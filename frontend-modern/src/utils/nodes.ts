@@ -19,6 +19,26 @@ const extractHostname = (value: string): string => {
   return hostPart.replace(/:\d+$/, '');
 };
 
+const HTTP_URL_PATTERN = /^https?:\/\//i;
+
+/**
+ * Resolve the external management URL for a PVE node. `guestURL` carries the
+ * operator-set link override (and, via the resource adapters, the PVE API
+ * connection URL). `host` is only honored when it is URL-shaped: on the
+ * unified-resource node shape it holds a bare hostname label for the drawer,
+ * which must not become a relative link target.
+ */
+export function getNodeExternalUrl<
+  T extends Pick<Node, 'name'> & Partial<Pick<Node, 'guestURL' | 'host'>>,
+>(node: T): string {
+  const guestUrl = typeof node.guestURL === 'string' ? node.guestURL.trim() : '';
+  if (HTTP_URL_PATTERN.test(guestUrl)) return guestUrl;
+  const host = typeof node.host === 'string' ? node.host.trim() : '';
+  if (HTTP_URL_PATTERN.test(host)) return host;
+  const name = typeof node.name === 'string' ? node.name.trim() : '';
+  return name ? `https://${name}:8006` : '';
+}
+
 export function getNodeDisplayName<T extends DisplayableNode>(node: T): string {
   const display = typeof node.displayName === 'string' ? node.displayName.trim() : '';
   if (display) return display;

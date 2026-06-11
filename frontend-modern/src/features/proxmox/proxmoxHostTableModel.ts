@@ -13,7 +13,8 @@ export type ProxmoxHostTableColumnId =
   | 'temp'
   | 'vms'
   | 'cts'
-  | 'cluster';
+  | 'cluster'
+  | 'web';
 
 export type ProxmoxHostTableColumn = {
   id: ProxmoxHostTableColumnId;
@@ -39,6 +40,7 @@ const HOST_COLUMN_MIN_LAYOUT: Record<ProxmoxHostTableColumnId, WorkloadTableLayo
   version: 'compact',
   uptime: 'compact',
   cluster: 'compact',
+  web: 'compact',
 };
 
 // CPU, memory, and disk render the same kind of usage bar, so they share
@@ -58,6 +60,7 @@ const HOST_COLUMN_DESKTOP_WIDTHS: Record<ProxmoxHostTableColumnId, number> = {
   vms: 5,
   cts: 5,
   cluster: 10,
+  web: 4,
 };
 
 const HOST_COLUMN_RESPONSIVE_WEIGHTS: Record<
@@ -99,6 +102,7 @@ export const PROXMOX_HOST_TABLE_COLUMNS: ProxmoxHostTableColumn[] = [
   { id: 'vms', label: 'VMs', kind: 'numeric-value' },
   { id: 'cts', label: 'CTs', kind: 'numeric-value' },
   { id: 'cluster', label: 'Cluster', kind: 'text' },
+  { id: 'web', label: 'Web', kind: 'badge' },
 ];
 
 export const getProxmoxHostVisibleColumnsForLayout = (

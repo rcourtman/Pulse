@@ -923,9 +923,13 @@ export const nodeFromResource = (resource: Resource): Node | null => {
     displayName: getPreferredInfrastructureDisplayName(resource),
     instance,
     host: name || preferredHostLabel,
+    // proxmox.guestUrl is the operator-set link override and proxmox.host the
+    // PVE API connection URL; `host` above stays a hostname label for display.
     guestURL:
+      asString(proxmox?.guestUrl) ||
       asString((resource as unknown as Record<string, unknown>).customURL) ||
-      asString((resource as unknown as Record<string, unknown>).customUrl),
+      asString((resource as unknown as Record<string, unknown>).customUrl) ||
+      asString(proxmox?.host),
     status: resource.status || 'unknown',
     type: resource.type,
     cpu: resource.cpu?.current ?? 0,

@@ -7,6 +7,7 @@ import {
   type Component,
   type JSX,
 } from 'solid-js';
+import ExternalLinkIcon from 'lucide-solid/icons/external-link';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { TableCard } from '@/components/shared/TableCard';
@@ -27,6 +28,7 @@ import {
   TableRow,
 } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
+import { getNodeExternalUrl } from '@/utils/nodes';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { normalizeDiskArray } from '@/utils/format';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
@@ -241,6 +243,10 @@ export const ProxmoxNodesTable: Component<{
                       } as Disk)
                     : undefined;
                 const legacyNode = () => projectResourceToLegacyNode(node);
+                const externalUrl = () => {
+                  const shimmed = drawerNode();
+                  return shimmed ? getNodeExternalUrl(shimmed) : '';
+                };
                 const cpuSeries = () => metricHistory.getNodeMetricSeries(legacyNode(), 'cpu');
                 const memorySeries = () =>
                   metricHistory.getNodeMetricSeries(legacyNode(), 'memory');
@@ -414,6 +420,28 @@ export const ProxmoxNodesTable: Component<{
                           <span class="inline-flex items-center rounded-md bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-base-content">
                             {cluster()}
                           </span>
+                        </TableCell>
+                      );
+                    case 'web':
+                      return (
+                        <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
+                          <Show when={externalUrl()} fallback={<span class="text-muted">—</span>}>
+                            {(href) => (
+                              <a
+                                data-proxmox-host-web-link
+                                href={href()}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="inline-flex h-6 w-6 items-center justify-center rounded-md text-blue-600 transition-colors hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 dark:text-blue-400 dark:hover:bg-blue-950 dark:hover:text-blue-300"
+                                title={`Open ${name()} web interface`}
+                                aria-label={`Open ${name()} web interface`}
+                                onClick={(event) => event.stopPropagation()}
+                                onKeyDown={(event) => event.stopPropagation()}
+                              >
+                                <ExternalLinkIcon class="h-3.5 w-3.5" />
+                              </a>
+                            )}
+                          </Show>
                         </TableCell>
                       );
                     default:

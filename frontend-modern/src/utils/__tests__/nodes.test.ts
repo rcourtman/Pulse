@@ -1,5 +1,30 @@
 import { describe, expect, it } from 'vitest';
-import { getNodeDisplayName, hasAlternateDisplayName } from '@/utils/nodes';
+import { getNodeDisplayName, getNodeExternalUrl, hasAlternateDisplayName } from '@/utils/nodes';
+
+describe('getNodeExternalUrl', () => {
+  it('prefers a URL-shaped guestURL', () => {
+    const node = { name: 'pve1', guestURL: 'https://pve.example.com:8006', host: 'pve1' };
+    expect(getNodeExternalUrl(node)).toBe('https://pve.example.com:8006');
+  });
+
+  it('falls back to a URL-shaped host for legacy node payloads', () => {
+    const node = { name: 'pve1', guestURL: '', host: 'https://192.168.0.5:8006' };
+    expect(getNodeExternalUrl(node)).toBe('https://192.168.0.5:8006');
+  });
+
+  it('never treats a bare hostname label as a link target', () => {
+    const node = { name: 'pve1', guestURL: '', host: 'pve1' };
+    expect(getNodeExternalUrl(node)).toBe('https://pve1:8006');
+  });
+
+  it('builds the canonical PVE default from the node name', () => {
+    expect(getNodeExternalUrl({ name: 'pve1' })).toBe('https://pve1:8006');
+  });
+
+  it('returns empty when no name is available', () => {
+    expect(getNodeExternalUrl({ name: '' })).toBe('');
+  });
+});
 
 describe('getNodeDisplayName', () => {
   it('returns displayName when present and non-empty', () => {

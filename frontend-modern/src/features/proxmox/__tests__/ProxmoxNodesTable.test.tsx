@@ -72,6 +72,48 @@ afterEach(() => {
 });
 
 describe('ProxmoxNodesTable', () => {
+  it('links each node to its PVE web interface without hijacking the row click', () => {
+    render(() => (
+      <ProxmoxNodesTable
+        nodes={[
+          makeNodeResource({
+            proxmox: {
+              clusterName: 'homelab',
+              nodeName: 'pve-node-1',
+              guestUrl: 'https://pve.example.com:8006',
+            },
+          }),
+        ]}
+        guests={[]}
+        emptyIcon={<span />}
+        emptyTitle="No Proxmox VE nodes"
+        emptyDescription="No nodes"
+      />
+    ));
+
+    const link = screen.getByRole('link', { name: 'Open pve-node-1 web interface' });
+    expect(link).toHaveAttribute('href', 'https://pve.example.com:8006');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(screen.queryByTestId('node-drawer')).not.toBeInTheDocument();
+  });
+
+  it('builds the canonical :8006 link when no URL metadata is present', () => {
+    render(() => (
+      <ProxmoxNodesTable
+        nodes={[makeNodeResource()]}
+        guests={[]}
+        emptyIcon={<span />}
+        emptyTitle="No Proxmox VE nodes"
+        emptyDescription="No nodes"
+      />
+    ));
+
+    expect(screen.getByRole('link', { name: 'Open pve-node-1 web interface' })).toHaveAttribute(
+      'href',
+      'https://pve-node-1:8006',
+    );
+  });
+
   it('opens the host details drawer from the host-owned top table row', async () => {
     render(() => (
       <ProxmoxNodesTable

@@ -116,6 +116,34 @@ describe('resourceStateAdapters nodeFromResource', () => {
     expect(node?.host).toBe('tower.local');
   });
 
+  it('maps the PVE web interface URL from proxmox metadata', () => {
+    const node = nodeFromResource(
+      createNodeResource({
+        proxmox: {
+          nodeName: 'pve-node-1',
+          guestUrl: 'https://pve.example.com:8006',
+          host: 'https://192.168.0.5:8006',
+        },
+      }),
+    );
+
+    expect(node?.guestURL).toBe('https://pve.example.com:8006');
+    expect(node?.host).toBe('pve-node-1');
+  });
+
+  it('falls back to the PVE API connection URL when no guest URL override exists', () => {
+    const node = nodeFromResource(
+      createNodeResource({
+        proxmox: {
+          nodeName: 'pve-node-1',
+          host: 'https://192.168.0.5:8006',
+        },
+      }),
+    );
+
+    expect(node?.guestURL).toBe('https://192.168.0.5:8006');
+  });
+
   it('projects the canonical cluster name through the shared helper', () => {
     const node = nodeFromResource(
       createNodeResource({

@@ -607,6 +607,10 @@ export interface ResourceProxmoxMeta {
   pool?: string;
   instance?: string;
   clusterName?: string;
+  /** PVE API connection URL (json `host` on the backend ProxmoxData). */
+  host?: string;
+  /** Operator-set web interface URL override. */
+  guestUrl?: string;
   cpus?: number;
   template?: boolean;
   disks?: Disk[];

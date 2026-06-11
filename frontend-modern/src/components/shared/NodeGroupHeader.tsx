@@ -1,6 +1,6 @@
 import { Component, For, Show, type JSX } from 'solid-js';
 import type { Node } from '@/types/api';
-import { getNodeDisplayName, hasAlternateDisplayName } from '@/utils/nodes';
+import { getNodeDisplayName, getNodeExternalUrl, hasAlternateDisplayName } from '@/utils/nodes';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { getNodeStatusIndicator } from '@/utils/status';
 import { formatUptime } from '@/utils/format';
@@ -29,7 +29,7 @@ interface NodeGroupHeaderProps {
 export const NodeGroupHeader: Component<NodeGroupHeaderProps> = (props) => {
   const nodeStatus = () => getNodeStatusIndicator(props.node);
   const isOnline = () => nodeStatus().variant === 'success';
-  const nodeUrl = () => props.node.guestURL || props.node.host || `https://${props.node.name}:8006`;
+  const nodeUrl = () => getNodeExternalUrl(props.node);
   const displayName = () => getNodeDisplayName(props.node);
   const showActualName = () => hasAlternateDisplayName(props.node);
   const pveVersion = () => formatProxmoxVersion(props.node.pveVersion);
