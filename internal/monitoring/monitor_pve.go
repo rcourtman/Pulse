@@ -711,11 +711,11 @@ func (m *Monitor) preserveOrExpireNodes(prevInstanceNodes []models.Node) []model
 		// Grace requires evidence of a real online sighting: either this
 		// process saw the node online (nodeLastOnline), or the previous
 		// snapshot itself reports it online with a recent poll timestamp.
-		// prevNode.LastSeen alone is NOT enough for an offline node — prev
-		// state round-trips through the unified registry, which stamps
-		// zero LastSeen values with the ingest time, so a synthesized
-		// offline placeholder would otherwise come back "recently seen"
-		// every cycle and be resurrected to online forever.
+		// prevNode.LastSeen alone is NOT enough for an offline node: a
+		// synthesized offline placeholder has never been sighted, and even
+		// though the unified registry now preserves its zero LastSeen
+		// instead of stamping ingest time, requiring an online sighting
+		// keeps this policy correct independent of registry stamping.
 		m.mu.Lock()
 		lastOnline, sawOnline := m.nodeLastOnline[prevNode.ID]
 		m.mu.Unlock()

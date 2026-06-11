@@ -504,7 +504,7 @@ func (rr *ResourceRegistry) IngestResources(resources []Resource) {
 			resource.SourceStatus = make(map[DataSource]SourceStatus, len(resource.Sources))
 			for _, source := range resource.Sources {
 				resource.SourceStatus[source] = SourceStatus{
-					Status:   "online",
+					Status:   sourceSightingStatus(resource.LastSeen),
 					LastSeen: resource.LastSeen,
 				}
 			}
@@ -1269,6 +1269,19 @@ func (rr *ResourceRegistry) MarkStale(now time.Time, thresholds map[DataSource]t
 	rr.mu.Lock()
 	defer rr.mu.Unlock()
 	rr.markStaleLocked(now, thresholds)
+}
+
+// sourceSightingStatus derives the per-source delivery status from the last
+// time that source actually delivered the resource. A zero sighting means the
+// source has never delivered it (synthesized offline placeholders, instances
+// that have not completed a poll since startup); its delivery state is
+// unknown, not online. Stamping it "online" would exempt it from
+// stale-marking forever, because markStaleLocked skips zero LastSeen entries.
+func sourceSightingStatus(lastSeen time.Time) string {
+	if lastSeen.IsZero() {
+		return "unknown"
+	}
+	return "online"
 }
 
 func (rr *ResourceRegistry) markStaleLocked(now time.Time, thresholds map[DataSource]time.Duration) {
@@ -2198,14 +2211,10 @@ func (rr *ResourceRegistry) ingest(source DataSource, sourceID string, resource 
 	resource.Identity = identity
 	resource.Sources = []DataSource{source}
 	resource.SourceStatus = map[DataSource]SourceStatus{
-		source: {Status: "online", LastSeen: resource.LastSeen},
+		source: {Status: sourceSightingStatus(resource.LastSeen), LastSeen: resource.LastSeen},
 	}
 	resource.parentBySource = make(map[DataSource]string)
 	rr.setSourceParent(&resource, source, resource.ParentID)
-
-	if resource.LastSeen.IsZero() {
-		resource.LastSeen = time.Now().UTC()
-	}
 
 	// Linked resources must be mutually linked to avoid one-sided/ambiguous auto-merges.
 	if linked := rr.resolveLinkedResource(source, sourceID, resource); linked != "" {
@@ -2276,9 +2285,6 @@ func (rr *ResourceRegistry) mergeLinkedKubernetesNode(
 
 	resource.Identity = identity
 	resource.Type = CanonicalResourceType(resource.Type)
-	if resource.LastSeen.IsZero() {
-		resource.LastSeen = time.Now().UTC()
-	}
 
 	rr.mergeInto(existing, resource, SourceK8s)
 	rr.bySource[SourceK8s][sourceID] = existing.ID
@@ -2486,7 +2492,7 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 	if existing.SourceStatus == nil {
 		existing.SourceStatus = make(map[DataSource]SourceStatus)
 	}
-	existing.SourceStatus[source] = SourceStatus{Status: "online", LastSeen: incoming.LastSeen}
+	existing.SourceStatus[source] = SourceStatus{Status: sourceSightingStatus(incoming.LastSeen), LastSeen: incoming.LastSeen}
 
 	if incoming.LastSeen.After(existing.LastSeen) {
 		existing.LastSeen = incoming.LastSeen

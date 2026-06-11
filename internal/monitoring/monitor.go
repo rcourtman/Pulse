@@ -6149,8 +6149,11 @@ func monitorStringValue(value *string) string {
 }
 
 func monitorLastSeenUnix(value time.Time) int64 {
+	// Zero means the resource has never actually been sighted (synthesized
+	// offline placeholders). Report 0 so the frontend renders "never" instead
+	// of fabricating a fresh sighting.
 	if value.IsZero() {
-		return time.Now().UTC().UnixMilli()
+		return 0
 	}
 	return value.UnixMilli()
 }

@@ -103,6 +103,11 @@ func (a *MonitorAdapter) replaceRegistry(snapshot models.StateSnapshot, recordsB
 		}
 		rebuilt.IngestRecords(source, records)
 	}
+	// IngestSnapshot runs its stale pass before the record sources above are
+	// ingested, so record-sourced resources would otherwise keep their
+	// ingest-time "online" stamp regardless of how old their data is.
+	// Re-evaluate staleness over the fully assembled registry.
+	rebuilt.MarkStale(time.Now().UTC(), nil)
 	rebuiltAt := time.Now().UTC()
 	if !snapshot.LastUpdate.IsZero() && snapshot.LastUpdate.After(rebuiltAt) {
 		rebuiltAt = snapshot.LastUpdate

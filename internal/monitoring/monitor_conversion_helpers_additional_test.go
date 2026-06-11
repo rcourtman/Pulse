@@ -196,11 +196,10 @@ func TestMonitorIdentityLabelsSourceTypeAndLastSeenAdditional(t *testing.T) {
 			t.Fatalf("monitorLastSeenUnix(non-zero) = %d, want %d", got, now.UnixMilli())
 		}
 
-		before := time.Now().UTC().UnixMilli()
-		zero := monitorLastSeenUnix(time.Time{})
-		after := time.Now().UTC().UnixMilli()
-		if zero < before || zero > after {
-			t.Fatalf("monitorLastSeenUnix(zero) = %d, want between %d and %d", zero, before, after)
+		// A zero LastSeen means the resource has never been sighted; the
+		// payload must not fabricate a fresh timestamp for it.
+		if got := monitorLastSeenUnix(time.Time{}); got != 0 {
+			t.Fatalf("monitorLastSeenUnix(zero) = %d, want 0", got)
 		}
 	})
 

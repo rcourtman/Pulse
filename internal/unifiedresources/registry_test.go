@@ -4451,3 +4451,73 @@ func TestMergedHostCanonicalIDStableAcrossRestartsAndIngestOrders(t *testing.T) 
 		t.Fatalf("expected one merged resource after reversed-order ingest, got %d", got)
 	}
 }
+
+// A synthesized placeholder (e.g. an offline PVE node for an instance that
+// has never completed a poll) carries a zero LastSeen. Ingest must preserve
+// that zero instead of fabricating a fresh sighting, and the per-source
+// delivery status must be "unknown", not "online" — an online stamp with a
+// zero LastSeen is permanently exempt from stale-marking and masks the
+// source's real delivery state (the loop behind commit 8372a22c5).
+func TestIngestPreservesNeverSeenSightingAndStampsUnknownSourceStatus(t *testing.T) {
+	rr := NewRegistry(nil)
+
+	placeholder := topLevelTestProxmoxNode("proxmox-node", "tower", "proxmox-1", "https://tower.local:8006")
+	placeholder.Status = StatusOffline
+	placeholder.LastSeen = time.Time{}
+
+	rr.IngestRecords(SourceProxmox, []IngestRecord{
+		{SourceID: "proxmox-node", Resource: placeholder},
+	})
+
+	resources := rr.List()
+	if len(resources) != 1 {
+		t.Fatalf("List() returned %d resources, want 1", len(resources))
+	}
+	resource := resources[0]
+
+	if !resource.LastSeen.IsZero() {
+		t.Fatalf("resource.LastSeen = %s, want zero: never-seen resources must not get a fabricated sighting", resource.LastSeen)
+	}
+	status, ok := resource.SourceStatus[SourceProxmox]
+	if !ok {
+		t.Fatal("expected a proxmox source status entry")
+	}
+	if status.Status != "unknown" {
+		t.Fatalf("SourceStatus[proxmox].Status = %q, want %q: a source that never delivered the resource must not be stamped online", status.Status, "unknown")
+	}
+	if !status.LastSeen.IsZero() {
+		t.Fatalf("SourceStatus[proxmox].LastSeen = %s, want zero", status.LastSeen)
+	}
+
+	// Stale marking must leave a never-seen source alone in both directions.
+	rr.MarkStale(time.Now().UTC(), nil)
+	if got := rr.List()[0].SourceStatus[SourceProxmox].Status; got != "unknown" {
+		t.Fatalf("SourceStatus[proxmox].Status after MarkStale = %q, want %q", got, "unknown")
+	}
+}
+
+// A real sighting keeps the online stamp and the genuine timestamp on both
+// the resource and the per-source delivery status.
+func TestIngestStampsOnlineSourceStatusForRealSighting(t *testing.T) {
+	rr := NewRegistry(nil)
+	seen := time.Now().UTC().Add(-5 * time.Second).Truncate(time.Millisecond)
+
+	node := topLevelTestProxmoxNode("proxmox-node", "tower", "proxmox-1", "https://tower.local:8006")
+	node.LastSeen = seen
+
+	rr.IngestRecords(SourceProxmox, []IngestRecord{
+		{SourceID: "proxmox-node", Resource: node},
+	})
+
+	resource := rr.List()[0]
+	if !resource.LastSeen.Equal(seen) {
+		t.Fatalf("resource.LastSeen = %s, want %s", resource.LastSeen, seen)
+	}
+	status := resource.SourceStatus[SourceProxmox]
+	if status.Status != "online" {
+		t.Fatalf("SourceStatus[proxmox].Status = %q, want online", status.Status)
+	}
+	if !status.LastSeen.Equal(seen) {
+		t.Fatalf("SourceStatus[proxmox].LastSeen = %s, want %s", status.LastSeen, seen)
+	}
+}

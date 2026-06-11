@@ -266,7 +266,7 @@ func addConnectedInfrastructureSurface(
 			hostname:          connectedInfrastructureHostname(resource),
 			status:            "active",
 			healthStatus:      strings.TrimSpace(string(resource.Status)),
-			lastSeen:          resource.LastSeen.UnixMilli(),
+			lastSeen:          connectedInfrastructureLastSeenMillis(resource),
 			version:           connectedInfrastructureVersion(resource),
 			isOutdatedBinary:  connectedInfrastructureIsOutdated(resource),
 			linkedNodeID:      connectedInfrastructureLinkedNodeID(resource),
@@ -282,7 +282,7 @@ func addConnectedInfrastructureSurface(
 		groups[key] = group
 	}
 
-	if resourceLastSeen := resource.LastSeen.UnixMilli(); resourceLastSeen > group.lastSeen {
+	if resourceLastSeen := connectedInfrastructureLastSeenMillis(resource); resourceLastSeen > group.lastSeen {
 		group.lastSeen = resourceLastSeen
 	}
 	if group.version == "" {
@@ -435,6 +435,16 @@ func connectedInfrastructureHostname(resource unifiedresources.Resource) string 
 		}
 	}
 	return ""
+}
+
+// connectedInfrastructureLastSeenMillis converts a resource's last sighting
+// to frontend milliseconds. A never-seen resource (zero LastSeen) reports 0,
+// not the huge negative UnixMilli of the zero time.
+func connectedInfrastructureLastSeenMillis(resource unifiedresources.Resource) int64 {
+	if resource.LastSeen.IsZero() {
+		return 0
+	}
+	return resource.LastSeen.UnixMilli()
 }
 
 func connectedInfrastructureName(resource unifiedresources.Resource) string {

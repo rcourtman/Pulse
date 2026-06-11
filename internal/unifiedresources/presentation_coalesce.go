@@ -333,7 +333,7 @@ func mergePresentationSourceStatus(
 		if rightLastSeen.After(lastSeen) {
 			lastSeen = rightLastSeen
 		}
-		merged[source] = SourceStatus{Status: "online", LastSeen: lastSeen}
+		merged[source] = SourceStatus{Status: sourceSightingStatus(lastSeen), LastSeen: lastSeen}
 	}
 	return merged
 }
