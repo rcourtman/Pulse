@@ -1,10 +1,12 @@
-import { For, Show } from 'solid-js';
+import { For, Show, createMemo } from 'solid-js';
 
 import {
   DrawerDiskListCard,
   buildDrawerDiskListItems,
   type DrawerDiskListItem,
 } from '@/components/Workloads/DrawerDiskListCard';
+import { useResourceDetailDrawerDockerActionsState } from '@/components/Infrastructure/useResourceDetailDrawerDockerActionsState';
+import { areSystemSettingsLoaded, shouldHideDockerUpdateActions } from '@/stores/systemSettings';
 import type { Resource } from '@/types/resource';
 import {
   formatBytes,
@@ -196,8 +198,24 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
     if (typeof count === 'number') {
       rows.push({ label: 'Containers', value: `${count}` });
     }
-    if (typeof docker()?.updatesAvailableCount === 'number') {
-      rows.push({ label: 'Updates', value: `${docker()!.updatesAvailableCount}` });
+    const updates = docker()?.updatesAvailableCount;
+    if (typeof updates === 'number') {
+      rows.push({
+        label: 'Updates',
+        value: `${updates}`,
+        valueClass: updates > 0 ? 'text-sky-700 dark:text-sky-300' : undefined,
+      });
+    }
+    const checkedAt = cleanText(docker()?.updatesLastCheckedAt);
+    if (checkedAt) {
+      const parsed = Date.parse(checkedAt);
+      if (Number.isFinite(parsed)) {
+        rows.push({
+          label: 'Checked',
+          value: formatRelativeTime(parsed),
+          title: new Date(parsed).toLocaleString(),
+        });
+      }
     }
     if (hasDockerSwarmEvidence(props.host)) {
       const role = cleanText(docker()?.swarm?.nodeRole);
@@ -209,6 +227,30 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
     }
     return rows;
   };
+
+  type DockerHostCommandMeta = {
+    type?: string;
+    status?: string;
+    message?: string;
+    failureReason?: string;
+  };
+
+  const hostSourceId = createMemo(() => cleanText(docker()?.hostSourceId) || null);
+  const updatesAvailable = createMemo(() => docker()?.updatesAvailableCount ?? 0);
+  const hostCommand = createMemo(
+    () => docker()?.command as DockerHostCommandMeta | undefined,
+  );
+  const hostCommandActive = createMemo(() =>
+    ['queued', 'dispatched', 'acknowledged', 'in_progress'].includes(
+      cleanText(hostCommand()?.status).toLowerCase(),
+    ),
+  );
+  const updateActions = useResourceDetailDrawerDockerActionsState({
+    dockerHostSourceId: hostSourceId,
+    dockerUpdatesAvailable: updatesAvailable,
+  });
+  const updateActionsLoading = () => !areSystemSettingsLoaded();
+  const updateAllHidden = () => shouldHideDockerUpdateActions();
 
   const memoryRows = (): DockerOverviewRow[] => {
     const memory = memorySource();
@@ -294,7 +336,89 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
     <div class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(25%-0.75rem)] [&>*]:min-w-[200px] [&>*]:max-w-full [&>*]:overflow-hidden">
       <DetailCard title="System" rows={systemRows()} />
       <DetailCard title="Runtime" rows={runtimeRows()} />
-      <DetailCard title="Containers" rows={containerRows()} />
+      <div class={DOCKER_OVERVIEW_CARD_CLASS} data-testid="docker-host-drawer-containers-card">
+        <h3 class="mb-2 text-[11px] font-medium uppercase tracking-wide text-base-content">
+          Containers
+        </h3>
+        <div class="space-y-1.5 text-[11px]">
+          <For each={containerRows()}>
+            {(row) => (
+              <div class="flex items-center justify-between gap-2 min-w-0">
+                <span class="shrink-0 text-muted">{row.label}</span>
+                <span
+                  class={`truncate text-right font-medium ${row.valueClass ?? 'text-base-content'}`}
+                  title={row.title ?? row.value}
+                >
+                  {row.value}
+                </span>
+              </div>
+            )}
+          </For>
+          <Show when={hostSourceId()}>
+            <div class="space-y-1.5 border-t border-border pt-2">
+              <Show when={hostCommand()?.type || hostCommand()?.status}>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-muted">
+                    {titleCase(cleanText(hostCommand()?.type).replace(/_/g, ' ') || 'Command')}
+                  </span>
+                  <span
+                    class={`truncate text-right font-medium ${
+                      hostCommandActive()
+                        ? 'text-sky-700 dark:text-sky-300'
+                        : 'text-base-content'
+                    }`}
+                    title={hostCommand()?.failureReason || hostCommand()?.message || undefined}
+                  >
+                    {titleCase(cleanText(hostCommand()?.status).replace(/_/g, ' ') || 'unknown')}
+                  </span>
+                </div>
+              </Show>
+              <Show when={updateActions.dockerActionError()}>
+                <div class="rounded border border-red-200 bg-red-50 px-2 py-1.5 text-[10px] text-red-700 dark:border-red-700 dark:bg-red-900 dark:text-red-200">
+                  {updateActions.dockerActionError()}
+                </div>
+              </Show>
+              <Show when={updateActions.dockerActionNote()}>
+                <div class="rounded border border-border bg-surface-hover px-2 py-1.5 text-[10px] text-base-content">
+                  {updateActions.dockerActionNote()}
+                </div>
+              </Show>
+              <div class="flex flex-wrap items-center gap-2 pt-0.5">
+                <button
+                  type="button"
+                  disabled={
+                    updateActions.dockerActionBusy() ||
+                    updateActionsLoading() ||
+                    hostCommandActive()
+                  }
+                  onClick={() => void updateActions.queueDockerUpdateCheck()}
+                  class="rounded-md border border-border bg-surface px-2.5 py-1 text-[11px] font-semibold text-base-content hover:bg-surface-hover disabled:opacity-60"
+                  title={updateActionsLoading() ? 'Loading settings...' : undefined}
+                >
+                  Check updates
+                </button>
+                <Show when={!updateAllHidden()}>
+                  <button
+                    type="button"
+                    disabled={
+                      updateActions.dockerActionBusy() ||
+                      updateActionsLoading() ||
+                      hostCommandActive() ||
+                      updatesAvailable() <= 0
+                    }
+                    onClick={() => void updateActions.queueDockerUpdateAll()}
+                    class="rounded-md border border-sky-200 bg-sky-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-sky-700 disabled:opacity-60 disabled:hover:bg-sky-600 dark:border-sky-700 dark:bg-sky-600 dark:hover:bg-sky-500 dark:disabled:hover:bg-sky-600"
+                  >
+                    {updateActions.confirmUpdateAll()
+                      ? 'Confirm update'
+                      : `Update all${updatesAvailable() > 0 ? ` (${updatesAvailable()})` : ''}`}
+                  </button>
+                </Show>
+              </div>
+            </div>
+          </Show>
+        </div>
+      </div>
       <DetailCard title="Memory" rows={memoryRows()} />
       <Show
         when={perDiskItems().length > 0}

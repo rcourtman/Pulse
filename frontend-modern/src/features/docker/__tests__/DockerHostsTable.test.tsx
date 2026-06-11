@@ -125,6 +125,32 @@ describe('DockerHostsTable', () => {
     expect(screen.getByRole('tab', { name: 'History' })).toHaveAttribute('type', 'button');
   });
 
+  it('surfaces container update actions in the host drawer', () => {
+    render(() => (
+      <DockerHostsTable
+        resources={[
+          makeDockerHost({
+            docker: {
+              runtimeVersion: '27.5.1',
+              containerCount: 12,
+              hostSourceId: 'docker-01',
+              updatesAvailableCount: 3,
+            } as NonNullable<Resource['docker']>,
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No Docker hosts"
+        emptyDescription="No hosts"
+        showToolbar={false}
+      />
+    ));
+
+    fireEvent.click(screen.getByText('docker-01').closest('tr')!);
+
+    expect(screen.getByRole('button', { name: 'Check updates' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Update all (3)' })).toBeInTheDocument();
+  });
+
   it('identifies the host system separately from the container runtime', () => {
     render(() => (
       <DockerHostsTable
