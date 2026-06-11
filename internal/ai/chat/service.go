@@ -2956,6 +2956,12 @@ func (s *Service) ListAvailableTools(ctx context.Context, prompt string) []strin
 }
 
 // ListSessions returns all sessions
+// maxSessionHandoffRefreshPerList bounds how many sessions get their handoff
+// action status re-checked per list call. The list is newest-first, so this
+// covers every session the recent-sessions UI surfaces; older sessions
+// self-heal when loaded (the turn path refreshes the active session).
+const maxSessionHandoffRefreshPerList = 20
+
 func (s *Service) ListSessions(ctx context.Context) ([]Session, error) {
 	s.mu.RLock()
 	sessions := s.sessions
@@ -2967,25 +2973,36 @@ func (s *Service) ListSessions(ctx context.Context) ([]Session, error) {
 		return nil, fmt.Errorf("service not started")
 	}
 
-	refreshSessionHandoffActionSummaries(sessions, orgID, actionAuditStore)
-	return sessions.List()
-}
-
-func refreshSessionHandoffActionSummaries(sessions *SessionStore, orgID string, actionStore unifiedresources.ResourceStore) {
-	if sessions == nil {
-		return
-	}
-
 	list, err := sessions.List()
 	if err != nil {
-		log.Debug().Err(err).Msg("[ChatService] Failed to list sessions for handoff action refresh")
-		return
+		return nil, err
+	}
+	if refreshSessionHandoffActionSummaries(sessions, orgID, actionAuditStore, list) {
+		// Some summaries were rewritten on disk; re-list (cheap, cached) so
+		// the response carries the refreshed action status.
+		return sessions.List()
+	}
+	return list, nil
+}
+
+// refreshSessionHandoffActionSummaries re-checks handoff action status against
+// the action audit store for the most recent sessions that carry actions.
+// It returns true when at least one session summary was rewritten.
+func refreshSessionHandoffActionSummaries(sessions *SessionStore, orgID string, actionStore unifiedresources.ResourceStore, list []Session) bool {
+	if sessions == nil {
+		return false
 	}
 
+	updated := false
+	checked := 0
 	for _, session := range list {
+		if checked >= maxSessionHandoffRefreshPerList {
+			break
+		}
 		if session.HandoffSummary == nil || session.HandoffSummary.ActionCount == 0 {
 			continue
 		}
+		checked++
 		actions, err := sessions.GetModelHandoffActions(session.ID)
 		if err != nil {
 			log.Debug().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to load session handoff actions for summary refresh")
@@ -2997,8 +3014,11 @@ func refreshSessionHandoffActionSummaries(sessions *SessionStore, orgID string, 
 		}
 		if err := sessions.SetModelHandoffActions(session.ID, refreshed); err != nil {
 			log.Debug().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to persist refreshed session handoff action summary")
+			continue
 		}
+		updated = true
 	}
+	return updated
 }
 
 func handoffActionsEqual(a, b []HandoffAction) bool {

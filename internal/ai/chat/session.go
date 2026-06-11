@@ -39,6 +39,43 @@ type SessionStore struct {
 	// These extract and preserve key facts from tool results to prevent amnesia
 	// when old tool results are compacted from the conversation context.
 	knowledgeAccumulators map[string]*KnowledgeAccumulator
+
+	// summaryMu guards summaryCache. It is a leaf lock: never acquire s.mu
+	// while holding it. List() must stay off s.mu (see
+	// TestSessionStoreListDoesNotHoldStoreMutex), so the cache has its own.
+	summaryMu sync.Mutex
+	// summaryCache holds per-file session summaries keyed by file name,
+	// validated by (modTime, size). Listing sessions must not scale with
+	// transcript bytes: a session file is only re-read when it changed.
+	summaryCache map[string]sessionSummaryCacheEntry
+
+	// indexMu serializes summary index file writes.
+	indexMu sync.Mutex
+}
+
+type sessionSummaryCacheEntry struct {
+	modTime time.Time
+	size    int64
+	summary Session
+}
+
+// sessionSummaryIndexFile persists the summary cache across restarts so the
+// first List() after boot does not re-read every transcript. Entries are
+// validated against each file's (modTime, size) before use, so a stale or
+// hand-edited index only costs a re-parse, never a wrong summary.
+const sessionSummaryIndexFile = ".sessions_index.json"
+
+const sessionSummaryIndexVersion = 1
+
+type sessionSummaryIndexEntry struct {
+	ModTime time.Time `json:"mod_time"`
+	Size    int64     `json:"size"`
+	Summary Session   `json:"summary"`
+}
+
+type sessionSummaryIndexData struct {
+	Version int                                 `json:"version"`
+	Entries map[string]sessionSummaryIndexEntry `json:"entries"`
 }
 
 const maxSessionTurnRedoStack = 10
@@ -391,6 +428,31 @@ func sessionSummaryFromData(data sessionData) Session {
 	}
 }
 
+// sessionListData decodes only what a session summary needs. Message and redo
+// payloads stay as raw JSON so listing cost does not scale with transcript
+// size — only their counts matter here.
+type sessionListData struct {
+	ID            string               `json:"id"`
+	Title         string               `json:"title"`
+	Messages      []json.RawMessage    `json:"messages"`
+	ModelContext  *sessionModelContext `json:"model_context,omitempty"`
+	TurnRedoStack []json.RawMessage    `json:"turn_redo_stack,omitempty"`
+	CreatedAt     time.Time            `json:"created_at"`
+	UpdatedAt     time.Time            `json:"updated_at"`
+}
+
+func sessionSummaryFromListData(data sessionListData) Session {
+	return Session{
+		ID:             data.ID,
+		Title:          data.Title,
+		CreatedAt:      data.CreatedAt,
+		UpdatedAt:      data.UpdatedAt,
+		MessageCount:   len(data.Messages),
+		CanRedo:        len(data.TurnRedoStack) > 0,
+		HandoffSummary: modelContextHandoffSummary(data.ModelContext),
+	}
+}
+
 const (
 	maxSessionIDLength   = 128
 	maxSessionTitleRunes = 120
@@ -405,13 +467,16 @@ func NewSessionStore(dataDir string) (*SessionStore, error) {
 		return nil, fmt.Errorf("failed to create sessions directory: %w", err)
 	}
 
-	return &SessionStore{
+	store := &SessionStore{
 		dataDir:               sessionsDir,
 		resolvedContexts:      make(map[string]*ResolvedContext),
 		sessionFSMs:           make(map[string]*SessionFSM),
 		sessionToolSets:       make(map[string]map[string]bool),
 		knowledgeAccumulators: make(map[string]*KnowledgeAccumulator),
-	}, nil
+		summaryCache:          make(map[string]sessionSummaryCacheEntry),
+	}
+	store.loadSummaryIndex()
+	return store, nil
 }
 
 // sessionPath returns the file path for a session
@@ -485,40 +550,75 @@ func (s *SessionStore) findLegacySessionPath(id string) (string, error) {
 	return "", nil
 }
 
-// List returns all sessions, sorted by updated_at descending
+// List returns all sessions, sorted by updated_at descending.
+// Summaries are served from a per-file cache validated by (modTime, size);
+// only files that changed since the last call are re-read and re-parsed.
 func (s *SessionStore) List() ([]Session, error) {
 	entries, err := os.ReadDir(s.dataDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read sessions directory: %w", err)
 	}
 
+	seen := make(map[string]struct{}, len(entries))
+	cacheChanged := false
 	var sessions []Session
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+		name := entry.Name()
+		if entry.IsDir() || strings.HasPrefix(name, ".") || !strings.HasSuffix(name, ".json") {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			log.Warn().Err(err).Str("file", name).Msg("failed to stat session file")
+			continue
+		}
+		seen[name] = struct{}{}
+
+		s.summaryMu.Lock()
+		cached, ok := s.summaryCache[name]
+		s.summaryMu.Unlock()
+		if ok && cached.modTime.Equal(info.ModTime()) && cached.size == info.Size() {
+			sessions = append(sessions, cached.summary)
 			continue
 		}
 
-		path, err := securityutil.JoinStorageLeaf(s.dataDir, entry.Name())
+		path, err := securityutil.JoinStorageLeaf(s.dataDir, name)
 		if err != nil {
-			log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to resolve session file path")
+			log.Warn().Err(err).Str("file", name).Msg("failed to resolve session file path")
 			continue
 		}
 
 		file, err := os.ReadFile(path)
 		if err != nil {
-			log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to read session file")
+			log.Warn().Err(err).Str("file", name).Msg("failed to read session file")
 			continue
 		}
-		var data sessionData
+		var data sessionListData
 		if err := json.Unmarshal(file, &data); err != nil {
-			log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to parse session file")
+			log.Warn().Err(err).Str("file", name).Msg("failed to parse session file")
 			continue
-		}
-		for i := range data.Messages {
-			data.Messages[i] = data.Messages[i].NormalizeCollections()
 		}
 
-		sessions = append(sessions, sessionSummaryFromData(data))
+		summary := sessionSummaryFromListData(data)
+		s.summaryMu.Lock()
+		s.summaryCache[name] = sessionSummaryCacheEntry{modTime: info.ModTime(), size: info.Size(), summary: summary}
+		s.summaryMu.Unlock()
+		cacheChanged = true
+		sessions = append(sessions, summary)
+	}
+
+	// Drop cache entries for files that no longer exist
+	s.summaryMu.Lock()
+	for name := range s.summaryCache {
+		if _, ok := seen[name]; !ok {
+			delete(s.summaryCache, name)
+			cacheChanged = true
+		}
+	}
+	s.summaryMu.Unlock()
+
+	if cacheChanged {
+		s.saveSummaryIndex()
 	}
 
 	// Sort by updated_at descending (newest first)
@@ -527,6 +627,79 @@ func (s *SessionStore) List() ([]Session, error) {
 	})
 
 	return sessions, nil
+}
+
+// loadSummaryIndex hydrates the summary cache from the persisted index.
+// Best-effort: a missing or corrupt index just means the next List()
+// re-parses changed files and rewrites it.
+func (s *SessionStore) loadSummaryIndex() {
+	path := filepath.Join(s.dataDir, sessionSummaryIndexFile)
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			log.Warn().Err(err).Msg("failed to read session summary index")
+		}
+		return
+	}
+	var data sessionSummaryIndexData
+	if err := json.Unmarshal(raw, &data); err != nil {
+		log.Warn().Err(err).Msg("failed to parse session summary index; rebuilding on next list")
+		return
+	}
+	if data.Version != sessionSummaryIndexVersion {
+		return
+	}
+	s.summaryMu.Lock()
+	defer s.summaryMu.Unlock()
+	for name, entry := range data.Entries {
+		if strings.HasPrefix(name, ".") || !strings.HasSuffix(name, ".json") {
+			continue
+		}
+		s.summaryCache[name] = sessionSummaryCacheEntry{modTime: entry.ModTime, size: entry.Size, summary: entry.Summary}
+	}
+}
+
+// saveSummaryIndex persists the summary cache next to the session files.
+// Best-effort: failures are logged and never block session operations.
+func (s *SessionStore) saveSummaryIndex() {
+	s.summaryMu.Lock()
+	data := sessionSummaryIndexData{
+		Version: sessionSummaryIndexVersion,
+		Entries: make(map[string]sessionSummaryIndexEntry, len(s.summaryCache)),
+	}
+	for name, entry := range s.summaryCache {
+		data.Entries[name] = sessionSummaryIndexEntry{ModTime: entry.modTime, Size: entry.size, Summary: entry.summary}
+	}
+	s.summaryMu.Unlock()
+
+	raw, err := json.Marshal(data)
+	if err != nil {
+		log.Warn().Err(err).Msg("failed to marshal session summary index")
+		return
+	}
+
+	s.indexMu.Lock()
+	defer s.indexMu.Unlock()
+	path := filepath.Join(s.dataDir, sessionSummaryIndexFile)
+	tmpFile, err := os.CreateTemp(s.dataDir, sessionSummaryIndexFile+".tmp-")
+	if err != nil {
+		log.Warn().Err(err).Msg("failed to create session summary index temp file")
+		return
+	}
+	tmpPath := tmpFile.Name()
+	if err := tmpFile.Chmod(0600); err == nil {
+		_, err = tmpFile.Write(raw)
+	}
+	if closeErr := tmpFile.Close(); err == nil {
+		err = closeErr
+	}
+	if err == nil {
+		err = os.Rename(tmpPath, path)
+	}
+	if err != nil {
+		_ = os.Remove(tmpPath)
+		log.Warn().Err(err).Msg("failed to write session summary index")
+	}
 }
 
 // Create creates a new session
@@ -773,10 +946,14 @@ func (s *SessionStore) Delete(id string) error {
 			return fmt.Errorf("failed to delete session: %w", err)
 		}
 		removed = true
+		s.summaryMu.Lock()
+		delete(s.summaryCache, filepath.Base(candidate))
+		s.summaryMu.Unlock()
 	}
 	if !removed {
 		return fmt.Errorf("session not found: %s", id)
 	}
+	s.saveSummaryIndex()
 
 	// Also clean up resolved context, FSM, and knowledge accumulator
 	delete(s.resolvedContexts, id)
@@ -1295,7 +1472,24 @@ func (s *SessionStore) writeSession(data sessionData) error {
 	cleanupTemp = false
 	if legacyPath, err := s.directLegacySessionPath(data.ID); err == nil && legacyPath != "" && legacyPath != path {
 		_ = os.Remove(legacyPath)
+		s.summaryMu.Lock()
+		delete(s.summaryCache, filepath.Base(legacyPath))
+		s.summaryMu.Unlock()
 	}
+
+	// Keep the list summary cache warm so List() never re-reads this file.
+	s.summaryMu.Lock()
+	if info, err := os.Stat(path); err == nil {
+		s.summaryCache[filepath.Base(path)] = sessionSummaryCacheEntry{
+			modTime: info.ModTime(),
+			size:    info.Size(),
+			summary: sessionSummaryFromData(data),
+		}
+	} else {
+		delete(s.summaryCache, filepath.Base(path))
+	}
+	s.summaryMu.Unlock()
+	s.saveSummaryIndex()
 
 	return nil
 }

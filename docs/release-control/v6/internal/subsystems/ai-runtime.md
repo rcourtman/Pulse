@@ -1441,6 +1441,16 @@ deriving an older display status from `workflowStatusHistory`.
    atomically readable through temp-file plus rename so a large recent-session
    list cannot block `EnsureSession`, `AddMessage`, or stored handoff reads on
    a new prompt.
+   Session listing cost must not scale with stored transcript bytes.
+   `SessionStore.List` serves summaries from a per-file cache validated by
+   each file's (modTime, size), re-reading only files that changed since the
+   last list, and a cache-miss parse must not deep-decode message or redo
+   payloads (only their counts feed the summary). The cache persists as
+   `.sessions_index.json` beside the session files so the first list after a
+   restart stays index-speed; the index is best-effort and self-healing
+   (missing, corrupt, or stale entries only cost a re-parse, never a wrong
+   summary, and dotfiles are never listed as sessions). `writeSession` and
+   `Delete` keep the cache and index coherent on every mutation.
    Assistant session navigation must provide a searchable history path in the
    drawer-owned picker, using the canonical `/api/ai/sessions` contract rather
    than a separate recent-chat store. Search is applied before result limiting
@@ -2297,7 +2307,13 @@ deriving an older display status from `workflowStatusHistory`.
     from the canonical approval store and action-audit store. Session listing is
     an operator decision surface, so it must not leave stale pending/approval
     labels in the drawer after the governed action moved on, and it must still
-    omit raw commands, preflight bodies, and execution output.
+    omit raw commands, preflight bodies, and execution output. That refresh is
+    bounded, not exhaustive: the list is newest-first and only the
+    `maxSessionHandoffRefreshPerList` (20) most recent action-carrying
+    sessions are re-checked per list call, which covers every summary the
+    recent-sessions surface and picker top present; deeper history self-heals
+    because the send path refreshes the active session's handoff actions on
+    load before the turn executes.
     The Assistant drawer must also fetch that current session list before
     opening the session picker instead of presenting mount-time cached
     summaries as the operator's decision surface. For restored Patrol

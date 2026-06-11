@@ -442,6 +442,109 @@ func TestSessionStoreListDoesNotHoldStoreMutex(t *testing.T) {
 	}
 }
 
+func TestSessionStoreListServesSummariesFromCacheUntilFileChanges(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	require.NoError(t, err)
+
+	session, err := store.Create()
+	require.NoError(t, err)
+	require.NoError(t, store.AddMessage(session.ID, Message{Role: "user", Content: "aaaa"}))
+	require.NoError(t, store.AddMessage(session.ID, Message{Role: "assistant", Content: "reply"}))
+
+	sessions, err := store.List()
+	require.NoError(t, err)
+	require.Len(t, sessions, 1)
+	assert.Equal(t, "aaaa", sessions[0].Title)
+	assert.Equal(t, 2, sessions[0].MessageCount)
+
+	// Rewrite the file out of band with same-length content and restore the
+	// original mtime: List must serve the cached summary without re-reading.
+	path, err := store.sessionPath(session.ID)
+	require.NoError(t, err)
+	info, err := os.Stat(path)
+	require.NoError(t, err)
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	patched := strings.Replace(string(raw), `"title": "aaaa"`, `"title": "bbbb"`, 1)
+	require.NotEqual(t, string(raw), patched, "test fixture must contain the title to patch")
+	require.NoError(t, os.WriteFile(path, []byte(patched), 0600))
+	require.NoError(t, os.Chtimes(path, info.ModTime(), info.ModTime()))
+
+	sessions, err = store.List()
+	require.NoError(t, err)
+	require.Len(t, sessions, 1)
+	assert.Equal(t, "aaaa", sessions[0].Title, "unchanged (mtime, size) must serve the cached summary")
+
+	// Bump the mtime: List must notice the change and re-parse the file.
+	require.NoError(t, os.Chtimes(path, info.ModTime().Add(2*time.Second), info.ModTime().Add(2*time.Second)))
+	sessions, err = store.List()
+	require.NoError(t, err)
+	require.Len(t, sessions, 1)
+	assert.Equal(t, "bbbb", sessions[0].Title, "changed mtime must invalidate the cached summary")
+	assert.Equal(t, 2, sessions[0].MessageCount)
+}
+
+func TestSessionStoreSummaryIndexSurvivesRestart(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewSessionStore(dir)
+	require.NoError(t, err)
+
+	session, err := store.Create()
+	require.NoError(t, err)
+	require.NoError(t, store.AddMessage(session.ID, Message{Role: "user", Content: "indexed title"}))
+
+	// A fresh store (simulated restart) must serve the summary from the
+	// persisted index without re-reading the transcript: corrupt the message
+	// payload on disk at unchanged (mtime, size) and expect the indexed
+	// summary, not a parse of the corrupted file.
+	path, err := store.sessionPath(session.ID)
+	require.NoError(t, err)
+	info, err := os.Stat(path)
+	require.NoError(t, err)
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	patched := strings.Replace(string(raw), `"content": "indexed title"`, `"content": "altered titlexx"`, 1)
+	require.NotEqual(t, string(raw), patched)
+	require.NoError(t, os.WriteFile(path, []byte(patched), 0600))
+	require.NoError(t, os.Chtimes(path, info.ModTime(), info.ModTime()))
+
+	reopened, err := NewSessionStore(dir)
+	require.NoError(t, err)
+	sessions, err := reopened.List()
+	require.NoError(t, err)
+	require.Len(t, sessions, 1)
+	assert.Equal(t, "indexed title", sessions[0].Title)
+	assert.Equal(t, 1, sessions[0].MessageCount)
+
+	// The index file itself must never show up as a session.
+	for _, s := range sessions {
+		assert.NotEmpty(t, s.ID)
+	}
+}
+
+func TestSessionStoreListDropsExternallyDeletedSessions(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	require.NoError(t, err)
+
+	keep, err := store.Create()
+	require.NoError(t, err)
+	drop, err := store.Create()
+	require.NoError(t, err)
+
+	sessions, err := store.List()
+	require.NoError(t, err)
+	require.Len(t, sessions, 2)
+
+	path, err := store.sessionPath(drop.ID)
+	require.NoError(t, err)
+	require.NoError(t, os.Remove(path))
+
+	sessions, err = store.List()
+	require.NoError(t, err)
+	require.Len(t, sessions, 1)
+	assert.Equal(t, keep.ID, sessions[0].ID)
+}
+
 func TestSessionStoreEnsureSessionDoesNotScanIndirectLegacyFilesForNewSession(t *testing.T) {
 	store, err := NewSessionStore(t.TempDir())
 	require.NoError(t, err)
