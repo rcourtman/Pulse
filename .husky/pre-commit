@@ -68,7 +68,10 @@ gofmt -w -s .
 # Run Go linting (if golangci-lint is available)
 if command -v golangci-lint >/dev/null 2>&1; then
     echo "Running golangci-lint..."
-    golangci-lint run ./...
+    STAGED_GO_PKGS=$(git diff --cached --name-only | grep '\.go$' | xargs -I{} dirname {} 2>/dev/null | sort -u | sed 's|^|./|' | tr '
+' ' ')
+    if [ -z "$STAGED_GO_PKGS" ]; then STAGED_GO_PKGS="./..."; fi
+    GOMAXPROCS="${GOMAXPROCS:-2}" golangci-lint run --concurrency "${GOLANGCI_LINT_CONCURRENCY:-2}" --timeout "${GOLANGCI_LINT_TIMEOUT:-5m}" $STAGED_GO_PKGS
 fi
 
 # Run frontend linting (if package.json has lint script)
