@@ -6801,6 +6801,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 			pollErr = monErr
 			log.Error().Err(monErr).Str("instance", instanceName).Msg("Failed to get nodes")
 			m.state.SetConnectionHealth(instanceName, false)
+			m.markPVEInstanceNodesUnreachable(instanceName)
 
 			// Track auth failure if it's an authentication error
 			if errors.IsAuthError(err) {
@@ -11598,6 +11599,51 @@ func (m *Monitor) resetAuthFailures(instanceName string, nodeType string) {
 		delete(m.authFailures, nodeID)
 		delete(m.lastAuthAttempt, nodeID)
 	}
+}
+
+// markPVEInstanceNodesUnreachable keeps a PVE instance visible when the whole
+// instance stops answering (host shut down, network loss, connection refused).
+// Previously the poll error path returned without touching node state, so a
+// host that went dark kept showing its last online snapshot forever, and a
+// host that was already down when Pulse started never appeared at all. Nodes
+// seen within the offline grace window keep their prior state with degraded
+// connection health (mirroring the empty-node fallback in pollPVEInstance);
+// past the window they flip to offline. An instance with no node state yet
+// gets the synthesized offline entry from removeFailedPVENode so it still
+// shows on the dashboard.
+func (m *Monitor) markPVEInstanceNodesUnreachable(instanceName string) {
+	prevState := m.GetState()
+	prevInstanceNodes := make([]models.Node, 0)
+	for _, existingNode := range prevState.Nodes {
+		if existingNode.Instance == instanceName {
+			prevInstanceNodes = append(prevInstanceNodes, existingNode)
+		}
+	}
+
+	if len(prevInstanceNodes) == 0 {
+		m.removeFailedPVENode(instanceName)
+		return
+	}
+
+	preserved := make([]models.Node, 0, len(prevInstanceNodes))
+	now := time.Now()
+	for _, prevNode := range prevInstanceNodes {
+		nodeCopy := prevNode
+
+		if !nodeCopy.LastSeen.IsZero() && now.Sub(nodeCopy.LastSeen) < nodeOfflineGracePeriod {
+			if nodeCopy.ConnectionHealth == "" || nodeCopy.ConnectionHealth == "healthy" {
+				nodeCopy.ConnectionHealth = "degraded"
+			}
+		} else {
+			nodeCopy.Status = "offline"
+			nodeCopy.ConnectionHealth = "error"
+			nodeCopy.Uptime = 0
+			nodeCopy.CPU = 0
+		}
+
+		preserved = append(preserved, nodeCopy)
+	}
+	m.state.UpdateNodesForInstance(instanceName, preserved)
 }
 
 // removeFailedPVENode updates a PVE node to show failed authentication status
