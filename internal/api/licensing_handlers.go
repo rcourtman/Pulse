@@ -64,6 +64,12 @@ type LicenseHandlers struct {
 	hostedLeaseRefresh        sync.Map // map[string]*hostedEntitlementRefreshLoop
 	runtimeVersion            string
 	runtimeIdentity           runtimeIdentityModel
+
+	// legacyExchangeRetries tracks orgs with a background v5→v6 exchange
+	// retry loop in flight so only one loop runs per org.
+	legacyExchangeRetries sync.Map // map[string]struct{}
+	// legacyExchangeRetrySchedule overrides the retry backoff in tests.
+	legacyExchangeRetrySchedule []time.Duration
 }
 
 // NewLicenseHandlers creates a new license handlers instance.
@@ -133,6 +139,12 @@ func (h *LicenseHandlers) StopAllBackgroundLoops() {
 	h.hostedLeaseRefresh.Range(func(key, value any) bool {
 		if orgID, ok := key.(string); ok {
 			h.stopHostedEntitlementRefreshLoop(orgID)
+		}
+		return true
+	})
+	h.legacyExchangeRetries.Range(func(key, _ any) bool {
+		if orgID, ok := key.(string); ok {
+			h.stopLegacyExchangeRetry(orgID)
 		}
 		return true
 	})
@@ -576,13 +588,23 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 		if loadErr != nil {
 			if !os.IsNotExist(loadErr) {
 				log.Warn().Str("org_id", orgID).Err(loadErr).Msg("Failed to load persisted legacy license")
+				// A license.enc that exists but cannot be read means a paid v5
+				// install is about to present as Community — surface it as a
+				// migration notice instead of degrading silently.
+				if persistErr := h.setCommercialMigrationState(orgID, classifyPersistedLicenseLoadErrorFromLicensing(loadErr)); persistErr != nil {
+					log.Warn().Str("org_id", orgID).Err(persistErr).Msg("Failed to persist commercial migration state for unreadable legacy license")
+				}
 			}
 		} else if strings.TrimSpace(legacyJWT) != "" {
 			if _, err := service.Activate(legacyJWT); err != nil {
-				if persistErr := h.setCommercialMigrationState(orgID, classifyLegacyExchangeErrorFromLicensing(err)); persistErr != nil {
+				migrationStatus := classifyLegacyExchangeErrorFromLicensing(err)
+				if persistErr := h.setCommercialMigrationState(orgID, migrationStatus); persistErr != nil {
 					log.Warn().Str("org_id", orgID).Err(persistErr).Msg("Failed to persist commercial migration state")
 				}
 				log.Warn().Str("org_id", orgID).Err(err).Msg("Failed to auto-exchange persisted legacy license")
+				if migrationStatus != nil && migrationStatus.State == commercialMigrationStatePendingValue {
+					h.scheduleLegacyExchangeRetry(orgID, legacyJWT)
+				}
 			} else if service.IsActivated() {
 				if clearErr := h.setCommercialMigrationState(orgID, nil); clearErr != nil {
 					log.Warn().Str("org_id", orgID).Err(clearErr).Msg("Failed to clear commercial migration state after successful auto-exchange")
@@ -947,6 +969,7 @@ func (h *LicenseHandlers) activateLicenseKey(ctx context.Context, licenseKey str
 
 	if service.IsActivated() {
 		h.stopHostedEntitlementRefreshLoop(orgID)
+		h.stopLegacyExchangeRetry(orgID)
 		if clearErr := h.setCommercialMigrationState(orgID, nil); clearErr != nil {
 			log.Warn().Err(clearErr).Str("org_id", orgID).Msg("Failed to clear commercial migration state after activation")
 		}

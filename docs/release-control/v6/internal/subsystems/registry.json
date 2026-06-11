@@ -490,6 +490,14 @@
       ]
     },
     {
+      "path": "internal/api/licensing_legacy_retry.go",
+      "rationale": "the background legacy-exchange retry loop carries both API payload contract and cloud-paid entitlement boundary ownership",
+      "subsystems": [
+        "api-contracts",
+        "cloud-paid"
+      ]
+    },
+    {
       "path": "internal/api/notifications.go",
       "rationale": "notification handlers are both a notification delivery control surface and a canonical API payload contract boundary",
       "subsystems": [
@@ -2341,6 +2349,7 @@
             "match_prefixes": [],
             "match_files": [
               "pkg/licensing/commercial_migration.go",
+              "pkg/licensing/commercial_migration_load.go",
               "pkg/licensing/http.go",
               "pkg/licensing/quickstart_credits.go",
               "pkg/licensing/trial_start.go",
@@ -2350,6 +2359,7 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "pkg/licensing/commercial_migration_load_test.go",
               "pkg/licensing/commercial_migration_test.go",
               "pkg/licensing/http_test.go",
               "pkg/licensing/quickstart_credits_test.go",

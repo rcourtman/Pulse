@@ -165,8 +165,17 @@ Stripe-free and avoids a cloud-control-plane report data path across clients.
    preserve the raw runtime build and expose a normalized `pro`, `community`,
    or `unknown` status so paid-runtime support triage does not depend on
    interpreting Docker tags, public release names, or customer screenshots.
-5. `internal/api/payments_webhook_handlers.go` shared with `api-contracts`: commercial payment webhook handlers carry both API payload contract and cloud-paid billing boundary ownership.
-6. `internal/api/public_signup_handlers.go` shared with `api-contracts`: hosted signup handlers carry both API payload contract and cloud-paid hosted provisioning boundary ownership.
+   That same shared licensing boundary also owns paid-migration degradation
+   visibility and recovery. A persisted v5 license that exists but cannot be
+   read or decrypted must publish a terminal `commercial_migration` state
+   (`persisted_license_unreadable`) instead of downgrading to Community
+   behind a log line, and startup legacy-exchange failures classified as
+   pending must self-retry in the background with backoff for the life of
+   the process so a transient license-server or DNS failure at first boot
+   never strands a paying upgrader on Community until a manual restart.
+5. `internal/api/licensing_legacy_retry.go` shared with `api-contracts`: the background legacy-exchange retry loop carries both API payload contract and cloud-paid entitlement boundary ownership.
+6. `internal/api/payments_webhook_handlers.go` shared with `api-contracts`: commercial payment webhook handlers carry both API payload contract and cloud-paid billing boundary ownership.
+7. `internal/api/public_signup_handlers.go` shared with `api-contracts`: hosted signup handlers carry both API payload contract and cloud-paid hosted provisioning boundary ownership.
    That shared monitored-system presentation boundary also owns disabled
    provider-connection copy. Commercial entitlement surfaces must treat canonical
    zero-delta and removal-only TrueNAS or VMware previews as non-consuming or
@@ -182,10 +191,10 @@ Stripe-free and avoids a cloud-control-plane report data path across clients.
    syntactically valid `/api/public/signup` requests resolve to one uniform
    `202 Accepted` Pulse Account response whether provisioning/email side
    effects ran or were suppressed by owner-email throttling.
-6. `internal/cloudcp/auth/magiclink.go` shared with `security-privacy`: control-plane magic-link HMAC handling is both a Pulse Cloud account-access boundary and a security/privacy token-secrecy boundary.
-7. `internal/cloudcp/auth/magiclink_store.go` shared with `security-privacy`: control-plane magic-link persistence is both a Pulse Cloud account-access boundary and a security/privacy storage-hardening boundary.
-8. `internal/cloudcp/docker/labels.go` shared with `deployment-installability`: hosted tenant Docker labels are both a Pulse Cloud runtime contract boundary and a deployment-installability rollout boundary.
-9. `internal/cloudcp/docker/manager.go` shared with `deployment-installability`: hosted tenant container management is both a Pulse Cloud runtime contract boundary and a deployment-installability rollout boundary.
+7. `internal/cloudcp/auth/magiclink.go` shared with `security-privacy`: control-plane magic-link HMAC handling is both a Pulse Cloud account-access boundary and a security/privacy token-secrecy boundary.
+8. `internal/cloudcp/auth/magiclink_store.go` shared with `security-privacy`: control-plane magic-link persistence is both a Pulse Cloud account-access boundary and a security/privacy storage-hardening boundary.
+9. `internal/cloudcp/docker/labels.go` shared with `deployment-installability`: hosted tenant Docker labels are both a Pulse Cloud runtime contract boundary and a deployment-installability rollout boundary.
+10. `internal/cloudcp/docker/manager.go` shared with `deployment-installability`: hosted tenant container management is both a Pulse Cloud runtime contract boundary and a deployment-installability rollout boundary.
    Hosted tenant container creation must also bound Docker `json-file` logs
    through the control-plane Docker manager so tenant runtime logging cannot
    fill the live Pulse Cloud host independently of tenant data quotas.
@@ -258,18 +267,18 @@ Stripe-free and avoids a cloud-control-plane report data path across clients.
    networks, tenant-local report branding, and provider MSP operator commands
    with `provider_hosted_msp` while preserving its own control-plane mode value
    for status, backup manifests, and operational audit.
-10. `internal/cloudcp/provider_msp_backup.go` shared with `deployment-installability`: provider-hosted MSP backup is both a cloud-paid license/account/runtime continuity boundary and a deployment-installability recovery artifact boundary.
+11. `internal/cloudcp/provider_msp_backup.go` shared with `deployment-installability`: provider-hosted MSP backup is both a cloud-paid license/account/runtime continuity boundary and a deployment-installability recovery artifact boundary.
     License-backed provider MSP backups must include the signed MSP license
     file as a recovery artifact while exposing only license metadata in command
     output, restore must recover that license as an explicit operator artifact,
     and the archive must stay Stripe-free so provider-hosted MSP recovery does
     not inherit Pulse-hosted SaaS billing assumptions.
-11. `internal/cloudcp/provider_msp_recovery.go` shared with `deployment-installability`: provider-hosted MSP failed-workspace recovery is both a cloud-paid license/account/runtime continuity boundary and a deployment-installability recovery artifact boundary.
+12. `internal/cloudcp/provider_msp_recovery.go` shared with `deployment-installability`: provider-hosted MSP failed-workspace recovery is both a cloud-paid license/account/runtime continuity boundary and a deployment-installability recovery artifact boundary.
     Provider-hosted MSP recovery must require the signed provider MSP license
     source by default, preserve the client workspace boundary, refuse to start
     from empty tenant data, and mark a workspace active only after the canonical
     tenant-runtime rollout path has produced a healthy runtime.
-12. `internal/cloudcp/tenant_runtime_rollout.go` shared with `deployment-installability`: hosted tenant runtime rollout is both a Pulse Cloud runtime contract boundary and a deployment-installability release-rollout boundary.
+13. `internal/cloudcp/tenant_runtime_rollout.go` shared with `deployment-installability`: hosted tenant runtime rollout is both a Pulse Cloud runtime contract boundary and a deployment-installability release-rollout boundary.
     Hosted tenant runtime reconciliation must treat a registered tenant with
     preserved tenant data but no live Docker runtime as a recoverable managed
     state, not as a terminal skip. The control-plane-owned reconcile path must

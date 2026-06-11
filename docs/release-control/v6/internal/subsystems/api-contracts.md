@@ -743,19 +743,20 @@ payload shape change when the portal presents compact client rows.
     destination, but the browser/API contract must not reintroduce
     Pulse-Pro-as-page-name copy in callback titles, actions, or retry
     guidance.
-40. `internal/api/notifications.go` shared with `notifications`: notification handlers are both a notification delivery control surface and a canonical API payload contract boundary.
-41. `internal/api/org_handlers.go` shared with `organization-settings`: organization management handlers are both an organization settings control surface and a canonical API payload contract boundary.
-42. `internal/api/org_lifecycle_handlers.go` shared with `organization-settings`: organization lifecycle handlers are both an organization settings control surface and a canonical API payload contract boundary.
-43. `internal/api/payments_webhook_handlers.go` shared with `cloud-paid`: commercial payment webhook handlers carry both API payload contract and cloud-paid billing boundary ownership.
-44. `internal/api/public_signup_handlers.go` shared with `cloud-paid`: hosted signup handlers carry both API payload contract and cloud-paid hosted provisioning boundary ownership.
+40. `internal/api/licensing_legacy_retry.go` shared with `cloud-paid`: the background legacy-exchange retry loop carries both API payload contract and cloud-paid entitlement boundary ownership.
+41. `internal/api/notifications.go` shared with `notifications`: notification handlers are both a notification delivery control surface and a canonical API payload contract boundary.
+42. `internal/api/org_handlers.go` shared with `organization-settings`: organization management handlers are both an organization settings control surface and a canonical API payload contract boundary.
+43. `internal/api/org_lifecycle_handlers.go` shared with `organization-settings`: organization lifecycle handlers are both an organization settings control surface and a canonical API payload contract boundary.
+44. `internal/api/payments_webhook_handlers.go` shared with `cloud-paid`: commercial payment webhook handlers carry both API payload contract and cloud-paid billing boundary ownership.
+45. `internal/api/public_signup_handlers.go` shared with `cloud-paid`: hosted signup handlers carry both API payload contract and cloud-paid hosted provisioning boundary ownership.
     That same shared boundary also owns public hosted-signup response privacy:
     syntactically valid `/api/public/signup` requests must return one generic
     `202 Accepted` Pulse Account message whether provisioning/email side effects
     ran or were suppressed by the owner-email limiter, while invalid bodies and
     true server failures remain explicit.
-45. `internal/api/relay_mobile_capability.go` shared with `relay-runtime`: the backend-owned Pulse Mobile relay capability inventory is both a relay runtime boundary and a canonical API payload contract surface.
-46. `internal/api/resources.go` shared with `unified-resources`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
-47. `internal/api/security.go` shared with `security-privacy`: the security handlers are both a security/privacy control surface and a canonical API payload contract boundary.
+46. `internal/api/relay_mobile_capability.go` shared with `relay-runtime`: the backend-owned Pulse Mobile relay capability inventory is both a relay runtime boundary and a canonical API payload contract surface.
+47. `internal/api/resources.go` shared with `unified-resources`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
+48. `internal/api/security.go` shared with `security-privacy`: the security handlers are both a security/privacy control surface and a canonical API payload contract boundary.
     That same shared security/API boundary owns CSRF replacement-token
     concurrency. When parallel browser mutations arrive with stale or missing
     CSRF tokens for the same session, `internal/api/csrf_store.go` may retain
@@ -763,7 +764,7 @@ payload shape change when the portal presents compact client rows.
     replacement can validate its retry. Logout, password-change, and explicit
     session revocation must still delete the full session token set rather than
     leaving any retained replacement token valid.
-48. `internal/api/security_tokens.go` shared with `security-privacy`: the security token handlers are both a security/privacy control surface and a canonical API payload contract boundary.
+49. `internal/api/security_tokens.go` shared with `security-privacy`: the security token handlers are both a security/privacy control surface and a canonical API payload contract boundary.
     Token owner identity is reserved for the server-authenticated principal:
     shared token-minting helpers must derive `owner_user_id` from the current
     session or caller token and reject extension metadata that tries to
@@ -779,15 +780,15 @@ payload shape change when the portal presents compact client rows.
     before minting a `relay:mobile:access` credential. Community installs may
     receive the standard license-required response, but direct API calls must
     not bypass Relay entitlement by creating mobile runtime tokens.
-49. `internal/api/setup_script_render.go` shared with `agent-lifecycle`, `storage-recovery`: the generated Proxmox setup-script is a shared boundary across agent lifecycle (forced-command keys, install/uninstall edits), API contracts (rendered token shape and encoded rerun URL), and storage/recovery (backup visibility grants, Pulse-managed temperature SSH keys, and SMART disk-temperature collection).
-50. `internal/api/slo.go` shared with `performance-and-scalability`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
-51. `internal/api/system_settings.go` shared with `security-privacy`: the system settings telemetry and auth controls are both a security/privacy control surface and a canonical API payload contract boundary.
-52. `internal/api/unified_agent.go` shared with `agent-lifecycle`: unified agent download and installer handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
+50. `internal/api/setup_script_render.go` shared with `agent-lifecycle`, `storage-recovery`: the generated Proxmox setup-script is a shared boundary across agent lifecycle (forced-command keys, install/uninstall edits), API contracts (rendered token shape and encoded rerun URL), and storage/recovery (backup visibility grants, Pulse-managed temperature SSH keys, and SMART disk-temperature collection).
+51. `internal/api/slo.go` shared with `performance-and-scalability`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
+52. `internal/api/system_settings.go` shared with `security-privacy`: the system settings telemetry and auth controls are both a security/privacy control surface and a canonical API payload contract boundary.
+53. `internal/api/unified_agent.go` shared with `agent-lifecycle`: unified agent download and installer handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
     Development-mode missing-binary responses must report the build command
     for the requested normalized OS/architecture, not a hard-coded Linux
     target, so installer preflight failures point operators at the artifact
     they actually need.
-53. `internal/api/updates.go` shared with `deployment-installability`: update handlers are both a deployment-installability control surface and a canonical API payload contract boundary.
+54. `internal/api/updates.go` shared with `deployment-installability`: update handlers are both a deployment-installability control surface and a canonical API payload contract boundary.
     Update-plan responses own the structured readiness verdict for server
     updater capability, rollback support, agent continuity, v5 agent migration
     transport security, and agent reporting token scope. That verdict is part
@@ -4959,6 +4960,14 @@ trial-rate-limit acquisition payloads from an ordinary self-hosted runtime;
 expose a start-trial client method or in-app CTA in the same slice as any
 handler change. Commercial migration state must travel through
 `commercial_migration`, not through trial-denial reason strings.
+That migration transport must cover every degraded path, not just exchange
+rejections: when a persisted v5 license exists but cannot be read or
+decrypted, the runtime must publish a terminal `commercial_migration` state
+(`persisted_license_unreadable`) instead of degrading to Community behind a
+log line. Startup legacy-exchange failures classified as pending must
+self-retry in the background with backoff for the life of the process —
+a transient license-server or DNS failure at first boot must not require a
+manual restart or panel retry to complete a paid migration.
 That same shared commercial API boundary also owns hosted self-serve failure
 transport semantics. Hosted trial request and verification failures may render
 owned HTML pages, but they must preserve the originating Pulse instance and

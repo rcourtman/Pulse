@@ -104,6 +104,12 @@ func classifyLegacyExchangeErrorFromLicensing(err error) *commercialMigrationSta
 	return pkglicensing.ClassifyLegacyExchangeError(err)
 }
 
+func classifyPersistedLicenseLoadErrorFromLicensing(err error) *commercialMigrationStatusModel {
+	return pkglicensing.ClassifyPersistedLicenseLoadError(err)
+}
+
+const commercialMigrationStatePendingValue = pkglicensing.CommercialMigrationStatePending
+
 func isValidBillingSubscriptionStateFromLicensing(state subscriptionState) bool {
 	return pkglicensing.IsValidBillingSubscriptionState(state)
 }

@@ -2914,6 +2914,7 @@ index 1111111..2222222 100644
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
                     "exact_files": [
+                        "pkg/licensing/commercial_migration_load_test.go",
                         "pkg/licensing/commercial_migration_test.go",
                         "pkg/licensing/http_test.go",
                         "pkg/licensing/quickstart_credits_test.go",
