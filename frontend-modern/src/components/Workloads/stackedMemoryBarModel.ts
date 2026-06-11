@@ -60,6 +60,15 @@ const MEMORY_COLORS = {
   swap: 'rgba(168, 85, 247, 0.6)',
 };
 
+// Cache can never exceed the non-used pages; clamp so a momentarily
+// inconsistent snapshot (used drifting past total - cache) cannot push the
+// segments or the reconciliation row past 100%.
+function getEffectiveCache(props: StackedMemoryBarProps): number {
+  const cache = props.cache || 0;
+  if (cache <= 0 || props.total <= 0) return 0;
+  return Math.min(cache, Math.max(0, props.total - props.used));
+}
+
 function getUtilizationPercent(props: StackedMemoryBarProps): number {
   if (props.total > 0) {
     return (props.used / props.total) * 100;
@@ -91,7 +100,7 @@ function getSegments(
   const balloon = props.balloon || 0;
   const hasActiveBallooning = balloon > 0 && balloon < props.total;
   const usedPercent = (props.used / props.total) * 100;
-  const cache = props.cache || 0;
+  const cache = getEffectiveCache(props);
   const cachePercent = (cache / props.total) * 100;
 
   const segments: StackedMemorySegment[] = [];
@@ -139,7 +148,7 @@ function getTooltipRows(
 ): StackedMemoryTooltipRow[] {
   const rows: StackedMemoryTooltipRow[] = [];
   const balloon = props.balloon || 0;
-  const cache = props.cache || 0;
+  const cache = getEffectiveCache(props);
   const hasActiveBallooning = props.total > 0 && balloon > 0 && balloon < props.total;
   const hasSwap = (props.swapTotal || 0) > 0;
 

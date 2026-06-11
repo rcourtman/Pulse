@@ -4072,6 +4072,12 @@ func applyMemoryUsage(memory *models.Memory, usage float64) {
 	if memory.Free < 0 {
 		memory.Free = 0
 	}
+	// Keep the reclaimable-cache invariant (used + cache + free == total) as
+	// the sampled usage drifts: cache can never exceed the non-used pages.
+	if memory.Cache > memory.Free {
+		memory.Cache = memory.Free
+	}
+	memory.Free -= memory.Cache
 }
 
 func applyDiskUsage(disk *models.Disk, usage float64) {
