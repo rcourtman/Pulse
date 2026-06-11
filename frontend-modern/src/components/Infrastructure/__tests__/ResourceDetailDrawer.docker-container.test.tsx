@@ -1,0 +1,141 @@
+import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { Resource } from '@/types/resource';
+import { ResourceDetailDrawer } from '../ResourceDetailDrawer';
+
+vi.mock('@/components/Workloads/GuestDrawerHistory', () => ({
+  GuestDrawerHistory: (props: {
+    target: { resourceType: string; resourceId: string } | null;
+    range: string;
+    fallbackMetrics?: Record<string, number | undefined>;
+  }) => (
+    <div
+      data-testid="container-history"
+      data-resource-type={props.target?.resourceType}
+      data-resource-id={props.target?.resourceId}
+      data-range={props.range}
+      data-cpu={props.fallbackMetrics?.cpu}
+    />
+  ),
+  GuestDrawerHistoryRangeSelect: (props: {
+    range: string;
+    onRangeChange: (range: string) => void;
+  }) => (
+    <select
+      aria-label="History range"
+      value={props.range}
+      onChange={(event) => props.onRangeChange(event.currentTarget.value)}
+    >
+      <option value="24h">24 hours</option>
+      <option value="7d">7 days</option>
+    </select>
+  ),
+}));
+
+const resource = (overrides: Partial<Resource>): Resource =>
+  ({
+    id: overrides.id ?? 'app-container-1',
+    name: overrides.name ?? overrides.id ?? 'app-container-1',
+    displayName: overrides.displayName ?? overrides.name ?? overrides.id ?? 'app-container-1',
+    type: overrides.type ?? 'app-container',
+    platformId: 'docker',
+    platformType: 'docker',
+    sourceType: 'agent',
+    status: 'online',
+    lastSeen: 1_700_000_000_000,
+    ...overrides,
+  }) as Resource;
+
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
+
+describe('ResourceDetailDrawer for Docker containers', () => {
+  it('adds a metrics history tab for app-containers with a metrics target', async () => {
+    render(() => (
+      <ResourceDetailDrawer
+        resource={resource({
+          id: 'app-container-web',
+          name: 'edge-web',
+          metricsTarget: { resourceType: 'app-container', resourceId: 'abc123def456' },
+          cpu: { current: 75 },
+        })}
+      />
+    ));
+
+    await fireEvent.click(screen.getByRole('tab', { name: 'History' }));
+
+    const history = screen.getByTestId('container-history');
+    expect(history).toHaveAttribute('data-resource-type', 'app-container');
+    expect(history).toHaveAttribute('data-resource-id', 'abc123def456');
+    expect(history).toHaveAttribute('data-cpu', '75');
+  });
+
+  it('omits the history tab when no metrics target resolves', () => {
+    render(() => (
+      <ResourceDetailDrawer
+        resource={resource({
+          id: 'docker-image-1',
+          type: 'docker-image',
+          name: 'nginx:latest',
+        })}
+      />
+    ));
+
+    expect(screen.queryByRole('tab', { name: 'History' })).not.toBeInTheDocument();
+  });
+
+  it('renders container runtime facts in the table-row summary', () => {
+    render(() => (
+      <ResourceDetailDrawer
+        presentation="table-row"
+        resource={resource({
+          id: 'app-container-web',
+          name: 'edge-web',
+          docker: {
+            containerId: 'abc123def456',
+            containerState: 'running',
+            image: 'ghcr.io/example/edge-web:2026.05',
+            restartCount: 7,
+            createdAt: '2026-04-13T01:14:01Z',
+            labels: {
+              'com.docker.compose.project': 'orion',
+              'com.docker.compose.service': 'web',
+              'traefik.enable': 'true',
+            },
+          },
+        })}
+      />
+    ));
+
+    const section = screen.getByTestId('resource-docker-container-section');
+    expect(within(section).getByText('Image')).toBeInTheDocument();
+    expect(within(section).getByText('ghcr.io/example/edge-web:2026.05')).toBeInTheDocument();
+    expect(within(section).getByText('Restarts')).toBeInTheDocument();
+    expect(within(section).getByText('7')).toHaveClass('text-red-600');
+    expect(within(section).getByText('Created')).toBeInTheDocument();
+    expect(within(section).getByText(/ago$/)).toBeInTheDocument();
+    expect(within(section).getByText('Compose project')).toBeInTheDocument();
+    expect(within(section).getByText('orion')).toBeInTheDocument();
+    expect(within(section).getByText('Compose service')).toBeInTheDocument();
+    expect(within(section).getByText('Labels')).toBeInTheDocument();
+    expect(within(section).getByText(/traefik\.enable/)).toBeInTheDocument();
+  });
+
+  it('does not render the container section for non-container resources', () => {
+    render(() => (
+      <ResourceDetailDrawer
+        presentation="table-row"
+        resource={resource({
+          id: 'docker-volume-1',
+          type: 'docker-volume',
+          name: 'app-data',
+          docker: { volumeName: 'app-data', driver: 'local', createdAt: '2026-04-13T01:14:01Z' },
+        })}
+      />
+    ));
+
+    expect(screen.queryByTestId('resource-docker-container-section')).not.toBeInTheDocument();
+  });
+});

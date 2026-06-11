@@ -3,7 +3,7 @@ import type { Component } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import { Card } from '@/components/shared/Card';
 import { TagBadges } from '@/components/shared/TagBadges';
-import { formatUptime } from '@/utils/format';
+import { formatRelativeTime, formatUptime } from '@/utils/format';
 import { formatInteger } from './resourceDetailMappers';
 import type { UseResourceDetailDrawerStateResult } from './useResourceDetailDrawerState';
 
@@ -12,6 +12,131 @@ interface ResourceSummaryPresentationProps {
   drawer: UseResourceDetailDrawerStateResult;
   showPlatformId: boolean;
 }
+
+// Docker / Podman containers carry runtime facts (image, restart count,
+// created-at, compose membership, labels) that no generic summary row
+// surfaces. v5 rendered all of these in the container drawer; the unified
+// payload still ships them on resource.docker.
+const dockerContainerMeta = (resource: Resource): NonNullable<Resource['docker']> | null => {
+  if (resource.type !== 'app-container') return null;
+  const docker = resource.docker;
+  if (!docker) return null;
+  if (!docker.containerId && !docker.containerState && !docker.image) return null;
+  return docker;
+};
+
+const composeLabelValue = (
+  labels: Record<string, string> | undefined,
+  suffix: 'project' | 'service',
+): string =>
+  (
+    labels?.[`com.docker.compose.${suffix}`] ||
+    labels?.[`io.podman.compose.${suffix}`] ||
+    ''
+  ).trim();
+
+const dockerCreatedAtMillis = (docker: NonNullable<Resource['docker']>): number | null => {
+  const raw = (docker.createdAt || '').trim();
+  if (!raw) return null;
+  const parsed = Date.parse(raw);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const DockerContainerSummarySection: Component<{ docker: NonNullable<Resource['docker']> }> = (
+  props,
+) => {
+  const labels = () => props.docker.labels ?? {};
+  const labelEntries = () => Object.entries(labels());
+  const createdAt = () => dockerCreatedAtMillis(props.docker);
+  const restartCount = () => props.docker.restartCount;
+
+  return (
+    <tbody
+      data-testid="resource-docker-container-section"
+      class="divide-y divide-border border-t border-border"
+    >
+      <tr class="bg-surface-alt">
+        <th
+          colspan="2"
+          class="px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-wide text-muted"
+        >
+          Container
+        </th>
+      </tr>
+      <Show when={(props.docker.image || '').trim()}>
+        <tr>
+          <td class="w-[38%] px-2 py-1 text-muted">Image</td>
+          <td class="px-2 py-1 text-right font-medium text-base-content" title={props.docker.image}>
+            <span class="block truncate">{props.docker.image}</span>
+          </td>
+        </tr>
+      </Show>
+      <Show when={typeof restartCount() === 'number'}>
+        <tr>
+          <td class="px-2 py-1 text-muted">Restarts</td>
+          <td
+            class={`px-2 py-1 text-right font-medium ${
+              (restartCount() ?? 0) > 5
+                ? 'text-red-600 dark:text-red-400'
+                : 'text-base-content'
+            }`}
+          >
+            {formatInteger(restartCount())}
+          </td>
+        </tr>
+      </Show>
+      <Show when={createdAt()}>
+        {(created) => (
+          <tr>
+            <td class="px-2 py-1 text-muted">Created</td>
+            <td
+              class="px-2 py-1 text-right font-medium text-base-content"
+              title={new Date(created()).toLocaleString()}
+            >
+              {formatRelativeTime(created())}
+            </td>
+          </tr>
+        )}
+      </Show>
+      <Show when={composeLabelValue(labels(), 'project')}>
+        <tr>
+          <td class="px-2 py-1 text-muted">Compose project</td>
+          <td class="px-2 py-1 text-right font-medium text-base-content">
+            {composeLabelValue(labels(), 'project')}
+          </td>
+        </tr>
+      </Show>
+      <Show when={composeLabelValue(labels(), 'service')}>
+        <tr>
+          <td class="px-2 py-1 text-muted">Compose service</td>
+          <td class="px-2 py-1 text-right font-medium text-base-content">
+            {composeLabelValue(labels(), 'service')}
+          </td>
+        </tr>
+      </Show>
+      <Show when={labelEntries().length > 0}>
+        <tr>
+          <td class="px-2 py-1 align-top text-muted">Labels</td>
+          <td class="px-2 py-1">
+            <div class="flex flex-wrap justify-end gap-1">
+              <For each={labelEntries()}>
+                {([key, value]) => (
+                  <span
+                    class="inline-flex max-w-full items-center truncate rounded bg-surface-alt px-1.5 py-0.5 text-[10px]"
+                    title={value ? `${key}: ${value}` : key}
+                  >
+                    {key}
+                    <Show when={value}>: {value}</Show>
+                  </span>
+                )}
+              </For>
+            </div>
+          </td>
+        </tr>
+      </Show>
+    </tbody>
+  );
+};
 
 export const InlineResourceSummaryTables: Component<ResourceSummaryPresentationProps> = (props) => (
   <div
@@ -112,6 +237,9 @@ export const InlineResourceSummaryTables: Component<ResourceSummaryPresentationP
           </tr>
         </Show>
       </tbody>
+      <Show when={dockerContainerMeta(props.resource)}>
+        {(docker) => <DockerContainerSummarySection docker={docker()} />}
+      </Show>
       <tbody
         data-testid="resource-identity-section"
         class="divide-y divide-border border-t border-border"

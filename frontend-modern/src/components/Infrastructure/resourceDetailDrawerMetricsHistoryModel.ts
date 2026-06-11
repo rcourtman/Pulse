@@ -27,16 +27,17 @@ export const getResourceMetricsHistoryTarget = (
   return null;
 };
 
+// Any resource that resolves a metrics history target can chart history —
+// the backend stores and serves series for every type resolveMetricsTarget
+// hands out (agent, vm, system-container, app-container, pod, disk, ceph).
+// Gating on type === 'agent' silently hid history for Docker containers
+// even though the store records their CPU/memory/disk/IO samples.
 export const resourceSupportsMetricsHistory = (resource: Resource): boolean =>
-  resource.type === 'agent' && getResourceMetricsHistoryTarget(resource) !== null;
+  getResourceMetricsHistoryTarget(resource) !== null;
 
 export const getResourceMetricsHistoryFallbackMetrics = (
   resource: Resource,
 ): Record<string, number | undefined> => {
-  if (resource.type !== 'agent') {
-    return {};
-  }
-
   return {
     cpu: finiteMetric(resource.cpu?.current),
     memory: resource.memory ? finiteMetric(getMemoryPercent(resource)) : undefined,
