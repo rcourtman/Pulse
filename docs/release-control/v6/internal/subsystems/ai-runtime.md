@@ -2388,6 +2388,12 @@ deriving an older display status from `workflowStatusHistory`.
 
 ## Current State
 
+The done event carries `context_limit_tokens` (the active model's context
+window from `providers.ContextWindowTokens`) alongside token usage, and the
+drawer's last-turn summary renders input tokens as a percentage of that
+window ("8,500 tokens (6% of context)") so operators can see compaction
+coming; when the limit is absent the summary renders exactly as before.
+
 Post-tool model turns mark the status handoff: every agentic turn after the
 first emits a `model_processing` workflow state ("Working on the response
 with the gathered results.") before the provider call, so a provider that

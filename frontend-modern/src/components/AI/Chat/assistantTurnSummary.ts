@@ -39,11 +39,21 @@ const assistantTokenSummary = (message: ChatMessage) => {
   if (output <= 0) return null;
 
   const total = input + output;
+  // How full the model's context window was this turn (input side carries
+  // the conversation), so the operator can see compaction coming.
+  const contextLimit = normalizeAssistantTokenCount(message.tokens?.contextLimit);
+  const contextPercent =
+    contextLimit > 0 && input > 0 ? Math.min(100, Math.round((input / contextLimit) * 100)) : 0;
+  const contextLabel = contextPercent > 0 ? ` (${contextPercent}% of context)` : '';
+  const contextDetail =
+    contextPercent > 0
+      ? `, context ${formatAssistantTokenCount(input)} of ${formatAssistantTokenCount(contextLimit)} (${contextPercent}%)`
+      : '';
   return {
-    label: `${formatAssistantTokenCount(total)} ${total === 1 ? 'token' : 'tokens'}`,
+    label: `${formatAssistantTokenCount(total)} ${total === 1 ? 'token' : 'tokens'}${contextLabel}`,
     detail: `${formatAssistantTokenCount(total)} total, ${formatAssistantTokenCount(
       input,
-    )} input, ${formatAssistantTokenCount(output)} output`,
+    )} input, ${formatAssistantTokenCount(output)} output${contextDetail}`,
   };
 };
 

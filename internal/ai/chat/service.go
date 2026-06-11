@@ -957,10 +957,11 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 
 	// Send done event with token usage for this request.
 	doneData, _ := json.Marshal(DoneData{
-		SessionID:    session.ID,
-		Model:        selectedModel,
-		InputTokens:  loop.GetTotalInputTokens(),
-		OutputTokens: loop.GetTotalOutputTokens(),
+		SessionID:          session.ID,
+		Model:              selectedModel,
+		InputTokens:        loop.GetTotalInputTokens(),
+		OutputTokens:       loop.GetTotalOutputTokens(),
+		ContextLimitTokens: providers.ContextWindowTokens(selectedModel),
 	})
 	streamCallback(StreamEvent{Type: "done", Data: doneData})
 

@@ -51,6 +51,23 @@ describe('assistantTurnSummary', () => {
     });
   });
 
+  it('shows how full the context window was when the done event carries the limit', () => {
+    expect(
+      getAssistantTurnSummary(
+        makeAssistantMessage({
+          tokens: { input: 8200, output: 300, contextLimit: 131072 },
+        }),
+        {
+          getModelRouteLabel: () => 'Qwen via OpenRouter',
+        },
+      ),
+    ).toEqual({
+      label: 'Last turn: Qwen via OpenRouter · 3s · 8,500 tokens (6% of context)',
+      title:
+        'Last assistant turn summary: Model: Qwen via OpenRouter. Duration: 3s. Usage: 8,500 total, 8,200 input, 300 output, context 8,200 of 131,072 (6%)',
+    });
+  });
+
   it('keeps route and duration visible when provider usage is missing', () => {
     expect(
       getAssistantTurnSummary(

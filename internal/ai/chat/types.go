@@ -414,6 +414,9 @@ type DoneData struct {
 	Model        string `json:"model,omitempty"`
 	InputTokens  int    `json:"input_tokens,omitempty"`
 	OutputTokens int    `json:"output_tokens,omitempty"`
+	// ContextLimitTokens is the active model's context window, so the client
+	// can show how full the turn's context was without a model table of its own.
+	ContextLimitTokens int `json:"context_limit_tokens,omitempty"`
 }
 
 // Control level constants

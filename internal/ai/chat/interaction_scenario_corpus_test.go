@@ -105,13 +105,13 @@ func interactionScenarios() []interactionScenario {
 	return []interactionScenario{
 		{
 			name:              "plain answer turn",
-			promise:           "a simple question streams an answer and a terminal done stamped with the model route — no errors, no tool noise",
+			promise:           "a simple question streams an answer and a terminal done stamped with the model route and context window — no errors, no tool noise",
 			prompt:            "is pulse healthy",
 			calls:             []scriptedProviderCall{providerContentDone("Pulse is healthy.")},
 			orderedTypes:      []string{"session", "workflow_state", "content", "done"},
 			forbiddenTypes:    []string{"error", "tool_start", "tool_end"},
 			answerMustContain: []string{"Pulse is healthy."},
-			streamMustContain: []string{`"model":"openai:test"`},
+			streamMustContain: []string{`"model":"openai:test"`, `"context_limit_tokens"`},
 		},
 		{
 			name:              "greeting answers directly without tool noise",
