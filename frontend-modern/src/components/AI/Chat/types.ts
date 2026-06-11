@@ -22,6 +22,10 @@ export interface PendingTool {
   status?: 'pending' | 'running' | 'waiting';
   progress?: string;
   startedAt?: number;
+  // When execution actually began (first 'running' phase). startedAt marks
+  // the model starting to stream tool arguments, which can run minutes ahead
+  // of execution on slow routes — durations must not bill that to the tool.
+  runningAt?: number;
   updatedAt?: number;
 }
 
@@ -122,6 +126,9 @@ export interface StreamDisplayEvent {
   tool?: ToolExecution;
   pendingTool?: PendingTool;
   toolCancel?: ToolCancellation;
+  // Execution start carried from the pending tool onto the completed row so
+  // the duration stamp reflects execution, not model arg-streaming.
+  runningAt?: number;
   content?: string;
   model?: string;
   failedModel?: string;

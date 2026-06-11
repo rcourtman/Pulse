@@ -2081,6 +2081,7 @@ describe('useChat', () => {
         status: 'running',
         progress: undefined,
         startedAt: expect.any(Number),
+        runningAt: expect.any(Number),
         updatedAt: expect.any(Number),
       });
       expect(assistant.streamEvents).toContainEqual(
@@ -2091,6 +2092,40 @@ describe('useChat', () => {
           updatedAt: expect.any(Number),
         }),
       );
+      dispose();
+    });
+
+    it('anchors execution start on the running phase and carries it onto the completed tool row', async () => {
+      const { getFireEvent } = setupWithEventCapture();
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
+
+      await chat.sendMessage('hi');
+      const fire = getFireEvent();
+
+      // Model is still streaming arguments: no execution start yet.
+      fire({
+        type: 'tool_start',
+        data: { id: 'tool-1', name: 'pulse_query', input: '', phase: 'pending' },
+      });
+      let assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      expect(assistant.pendingTools![0].runningAt).toBeUndefined();
+
+      // Execution begins.
+      fire({
+        type: 'tool_progress',
+        data: { id: 'tool-1', name: 'pulse_query', input: '{}', phase: 'running' },
+      });
+      assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      const runningAt = assistant.pendingTools![0].runningAt;
+      expect(runningAt).toEqual(expect.any(Number));
+
+      fire({
+        type: 'tool_end',
+        data: { id: 'tool-1', name: 'pulse_query', input: '{}', output: 'ok', success: true },
+      });
+      assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      const completedEvent = (assistant.streamEvents || []).find((evt) => evt.type === 'tool');
+      expect(completedEvent?.runningAt).toBe(runningAt);
       dispose();
     });
 

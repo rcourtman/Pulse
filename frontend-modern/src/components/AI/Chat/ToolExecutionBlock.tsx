@@ -32,6 +32,10 @@ import { getAssistantFastToolCompletionSettleUntil } from './streamActivityTimin
 interface ToolExecutionBlockProps {
   tool: ToolExecution;
   startedAt?: number;
+  // When execution actually began. startedAt marks the model starting to
+  // stream tool arguments; on slow routes that can run minutes before the
+  // tool runs, and the duration stamp must not bill it to the tool.
+  runningAt?: number;
   completedAt?: number;
   live?: boolean;
   settleUntil?: number;
@@ -384,7 +388,9 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
   });
 
   const durationLabel = createMemo(() =>
-    settlingFastCompletion() ? '' : formatCompletedToolDuration(props.startedAt, props.completedAt),
+    settlingFastCompletion()
+      ? ''
+      : formatCompletedToolDuration(props.runningAt ?? props.startedAt, props.completedAt),
   );
 
   const statusLabel = () =>

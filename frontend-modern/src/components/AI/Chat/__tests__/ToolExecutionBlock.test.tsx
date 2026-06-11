@@ -132,6 +132,22 @@ describe('ToolExecutionBlock', () => {
     expect(screen.getByLabelText('Tool duration <1s')).toHaveTextContent('<1s');
   });
 
+  it('stamps duration from execution start, not model arg-streaming start', () => {
+    // The model spent ~2 minutes streaming arguments (startedAt) before the
+    // tool actually ran for 2s (runningAt → completedAt). The visible stamp
+    // must bill the tool only for its execution.
+    render(() => (
+      <ToolExecutionBlock
+        tool={makeTool()}
+        startedAt={1_000}
+        runningAt={129_000}
+        completedAt={131_000}
+      />
+    ));
+
+    expect(screen.getByLabelText('Tool duration 2s')).toHaveTextContent('2s');
+  });
+
   it('briefly presents fresh live fast completions as running before settling', async () => {
     vi.useFakeTimers();
 

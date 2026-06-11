@@ -740,6 +740,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                           {(tool) => (
                             <ToolExecutionBlock
                               startedAt={evt()?.startedAt}
+                              runningAt={evt()?.runningAt}
                               completedAt={evt()?.updatedAt}
                               live={props.message.isStreaming}
                               settleUntil={evt()?.settleUntil}

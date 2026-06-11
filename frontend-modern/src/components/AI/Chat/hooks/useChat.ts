@@ -834,15 +834,17 @@ export function useChat(options: UseChatOptions = {}) {
         continue;
       }
       replacedTool = true;
+      const mergedStatus = data.phase ? status : tool.status || status;
       resolvedTool = {
         ...tool,
         id: data.id || tool.id,
         name: data.name || tool.name,
         input: data.input || tool.input,
         rawInput: data.raw_input || tool.rawInput,
-        status: data.phase ? status : tool.status || status,
+        status: mergedStatus,
         progress: progress || tool.progress,
         startedAt: tool.startedAt || now,
+        runningAt: tool.runningAt || (mergedStatus === 'running' ? now : undefined),
         updatedAt: now,
       };
       updatedPendingTools.push(resolvedTool);
@@ -857,6 +859,7 @@ export function useChat(options: UseChatOptions = {}) {
         status,
         progress,
         startedAt: now,
+        runningAt: status === 'running' ? now : undefined,
         updatedAt: now,
       };
       updatedPendingTools.push(resolvedTool);
@@ -908,6 +911,7 @@ export function useChat(options: UseChatOptions = {}) {
       status,
       progress: progress || tool.progress,
       startedAt: tool.startedAt || now,
+      runningAt: tool.runningAt || (status === 'running' ? now : undefined),
       updatedAt: now,
     });
 
@@ -1588,6 +1592,7 @@ export function useChat(options: UseChatOptions = {}) {
                   tool: newToolCall,
                   toolId: completedToolId,
                   startedAt: resolvedPendingTool?.startedAt,
+                  runningAt: resolvedPendingTool?.runningAt,
                   updatedAt: completedAt,
                   settleUntil,
                 });
@@ -1616,6 +1621,7 @@ export function useChat(options: UseChatOptions = {}) {
                       tool: newToolCall,
                       toolId: completedToolId,
                       startedAt,
+                      runningAt: evt.pendingTool?.runningAt || evt.runningAt,
                       updatedAt: completedAt,
                       settleUntil,
                     };
