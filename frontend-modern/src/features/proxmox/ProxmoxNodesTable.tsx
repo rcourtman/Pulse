@@ -60,6 +60,7 @@ import {
   getProxmoxHostTableMinWidthClass,
   getProxmoxHostVisibleColumnsForLayout,
   type ProxmoxHostTableColumn,
+  type ProxmoxHostTableColumnId,
 } from './proxmoxHostTableModel';
 
 // Proxmox Overview mirrors the v5 Dashboard layout: a dedicated nodes table on
@@ -131,6 +132,60 @@ const formatPercentLabel = (value: number | null | undefined): string => {
   return `${Math.round(Math.max(0, normalized))}%`;
 };
 
+type HostSortKey = Exclude<ProxmoxHostTableColumnId, 'web'>;
+
+const TEXT_SORT_KEYS = new Set<ProxmoxHostTableColumnId>(['node', 'version', 'cluster']);
+
+const getHostSortValue = (
+  node: Resource,
+  guests: Resource[],
+  key: HostSortKey,
+): string | number | null => {
+  switch (key) {
+    case 'node':
+      return asTrimmedString(node.name) || node.id;
+    case 'version':
+      return asTrimmedString(getResourceVersion(node)) || null;
+    case 'cluster':
+      return getResourceClusterLabel(node);
+    case 'cpu':
+      return node.cpu?.current ?? null;
+    case 'memory': {
+      const total = node.memory?.total ?? 0;
+      if (total > 0) return ((node.memory?.used ?? 0) / total) * 100;
+      return typeof node.memory?.current === 'number' ? node.memory.current : null;
+    }
+    case 'disk':
+      return node.disk?.current ?? null;
+    case 'temp':
+      return typeof node.temperature === 'number' && node.temperature > 0
+        ? node.temperature
+        : null;
+    case 'uptime':
+      return node.uptime ?? null;
+    case 'vms':
+      return countGuestsForNode(guests, getResourceNodeName(node)).vms;
+    case 'cts':
+      return countGuestsForNode(guests, getResourceNodeName(node)).containers;
+    default:
+      key satisfies never;
+      return null;
+  }
+};
+
+const isEmptyHostSortValue = (value: string | number | null): boolean =>
+  value === null || (typeof value === 'number' && Number.isNaN(value));
+
+const compareHostSortValues = (a: string | number | null, b: string | number | null): number => {
+  const aEmpty = isEmptyHostSortValue(a);
+  const bEmpty = isEmptyHostSortValue(b);
+  if (aEmpty && bEmpty) return 0;
+  if (aEmpty) return 1;
+  if (bEmpty) return -1;
+  if (typeof a === 'number' && typeof b === 'number') return a === b ? 0 : a < b ? -1 : 1;
+  return String(a).localeCompare(String(b), undefined, { sensitivity: 'base' });
+};
+
 export const ProxmoxNodesTable: Component<{
   nodes: Resource[];
   guests: Resource[];
@@ -150,6 +205,41 @@ export const ProxmoxNodesTable: Component<{
   const visibleColumnIds = createMemo(() => visibleColumns().map((column) => column.id));
   const displayMode = () => props.metricDisplayMode?.() ?? 'bars';
   const isSparklineMode = () => displayMode() === 'sparklines';
+  const [sortKey, setSortKey] = createSignal<HostSortKey | null>(null);
+  const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
+
+  const handleSort = (column: ProxmoxHostTableColumnId) => {
+    if (column === 'web') return;
+    const key = column as HostSortKey;
+    const defaultDirection = TEXT_SORT_KEYS.has(key) ? 'asc' : 'desc';
+    // Cycle: default direction → flipped → cleared.
+    if (sortKey() === key) {
+      if (sortDirection() === defaultDirection) {
+        setSortDirection(defaultDirection === 'asc' ? 'desc' : 'asc');
+      } else {
+        setSortKey(null);
+        setSortDirection('asc');
+      }
+      return;
+    }
+    setSortKey(key);
+    setSortDirection(defaultDirection);
+  };
+
+  const sortedNodes = createMemo(() => {
+    const key = sortKey();
+    if (!key) return props.nodes;
+    const dir = sortDirection() === 'asc' ? 1 : -1;
+    const decorated = props.nodes.map(
+      (node) => [getHostSortValue(node, props.guests, key), node] as const,
+    );
+    decorated.sort(([a], [b]) => {
+      // Missing values stay last in either direction.
+      if (isEmptyHostSortValue(a) || isEmptyHostSortValue(b)) return compareHostSortValues(a, b);
+      return compareHostSortValues(a, b) * dir;
+    });
+    return decorated.map(([, node]) => node);
+  });
 
   // Use the same canonical history reader the workloads table uses; cache
   // keys collide so the two readers dedupe their fetches.
@@ -190,15 +280,28 @@ export const ProxmoxNodesTable: Component<{
             <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
               <For each={visibleColumns()}>
                 {(column) => (
-                  <TableHead class={getPlatformTableHeadClassForKind(column.kind)}>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind(column.kind)} ${
+                      column.id !== 'web' ? 'cursor-pointer hover:bg-surface-hover' : ''
+                    }`}
+                    aria-sort={
+                      sortKey() === column.id
+                        ? sortDirection() === 'asc'
+                          ? 'ascending'
+                          : 'descending'
+                        : undefined
+                    }
+                    onClick={() => handleSort(column.id)}
+                  >
                     {column.label}
+                    {sortKey() === column.id && (sortDirection() === 'asc' ? ' ▲' : ' ▼')}
                   </TableHead>
                 )}
               </For>
             </TableRow>
           </TableHeader>
           <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
-            <For each={props.nodes}>
+            <For each={sortedNodes()}>
               {(node) => {
                 const name = () => asTrimmedString(node.name) || node.id;
                 const drawerNode = createMemo(() => nodeFromResource(node));

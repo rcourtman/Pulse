@@ -173,6 +173,49 @@ describe('ProxmoxNodesTable', () => {
     expect(offlineRow).not.toHaveAttribute('data-workload-alert-accent');
   });
 
+  it('sorts rows from the column headers with metric columns defaulting to descending', async () => {
+    render(() => (
+      <ProxmoxNodesTable
+        nodes={[
+          makeNodeResource({ cpu: { current: 10 } }),
+          makeNodeResource({
+            id: 'agent:pve-node-2',
+            name: 'pve-node-2',
+            displayName: 'pve-node-2',
+            cpu: { current: 80 },
+            proxmox: { clusterName: 'homelab', nodeName: 'pve-node-2' },
+          }),
+        ]}
+        guests={[]}
+        emptyIcon={<span />}
+        emptyTitle="No Proxmox VE nodes"
+        emptyDescription="No nodes"
+      />
+    ));
+
+    const rowNames = () =>
+      screen
+        .getAllByText(/pve-node-\d/)
+        .map((el) => el.textContent)
+        .filter((text) => text === 'pve-node-1' || text === 'pve-node-2');
+
+    expect(rowNames()).toEqual(['pve-node-1', 'pve-node-2']);
+
+    const cpuHeader = screen.getByText('CPU');
+    await fireEvent.click(cpuHeader);
+    expect(cpuHeader.closest('th')).toHaveAttribute('aria-sort', 'descending');
+    expect(rowNames()).toEqual(['pve-node-2', 'pve-node-1']);
+
+    await fireEvent.click(cpuHeader);
+    expect(cpuHeader.closest('th')).toHaveAttribute('aria-sort', 'ascending');
+    expect(rowNames()).toEqual(['pve-node-1', 'pve-node-2']);
+
+    // Third click returns to the default (unsorted) order.
+    await fireEvent.click(cpuHeader);
+    expect(cpuHeader.closest('th')).not.toHaveAttribute('aria-sort');
+    expect(rowNames()).toEqual(['pve-node-1', 'pve-node-2']);
+  });
+
   it('opens the host details drawer from the host-owned top table row', async () => {
     render(() => (
       <ProxmoxNodesTable
