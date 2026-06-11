@@ -23,8 +23,11 @@
 #                                   Allow automatic Patrol/discovery/alert AI in dev
 #   HOT_DEV_BACKEND_HEALTH_STARTUP_GRACE_SECONDS=180
 #                                   Backend /api/health grace after starts/restarts
-#   HOT_DEV_BACKEND_UNHEALTHY_THRESHOLD=2
+#   HOT_DEV_BACKEND_UNHEALTHY_THRESHOLD=4
 #                                   Consecutive failed /api/health probes before restart
+#                                   (default tolerates ~20s of load-induced stall; test
+#                                   suites and builds on the same machine routinely peg
+#                                   the CPU and a kill mid-AI-stream bricks that chat turn)
 #
 # Pro Features Mode:
 #   When pulse-enterprise repo exists and HOT_DEV_USE_PRO is not "false",
@@ -519,11 +522,11 @@ fi
 log_info "Starting backend health monitor..."
 (
     UNHEALTHY_STREAK=0
-    UNHEALTHY_THRESHOLD="${HOT_DEV_BACKEND_UNHEALTHY_THRESHOLD:-2}"
+    UNHEALTHY_THRESHOLD="${HOT_DEV_BACKEND_UNHEALTHY_THRESHOLD:-4}"
     BACKEND_HEALTH_STARTUP_GRACE_SECONDS="${HOT_DEV_BACKEND_HEALTH_STARTUP_GRACE_SECONDS:-180}"
     BACKEND_PROCESS_MISSING_GRACE_SECONDS="${HOT_DEV_BACKEND_PROCESS_MISSING_GRACE_SECONDS:-10}"
 
-    [[ "${UNHEALTHY_THRESHOLD}" =~ ^[1-9][0-9]*$ ]] || UNHEALTHY_THRESHOLD=2
+    [[ "${UNHEALTHY_THRESHOLD}" =~ ^[1-9][0-9]*$ ]] || UNHEALTHY_THRESHOLD=4
     [[ "${BACKEND_HEALTH_STARTUP_GRACE_SECONDS}" =~ ^[0-9]+$ ]] || BACKEND_HEALTH_STARTUP_GRACE_SECONDS=180
     [[ "${BACKEND_PROCESS_MISSING_GRACE_SECONDS}" =~ ^[0-9]+$ ]] || BACKEND_PROCESS_MISSING_GRACE_SECONDS=10
 

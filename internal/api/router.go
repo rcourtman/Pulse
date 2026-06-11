@@ -4468,7 +4468,12 @@ func (r *Router) handleHealth(w http.ResponseWriter, req *http.Request) {
 	monitorHealthy := r.monitor != nil
 	schedulerHealthy := false
 	if monitorHealthy {
-		schedulerHealthy = r.monitor.SchedulerHealth().DeadLetter.Count == 0
+		// Liveness probes are watchdog-polled and must stay minimal: the
+		// full SchedulerHealth refreshes provider caches under the monitor's
+		// write lock on every call, which this endpoint only needed for the
+		// dead-letter count. DeadLetterCount touches only the queue's own
+		// short-lived mutex.
+		schedulerHealthy = r.monitor.DeadLetterCount() == 0
 	}
 
 	statusCode := http.StatusOK

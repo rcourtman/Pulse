@@ -2451,6 +2451,18 @@ func emptySchedulerHealthResponse(enabled bool) SchedulerHealthResponse {
 }
 
 // SchedulerHealth returns a complete snapshot of scheduler health for API exposure.
+// DeadLetterCount reports the number of dead-lettered poll tasks using only
+// the queue's own short-lived mutex. Liveness probes (/api/health) use this
+// instead of SchedulerHealth, which refreshes provider caches under the
+// monitor's write lock on every call — far more work and lock surface than a
+// watchdog-polled liveness check should pay for.
+func (m *Monitor) DeadLetterCount() int {
+	if m == nil || m.deadLetterQueue == nil {
+		return 0
+	}
+	return m.deadLetterQueue.Size()
+}
+
 func (m *Monitor) SchedulerHealth() SchedulerHealthResponse {
 	response := emptySchedulerHealthResponse(m.config != nil && m.config.AdaptivePollingEnabled)
 
