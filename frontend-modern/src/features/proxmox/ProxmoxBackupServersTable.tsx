@@ -10,7 +10,7 @@ import {
   TableRow,
 } from '@/components/shared/Table';
 import { TableCard } from '@/components/shared/TableCard';
-import { formatBytes } from '@/utils/format';
+import { formatBytes, formatUptime } from '@/utils/format';
 import {
   PLATFORM_TABLE_BODY_CLASS,
   PLATFORM_TABLE_CARD_CLASS,
@@ -28,6 +28,8 @@ import type { StatusIndicatorVariant } from '@/utils/status';
 // so it lives here on the Backups page, not buried on the platform Storage tab
 // where the rows read as generic "PVE" storage. One row per datastore, labelled
 // by its server; a server with no datastore data still gets a reachability row.
+// Host CPU/memory/uptime ride along on each of the server's rows: PBS hosts
+// left the v5 nodes table in the v6 IA, so this is where their health lives.
 
 interface BackupServerRow {
   key: string;
@@ -35,6 +37,11 @@ interface BackupServerRow {
   online: boolean;
   connectionLabel: string;
   version?: string;
+  cpuPercent?: number;
+  memoryPercent?: number;
+  memoryUsed?: number;
+  memoryTotal?: number;
+  uptimeSeconds?: number;
   datastore?: ResourcePBSDatastore;
   backupCount: number;
 }
@@ -104,24 +111,31 @@ export function buildBackupServerRows(
   // datastore renders as a phantom offline "server" row.
   for (const server of servers.filter((resource) => resource.type === 'pbs')) {
     const datastores = server.pbs?.datastores ?? [];
+    const memoryTotal = server.memory?.total ?? 0;
+    const host = {
+      serverName: server.name,
+      online: serverIsOnline(server),
+      connectionLabel: connectionLabel(server),
+      version: server.pbs?.version,
+      cpuPercent: typeof server.cpu?.current === 'number' ? server.cpu.current : undefined,
+      memoryPercent:
+        memoryTotal > 0
+          ? ((server.memory?.used ?? 0) / memoryTotal) * 100
+          : typeof server.memory?.current === 'number'
+            ? server.memory.current
+            : undefined,
+      memoryUsed: server.memory?.used,
+      memoryTotal: memoryTotal > 0 ? memoryTotal : undefined,
+      uptimeSeconds: server.uptime ?? server.pbs?.uptimeSeconds,
+    };
     if (datastores.length === 0) {
-      rows.push({
-        key: server.id,
-        serverName: server.name,
-        online: serverIsOnline(server),
-        connectionLabel: connectionLabel(server),
-        version: server.pbs?.version,
-        backupCount: 0,
-      });
+      rows.push({ key: server.id, ...host, backupCount: 0 });
       continue;
     }
     for (const datastore of datastores) {
       rows.push({
         key: `${server.id}:${datastore.name}`,
-        serverName: server.name,
-        online: serverIsOnline(server),
-        connectionLabel: connectionLabel(server),
-        version: server.pbs?.version,
+        ...host,
         datastore,
         backupCount: countFor(server, datastore.name),
       });
@@ -140,21 +154,31 @@ export function ProxmoxBackupServersTable(props: {
   return (
     <Show when={rows().length > 0}>
       <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
-        <Table class="min-w-[820px] table-fixed text-xs">
+        <Table class="min-w-[1020px] table-fixed text-xs">
           <colgroup>
-            <col style={{ width: '20%' }} />
-            <col style={{ width: '13%' }} />
+            <col style={{ width: '16%' }} />
+            <col style={{ width: '10%' }} />
+            <col style={{ width: '8%' }} />
+            <col style={{ width: '6%' }} />
             <col style={{ width: '11%' }} />
-            <col style={{ width: '18%' }} />
-            <col style={{ width: '20%' }} />
-            <col style={{ width: '9%' }} />
-            <col style={{ width: '9%' }} />
+            <col style={{ width: '7%' }} />
+            <col style={{ width: '13%' }} />
+            <col style={{ width: '15%' }} />
+            <col style={{ width: '7%' }} />
+            <col style={{ width: '7%' }} />
           </colgroup>
           <TableHeader>
             <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
               <TableHead class={getPlatformTableHeadClassForKind('name')}>Backup server</TableHead>
               <TableHead class={getPlatformTableHeadClassForKind('text')}>Status</TableHead>
               <TableHead class={getPlatformTableHeadClassForKind('text')}>Version</TableHead>
+              <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>CPU</TableHead>
+              <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                Memory
+              </TableHead>
+              <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                Uptime
+              </TableHead>
               <TableHead class={getPlatformTableHeadClassForKind('text')}>Datastore</TableHead>
               <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>Used</TableHead>
               <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
@@ -191,6 +215,48 @@ export function ProxmoxBackupServersTable(props: {
                       class={`${getPlatformTableCellClassForKind('text')} text-muted truncate text-[11px]`}
                     >
                       {row.version || '—'}
+                    </TableCell>
+                    <TableCell
+                      class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
+                    >
+                      <Show
+                        when={row.online && row.cpuPercent !== undefined}
+                        fallback={<span class="text-muted">—</span>}
+                      >
+                        {Math.round(row.cpuPercent ?? 0)}%
+                      </Show>
+                    </TableCell>
+                    <TableCell class={getPlatformTableCellClassForKind('numeric-value')}>
+                      <Show
+                        when={row.online && row.memoryPercent !== undefined}
+                        fallback={<span class="text-muted">—</span>}
+                      >
+                        <span
+                          class="text-base-content tabular-nums"
+                          title={
+                            row.memoryTotal
+                              ? `${formatBytes(row.memoryUsed ?? 0)} / ${formatBytes(row.memoryTotal)}`
+                              : undefined
+                          }
+                        >
+                          {Math.round(row.memoryPercent ?? 0)}%
+                        </span>
+                        <Show when={row.memoryTotal}>
+                          <span class="ml-1 text-[10px] text-muted tabular-nums">
+                            ({formatBytes(row.memoryUsed ?? 0)}/{formatBytes(row.memoryTotal ?? 0)})
+                          </span>
+                        </Show>
+                      </Show>
+                    </TableCell>
+                    <TableCell
+                      class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
+                    >
+                      <Show
+                        when={row.online && (row.uptimeSeconds ?? 0) > 0}
+                        fallback={<span class="text-muted">—</span>}
+                      >
+                        {formatUptime(row.uptimeSeconds ?? 0)}
+                      </Show>
                     </TableCell>
                     <TableCell
                       class={`${getPlatformTableCellClassForKind('text')} text-base-content truncate font-mono text-[11px]`}
