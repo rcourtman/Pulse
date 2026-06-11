@@ -143,6 +143,35 @@ activation, recovery, or BYOK/local AI setup instead; any exceptional
 support-issued entitlement is reflected through hosted entitlement state rather
 than a local in-app trial acquisition flow.
 
+#### Breaking Change: Paid Licensing Requires Connectivity
+
+Pulse v5 validated paid license keys entirely locally. Once activated, a v5
+Pro or Lifetime install never needed to reach a licensing service again, so
+fully offline and air-gapped installs kept paid features indefinitely.
+
+Pulse v6 does not work that way. This is a breaking change for paid installs:
+
+- **What changed.** v6 activates a paid license against
+  `license.pulserelay.pro` and then refreshes a short-lived entitlement grant
+  in the background (several times a day by default). The grant is valid for
+  72 hours, and after it expires Pulse allows a further 7 day grace window.
+- **Offline tolerance.** A paid v6 instance that cannot reach
+  `license.pulserelay.pro` keeps its paid features for roughly 10 days from
+  the last successful refresh (72 hour grant lifetime plus 7 day grace).
+  After that, paid features drop to Community behavior until connectivity
+  returns. Core monitoring keeps running throughout; this affects paid
+  surfaces such as extended history and AI operations, not data collection.
+- **Recovery is automatic.** When connectivity returns, the background
+  refresh (or a restart) reactivates the license without re-entering the key.
+- **Who is affected.** Every paid self-hosted install, including Lifetime.
+  Air-gapped or egress-restricted environments are affected the most: v6
+  cannot keep paid features active without periodic outbound HTTPS to
+  `license.pulserelay.pro`.
+- **What to do.** Allow outbound HTTPS (port 443) from the Pulse server to
+  `license.pulserelay.pro`. If your environment is air-gapped or cannot
+  allow that egress, contact `support@pulserelay.pro` before upgrading to
+  discuss options for your install.
+
 #### Paid Pulse Pro Runtime
 
 Paid Pulse Pro, Relay, and eligible legacy customers should not use public
@@ -170,6 +199,12 @@ Pulse v6 uses the activation/grant model for active licensing, but it can migrat
   - a Pulse v6 activation key, or
   - a valid Pulse v5 paid license key, which Pulse will try to exchange automatically into the v6 activation model
 - If the exchange service cannot complete the migration, retry from the v6 license panel or use the self-serve retrieval flow to fetch the current v6 activation key. Email is only a backup copy of that key.
+- A migrated v5 key can be active on a limited number of v6 installations at
+  a time (currently 3). v5 never counted installations, so if you run the
+  same key on more instances than that, the extra instances will report that
+  the key has reached its installation limit and will stay on Community.
+  Retrying does not help; contact `support@pulserelay.pro` to release an
+  installation you no longer use or to raise the limit.
 - The exchanged v6 entitlement depends on the original cohort. Lifetime,
   active pre-cutover recurring Pro, and other migrated legacy paid installs do
   not all land on the same commercial continuity posture.

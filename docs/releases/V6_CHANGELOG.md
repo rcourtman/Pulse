@@ -124,6 +124,20 @@ the navigation shape you already know.
 
 - **The legacy `PORT` variable is deprecated.** V6 still honors `PORT` as a fallback for `FRONTEND_PORT` so existing Docker and manual installs keep their configured port after upgrade, but it logs a deprecation warning at startup and `FRONTEND_PORT` wins when both are set. Move deployments to `FRONTEND_PORT`.
 
+- **Paid licensing now requires periodic connectivity to
+  `license.pulserelay.pro`.** v5 validated paid keys entirely offline; v6
+  activates against the licensing service and refreshes a short-lived
+  entitlement grant in the background. A paid instance that loses
+  connectivity keeps paid features for roughly 10 days from the last
+  successful refresh (a 72 hour grant lifetime plus a 7 day grace window),
+  then drops to Community behavior until connectivity returns. Core
+  monitoring keeps running throughout, and recovery is automatic once the
+  service is reachable again. Air-gapped installs cannot keep paid features
+  active in v6.0.0; contact `support@pulserelay.pro` before upgrading.
+  Migrated v5 keys are also limited to a fixed number of concurrent v6
+  installations (currently 3), which v5 never enforced; see
+  `docs/UPGRADE_v6.md` for details.
+
 ## Under the hood but important
 
 - **V6 ships with a real v5 upgrade path.** The migration tests cover config

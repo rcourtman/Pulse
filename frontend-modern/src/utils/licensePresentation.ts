@@ -758,6 +758,8 @@ export const getCommercialMigrationActionText = (action?: string): string => {
       return 'Use the current v6 activation key for this purchase.';
     case 'enter_supported_v5_key':
       return 'Retry with the original v5 Pro/Lifetime key from this instance.';
+    case 'free_installation_slot':
+      return 'Contact support@pulserelay.pro to release an installation you no longer use or to raise the limit.';
     default:
       return 'Review the activation state from this instance before trying again.';
   }
@@ -795,6 +797,10 @@ export const getCommercialMigrationNotice = (
 
   let body = 'Pulse detected a paid v5 license, but it could not be migrated automatically.';
   switch (migration.reason) {
+    case 'exchange_installation_limit':
+      body =
+        'Pulse detected a paid v5 license, but that key is already active on its maximum number of v6 installations, so this instance cannot activate until a slot is freed.';
+      break;
     case 'exchange_invalid':
       body = 'Pulse detected a paid v5 license, but that key was rejected during v6 migration.';
       break;
@@ -810,6 +816,10 @@ export const getCommercialMigrationNotice = (
       break;
     case 'exchange_unsupported':
       body = 'Pulse detected a key that is not a supported v5 Pro/Lifetime migration input.';
+      break;
+    case 'persisted_license_unreadable':
+      body =
+        'Pulse found a saved v5 license from a previous installation, but it could not be read on this system.';
       break;
     default:
       break;

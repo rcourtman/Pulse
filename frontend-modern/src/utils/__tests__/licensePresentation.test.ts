@@ -185,6 +185,36 @@ describe('licensePresentation', () => {
     });
   });
 
+  it('renders the installation limit as terminal with slot guidance, never as a retryable handoff', () => {
+    const notice = getCommercialMigrationNotice({
+      state: 'failed',
+      reason: 'exchange_installation_limit',
+      recommended_action: 'free_installation_slot',
+    } as never);
+    expect(notice).toMatchObject({
+      title: 'v5 license migration needs attention',
+      tone: expect.stringContaining('red'),
+    });
+    expect(notice?.body).toContain('maximum number of v6 installations');
+    expect(notice?.body).toContain('support@pulserelay.pro');
+    expect(notice?.body).not.toContain('Retry activation');
+    expect(notice?.body).not.toContain('still settling');
+  });
+
+  it('renders an unreadable persisted v5 license as terminal with re-enter-key guidance', () => {
+    const notice = getCommercialMigrationNotice({
+      state: 'failed',
+      reason: 'persisted_license_unreadable',
+      recommended_action: 'enter_supported_v5_key',
+    } as never);
+    expect(notice).toMatchObject({
+      title: 'v5 license migration needs attention',
+      tone: expect.stringContaining('red'),
+    });
+    expect(notice?.body).toContain('could not be read on this system');
+    expect(notice?.body).toContain('Retry with the original v5 Pro/Lifetime key');
+  });
+
   it('returns grandfathered recurring price continuity notices only for active recurring v5 plans', () => {
     expect(isGrandfatheredRecurringV5PlanVersion('v5_pro_monthly_grandfathered')).toBe(true);
     expect(isGrandfatheredRecurringV5PlanVersion('v5_pro_annual_grandfathered')).toBe(true);
