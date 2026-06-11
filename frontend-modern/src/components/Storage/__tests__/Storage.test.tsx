@@ -572,13 +572,12 @@ describe('Storage', () => {
     render(() => <Storage />);
 
     expect(screen.getByRole('columnheader', { name: 'Storage' })).toBeInTheDocument();
-    expect(screen.getByRole('columnheader', { name: 'Source' })).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'Source' })).not.toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Protection' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Type' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Host' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Usage' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'State' })).toBeInTheDocument();
-    expect(screen.getAllByText('PVE').length).toBeGreaterThan(0);
     expect(screen.getAllByText('pve1').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Protection Reduced').length).toBeGreaterThan(0);
     expect(

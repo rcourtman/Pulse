@@ -16,8 +16,6 @@ import {
   STORAGE_POOL_ROW_NAME_TEXT_CLASS,
   STORAGE_POOL_ROW_PROTECTION_CELL_CLASS,
   STORAGE_POOL_ROW_PROTECTION_TEXT_CLASS,
-  STORAGE_POOL_ROW_SOURCE_BADGE_CLASS,
-  STORAGE_POOL_ROW_SOURCE_CELL_CLASS,
   STORAGE_POOL_ROW_TEXT_TRUNCATE_CLASS,
   STORAGE_POOL_ROW_TYPE_CELL_CLASS,
   STORAGE_POOL_ROW_USAGE_FALLBACK_CLASS,
@@ -108,12 +106,6 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
               {row().stateLabel}
             </span>
           </Show>
-        </td>
-
-        <td class={STORAGE_POOL_ROW_SOURCE_CELL_CLASS}>
-          <span class={`${row().platformToneClass} ${STORAGE_POOL_ROW_SOURCE_BADGE_CLASS}`}>
-            {row().platformLabel}
-          </span>
         </td>
 
         <td class={STORAGE_POOL_ROW_TYPE_CELL_CLASS}>

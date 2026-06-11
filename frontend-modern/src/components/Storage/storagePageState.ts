@@ -61,7 +61,6 @@ export const DEFAULT_STORAGE_SORT_OPTIONS: Array<{ value: StorageSortKey; label:
   { value: 'priority', label: 'Priority' },
   { value: 'name', label: 'Storage' },
   { value: 'state', label: 'State' },
-  { value: 'source', label: 'Source' },
   { value: 'usage', label: 'Usage %' },
   { value: 'type', label: 'Type' },
   { value: 'host', label: 'Host' },
@@ -123,7 +122,6 @@ export const normalizeStorageSortKey = (value: string): StorageSortKey => {
     normalized === 'priority' ||
     normalized === 'name' ||
     normalized === 'state' ||
-    normalized === 'source' ||
     normalized === 'usage' ||
     normalized === 'type' ||
     normalized === 'host' ||
@@ -132,6 +130,8 @@ export const normalizeStorageSortKey = (value: string): StorageSortKey => {
   ) {
     return normalized;
   }
+  // 'source' persisted from before the Source column was demoted to the row
+  // expansion folds back to the default here.
   return 'priority';
 };
 

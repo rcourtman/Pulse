@@ -3,6 +3,7 @@ import type { StorageRecord } from '@/features/storageBackups/models';
 import {
   getStorageRecordContent,
   getStorageRecordNodeLabel,
+  getStorageRecordPlatformLabel,
   getStorageRecordShared,
   getStorageRecordStatus,
   getStorageRecordType,
@@ -103,6 +104,7 @@ export function buildStoragePoolDetailConfigRows(
   const content = getStorageRecordContent(record);
   const rows: StoragePoolDetailConfigRow[] = [
     { label: 'Node', value: getStorageRecordNodeLabel(record) },
+    { label: 'Source', value: getStorageRecordPlatformLabel(record) },
     { label: 'Type', value: getStorageRecordType(record) },
     { label: 'Status', value: getStorageRecordStatus(record) },
     {
@@ -121,7 +123,7 @@ export function buildStoragePoolDetailConfigRows(
   ];
 
   if (content) {
-    rows.splice(2, 0, { label: 'Content', value: content });
+    rows.splice(3, 0, { label: 'Content', value: content });
   }
 
   return rows;

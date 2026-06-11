@@ -1486,7 +1486,12 @@ not a replacement status card, CTA band, or page-local nested card.
     `frontend-modern/src/features/storageBackups/cephRecordPresentation.ts`
     (lifting worse health onto the survivor) before shared storage tables
     render, instead of each table double-listing the same Ceph storage with
-    conflicting raw-pool versus mounted-capacity accounting.
+    conflicting raw-pool versus mounted-capacity accounting. Storage row
+    models built by
+    `frontend-modern/src/features/storageBackups/storagePoolRowPresentation.ts`
+    must only carry fields the row actually renders; per-row source-platform
+    badges and other identical-on-every-row decorations belong in the row
+    expansion, not in `StoragePoolRowModel`.
 30. Keep infrastructure settings-shell API alternatives on the shared shell
     contract. `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`,
     `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`, and

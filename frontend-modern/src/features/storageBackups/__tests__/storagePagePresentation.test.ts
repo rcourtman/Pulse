@@ -19,7 +19,6 @@ describe('storagePagePresentation', () => {
     expect(getStoragePoolTableColumns('Growth (24h)').map((column) => column.label)).toEqual([
       'Storage',
       'State',
-      'Source',
       'Type',
       'Host',
       'Protection',
@@ -27,10 +26,10 @@ describe('storagePagePresentation', () => {
       'Growth (24h)',
     ]);
     expect(getStoragePoolTableColumns('Growth (24h)').map((column) => column.compactLabel)).toEqual(
-      ['Storage', 'State', 'Src', 'Type', 'Host', 'Prot', 'Used', '24h'],
+      ['Storage', 'State', 'Type', 'Host', 'Prot', 'Used', '24h'],
     );
-    expect(getStoragePoolTableColumns('Growth (24h)')[0].colClassName).toContain('xl:w-[18%]');
-    expect(getStoragePoolTableColumns('Growth (24h)')[3].className).toContain(
+    expect(getStoragePoolTableColumns('Growth (24h)')[0].colClassName).toContain('xl:w-[20%]');
+    expect(getStoragePoolTableColumns('Growth (24h)')[2].className).toContain(
       'hidden xl:table-cell',
     );
   });

@@ -1521,7 +1521,20 @@ storage rows that mount them by
 `consolidateCephClusterPoolRecords` in
 `frontend-modern/src/features/storageBackups/cephRecordPresentation.ts`,
 applied by `frontend-modern/src/components/Storage/useStorageModel.ts` before
-filtering, sorting, and summary. The pool row's worse health is lifted onto
+filtering, sorting, and summary.
+The pools table column set is Storage / State / Type / Host / Protection /
+Usage / Growth at the platform-standard 32px row height
+(`STORAGE_POOL_ROW_HEIGHT_CLASS`). Source platform identity is not a table
+column: every live embedding forces a single platform
+(`forcedSourceFilter`), so a per-row Source badge degenerates into repeated
+noise (the same failure 809e2c900 removed from the disks table). The
+record's source platform lives in the row expansion's Configuration card
+(`buildStoragePoolDetailConfigRows`' `Source` row) and stays filterable
+through the FilterBar source chip on unforced embeddings. Backup-repository
+host labels must resolve through name-bearing candidates (parent name, PBS
+instance name, owning PVE node, storage nodes) before falling back to raw
+parent/platform resource ids, so PVE-configured PBS storage rows show the
+owning node instead of opaque `agent-`/`storage-` identifiers. The pool row's worse health is lifted onto
 the surviving mount row (state, status detail, issue summary) so a degraded
 cluster stays visible, and pool rows with no mounting sibling are kept so
 clusters monitored without PVE storage entries do not lose their only

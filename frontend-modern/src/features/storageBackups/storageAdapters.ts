@@ -95,6 +95,9 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
   const locationLabel = isBackupRepository
     ? resource.parentName ||
       (platformData.pbsInstanceName as string | undefined) ||
+      proxmoxNode ||
+      (platformData.node as string | undefined) ||
+      storageNodes[0] ||
       resource.parentId ||
       resource.platformId ||
       'Unknown'

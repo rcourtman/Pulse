@@ -137,7 +137,6 @@ describe('storagePageState', () => {
       'priority',
       'name',
       'state',
-      'source',
       'usage',
       'type',
       'host',

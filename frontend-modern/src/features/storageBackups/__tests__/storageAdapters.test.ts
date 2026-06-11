@@ -386,6 +386,34 @@ describe('storageAdapters', () => {
     expect(records[0].details?.protectionReduced).toBe(true);
   });
 
+  it('prefers the owning node over raw resource ids for unnamed backup repositories', () => {
+    const records = buildStorageRecords({
+      state: baseState(),
+      resources: [
+        makeResourceStorage({
+          id: 'pve-pbs-storage',
+          name: 'backup-vault-a',
+          parentId: 'agent-0b42c3198bcaa645',
+          parentName: undefined,
+          platformData: {
+            type: 'pbs',
+            node: 'pve1',
+            instance: 'cluster-a',
+            shared: true,
+          },
+          storage: {
+            type: 'pbs',
+            topology: 'datastore',
+            protection: 'backup',
+          } as Resource['storage'],
+        }),
+      ],
+    });
+
+    expect(records).toHaveLength(1);
+    expect(records[0].hostLabel).toBe('pve1');
+  });
+
   it('keeps dependency impact separate from healthy storage primary issues', () => {
     const records = buildStorageRecords({
       state: baseState(),
