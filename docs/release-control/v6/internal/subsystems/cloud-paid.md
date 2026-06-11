@@ -541,6 +541,13 @@ or other self-hosted uncapped continuity plans.
     random key file and the current HKDF-based derivation. Machine ID may
     remain only as a compatibility loader for previously saved state, and
     legacy derivations must never become the write path again.
+    The compatibility loader must keep every key material a real v5.0.x
+    install could have sealed `license.enc` with: the raw machine-id file
+    content exactly as read (untrimmed, trailing newline included), the
+    hostname fallback, and the fixed v5 dev fallback, each tried only through
+    the legacy sha256 derivation on decrypt. Licenses activated on v5.0.0
+    predate `.license-key` and are never re-saved, so dropping or trimming
+    any of those materials silently downgrades paying upgraders to Community.
 11. Add or change hosted trial or self-hosted purchase-return token semantics
     through `pkg/licensing/trial_activation.go` and
     `pkg/licensing/purchase_return.go`

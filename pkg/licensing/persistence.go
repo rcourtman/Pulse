@@ -150,9 +150,10 @@ func writeOwnerOnlyPersistenceFileAtomic(path string, data []byte) error {
 
 // Persistence handles encrypted storage of license keys.
 type Persistence struct {
-	configDir     string
-	encryptionKey string // Primary persistent key for encryption
-	machineID     string // Legacy-only fallback for backwards compatibility
+	configDir          string
+	encryptionKey      string   // Primary persistent key for encryption
+	machineID          string   // Legacy-only fallback for backwards compatibility
+	legacyKeyMaterials []string // v5.0.x raw key materials, tried verbatim (untrimmed) on decrypt
 }
 
 // NewPersistence creates a new license persistence handler.
@@ -177,9 +178,10 @@ func NewPersistence(configDir string) (*Persistence, error) {
 	}
 
 	return &Persistence{
-		configDir:     normalizedConfigDir,
-		encryptionKey: persistentKey,
-		machineID:     machineID,
+		configDir:          normalizedConfigDir,
+		encryptionKey:      persistentKey,
+		machineID:          machineID,
+		legacyKeyMaterials: legacyV5KeyMaterials(),
 	}, nil
 }
 
@@ -475,27 +477,38 @@ func (p *Persistence) deriveLegacyKeyFrom(keyMaterial string) []byte {
 
 func (p *Persistence) compatibleKeyCandidates() [][]byte {
 	materials := []string{}
+	seen := map[string]bool{}
 	addMaterial := func(candidate string) {
 		candidate = strings.TrimSpace(candidate)
-		if candidate == "" {
+		if candidate == "" || seen[candidate] {
 			return
 		}
-		for _, existing := range materials {
-			if existing == candidate {
-				return
-			}
-		}
+		seen[candidate] = true
 		materials = append(materials, candidate)
 	}
 
 	addMaterial(p.encryptionKey)
 	addMaterial(p.machineID)
 
-	keys := make([][]byte, 0, len(materials)*2)
+	keys := make([][]byte, 0, len(materials)*2+len(p.legacyKeyMaterials))
 	for _, material := range materials {
 		if key := p.deriveKeyFrom(material); len(key) > 0 {
 			keys = append(keys, key)
 		}
+		if key := p.deriveLegacyKeyFrom(material); len(key) > 0 {
+			keys = append(keys, key)
+		}
+	}
+
+	// v5.0.x sealed license.enc with sha256("pulse-license-" + material) over
+	// untrimmed material: the raw machine-id file content (trailing newline
+	// included), the hostname fallback, or a fixed dev fallback. Those keys
+	// are only reachable by hashing the material verbatim, so never trim here.
+	for _, material := range p.legacyKeyMaterials {
+		if material == "" || seen[material] {
+			continue
+		}
+		seen[material] = true
 		if key := p.deriveLegacyKeyFrom(material); len(key) > 0 {
 			keys = append(keys, key)
 		}
@@ -518,15 +531,20 @@ func (p *Persistence) decryptWithCompatibleKeys(ciphertext []byte) ([]byte, erro
 	return nil, fmt.Errorf("no compatible decryption key available")
 }
 
+// machineIDPaths are the machine-id sources shared by current and v5-era key
+// derivation.
+var machineIDPaths = []string{
+	"/etc/machine-id",
+	"/var/lib/dbus/machine-id",
+}
+
+// legacyV5MachineIDFallback mirrors v5.0.0's NewPersistence fallback when no
+// machine-id source was readable.
+const legacyV5MachineIDFallback = "pulse-dev-fallback-machine-id"
+
 // getMachineID attempts to get a stable machine identifier.
 func getMachineID() (string, error) {
-	// Try Linux machine-id
-	paths := []string{
-		"/etc/machine-id",
-		"/var/lib/dbus/machine-id",
-	}
-
-	for _, path := range paths {
+	for _, path := range machineIDPaths {
 		data, err := os.ReadFile(path)
 		if err == nil && len(data) > 0 {
 			trimmed := strings.TrimSpace(string(data))
@@ -537,4 +555,25 @@ func getMachineID() (string, error) {
 	}
 
 	return "", errors.New("could not determine machine ID")
+}
+
+// legacyV5KeyMaterials reproduces the key-material set v5.0.x used to seal
+// license.enc: the raw machine-id file content exactly as read (v5 never
+// trimmed it, so a standard newline-terminated /etc/machine-id keyed the
+// cipher with the newline included), then the hostname fallback, then the
+// fixed dev fallback. Licenses activated on v5.0.0 — before .license-key
+// shipped in v5.0.1 — are never re-saved, so these are the only keys that
+// can open them.
+func legacyV5KeyMaterials() []string {
+	materials := []string{}
+	for _, path := range machineIDPaths {
+		data, err := os.ReadFile(path)
+		if err == nil && len(data) > 0 {
+			materials = append(materials, string(data))
+		}
+	}
+	if hostname, err := os.Hostname(); err == nil && hostname != "" {
+		materials = append(materials, hostname)
+	}
+	return append(materials, legacyV5MachineIDFallback)
 }

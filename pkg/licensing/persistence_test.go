@@ -206,6 +206,92 @@ func TestPersistence(t *testing.T) {
 		}
 	})
 
+	t.Run("Backwards compatibility with v5.0.0 raw key materials", func(t *testing.T) {
+		// v5.0.0 sealed license.enc with sha256("pulse-license-" + material)
+		// where material was the raw machine-id file content (trailing
+		// newline included), the hostname fallback, or the fixed dev
+		// fallback. Licenses activated on v5.0.0 were never re-saved, so v6
+		// must be able to open files sealed under each of those materials.
+		rawMachineID := "0123456789abcdef0123456789abcdef\n"
+		hostname := "pulse-host-01"
+
+		for name, material := range map[string]string{
+			"raw machine-id with trailing newline": rawMachineID,
+			"hostname fallback":                    hostname,
+			"dev fallback":                         legacyV5MachineIDFallback,
+		} {
+			t.Run(name, func(t *testing.T) {
+				tmpDirCompat := t.TempDir()
+				testKey := "v5-lifetime-key"
+
+				sealer := &Persistence{configDir: tmpDirCompat}
+				persisted := PersistedLicense{LicenseKey: testKey}
+				jsonData, _ := json.Marshal(persisted)
+				encrypted, err := encryptWithKey(jsonData, sealer.deriveLegacyKeyFrom(material))
+				if err != nil {
+					t.Fatalf("Failed to encrypt license: %v", err)
+				}
+				licensePath := filepath.Join(tmpDirCompat, LicenseFileName)
+				encoded := base64.StdEncoding.EncodeToString(encrypted)
+				if err := os.WriteFile(licensePath, []byte(encoded), 0600); err != nil {
+					t.Fatalf("Failed to write license file: %v", err)
+				}
+
+				// v6 trims machine-id and generates a fresh persistent key,
+				// so only the raw legacy materials can open the v5.0.0 file.
+				pNew := &Persistence{
+					configDir:          tmpDirCompat,
+					encryptionKey:      "new-persistent-key",
+					machineID:          strings.TrimSpace(rawMachineID),
+					legacyKeyMaterials: []string{rawMachineID, hostname, legacyV5MachineIDFallback},
+				}
+
+				loaded, err := pNew.LoadWithMetadata()
+				if err != nil {
+					t.Fatalf("Failed to load v5.0.0-era license with raw key material %q: %v\n"+
+						"This breaks migration for licenses activated on v5.0.0 before .license-key existed", name, err)
+				}
+				if loaded.LicenseKey != testKey {
+					t.Errorf("Expected license key %s, got %s", testKey, loaded.LicenseKey)
+				}
+			})
+		}
+	})
+
+	t.Run("NewPersistence collects v5.0.0 legacy key materials", func(t *testing.T) {
+		p, err := NewPersistence(t.TempDir())
+		if err != nil {
+			t.Fatalf("Failed to create persistence: %v", err)
+		}
+
+		contains := func(materials []string, want string) bool {
+			for _, m := range materials {
+				if m == want {
+					return true
+				}
+			}
+			return false
+		}
+
+		if !contains(p.legacyKeyMaterials, legacyV5MachineIDFallback) {
+			t.Errorf("legacyKeyMaterials missing dev fallback %q: %v", legacyV5MachineIDFallback, p.legacyKeyMaterials)
+		}
+		if hostname, err := os.Hostname(); err == nil && hostname != "" {
+			if !contains(p.legacyKeyMaterials, hostname) {
+				t.Errorf("legacyKeyMaterials missing hostname %q: %v", hostname, p.legacyKeyMaterials)
+			}
+		}
+		for _, path := range machineIDPaths {
+			data, err := os.ReadFile(path)
+			if err != nil || len(data) == 0 {
+				continue
+			}
+			if !contains(p.legacyKeyMaterials, string(data)) {
+				t.Errorf("legacyKeyMaterials missing raw content of %s: %v", path, p.legacyKeyMaterials)
+			}
+		}
+	})
+
 	t.Run("Backwards compatibility with legacy persistent-key derivation", func(t *testing.T) {
 		tmpDirCompat, _ := os.MkdirTemp("", "pulse-license-persistent-compat-*")
 		defer os.RemoveAll(tmpDirCompat)
