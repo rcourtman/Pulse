@@ -36,6 +36,13 @@ const backendWsUrl =
     }
   })();
 
+// When the dev server runs on a non-default port (e.g. a preview/tooling
+// instance beside the managed 5173 one), the backend's dev origin allowlist
+// (http://localhost:5173,http://localhost:7655) rejects WebSocket upgrades.
+// Setting PULSE_DEV_PROXY_ORIGIN rewrites the proxied Origin header to an
+// allowed one. Unset, nothing changes.
+const proxyOriginOverride = process.env.PULSE_DEV_PROXY_ORIGIN ?? '';
+
 const srcAlias = path.resolve(__dirname, './src');
 
 export default defineConfig({
@@ -63,6 +70,7 @@ export default defineConfig({
           proxy.options.proxyTimeout = 0;
 
           proxy.on('proxyReqWs', (proxyReq, req, socket) => {
+            if (proxyOriginOverride) proxyReq.setHeader('Origin', proxyOriginOverride);
             socket.setTimeout(0);
             socket.setNoDelay(true);
             socket.setKeepAlive(true, 30000);
