@@ -94,6 +94,21 @@ const displayName = (resource: Resource): string =>
   asTrimmedString(resource.kubernetes?.podName) ||
   resource.id;
 
+// Scope labels prefer the human-facing cluster name; the internal cluster id
+// is only a fallback for rows whose adapter carries no name. Every Kubernetes
+// page table shares this so the same cluster never reads as "Production EU"
+// in one column and "k8s-production-1" in another.
+export const kubernetesClusterLabel = (resource: Resource): string =>
+  asTrimmedString(resource.kubernetes?.clusterName) ||
+  asTrimmedString(resource.kubernetes?.clusterId);
+
+export const kubernetesScopeLabel = (resource: Resource): string => {
+  const cluster = kubernetesClusterLabel(resource);
+  const namespace = asTrimmedString(resource.kubernetes?.namespace);
+  if (namespace) return cluster ? `${cluster}/${namespace}` : namespace;
+  return cluster || 'Cluster';
+};
+
 const containerHasFatalReason = (container: ResourceKubernetesPodContainerStatus): boolean => {
   const reason = normalizeKubernetesToken(container.reason);
   if (reason && POD_CONTAINER_FATAL_REASONS.has(reason)) return true;

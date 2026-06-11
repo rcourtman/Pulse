@@ -66,7 +66,9 @@ describe('KubernetesDeploymentsTable', () => {
     expect(screen.getByText('Updated')).toBeInTheDocument();
     expect(screen.getByText('Ready')).toBeInTheDocument();
     expect(screen.getByText('Available')).toBeInTheDocument();
-    expect(screen.getByText('Observed')).toBeInTheDocument();
+    // observedGeneration is deliberately not a column: the raw number is
+    // unactionable without the spec generation beside it.
+    expect(screen.queryByText('Observed')).toBeNull();
     expect(screen.getByText('Age')).toBeInTheDocument();
 
     expect(screen.getByText('checkout-api')).toBeInTheDocument();
@@ -75,7 +77,7 @@ describe('KubernetesDeploymentsTable', () => {
     expect(screen.getByText('4')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
     expect(screen.getAllByText('2')).toHaveLength(2);
-    expect(screen.getByText('12')).toBeInTheDocument();
+    expect(screen.queryByText('12')).toBeNull();
     expect(screen.getByText('2h ago')).toBeInTheDocument();
     expect(
       document.querySelector('[data-kubernetes-deployment-row="checkout-api"]'),

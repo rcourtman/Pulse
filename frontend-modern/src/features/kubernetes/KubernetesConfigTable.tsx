@@ -32,6 +32,7 @@ import {
 import type { Resource } from '@/types/resource';
 import {
   filterKubernetesResources,
+  kubernetesScopeLabel,
   type KubernetesResourceStatusFilter,
 } from './kubernetesPageModel';
 
@@ -54,15 +55,6 @@ const configKind = (resource: Resource): string => {
   if (resource.type === 'k8s-role-binding') return 'RoleBinding';
   if (resource.type === 'k8s-cluster-role-binding') return 'ClusterRoleBinding';
   return resource.kubernetes?.resourceKind || resource.type;
-};
-
-const configScope = (resource: Resource): string => {
-  const cluster =
-    asTrimmedString(resource.kubernetes?.clusterId) ||
-    asTrimmedString(resource.kubernetes?.clusterName);
-  const namespace = asTrimmedString(resource.kubernetes?.namespace);
-  if (namespace) return cluster ? `${cluster}/${namespace}` : namespace;
-  return cluster || 'Cluster';
 };
 
 const plural = (count: number, singular: string, pluralLabel = `${singular}s`): string =>
@@ -284,7 +276,7 @@ export const KubernetesConfigTable: Component<{
                     const indicator = () => getSimpleStatusIndicator(resource.status);
                     const name = () => configName(resource);
                     const kind = () => configKind(resource);
-                    const scope = () => configScope(resource);
+                    const scope = () => kubernetesScopeLabel(resource);
                     const state = () => lifecycleOrTrust(resource);
                     const data = () => dataShape(resource);
                     const refs = () => serviceAccountRefs(resource);

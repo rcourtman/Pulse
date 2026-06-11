@@ -33,6 +33,7 @@ import type { Resource } from '@/types/resource';
 import {
   compareKubernetesDeployments,
   filterKubernetesResources,
+  kubernetesClusterLabel,
   mapKubernetesDeploymentStatus,
   type KubernetesResourceStatusFilter,
 } from './kubernetesPageModel';
@@ -43,8 +44,9 @@ import {
 // render as dashes. This deployment-native table reuses canonical shared
 // primitives (Card, Table, SearchInput, FilterButtonGroup, StatusDot) but
 // surfaces deployment-meaningful columns only: namespace, cluster,
-// desired / updated / ready / available replicas, observed generation, and
-// metadata age.
+// desired / updated / ready / available replicas, and metadata age.
+// observedGeneration is deliberately not a column: without the spec
+// generation beside it the raw number is unactionable.
 
 const replicaCount = (value: number | undefined): JSX.Element => (
   <span class="tabular-nums">{value ?? 0}</span>
@@ -121,19 +123,19 @@ export const KubernetesDeploymentsTable: Component<{
                     Desktop widths: Deployment, Namespace, and Cluster take
                     the biggest shares because their content can be long.
                     The integer-count columns (Desired / Updated / Ready /
-                    Available / Observed) trim to what their headers plus
-                    1-2 digit values need. Mobile widths are unchanged.
+                    Available) trim to what their headers plus 1-2 digit
+                    values need. Mobile widths are unchanged.
                   */}
-                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[22%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[25%]`}>
                     Deployment
                   </TableHead>
                   <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[17%]`}
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[20%]`}
                   >
                     Namespace
                   </TableHead>
                   <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[14%]`}
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[17%]`}
                   >
                     Cluster
                   </TableHead>
@@ -158,11 +160,6 @@ export const KubernetesDeploymentsTable: Component<{
                     Available
                   </TableHead>
                   <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[9%]`}
-                  >
-                    Observed
-                  </TableHead>
-                  <TableHead
                     class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[6%]`}
                   >
                     Age
@@ -174,10 +171,7 @@ export const KubernetesDeploymentsTable: Component<{
                   {(deployment) => {
                     const name = () => asTrimmedString(deployment.name) || deployment.id;
                     const ns = () => asTrimmedString(deployment.kubernetes?.namespace) || '—';
-                    const cluster = () =>
-                      asTrimmedString(deployment.kubernetes?.clusterName) ||
-                      asTrimmedString(deployment.kubernetes?.clusterId) ||
-                      '—';
+                    const cluster = () => kubernetesClusterLabel(deployment) || '—';
                     const indicator = () => mapKubernetesDeploymentStatus(deployment);
                     const age = () => formatAge(deployment.kubernetes?.createdAt);
                     const detailRowId = () => drawer.detailRowId(deployment);
@@ -237,11 +231,6 @@ export const KubernetesDeploymentsTable: Component<{
                           {replicaCount(deployment.kubernetes?.availableReplicas)}
                         </TableCell>
                         <TableCell
-                          class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
-                        >
-                          {replicaCount(deployment.kubernetes?.observedGeneration)}
-                        </TableCell>
-                        <TableCell
                           class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                         >
                           <span class="tabular-nums" title={deployment.kubernetes?.createdAt || ''}>
@@ -253,7 +242,7 @@ export const KubernetesDeploymentsTable: Component<{
                         resource={deployment}
                         open={isExpanded()}
                         detailRowId={detailRowId()}
-                        colSpan={9}
+                        colSpan={8}
                         resolveResourceLabel={resolveResourceLabel}
                         onClose={() => drawer.close(deployment)}
                       />

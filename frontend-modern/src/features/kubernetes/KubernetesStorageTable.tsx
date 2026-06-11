@@ -33,6 +33,7 @@ import {
 import type { Resource } from '@/types/resource';
 import {
   filterKubernetesResources,
+  kubernetesScopeLabel,
   type KubernetesResourceStatusFilter,
 } from './kubernetesPageModel';
 
@@ -60,17 +61,6 @@ const storageKind = (resource: Resource): string => {
   if (resource.type === 'k8s-persistent-volume') return 'PV';
   if (resource.type === 'k8s-persistent-volume-claim') return 'PVC';
   return resource.kubernetes?.resourceKind || resource.type;
-};
-
-const storageScope = (resource: Resource): string => {
-  const clusterScope =
-    asTrimmedString(resource.kubernetes?.clusterId) ||
-    asTrimmedString(resource.kubernetes?.clusterName);
-  const namespace = asTrimmedString(resource.kubernetes?.namespace);
-  if (namespace) {
-    return clusterScope ? `${clusterScope}/${namespace}` : namespace;
-  }
-  return clusterScope || 'Cluster';
 };
 
 const bindingOrPhase = (resource: Resource): string => {
@@ -259,7 +249,7 @@ export const KubernetesStorageTable: Component<{
                     const indicator = () => getSimpleStatusIndicator(resource.status);
                     const name = () => storageName(resource);
                     const kind = () => storageKind(resource);
-                    const scope = () => storageScope(resource);
+                    const scope = () => kubernetesScopeLabel(resource);
                     const policy = () => policyLabel(resource);
                     const target = () => bindingTarget(resource);
                     const detailRowId = () => drawer.detailRowId(resource);

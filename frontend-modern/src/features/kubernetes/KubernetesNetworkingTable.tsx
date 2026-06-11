@@ -32,6 +32,7 @@ import {
 import type { Resource } from '@/types/resource';
 import {
   filterKubernetesResources,
+  kubernetesScopeLabel,
   type KubernetesResourceStatusFilter,
 } from './kubernetesPageModel';
 
@@ -44,15 +45,6 @@ const networkKind = (resource: Resource): string => {
   if (resource.type === 'k8s-ingress') return 'Ingress';
   if (resource.type === 'k8s-endpoint-slice') return 'EndpointSlice';
   return resource.kubernetes?.resourceKind || resource.type;
-};
-
-const scopeLabel = (resource: Resource): string => {
-  const cluster =
-    asTrimmedString(resource.kubernetes?.clusterId) ||
-    asTrimmedString(resource.kubernetes?.clusterName);
-  const namespace = asTrimmedString(resource.kubernetes?.namespace);
-  if (namespace) return cluster ? `${cluster}/${namespace}` : namespace;
-  return cluster || 'Cluster';
 };
 
 const summarizeValues = (
@@ -226,7 +218,7 @@ export const KubernetesNetworkingTable: Component<{
                   {(resource) => {
                     const indicator = () => getSimpleStatusIndicator(resource.status);
                     const name = () => resourceName(resource);
-                    const scope = () => scopeLabel(resource);
+                    const scope = () => kubernetesScopeLabel(resource);
                     const address = () => addressOrHosts(resource);
                     const ports = () => portLabel(resource);
                     const targets = () => targetSummary(resource);

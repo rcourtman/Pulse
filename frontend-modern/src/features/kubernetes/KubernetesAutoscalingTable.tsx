@@ -32,6 +32,7 @@ import {
 import type { Resource } from '@/types/resource';
 import {
   filterKubernetesResources,
+  kubernetesScopeLabel,
   type KubernetesResourceStatusFilter,
 } from './kubernetesPageModel';
 
@@ -39,15 +40,6 @@ const textValue = (value: string | undefined): string => asTrimmedString(value) 
 
 const autoscalerName = (resource: Resource): string =>
   asTrimmedString(resource.displayName) || asTrimmedString(resource.name) || resource.id;
-
-const autoscalerScope = (resource: Resource): string => {
-  const cluster =
-    asTrimmedString(resource.kubernetes?.clusterId) ||
-    asTrimmedString(resource.kubernetes?.clusterName);
-  const namespace = asTrimmedString(resource.kubernetes?.namespace);
-  if (namespace) return cluster ? `${cluster}/${namespace}` : namespace;
-  return cluster || 'Cluster';
-};
 
 const targetRef = (resource: Resource): string =>
   textValue(
@@ -184,7 +176,7 @@ export const KubernetesAutoscalingTable: Component<{
                   {(resource) => {
                     const indicator = () => getSimpleStatusIndicator(resource.status);
                     const name = () => autoscalerName(resource);
-                    const scope = () => autoscalerScope(resource);
+                    const scope = () => kubernetesScopeLabel(resource);
                     const target = () => targetRef(resource);
                     const metrics = () => metricSources(resource);
                     const labels = () => labelSummary(resource);

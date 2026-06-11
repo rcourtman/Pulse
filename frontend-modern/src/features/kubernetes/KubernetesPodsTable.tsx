@@ -32,6 +32,7 @@ import type { Resource, ResourceKubernetesPodContainerStatus } from '@/types/res
 import {
   compareKubernetesPods,
   filterKubernetesResources,
+  kubernetesScopeLabel,
   mapKubernetesPodStatus,
   type KubernetesResourceStatusFilter,
 } from './kubernetesPageModel';
@@ -43,15 +44,6 @@ const podName = (resource: Resource): string =>
   asTrimmedString(resource.displayName) ||
   asTrimmedString(resource.name) ||
   resource.id;
-
-const podScope = (resource: Resource): string => {
-  const cluster =
-    asTrimmedString(resource.kubernetes?.clusterId) ||
-    asTrimmedString(resource.kubernetes?.clusterName);
-  const namespace = asTrimmedString(resource.kubernetes?.namespace);
-  if (namespace) return cluster ? `${cluster}/${namespace}` : namespace;
-  return cluster || 'Cluster';
-};
 
 const podContainers = (resource: Resource): ResourceKubernetesPodContainerStatus[] =>
   resource.kubernetes?.podContainers ?? [];
@@ -202,7 +194,7 @@ export const KubernetesPodsTable: Component<{
                   {(resource) => {
                     const indicator = () => mapKubernetesPodStatus(resource);
                     const name = () => podName(resource);
-                    const scope = () => podScope(resource);
+                    const scope = () => kubernetesScopeLabel(resource);
                     const node = () => textValue(resource.kubernetes?.nodeName);
                     const owner = () => ownerValue(resource);
                     const image = () => imageValue(resource);

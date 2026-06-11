@@ -32,6 +32,7 @@ import {
 import type { Resource } from '@/types/resource';
 import {
   filterKubernetesResources,
+  kubernetesScopeLabel,
   type KubernetesResourceStatusFilter,
 } from './kubernetesPageModel';
 
@@ -43,15 +44,6 @@ const textValue = (value: string | undefined): string => asTrimmedString(value) 
 
 const serviceName = (resource: Resource): string =>
   asTrimmedString(resource.displayName) || asTrimmedString(resource.name) || resource.id;
-
-const serviceScope = (resource: Resource): string => {
-  const cluster =
-    asTrimmedString(resource.kubernetes?.clusterId) ||
-    asTrimmedString(resource.kubernetes?.clusterName);
-  const namespace = asTrimmedString(resource.kubernetes?.namespace);
-  if (namespace) return cluster ? `${cluster}/${namespace}` : namespace;
-  return cluster || 'Cluster';
-};
 
 const summarizeValues = (
   values: readonly (string | undefined)[] | undefined,
@@ -185,7 +177,7 @@ export const KubernetesServicesTable: Component<{
                   {(resource) => {
                     const indicator = () => getSimpleStatusIndicator(resource.status);
                     const name = () => serviceName(resource);
-                    const scope = () => serviceScope(resource);
+                    const scope = () => kubernetesScopeLabel(resource);
                     const serviceType = () => textValue(resource.kubernetes?.serviceType);
                     const clusterIp = () => textValue(resource.kubernetes?.clusterIp);
                     const externalIps = () => externalIpSummary(resource);

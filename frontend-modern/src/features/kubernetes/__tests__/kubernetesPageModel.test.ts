@@ -13,6 +13,8 @@ import {
   compareKubernetesNodes,
   compareKubernetesPods,
   getKubernetesPageTabSpecs,
+  kubernetesClusterLabel,
+  kubernetesScopeLabel,
   mapKubernetesControllerStatus,
   mapKubernetesCronJobStatus,
   mapKubernetesDaemonSetStatus,
@@ -804,6 +806,42 @@ describe('kubernetesPageModel', () => {
         'pod-healthy',
       ]);
       expect(filterKubernetesResources(warningRows, '', 'offline')).toEqual([]);
+    });
+  });
+
+  describe('kubernetesScopeLabel', () => {
+    it('prefers the human cluster name over the internal cluster id', () => {
+      expect(
+        kubernetesScopeLabel(
+          makeResource({
+            id: 'pod-1',
+            type: 'pod',
+            kubernetes: {
+              clusterId: 'k8s-production-1',
+              clusterName: 'Production EU',
+              namespace: 'services',
+            },
+          }),
+        ),
+      ).toBe('Production EU/services');
+      expect(
+        kubernetesClusterLabel(
+          makeResource({
+            id: 'pod-2',
+            type: 'pod',
+            kubernetes: { clusterId: 'k8s-production-1' },
+          }),
+        ),
+      ).toBe('k8s-production-1');
+    });
+
+    it('falls back through namespace-only and empty scopes', () => {
+      expect(
+        kubernetesScopeLabel(
+          makeResource({ id: 'ns-only', type: 'pod', kubernetes: { namespace: 'apps' } }),
+        ),
+      ).toBe('apps');
+      expect(kubernetesScopeLabel(makeResource({ id: 'bare', type: 'pod' }))).toBe('Cluster');
     });
   });
 

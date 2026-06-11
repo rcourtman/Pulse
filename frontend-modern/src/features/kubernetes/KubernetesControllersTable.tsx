@@ -33,6 +33,7 @@ import type { Resource } from '@/types/resource';
 import {
   compareKubernetesControllers,
   filterKubernetesResources,
+  kubernetesScopeLabel,
   mapKubernetesControllerStatus,
   type KubernetesResourceStatusFilter,
 } from './kubernetesPageModel';
@@ -47,15 +48,6 @@ const controllerName = (resource: Resource): string =>
 
 const controllerKind = (resource: Resource): string =>
   resource.kubernetes?.resourceKind || getResourceTypeLabel(resource.type) || resource.type;
-
-const controllerScope = (resource: Resource): string => {
-  const cluster =
-    asTrimmedString(resource.kubernetes?.clusterId) ||
-    asTrimmedString(resource.kubernetes?.clusterName);
-  const namespace = asTrimmedString(resource.kubernetes?.namespace);
-  if (namespace) return cluster ? `${cluster}/${namespace}` : namespace;
-  return cluster || 'Cluster';
-};
 
 const targetValue = (resource: Resource): string => {
   switch (resource.type) {
@@ -278,7 +270,7 @@ export const KubernetesControllersTable: Component<{
                     const indicator = () => mapKubernetesControllerStatus(resource);
                     const name = () => controllerName(resource);
                     const kind = () => controllerKind(resource);
-                    const scope = () => controllerScope(resource);
+                    const scope = () => kubernetesScopeLabel(resource);
                     const target = () => targetValue(resource);
                     const exceptions = () => exceptionSummary(resource);
                     const detail = () => apiDetail(resource);

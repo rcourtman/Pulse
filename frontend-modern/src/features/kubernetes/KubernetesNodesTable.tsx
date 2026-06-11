@@ -35,6 +35,7 @@ import type { Resource } from '@/types/resource';
 import {
   compareKubernetesNodes,
   filterKubernetesResources,
+  kubernetesClusterLabel,
   mapKubernetesNodeStatus,
   type KubernetesResourceStatusFilter,
 } from './kubernetesPageModel';
@@ -203,10 +204,7 @@ export const KubernetesNodesTable: Component<{
                   {(node) => {
                     const meta = () => node.kubernetes;
                     const name = () => asTrimmedString(node.name) || node.id;
-                    const cluster = () =>
-                      asTrimmedString(meta()?.clusterName) ||
-                      asTrimmedString(meta()?.clusterId) ||
-                      '—';
+                    const cluster = () => kubernetesClusterLabel(node) || '—';
                     const kubelet = () => asTrimmedString(meta()?.kubeletVersion) || '—';
                     const runtime = () => asTrimmedString(meta()?.containerRuntimeVersion) || '—';
                     const capacityLabel = () => {

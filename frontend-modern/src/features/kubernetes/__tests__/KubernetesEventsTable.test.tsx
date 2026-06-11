@@ -1,5 +1,5 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Resource } from '@/types/resource';
 import { KubernetesEventsTable } from '../KubernetesEventsTable';
@@ -24,10 +24,14 @@ const makeResource = ({
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
 });
 
 describe('KubernetesEventsTable', () => {
   it('renders Kubernetes Event fields with severity, newest-first ordering, and message context', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-24T15:00:00Z'));
+
     render(() => (
       <KubernetesEventsTable
         resources={[
@@ -84,7 +88,10 @@ describe('KubernetesEventsTable', () => {
     expect(screen.getByText('FailedScheduling')).toBeInTheDocument();
     expect(screen.getByText('Pod/checkout-api-123')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
-    expect(screen.getByText('2026-05-24T13:00:00Z')).toBeInTheDocument();
+    // The cell humanizes the observed time; the raw timestamp stays on the
+    // hover title.
+    expect(screen.getByText('2h ago')).toBeInTheDocument();
+    expect(screen.getByTitle('2026-05-24T13:00:00Z')).toBeInTheDocument();
     expect(screen.getByText('0/3 nodes are available')).toBeInTheDocument();
 
     expect(

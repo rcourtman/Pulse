@@ -11,6 +11,7 @@ import {
   TableRow,
 } from '@/components/shared/Table';
 import { asTrimmedString } from '@/utils/stringUtils';
+import { formatRelativeTime } from '@/utils/format';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
   PLATFORM_TABLE_BODY_CLASS,
@@ -32,6 +33,7 @@ import type { Resource } from '@/types/resource';
 import {
   compareKubernetesEvents,
   filterKubernetesResources,
+  kubernetesScopeLabel,
   mapKubernetesEventSeverity,
   type KubernetesResourceStatusFilter,
 } from './kubernetesPageModel';
@@ -41,15 +43,6 @@ const textValue = (value: string | undefined): string => asTrimmedString(value) 
 const eventName = (resource: Resource): string =>
   asTrimmedString(resource.displayName) || asTrimmedString(resource.name) || resource.id;
 
-const eventScope = (resource: Resource): string => {
-  const cluster =
-    asTrimmedString(resource.kubernetes?.clusterId) ||
-    asTrimmedString(resource.kubernetes?.clusterName);
-  const namespace = asTrimmedString(resource.kubernetes?.namespace);
-  if (namespace) return cluster ? `${cluster}/${namespace}` : namespace;
-  return cluster || 'Cluster';
-};
-
 const involvedObject = (resource: Resource): string =>
   textValue(
     [resource.kubernetes?.involvedKind, resource.kubernetes?.involvedName]
@@ -57,12 +50,16 @@ const involvedObject = (resource: Resource): string =>
       .join('/'),
   );
 
-const observedTime = (resource: Resource): string =>
-  textValue(
+const observedTimestamp = (resource: Resource): string =>
+  asTrimmedString(
     resource.kubernetes?.eventTime ||
       resource.kubernetes?.firstSeen ||
       resource.kubernetes?.createdAt,
-  );
+  ) || '';
+
+// Humanized for the cell ("2h ago"); the raw timestamp stays on the title.
+const observedTime = (resource: Resource): string =>
+  formatRelativeTime(observedTimestamp(resource), { compact: true, emptyText: '—' }) || '—';
 
 const numberValue = (value: number | undefined): JSX.Element =>
   typeof value === 'number' ? <span class="tabular-nums">{value}</span> : <span>—</span>;
@@ -163,7 +160,7 @@ export const KubernetesEventsTable: Component<{
                     const indicator = () =>
                       mapKubernetesEventSeverity(resource.kubernetes?.eventType);
                     const name = () => eventName(resource);
-                    const scope = () => eventScope(resource);
+                    const scope = () => kubernetesScopeLabel(resource);
                     const observed = () => observedTime(resource);
                     const message = () => textValue(resource.kubernetes?.message);
                     const detailRowId = () => drawer.detailRowId(resource);
@@ -233,7 +230,10 @@ export const KubernetesEventsTable: Component<{
                         <TableCell
                           class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
                         >
-                          <span class="inline-block max-w-[12rem] truncate" title={observed()}>
+                          <span
+                            class="inline-block max-w-[12rem] truncate"
+                            title={observedTimestamp(resource) || observed()}
+                          >
                             {observed()}
                           </span>
                         </TableCell>

@@ -32,6 +32,7 @@ import {
 import type { Resource } from '@/types/resource';
 import {
   filterKubernetesResources,
+  kubernetesScopeLabel,
   type KubernetesResourceStatusFilter,
 } from './kubernetesPageModel';
 
@@ -50,15 +51,6 @@ const policyKind = (resource: Resource): string => {
   if (resource.type === 'k8s-resource-quota') return 'ResourceQuota';
   if (resource.type === 'k8s-limit-range') return 'LimitRange';
   return resource.kubernetes?.resourceKind || resource.type;
-};
-
-const policyScope = (resource: Resource): string => {
-  const cluster =
-    asTrimmedString(resource.kubernetes?.clusterId) ||
-    asTrimmedString(resource.kubernetes?.clusterName);
-  const namespace = asTrimmedString(resource.kubernetes?.namespace);
-  if (namespace) return cluster ? `${cluster}/${namespace}` : namespace;
-  return cluster || 'Cluster';
 };
 
 const summarizeValues = (
@@ -307,7 +299,7 @@ export const KubernetesPolicyTable: Component<{
                   {(resource) => {
                     const indicator = () => getSimpleStatusIndicator(resource.status);
                     const name = () => policyName(resource);
-                    const scope = () => policyScope(resource);
+                    const scope = () => kubernetesScopeLabel(resource);
                     const shape = () => policyShape(resource);
                     const spec = () => policySpec(resource);
                     const state = () => policyState(resource);
