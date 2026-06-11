@@ -1200,6 +1200,34 @@ describe('MessageItem', () => {
       expect(screen.getByText('Qwen 3.7 Plus via OpenRouter')).toBeInTheDocument();
     });
 
+    it('hides the selected-route row when raw ids differ but the display label matches the badge', () => {
+      const events: StreamDisplayEvent[] = [
+        {
+          type: 'model_switch',
+          model: 'openrouter:qwen/qwen3.7-plus',
+          modelEvent: 'selected',
+        },
+      ];
+
+      render(() => (
+        <MessageItem
+          message={makeMessage({
+            role: 'assistant',
+            // The done event can rewrite message.model to a provider-reported
+            // id that differs in raw form while reading identically.
+            model: 'openrouter:qwen/qwen3.7-plus-20260101',
+            streamEvents: events,
+          })}
+          getModelRouteLabel={() => 'Qwen 3.7 Plus via OpenRouter'}
+          {...makeHandlers()}
+        />
+      ));
+
+      expect(
+        screen.queryByRole('status', { name: 'Assistant model route selected' }),
+      ).not.toBeInTheDocument();
+    });
+
     it('keeps the selected-route row when a later switch makes it part of the turn story', () => {
       const events: StreamDisplayEvent[] = [
         {

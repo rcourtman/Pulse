@@ -257,6 +257,26 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
   );
   const isSelectedModelRouteEvent = (evt: StreamDisplayEvent) =>
     evt.type === 'model_switch' && evt.modelEvent === 'selected' && !evt.failedModel?.trim();
+  // A plain selected-route row repeats the route badge already shown in the
+  // turn header. Keep it only when it adds information: the header has no
+  // route, the route reads differently from the turn's final model, or a
+  // later switch makes the starting route part of the turn's story. Compare
+  // display labels, not raw ids — the done event can rewrite message.model to
+  // a provider-reported id that differs in raw form while reading identically
+  // to the user.
+  const shouldRenderModelRouteEvent = (evt: StreamDisplayEvent) => {
+    if (evt.type !== 'model_switch' || !evt.model?.trim()) return false;
+    if (!isSelectedModelRouteEvent(evt)) return true;
+    const hasRouteSwitch = (props.message.streamEvents || []).some(
+      (event) =>
+        event.type === 'model_switch' &&
+        !!event.model?.trim() &&
+        !isSelectedModelRouteEvent(event),
+    );
+    return (
+      hasRouteSwitch || !messageModelLabel() || modelRouteLabel(evt.model) !== messageModelLabel()
+    );
+  };
   const isConcreteStreamActivity = (evt: StreamDisplayEvent) => {
     switch (evt.type) {
       case 'workflow_status':
@@ -304,21 +324,8 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
         return !!evt.pendingTool;
       case 'tool_cancel':
         return !!evt.toolCancel;
-      case 'model_switch': {
-        if (!evt.model?.trim()) return false;
-        if (!isSelectedModelRouteEvent(evt)) return true;
-        // A plain selected-route row repeats the route badge already shown in
-        // the turn header. Keep it only when it adds information: the header
-        // has no route, the route differs from the turn's final model, or a
-        // later switch makes the starting route part of the turn's story.
-        const hasRouteSwitch = (props.message.streamEvents || []).some(
-          (event) =>
-            event.type === 'model_switch' &&
-            !!event.model?.trim() &&
-            !isSelectedModelRouteEvent(event),
-        );
-        return hasRouteSwitch || !props.message.model || evt.model !== props.message.model;
-      }
+      case 'model_switch':
+        return shouldRenderModelRouteEvent(evt);
       case 'approval':
         return !!evt.approval;
       case 'question':
@@ -770,9 +777,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                         </Match>
 
                         <Match
-                          when={
-                            evt()?.type === 'model_switch' && evt().model?.trim() ? evt() : undefined
-                          }
+                          when={evt() && shouldRenderModelRouteEvent(evt()) ? evt() : undefined}
                         >
                           {(modelEvent) => {
                             const event = modelEvent();
