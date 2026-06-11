@@ -41,6 +41,7 @@ func TestIngestSnapshotIncludesKubernetesHierarchy(t *testing.T) {
 						Namespace: "default",
 						NodeName:  "worker-1",
 						Phase:     "Running",
+						QoSClass:  "Burstable",
 						CreatedAt: now.Add(-20 * time.Minute),
 						StartTime: &podStart,
 						Containers: []models.KubernetesPodContainer{
@@ -216,6 +217,9 @@ func TestIngestSnapshotIncludesKubernetesHierarchy(t *testing.T) {
 
 	if podResource.Kubernetes == nil || podResource.Kubernetes.Namespace != "default" {
 		t.Fatalf("expected pod namespace metadata, got %+v", podResource.Kubernetes)
+	}
+	if podResource.Kubernetes.QoSClass != "Burstable" {
+		t.Fatalf("expected pod QoS class to be projected, got %+v", podResource.Kubernetes)
 	}
 	if podResource.Kubernetes.MetricCapabilities == nil {
 		t.Fatalf("expected kubernetes metric capabilities on pod resource, got nil")

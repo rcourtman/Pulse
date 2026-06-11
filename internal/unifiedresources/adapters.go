@@ -2494,6 +2494,7 @@ func resourceFromKubernetesPod(cluster models.KubernetesCluster, pod models.Kube
 			PodReason:     pod.Reason,
 			PodMessage:    pod.Message,
 			PodContainers: cloneK8sPodContainers(pod.Containers),
+			QoSClass:      strings.TrimSpace(pod.QoSClass),
 			UptimeSeconds: func() int64 {
 				if pod.StartTime != nil {
 					start := pod.StartTime.UTC()

@@ -1549,6 +1549,7 @@ type K8sData struct {
 	PodReason                    string                 `json:"podReason,omitempty"`     // pod: status reason
 	PodMessage                   string                 `json:"podMessage,omitempty"`    // pod: status message
 	PodContainers                []K8sPodContainer      `json:"podContainers,omitempty"` // pod: sub-containers
+	QoSClass                     string                 `json:"qosClass,omitempty"`      // pod: Guaranteed / Burstable / BestEffort
 	UptimeSeconds                int64                  `json:"uptimeSeconds,omitempty"`
 	Temperature                  *float64               `json:"temperature,omitempty"`
 	Restarts                     int                    `json:"restarts,omitempty"`
