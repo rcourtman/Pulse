@@ -30,12 +30,66 @@ const setWideViewport = () => {
   });
 };
 
+const setCompactViewport = () => {
+  Object.defineProperty(window, 'innerWidth', {
+    configurable: true,
+    value: 1280,
+  });
+};
+
 describe('useWorkloadsControlsState', () => {
   beforeEach(() => {
     localStorage.clear();
     setMockRouterSearch('');
     navigateSpy.mockClear();
     setWideViewport();
+  });
+
+  it('lets an explicit toggle pin a layout-hidden column into the compact table', () => {
+    setCompactViewport();
+    createRoot((dispose) => {
+      try {
+        const [showFilters, setShowFilters] = createSignal(false);
+        const state = useWorkloadsControlsState({
+          viewMode: () => 'all' as ViewMode,
+          showFilters,
+          setShowFilters,
+        });
+        const menu = state.workloadsFilterColumnVisibility();
+
+        // netIo is layout-gated to the wide breakpoint: invisible at 1280px
+        // and reported hidden by the menu even though the user never hid it.
+        expect(state.workloadTableVisibleColumnIds()).not.toContain('netIo');
+        expect(menu.isColumnHidden('netIo')).toBe(true);
+
+        // First toggle pins it into view instead of flipping a flag the user
+        // cannot see the effect of.
+        menu.onColumnToggle('netIo');
+        expect(state.workloadTableVisibleColumnIds()).toContain('netIo');
+        expect(menu.isColumnHidden('netIo')).toBe(false);
+        expect(state.columnVisibility.hiddenColumns()).not.toContain('netIo');
+
+        // Second toggle unpins it; the column returns to its layout default
+        // rather than becoming user-hidden on wide viewports too.
+        menu.onColumnToggle('netIo');
+        expect(state.workloadTableVisibleColumnIds()).not.toContain('netIo');
+        expect(state.columnVisibility.hiddenColumns()).not.toContain('netIo');
+
+        // Layout-visible columns keep the plain hide/show semantics.
+        menu.onColumnToggle('backup');
+        expect(state.columnVisibility.hiddenColumns()).toContain('backup');
+        menu.onColumnToggle('backup');
+        expect(state.columnVisibility.hiddenColumns()).not.toContain('backup');
+
+        // Reset clears pinned columns along with user-hidden ones.
+        menu.onColumnToggle('netIo');
+        expect(state.workloadTableVisibleColumnIds()).toContain('netIo');
+        menu.onColumnReset();
+        expect(state.workloadTableVisibleColumnIds()).not.toContain('netIo');
+      } finally {
+        dispose();
+      }
+    });
   });
 
   it('lets Docker scope use a container-native column profile without hiding disk globally', () => {
