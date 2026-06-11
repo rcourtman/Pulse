@@ -263,6 +263,9 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
     useWorkloads: true,
     forcedPlatform: PROXMOX_PLATFORM_FILTER,
     suppressPlatformFilter: true,
+    // The polymorphic 'info' column always holds the VMID on a pure-Proxmox
+    // surface, so label it with the platform vocabulary instead of 'Info'.
+    columnLabelOverrides: { info: 'ID' },
     statusModeStorageScope: PROXMOX_WORKLOAD_STATUS_STORAGE_SCOPE,
     compactGroupHeaders: true,
     groupNodeDrawerMode: 'disabled',
