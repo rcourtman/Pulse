@@ -468,6 +468,7 @@ func TestParityStorageFields(t *testing.T) {
 		Instance: "pve",
 		Type:     "zfspool",
 		Status:   "online",
+		LastSeen: now,
 		Path:     "/tank",
 		Total:    107374182400,
 		Used:     10737418240,
@@ -521,7 +522,7 @@ func TestParityStorageFields(t *testing.T) {
 	require.Equal(t, storage.Used, v.DiskUsed())
 	require.Equal(t, storage.Total, v.DiskTotal())
 	require.InEpsilon(t, percentFromUsage(storage.Usage), v.DiskPercent(), 1e-9)
-	require.NotZero(t, v.LastSeen())
+	require.True(t, v.LastSeen().Equal(storage.LastSeen))
 }
 
 func TestParityPBSInstanceFields(t *testing.T) {

@@ -89,7 +89,9 @@ jobs:
       - name: Go unit tests
         env:
           PULSE_DATA_DIR: /tmp/pulse-test-data
-        run: go test -race -timeout 10m ./...
+        # internal/api alone takes ~10m under -race on a fast machine; CI
+        # runners need the larger per-binary budget.
+        run: go test -race -timeout 25m ./...
 
       - name: Go benchmarks
         env:
