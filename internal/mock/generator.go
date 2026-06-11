@@ -5509,6 +5509,43 @@ func updateFixtureStateMetricsAt(data *models.StateSnapshot, config MockConfig, 
 		inst.LastUpdated = refreshNow
 	}
 
+	// Sighting stamps simulate each poll delivering the PVE inventory; they
+	// are deliberately not gated on RandomMetrics so fixtures stay fresh in
+	// static-metrics mode too. Guests and storage on an offline node keep
+	// their old stamp (an offline node's poll delivers nothing); a zero
+	// stamp is backdated so the UI shows a stale sighting, not "never".
+	staleSighting := refreshNow.Add(-10 * time.Minute)
+	offlineNodes := make(map[string]struct{})
+	for i := range data.Nodes {
+		node := &data.Nodes[i]
+		if node.Status != "online" || node.ConnectionHealth == "offline" || node.Uptime <= 0 {
+			offlineNodes[node.Name] = struct{}{}
+			if node.LastSeen.IsZero() {
+				node.LastSeen = staleSighting
+			}
+			continue
+		}
+		node.LastSeen = refreshNow
+	}
+	stampGuestSighting := func(nodeName string, lastSeen *time.Time) {
+		if _, offline := offlineNodes[nodeName]; offline {
+			if lastSeen.IsZero() {
+				*lastSeen = staleSighting
+			}
+			return
+		}
+		*lastSeen = refreshNow
+	}
+	for i := range data.VMs {
+		stampGuestSighting(data.VMs[i].Node, &data.VMs[i].LastSeen)
+	}
+	for i := range data.Containers {
+		stampGuestSighting(data.Containers[i].Node, &data.Containers[i].LastSeen)
+	}
+	for i := range data.Storage {
+		stampGuestSighting(data.Storage[i].Node, &data.Storage[i].LastSeen)
+	}
+
 	if !config.RandomMetrics {
 		data.LastUpdate = refreshNow
 		return
@@ -5566,9 +5603,6 @@ func updateFixtureStateMetricsAt(data *models.StateSnapshot, config MockConfig, 
 			continue
 		}
 		ApplyStorageUsage(storage, SampleMetric("storage", storage.ID, "usage", refreshNow))
-		// Refreshing usage simulates a fresh poll; stamp the sighting so
-		// available mock storage doesn't age past the stale thresholds.
-		storage.LastSeen = refreshNow
 	}
 
 	// Update disk metrics.
