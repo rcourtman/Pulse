@@ -467,31 +467,34 @@ func TestCollectSMARTLocalListDevicesError(t *testing.T) {
 	}
 }
 
-func TestCollectSMARTLocalSkipsErrors(t *testing.T) {
+func TestCollectSMARTLocalReportsIdentityOnlyForProbeErrors(t *testing.T) {
+	stubLinuxSysfs(t,
+		[]string{"sda", "sdb"},
+		map[string]string{
+			"/sys/block/sda/size":         "100\n",
+			"/sys/block/sda/device/model": "Failed Disk\n",
+			"/sys/block/sdb/size":         "200\n",
+		},
+	)
+
 	origRun := smartRunCommandOutput
 	origLook := execLookPath
 	origNow := timeNow
-	origReadDir := readDir
 	t.Cleanup(func() {
 		smartRunCommandOutput = origRun
 		execLookPath = origLook
 		timeNow = origNow
-		readDir = origReadDir
 	})
 
 	fixed := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
 	timeNow = func() time.Time { return fixed }
-	readDir = func(string) ([]os.DirEntry, error) { return nil, errors.New("sysfs unavailable") }
 	execLookPath = func(string) (string, error) { return "smartctl", nil }
 
 	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
-		if name == "lsblk" {
-			return mockLsblkJSON(
-				lsblkDevice{Name: "sda", Type: "disk", Tran: "sata", Subsystems: "block:scsi:pci"},
-				lsblkDevice{Name: "sdb", Type: "disk", Tran: "sata", Subsystems: "block:scsi:pci"},
-			), nil
-		}
 		if name == "smartctl" {
+			if len(args) == 1 && args[0] == "--scan-open" {
+				return nil, nil
+			}
 			device := args[len(args)-1]
 			if strings.Contains(device, "sda") {
 				return nil, errors.New("read error")
@@ -515,11 +518,32 @@ func TestCollectSMARTLocalSkipsErrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CollectSMARTLocal error: %v", err)
 	}
-	if len(result) != 1 {
-		t.Fatalf("expected 1 result, got %d", len(result))
+	if len(result) != 2 {
+		t.Fatalf("expected successful disk plus identity-only failed disk, got %#v", result)
 	}
-	if result[0].Device != "sdb" || !result[0].LastUpdated.Equal(fixed) {
-		t.Fatalf("unexpected result: %#v", result[0])
+
+	byDevice := make(map[string]DiskSMART, len(result))
+	for _, disk := range result {
+		byDevice[disk.Device] = disk
+	}
+
+	sdb, ok := byDevice["sdb"]
+	if !ok {
+		t.Fatalf("expected successful sdb result, got %#v", result)
+	}
+	if sdb.Health != "PASSED" || sdb.Temperature != 30 || !sdb.LastUpdated.Equal(fixed) {
+		t.Fatalf("unexpected successful disk result: %#v", sdb)
+	}
+
+	sda, ok := byDevice["sda"]
+	if !ok {
+		t.Fatalf("expected failed sda to remain visible as identity-only, got %#v", result)
+	}
+	if sda.Model != "Failed Disk" || sda.SizeBytes != 51200 {
+		t.Fatalf("unexpected identity-only disk: %#v", sda)
+	}
+	if sda.Health != "UNKNOWN" || sda.Temperature != 0 || sda.Attributes != nil || !sda.LastUpdated.Equal(fixed) {
+		t.Fatalf("identity-only disk must not fabricate SMART data: %#v", sda)
 	}
 }
 

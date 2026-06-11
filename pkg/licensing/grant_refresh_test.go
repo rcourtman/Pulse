@@ -26,6 +26,23 @@ func TestGrantRefreshLoop_StartStop(t *testing.T) {
 	svc.StopGrantRefresh() // Duplicate stop is a no-op.
 }
 
+func setImmediateGrantRefreshLoop(t *testing.T, svc *Service) {
+	t.Helper()
+
+	svc.SetRefreshHints(RefreshHints{IntervalSeconds: 60, JitterPercent: 0})
+	svc.mu.RLock()
+	loop := svc.grantRefresh
+	svc.mu.RUnlock()
+	if loop == nil {
+		t.Fatal("expected grant refresh loop to be initialized")
+	}
+
+	loop.mu.Lock()
+	loop.refreshInterval = time.Millisecond
+	loop.jitterPercent = 0
+	loop.mu.Unlock()
+}
+
 func TestGrantRefreshLoop_RefreshesGrant(t *testing.T) {
 	setupTestPublicKey(t)
 	const expectedClientVersion = "6.0.0-rc.1"
@@ -205,14 +222,8 @@ func TestGrantRefreshLoop_NonRevocation401KeepsActivation(t *testing.T) {
 		t.Fatalf("RestoreActivation: %v", err)
 	}
 
+	setImmediateGrantRefreshLoop(t, svc)
 	svc.StartGrantRefresh(context.Background())
-	svc.mu.RLock()
-	loop := svc.grantRefresh
-	svc.mu.RUnlock()
-	loop.mu.Lock()
-	loop.refreshInterval = time.Millisecond
-	loop.jitterPercent = 0
-	loop.mu.Unlock()
 
 	// Wait for at least one failed refresh attempt.
 	deadline := time.After(5 * time.Second)
@@ -303,17 +314,7 @@ func TestGrantRefreshLoop_401ClearsActivation(t *testing.T) {
 		t.Fatalf("RestoreActivation: %v", err)
 	}
 
-	// Set a very short refresh interval so the loop fires immediately.
-	svc.SetRefreshHints(RefreshHints{IntervalSeconds: 60, JitterPercent: 0.01})
-	// Override the loop's interval directly for instant firing.
-	svc.mu.RLock()
-	loop := svc.grantRefresh
-	svc.mu.RUnlock()
-	loop.mu.Lock()
-	loop.refreshInterval = time.Millisecond
-	loop.jitterPercent = 0
-	loop.mu.Unlock()
-
+	setImmediateGrantRefreshLoop(t, svc)
 	// Start the refresh loop — it should hit 401 and self-exit after clearing state.
 	svc.StartGrantRefresh(context.Background())
 

@@ -14,29 +14,24 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func TestCollectLocal_LogsStructuredContextOnDeviceCollectionFailure(t *testing.T) {
+func TestCollectLocal_LogsStructuredContextAndIdentityOnlyDiskOnDeviceCollectionFailure(t *testing.T) {
+	stubLinuxSysfs(t,
+		[]string{"sda"},
+		map[string]string{
+			"/sys/block/sda/size":         "200\n",
+			"/sys/block/sda/device/model": "Troubled Disk\n",
+		},
+	)
+
 	origRun := smartRunCommandOutput
 	origLook := execLookPath
-	origGOOS := runtimeGOOS
-	origReadDir := readDir
 	t.Cleanup(func() {
 		smartRunCommandOutput = origRun
 		execLookPath = origLook
-		runtimeGOOS = origGOOS
-		readDir = origReadDir
 	})
 
-	runtimeGOOS = "linux"
-	readDir = func(string) ([]os.DirEntry, error) { return nil, errors.New("sysfs unavailable") }
 	execLookPath = func(string) (string, error) { return "smartctl", nil }
 	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
-		if name == "lsblk" {
-			data := lsblkJSON{Blockdevices: []lsblkDevice{
-				{Name: "sda", Type: "disk", Tran: "sata", Subsystems: "block:scsi:pci"},
-			}}
-			out, _ := json.Marshal(data)
-			return out, nil
-		}
 		if name == "smartctl" {
 			return nil, errors.New("read failed")
 		}
@@ -48,14 +43,22 @@ func TestCollectLocal_LogsStructuredContextOnDeviceCollectionFailure(t *testing.
 	if err != nil {
 		t.Fatalf("CollectSMARTLocal returned unexpected error: %v", err)
 	}
-	if len(results) != 0 {
-		t.Fatalf("CollectSMARTLocal returned results despite command failure: %#v", results)
+	if len(results) != 1 {
+		t.Fatalf("expected failed physical disk to remain visible as identity-only, got %#v", results)
+	}
+	disk := results[0]
+	if disk.Device != "sda" || disk.Model != "Troubled Disk" || disk.SizeBytes != 102400 {
+		t.Fatalf("unexpected identity-only disk: %#v", disk)
+	}
+	if disk.Health != "UNKNOWN" || disk.Temperature != 0 || disk.Attributes != nil {
+		t.Fatalf("identity-only disk must not fabricate SMART data: %#v", disk)
 	}
 
 	for _, expected := range []string{
 		`"component":"smartctl_collector"`,
 		`"action":"collect_device_smart_failed"`,
 		`"device":"/dev/sda"`,
+		`"action":"identity_only_disk"`,
 		`"action":"collect_local_complete"`,
 	} {
 		if !strings.Contains(logOutput.String(), expected) {
