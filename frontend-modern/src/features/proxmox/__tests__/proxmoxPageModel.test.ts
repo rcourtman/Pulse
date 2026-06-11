@@ -126,6 +126,8 @@ describe('proxmoxPageModel', () => {
       nodeCount: 1,
       guestCount: 1,
       runningGuestCount: 1,
+      degradedGuestCount: 0,
+      stoppedGuestCount: 0,
       storageCount: 1,
       pbsCount: 1,
       pmgCount: 1,

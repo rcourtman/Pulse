@@ -25,6 +25,7 @@ export type ProxmoxPageSummary = {
   nodeCount: number;
   guestCount: number;
   runningGuestCount: number;
+  degradedGuestCount: number;
   stoppedGuestCount: number;
   storageCount: number;
   pbsCount: number;
@@ -341,6 +342,9 @@ export function buildProxmoxPageModel(resources: Resource[]): ProxmoxPageModel {
       guestCount: guests.length,
       runningGuestCount: guests.filter(
         (resource) => resource.status === 'online' || resource.status === 'running',
+      ).length,
+      degradedGuestCount: guests.filter(
+        (resource) => resource.status === 'degraded' || resource.status === 'warning',
       ).length,
       stoppedGuestCount: guests.filter(
         (resource) => resource.status === 'offline' || resource.status === 'stopped',

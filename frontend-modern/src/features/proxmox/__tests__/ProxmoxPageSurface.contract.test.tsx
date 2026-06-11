@@ -154,6 +154,41 @@ describe('ProxmoxPageSurface contract', () => {
     );
   });
 
+  it('renders the v5-style guest totals strip from the page summary', () => {
+    setResources([
+      makeResource({
+        id: 'agent:pve-1',
+        type: 'agent',
+        proxmox: { nodeName: 'pve-1', clusterName: 'homelab' },
+      }),
+      makeResource({
+        id: 'vm-100',
+        type: 'vm',
+        status: 'running',
+        proxmox: { nodeName: 'pve-1', vmid: 100 },
+      }),
+      makeResource({
+        id: 'vm-101',
+        type: 'vm',
+        status: 'degraded',
+        proxmox: { nodeName: 'pve-1', vmid: 101 },
+      }),
+      makeResource({
+        id: 'vm-102',
+        type: 'vm',
+        status: 'stopped',
+        proxmox: { nodeName: 'pve-1', vmid: 102 },
+      }),
+    ]);
+
+    render(() => <ProxmoxPageSurface />);
+
+    const totals = screen.getByTestId('proxmox-guest-totals');
+    expect(totals).toHaveTextContent('1 running');
+    expect(totals).toHaveTextContent('1 attention');
+    expect(totals).toHaveTextContent('1 stopped');
+  });
+
   it('does not surface stale-agent notices for development builds without an agent target', () => {
     mockVersionInfo.mockReturnValue({
       version: '6.0.0-rc.6+git.172.g2c360f779.dirty',

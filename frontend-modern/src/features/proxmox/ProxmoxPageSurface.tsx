@@ -1,5 +1,6 @@
 import { useLocation } from '@solidjs/router';
 import { Show, createMemo, createResource, type Accessor } from 'solid-js';
+import { StatusDot } from '@/components/shared/StatusDot';
 import StorageSurface from '@/components/Storage/Storage';
 import { WorkloadsFilter } from '@/components/Workloads/WorkloadsFilter';
 import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
@@ -346,6 +347,31 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
         emptyStateTitle="No Proxmox workloads"
         emptyStateDescription="Proxmox VMs and LXCs appear here when inventory is available."
       />
+      {/* v5 dashboard closed with a running/stopped totals strip; the counts
+          are platform-wide, matching the status-chip vocabulary above. */}
+      <Show when={props.model().summary.guestCount > 0}>
+        <div
+          class="flex items-center gap-2 rounded border border-border bg-surface-alt px-2 py-1 text-xs text-muted"
+          data-testid="proxmox-guest-totals"
+        >
+          <span class="flex items-center gap-1.5">
+            <StatusDot size="xs" variant="success" ariaHidden />
+            {props.model().summary.runningGuestCount} running
+          </span>
+          <Show when={props.model().summary.degradedGuestCount > 0}>
+            <span aria-hidden="true">|</span>
+            <span class="flex items-center gap-1.5">
+              <StatusDot size="xs" variant="warning" ariaHidden />
+              {props.model().summary.degradedGuestCount} attention
+            </span>
+          </Show>
+          <span aria-hidden="true">|</span>
+          <span class="flex items-center gap-1.5">
+            <StatusDot size="xs" variant="danger" ariaHidden />
+            {props.model().summary.stoppedGuestCount} stopped
+          </span>
+        </div>
+      </Show>
     </div>
   );
 }
