@@ -45,20 +45,17 @@ if ! git diff-index --quiet HEAD --; then
 fi
 echo "✓ Working directory is clean"
 
-# Check 3: On main branch
+# Check 3: Release branch
+# Each release line is branch-owned: 5.1.x releases must be cut from
+# release/5.1, v6 releases from pulse/v6-release, and main is the historical
+# default for any other line. The release workflow enforces the line/branch
+# pairing itself, so we pass the current branch through as the dispatch ref.
 CURRENT_BRANCH=$(git branch --show-current)
-if [ "$CURRENT_BRANCH" != "main" ]; then
-  echo "⚠️  Warning: Not on main branch (current: ${CURRENT_BRANCH})"
-  echo ""
-  read -p "Continue anyway? [y/N] " -n 1 -r
-  echo ""
-  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "Aborted"
-    exit 1
-  fi
-else
-  echo "✓ On main branch"
+if [ -z "$CURRENT_BRANCH" ]; then
+  echo "❌ Detached HEAD: cannot determine release branch"
+  exit 1
 fi
+echo "✓ Releasing from branch: ${CURRENT_BRANCH}"
 
 # Check 4: Up to date with remote
 git fetch origin --quiet
@@ -146,6 +143,7 @@ echo ""
 echo "Triggering release workflow..."
 if [ -n "$NOTES_FILE" ]; then
   gh workflow run create-release.yml \
+    --ref "${CURRENT_BRANCH}" \
     -f version="${VERSION}" \
     -f release_notes="$(cat "$NOTES_FILE")"
 else
