@@ -3,9 +3,11 @@ import type { CephCluster } from '@/types/api';
 import type { StorageRecord } from '@/features/storageBackups/models';
 import {
   collectCephClusterNodes,
+  consolidateCephClusterPoolRecords,
   getCephClusterKeyFromStorageRecord,
   getCephPoolsText,
   getCephSummaryText,
+  isCephClusterPoolStorageRecord,
   isCephStorageRecord,
 } from '@/features/storageBackups/cephRecordPresentation';
 
@@ -83,5 +85,101 @@ describe('cephRecordPresentation', () => {
       ),
     ).toBe('rbd: 75%');
     expect(getCephPoolsText(makeRecord({ name: 'ceph-a' }), null)).toBe('ceph-a: 40%');
+  });
+
+  it('classifies cluster-internal ceph pool rows by their synthesis signature', () => {
+    const poolRecord = makeRecord({
+      id: 'pool-1',
+      name: 'cephfs-data',
+      details: { type: 'ceph', node: 'cluster' },
+    });
+    expect(isCephClusterPoolStorageRecord(poolRecord)).toBe(true);
+    expect(isCephClusterPoolStorageRecord(makeRecord())).toBe(false);
+    expect(
+      isCephClusterPoolStorageRecord(makeRecord({ details: { type: 'cephfs', node: 'cluster' } })),
+    ).toBe(false);
+  });
+
+  it('collapses cluster pool rows into the PVE storage rows that mount them', () => {
+    const poolRecord = makeRecord({
+      id: 'pool-1',
+      name: 'cephfs-data',
+      health: 'warning',
+      details: { type: 'ceph', node: 'cluster', status: 'degraded' },
+    });
+    const mountRecord = makeRecord({
+      id: 'mount-1',
+      name: 'cephfs-data',
+      health: 'healthy',
+      details: { type: 'cephfs', node: 'shared', status: 'online' },
+    });
+    const unrelated = makeRecord({
+      id: 'other-1',
+      name: 'local-zfs',
+      details: { type: 'zfspool', node: 'pve1' },
+      capabilities: ['capacity'],
+      source: {
+        platform: 'proxmox-pve',
+        family: 'virtualization',
+        origin: 'resource',
+        adapterId: 'resource-storage',
+      },
+    });
+
+    const consolidated = consolidateCephClusterPoolRecords([poolRecord, mountRecord, unrelated]);
+
+    expect(consolidated.map((record) => record.id)).toEqual(['mount-1', 'other-1']);
+    const survivor = consolidated[0];
+    expect(survivor.health).toBe('warning');
+    expect(survivor.statusLabel).toBe('degraded');
+    expect(survivor.details?.status).toBe('degraded');
+    expect(survivor.issueSummary).toBe('Ceph reports pool cephfs-data degraded');
+  });
+
+  it('matches pool rows to mounts via the backing pool detail', () => {
+    const poolRecord = makeRecord({
+      id: 'pool-1',
+      name: 'vm-pool',
+      health: 'critical',
+      issueSummary: 'Ceph cluster HEALTH_ERR',
+      details: { type: 'ceph', node: 'cluster', status: 'unavailable' },
+    });
+    const mountRecord = makeRecord({
+      id: 'mount-1',
+      name: 'fast-rbd',
+      health: 'healthy',
+      details: { type: 'rbd', node: 'shared', pool: 'vm-pool', status: 'online' },
+    });
+
+    const consolidated = consolidateCephClusterPoolRecords([poolRecord, mountRecord]);
+
+    expect(consolidated.map((record) => record.id)).toEqual(['mount-1']);
+    expect(consolidated[0].health).toBe('critical');
+    expect(consolidated[0].issueSummary).toBe('Ceph cluster HEALTH_ERR');
+  });
+
+  it('keeps unmounted pool rows and never downgrades a sicker mount', () => {
+    const orphanPool = makeRecord({
+      id: 'pool-1',
+      name: 'standalone-pool',
+      details: { type: 'ceph', node: 'cluster' },
+    });
+    expect(consolidateCephClusterPoolRecords([orphanPool])).toEqual([orphanPool]);
+
+    const healthyPool = makeRecord({
+      id: 'pool-2',
+      name: 'cephfs-data',
+      health: 'healthy',
+      details: { type: 'ceph', node: 'cluster', status: 'available' },
+    });
+    const sickMount = makeRecord({
+      id: 'mount-2',
+      name: 'cephfs-data',
+      health: 'critical',
+      statusLabel: 'unavailable',
+      details: { type: 'cephfs', node: 'shared', status: 'unavailable' },
+    });
+    const consolidated = consolidateCephClusterPoolRecords([healthyPool, sickMount]);
+    expect(consolidated).toEqual([sickMount]);
   });
 });

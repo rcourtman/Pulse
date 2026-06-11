@@ -1,6 +1,7 @@
 import { Accessor, createMemo } from 'solid-js';
 import type { StorageHealthFilter, StorageRecord } from '@/features/storageBackups/models';
 import type { StorageCapacityDeltaPresentation } from '@/features/storageBackups/storageCapacityDeltaPresentation';
+import { consolidateCephClusterPoolRecords } from '@/features/storageBackups/cephRecordPresentation';
 import {
   buildStorageSourceOptions,
   filterStorageRecords,
@@ -41,10 +42,14 @@ export const useStorageModel = (options: UseStorageModelOptions) => {
     findSelectedStorageNode(options.selectedNodeId(), options.nodeOptions()),
   );
 
-  const sourceOptions = createMemo(() => buildStorageSourceOptions(options.records()));
+  const consolidatedRecords = createMemo(() =>
+    consolidateCephClusterPoolRecords(options.records()),
+  );
+
+  const sourceOptions = createMemo(() => buildStorageSourceOptions(consolidatedRecords()));
 
   const filteredRecords = createMemo(() => {
-    return filterStorageRecords(options.records(), {
+    return filterStorageRecords(consolidatedRecords(), {
       search: options.search(),
       sourceFilter: options.sourceFilter(),
       healthFilter: options.healthFilter(),

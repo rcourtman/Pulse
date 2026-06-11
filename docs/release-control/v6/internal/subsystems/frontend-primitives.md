@@ -1480,6 +1480,13 @@ not a replacement status card, CTA band, or page-local nested card.
     `platformData.zfsPool` fallback) when building pool detail and bar
     summaries, rather than re-deriving device-level health from risk-reason
     strings or presenting flattened pool-state scalars as the full report.
+    Ceph dedup is part of the same shared-presenter truth: cluster-internal
+    pool rows must be consolidated into their mounting storage rows through
+    `consolidateCephClusterPoolRecords` in
+    `frontend-modern/src/features/storageBackups/cephRecordPresentation.ts`
+    (lifting worse health onto the survivor) before shared storage tables
+    render, instead of each table double-listing the same Ceph storage with
+    conflicting raw-pool versus mounted-capacity accounting.
 30. Keep infrastructure settings-shell API alternatives on the shared shell
     contract. `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`,
     `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`, and

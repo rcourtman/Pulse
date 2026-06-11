@@ -46,4 +46,15 @@ describe('Storage code standards guardrails', () => {
 
     expect(violations).toEqual([]);
   });
+
+  it('keeps the pools table on consolidated ceph records', () => {
+    const source = readFileSync(path.resolve(storageDir, 'useStorageModel.ts'), 'utf-8');
+
+    expect(source).toContain(
+      "import { consolidateCephClusterPoolRecords } from '@/features/storageBackups/cephRecordPresentation';",
+    );
+    expect(source).toContain('consolidateCephClusterPoolRecords(options.records())');
+    expect(source).toContain('buildStorageSourceOptions(consolidatedRecords())');
+    expect(source).toContain('filterStorageRecords(consolidatedRecords()');
+  });
 });

@@ -13,6 +13,87 @@ export const isCephStorageRecord = (record: StorageRecord): boolean => {
   return record.capabilities.includes('replication') && record.source.platform.includes('proxmox');
 };
 
+// Signature of the cluster-internal pool rows synthesized from Ceph cluster
+// telemetry (models.StorageFromCephPool): type "ceph" homed on the "cluster"
+// pseudo-node, as opposed to the rbd/cephfs storage entries PVE mounts.
+export const isCephClusterPoolStorageRecord = (record: StorageRecord): boolean => {
+  if (getStorageRecordType(record) !== 'ceph') return false;
+  const details = (record.details || {}) as Record<string, unknown>;
+  return details.node === 'cluster';
+};
+
+const STORAGE_HEALTH_SEVERITY_RANK: Record<string, number> = {
+  critical: 4,
+  offline: 3,
+  warning: 2,
+  unknown: 1,
+  healthy: 0,
+};
+
+const storageHealthRank = (health: string): number => STORAGE_HEALTH_SEVERITY_RANK[health] ?? 0;
+
+const getRecordPoolDetail = (record: StorageRecord): string => {
+  const pool = ((record.details || {}) as Record<string, unknown>).pool;
+  return typeof pool === 'string' ? pool.trim() : '';
+};
+
+const getRecordStatusDetail = (record: StorageRecord): string => {
+  const status = ((record.details || {}) as Record<string, unknown>).status;
+  return typeof status === 'string' ? status.trim() : '';
+};
+
+/**
+ * Collapse cluster-internal Ceph pool rows into the PVE storage rows that
+ * mount them, so the same storage does not appear twice with conflicting
+ * usage accounting (raw pool bytes vs PVE-visible bytes). The pool row's
+ * health is lifted onto the surviving row when it is worse, so a degraded
+ * cluster stays visible on the storage table. Pool rows with no mounting
+ * sibling are kept: hiding them would hide the only capacity row for
+ * clusters monitored without PVE storage entries.
+ */
+export const consolidateCephClusterPoolRecords = (records: StorageRecord[]): StorageRecord[] => {
+  const poolRecords = records.filter(isCephClusterPoolStorageRecord);
+  if (poolRecords.length === 0) return records;
+
+  const consumedPoolIds = new Set<string>();
+  const liftBySiblingId = new Map<string, StorageRecord>();
+
+  for (const pool of poolRecords) {
+    const sibling = records.find(
+      (candidate) =>
+        candidate !== pool &&
+        !isCephClusterPoolStorageRecord(candidate) &&
+        isCephStorageRecord(candidate) &&
+        (getRecordPoolDetail(candidate) === pool.name || candidate.name === pool.name),
+    );
+    if (!sibling) continue;
+    consumedPoolIds.add(pool.id);
+    const existing = liftBySiblingId.get(sibling.id);
+    if (!existing || storageHealthRank(pool.health) > storageHealthRank(existing.health)) {
+      liftBySiblingId.set(sibling.id, pool);
+    }
+  }
+
+  if (consumedPoolIds.size === 0) return records;
+
+  return records
+    .filter((record) => !consumedPoolIds.has(record.id))
+    .map((record) => {
+      const pool = liftBySiblingId.get(record.id);
+      if (!pool) return record;
+      if (storageHealthRank(pool.health) <= storageHealthRank(record.health)) return record;
+      const poolStatus = getRecordStatusDetail(pool) || pool.statusLabel || pool.health;
+      return {
+        ...record,
+        health: pool.health,
+        statusLabel: poolStatus,
+        issueSummary:
+          pool.issueSummary?.trim() || `Ceph reports pool ${pool.name} ${poolStatus}`,
+        details: { ...(record.details || {}), status: poolStatus },
+      };
+    });
+};
+
 export const getCephClusterKeyFromStorageRecord = (record: StorageRecord): string => {
   const details = (record.details || {}) as Record<string, unknown>;
   const parent = typeof details.parentId === 'string' ? details.parentId : '';

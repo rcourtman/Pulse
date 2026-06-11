@@ -1514,6 +1514,19 @@ the record's `details.zfsPool`, which
 `frontend-modern/src/components/Storage/StoragePoolDetail.tsx` renders that
 report inside the row expansion so degraded pools name the failing device and
 running scrub/resilver without re-promoting per-device noise into table rows.
+The pools table must not double-list Ceph-backed storage. Cluster-internal
+pool rows synthesized from Ceph cluster telemetry (`models.StorageFromCephPool`:
+type `ceph` homed on the `cluster` pseudo-node) are consolidated into the PVE
+storage rows that mount them by
+`consolidateCephClusterPoolRecords` in
+`frontend-modern/src/features/storageBackups/cephRecordPresentation.ts`,
+applied by `frontend-modern/src/components/Storage/useStorageModel.ts` before
+filtering, sorting, and summary. The pool row's worse health is lifted onto
+the surviving mount row (state, status detail, issue summary) so a degraded
+cluster stays visible, and pool rows with no mounting sibling are kept so
+clusters monitored without PVE storage entries do not lose their only
+capacity row. Raw pool accounting stays on the Ceph tab's cluster drawer,
+which remains the canonical home for per-pool stored/available bytes.
 Shared chart transport that storage and recovery coexist with must also stay
 on rendered-metric budgets. When `internal/api/router.go` batches workload
 history for adjacent overview or shared summary cards, it may parallelize the
