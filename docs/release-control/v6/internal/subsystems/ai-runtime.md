@@ -1522,6 +1522,18 @@ deriving an older display status from `workflowStatusHistory`.
    return the updated `ChatSession`, update the visible row without closing the
    picker, and leave messages, handoff context, approvals, and tool evidence
    unchanged.
+   Session titles follow OpenCode's generated-title model: after a session's
+   first exchange completes, the chat runtime upgrades the auto-truncated
+   first-prompt placeholder to a short model-generated title
+   (`chat.Service.generateSessionTitle`, `internal/ai/chat/session_title.go`).
+   The upgrade runs after the done event reaches the client (no turn
+   latency), only on the first exchange, and never overwrites a title the
+   user set: any title that differs from the placeholder is left alone, with
+   a re-check before persisting to lose races against a concurrent rename.
+   Title requests pass the same model-boundary sanitizer as normal turns,
+   record usage as `assistant_session_title`, and a failed or timed-out
+   title call leaves the placeholder in place rather than failing anything
+   user-visible.
    Assistant turn undo/redo is also a source-backed session repair workflow,
    not a transcript-local delete button. The referenced OpenCode source in
    `packages/opencode/src/cli/cmd/tui/routes/session/index.tsx` registers
@@ -2375,6 +2387,15 @@ deriving an older display status from `workflowStatusHistory`.
     named by their source rather than as generic dashboard briefs.
 
 ## Current State
+
+Session titles are model-generated after the first exchange
+(`internal/ai/chat/session_title.go`): the chat runtime upgrades the
+auto-truncated first-prompt placeholder once the done event has reached the
+client, never overwrites a user-set title (placeholder comparison plus a
+pre-persist re-check), passes the model-boundary sanitizer, records usage as
+`assistant_session_title`, and leaves the placeholder on failure or timeout.
+The long-form contract lives with the session rename clause in Extension
+Points.
 
 Finding identity is the LLM-assigned key (resource+category+key hash → ID),
 and key collisions are surfaced, not forked: when a same-ID re-detection's

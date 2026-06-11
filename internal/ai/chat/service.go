@@ -964,6 +964,12 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	})
 	streamCallback(StreamEvent{Type: "done", Data: doneData})
 
+	// Upgrade the placeholder title (truncated first prompt) to a
+	// model-generated one after the first exchange. The client has already
+	// received done; this bounded call only delays handler teardown and
+	// skips itself on any later turn or user rename.
+	s.upgradeSessionTitleAfterFirstExchange(session.ID)
+
 	return nil
 }
 

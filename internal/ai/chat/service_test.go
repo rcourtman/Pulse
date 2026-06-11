@@ -672,6 +672,10 @@ func TestService_Execute_NonStreaming(t *testing.T) {
 			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{}})
 		}).
 		Once()
+	// First-exchange completion triggers background session-title generation.
+	mockProvider.On("Chat", mock.Anything, mock.Anything).
+		Return(&providers.ChatResponse{Content: "Greeting check"}, nil)
+	mockProvider.On("Name").Return("mock").Maybe()
 
 	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
 	service := &Service{
