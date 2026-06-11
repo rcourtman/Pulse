@@ -2,6 +2,8 @@ import { For, Show, createMemo, type Component } from 'solid-js';
 import { useSearchParams } from '@solidjs/router';
 import type { FilterDef } from '@/components/shared/FilterBar';
 import { UpdateButton } from '@/components/shared/ContainerUpdateBadge';
+import { ResponsiveMetricCell } from '@/components/shared/responsive';
+import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import {
@@ -13,6 +15,7 @@ import {
   TableRow,
 } from '@/components/shared/Table';
 import { asTrimmedString } from '@/utils/stringUtils';
+import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
   PLATFORM_TABLE_BODY_CLASS,
@@ -34,7 +37,6 @@ import {
   DockerResourceNameCell,
   dockerHostName,
   dockerJoinValues,
-  dockerNumberValue,
   dockerTextValue,
   type DockerNativeTableProps,
 } from './DockerNativeTableShared';
@@ -87,6 +89,25 @@ const runtimeSummary = (resource: Resource): string => {
 
 const containerState = (resource: Resource): string =>
   dockerTextValue(resource.docker?.containerState || resource.status);
+
+const isContainerRunning = (resource: Resource): boolean =>
+  (asTrimmedString(resource.docker?.containerState || resource.status) ?? '').toLowerCase() ===
+  'running';
+
+const finiteMetric = (value: number | undefined): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+
+const metricFallback = () => (
+  <div class="flex justify-center">
+    <span class="text-xs text-muted" aria-hidden="true">
+      —
+    </span>
+  </div>
+);
+
+// v5 flagged crash-loopers in the restarts column; a container that restarted
+// more than this many times needs an operator's eye even while "running".
+const RESTART_ATTENTION_THRESHOLD = 5;
 
 const updateStatusLabel = (resource: Resource): string => {
   const update = resource.docker?.updateStatus;
@@ -210,6 +231,17 @@ export const DockerContainersTable: Component<DockerNativeTableProps> = (props) 
     setHostFilter('');
   };
   const sortedRows = createMemo(() => [...scopedRows()].sort(compareDockerContainers));
+  // Runtime is host-level data repeated on every container row; it only
+  // informs when the fleet actually mixes runtimes (docker vs podman).
+  const showRuntimeColumn = createMemo(() => {
+    const kinds = new Set<string>();
+    for (const resource of props.resources) {
+      const kind = (asTrimmedString(resource.docker?.runtime) ?? '').toLowerCase();
+      if (kind) kinds.add(kind);
+    }
+    return kinds.size > 1;
+  });
+  const drawerColSpan = createMemo(() => (showRuntimeColumn() ? 13 : 12));
   const drawer = createPlatformResourceDetailState({ idPrefix: 'docker-container-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
 
@@ -255,7 +287,7 @@ export const DockerContainersTable: Component<DockerNativeTableProps> = (props) 
         >
           <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
             <TableCardHeader title={props.title ?? 'Containers'} />
-            <Table class="min-w-[790px] table-fixed text-xs md:min-w-[1680px]">
+            <Table class="min-w-[1010px] table-fixed text-xs md:min-w-[1900px]">
               <TableHeader>
                 <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
                   <TableHead class={`${getPlatformTableHeadClassForKind('name')} w-[220px]`}>
@@ -266,11 +298,13 @@ export const DockerContainersTable: Component<DockerNativeTableProps> = (props) 
                   >
                     Host
                   </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[130px]`}
-                  >
-                    Runtime
-                  </TableHead>
+                  <Show when={showRuntimeColumn()}>
+                    <TableHead
+                      class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[130px]`}
+                    >
+                      Runtime
+                    </TableHead>
+                  </Show>
                   <TableHead class={`${getPlatformTableHeadClassForKind('text')} w-[260px]`}>
                     Image
                   </TableHead>
@@ -281,6 +315,17 @@ export const DockerContainersTable: Component<DockerNativeTableProps> = (props) 
                     class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[100px]`}
                   >
                     Health
+                  </TableHead>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('metric-bar')} w-[110px] md:w-[140px]`}
+                  >
+                    CPU
+                  </TableHead>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('metric-bar')} w-[110px] md:w-[140px]`}
+                  >
+                    <span class="md:hidden">Mem</span>
+                    <span class="hidden md:inline">Memory</span>
                   </TableHead>
                   <TableHead
                     class={`${getPlatformTableHeadClassForKind('numeric-value')} w-[110px]`}
@@ -316,6 +361,16 @@ export const DockerContainersTable: Component<DockerNativeTableProps> = (props) 
                     const health = () => dockerTextValue(resource.docker?.health);
                     const runtime = () => runtimeSummary(resource);
                     const host = () => dockerHostName(resource);
+                    const running = () => isContainerRunning(resource);
+                    const metricsKey = () => buildMetricKeyForUnifiedResource(resource);
+                    const cpuPercent = () => finiteMetric(resource.cpu?.current);
+                    const memoryUsed = () => finiteMetric(resource.memory?.used) ?? 0;
+                    const memoryTotal = () => finiteMetric(resource.memory?.total) ?? 0;
+                    const memoryPercentOnly = () =>
+                      memoryTotal() > 0 ? undefined : finiteMetric(resource.memory?.current);
+                    const hasMemoryMetric = () =>
+                      memoryTotal() > 0 || memoryPercentOnly() !== undefined;
+                    const restartCount = () => resource.docker?.restartCount ?? 0;
                     const ports = () => dockerContainerPortsSummary(resource);
                     const networks = () => networksSummary(resource);
                     const mounts = () => mountsSummary(resource);
@@ -344,13 +399,15 @@ export const DockerContainersTable: Component<DockerNativeTableProps> = (props) 
                               {host()}
                             </span>
                           </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                          >
-                            <span class="block max-w-full truncate" title={runtime()}>
-                              {runtime()}
-                            </span>
-                          </TableCell>
+                          <Show when={showRuntimeColumn()}>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                            >
+                              <span class="block max-w-full truncate" title={runtime()}>
+                                {runtime()}
+                              </span>
+                            </TableCell>
+                          </Show>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
@@ -369,9 +426,48 @@ export const DockerContainersTable: Component<DockerNativeTableProps> = (props) 
                             {health()}
                           </TableCell>
                           <TableCell
+                            class={`${getPlatformTableCellClassForKind('metric-bar')} w-[110px] md:w-auto`}
+                          >
+                            <ResponsiveMetricCell
+                              class="w-full"
+                              value={cpuPercent() ?? 0}
+                              type="cpu"
+                              resourceId={metricsKey()}
+                              isRunning={running() && cpuPercent() !== undefined}
+                              showMobile={false}
+                            />
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('metric-bar')} w-[110px] md:w-auto`}
+                          >
+                            <Show
+                              when={running() && hasMemoryMetric()}
+                              fallback={metricFallback()}
+                            >
+                              <StackedMemoryBar
+                                used={memoryUsed()}
+                                total={memoryTotal()}
+                                percentOnly={memoryPercentOnly()}
+                              />
+                            </Show>
+                          </TableCell>
+                          <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            {dockerNumberValue(resource.docker?.restartCount)}
+                            <Show
+                              when={typeof resource.docker?.restartCount === 'number'}
+                              fallback={<span>—</span>}
+                            >
+                              <span
+                                class={`tabular-nums ${
+                                  restartCount() > RESTART_ATTENTION_THRESHOLD
+                                    ? 'font-medium text-red-600 dark:text-red-400'
+                                    : ''
+                                }`}
+                              >
+                                {resource.docker?.restartCount}
+                              </span>
+                            </Show>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
@@ -423,7 +519,7 @@ export const DockerContainersTable: Component<DockerNativeTableProps> = (props) 
                           resource={resource}
                           open={isExpanded()}
                           detailRowId={detailRowId()}
-                          colSpan={11}
+                          colSpan={drawerColSpan()}
                           resolveResourceLabel={resolveResourceLabel}
                           onClose={() => drawer.close(resource)}
                         />

@@ -790,6 +790,43 @@ describe('dockerPageModel', () => {
       ]);
     });
 
+    it('matches container labels and Swarm stack names', () => {
+      const labelled: Resource[] = [
+        ...rows,
+        makeResource({
+          id: 'compose-db',
+          type: 'app-container',
+          status: 'online',
+          docker: {
+            containerState: 'running',
+            labels: {
+              'com.docker.compose.project': 'orion',
+              'com.docker.compose.service': 'database',
+            },
+          },
+        }),
+        makeResource({
+          id: 'svc-stacked',
+          type: 'docker-service',
+          status: 'online',
+          docker: {
+            serviceName: 'shop-api',
+            labels: { 'com.docker.stack.namespace': 'shopstack' },
+          },
+        }),
+      ];
+
+      expect(filterDockerResources(labelled, 'orion', 'all').map((r) => r.id)).toEqual([
+        'compose-db',
+      ]);
+      expect(filterDockerResources(labelled, 'database', 'all').map((r) => r.id)).toEqual([
+        'compose-db',
+      ]);
+      expect(filterDockerResources(labelled, 'shopstack', 'all').map((r) => r.id)).toEqual([
+        'svc-stacked',
+      ]);
+    });
+
     it('still combines status and search', () => {
       expect(filterDockerResources(rows, 'payments-worker', 'degraded').map((r) => r.id)).toEqual([
         'svc-payments',

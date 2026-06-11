@@ -34,6 +34,23 @@ import {
   type DockerNativeTableProps,
 } from './DockerNativeTableShared';
 import { filterDockerResources, type DockerResourceStatusFilter } from './dockerPageModel';
+import { formatRelativeTime } from '@/utils/format';
+
+const parseCreatedAt = (value: string | undefined): number | null => {
+  if (!value) return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const createdRelative = (value: string | undefined): string => {
+  const parsed = parseCreatedAt(value);
+  return parsed === null ? dockerTextValue(value) : formatRelativeTime(parsed);
+};
+
+const createdAbsolute = (value: string | undefined): string => {
+  const parsed = parseCreatedAt(value);
+  return parsed === null ? dockerTextValue(value) : new Date(parsed).toLocaleString();
+};
 
 export const DockerVolumesTable: Component<DockerNativeTableProps> = (props) => {
   const tableState = createPlatformTableFilterState({
@@ -164,9 +181,9 @@ export const DockerVolumesTable: Component<DockerNativeTableProps> = (props) => 
                           >
                             <span
                               class="inline-block max-w-[12rem] truncate"
-                              title={dockerTextValue(resource.docker?.createdAt)}
+                              title={createdAbsolute(resource.docker?.createdAt)}
                             >
-                              {dockerTextValue(resource.docker?.createdAt)}
+                              {createdRelative(resource.docker?.createdAt)}
                             </span>
                           </TableCell>
                           <TableCell

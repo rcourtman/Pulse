@@ -377,6 +377,20 @@ export function buildDockerNetworkAttachmentRows(
     .sort((left, right) => compareDockerContainers(left.resource, right.resource));
 }
 
+// The API serializes a `stack` field for Swarm services, but the frontend
+// ResourceDockerMeta type does not declare it yet; until it does, fall back
+// to the canonical Swarm stack label every stack deploy stamps on the
+// service.
+export const dockerServiceStack = (resource: Resource): string => {
+  const docker = resource.docker as
+    | (NonNullable<Resource['docker']> & { stack?: string })
+    | undefined;
+  return (
+    asTrimmedString(docker?.stack) ||
+    asTrimmedString(docker?.labels?.['com.docker.stack.namespace'])
+  );
+};
+
 // Builds the lowercase search haystack a Docker page table consults when
 // filtering rows. The shared platformPage helper carries only generic Resource
 // fields; docker.* lookups live here so the cross-platform helper does not
@@ -453,6 +467,11 @@ export function dockerResourceSearchHaystack(resource: Resource): string {
     ]) ?? []),
     ...(docker?.repoTags ?? []),
     ...(docker?.repoDigests ?? []),
+    // Labels carry the operator-meaningful container organizers (compose
+    // project/service, Swarm stack, traefik rules); v5 searched them and the
+    // unified payload still ships them.
+    ...(docker?.labels ? Object.entries(docker.labels).flatMap(([key, value]) => [key, value]) : []),
+    dockerServiceStack(resource),
     ...(resource.tags ?? []),
   ]
     .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)

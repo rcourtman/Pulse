@@ -36,6 +36,29 @@ vi.mock('@/stores/systemSettings', () => ({
   shouldHideDockerUpdateActions: () => false,
 }));
 
+// jsdom has no ResizeObserver; stub the shared metric cells like the
+// DockerHostsTable tests do.
+vi.mock('@/components/shared/responsive', () => ({
+  ResponsiveMetricCell: (props: { type: string; isRunning?: boolean; resourceId?: string }) => (
+    <div
+      data-testid={`responsive-${props.type}-metric`}
+      data-resource-id={props.resourceId ?? ''}
+      data-running={String(props.isRunning)}
+    />
+  ),
+}));
+
+vi.mock('@/components/Workloads/StackedMemoryBar', () => ({
+  StackedMemoryBar: (props: { used: number; total: number; percentOnly?: number }) => (
+    <div
+      data-testid="stacked-memory-bar"
+      data-used={String(props.used)}
+      data-total={String(props.total)}
+      data-percent-only={String(props.percentOnly ?? '')}
+    />
+  ),
+}));
+
 const makeResource = ({
   id,
   type,
@@ -78,6 +101,8 @@ describe('Docker native tables', () => {
             type: 'app-container',
             name: 'edge-web',
             status: 'running',
+            cpu: { current: 42 },
+            memory: { current: 50, used: 512 * 1024 * 1024, total: 1024 * 1024 * 1024 },
             docker: {
               hostname: 'edge-01',
               runtime: 'docker',
@@ -105,6 +130,21 @@ describe('Docker native tables', () => {
               },
             },
           }),
+          makeResource({
+            id: 'container-2',
+            type: 'app-container',
+            name: 'edge-cache',
+            status: 'running',
+            docker: {
+              hostname: 'edge-02',
+              runtime: 'podman',
+              runtimeVersion: '5.2.1',
+              image: 'redis:7.4',
+              containerState: 'running',
+              health: 'healthy',
+              restartCount: 7,
+            },
+          }),
         ]}
         emptyIcon={<span />}
         emptyTitle="No containers"
@@ -115,18 +155,74 @@ describe('Docker native tables', () => {
 
     expect(screen.getByText('Container')).toBeInTheDocument();
     expect(screen.getByText('Runtime')).toBeInTheDocument();
+    expect(screen.getByText('CPU')).toBeInTheDocument();
+    expect(screen.getByText('Memory')).toBeInTheDocument();
     expect(screen.getByText('Restarts')).toBeInTheDocument();
     expect(screen.getByText('Updates')).toBeInTheDocument();
     expect(screen.getByText('edge-web')).toBeInTheDocument();
     expect(screen.getByText('edge-01')).toBeInTheDocument();
     expect(screen.getByText('docker 27.5.1')).toBeInTheDocument();
+    expect(screen.getByText('podman 5.2.1')).toBeInTheDocument();
     expect(screen.getByText('nginx:latest')).toBeInTheDocument();
-    expect(screen.getByText('healthy')).toBeInTheDocument();
+    expect(screen.getAllByText('healthy').length).toBe(2);
     expect(screen.getByText('2')).toBeInTheDocument();
     expect(screen.getByText('0.0.0.0:8080->80/tcp')).toBeInTheDocument();
     expect(screen.getByText('frontend 172.18.0.2')).toBeInTheDocument();
     expect(screen.getByText('volume:/usr/share/nginx/html (rw)')).toBeInTheDocument();
     expect(screen.getByText('Available')).toBeInTheDocument();
+
+    // A crash-looper (restarts above the v5 attention threshold) is flagged.
+    expect(screen.getByText('7')).toHaveClass('text-red-600');
+    expect(screen.getByText('2')).not.toHaveClass('text-red-600');
+
+    // Both rows get a CPU cell; only the row with memory data gets a bar.
+    expect(screen.getAllByTestId('responsive-cpu-metric').length).toBe(2);
+    expect(screen.getByTestId('stacked-memory-bar')).toHaveAttribute(
+      'data-used',
+      String(512 * 1024 * 1024),
+    );
+  });
+
+  it('hides the Runtime column when every container reports the same runtime', () => {
+    renderInRouter(() => (
+      <DockerContainersTable
+        resources={[
+          makeResource({
+            id: 'container-1',
+            type: 'app-container',
+            name: 'edge-web',
+            status: 'running',
+            docker: {
+              hostname: 'edge-01',
+              runtime: 'docker',
+              runtimeVersion: '27.5.1',
+              image: 'nginx:latest',
+              containerState: 'running',
+            },
+          }),
+          makeResource({
+            id: 'container-2',
+            type: 'app-container',
+            name: 'edge-cache',
+            status: 'running',
+            docker: {
+              hostname: 'edge-02',
+              runtime: 'docker',
+              runtimeVersion: '27.5.1',
+              image: 'redis:7.4',
+              containerState: 'running',
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No containers"
+        emptyDescription="No containers"
+        showToolbar={false}
+      />
+    ));
+
+    expect(screen.queryByText('Runtime')).not.toBeInTheDocument();
+    expect(screen.queryByText('docker 27.5.1')).not.toBeInTheDocument();
   });
 
   it('renders actionable Docker container updates with native agent and container IDs', async () => {
@@ -279,7 +375,10 @@ describe('Docker native tables', () => {
     expect(screen.getByText('app-data')).toBeInTheDocument();
     expect(screen.getByText('local')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
-    expect(screen.getByText('2026-05-24T13:00:00Z')).toBeInTheDocument();
+    // Created renders as a relative time with the absolute timestamp in the
+    // tooltip, not as a raw ISO string.
+    expect(screen.queryByText('2026-05-24T13:00:00Z')).not.toBeInTheDocument();
+    expect(screen.getByText(/ago$/)).toBeInTheDocument();
     expect(screen.getByText('/var/lib/docker/volumes/app-data/_data')).toBeInTheDocument();
   });
 
@@ -611,6 +710,7 @@ describe('Docker native tables', () => {
               mode: 'replicated',
               desiredTasks: 4,
               runningTasks: 2,
+              labels: { 'com.docker.stack.namespace': 'shop' },
               endpointPorts: [
                 { protocol: 'tcp', targetPort: 8080, publishedPort: 18080, publishMode: 'ingress' },
               ],
@@ -629,6 +729,8 @@ describe('Docker native tables', () => {
     ));
 
     expect(screen.getByText('Update')).toBeInTheDocument();
+    expect(screen.getByText('Stack')).toBeInTheDocument();
+    expect(screen.getByText('shop')).toBeInTheDocument();
     expect(screen.getByText('checkout-api')).toBeInTheDocument();
     expect(screen.getByText('registry.example.com/checkout-api:2026.05')).toBeInTheDocument();
     expect(screen.getByText('replicated')).toBeInTheDocument();

@@ -25,6 +25,7 @@ import {
 import type { Resource } from '@/types/resource';
 import {
   compareDockerServices,
+  dockerServiceStack,
   filterDockerResources,
   mapDockerServiceStatus,
   type DockerResourceStatusFilter,
@@ -154,11 +155,16 @@ export const DockerServicesTable: Component<{
                     Host get middle slices for rollout state, port lists, and
                     hostnames. Mobile widths are unchanged.
                   */}
-                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[18%]`}>
+                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[16%]`}>
                     Service
                   </TableHead>
                   <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[22%]`}
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[9%]`}
+                  >
+                    Stack
+                  </TableHead>
+                  <TableHead
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[19%]`}
                   >
                     Image
                   </TableHead>
@@ -196,6 +202,7 @@ export const DockerServicesTable: Component<{
                 <For each={sortedRows()}>
                   {(service) => {
                     const name = () => asTrimmedString(service.name) || service.id;
+                    const stack = () => dockerServiceStack(service) || '—';
                     const image = () => asTrimmedString(service.docker?.image) || '—';
                     const mode = () => asTrimmedString(service.docker?.mode) || '—';
                     const host = () => asTrimmedString(service.docker?.hostname) || '—';
@@ -215,6 +222,13 @@ export const DockerServicesTable: Component<{
                               {name()}
                             </span>
                           </div>
+                        </TableCell>
+                        <TableCell
+                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                        >
+                          <span class="truncate inline-block max-w-[8rem]" title={stack()}>
+                            {stack()}
+                          </span>
                         </TableCell>
                         <TableCell
                           class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
