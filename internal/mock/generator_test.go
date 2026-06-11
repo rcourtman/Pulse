@@ -140,6 +140,14 @@ func TestBuildFixtureStateIncludesHostAgents(t *testing.T) {
 		if host.Status == "" {
 			t.Fatalf("host agent missing status: %+v", host)
 		}
+		if host.Memory.Total > 0 {
+			if host.Memory.Cache <= 0 {
+				t.Fatalf("host agent %s should report reclaimable cache so the memory split is exercisable: %+v", host.ID, host.Memory)
+			}
+			if sum := host.Memory.Used + host.Memory.Cache + host.Memory.Free; sum > host.Memory.Total {
+				t.Fatalf("host agent %s memory used+cache+free %d exceeds total %d", host.ID, sum, host.Memory.Total)
+			}
+		}
 	}
 }
 

@@ -149,6 +149,7 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 			Total:     host.Memory.Total,
 			Used:      host.Memory.Used,
 			Free:      host.Memory.Free,
+			Cache:     host.Memory.Cache,
 			SwapUsed:  host.Memory.SwapUsed,
 			SwapTotal: host.Memory.SwapTotal,
 		},

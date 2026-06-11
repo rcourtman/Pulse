@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	godisk "github.com/shirou/gopsutil/v4/disk"
+	gomem "github.com/shirou/gopsutil/v4/mem"
 )
 
 func TestCollectDiskIO(t *testing.T) {
@@ -109,5 +110,41 @@ func TestCollectDisks_DeviceDeduplication(t *testing.T) {
 	expectedTotal := int64(volume1Total + backupTotal)
 	if total != expectedTotal {
 		t.Errorf("Total storage should be %d bytes, got %d bytes", expectedTotal, total)
+	}
+}
+
+func TestCollectSplitsReclaimableCache(t *testing.T) {
+	origVirtualMemory := virtualMemory
+	t.Cleanup(func() { virtualMemory = origVirtualMemory })
+
+	const gib = uint64(1024 * 1024 * 1024)
+	virtualMemory = func(ctx context.Context) (*gomem.VirtualMemoryStat, error) {
+		return &gomem.VirtualMemoryStat{
+			Total: 16 * gib,
+			Used:  6 * gib,
+			Free:  4 * gib,
+			// Available - Free = 6 GiB of reclaimable buff/cache.
+			Available:   10 * gib,
+			UsedPercent: 37.5,
+		}, nil
+	}
+
+	snapshot, err := Collect(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("Collect failed: %v", err)
+	}
+
+	if got, want := snapshot.Memory.CacheBytes, int64(6*gib); got != want {
+		t.Fatalf("CacheBytes = %d, want %d", got, want)
+	}
+	if got, want := snapshot.Memory.UsedBytes, int64(6*gib); got != want {
+		t.Fatalf("UsedBytes = %d, want %d", got, want)
+	}
+	if got, want := snapshot.Memory.FreeBytes, int64(4*gib); got != want {
+		t.Fatalf("FreeBytes = %d, want %d", got, want)
+	}
+	sum := snapshot.Memory.UsedBytes + snapshot.Memory.CacheBytes + snapshot.Memory.FreeBytes
+	if sum > snapshot.Memory.TotalBytes {
+		t.Fatalf("used+cache+free = %d exceeds total %d", sum, snapshot.Memory.TotalBytes)
 	}
 }

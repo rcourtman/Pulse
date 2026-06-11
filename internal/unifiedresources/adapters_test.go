@@ -1014,3 +1014,30 @@ func TestResourceFromDockerContainerUsesHostSighting(t *testing.T) {
 		t.Fatalf("resource.LastSeen = %s, want zero when the host has never reported", resource.LastSeen)
 	}
 }
+
+func TestResourceFromHostCarriesReclaimableMemoryCache(t *testing.T) {
+	host := models.Host{
+		ID:       "cache-host",
+		Hostname: "cache-host",
+		Platform: "linux",
+		Status:   "online",
+		Memory: models.Memory{
+			Total: 16 << 30,
+			Used:  6 << 30,
+			Free:  4 << 30,
+			Cache: 6 << 30,
+			Usage: 37.5,
+		},
+	}
+
+	resource, _ := resourceFromHost(host)
+	if resource.Agent == nil || resource.Agent.Memory == nil {
+		t.Fatal("expected agent memory payload")
+	}
+	if got, want := resource.Agent.Memory.Cache, int64(6<<30); got != want {
+		t.Fatalf("agent memory cache = %d, want %d", got, want)
+	}
+	if sum := resource.Agent.Memory.Used + resource.Agent.Memory.Cache + resource.Agent.Memory.Free; sum > resource.Agent.Memory.Total {
+		t.Fatalf("agent memory used+cache+free %d exceeds total %d", sum, resource.Agent.Memory.Total)
+	}
+}

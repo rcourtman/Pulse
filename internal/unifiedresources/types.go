@@ -738,9 +738,11 @@ type HostCephMeta struct {
 
 // AgentMemoryMeta describes agent-reported memory including swap.
 type AgentMemoryMeta struct {
-	Total     int64 `json:"total,omitempty"`
-	Used      int64 `json:"used,omitempty"`
-	Free      int64 `json:"free,omitempty"`
+	Total int64 `json:"total,omitempty"`
+	Used  int64 `json:"used,omitempty"`
+	Free  int64 `json:"free,omitempty"`
+	// Cache is the reclaimable page cache; used + cache + free ≈ total.
+	Cache     int64 `json:"cache,omitempty"`
 	SwapUsed  int64 `json:"swapUsed,omitempty"`
 	SwapTotal int64 `json:"swapTotal,omitempty"`
 }

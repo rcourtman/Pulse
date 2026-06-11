@@ -464,6 +464,14 @@ counters without requiring a parallel SMART row. Monitoring may normalize legacy
 statuses and filter empty slots, but it must not collapse assigned Unraid
 array/cache members back to generic host disks or discard native fields before
 unified resources builds storage and physical-disk resources.
+Host-agent memory ingest carries the reclaimable page-cache split. The host
+agent reports `cacheBytes` (gopsutil Available minus Free, with the ZFS ARC
+adjustment recomputing free so used + cache + free still covers the total),
+and `internal/monitoring/monitor_agents.go` maps it into
+`models.Memory.Cache`, clamping inconsistent or older-agent reports so
+used + cache never exceeds total. Mock fixtures author the same split for
+generic hosts and node-linked host agents, and any mock drift updater must
+hold the used + cache + free invariant as sampled usage changes.
 VMware vSphere now also has a locked phase-1 ingestion boundary under this
 lane. The admitted direction is vCenter-only in phase 1, and monitoring must
 stay API-first through the

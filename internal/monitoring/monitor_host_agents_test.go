@@ -2604,3 +2604,52 @@ func TestApplyHostReportMergesAgentCephWithProxmoxAPICluster(t *testing.T) {
 	}
 	t.Fatalf("expected canonical API Ceph pool alert using legacy agent override, got active alerts: %#v", active)
 }
+
+func TestApplyHostReportMapsReclaimableMemoryCache(t *testing.T) {
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+		rateTracker:       NewRateTracker(),
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{ID: "agent-cache", Version: "1.0.0", IntervalSeconds: 30},
+		Host: agentshost.HostInfo{
+			ID:       "machine-cache",
+			Hostname: "cache-host",
+			Platform: "linux",
+		},
+		Timestamp: time.Now().UTC(),
+		Metrics: agentshost.Metrics{
+			Memory: agentshost.MemoryMetric{
+				TotalBytes: 16 << 30,
+				UsedBytes:  6 << 30,
+				FreeBytes:  4 << 30,
+				CacheBytes: 6 << 30,
+				Usage:      37.5,
+			},
+		},
+	}
+
+	host, err := monitor.ApplyHostReport(report, &config.APITokenRecord{ID: "token-cache", Name: "Token"})
+	if err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+	if got, want := host.Memory.Cache, int64(6<<30); got != want {
+		t.Fatalf("memory cache = %d, want %d", got, want)
+	}
+
+	// An inconsistent report (cache pushing past total) is clamped so the
+	// used | cache | free split can never exceed the bar.
+	report.Metrics.Memory.CacheBytes = 12 << 30
+	host, err = monitor.ApplyHostReport(report, &config.APITokenRecord{ID: "token-cache", Name: "Token"})
+	if err != nil {
+		t.Fatalf("ApplyHostReport clamp: %v", err)
+	}
+	if got, want := host.Memory.Cache, int64(10<<30); got != want {
+		t.Fatalf("clamped memory cache = %d, want %d", got, want)
+	}
+}

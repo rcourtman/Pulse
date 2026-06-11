@@ -77,6 +77,14 @@ func Collect(ctx context.Context, diskExclude []string) (Snapshot, error) {
 	freeBytes := memStats.Free
 	usedPercent := memStats.UsedPercent
 
+	// Reclaimable page cache: Available counts the pages the kernel would hand
+	// back under pressure on top of truly-free ones, so the gap is buff/cache.
+	// Reported separately so the memory bar can show used | cache | free.
+	cacheBytes := uint64(0)
+	if memStats.Available > memStats.Free {
+		cacheBytes = memStats.Available - memStats.Free
+	}
+
 	// ZFS ARC memory is reclaimable under pressure but is counted as "used" by
 	// both FreeBSD (wired memory) and Linux (not in MemAvailable, openzfs/zfs#10255).
 	// Subtract it from Used to reflect actual memory pressure. Refs: #1264/#1051
@@ -95,8 +103,13 @@ func Collect(ctx context.Context, diskExclude []string) (Snapshot, error) {
 				usedPercent = 100
 			}
 		}
-		if memStats.Total >= usedBytes {
-			freeBytes = memStats.Total - usedBytes
+		// Recompute free so used + cache + free still covers the total after
+		// the ARC pages move out of used.
+		if memStats.Total >= usedBytes+cacheBytes {
+			freeBytes = memStats.Total - usedBytes - cacheBytes
+		} else if memStats.Total >= usedBytes {
+			cacheBytes = memStats.Total - usedBytes
+			freeBytes = 0
 		}
 	}
 
@@ -109,6 +122,7 @@ func Collect(ctx context.Context, diskExclude []string) (Snapshot, error) {
 		TotalBytes: int64(memStats.Total),
 		UsedBytes:  int64(usedBytes),
 		FreeBytes:  int64(freeBytes),
+		CacheBytes: int64(cacheBytes),
 		Usage:      usedPercent,
 		SwapTotal:  int64(memStats.SwapTotal),
 		SwapUsed:   swapUsed,

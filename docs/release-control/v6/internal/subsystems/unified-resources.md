@@ -1262,6 +1262,13 @@ presentation and host/appliance support-floor copy. Raw appliance identity
 aliases such as `unraid-os` may be accepted only through the generated
 host-profile token projection and must resolve to a governed profile id before
 they reach platform filters, source IDs, or top-level resource identity.
+Unified-resource `AgentData` also carries the host memory composition:
+`AgentMemoryMeta` exposes the reclaimable page-cache split (`cache`) beside
+used/free/swap so machine surfaces can render used | cache | free without a
+parallel payload, mirroring the `proxmox.memoryCache` transport nodes and
+guests use. The field is additive and omitted when an agent does not report
+it; consumers must treat missing cache as zero rather than inferring it from
+free space.
 Frontend resource identity presenters may append a runtime version to a
 displayed system badge only when that version is sourced from the same canonical
 platform or host-profile identity, such as PVE `ResourceProxmoxMeta.pveVersion`

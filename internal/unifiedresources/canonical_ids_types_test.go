@@ -1,6 +1,8 @@
 package unifiedresources
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -398,5 +400,24 @@ func TestIsUnsupportedLegacyResourceIDAlias(t *testing.T) {
 				t.Fatalf("IsUnsupportedLegacyResourceIDAlias(%q) = %v, want %v", tt.in, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestAgentMemoryMetaSerializesReclaimableCache(t *testing.T) {
+	meta := AgentMemoryMeta{Total: 16, Used: 6, Free: 4, Cache: 6}
+	payload, err := json.Marshal(meta)
+	if err != nil {
+		t.Fatalf("marshal AgentMemoryMeta: %v", err)
+	}
+	if !strings.Contains(string(payload), `"cache":6`) {
+		t.Fatalf("expected cache in agent memory payload, got %s", payload)
+	}
+
+	empty, err := json.Marshal(AgentMemoryMeta{Total: 16, Used: 6, Free: 10})
+	if err != nil {
+		t.Fatalf("marshal AgentMemoryMeta without cache: %v", err)
+	}
+	if strings.Contains(string(empty), "cache") {
+		t.Fatalf("cache should be omitted when unreported, got %s", empty)
 	}
 }

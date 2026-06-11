@@ -67,9 +67,12 @@ type Metrics struct {
 
 // MemoryMetric captures memory usage statistics in bytes.
 type MemoryMetric struct {
-	TotalBytes int64   `json:"totalBytes,omitempty"`
-	UsedBytes  int64   `json:"usedBytes,omitempty"`
-	FreeBytes  int64   `json:"freeBytes,omitempty"`
+	TotalBytes int64 `json:"totalBytes,omitempty"`
+	UsedBytes  int64 `json:"usedBytes,omitempty"`
+	FreeBytes  int64 `json:"freeBytes,omitempty"`
+	// CacheBytes is the reclaimable page cache (Available - Free);
+	// used + cache + free ≈ total.
+	CacheBytes int64   `json:"cacheBytes,omitempty"`
 	Usage      float64 `json:"usage,omitempty"`
 	SwapTotal  int64   `json:"swapTotalBytes,omitempty"`
 	SwapUsed   int64   `json:"swapUsedBytes,omitempty"`

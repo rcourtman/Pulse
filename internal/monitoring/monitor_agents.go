@@ -1759,9 +1759,17 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		Total:     report.Metrics.Memory.TotalBytes,
 		Used:      report.Metrics.Memory.UsedBytes,
 		Free:      report.Metrics.Memory.FreeBytes,
+		Cache:     report.Metrics.Memory.CacheBytes,
 		Usage:     safeFloat(report.Metrics.Memory.Usage),
 		SwapTotal: report.Metrics.Memory.SwapTotal,
 		SwapUsed:  report.Metrics.Memory.SwapUsed,
+	}
+	// Older agents don't report cache; clamp so used + cache never exceeds total.
+	if memory.Cache < 0 {
+		memory.Cache = 0
+	}
+	if memory.Total > 0 && memory.Used+memory.Cache > memory.Total {
+		memory.Cache = max(0, memory.Total-memory.Used)
 	}
 
 	// Fallback for LXC environments: gopsutil may read Total and Free correctly

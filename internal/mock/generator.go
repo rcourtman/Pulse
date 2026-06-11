@@ -2889,7 +2889,10 @@ func generateHosts(config MockConfig) []models.Host {
 		memTotal := int64(memTotalGiB) << 30
 		memUsage := SampleMetric("agent", hostID, "memory", now)
 		memUsed := int64(float64(memTotal) * (memUsage / 100.0))
-		memFree := memTotal - memUsed
+		// Roughly a third of the non-used pages read as reclaimable buff/cache
+		// so the machine memory split is exercisable in mock mode.
+		memCache := (memTotal - memUsed) / 3
+		memFree := memTotal - memUsed - memCache
 
 		swapTotal := int64(rand.Intn(32)) << 30
 		swapUsed := int64(float64(swapTotal) * rand.Float64())
@@ -3051,7 +3054,7 @@ func generateHosts(config MockConfig) []models.Host {
 			CPUCount:          cpuCount,
 			CPUUsage:          cpuUsage,
 			LoadAverage:       loadAverage,
-			Memory:            models.Memory{Total: memTotal, Used: memUsed, Free: memFree, Usage: memUsage, SwapTotal: swapTotal, SwapUsed: swapUsed},
+			Memory:            models.Memory{Total: memTotal, Used: memUsed, Free: memFree, Cache: memCache, Usage: memUsage, SwapTotal: swapTotal, SwapUsed: swapUsed},
 			Disks:             disks,
 			NetworkInterfaces: network,
 			Sensors:           sensors,
@@ -3489,6 +3492,12 @@ func buildMockLinkedHostFromNode(node models.Node, hostID string, hostIndex int,
 	if memory.Free < 0 {
 		memory.Free = 0
 	}
+	// The node memory carries a reclaimable-cache split; keep the
+	// used + cache + free invariant after recomputing free.
+	if memory.Cache > memory.Free {
+		memory.Cache = memory.Free
+	}
+	memory.Free -= memory.Cache
 
 	// Add swap for PVE node hosts
 	memory.SwapTotal = int64(8+rand.Intn(24)) << 30
