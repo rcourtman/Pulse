@@ -145,6 +145,25 @@ test("postRetestComment comments once for older non-maintainer bug reports", asy
   );
 });
 
+test("postRetestComment skips reopened issues", async () => {
+  const { github, calls } = createGithub({ latestVersion: "6.0.1" });
+  const issue = {
+    number: 1471,
+    title: "Disk temperature at 0°C",
+    body: "## Feedback type\nBug / regression\n\n## Pulse version\n5.1.31\n",
+    labels: [],
+    author_association: "NONE",
+  };
+
+  await triage.postRetestComment({
+    github,
+    context: createContext({ action: "reopened", issue }),
+    core: createCore(),
+  });
+
+  assert.equal(calls.createComment.length, 0);
+});
+
 test("postRetestComment skips maintainer-authored issues", async () => {
   const { github, calls } = createGithub({ latestVersion: "6.0.1" });
   const issue = {

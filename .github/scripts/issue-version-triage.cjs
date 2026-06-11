@@ -200,10 +200,13 @@ function buildRetestCommentBody(reportedVersion, latestVersion) {
 }
 
 function canPostRetestComment(issue, action) {
+  // "opened" only: non-collaborator reporters cannot reopen maintainer-closed
+  // issues, so a "reopened" event is a deliberate maintainer decision made with
+  // context. Posting retest boilerplate there contradicts the maintainer and
+  // plants the auto-close marker on an issue they chose to keep open.
   const authorAssociation = String(issue.author_association || "").toUpperCase();
   return (
-    (action === "opened" || action === "reopened") &&
-    !MAINTAINER_AUTHOR_ASSOCIATIONS.has(authorAssociation)
+    action === "opened" && !MAINTAINER_AUTHOR_ASSOCIATIONS.has(authorAssociation)
   );
 }
 
