@@ -138,6 +138,19 @@ func interactionScenarios() []interactionScenario {
 			streamMustContain:    []string{"pulse_query"},
 		},
 		{
+			name:    "post-tool model turn marks the status handoff",
+			promise: "after tools run, the footer status hands off from the last tool to the model composing the answer — a provider that reasons server-side without streaming events never leaves a stale tool status on screen",
+			prompt:  "summarize my inventory",
+			calls: []scriptedProviderCall{
+				providerQueryToolCall("call_e5f6a7b8"),
+				providerContentDone("Inventory summarized."),
+			},
+			maxTurns:          4,
+			orderedTypes:      []string{"session", "tool_start", "tool_end", "workflow_state", "content", "done"},
+			forbiddenTypes:    []string{"error"},
+			streamMustContain: []string{"model_processing", "Working on the response with the gathered results"},
+		},
+		{
 			name:    "no-narrative turn falls back to a clean operator sentence",
 			promise: "when the model runs tools but never writes an answer, the user reads one clean sentence — not raw JSON, tool-result dumps, or provider call ids",
 			prompt:  "check the topology",

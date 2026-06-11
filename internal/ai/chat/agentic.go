@@ -857,6 +857,16 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			req = requestSanitizer(req)
 		}
 
+		// Post-tool model turns can reason server-side for a long time without
+		// streaming a single event; without a fresh status the footer keeps
+		// the last tool's message ("Reading inventory. (40s)") while the model
+		// is already composing the answer. Mark the handoff explicitly. The
+		// model_thinking status still upgrades this when reasoning deltas
+		// actually arrive.
+		if turn > 0 {
+			emitWorkflowState(callback, "model_processing", "Working on the response with the gathered results.", sessionFSMState(a.sessionFSM), "")
+		}
+
 		maxProviderAttempts := 2
 		err := error(nil)
 		for attempt := 1; attempt <= maxProviderAttempts; attempt++ {

@@ -2388,6 +2388,14 @@ deriving an older display status from `workflowStatusHistory`.
 
 ## Current State
 
+Post-tool model turns mark the status handoff: every agentic turn after the
+first emits a `model_processing` workflow state ("Working on the response
+with the gathered results.") before the provider call, so a provider that
+reasons server-side without streaming events can never leave the previous
+tool's status stale on screen; `model_thinking` still upgrades the status
+when reasoning deltas actually arrive. Pinned by the interaction-quality
+corpus scenario "post-tool model turn marks the status handoff".
+
 Session titles are model-generated after the first exchange
 (`internal/ai/chat/session_title.go`): the chat runtime upgrades the
 auto-truncated first-prompt placeholder once the done event has reached the
