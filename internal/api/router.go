@@ -8259,6 +8259,10 @@ func workloadSummaryStatusIsRunning(runtimeState string, status unifiedresources
 	switch status {
 	case unifiedresources.StatusOnline:
 		return true
+	case unifiedresources.StatusWarning:
+		// Warning is an attention state on a running workload (degraded
+		// guest state, stale source data); power-off maps to StatusOffline.
+		return true
 	case unifiedresources.StatusOffline:
 		return false
 	}
