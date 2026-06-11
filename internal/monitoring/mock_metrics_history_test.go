@@ -764,9 +764,9 @@ func TestSeedMockMetricsHistory_UsesCanonicalMockFixtureGraphForLegacyAndProvide
 	sampleInterval := time.Minute
 	historyRetention := boundedMockHistoryProofWindow
 	if raceEnabled {
-		seedDuration = 5 * time.Minute
+		seedDuration = 3 * time.Hour
 		sampleInterval = time.Minute
-		historyRetention = 10 * time.Minute
+		historyRetention = 3 * time.Hour
 	}
 
 	cfg := metrics.DefaultConfig(t.TempDir())

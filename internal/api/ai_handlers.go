@@ -3477,12 +3477,13 @@ func (s *legacyAssistantSSEWriter) startHeartbeat(ctx context.Context) {
 }
 
 func (s *legacyAssistantSSEWriter) startIdleProgress(ctx context.Context) {
-	if chatStreamIdleProgressInterval <= 0 {
+	interval := chatStreamIdleProgressInterval
+	if interval <= 0 {
 		return
 	}
 
 	go func() {
-		ticker := time.NewTicker(chatStreamIdleProgressInterval)
+		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
 			select {
@@ -3500,7 +3501,7 @@ func (s *legacyAssistantSSEWriter) startIdleProgress(ctx context.Context) {
 					return
 				}
 				lastEventAt := time.UnixMilli(s.lastClientEventUnixMS.Load())
-				if time.Since(lastEventAt) < chatStreamIdleProgressInterval {
+				if time.Since(lastEventAt) < interval {
 					continue
 				}
 				progressEvent := ai.StreamEvent{

@@ -707,7 +707,13 @@ test_makefile_routes_managed_runtime_through_npm() {
 
 test_hot_dev_script_advertises_foreground_escape_hatch() {
   local output
-  output="$(sed -n '1,40p' "${HOT_DEV}")"
+  output="$(
+    awk '
+      NR == 1 { print; next }
+      /^#/ || /^$/ { print; next }
+      { exit }
+    ' "${HOT_DEV}"
+  )"
 
   assert_contains "hot-dev header identifies foreground escape hatch" "${output}" "hot-dev.sh - Foreground Pulse dev runtime escape hatch"
   assert_contains "hot-dev usage points to managed runtime first" "${output}" "npm run dev                             # Canonical managed dev runtime"
@@ -821,7 +827,7 @@ test_hot_dev_health_monitor_probes_api_health() {
   local output
   output="$(cat "${HOT_DEV}")"
 
-  assert_contains "hot-dev health monitor declares a configurable unhealthy streak threshold" "${output}" 'UNHEALTHY_THRESHOLD="${HOT_DEV_BACKEND_UNHEALTHY_THRESHOLD:-2}"'
+  assert_contains "hot-dev health monitor declares a configurable unhealthy streak threshold" "${output}" 'UNHEALTHY_THRESHOLD="${HOT_DEV_BACKEND_UNHEALTHY_THRESHOLD:-4}"'
   assert_contains "hot-dev health monitor declares backend startup grace" "${output}" 'BACKEND_HEALTH_STARTUP_GRACE_SECONDS="${HOT_DEV_BACKEND_HEALTH_STARTUP_GRACE_SECONDS:-180}"'
   assert_contains "hot-dev health monitor declares missing-process grace" "${output}" 'BACKEND_PROCESS_MISSING_GRACE_SECONDS="${HOT_DEV_BACKEND_PROCESS_MISSING_GRACE_SECONDS:-10}"'
   assert_contains "hot-dev health monitor tracks backend restart time through a shared marker" "${output}" 'BACKEND_STARTED_AT_FILE="${HOT_DEV_BACKEND_STARTED_AT_FILE:-${ROOT_DIR}/tmp/hot-dev.backend.started-at}"'
