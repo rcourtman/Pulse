@@ -230,6 +230,17 @@ export default defineConfig({
     target: 'esnext',
     rollupOptions: {
       output: {
+        // Dynamic-import facades named index.tsx/index.ts all produce chunks
+        // called "index", colliding with the real entry chunk in dist/assets
+        // and polluting the entry's bundle-size budget line. Name those
+        // chunks after the facade's directory instead (Chat, SetupWizard).
+        chunkFileNames(chunkInfo) {
+          if (chunkInfo.name === 'index' && chunkInfo.facadeModuleId) {
+            const dir = chunkInfo.facadeModuleId.split('/').slice(-2, -1)[0];
+            if (dir) return `assets/${dir}-[hash].js`;
+          }
+          return 'assets/[name]-[hash].js';
+        },
         manualChunks(id) {
           if (id.includes('node_modules')) {
             if (id.includes('solid-js') || id.includes('@solidjs/router')) return 'vendor-solid';
