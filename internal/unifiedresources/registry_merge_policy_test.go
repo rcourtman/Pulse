@@ -128,6 +128,65 @@ func TestHostnameIPDoesNotAutoMerge(t *testing.T) {
 	}
 }
 
+func TestCloneDockerDataPreservesContainerRuntimeMetadata(t *testing.T) {
+	startedAt := time.Date(2026, 6, 11, 13, 15, 30, 0, time.UTC)
+	finishedAt := startedAt.Add(45 * time.Minute)
+	original := &DockerData{
+		ContainerID: "container-1",
+		StartedAt:   &startedAt,
+		FinishedAt:  &finishedAt,
+		BlockIO: &DockerContainerBlockIOMeta{
+			ReadBytes:  9_876_543,
+			WriteBytes: 1_234_567,
+		},
+		Podman: &DockerPodmanContainerMeta{
+			PodName:          "edge-pod",
+			PodID:            "pod-123",
+			Infra:            true,
+			ComposeProject:   "orion",
+			ComposeService:   "web",
+			AutoUpdatePolicy: "registry",
+			UserNamespace:    "keep-id",
+		},
+	}
+
+	cloned := cloneDockerData(original)
+	if cloned == nil {
+		t.Fatal("expected docker clone")
+	}
+	if cloned.StartedAt == nil || !cloned.StartedAt.Equal(startedAt) {
+		t.Fatalf("startedAt = %v, want %v", cloned.StartedAt, startedAt)
+	}
+	if cloned.FinishedAt == nil || !cloned.FinishedAt.Equal(finishedAt) {
+		t.Fatalf("finishedAt = %v, want %v", cloned.FinishedAt, finishedAt)
+	}
+	if cloned.BlockIO == nil {
+		t.Fatal("expected block IO clone")
+	}
+	if got, want := cloned.BlockIO.ReadBytes, original.BlockIO.ReadBytes; got != want {
+		t.Fatalf("blockIo.readBytes = %d, want %d", got, want)
+	}
+	if cloned.Podman == nil {
+		t.Fatal("expected podman clone")
+	}
+	if got, want := cloned.Podman.ComposeProject, original.Podman.ComposeProject; got != want {
+		t.Fatalf("podman.composeProject = %q, want %q", got, want)
+	}
+
+	*cloned.StartedAt = cloned.StartedAt.Add(time.Hour)
+	cloned.BlockIO.ReadBytes = 1
+	cloned.Podman.ComposeProject = "mutated"
+	if !original.StartedAt.Equal(startedAt) {
+		t.Fatalf("original startedAt mutated to %v", original.StartedAt)
+	}
+	if original.BlockIO.ReadBytes != 9_876_543 {
+		t.Fatalf("original blockIo.readBytes mutated to %d", original.BlockIO.ReadBytes)
+	}
+	if original.Podman.ComposeProject != "orion" {
+		t.Fatalf("original podman.composeProject mutated to %q", original.Podman.ComposeProject)
+	}
+}
+
 func TestMergeTrueNASDataPreservesNativeAppFacetAsClone(t *testing.T) {
 	existing := &TrueNASData{
 		Hostname: "truenas-a.local",

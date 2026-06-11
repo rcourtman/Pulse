@@ -66,6 +66,18 @@ func TestContractResourceType(t *testing.T) {
 			want: ResourceTypeVM,
 		},
 		{
+			name: "docker app container metadata keeps app-container contract type",
+			resource: Resource{
+				Type: ResourceTypeAppContainer,
+				Docker: &DockerData{
+					ContainerID: "container-1",
+					BlockIO:     &DockerContainerBlockIOMeta{ReadBytes: 1024, WriteBytes: 2048},
+					Podman:      &DockerPodmanContainerMeta{PodName: "edge-pod", ComposeProject: "orion"},
+				},
+			},
+			want: ResourceTypeAppContainer,
+		},
+		{
 			name: "network share passthrough remains canonical",
 			resource: Resource{
 				Type: ResourceTypeNetworkShare,

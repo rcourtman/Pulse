@@ -246,6 +246,11 @@ those rows through a variant-switched generic inventory table. Swarm service
 rows must preserve the service update status emitted by the Docker adapter, and
 engine storage rows must stay host-scoped with table proof hooks so browser
 proof can distinguish a populated disk-usage tab from an empty fixture.
+Runtime container detail payloads must preserve the agent-reported lifecycle
+timestamps, Podman pod/compose/auto-update/user-namespace metadata, and
+cumulative block I/O totals on `DockerData`; frontend detail summaries and
+Docker page search consume those backend-authored fields before falling back to
+legacy labels.
 Docker network rows must consume canonical runtime attachment relationships,
 not page-local topology inference, when the unified-resource snapshot provides
 them. Runtime container-to-network membership is represented as active

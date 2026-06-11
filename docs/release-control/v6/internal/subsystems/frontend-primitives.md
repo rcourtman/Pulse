@@ -188,6 +188,10 @@ and Kubernetes platform pages may add native API-backed sections, but the tabs
 must use `PlatformSectionTabs`, canonical table alignment helpers, and shared
 resource type presentation/reporting helpers rather than page-local tab shells,
 alignment classes, or ad hoc report-category coercion. Platform tabs are
+feature-owned consumers of canonical resource payloads: Docker page model
+helpers may prefer backend-authored `DockerData` stack and Podman metadata for
+search/display while shared primitives continue to own only the tab shell,
+filter controls, and reusable presentation affordances. Platform tabs are
 workflow-level navigation, not one visible tab per API resource kind, and they
 must be evidence-gated by their owning row or signal model. `Overview` is the
 stable landing surface; supporting workflow tabs appear only when the current

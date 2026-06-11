@@ -220,11 +220,14 @@ func cloneDockerData(in *DockerData) *DockerData {
 	out.Networks = cloneDockerNetworkMetaSlice(in.Networks)
 	out.Mounts = cloneDockerMountMetaSlice(in.Mounts)
 	out.UpdateStatus = cloneDockerUpdateStatusMeta(in.UpdateStatus)
+	out.BlockIO = cloneDockerContainerBlockIOMeta(in.BlockIO)
+	out.Podman = cloneDockerPodmanContainerMeta(in.Podman)
 	out.RepoTags = cloneStringSlice(in.RepoTags)
 	out.RepoDigests = cloneStringSlice(in.RepoDigests)
 	out.Options = cloneStringMap(in.Options)
 	out.Subnets = cloneDockerNetworkSubnetMetaSlice(in.Subnets)
 	out.StartedAt = cloneTimePtr(in.StartedAt)
+	out.FinishedAt = cloneTimePtr(in.FinishedAt)
 	out.CompletedAt = cloneTimePtr(in.CompletedAt)
 	out.ObjectCreatedAt = cloneTimePtr(in.ObjectCreatedAt)
 	out.ObjectUpdatedAt = cloneTimePtr(in.ObjectUpdatedAt)
@@ -241,6 +244,22 @@ func cloneDockerData(in *DockerData) *DockerData {
 	out.Nodes = append([]models.DockerNode(nil), in.Nodes...)
 	out.Secrets = append([]models.DockerSecret(nil), in.Secrets...)
 	out.Configs = append([]models.DockerConfig(nil), in.Configs...)
+	return &out
+}
+
+func cloneDockerContainerBlockIOMeta(in *DockerContainerBlockIOMeta) *DockerContainerBlockIOMeta {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	return &out
+}
+
+func cloneDockerPodmanContainerMeta(in *DockerPodmanContainerMeta) *DockerPodmanContainerMeta {
+	if in == nil {
+		return nil
+	}
+	out := *in
 	return &out
 }
 

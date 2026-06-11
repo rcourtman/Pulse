@@ -1935,6 +1935,31 @@ func resourceFromDockerContainer(ct models.DockerContainer, host models.DockerHo
 	if !ct.CreatedAt.IsZero() {
 		docker.CreatedAt = ct.CreatedAt.UTC().Format(time.RFC3339)
 	}
+	if ct.StartedAt != nil && !ct.StartedAt.IsZero() {
+		startedAt := ct.StartedAt.UTC()
+		docker.StartedAt = &startedAt
+	}
+	if ct.FinishedAt != nil && !ct.FinishedAt.IsZero() {
+		finishedAt := ct.FinishedAt.UTC()
+		docker.FinishedAt = &finishedAt
+	}
+	if ct.BlockIO != nil && (ct.BlockIO.ReadBytes > 0 || ct.BlockIO.WriteBytes > 0) {
+		docker.BlockIO = &DockerContainerBlockIOMeta{
+			ReadBytes:  ct.BlockIO.ReadBytes,
+			WriteBytes: ct.BlockIO.WriteBytes,
+		}
+	}
+	if ct.Podman != nil {
+		docker.Podman = &DockerPodmanContainerMeta{
+			PodName:          strings.TrimSpace(ct.Podman.PodName),
+			PodID:            strings.TrimSpace(ct.Podman.PodID),
+			Infra:            ct.Podman.Infra,
+			ComposeProject:   strings.TrimSpace(ct.Podman.ComposeProject),
+			ComposeService:   strings.TrimSpace(ct.Podman.ComposeService),
+			AutoUpdatePolicy: strings.TrimSpace(ct.Podman.AutoUpdatePolicy),
+			UserNamespace:    strings.TrimSpace(ct.Podman.UserNamespace),
+		}
+	}
 	if len(ct.Ports) > 0 {
 		docker.Ports = make([]DockerPortMeta, len(ct.Ports))
 		for i, p := range ct.Ports {

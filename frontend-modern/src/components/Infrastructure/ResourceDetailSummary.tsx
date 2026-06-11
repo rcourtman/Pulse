@@ -3,7 +3,7 @@ import type { Component } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import { Card } from '@/components/shared/Card';
 import { TagBadges } from '@/components/shared/TagBadges';
-import { formatRelativeTime, formatUptime } from '@/utils/format';
+import { formatBytes, formatRelativeTime, formatUptime } from '@/utils/format';
 import { formatInteger } from './resourceDetailMappers';
 import type { UseResourceDetailDrawerStateResult } from './useResourceDetailDrawerState';
 
@@ -21,9 +21,21 @@ const dockerContainerMeta = (resource: Resource): NonNullable<Resource['docker']
   if (resource.type !== 'app-container') return null;
   const docker = resource.docker;
   if (!docker) return null;
-  if (!docker.containerId && !docker.containerState && !docker.image) return null;
+  if (
+    !docker.containerId &&
+    !docker.containerState &&
+    !docker.image &&
+    !docker.startedAt &&
+    !docker.finishedAt &&
+    !docker.blockIo &&
+    !docker.podman
+  ) {
+    return null;
+  }
   return docker;
 };
+
+const trimmedDockerValue = (value: string | undefined): string => (value || '').trim();
 
 const composeLabelValue = (
   labels: Record<string, string> | undefined,
@@ -35,19 +47,35 @@ const composeLabelValue = (
     ''
   ).trim();
 
-const dockerCreatedAtMillis = (docker: NonNullable<Resource['docker']>): number | null => {
-  const raw = (docker.createdAt || '').trim();
+const dockerTimestampMillis = (value: string | undefined): number | null => {
+  const raw = trimmedDockerValue(value);
   if (!raw) return null;
   const parsed = Date.parse(raw);
   return Number.isFinite(parsed) ? parsed : null;
 };
+
+const dockerByteTotal = (value: number | undefined): number | null =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
 
 const DockerContainerSummarySection: Component<{ docker: NonNullable<Resource['docker']> }> = (
   props,
 ) => {
   const labels = () => props.docker.labels ?? {};
   const labelEntries = () => Object.entries(labels());
-  const createdAt = () => dockerCreatedAtMillis(props.docker);
+  const createdAt = () => dockerTimestampMillis(props.docker.createdAt);
+  const startedAt = () => dockerTimestampMillis(props.docker.startedAt);
+  const finishedAt = () => dockerTimestampMillis(props.docker.finishedAt);
+  const podman = () => props.docker.podman;
+  const podmanPodName = () => trimmedDockerValue(podman()?.podName);
+  const podmanPodId = () => trimmedDockerValue(podman()?.podId);
+  const composeProject = () =>
+    trimmedDockerValue(podman()?.composeProject) || composeLabelValue(labels(), 'project');
+  const composeService = () =>
+    trimmedDockerValue(podman()?.composeService) || composeLabelValue(labels(), 'service');
+  const autoUpdatePolicy = () => trimmedDockerValue(podman()?.autoUpdatePolicy);
+  const userNamespace = () => trimmedDockerValue(podman()?.userNamespace);
+  const blockReadBytes = () => dockerByteTotal(props.docker.blockIo?.readBytes);
+  const blockWriteBytes = () => dockerByteTotal(props.docker.blockIo?.writeBytes);
   const restartCount = () => props.docker.restartCount;
 
   return (
@@ -76,9 +104,7 @@ const DockerContainerSummarySection: Component<{ docker: NonNullable<Resource['d
           <td class="px-2 py-1 text-muted">Restarts</td>
           <td
             class={`px-2 py-1 text-right font-medium ${
-              (restartCount() ?? 0) > 5
-                ? 'text-red-600 dark:text-red-400'
-                : 'text-base-content'
+              (restartCount() ?? 0) > 5 ? 'text-red-600 dark:text-red-400' : 'text-base-content'
             }`}
           >
             {formatInteger(restartCount())}
@@ -98,21 +124,101 @@ const DockerContainerSummarySection: Component<{ docker: NonNullable<Resource['d
           </tr>
         )}
       </Show>
-      <Show when={composeLabelValue(labels(), 'project')}>
+      <Show when={startedAt()}>
+        {(started) => (
+          <tr>
+            <td class="px-2 py-1 text-muted">Started</td>
+            <td
+              class="px-2 py-1 text-right font-medium text-base-content"
+              title={new Date(started()).toLocaleString()}
+            >
+              {formatRelativeTime(started())}
+            </td>
+          </tr>
+        )}
+      </Show>
+      <Show when={finishedAt()}>
+        {(finished) => (
+          <tr>
+            <td class="px-2 py-1 text-muted">Finished</td>
+            <td
+              class="px-2 py-1 text-right font-medium text-base-content"
+              title={new Date(finished()).toLocaleString()}
+            >
+              {formatRelativeTime(finished())}
+            </td>
+          </tr>
+        )}
+      </Show>
+      <Show when={podmanPodName()}>
         <tr>
-          <td class="px-2 py-1 text-muted">Compose project</td>
-          <td class="px-2 py-1 text-right font-medium text-base-content">
-            {composeLabelValue(labels(), 'project')}
+          <td class="px-2 py-1 text-muted">Podman pod</td>
+          <td class="px-2 py-1 text-right font-medium text-base-content" title={podmanPodName()}>
+            <span class="block truncate">{podmanPodName()}</span>
           </td>
         </tr>
       </Show>
-      <Show when={composeLabelValue(labels(), 'service')}>
+      <Show when={podmanPodId()}>
         <tr>
-          <td class="px-2 py-1 text-muted">Compose service</td>
-          <td class="px-2 py-1 text-right font-medium text-base-content">
-            {composeLabelValue(labels(), 'service')}
+          <td class="px-2 py-1 text-muted">Podman pod ID</td>
+          <td class="px-2 py-1 text-right font-medium text-base-content" title={podmanPodId()}>
+            <span class="block truncate">{podmanPodId()}</span>
           </td>
         </tr>
+      </Show>
+      <Show when={typeof podman()?.infra === 'boolean'}>
+        <tr>
+          <td class="px-2 py-1 text-muted">Podman infra</td>
+          <td class="px-2 py-1 text-right font-medium text-base-content">
+            {podman()?.infra ? 'Yes' : 'No'}
+          </td>
+        </tr>
+      </Show>
+      <Show when={composeProject()}>
+        <tr>
+          <td class="px-2 py-1 text-muted">Compose project</td>
+          <td class="px-2 py-1 text-right font-medium text-base-content">{composeProject()}</td>
+        </tr>
+      </Show>
+      <Show when={composeService()}>
+        <tr>
+          <td class="px-2 py-1 text-muted">Compose service</td>
+          <td class="px-2 py-1 text-right font-medium text-base-content">{composeService()}</td>
+        </tr>
+      </Show>
+      <Show when={autoUpdatePolicy()}>
+        <tr>
+          <td class="px-2 py-1 text-muted">Auto-update</td>
+          <td class="px-2 py-1 text-right font-medium text-base-content">{autoUpdatePolicy()}</td>
+        </tr>
+      </Show>
+      <Show when={userNamespace()}>
+        <tr>
+          <td class="px-2 py-1 text-muted">User namespace</td>
+          <td class="px-2 py-1 text-right font-medium text-base-content" title={userNamespace()}>
+            <span class="block truncate">{userNamespace()}</span>
+          </td>
+        </tr>
+      </Show>
+      <Show when={blockReadBytes()}>
+        {(readBytes) => (
+          <tr>
+            <td class="px-2 py-1 text-muted">Block I/O read</td>
+            <td class="px-2 py-1 text-right font-medium text-base-content">
+              {formatBytes(readBytes())}
+            </td>
+          </tr>
+        )}
+      </Show>
+      <Show when={blockWriteBytes()}>
+        {(writeBytes) => (
+          <tr>
+            <td class="px-2 py-1 text-muted">Block I/O write</td>
+            <td class="px-2 py-1 text-right font-medium text-base-content">
+              {formatBytes(writeBytes())}
+            </td>
+          </tr>
+        )}
       </Show>
       <Show when={labelEntries().length > 0}>
         <tr>

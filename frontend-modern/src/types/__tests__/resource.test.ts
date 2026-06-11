@@ -170,6 +170,19 @@ describe('Resource Helper Functions', () => {
         updatesAvailableCount: 2,
         updatesLastCheckedAt: '2026-05-17T18:00:00Z',
         command: { restartContainer: true },
+        startedAt: '2026-06-11T13:15:30Z',
+        finishedAt: '2026-06-11T14:00:30Z',
+        blockIo: { readBytes: 9_876_543, writeBytes: 1_234_567 },
+        podman: {
+          podName: 'edge-pod',
+          podId: 'pod-123',
+          infra: true,
+          composeProject: 'orion',
+          composeService: 'web',
+          autoUpdatePolicy: 'registry',
+          userNamespace: 'keep-id',
+        },
+        stack: 'shop',
         swarm: {
           clusterId: 'swarm-1',
           clusterName: 'homelab',
@@ -182,6 +195,9 @@ describe('Resource Helper Functions', () => {
 
       expect(docker.runtimeVersion).toBe('27.5.1');
       expect(docker.containerCount).toBe(12);
+      expect(docker.podman?.composeProject).toBe('orion');
+      expect(docker.blockIo?.readBytes).toBe(9_876_543);
+      expect(docker.stack).toBe('shop');
       expect(docker.swarm?.localState).toBe('active');
       expect(docker.swarm?.controlAvailable).toBe(true);
     });

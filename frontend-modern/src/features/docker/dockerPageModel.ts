@@ -377,18 +377,19 @@ export function buildDockerNetworkAttachmentRows(
     .sort((left, right) => compareDockerContainers(left.resource, right.resource));
 }
 
-// The API serializes a `stack` field for Swarm services, but the frontend
-// ResourceDockerMeta type does not declare it yet; until it does, fall back
-// to the canonical Swarm stack label every stack deploy stamps on the
-// service.
+// Prefer the backend-authored service stack while keeping the Docker label as
+// compatibility for older payloads.
 export const dockerServiceStack = (resource: Resource): string => {
-  const docker = resource.docker as
-    | (NonNullable<Resource['docker']> & { stack?: string })
-    | undefined;
+  const docker = resource.docker;
   return (
     asTrimmedString(docker?.stack) ||
     asTrimmedString(docker?.labels?.['com.docker.stack.namespace'])
   );
+};
+
+const dockerPrefixedToken = (prefix: string, value: string | undefined): string | undefined => {
+  const trimmed = asTrimmedString(value);
+  return trimmed ? `${prefix}:${trimmed}` : undefined;
 };
 
 // Builds the lowercase search haystack a Docker page table consults when
@@ -450,6 +451,16 @@ export function dockerResourceSearchHaystack(resource: Resource): string {
     docker?.swarm?.clusterName,
     docker?.swarm?.nodeRole,
     docker?.swarm?.localState,
+    docker?.podman?.podName,
+    docker?.podman?.podId,
+    docker?.podman?.composeProject,
+    docker?.podman?.composeService,
+    docker?.podman?.autoUpdatePolicy,
+    docker?.podman?.userNamespace,
+    dockerPrefixedToken('pod', docker?.podman?.podName),
+    dockerPrefixedToken('pod', docker?.podman?.podId),
+    dockerPrefixedToken('compose', docker?.podman?.composeProject),
+    dockerPrefixedToken('compose', docker?.podman?.composeService),
     ...(docker?.ports?.flatMap((port) => [
       dockerPortToken(port),
       port.ip,
@@ -470,7 +481,9 @@ export function dockerResourceSearchHaystack(resource: Resource): string {
     // Labels carry the operator-meaningful container organizers (compose
     // project/service, Swarm stack, traefik rules); v5 searched them and the
     // unified payload still ships them.
-    ...(docker?.labels ? Object.entries(docker.labels).flatMap(([key, value]) => [key, value]) : []),
+    ...(docker?.labels
+      ? Object.entries(docker.labels).flatMap(([key, value]) => [key, value])
+      : []),
     dockerServiceStack(resource),
     ...(resource.tags ?? []),
   ]

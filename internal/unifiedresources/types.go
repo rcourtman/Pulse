@@ -858,6 +858,23 @@ type DockerStorageUsageMeta struct {
 	ReclaimableBytes int64 `json:"reclaimableBytes,omitempty"`
 }
 
+// DockerContainerBlockIOMeta captures cumulative container block IO totals.
+type DockerContainerBlockIOMeta struct {
+	ReadBytes  uint64 `json:"readBytes,omitempty"`
+	WriteBytes uint64 `json:"writeBytes,omitempty"`
+}
+
+// DockerPodmanContainerMeta captures Podman-specific container metadata.
+type DockerPodmanContainerMeta struct {
+	PodName          string `json:"podName,omitempty"`
+	PodID            string `json:"podId,omitempty"`
+	Infra            bool   `json:"infra"`
+	ComposeProject   string `json:"composeProject,omitempty"`
+	ComposeService   string `json:"composeService,omitempty"`
+	AutoUpdatePolicy string `json:"autoUpdatePolicy,omitempty"`
+	UserNamespace    string `json:"userNamespace,omitempty"`
+}
+
 // DockerData contains Docker host- and container-specific data.
 type DockerData struct {
 	HostSourceID      string    `json:"hostSourceId,omitempty"` // raw model ID for the docker host
@@ -910,15 +927,19 @@ type DockerData struct {
 	Command               *models.DockerHostCommandStatus `json:"command,omitempty"`
 
 	// Container-specific fields (populated when Resource.Type == ResourceTypeAppContainer)
-	ContainerState string                  `json:"containerState,omitempty"`
-	Health         string                  `json:"health,omitempty"`
-	RestartCount   int                     `json:"restartCount,omitempty"`
-	ExitCode       int                     `json:"exitCode,omitempty"`
-	Ports          []DockerPortMeta        `json:"ports,omitempty"`
-	Labels         map[string]string       `json:"labels,omitempty"`
-	Networks       []DockerNetworkMeta     `json:"networks,omitempty"`
-	Mounts         []DockerMountMeta       `json:"mounts,omitempty"`
-	UpdateStatus   *DockerUpdateStatusMeta `json:"updateStatus,omitempty"`
+	ContainerState string                      `json:"containerState,omitempty"`
+	Health         string                      `json:"health,omitempty"`
+	RestartCount   int                         `json:"restartCount,omitempty"`
+	ExitCode       int                         `json:"exitCode,omitempty"`
+	StartedAt      *time.Time                  `json:"startedAt,omitempty"`
+	FinishedAt     *time.Time                  `json:"finishedAt,omitempty"`
+	BlockIO        *DockerContainerBlockIOMeta `json:"blockIo,omitempty"`
+	Podman         *DockerPodmanContainerMeta  `json:"podman,omitempty"`
+	Ports          []DockerPortMeta            `json:"ports,omitempty"`
+	Labels         map[string]string           `json:"labels,omitempty"`
+	Networks       []DockerNetworkMeta         `json:"networks,omitempty"`
+	Mounts         []DockerMountMeta           `json:"mounts,omitempty"`
+	UpdateStatus   *DockerUpdateStatusMeta     `json:"updateStatus,omitempty"`
 
 	// Service-specific fields (populated when Resource.Type == ResourceTypeDockerService)
 	ServiceID      string                   `json:"serviceId,omitempty"`
@@ -967,7 +988,6 @@ type DockerData struct {
 	CurrentState string     `json:"currentState,omitempty"`
 	Error        string     `json:"error,omitempty"`
 	Message      string     `json:"message,omitempty"`
-	StartedAt    *time.Time `json:"startedAt,omitempty"`
 	CompletedAt  *time.Time `json:"completedAt,omitempty"`
 
 	// Swarm-node-specific fields (populated when Resource.Type == ResourceTypeDockerSwarmNode)

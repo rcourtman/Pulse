@@ -10,6 +10,7 @@ import {
   compareDockerServices,
   compareDockerSwarmNodes,
   compareDockerTasks,
+  dockerServiceStack,
   filterDockerIncidents,
   filterDockerResources,
   getDockerHostSystemBadge,
@@ -811,19 +812,53 @@ describe('dockerPageModel', () => {
           status: 'online',
           docker: {
             serviceName: 'shop-api',
-            labels: { 'com.docker.stack.namespace': 'shopstack' },
+            stack: 'shopstack',
+            labels: { 'com.docker.stack.namespace': 'legacy-stack' },
+          },
+        }),
+        makeResource({
+          id: 'podman-web',
+          type: 'app-container',
+          status: 'online',
+          docker: {
+            containerState: 'running',
+            podman: {
+              podName: 'edge-pod',
+              podId: 'pod-123',
+              infra: false,
+              composeProject: 'orion',
+              composeService: 'web',
+              autoUpdatePolicy: 'registry',
+              userNamespace: 'keep-id',
+            },
           },
         }),
       ];
 
       expect(filterDockerResources(labelled, 'orion', 'all').map((r) => r.id)).toEqual([
         'compose-db',
+        'podman-web',
       ]);
       expect(filterDockerResources(labelled, 'database', 'all').map((r) => r.id)).toEqual([
         'compose-db',
       ]);
       expect(filterDockerResources(labelled, 'shopstack', 'all').map((r) => r.id)).toEqual([
         'svc-stacked',
+      ]);
+      expect(dockerServiceStack(labelled.find((resource) => resource.id === 'svc-stacked')!)).toBe(
+        'shopstack',
+      );
+      expect(filterDockerResources(labelled, 'legacy-stack', 'all').map((r) => r.id)).toEqual([
+        'svc-stacked',
+      ]);
+      expect(filterDockerResources(labelled, 'pod:edge-pod', 'all').map((r) => r.id)).toEqual([
+        'podman-web',
+      ]);
+      expect(filterDockerResources(labelled, 'compose:orion', 'all').map((r) => r.id)).toEqual([
+        'podman-web',
+      ]);
+      expect(filterDockerResources(labelled, 'keep-id', 'all').map((r) => r.id)).toEqual([
+        'podman-web',
       ]);
     });
 
@@ -840,9 +875,11 @@ describe('dockerPageModel', () => {
           .map((r) => r.id)
           .sort(),
       ).toEqual(['edge-proxy', 'redis-vol', 'svc-payments', 'svc-search', 'web'].sort());
-      expect(filterDockerResources(rows, '', 'degraded').map((r) => r.id).sort()).toEqual(
-        ['svc-payments', 'svc-search'].sort(),
-      );
+      expect(
+        filterDockerResources(rows, '', 'degraded')
+          .map((r) => r.id)
+          .sort(),
+      ).toEqual(['svc-payments', 'svc-search'].sort());
     });
   });
 

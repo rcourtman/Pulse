@@ -681,6 +681,20 @@ export interface ResourceDockerMeta {
   health?: string;
   restartCount?: number;
   exitCode?: number;
+  finishedAt?: string;
+  blockIo?: {
+    readBytes?: number;
+    writeBytes?: number;
+  };
+  podman?: {
+    podName?: string;
+    podId?: string;
+    infra?: boolean;
+    composeProject?: string;
+    composeService?: string;
+    autoUpdatePolicy?: string;
+    userNamespace?: string;
+  };
   ports?: Array<{
     privatePort?: number;
     publicPort?: number;
@@ -711,6 +725,7 @@ export interface ResourceDockerMeta {
     message?: string;
     completedAt?: string;
   };
+  stack?: string;
   mode?: string;
   desiredTasks?: number;
   runningTasks?: number;

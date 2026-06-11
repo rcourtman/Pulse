@@ -99,9 +99,21 @@ describe('ResourceDetailDrawer for Docker containers', () => {
             image: 'ghcr.io/example/edge-web:2026.05',
             restartCount: 7,
             createdAt: '2026-04-13T01:14:01Z',
+            startedAt: '2026-04-13T01:15:01Z',
+            finishedAt: '2026-04-13T02:15:01Z',
+            blockIo: { readBytes: 1_048_576, writeBytes: 2_097_152 },
+            podman: {
+              podName: 'edge-pod',
+              podId: 'pod-123',
+              infra: true,
+              composeProject: 'orion',
+              composeService: 'web',
+              autoUpdatePolicy: 'registry',
+              userNamespace: 'keep-id',
+            },
             labels: {
-              'com.docker.compose.project': 'orion',
-              'com.docker.compose.service': 'web',
+              'com.docker.compose.project': 'legacy-project',
+              'com.docker.compose.service': 'legacy-service',
               'traefik.enable': 'true',
             },
           },
@@ -115,10 +127,27 @@ describe('ResourceDetailDrawer for Docker containers', () => {
     expect(within(section).getByText('Restarts')).toBeInTheDocument();
     expect(within(section).getByText('7')).toHaveClass('text-red-600');
     expect(within(section).getByText('Created')).toBeInTheDocument();
-    expect(within(section).getByText(/ago$/)).toBeInTheDocument();
+    expect(within(section).getByText('Started')).toBeInTheDocument();
+    expect(within(section).getByText('Finished')).toBeInTheDocument();
+    expect(within(section).getAllByText(/ago$/).length).toBeGreaterThanOrEqual(3);
+    expect(within(section).getByText('Podman pod')).toBeInTheDocument();
+    expect(within(section).getByText('edge-pod')).toBeInTheDocument();
+    expect(within(section).getByText('Podman pod ID')).toBeInTheDocument();
+    expect(within(section).getByText('pod-123')).toBeInTheDocument();
+    expect(within(section).getByText('Podman infra')).toBeInTheDocument();
+    expect(within(section).getByText('Yes')).toBeInTheDocument();
     expect(within(section).getByText('Compose project')).toBeInTheDocument();
     expect(within(section).getByText('orion')).toBeInTheDocument();
+    expect(within(section).queryByText('legacy-project')).not.toBeInTheDocument();
     expect(within(section).getByText('Compose service')).toBeInTheDocument();
+    expect(within(section).getByText('Auto-update')).toBeInTheDocument();
+    expect(within(section).getByText('registry')).toBeInTheDocument();
+    expect(within(section).getByText('User namespace')).toBeInTheDocument();
+    expect(within(section).getByText('keep-id')).toBeInTheDocument();
+    expect(within(section).getByText('Block I/O read')).toBeInTheDocument();
+    expect(within(section).getByText('1.00 MB')).toBeInTheDocument();
+    expect(within(section).getByText('Block I/O write')).toBeInTheDocument();
+    expect(within(section).getByText('2.00 MB')).toBeInTheDocument();
     expect(within(section).getByText('Labels')).toBeInTheDocument();
     expect(within(section).getByText(/traefik\.enable/)).toBeInTheDocument();
   });

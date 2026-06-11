@@ -175,6 +175,88 @@ func TestResourceFromDockerContainerIncludesContainerID(t *testing.T) {
 	}
 }
 
+func TestResourceFromDockerContainerPreservesRuntimeMetadata(t *testing.T) {
+	startedAt := time.Date(2026, 6, 11, 8, 15, 30, 0, time.FixedZone("UTC-5", -5*60*60))
+	finishedAt := startedAt.Add(45 * time.Minute)
+	container := models.DockerContainer{
+		ID:         "abcdef123456",
+		Name:       "edge-web",
+		State:      "exited",
+		StartedAt:  &startedAt,
+		FinishedAt: &finishedAt,
+		BlockIO: &models.DockerContainerBlockIO{
+			ReadBytes:  9_876_543,
+			WriteBytes: 1_234_567,
+		},
+		Podman: &models.DockerPodmanContainer{
+			PodName:          "edge-pod",
+			PodID:            "pod-123",
+			Infra:            true,
+			ComposeProject:   "orion",
+			ComposeService:   "web",
+			AutoUpdatePolicy: "registry",
+			UserNamespace:    "keep-id",
+		},
+	}
+	host := models.DockerHost{
+		ID:       "podman-1",
+		Hostname: "podman-1",
+	}
+
+	resource, _ := resourceFromDockerContainer(container, host)
+	if resource.Docker == nil {
+		t.Fatal("expected docker payload")
+	}
+	if got, want := resource.Docker.Runtime, "podman"; got != want {
+		t.Fatalf("runtime = %q, want %q", got, want)
+	}
+	if resource.Docker.StartedAt == nil {
+		t.Fatal("expected startedAt")
+	}
+	if got, want := *resource.Docker.StartedAt, startedAt.UTC(); !got.Equal(want) || got.Location() != time.UTC {
+		t.Fatalf("startedAt = %s (%s), want UTC %s", got, got.Location(), want)
+	}
+	if resource.Docker.FinishedAt == nil {
+		t.Fatal("expected finishedAt")
+	}
+	if got, want := *resource.Docker.FinishedAt, finishedAt.UTC(); !got.Equal(want) || got.Location() != time.UTC {
+		t.Fatalf("finishedAt = %s (%s), want UTC %s", got, got.Location(), want)
+	}
+	if resource.Docker.BlockIO == nil {
+		t.Fatal("expected block IO totals")
+	}
+	if got, want := resource.Docker.BlockIO.ReadBytes, container.BlockIO.ReadBytes; got != want {
+		t.Fatalf("blockIo.readBytes = %d, want %d", got, want)
+	}
+	if got, want := resource.Docker.BlockIO.WriteBytes, container.BlockIO.WriteBytes; got != want {
+		t.Fatalf("blockIo.writeBytes = %d, want %d", got, want)
+	}
+	if resource.Docker.Podman == nil {
+		t.Fatal("expected podman metadata")
+	}
+	if got, want := resource.Docker.Podman.PodName, container.Podman.PodName; got != want {
+		t.Fatalf("podman.podName = %q, want %q", got, want)
+	}
+	if got, want := resource.Docker.Podman.PodID, container.Podman.PodID; got != want {
+		t.Fatalf("podman.podId = %q, want %q", got, want)
+	}
+	if got, want := resource.Docker.Podman.Infra, container.Podman.Infra; got != want {
+		t.Fatalf("podman.infra = %t, want %t", got, want)
+	}
+	if got, want := resource.Docker.Podman.ComposeProject, container.Podman.ComposeProject; got != want {
+		t.Fatalf("podman.composeProject = %q, want %q", got, want)
+	}
+	if got, want := resource.Docker.Podman.ComposeService, container.Podman.ComposeService; got != want {
+		t.Fatalf("podman.composeService = %q, want %q", got, want)
+	}
+	if got, want := resource.Docker.Podman.AutoUpdatePolicy, container.Podman.AutoUpdatePolicy; got != want {
+		t.Fatalf("podman.autoUpdatePolicy = %q, want %q", got, want)
+	}
+	if got, want := resource.Docker.Podman.UserNamespace, container.Podman.UserNamespace; got != want {
+		t.Fatalf("podman.userNamespace = %q, want %q", got, want)
+	}
+}
+
 func TestResourceFromHostProjectsAgentHostProfile(t *testing.T) {
 	host := models.Host{
 		ID:        "tower-host",
