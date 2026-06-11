@@ -5,11 +5,20 @@ import type { Resource } from '@/types/resource';
 import { ProxmoxNodesTable } from '../ProxmoxNodesTable';
 
 const nodeDrawerMock = vi.hoisted(() => vi.fn());
+const activeAlertsMock = vi.hoisted(() => ({ value: {} as Record<string, unknown> }));
 
 vi.mock('@/hooks/useBreakpoint', () => ({
   useBreakpoint: () => ({
     width: () => 1280,
   }),
+}));
+
+vi.mock('@/contexts/appRuntime', () => ({
+  useWebSocket: () => ({ activeAlerts: activeAlertsMock.value }),
+}));
+
+vi.mock('@/stores/alertsActivation', () => ({
+  useAlertsActivation: () => ({ activationState: () => 'active' }),
 }));
 
 vi.mock('@/components/shared/responsive', () => ({
@@ -69,6 +78,7 @@ const makeNodeResource = (overrides: Partial<Resource> = {}): Resource => ({
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  activeAlertsMock.value = {};
 });
 
 describe('ProxmoxNodesTable', () => {
@@ -112,6 +122,55 @@ describe('ProxmoxNodesTable', () => {
       'href',
       'https://pve-node-1:8006',
     );
+  });
+
+  it('restores the v5 row signals: alert accent, pending updates badge, full uptime, offline dimming', () => {
+    activeAlertsMock.value = {
+      'alert-1': {
+        id: 'alert-1',
+        resourceId: 'agent:pve-node-1',
+        level: 'critical',
+        type: 'cpu',
+        acknowledged: false,
+      },
+    };
+
+    render(() => (
+      <ProxmoxNodesTable
+        nodes={[
+          makeNodeResource({
+            uptime: 187_200, // 2d 4h
+            // pendingUpdates rides the raw proxmox payload; the narrow
+            // ResourceProxmoxMeta type does not declare it yet.
+            proxmox: {
+              clusterName: 'homelab',
+              nodeName: 'pve-node-1',
+              pendingUpdates: 12,
+            } as Resource['proxmox'],
+          }),
+          makeNodeResource({
+            id: 'agent:pve-node-2',
+            name: 'pve-node-2',
+            displayName: 'pve-node-2',
+            status: 'offline',
+            proxmox: { clusterName: 'homelab', nodeName: 'pve-node-2' },
+          }),
+        ]}
+        guests={[]}
+        emptyIcon={<span />}
+        emptyTitle="No Proxmox VE nodes"
+        emptyDescription="No nodes"
+      />
+    ));
+
+    const alertedRow = screen.getByText('pve-node-1').closest('tr');
+    expect(alertedRow).toHaveAttribute('data-workload-alert-accent', 'critical');
+    expect(screen.getByTitle('12 pending apt updates')).toHaveTextContent('12 updates');
+    expect(screen.getByText('2d 4h')).toBeInTheDocument();
+
+    const offlineRow = screen.getByText('pve-node-2').closest('tr');
+    expect(offlineRow?.className).toContain('opacity-60');
+    expect(offlineRow).not.toHaveAttribute('data-workload-alert-accent');
   });
 
   it('opens the host details drawer from the host-owned top table row', async () => {

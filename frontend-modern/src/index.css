@@ -202,15 +202,18 @@
     min-height: 32px;
   }
 
-  .workload-row[data-workload-alert-accent='critical'] > td:first-child {
+  .workload-row[data-workload-alert-accent='critical'] > td:first-child,
+  .host-row[data-workload-alert-accent='critical'] > td:first-child {
     box-shadow: inset 4px 0 0 0 #ef4444;
   }
 
-  .workload-row[data-workload-alert-accent='warning'] > td:first-child {
+  .workload-row[data-workload-alert-accent='warning'] > td:first-child,
+  .host-row[data-workload-alert-accent='warning'] > td:first-child {
     box-shadow: inset 4px 0 0 0 #eab308;
   }
 
-  .workload-row[data-workload-alert-accent='acknowledged'] > td:first-child {
+  .workload-row[data-workload-alert-accent='acknowledged'] > td:first-child,
+  .host-row[data-workload-alert-accent='acknowledged'] > td:first-child {
     box-shadow: inset 4px 0 0 0 #9ca3af;
   }
 

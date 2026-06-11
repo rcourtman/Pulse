@@ -8,6 +8,9 @@ import {
   type JSX,
 } from 'solid-js';
 import ExternalLinkIcon from 'lucide-solid/icons/external-link';
+import { useWebSocket } from '@/contexts/appRuntime';
+import { useAlertsActivation } from '@/stores/alertsActivation';
+import { getAlertStyles } from '@/utils/alerts';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { TableCard } from '@/components/shared/TableCard';
@@ -30,7 +33,7 @@ import {
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { getNodeExternalUrl } from '@/utils/nodes';
 import { asTrimmedString } from '@/utils/stringUtils';
-import { normalizeDiskArray } from '@/utils/format';
+import { formatUptime, normalizeDiskArray } from '@/utils/format';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import { useWorkloadTableMetricHistory } from '@/components/Workloads/useWorkloadTableMetricHistory';
 import { getWorkloadTableLayoutMode } from '@/components/Workloads/guestRowModel';
@@ -71,15 +74,11 @@ import {
 // metricDisplayMode signal so the hosts table swaps to MetricMiniSparkline
 // whenever the user flips the toggle.
 
-const formatUptime = (seconds: number | undefined): { label: string; warn: boolean } => {
+const formatNodeUptime = (seconds: number | undefined): { label: string; warn: boolean } => {
   if (!seconds || seconds <= 0) return { label: '—', warn: false };
-  const warn = seconds < 3_600; // <1h matches v5 "recently restarted" highlight
-  const days = Math.floor(seconds / 86_400);
-  if (days > 0) return { label: `${days}d`, warn };
-  const hours = Math.floor(seconds / 3_600);
-  if (hours > 0) return { label: `${hours}h`, warn };
-  const mins = Math.floor(seconds / 60);
-  return { label: `${mins}m`, warn };
+  // Full "26d 4h" precision matches v5 and the guest rows below; <1h keeps
+  // the v5 "recently restarted" highlight.
+  return { label: formatUptime(seconds), warn: seconds < 3_600 };
 };
 
 type GuestCounts = { vms: number; containers: number };
@@ -142,6 +141,9 @@ export const ProxmoxNodesTable: Component<{
   emptyDescription: string;
 }> = (props) => {
   const breakpoint = useBreakpoint();
+  const { activeAlerts } = useWebSocket();
+  const alertsActivation = useAlertsActivation();
+  const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
   const [selectedNodeId, setSelectedNodeId] = createSignal<string | null>(null);
   const layoutMode = createMemo(() => getWorkloadTableLayoutMode(breakpoint.width()));
   const visibleColumns = createMemo(() => getProxmoxHostVisibleColumnsForLayout(layoutMode()));
@@ -199,7 +201,7 @@ export const ProxmoxNodesTable: Component<{
             <For each={props.nodes}>
               {(node) => {
                 const name = () => asTrimmedString(node.name) || node.id;
-                const drawerNode = () => nodeFromResource(node);
+                const drawerNode = createMemo(() => nodeFromResource(node));
                 const detailRowId = () => `proxmox-host-drawer-${node.id}`;
                 const isSelected = () => selectedNodeId() === node.id;
                 const toggleNodeDrawer = () =>
@@ -216,7 +218,7 @@ export const ProxmoxNodesTable: Component<{
                 const counts = () => countGuestsForNode(props.guests, getResourceNodeName(node));
                 const indicator = () => getSimpleStatusIndicator(node.status);
                 const isOnline = () => indicator().variant === 'success';
-                const uptime = () => formatUptime(node.uptime);
+                const uptime = () => formatNodeUptime(node.uptime);
                 const metricsKey = () => buildMetricKeyForUnifiedResource(node);
                 const temperature = () => node.temperature;
                 const cpuPercent = () => node.cpu?.current ?? 0;
@@ -247,6 +249,26 @@ export const ProxmoxNodesTable: Component<{
                   const shimmed = drawerNode();
                   return shimmed ? getNodeExternalUrl(shimmed) : '';
                 };
+                const pendingUpdates = () => drawerNode()?.pendingUpdates ?? 0;
+                const alertStyles = createMemo(() =>
+                  getAlertStyles(node.id, activeAlerts, alertsEnabled()),
+                );
+                const alertAccentTone = createMemo<'critical' | 'warning' | 'acknowledged' | undefined>(
+                  () => {
+                    const styles = alertStyles();
+                    if (styles.hasUnacknowledgedAlert) {
+                      return styles.severity === 'critical' ? 'critical' : 'warning';
+                    }
+                    return styles.hasAcknowledgedOnlyAlert ? 'acknowledged' : undefined;
+                  },
+                );
+                const rowAlertBg = () => {
+                  const styles = alertStyles();
+                  if (!styles.hasUnacknowledgedAlert) return '';
+                  return styles.severity === 'critical'
+                    ? 'bg-red-50 dark:bg-red-950'
+                    : 'bg-yellow-50 dark:bg-yellow-950';
+                };
                 const cpuSeries = () => metricHistory.getNodeMetricSeries(legacyNode(), 'cpu');
                 const memorySeries = () =>
                   metricHistory.getNodeMetricSeries(legacyNode(), 'memory');
@@ -266,6 +288,18 @@ export const ProxmoxNodesTable: Component<{
                             <span class="truncate font-semibold text-base-content" title={name()}>
                               {name()}
                             </span>
+                            <Show when={isOnline() && pendingUpdates() > 0}>
+                              <span
+                                class={`rounded px-1 py-0 text-[9px] font-medium whitespace-nowrap ${
+                                  pendingUpdates() >= 10
+                                    ? 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-400'
+                                    : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-400'
+                                }`}
+                                title={`${pendingUpdates()} pending apt update${pendingUpdates() !== 1 ? 's' : ''}`}
+                              >
+                                {pendingUpdates()} updates
+                              </span>
+                            </Show>
                           </div>
                         </TableCell>
                       );
@@ -453,12 +487,13 @@ export const ProxmoxNodesTable: Component<{
                 return (
                   <>
                     <TableRow
-                      class={`cursor-pointer text-[11px] outline-none sm:text-xs ${
-                        isSelected() ? 'bg-surface-hover' : ''
-                      } focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-1 focus-visible:ring-offset-surface`}
+                      class={`host-row cursor-pointer text-[11px] outline-none sm:text-xs ${
+                        isSelected() ? 'bg-surface-hover' : rowAlertBg()
+                      } ${isOnline() ? '' : 'opacity-60'} focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-1 focus-visible:ring-offset-surface`}
                       aria-controls={isSelected() ? detailRowId() : undefined}
                       aria-expanded={isSelected() ? 'true' : 'false'}
                       data-proxmox-host-row={node.id}
+                      data-workload-alert-accent={alertAccentTone()}
                       onClick={toggleNodeDrawer}
                       onKeyDown={handleActivationKey}
                       tabIndex={0}
