@@ -949,6 +949,29 @@ AI-only summary payloads, or page-local heuristics.
     `verificationOutcome.status` presentation for `verified`,
     `unverified`, `failed`, and `unknown` so resource history, future
     action audit consumers, and tests share one bounded vocabulary.
+25. Keep canonical host IDs stable across restarts through durable
+    identity pins. Canonical ID derivation hashes the strongest identity
+    key available at mint time, and merged-source hosts (Proxmox node +
+    pulse-agent) expose different identity subsets depending on which
+    records are present when a registry rebuilds: agent records carry the
+    machine ID, node records only cluster+hostname. The store-backed
+    registry therefore persists identity pins
+    (`canonical_id` ↔ machine ID / DMI UUID / cluster / hostname) in the
+    `resource_identities` table (`ResourceStore.UpsertResourceIdentityPins`
+    / `ListResourceIdentityPins`, written diff-aware after monitor-adapter
+    rebuilds) and completes weak incoming identities from those pins
+    before matching and ID derivation
+    (`internal/unifiedresources/canonical_id_pins.go`). Change-journal
+    reads (`GetRecentChanges*` / `CountRecentChanges*`) must expand a
+    canonical ID to the era set recomputable from its pinned identity keys
+    (`ResourceIdentityPin.EraIDs`) so journal rows recorded under an
+    earlier era's ID stay part of the resource's timeline; reads keyed by
+    a stale era ID resolve to the same merged timeline. New ingest paths
+    must not mint host canonical IDs from snapshot-content-dependent
+    identity subsets without consulting the pins, and pin writes stay on
+    the durable store-backed registry (ephemeral per-request registries
+    consult, never write). Regression coverage:
+    `internal/unifiedresources/canonical_id_pins_test.go`.
 
 ## Current State
 

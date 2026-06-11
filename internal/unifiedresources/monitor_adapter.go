@@ -114,6 +114,7 @@ func (a *MonitorAdapter) replaceRegistry(snapshot models.StateSnapshot, recordsB
 		occurredAt = &occ
 	}
 	recordRegistryChanges(registry.store, before, rebuilt.List(), rebuiltAt, occurredAt, SourcePulseDiff, "")
+	rebuilt.PersistIdentityPins()
 
 	a.mu.Lock()
 	a.registry = rebuilt
@@ -294,6 +295,7 @@ func (a *MonitorAdapter) PopulateSupplementalRecords(source DataSource, records 
 	registry.IngestRecords(source, records)
 	rebuiltAt := time.Now().UTC()
 	recordRegistryChanges(registry.store, before, registry.List(), rebuiltAt, nil, SourcePlatformEvent, changeSourceAdapterForDataSource(source))
+	registry.PersistIdentityPins()
 	a.mu.Lock()
 	a.lastRebuiltAt = rebuiltAt
 	a.mu.Unlock()

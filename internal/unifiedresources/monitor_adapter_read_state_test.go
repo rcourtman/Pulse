@@ -336,3 +336,69 @@ func TestMonitorAdapterGetRecentChangesForwardsToStore(t *testing.T) {
 		t.Fatalf("Kind = %q, want %q", changes[0].Kind, ChangeCommandExecuted)
 	}
 }
+
+// The monitor adapter is the durable store-backed registry owner, so its
+// rebuild paths must persist canonical identity pins: a later boot window
+// (agent not yet checked in) relies on them to derive the same canonical host
+// ID it used in steady state.
+func TestMonitorAdapterRebuildPersistsIdentityPins(t *testing.T) {
+	store := NewMemoryStore()
+	adapter := NewMonitorAdapter(NewRegistry(store))
+
+	const machineID = "7d465a78-test-machine-id"
+	adapter.PopulateFromSnapshot(models.StateSnapshot{
+		Nodes: []models.Node{{
+			ID:          "homelab-delly",
+			Name:        "delly",
+			Instance:    "homelab",
+			ClusterName: "homelab",
+			Status:      "online",
+		}},
+		Hosts: []models.Host{{
+			ID:           machineID,
+			MachineID:    machineID,
+			Hostname:     "delly",
+			LinkedNodeID: "homelab-delly",
+		}},
+		LastUpdate: time.Now().UTC(),
+	})
+
+	pins, err := store.ListResourceIdentityPins()
+	if err != nil {
+		t.Fatalf("list identity pins: %v", err)
+	}
+	steadyID := buildHashID(ResourceTypeAgent, "machine:"+machineID)
+	found := false
+	for _, pin := range pins {
+		if pin.CanonicalID == steadyID && pin.MachineID == machineID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected snapshot rebuild to persist a machine-keyed identity pin, got %+v", pins)
+	}
+
+	// A restart boot window rebuilds from a snapshot that does not contain
+	// the agent host yet; the pinned identity must keep the canonical ID.
+	adapter.PopulateFromSnapshot(models.StateSnapshot{
+		Nodes: []models.Node{{
+			ID:          "homelab-delly",
+			Name:        "delly",
+			Instance:    "homelab",
+			ClusterName: "homelab",
+			Status:      "online",
+		}},
+		LastUpdate: time.Now().UTC(),
+	})
+
+	for _, resource := range adapter.GetAll() {
+		if resource.Proxmox != nil && resource.Proxmox.NodeName == "delly" {
+			if resource.ID != steadyID {
+				t.Fatalf("boot-window rebuild minted %q, want pinned %q", resource.ID, steadyID)
+			}
+			return
+		}
+	}
+	t.Fatalf("expected delly node resource in boot-window rebuild")
+}

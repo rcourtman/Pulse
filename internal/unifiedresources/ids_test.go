@@ -40,3 +40,50 @@ func TestSourceSpecificIDCanonicalizesSourceIDWhitespace(t *testing.T) {
 		t.Fatalf("SourceSpecificID should trim source ID whitespace: got %q want %q", got, want)
 	}
 }
+
+func TestResourceIdentityPinEraIDs(t *testing.T) {
+	pin := ResourceIdentityPin{
+		CanonicalID:  buildHashID(ResourceTypeAgent, "machine:machine-1"),
+		ResourceType: ResourceTypeAgent,
+		MachineID:    "machine-1",
+		DMIUUID:      "dmi-1",
+		ClusterName:  "homelab",
+		Hostname:     "delly.lan",
+	}
+
+	got := pin.EraIDs()
+	want := []string{
+		buildHashID(ResourceTypeAgent, "machine:machine-1"),
+		buildHashID(ResourceTypeAgent, "dmi:dmi-1"),
+		buildHashID(ResourceTypeAgent, "cluster:homelab:delly"),
+		buildHashID(ResourceTypeAgent, "hostname:delly"),
+	}
+	if len(got) != len(want) {
+		t.Fatalf("expected %d era IDs, got %d: %v", len(want), len(got), got)
+	}
+	for _, id := range want {
+		found := false
+		for _, eraID := range got {
+			if eraID == id {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("expected era set to include %q, got %v", id, got)
+		}
+	}
+}
+
+func TestResourceIdentityPinEraIDsSkipsWeakOnlyKeys(t *testing.T) {
+	pin := ResourceIdentityPin{
+		CanonicalID:  "agent-custom",
+		ResourceType: ResourceTypeAgent,
+		Hostname:     "delly",
+	}
+	got := pin.EraIDs()
+	want := []string{"agent-custom", buildHashID(ResourceTypeAgent, "hostname:delly")}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("expected era IDs %v, got %v", want, got)
+	}
+}

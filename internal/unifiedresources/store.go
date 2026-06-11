@@ -24,6 +24,10 @@ type ResourceStore interface {
 	AddExclusion(exclusion ResourceExclusion) error
 	GetLinks() ([]ResourceLink, error)
 	GetExclusions() ([]ResourceExclusion, error)
+	// Identity pins keep canonical IDs for merged-source hosts stable across
+	// restarts. See ResourceIdentityPin.
+	UpsertResourceIdentityPins(pins []ResourceIdentityPin) error
+	ListResourceIdentityPins() ([]ResourceIdentityPin, error)
 	RecordChange(change ResourceChange) error
 	GetRecentChanges(canonicalID string, since time.Time, limit int) ([]ResourceChange, error)
 	GetRecentChangesFiltered(canonicalID string, since time.Time, limit int, filters ResourceChangeFilters) ([]ResourceChange, error)
@@ -95,6 +99,12 @@ type SQLiteResourceStore struct {
 	resourceChangesHasSource               bool
 	resourceChangesObservedAtNeedsFallback bool
 	mu                                     sync.Mutex
+
+	// identityPinCache caches the (tiny) resource_identities table for
+	// change-journal era expansion. Invalidated on pin upserts.
+	identityPinMu    sync.Mutex
+	identityPinCache []ResourceIdentityPin
+	identityPinFresh bool
 }
 
 const (
@@ -432,11 +442,41 @@ func (s *SQLiteResourceStore) initSchema() error {
 	if err := s.ensureResourceChangesIndexes(); err != nil {
 		return err
 	}
+	if err := s.migrateResourceIdentitiesSchema(); err != nil {
+		return err
+	}
 	if err := s.migrateActionAuditsSchema(); err != nil {
 		return err
 	}
 	if err := s.migrateActionAuditRedaction(); err != nil {
 		return err
+	}
+	return nil
+}
+
+// migrateResourceIdentitiesSchema upgrades the resource_identities table from
+// its original schema-only shape (no code ever wrote it before identity pins)
+// to the pin layout: a cluster_name column and a unique canonical_id index so
+// pins upsert one row per canonical resource.
+func (s *SQLiteResourceStore) migrateResourceIdentitiesSchema() error {
+	columns, err := s.tableColumns("resource_identities")
+	if err != nil {
+		return err
+	}
+	if _, ok := columns["cluster_name"]; !ok {
+		if _, err := s.db.Exec("ALTER TABLE resource_identities ADD COLUMN cluster_name TEXT"); err != nil {
+			return fmt.Errorf("add resource_identities.cluster_name column: %w", err)
+		}
+	}
+	// The table shipped empty for every deployment, but stay defensive: drop
+	// duplicate canonical_id rows before enforcing uniqueness.
+	if _, err := s.db.Exec(`DELETE FROM resource_identities WHERE id NOT IN (
+		SELECT MAX(id) FROM resource_identities GROUP BY canonical_id
+	)`); err != nil {
+		return fmt.Errorf("dedupe resource_identities canonical rows: %w", err)
+	}
+	if _, err := s.db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_resource_identities_canonical_unique ON resource_identities(canonical_id)"); err != nil {
+		return fmt.Errorf("ensure resource_identities canonical unique index: %w", err)
 	}
 	return nil
 }
@@ -846,6 +886,151 @@ func (s *SQLiteResourceStore) Close() error {
 	return nil
 }
 
+func (s *SQLiteResourceStore) UpsertResourceIdentityPins(pins []ResourceIdentityPin) error {
+	if len(pins) == 0 {
+		return nil
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin identity pin upsert: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	for _, pin := range pins {
+		pin = pin.normalized()
+		if pin.CanonicalID == "" || !pin.hasStrongKey() {
+			continue
+		}
+		// A strong identity key can only belong to one canonical resource.
+		// When a key moves (host reinstalled, cluster slot re-occupied by a
+		// different machine), the new pin claims it and stale rows go.
+		if _, err := tx.Exec(`DELETE FROM resource_identities WHERE canonical_id != ? AND (
+				(machine_id IS NOT NULL AND machine_id = ?)
+				OR (dmi_uuid IS NOT NULL AND dmi_uuid = ?)
+				OR (cluster_name IS NOT NULL AND cluster_name != '' AND cluster_name = ? AND primary_hostname = ?)
+			)`,
+			pin.CanonicalID,
+			nullIfEmptyArg(pin.MachineID),
+			nullIfEmptyArg(pin.DMIUUID),
+			pin.ClusterName,
+			pin.Hostname,
+		); err != nil {
+			return fmt.Errorf("clear conflicting identity pins for %q: %w", pin.CanonicalID, err)
+		}
+		if _, err := tx.Exec(`INSERT INTO resource_identities (canonical_id, resource_type, machine_id, dmi_uuid, cluster_name, primary_hostname)
+			VALUES (?, ?, ?, ?, ?, ?)
+			ON CONFLICT(canonical_id) DO UPDATE SET
+				resource_type = excluded.resource_type,
+				machine_id = COALESCE(excluded.machine_id, resource_identities.machine_id),
+				dmi_uuid = COALESCE(excluded.dmi_uuid, resource_identities.dmi_uuid),
+				cluster_name = COALESCE(NULLIF(excluded.cluster_name, ''), resource_identities.cluster_name),
+				primary_hostname = COALESCE(NULLIF(excluded.primary_hostname, ''), resource_identities.primary_hostname),
+				updated_at = CURRENT_TIMESTAMP`,
+			pin.CanonicalID,
+			string(pin.ResourceType),
+			nullIfEmptyArg(pin.MachineID),
+			nullIfEmptyArg(pin.DMIUUID),
+			pin.ClusterName,
+			pin.Hostname,
+		); err != nil {
+			return fmt.Errorf("upsert identity pin for %q: %w", pin.CanonicalID, err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit identity pin upsert: %w", err)
+	}
+	committed = true
+
+	s.identityPinMu.Lock()
+	s.identityPinFresh = false
+	s.identityPinMu.Unlock()
+	return nil
+}
+
+func nullIfEmptyArg(value string) any {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	return strings.TrimSpace(value)
+}
+
+func (s *SQLiteResourceStore) ListResourceIdentityPins() ([]ResourceIdentityPin, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.queryResourceIdentityPins()
+}
+
+func (s *SQLiteResourceStore) queryResourceIdentityPins() ([]ResourceIdentityPin, error) {
+	rows, err := s.db.Query(`SELECT canonical_id, resource_type, COALESCE(machine_id, ''), COALESCE(dmi_uuid, ''), COALESCE(cluster_name, ''), COALESCE(primary_hostname, '') FROM resource_identities`)
+	if err != nil {
+		return nil, fmt.Errorf("query identity pins: %w", err)
+	}
+	defer rows.Close()
+
+	var pins []ResourceIdentityPin
+	for rows.Next() {
+		var pin ResourceIdentityPin
+		var resourceType string
+		if err := rows.Scan(&pin.CanonicalID, &resourceType, &pin.MachineID, &pin.DMIUUID, &pin.ClusterName, &pin.Hostname); err != nil {
+			return nil, fmt.Errorf("scan identity pin row: %w", err)
+		}
+		pin.ResourceType = ResourceType(resourceType)
+		pins = append(pins, pin.normalized())
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate identity pin rows: %w", err)
+	}
+	return pins, nil
+}
+
+// resourceChangeIDSet expands a canonical ID to the set of IDs its journal
+// rows may have been recorded under. Canonical IDs minted before the host's
+// strongest identity key was known hash a weaker key (cluster+hostname during
+// a boot window vs machine ID in steady state); the pinned identity makes
+// every era's ID recomputable, so reads merge the eras without rewriting
+// history. Unknown IDs expand to themselves.
+func (s *SQLiteResourceStore) resourceChangeIDSet(canonicalID string) []string {
+	canonicalID = CanonicalResourceID(canonicalID)
+	if canonicalID == "" {
+		return nil
+	}
+
+	s.identityPinMu.Lock()
+	if !s.identityPinFresh {
+		pins, err := s.queryResourceIdentityPins()
+		if err == nil {
+			s.identityPinCache = pins
+			s.identityPinFresh = true
+		}
+	}
+	pins := s.identityPinCache
+	s.identityPinMu.Unlock()
+
+	return expandResourceChangeIDs(canonicalID, pins)
+}
+
+func expandResourceChangeIDs(canonicalID string, pins []ResourceIdentityPin) []string {
+	for _, pin := range pins {
+		eraIDs := pin.EraIDs()
+		for _, eraID := range eraIDs {
+			if eraID == canonicalID {
+				return eraIDs
+			}
+		}
+	}
+	return []string{canonicalID}
+}
+
 func (s *SQLiteResourceStore) RecordChange(change ResourceChange) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -921,7 +1106,7 @@ func (s *SQLiteResourceStore) GetRecentChangesFiltered(canonicalID string, since
 	conditions := []string{}
 	canonicalID = CanonicalResourceID(canonicalID)
 	if canonicalID != "" {
-		conditions, args = appendRecentChangeResourceCondition(conditions, args, canonicalID, filters.IncludeRelated)
+		conditions, args = appendRecentChangeResourceCondition(conditions, args, s.resourceChangeIDSet(canonicalID), filters.IncludeRelated)
 	} else {
 		conditions = append(conditions, observedAtExpr+" >= ?")
 		args = append(args, since)
@@ -1047,7 +1232,7 @@ func (s *SQLiteResourceStore) CountRecentChanges(canonicalID string, since time.
 
 func (s *SQLiteResourceStore) CountRecentChangesFiltered(canonicalID string, since time.Time, filters ResourceChangeFilters) (int, error) {
 	query, args := buildRecentChangeCountQuery(
-		canonicalID,
+		s.resourceChangeIDSet(canonicalID),
 		since,
 		filters,
 		"SELECT COUNT(*) FROM resource_changes",
@@ -1072,7 +1257,7 @@ func (s *SQLiteResourceStore) CountRecentChangesByKind(canonicalID string, since
 
 func (s *SQLiteResourceStore) CountRecentChangesByKindFiltered(canonicalID string, since time.Time, filters ResourceChangeFilters) (map[ChangeKind]int, error) {
 	query, args := buildRecentChangeCountQuery(
-		canonicalID,
+		s.resourceChangeIDSet(canonicalID),
 		since,
 		filters,
 		"SELECT COALESCE(kind, ''), COUNT(*) FROM resource_changes",
@@ -1116,7 +1301,7 @@ func (s *SQLiteResourceStore) CountRecentChangesBySourceType(canonicalID string,
 func (s *SQLiteResourceStore) CountRecentChangesBySourceTypeFiltered(canonicalID string, since time.Time, filters ResourceChangeFilters) (map[ChangeSourceType]int, error) {
 	sourceTypeExpr := s.resourceChangesSourceTypeExpr()
 	query, args := buildRecentChangeCountQuery(
-		canonicalID,
+		s.resourceChangeIDSet(canonicalID),
 		since,
 		filters,
 		"SELECT "+sourceTypeExpr+", COUNT(*) FROM resource_changes",
@@ -1160,7 +1345,7 @@ func (s *SQLiteResourceStore) CountRecentChangesBySourceAdapter(canonicalID stri
 func (s *SQLiteResourceStore) CountRecentChangesBySourceAdapterFiltered(canonicalID string, since time.Time, filters ResourceChangeFilters) (map[ChangeSourceAdapter]int, error) {
 	sourceAdapterExpr := s.resourceChangesSourceAdapterExpr()
 	query, args := buildRecentChangeCountQuery(
-		canonicalID,
+		s.resourceChangeIDSet(canonicalID),
 		since,
 		filters,
 		"SELECT "+sourceAdapterExpr+", COUNT(*) FROM resource_changes",
@@ -2005,13 +2190,76 @@ type MemoryStore struct {
 	exportAudits          []ExportAuditRecord
 	resourceOperatorState map[string]ResourceOperatorState
 	loopReports           map[string]LoopReport
+	identityPins          map[string]ResourceIdentityPin
 }
 
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
 		resourceOperatorState: make(map[string]ResourceOperatorState),
 		loopReports:           make(map[string]LoopReport),
+		identityPins:          make(map[string]ResourceIdentityPin),
 	}
+}
+
+func (m *MemoryStore) UpsertResourceIdentityPins(pins []ResourceIdentityPin) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, pin := range pins {
+		pin = pin.normalized()
+		if pin.CanonicalID == "" || !pin.hasStrongKey() {
+			continue
+		}
+		// Mirror the SQLite conflict semantics: a strong identity key belongs
+		// to exactly one canonical resource.
+		for canonicalID, existing := range m.identityPins {
+			if canonicalID == pin.CanonicalID {
+				continue
+			}
+			if (pin.MachineID != "" && existing.MachineID == pin.MachineID) ||
+				(pin.DMIUUID != "" && existing.DMIUUID == pin.DMIUUID) ||
+				(pin.ClusterName != "" && existing.ClusterName == pin.ClusterName && existing.Hostname == pin.Hostname) {
+				delete(m.identityPins, canonicalID)
+			}
+		}
+		if existing, ok := m.identityPins[pin.CanonicalID]; ok {
+			if pin.MachineID == "" {
+				pin.MachineID = existing.MachineID
+			}
+			if pin.DMIUUID == "" {
+				pin.DMIUUID = existing.DMIUUID
+			}
+			if pin.ClusterName == "" {
+				pin.ClusterName = existing.ClusterName
+			}
+			if pin.Hostname == "" {
+				pin.Hostname = existing.Hostname
+			}
+		}
+		m.identityPins[pin.CanonicalID] = pin
+	}
+	return nil
+}
+
+func (m *MemoryStore) ListResourceIdentityPins() ([]ResourceIdentityPin, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	pins := make([]ResourceIdentityPin, 0, len(m.identityPins))
+	for _, pin := range m.identityPins {
+		pins = append(pins, pin)
+	}
+	return pins, nil
+}
+
+func (m *MemoryStore) resourceChangeIDSetLocked(canonicalID string) []string {
+	canonicalID = CanonicalResourceID(canonicalID)
+	if canonicalID == "" {
+		return nil
+	}
+	pins := make([]ResourceIdentityPin, 0, len(m.identityPins))
+	for _, pin := range m.identityPins {
+		pins = append(pins, pin)
+	}
+	return expandResourceChangeIDs(canonicalID, pins)
 }
 
 func (m *MemoryStore) AddLink(link ResourceLink) error {
@@ -2078,10 +2326,11 @@ func (m *MemoryStore) GetRecentChangesFiltered(canonicalID string, since time.Ti
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	canonicalID = CanonicalResourceID(canonicalID)
+	idSet := m.resourceChangeIDSetLocked(canonicalID)
 	var out []ResourceChange
 	for i := len(m.changes) - 1; i >= 0; i-- {
 		change := m.changes[i]
-		if canonicalID != "" && !changeMatchesResource(change, canonicalID, filters.IncludeRelated) {
+		if canonicalID != "" && !changeMatchesResource(change, idSet, filters.IncludeRelated) {
 			continue
 		}
 		if !since.IsZero() && change.ObservedAt.Before(since) {
@@ -2106,9 +2355,10 @@ func (m *MemoryStore) CountRecentChangesFiltered(canonicalID string, since time.
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	canonicalID = CanonicalResourceID(canonicalID)
+	idSet := m.resourceChangeIDSetLocked(canonicalID)
 	count := 0
 	for _, change := range m.changes {
-		if canonicalID != "" && !changeMatchesResource(change, canonicalID, filters.IncludeRelated) {
+		if canonicalID != "" && !changeMatchesResource(change, idSet, filters.IncludeRelated) {
 			continue
 		}
 		if !since.IsZero() && change.ObservedAt.Before(since) {
@@ -2130,9 +2380,10 @@ func (m *MemoryStore) CountRecentChangesByKindFiltered(canonicalID string, since
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	canonicalID = CanonicalResourceID(canonicalID)
+	idSet := m.resourceChangeIDSetLocked(canonicalID)
 	counts := make(map[ChangeKind]int)
 	for _, change := range m.changes {
-		if canonicalID != "" && !changeMatchesResource(change, canonicalID, filters.IncludeRelated) {
+		if canonicalID != "" && !changeMatchesResource(change, idSet, filters.IncludeRelated) {
 			continue
 		}
 		if !since.IsZero() && change.ObservedAt.Before(since) {
@@ -2157,9 +2408,10 @@ func (m *MemoryStore) CountRecentChangesBySourceTypeFiltered(canonicalID string,
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	canonicalID = CanonicalResourceID(canonicalID)
+	idSet := m.resourceChangeIDSetLocked(canonicalID)
 	counts := make(map[ChangeSourceType]int)
 	for _, change := range m.changes {
-		if canonicalID != "" && !changeMatchesResource(change, canonicalID, filters.IncludeRelated) {
+		if canonicalID != "" && !changeMatchesResource(change, idSet, filters.IncludeRelated) {
 			continue
 		}
 		if !since.IsZero() && change.ObservedAt.Before(since) {
@@ -2184,9 +2436,10 @@ func (m *MemoryStore) CountRecentChangesBySourceAdapterFiltered(canonicalID stri
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	canonicalID = CanonicalResourceID(canonicalID)
+	idSet := m.resourceChangeIDSetLocked(canonicalID)
 	counts := make(map[ChangeSourceAdapter]int)
 	for _, change := range m.changes {
-		if canonicalID != "" && !changeMatchesResource(change, canonicalID, filters.IncludeRelated) {
+		if canonicalID != "" && !changeMatchesResource(change, idSet, filters.IncludeRelated) {
 			continue
 		}
 		if !since.IsZero() && change.ObservedAt.Before(since) {
@@ -2203,14 +2456,13 @@ func (m *MemoryStore) CountRecentChangesBySourceAdapterFiltered(canonicalID stri
 	return counts, nil
 }
 
-func buildRecentChangeCountQuery(canonicalID string, since time.Time, filters ResourceChangeFilters, selectClause string, observedAtExpr string, sourceTypeExpr string, sourceAdapterExpr string) (string, []any) {
+func buildRecentChangeCountQuery(canonicalIDs []string, since time.Time, filters ResourceChangeFilters, selectClause string, observedAtExpr string, sourceTypeExpr string, sourceAdapterExpr string) (string, []any) {
 	query := selectClause
 	args := []any{}
 	conditions := []string{observedAtExpr + " >= ?"}
 	args = append(args, since)
-	canonicalID = CanonicalResourceID(canonicalID)
-	if canonicalID != "" {
-		conditions, args = appendRecentChangeResourceCondition(conditions, args, canonicalID, filters.IncludeRelated)
+	if len(canonicalIDs) > 0 {
+		conditions, args = appendRecentChangeResourceCondition(conditions, args, canonicalIDs, filters.IncludeRelated)
 	}
 	if len(filters.Kinds) > 0 {
 		placeholders := make([]string, 0, len(filters.Kinds))
@@ -2240,26 +2492,44 @@ func buildRecentChangeCountQuery(canonicalID string, since time.Time, filters Re
 	return query, args
 }
 
-func appendRecentChangeResourceCondition(conditions []string, args []any, canonicalID string, includeRelated bool) ([]string, []any) {
-	if !includeRelated {
-		return append(conditions, "canonical_id = ?"), append(args, canonicalID)
+func appendRecentChangeResourceCondition(conditions []string, args []any, canonicalIDs []string, includeRelated bool) ([]string, []any) {
+	placeholders := make([]string, len(canonicalIDs))
+	for i, id := range canonicalIDs {
+		placeholders[i] = "?"
+		args = append(args, id)
 	}
-	return append(conditions, `(canonical_id = ? OR EXISTS (
+	inClause := "(" + strings.Join(placeholders, ", ") + ")"
+	if !includeRelated {
+		return append(conditions, "canonical_id IN "+inClause), args
+	}
+	for _, id := range canonicalIDs {
+		args = append(args, id)
+	}
+	return append(conditions, `(canonical_id IN `+inClause+` OR EXISTS (
 			SELECT 1
 			FROM json_each(CASE WHEN json_valid(resource_changes.related_resources) THEN resource_changes.related_resources ELSE '[]' END)
-			WHERE TRIM(json_each.value) = ?
-		))`), append(args, canonicalID, canonicalID)
+			WHERE TRIM(json_each.value) IN `+inClause+`
+		))`), args
 }
 
-func changeMatchesResource(change ResourceChange, canonicalID string, includeRelated bool) bool {
-	if CanonicalResourceID(change.ResourceID) == canonicalID {
+func changeMatchesResource(change ResourceChange, canonicalIDs []string, includeRelated bool) bool {
+	matches := func(id string) bool {
+		id = CanonicalResourceID(id)
+		for _, canonicalID := range canonicalIDs {
+			if id == canonicalID {
+				return true
+			}
+		}
+		return false
+	}
+	if matches(change.ResourceID) {
 		return true
 	}
 	if !includeRelated {
 		return false
 	}
 	for _, relatedID := range change.RelatedResources {
-		if CanonicalResourceID(relatedID) == canonicalID {
+		if matches(relatedID) {
 			return true
 		}
 	}

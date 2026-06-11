@@ -4378,3 +4378,76 @@ func TestMergeMetric_StaleSourceDoesNotClobberLive(t *testing.T) {
 		t.Fatalf("expected live proxmox CPU to survive stale agent merge, got %+v", got)
 	}
 }
+
+// The merged-source host shape from the homelab canonical-ID bug: a PVE node
+// record that only knows cluster+hostname, and a pulse-agent record that
+// knows the machine ID. Whichever record mints the canonical resource decides
+// which identity key gets hashed, so without durable identity pins the
+// canonical ID flips between boot windows (node-only) and steady state
+// (agent present), fragmenting the change journal into per-boot eras.
+func mergedHostNodeResource() Resource {
+	return Resource{
+		Type:    ResourceTypeAgent,
+		Name:    "delly",
+		Status:  StatusOnline,
+		Proxmox: &ProxmoxData{SourceID: "homelab-delly", NodeName: "delly", ClusterName: "homelab"},
+	}
+}
+
+func mergedHostAgentResource(machineID string) Resource {
+	return Resource{
+		Type:   ResourceTypeAgent,
+		Name:   "delly",
+		Status: StatusOnline,
+		Agent:  &AgentData{AgentID: machineID, Hostname: "delly", MachineID: machineID},
+	}
+}
+
+func TestMergedHostCanonicalIDStableAcrossRestartsAndIngestOrders(t *testing.T) {
+	store := NewMemoryStore()
+
+	const machineID = "7d465a78-test-machine-id"
+	nodeIdentity := ResourceIdentity{Hostnames: []string{"delly"}, ClusterName: "homelab"}
+	agentIdentity := ResourceIdentity{MachineID: machineID, Hostnames: []string{"delly"}}
+	// IngestSnapshot merges the linked host's identity into the node record
+	// when the agent is present in the snapshot.
+	steadyIdentity := mergeIdentity(nodeIdentity, agentIdentity)
+
+	steadyID := buildHashID(ResourceTypeAgent, "machine:"+machineID)
+	bootEraID := buildHashID(ResourceTypeAgent, "cluster:homelab:delly")
+	if steadyID == bootEraID {
+		t.Fatalf("test setup broken: era IDs must differ")
+	}
+
+	// Steady-state boot: node record carries the merged identity and mints
+	// the machine-keyed canonical ID; the agent record merges into it.
+	steady := NewRegistry(store)
+	if id := steady.ingest(SourceProxmox, "homelab-delly", mergedHostNodeResource(), steadyIdentity); id != steadyID {
+		t.Fatalf("steady-state node ingest minted %q, want machine-keyed %q", id, steadyID)
+	}
+	if id := steady.ingest(SourceAgent, machineID, mergedHostAgentResource(machineID), agentIdentity); id != steadyID {
+		t.Fatalf("steady-state agent ingest resolved %q, want %q", id, steadyID)
+	}
+	steady.PersistIdentityPins()
+
+	// Restart into a boot window: the agent has not checked in yet, so the
+	// node record only knows cluster+hostname. Before identity pins this
+	// minted bootEraID and the change journal fragmented into a second era.
+	bootWindow := NewRegistry(store)
+	if id := bootWindow.ingest(SourceProxmox, "homelab-delly", mergedHostNodeResource(), nodeIdentity); id != steadyID {
+		t.Fatalf("boot-window node ingest minted %q, want pinned %q", id, steadyID)
+	}
+
+	// Restart with the opposite ingest order: agent record first into an
+	// empty registry, node record after.
+	reversed := NewRegistry(store)
+	if id := reversed.ingest(SourceAgent, machineID, mergedHostAgentResource(machineID), agentIdentity); id != steadyID {
+		t.Fatalf("agent-first ingest minted %q, want %q", id, steadyID)
+	}
+	if id := reversed.ingest(SourceProxmox, "homelab-delly", mergedHostNodeResource(), nodeIdentity); id != steadyID {
+		t.Fatalf("node-after-agent ingest resolved %q, want %q", id, steadyID)
+	}
+	if got := len(reversed.List()); got != 1 {
+		t.Fatalf("expected one merged resource after reversed-order ingest, got %d", got)
+	}
+}

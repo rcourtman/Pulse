@@ -311,6 +311,13 @@ truth for live infrastructure data.
    SMB/NFS shares must enter unified resources as `network-share` records with
    the TrueNAS share facet, not as generic storage rows or Docker/container
    compatibility records.
+10. Keep the monitor-adapter rebuild lifecycle persisting canonical identity
+    pins. `internal/unifiedresources/monitor_adapter.go` calls
+    `PersistIdentityPins` after snapshot rebuilds and supplemental-record
+    ingestion so canonical host IDs stay stable across restarts (see the
+    unified-resources contract's durable identity-pin obligation). Rebuild
+    paths added to the adapter must keep that persistence step; ephemeral
+    snapshot-bridge adapters stay read-only.
 
 ## Current State
 

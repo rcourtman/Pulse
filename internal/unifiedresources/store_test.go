@@ -2308,3 +2308,86 @@ func TestSQLiteResourceStore_ResourceOperatorState_RoundTrips(t *testing.T) {
 		t.Errorf("clear must be idempotent; got %v", err)
 	}
 }
+
+func TestResourceChangeReadsMergeCanonicalIDEras(t *testing.T) {
+	const machineID = "7d465a78-test-machine-id"
+	steadyID := buildHashID(ResourceTypeAgent, "machine:"+machineID)
+	bootEraID := buildHashID(ResourceTypeAgent, "cluster:homelab:delly")
+
+	sqliteStore, err := NewSQLiteResourceStore(t.TempDir(), "")
+	if err != nil {
+		t.Fatalf("open sqlite store: %v", err)
+	}
+	defer sqliteStore.Close()
+
+	stores := map[string]ResourceStore{
+		"memory": NewMemoryStore(),
+		"sqlite": sqliteStore,
+	}
+
+	for name, store := range stores {
+		t.Run(name, func(t *testing.T) {
+			if err := store.UpsertResourceIdentityPins([]ResourceIdentityPin{{
+				CanonicalID:  steadyID,
+				ResourceType: ResourceTypeAgent,
+				MachineID:    machineID,
+				ClusterName:  "homelab",
+				Hostname:     "delly",
+			}}); err != nil {
+				t.Fatalf("upsert pin: %v", err)
+			}
+
+			base := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
+			record := func(id, resourceID string, at time.Time) {
+				t.Helper()
+				if err := store.RecordChange(ResourceChange{
+					ID:         id,
+					ResourceID: resourceID,
+					ObservedAt: at,
+					Kind:       ChangeStateTransition,
+					SourceType: SourcePulseDiff,
+					Confidence: ConfidenceHigh,
+				}); err != nil {
+					t.Fatalf("record change %s: %v", id, err)
+				}
+			}
+			record("change-boot-era", bootEraID, base)
+			record("change-steady-era", steadyID, base.Add(time.Hour))
+			record("change-unrelated", "agent-unrelated", base.Add(2*time.Hour))
+
+			changes, err := store.GetRecentChanges(steadyID, time.Time{}, 0)
+			if err != nil {
+				t.Fatalf("get changes by steady ID: %v", err)
+			}
+			if len(changes) != 2 {
+				t.Fatalf("expected both journal eras under the steady ID, got %d changes", len(changes))
+			}
+
+			// Reads keyed by the old era ID resolve through the pin too, so
+			// callers holding a stale canonical ID see the full timeline.
+			changes, err = store.GetRecentChanges(bootEraID, time.Time{}, 0)
+			if err != nil {
+				t.Fatalf("get changes by boot-era ID: %v", err)
+			}
+			if len(changes) != 2 {
+				t.Fatalf("expected both journal eras under the boot-era ID, got %d changes", len(changes))
+			}
+
+			count, err := store.CountRecentChanges(steadyID, time.Time{})
+			if err != nil {
+				t.Fatalf("count changes: %v", err)
+			}
+			if count != 2 {
+				t.Fatalf("expected era-merged count 2, got %d", count)
+			}
+
+			unrelated, err := store.GetRecentChanges("agent-unrelated", time.Time{}, 0)
+			if err != nil {
+				t.Fatalf("get unrelated changes: %v", err)
+			}
+			if len(unrelated) != 1 {
+				t.Fatalf("expected unrelated resource to keep its own timeline, got %d changes", len(unrelated))
+			}
+		})
+	}
+}

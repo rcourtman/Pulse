@@ -40,14 +40,15 @@ type IngestRecord struct {
 
 // ResourceRegistry merges resources from multiple sources.
 type ResourceRegistry struct {
-	mu         sync.RWMutex
-	resources  map[string]*Resource
-	bySource   map[DataSource]map[string]string
-	matcher    *IdentityMatcher
-	store      ResourceStore
-	links      []ResourceLink
-	exclusions map[string]struct{}
-	pbsBackups []models.PBSBackup
+	mu           sync.RWMutex
+	resources    map[string]*Resource
+	bySource     map[DataSource]map[string]string
+	matcher      *IdentityMatcher
+	store        ResourceStore
+	links        []ResourceLink
+	exclusions   map[string]struct{}
+	identityPins *identityPinIndex
+	pbsBackups   []models.PBSBackup
 
 	// Cached typed view indexes. Invalidated on ingest, rebuilt lazily on
 	// first access. Protected by mu — callers hold RLock to read, and the
@@ -92,6 +93,7 @@ func NewRegistry(store ResourceStore) *ResourceRegistry {
 	rr.bySource[SourceAvailability] = make(map[string]string)
 
 	rr.loadOverrides()
+	rr.loadIdentityPins()
 	return rr
 }
 
@@ -2187,8 +2189,13 @@ func (rr *ResourceRegistry) ingest(source DataSource, sourceID string, resource 
 		rr.bySource[source] = make(map[string]string)
 	}
 
-	resource.Identity = identity
 	resource.Type = CanonicalResourceType(resource.Type)
+	// Complete weak host identities from the durable pins before matching and
+	// ID derivation, so canonical IDs do not depend on which sources happen to
+	// be present in this rebuild (boot windows ingest the Proxmox node record
+	// before the agent has checked in).
+	identity = rr.completeIdentityFromPins(resource.Type, identity)
+	resource.Identity = identity
 	resource.Sources = []DataSource{source}
 	resource.SourceStatus = map[DataSource]SourceStatus{
 		source: {Status: "online", LastSeen: resource.LastSeen},
