@@ -35,7 +35,9 @@ import {
 import type { Resource } from '@/types/resource';
 import {
   buildKubernetesClusterChildCounts,
+  emptyKubernetesClusterChildCounts,
   filterKubernetesResources,
+  type KubernetesClusterChildCount,
   type KubernetesResourceStatusFilter,
 } from './kubernetesPageModel';
 
@@ -58,6 +60,18 @@ const metricFallback = () => (
       —
     </span>
   </div>
+);
+
+// v5-style healthy/total fraction: the healthy share turns amber as soon as
+// any child needs attention, so a cluster with a NotReady node reads "2/3"
+// instead of a flat "3".
+const childCountCell = (count: KubernetesClusterChildCount) => (
+  <>
+    <span class={count.attention > 0 ? 'text-amber-700 dark:text-amber-300' : ''}>
+      {count.total - count.attention}
+    </span>
+    <span class="text-muted">/{count.total}</span>
+  </>
 );
 
 export const KubernetesClustersTable: Component<{
@@ -169,11 +183,7 @@ export const KubernetesClustersTable: Component<{
                     const hasMemoryMetric = () =>
                       memoryTotal() > 0 || memoryPercentOnly() !== undefined;
                     const counts = () =>
-                      countsByCluster().get(cluster.id) ?? {
-                        nodes: 0,
-                        pods: 0,
-                        deployments: 0,
-                      };
+                      countsByCluster().get(cluster.id) ?? emptyKubernetesClusterChildCounts();
                     const indicator = () => getSimpleStatusIndicator(cluster.status);
                     const canRenderMetrics = () => indicator().variant !== 'muted';
                     const detailRowId = () => drawer.detailRowId(cluster);
@@ -222,17 +232,17 @@ export const KubernetesClustersTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
                           >
-                            {counts().nodes}
+                            {childCountCell(counts().nodes)}
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums md:table-cell`}
                           >
-                            {counts().pods}
+                            {childCountCell(counts().pods)}
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums md:table-cell`}
                           >
-                            {counts().deployments}
+                            {childCountCell(counts().deployments)}
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('metric-bar')} w-[20%] md:w-auto`}

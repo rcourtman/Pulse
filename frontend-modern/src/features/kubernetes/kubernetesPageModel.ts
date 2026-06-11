@@ -704,17 +704,35 @@ export type KubernetesPageModel = {
   incidents: KubernetesIncidentRow[];
 };
 
-export type KubernetesClusterChildCounts = {
-  nodes: number;
-  pods: number;
-  deployments: number;
+export type KubernetesClusterChildCount = {
+  total: number;
+  // Rows whose status indicator is danger or warning. Healthy-for-display is
+  // total - attention, so muted states (Unknown, Scaled to 0) never read as
+  // degraded.
+  attention: number;
 };
 
-const emptyKubernetesClusterChildCounts = (): KubernetesClusterChildCounts => ({
-  nodes: 0,
-  pods: 0,
-  deployments: 0,
+export type KubernetesClusterChildCounts = {
+  nodes: KubernetesClusterChildCount;
+  pods: KubernetesClusterChildCount;
+  deployments: KubernetesClusterChildCount;
+};
+
+export const emptyKubernetesClusterChildCounts = (): KubernetesClusterChildCounts => ({
+  nodes: { total: 0, attention: 0 },
+  pods: { total: 0, attention: 0 },
+  deployments: { total: 0, attention: 0 },
 });
+
+const tallyKubernetesChild = (
+  count: KubernetesClusterChildCount,
+  indicator: StatusIndicator,
+): void => {
+  count.total += 1;
+  if (indicator.variant === 'danger' || indicator.variant === 'warning') {
+    count.attention += 1;
+  }
+};
 
 const matchClusterFor = (
   resource: Resource,
@@ -738,10 +756,12 @@ const matchClusterFor = (
 };
 
 // Walks the resource snapshot once and rolls per-cluster Nodes / Pods /
-// Deployments into a Map keyed by cluster row id. The Overview clusters
-// table calls this instead of computing counts inline, so the same
-// rollup is testable and reusable by other consumers (incident rollups,
-// future Overview "active issues" cards).
+// Deployments into a Map keyed by cluster row id, carrying both the total
+// and how many rows need attention so the Overview can render the v5-style
+// healthy/total fractions. The Overview clusters table calls this instead
+// of computing counts inline, so the same rollup is testable and reusable
+// by other consumers (incident rollups, future Overview "active issues"
+// cards).
 export function buildKubernetesClusterChildCounts(
   resources: readonly Resource[],
   clusters: readonly Resource[],
@@ -758,13 +778,13 @@ export function buildKubernetesClusterChildCounts(
     const bucket = counts.get(cluster.id);
     if (!bucket) continue;
     if (resource.type === 'k8s-node') {
-      bucket.nodes += 1;
+      tallyKubernetesChild(bucket.nodes, mapKubernetesNodeStatus(resource));
     } else if (resource.type === 'agent' && resource.sources?.includes('kubernetes')) {
-      bucket.nodes += 1;
+      tallyKubernetesChild(bucket.nodes, mapKubernetesNodeStatus(resource));
     } else if (resource.type === 'pod') {
-      bucket.pods += 1;
+      tallyKubernetesChild(bucket.pods, mapKubernetesPodStatus(resource));
     } else if (resource.type === 'k8s-deployment') {
-      bucket.deployments += 1;
+      tallyKubernetesChild(bucket.deployments, mapKubernetesDeploymentStatus(resource));
     }
   }
   return counts;

@@ -674,8 +674,71 @@ describe('kubernetesPageModel', () => {
       ];
 
       const counts = buildKubernetesClusterChildCounts(resources, [prod, stg]);
-      expect(counts.get('cluster-prod')).toEqual({ nodes: 2, pods: 3, deployments: 1 });
-      expect(counts.get('cluster-stg')).toEqual({ nodes: 1, pods: 1, deployments: 0 });
+      expect(counts.get('cluster-prod')).toEqual({
+        nodes: { total: 2, attention: 0 },
+        pods: { total: 3, attention: 0 },
+        deployments: { total: 1, attention: 0 },
+      });
+      expect(counts.get('cluster-stg')).toEqual({
+        nodes: { total: 1, attention: 0 },
+        pods: { total: 1, attention: 0 },
+        deployments: { total: 0, attention: 0 },
+      });
+    });
+
+    it('tallies attention per bucket from the status mappers', () => {
+      const prod = cluster('cluster-prod', { clusterId: 'prod' });
+      const counts = buildKubernetesClusterChildCounts(
+        [
+          prod,
+          makeResource({
+            id: 'n-ready',
+            type: 'k8s-node',
+            kubernetes: { clusterId: 'prod', ready: true },
+          }),
+          makeResource({
+            id: 'n-cordoned',
+            type: 'k8s-node',
+            kubernetes: { clusterId: 'prod', ready: true, unschedulable: true },
+          }),
+          makeResource({
+            id: 'p-running',
+            type: 'pod',
+            kubernetes: {
+              clusterId: 'prod',
+              podPhase: 'Running',
+              podContainers: [{ ready: true, state: 'running' }],
+            },
+          }),
+          makeResource({
+            id: 'p-crash',
+            type: 'pod',
+            kubernetes: {
+              clusterId: 'prod',
+              podPhase: 'Running',
+              podContainers: [{ ready: false, state: 'waiting', reason: 'CrashLoopBackOff' }],
+            },
+          }),
+          makeResource({
+            id: 'd-scaled-to-zero',
+            type: 'k8s-deployment',
+            kubernetes: { clusterId: 'prod', desiredReplicas: 0 },
+          }),
+          makeResource({
+            id: 'd-partial',
+            type: 'k8s-deployment',
+            kubernetes: { clusterId: 'prod', desiredReplicas: 3, readyReplicas: 1 },
+          }),
+        ],
+        [prod],
+      );
+      expect(counts.get('cluster-prod')).toEqual({
+        nodes: { total: 2, attention: 1 },
+        pods: { total: 2, attention: 1 },
+        // Scaled-to-zero is muted, not degraded; only the partial rollout
+        // counts as attention.
+        deployments: { total: 2, attention: 1 },
+      });
     });
 
     it('counts agent rows that report a kubernetes source as cluster nodes', () => {
@@ -698,7 +761,11 @@ describe('kubernetesPageModel', () => {
         ],
         [prod],
       );
-      expect(counts.get('cluster-prod')).toEqual({ nodes: 1, pods: 0, deployments: 0 });
+      expect(counts.get('cluster-prod')).toEqual({
+        nodes: { total: 1, attention: 0 },
+        pods: { total: 0, attention: 0 },
+        deployments: { total: 0, attention: 0 },
+      });
     });
 
     it('ignores resources whose kubernetes.clusterId / clusterName matches no cluster row', () => {
@@ -711,7 +778,11 @@ describe('kubernetesPageModel', () => {
         ],
         [prod],
       );
-      expect(counts.get('cluster-prod')).toEqual({ nodes: 0, pods: 0, deployments: 0 });
+      expect(counts.get('cluster-prod')).toEqual({
+        nodes: { total: 0, attention: 0 },
+        pods: { total: 0, attention: 0 },
+        deployments: { total: 0, attention: 0 },
+      });
     });
 
     it('returns an empty map when there are no clusters', () => {
