@@ -244,11 +244,33 @@ const section = (
   rows: AgentMachineTemperatureDetailRow[],
 ): AgentMachineTemperatureDetailSection[] => (rows.length > 0 ? [{ heading, rows }] : []);
 
+const TEMPERATURE_SECTION_ROW_CAP = 6;
+
+// Hover tooltips can't scroll, so each section is capped — but truncation must
+// be visible, not silent (readings are sorted worst-first, so the cap drops
+// the least alarming ones).
+const capTemperatureRows = (
+  rows: AgentMachineTemperatureDetailRow[],
+): AgentMachineTemperatureDetailRow[] =>
+  rows.length > TEMPERATURE_SECTION_ROW_CAP
+    ? [
+        ...rows.slice(0, TEMPERATURE_SECTION_ROW_CAP),
+        {
+          label: `+${rows.length - TEMPERATURE_SECTION_ROW_CAP} more`,
+          value: '',
+          muted: true,
+        },
+      ]
+    : rows;
+
 const flattenTemperatureSections = (
   sections: readonly AgentMachineTemperatureDetailSection[],
 ): string =>
   sections
-    .flatMap((entry) => [entry.heading, ...entry.rows.map((row) => `${row.label}: ${row.value}`)])
+    .flatMap((entry) => [
+      entry.heading,
+      ...entry.rows.map((row) => (row.value ? `${row.label}: ${row.value}` : row.label)),
+    ])
     .join('\n');
 
 const getMetricPercent = (metric: Resource['cpu'] | undefined): number | undefined =>
@@ -441,14 +463,12 @@ export const getAgentMachineTemperatureDetailSections = (
 ): AgentMachineTemperatureDetailSection[] => {
   const sensorReadings = getSensorTemperatureReadings(machine)
     .sort(byHighestTemperature)
-    .slice(0, 6)
     .map((reading) => ({
       label: reading.label,
       value: formatTemperatureValue(reading),
     }));
   const activeSmartReadings = getActiveSmartTemperatureReadings(machine)
     .sort(byHighestTemperature)
-    .slice(0, 6)
     .map((reading) => ({
       label: `Disk ${reading.label}`,
       value: formatTemperatureValue(reading),
@@ -456,7 +476,6 @@ export const getAgentMachineTemperatureDetailSections = (
   const standbySmartReadings = getSmartTemperatureReadings(machine)
     .filter((reading) => reading.standby)
     .sort(byLabel)
-    .slice(0, 6)
     .map((reading) => ({
       label: `Disk ${reading.label}`,
       value: 'standby',
@@ -464,23 +483,24 @@ export const getAgentMachineTemperatureDetailSections = (
     }));
   const fanReadings = getFanReadings(machine)
     .sort(byLabel)
-    .slice(0, 6)
     .map((reading) => ({
       label: reading.label,
       value: `${Math.round(reading.value)} RPM`,
     }));
   const additionalReadings = getAdditionalTemperatureReadings(machine)
     .sort(byHighestTemperature)
-    .slice(0, 6)
     .map((reading) => ({
       label: reading.label,
       value: formatTemperatureValue(reading),
     }));
   return [
-    ...section('Temperatures', sensorReadings),
-    ...section('Disk Temperatures', [...activeSmartReadings, ...standbySmartReadings]),
-    ...section('Fan Speeds', fanReadings),
-    ...section('Other Sensors', additionalReadings),
+    ...section('Temperatures', capTemperatureRows(sensorReadings)),
+    ...section(
+      'Disk Temperatures',
+      capTemperatureRows([...activeSmartReadings, ...standbySmartReadings]),
+    ),
+    ...section('Fan Speeds', capTemperatureRows(fanReadings)),
+    ...section('Other Sensors', capTemperatureRows(additionalReadings)),
   ];
 };
 

@@ -22,6 +22,7 @@ import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import { ColumnPicker } from '@/components/shared/ColumnPicker';
 import { StatusDot } from '@/components/shared/StatusDot';
+import { TemperatureGauge } from '@/components/shared/TemperatureGauge';
 import {
   Table,
   TableBody,
@@ -33,6 +34,7 @@ import {
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import { TooltipPortal } from '@/components/shared/TooltipPortal';
+import { hostOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
 import {
   compareAgentVersions,
   formatAgentVersionDisplay,
@@ -63,6 +65,7 @@ import type { Resource, ResourceAvailabilityMeta } from '@/types/resource';
 import { getActionableAgentIdFromResource } from '@/utils/agentResources';
 import { formatBytes, formatSpeed, normalizeDiskArray } from '@/utils/format';
 import { STORAGE_KEYS } from '@/utils/localStorage';
+import { useAlertsActivation } from '@/stores/alertsActivation';
 import { notificationStore } from '@/stores/notifications';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
@@ -72,7 +75,6 @@ import {
 } from '@/utils/raidPresentation';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
-import { formatTemperature as formatTemperatureValue } from '@/utils/temperature';
 import {
   RESOURCE_METADATA_CHANGED_EVENT,
   type ResourceMetadataChangedDetail,
@@ -230,7 +232,7 @@ const AgentMachineTemperatureCell: Component<{
       maxWidth={320}
       trigger={
         <Show when={positiveTemperature()} fallback={<span class="text-muted">—</span>}>
-          {(value) => formatTemperatureValue(value())}
+          {(value) => <TemperatureGauge value={value()} />}
         </Show>
       }
     >
@@ -332,14 +334,15 @@ const AgentMachineNetworkInterfacesList: Component<{
               }
             >
               <div class="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[9px] text-muted">
+                {/* Interface counters are cumulative totals, not rates — format as bytes. */}
                 <Show when={iface.rxBytes !== undefined || iface.txBytes !== undefined}>
                   <span>
                     <span class="font-mono text-emerald-500">RX</span>{' '}
-                    {formatSpeed(iface.rxBytes ?? 0)}
+                    {formatBytes(iface.rxBytes ?? 0)}
                   </span>
                   <span>
                     <span class="font-mono text-orange-400">TX</span>{' '}
-                    {formatSpeed(iface.txBytes ?? 0)}
+                    {formatBytes(iface.txBytes ?? 0)}
                   </span>
                 </Show>
                 <Show when={iface.speedMbps !== undefined}>
@@ -935,6 +938,9 @@ const memoryPercentOnlyFor = (machine: Resource): number | undefined => {
 const memoryBalloonFor = (machine: Resource): number | undefined =>
   finiteMetric(machine.agent?.memory?.balloon);
 
+const memoryCacheFor = (machine: Resource): number | undefined =>
+  finiteMetric(machine.agent?.memory?.cache);
+
 const memorySwapUsedFor = (machine: Resource): number | undefined =>
   finiteMetric(machine.agent?.memory?.swapUsed);
 
@@ -1231,6 +1237,7 @@ export const AgentsMachinesTable: Component<{
     initialStatus: 'all' as PlatformResourceStatusFilter,
     filter: filterAgentMachineResources,
   });
+  const alertsActivation = useAlertsActivation();
   const [sortKey, setSortKey] = createSignal<AgentMachineSortKey>('name');
   const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
   const columnVisibility = useColumnVisibility(
@@ -1499,11 +1506,19 @@ export const AgentsMachinesTable: Component<{
                         ? outdatedAgentTelemetryFallbackFor(machine, props.targetAgentVersion)
                         : undefined;
                     const metricsKey = () => buildMetricKeyForUnifiedResource(machine);
+                    const alertResourceIds = () => hostOverrideIdCandidates(machine);
+                    const cpuThresholds = () =>
+                      alertsActivation.getMetricThresholds('agent', 'cpu', alertResourceIds());
+                    const memoryThresholds = () =>
+                      alertsActivation.getMetricThresholds('agent', 'memory', alertResourceIds());
+                    const diskThresholds = () =>
+                      alertsActivation.getMetricThresholds('agent', 'disk', alertResourceIds());
                     const cpuPercent = () => getAgentMachineCpuPercent(machine);
                     const cpuCores = () => cpuCoresFor(machine);
                     const cpuLoadAverage = () => cpuLoadAverageFor(machine);
                     const memoryUsed = () => memoryUsedFor(machine);
                     const memoryTotal = () => memoryTotalFor(machine);
+                    const memoryCache = () => memoryCacheFor(machine);
                     const memoryBalloon = () => memoryBalloonFor(machine);
                     const memorySwapUsed = () => memorySwapUsedFor(machine);
                     const memorySwapTotal = () => memorySwapTotalFor(machine);
@@ -1644,6 +1659,7 @@ export const AgentsMachinesTable: Component<{
                                 usage={cpuPercent() ?? 0}
                                 loadAverage={cpuLoadAverage()}
                                 cores={cpuCores()}
+                                thresholds={cpuThresholds()}
                                 resourceId={metricsKey()}
                               />
                             </Show>
@@ -1659,9 +1675,11 @@ export const AgentsMachinesTable: Component<{
                                 used={memoryUsed()}
                                 total={memoryTotal()}
                                 percentOnly={memoryPercentOnly()}
+                                cache={memoryCache()}
                                 balloon={memoryBalloon()}
                                 swapUsed={memorySwapUsed()}
                                 swapTotal={memorySwapTotal()}
+                                thresholds={memoryThresholds()}
                                 resourceId={metricsKey()}
                               />
                             </Show>
@@ -1677,6 +1695,7 @@ export const AgentsMachinesTable: Component<{
                                 mode={(disks()?.length ?? 0) > 1 ? 'vertical-bars' : undefined}
                                 disks={disks()}
                                 aggregateDisk={aggregateDisk()}
+                                thresholds={diskThresholds()}
                               />
                             </Show>
                           </TableCell>
