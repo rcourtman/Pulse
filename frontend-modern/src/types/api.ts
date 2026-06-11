@@ -1068,6 +1068,7 @@ export interface Temperature {
   hasCPU?: boolean; // Whether CPU temperature data is available
   hasGPU?: boolean; // Whether GPU temperature data is available
   hasNVMe?: boolean; // Whether NVMe temperature data is available
+  legacySensorsFormat?: boolean; // SSH payload was raw `sensors -j` (pre-rc.6 node setup); SMART disk temps cannot arrive until the setup script is re-run
   lastUpdate: string; // When this data was collected
 }
 

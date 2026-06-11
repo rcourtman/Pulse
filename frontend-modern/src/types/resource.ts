@@ -612,6 +612,13 @@ export interface ResourceProxmoxMeta {
   osTemplate?: string;
   pveVersion?: string;
   kernelVersion?: string;
+  // Narrow projection of the node's temperature payload. `legacySensorsFormat`
+  // marks SSH sensor setups from before v6.0.0-rc.6 (authorized_keys locked to
+  // `sensors -j`), which can never deliver SATA/SAS disk temperatures.
+  temperatureDetails?: {
+    available?: boolean;
+    legacySensorsFormat?: boolean;
+  };
 }
 
 // Docker runtime, container, and Swarm service projection emitted by the

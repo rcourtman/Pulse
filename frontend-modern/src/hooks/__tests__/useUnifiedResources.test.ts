@@ -868,6 +868,41 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
+  it('passes proxmox temperatureDetails through for the outdated-sensor-setup gate', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            ...v2Resource,
+            sources: ['proxmox'],
+            agent: undefined,
+            proxmox: {
+              nodeName: 'pve1',
+              temperature: 58.4,
+              temperatureDetails: { available: true, legacySensorsFormat: true },
+            },
+          },
+        ],
+      }),
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources({ query: 'type=k8s-deployment', cacheKey: 'k8s-deployments' });
+    });
+
+    await result!.refetch();
+    expect(result!.resources()[0].proxmox?.temperatureDetails).toEqual({
+      available: true,
+      legacySensorsFormat: true,
+    });
+
+    dispose();
+  });
+
   it('projects raw VMware sources onto the canonical vSphere platform model', async () => {
     apiFetchMock.mockResolvedValueOnce({
       ok: true,

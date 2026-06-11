@@ -202,6 +202,10 @@ type APIResource = {
     cpus?: number;
     uptime?: number;
     temperature?: number;
+    temperatureDetails?: {
+      available?: boolean;
+      legacySensorsFormat?: boolean;
+    };
     template?: boolean;
     disks?: APIAgentDiskInfo[];
     swapUsed?: number;
@@ -821,6 +825,7 @@ const toResource = (v2: APIResource): Resource => {
           swapUsed: v2.proxmox.swapUsed,
           swapTotal: v2.proxmox.swapTotal,
           balloon: v2.proxmox.balloon,
+          temperatureDetails: v2.proxmox.temperatureDetails,
         }
       : undefined,
     cpu: metricToResourceMetric(v2.metrics?.cpu),

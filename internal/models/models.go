@@ -2709,7 +2709,12 @@ type Temperature struct {
 	HasGPU       bool       `json:"hasGPU"`                 // Whether GPU temperature data is available
 	HasNVMe      bool       `json:"hasNVMe"`                // Whether NVMe temperature data is available
 	HasSMART     bool       `json:"hasSMART"`               // Whether SMART disk temperature data is available
-	LastUpdate   time.Time  `json:"lastUpdate"`             // When this data was collected
+	// True when the SSH payload was raw `sensors -j` output instead of the
+	// pulse-sensors wrapper payload. Pre-v6.0.0-rc.6 setup scripts lock the
+	// authorized_keys entry to `sensors -j`, so SMART (SATA/SAS) disk temps
+	// can never arrive until the node setup script is re-run.
+	LegacySensorsFormat bool      `json:"legacySensorsFormat,omitempty"`
+	LastUpdate          time.Time `json:"lastUpdate"` // When this data was collected
 }
 
 func (t Temperature) NormalizeCollections() Temperature {

@@ -461,9 +461,10 @@ func (tc *TemperatureCollector) parseSensorsJSON(jsonStr string) (*models.Temper
 	}
 
 	temp := &models.Temperature{
-		Cores: []models.CoreTemp{},
-		NVMe:  []models.NVMeTemp{},
-		SMART: smartData,
+		Cores:               []models.CoreTemp{},
+		NVMe:                []models.NVMeTemp{},
+		SMART:               smartData,
+		LegacySensorsFormat: !parsedWrapper,
 	}
 
 	foundCPUChip := false

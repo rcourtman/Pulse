@@ -951,6 +951,12 @@ must request `/usr/local/sbin/pulse-sensors` when it exists, parse the wrapper
 payload as `{sensors, smart}`, preserve backward compatibility with old forced
 `sensors -j` keys, and expose SMART disk temperatures through the same
 `models.Temperature.SMART` path used by the physical-disk merge.
+When the payload arrives in the legacy raw `sensors -j` shape, the parser must
+mark it via `models.Temperature.LegacySensorsFormat` and the host-agent merge
+in `internal/monitoring/host_agent_temps.go` must preserve that marker, so the
+frontend can surface a data-gated outdated-sensor-setup notice instead of
+letting SATA/SAS disk temperatures silently stay blank on pre-rc.6 SSH key
+setups.
 That same Proxmox monitoring boundary also owns checked response parsing for
 polymorphic numeric fields. Shared client parsers such as
 `pkg/proxmox/replication.go` must use the package's checked integer conversion

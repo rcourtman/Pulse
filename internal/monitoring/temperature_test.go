@@ -201,6 +201,27 @@ func TestTemperatureCollector_ParseSensorsJSON_WrapperSMARTTemps(t *testing.T) {
 	assert.Equal(t, "SATA-SERIAL-1", temp.SMART[0].Serial)
 	assert.Equal(t, 34, temp.SMART[0].Temperature)
 	assert.Equal(t, "sata", temp.SMART[0].Type)
+	assert.False(t, temp.LegacySensorsFormat)
+}
+
+func TestTemperatureCollector_ParseSensorsJSON_FlagsLegacyFormat(t *testing.T) {
+	tc := &TemperatureCollector{}
+
+	// Raw `sensors -j` output, the shape forced by pre-rc.6 authorized_keys
+	// entries. Disk (SMART) temperatures can never arrive on this path, so the
+	// payload must be flagged for the outdated-sensor-setup notice.
+	jsonStr := `{
+		"coretemp-isa-0000": {
+			"Package id 0": { "temp1_input": 47.0 }
+		}
+	}`
+
+	temp, err := tc.parseSensorsJSON(jsonStr)
+	require.NoError(t, err)
+	require.NotNil(t, temp)
+	assert.True(t, temp.Available)
+	assert.True(t, temp.LegacySensorsFormat)
+	assert.False(t, temp.HasSMART)
 }
 
 func TestTemperatureCollector_HelperMethods(t *testing.T) {

@@ -14,13 +14,18 @@ import {
   isWorkloadTableMetricHistoryRange,
   type WorkloadTableMetricHistoryRange,
 } from '@/components/Workloads/workloadMetricHistoryModel';
-import { buildInfrastructureAgentUpdatesPath } from '@/components/Settings/infrastructureWorkspaceModel';
+import {
+  buildInfrastructureAgentUpdatesPath,
+  buildInfrastructureWorkspacePath,
+} from '@/components/Settings/infrastructureWorkspaceModel';
 import {
   collectOutdatedAgentHosts,
   formatAgentVersionDisplay,
 } from '@/features/platformPage/agentVersion';
 import { getPlatformIcon } from '@/features/platformPage/platformIcon';
 import { PlatformOutdatedAgentNotice } from '@/features/platformPage/PlatformOutdatedAgentNotice';
+import { PlatformOutdatedSensorSetupNotice } from '@/features/platformPage/PlatformOutdatedSensorSetupNotice';
+import { collectOutdatedSensorSetupNodes } from '@/features/platformPage/sensorSetup';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import {
@@ -97,6 +102,12 @@ export function ProxmoxPageSurface() {
   const serverVersionDisplay = createMemo(() =>
     formatAgentVersionDisplay(agentUpdateTargetVersion()),
   );
+  const outdatedSensorSetupNodes = createMemo(() =>
+    collectOutdatedSensorSetupNodes(
+      model().pveNodes,
+      model().resources.filter((resource) => resource.type === 'physical_disk'),
+    ),
+  );
 
   // The hosts table at the top and the embedded WorkloadsSurface below share
   // the bars/sparklines toggle (and the sparkline history range that ships
@@ -162,6 +173,10 @@ export function ProxmoxPageSurface() {
               copyVariant="latest-detail"
               actionHref={outdatedAgentUpdatePath()}
               actionLabel="Open agent upgrade commands"
+            />
+            <PlatformOutdatedSensorSetupNotice
+              nodes={outdatedSensorSetupNodes()}
+              actionHref={buildInfrastructureWorkspacePath()}
             />
             <Show when={activeTab() === 'overview'}>
               <ProxmoxOverview

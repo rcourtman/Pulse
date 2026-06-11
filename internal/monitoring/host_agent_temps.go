@@ -373,7 +373,11 @@ func mergeTemperatureData(hostAgentTemp, proxyTemp *models.Temperature) *models.
 		HasGPU:       hostAgentTemp.HasGPU,
 		HasNVMe:      hostAgentTemp.HasNVMe,
 		HasSMART:     hostAgentTemp.HasSMART || proxyTemp.HasSMART,
-		LastUpdate:   hostAgentTemp.LastUpdate,
+		// The legacy-format marker describes the node's SSH sensor setup; a
+		// linked host agent doesn't fix that setup, so the flag survives the
+		// merge (the UI gate hides the notice once disk temps actually arrive).
+		LegacySensorsFormat: proxyTemp.LegacySensorsFormat,
+		LastUpdate:          hostAgentTemp.LastUpdate,
 	}
 
 	// Use host agent CPU data if available, fall back to proxy

@@ -283,6 +283,29 @@ func TestMergeTemperatureData_NilInputs(t *testing.T) {
 	})
 }
 
+func TestMergeTemperatureData_PreservesLegacySensorsFormat(t *testing.T) {
+	hostTemp := &models.Temperature{
+		CPUPackage: 55.0,
+		HasCPU:     true,
+		Available:  true,
+		LastUpdate: time.Now(),
+	}
+	proxyTemp := &models.Temperature{
+		CPUPackage:          52.0,
+		HasCPU:              true,
+		Available:           true,
+		LegacySensorsFormat: true,
+	}
+
+	result := mergeTemperatureData(hostTemp, proxyTemp)
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	if !result.LegacySensorsFormat {
+		t.Error("expected LegacySensorsFormat from proxy to survive the merge")
+	}
+}
+
 func TestMergeTemperatureData_Merge(t *testing.T) {
 	hostTemp := &models.Temperature{
 		CPUPackage: 55.0,
