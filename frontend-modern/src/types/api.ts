@@ -1000,6 +1000,8 @@ export interface Memory {
   total: number;
   used: number;
   free: number;
+  /** Reclaimable buff/cache (available - truly free); used + cache + free ≈ total. */
+  cache?: number;
   usage: number;
   balloon?: number;
   swapUsed?: number;

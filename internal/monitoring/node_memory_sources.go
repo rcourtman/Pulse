@@ -202,6 +202,9 @@ func (m *Monitor) resolveNodeMemory(
 		Free:  free,
 		Usage: safePercentage(float64(actualUsed), float64(memory.Total)),
 	}
+	// Free above is total-used, i.e. available. The node status reports its
+	// truly-free pages directly, so split the reclaimable cache back out.
+	splitReclaimableMemory(&resolved, memory.Free)
 
 	return resolved, source, fallbackReason, raw, true
 }

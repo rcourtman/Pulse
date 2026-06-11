@@ -617,6 +617,9 @@ export interface ResourceProxmoxMeta {
   swapUsed?: number;
   swapTotal?: number;
   balloon?: number;
+  /** Reclaimable buff/cache split out of the memory metric's free bytes. */
+  memoryCache?: number;
+  pendingUpdates?: number;
   isOci?: boolean;
   osTemplate?: string;
   pveVersion?: string;

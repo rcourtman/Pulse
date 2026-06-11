@@ -13,6 +13,8 @@ export interface StackedMemoryBarProps {
   used: number;
   total: number;
   percentOnly?: number;
+  /** Reclaimable buff/cache (available - truly free); used + cache + free ≈ total. */
+  cache?: number;
   swapUsed?: number;
   swapTotal?: number;
   balloon?: number;
@@ -52,6 +54,8 @@ export interface StackedMemoryBarPresentation {
 
 const MEMORY_COLORS = {
   active: 'rgba(34, 197, 94, 0.6)',
+  // Muted amber: reclaimable buff/cache, matching the v5 segment tone.
+  cache: 'rgba(251, 191, 36, 0.45)',
   balloon: 'rgba(59, 130, 246, 0.6)',
   swap: 'rgba(168, 85, 247, 0.6)',
 };
@@ -87,20 +91,8 @@ function getSegments(
   const balloon = props.balloon || 0;
   const hasActiveBallooning = balloon > 0 && balloon < props.total;
   const usedPercent = (props.used / props.total) * 100;
-
-  if (!hasActiveBallooning) {
-    if (props.used <= 0) {
-      return [];
-    }
-    return [
-      {
-        color: getMetricColorRgba(usedPercent, 'memory', props.thresholds),
-        label: 'Active',
-        leftPercent: 0,
-        widthPercent: usedPercent,
-      },
-    ];
-  }
+  const cache = props.cache || 0;
+  const cachePercent = (cache / props.total) * 100;
 
   const segments: StackedMemorySegment[] = [];
   if (props.used > 0) {
@@ -112,14 +104,30 @@ function getSegments(
     });
   }
 
-  const balloonLimitPercent = Math.max(0, (balloon / props.total) * 100 - usedPercent);
-  if (balloonLimitPercent > 0 && balloon > props.used) {
+  // Reclaimable buff/cache rides between active and the balloon limit, like v5.
+  if (cache > 0) {
     segments.push({
-      color: MEMORY_COLORS.balloon,
-      label: 'Balloon',
+      color: MEMORY_COLORS.cache,
+      label: 'Reclaimable',
       leftPercent: usedPercent,
-      widthPercent: balloonLimitPercent,
+      widthPercent: cachePercent,
     });
+  }
+
+  if (hasActiveBallooning) {
+    const usedPlusCache = props.used + cache;
+    const balloonLimitPercent = Math.max(
+      0,
+      (balloon / props.total) * 100 - usedPercent - cachePercent,
+    );
+    if (balloonLimitPercent > 0 && balloon > usedPlusCache) {
+      segments.push({
+        color: MEMORY_COLORS.balloon,
+        label: 'Balloon',
+        leftPercent: usedPercent + cachePercent,
+        widthPercent: balloonLimitPercent,
+      });
+    }
   }
 
   return segments;
@@ -131,6 +139,7 @@ function getTooltipRows(
 ): StackedMemoryTooltipRow[] {
   const rows: StackedMemoryTooltipRow[] = [];
   const balloon = props.balloon || 0;
+  const cache = props.cache || 0;
   const hasActiveBallooning = props.total > 0 && balloon > 0 && balloon < props.total;
   const hasSwap = (props.swapTotal || 0) > 0;
 
@@ -142,6 +151,15 @@ function getTooltipRows(
       value: formatBytes(props.used),
     });
 
+    if (cache > 0) {
+      rows.push({
+        borderTop: true,
+        label: 'Reclaimable cache',
+        labelClass: 'text-amber-400',
+        value: formatBytes(cache),
+      });
+    }
+
     if (hasActiveBallooning) {
       rows.push({
         borderTop: true,
@@ -151,12 +169,26 @@ function getTooltipRows(
       });
     }
 
+    // Truly free pages exclude the reclaimable cache; capped at the balloon
+    // limit when ballooning is active (the guest cannot use past it).
+    const ceiling = hasActiveBallooning ? balloon : props.total;
     rows.push({
       borderTop: true,
       label: 'Free',
       labelClass: 'text-slate-400',
-      value: formatBytes(props.total - props.used),
+      value: formatBytes(Math.max(0, ceiling - props.used - cache)),
     });
+
+    // Proxmox's UI counts reclaimable cache as used; this row explains why
+    // Pulse's percentage reads lower than the same guest in Proxmox.
+    if (cache > 0) {
+      rows.push({
+        borderTop: true,
+        label: 'Shown in Proxmox',
+        labelClass: 'text-slate-500 italic',
+        value: formatPercent(((props.used + cache) / props.total) * 100),
+      });
+    }
   } else {
     rows.push({
       borderTop: true,

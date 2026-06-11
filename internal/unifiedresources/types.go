@@ -354,7 +354,9 @@ type ProxmoxData struct {
 	SwapUsed                     int64               `json:"swapUsed,omitempty"`
 	SwapTotal                    int64               `json:"swapTotal,omitempty"`
 	Balloon                      int64               `json:"balloon,omitempty"`
-	Lock                         string              `json:"lock,omitempty"` // Proxmox lock state (e.g. "backup", "migrate", "snapshot")
+	// Reclaimable buff/cache split out of the memory metric's free bytes.
+	MemoryCache int64  `json:"memoryCache,omitempty"`
+	Lock        string `json:"lock,omitempty"` // Proxmox lock state (e.g. "backup", "migrate", "snapshot")
 	// Internal link hint to a host agent resource.
 	LinkedAgentID string `json:"-"`
 }

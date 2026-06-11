@@ -63,6 +63,9 @@ func resourceFromProxmoxNode(node models.Node, linkedHost *models.Host) (Resourc
 		PendingUpdates:               node.PendingUpdates,
 		TemperatureMonitoringEnabled: cloneBoolPtr(node.TemperatureMonitoringEnabled),
 		PendingUpdatesCheckedAt:      zeroTimeToPtr(node.PendingUpdatesCheckedAt),
+		MemoryCache:                  node.Memory.Cache,
+		SwapUsed:                     node.Memory.SwapUsed,
+		SwapTotal:                    node.Memory.SwapTotal,
 		LinkedAgentID:                linkedAgentID,
 	}
 
@@ -1509,6 +1512,7 @@ func resourceFromVM(vm models.VM) (Resource, ResourceIdentity) {
 		SwapUsed:          vm.Memory.SwapUsed,
 		SwapTotal:         vm.Memory.SwapTotal,
 		Balloon:           vm.Memory.Balloon,
+		MemoryCache:       vm.Memory.Cache,
 		Lock:              vm.Lock,
 	}
 	resource := Resource{
@@ -1553,6 +1557,7 @@ func resourceFromContainer(ct models.Container) (Resource, ResourceIdentity) {
 		SwapUsed:          ct.Memory.SwapUsed,
 		SwapTotal:         ct.Memory.SwapTotal,
 		Balloon:           ct.Memory.Balloon,
+		MemoryCache:       ct.Memory.Cache,
 		Lock:              ct.Lock,
 	}
 	resource := Resource{

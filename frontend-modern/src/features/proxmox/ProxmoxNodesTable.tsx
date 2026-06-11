@@ -474,6 +474,9 @@ export const ProxmoxNodesTable: Component<{
                                   used={memoryUsed()}
                                   total={memoryTotal()}
                                   percentOnly={memoryPercentOnly()}
+                                  cache={drawerNode()?.memory?.cache || 0}
+                                  swapUsed={drawerNode()?.memory?.swapUsed || 0}
+                                  swapTotal={drawerNode()?.memory?.swapTotal || 0}
                                 />
                               </Show>
                             }

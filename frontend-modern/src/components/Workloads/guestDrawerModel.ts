@@ -298,10 +298,14 @@ export const getGuestDrawerMemoryRows = (guest: Guest): GuestDrawerMemoryRow[] =
   const rows: GuestDrawerMemoryRow[] = [];
   const total = memory.total ?? 0;
   const used = memory.used ?? 0;
+  const cache = memory.cache ?? 0;
 
   if (total > 0) {
     rows.push({ label: 'Usage', value: `${formatPercent((used / total) * 100)} · ${formatBytes(used)}` });
     rows.push({ label: 'Total', value: formatBytes(total) });
+    if (cache > 0) {
+      rows.push({ label: 'Reclaimable cache', value: formatBytes(cache) });
+    }
     if (typeof memory.free === 'number') {
       rows.push({ label: 'Free', value: formatBytes(memory.free) });
     }

@@ -93,6 +93,7 @@ type APIResource = {
     swapUsed?: number;
     swapTotal?: number;
     balloon?: number;
+    memoryCache?: number;
     isOci?: boolean;
     osTemplate?: string;
     osName?: string;
@@ -455,8 +456,13 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     cpus: resource.proxmox?.cpus ?? 1,
     memory: (() => {
       const base = buildMetric(resource.metrics?.memory);
+      const cache = resource.proxmox?.memoryCache ?? 0;
       return {
         ...base,
+        // buildMetric derives free as total-used (available); carve the
+        // reclaimable cache back out so free means truly-free pages.
+        free: Math.max(0, base.free - cache),
+        cache,
         swapUsed: resource.proxmox?.swapUsed ?? 0,
         swapTotal: resource.proxmox?.swapTotal ?? 0,
         balloon: resource.proxmox?.balloon ?? 0,

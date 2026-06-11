@@ -71,6 +71,9 @@ type Alert struct {
 	Acknowledged    bool       `json:"acknowledged"`
 	AckTime         *time.Time `json:"ackTime,omitempty"`
 	AckUser         string     `json:"ackUser,omitempty"`
+	// Metadata carries alert-engine annotations (notably resourceType) so the
+	// frontend can classify an alert without re-deriving resource identity.
+	Metadata map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // ResolvedAlert represents a recently resolved alert
@@ -2649,9 +2652,11 @@ type PMGQueueStatus struct {
 
 // Memory represents memory usage
 type Memory struct {
-	Total     int64   `json:"total"`
-	Used      int64   `json:"used"`
-	Free      int64   `json:"free"`
+	Total int64 `json:"total"`
+	Used  int64 `json:"used"`
+	Free  int64 `json:"free"`
+	// Reclaimable buff/cache (available - truly free); used + cache + free ≈ total.
+	Cache     int64   `json:"cache,omitempty"`
 	Usage     float64 `json:"usage"`
 	Balloon   int64   `json:"balloon,omitempty"`
 	SwapUsed  int64   `json:"swapUsed,omitempty"`

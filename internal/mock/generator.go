@@ -873,7 +873,10 @@ func generateNode(name string, highLoad bool, config MockConfig) models.Node {
 		Memory: models.Memory{
 			Total: totalMem * 1024 * 1024 * 1024, // Convert to bytes
 			Used:  usedMem * 1024 * 1024 * 1024,
-			Free:  (totalMem - usedMem) * 1024 * 1024 * 1024,
+			// Roughly a third of the non-used pages read as reclaimable
+			// buff/cache so the node memory split is exercisable in mock mode.
+			Cache: (totalMem - usedMem) / 3 * 1024 * 1024 * 1024,
+			Free:  ((totalMem - usedMem) - (totalMem-usedMem)/3) * 1024 * 1024 * 1024,
 			Usage: float64(usedMem) / float64(totalMem) * 100,
 		},
 		Disk: models.Disk{
@@ -1115,6 +1118,12 @@ func generateVM(nodeName string, instance string, vmid int, config MockConfig) m
 			Balloon:   balloon,
 			SwapTotal: swapTotal,
 			SwapUsed:  swapUsed,
+		}
+		// Carve reclaimable buff/cache out of the free pages so the
+		// used | cache | free memory split is exercisable in mock mode.
+		if mem.Free > 0 {
+			mem.Cache = int64(float64(mem.Free) * (0.2 + rand.Float64()*0.4))
+			mem.Free -= mem.Cache
 		}
 		uptime = int64(3600 * (1 + rand.Intn(720))) // 1-720 hours
 	}

@@ -246,6 +246,14 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
       )}`,
     },
     { label: 'Total', value: formatBytes(props.node.memory?.total || 0) },
+    ...(props.node.memory?.cache
+      ? [
+          {
+            label: 'Reclaimable cache',
+            value: formatBytes(props.node.memory.cache),
+          } satisfies NodeOverviewRow,
+        ]
+      : []),
     { label: 'Free', value: formatBytes(props.node.memory?.free || 0) },
     ...(props.node.memory?.swapTotal
       ? [

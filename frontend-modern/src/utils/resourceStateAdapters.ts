@@ -774,10 +774,18 @@ export const mergeCanonicalResourceSnapshot = (
   );
 };
 
-const buildMemory = (metric: Resource['memory'], fallback?: Record<string, unknown>): Memory => {
+const buildMemory = (
+  metric: Resource['memory'],
+  fallback?: Record<string, unknown>,
+  proxmoxMeta?: Record<string, unknown>,
+): Memory => {
   const total = metric?.total ?? asNumber(fallback?.total) ?? 0;
   const used = metric?.used ?? asNumber(fallback?.used) ?? 0;
-  const free = metric?.free ?? asNumber(fallback?.free) ?? Math.max(total - used, 0);
+  const cache = asNumber(proxmoxMeta?.memoryCache) ?? asNumber(fallback?.cache) ?? 0;
+  // The metric ships no free bytes for PVE payloads; total-used is the
+  // reclaimable-inclusive available, so carve the cache back out when known.
+  const free =
+    metric?.free ?? asNumber(fallback?.free) ?? Math.max(total - used - cache, 0);
   const usage =
     metric?.current ?? (total > 0 ? (used / total) * 100 : (asNumber(fallback?.usage) ?? 0));
   return {
@@ -785,8 +793,9 @@ const buildMemory = (metric: Resource['memory'], fallback?: Record<string, unkno
     used,
     free,
     usage,
-    swapUsed: asNumber(fallback?.swapUsed),
-    swapTotal: asNumber(fallback?.swapTotal),
+    cache: cache > 0 ? cache : undefined,
+    swapUsed: asNumber(proxmoxMeta?.swapUsed) ?? asNumber(fallback?.swapUsed),
+    swapTotal: asNumber(proxmoxMeta?.swapTotal) ?? asNumber(fallback?.swapTotal),
     balloon: asNumber(fallback?.balloon),
   };
 };
@@ -933,7 +942,7 @@ export const nodeFromResource = (resource: Resource): Node | null => {
     status: resource.status || 'unknown',
     type: resource.type,
     cpu: resource.cpu?.current ?? 0,
-    memory: buildMemory(resource.memory, asRecord(proxmox?.memory)),
+    memory: buildMemory(resource.memory, asRecord(proxmox?.memory), proxmox),
     disk: buildDisk(resource.disk, asRecord(proxmox?.disk)),
     networkIn: resource.network?.rxBytes,
     networkOut: resource.network?.txBytes,

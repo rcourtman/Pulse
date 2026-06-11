@@ -332,6 +332,9 @@ func (m *Monitor) buildVMFromClusterResource(
 	if memory.Used > memory.Total {
 		memory.Used = memory.Total
 	}
+	// Free above is total-used, i.e. available. When the guest reported its
+	// truly-free pages (meminfo), split the reclaimable cache back out.
+	splitReclaimableMemory(&memory, state.guestRaw.MemInfoFree)
 	if state.detailedStatus != nil && state.detailedStatus.Balloon > 0 {
 		memory.Balloon = int64(state.detailedStatus.Balloon)
 	}
