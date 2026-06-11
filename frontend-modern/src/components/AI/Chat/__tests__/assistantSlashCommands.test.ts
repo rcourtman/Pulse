@@ -218,6 +218,23 @@ describe('assistantSlashCommands', () => {
     );
   });
 
+  it('drops the availability reason hint on enabled commands', () => {
+    const commands = filterAssistantSlashCommands('compact', undefined, {
+      availability: {
+        compact: {
+          disabled: false,
+          // The availability map always computes a fall-through reason; an
+          // enabled command must not display it as a false statement.
+          reason: 'Unavailable while another session action is running.',
+        },
+      },
+    });
+
+    expect(commands).toHaveLength(1);
+    expect(commands[0].disabled).toBe(false);
+    expect(commands[0].disabledReason).toBeUndefined();
+  });
+
   it('exposes canonical and alias tokens for the picker', () => {
     const help = filterAssistantSlashCommands('commands')[0];
     expect(getAssistantSlashCommandTokens(help)).toEqual(['help', 'commands']);

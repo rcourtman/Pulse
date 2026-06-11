@@ -248,7 +248,10 @@ const commandWithAvailability = (
   return {
     ...command,
     disabled: state.disabled,
-    disabledReason: state.reason,
+    // The availability map computes a fall-through reason even when the
+    // command is enabled; carrying it through made the menu show false
+    // statements like "Forking is already running." on enabled commands.
+    disabledReason: state.disabled ? state.reason : undefined,
   };
 };
 
