@@ -608,6 +608,19 @@ export const PendingToolBlock: Component<PendingToolBlockProps> = (props) => {
     if (!preview || summary.startsWith('$ ') || preview === summary) return '';
     return preview;
   });
+  // While the model is still streaming the tool arguments the raw input is
+  // partial JSON that no parser can summarize yet. Show its live tail (the
+  // OpenCode mutable tool-part pattern: you watch the call being written)
+  // instead of leaving only the generic placeholder.
+  const formingArgsPreview = createMemo(() => {
+    if (commandPreview()) return '';
+    if (!isPlaceholderToolInputSummary(parsedInputSummary())) return '';
+    const raw = (props.tool.rawInput || '').replace(/\s+/g, ' ').trim();
+    if (!raw) return '';
+    const maxChars = 120;
+    if (raw.length <= maxChars) return raw;
+    return '…' + raw.slice(raw.length - maxChars);
+  });
   const status = createMemo(() => props.tool.status || 'pending');
   const [now, setNow] = createSignal(Date.now());
   const statusLabel = createMemo(() => {
@@ -695,6 +708,14 @@ export const PendingToolBlock: Component<PendingToolBlockProps> = (props) => {
             <ToolInputSummary summary={inputSummary()} />
             <Show when={commandPreview()}>
               <ToolCommandPreview preview={commandPreview()} />
+            </Show>
+            <Show when={formingArgsPreview()}>
+              <div
+                class="mt-1 min-w-0 font-mono text-[10px] leading-snug text-muted"
+                aria-label="Tool input streaming"
+              >
+                <span class="block truncate">{formingArgsPreview()}</span>
+              </div>
             </Show>
           </div>
         </div>

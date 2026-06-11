@@ -818,6 +818,53 @@ describe('PendingToolBlock', () => {
     expect(screen.getByText('df -h')).toBeInTheDocument();
   });
 
+  it('streams forming raw args into the pending row while they are unparsable', () => {
+    // Mid-stream tool args are partial JSON: no summary or command preview
+    // can parse yet, so the row must show the live raw tail instead of only
+    // the generic placeholder.
+    render(() => (
+      <PendingToolBlock
+        tool={makePending({
+          name: 'pulse_query',
+          input: '',
+          rawInput: '{"action":"topology","summary_on',
+          status: 'pending',
+        })}
+      />
+    ));
+    expect(screen.getByLabelText('Tool input streaming')).toHaveTextContent(
+      '{"action":"topology","summary_on',
+    );
+  });
+
+  it('shows the tail of long forming raw args', () => {
+    const head = '{"action":"exec","command":"';
+    const tail = 'x'.repeat(130);
+    render(() => (
+      <PendingToolBlock
+        tool={makePending({ name: 'pulse_query', input: '', rawInput: head + tail, status: 'pending' })}
+      />
+    ));
+    const preview = screen.getByLabelText('Tool input streaming');
+    expect(preview.textContent).toMatch(/^…/);
+    expect(preview.textContent).toContain('xxx');
+    expect(preview.textContent!.length).toBeLessThanOrEqual(121);
+  });
+
+  it('does not show the forming-args preview once the input parses to a summary', () => {
+    render(() => (
+      <PendingToolBlock
+        tool={makePending({
+          name: 'pulse_query',
+          input: '{"action":"topology"}',
+          rawInput: '{"action":"topology"}',
+          status: 'running',
+        })}
+      />
+    ));
+    expect(screen.queryByLabelText('Tool input streaming')).not.toBeInTheDocument();
+  });
+
   it('truncates input summaries longer than 28 chars', () => {
     const longInput = 'B'.repeat(55);
     render(() => <PendingToolBlock tool={makePending({ input: longInput })} />);
