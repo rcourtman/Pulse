@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
@@ -53,25 +52,21 @@ func TestLogHandlers_HandleStreamLogs_RequiresFlusher(t *testing.T) {
 
 func TestLogHandlers_HandleStreamLogs_SendsEvents(t *testing.T) {
 	handler := NewLogHandlers(&config.Config{}, nil)
+
+	// The global broadcaster is shared with every concurrently running test,
+	// so live-channel delivery cannot be asserted without racing their log
+	// traffic (full subscriber channels drop messages). Write the line first
+	// and rely on Subscribe's history replay, which the handler performs
+	// before its live loop; a pre-cancelled context then makes the handler
+	// return synchronously after the replay.
+	_, _ = logging.GetBroadcaster().Write([]byte("test-log-line"))
+
 	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
 	req := httptest.NewRequest(http.MethodGet, "/api/logs/stream", nil).WithContext(ctx)
 	rr := httptest.NewRecorder()
 
-	done := make(chan struct{})
-	go func() {
-		handler.HandleStreamLogs(rr, req)
-		close(done)
-	}()
-
-	_, _ = logging.GetBroadcaster().Write([]byte("test-log-line"))
-	time.Sleep(10 * time.Millisecond)
-	cancel()
-
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timeout waiting for stream handler to finish")
-	}
+	handler.HandleStreamLogs(rr, req)
 
 	body := rr.Body.String()
 	if !strings.Contains(body, "data:") {
