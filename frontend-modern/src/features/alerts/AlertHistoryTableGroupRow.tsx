@@ -33,7 +33,7 @@ function getGroupSummaryLabel(group: AlertHistoryGroup) {
 export function AlertHistoryTableGroupRow(props: AlertHistoryTableGroupRowProps) {
   return (
     <TableRow class={getGroupedTableRowClass()}>
-      <TableCell colspan={10} class={getGroupedTableRowCellClass()}>
+      <TableCell colspan={9} class={getGroupedTableRowCellClass()}>
         <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
           <span class="truncate" title={props.group.fullLabel}>
             {props.group.label}

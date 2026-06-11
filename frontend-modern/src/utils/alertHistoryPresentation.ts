@@ -1,25 +1,3 @@
-export interface AlertHistorySourcePresentation {
-  label: string;
-  className: string;
-}
-
-export function getAlertHistorySourcePresentation(source?: string | null): AlertHistorySourcePresentation {
-  const normalized = (source ?? '').trim().toLowerCase();
-  if (normalized === 'ai') {
-    return {
-      label: 'Patrol',
-      className:
-        'text-[10px] px-1.5 py-0.5 rounded font-medium bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300',
-    };
-  }
-
-  return {
-    label: 'Alert',
-    className:
-      'text-[10px] px-1.5 py-0.5 rounded font-medium bg-sky-100 dark:bg-sky-900 text-sky-700 dark:text-sky-300',
-  };
-}
-
 export function getAlertHistoryResourceTypeBadgeClass(resourceType?: string | null): string {
   const normalized = (resourceType ?? '').trim().toLowerCase();
 
@@ -27,7 +5,7 @@ export function getAlertHistoryResourceTypeBadgeClass(resourceType?: string | nu
     return 'text-xs px-1 py-0.5 rounded bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300';
   }
 
-  if (normalized === 'container' || normalized === 'ct') {
+  if (normalized === 'container' || normalized === 'ct' || normalized === 'lxc') {
     return 'text-xs px-1 py-0.5 rounded bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300';
   }
 

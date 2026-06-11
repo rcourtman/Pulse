@@ -32,18 +32,13 @@ export function AlertHistoryTableSection(props: AlertHistoryTableSectionProps) {
           }
         >
           <TableCard class="mb-2">
-            <Table class="w-full text-[11px] sm:text-sm">
+            <Table class="w-full min-w-[800px] text-[11px] sm:text-sm">
               <TableHeader>
                 <TableRow class="border-b border-border bg-surface-hover text-muted">
                   <TableHead
                     class={`${getPlatformTableHeadClassForKind('text')} text-[10px] font-medium uppercase tracking-wider sm:text-xs`}
                   >
                     Timestamp
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('badge')} text-[10px] font-medium uppercase tracking-wider sm:text-xs`}
-                  >
-                    Source
                   </TableHead>
                   <TableHead
                     class={`${getPlatformTableHeadClassForKind('name')} text-[10px] font-medium uppercase tracking-wider sm:text-xs`}
@@ -66,17 +61,17 @@ export function AlertHistoryTableSection(props: AlertHistoryTableSectionProps) {
                     Message
                   </TableHead>
                   <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden text-[10px] font-medium uppercase tracking-wider lg:table-cell sm:text-xs`}
+                    class={`${getPlatformTableHeadClassForKind('numeric-value')} text-[10px] font-medium uppercase tracking-wider sm:text-xs`}
                   >
                     Duration
                   </TableHead>
                   <TableHead
-                    class={`${getPlatformTableHeadClassForKind('badge')} hidden text-[10px] font-medium uppercase tracking-wider lg:table-cell sm:text-xs`}
+                    class={`${getPlatformTableHeadClassForKind('badge')} text-[10px] font-medium uppercase tracking-wider sm:text-xs`}
                   >
                     Status
                   </TableHead>
                   <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden text-[10px] font-medium uppercase tracking-wider lg:table-cell sm:text-xs`}
+                    class={`${getPlatformTableHeadClassForKind('text')} text-[10px] font-medium uppercase tracking-wider sm:text-xs`}
                   >
                     Node
                   </TableHead>

@@ -53,7 +53,11 @@ export function useAlertOverviewState(props: UseAlertOverviewStateProps) {
         if (a.acknowledged !== b.acknowledged) {
           return a.acknowledged ? 1 : -1;
         }
-        return new Date(b.startTime).getTime() - new Date(a.startTime).getTime();
+        const timeDiff = new Date(b.startTime).getTime() - new Date(a.startTime).getTime();
+        if (timeDiff !== 0) return timeDiff;
+        // Stable id tiebreaker: alerts fired in the same polling cycle share a
+        // startTime and would otherwise scramble visually on re-render (#1218).
+        return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
       }),
   );
 

@@ -116,4 +116,24 @@ describe('useAlertOverviewState', () => {
     );
     expect(notificationStore.error).toHaveBeenCalledWith('Failed to acknowledge 1 alert.');
   });
+
+  it('keeps a stable id order for alerts sharing a startTime (#1218)', () => {
+    const sharedStart = new Date(Date.now() - 60_000).toISOString();
+    const [activeAlerts] = createSignal<Record<string, Alert>>({
+      zeta: makeAlert('zeta', sharedStart),
+      alpha: makeAlert('alpha', sharedStart),
+      mid: makeAlert('mid', sharedStart),
+    });
+
+    const { result } = renderHook(() =>
+      useAlertOverviewState({
+        activeAlerts,
+        overrides: () => [],
+        showAcknowledged: () => true,
+        updateAlert: vi.fn(),
+      }),
+    );
+
+    expect(result.filteredAlerts().map((alert) => alert.id)).toEqual(['alpha', 'mid', 'zeta']);
+  });
 });

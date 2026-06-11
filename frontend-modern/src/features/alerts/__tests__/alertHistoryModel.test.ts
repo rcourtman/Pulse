@@ -4,12 +4,14 @@ import type { Alert } from '@/types/api';
 import type { Resource } from '@/types/resource';
 
 import {
+  applyAlertHistoryWindow,
   buildAlertHistoryItems,
   buildAlertHistoryParams,
   buildAlertTrends,
   buildSelectedBucketDetails,
   formatAlertHistoryDuration,
   getAlertBucketDurationLabel,
+  type HistoryItem,
 } from '../alertHistoryModel';
 
 describe('alertHistoryModel', () => {
@@ -94,5 +96,27 @@ describe('alertHistoryModel', () => {
     const details = buildSelectedBucketDetails(1, trends, 'en-GB');
     expect(details).not.toBeNull();
     expect(details?.rangeLabel).toContain('Mar');
+  });
+
+  it('keeps a stable id order for alerts sharing a startTime (#1218)', () => {
+    const sharedStart = '2026-03-22T09:00:00.000Z';
+    const items = [
+      { id: 'zeta', startTime: sharedStart },
+      { id: 'alpha', startTime: sharedStart },
+      { id: 'newest', startTime: '2026-03-22T09:30:00.000Z' },
+      { id: 'mid', startTime: sharedStart },
+    ] as HistoryItem[];
+    const now = Date.UTC(2026, 2, 22, 10, 0, 0);
+    const trends = buildAlertTrends(items, '24h', now);
+
+    const sorted = applyAlertHistoryWindow({
+      filteredItems: items,
+      timeFilter: '24h',
+      selectedBarIndex: null,
+      trends,
+      now,
+    });
+
+    expect(sorted.map((item) => item.id)).toEqual(['newest', 'alpha', 'mid', 'zeta']);
   });
 });

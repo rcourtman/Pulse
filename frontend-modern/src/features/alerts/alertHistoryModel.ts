@@ -375,9 +375,13 @@ export function applyAlertHistoryWindow({
     }
   }
 
-  return [...filtered].sort(
-    (a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime(),
-  );
+  // Stable id tiebreaker: alerts fired in the same polling cycle share a
+  // startTime and would otherwise scramble visually on re-render (#1218).
+  return [...filtered].sort((a, b) => {
+    const timeDiff = new Date(b.startTime).getTime() - new Date(a.startTime).getTime();
+    if (timeDiff !== 0) return timeDiff;
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  });
 }
 
 const MONTH_NAMES = [

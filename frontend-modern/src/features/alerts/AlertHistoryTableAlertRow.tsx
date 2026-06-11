@@ -4,10 +4,7 @@ import { IncidentTimelinePanel } from '@/components/Alerts/IncidentTimelinePanel
 import { InvestigateAlertButton } from '@/components/Alerts/InvestigateAlertButton';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { getPlatformTableCellClassForKind } from '@/features/platformPage/sharedPlatformPage';
-import {
-  getAlertHistoryResourceTypeBadgeClass,
-  getAlertHistorySourcePresentation,
-} from '@/utils/alertHistoryPresentation';
+import { getAlertHistoryResourceTypeBadgeClass } from '@/utils/alertHistoryPresentation';
 import {
   getAlertHistoryStatusPresentation,
   getAlertIncidentLevelBadgeClass,
@@ -26,7 +23,6 @@ interface AlertHistoryTableAlertRowProps {
 export function AlertHistoryTableAlertRow(props: AlertHistoryTableAlertRowProps) {
   const rowKey = () => props.state.getIncidentRowKey(props.alert);
   const historyStatusPresentation = () => getAlertHistoryStatusPresentation(props.alert.status);
-  const sourcePresentation = () => getAlertHistorySourcePresentation(props.alert.source);
 
   return (
     <>
@@ -42,10 +38,6 @@ export function AlertHistoryTableAlertRow(props: AlertHistoryTableAlertRowProps)
           })}
         </TableCell>
 
-        <TableCell class={getPlatformTableCellClassForKind('badge')}>
-          <span class={sourcePresentation().className}>{sourcePresentation().label}</span>
-        </TableCell>
-
         <TableCell
           class={`${getPlatformTableCellClassForKind('name')} max-w-[150px] truncate font-medium text-base-content`}
           title={props.alert.resourceName}
@@ -54,8 +46,11 @@ export function AlertHistoryTableAlertRow(props: AlertHistoryTableAlertRowProps)
         </TableCell>
 
         <TableCell class={getPlatformTableCellClassForKind('badge')}>
-          <span class={getAlertHistoryResourceTypeBadgeClass(props.alert.resourceType)}>
-            {props.alert.resourceType}
+          <span
+            class={getAlertHistoryResourceTypeBadgeClass(props.alert.resourceType)}
+            title={props.alert.resourceType}
+          >
+            {props.alert.title}
           </span>
         </TableCell>
 
@@ -72,20 +67,18 @@ export function AlertHistoryTableAlertRow(props: AlertHistoryTableAlertRowProps)
           {props.alert.description}
         </TableCell>
 
-        <TableCell
-          class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-muted lg:table-cell`}
-        >
+        <TableCell class={`${getPlatformTableCellClassForKind('numeric-value')} text-muted`}>
           {props.alert.duration}
         </TableCell>
 
-        <TableCell class={`${getPlatformTableCellClassForKind('badge')} hidden lg:table-cell`}>
+        <TableCell class={getPlatformTableCellClassForKind('badge')}>
           <span class={historyStatusPresentation().className}>
             {historyStatusPresentation().label}
           </span>
         </TableCell>
 
         <TableCell
-          class={`${getPlatformTableCellClassForKind('text')} hidden truncate text-muted lg:table-cell`}
+          class={`${getPlatformTableCellClassForKind('text')} truncate text-muted`}
           title={props.alert.nodeDisplayName || props.alert.node || ''}
         >
           {props.alert.nodeDisplayName || props.alert.node || '—'}
@@ -157,7 +150,7 @@ export function AlertHistoryTableAlertRow(props: AlertHistoryTableAlertRowProps)
 
       <Show when={props.alert.source === 'alert' && props.state.expandedIncidents().has(rowKey())}>
         <TableRow class="border-b border-border bg-surface-alt">
-          <TableCell colspan={11} class="p-3">
+          <TableCell colspan={9} class="p-3">
             <IncidentTimelinePanel
               loading={props.state.incidentLoading()[rowKey()]}
               error={props.state.incidentErrors()[rowKey()]}

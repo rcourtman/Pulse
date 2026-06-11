@@ -2823,7 +2823,6 @@ describe('frontend resource type boundaries', () => {
     expect(alertHistoryTableSectionSource).not.toContain('InvestigateAlertButton');
     expect(alertHistoryTableGroupRowSource).toContain('getGroupSummaryLabel');
     expect(alertHistoryTableAlertRowSource).toContain('getAlertHistoryStatusPresentation');
-    expect(alertHistoryTableAlertRowSource).toContain('getAlertHistorySourcePresentation');
     expect(alertHistoryTableAlertRowSource).toContain('getAlertHistoryResourceTypeBadgeClass');
     expect(alertHistoryTableAlertRowSource).toContain('IncidentTimelinePanel');
     expect(alertHistoryTableAlertRowSource).toContain('InvestigateAlertButton');
@@ -3211,9 +3210,6 @@ describe('frontend resource type boundaries', () => {
     );
     expect(alertIncidentPresentationSource).toContain(
       'export function getAlertHistoryStatusPresentation',
-    );
-    expect(alertHistoryPresentationSource).toContain(
-      'export function getAlertHistorySourcePresentation',
     );
     expect(alertHistoryPresentationSource).toContain(
       'export function getAlertHistoryResourceTypeBadgeClass',
