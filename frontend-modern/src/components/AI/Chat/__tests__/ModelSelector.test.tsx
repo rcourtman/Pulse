@@ -754,7 +754,7 @@ describe('ModelSelector', () => {
 
   // --- Model name display ---
 
-  it('falls back to model ID segment when name is not provided', () => {
+  it('falls back to a humanized provider route label when name is not provided', () => {
     const models = [makeModel({ id: 'anthropic:claude-test', name: '', notable: true })];
     render(() => (
       <ModelSelector
@@ -764,9 +764,7 @@ describe('ModelSelector', () => {
       />
     ));
 
-    // selectedLabel should use id.split(':').pop() when name is empty but match exists
-    // Actually, empty name returns falsy, so it falls to id.split(':').pop()
-    expect(screen.getByText('claude-test')).toBeInTheDocument();
+    expect(screen.getByText('Anthropic: Claude Test')).toBeInTheDocument();
   });
 
   // --- Empty models list ---

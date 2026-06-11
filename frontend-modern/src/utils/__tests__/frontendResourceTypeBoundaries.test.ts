@@ -184,6 +184,8 @@ import resourceCorrelationPresentationSource from '@/utils/resourceCorrelationPr
 import confidencePresentationSource from '@/utils/confidencePresentation.ts?raw';
 import textPresentationSource from '@/utils/textPresentation.ts?raw';
 import messageItemSource from '@/components/AI/Chat/MessageItem.tsx?raw';
+import activeTurnStatusSource from '@/components/AI/Chat/activeTurnStatus.ts?raw';
+import toolPresentationSource from '@/components/AI/Chat/toolPresentation.ts?raw';
 import toolExecutionBlockSource from '@/components/AI/Chat/ToolExecutionBlock.tsx?raw';
 import aiChatSource from '@/components/AI/Chat/index.tsx?raw';
 import useChatSource from '@/components/AI/Chat/hooks/useChat.ts?raw';
@@ -481,6 +483,7 @@ import patrolRunPresentationSource from '@/utils/patrolRunPresentation.ts?raw';
 import patrolSummaryPresentationSource from '@/utils/patrolSummaryPresentation.ts?raw';
 import aiCostDashboardSource from '@/components/AI/AICostDashboard.tsx?raw';
 import modelSelectorSource from '@/components/AI/Chat/ModelSelector.tsx?raw';
+import aiModelPickerSource from '@/components/shared/AIModelPicker.tsx?raw';
 import remediationStatusSource from '@/components/patrol/RemediationStatus.tsx?raw';
 import remediationPresentationSource from '@/utils/remediationPresentation.ts?raw';
 import aiChatPresentationSource from '@/utils/aiChatPresentation.ts?raw';
@@ -2137,8 +2140,8 @@ describe('frontend resource type boundaries', () => {
     expect(k8sDeploymentsDrawerSource).not.toContain(
       "const normalize = (value?: string | null) => (value || '').trim();",
     );
-    expect(messageItemSource).toContain('formatIdentifierLabel');
-    expect(toolExecutionBlockSource).toContain('formatIdentifierLabel');
+    expect(activeTurnStatusSource).toContain('formatIdentifierLabel');
+    expect(toolPresentationSource).toContain('formatIdentifierLabel');
     expect(aiChatSource).toContain('formatIdentifierLabel');
     expect(patrolStatusBarSource).toContain('formatTriggerReason');
     expect(findingsPanelSource).toContain('formatIdentifierLabel');
@@ -3718,7 +3721,8 @@ describe('frontend resource type boundaries', () => {
     expect(aiCostPresentationSource).toContain(
       'export function getAICostExportHistoryErrorMessage',
     );
-    expect(modelSelectorSource).toContain('AI_CHAT_MODEL_SELECTOR_EMPTY_STATE');
+    expect(aiModelPickerSource).toContain('AI_CHAT_MODEL_SELECTOR_EMPTY_STATE');
+    expect(aiModelPickerSource).not.toContain('No matching models.');
     expect(modelSelectorSource).not.toContain('No matching models.');
     expect(aiChatPresentationSource).toContain('export const AI_CHAT_MODEL_SELECTOR_EMPTY_STATE');
     expect(aiChatPresentationSource).toContain('export const AI_CHAT_SESSION_EMPTY_STATE');
