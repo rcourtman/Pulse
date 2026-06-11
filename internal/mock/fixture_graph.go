@@ -87,6 +87,8 @@ func (g *FixtureGraph) UpdateAlertSnapshots(active []alerts.Alert, resolved []mo
 			Threshold:    alert.Threshold,
 			StartTime:    alert.StartTime,
 			Acknowledged: alert.Acknowledged,
+			// GetActiveAlerts returns deep clones, so the map is already private.
+			Metadata: alert.Metadata,
 		})
 	}
 

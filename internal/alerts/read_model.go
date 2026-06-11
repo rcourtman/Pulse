@@ -283,6 +283,8 @@ func (m *Manager) GetRecentlyResolved() []models.ResolvedAlert {
 				Threshold:    exported.Threshold,
 				StartTime:    exported.StartTime,
 				Acknowledged: exported.Acknowledged,
+				// exported is a deep clone, so the map is already private.
+				Metadata: exported.Metadata,
 			},
 			ResolvedTime: alert.ResolvedTime,
 		})

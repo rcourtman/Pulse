@@ -1165,6 +1165,12 @@ func clonePerformance(src Performance) Performance {
 func cloneAlert(src Alert) Alert {
 	dest := src
 	dest.AckTime = cloneTimePtr(src.AckTime)
+	if src.Metadata != nil {
+		dest.Metadata = make(map[string]interface{}, len(src.Metadata))
+		for k, v := range src.Metadata {
+			dest.Metadata[k] = v
+		}
+	}
 	return dest
 }
 

@@ -5,7 +5,14 @@ export function getAlertHistoryResourceTypeBadgeClass(resourceType?: string | nu
     return 'text-xs px-1 py-0.5 rounded bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300';
   }
 
-  if (normalized === 'container' || normalized === 'ct' || normalized === 'lxc') {
+  // 'system-container' is the unified-model name the v6 alert engine stamps
+  // for LXC guests (guest_snapshot.go resourceType()).
+  if (
+    normalized === 'container' ||
+    normalized === 'ct' ||
+    normalized === 'lxc' ||
+    normalized === 'system-container'
+  ) {
     return 'text-xs px-1 py-0.5 rounded bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300';
   }
 

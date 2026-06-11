@@ -75,17 +75,18 @@ func buildAlertHistory(nodes []models.Node, vms []models.VM, containers []models
 			// Pick random alert type
 			alertType := alertTypes[rand.Intn(len(alertTypes))]
 
-			// Pick random resource
-			var resourceName, resourceID, node string
-			resourceType := rand.Intn(3)
+			// Pick random resource. resourceType uses the same vocabulary the
+			// real alert engine stamps into metadata (node.go, guest_snapshot.go).
+			var resourceName, resourceID, node, resourceType string
 
-			switch resourceType {
+			switch rand.Intn(3) {
 			case 0: // Node alert
 				if len(nodes) > 0 {
 					selectedNode := nodes[rand.Intn(len(nodes))]
 					resourceName = selectedNode.Name
 					resourceID = selectedNode.ID
 					node = selectedNode.Name
+					resourceType = "node"
 				}
 			case 1: // VM alert
 				if len(vms) > 0 {
@@ -93,6 +94,7 @@ func buildAlertHistory(nodes []models.Node, vms []models.VM, containers []models
 					resourceName = vm.Name
 					resourceID = vm.ID
 					node = vm.Node
+					resourceType = "vm"
 				}
 			case 2: // Container alert
 				if len(containers) > 0 {
@@ -100,6 +102,7 @@ func buildAlertHistory(nodes []models.Node, vms []models.VM, containers []models
 					resourceName = selectedContainer.Name
 					resourceID = selectedContainer.ID
 					node = selectedContainer.Node
+					resourceType = "system-container"
 				}
 			}
 
@@ -133,6 +136,9 @@ func buildAlertHistory(nodes []models.Node, vms []models.VM, containers []models
 				Message:      msg,
 				StartTime:    startTime,
 				Acknowledged: false, // Historical alerts are not acknowledged
+			}
+			if resourceType != "" {
+				alert.Metadata = map[string]interface{}{"resourceType": resourceType}
 			}
 
 			// Add threshold values for threshold alerts
@@ -177,6 +183,9 @@ func buildAlertHistory(nodes []models.Node, vms []models.VM, containers []models
 			Message:      msg,
 			StartTime:    startTime,
 			Acknowledged: false,
+		}
+		if resourceName != "" {
+			alert.Metadata = map[string]interface{}{"resourceType": "node"}
 		}
 
 		if alertType.alertType == "threshold" {
