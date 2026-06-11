@@ -118,8 +118,8 @@ describe('HistoryChart', () => {
     expect(screen.getByText('History')).toBeInTheDocument();
   });
 
-  it('exposes the Relay history range as a first-class chart option', () => {
-    expect(HISTORY_CHART_RANGES).toEqual(['24h', '7d', '14d', '30d', '90d']);
+  it('exposes the sub-day and Relay history ranges as first-class chart options', () => {
+    expect(HISTORY_CHART_RANGES).toEqual(['1h', '6h', '12h', '24h', '7d', '14d', '30d', '90d']);
   });
 
   it('positions the tooltip beside the hovered point when there is chart space', () => {

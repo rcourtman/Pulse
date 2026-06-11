@@ -31,7 +31,16 @@ export interface HistoryChartTooltipLayout {
   height: number;
 }
 
-export const HISTORY_CHART_RANGES: HistoryTimeRange[] = ['24h', '7d', '14d', '30d', '90d'];
+export const HISTORY_CHART_RANGES: HistoryTimeRange[] = [
+  '1h',
+  '6h',
+  '12h',
+  '24h',
+  '7d',
+  '14d',
+  '30d',
+  '90d',
+];
 
 export function formatHistoryChartTooltipValue(value: number, unit?: string): string {
   if (unit === '%') return `${value.toFixed(1)}%`;

@@ -74,6 +74,12 @@ const EMPTY_HISTORY_RESPONSE: AllMetricsHistoryResponse = {
 
 const formatRangeLabel = (range: HistoryTimeRange): string => {
   switch (range) {
+    case '1h':
+      return '1 hour';
+    case '6h':
+      return '6 hours';
+    case '12h':
+      return '12 hours';
     case '24h':
       return '24 hours';
     case '7d':
