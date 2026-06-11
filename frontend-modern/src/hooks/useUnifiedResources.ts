@@ -319,6 +319,7 @@ type APIResource = {
     nodes?: string[];
     pool?: string;
     path?: string;
+    zfsPool?: unknown;
     zfsPoolState?: string;
     zfsReadErrors?: number;
     zfsWriteErrors?: number;

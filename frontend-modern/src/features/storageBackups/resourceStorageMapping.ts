@@ -1,4 +1,5 @@
 import type { Resource } from '@/types/resource';
+import type { ZFSPool } from '@/types/api';
 import type { StorageCapability, StorageCategory } from './models';
 
 export type ResourceStorageMeta = {
@@ -19,6 +20,7 @@ export type ResourceStorageMeta = {
   numMissing?: number;
   isCeph?: boolean;
   isZfs?: boolean;
+  zfsPool?: ZFSPool;
 };
 
 type ResourceWithStorageMeta = Resource & {
@@ -65,6 +67,10 @@ const normalizeStorageMeta = (value: unknown): ResourceStorageMeta | null => {
     numMissing: typeof candidate.numMissing === 'number' ? candidate.numMissing : undefined,
     isCeph: typeof candidate.isCeph === 'boolean' ? candidate.isCeph : undefined,
     isZfs: typeof candidate.isZfs === 'boolean' ? candidate.isZfs : undefined,
+    zfsPool:
+      candidate.zfsPool && typeof candidate.zfsPool === 'object'
+        ? (candidate.zfsPool as ResourceStorageMeta['zfsPool'])
+        : undefined,
   };
 };
 

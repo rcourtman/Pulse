@@ -213,7 +213,7 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
       protection: storageMeta?.protection,
       isCeph: storageMeta?.isCeph,
       isZfs: storageMeta?.isZfs,
-      zfsPool: platformData.zfsPool,
+      zfsPool: storageMeta?.zfsPool ?? platformData.zfsPool,
       arrayState: storageMeta?.arrayState,
       syncAction: storageMeta?.syncAction,
       syncProgress: storageMeta?.syncProgress,

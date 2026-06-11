@@ -310,7 +310,12 @@ func TestResourceFromStorageDetectsZFSMetadata(t *testing.T) {
 		Active:   true,
 		ZFSPool: &models.ZFSPool{
 			Name:  "rpool",
-			State: "ONLINE",
+			State: "DEGRADED",
+			Scan:  "resilver in progress since Thu Jun 11 09:00:00 2026",
+			Devices: []models.ZFSDevice{
+				{Name: "sda2", Type: "disk", State: "ONLINE"},
+				{Name: "sdb2", Type: "disk", State: "FAULTED", ReadErrors: 3},
+			},
 		},
 	}
 
@@ -326,6 +331,22 @@ func TestResourceFromStorageDetectsZFSMetadata(t *testing.T) {
 	}
 	if resource.Storage.Shared {
 		t.Fatalf("expected shared=false")
+	}
+	pool := resource.Storage.ZFSPool
+	if pool == nil {
+		t.Fatal("expected full ZFS pool payload on storage metadata")
+	}
+	if pool.Scan != storage.ZFSPool.Scan {
+		t.Fatalf("zfs scan = %q, want %q", pool.Scan, storage.ZFSPool.Scan)
+	}
+	if len(pool.Devices) != 2 {
+		t.Fatalf("zfs devices = %d, want 2", len(pool.Devices))
+	}
+	if pool.Devices[1].State != "FAULTED" || pool.Devices[1].ReadErrors != 3 {
+		t.Fatalf("zfs device passthrough mismatch: %+v", pool.Devices[1])
+	}
+	if pool == storage.ZFSPool {
+		t.Fatal("expected ZFS pool to be copied, not aliased to the source pointer")
 	}
 }
 

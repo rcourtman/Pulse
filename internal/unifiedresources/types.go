@@ -390,10 +390,14 @@ type StorageMeta struct {
 	Path  string   `json:"path,omitempty"`  // local mount path on the node
 
 	// ZFS metadata (when IsZFS is true and the source provides details).
-	ZFSPoolState      string `json:"zfsPoolState,omitempty"`
-	ZFSReadErrors     int64  `json:"zfsReadErrors,omitempty"`
-	ZFSWriteErrors    int64  `json:"zfsWriteErrors,omitempty"`
-	ZFSChecksumErrors int64  `json:"zfsChecksumErrors,omitempty"`
+	// ZFSPool carries the full pool report (scan status, per-device states
+	// and error counts); the scalar fields below are the flattened summary
+	// kept for consumers that only need pool-level state.
+	ZFSPool           *models.ZFSPool `json:"zfsPool,omitempty"`
+	ZFSPoolState      string          `json:"zfsPoolState,omitempty"`
+	ZFSReadErrors     int64           `json:"zfsReadErrors,omitempty"`
+	ZFSWriteErrors    int64           `json:"zfsWriteErrors,omitempty"`
+	ZFSChecksumErrors int64           `json:"zfsChecksumErrors,omitempty"`
 
 	// Unraid metadata (when Platform is "unraid").
 	ArrayState   string  `json:"arrayState,omitempty"`

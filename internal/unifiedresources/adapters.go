@@ -1610,7 +1610,10 @@ func resourceFromStorage(storage models.Storage) (Resource, ResourceIdentity) {
 
 	zfsPoolState := ""
 	var zfsReadErrors, zfsWriteErrors, zfsChecksumErrors int64
+	var zfsPool *models.ZFSPool
 	if storage.ZFSPool != nil {
+		normalized := storage.ZFSPool.NormalizeCollections()
+		zfsPool = &normalized
 		zfsPoolState = strings.TrimSpace(storage.ZFSPool.State)
 		zfsReadErrors = storage.ZFSPool.ReadErrors
 		zfsWriteErrors = storage.ZFSPool.WriteErrors
@@ -1641,6 +1644,7 @@ func resourceFromStorage(storage models.Storage) (Resource, ResourceIdentity) {
 			Nodes:             append([]string(nil), storage.Nodes...),
 			Pool:              storage.Pool,
 			Path:              storage.Path,
+			ZFSPool:           zfsPool,
 			ZFSPoolState:      zfsPoolState,
 			ZFSReadErrors:     zfsReadErrors,
 			ZFSWriteErrors:    zfsWriteErrors,

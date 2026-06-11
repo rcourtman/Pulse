@@ -1475,7 +1475,11 @@ not a replacement status card, CTA band, or page-local nested card.
     must distinguish inventory datastores from backup repositories so VMware
     rows on the shared storage route stay canonical to the admitted phase-1 floor instead of
     reviving backup-target, protected-target, or recovery-local semantics on a
-    shared page.
+    shared page. Those presenters must also source ZFS pool health from the
+    canonical `details.zfsPool` payload (meta-first `storage.zfsPool`, flat
+    `platformData.zfsPool` fallback) when building pool detail and bar
+    summaries, rather than re-deriving device-level health from risk-reason
+    strings or presenting flattened pool-state scalars as the full report.
 30. Keep infrastructure settings-shell API alternatives on the shared shell
     contract. `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`,
     `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`, and

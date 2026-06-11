@@ -377,6 +377,43 @@ func TestCanonicalStorageMetadataPreservesBackingPoolField(t *testing.T) {
 	}
 }
 
+func TestCanonicalStorageMetadataCarriesFullZFSPoolReport(t *testing.T) {
+	requiredSnippets := map[string][]string{
+		"types.go": {
+			"ZFSPool           *models.ZFSPool `json:\"zfsPool,omitempty\"`",
+		},
+		"adapters.go": {
+			"normalized := storage.ZFSPool.NormalizeCollections()",
+			"ZFSPool:           zfsPool,",
+		},
+		filepath.Join("..", "monitoring", "monitor.go"): {
+			"payload[\"zfsPool\"] = storage.ZFSPool",
+		},
+		filepath.Join("..", "..", "frontend-modern", "src", "types", "resource.ts"): {
+			"zfsPool?: ZFSPool;",
+		},
+		filepath.Join("..", "..", "frontend-modern", "src", "hooks", "useUnifiedResources.ts"): {
+			"zfsPool?: unknown;",
+		},
+		filepath.Join("..", "..", "frontend-modern", "src", "features", "storageBackups", "storageAdapters.ts"): {
+			"zfsPool: storageMeta?.zfsPool ?? platformData.zfsPool,",
+		},
+	}
+
+	for path, snippets := range requiredSnippets {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", path, err)
+		}
+		source := string(data)
+		for _, snippet := range snippets {
+			if !strings.Contains(source, snippet) {
+				t.Fatalf("%s must contain %q", path, snippet)
+			}
+		}
+	}
+}
+
 func TestCephPoolsProjectThroughCanonicalStoragePath(t *testing.T) {
 	requiredSnippets := map[string][]string{
 		filepath.Join("..", "models", "models.go"): {

@@ -826,7 +826,13 @@ AI-only summary payloads, or page-local heuristics.
     `frontend-modern/src/hooks/useUnifiedResources.ts` must carry the
     provider-reported storage `pool` metadata alongside path and ZFS health so
     storage consumers do not have to recover backing-pool identity from names
-    or path heuristics.
+    or path heuristics. ZFS health means the full pool report:
+    `StorageMeta.ZFSPool` carries the provider's pool object (scan activity
+    plus per-device states, error counters, and messages) to consumers
+    alongside the flattened `zfsPoolState`/`zfs*Errors` scalars, so storage
+    surfaces can show which device failed and whether a scrub/resilver is
+    running instead of reducing pool health to a one-word state
+    (`TestCanonicalStorageMetadataCarriesFullZFSPoolReport` pins the path).
 17. Keep compatible unified-resource consumers on one shared snapshot truth.
     `frontend-modern/src/hooks/useUnifiedResources.ts` may seed narrower
     type-filtered consumers from a fresh `all-resources` snapshot when the

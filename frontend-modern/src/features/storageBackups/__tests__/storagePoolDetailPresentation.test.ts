@@ -37,7 +37,17 @@ const buildRecord = (overrides: Partial<StorageRecord> = {}): StorageRecord => (
       readErrors: 1,
       writeErrors: 2,
       checksumErrors: 3,
-      devices: [{ name: 'sda' }],
+      devices: [
+        { name: 'sda', type: 'disk', state: 'ONLINE' },
+        {
+          name: 'sdb',
+          type: 'disk',
+          state: 'FAULTED',
+          readErrors: 3,
+          checksumErrors: 1,
+          message: 'too many errors',
+        },
+      ],
     },
   },
   ...overrides,
@@ -114,6 +124,16 @@ describe('storagePoolDetailPresentation', () => {
       state: 'ONLINE',
       scan: 'scrub repaired 0B',
       errorSummary: 'Errors: R:1 W:2 C:3',
+      devices: [
+        { name: 'sda', type: 'disk', state: 'ONLINE', errorSummary: '', message: '' },
+        {
+          name: 'sdb',
+          type: 'disk',
+          state: 'FAULTED',
+          errorSummary: '3R/0W/1C errors',
+          message: 'too many errors',
+        },
+      ],
     });
     expect(getStoragePoolLinkedDisks(record, [buildDisk()])).toEqual([
       {

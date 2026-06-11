@@ -431,7 +431,12 @@ state remains a separate `unraid_sync_active` reason. Realtime resource
 broadcasts must preserve canonical identity, discovery target, metrics target,
 incident rollups, and raw `agent`/`storage` facet payloads so frontend
 infrastructure surfaces can explain degraded/warning rows without falling back
-to generic status labels. That realtime broadcast contract also owns source and
+to generic status labels. Storage platform-data payloads built by
+`monitorStoragePlatformData` must carry the full `zfsPool` report (scan
+activity and per-device states/errors/messages) alongside the flattened
+`zfsPoolState`/error scalars whenever canonical `StorageMeta.ZFSPool` is
+present, so `/api/state` and websocket consumers can render device-level ZFS
+health in parity with the unified-resources read path. That realtime broadcast contract also owns source and
 platform identity for storage resources: `internal/monitoring/monitor.go` must
 carry the canonical `Resource.Sources` array onto `ResourceFrontend` and
 `platformData.sources`, and must derive storage `platformType` from the owning

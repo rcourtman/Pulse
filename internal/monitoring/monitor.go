@@ -6018,6 +6018,9 @@ func monitorStoragePlatformData(resource unifiedresources.Resource, platformID s
 	payload["zfsReadErrors"] = storage.ZFSReadErrors
 	payload["zfsWriteErrors"] = storage.ZFSWriteErrors
 	payload["zfsChecksumErrors"] = storage.ZFSChecksumErrors
+	if storage.ZFSPool != nil {
+		payload["zfsPool"] = storage.ZFSPool
+	}
 	return payload
 }
 

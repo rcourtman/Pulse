@@ -20,6 +20,7 @@ import type {
   PBSPruneJob,
   PBSSyncJob,
   PBSVerifyJob,
+  ZFSPool,
 } from '@/types/api';
 import {
   PLATFORM_TYPE_KEYS as GENERATED_PLATFORM_TYPE_KEYS,
@@ -385,6 +386,7 @@ export interface ResourceStorageMeta {
   nodes?: string[];
   pool?: string;
   path?: string;
+  zfsPool?: ZFSPool;
   zfsPoolState?: string;
   zfsReadErrors?: number;
   zfsWriteErrors?: number;

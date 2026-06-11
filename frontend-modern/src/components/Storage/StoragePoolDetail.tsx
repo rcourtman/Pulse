@@ -13,6 +13,7 @@ import {
 } from '@/features/storageBackups/diskDetailPresentation';
 import {
   STORAGE_POOL_DETAIL_HISTORY_RANGE_OPTIONS,
+  getZfsDeviceStateTextClass,
   getZfsErrorTextClass,
   getZfsScanTextClass,
 } from '@/features/storageBackups/storagePoolDetailPresentation';
@@ -149,6 +150,36 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
                   <Show when={zfsSummary()!.errorSummary}>
                     <div class={`${STORAGE_DETAIL_FULL_WIDTH_ROW_CLASS} ${getZfsErrorTextClass()}`}>
                       {zfsSummary()!.errorSummary}
+                    </div>
+                  </Show>
+                  <Show when={zfsSummary()!.devices.length > 0}>
+                    <div class={`${STORAGE_DETAIL_FULL_WIDTH_ROW_CLASS} space-y-0.5 pt-1`}>
+                      <For each={zfsSummary()!.devices}>
+                        {(device) => (
+                          <div class={STORAGE_DETAIL_LINKED_DISK_ROW_CLASS}>
+                            <span
+                              class={STORAGE_DETAIL_LINKED_DISK_PATH_CLASS}
+                              title={device.name}
+                            >
+                              {device.name}
+                            </span>
+                            <Show when={device.type}>
+                              <span class={STORAGE_DETAIL_MUTED_TEXT_CLASS}>{device.type}</span>
+                            </Show>
+                            <span class={getZfsDeviceStateTextClass(device.state)}>
+                              {device.state}
+                            </span>
+                            <Show when={device.errorSummary}>
+                              <span class={getZfsErrorTextClass()}>{device.errorSummary}</span>
+                            </Show>
+                            <Show when={device.message}>
+                              <span class={`${STORAGE_DETAIL_MUTED_TEXT_CLASS} italic`}>
+                                {device.message}
+                              </span>
+                            </Show>
+                          </div>
+                        )}
+                      </For>
                     </div>
                   </Show>
                 </div>

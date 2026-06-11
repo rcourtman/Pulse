@@ -1502,6 +1502,18 @@ chart entitlement sequence. They must expose `14d` between `7d` and `30d` and
 pass the selected range through to `HistoryChart` unchanged, rather than
 inventing storage-local range catalogs, paid-tier labels, or alternate
 metrics-history gating.
+The storage pool detail's ZFS Pool card is the canonical home for
+device-level ZFS health.
+`frontend-modern/src/features/storageBackups/storagePoolDetailPresentation.ts`
+builds the pool summary (state, scan activity, pool error totals) and the
+per-device report (name, vdev type, state, R/W/C error counts, message) from
+the record's `details.zfsPool`, which
+`frontend-modern/src/features/storageBackups/storageAdapters.ts` and
+`resourceStorageMapping.ts` resolve meta-first from canonical
+`storage.zfsPool` with flat `platformData.zfsPool` fallback.
+`frontend-modern/src/components/Storage/StoragePoolDetail.tsx` renders that
+report inside the row expansion so degraded pools name the failing device and
+running scrub/resilver without re-promoting per-device noise into table rows.
 Shared chart transport that storage and recovery coexist with must also stay
 on rendered-metric budgets. When `internal/api/router.go` batches workload
 history for adjacent overview or shared summary cards, it may parallelize the

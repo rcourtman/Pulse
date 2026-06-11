@@ -558,4 +558,50 @@ describe('storageAdapters', () => {
     });
     expect(records[0].refs?.resourceId).toBe('pool:tank');
   });
+
+  it('carries the full ZFS pool payload from storage meta into record details', () => {
+    const zfsPool = {
+      name: 'rpool',
+      state: 'DEGRADED',
+      status: 'Degraded',
+      scan: 'resilver in progress',
+      readErrors: 0,
+      writeErrors: 0,
+      checksumErrors: 2,
+      devices: [
+        {
+          name: 'sda2',
+          type: 'disk',
+          state: 'ONLINE',
+          readErrors: 0,
+          writeErrors: 0,
+          checksumErrors: 0,
+        },
+        {
+          name: 'sdb2',
+          type: 'disk',
+          state: 'FAULTED',
+          readErrors: 3,
+          writeErrors: 0,
+          checksumErrors: 0,
+        },
+      ],
+    };
+    const state = baseState();
+    const records = buildStorageRecords({
+      state,
+      resources: [
+        makeResourceStorage({
+          storage: {
+            type: 'zfspool',
+            isZfs: true,
+            zfsPool,
+          } as Resource['storage'],
+        }),
+      ],
+    });
+
+    expect(records).toHaveLength(1);
+    expect(records[0].details?.zfsPool).toEqual(zfsPool);
+  });
 });

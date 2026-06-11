@@ -42,10 +42,19 @@ export type StoragePoolDetailChartTarget = {
   resourceId: string | null;
 };
 
+export type StoragePoolDetailZfsDevice = {
+  name: string;
+  type: string;
+  state: string;
+  errorSummary: string;
+  message: string;
+};
+
 export type StoragePoolDetailZfsSummary = {
   state: string;
   scan: string;
   errorSummary: string | null;
+  devices: StoragePoolDetailZfsDevice[];
 };
 
 export const STORAGE_POOL_DETAIL_HISTORY_RANGE_OPTIONS: readonly {
@@ -199,6 +208,22 @@ export function buildStoragePoolDetailTopologyRows(
   return rows;
 }
 
+export function getZfsDeviceErrorSummary(
+  readErrors: number,
+  writeErrors: number,
+  checksumErrors: number,
+): string {
+  if (readErrors <= 0 && writeErrors <= 0 && checksumErrors <= 0) return '';
+  return `${readErrors}R/${writeErrors}W/${checksumErrors}C errors`;
+}
+
+export function getZfsDeviceStateTextClass(state: string): string {
+  const normalized = (state || '').trim().toUpperCase();
+  if (!normalized || normalized === 'ONLINE') return 'text-muted';
+  if (normalized === 'DEGRADED') return 'font-medium text-amber-700 dark:text-amber-300';
+  return 'font-medium text-red-700 dark:text-red-300';
+}
+
 export function buildStoragePoolDetailZfsSummary(
   record: StorageRecord,
 ): StoragePoolDetailZfsSummary | null {
@@ -213,6 +238,17 @@ export function buildStoragePoolDetailZfsSummary(
     errorSummary: hasErrors
       ? getZfsErrorSummary(pool.readErrors, pool.writeErrors, pool.checksumErrors)
       : null,
+    devices: (pool.devices || []).map((device) => ({
+      name: device.name,
+      type: device.type || '',
+      state: device.state || '',
+      errorSummary: getZfsDeviceErrorSummary(
+        device.readErrors || 0,
+        device.writeErrors || 0,
+        device.checksumErrors || 0,
+      ),
+      message: (device.message || '').trim(),
+    })),
   };
 }
 
