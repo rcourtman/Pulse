@@ -25,6 +25,8 @@ import RotateCwIcon from 'lucide-solid/icons/rotate-cw';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import Undo2Icon from 'lucide-solid/icons/undo-2';
 import XIcon from 'lucide-solid/icons/x';
+import BellIcon from 'lucide-solid/icons/bell';
+import BellOffIcon from 'lucide-solid/icons/bell-off';
 import BookmarkIcon from 'lucide-solid/icons/bookmark';
 import CheckIcon from 'lucide-solid/icons/check';
 import CircleHelpIcon from 'lucide-solid/icons/circle-help';
@@ -172,6 +174,11 @@ import {
   type AssistantSlashCommand,
   type AssistantSlashCommandAction,
 } from './assistantSlashCommands';
+import {
+  assistantNotificationsEnabled,
+  assistantNotificationsSupported,
+  setAssistantNotificationsEnabled,
+} from './assistantNotifications';
 import {
   buildAssistantTranscriptFilename,
   downloadAssistantTranscriptFile,
@@ -3526,6 +3533,20 @@ export const AIChat: Component<AIChatProps> = (props) => {
     focusComposer();
   };
 
+  const handleToggleAttentionNotifications = async () => {
+    if (assistantNotificationsEnabled()) {
+      await setAssistantNotificationsEnabled(false);
+      return;
+    }
+    const granted = await setAssistantNotificationsEnabled(true);
+    if (!granted) {
+      notificationStore.info(
+        'Notifications are blocked for this site. Allow them in your browser to be alerted when the Assistant needs you.',
+        4000,
+      );
+    }
+  };
+
   const handleForkSession = async () => {
     if (forkingSession()) return;
     const sourceSessionId = chat.sessionId().trim();
@@ -3938,6 +3959,34 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 <PlusIcon class="h-3.5 w-3.5" aria-hidden="true" />
                 <span class="font-medium">{AI_CHAT_NEW_SESSION_SHORT_LABEL}</span>
               </button>
+
+              <Show when={assistantNotificationsSupported()}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void handleToggleAttentionNotifications();
+                  }}
+                  class={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-border transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content ${
+                    assistantNotificationsEnabled()
+                      ? 'bg-surface-alt text-base-content'
+                      : 'bg-surface text-muted'
+                  }`}
+                  title={
+                    assistantNotificationsEnabled()
+                      ? 'Notifications on: you are alerted when the Assistant finishes or needs you while this tab is in the background'
+                      : 'Notify me when the Assistant finishes or needs me while this tab is in the background'
+                  }
+                  aria-label="Toggle Assistant attention notifications"
+                  aria-pressed={assistantNotificationsEnabled()}
+                >
+                  <Show
+                    when={assistantNotificationsEnabled()}
+                    fallback={<BellOffIcon class="h-4 w-4" aria-hidden="true" />}
+                  >
+                    <BellIcon class="h-4 w-4" aria-hidden="true" />
+                  </Show>
+                </button>
+              </Show>
 
               <button
                 type="button"

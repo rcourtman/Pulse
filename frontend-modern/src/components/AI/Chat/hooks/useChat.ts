@@ -20,6 +20,7 @@ import {
   type AssistantOutputArtifactStreamState,
 } from '../assistantOutputHygiene';
 import { isAssistantExplicitModelRoute } from '../assistantModelRoutes';
+import { notifyAssistantAttention } from '../assistantNotifications';
 import { getAssistantFastToolCompletionSettleUntil } from '../streamActivityTiming';
 import type {
   ChatMessage,
@@ -1320,6 +1321,13 @@ export function useChat(options: UseChatOptions = {}) {
 
   const processEvent = (assistantId: string, requestId: number, event: StreamEvent) => {
     if (requestId !== activeRequestId) return;
+
+    // Attention notifications fire here (once per stream event), never inside
+    // the setMessages updaters below, which Solid may re-run.
+    if (event.type === 'done') notifyAssistantAttention('done');
+    else if (event.type === 'error') notifyAssistantAttention('error');
+    else if (event.type === 'question') notifyAssistantAttention('question');
+    else if (event.type === 'approval_needed') notifyAssistantAttention('approval');
 
     if (event.type === 'session') {
       applyStreamSessionId(extractSessionId(event.data));
