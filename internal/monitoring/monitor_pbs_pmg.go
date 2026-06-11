@@ -471,6 +471,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 				Shared:   true,     // PBS datastores are typically shared/network storage
 				Enabled:  true,
 				Active:   pbsInst.Status == "online",
+				LastSeen: pbsInst.LastSeen,
 			}
 			pbsStorages = append(pbsStorages, pbsStorage)
 		}

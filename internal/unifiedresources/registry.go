@@ -1513,11 +1513,34 @@ func attachLinkedAgentID(proxmox *ProxmoxData, linkedAgentID string) {
 
 func (rr *ResourceRegistry) ingestStorage(storage models.Storage) {
 	resource, identity := resourceFromStorage(storage)
+	if pbsStorageInstance(storage) {
+		// Datastore-derived entries from the PBS poller (monitor_pbs_pmg)
+		// are delivered by the PBS source on the PBS cadence, not by a PVE
+		// poll. Keying them SourceProxmox would judge their freshness
+		// against the (faster) Proxmox stale threshold and flap healthy
+		// datastores stale between PBS polls. storage.Instance carries the
+		// PBS instance source ID ("pbs-<name>"), so parent them to the PBS
+		// instance, which IngestSnapshot ingests before storage.
+		if parentID, ok := rr.bySource[SourcePBS][storage.Instance]; ok {
+			resource.ParentID = &parentID
+		}
+		rr.ingest(SourcePBS, storage.ID, resource, identity)
+		return
+	}
 	parentSourceID := proxmoxNodeSourceID(storage.Instance, storage.Node)
 	if parentID, ok := rr.bySource[SourceProxmox][parentSourceID]; ok {
 		resource.ParentID = &parentID
 	}
 	rr.ingest(SourceProxmox, storage.ID, resource, identity)
+}
+
+// pbsStorageInstance reports whether a storage entry was produced by the PBS
+// poller's datastore conversion rather than a PVE storage poll. PVE itself
+// reports pbs-typed storage.cfg backends too, but those carry the PVE
+// instance name; only the PBS poller writes the "pbs-" instance prefix.
+func pbsStorageInstance(storage models.Storage) bool {
+	return strings.EqualFold(strings.TrimSpace(storage.Type), "pbs") &&
+		strings.HasPrefix(strings.TrimSpace(storage.Instance), "pbs-")
 }
 
 func (rr *ResourceRegistry) ingestPhysicalDisk(disk models.PhysicalDisk) {

@@ -685,6 +685,8 @@ export interface Storage {
   shared: boolean;
   enabled: boolean;
   active: boolean;
+  // RFC3339 timestamp of the last poll that delivered this entry; absent = never seen
+  lastSeen?: string;
   // Added for deduplication in storage view
   nodes?: string[];
   nodeIds?: string[];

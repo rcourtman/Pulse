@@ -375,6 +375,7 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 					Shared:   shared,
 					Enabled:  storage.Enabled == 1,
 					Active:   storage.Active == 1,
+					LastSeen: startTime.UTC(),
 				}
 
 				if hasClusterConfig {
@@ -605,6 +606,7 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 			Shared:    true,
 			Enabled:   true,
 			Active:    true,
+			LastSeen:  startTime.UTC(),
 		}
 
 		allStorage = append(allStorage, synthetic)

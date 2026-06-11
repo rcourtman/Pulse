@@ -3014,6 +3014,7 @@ func storageFromReadStateView(view *unifiedresources.StoragePoolView) models.Sto
 		Shared:    view.Shared(),
 		Enabled:   view.Enabled(),
 		Active:    view.Active(),
+		LastSeen:  view.LastSeen(),
 		ZFSPool:   storageZFSPoolFromReadStateView(view),
 	}
 }

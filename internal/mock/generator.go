@@ -4391,6 +4391,12 @@ func generateStorage(nodes []models.Node) []models.Storage {
 
 	for _, node := range nodes {
 		isOffline := node.Status != "online" || node.ConnectionHealth == "offline" || node.Uptime <= 0
+		// Storage on an offline node hasn't been freshly observed; backdate
+		// its sighting so the stale path renders instead of fake freshness.
+		nodeStorageSeen := now
+		if isOffline {
+			nodeStorageSeen = now.Add(-10 * time.Minute)
+		}
 		// Local storage (always present)
 		localTotal := int64(500 * 1024 * 1024 * 1024) // 500GB
 		localID := fmt.Sprintf("%s-%s-local", node.Instance, node.Name)
@@ -4427,6 +4433,7 @@ func generateStorage(nodes []models.Node) []models.Storage {
 			Shared:   false,
 			Enabled:  localEnabled,
 			Active:   localActive,
+			LastSeen: nodeStorageSeen,
 		})
 
 		// Local-zfs (common)
@@ -4492,6 +4499,7 @@ func generateStorage(nodes []models.Node) []models.Storage {
 			Shared:   false,
 			Enabled:  zfsEnabled,
 			Active:   zfsActive,
+			LastSeen: nodeStorageSeen,
 			ZFSPool:  zfsPool,
 		})
 
@@ -4533,6 +4541,7 @@ func generateStorage(nodes []models.Node) []models.Storage {
 				Shared:   true, // PBS storage is shared cluster-wide (all nodes can access it)
 				Enabled:  true,
 				Active:   true,
+				LastSeen: now,
 			})
 		}
 	}
@@ -4557,6 +4566,7 @@ func generateStorage(nodes []models.Node) []models.Storage {
 			Shared:   true,
 			Enabled:  true,
 			Active:   true,
+			LastSeen: now,
 		})
 	}
 
@@ -4590,6 +4600,7 @@ func generateStorage(nodes []models.Node) []models.Storage {
 			Shared:   true,
 			Enabled:  true,
 			Active:   true,
+			LastSeen: now,
 		})
 
 		cephFsTotal := int64(24 * 1024 * 1024 * 1024 * 1024) // 24TB
@@ -4610,6 +4621,7 @@ func generateStorage(nodes []models.Node) []models.Storage {
 			Shared:   true,
 			Enabled:  true,
 			Active:   true,
+			LastSeen: now,
 		})
 	}
 
@@ -5554,6 +5566,9 @@ func updateFixtureStateMetricsAt(data *models.StateSnapshot, config MockConfig, 
 			continue
 		}
 		ApplyStorageUsage(storage, SampleMetric("storage", storage.ID, "usage", refreshNow))
+		// Refreshing usage simulates a fresh poll; stamp the sighting so
+		// available mock storage doesn't age past the stale thresholds.
+		storage.LastSeen = refreshNow
 	}
 
 	// Update disk metrics.

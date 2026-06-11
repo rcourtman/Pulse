@@ -4521,3 +4521,83 @@ func TestIngestStampsOnlineSourceStatusForRealSighting(t *testing.T) {
 		t.Fatalf("SourceStatus[proxmox].LastSeen = %s, want %s", status.LastSeen, seen)
 	}
 }
+
+// Datastore-derived storage entries written by the PBS poller (instance
+// "pbs-<name>", type "pbs") are delivered on the PBS cadence, so they must be
+// keyed to SourcePBS — judging them against the faster Proxmox stale
+// threshold would flap healthy datastores stale between PBS polls. PVE also
+// reports pbs-typed storage.cfg backends, and those stay SourceProxmox: they
+// really are delivered by the PVE storage poll.
+func TestIngestStorageRoutesPBSPollerEntriesToPBSSource(t *testing.T) {
+	seen := time.Now().UTC().Add(-30 * time.Second).Truncate(time.Millisecond)
+	snapshot := models.StateSnapshot{
+		PBSInstances: []models.PBSInstance{{
+			ID:       "pbs-backup",
+			Name:     "backup",
+			Host:     "https://pbs.local:8007",
+			Status:   "online",
+			LastSeen: seen,
+		}},
+		Storage: []models.Storage{
+			{
+				ID:       "pbs-backup-main",
+				Name:     "main",
+				Node:     "backup",
+				Instance: "pbs-backup",
+				Type:     "pbs",
+				Status:   "available",
+				LastSeen: seen,
+			},
+			{
+				ID:       "home-pve1-pbs-remote",
+				Name:     "pbs-remote",
+				Node:     "pve1",
+				Instance: "home",
+				Type:     "pbs",
+				Status:   "available",
+				LastSeen: seen,
+			},
+		},
+	}
+
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(snapshot)
+
+	var pbsInstanceID string
+	var pollerStorage, pveStorage *Resource
+	for _, resource := range rr.List() {
+		resource := resource
+		switch {
+		case resource.Type == ResourceTypePBS:
+			pbsInstanceID = resource.ID
+		case resource.Type == ResourceTypeStorage && resource.Proxmox != nil && resource.Proxmox.SourceID == "pbs-backup-main":
+			pollerStorage = &resource
+		case resource.Type == ResourceTypeStorage && resource.Proxmox != nil && resource.Proxmox.SourceID == "home-pve1-pbs-remote":
+			pveStorage = &resource
+		}
+	}
+	if pbsInstanceID == "" {
+		t.Fatal("expected a PBS instance resource")
+	}
+	if pollerStorage == nil || pveStorage == nil {
+		t.Fatalf("expected both storage resources (pollerStorage=%v, pveStorage=%v)", pollerStorage != nil, pveStorage != nil)
+	}
+
+	if len(pollerStorage.Sources) != 1 || pollerStorage.Sources[0] != SourcePBS {
+		t.Fatalf("PBS poller storage Sources = %v, want [%s]", pollerStorage.Sources, SourcePBS)
+	}
+	status, ok := pollerStorage.SourceStatus[SourcePBS]
+	if !ok {
+		t.Fatal("expected a pbs source status entry on the PBS poller storage")
+	}
+	if !status.LastSeen.Equal(seen) {
+		t.Fatalf("SourceStatus[pbs].LastSeen = %s, want %s", status.LastSeen, seen)
+	}
+	if pollerStorage.ParentID == nil || *pollerStorage.ParentID != pbsInstanceID {
+		t.Fatalf("PBS poller storage ParentID = %v, want the PBS instance %q", pollerStorage.ParentID, pbsInstanceID)
+	}
+
+	if len(pveStorage.Sources) != 1 || pveStorage.Sources[0] != SourceProxmox {
+		t.Fatalf("PVE-reported pbs-typed storage Sources = %v, want [%s]", pveStorage.Sources, SourceProxmox)
+	}
+}

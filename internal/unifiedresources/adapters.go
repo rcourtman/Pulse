@@ -1621,7 +1621,7 @@ func resourceFromStorage(storage models.Storage) (Resource, ResourceIdentity) {
 		Type:      ResourceTypeStorage,
 		Name:      name,
 		Status:    statusFromStorage(storage),
-		LastSeen:  now,
+		LastSeen:  storage.LastSeen,
 		UpdatedAt: now,
 		Metrics:   metricsFromStorage(storage),
 		Proxmox: &ProxmoxData{
@@ -1973,7 +1973,7 @@ func resourceFromDockerContainer(ct models.DockerContainer, host models.DockerHo
 		Technology: runtime,
 		Name:       ct.Name,
 		Status:     statusFromDockerState(ct.State),
-		LastSeen:   time.Now().UTC(),
+		LastSeen:   host.LastSeen,
 		UpdatedAt:  time.Now().UTC(),
 		Metrics:    metrics,
 	}

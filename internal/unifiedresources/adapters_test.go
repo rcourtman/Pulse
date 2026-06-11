@@ -853,3 +853,61 @@ func TestNamespacedKubernetesResourceScaffold(t *testing.T) {
 		t.Fatalf("identity clusterName = %q, want prod", identity.ClusterName)
 	}
 }
+
+// Storage models carry the timestamp of the poll that delivered them. The
+// adapter must pass that sighting through — and preserve zero for never-seen
+// entries — instead of fabricating a fresh one at conversion time, because
+// the registry is rebuilt from the retained snapshot every cycle and a
+// conversion-time stamp would report a dead source as freshly delivering.
+func TestResourceFromStorageUsesModelSighting(t *testing.T) {
+	seen := time.Now().UTC().Add(-45 * time.Second).Truncate(time.Millisecond)
+	storage := models.Storage{
+		ID:       "cluster-a-pve-1-local",
+		Name:     "local",
+		Node:     "pve-1",
+		Instance: "cluster-a",
+		Type:     "dir",
+		Status:   "available",
+		LastSeen: seen,
+	}
+
+	resource, _ := resourceFromStorage(storage)
+	if !resource.LastSeen.Equal(seen) {
+		t.Fatalf("resource.LastSeen = %s, want the model sighting %s", resource.LastSeen, seen)
+	}
+
+	storage.LastSeen = time.Time{}
+	resource, _ = resourceFromStorage(storage)
+	if !resource.LastSeen.IsZero() {
+		t.Fatalf("resource.LastSeen = %s, want zero for a never-seen storage entry", resource.LastSeen)
+	}
+}
+
+// Docker containers are delivered wholesale with each host report, so the
+// host's report timestamp is the container's sighting. Stamping conversion
+// time instead would keep a container "fresh" forever after its host agent
+// stopped reporting.
+func TestResourceFromDockerContainerUsesHostSighting(t *testing.T) {
+	seen := time.Now().UTC().Add(-45 * time.Second).Truncate(time.Millisecond)
+	container := models.DockerContainer{
+		ID:    "abcdef123456",
+		Name:  "web",
+		State: "running",
+	}
+	host := models.DockerHost{
+		ID:       "docker-1",
+		Hostname: "docker-1",
+		LastSeen: seen,
+	}
+
+	resource, _ := resourceFromDockerContainer(container, host)
+	if !resource.LastSeen.Equal(seen) {
+		t.Fatalf("resource.LastSeen = %s, want the host report sighting %s", resource.LastSeen, seen)
+	}
+
+	host.LastSeen = time.Time{}
+	resource, _ = resourceFromDockerContainer(container, host)
+	if !resource.LastSeen.IsZero() {
+		t.Fatalf("resource.LastSeen = %s, want zero when the host has never reported", resource.LastSeen)
+	}
+}

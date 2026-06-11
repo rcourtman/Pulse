@@ -2046,27 +2046,28 @@ type DockerHostCommandStatus struct {
 
 // Storage represents a storage resource
 type Storage struct {
-	ID        string   `json:"id"`
-	Name      string   `json:"name"`
-	Node      string   `json:"node"`
-	Instance  string   `json:"instance"`
-	Nodes     []string `json:"nodes,omitempty"`
-	NodeIDs   []string `json:"nodeIds,omitempty"`
-	AliasIDs  []string `json:"aliasIds,omitempty"`
-	NodeCount int      `json:"nodeCount,omitempty"`
-	Type      string   `json:"type"`
-	Status    string   `json:"status"`
-	Pool      string   `json:"pool,omitempty"`
-	Path      string   `json:"path,omitempty"`
-	Total     int64    `json:"total"`
-	Used      int64    `json:"used"`
-	Free      int64    `json:"free"`
-	Usage     float64  `json:"usage"`
-	Content   string   `json:"content"`
-	Shared    bool     `json:"shared"`
-	Enabled   bool     `json:"enabled"`
-	Active    bool     `json:"active"`
-	ZFSPool   *ZFSPool `json:"zfsPool,omitempty"` // ZFS pool details if this is ZFS storage
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Node      string    `json:"node"`
+	Instance  string    `json:"instance"`
+	Nodes     []string  `json:"nodes,omitempty"`
+	NodeIDs   []string  `json:"nodeIds,omitempty"`
+	AliasIDs  []string  `json:"aliasIds,omitempty"`
+	NodeCount int       `json:"nodeCount,omitempty"`
+	Type      string    `json:"type"`
+	Status    string    `json:"status"`
+	Pool      string    `json:"pool,omitempty"`
+	Path      string    `json:"path,omitempty"`
+	Total     int64     `json:"total"`
+	Used      int64     `json:"used"`
+	Free      int64     `json:"free"`
+	Usage     float64   `json:"usage"`
+	Content   string    `json:"content"`
+	Shared    bool      `json:"shared"`
+	Enabled   bool      `json:"enabled"`
+	Active    bool      `json:"active"`
+	LastSeen  time.Time `json:"lastSeen,omitzero"` // when the owning poller last delivered this entry; zero = never seen
+	ZFSPool   *ZFSPool  `json:"zfsPool,omitempty"` // ZFS pool details if this is ZFS storage
 }
 
 func CephPoolStorageID(instanceName, poolName string) string {
@@ -2146,6 +2147,7 @@ func StorageFromCephPool(cluster CephCluster, pool CephPool) Storage {
 		Shared:   true,
 		Enabled:  true,
 		Active:   status == "available",
+		LastSeen: cluster.LastUpdated,
 	}
 }
 
