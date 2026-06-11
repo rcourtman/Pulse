@@ -624,9 +624,78 @@ func (m *Monitor) preserveNodesWhenEmpty(instanceName string, modelNodes []model
 func (m *Monitor) markPVEInstanceNodesUnreachable(instanceName string) {
 	_, prevInstanceNodes := m.snapshotPrevNodes(instanceName)
 	if len(prevInstanceNodes) == 0 {
+		// Never polled successfully this process lifetime (e.g. Pulse
+		// started while the host was already down). Synthesize offline
+		// entries from the instance config so the configured instance is
+		// still represented on the platform pages instead of vanishing
+		// until its first successful poll (#1433).
+		if placeholders := m.placeholderNodesForInstance(instanceName); len(placeholders) > 0 {
+			m.state.UpdateNodesForInstance(instanceName, placeholders)
+		}
 		return
 	}
 	m.state.UpdateNodesForInstance(instanceName, m.preserveOrExpireNodes(prevInstanceNodes))
+}
+
+// placeholderNodesForInstance builds offline node entries from the instance
+// configuration for an instance with no node state yet. Cluster configs carry
+// their discovered member endpoints, so each member gets its own row with the
+// same node ID a live poll would assign; a standalone instance gets a single
+// row named after the configured instance. The next successful poll replaces
+// these wholesale via UpdateNodesForInstance.
+func (m *Monitor) placeholderNodesForInstance(instanceName string) []models.Node {
+	instanceCfg := m.getInstanceConfig(instanceName)
+	if instanceCfg == nil {
+		return nil
+	}
+
+	makeNode := func(nodeName string) models.Node {
+		nodeID := instanceName + "-" + nodeName
+		if instanceCfg.IsCluster && instanceCfg.ClusterName != "" {
+			nodeID = instanceCfg.ClusterName + "-" + nodeName
+		}
+		connectionHost, guestURL := resolveNodeConnectionInfo(instanceCfg, monitorDiscoveryConfig(m), nodeName)
+		return models.Node{
+			ID:                           nodeID,
+			Name:                         nodeName,
+			DisplayName:                  getNodeDisplayName(instanceCfg, nodeName),
+			Instance:                     instanceName,
+			Host:                         connectionHost,
+			GuestURL:                     guestURL,
+			Status:                       "offline",
+			Type:                         "node",
+			ConnectionHealth:             "error",
+			LoadAverage:                  []float64{},
+			IsClusterMember:              instanceCfg.IsCluster,
+			ClusterName:                  instanceCfg.ClusterName,
+			TemperatureMonitoringEnabled: instanceCfg.TemperatureMonitoringEnabled,
+		}
+	}
+
+	if instanceCfg.IsCluster && len(instanceCfg.ClusterEndpoints) > 0 {
+		nodes := make([]models.Node, 0, len(instanceCfg.ClusterEndpoints))
+		seen := make(map[string]struct{}, len(instanceCfg.ClusterEndpoints))
+		for _, endpoint := range instanceCfg.ClusterEndpoints {
+			nodeName := strings.TrimSpace(endpoint.NodeName)
+			if nodeName == "" {
+				continue
+			}
+			if _, dup := seen[strings.ToLower(nodeName)]; dup {
+				continue
+			}
+			seen[strings.ToLower(nodeName)] = struct{}{}
+			nodes = append(nodes, makeNode(nodeName))
+		}
+		if len(nodes) > 0 {
+			return nodes
+		}
+	}
+
+	nodeName := strings.TrimSpace(instanceCfg.Name)
+	if nodeName == "" {
+		nodeName = instanceName
+	}
+	return []models.Node{makeNode(nodeName)}
 }
 
 // preserveOrExpireNodes keeps recently seen nodes online through transient
@@ -639,16 +708,22 @@ func (m *Monitor) preserveOrExpireNodes(prevInstanceNodes []models.Node) []model
 
 		// Keep recently seen nodes online during transient GetNodes gaps.
 		// This mirrors the node grace behavior used in regular node polling.
-		lastSeen := prevNode.LastSeen
-		if lastSeen.IsZero() {
-			m.mu.Lock()
-			if lastOnline, ok := m.nodeLastOnline[prevNode.ID]; ok {
-				lastSeen = lastOnline
-			}
-			m.mu.Unlock()
-		}
+		// Grace requires evidence of a real online sighting: either this
+		// process saw the node online (nodeLastOnline), or the previous
+		// snapshot itself reports it online with a recent poll timestamp.
+		// prevNode.LastSeen alone is NOT enough for an offline node — prev
+		// state round-trips through the unified registry, which stamps
+		// zero LastSeen values with the ingest time, so a synthesized
+		// offline placeholder would otherwise come back "recently seen"
+		// every cycle and be resurrected to online forever.
+		m.mu.Lock()
+		lastOnline, sawOnline := m.nodeLastOnline[prevNode.ID]
+		m.mu.Unlock()
 
-		withinGrace := !lastSeen.IsZero() && now.Sub(lastSeen) < nodeOfflineGracePeriod
+		withinGrace := sawOnline && now.Sub(lastOnline) < nodeOfflineGracePeriod
+		if !withinGrace && strings.EqualFold(strings.TrimSpace(prevNode.Status), "online") {
+			withinGrace = !prevNode.LastSeen.IsZero() && now.Sub(prevNode.LastSeen) < nodeOfflineGracePeriod
+		}
 		if withinGrace {
 			if strings.TrimSpace(nodeCopy.Status) == "" || strings.EqualFold(nodeCopy.Status, "offline") {
 				nodeCopy.Status = "online"
