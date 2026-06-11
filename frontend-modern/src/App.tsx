@@ -8,6 +8,7 @@ import { Login } from './components/Login';
 import { logger } from './utils/logger';
 import { UpdateBanner } from './components/UpdateBanner';
 import { DemoBanner } from './components/DemoBanner';
+import { CommercialMigrationBanner } from './components/CommercialMigrationBanner';
 import { GitHubStarBanner } from './components/GitHubStarBanner';
 // Modals are only mounted when opened, so their code can stay out of the
 // entry bundle until first use (same pattern as AIChat below).
@@ -454,6 +455,7 @@ function App() {
                       <Show when={!kioskMode()}>
                         <SecurityWarning />
                         <DemoBanner />
+                        <CommercialMigrationBanner />
                         <UpdateBanner />
                         <GitHubStarBanner />
                         <GlobalUpdateProgressWatcher />
