@@ -487,8 +487,21 @@ func TestMonitorGetUnifiedReadStateOrSnapshotUsesCanonicalMockUnifiedResources(t
 }
 
 func TestMonitorBuildBroadcastFrontendStateUsesCanonicalMockUnifiedResources(t *testing.T) {
+	previousEnabled := mock.IsMockEnabled()
+	previousConfig := mock.GetConfig()
+	t.Cleanup(func() {
+		mustSetMockEnabled(t, false)
+		mock.SetMockConfig(previousConfig)
+		if previousEnabled {
+			mustSetMockEnabled(t, true)
+		}
+	})
+
+	stableConfig := mock.DefaultConfig
+	stableConfig.UpdateInterval = 5 * time.Minute
+	mustSetMockEnabled(t, false)
+	mock.SetMockConfig(stableConfig)
 	mustSetMockEnabled(t, true)
-	t.Cleanup(func() { mustSetMockEnabled(t, false) })
 
 	graph := mock.CurrentFixtureGraph()
 	legacyName := ""
