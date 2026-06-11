@@ -70,5 +70,29 @@ describe('KubernetesClustersTable', () => {
     expect(screen.getByText('prod-west')).toBeInTheDocument();
     expect(screen.getByTestId('responsive-metric-cell')).toBeInTheDocument();
     expect(screen.getByTestId('stacked-memory-bar')).toBeInTheDocument();
+    expect(screen.queryByText('Pending uninstall')).toBeNull();
+  });
+
+  it('badges clusters whose agent is pending uninstall', () => {
+    const cluster = makeClusterResource({
+      kubernetes: {
+        clusterId: 'prod-west',
+        clusterName: 'prod-west',
+        pendingUninstall: true,
+      },
+    });
+
+    render(() => (
+      <KubernetesClustersTable
+        clusters={[cluster]}
+        scope={[cluster]}
+        emptyIcon={<span />}
+        emptyTitle="No clusters"
+        emptyDescription="No clusters"
+        showToolbar={false}
+      />
+    ));
+
+    expect(screen.getByText('Pending uninstall')).toBeInTheDocument();
   });
 });

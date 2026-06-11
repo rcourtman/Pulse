@@ -6,6 +6,7 @@ import { GUEST_DRAWER_HISTORY_DEFAULT_RANGE } from '@/components/Workloads/guest
 import { aiChatStore } from '@/stores/aiChat';
 import { notificationStore } from '@/stores/notifications';
 import { createLocalStorageBooleanSignal, STORAGE_KEYS } from '@/utils/localStorage';
+import { hasKubernetesDetailSections } from './resourceDetailDrawerKubernetesModel';
 import { isPulseAgentPlatformResource } from '@/utils/agentResources';
 import { copyToClipboard } from '@/utils/clipboard';
 import { formatAgentResourceContextForClipboard } from '@/utils/agentContextPresentation';
@@ -57,6 +58,9 @@ export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerSta
   const [showVMwareDetails, setShowVMwareDetails] = createSignal(false);
   const [showTrueNASDetails, setShowTrueNASDetails] = createSignal(
     options.initialShowTrueNASDetails === true,
+  );
+  const [showKubernetesDetails, setShowKubernetesDetails] = createSignal(
+    hasKubernetesDetailSections(resource),
   );
   const [showPbsJobDetail, setShowPbsJobDetail] = createSignal(false);
   const [showPmgMailFlowDetail, setShowPmgMailFlowDetail] = createSignal(false);
@@ -177,6 +181,8 @@ export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerSta
     setShowVMwareDetails,
     showTrueNASDetails,
     setShowTrueNASDetails,
+    showKubernetesDetails,
+    setShowKubernetesDetails,
     showPbsJobDetail,
     setShowPbsJobDetail,
     showPmgMailFlowDetail,

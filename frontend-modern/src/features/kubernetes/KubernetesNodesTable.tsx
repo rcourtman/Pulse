@@ -151,8 +151,8 @@ export const KubernetesNodesTable: Component<{
                     Desktop widths: Node gets headroom for cluster-style
                     names, Runtime gets room for "containerd://1.7.20"
                     -style values, Capacity gets room for "6 cores /
-                    51.0 GB" strings, CPU and Memory bars share an
-                    equal slice, and the short-text columns (Cluster,
+                    51.0 GB / 110 pods" strings, CPU and Memory bars share
+                    an equal slice, and the short-text columns (Cluster,
                     Roles, Kubelet, Uptime) trim accordingly. Wide
                     desktop gets extra room without forcing normal desktop
                     viewports to hide Capacity behind horizontal scroll.
@@ -212,9 +212,11 @@ export const KubernetesNodesTable: Component<{
                     const capacityLabel = () => {
                       const cores = meta()?.capacityCpuCores;
                       const mem = meta()?.capacityMemoryBytes;
+                      const pods = meta()?.capacityPods;
                       const parts: string[] = [];
                       if (typeof cores === 'number' && cores > 0) parts.push(`${cores} cores`);
                       if (typeof mem === 'number' && mem > 0) parts.push(formatBytes(mem));
+                      if (typeof pods === 'number' && pods > 0) parts.push(`${pods} pods`);
                       return parts.join(' / ') || '—';
                     };
                     const compactCapacityLabel = () => {

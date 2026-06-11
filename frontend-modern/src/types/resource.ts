@@ -967,6 +967,7 @@ export interface ResourceKubernetesMeta {
   podReason?: string;
   podMessage?: string;
   podContainers?: ResourceKubernetesPodContainerStatus[];
+  qosClass?: string;
   restarts?: number;
   ownerKind?: string;
   ownerName?: string;

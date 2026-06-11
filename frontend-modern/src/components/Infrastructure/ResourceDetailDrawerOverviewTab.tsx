@@ -85,6 +85,26 @@ const TrueNASDetailsDisclosure: Component<{
   </SupportDisclosure>
 );
 
+const KubernetesDetailsDisclosure: Component<{
+  drawer: UseResourceDetailDrawerStateResult;
+  class?: string;
+  contentClass?: string;
+}> = (props) => (
+  <SupportDisclosure
+    title="Kubernetes"
+    summary={props.drawer.kubernetesDetailsSummary()}
+    expanded={props.drawer.showKubernetesDetails()}
+    onToggle={() => props.drawer.setShowKubernetesDetails((value) => !value)}
+    showLabel="Show Kubernetes"
+    hideLabel="Hide Kubernetes"
+    class={props.class}
+    contentClass={props.contentClass ?? 'mt-3 space-y-3'}
+    dataTestId="resource-kubernetes-details-section"
+  >
+    <TrueNASDetailSectionTable sections={props.drawer.kubernetesDetailSections()} />
+  </SupportDisclosure>
+);
+
 const machineHostDetailsTitle = (resource: Resource): string =>
   isPulseAgentPlatformResource(resource) ? 'Machine' : 'Host';
 
@@ -309,6 +329,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
       drawer.actionAuditCount() > 0 ||
       Boolean(drawer.actionAuditError()));
   const shouldPromoteTrueNASDetails = () => compactTableRow() && drawer.hasTrueNASDetails();
+  const shouldPromoteKubernetesDetails = () => compactTableRow() && drawer.hasKubernetesDetails();
   const shouldPromoteHostDetails = () =>
     compactTableRow() && isPulseAgentPlatformResource(resource) && drawer.hasHostDetails();
   const shouldPromoteAccessContext = () =>
@@ -322,6 +343,10 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
 
       <Show when={shouldPromoteTrueNASDetails()}>
         <TrueNASDetailsDisclosure drawer={drawer} class="space-y-2" contentClass="space-y-2" />
+      </Show>
+
+      <Show when={shouldPromoteKubernetesDetails()}>
+        <KubernetesDetailsDisclosure drawer={drawer} class="space-y-2" contentClass="space-y-2" />
       </Show>
 
       <Show when={shouldPromoteHostDetails()}>
@@ -630,6 +655,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
             drawer.hasServiceDetails() ||
             drawer.hasVMwareDetails() ||
             drawer.hasTrueNASDetails() ||
+            drawer.hasKubernetesDetails() ||
             (drawer.hasHostDetails() && !shouldPromoteHostDetails()) ||
             (drawer.hasAccessContext() && !shouldPromoteAccessContext()) ||
             drawer.hasInvestigationContext()
@@ -641,6 +667,10 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
           >
             <Show when={drawer.hasTrueNASDetails() && !shouldPromoteTrueNASDetails()}>
               <TrueNASDetailsDisclosure drawer={drawer} class="h-full" />
+            </Show>
+
+            <Show when={drawer.hasKubernetesDetails() && !shouldPromoteKubernetesDetails()}>
+              <KubernetesDetailsDisclosure drawer={drawer} class="h-full" />
             </Show>
 
             <Show when={drawer.hasAccessContext() && !shouldPromoteAccessContext()}>

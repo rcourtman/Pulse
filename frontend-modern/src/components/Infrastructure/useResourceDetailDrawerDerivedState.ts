@@ -79,6 +79,10 @@ import {
   buildTrueNASDetailsSummary,
   buildTrueNASDetailSections,
 } from './resourceDetailDrawerTrueNASModel';
+import {
+  buildKubernetesDetailsSummary,
+  buildKubernetesDetailSections,
+} from './resourceDetailDrawerKubernetesModel';
 import { getResourceHealthIssuePresentation } from './resourceHealthPresentation';
 
 type DrawerTab =
@@ -340,6 +344,9 @@ export const useResourceDetailDrawerDerivedState = (
   const trueNASDetailSections = createMemo(() => buildTrueNASDetailSections(resource));
   const hasTrueNASDetails = createMemo(() => trueNASDetailSections().length > 0);
   const trueNASDetailsSummary = createMemo(() => buildTrueNASDetailsSummary(resource));
+  const kubernetesDetailSections = createMemo(() => buildKubernetesDetailSections(resource));
+  const hasKubernetesDetails = createMemo(() => kubernetesDetailSections().length > 0);
+  const kubernetesDetailsSummary = createMemo(() => buildKubernetesDetailsSummary(resource));
   const metricsHistoryTarget = createMemo(() => getResourceMetricsHistoryTarget(resource));
   const metricsHistoryFallbackMetrics = createMemo(() =>
     getResourceMetricsHistoryFallbackMetrics(resource),
@@ -482,6 +489,9 @@ export const useResourceDetailDrawerDerivedState = (
     hasTrueNASDetails,
     trueNASDetailsSummary,
     trueNASDetailSections,
+    hasKubernetesDetails,
+    kubernetesDetailsSummary,
+    kubernetesDetailSections,
     relatedLinks,
     hasRuntimeOperationalContext,
     sourceSections,
