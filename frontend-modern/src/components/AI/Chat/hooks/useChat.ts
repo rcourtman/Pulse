@@ -2159,6 +2159,11 @@ export function useChat(options: UseChatOptions = {}) {
           model: m.model,
           toolCalls,
           streamEvents,
+          // Restored messages are never live. Leaving this undefined reads as
+          // "still streaming" to the activity dock (isStreaming !== false),
+          // which pinned a phantom "Generating response" after loading any
+          // session whose last turn ended without a terminal event.
+          isStreaming: false as const,
         };
       });
       const restoredModel = latestExplicitModelRouteFromTranscript(loadedMessages);

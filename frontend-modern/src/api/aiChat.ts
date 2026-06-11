@@ -158,6 +158,13 @@ export interface AIChatStreamLifecycle {
 const AI_CHAT_STREAM_TEXT_PAINT_CHECKPOINT_INTERVAL = 4;
 const AI_CHAT_STREAM_TEXT_EVENT_TYPES = new Set(['content', 'thinking']);
 
+// The backend writes an SSE ": heartbeat" comment every 5 seconds while a
+// turn is in flight, so a healthy connection never goes quiet for long. If no
+// bytes arrive for this window the connection is dead (backend restart,
+// half-open socket) and the turn must fail fast instead of leaving the user
+// staring at "Generating response" for the old 300s ceiling.
+export const AI_CHAT_STREAM_INACTIVITY_TIMEOUT_MS = 30000;
+
 const isAIChatStreamTextEvent = (event: Pick<StreamEvent, 'type'>): boolean =>
   AI_CHAT_STREAM_TEXT_EVENT_TYPES.has(event.type);
 
@@ -417,8 +424,17 @@ export class AIChatAPI {
         throw new Error('Pulse Assistant stream timed out waiting for provider data.');
       },
       onComplete: () => {
-        onEvent({ type: 'done' });
+        // The backend always terminates a chat stream with an explicit done or
+        // error event. A clean close without one means the connection was
+        // severed mid-turn (backend restart, proxy drop) — surface an
+        // interruption the user can retry instead of pretending the turn
+        // finished.
+        onEvent({
+          type: 'error',
+          data: { message: 'Connection to Pulse closed before the response finished.' },
+        } as StreamEvent);
       },
+      timeoutMs: AI_CHAT_STREAM_INACTIVITY_TIMEOUT_MS,
       yieldBetweenEvents: createAIChatStreamPaintCheckpointPredicate(),
     });
   }

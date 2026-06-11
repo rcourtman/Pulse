@@ -1147,7 +1147,9 @@ describe('AIChatAPI', () => {
       .fn()
       .mockResolvedValueOnce({
         done: false,
-        value: encoder.encode('data: {"type":"content","data":{"text":"First"}}\n\n'),
+        value: encoder.encode(
+          'data: {"type":"content","data":{"text":"First"}}\n\ndata: {"type":"done"}\n\n',
+        ),
       })
       .mockResolvedValueOnce({ done: true, value: undefined });
     const releaseLock = vi.fn();
@@ -1184,6 +1186,36 @@ describe('AIChatAPI', () => {
 
     expect(onStreamOpen).toHaveBeenCalledOnce();
     expect(order).toEqual(['stream-open', 'content', 'done']);
+    expect(releaseLock).toHaveBeenCalledTimes(1);
+  });
+
+  it('surfaces a stream that closes without a terminal event as an interruption error', async () => {
+    const encoder = new TextEncoder();
+    const read = vi
+      .fn()
+      .mockResolvedValueOnce({
+        done: false,
+        value: encoder.encode('data: {"type":"content","data":{"text":"partial answer"}}\n\n'),
+      })
+      .mockResolvedValueOnce({ done: true, value: undefined });
+    const releaseLock = vi.fn();
+    const onEvent = vi.fn();
+
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      body: {
+        getReader: () => ({ read, releaseLock }),
+      },
+    } as unknown as Response);
+
+    await AIChatAPI.chat('hello', undefined, undefined, onEvent);
+
+    const types = onEvent.mock.calls.map(([event]) => event.type);
+    expect(types).toEqual(['content', 'error']);
+    expect(onEvent.mock.calls[1][0]).toMatchObject({
+      type: 'error',
+      data: { message: expect.stringContaining('closed before the response finished') },
+    });
     expect(releaseLock).toHaveBeenCalledTimes(1);
   });
 
@@ -1371,7 +1403,11 @@ describe('AIChatAPI', () => {
 
     expect(read).toHaveBeenCalledTimes(1);
     expect(releaseLock).toHaveBeenCalledTimes(1);
-    expect(onEvent).toHaveBeenCalledWith({ type: 'done' });
+    // A close without a terminal event is an interruption, not completion.
+    expect(onEvent).toHaveBeenCalledWith({
+      type: 'error',
+      data: { message: expect.stringContaining('closed before the response finished') },
+    });
     expect(clearTimeoutSpy).toHaveBeenCalled();
     clearTimeoutSpy.mockRestore();
   });
@@ -1429,7 +1465,12 @@ describe('AIChatAPI', () => {
     expect(logger.error).toHaveBeenCalledWith('[AI Chat] Failed to parse event', {
       line: 'data: not valid json',
     });
-    expect(onEvent).toHaveBeenCalledWith({ type: 'done' });
+    // The malformed stream never delivered a terminal event, so the close
+    // surfaces as an interruption.
+    expect(onEvent).toHaveBeenCalledWith({
+      type: 'error',
+      data: { message: expect.stringContaining('closed before the response finished') },
+    });
     expect(releaseLock).toHaveBeenCalledTimes(1);
   });
 

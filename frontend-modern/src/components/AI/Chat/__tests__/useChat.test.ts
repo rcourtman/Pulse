@@ -3313,6 +3313,30 @@ describe('useChat', () => {
       dispose();
     });
 
+    it('marks every restored message as not streaming so no phantom active turn survives a load', async () => {
+      mockGetMessages.mockResolvedValue([
+        { id: 'msg-1', role: 'user', content: 'check minipc', timestamp: '2024-01-01T00:00:00Z' },
+        {
+          id: 'msg-2',
+          role: 'assistant',
+          // A persisted turn that ended without a final answer (e.g. the
+          // stream died mid-turn) must still restore as settled history.
+          content: '',
+          timestamp: '2024-01-01T00:00:01Z',
+          tool_calls: [{ name: 'pulse_query', input: '{}', output: '', success: false }],
+        },
+      ]);
+
+      const { value: chat, dispose } = withRoot(() => useChat());
+      const loaded = await chat.loadSession('sess-interrupted');
+
+      expect(loaded).toBe(true);
+      for (const msg of chat.messages()) {
+        expect(msg.isStreaming).toBe(false);
+      }
+      dispose();
+    });
+
     it('restores the latest explicit model route before publishing the loaded session id', async () => {
       mockGetMessages.mockResolvedValue([
         {
