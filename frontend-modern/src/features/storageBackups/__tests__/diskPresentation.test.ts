@@ -10,8 +10,9 @@ import {
   PHYSICAL_DISK_EMPTY_CARD_CLASS,
   PHYSICAL_DISK_ALL_GROUPS_FILTER_LABEL,
   PHYSICAL_DISK_ALL_ROLES_FILTER_LABEL,
+  PHYSICAL_DISK_HEADER_DEVICE_CLASS,
   PHYSICAL_DISK_HEADER_DISK_CLASS,
-  PHYSICAL_DISK_HEADER_SOURCE_CLASS,
+  PHYSICAL_DISK_HEADER_LIFE_CLASS,
   PHYSICAL_DISK_NAME_TEXT_CLASS,
   PHYSICAL_DISK_SOURCE_BADGE_CLASS,
   PHYSICAL_DISK_TABLE_CLASS,
@@ -20,6 +21,8 @@ import {
   getPhysicalDiskHealthStatus,
   getPhysicalDiskHealthSummary,
   getPhysicalDiskHostLabel,
+  getPhysicalDiskLifeLabel,
+  getPhysicalDiskLifeTextClass,
   getPhysicalDiskNormalizedHealth,
   getPhysicalDiskParentLabel,
   getPhysicalDiskPlatformLabel,
@@ -63,7 +66,8 @@ describe('diskPresentation', () => {
     expect(PHYSICAL_DISK_TABLE_CLASS).toBe('w-full table-fixed text-xs');
     expect(PHYSICAL_DISK_TABLE_ROW_HOVER_CLASS).toContain('hover:bg-surface-hover');
     expect(PHYSICAL_DISK_HEADER_DISK_CLASS).toContain('uppercase');
-    expect(PHYSICAL_DISK_HEADER_SOURCE_CLASS).toContain('sm:w-[11%]');
+    expect(PHYSICAL_DISK_HEADER_DEVICE_CLASS).toContain('md:table-cell');
+    expect(PHYSICAL_DISK_HEADER_LIFE_CLASS).toContain('md:table-cell');
     expect(PHYSICAL_DISK_NAME_TEXT_CLASS).toContain('font-semibold');
     expect(PHYSICAL_DISK_SOURCE_BADGE_CLASS).toContain('justify-center');
 
@@ -119,6 +123,19 @@ describe('diskPresentation', () => {
         storageGroup: 'tank',
       }),
     ).toBe('tank');
+    expect(getPhysicalDiskParentLabel(makeDiskData({ storageGroup: '', used: 'ZFS' }))).toBe('ZFS');
+    expect(getPhysicalDiskParentLabel(makeDiskData({ storageGroup: 'tank', used: 'ZFS' }))).toBe(
+      'tank',
+    );
+    expect(getPhysicalDiskParentLabel(makeDiskData({ storageGroup: '', used: 'unknown' }))).toBe(
+      '',
+    );
+    expect(getPhysicalDiskLifeLabel(makeDiskData({ wearout: 96 }))).toBe('96%');
+    expect(getPhysicalDiskLifeLabel(makeDiskData({ wearout: 0 }))).toBe('');
+    expect(getPhysicalDiskLifeLabel(makeDiskData({ wearout: -1 }))).toBe('');
+    expect(getPhysicalDiskLifeTextClass(makeDiskData({ wearout: 96 }))).toContain('text-green');
+    expect(getPhysicalDiskLifeTextClass(makeDiskData({ wearout: 35 }))).toContain('text-amber');
+    expect(getPhysicalDiskLifeTextClass(makeDiskData({ wearout: 9 }))).toContain('text-red');
     expect(getPhysicalDiskPlatformLabel({} as Resource, 'PVE')).toBe('PVE');
     expect(
       getPhysicalDiskSourceBadgePresentation({

@@ -1238,7 +1238,10 @@ describe('frontend resource type boundaries', () => {
     expect(diskListSource).toContain('getPhysicalDiskEmptyStatePresentation');
     expect(diskListSource).toContain('getPhysicalDiskRoleLabel');
     expect(diskListSource).toContain('getPhysicalDiskParentLabel');
-    expect(diskListSource).toContain('getPhysicalDiskSourceBadgePresentation');
+    expect(diskListSource).toContain('getPhysicalDiskLifeLabel');
+    // The source badge renders in the expansion (DiskDetail), not the table.
+    expect(diskListSource).not.toContain('getPhysicalDiskSourceBadgePresentation');
+    expect(diskDetailSource).toContain('getPhysicalDiskSourceBadgePresentation');
     expect(diskListSource).not.toContain('const titleize =');
     expect(diskListSource).not.toContain('const platformLabel =');
     expect(diskListSource).not.toContain('function hasSmartWarning(');

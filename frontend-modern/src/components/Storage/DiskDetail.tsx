@@ -38,6 +38,7 @@ import {
   STORAGE_DETAIL_MONO_CHIP_CLASS,
   STORAGE_DETAIL_SECTION_TITLE_CLASS,
 } from '@/features/storageBackups/detailPresentation';
+import { getPhysicalDiskSourceBadgePresentation } from '@/features/storageBackups/diskPresentation';
 import { StorageDetailMetricCard } from './StorageDetailMetricCard';
 import { useDiskDetailModel } from './useDiskDetailModel';
 
@@ -82,6 +83,12 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
           <span class={STORAGE_DISK_DETAIL_MODEL_CLASS}>{diskData().model || 'Unknown Disk'}</span>
           <span class={STORAGE_DETAIL_MONO_CHIP_CLASS}>{diskData().devPath}</span>
           <span class={STORAGE_DISK_DETAIL_NODE_CLASS}>{diskData().node}</span>
+          <span
+            class={getPhysicalDiskSourceBadgePresentation(props.disk).className}
+            title="Data source"
+          >
+            {getPhysicalDiskSourceBadgePresentation(props.disk).label}
+          </span>
           <Show when={diskData().serial}>
             <span class={STORAGE_DISK_DETAIL_SERIAL_CLASS}>S/N: {diskData().serial}</span>
           </Show>

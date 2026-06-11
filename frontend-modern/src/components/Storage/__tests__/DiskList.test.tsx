@@ -105,15 +105,37 @@ describe('DiskList', () => {
     });
 
     expect(screen.getByRole('columnheader', { name: 'Disk' })).toBeInTheDocument();
-    expect(screen.getByRole('columnheader', { name: 'Source' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Device' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Host' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'SSD life remaining' })).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'Source' })).not.toBeInTheDocument();
     expect(screen.getByText('Disk sda')).toBeInTheDocument();
+    expect(screen.getByText('/dev/sda')).toBeInTheDocument();
     expect(screen.getByText('tower')).toBeInTheDocument();
-    expect(screen.getByText('PVE')).toBeInTheDocument();
     expect(screen.getByText('Parity')).toBeInTheDocument();
     expect(screen.getByText('Tower Array')).toBeInTheDocument();
     expect(screen.getByText('Needs Attention')).toBeInTheDocument();
     expect(screen.getByText('Pending sectors detected.')).toBeInTheDocument();
+  });
+
+  it('renders SSD life and falls back to the Proxmox usage string for Belongs', () => {
+    renderDiskList({
+      disks: [
+        buildDisk('sda', 'tower', {
+          diskType: 'ssd',
+          wearout: 96,
+          storageGroup: '',
+          used: 'ZFS',
+          storageRole: '',
+        }),
+      ],
+      nodes: [buildNode('node-tower', 'tower')],
+      selectedNode: null,
+      searchTerm: '',
+    });
+
+    expect(screen.getByText('96%')).toBeInTheDocument();
+    expect(screen.getByText('ZFS')).toBeInTheDocument();
   });
 
   it('filters disks by search term and supports row expansion', () => {
@@ -196,7 +218,7 @@ describe('DiskList', () => {
       searchTerm: '',
     });
 
-    expect(screen.getByText('TrueNAS')).toBeInTheDocument();
+    expect(screen.getByText('truenas-main')).toBeInTheDocument();
     fireEvent.click(screen.getByText('Seagate IronWolf'));
     expect(screen.getByTestId('disk-detail')).toHaveTextContent('sda');
   });

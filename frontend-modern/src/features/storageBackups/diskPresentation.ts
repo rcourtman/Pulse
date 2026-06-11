@@ -96,25 +96,28 @@ export const PHYSICAL_DISK_TABLE_BODY_CLASS = 'divide-y divide-border';
 export const PHYSICAL_DISK_TABLE_ROW_CLASS = 'cursor-pointer transition-colors';
 export const PHYSICAL_DISK_TABLE_ROW_SELECTED_CLASS = 'bg-blue-50 dark:bg-blue-900';
 export const PHYSICAL_DISK_TABLE_ROW_HOVER_CLASS = 'hover:bg-surface-hover';
-export const PHYSICAL_DISK_TABLE_ROW_STYLE = { height: '38px' } as const;
+export const PHYSICAL_DISK_TABLE_ROW_STYLE = { height: '32px' } as const;
 export const PHYSICAL_DISK_DETAIL_ROW_CELL_CLASS =
   'border-b border-border-subtle bg-surface-alt px-4 py-4 shadow-inner';
-export const PHYSICAL_DISK_COL_DISK_CLASS = 'w-[42%] sm:w-[28%] md:w-[28%] xl:w-[22%]';
-export const PHYSICAL_DISK_COL_SOURCE_CLASS = 'w-[15%] sm:w-[11%] md:w-[9%] xl:w-[8%]';
+export const PHYSICAL_DISK_COL_DISK_CLASS = 'w-[47%] sm:w-[31%] md:w-[24%] xl:w-[19%]';
+export const PHYSICAL_DISK_COL_DEVICE_CLASS = 'hidden md:table-column md:w-[11%] xl:w-[9%]';
 export const PHYSICAL_DISK_COL_HOST_CLASS =
-  'hidden sm:table-column sm:w-[18%] md:w-[14%] xl:w-[12%]';
-export const PHYSICAL_DISK_COL_ROLE_CLASS = 'hidden xl:table-column xl:w-[10%]';
-export const PHYSICAL_DISK_COL_PARENT_CLASS = 'hidden xl:table-column xl:w-[13%]';
-export const PHYSICAL_DISK_COL_HEALTH_CLASS = 'w-[25%] sm:w-[24%] md:w-[20%] xl:w-[16%]';
-export const PHYSICAL_DISK_COL_TEMP_CLASS = 'hidden md:table-column md:w-[9%] xl:w-[7%]';
-export const PHYSICAL_DISK_COL_SIZE_CLASS = 'w-[18%] sm:w-[19%] md:w-[20%] xl:w-[12%]';
+  'hidden sm:table-column sm:w-[20%] md:w-[12%] xl:w-[10%]';
+export const PHYSICAL_DISK_COL_ROLE_CLASS = 'hidden xl:table-column xl:w-[8%]';
+export const PHYSICAL_DISK_COL_PARENT_CLASS = 'hidden xl:table-column xl:w-[12%]';
+export const PHYSICAL_DISK_COL_HEALTH_CLASS = 'w-[29%] sm:w-[27%] md:w-[19%] xl:w-[17%]';
+export const PHYSICAL_DISK_COL_LIFE_CLASS = 'hidden md:table-column md:w-[7%] xl:w-[6%]';
+export const PHYSICAL_DISK_COL_TEMP_CLASS = 'hidden md:table-column md:w-[8%] xl:w-[7%]';
+export const PHYSICAL_DISK_COL_SIZE_CLASS = 'w-[24%] sm:w-[22%] md:w-[19%] xl:w-[12%]';
+const PHYSICAL_DISK_CELL_DEVICE_RESPONSIVE_CLASS = 'hidden md:table-cell md:w-[11%] xl:w-[9%]';
 const PHYSICAL_DISK_CELL_HOST_RESPONSIVE_CLASS =
-  'hidden sm:table-cell sm:w-[18%] md:w-[14%] xl:w-[12%]';
-const PHYSICAL_DISK_CELL_ROLE_RESPONSIVE_CLASS = 'hidden xl:table-cell xl:w-[10%]';
-const PHYSICAL_DISK_CELL_PARENT_RESPONSIVE_CLASS = 'hidden xl:table-cell xl:w-[13%]';
-const PHYSICAL_DISK_CELL_TEMP_RESPONSIVE_CLASS = 'hidden md:table-cell md:w-[9%] xl:w-[7%]';
+  'hidden sm:table-cell sm:w-[20%] md:w-[12%] xl:w-[10%]';
+const PHYSICAL_DISK_CELL_ROLE_RESPONSIVE_CLASS = 'hidden xl:table-cell xl:w-[8%]';
+const PHYSICAL_DISK_CELL_PARENT_RESPONSIVE_CLASS = 'hidden xl:table-cell xl:w-[12%]';
+const PHYSICAL_DISK_CELL_LIFE_RESPONSIVE_CLASS = 'hidden md:table-cell md:w-[7%] xl:w-[6%]';
+const PHYSICAL_DISK_CELL_TEMP_RESPONSIVE_CLASS = 'hidden md:table-cell md:w-[8%] xl:w-[7%]';
 export const PHYSICAL_DISK_HEADER_DISK_CLASS = `${PHYSICAL_DISK_TABLE_HEADER_CLASS} ${PHYSICAL_DISK_COL_DISK_CLASS}`;
-export const PHYSICAL_DISK_HEADER_SOURCE_CLASS = `${PHYSICAL_DISK_TABLE_HEADER_CLASS} ${PHYSICAL_DISK_COL_SOURCE_CLASS}`;
+export const PHYSICAL_DISK_HEADER_DEVICE_CLASS = `${PHYSICAL_DISK_TABLE_HEADER_CLASS} ${PHYSICAL_DISK_CELL_DEVICE_RESPONSIVE_CLASS}`;
 // Headers for responsively-hidden columns must use `table-cell` (not
 // `table-column`, which is for `<col>` and does not render `<th>`
 // content), otherwise the cells render but the column header is blank.
@@ -122,14 +125,16 @@ export const PHYSICAL_DISK_HEADER_HOST_CLASS = `${PHYSICAL_DISK_TABLE_HEADER_CLA
 export const PHYSICAL_DISK_HEADER_ROLE_CLASS = `${PHYSICAL_DISK_TABLE_HEADER_CLASS} ${PHYSICAL_DISK_CELL_ROLE_RESPONSIVE_CLASS}`;
 export const PHYSICAL_DISK_HEADER_PARENT_CLASS = `${PHYSICAL_DISK_TABLE_HEADER_CLASS} ${PHYSICAL_DISK_CELL_PARENT_RESPONSIVE_CLASS}`;
 export const PHYSICAL_DISK_HEADER_HEALTH_CLASS = `${PHYSICAL_DISK_TABLE_HEADER_CLASS} ${PHYSICAL_DISK_COL_HEALTH_CLASS}`;
+export const PHYSICAL_DISK_HEADER_LIFE_CLASS = `${PHYSICAL_DISK_TABLE_HEADER_CLASS} ${PHYSICAL_DISK_CELL_LIFE_RESPONSIVE_CLASS}`;
 export const PHYSICAL_DISK_HEADER_TEMP_CLASS = `${PHYSICAL_DISK_TABLE_HEADER_CLASS} ${PHYSICAL_DISK_CELL_TEMP_RESPONSIVE_CLASS}`;
 export const PHYSICAL_DISK_HEADER_SIZE_CLASS = `${PHYSICAL_DISK_TABLE_HEADER_CLASS} ${PHYSICAL_DISK_COL_SIZE_CLASS}`;
 export const PHYSICAL_DISK_CELL_DISK_CLASS = `${PHYSICAL_DISK_COL_DISK_CLASS} overflow-hidden px-1 sm:px-1.5 lg:px-2 py-1 align-middle text-xs`;
-export const PHYSICAL_DISK_CELL_SOURCE_CLASS = `${PHYSICAL_DISK_COL_SOURCE_CLASS} overflow-hidden px-1 sm:px-1.5 lg:px-2 py-1 align-middle text-xs`;
+export const PHYSICAL_DISK_CELL_DEVICE_CLASS = `${PHYSICAL_DISK_CELL_DEVICE_RESPONSIVE_CLASS} overflow-hidden px-1 sm:px-1.5 lg:px-2 py-1 align-middle text-xs`;
 export const PHYSICAL_DISK_CELL_HOST_CLASS = `${PHYSICAL_DISK_CELL_HOST_RESPONSIVE_CLASS} overflow-hidden px-1 sm:px-1.5 lg:px-2 py-1 align-middle text-xs`;
 export const PHYSICAL_DISK_CELL_ROLE_CLASS = `${PHYSICAL_DISK_CELL_ROLE_RESPONSIVE_CLASS} overflow-hidden px-1 sm:px-1.5 lg:px-2 py-1 align-middle text-xs`;
 export const PHYSICAL_DISK_CELL_PARENT_CLASS = `${PHYSICAL_DISK_CELL_PARENT_RESPONSIVE_CLASS} overflow-hidden px-1 sm:px-1.5 lg:px-2 py-1 align-middle text-xs`;
 export const PHYSICAL_DISK_CELL_HEALTH_CLASS = `${PHYSICAL_DISK_COL_HEALTH_CLASS} overflow-hidden px-1 sm:px-1.5 lg:px-2 py-1 align-middle text-xs`;
+export const PHYSICAL_DISK_CELL_LIFE_CLASS = `${PHYSICAL_DISK_CELL_LIFE_RESPONSIVE_CLASS} overflow-hidden px-1 sm:px-1.5 lg:px-2 py-1 align-middle text-xs whitespace-nowrap`;
 export const PHYSICAL_DISK_CELL_TEMP_CLASS = `${PHYSICAL_DISK_CELL_TEMP_RESPONSIVE_CLASS} overflow-hidden px-1 sm:px-1.5 lg:px-2 py-1 align-middle text-xs whitespace-nowrap`;
 export const PHYSICAL_DISK_CELL_SIZE_CLASS = `${PHYSICAL_DISK_COL_SIZE_CLASS} overflow-hidden px-1 sm:px-1.5 lg:px-2 py-1 align-middle text-xs whitespace-nowrap`;
 export const PHYSICAL_DISK_NAME_WRAP_CLASS = 'flex min-w-0 items-center gap-1.5 whitespace-nowrap';
@@ -138,7 +143,10 @@ export const PHYSICAL_DISK_NAME_TEXT_CLASS =
 export const PHYSICAL_DISK_SOURCE_BADGE_CLASS =
   'inline-flex max-w-full min-w-0 justify-center overflow-hidden text-ellipsis px-1 sm:px-1.5 py-px text-[9px] font-medium';
 export const PHYSICAL_DISK_VALUE_TEXT_CLASS = 'block truncate text-[11px] text-base-content';
+export const PHYSICAL_DISK_DEVICE_TEXT_CLASS =
+  'block truncate font-mono text-[11px] text-base-content';
 export const PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS = 'text-[11px] text-muted';
+export const PHYSICAL_DISK_LIFE_CLASS = 'text-[11px] font-medium';
 export const PHYSICAL_DISK_HEALTH_WRAP_CLASS =
   'flex min-w-0 items-center gap-1.5 whitespace-nowrap';
 export const PHYSICAL_DISK_HEALTH_LABEL_CLASS = 'min-w-0 truncate text-[11px] font-semibold';
@@ -568,7 +576,26 @@ export function getPhysicalDiskRoleLabel(disk: PhysicalDiskPresentationData): st
 
 export function getPhysicalDiskParentLabel(disk: PhysicalDiskPresentationData): string {
   if (disk.storageGroup?.trim()) return disk.storageGroup.trim();
+  // Proxmox reports a usage string ("ZFS", "ext4", "BIOS boot", "LVM", ...)
+  // for disks it cannot map to a named pool; better than an empty cell.
+  const used = disk.used?.trim() || '';
+  if (used && used.toLowerCase() !== 'unknown') return used;
   return '';
+}
+
+export function getPhysicalDiskLifeLabel(disk: PhysicalDiskPresentationData): string {
+  // Wearout is "% life remaining" (100 = new); 0 and -1 both mean unreported.
+  if (typeof disk.wearout !== 'number' || disk.wearout <= 0) return '';
+  return `${Math.min(disk.wearout, 100)}%`;
+}
+
+export function getPhysicalDiskLifeTextClass(disk: PhysicalDiskPresentationData): string {
+  if (typeof disk.wearout !== 'number' || disk.wearout <= 0) {
+    return PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS;
+  }
+  if (disk.wearout < 20) return 'text-red-600 dark:text-red-400';
+  if (disk.wearout < 50) return 'text-amber-600 dark:text-amber-400';
+  return 'text-green-600 dark:text-green-400';
 }
 
 export function getPhysicalDiskRoleFilterValue(disk: PhysicalDiskPresentationData): string {
