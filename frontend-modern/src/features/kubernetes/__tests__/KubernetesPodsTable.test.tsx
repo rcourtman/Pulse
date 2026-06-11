@@ -73,7 +73,7 @@ describe('KubernetesPodsTable', () => {
     expect(screen.getByText('Pod')).toBeInTheDocument();
     expect(screen.getByText('Scope')).toBeInTheDocument();
     expect(screen.getByText('Node')).toBeInTheDocument();
-    expect(screen.getByText('Phase')).toBeInTheDocument();
+    expect(screen.getByText('Status')).toBeInTheDocument();
     expect(screen.getByText('Ready')).toBeInTheDocument();
     expect(screen.getByText('Restarts')).toBeInTheDocument();
     expect(screen.getByText('Owner')).toBeInTheDocument();
@@ -83,7 +83,9 @@ describe('KubernetesPodsTable', () => {
     expect(screen.getByText('checkout-api-6c746d5bcf-c7z2p')).toBeInTheDocument();
     expect(screen.getByText('prod-euw1/services')).toBeInTheDocument();
     expect(screen.getByText('prod-euw1-k8s-02')).toBeInTheDocument();
-    expect(screen.getByText('Running')).toBeInTheDocument();
+    // Raw phase is Running, but the metrics-sidecar container is not ready;
+    // the status column shows the mapped label, not the phase.
+    expect(screen.getByText('Not ready')).toBeInTheDocument();
     expect(screen.getByText('1/2')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
     expect(screen.getByText('Deployment/checkout-api')).toBeInTheDocument();
@@ -136,8 +138,17 @@ describe('KubernetesPodsTable', () => {
       (row) => row.getAttribute('data-kubernetes-pod-row'),
     );
     expect(rows).toEqual(['crashing-pod', 'not-ready-pod', 'happy-pod']);
-    expect(screen.getByTitle('CrashLoopBackOff')).toHaveClass('bg-red-500');
-    expect(screen.getByTitle('Not ready')).toHaveClass('bg-amber-500');
-    expect(screen.getByTitle('Running')).toHaveClass('bg-emerald-500');
+    // The failure reason is visible cell text, not just a dot tooltip.
+    expect(screen.getByText('CrashLoopBackOff')).toBeInTheDocument();
+    expect(screen.getByText('Not ready')).toBeInTheDocument();
+    expect(
+      screen.getAllByTitle('CrashLoopBackOff').some((el) => el.classList.contains('bg-red-500')),
+    ).toBe(true);
+    expect(
+      screen.getAllByTitle('Not ready').some((el) => el.classList.contains('bg-amber-500')),
+    ).toBe(true);
+    expect(
+      screen.getAllByTitle('Running').some((el) => el.classList.contains('bg-emerald-500')),
+    ).toBe(true);
   });
 });

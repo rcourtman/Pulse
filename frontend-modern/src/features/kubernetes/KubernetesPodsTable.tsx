@@ -53,9 +53,6 @@ const podScope = (resource: Resource): string => {
   return cluster || 'Cluster';
 };
 
-const podPhase = (resource: Resource): string =>
-  textValue(resource.kubernetes?.podPhase || resource.kubernetes?.phase);
-
 const podContainers = (resource: Resource): ResourceKubernetesPodContainerStatus[] =>
   resource.kubernetes?.podContainers ?? [];
 
@@ -171,7 +168,7 @@ export const KubernetesPodsTable: Component<{
                     Node
                   </TableHead>
                   <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[8%]`}>
-                    Phase
+                    Status
                   </TableHead>
                   <TableHead
                     class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[7%]`}
@@ -207,7 +204,6 @@ export const KubernetesPodsTable: Component<{
                     const name = () => podName(resource);
                     const scope = () => podScope(resource);
                     const node = () => textValue(resource.kubernetes?.nodeName);
-                    const phase = () => podPhase(resource);
                     const owner = () => ownerValue(resource);
                     const image = () => imageValue(resource);
                     const age = () => ageValue(resource);
@@ -255,7 +251,12 @@ export const KubernetesPodsTable: Component<{
                         <TableCell
                           class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                         >
-                          {phase()}
+                          {/* The mapped label carries the container failure reason
+                              (CrashLoopBackOff, ImagePullBackOff, ...) where the raw
+                              phase would still read "Running". */}
+                          <span class="block max-w-full truncate" title={indicator().label}>
+                            {indicator().label}
+                          </span>
                         </TableCell>
                         <TableCell
                           class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}

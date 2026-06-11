@@ -365,6 +365,32 @@ describe('kubernetesPageModel', () => {
       ).toEqual({ variant: 'success', label: 'Ready' });
     });
 
+    it('returns warning for a cordoned node even though it reports ready', () => {
+      expect(
+        mapKubernetesNodeStatus(
+          makeResource({
+            id: 'cordoned',
+            type: 'k8s-node',
+            status: 'warning',
+            kubernetes: { ready: true, unschedulable: true },
+          }),
+        ),
+      ).toEqual({ variant: 'warning', label: 'Unschedulable' });
+    });
+
+    it('keeps NotReady as the dominant state when a cordoned node is also down', () => {
+      expect(
+        mapKubernetesNodeStatus(
+          makeResource({
+            id: 'cordoned-down',
+            type: 'k8s-node',
+            status: 'offline',
+            kubernetes: { ready: false, unschedulable: true },
+          }),
+        ),
+      ).toEqual({ variant: 'danger', label: 'NotReady' });
+    });
+
     it('falls back to resource.status when ready is undefined', () => {
       expect(
         mapKubernetesNodeStatus(makeResource({ id: 'fallback-ok', type: 'k8s-node', status: 'online' })),
@@ -757,6 +783,27 @@ describe('kubernetesPageModel', () => {
         'node-worker',
       ]);
       expect(filterKubernetesResources(rows, 'v1.30', 'online')).toEqual([]);
+    });
+
+    it('buckets the backend `warning` status into the degraded filter', () => {
+      // The Kubernetes adapter emits `warning` (never `degraded`) for
+      // unhealthy-but-alive rows; the Degraded chip must match them.
+      const warningRows: Resource[] = [
+        makeResource({
+          id: 'pod-crashloop',
+          type: 'pod',
+          status: 'warning',
+          kubernetes: { namespace: 'payments', podName: 'checkout-api-abc' },
+        }),
+        makeResource({ id: 'pod-healthy', type: 'pod', status: 'online' }),
+      ];
+      expect(filterKubernetesResources(warningRows, '', 'degraded').map((r) => r.id)).toEqual([
+        'pod-crashloop',
+      ]);
+      expect(filterKubernetesResources(warningRows, '', 'online').map((r) => r.id)).toEqual([
+        'pod-healthy',
+      ]);
+      expect(filterKubernetesResources(warningRows, '', 'offline')).toEqual([]);
     });
   });
 

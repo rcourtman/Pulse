@@ -135,6 +135,7 @@ describe('useResources - Resource Filtering Logic', () => {
         running: 0,
         stopped: 0,
         degraded: 0,
+        warning: 0,
         paused: 0,
         unknown: 0,
       };

@@ -95,13 +95,16 @@ export type SourceType =
   | 'agent' // Data pushed from agent
   | 'hybrid'; // Both sources, agent preferred
 
-// Resource status - operational state
+// Resource status - operational state. `warning` is what the canonical
+// Kubernetes adapter emits for unhealthy-but-alive rows (cordoned nodes,
+// not-ready containers, pending pods, partially available controllers).
 export type ResourceStatus =
   | 'online'
   | 'offline'
   | 'running'
   | 'stopped'
   | 'degraded'
+  | 'warning'
   | 'paused'
   | 'unknown';
 
@@ -1108,6 +1111,7 @@ export interface ResourceKubernetesMeta {
   kernelVersion?: string;
   roles?: string[];
   ready?: boolean;
+  unschedulable?: boolean;
   capacityCpuCores?: number;
   allocatableCpuCores?: number;
   capacityMemoryBytes?: number;

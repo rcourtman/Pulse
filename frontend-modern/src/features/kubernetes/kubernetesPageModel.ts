@@ -132,6 +132,11 @@ export function mapKubernetesPodStatus(resource: Resource): StatusIndicator {
 export function mapKubernetesNodeStatus(resource: Resource): StatusIndicator {
   const ready = resource.kubernetes?.ready;
   if (ready === false) return { variant: 'danger', label: 'NotReady' };
+  // A cordoned node still reports ready=true; check unschedulable before
+  // declaring the row healthy or the cordon is invisible on the page.
+  if (resource.kubernetes?.unschedulable === true) {
+    return { variant: 'warning', label: 'Unschedulable' };
+  }
   if (ready === true) return { variant: 'success', label: 'Ready' };
 
   const status = normalizeKubernetesToken(resource.status);
@@ -438,7 +443,11 @@ export function filterKubernetesIncidents(
 export type KubernetesResourceStatusFilter = 'all' | 'online' | 'degraded' | 'offline';
 
 const ONLINE_RESOURCE_STATUSES = new Set<string>(['online', 'running']);
-const DEGRADED_RESOURCE_STATUSES = new Set<string>(['degraded', 'paused']);
+// The canonical Kubernetes adapter reports every unhealthy-but-alive state
+// (cordoned node, not-ready container, pending pod, partially available
+// controller) as `warning`, so the degraded bucket must accept it or those
+// rows match none of the Healthy / Degraded / Offline filter chips.
+const DEGRADED_RESOURCE_STATUSES = new Set<string>(['degraded', 'paused', 'warning']);
 const OFFLINE_RESOURCE_STATUSES = new Set<string>(['offline', 'stopped']);
 
 const mapResourceStatusToTriad = (
