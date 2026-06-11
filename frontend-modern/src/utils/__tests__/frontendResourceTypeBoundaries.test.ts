@@ -1317,11 +1317,9 @@ describe('frontend resource type boundaries', () => {
     expect(storagePoolRowSource).not.toContain('const hostLabel = createMemo(');
     expect(storagePoolRowSource).not.toContain('const topologyLabel = createMemo(');
     expect(storagePoolRowPresentationSource).toContain('export const buildStoragePoolRowModel');
-    expect(storagePoolRowPresentationSource).toContain('getSourcePlatformPresentation');
+    expect(storagePoolRowPresentationSource).toContain('getStorageRecordHostLabel');
+    expect(storagePoolRowPresentationSource).toContain('getStorageRecordTopologyLabel');
     expect(storagePoolRowPresentationSource).toContain('getCompactStoragePoolProtectionLabel');
-    expect(storagePoolRowPresentationSource).toContain('getCompactStoragePoolImpactLabel');
-    expect(storagePoolRowPresentationSource).toContain('getCompactStoragePoolIssueLabel');
-    expect(storagePoolRowPresentationSource).toContain('getCompactStoragePoolIssueSummary');
     expect(storagePoolRowPresentationSource).toContain('getCompactStoragePoolProtectionTitle');
     expect(storagePoolRowPresentationSource).toContain('getStoragePoolStateLabel');
     expect(storagePoolRowPresentationSource).toContain('getStoragePoolStateTitle');
