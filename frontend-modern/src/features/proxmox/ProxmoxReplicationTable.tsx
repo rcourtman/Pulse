@@ -1,12 +1,4 @@
-import {
-  For,
-  Show,
-  createMemo,
-  createResource,
-  createSignal,
-  type Component,
-  type JSX,
-} from 'solid-js';
+import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
 import ArrowRightIcon from 'lucide-solid/icons/arrow-right';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
@@ -101,9 +93,42 @@ function formatSyncTime(job: ReplicationJob): string {
   if (job.lastSyncUnix && job.lastSyncUnix > 0) {
     return formatRelativeTime(job.lastSyncUnix * 1000, { compact: true });
   }
-  const raw = job.lastSyncTime as number | string | undefined;
-  if (raw) return formatRelativeTime(raw, { compact: true });
+  if (job.lastSyncTime) return formatRelativeTime(job.lastSyncTime, { compact: true });
   return '—';
+}
+
+type NextSyncTone = 'overdue' | 'imminent' | 'normal' | 'muted';
+
+const NEXT_SYNC_TONE_CLASS: Record<NextSyncTone, string> = {
+  overdue: 'text-red-600 dark:text-red-300 font-semibold',
+  imminent: 'text-amber-600 dark:text-amber-300',
+  normal: '',
+  muted: 'text-muted',
+};
+
+// An overdue next-sync is the one signal that catches a stalled pvesr
+// scheduler even while the last sync still reports ok, so it gets its own
+// column instead of folding into the status pill (which mirrors PVE's own
+// job state).
+function nextSyncFor(job: ReplicationJob): { text: string; tone: NextSyncTone } {
+  if (!job.enabled) return { text: '—', tone: 'muted' };
+  let target = 0;
+  if (job.nextSyncUnix && job.nextSyncUnix > 0) {
+    target = job.nextSyncUnix * 1000;
+  } else if (job.nextSyncTime) {
+    const raw = job.nextSyncTime;
+    const parsed = typeof raw === 'number' ? (raw > 1e12 ? raw : raw * 1000) : Date.parse(raw);
+    if (Number.isFinite(parsed)) target = parsed;
+  }
+  if (!target) return { text: '—', tone: 'muted' };
+  const minutes = Math.floor((target - Date.now()) / 60_000);
+  if (minutes < 0) {
+    const overdue = Math.abs(minutes);
+    const text = overdue < 60 ? `${overdue}m overdue` : `${Math.floor(overdue / 60)}h overdue`;
+    return { text, tone: 'overdue' };
+  }
+  if (minutes < 60) return { text: `in ${minutes}m`, tone: minutes < 5 ? 'imminent' : 'normal' };
+  return { text: `in ${Math.floor(minutes / 60)}h ${minutes % 60}m`, tone: 'normal' };
 }
 
 function formatDuration(seconds: number | undefined, human: string | undefined): string {
@@ -117,7 +142,7 @@ function formatDuration(seconds: number | undefined, human: string | undefined):
   return `${h}h ${m}m`;
 }
 
-async function fetchReplicationJobs(): Promise<ReplicationJob[]> {
+export async function fetchReplicationJobs(): Promise<ReplicationJob[]> {
   const response = await apiFetch('/api/replication/jobs?platform=proxmox-pve');
   if (!response.ok) {
     throw new Error(`Failed to load replication jobs (${response.status})`);
@@ -126,19 +151,23 @@ async function fetchReplicationJobs(): Promise<ReplicationJob[]> {
   return Array.isArray(payload?.data) ? payload.data : [];
 }
 
+// The jobs resource lives in ProxmoxPageSurface (it also gates the
+// Replication tab's visibility), so this table is purely presentational.
 export const ProxmoxReplicationTable: Component<{
+  jobs: ReplicationJob[] | undefined;
+  error: unknown;
+  onRetry: () => void;
   emptyIcon: JSX.Element;
   emptyTitle: string;
   emptyDescription: string;
 }> = (props) => {
-  const [jobs, { refetch }] = createResource<ReplicationJob[]>(fetchReplicationJobs);
   const [search, setSearch] = createSignal('');
   const [status, setStatus] = createSignal<ReplicationStatusFilter>('all');
 
   const filtered = createMemo(() => {
     const term = search().trim().toLowerCase();
     const want = status();
-    return (jobs() ?? []).filter((job) => {
+    return (props.jobs ?? []).filter((job) => {
       if (want !== 'all' && classifyJob(job) !== want) return false;
       if (!term) return true;
       const haystack = [
@@ -158,22 +187,22 @@ export const ProxmoxReplicationTable: Component<{
     });
   });
 
-  const total = createMemo(() => (jobs() ?? []).length);
+  const total = createMemo(() => (props.jobs ?? []).length);
   const visible = createMemo(() => filtered().length);
 
   return (
     <Show
-      when={!jobs.error}
+      when={!props.error}
       fallback={
         <Card padding="lg">
           <EmptyState
             icon={props.emptyIcon}
             title="Could not load replication jobs"
-            description={(jobs.error as Error | undefined)?.message ?? 'Refresh to retry.'}
+            description={(props.error as Error | undefined)?.message ?? 'Refresh to retry.'}
             actions={
               <button
                 type="button"
-                onClick={() => void refetch()}
+                onClick={() => props.onRetry()}
                 class="inline-flex min-h-10 items-center rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-surface-hover"
               >
                 Refresh
@@ -184,7 +213,7 @@ export const ProxmoxReplicationTable: Component<{
       }
     >
       <Show
-        when={jobs() !== undefined}
+        when={props.jobs !== undefined}
         fallback={
           <Card padding="lg">
             <EmptyState
@@ -233,7 +262,7 @@ export const ProxmoxReplicationTable: Component<{
               }
             >
               <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
-                <Table class="min-w-[1100px] text-xs">
+                <Table class="min-w-[1200px] text-xs">
                   <TableHeader>
                     <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
                       <TableHead class={getPlatformTableHeadClassForKind('text')}>Status</TableHead>
@@ -249,6 +278,9 @@ export const ProxmoxReplicationTable: Component<{
                         Last sync
                       </TableHead>
                       <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                        Next sync
+                      </TableHead>
+                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
                         Duration
                       </TableHead>
                       <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
@@ -262,6 +294,7 @@ export const ProxmoxReplicationTable: Component<{
                       {(job) => {
                         const classification = classifyJob(job);
                         const ind = indicatorFor(classification);
+                        const next = nextSyncFor(job);
                         const sourceNode = (job.sourceNode ?? '').trim() || '—';
                         const targetNode = (job.targetNode ?? '').trim() || '—';
                         return (
@@ -307,6 +340,11 @@ export const ProxmoxReplicationTable: Component<{
                               class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                             >
                               {formatSyncTime(job)}
+                            </TableCell>
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                            >
+                              <span class={NEXT_SYNC_TONE_CLASS[next.tone]}>{next.text}</span>
                             </TableCell>
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}

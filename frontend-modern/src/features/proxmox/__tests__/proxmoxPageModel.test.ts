@@ -51,10 +51,7 @@ describe('proxmoxPageModel', () => {
     });
 
     it('returns every node when the search term is empty', () => {
-      expect(filterProxmoxNodesForSearch([minipc, delly], [debianGo], '')).toEqual([
-        minipc,
-        delly,
-      ]);
+      expect(filterProxmoxNodesForSearch([minipc, delly], [debianGo], '')).toEqual([minipc, delly]);
     });
 
     it('keeps the host node of a matching guest so a guest search does not empty the nodes table', () => {
@@ -88,18 +85,6 @@ describe('proxmoxPageModel', () => {
         platformData: {
           proxmox: { lastBackup: 1_700_000_000_000 },
         },
-        recentChanges: [
-          {
-            id: 'replication-1',
-            observedAt: '2026-05-15T08:00:00.000Z',
-            resourceId: 'vm-101',
-            kind: 'activity',
-            sourceType: 'platform_event',
-            sourceAdapter: 'proxmox_adapter',
-            confidence: 'high',
-            reason: 'Replication job completed',
-          },
-        ],
       }),
       makeResource({
         id: 'local-zfs',
@@ -153,13 +138,10 @@ describe('proxmoxPageModel', () => {
       guests: [expect.objectContaining({ id: 'vm-101' })],
       storage: [expect.objectContaining({ id: 'local-zfs' })],
     });
-    expect(model.replicationChanges).toHaveLength(1);
-    expect(model.replicationChanges[0]).toMatchObject({
-      resource: expect.objectContaining({ id: 'vm-101' }),
-      change: expect.objectContaining({ id: 'replication-1' }),
-    });
     expect(model.resources.map((resource) => resource.id)).not.toContain('docker-host');
-    expect(buildVisibleProxmoxTabSpecs(model).map((tab) => tab.id)).toEqual([
+    // Replication is gated on the fetched job count, not on anything in the
+    // resource model: the jobs bypass the unified-resource pipeline.
+    expect(buildVisibleProxmoxTabSpecs(model, 1).map((tab) => tab.id)).toEqual([
       'overview',
       'storage',
       'replication',
@@ -169,7 +151,7 @@ describe('proxmoxPageModel', () => {
     ]);
   });
 
-  it('hides Replication for a PVE estate without replication signals', () => {
+  it('hides Replication for a PVE estate without replication jobs', () => {
     const model = buildProxmoxPageModel([
       makeResource({
         id: 'pve-node-1',
@@ -187,7 +169,7 @@ describe('proxmoxPageModel', () => {
       }),
     ]);
 
-    expect(buildVisibleProxmoxTabSpecs(model).map((tab) => tab.id)).toEqual(['overview']);
+    expect(buildVisibleProxmoxTabSpecs(model, 0).map((tab) => tab.id)).toEqual(['overview']);
   });
 
   it('resolves Proxmox suite scope from canonical platform hints', () => {

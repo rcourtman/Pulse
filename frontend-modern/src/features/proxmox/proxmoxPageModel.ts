@@ -1,5 +1,4 @@
 import type { Resource, ResourceMetric, ResourceType } from '@/types/resource';
-import type { ResourceChange } from '@/types/resource';
 import { formatProxmoxVersion } from '@/utils/proxmoxVersion';
 import { resourceMatchesSearch } from '@/utils/resourceSearchMatch';
 
@@ -43,14 +42,8 @@ export type ProxmoxPageModel = {
   pmg: Resource[];
   ceph: Resource[];
   physicalDisks: Resource[];
-  replicationChanges: ProxmoxReplicationChange[];
   clusterGroups: ProxmoxClusterGroup[];
   summary: ProxmoxPageSummary;
-};
-
-export type ProxmoxReplicationChange = {
-  resource: Resource;
-  change: ResourceChange;
 };
 
 const PROXMOX_RESOURCE_TYPES = new Set<ResourceType>([
@@ -197,8 +190,7 @@ export function filterProxmoxNodesForSearch(
   );
   return nodes.filter(
     (node) =>
-      resourceMatchesSearch(node, term) ||
-      matchingGuestNodeNames.has(getResourceNodeName(node)),
+      resourceMatchesSearch(node, term) || matchingGuestNodeNames.has(getResourceNodeName(node)),
   );
 }
 
@@ -220,25 +212,6 @@ export function getResourceLastBackup(resource: Resource): string | number | nul
   const value = platformProxmox.lastBackup;
   return typeof value === 'string' || typeof value === 'number' ? value : null;
 }
-
-const hasReplicationSignal = (change: ResourceChange): boolean => {
-  const haystack = [
-    change.id,
-    change.resourceId,
-    change.kind,
-    change.sourceType,
-    change.sourceAdapter,
-    change.reason,
-    change.from,
-    change.to,
-    ...(change.relatedResources ?? []),
-  ]
-    .filter((value): value is string => typeof value === 'string')
-    .join(' ')
-    .toLowerCase();
-
-  return haystack.includes('replication') || haystack.includes('replica');
-};
 
 const hasBackupSignal = (resource: Resource): boolean => {
   if (getResourceLastBackup(resource) !== null) return true;
@@ -263,21 +236,6 @@ const hasBackupSignal = (resource: Resource): boolean => {
     haystack.includes('backup') || haystack.includes('snapshot') || haystack.includes('vzdump')
   );
 };
-
-function buildReplicationChanges(resources: Resource[]): ProxmoxReplicationChange[] {
-  return resources
-    .flatMap((resource) =>
-      (resource.recentChanges ?? [])
-        .filter(hasReplicationSignal)
-        .map((change) => ({ resource, change })),
-    )
-    .sort((left, right) => {
-      const observedDelta =
-        new Date(right.change.observedAt).getTime() - new Date(left.change.observedAt).getTime();
-      if (observedDelta !== 0) return observedDelta;
-      return right.change.id.localeCompare(left.change.id);
-    });
-}
 
 export function getResourceVersion(resource: Resource): string {
   const pveVersion = formatProxmoxVersion(resource.proxmox?.pveVersion);
@@ -319,7 +277,6 @@ export function buildProxmoxPageModel(resources: Resource[]): ProxmoxPageModel {
       isRecord(getPlatformData(resource).ceph),
   );
   const physicalDisks = proxmoxResources.filter((resource) => resource.type === 'physical_disk');
-  const replicationChanges = buildReplicationChanges(proxmoxResources);
 
   const groupsById = new Map<string, ProxmoxClusterGroup>();
   const ensureGroup = (label: string): ProxmoxClusterGroup => {
@@ -377,7 +334,6 @@ export function buildProxmoxPageModel(resources: Resource[]): ProxmoxPageModel {
     pmg,
     ceph,
     physicalDisks,
-    replicationChanges,
     clusterGroups,
     summary: {
       clusterCount: clusterGroups.filter((group) => group.id !== '__standalone__').length,
@@ -398,13 +354,20 @@ export function buildProxmoxPageModel(resources: Resource[]): ProxmoxPageModel {
   };
 }
 
-export function buildVisibleProxmoxTabSpecs(model: ProxmoxPageModel): ProxmoxTabSpec[] {
+// Replication deliberately bypasses the unified-resource pipeline (it is
+// projected straight from Monitor.ReplicationJobsSnapshot via
+// /api/replication/jobs), so the tab is gated on the fetched job count
+// rather than on anything derivable from `model`.
+export function buildVisibleProxmoxTabSpecs(
+  model: ProxmoxPageModel,
+  replicationJobCount: number,
+): ProxmoxTabSpec[] {
   const visible = new Set<ProxmoxPageTabId>(['overview']);
 
   if (model.storage.length > 0 || model.physicalDisks.length > 0) {
     visible.add('storage');
   }
-  if (model.replicationChanges.length > 0) {
+  if (replicationJobCount > 0) {
     visible.add('replication');
   }
   if (model.resources.some(hasBackupSignal) || model.pbs.length > 0) {

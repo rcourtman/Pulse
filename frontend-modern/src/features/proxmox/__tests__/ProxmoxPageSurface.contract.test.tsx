@@ -109,6 +109,7 @@ vi.mock('../ProxmoxNodesTable', () => ({
 
 vi.mock('../ProxmoxReplicationTable', () => ({
   ProxmoxReplicationTable: () => <div data-testid="replication-table" />,
+  fetchReplicationJobs: () => Promise.resolve([]),
 }));
 
 describe('ProxmoxPageSurface contract', () => {

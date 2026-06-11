@@ -560,11 +560,13 @@ export interface ReplicationJob {
   state?: string;
   status?: string;
   lastSyncStatus?: string;
-  lastSyncTime?: number;
+  // The Go model serializes *time.Time fields as RFC3339 strings; the
+  // *Unix companions carry the same instants as epoch seconds.
+  lastSyncTime?: number | string;
   lastSyncUnix?: number;
   lastSyncDurationSeconds?: number;
   lastSyncDurationHuman?: string;
-  nextSyncTime?: number;
+  nextSyncTime?: number | string;
   nextSyncUnix?: number;
   durationSeconds?: number;
   durationHuman?: string;

@@ -1,5 +1,5 @@
 import { useLocation } from '@solidjs/router';
-import { Show, createMemo, type Accessor } from 'solid-js';
+import { Show, createMemo, createResource, type Accessor } from 'solid-js';
 import StorageSurface from '@/components/Storage/Storage';
 import { WorkloadsFilter } from '@/components/Workloads/WorkloadsFilter';
 import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
@@ -38,7 +38,7 @@ import { ProxmoxBackupsTable } from './ProxmoxBackupsTable';
 import { ProxmoxCephTable } from './ProxmoxCephTable';
 import { ProxmoxMailGatewayTable } from './ProxmoxMailGatewayTable';
 import { ProxmoxNodesTable } from './ProxmoxNodesTable';
-import { ProxmoxReplicationTable } from './ProxmoxReplicationTable';
+import { ProxmoxReplicationTable, fetchReplicationJobs } from './ProxmoxReplicationTable';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import { updateStore } from '@/stores/updates';
 import {
@@ -81,7 +81,18 @@ export function ProxmoxPageSurface() {
     initialHydration: 'prefer-ws-then-rest',
   });
   const model = createMemo(() => buildProxmoxPageModel(resources()));
-  const visibleTabs = createMemo(() => buildVisibleProxmoxTabSpecs(model()));
+  // Replication jobs come straight from /api/replication/jobs (they bypass
+  // the unified-resource pipeline), so the surface owns the fetch: the job
+  // count gates the Replication tab and the same data feeds the table.
+  // Reading an errored resource throws, hence the `.error` guards.
+  const [replicationJobs, { refetch: refetchReplicationJobs }] =
+    createResource(fetchReplicationJobs);
+  const replicationJobCount = createMemo(() =>
+    replicationJobs.error ? 0 : (replicationJobs() ?? []).length,
+  );
+  const visibleTabs = createMemo(() =>
+    buildVisibleProxmoxTabSpecs(model(), replicationJobCount()),
+  );
   const visibleTabIds = createMemo(
     () => new Set<ProxmoxPageTabId>(visibleTabs().map((tab) => tab.id)),
   );
@@ -198,6 +209,9 @@ export function ProxmoxPageSurface() {
             </Show>
             <Show when={activeTab() === 'replication'}>
               <ProxmoxReplicationTable
+                jobs={replicationJobs.error ? undefined : replicationJobs()}
+                error={replicationJobs.error}
+                onRetry={() => void refetchReplicationJobs()}
                 emptyIcon={<ProxmoxIcon class="h-6 w-6 text-slate-400" />}
                 emptyTitle="No replication jobs"
                 emptyDescription="Replication jobs appear here once PVE is configured to replicate guests between nodes."
