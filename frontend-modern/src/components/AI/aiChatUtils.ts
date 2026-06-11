@@ -45,6 +45,19 @@ const configureDOMPurify = () => {
     element.setAttribute('target', '_blank');
     element.setAttribute('rel', 'noopener noreferrer');
   });
+
+  // 'class' stays out of ALLOWED_ATTR (UI-redressing surface — see the
+  // hardening notes in renderMarkdown). The single carve-out is marked's
+  // fence-language hint on <code>, pattern-pinned so only `language-x`
+  // survives; the lazy syntax highlighter needs it to pick a grammar.
+  DOMPurify.addHook('uponSanitizeAttribute', (node, data) => {
+    const element = node as Element | null;
+    if (!element || element.tagName !== 'CODE') return;
+    if (data.attrName !== 'class') return;
+    if (/^language-[a-z0-9+#_-]{1,30}$/i.test(data.attrValue)) {
+      data.forceKeepAttr = true;
+    }
+  });
 };
 
 const coerceMarkdownInput = (content: unknown): string => {

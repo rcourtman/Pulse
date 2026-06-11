@@ -254,6 +254,10 @@ export default defineConfig({
             if (id.includes('solid-js') || id.includes('@solidjs/router')) return 'vendor-solid';
             if (id.includes('lucide-solid')) return 'vendor-icons';
             if (id.includes('marked') || id.includes('dompurify')) return 'vendor-ai';
+            // Only ever dynamically imported (Assistant code-block
+            // highlighting on settled turns); folding it into the eager
+            // vendor chunk would bill it to first load.
+            if (id.includes('highlight.js')) return 'vendor-highlight';
             return 'vendor';
           }
 

@@ -19,6 +19,7 @@ import RotateCcwIcon from 'lucide-solid/icons/rotate-ccw';
 import SparklesIcon from 'lucide-solid/icons/sparkles';
 import XIcon from 'lucide-solid/icons/x';
 import { renderMarkdown } from '../aiChatUtils';
+import { highlightSettledCodeBlocks } from './aiCodeHighlight';
 import { morphMarkdownInto } from './markdownMorph';
 import { PendingToolBlock, ToolCancellationBlock, ToolExecutionBlock } from './ToolExecutionBlock';
 import { ApprovalCard } from './ApprovalCard';
@@ -223,6 +224,13 @@ const AssistantMarkdownBlock: Component<{
   createEffect(() => {
     const html = renderMarkdown(visibleText());
     if (container) morphMarkdownInto(container, html);
+    // Highlight only once the turn settles: re-highlighting per streaming
+    // delta would fight the morph (it diffs against plain markup) and churn
+    // the DOM. The highlighter runs over the sanitized DOM, so its spans
+    // never pass through DOMPurify.
+    if (container && props.streaming !== true) {
+      void highlightSettledCodeBlocks(container);
+    }
   });
 
   return <div ref={container} class={markdownClass} aria-live={props.streaming ? 'polite' : undefined} />;

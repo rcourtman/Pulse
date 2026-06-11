@@ -150,6 +150,23 @@ describe('aiChatUtils', () => {
       expect(output).not.toContain('inset-0');
     });
 
+    // The one class carve-out: marked's fence-language hint on <code>, so
+    // the lazy syntax highlighter can pick a grammar. Pattern-pinned.
+    it('keeps the language-x class on fenced code blocks only', () => {
+      const output = utils.renderMarkdown(['```bash', 'df -h', '```'].join('\n'));
+      expect(output).toContain('language-bash');
+
+      const hostile = utils.renderMarkdown(
+        '<code class="fixed inset-0 z-50">x</code><code class="language-bash extra">y</code>',
+      );
+      expect(hostile).not.toContain('fixed');
+      // Multi-class values fail the ^language-x$ pattern and are dropped whole.
+      expect(hostile).not.toContain('language-bash extra');
+
+      const nonCode = utils.renderMarkdown('<div class="language-bash">z</div>');
+      expect(nonCode).not.toContain('class=');
+    });
+
     // Regression: real http/https links still render and pick up the safe
     // target/rel attributes from the afterSanitizeAttributes hook.
     it('preserves https links and applies target/rel', () => {

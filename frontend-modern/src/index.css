@@ -140,6 +140,47 @@
 }
 
 @layer components {
+  /* Assistant code-block syntax highlighting (highlight.js tokens).
+     Chat code blocks always render on the dark prose-pre slate background,
+     so a single readable-on-dark palette serves both app themes. */
+  .prose pre code.hljs-highlighted .hljs-comment,
+  .prose pre code.hljs-highlighted .hljs-quote {
+    color: theme('colors.slate.400');
+    font-style: italic;
+  }
+  .prose pre code.hljs-highlighted .hljs-keyword,
+  .prose pre code.hljs-highlighted .hljs-selector-tag,
+  .prose pre code.hljs-highlighted .hljs-literal,
+  .prose pre code.hljs-highlighted .hljs-built_in {
+    color: theme('colors.violet.300');
+  }
+  .prose pre code.hljs-highlighted .hljs-string,
+  .prose pre code.hljs-highlighted .hljs-regexp,
+  .prose pre code.hljs-highlighted .hljs-addition {
+    color: theme('colors.emerald.300');
+  }
+  .prose pre code.hljs-highlighted .hljs-number,
+  .prose pre code.hljs-highlighted .hljs-symbol,
+  .prose pre code.hljs-highlighted .hljs-bullet {
+    color: theme('colors.amber.300');
+  }
+  .prose pre code.hljs-highlighted .hljs-title,
+  .prose pre code.hljs-highlighted .hljs-section,
+  .prose pre code.hljs-highlighted .hljs-name,
+  .prose pre code.hljs-highlighted .hljs-function {
+    color: theme('colors.sky.300');
+  }
+  .prose pre code.hljs-highlighted .hljs-attr,
+  .prose pre code.hljs-highlighted .hljs-attribute,
+  .prose pre code.hljs-highlighted .hljs-variable,
+  .prose pre code.hljs-highlighted .hljs-template-variable {
+    color: theme('colors.cyan.300');
+  }
+  .prose pre code.hljs-highlighted .hljs-meta,
+  .prose pre code.hljs-highlighted .hljs-deletion {
+    color: theme('colors.rose.300');
+  }
+
   .touch-scroll {
     -webkit-overflow-scrolling: touch;
   }
