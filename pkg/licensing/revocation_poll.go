@@ -2,7 +2,6 @@ package licensing
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/rand/v2"
 	"sync"
@@ -225,8 +224,7 @@ func (s *Service) handleRevocationEvent(event RevocationEvent) {
 				Msg("License version bumped — triggering immediate grant refresh")
 			go func() {
 				if err := s.refreshGrantOnce(context.Background()); err != nil {
-					var apiErr *LicenseServerError
-					if errors.As(err, &apiErr) && apiErr.StatusCode == 401 {
+					if isRevokedActivationError(err) {
 						s.clearActivationState()
 						return
 					}

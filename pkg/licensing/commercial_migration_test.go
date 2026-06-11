@@ -11,6 +11,7 @@ func TestClassifyLegacyExchangeError(t *testing.T) {
 		err        error
 		wantState  CommercialMigrationState
 		wantReason CommercialMigrationReason
+		wantAction CommercialMigrationAction
 	}{
 		{
 			name:       "retryable server error stays pending",
@@ -36,6 +37,19 @@ func TestClassifyLegacyExchangeError(t *testing.T) {
 			wantState:  CommercialMigrationStateFailed,
 			wantReason: CommercialMigrationReasonExchangeUnsupportedKey,
 		},
+		{
+			name:       "installation limit conflict is terminal with slot guidance",
+			err:        fmt.Errorf("activation failed: %w", &LicenseServerError{StatusCode: 409, Code: "MAX_INSTALLATIONS"}),
+			wantState:  CommercialMigrationStateFailed,
+			wantReason: CommercialMigrationReasonExchangeInstallationLimit,
+			wantAction: CommercialMigrationActionFreeInstallationSlot,
+		},
+		{
+			name:       "other conflict stays pending",
+			err:        fmt.Errorf("activation failed: %w", &LicenseServerError{StatusCode: 409, Code: "EXCHANGE_IN_PROGRESS"}),
+			wantState:  CommercialMigrationStatePending,
+			wantReason: CommercialMigrationReasonExchangeConflict,
+		},
 	}
 
 	for _, tt := range tests {
@@ -49,6 +63,9 @@ func TestClassifyLegacyExchangeError(t *testing.T) {
 			}
 			if got.Reason != tt.wantReason {
 				t.Fatalf("reason=%q, want %q", got.Reason, tt.wantReason)
+			}
+			if tt.wantAction != "" && got.RecommendedAction != tt.wantAction {
+				t.Fatalf("action=%q, want %q", got.RecommendedAction, tt.wantAction)
 			}
 		})
 	}

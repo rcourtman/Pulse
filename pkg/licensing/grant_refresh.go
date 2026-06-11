@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"strings"
 	"sync"
 	"time"
 
@@ -156,13 +157,24 @@ func (s *Service) runGrantRefreshLoop(ctx context.Context) {
 		if err := s.refreshGrantOnce(ctx); err != nil {
 			consecutiveFailures++
 
-			var apiErr *LicenseServerError
-			if errors.As(err, &apiErr) && apiErr.StatusCode == 401 {
-				// 401 means the installation token is revoked or expired.
-				// Clear activation state and revert to free tier.
-				log.Warn().Msg("Grant refresh received 401 (revoked/expired), clearing activation")
+			if isRevokedActivationError(err) {
+				// The server explicitly says this installation or licence is
+				// revoked. Clear activation state and revert to free tier.
+				log.Warn().Msg("Grant refresh rejected as revoked, clearing activation")
 				s.clearActivationState()
 				return
+			}
+
+			var apiErr *LicenseServerError
+			if errors.As(err, &apiErr) && apiErr.StatusCode == 401 {
+				// A 401 without an explicit revocation code also covers
+				// token-not-found, token-expired, and transient server-side
+				// auth issues. Keep the licence: the grant's own expiry plus
+				// the grace window governs degradation, and recovery happens
+				// via a later successful refresh or startup re-exchange.
+				log.Warn().
+					Str("code", apiErr.Code).
+					Msg("Grant refresh got 401 without revocation code, keeping licence and retrying")
 			}
 
 			log.Warn().
@@ -271,6 +283,23 @@ func (s *Service) refreshGrantOnce(ctx context.Context) error {
 		Msg("Grant refreshed successfully")
 
 	return nil
+}
+
+// isRevokedActivationError reports whether err is a license-server 401 that
+// explicitly indicates the installation or licence has been revoked. Only
+// these codes justify wiping local activation state; any other 401 (token
+// not found, token expired, malformed body) keeps the licence and relies on
+// grant-expiry grace instead.
+func isRevokedActivationError(err error) bool {
+	var apiErr *LicenseServerError
+	if !errors.As(err, &apiErr) || apiErr.StatusCode != 401 {
+		return false
+	}
+	switch strings.ToUpper(strings.TrimSpace(apiErr.Code)) {
+	case "TOKEN_REVOKED", "INSTALLATION_REVOKED", "LICENSE_REVOKED":
+		return true
+	}
+	return false
 }
 
 // clearActivationState clears the activation state and reverts to free tier.

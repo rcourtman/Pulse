@@ -3,6 +3,7 @@ package licensing
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -117,11 +118,134 @@ func TestGrantRefreshLoop_RefreshesGrant(t *testing.T) {
 	}
 }
 
+func TestIsRevokedActivationError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"revoked token", &LicenseServerError{StatusCode: 401, Code: "TOKEN_REVOKED"}, true},
+		{"revoked token lowercase", &LicenseServerError{StatusCode: 401, Code: "token_revoked"}, true},
+		{"revoked installation", &LicenseServerError{StatusCode: 401, Code: "INSTALLATION_REVOKED"}, true},
+		{"revoked license", &LicenseServerError{StatusCode: 401, Code: "LICENSE_REVOKED"}, true},
+		{"wrapped revoked token", fmt.Errorf("refresh grant: %w", &LicenseServerError{StatusCode: 401, Code: "TOKEN_REVOKED"}), true},
+		{"expired token", &LicenseServerError{StatusCode: 401, Code: "TOKEN_EXPIRED"}, false},
+		{"token not found", &LicenseServerError{StatusCode: 401, Code: "INVALID_TOKEN"}, false},
+		{"401 without structured code", &LicenseServerError{StatusCode: 401, Code: "http_401"}, false},
+		{"revocation code on non-401", &LicenseServerError{StatusCode: 403, Code: "TOKEN_REVOKED"}, false},
+		{"plain error", fmt.Errorf("connection refused"), false},
+		{"nil error", nil, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isRevokedActivationError(tt.err); got != tt.want {
+				t.Fatalf("isRevokedActivationError() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGrantRefreshLoop_NonRevocation401KeepsActivation(t *testing.T) {
+	setupTestPublicKey(t)
+
+	// A 401 without an explicit revocation code (token not found, expired,
+	// transient server auth issues) must NOT wipe the licence — the grant's
+	// own expiry plus grace governs degradation instead.
+	var refreshCount atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		refreshCount.Add(1)
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]any{
+			"code":    "INVALID_TOKEN",
+			"message": "Installation token not found",
+		})
+	}))
+	defer server.Close()
+
+	initialGrantJWT := makeTestGrantJWT(t, &GrantClaims{
+		LicenseID: "lic_spurious_401",
+		Tier:      "pro",
+		State:     "active",
+		IssuedAt:  time.Now().Unix(),
+		ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
+	})
+
+	tmpDir, err := os.MkdirTemp("", "pulse-refresh-spurious-401-*")
+	if err != nil {
+		t.Fatalf("create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	p, err := NewPersistence(tmpDir)
+	if err != nil {
+		t.Fatalf("create persistence: %v", err)
+	}
+
+	svc := NewService()
+	svc.SetLicenseServerClient(NewLicenseServerClient(server.URL))
+	svc.SetPersistence(p)
+
+	state := &ActivationState{
+		InstallationID:      "inst_spurious",
+		InstallationToken:   "pit_live_spurious",
+		LicenseID:           "lic_spurious_401",
+		GrantJWT:            initialGrantJWT,
+		GrantJTI:            "grant_old",
+		InstanceFingerprint: "fp-spurious",
+	}
+	if err := p.SaveActivationState(state); err != nil {
+		t.Fatalf("save state: %v", err)
+	}
+
+	svc.mu.Lock()
+	svc.activationState = state
+	svc.mu.Unlock()
+	if err := svc.RestoreActivation(state); err != nil {
+		t.Fatalf("RestoreActivation: %v", err)
+	}
+
+	svc.StartGrantRefresh(context.Background())
+	svc.mu.RLock()
+	loop := svc.grantRefresh
+	svc.mu.RUnlock()
+	loop.mu.Lock()
+	loop.refreshInterval = time.Millisecond
+	loop.jitterPercent = 0
+	loop.mu.Unlock()
+
+	// Wait for at least one failed refresh attempt.
+	deadline := time.After(5 * time.Second)
+	for refreshCount.Load() == 0 {
+		select {
+		case <-deadline:
+			svc.StopGrantRefresh()
+			t.Fatal("timed out waiting for refresh attempt")
+		default:
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	// Give the loop a moment to (incorrectly) clear state if it were going to.
+	time.Sleep(50 * time.Millisecond)
+	svc.StopGrantRefresh()
+
+	if svc.Current() == nil {
+		t.Fatal("expected licence to survive a non-revocation 401")
+	}
+	if !svc.IsActivated() {
+		t.Fatal("expected activation to survive a non-revocation 401")
+	}
+	if !p.ActivationStateExists() {
+		t.Fatal("expected persisted activation state to survive a non-revocation 401")
+	}
+}
+
 func TestGrantRefreshLoop_401ClearsActivation(t *testing.T) {
 	setupTestPublicKey(t)
 
-	// This test exercises the full runGrantRefreshLoop 401 branch, which calls
-	// clearActivationState to revert to free tier and exit the loop.
+	// This test exercises the runGrantRefreshLoop revocation branch: a 401
+	// carrying an explicit revocation code calls clearActivationState to
+	// revert to free tier and exit the loop.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]any{

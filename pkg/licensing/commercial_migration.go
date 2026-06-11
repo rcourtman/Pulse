@@ -16,18 +16,20 @@ const (
 	CommercialMigrationStatePending CommercialMigrationState = "pending"
 	CommercialMigrationStateFailed  CommercialMigrationState = "failed"
 
-	CommercialMigrationReasonExchangeUnavailable    CommercialMigrationReason = "exchange_unavailable"
-	CommercialMigrationReasonExchangeRateLimited    CommercialMigrationReason = "exchange_rate_limited"
-	CommercialMigrationReasonExchangeConflict       CommercialMigrationReason = "exchange_conflict"
-	CommercialMigrationReasonExchangeInvalid        CommercialMigrationReason = "exchange_invalid"
-	CommercialMigrationReasonExchangeMalformed      CommercialMigrationReason = "exchange_malformed"
-	CommercialMigrationReasonExchangeRevoked        CommercialMigrationReason = "exchange_revoked"
-	CommercialMigrationReasonExchangeNonMigratable  CommercialMigrationReason = "exchange_non_migratable"
-	CommercialMigrationReasonExchangeUnsupportedKey CommercialMigrationReason = "exchange_unsupported"
+	CommercialMigrationReasonExchangeUnavailable       CommercialMigrationReason = "exchange_unavailable"
+	CommercialMigrationReasonExchangeRateLimited       CommercialMigrationReason = "exchange_rate_limited"
+	CommercialMigrationReasonExchangeConflict          CommercialMigrationReason = "exchange_conflict"
+	CommercialMigrationReasonExchangeInstallationLimit CommercialMigrationReason = "exchange_installation_limit"
+	CommercialMigrationReasonExchangeInvalid           CommercialMigrationReason = "exchange_invalid"
+	CommercialMigrationReasonExchangeMalformed         CommercialMigrationReason = "exchange_malformed"
+	CommercialMigrationReasonExchangeRevoked           CommercialMigrationReason = "exchange_revoked"
+	CommercialMigrationReasonExchangeNonMigratable     CommercialMigrationReason = "exchange_non_migratable"
+	CommercialMigrationReasonExchangeUnsupportedKey    CommercialMigrationReason = "exchange_unsupported"
 
-	CommercialMigrationActionRetryActivation  CommercialMigrationAction = "retry_activation"
-	CommercialMigrationActionUseV6Activation  CommercialMigrationAction = "use_v6_activation_key"
-	CommercialMigrationActionEnterSupportedV5 CommercialMigrationAction = "enter_supported_v5_key"
+	CommercialMigrationActionRetryActivation      CommercialMigrationAction = "retry_activation"
+	CommercialMigrationActionUseV6Activation      CommercialMigrationAction = "use_v6_activation_key"
+	CommercialMigrationActionEnterSupportedV5     CommercialMigrationAction = "enter_supported_v5_key"
+	CommercialMigrationActionFreeInstallationSlot CommercialMigrationAction = "free_installation_slot"
 )
 
 // CommercialMigrationStatus is the explicit v6-owned contract for unresolved
@@ -113,8 +115,17 @@ func ClassifyLegacyExchangeError(err error) *CommercialMigrationStatus {
 			status.Reason = CommercialMigrationReasonExchangeRevoked
 			status.RecommendedAction = CommercialMigrationActionUseV6Activation
 		case 409:
-			status.State = CommercialMigrationStatePending
-			status.Reason = CommercialMigrationReasonExchangeConflict
+			if strings.EqualFold(strings.TrimSpace(serverErr.Code), "MAX_INSTALLATIONS") {
+				// The key has used up its installation slots server-side.
+				// Retrying from this instance can never succeed until a slot
+				// is freed, so this is terminal, not pending.
+				status.State = CommercialMigrationStateFailed
+				status.Reason = CommercialMigrationReasonExchangeInstallationLimit
+				status.RecommendedAction = CommercialMigrationActionFreeInstallationSlot
+			} else {
+				status.State = CommercialMigrationStatePending
+				status.Reason = CommercialMigrationReasonExchangeConflict
+			}
 		case 410:
 			status.State = CommercialMigrationStateFailed
 			status.Reason = CommercialMigrationReasonExchangeNonMigratable
