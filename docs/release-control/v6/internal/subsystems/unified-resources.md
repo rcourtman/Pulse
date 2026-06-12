@@ -142,6 +142,7 @@ cross-source deduplication.
 120. `frontend-modern/src/features/proxmox/ProxmoxMailGatewayTable.tsx`
 121. `frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx`
 122. `frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx`
+122a. `frontend-modern/src/features/proxmox/proxmoxHostTableModel.ts`
 123. `frontend-modern/src/features/truenas/TrueNASAlertsTable.tsx`
 124. `frontend-modern/src/features/truenas/TrueNASAppsTable.tsx`
 125. `frontend-modern/src/features/truenas/TrueNASNetworkSharesTable.tsx`
@@ -222,6 +223,13 @@ affordance itself must compose
 `PlatformResourceDetailTableRow.tsx` contract. Future platform tables must not
 add page-local chevron buttons, bespoke `aria-expanded` handling, or local
 event-propagation variants for row detail expansion.
+The split also applies to web-interface launch affordances. Unified-resource
+tables own whether a row has a saved, inferred, or source-native web-interface
+URL and how that URL is derived, but the visible launch affordance belongs on
+the resource name through the shared `WebInterfaceNameLink` primitive. Proxmox
+host table columns are governed by `proxmoxHostTableModel.ts`; that model must
+not reintroduce a separate `Web` column or move the web-interface launch back
+into a page-local icon cell.
 Product-originated resource references may arrive as registered unified
 resource IDs, source-specific IDs, or canonical identity aliases. The
 unified-resource registry owns resolving those references through

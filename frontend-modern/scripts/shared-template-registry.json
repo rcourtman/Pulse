@@ -4,7 +4,7 @@
     {
       "id": "runtime-web-interface-name-link",
       "category": "resource-launch",
-      "summary": "Runtime resource rows must launch saved web-interface URLs through the shared name-link template, not a page-local link or separate web column.",
+      "summary": "Runtime resource rows must launch saved or inferred web-interface URLs through the shared name-link template, not a page-local link or separate web column.",
       "canonical": {
         "path": "src/components/shared/WebInterfaceNameLink.tsx",
         "export": "WebInterfaceNameLink"
@@ -15,6 +15,9 @@
         },
         {
           "path": "src/features/standalone/AgentsMachinesTable.tsx"
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxNodesTable.tsx"
         }
       ],
       "forbiddenPatterns": [
@@ -34,12 +37,26 @@
         {
           "path": "src/features/standalone/agentMachineTableModel.ts",
           "patterns": ["id: 'web'", "label: 'Web'"]
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxNodesTable.tsx",
+          "patterns": [
+            "target=\"_blank\"",
+            "rel=\"noopener noreferrer\"",
+            "data-proxmox-host-web-link"
+          ]
+        },
+        {
+          "path": "src/features/proxmox/proxmoxHostTableModel.ts",
+          "patterns": ["id: 'web'", "label: 'Web'"]
         }
       ],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "src/features/standalone/__tests__/AgentsMachinesTable.test.tsx",
-        "src/components/Workloads/__tests__/GuestRow.test.tsx"
+        "src/components/Workloads/__tests__/GuestRow.test.tsx",
+        "src/features/proxmox/__tests__/ProxmoxNodesTable.test.tsx",
+        "src/features/proxmox/__tests__/proxmoxHostTableModel.test.ts"
       ]
     }
   ],

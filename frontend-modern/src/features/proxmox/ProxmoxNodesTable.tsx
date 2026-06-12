@@ -7,11 +7,11 @@ import {
   type Component,
   type JSX,
 } from 'solid-js';
-import ExternalLinkIcon from 'lucide-solid/icons/external-link';
 import { useWebSocket } from '@/contexts/appRuntime';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { getAlertStyles } from '@/utils/alerts';
 import { StatusDot } from '@/components/shared/StatusDot';
+import { WebInterfaceNameLink } from '@/components/shared/WebInterfaceNameLink';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { NodeDrawer } from '@/components/Workloads/NodeDrawer';
 import { toDiscoveryConfig } from '@/components/Infrastructure/resourceDetailDiscoveryModel';
@@ -122,7 +122,7 @@ const formatPercentLabel = (value: number | null | undefined): string => {
   return `${Math.round(Math.max(0, normalized))}%`;
 };
 
-type HostSortKey = Exclude<ProxmoxHostTableColumnId, 'web'>;
+type HostSortKey = ProxmoxHostTableColumnId;
 
 const TEXT_SORT_KEYS = new Set<ProxmoxHostTableColumnId>(['node', 'version', 'cluster']);
 
@@ -197,7 +197,6 @@ export const ProxmoxNodesTable: Component<{
   const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
 
   const handleSort = (column: ProxmoxHostTableColumnId) => {
-    if (column === 'web') return;
     const key = column as HostSortKey;
     const defaultDirection = TEXT_SORT_KEYS.has(key) ? 'asc' : 'desc';
     // Cycle: default direction → flipped → cleared.
@@ -270,9 +269,7 @@ export const ProxmoxNodesTable: Component<{
           <For each={visibleColumns()}>
             {(column) => (
               <TableHead
-                class={`${getPlatformTableHeadClassForKind(column.kind)} ${
-                  column.id !== 'web' ? 'cursor-pointer hover:bg-surface-hover' : ''
-                }`}
+                class={`${getPlatformTableHeadClassForKind(column.kind)} cursor-pointer hover:bg-surface-hover`}
                 aria-sort={
                   sortKey() === column.id
                     ? sortDirection() === 'asc'
@@ -381,9 +378,13 @@ export const ProxmoxNodesTable: Component<{
                             title={node.status || 'unknown'}
                             ariaHidden
                           />
-                          <span class="truncate font-semibold text-base-content" title={name()}>
-                            {name()}
-                          </span>
+                          <WebInterfaceNameLink
+                            name={name()}
+                            url={externalUrl()}
+                            class="truncate font-semibold text-base-content transition-colors hover:text-sky-600 dark:hover:text-sky-400"
+                            fallbackClass="truncate font-semibold text-base-content"
+                            title={`Open ${name()} web interface`}
+                          />
                           <Show when={isOnline() && pendingUpdates() > 0}>
                             <span
                               class={`rounded px-1 py-0 text-[9px] font-medium whitespace-nowrap ${
@@ -549,28 +550,6 @@ export const ProxmoxNodesTable: Component<{
                         <span class="inline-flex items-center rounded-md bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-base-content">
                           {cluster()}
                         </span>
-                      </TableCell>
-                    );
-                  case 'web':
-                    return (
-                      <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
-                        <Show when={externalUrl()} fallback={<span class="text-muted">—</span>}>
-                          {(href) => (
-                            <a
-                              data-proxmox-host-web-link
-                              href={href()}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              class="inline-flex h-6 w-6 items-center justify-center rounded-md text-blue-600 transition-colors hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 dark:text-blue-400 dark:hover:bg-blue-950 dark:hover:text-blue-300"
-                              title={`Open ${name()} web interface`}
-                              aria-label={`Open ${name()} web interface`}
-                              onClick={(event) => event.stopPropagation()}
-                              onKeyDown={(event) => event.stopPropagation()}
-                            >
-                              <ExternalLinkIcon class="h-3.5 w-3.5" />
-                            </a>
-                          )}
-                        </Show>
                       </TableCell>
                     );
                   default:

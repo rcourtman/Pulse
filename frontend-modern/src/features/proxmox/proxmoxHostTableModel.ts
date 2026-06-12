@@ -13,8 +13,7 @@ export type ProxmoxHostTableColumnId =
   | 'temp'
   | 'vms'
   | 'cts'
-  | 'cluster'
-  | 'web';
+  | 'cluster';
 
 export type ProxmoxHostTableColumn = {
   id: ProxmoxHostTableColumnId;
@@ -40,7 +39,6 @@ const HOST_COLUMN_MIN_LAYOUT: Record<ProxmoxHostTableColumnId, WorkloadTableLayo
   version: 'compact',
   uptime: 'compact',
   cluster: 'compact',
-  web: 'compact',
 };
 
 // CPU, memory, and disk render the same kind of usage bar, so they share
@@ -60,7 +58,6 @@ const HOST_COLUMN_DESKTOP_WIDTHS: Record<ProxmoxHostTableColumnId, number> = {
   vms: 5,
   cts: 5,
   cluster: 10,
-  web: 4,
 };
 
 const HOST_COLUMN_RESPONSIVE_WEIGHTS: Record<
@@ -90,7 +87,9 @@ const formatPercentage = (value: number): string => `${Number(value.toFixed(4))}
 // Column order follows the canonical recommended ordering documented in
 // columnAlignment.ts: identity → context → bars (CPU/Memory/Disk
 // contiguous) → diagnostic (Temp) → time (Uptime) → inventory counts
-// → external owner reference at end.
+// → source context at end. Web-interface launches live on the node name so
+// every runtime table uses the canonical shared name-link affordance instead
+// of adding a separate action column.
 export const PROXMOX_HOST_TABLE_COLUMNS: ProxmoxHostTableColumn[] = [
   { id: 'node', label: 'Node', kind: 'name' },
   { id: 'version', label: 'Version', kind: 'text' },
@@ -102,7 +101,6 @@ export const PROXMOX_HOST_TABLE_COLUMNS: ProxmoxHostTableColumn[] = [
   { id: 'vms', label: 'VMs', kind: 'numeric-value' },
   { id: 'cts', label: 'CTs', kind: 'numeric-value' },
   { id: 'cluster', label: 'Cluster', kind: 'text' },
-  { id: 'web', label: 'Web', kind: 'badge' },
 ];
 
 export const getProxmoxHostVisibleColumnsForLayout = (

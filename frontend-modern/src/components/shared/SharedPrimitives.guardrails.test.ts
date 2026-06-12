@@ -103,6 +103,7 @@ import dockerHostsTableSource from '@/features/docker/DockerHostsTable.tsx?raw';
 import kubernetesNodesTableSource from '@/features/kubernetes/KubernetesNodesTable.tsx?raw';
 import proxmoxCoverageTableSource from '@/features/proxmox/ProxmoxCoverageTable.tsx?raw';
 import proxmoxNodesTableSource from '@/features/proxmox/ProxmoxNodesTable.tsx?raw';
+import proxmoxHostTableModelSource from '@/features/proxmox/proxmoxHostTableModel.ts?raw';
 import vsphereHostsTableSource from '@/features/vmware/VsphereHostsTable.tsx?raw';
 import agentsMachinesTableSource from '@/features/standalone/AgentsMachinesTable.tsx?raw';
 import agentMachineTableModelSource from '@/features/standalone/agentMachineTableModel.ts?raw';
@@ -925,6 +926,7 @@ describe('shared primitive guardrails', () => {
       rules: Array<{
         id: string;
         canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
       }>;
     };
     const registeredRule = registry.rules.find(
@@ -938,15 +940,27 @@ describe('shared primitive guardrails', () => {
     expect(webInterfaceNameLinkSource).toContain('rel="noopener noreferrer"');
     expect(webInterfaceNameLinkSource).toContain('event.stopPropagation()');
     expect(webInterfaceNameLinkSource).toContain('Open web interface for');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
+      expect.arrayContaining([
+        'src/components/Workloads/GuestRow.tsx',
+        'src/features/standalone/AgentsMachinesTable.tsx',
+        'src/features/proxmox/ProxmoxNodesTable.tsx',
+      ]),
+    );
 
     expect(guestRowSource).toContain('WebInterfaceNameLink');
     expect(agentsMachinesTableSource).toContain('WebInterfaceNameLink');
+    expect(proxmoxNodesTableSource).toContain('WebInterfaceNameLink');
     expect(guestRowSource).not.toContain('target="_blank"');
     expect(agentsMachinesTableSource).not.toContain('target="_blank"');
+    expect(proxmoxNodesTableSource).not.toContain('target="_blank"');
     expect(agentsMachinesTableSource).not.toContain('AgentMachineWebLinkCell');
     expect(agentsMachinesTableSource).not.toContain('data-agent-machine-web-link');
+    expect(proxmoxNodesTableSource).not.toContain('data-proxmox-host-web-link');
     expect(agentMachineTableModelSource).not.toContain("id: 'web'");
     expect(agentMachineTableModelSource).not.toContain("label: 'Web'");
+    expect(proxmoxHostTableModelSource).not.toContain("id: 'web'");
+    expect(proxmoxHostTableModelSource).not.toContain("label: 'Web'");
   });
 
   it('keeps platform table frames on the shared shell template', () => {

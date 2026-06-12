@@ -101,9 +101,12 @@ describe('ProxmoxNodesTable', () => {
       />
     ));
 
-    const link = screen.getByRole('link', { name: 'Open pve-node-1 web interface' });
+    const link = screen.getByRole('link', { name: 'Open web interface for pve-node-1' });
     expect(link).toHaveAttribute('href', 'https://pve.example.com:8006');
     expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveTextContent('pve-node-1');
+    expect(screen.queryByRole('columnheader', { name: 'Web' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('proxmox-host-web-link')).not.toBeInTheDocument();
     expect(screen.queryByTestId('node-drawer')).not.toBeInTheDocument();
   });
 
@@ -118,10 +121,9 @@ describe('ProxmoxNodesTable', () => {
       />
     ));
 
-    expect(screen.getByRole('link', { name: 'Open pve-node-1 web interface' })).toHaveAttribute(
-      'href',
-      'https://pve-node-1:8006',
-    );
+    expect(
+      screen.getByRole('link', { name: 'Open web interface for pve-node-1' }),
+    ).toHaveAttribute('href', 'https://pve-node-1:8006');
   });
 
   it('restores the v5 row signals: alert accent, pending updates badge, full uptime, offline dimming', () => {

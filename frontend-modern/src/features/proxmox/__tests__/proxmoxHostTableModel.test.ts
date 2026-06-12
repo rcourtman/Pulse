@@ -46,10 +46,9 @@ describe('proxmoxHostTableModel', () => {
       'vms',
       'cts',
       'cluster',
-      'web',
     ]);
     expect(getProxmoxHostColumnWidthStyle('cluster', 'compact', compactIds)).toEqual({
-      width: '10.3093%',
+      width: '10.7527%',
     });
   });
 
