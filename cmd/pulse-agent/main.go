@@ -681,7 +681,7 @@ type Config struct {
 	DockerRuntime             string // Force Docker / Podman runtime: docker, podman, or auto
 
 	// Security
-	EnableCommands bool // Enable command execution for Patrol remediation (disabled by default)
+	EnableCommands bool // Enable Pulse command execution for Patrol actions and Proxmox LXC Docker inventory (disabled by default)
 
 	// Enrollment
 	Enroll bool // Exchange bootstrap token for runtime token on startup
@@ -813,7 +813,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	disableAutoUpdateFlag := fs.Bool("disable-auto-update", utils.ParseBool(envDisableAutoUpdate), "Disable automatic updates")
 	disableDockerUpdateChecksFlag := fs.Bool("disable-docker-update-checks", utils.ParseBool(envDisableDockerUpdateChecks), "Disable Docker image update detection (avoids Docker Hub rate limits)")
 	dockerRuntimeFlag := fs.String("docker-runtime", envDockerRuntime, "Docker / Podman runtime: auto, docker, or podman (default: auto)")
-	enableCommandsFlag := fs.Bool("enable-commands", utils.ParseBool(envEnableCommands), "Enable command execution for Patrol remediation (disabled by default)")
+	enableCommandsFlag := fs.Bool("enable-commands", utils.ParseBool(envEnableCommands), "Enable Pulse command execution for Patrol actions and Proxmox LXC Docker inventory (disabled by default)")
 	disableCommandsFlag := fs.Bool("disable-commands", false, "[DEPRECATED] Commands are now disabled by default; use --enable-commands to enable")
 	enrollFlag := fs.Bool("enroll", false, "Exchange bootstrap token for runtime token (used by deploy wizard)")
 	healthAddrFlag := fs.String("health-addr", defaultHealthAddr, "Health/metrics server address (empty to disable)")

@@ -269,6 +269,11 @@ bounds, current/desired replicas, and metric source columns.
 Kubernetes events inventory follows that same primitive boundary while the
 unified-resource owner supplies Event type, reason, involved-object, count,
 observed-time, and message columns.
+Docker empty-state guidance on platform pages follows the same shared platform
+primitive boundary: it may use the route-specific Docker / Podman vocabulary,
+but it must distinguish standalone Docker host installation from the Proxmox
+LXC Docker host-side inventory path without adding page-local installer command
+assembly or token handling.
 Docker / Podman inventory follows that same primitive boundary while the
 unified-resource owner supplies API-object-specific container, image, volume,
 network, Swarm node, task, secret, and config columns through dedicated native

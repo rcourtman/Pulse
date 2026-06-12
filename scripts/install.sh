@@ -22,7 +22,7 @@
 #   --agent-id <id>     Custom agent identifier (default: auto-generated)
 #   --disk-exclude <pattern>  Exclude mount points matching pattern (repeatable)
 #   --insecure          Skip TLS certificate verification
-#   --enable-commands   Enable AI command execution on agent (disabled by default)
+#   --enable-commands   Enable Pulse command execution on agent (disabled by default; required for Patrol actions and Proxmox LXC Docker inventory)
 #   --health-addr <addr> Health/metrics listener address (default: 127.0.0.1:9191, use "" to disable)
 #   --update            Update an existing agent using saved connection state
 #   --uninstall         Remove the agent
@@ -299,7 +299,7 @@ Options:
   --disk-exclude <path>   Exclude mount point (repeatable)
   --insecure              Skip TLS verification (auto-enabled for http:// URLs)
   --cacert <path>         Custom CA certificate for TLS (used by curl and agent)
-  --enable-commands       Enable AI command execution
+  --enable-commands       Enable Pulse command execution (disabled by default; required for Patrol actions and Proxmox LXC Docker inventory)
   --health-addr <addr>    Health/metrics listener address (default: 127.0.0.1:9191; use "" to disable)
   --enroll                Exchange bootstrap token for runtime token (deploy wizard)
   --update                Update an existing agent using saved connection state
@@ -1797,12 +1797,20 @@ log_info "  Agent metrics: $ENABLE_HOST"
 log_info "  Docker/Podman: $ENABLE_DOCKER"
 log_info "  Kubernetes: $ENABLE_KUBERNETES"
 log_info "  Proxmox: $ENABLE_PROXMOX"
+log_info "  Pulse command execution: $ENABLE_COMMANDS"
 if [[ "$ENABLE_PROXMOX" == "true" ]]; then
     if [[ -n "$PROXMOX_TYPE" ]]; then
         log_info "  Proxmox type: $PROXMOX_TYPE"
     else
         log_info "  Proxmox type: auto-detect all installed services"
     fi
+fi
+if [[ "$ENABLE_COMMANDS" == "true" ]]; then
+    log_info "    Accepts Pulse-scoped command requests on this agent."
+    log_info "    On Proxmox nodes this is required for opted-in LXC Docker inventory via pct exec."
+    log_info "    The Pulse server must also be started with PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true."
+else
+    log_info "    Command execution is off; enable only when Patrol actions or Proxmox LXC Docker inventory are needed."
 fi
 
 if [[ "$ENABLE_DOCKER" == "true" ]] && discover_rootless_container_runtime; then

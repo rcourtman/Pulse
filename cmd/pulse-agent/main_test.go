@@ -30,8 +30,8 @@ func TestEnableCommandsHelpUsesPatrolRemediationCopy(t *testing.T) {
 	}
 	text := string(source)
 
-	if !strings.Contains(text, "Enable command execution for Patrol remediation (disabled by default)") {
-		t.Fatal("expected enable-commands help to describe Patrol remediation")
+	if !strings.Contains(text, "Enable Pulse command execution for Patrol actions and Proxmox LXC Docker inventory (disabled by default)") {
+		t.Fatal("expected enable-commands help to describe Patrol actions and Proxmox LXC Docker inventory")
 	}
 	if strings.Contains(text, "Enable command execution for AI auto-fix") {
 		t.Fatal("enable-commands help must not revive AI auto-fix wording")

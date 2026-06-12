@@ -230,7 +230,12 @@ describe('infrastructure operations model', () => {
     );
     expect(infrastructureInstallerSectionSource).toContain('Install on Unraid');
     expect(infrastructureInstallerSectionSource).toContain('Run on Unraid');
-    expect(infrastructureInstallerSectionSource).toContain('Install on the Docker host');
+    expect(infrastructureInstallerSectionSource).toContain('Install for Docker / Podman');
+    expect(infrastructureInstallerSectionSource).toContain('Docker inside Proxmox LXCs');
+    expect(infrastructureInstallerSectionSource).toContain(
+      'PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true',
+    );
+    expect(infrastructureInstallerSectionSource).toContain('bounded <code>pct exec</code>');
     expect(infrastructureInstallerSectionSource).toContain('Install on a Kubernetes node');
     expect(infrastructureInstallerSectionSource).toContain(
       'state.handleInstallProfileChange(presentation().preferredProfile)',
@@ -263,10 +268,10 @@ describe('infrastructure operations model', () => {
       'Generate an install token first. Pulse will then build copy-ready commands',
     );
     expect(infrastructureInstallerSectionSource).toContain(
-      'Allow Pulse Patrol to execute diagnostic and fix commands on this agent',
+      'Allow Pulse-scoped command requests on this agent for Patrol actions and opted-in Proxmox LXC Docker inventory',
     );
     expect(infrastructureInstallerSectionSource).toContain(
-      'Enable Pulse command execution (for Patrol remediation)',
+      'Enable Pulse command execution (Patrol actions and Proxmox LXC Docker inventory)',
     );
     expect(infrastructureInstallerSectionSource).not.toContain('Patrol auto-fix');
     expect(infrastructureInstallerSectionSource).not.toContain('auto-fix requires Pulse Pro');

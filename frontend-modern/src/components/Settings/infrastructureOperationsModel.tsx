@@ -317,7 +317,7 @@ export const INSTALL_PROFILE_OPTIONS: InstallProfileOption[] = [
     value: 'proxmox-pve',
     label: 'Proxmox VE node',
     description:
-      'Force Proxmox integration and register as a PVE node. Install on each cluster member when you want full node-local telemetry such as temperatures and SMART data.',
+      'Force Proxmox integration and register as a PVE node. Install on each cluster member for node-local telemetry such as temperatures and SMART data; use this profile plus command execution when Docker inside LXCs should be inventoried from the Proxmox host path.',
     flags: ['--enable-proxmox', '--proxmox-type pve'],
   },
   {

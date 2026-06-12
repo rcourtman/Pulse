@@ -110,7 +110,7 @@ export function DockerPageSurface() {
               <PlatformTableEmptyState
                 icon={dockerIcon()}
                 title="No Docker or Podman hosts"
-                description="Install the Pulse agent on a Docker or Podman host to populate this runtime lens."
+                description="Install the Pulse agent on a Docker or Podman host. For Docker inside Proxmox LXCs, install the agent on the Proxmox node with command execution enabled, then enable Proxmox guest Docker inventory on the Pulse server."
               />
             }
           >

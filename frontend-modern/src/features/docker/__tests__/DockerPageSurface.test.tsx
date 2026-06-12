@@ -227,6 +227,24 @@ afterEach(() => {
 });
 
 describe('DockerPageSurface', () => {
+  it('explains the direct host and Proxmox LXC Docker install paths when empty', () => {
+    mocks.useUnifiedResources.mockReturnValue({
+      error: () => null,
+      loading: () => false,
+      refetch: vi.fn(),
+      resources: () => [],
+    });
+
+    render(() => <DockerPageSurface />);
+
+    const emptyState = screen.getByTestId('platform-table-empty-state');
+    expect(emptyState).toHaveAttribute('data-title', 'No Docker or Podman hosts');
+    expect(emptyState).toHaveTextContent('Install the Pulse agent on a Docker or Podman host');
+    expect(emptyState).toHaveTextContent('Docker inside Proxmox LXCs');
+    expect(emptyState).toHaveTextContent('command execution enabled');
+    expect(emptyState).toHaveTextContent('Proxmox guest Docker inventory');
+  });
+
   it('keeps overview focused on runtime hosts plus primary container workloads', () => {
     render(() => <DockerPageSurface />);
 

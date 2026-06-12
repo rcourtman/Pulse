@@ -378,6 +378,11 @@ payload shape change when the portal presents compact client rows.
     `frontend-modern/src/utils/sourcePlatforms.ts` rather than page-local
     wording, because those install choices set API-token and install-command
     expectations for the operator.
+    That same install-profile model must keep the standalone Docker / Podman
+    runtime profile distinct from Proxmox LXC Docker inventory. The Docker
+    profile may force local runtime monitoring, while Docker inside LXCs must
+    point operators to the Proxmox VE node profile plus command execution and
+    explicit server-side guest Docker inventory opt-in.
     That same browser/API boundary must not retain customer-side commercial or
     onboarding telemetry wrappers around infrastructure operations. Pulse
     Account and the server-owned commercial reporting routes own commercial
@@ -1178,6 +1183,11 @@ the canonical monitored-system blocked payload.
     rewritten into source credential, liveness, or setup failure facts.
     That same governed infrastructure-operations API boundary also owns discovery polling activation: the shared discovery runtime may only poll `/api/discover` while the settings shell has the `infrastructure-connections` route active, so route-level IA changes cannot silently keep discovery traffic alive on unrelated systems or install screens.
     That same governed setup/install boundary also owns uninstall convergence: when a script-managed Proxmox node removes its local Pulse credentials, the canonical `/api/auto-unregister` API must remove the matching stored node immediately and emit the same discovery/node-deleted refresh semantics as manual deletion, so the infrastructure sources table does not keep a stale active row until the next failed poll.
+    That same governed install-presentation boundary must preserve the
+    Docker-versus-Proxmox LXC distinction from the shared model: generated
+    install surfaces may not imply that Docker inside Proxmox LXCs requires a
+    guest-local agent when the intended path is a Proxmox node agent with
+    command execution and server-side guest Docker inventory opt-in.
     That same governed setup/install boundary also owns Proxmox
     `authorized_keys` symlink preservation in the rendered PVE setup script:
     temperature-key install and uninstall edits must resolve the real

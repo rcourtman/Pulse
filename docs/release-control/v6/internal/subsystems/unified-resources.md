@@ -170,6 +170,11 @@ evidence, and inactive standalone Swarm metadata must not be interpreted as
 host-role or service-surface proof. The unified-resource adapter is the backend
 fail-closed layer for that rule, so persisted or older-agent inactive Swarm
 payloads cannot reintroduce false Swarm capability surfaces.
+The empty state for this route must preserve that runtime-lens contract:
+standalone Docker / Podman hosts use a local runtime agent, while Docker inside
+Proxmox LXCs is represented as the explicitly opted-in Proxmox host-side guest
+Docker inventory path rather than a requirement to install an agent in every
+guest.
 
 Platform Overview tabs are rollup boundaries, not duplicate inventory dumps.
 Docker / Podman Overview owns runtime host rows and primary container workload

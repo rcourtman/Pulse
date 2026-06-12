@@ -79,12 +79,12 @@ const INSTALLER_FOCUS_PRESENTATION: Record<
     platforms: ['linux'],
   },
   docker: {
-    title: 'Install on the Docker host',
+    title: 'Install for Docker / Podman',
     description:
-      'Run the installer on the machine that runs Docker or Podman so Pulse can discover containers from that host.',
+      'Run on the machine that runs Docker or Podman. For Docker inside Proxmox LXCs, use the Proxmox node path below instead of installing inside every guest.',
     recommendationTitle: 'Docker install path',
     recommendationDetail:
-      'Install Pulse Agent on the Docker or Podman host. The Docker profile is selected for this flow so copied commands force container monitoring when automatic detection is restricted.',
+      'For a standalone Docker or Podman host, install Pulse Agent on that host. The Docker profile is selected for this flow so copied commands force runtime monitoring when automatic detection is restricted. For Docker inside Proxmox LXCs, install on the Proxmox node, select the Proxmox VE node profile, and enable command execution so the server-opted-in LXC inventory path can run.',
     preferredProfile: 'docker',
     platforms: ['linux'],
   },
@@ -106,7 +106,7 @@ const getCommandSectionTitle = (
 ): string => {
   if (section.platform !== 'linux') return section.title;
   if (focus === 'unraid') return 'Run on Unraid';
-  if (focus === 'docker') return 'Run on the Docker host';
+  if (focus === 'docker') return 'Run on the Docker host or Proxmox node';
   if (focus === 'kubernetes') return 'Run on a Kubernetes node';
   return section.title;
 };
@@ -120,7 +120,7 @@ const getCommandSectionDescription = (
     return 'Use the Linux installer from Unraid terminal or SSH. The agent stores its local uninstall helper under the Unraid plugin path.';
   }
   if (focus === 'docker') {
-    return 'Use the Linux installer on the Docker or Podman host. Commands in this flow include the Docker profile.';
+    return 'Use the Linux installer on a standalone Docker or Podman host. For Docker inside Proxmox LXCs, switch Target profile to Proxmox VE node and enable command execution.';
   }
   if (focus === 'kubernetes') {
     return 'Use the Linux installer on a Kubernetes node. Commands in this flow include the Kubernetes profile.';
@@ -253,6 +253,22 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
             {presentation().recommendationDetail}
           </p>
         </div>
+
+        <Show when={focus() === 'docker'}>
+          <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-50">
+            <p class="font-semibold">Docker inside Proxmox LXCs</p>
+            <p class="mt-1 text-xs text-blue-800 dark:text-blue-200">
+              Install the agent on the Proxmox node, not inside every LXC. In advanced options,
+              select <span class="font-medium">Proxmox VE node</span> and enable{' '}
+              <span class="font-medium">Pulse command execution</span>. Then start Pulse with{' '}
+              <code>PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true</code>; optionally restrict it
+              with <code>PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS=101,102</code>. Pulse uses
+              bounded <code>pct exec</code> inventory for <code>docker ps</code> and{' '}
+              <code>docker stats</code>, skips guests that already have their own agent, and does
+              not collect inspect, environment, mount, command, or process details.
+            </p>
+          </div>
+        </Show>
 
         <div class="space-y-3">
           <div class="space-y-1">
@@ -545,7 +561,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
 
                   <label
                     class="inline-flex cursor-pointer items-center gap-2 text-sm text-base-content"
-                    title="Allow Pulse Patrol to execute diagnostic and fix commands on this agent"
+                    title="Allow Pulse-scoped command requests on this agent for Patrol actions and opted-in Proxmox LXC Docker inventory"
                   >
                     <input
                       type="checkbox"
@@ -553,13 +569,15 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                       onChange={(event) => state.setEnableCommands(event.currentTarget.checked)}
                       class="rounded text-blue-600 focus:ring-blue-500"
                     />
-                    Enable Pulse command execution (for Patrol remediation)
+                    Enable Pulse command execution (Patrol actions and Proxmox LXC Docker inventory)
                   </label>
 
                   <Show when={state.enableCommands()}>
                     <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200">
-                      <span class="font-medium">Pulse commands enabled</span> — The agent will
-                      accept diagnostic and fix commands from Pulse Patrol features.
+                      <span class="font-medium">Pulse commands enabled</span>: The agent will accept
+                      Pulse-scoped command requests. On Proxmox nodes, this is required for opted-in
+                      Docker-in-LXC inventory because Pulse runs bounded <code>pct exec</code>{' '}
+                      Docker summary checks.
                     </div>
                   </Show>
 

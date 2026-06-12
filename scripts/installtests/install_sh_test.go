@@ -71,6 +71,31 @@ func TestInstallSHAutoDetectProxmoxKeepsRuntimeTypeUnpinned(t *testing.T) {
 	}
 }
 
+func TestInstallSHExplainsCommandExecutionForProxmoxLXCDockerInventory(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatalf("read install.sh: %v", err)
+	}
+
+	script := string(content)
+	required := []string{
+		`--enable-commands       Enable Pulse command execution (disabled by default; required for Patrol actions and Proxmox LXC Docker inventory)`,
+		`log_info "  Pulse command execution: $ENABLE_COMMANDS"`,
+		`log_info "    Accepts Pulse-scoped command requests on this agent."`,
+		`log_info "    On Proxmox nodes this is required for opted-in LXC Docker inventory via pct exec."`,
+		`log_info "    The Pulse server must also be started with PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true."`,
+		`log_info "    Command execution is off; enable only when Patrol actions or Proxmox LXC Docker inventory are needed."`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("install.sh missing command-execution disclosure: %s", needle)
+		}
+	}
+	if strings.Contains(script, "Enable AI command execution") {
+		t.Fatal("install.sh must not describe --enable-commands as AI command execution")
+	}
+}
+
 func TestInstallSHAcceptsLegacyBooleanFlagValues(t *testing.T) {
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {

@@ -779,7 +779,7 @@ profile and assignment columns, but embedded table framing must route through
 7. Add or change the unified agent CLI entrypoint, version/help exit semantics, or startup argument/error routing through `cmd/pulse-agent/main.go`.
    The CLI entrypoint owns propagation of persistence context into runtime-owned helpers. When installer-selected state roots differ from the default, `cmd/pulse-agent/main.go` must pass that exact `StateDir` through both the host-agent runtime and updater startup paths instead of letting one path silently fall back to `/var/lib/pulse-agent`.
    The same runtime-owned boundary also owns Pulse control-plane URL validation for agent startup, remote config, updater continuity, and command transport. Non-loopback control-plane URLs remain HTTPS/WSS by default, but explicitly insecure agent/dev-runtime flows may use plain HTTP/WS for LAN development control planes; installer-persisted dev URLs must not be accepted by one runtime path and rejected by another.
-   The unified agent CLI copy follows the same Patrol remediation vocabulary as the install surface. `cmd/pulse-agent/main.go` may keep the `--enable-commands` flag name for compatibility, but the help text and inline comments must describe command execution as Patrol remediation rather than reviving AI auto-fix language.
+   The unified agent CLI copy follows the same command-execution vocabulary as the install surface. `cmd/pulse-agent/main.go` may keep the `--enable-commands` flag name for compatibility, but the help text and inline comments must describe command execution as Pulse command execution for Patrol actions and governed Proxmox LXC Docker inventory rather than reviving AI auto-fix language.
    The unified agent CLI copy also owns operator-facing Docker / Podman runtime
    labels. `cmd/pulse-agent/main.go` may keep the historical
    `--enable-docker` and `--docker-runtime` flag names for compatibility, but
@@ -3061,6 +3061,12 @@ install copy may recommend installing the agent on every machine that needs
 temperatures, SMART disk data, services, Docker, or Kubernetes telemetry, but
 they may not imply that API-backed cluster visibility or best-effort peer
 augmentation is equivalent to a local agent install on that machine.
+Docker onboarding copy must also distinguish the standalone Docker / Podman
+install path from Docker inside Proxmox LXCs: standalone runtimes use the
+Docker runtime profile on that host, while Proxmox LXC Docker inventory uses a
+Proxmox VE node agent with command execution plus explicit server-side
+`PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true`, and the copy may not imply
+that installing an agent inside every LXC is required.
 That same connected-systems summary must preserve canonical local operator
 identity for newly connected infrastructure. When governed resources such as
 PBS or PMG appear in the setup-completion poll, the surface must show their

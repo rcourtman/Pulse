@@ -271,6 +271,12 @@ TLS floor in the dynamic config.
    settings, insecure flag, and persisted agent id from the local installed
    agent state, must fail closed when no existing installation or connection
    state is present, and must refuse to silently become a new install command.
+   The shell installer must disclose `--enable-commands` as Pulse command
+   execution, disabled by default, and must name both Patrol actions and
+   Proxmox LXC Docker inventory as the operator-visible reasons to enable it.
+   When enabled, the terminal summary must also state that Proxmox LXC Docker
+   inventory still requires explicit server-side
+   `PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true`.
 
 ## Extension Points
 
@@ -314,6 +320,10 @@ TLS floor in the dynamic config.
    installer in that slot silently breaks every one of those flows because the
    agent installer rejects `--version` as an unknown argument; this drift
    shipped across v6 rc.1 → rc.5 (April 12 → May 11, 2026) before being caught.
+   Installer-facing command-execution copy must remain aligned with the served
+   agent installer: Proxmox LXC Docker inventory may be described only as an
+   opt-in host-side path that requires both agent command execution and server
+   guest-Docker inventory opt-in.
    `scripts/validate-release.sh` must therefore fail the release if the
    published `install.sh` does not carry the server-installer banner, does not
    handle `--version)` in its argument parser, contains the agent installer
