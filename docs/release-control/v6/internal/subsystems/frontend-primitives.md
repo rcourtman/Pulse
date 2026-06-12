@@ -2426,6 +2426,12 @@ column chooser trigger, panel title, reset action, empty-state copy, hidden
 count badge, dropdown width, and outside-click lifecycle through the shared
 shell/state/model split. Table surfaces must compose that primitive instead of
 recreating local column chooser buttons or panels.
+Selection-card groups are registry-backed too. `SelectionCardGroup` owns the
+compact/detail card grid, active-card tone, disabled selection behavior,
+pressed-state semantics, title/description styling, and icon container
+treatment through the shared shell/state/model split. Settings and feature
+surfaces must compose that primitive instead of copying compact/detail
+border-card styling locally.
 Grouped/list table-mode controls are registry-backed as well.
 `GroupedTableModeSegmentedControl` owns the shared `Group by` label,
 `Grouped` / `List` labels, tooltip titles, and icons for table mode switching.

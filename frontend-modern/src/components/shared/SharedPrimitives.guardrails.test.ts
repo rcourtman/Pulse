@@ -244,20 +244,74 @@ describe('shared primitive guardrails', () => {
   });
 
   it('routes selectable settings cards through SelectionCardGroup', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        allowedPaths?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find(
+      (rule) => rule.id === 'selection-card-group-shell',
+    );
+    const registeredGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'selection-card-group-local-active-card-styles',
+    );
+
+    expect(registeredRule?.canonical?.path).toBe(
+      'src/components/shared/SelectionCardGroup.tsx',
+    );
+    expect(registeredRule?.canonical?.export).toBe('SelectionCardGroup');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/components/Settings/AISettingsDialogs.tsx',
+      'src/components/Settings/UpdatesSettingsPanel.tsx',
+    ]);
+    expect(registeredGuard?.canonical?.path).toBe(
+      'src/components/shared/selectionCardGroupModel.ts',
+    );
+    expect(registeredGuard?.canonical?.export).toBe(
+      'getSelectionCardButtonClass',
+    );
+    expect(registeredGuard?.allPatterns).toEqual([
+      'p-4 rounded-md border-2 transition-all text-left',
+      'p-3 rounded-md border-2 transition-all text-center',
+    ]);
+    expect(registeredGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(registeredGuard?.scopes).toEqual(
+      expect.arrayContaining([
+        'src/components/Settings',
+        'src/features',
+        'src/pages',
+      ]),
+    );
+
     expect(selectionCardGroupSource).toContain('useSelectionCardGroupState');
     expect(selectionCardGroupSource).toContain('getSelectionCardGroupClass');
     expect(selectionCardGroupSource).toContain('getSelectionCardButtonClass');
     expect(selectionCardGroupSource).toContain('getSelectionCardTitleClass');
+    expect(selectionCardGroupSource).toContain('aria-pressed');
+    expect(selectionCardGroupSource).toContain('disabled={selectionCardGroup.isOptionDisabled');
     expect(selectionCardGroupSource).not.toContain('resolveSelectionCardTone');
     expect(selectionCardGroupSource).not.toContain('props.onChange(option.value)');
     expect(selectionCardGroupStateSource).toContain('export function useSelectionCardGroupState');
     expect(selectionCardGroupStateSource).toContain('createMemo');
     expect(selectionCardGroupStateSource).toContain('resolveSelectionCardTone');
+    expect(selectionCardGroupStateSource).toContain('props.disabled || option.disabled');
     expect(selectionCardGroupStateSource).toContain('props.onChange(option.value)');
     expect(selectionCardGroupModelSource).toContain('resolveSelectionCardGroupVariant');
     expect(selectionCardGroupModelSource).toContain('resolveSelectionCardTone');
     expect(selectionCardGroupModelSource).toContain('getSelectionCardButtonClass');
     expect(selectionCardGroupModelSource).toContain("compact: 'grid grid-cols-2 gap-2'");
+    expect(selectionCardGroupModelSource).toContain(
+      "detail: 'grid grid-cols-1 gap-3'",
+    );
     expect(aiSettingsDialogsSource).toContain('SelectionCardGroup');
     expect(aiSettingsDialogsSource).toContain('variant="compact"');
     expect(aiSettingsDialogsSource).not.toContain(

@@ -274,6 +274,24 @@
       ]
     },
     {
+      "id": "selection-card-group-shell",
+      "category": "selection-card-group",
+      "summary": "Selectable settings card groups must compose SelectionCardGroup instead of recreating compact/detail active-card styling and disabled selection behavior locally.",
+      "canonical": {
+        "path": "src/components/shared/SelectionCardGroup.tsx",
+        "export": "SelectionCardGroup"
+      },
+      "requiredConsumers": [
+        { "path": "src/components/Settings/AISettingsDialogs.tsx" },
+        { "path": "src/components/Settings/UpdatesSettingsPanel.tsx" }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/SelectionCardGroup.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "grouped-table-mode-segmented-control",
       "category": "table-mode-control",
       "summary": "Grouped/list table-mode controls must compose GroupedTableModeSegmentedControl instead of recreating grouped/list labels, titles, or icons locally.",
@@ -419,6 +437,27 @@
       "legacyReason": "Retired migration debt. Table column visibility controls must use ColumnPicker; local column chooser copies are not allowed.",
       "allowedPaths": [],
       "ignoredPaths": ["src/components/shared/ColumnPicker.test.tsx"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "selection-card-group-local-active-card-styles",
+      "category": "selection-card-group",
+      "summary": "Settings and feature surfaces must not copy the compact/detail active-card styling owned by SelectionCardGroup.",
+      "canonical": {
+        "path": "src/components/shared/selectionCardGroupModel.ts",
+        "export": "getSelectionCardButtonClass"
+      },
+      "scopes": ["src/components/Settings", "src/features", "src/pages"],
+      "extensions": [".tsx"],
+      "allPatterns": [
+        "p-4 rounded-md border-2 transition-all text-left",
+        "p-3 rounded-md border-2 transition-all text-center"
+      ],
+      "legacyReason": "Retired migration debt. Selectable settings card groups must use SelectionCardGroup; local compact/detail active-card styling forks are not allowed.",
+      "allowedPaths": [],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "scripts/shared-template-audit.mjs"
