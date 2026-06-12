@@ -58,6 +58,12 @@ Patrol-specific presentation helpers.
 
 1. Add or change Patrol page orchestration through `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`, keep `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts` as the canonical investigation-context derivation owner, keep `frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx` as the feature shell, keep the Patrol-owned section files under `frontend-modern/src/features/patrol/` as the heavy render owners, keep `frontend-modern/src/pages/AIIntelligence.tsx` as the route shell, keep `frontend-modern/src/stores/aiIntelligenceSummaryModel.ts` as the canonical AI summary normalization owner, and update `frontend-modern/src/stores/aiIntelligence.ts` together
 2. Add or change Patrol findings, approvals, investigation, or run-history presentation through `frontend-modern/src/components/AI/FindingsPanel.tsx` and `frontend-modern/src/components/patrol/`
+   Patrol owns run-history labels, counts, status variants, and domain copy, but
+   visible run-history status badges must compose the shared
+   `StatusIndicatorBadge`, and resource/outcome/snapshot/scoped-run metadata
+   chips must compose the shared `MetadataBadge`. If Patrol needs a new badge
+   shape or tone, extend the shared primitive and registry guard instead of
+   adding page-local rounded pill spans.
 3. Keep remediation execution badge copy and severity styling aligned through `frontend-modern/src/components/patrol/RemediationStatus.tsx` and `frontend-modern/src/utils/remediationPresentation.ts`
 4. Add or change Patrol header, summary, status runtime-state presentation, or runtime provider action presentation through `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`, `frontend-modern/src/features/patrol/PatrolIntelligenceSummary.tsx`, `frontend-modern/src/components/patrol/PatrolStatusBar.tsx`, `frontend-modern/src/utils/patrolRuntimePresentation.ts`, and `frontend-modern/src/utils/patrolRuntimeActions.ts`
    Patrol summary presentation may show recent activity mix and trigger mode as
@@ -75,6 +81,7 @@ Patrol-specific presentation helpers.
 1. Reintroducing Patrol finding, investigation, approval, or run-history copy directly inside page components when canonical Patrol presentation helpers already own it
 2. Duplicating Patrol finding severity, lifecycle, alert-identity, or approval-risk derivation outside the governed Patrol presentation helpers
 3. Letting the Patrol page, local store, and findings UI drift into separate shadow truths for the same Patrol status or finding lifecycle state
+4. Recreating Patrol run-history status or metadata badge shells locally instead of composing `StatusIndicatorBadge` and `MetadataBadge`
 
 ## Completion Obligations
 

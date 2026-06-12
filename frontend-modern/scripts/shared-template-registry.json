@@ -543,7 +543,14 @@
       },
       "requiredConsumers": [
         { "path": "src/components/Settings/AgentProfilesPanel.tsx" },
-        { "path": "src/components/Settings/DiagnosticsResultsPanel.tsx" }
+        { "path": "src/components/Settings/DiagnosticsResultsPanel.tsx" },
+        { "path": "src/components/patrol/RunHistoryEntry.tsx" }
+      ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/components/patrol/RunHistoryEntry.tsx",
+          "patterns": ["runStatus.badgeClass"]
+        }
       ],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
@@ -559,7 +566,19 @@
         "path": "src/components/shared/MetadataBadge.tsx",
         "export": "MetadataBadge"
       },
-      "requiredConsumers": [{ "path": "src/components/shared/OrganizationBadges.tsx" }],
+      "requiredConsumers": [
+        { "path": "src/components/shared/OrganizationBadges.tsx" },
+        { "path": "src/components/patrol/RunHistoryEntry.tsx" }
+      ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/components/patrol/RunHistoryEntry.tsx",
+          "patterns": [
+            "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium",
+            "inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50"
+          ]
+        }
+      ],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "src/components/shared/MetadataBadge.test.tsx",
@@ -1195,6 +1214,26 @@
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "src/components/shared/StatusIndicatorBadge.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "patrol-run-metadata-badge-local-shell",
+      "category": "metadata-badge",
+      "summary": "Patrol run-history metadata chips must compose MetadataBadge instead of recreating local rounded resource or outcome pill spans.",
+      "canonical": {
+        "path": "src/components/shared/MetadataBadge.tsx",
+        "export": "MetadataBadge"
+      },
+      "scopes": ["src/components/patrol"],
+      "extensions": [".tsx"],
+      "allPatterns": ["inline-flex items-center gap-1", "rounded-full text-xs font-medium"],
+      "legacyReason": "Retired migration debt. Patrol run-history resource and outcome chips use MetadataBadge for shared shell, sizing, tone, and whitespace behavior.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/MetadataBadge.test.tsx",
         "scripts/shared-template-audit.mjs"
       ]
     },

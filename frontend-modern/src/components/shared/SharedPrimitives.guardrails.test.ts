@@ -206,6 +206,7 @@ import resourcePickerSource from '@/components/Settings/ResourcePicker.tsx?raw';
 import settingsPageShellSource from '@/components/Settings/SettingsPageShell.tsx?raw';
 import patrolIntelligenceHeaderSource from '@/features/patrol/PatrolIntelligenceHeader.tsx?raw';
 import patrolIntelligenceWorkspaceSource from '@/features/patrol/PatrolIntelligenceWorkspace.tsx?raw';
+import runHistoryEntrySource from '@/components/patrol/RunHistoryEntry.tsx?raw';
 import filterBarSource from '@/components/shared/FilterBar/FilterBar.tsx?raw';
 import filterChipSource from '@/components/shared/FilterBar/FilterChip.tsx?raw';
 import featureGateSectionSource from '@/components/shared/FeatureGateSection.tsx?raw';
@@ -1533,6 +1534,7 @@ describe('shared primitive guardrails', () => {
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
       'src/components/Settings/AgentProfilesPanel.tsx',
       'src/components/Settings/DiagnosticsResultsPanel.tsx',
+      'src/components/patrol/RunHistoryEntry.tsx',
     ]);
     expect(registeredGuard?.canonical?.path).toBe('src/components/shared/StatusIndicatorBadge.tsx');
     expect(registeredGuard?.canonical?.export).toBe('StatusIndicatorBadge');
@@ -1552,9 +1554,11 @@ describe('shared primitive guardrails', () => {
     expect(diagnosticsResultsPanelSource).toContain('StatusIndicatorBadge');
     expect(diagnosticsResultsPanelSource).not.toContain('const StatusBadge');
     expect(diagnosticsResultsPanelSource).not.toContain('getStatusIndicatorBadgeToneClasses');
+    expect(runHistoryEntrySource).toContain('StatusIndicatorBadge');
+    expect(runHistoryEntrySource).not.toContain('runStatus.badgeClass');
   });
 
-  it('keeps organization metadata badges on shared badge wrappers', () => {
+  it('keeps metadata badges on shared badge primitives', () => {
     const registry = JSON.parse(sharedTemplateRegistrySource) as {
       rules?: Array<{
         id: string;
@@ -1581,11 +1585,15 @@ describe('shared primitive guardrails', () => {
     const localShareStatusGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'organization-share-status-badge-local-shell',
     );
+    const patrolRunMetadataGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'patrol-run-metadata-badge-local-shell',
+    );
 
     expect(metadataRule?.canonical?.path).toBe('src/components/shared/MetadataBadge.tsx');
     expect(metadataRule?.canonical?.export).toBe('MetadataBadge');
     expect(metadataRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
       'src/components/shared/OrganizationBadges.tsx',
+      'src/components/patrol/RunHistoryEntry.tsx',
     ]);
     expect(roleRule?.canonical?.path).toBe('src/components/shared/OrganizationBadges.tsx');
     expect(roleRule?.canonical?.export).toBe('OrganizationRoleBadge');
@@ -1606,6 +1614,13 @@ describe('shared primitive guardrails', () => {
     expect(localRoleGuard?.scopes).toEqual(['src/components/Settings']);
     expect(localShareStatusGuard?.allPatterns).toEqual(['statusBadgeClass(']);
     expect(localShareStatusGuard?.scopes).toEqual(['src/components/Settings']);
+    expect(patrolRunMetadataGuard?.canonical?.path).toBe('src/components/shared/MetadataBadge.tsx');
+    expect(patrolRunMetadataGuard?.canonical?.export).toBe('MetadataBadge');
+    expect(patrolRunMetadataGuard?.allPatterns).toEqual([
+      'inline-flex items-center gap-1',
+      'rounded-full text-xs font-medium',
+    ]);
+    expect(patrolRunMetadataGuard?.scopes).toEqual(['src/components/patrol']);
 
     expect(metadataBadgeSource).toContain('METADATA_BADGE_TONE_CLASSES');
     expect(metadataBadgeSource).toContain('getMetadataBadgeClass');
@@ -1635,6 +1650,14 @@ describe('shared primitive guardrails', () => {
         'inline-flex w-fit rounded-full px-2 py-0.5 text-xs font-medium',
       );
     }
+
+    expect(runHistoryEntrySource).toContain('MetadataBadge');
+    expect(runHistoryEntrySource).not.toContain(
+      'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium',
+    );
+    expect(runHistoryEntrySource).not.toContain(
+      'inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50',
+    );
   });
 
   it('keeps resource status dots on the shared StatusDot primitive', () => {

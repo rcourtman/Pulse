@@ -5,9 +5,11 @@ import {
   getPatrolProviderSettingsAction,
   type PatrolRuntimeActionPresentation,
 } from '@/utils/patrolRuntimeActions';
+import type { StatusIndicatorVariant } from '@/utils/status';
 
 export interface PatrolRunStatusPresentation {
   badgeClass: string;
+  variant: StatusIndicatorVariant;
   label: string;
 }
 
@@ -109,27 +111,32 @@ export function getPatrolRunStatusPresentation(
     case 'error':
       return {
         badgeClass: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
+        variant: 'danger',
         label: formatIdentifierLabel(normalized),
       };
     case 'issues_found':
       return {
         badgeClass: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
+        variant: 'warning',
         label: 'issues found',
       };
     case 'healthy':
       if (!findingsSnapshotAvailable) {
         return {
           badgeClass: 'bg-surface-alt text-base-content',
+          variant: 'muted',
           label: 'completed',
         };
       }
       return {
         badgeClass: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
+        variant: 'success',
         label: 'healthy',
       };
     default:
       return {
         badgeClass: 'bg-surface-alt text-base-content',
+        variant: 'muted',
         label: formatIdentifierLabel(normalized, { fallback: 'unknown' }),
       };
   }

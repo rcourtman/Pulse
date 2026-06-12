@@ -498,6 +498,10 @@ not a replacement status card, CTA band, or page-local nested card.
    `OrganizationRoleBadge` and `OrganizationShareStatusBadge`, so role/status
    tone mapping, pill shape, fit behavior, and whitespace handling do not drift
    across organization overview, access, and sharing surfaces.
+   Patrol run-history resource, outcome, snapshot, and scoped-run chips must
+   also compose `MetadataBadge`; Patrol remains the label/count/semantics
+   owner, but the visible badge shell, sizing, tone vocabulary, and whitespace
+   behavior stay in the shared primitive and `shared-template-registry.json`.
    Inline detail content belongs to the shared detail-section primitive family.
    Feature surfaces may own the platform-specific rows, section labels, and
    source model, but section row shaping, empty-row compaction, value tone
@@ -2359,6 +2363,10 @@ presentation for product surfaces that display state rather than toggle it.
 Product components must compose `StatusIndicatorBadge` instead of calling
 `getStatusIndicatorBadgeToneClasses` directly; low-level status utilities may
 still expose the tone mapping for that primitive and utility-level tests.
+Patrol run-history status labels follow this state-badge boundary: Patrol may
+derive the status label and typed variant in `patrolRunPresentation.ts`, but
+`RunHistoryEntry.tsx` must render the visible state badge through
+`StatusIndicatorBadge` rather than `runStatus.badgeClass` or a local span.
 The shared segmented selector now follows that same owner split.
 `frontend-modern/src/components/shared/FilterButtonGroup.tsx` stays the render
 shell, `frontend-modern/src/components/shared/useFilterButtonGroupState.ts`

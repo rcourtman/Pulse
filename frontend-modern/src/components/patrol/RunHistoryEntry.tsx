@@ -3,6 +3,8 @@ import type { Accessor } from 'solid-js';
 import type { PatrolRunRecord } from '@/api/patrol';
 import { FindingsPanel } from '@/components/AI/FindingsPanel';
 import { renderMarkdown } from '@/components/AI/aiChatUtils';
+import { MetadataBadge } from '@/components/shared/MetadataBadge';
+import { StatusIndicatorBadge } from '@/components/shared/StatusIndicatorBadge';
 import { buildPatrolRunAssistantHandoff } from '@/features/patrol/patrolInvestigationContextModel';
 import { aiChatStore } from '@/stores/aiChat';
 import { RunToolCallTrace } from './RunToolCallTrace';
@@ -108,10 +110,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
                 (props.patrolStream.resynced() || props.patrolStream.reconnectCount() > 0)
               }
             >
-              <span
-                title={resyncTitle()}
-                class="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300"
-              >
+              <MetadataBadge title={resyncTitle()} tone="info" size="xs" shape="rounded">
                 <RefreshCwIcon class="w-3 h-3" />
                 <span>
                   {props.patrolStream.resynced()
@@ -120,7 +119,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
                       : 'Resynced'
                     : `Reconnected${props.patrolStream.reconnectCount() > 1 ? ` x${props.patrolStream.reconnectCount()}` : ''}`}
                 </span>
-              </span>
+              </MetadataBadge>
             </Show>
             <Show when={hasError()}>
               <ShieldAlertIcon class="w-3.5 h-3.5 text-red-500" />
@@ -130,9 +129,9 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
               <span class="text-blue-700 dark:text-blue-300">{props.patrolStream.phase()}</span>
             </Show>
             <Show when={!hasError() && props.patrolStream.currentTool()}>
-              <span class="font-mono text-[11px] bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded">
+              <MetadataBadge tone="info" size="xs" shape="rounded" class="font-mono">
                 {props.patrolStream.currentTool()}
-              </span>
+              </MetadataBadge>
             </Show>
             <Show when={!hasError() && props.patrolStream.tokens() > 0}>
               <span class="text-blue-500 dark:text-blue-400 ml-auto">
@@ -190,7 +189,12 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
           <span class="text-base-content font-medium">
             {formatRelativeTime(run.started_at, { compact: true })}
           </span>
-          <span class={`px-1.5 py-0.5 rounded ${runStatus.badgeClass}`}>{runStatus.label}</span>
+          <StatusIndicatorBadge
+            label={runStatus.label}
+            variant={runStatus.variant}
+            size="xs"
+            shape="rounded"
+          />
           <span>{formatTriggerReason(run.trigger_reason)}</span>
           <Show when={scopeSummary && !coverageSummary}>
             <span>• {scopeSummary}</span>
@@ -337,54 +341,54 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
               </div>
               <div class="flex flex-wrap gap-1.5">
                 <Show when={run.nodes_checked > 0}>
-                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                  <MetadataBadge tone="neutral">
                     <ServerIcon class="w-3 h-3" /> {run.nodes_checked} node
                     {run.nodes_checked !== 1 ? 's' : ''}
-                  </span>
+                  </MetadataBadge>
                 </Show>
                 <Show when={run.guests_checked > 0}>
-                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-rose-50 text-rose-700 dark:bg-rose-900 dark:text-rose-300">
+                  <MetadataBadge tone="neutral">
                     <MonitorIcon class="w-3 h-3" /> {run.guests_checked} VM
                     {run.guests_checked !== 1 ? 's' : ''}
-                  </span>
+                  </MetadataBadge>
                 </Show>
                 <Show when={run.docker_checked > 0}>
-                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-cyan-50 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-300">
+                  <MetadataBadge tone="neutral">
                     <BoxIcon class="w-3 h-3" /> {run.docker_checked} container
                     {run.docker_checked !== 1 ? 's' : ''}
-                  </span>
+                  </MetadataBadge>
                 </Show>
                 <Show when={run.storage_checked > 0}>
-                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
+                  <MetadataBadge tone="neutral">
                     <HardDriveIcon class="w-3 h-3" /> {run.storage_checked} storage
-                  </span>
+                  </MetadataBadge>
                 </Show>
                 <Show when={run.hosts_checked > 0}>
-                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 dark:bg-green-900 dark:text-green-300">
+                  <MetadataBadge tone="neutral">
                     <GlobeIcon class="w-3 h-3" /> {run.hosts_checked} agent
                     {run.hosts_checked !== 1 ? 's' : ''}
-                  </span>
+                  </MetadataBadge>
                 </Show>
                 <Show when={run.truenas_checked > 0}>
-                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-teal-50 text-teal-700 dark:bg-teal-900 dark:text-teal-300">
+                  <MetadataBadge tone="neutral">
                     <HardDriveIcon class="w-3 h-3" /> {run.truenas_checked} TrueNAS
                     {run.truenas_checked !== 1 ? ' systems' : ' system'}
-                  </span>
+                  </MetadataBadge>
                 </Show>
                 <Show when={run.pbs_checked > 0}>
-                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300">
+                  <MetadataBadge tone="neutral">
                     <DatabaseIcon class="w-3 h-3" /> {run.pbs_checked} PBS
-                  </span>
+                  </MetadataBadge>
                 </Show>
                 <Show when={run.pmg_checked > 0}>
-                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-50 text-orange-700 dark:bg-orange-900 dark:text-orange-300">
+                  <MetadataBadge tone="neutral">
                     <MailIcon class="w-3 h-3" /> {run.pmg_checked} PMG
-                  </span>
+                  </MetadataBadge>
                 </Show>
                 <Show when={run.kubernetes_checked > 0}>
-                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-sky-50 text-sky-700 dark:bg-sky-900 dark:text-sky-300">
+                  <MetadataBadge tone="neutral">
                     <ActivityIcon class="w-3 h-3" /> {run.kubernetes_checked} K8s
-                  </span>
+                  </MetadataBadge>
                 </Show>
               </div>
             </div>
@@ -400,36 +404,36 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
             </div>
             <div class="flex flex-wrap gap-1.5">
               <Show when={run.new_findings > 0}>
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300">
+                <MetadataBadge tone="warning">
                   <AlertTriangleIcon class="w-3 h-3" /> {run.new_findings} new
-                </span>
+                </MetadataBadge>
               </Show>
               <Show when={run.existing_findings > 0}>
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-surface-hover ">
+                <MetadataBadge tone="muted">
                   <ActivityIcon class="w-3 h-3" /> {run.existing_findings} existing
-                </span>
+                </MetadataBadge>
               </Show>
               <Show when={run.resolved_findings > 0}>
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
+                <MetadataBadge tone="success">
                   <CheckCircleIcon class="w-3 h-3" /> {run.resolved_findings} resolved
-                </span>
+                </MetadataBadge>
               </Show>
               <Show when={run.auto_fix_count > 0}>
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
+                <MetadataBadge tone="info">
                   <WrenchIcon class="w-3 h-3" /> {run.auto_fix_count} remediated
-                </span>
+                </MetadataBadge>
               </Show>
               <Show when={run.rejected_findings > 0}>
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-surface-alt ">
+                <MetadataBadge tone="muted">
                   <FilterXIcon class="w-3 h-3" /> {run.rejected_findings} rejected
-                </span>
+                </MetadataBadge>
               </Show>
               <Show
                 when={!hasFindingsSnapshot && run.new_findings === 0 && run.existing_findings === 0}
               >
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
+                <MetadataBadge tone="info">
                   <ActivityIcon class="w-3 h-3" /> Snapshot unavailable
-                </span>
+                </MetadataBadge>
               </Show>
               <Show
                 when={
@@ -439,9 +443,9 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
                   run.existing_findings === 0
                 }
               >
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
+                <MetadataBadge tone="success">
                   <CheckCircleIcon class="w-3 h-3" /> All clear
-                </span>
+                </MetadataBadge>
               </Show>
             </div>
           </div>
@@ -477,9 +481,9 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
               </span>
             </Show>
             <Show when={run.type === 'scoped' && !coverageSummary}>
-              <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 dark:bg-blue-900 dark:text-blue-400 text-[10px] font-medium">
+              <MetadataBadge tone="info" size="xs" shape="rounded">
                 {formatScope(run) || 'Scoped'}
-              </span>
+              </MetadataBadge>
             </Show>
           </div>
 

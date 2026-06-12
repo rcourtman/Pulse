@@ -41,21 +41,25 @@ describe('patrolRunPresentation', () => {
   it('maps critical and error runs to danger styling', () => {
     expect(getPatrolRunStatusPresentation('critical').badgeClass).toContain('red-100');
     expect(getPatrolRunStatusPresentation('error').badgeClass).toContain('red-100');
+    expect(getPatrolRunStatusPresentation('error').variant).toBe('danger');
   });
 
   it('maps issues found to warning styling', () => {
     const presentation = getPatrolRunStatusPresentation('issues_found');
     expect(presentation.badgeClass).toContain('amber-100');
+    expect(presentation.variant).toBe('warning');
     expect(presentation.label).toBe('issues found');
   });
 
   it('maps healthy runs to success styling', () => {
     expect(getPatrolRunStatusPresentation('healthy').badgeClass).toContain('green-100');
+    expect(getPatrolRunStatusPresentation('healthy').variant).toBe('success');
   });
 
   it('downgrades legacy healthy runs without findings snapshots to a neutral completed state', () => {
     expect(getPatrolRunStatusPresentation('healthy', 0, false)).toEqual({
       badgeClass: 'bg-surface-alt text-base-content',
+      variant: 'muted',
       label: 'completed',
     });
   });
@@ -64,6 +68,7 @@ describe('patrolRunPresentation', () => {
     const presentation = getPatrolRunStatusPresentation('healthy', 2);
     expect(presentation.label).toBe('error');
     expect(presentation.badgeClass).toContain('red-100');
+    expect(presentation.variant).toBe('danger');
   });
 
   it('treats only healthy runs without errors as healthy', () => {
@@ -104,6 +109,7 @@ describe('patrolRunPresentation', () => {
     const presentation = getPatrolRunStatusPresentation(' Needs Review ');
     expect(presentation.label).toBe('needs review');
     expect(presentation.badgeClass).toContain('bg-surface-alt');
+    expect(presentation.variant).toBe('muted');
   });
 
   it('maps tool call success and failure to canonical colors', () => {
@@ -162,6 +168,7 @@ describe('patrolRunPresentation', () => {
       kindLabel: 'Scoped run',
       status: {
         badgeClass: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
+        variant: 'danger',
         label: 'error',
       },
       timestamp: '2026-03-12T10:01:00Z',
