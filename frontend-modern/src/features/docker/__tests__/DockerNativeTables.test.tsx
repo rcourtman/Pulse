@@ -170,12 +170,12 @@ describe('Docker native tables', () => {
     expect(screen.getByText('Memory')).toBeInTheDocument();
     expect(screen.getByText('Restarts')).toBeInTheDocument();
     expect(screen.getByText('Updates')).toBeInTheDocument();
+    expect(screen.queryByText('Health')).not.toBeInTheDocument();
     expect(screen.getByText('edge-web')).toBeInTheDocument();
     expect(screen.getByText('edge-01')).toBeInTheDocument();
     expect(screen.getByText('docker 27.5.1')).toBeInTheDocument();
     expect(screen.getByText('podman 5.2.1')).toBeInTheDocument();
     expect(screen.getByText('nginx:latest')).toBeInTheDocument();
-    expect(screen.getAllByText('healthy').length).toBe(2);
     expect(screen.getByText('2')).toBeInTheDocument();
     expect(screen.getByText('0.0.0.0:8080->80/tcp')).toBeInTheDocument();
     expect(screen.getByText('frontend 172.18.0.2')).toBeInTheDocument();
@@ -234,6 +234,46 @@ describe('Docker native tables', () => {
 
     expect(screen.queryByText('Runtime')).not.toBeInTheDocument();
     expect(screen.queryByText('docker 27.5.1')).not.toBeInTheDocument();
+  });
+
+  it('hides the Restarts column when the current containers have no restart signal', () => {
+    setViewportWidth(1500);
+
+    renderInRouter(() => (
+      <DockerContainersTable
+        resources={[
+          makeResource({
+            id: 'container-1',
+            type: 'app-container',
+            name: 'edge-web',
+            status: 'running',
+            docker: {
+              hostname: 'edge-01',
+              image: 'nginx:latest',
+              containerState: 'running',
+              restartCount: 0,
+            },
+          }),
+          makeResource({
+            id: 'container-2',
+            type: 'app-container',
+            name: 'edge-cache',
+            status: 'running',
+            docker: {
+              hostname: 'edge-02',
+              image: 'redis:7.4',
+              containerState: 'running',
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No containers"
+        emptyDescription="No containers"
+        showToolbar={false}
+      />
+    ));
+
+    expect(screen.queryByText('Restarts')).not.toBeInTheDocument();
   });
 
   it('renders actionable Docker container updates with native agent and container IDs', async () => {

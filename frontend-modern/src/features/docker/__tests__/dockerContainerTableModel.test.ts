@@ -8,7 +8,7 @@ import {
 
 describe('dockerContainerTableModel', () => {
   it('keeps the mobile container table on identity, state, live metrics, and update action', () => {
-    const columns = getDockerContainerVisibleColumnsForLayout('mobile', true);
+    const columns = getDockerContainerVisibleColumnsForLayout('mobile', true, true);
     const ids = columns.map((column) => column.id);
 
     expect(ids).toEqual(['container', 'state', 'cpu', 'memory', 'updates']);
@@ -21,14 +21,26 @@ describe('dockerContainerTableModel', () => {
     });
   });
 
-  it('adds host and restart signal before slower forensic fields on tablet', () => {
+  it('adds host before slower forensic fields on tablet', () => {
     expect(
-      getDockerContainerVisibleColumnsForLayout('tablet', true).map((column) => column.id),
-    ).toEqual(['container', 'host', 'state', 'cpu', 'memory', 'restarts', 'updates']);
+      getDockerContainerVisibleColumnsForLayout('tablet', true, false).map((column) => column.id),
+    ).toEqual(['container', 'host', 'state', 'cpu', 'memory', 'updates']);
+  });
+
+  it('adds restarts only when the current row set has restart signal to scan', () => {
+    const withoutRestarts = getDockerContainerVisibleColumnsForLayout('compact', true, false).map(
+      (column) => column.id,
+    );
+    const withRestarts = getDockerContainerVisibleColumnsForLayout('compact', true, true).map(
+      (column) => column.id,
+    );
+
+    expect(withoutRestarts).not.toContain('restarts');
+    expect(withRestarts).toContain('restarts');
   });
 
   it('keeps compact desktop scan-focused and hides wide forensic columns', () => {
-    const columns = getDockerContainerVisibleColumnsForLayout('compact', true);
+    const columns = getDockerContainerVisibleColumnsForLayout('compact', true, true);
     const ids = columns.map((column) => column.id);
 
     expect(ids).toEqual([
@@ -49,10 +61,10 @@ describe('dockerContainerTableModel', () => {
   });
 
   it('shows runtime only for mixed Docker and Podman fleets', () => {
-    const compactIds = getDockerContainerVisibleColumnsForLayout('compact', false).map(
+    const compactIds = getDockerContainerVisibleColumnsForLayout('compact', false, true).map(
       (column) => column.id,
     );
-    const wideIds = getDockerContainerVisibleColumnsForLayout('wide', false).map(
+    const wideIds = getDockerContainerVisibleColumnsForLayout('wide', false, true).map(
       (column) => column.id,
     );
 

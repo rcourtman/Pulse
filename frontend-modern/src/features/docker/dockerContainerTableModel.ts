@@ -9,7 +9,6 @@ export type DockerContainerTableColumnId =
   | 'runtime'
   | 'image'
   | 'state'
-  | 'health'
   | 'cpu'
   | 'memory'
   | 'restarts'
@@ -45,7 +44,6 @@ const DOCKER_CONTAINER_COLUMN_MIN_LAYOUT: Record<
   image: 'compact',
   runtime: 'compact',
   ports: 'compact',
-  health: 'wide',
   networks: 'wide',
   mounts: 'wide',
 };
@@ -56,7 +54,6 @@ const DOCKER_CONTAINER_COLUMNS: DockerContainerTableColumn[] = [
   { id: 'runtime', label: 'Runtime', kind: 'text' },
   { id: 'image', label: 'Image', kind: 'text' },
   { id: 'state', label: 'State', kind: 'text' },
-  { id: 'health', label: 'Health', kind: 'text' },
   { id: 'cpu', label: 'CPU', kind: 'metric-bar' },
   { id: 'memory', label: 'Memory', kind: 'metric-bar' },
   { id: 'restarts', label: 'Restarts', kind: 'numeric-value' },
@@ -72,7 +69,6 @@ const DOCKER_CONTAINER_DESKTOP_WIDTHS: Record<DockerContainerTableColumnId, numb
   runtime: 7,
   image: 16,
   state: 6,
-  health: 6,
   cpu: 9,
   memory: 10,
   restarts: 6,
@@ -121,10 +117,12 @@ const formatPercentage = (value: number): string => `${Number(value.toFixed(4))}
 export const getDockerContainerVisibleColumnsForLayout = (
   layoutMode: WorkloadTableLayoutMode,
   includeRuntime: boolean,
+  includeRestarts: boolean,
 ): DockerContainerTableColumn[] => {
   const layoutRank = DOCKER_CONTAINER_TABLE_LAYOUT_ORDER[layoutMode];
   return DOCKER_CONTAINER_COLUMNS.filter((column) => {
     if (column.id === 'runtime' && !includeRuntime) return false;
+    if (column.id === 'restarts' && !includeRestarts) return false;
     return (
       DOCKER_CONTAINER_TABLE_LAYOUT_ORDER[DOCKER_CONTAINER_COLUMN_MIN_LAYOUT[column.id]] <=
       layoutRank

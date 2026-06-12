@@ -251,8 +251,18 @@ export const DockerContainersTable: Component<DockerNativeTableProps> = (props) 
     }
     return kinds.size > 1;
   });
+  const showRestartColumn = createMemo(() =>
+    scopedRows().some(
+      (resource) =>
+        typeof resource.docker?.restartCount === 'number' && resource.docker.restartCount > 0,
+    ),
+  );
   const visibleColumns = createMemo(() =>
-    getDockerContainerVisibleColumnsForLayout(layoutMode(), showRuntimeColumn()),
+    getDockerContainerVisibleColumnsForLayout(
+      layoutMode(),
+      showRuntimeColumn(),
+      showRestartColumn(),
+    ),
   );
   const visibleColumnIds = createMemo(() => visibleColumns().map((column) => column.id));
   const drawerColSpan = createMemo(() => visibleColumns().length);
@@ -335,7 +345,6 @@ export const DockerContainersTable: Component<DockerNativeTableProps> = (props) 
                     const indicator = mapDockerContainerStatus(resource);
                     const image = () => dockerTextValue(resource.docker?.image);
                     const state = () => containerState(resource);
-                    const health = () => dockerTextValue(resource.docker?.health);
                     const runtime = () => runtimeSummary(resource);
                     const host = () => dockerHostName(resource);
                     const running = () => isContainerRunning(resource);
@@ -399,16 +408,6 @@ export const DockerContainersTable: Component<DockerNativeTableProps> = (props) 
                             >
                               <span class="block max-w-full truncate" title={state()}>
                                 {state()}
-                              </span>
-                            </TableCell>
-                          );
-                        case 'health':
-                          return (
-                            <TableCell
-                              class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content`}
-                            >
-                              <span class="block max-w-full truncate" title={health()}>
-                                {health()}
                               </span>
                             </TableCell>
                           );
