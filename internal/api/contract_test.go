@@ -15136,6 +15136,20 @@ func TestContract_AgentSurfaceErrorCodesMatchManifestDeclarations(t *testing.T) 
 	}
 }
 
+func TestContract_PlanActionDeclaresExecutionUnavailable(t *testing.T) {
+	source, err := os.ReadFile("agent_capabilities.go")
+	if err != nil {
+		t.Fatalf("read agent_capabilities.go: %v", err)
+	}
+	src := string(source)
+	if !strings.Contains(src, `Name:             "plan_action"`) {
+		t.Fatal("agent capabilities manifest must declare plan_action")
+	}
+	if !strings.Contains(src, `"action_execution_unavailable"`) {
+		t.Error("plan_action must declare action_execution_unavailable so agents can branch on executor-owned live-readiness refusal")
+	}
+}
+
 // TestContract_AgentCapabilitiesManifestIsPublic pins the auth
 // contract for the discovery surface: the manifest must be in the
 // router's publicPaths list so it serves without a token. The

@@ -24,6 +24,12 @@ type ActionExecutor interface {
 	ExecuteAction(ctx context.Context, record unified.ActionAuditRecord) (*unified.ExecutionResult, error)
 }
 
+// ActionAvailabilityChecker lets an executor contribute live readiness checks
+// before Pulse advertises or persists an executable action plan.
+type ActionAvailabilityChecker interface {
+	CheckActionAvailable(ctx context.Context, req unified.ActionRequest, resource unified.Resource) error
+}
+
 type actionDecisionRequest struct {
 	Outcome unified.ApprovalOutcome `json:"outcome"`
 	Reason  string                  `json:"reason,omitempty"`
@@ -114,6 +120,16 @@ func (h *ResourceHandlers) HandlePlanAction(w http.ResponseWriter, r *http.Reque
 	}
 
 	req = normalizeActionRequestForAudit(req)
+	if checker, ok := h.actionExecutor.(ActionAvailabilityChecker); ok {
+		if err := checker.CheckActionAvailable(r.Context(), req, *resource); err != nil {
+			writeJSONErrorWithDetails(w, http.StatusConflict, "action_execution_unavailable", "Action execution is unavailable", map[string]string{
+				"resourceId":     req.ResourceID,
+				"capabilityName": req.CapabilityName,
+				"reason":         sanitizeErrorForClient(err, "action execution is unavailable"),
+			})
+			return
+		}
+	}
 	store, err := h.getStore(orgID)
 	if err != nil {
 		writeJSONError(w, http.StatusServiceUnavailable, "action_audit_unavailable", "Action audit history is not available")

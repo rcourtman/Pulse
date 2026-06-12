@@ -441,14 +441,14 @@ var agentCapabilitiesManifest = AgentCapabilitiesManifest{
 		},
 		{
 			Name:             "plan_action",
-			Description:      "Plan an action against a resource. The planner validates the request, looks up the capability on the resource, and returns an ActionPlan with the approval policy, blast radius, plan hash, and preflight summary. The plan is persisted to the audit history at the planned/pending state so subsequent decide_action and execute_action calls can reference it by id. Plan-and-execute is a two-step flow when the resulting plan requires approval, one-step otherwise.",
+			Description:      "Plan an action against a resource. The planner validates the request, looks up the capability on the resource, checks executor-owned live availability, and returns an ActionPlan with the approval policy, blast radius, plan hash, and preflight summary. The plan is persisted to the audit history at the planned/pending state only after the live availability check passes, so subsequent decide_action and execute_action calls can reference it by id. Plan-and-execute is a two-step flow when the resulting plan requires approval, one-step otherwise.",
 			Category:         "action",
 			Method:           http.MethodPost,
 			Path:             "/api/actions/plan",
 			Scope:            "ai:execute",
 			RequestBodyShape: "ActionRequest",
 			ResponseShape:    "ActionPlan",
-			ErrorCodes:       []string{"invalid_action_request", "resource_not_found", "capability_not_found"},
+			ErrorCodes:       []string{"invalid_action_request", "resource_not_found", "capability_not_found", "action_execution_unavailable"},
 		},
 		{
 			Name:             "decide_action",

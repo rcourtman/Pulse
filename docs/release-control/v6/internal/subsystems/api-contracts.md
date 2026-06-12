@@ -1004,6 +1004,15 @@ the canonical monitored-system blocked payload.
    not duplicate the initial lifecycle events. MCP, CLI, and UI consumers may
    adapt this payload, but they must not become the source of truth for action
    planning semantics.
+   Executor-owned live readiness is part of planning, not a UI precheck:
+   after planner validation and before audit persistence, `actions.go` must ask
+   the registered executor whether the resource/capability is currently
+   executable. A failed readiness check returns `409`
+   `action_execution_unavailable`, does not create or mutate an action audit
+   record, and must not dispatch commands. Docker / Podman lifecycle readiness
+   uses that hook for command-agent connectivity and runtime posture; browser
+   controls may consume advertised capabilities, but must not replace this
+   check with direct shell, SSH, provider, or agent-command calls.
    Action approval decisions are API-owned as a separate non-execution
    contract: `POST /api/actions/{id}/decision` may only record an
    `approved` or `rejected` decision against a persisted `pending_approval`
@@ -2492,7 +2501,8 @@ field-level reasons on validation failures (e.g.
 need to parse human text to know which field went wrong. The
 manifest's per-capability `errorCodes` lists declare the closed
 set: `plan_action` carries `invalid_action_request`,
-`resource_not_found`, `capability_not_found`; `decide_action`
+`resource_not_found`, `capability_not_found`,
+`action_execution_unavailable`; `decide_action`
 carries `missing_id`, `invalid_id`, `invalid_action_decision`,
 `action_not_found`, `action_not_pending`, `action_plan_expired`;
 `execute_action` carries `missing_id`, `invalid_id`,

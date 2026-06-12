@@ -238,7 +238,8 @@ Docker / Podman from lifecycle-local code.
 Disconnected command-agent state is also API-owned readiness: lifecycle
 surfaces may reflect missing backend-advertised capabilities, but must not
 reconnect, substitute, or directly address an agent to make a stale container
-action executable.
+action executable. Backend resource payloads and plan-action readiness are the
+only supported lifecycle signal for that state.
 Assistant session rename through `PATCH /api/ai/sessions/{id}` follows that
 same browser-safe history boundary. Lifecycle surfaces, MCP adapters, and
 agents may display the updated title as human navigation metadata, but they

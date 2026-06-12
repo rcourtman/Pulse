@@ -227,6 +227,10 @@ not storage or recovery controls: storage/recovery consumers may render their
 redacted action history as context, but must not treat container lifecycle
 capabilities, `DockerData`, or agent command verification as backup freshness,
 restore support, or a recovery-local execution path.
+Disconnected command-agent readiness for those lifecycle actions remains an
+API/runtime fail-closed condition; storage/recovery consumers may observe that
+an action is unavailable, but must not reinterpret it as recovery degradation
+or attempt a recovery-local container command path.
 Storage and recovery surfaces may consume Discovery context from the shared
 API boundary when it helps explain protected workloads or storage-adjacent
 services, including mock-mode config/data/log path examples. That context is

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -149,6 +150,7 @@ func (h *ResourceHandlers) HandleListResources(w http.ResponseWriter, r *http.Re
 	}
 
 	allResources := presentationResourcesFromRegistry(registry)
+	h.applyActionAvailability(r.Context(), allResources)
 	resources := allResources
 	if unsupported := unsupportedResourceTypeFilterTokens(r.URL.Query().Get("type")); len(unsupported) > 0 {
 		http.Error(w, "unsupported type filter token(s): "+strings.Join(unsupported, ", "), http.StatusBadRequest)
@@ -294,6 +296,9 @@ func (h *ResourceHandlers) HandleGetResource(w http.ResponseWriter, r *http.Requ
 	}
 
 	resourceCopy := *resource
+	resourceCopies := []unified.Resource{resourceCopy}
+	h.applyActionAvailability(r.Context(), resourceCopies)
+	resourceCopy = resourceCopies[0]
 	attachDiscoveryTarget(&resourceCopy)
 	h.attachDiscoveryReadiness(&resourceCopy, time.Now().UTC())
 	attachMetricsTarget(&resourceCopy, registry)
@@ -302,6 +307,38 @@ func (h *ResourceHandlers) HandleGetResource(w http.ResponseWriter, r *http.Requ
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resourceCopy)
+}
+
+func (h *ResourceHandlers) applyActionAvailability(ctx context.Context, resources []unified.Resource) {
+	checker, ok := h.actionExecutor.(ActionAvailabilityChecker)
+	if !ok || checker == nil {
+		return
+	}
+	for i := range resources {
+		if len(resources[i].Capabilities) == 0 {
+			continue
+		}
+		filtered := make([]unified.ResourceCapability, 0, len(resources[i].Capabilities))
+		for _, capability := range resources[i].Capabilities {
+			req := unified.ActionRequest{
+				RequestID:      "resource-capability-availability",
+				ResourceID:     resources[i].ID,
+				CapabilityName: capability.Name,
+				Params:         map[string]any{},
+				Reason:         "Projecting currently executable resource capabilities.",
+				RequestedBy:    "system:resource-api",
+			}
+			if err := checker.CheckActionAvailable(ctx, req, resources[i]); err != nil {
+				continue
+			}
+			filtered = append(filtered, capability)
+		}
+		if len(filtered) == 0 {
+			resources[i].Capabilities = nil
+		} else {
+			resources[i].Capabilities = filtered
+		}
+	}
 }
 
 func presentationResourcesFromRegistry(registry *unified.ResourceRegistry) []unified.Resource {

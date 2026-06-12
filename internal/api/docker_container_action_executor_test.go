@@ -18,8 +18,9 @@ import (
 )
 
 type fakeDockerActionAgentCommander struct {
-	results []*agentexec.CommandResultPayload
-	calls   []agentexec.ExecuteCommandPayload
+	results   []*agentexec.CommandResultPayload
+	calls     []agentexec.ExecuteCommandPayload
+	connected map[string]bool
 }
 
 func (f *fakeDockerActionAgentCommander) ExecuteCommand(_ context.Context, _ string, cmd agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error) {
@@ -30,6 +31,21 @@ func (f *fakeDockerActionAgentCommander) ExecuteCommand(_ context.Context, _ str
 	result := f.results[0]
 	f.results = f.results[1:]
 	return result, nil
+}
+
+func (f *fakeDockerActionAgentCommander) IsAgentConnected(agentID string) bool {
+	if f.connected == nil {
+		return true
+	}
+	return f.connected[agentID]
+}
+
+func dockerActionCapabilityNames(capabilities []unified.ResourceCapability) []string {
+	names := make([]string, 0, len(capabilities))
+	for _, capability := range capabilities {
+		names = append(names, capability.Name)
+	}
+	return names
 }
 
 func TestDockerContainerActionExecutorDispatchesPodmanRestartAndVerification(t *testing.T) {
@@ -86,6 +102,120 @@ func TestDockerContainerActionExecutorFailsWhenCapabilityNoLongerAdvertised(t *t
 	}
 	if len(agents.calls) != 0 {
 		t.Fatalf("agent calls = %#v, want none", agents.calls)
+	}
+}
+
+func TestDockerContainerActionExecutorAvailabilityRequiresConnectedAgent(t *testing.T) {
+	now := time.Now().UTC()
+	resource := dockerContainerActionResource("app-container:api", "docker", "running", now)
+	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot:  models.StateSnapshot{LastUpdate: now},
+		resources: []unified.Resource{resource},
+	})
+	agents := &fakeDockerActionAgentCommander{connected: map[string]bool{"agent-1": false}}
+	executor := newDockerContainerActionExecutor(h, agents).(dockerContainerActionExecutor)
+
+	err := executor.CheckActionAvailable(context.Background(), unified.ActionRequest{
+		RequestID:      "req-availability",
+		ResourceID:     "app-container:api",
+		CapabilityName: "restart",
+		Reason:         "operator requested restart",
+		RequestedBy:    "operator",
+	}, resource)
+	if err == nil || !strings.Contains(err.Error(), `docker container command agent "agent-1" is not connected`) {
+		t.Fatalf("CheckActionAvailable err = %v, want disconnected agent", err)
+	}
+	if len(agents.calls) != 0 {
+		t.Fatalf("agent calls = %#v, want none", agents.calls)
+	}
+}
+
+func TestHandlePlanActionRejectsDisconnectedDockerContainerAgent(t *testing.T) {
+	now := time.Now().UTC()
+	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot: models.StateSnapshot{LastUpdate: now},
+		resources: []unified.Resource{
+			dockerContainerActionResource("app-container:api", "docker", "running", now),
+		},
+	})
+	h.SetActionExecutor(newDockerContainerActionExecutor(h, &fakeDockerActionAgentCommander{
+		connected: map[string]bool{"agent-1": false},
+	}))
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/actions/plan", bytes.NewBufferString(`{
+		"requestId":"req-disconnected-agent",
+		"resourceId":"app-container:api",
+		"capabilityName":"restart",
+		"reason":"operator requested restart",
+		"requestedBy":"operator"
+	}`))
+	h.HandlePlanAction(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("plan status = %d, want %d, body=%s", rec.Code, http.StatusConflict, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"error":"action_execution_unavailable"`) ||
+		!strings.Contains(rec.Body.String(), `"reason":"action execution is unavailable"`) {
+		t.Fatalf("unexpected response body: %s", rec.Body.String())
+	}
+	store, err := h.getStore("default")
+	if err != nil {
+		t.Fatalf("get store: %v", err)
+	}
+	audits, err := store.GetActionAudits("app-container:api", time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("GetActionAudits: %v", err)
+	}
+	if len(audits) != 0 {
+		t.Fatalf("audits = %#v, want none for refused plan", audits)
+	}
+}
+
+func TestResourceResponsesFilterDisconnectedDockerLifecycleCapabilities(t *testing.T) {
+	now := time.Now().UTC()
+	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot: models.StateSnapshot{LastUpdate: now},
+		resources: []unified.Resource{
+			dockerContainerActionResource("app-container:api", "docker", "running", now),
+		},
+	})
+	h.SetActionExecutor(newDockerContainerActionExecutor(h, &fakeDockerActionAgentCommander{
+		connected: map[string]bool{"agent-1": false},
+	}))
+
+	listRec := httptest.NewRecorder()
+	listReq := httptest.NewRequest(http.MethodGet, "/api/resources?type=app-container", nil)
+	h.HandleListResources(listRec, listReq)
+	if listRec.Code != http.StatusOK {
+		t.Fatalf("list status = %d, body=%s", listRec.Code, listRec.Body.String())
+	}
+	var list ResourcesResponse
+	if err := json.Unmarshal(listRec.Body.Bytes(), &list); err != nil {
+		t.Fatalf("decode list: %v", err)
+	}
+	if len(list.Data) != 1 {
+		t.Fatalf("list data len = %d, want 1", len(list.Data))
+	}
+	if got := dockerActionCapabilityNames(list.Data[0].Capabilities); len(got) != 0 {
+		t.Fatalf("list capabilities = %#v, want none", got)
+	}
+
+	detailRec := httptest.NewRecorder()
+	detailReq := httptest.NewRequest(http.MethodGet, "/api/resources/app-container:api", nil)
+	h.HandleGetResource(detailRec, detailReq)
+	if detailRec.Code != http.StatusOK {
+		t.Fatalf("detail status = %d, body=%s", detailRec.Code, detailRec.Body.String())
+	}
+	var detail unified.Resource
+	if err := json.Unmarshal(detailRec.Body.Bytes(), &detail); err != nil {
+		t.Fatalf("decode detail: %v", err)
+	}
+	if got := dockerActionCapabilityNames(detail.Capabilities); len(got) != 0 {
+		t.Fatalf("detail capabilities = %#v, want none", got)
 	}
 }
 

@@ -15,6 +15,7 @@ const dockerContainerLifecycleHandler = "docker.container.lifecycle"
 
 type dockerActionAgentCommander interface {
 	ExecuteCommand(ctx context.Context, agentID string, cmd agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error)
+	IsAgentConnected(agentID string) bool
 }
 
 type dockerContainerActionExecutor struct {
@@ -55,6 +56,9 @@ func (e dockerContainerActionExecutor) ExecuteAction(ctx context.Context, record
 	if agentID == "" {
 		return nil, fmt.Errorf("docker container resource %q is not backed by a reporting Pulse agent", record.Request.ResourceID)
 	}
+	if !e.agents.IsAgentConnected(agentID) {
+		return nil, fmt.Errorf("docker container command agent %q is not connected", agentID)
+	}
 
 	command := fmt.Sprintf("%s %s %s", runtime, operation, shellQuote(containerRef))
 	result, err := e.agents.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
@@ -87,6 +91,25 @@ func (e dockerContainerActionExecutor) ExecuteAction(ctx context.Context, record
 	return execution, nil
 }
 
+func (e dockerContainerActionExecutor) CheckActionAvailable(ctx context.Context, req unified.ActionRequest, resource unified.Resource) error {
+	operation := strings.TrimSpace(req.CapabilityName)
+	capability, ok := findDockerLifecycleCapability(resource.Capabilities, operation)
+	if !ok || capability.InternalHandler != dockerContainerLifecycleHandler {
+		return nil
+	}
+	if e.agents == nil {
+		return fmt.Errorf("docker container command agent manager is not available")
+	}
+	if _, err := e.executableDockerContainerResource(ctx, resource, operation); err != nil {
+		return err
+	}
+	agentID := strings.TrimSpace(resource.Docker.AgentID)
+	if !e.agents.IsAgentConnected(agentID) {
+		return fmt.Errorf("docker container command agent %q is not connected", agentID)
+	}
+	return nil
+}
+
 func (e dockerContainerActionExecutor) currentDockerContainerResource(ctx context.Context, resourceID, operation string) (unified.Resource, error) {
 	if e.resources == nil {
 		return unified.Resource{}, fmt.Errorf("resource handler unavailable")
@@ -99,11 +122,15 @@ func (e dockerContainerActionExecutor) currentDockerContainerResource(ctx contex
 	if !ok || resource == nil {
 		return unified.Resource{}, fmt.Errorf("resource %q is no longer present", resourceID)
 	}
+	return e.executableDockerContainerResource(ctx, *resource, operation)
+}
+
+func (e dockerContainerActionExecutor) executableDockerContainerResource(_ context.Context, resource unified.Resource, operation string) (unified.Resource, error) {
 	if resource.Type != unified.ResourceTypeAppContainer || resource.Docker == nil {
-		return unified.Resource{}, fmt.Errorf("resource %q is not a Docker or Podman container", resourceID)
+		return unified.Resource{}, fmt.Errorf("resource %q is not a Docker or Podman container", resource.ID)
 	}
 	if status := resource.SourceStatus[unified.SourceDocker]; strings.EqualFold(strings.TrimSpace(status.Status), "stale") || strings.EqualFold(strings.TrimSpace(status.Status), "offline") {
-		return unified.Resource{}, fmt.Errorf("docker inventory for resource %q is %s", resourceID, status.Status)
+		return unified.Resource{}, fmt.Errorf("docker inventory for resource %q is %s", resource.ID, status.Status)
 	}
 	if resource.Docker.Security != nil && resource.Docker.Security.MutatingCommandsBlocked {
 		reason := strings.TrimSpace(resource.Docker.Security.MutatingCommandsBlockedReason)
@@ -113,11 +140,11 @@ func (e dockerContainerActionExecutor) currentDockerContainerResource(ctx contex
 		return unified.Resource{}, fmt.Errorf("docker container lifecycle action is blocked by host policy: %s", reason)
 	}
 	if capability, ok := findDockerLifecycleCapability(resource.Capabilities, operation); !ok {
-		return unified.Resource{}, fmt.Errorf("resource %q does not currently advertise %s capability", resourceID, operation)
+		return unified.Resource{}, fmt.Errorf("resource %q does not currently advertise %s capability", resource.ID, operation)
 	} else if capability.InternalHandler != dockerContainerLifecycleHandler {
-		return unified.Resource{}, fmt.Errorf("resource %q advertises %s through unsupported handler %q", resourceID, operation, capability.InternalHandler)
+		return unified.Resource{}, fmt.Errorf("resource %q advertises %s through unsupported handler %q", resource.ID, operation, capability.InternalHandler)
 	}
-	return *resource, nil
+	return resource, nil
 }
 
 func findDockerLifecycleCapability(capabilities []unified.ResourceCapability, operation string) (unified.ResourceCapability, bool) {

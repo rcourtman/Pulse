@@ -574,12 +574,14 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 		},
 		filepath.Join("..", "api", "actions.go"): {
 			"type ActionExecutor interface",
+			"type ActionAvailabilityChecker interface",
 			"func (h *ResourceHandlers) HandleExecuteAction(w http.ResponseWriter, r *http.Request)",
 			"func (h *ResourceHandlers) validateActionPlanFresh(orgID string, record unified.ActionAuditRecord) error",
 			"func recordRefusedActionExecution(store unified.ResourceStore, record unified.ActionAuditRecord",
 			"func (h *ResourceHandlers) publishActionCompleted(record unified.ActionAuditRecord)",
 			"store.RecordActionExecutionStart(started, startEvent)",
 			"store.RecordActionExecutionResult(completed, doneEvent)",
+			"action_execution_unavailable",
 			"action_plan_drift",
 			"action_executor_unavailable",
 		},
@@ -588,6 +590,7 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 			"actionCompleted     func(unified.ActionAuditRecord)",
 			"func (h *ResourceHandlers) SetActionExecutor(executor ActionExecutor)",
 			"func (h *ResourceHandlers) SetActionCompletedPublisher(",
+			"func (h *ResourceHandlers) applyActionAvailability(ctx context.Context, resources []unified.Resource)",
 		},
 		filepath.Join("..", "api", "agent_events.go"): {
 			"func (b *AgentEventBroadcaster) PublishActionCompletedRecord(record unifiedresources.ActionAuditRecord)",

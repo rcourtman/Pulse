@@ -439,6 +439,13 @@ container inventory table.
    `/api/actions/*` and the agent command server; platform rows or drawers
    must not wire direct shell, SSH, provider, or runtime calls around this
    capability contract.
+   API resource responses must project only currently executable lifecycle
+   capabilities: when the command agent that owns the Docker / Podman runtime is
+   not connected, `resources.go` filters those capabilities from list and
+   detail payloads before frontend controls render. Planning still rechecks the
+   same readiness boundary and fails closed with `action_execution_unavailable`
+   before audit creation if the live command path disappears after the resource
+   response was read.
    TrueNAS app inventory enters the model as native `TrueNASData.App`
    metadata on canonical `app-container` resources. The facet is sourced from
    the TrueNAS API app inventory (`app.query` plus active workload/stat
