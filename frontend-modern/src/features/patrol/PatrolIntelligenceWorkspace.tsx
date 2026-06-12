@@ -7,6 +7,7 @@ import { formatTriggerReason } from '@/utils/patrolFormat';
 import { ResourcePolicySummary } from '@/components/Infrastructure/ResourcePolicySummary';
 import { ResourceCorrelationSummary } from '@/components/Infrastructure/ResourceCorrelationSummary';
 import { ResourceChangeSummary } from '@/components/Infrastructure/ResourceChangeSummary';
+import { Button } from '@/components/shared/Button';
 import {
   getPatrolSupportingContextCorrelationSummary,
   getPatrolSupportingContextToggleLabel,
@@ -147,13 +148,15 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
               </Show>
             </div>
 
-            <button
+            <Button
               type="button"
+              variant="secondary"
+              size="sm"
+              class="px-3"
               onClick={() => state.setShowInvestigationContext((value) => !value)}
-              class="inline-flex items-center rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover"
             >
               {getPatrolSupportingContextToggleLabel(state.showInvestigationContext())}
-            </button>
+            </Button>
           </div>
 
           <Show when={state.showInvestigationContext()}>

@@ -181,6 +181,27 @@
       ]
     },
     {
+      "id": "button-command-shell",
+      "category": "action-button",
+      "summary": "Standard command buttons and button-styled route actions must compose Button or ButtonLink for shared variants, sizes, focus, disabled, loading, and safe-link behavior instead of recreating local Tailwind button shells.",
+      "canonical": {
+        "path": "src/components/shared/Button.tsx",
+        "export": "Button"
+      },
+      "requiredConsumers": [
+        { "path": "src/components/AI/Chat/ChatMessages.tsx" },
+        { "path": "src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx" },
+        { "path": "src/components/Settings/DataHandlingPanel.tsx" },
+        { "path": "src/features/patrol/PatrolIntelligenceWorkspace.tsx" },
+        { "path": "src/features/standalone/StandalonePageSurface.tsx" }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "form-select-shell",
       "category": "form-control",
       "summary": "Native select controls must compose FormSelect for shared label/id/help wiring, value synchronization, and select chrome instead of recreating labelled select wrappers locally.",
@@ -200,8 +221,12 @@
         { "path": "src/components/Settings/AIRuntimeControlsSection.tsx" },
         { "path": "src/components/Settings/AgentProfilesPanel.tsx" },
         { "path": "src/components/Settings/AuditLogPanel.tsx" },
-        { "path": "src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx" },
-        { "path": "src/components/Settings/ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx" },
+        {
+          "path": "src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx"
+        },
+        {
+          "path": "src/components/Settings/ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx"
+        },
         { "path": "src/components/Settings/InfrastructureInstallerSection.tsx" },
         { "path": "src/components/Settings/NodeModalMonitoringSection.tsx" },
         { "path": "src/components/Settings/OrganizationAccessManagementSection.tsx" },
@@ -1007,6 +1032,28 @@
       "allowedPaths": [],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "button-secondary-command-local-shell",
+      "category": "action-button",
+      "summary": "Product surfaces must not copy the standard secondary command-button shell; use Button for buttons and ButtonLink for route/link actions.",
+      "canonical": {
+        "path": "src/components/shared/buttonModel.ts",
+        "export": "getButtonClass"
+      },
+      "scopes": ["src/components", "src/features", "src/pages"],
+      "extensions": [".tsx"],
+      "allPatterns": [
+        "rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content"
+      ],
+      "legacyReason": "Retired migration debt. Standard secondary command buttons belong to the shared Button primitive family, including button-styled links.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/Button.test.tsx"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
         "scripts/shared-template-audit.mjs"
       ]
     }

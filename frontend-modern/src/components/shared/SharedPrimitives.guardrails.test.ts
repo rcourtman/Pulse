@@ -3,8 +3,11 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import calloutCardSource from '@/components/shared/CalloutCard.tsx?raw';
 import assistantCommandHelpDialogSource from '@/components/AI/Chat/AssistantCommandHelpDialog.tsx?raw';
+import chatMessagesSource from '@/components/AI/Chat/ChatMessages.tsx?raw';
 import aiChatSource from '@/components/AI/Chat/index.tsx?raw';
 import aiModelPickerSource from '@/components/shared/AIModelPicker.tsx?raw';
+import buttonSource from '@/components/shared/Button.tsx?raw';
+import buttonModelSource from '@/components/shared/buttonModel.ts?raw';
 import commandPaletteModalSource from '@/components/shared/CommandPaletteModal.tsx?raw';
 import commandPaletteModelSource from '@/components/shared/commandPaletteModel.ts?raw';
 import columnPickerSource from '@/components/shared/ColumnPicker.tsx?raw';
@@ -159,11 +162,13 @@ import alertHistoryTableGroupRowSource from '@/features/alerts/AlertHistoryTable
 import alertResourceTableDesktopSource from '@/components/Alerts/AlertResourceTableDesktop.tsx?raw';
 import aiCostDashboardSource from '@/components/AI/AICostDashboard.tsx?raw';
 import resourceDetailSummarySource from '@/components/Infrastructure/ResourceDetailSummary.tsx?raw';
+import resourceDetailDrawerDebugTabSource from '@/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx?raw';
 import aiSettingsDialogsSource from '@/components/Settings/AISettingsDialogs.tsx?raw';
 import agentProfilesPanelSource from '@/components/Settings/AgentProfilesPanel.tsx?raw';
 import apiTokenManagerSource from '@/components/Settings/APITokenManager.tsx?raw';
 import diagnosticsResultsPanelSource from '@/components/Settings/DiagnosticsResultsPanel.tsx?raw';
 import dockerRuntimeSettingsCardSource from '@/components/Settings/DockerRuntimeSettingsCard.tsx?raw';
+import dataHandlingPanelSource from '@/components/Settings/DataHandlingPanel.tsx?raw';
 import generalSettingsPanelSource from '@/components/Settings/GeneralSettingsPanel.tsx?raw';
 import organizationAccessMembersSectionSource from '@/components/Settings/OrganizationAccessMembersSection.tsx?raw';
 import organizationIncomingSharesSectionSource from '@/components/Settings/OrganizationIncomingSharesSection.tsx?raw';
@@ -177,6 +182,7 @@ import infrastructureSourcePickerSource from '@/components/Settings/Infrastructu
 import resourcePickerSource from '@/components/Settings/ResourcePicker.tsx?raw';
 import settingsPageShellSource from '@/components/Settings/SettingsPageShell.tsx?raw';
 import patrolIntelligenceHeaderSource from '@/features/patrol/PatrolIntelligenceHeader.tsx?raw';
+import patrolIntelligenceWorkspaceSource from '@/features/patrol/PatrolIntelligenceWorkspace.tsx?raw';
 import filterBarSource from '@/components/shared/FilterBar/FilterBar.tsx?raw';
 import filterChipSource from '@/components/shared/FilterBar/FilterChip.tsx?raw';
 import addFilterMenuSource from '@/components/shared/FilterBar/AddFilterMenu.tsx?raw';
@@ -228,16 +234,12 @@ describe('shared primitive guardrails', () => {
         allowedPaths?: string[];
       }>;
     };
-    const registeredRule = registry.rules?.find(
-      (rule) => rule.id === 'filter-button-group-shell',
-    );
+    const registeredRule = registry.rules?.find((rule) => rule.id === 'filter-button-group-shell');
     const registeredGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'filter-button-group-local-segmented-control-styles',
     );
 
-    expect(registeredRule?.canonical?.path).toBe(
-      'src/components/shared/FilterButtonGroup.tsx',
-    );
+    expect(registeredRule?.canonical?.path).toBe('src/components/shared/FilterButtonGroup.tsx');
     expect(registeredRule?.canonical?.export).toBe('FilterButtonGroup');
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
       'src/components/Settings/GeneralSettingsPanel.tsx',
@@ -254,11 +256,7 @@ describe('shared primitive guardrails', () => {
     ]);
     expect(registeredGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(registeredGuard?.scopes).toEqual(
-      expect.arrayContaining([
-        'src/components/Settings',
-        'src/features',
-        'src/pages',
-      ]),
+      expect.arrayContaining(['src/components/Settings', 'src/features', 'src/pages']),
     );
 
     expect(filterButtonGroupSource).toContain('useFilterButtonGroupState');
@@ -517,16 +515,12 @@ describe('shared primitive guardrails', () => {
         allowedPaths?: string[];
       }>;
     };
-    const registeredRule = registry.rules?.find(
-      (rule) => rule.id === 'selection-card-group-shell',
-    );
+    const registeredRule = registry.rules?.find((rule) => rule.id === 'selection-card-group-shell');
     const registeredGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'selection-card-group-local-active-card-styles',
     );
 
-    expect(registeredRule?.canonical?.path).toBe(
-      'src/components/shared/SelectionCardGroup.tsx',
-    );
+    expect(registeredRule?.canonical?.path).toBe('src/components/shared/SelectionCardGroup.tsx');
     expect(registeredRule?.canonical?.export).toBe('SelectionCardGroup');
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
       'src/components/Settings/AISettingsDialogs.tsx',
@@ -535,20 +529,14 @@ describe('shared primitive guardrails', () => {
     expect(registeredGuard?.canonical?.path).toBe(
       'src/components/shared/selectionCardGroupModel.ts',
     );
-    expect(registeredGuard?.canonical?.export).toBe(
-      'getSelectionCardButtonClass',
-    );
+    expect(registeredGuard?.canonical?.export).toBe('getSelectionCardButtonClass');
     expect(registeredGuard?.allPatterns).toEqual([
       'p-4 rounded-md border-2 transition-all text-left',
       'p-3 rounded-md border-2 transition-all text-center',
     ]);
     expect(registeredGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(registeredGuard?.scopes).toEqual(
-      expect.arrayContaining([
-        'src/components/Settings',
-        'src/features',
-        'src/pages',
-      ]),
+      expect.arrayContaining(['src/components/Settings', 'src/features', 'src/pages']),
     );
 
     expect(selectionCardGroupSource).toContain('useSelectionCardGroupState');
@@ -568,9 +556,7 @@ describe('shared primitive guardrails', () => {
     expect(selectionCardGroupModelSource).toContain('resolveSelectionCardTone');
     expect(selectionCardGroupModelSource).toContain('getSelectionCardButtonClass');
     expect(selectionCardGroupModelSource).toContain("compact: 'grid grid-cols-2 gap-2'");
-    expect(selectionCardGroupModelSource).toContain(
-      "detail: 'grid grid-cols-1 gap-3'",
-    );
+    expect(selectionCardGroupModelSource).toContain("detail: 'grid grid-cols-1 gap-3'");
     expect(aiSettingsDialogsSource).toContain('SelectionCardGroup');
     expect(aiSettingsDialogsSource).toContain('variant="compact"');
     expect(aiSettingsDialogsSource).not.toContain(
@@ -677,16 +663,12 @@ describe('shared primitive guardrails', () => {
         ignoredPaths?: string[];
       }>;
     };
-    const registeredRule = registry.rules?.find(
-      (rule) => rule.id === 'table-card-header-shell',
-    );
+    const registeredRule = registry.rules?.find((rule) => rule.id === 'table-card-header-shell');
     const registeredGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'table-card-header-local-summary-header',
     );
 
-    expect(registeredRule?.canonical?.path).toBe(
-      'src/components/shared/TableCardHeader.tsx',
-    );
+    expect(registeredRule?.canonical?.path).toBe('src/components/shared/TableCardHeader.tsx');
     expect(registeredRule?.canonical?.export).toBe('TableCardHeader');
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
       'src/components/Infrastructure/UnifiedResourceHostTableCard.tsx',
@@ -694,9 +676,7 @@ describe('shared primitive guardrails', () => {
       'src/components/Storage/StorageContentCard.tsx',
       'src/features/platformPage/sharedPlatformPage.tsx',
     ]);
-    expect(registeredGuard?.canonical?.path).toBe(
-      'src/components/shared/TableCardHeader.tsx',
-    );
+    expect(registeredGuard?.canonical?.path).toBe('src/components/shared/TableCardHeader.tsx');
     expect(registeredGuard?.canonical?.export).toBe('TableCardHeader');
     expect(registeredGuard?.allPatterns).toEqual(['SummaryTableCardHeader']);
     expect(registeredGuard?.allowedPaths ?? []).toHaveLength(0);
@@ -741,16 +721,12 @@ describe('shared primitive guardrails', () => {
         ignoredPaths?: string[];
       }>;
     };
-    const registeredRule = registry.rules?.find(
-      (rule) => rule.id === 'table-card-frame-shell',
-    );
+    const registeredRule = registry.rules?.find((rule) => rule.id === 'table-card-frame-shell');
     const registeredGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'table-card-frame-local-wrapper',
     );
 
-    expect(registeredRule?.canonical?.path).toBe(
-      'src/components/shared/TableCard.tsx',
-    );
+    expect(registeredRule?.canonical?.path).toBe('src/components/shared/TableCard.tsx');
     expect(registeredRule?.canonical?.export).toBe('TableCard');
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
       'src/components/Infrastructure/UnifiedResourceHostTableCard.tsx',
@@ -1409,17 +1385,13 @@ describe('shared primitive guardrails', () => {
       (guard) => guard.id === 'status-indicator-badge-local-tone-helper',
     );
 
-    expect(registeredRule?.canonical?.path).toBe(
-      'src/components/shared/StatusIndicatorBadge.tsx',
-    );
+    expect(registeredRule?.canonical?.path).toBe('src/components/shared/StatusIndicatorBadge.tsx');
     expect(registeredRule?.canonical?.export).toBe('StatusIndicatorBadge');
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
       'src/components/Settings/AgentProfilesPanel.tsx',
       'src/components/Settings/DiagnosticsResultsPanel.tsx',
     ]);
-    expect(registeredGuard?.canonical?.path).toBe(
-      'src/components/shared/StatusIndicatorBadge.tsx',
-    );
+    expect(registeredGuard?.canonical?.path).toBe('src/components/shared/StatusIndicatorBadge.tsx');
     expect(registeredGuard?.canonical?.export).toBe('StatusIndicatorBadge');
     expect(registeredGuard?.allPatterns).toEqual(['getStatusIndicatorBadgeToneClasses(']);
     expect(registeredGuard?.scopes).toEqual(['src/components', 'src/features']);
@@ -1511,6 +1483,69 @@ describe('shared primitive guardrails', () => {
     ]) {
       expect(source).toContain('StatusDot');
     }
+  });
+
+  it('keeps standard command buttons on the shared Button primitive', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        allowedPaths?: string[];
+        ignoredPaths?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find((rule) => rule.id === 'button-command-shell');
+    const registeredGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'button-secondary-command-local-shell',
+    );
+
+    expect(registeredRule?.canonical?.path).toBe('src/components/shared/Button.tsx');
+    expect(registeredRule?.canonical?.export).toBe('Button');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/components/AI/Chat/ChatMessages.tsx',
+      'src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx',
+      'src/components/Settings/DataHandlingPanel.tsx',
+      'src/features/patrol/PatrolIntelligenceWorkspace.tsx',
+      'src/features/standalone/StandalonePageSurface.tsx',
+    ]);
+    expect(registeredGuard?.canonical?.path).toBe('src/components/shared/buttonModel.ts');
+    expect(registeredGuard?.canonical?.export).toBe('getButtonClass');
+    expect(registeredGuard?.allPatterns).toEqual([
+      'rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content',
+    ]);
+    expect(registeredGuard?.scopes).toEqual(['src/components', 'src/features', 'src/pages']);
+    expect(registeredGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(registeredGuard?.ignoredPaths).toEqual(['src/components/shared/Button.test.tsx']);
+
+    expect(buttonSource).toContain('export function Button');
+    expect(buttonSource).toContain('export function ButtonLink');
+    expect(buttonSource).toContain('getButtonClass');
+    expect(buttonModelSource).toContain('BUTTON_VARIANT_CLASSES');
+    expect(buttonModelSource).toContain('BUTTON_SIZE_CLASSES');
+    expect(chatMessagesSource).toContain('@/components/shared/Button');
+    expect(chatMessagesSource).not.toContain(
+      'rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content',
+    );
+    expect(resourceDetailDrawerDebugTabSource).toContain('@/components/shared/Button');
+    expect(resourceDetailDrawerDebugTabSource).not.toContain(
+      'rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content',
+    );
+    expect(dataHandlingPanelSource).toContain('@/components/shared/Button');
+    expect(patrolIntelligenceWorkspaceSource).toContain('@/components/shared/Button');
+    expect(patrolIntelligenceWorkspaceSource).not.toContain(
+      'rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content',
+    );
+    expect(standalonePageSurfaceSource).toContain('ButtonLink');
+    expect(standalonePageSurfaceSource).not.toContain(
+      'rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content',
+    );
   });
 
   it('keeps discovery readiness badges presentation-only and accessible', () => {
@@ -1854,10 +1889,7 @@ describe('shared primitive guardrails', () => {
       'src/features/platformPage/sharedPlatformPage.tsx',
     );
     expect(registeredGuard?.canonical?.export).toBe('PlatformTableLoadingState');
-    expect(registeredGuard?.allPatterns).toEqual([
-      'role="status"',
-      'px-3 py-2 text-xs text-muted',
-    ]);
+    expect(registeredGuard?.allPatterns).toEqual(['role="status"', 'px-3 py-2 text-xs text-muted']);
     expect(registeredGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(registeredGuard?.scopes).toEqual(
       expect.arrayContaining([

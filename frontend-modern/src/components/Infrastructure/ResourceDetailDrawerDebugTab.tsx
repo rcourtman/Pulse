@@ -1,5 +1,6 @@
 import { For, Show } from 'solid-js';
 import type { Component } from 'solid-js';
+import { Button } from '@/components/shared/Button';
 import type { Resource } from '@/types/resource';
 import { formatRelativeTime } from '@/utils/format';
 import type { UseResourceDetailDrawerStateResult } from './useResourceDetailDrawerState';
@@ -20,13 +21,15 @@ export const ResourceDetailDrawerDebugTab: Component<ResourceDetailDrawerDebugTa
         <div class="text-xs text-muted">
           Debug mode is enabled via localStorage (<code>pulse_debug_mode</code>).
         </div>
-        <button
+        <Button
           type="button"
+          variant="secondary"
+          size="sm"
+          class="px-3"
           onClick={drawer.handleCopyJson}
-          class="rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover"
         >
           {drawer.copied() ? 'Copied' : 'Copy JSON'}
-        </button>
+        </Button>
       </div>
 
       <div class="mt-3 space-y-4">

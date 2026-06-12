@@ -163,6 +163,9 @@ work extends shared components instead of creating new local variants.
 134. `frontend-modern/src/utils/sourcePlatformOptions.ts`
 135. `frontend-modern/src/utils/sourcePlatforms.ts`
 136. `frontend-modern/src/utils/infrastructureOnboardingPresentation.ts`
+137. `frontend-modern/src/components/shared/Button.tsx`
+138. `frontend-modern/src/components/shared/buttonModel.ts`
+139. `frontend-modern/src/components/shared/Button.test.tsx`
 
 ## Shared Boundaries
 
@@ -454,6 +457,18 @@ and status payloads. Those labels are summary context inside the same strip,
 not a replacement status card, CTA band, or page-local nested card.
 
 1. Add shared primitives in `frontend-modern/src/components/shared/`
+   Standard command buttons and button-styled route actions belong to the
+   shared `Button` primitive family. Feature pages may choose the action label,
+   icon, route, click handler, and contextual layout, but secondary/primary/
+   danger/outline/ghost button chrome, sizes, focus rings, disabled/loading
+   behavior, and safe new-tab link behavior must come from `Button`,
+   `ButtonLink`, and `buttonModel.ts`. Empty states, platform page notices,
+   Patrol controls, settings panel actions, and other repeated command
+   affordances must not copy local `inline-flex ... rounded-md ... bg-surface`
+   Tailwind shells just because the page needs a one-off action. If a new
+   surface needs a variant that the shared primitive does not expose, extend
+   the primitive and registry guard rather than adding a page-local class
+   string.
    Framed product table surfaces must consume the shared `TableCard` frame and
    `TableCardHeader` title/action band instead of composing page-local `Card`
    border, background, overflow, or table-title chrome. Feature owners may own

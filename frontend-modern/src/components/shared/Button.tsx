@@ -1,7 +1,6 @@
-import { JSX, mergeProps, splitProps } from 'solid-js';
-
-type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'outline';
-type ButtonSize = 'sm' | 'md' | 'lg' | 'icon';
+import { A } from '@solidjs/router';
+import { JSX, Show, mergeProps, splitProps } from 'solid-js';
+import { getButtonClass, type ButtonSize, type ButtonVariant } from './buttonModel';
 
 export interface ButtonProps extends JSX.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
@@ -10,20 +9,13 @@ export interface ButtonProps extends JSX.ButtonHTMLAttributes<HTMLButtonElement>
   class?: string;
 }
 
-const variantClasses: Record<ButtonVariant, string> = {
-  primary: 'bg-blue-600 text-white hover:bg-blue-700 border border-transparent shadow-sm',
-  secondary: 'bg-surface text-base-content hover:bg-surface-hover border border-border shadow-sm',
-  danger: 'bg-red-600 text-white hover:bg-red-700 border border-transparent shadow-sm',
-  ghost: 'bg-transparent text-base-content hover:bg-surface-hover border border-transparent',
-  outline: 'bg-transparent text-base-content border border-border hover:bg-surface-hover',
-};
-
-const sizeClasses: Record<ButtonSize, string> = {
-  sm: 'px-2.5 py-1.5 text-xs',
-  md: 'px-4 py-2 text-sm',
-  lg: 'px-6 py-3 text-base',
-  icon: 'p-2',
-};
+export interface ButtonLinkProps extends JSX.AnchorHTMLAttributes<HTMLAnchorElement> {
+  href: string;
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  class?: string;
+  hardNavigation?: boolean;
+}
 
 export function Button(props: ButtonProps) {
   const merged = mergeProps(
@@ -39,12 +31,13 @@ export function Button(props: ButtonProps) {
     'disabled',
   ]);
 
-  const baseClasses =
-    'inline-flex items-center justify-center font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
-
   return (
     <button
-      class={`${baseClasses} ${variantClasses[local.variant]} ${sizeClasses[local.size]} ${local.class || ''}`.trim()}
+      class={getButtonClass({
+        variant: local.variant,
+        size: local.size,
+        class: local.class,
+      })}
       disabled={local.disabled || local.isLoading}
       {...rest}
     >
@@ -72,6 +65,51 @@ export function Button(props: ButtonProps) {
       ) : null}
       {local.children}
     </button>
+  );
+}
+
+export function ButtonLink(props: ButtonLinkProps) {
+  const merged = mergeProps(
+    { variant: 'secondary' as ButtonVariant, size: 'md' as ButtonSize },
+    props,
+  );
+  const [local, rest] = splitProps(merged, [
+    'variant',
+    'size',
+    'class',
+    'children',
+    'href',
+    'hardNavigation',
+    'rel',
+    'target',
+  ]);
+  const className = () =>
+    getButtonClass({
+      variant: local.variant,
+      size: local.size,
+      class: local.class,
+    });
+  const useNativeAnchor = () =>
+    Boolean(
+      local.hardNavigation ||
+      local.target === '_blank' ||
+      /^(https?:|mailto:|tel:)/.test(local.href),
+    );
+  const rel = () => local.rel ?? (local.target === '_blank' ? 'noopener noreferrer' : undefined);
+
+  return (
+    <Show
+      when={useNativeAnchor()}
+      fallback={
+        <A {...rest} href={local.href} class={className()}>
+          {local.children}
+        </A>
+      }
+    >
+      <a {...rest} href={local.href} class={className()} target={local.target} rel={rel()}>
+        {local.children}
+      </a>
+    </Show>
   );
 }
 

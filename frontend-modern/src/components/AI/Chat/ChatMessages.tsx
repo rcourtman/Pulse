@@ -1,6 +1,7 @@
 import { Component, Show, For, createEffect, createMemo, createSignal } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import ArrowDownIcon from 'lucide-solid/icons/arrow-down';
+import { Button } from '@/components/shared/Button';
 import { MessageItem } from './MessageItem';
 import type { ChatSession } from '@/api/aiChat';
 import type { QueuedFollowUp } from './hooks/useChat';
@@ -317,15 +318,17 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
         <div ref={messagesEndRef} class="h-1" />
       </div>
       <Show when={props.messages.length > 0 && !isPinnedToBottom()}>
-        <button
+        <Button
           type="button"
-          class="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content shadow-lg transition-colors hover:bg-surface-alt focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+          variant="secondary"
+          size="sm"
+          class="absolute bottom-3 left-1/2 z-10 -translate-x-1/2 gap-1.5 px-3 shadow-lg hover:bg-surface-alt focus:ring-blue-500/40"
           onClick={jumpToLatest}
           aria-label="Jump to latest Assistant message"
         >
           <ArrowDownIcon class="h-3.5 w-3.5" aria-hidden="true" />
           <span>Latest</span>
-        </button>
+        </Button>
       </Show>
     </div>
   );

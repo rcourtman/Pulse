@@ -1,8 +1,9 @@
 import { Show, createEffect, createMemo, createSignal } from 'solid-js';
-import { A, useLocation, useNavigate } from '@solidjs/router';
+import { useLocation, useNavigate } from '@solidjs/router';
 import ActivityIcon from 'lucide-solid/icons/activity';
 import ServerIcon from 'lucide-solid/icons/server';
 import SettingsIcon from 'lucide-solid/icons/settings';
+import { Button, ButtonLink } from '@/components/shared/Button';
 import {
   buildInfrastructureAgentUpdatesPath,
   buildInfrastructureOnboardingPath,
@@ -34,8 +35,6 @@ type StandaloneTabId = (typeof STANDALONE_TAB_SPECS)[number]['id'];
 
 const machineIcon = () => <ServerIcon class="h-6 w-6 text-slate-400" />;
 const availabilityIcon = () => <ActivityIcon class="h-6 w-6 text-slate-400" />;
-const overviewActionClass =
-  'inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content shadow-sm hover:bg-slate-50';
 
 const resolveStandaloneTab = (pathname: string): StandaloneTabId =>
   pathname.replace(/\/+$/, '') === buildStandalonePath('availability')
@@ -141,18 +140,25 @@ export function StandalonePageSurface() {
                   description="Install Pulse Agent on servers, laptops, and desktops for CPU, memory, disk, and network telemetry. Agentless reachability checks live in Availability checks."
                   actions={
                     <div class="flex flex-wrap items-center justify-center gap-2">
-                      <button
+                      <Button
                         type="button"
+                        variant="secondary"
+                        size="sm"
+                        class="gap-2 px-3"
                         onClick={() => navigate(buildInfrastructureOnboardingPath('pick'))}
-                        class="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content shadow-sm hover:bg-slate-50"
                       >
                         <SettingsIcon class="h-3.5 w-3.5" />
                         Add agent
-                      </button>
-                      <A href={buildStandalonePath('availability')} class={overviewActionClass}>
+                      </Button>
+                      <ButtonLink
+                        href={buildStandalonePath('availability')}
+                        variant="secondary"
+                        size="sm"
+                        class="gap-2 px-3"
+                      >
                         <ActivityIcon class="h-3.5 w-3.5" />
                         View checks
-                      </A>
+                      </ButtonLink>
                     </div>
                   }
                 />
@@ -177,21 +183,25 @@ export function StandalonePageSurface() {
                         description="Availability checks, including ICMP checks for computers, stay in the Availability checks tab. Install Pulse Agent when you need full machine telemetry."
                         actions={
                           <div class="flex flex-wrap items-center justify-center gap-2">
-                            <button
+                            <Button
                               type="button"
+                              variant="secondary"
+                              size="sm"
+                              class="gap-2 px-3"
                               onClick={() => navigate(buildInfrastructureOnboardingPath('pick'))}
-                              class={overviewActionClass}
                             >
                               <SettingsIcon class="h-3.5 w-3.5" />
                               Add agent
-                            </button>
-                            <A
+                            </Button>
+                            <ButtonLink
                               href={buildStandalonePath('availability')}
-                              class={overviewActionClass}
+                              variant="secondary"
+                              size="sm"
+                              class="gap-2 px-3"
                             >
                               <ActivityIcon class="h-3.5 w-3.5" />
                               View checks
-                            </A>
+                            </ButtonLink>
                           </div>
                         }
                       />
