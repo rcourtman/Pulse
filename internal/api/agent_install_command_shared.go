@@ -89,6 +89,7 @@ type agentInstallCommandOptions struct {
 	Token              string
 	InstallType        string
 	IncludeInstallType bool
+	EnableCommands     bool
 }
 
 type setupScriptInstallArtifact struct {
@@ -219,6 +220,11 @@ func buildProxmoxAgentInstallCommand(opts agentInstallCommandOptions) string {
 	if opts.IncludeInstallType {
 		command += fmt.Sprintf(` \
   --proxmox-type %s`, posixShellQuote(opts.InstallType))
+	}
+
+	if opts.EnableCommands {
+		command += ` \
+  --enable-commands`
 	}
 
 	return withPrivilegeEscalation(command) + tokenCleanup

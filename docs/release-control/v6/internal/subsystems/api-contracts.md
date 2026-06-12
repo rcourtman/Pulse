@@ -463,6 +463,12 @@ payload shape change when the portal presents compact client rows.
     path is chosen: API Inventory is the recommended least-privilege API path,
     Host Telemetry Agent is the optional full-host-telemetry root-agent path,
     and Manual Token Setup is a manual API-token escape hatch.
+    For PVE, the Host Telemetry Agent setup path is also the governed
+    host-side Docker-in-LXC inventory setup path: the frontend request to
+    `/api/agent-install-command` must explicitly ask for command execution, the
+    generated install command must render `--enable-commands`, and the default
+    API Inventory path must not imply it can run the opted-in host-side Docker
+    inventory collector.
     The inline node credential slot must keep the visible submit sequence as
     `Endpoint`, `Authentication`, and `Coverage` before the API-backed setup
     controls. That sequence is presentation guidance for the existing setup
@@ -473,6 +479,12 @@ payload shape change when the portal presents compact client rows.
     token-file and preflight transport contract: tokens are passed to the
     installer as ephemeral files, and host install snippets must verify the
     target Pulse URL plus exact agent binary artifact before root escalation.
+    The shared Proxmox agent install command contract may expose
+    `--enable-commands` only through an explicit request field. The PVE Host
+    Telemetry Agent setup surface is the approved caller for that opt-in when
+    the operator wants Patrol actions or server-opted-in Docker-in-LXC
+    inventory from the Proxmox node; generic Proxmox API Inventory setup must
+    remain least-privilege and command-execution-free.
 32a. `internal/api/cloud_agent_install_command.go` shared with `agent-lifecycle`, `cloud-paid`: hosted tenant agent install commands are agent lifecycle enrollment transport, hosted/provider MSP tenant boundary, and canonical API payload contract.
     The route and reusable helper must both mint PVE/PBS install tokens only in
     hosted mode, only for an existing tenant/org, and only into that tenant
@@ -4310,6 +4322,10 @@ The frontend may tell operators to rerun the same canonical command and choose
 Audit/Repair, but it must not imply the current API token is rotated during
 repair. Install/Configure remains the explicit rotation and re-registration
 path when the token value itself needs to be replaced.
+That same setup surface must also keep the Docker-in-LXC guidance with the PVE
+Host Telemetry Agent mode. API Inventory copy may point operators to Host
+Telemetry Agent when Docker runs inside LXCs, but it must not claim that API
+setup alone can run the host-side Docker collector.
 That same bootstrap artifact contract must also stay coherent in public-facing
 guidance: `docs/API.md` and operator setup guides may not describe
 `/api/setup-script-url` as if it only returned a token plus bare URL, and they
@@ -4734,7 +4750,11 @@ transport in `frontend-modern/src/api/nodes.ts`: the canonical client request
 shape for `/api/agent-install-command` must support both `type:"pve"` and
 `type:"pbs"` with the same explicit `enableProxmox` flag, so install-command
 surfaces do not fork into ad hoc raw POST payloads for different Proxmox node
-types. That same shared client boundary must also validate a non-empty
+types. PVE Host Telemetry Agent consumers that need Patrol actions or
+server-opted-in Docker-in-LXC inventory must preserve the explicit
+`enableCommands` request field instead of appending command-execution flags in
+the browser or implying that the server will infer guest Docker authority from
+`enableProxmox`. That same shared client boundary must also validate a non-empty
 `command` response and keep the raw backend `token` field inside
 `frontend-modern/src/api/nodes.ts` rather than leaking it into downstream UI
 state. Downstream Proxmox install-command consumers like the extracted node

@@ -316,6 +316,12 @@ The setup guide must also present the source strategy at action time: API
 Inventory is the recommended least-privilege API path, Host Telemetry Agent is
 the optional full-host-telemetry root-agent path, and Manual Token Setup is an
 advanced manual API-token escape hatch.
+For PVE, that same setup guide must keep Docker inside Proxmox LXCs attached
+to the Host Telemetry Agent path, not the default API Inventory path: API
+Inventory alone cannot run host-side guest Docker inventory, while the PVE Host
+Telemetry Agent command must explicitly request Pulse command execution and
+explain the separate server-side `PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY`
+opt-in.
 For existing Proxmox API sources, that same setup guide must expose the
 non-destructive Audit/Repair rerun path before asking operators to rotate
 credentials. Audit/Repair is the first lifecycle response to suspected setup
@@ -3066,7 +3072,9 @@ install path from Docker inside Proxmox LXCs: standalone runtimes use the
 Docker runtime profile on that host, while Proxmox LXC Docker inventory uses a
 Proxmox VE node agent with command execution plus explicit server-side
 `PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true`, and the copy may not imply
-that installing an agent inside every LXC is required.
+that installing an agent inside every LXC is required. The Docker empty state,
+infrastructure installer, and Proxmox node setup guide must all preserve that
+same distinction.
 That same connected-systems summary must preserve canonical local operator
 identity for newly connected infrastructure. When governed resources such as
 PBS or PMG appear in the setup-completion poll, the surface must show their

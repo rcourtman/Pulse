@@ -124,8 +124,28 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                     <li>
                       Adds host-local telemetry such as temperatures, SMART, ZFS, Ceph, and mdadm
                     </li>
-                    <li>Enables Pulse Patrol command execution for VMs and containers</li>
+                    <li>
+                      Enables Pulse command execution for Patrol actions and opted-in Docker-in-LXC
+                      inventory
+                    </li>
                   </ul>
+                  <div class="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 dark:border-blue-800 dark:bg-blue-950/30">
+                    <p class="text-xs text-blue-800 dark:text-blue-200">
+                      <strong>Docker inside Proxmox LXCs:</strong> use this host-agent path instead
+                      of installing Pulse Agent in every guest. The copied command enables Pulse
+                      command execution on the Proxmox node; the Pulse server still must be opted in
+                      with{' '}
+                      <code class="break-all rounded bg-blue-100 px-1 font-mono dark:bg-blue-900">
+                        PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true
+                      </code>
+                      , and you can limit guests with{' '}
+                      <code class="break-all rounded bg-blue-100 px-1 font-mono dark:bg-blue-900">
+                        PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS=101,102
+                      </code>
+                      . Pulse uses bounded <code>pct exec</code> Docker summary checks and skips
+                      guests that already report through their own agent.
+                    </p>
+                  </div>
                   <p class="text-blue-800 dark:text-blue-200 font-medium">
                     Run this command on your Proxmox VE node:
                   </p>
@@ -203,6 +223,13 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                       Proxmox without installing a root agent. Add the host telemetry agent later
                       only where you need temperatures, SMART, local storage details, or
                       agent-driven operations.
+                    </p>
+                  </div>
+                  <div class="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 dark:border-blue-800 dark:bg-blue-950/30">
+                    <p class="text-xs text-blue-800 dark:text-blue-200">
+                      <strong>Docker inside Proxmox LXCs?</strong> Switch to Host Telemetry Agent
+                      for the Proxmox node. API inventory alone does not run the opted-in host-side
+                      Docker inventory path.
                     </p>
                   </div>
                   <Show when={state.isEditingExistingNode()}>

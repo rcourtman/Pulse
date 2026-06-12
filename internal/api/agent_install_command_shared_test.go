@@ -32,6 +32,7 @@ func TestBuildProxmoxAgentInstallCommand(t *testing.T) {
 	require.Contains(t, command, `--token-file "$token_file"`)
 	require.Contains(t, command, `rm -f "$token_file"`)
 	require.Contains(t, command, "--proxmox-type "+posixShellQuote("pbs"))
+	require.NotContains(t, command, "--enable-commands")
 }
 
 func TestBuildProxmoxAgentInstallCommand_IncludesInsecureForPlainHTTP(t *testing.T) {
@@ -104,6 +105,22 @@ func TestBuildProxmoxAgentInstallCommand_NormalizesTrailingSlashes(t *testing.T)
 	require.Contains(t, command, `--token-file "$token_file"`)
 	require.NotContains(t, command, "//install.sh")
 	require.NotContains(t, command, "--url "+posixShellQuote("https://pulse.example.com/base/"))
+}
+
+func TestBuildProxmoxAgentInstallCommand_IncludesCommandsWhenRequested(t *testing.T) {
+	command := buildProxmoxAgentInstallCommand(agentInstallCommandOptions{
+		BaseURL:            "https://pulse.example.com/",
+		Token:              "token-123",
+		InstallType:        "pve",
+		IncludeInstallType: true,
+		EnableCommands:     true,
+	})
+
+	require.Contains(t, command, "--enable-proxmox")
+	require.Contains(t, command, "--proxmox-type "+posixShellQuote("pve"))
+	require.Contains(t, command, "--enable-commands")
+	require.Contains(t, command, `| { if [ "$(id -u)" -eq 0 ]; then bash -s --`)
+	require.Contains(t, command, `rm -f "$token_file"`)
 }
 
 func TestBuildContainerRuntimeAgentInstallCommand_UsesLifecycleTransport(t *testing.T) {

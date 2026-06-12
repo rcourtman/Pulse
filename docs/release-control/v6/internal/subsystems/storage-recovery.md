@@ -348,10 +348,12 @@ recovery scope, or a storage/recovery-owned secret source.
    preserve the API-owned Docker / Podman module or host wording for management
    responses and must not introduce recovery-local container-runtime labels.
    Proxmox-side LXC Docker inventory wiring may also pass through
-   `internal/api/router.go`, but storage and recovery may consume the resulting
-   app-container/resource context only as workload inventory. It must not be
-   reinterpreted as backup freshness, restore coverage, or storage protection
-   evidence for the LXC guest.
+   `internal/api/router.go` and Proxmox agent install-command generation, but
+   storage and recovery may consume the resulting app-container/resource
+   context only as workload inventory. The `--enable-commands` install opt-in
+   for host-side Docker-in-LXC collection must not be reinterpreted as backup
+   freshness, restore coverage, storage protection evidence, or remediation
+   authority for the LXC guest.
    Global resource timeline routing may also pass through shared
    `internal/api/` handlers. Storage and recovery surfaces may read canonical
    timeline records as adjacent evidence, but they must not reinterpret an

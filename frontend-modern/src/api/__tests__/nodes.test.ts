@@ -244,13 +244,17 @@ describe('NodesAPI', () => {
     it('gets agent install command', async () => {
       vi.mocked(apiFetchJSON).mockResolvedValueOnce({ command: ' curl ... ', token: 'secret-token' });
 
-      const result = await NodesAPI.getAgentInstallCommand({ type: 'pve', enableProxmox: true });
+      const result = await NodesAPI.getAgentInstallCommand({
+        type: 'pve',
+        enableProxmox: true,
+        enableCommands: true,
+      });
 
       expect(apiFetchJSON).toHaveBeenCalledWith(
         '/api/agent-install-command',
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({ type: 'pve', enableProxmox: true }),
+          body: JSON.stringify({ type: 'pve', enableProxmox: true, enableCommands: true }),
         }),
       );
       expect(result).toEqual({ command: 'curl ...' });

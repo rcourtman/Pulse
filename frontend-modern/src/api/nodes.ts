@@ -237,6 +237,7 @@ export class NodesAPI {
   static async getAgentInstallCommand(params: {
     type: 'pve' | 'pbs';
     enableProxmox: boolean;
+    enableCommands?: boolean;
   }): Promise<AgentInstallCommandResponse> {
     const response = await apiFetchJSON<RawAgentInstallCommandResponse>('/api/agent-install-command', {
       method: 'POST',

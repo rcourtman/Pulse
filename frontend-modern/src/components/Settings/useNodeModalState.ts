@@ -79,6 +79,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
       const data = await NodesAPI.getAgentInstallCommand({
         type,
         enableProxmox: true,
+        enableCommands: type === 'pve',
       });
       setAgentInstallCommand(data.command);
       const copied = await copyToClipboard(data.command);

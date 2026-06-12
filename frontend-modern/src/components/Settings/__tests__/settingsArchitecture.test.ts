@@ -829,7 +829,12 @@ describe('settings architecture guardrails', () => {
     expect(nodeModalSetupGuideSectionSource).toContain('Existing source repair');
     expect(nodeModalSetupGuideSectionSource).toContain('Audit/Repair');
     expect(nodeModalSetupGuideSectionSource).toContain('without rotating the current API token');
+    expect(nodeModalSetupGuideSectionSource).toContain('Docker inside Proxmox LXCs');
+    expect(nodeModalSetupGuideSectionSource).toContain(
+      'PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true',
+    );
     expect(nodeModalStatusFooterSource).toContain('guidedSetupOnlyMode');
+    expect(nodeModalStateSource).toContain("enableCommands: type === 'pve'");
     expect(nodeModalStateSource).toContain('data.setupMode !==');
 
     expect(vmwareCredentialSlotSource).toContain('TlsVerificationWarningBanner');

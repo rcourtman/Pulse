@@ -51,6 +51,8 @@ describe('NodeModalSetupGuideSection', () => {
     expect(screen.getByText('API inventory')).toBeInTheDocument();
     expect(screen.getByText(/Recommended least-privilege path/i)).toBeInTheDocument();
     expect(screen.getByText(/Recommended API inventory path/i)).toBeInTheDocument();
+    expect(screen.getByText(/Docker inside Proxmox LXCs\?/i)).toBeInTheDocument();
+    expect(screen.getByText(/API inventory alone does not run/i)).toBeInTheDocument();
     // Tab renamed from 'API Inventory' (internal term) to 'Connect via API'.
     expect(screen.getByRole('button', { name: /Connect via API/i })).toBeInTheDocument();
     expect(screen.queryByText('Manual API token')).not.toBeInTheDocument();
@@ -65,6 +67,15 @@ describe('NodeModalSetupGuideSection', () => {
     expect(screen.getAllByText(/Optional full host telemetry/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Pulse Agent root service/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/temperatures, SMART, ZFS, Ceph, and mdadm/i)).toBeInTheDocument();
+    expect(screen.getByText(/Docker inside Proxmox LXCs:/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Pulse command execution/i).length).toBeGreaterThan(0);
+    expect(
+      screen.getByText('PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS=101,102'),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/bounded/i)).toHaveTextContent(/pct exec/);
   });
 
   it('labels manual setup as the advanced token escape hatch', () => {
