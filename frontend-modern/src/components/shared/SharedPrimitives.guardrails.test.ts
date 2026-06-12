@@ -49,6 +49,8 @@ import statusDotSource from '@/components/shared/StatusDot.tsx?raw';
 import statusBadgeSource from '@/components/shared/StatusBadge.tsx?raw';
 import statusBadgeModelSource from '@/components/shared/statusBadgeModel.ts?raw';
 import statusIndicatorBadgeSource from '@/components/shared/StatusIndicatorBadge.tsx?raw';
+import metadataBadgeSource from '@/components/shared/MetadataBadge.tsx?raw';
+import organizationBadgesSource from '@/components/shared/OrganizationBadges.tsx?raw';
 import discoveryReadinessBadgeSource from '@/components/shared/DiscoveryReadinessBadge.tsx?raw';
 import subtabsSource from '@/components/shared/Subtabs.tsx?raw';
 import toggleSource from '@/components/shared/Toggle.tsx?raw';
@@ -189,6 +191,7 @@ import dataHandlingPanelSource from '@/components/Settings/DataHandlingPanel.tsx
 import generalSettingsPanelSource from '@/components/Settings/GeneralSettingsPanel.tsx?raw';
 import infrastructureInstallerSectionSource from '@/components/Settings/InfrastructureInstallerSection.tsx?raw';
 import infrastructureWorkspaceSource from '@/components/Settings/InfrastructureWorkspace.tsx?raw';
+import organizationAccessInvitationsSectionSource from '@/components/Settings/OrganizationAccessInvitationsSection.tsx?raw';
 import organizationAccessMembersSectionSource from '@/components/Settings/OrganizationAccessMembersSection.tsx?raw';
 import organizationIncomingSharesSectionSource from '@/components/Settings/OrganizationIncomingSharesSection.tsx?raw';
 import organizationOutgoingSharesSectionSource from '@/components/Settings/OrganizationOutgoingSharesSection.tsx?raw';
@@ -1549,6 +1552,89 @@ describe('shared primitive guardrails', () => {
     expect(diagnosticsResultsPanelSource).toContain('StatusIndicatorBadge');
     expect(diagnosticsResultsPanelSource).not.toContain('const StatusBadge');
     expect(diagnosticsResultsPanelSource).not.toContain('getStatusIndicatorBadgeToneClasses');
+  });
+
+  it('keeps organization metadata badges on shared badge wrappers', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        allowedPaths?: string[];
+        ignoredPaths?: string[];
+      }>;
+    };
+    const metadataRule = registry.rules?.find((rule) => rule.id === 'metadata-badge-shell');
+    const roleRule = registry.rules?.find((rule) => rule.id === 'organization-role-badge-shell');
+    const shareStatusRule = registry.rules?.find(
+      (rule) => rule.id === 'organization-share-status-badge-shell',
+    );
+    const localRoleGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'organization-role-badge-local-shell',
+    );
+    const localShareStatusGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'organization-share-status-badge-local-shell',
+    );
+
+    expect(metadataRule?.canonical?.path).toBe('src/components/shared/MetadataBadge.tsx');
+    expect(metadataRule?.canonical?.export).toBe('MetadataBadge');
+    expect(metadataRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/components/shared/OrganizationBadges.tsx',
+    ]);
+    expect(roleRule?.canonical?.path).toBe('src/components/shared/OrganizationBadges.tsx');
+    expect(roleRule?.canonical?.export).toBe('OrganizationRoleBadge');
+    expect(roleRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/components/Settings/OrganizationAccessInvitationsSection.tsx',
+      'src/components/Settings/OrganizationAccessMembersSection.tsx',
+      'src/components/Settings/OrganizationIncomingSharesSection.tsx',
+      'src/components/Settings/OrganizationOutgoingSharesSection.tsx',
+      'src/components/Settings/OrganizationOverviewMembersSection.tsx',
+    ]);
+    expect(shareStatusRule?.canonical?.path).toBe('src/components/shared/OrganizationBadges.tsx');
+    expect(shareStatusRule?.canonical?.export).toBe('OrganizationShareStatusBadge');
+    expect(shareStatusRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/components/Settings/OrganizationIncomingSharesSection.tsx',
+      'src/components/Settings/OrganizationOutgoingSharesSection.tsx',
+    ]);
+    expect(localRoleGuard?.allPatterns).toEqual(['roleBadgeClass(']);
+    expect(localRoleGuard?.scopes).toEqual(['src/components/Settings']);
+    expect(localShareStatusGuard?.allPatterns).toEqual(['statusBadgeClass(']);
+    expect(localShareStatusGuard?.scopes).toEqual(['src/components/Settings']);
+
+    expect(metadataBadgeSource).toContain('METADATA_BADGE_TONE_CLASSES');
+    expect(metadataBadgeSource).toContain('getMetadataBadgeClass');
+    expect(organizationBadgesSource).toContain('MetadataBadge');
+    expect(organizationBadgesSource).toContain('getOrganizationRoleBadgeTone');
+    expect(organizationBadgesSource).toContain('getOrganizationShareStatusBadgeTone');
+
+    for (const source of [
+      organizationAccessInvitationsSectionSource,
+      organizationAccessMembersSectionSource,
+      organizationIncomingSharesSectionSource,
+      organizationOutgoingSharesSectionSource,
+      organizationOverviewMembersSectionSource,
+    ]) {
+      expect(source).toContain('OrganizationRoleBadge');
+      expect(source).not.toContain('roleBadgeClass');
+      expect(source).not.toContain('inline-flex rounded-full px-2 py-0.5 text-xs font-medium');
+    }
+
+    for (const source of [
+      organizationIncomingSharesSectionSource,
+      organizationOutgoingSharesSectionSource,
+    ]) {
+      expect(source).toContain('OrganizationShareStatusBadge');
+      expect(source).not.toContain('statusBadgeClass');
+      expect(source).not.toContain(
+        'inline-flex w-fit rounded-full px-2 py-0.5 text-xs font-medium',
+      );
+    }
   });
 
   it('keeps resource status dots on the shared StatusDot primitive', () => {

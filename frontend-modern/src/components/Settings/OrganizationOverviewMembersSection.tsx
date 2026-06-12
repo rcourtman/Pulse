@@ -1,7 +1,8 @@
 import { Component } from 'solid-js';
+import { OrganizationRoleBadge } from '@/components/shared/OrganizationBadges';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 import { getOrganizationOverviewMembersEmptyState } from '@/utils/organizationSettingsPresentation';
-import { formatOrgDate, normalizeRole, roleBadgeClass } from '@/utils/orgUtils';
+import { formatOrgDate, normalizeRole } from '@/utils/orgUtils';
 import type { useOrganizationOverviewPanelState } from './useOrganizationOverviewPanelState';
 
 interface OrganizationOverviewMembersSectionProps {
@@ -27,13 +28,7 @@ export const OrganizationOverviewMembersSection: Component<
           label: 'Role',
           render: (member) => {
             const role = normalizeRole(member.role);
-            return (
-              <span
-                class={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${roleBadgeClass(role)}`}
-              >
-                {role}
-              </span>
-            );
+            return <OrganizationRoleBadge role={role} />;
           },
         },
         {

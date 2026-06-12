@@ -2823,7 +2823,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 {
                     "heading": "## Extension Points",
                     "path": "frontend-modern/src/api/orgs.ts",
-                    "line": 79,
+                    "line": 85,
                     "heading_line": 70,
                 },
             ],
@@ -2899,7 +2899,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 {
                     "heading": "## Extension Points",
                     "path": "internal/api/access_control_handlers.go",
-                    "line": 93,
+                    "line": 99,
                     "heading_line": 70,
                 },
             ],

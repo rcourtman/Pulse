@@ -1,8 +1,9 @@
 import { Component, For, Show } from 'solid-js';
 import { FormSelect } from '@/components/shared/FormSelect';
+import { OrganizationRoleBadge } from '@/components/shared/OrganizationBadges';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 import { ORGANIZATION_MEMBER_ROLE_OPTIONS } from '@/utils/organizationRolePresentation';
-import { formatOrgDate, normalizeRole, roleBadgeClass } from '@/utils/orgUtils';
+import { formatOrgDate, normalizeRole } from '@/utils/orgUtils';
 import { getOrganizationAccessEmptyState } from '@/utils/organizationSettingsPresentation';
 import Trash2 from 'lucide-solid/icons/trash-2';
 import type { OrganizationMember, OrganizationRole } from '@/api/orgs';
@@ -36,13 +37,7 @@ export const OrganizationAccessMembersSection: Component<OrganizationAccessMembe
               return (
                 <Show
                   when={props.state.canManageCurrentOrg()}
-                  fallback={
-                    <span
-                      class={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${roleBadgeClass(role)}`}
-                    >
-                      {role}
-                    </span>
-                  }
+                  fallback={<OrganizationRoleBadge role={role} />}
                 >
                   <FormSelect
                     label={`Role for ${member.userId}`}

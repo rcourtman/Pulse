@@ -4019,6 +4019,7 @@
       "owned_files": [
         "frontend-modern/src/api/orgs.ts",
         "frontend-modern/src/api/rbac.ts",
+        "frontend-modern/src/components/Settings/OrganizationAccessInvitationsSection.tsx",
         "frontend-modern/src/components/Settings/OrganizationAccessLoadingState.tsx",
         "frontend-modern/src/components/Settings/OrganizationAccessManagementSection.tsx",
         "frontend-modern/src/components/Settings/OrganizationAccessMembersSection.tsx",
@@ -4118,6 +4119,7 @@
             "label": "organization settings surface proof",
             "match_prefixes": [],
             "match_files": [
+              "frontend-modern/src/components/Settings/OrganizationAccessInvitationsSection.tsx",
               "frontend-modern/src/components/Settings/OrganizationAccessLoadingState.tsx",
               "frontend-modern/src/components/Settings/OrganizationAccessManagementSection.tsx",
               "frontend-modern/src/components/Settings/OrganizationAccessMembersSection.tsx",

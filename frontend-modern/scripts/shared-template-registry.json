@@ -552,6 +552,92 @@
       ]
     },
     {
+      "id": "metadata-badge-shell",
+      "category": "metadata-badge",
+      "summary": "Read-only metadata chips must compose MetadataBadge so size, shape, tone vocabulary, fit behavior, and whitespace handling stay shared instead of being copied as page-local pill spans.",
+      "canonical": {
+        "path": "src/components/shared/MetadataBadge.tsx",
+        "export": "MetadataBadge"
+      },
+      "requiredConsumers": [{ "path": "src/components/shared/OrganizationBadges.tsx" }],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/MetadataBadge.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "organization-role-badge-shell",
+      "category": "metadata-badge",
+      "summary": "Organization role badges must compose OrganizationRoleBadge instead of each organization settings section mapping role tones and pill styling locally.",
+      "canonical": {
+        "path": "src/components/shared/OrganizationBadges.tsx",
+        "export": "OrganizationRoleBadge"
+      },
+      "requiredConsumers": [
+        { "path": "src/components/Settings/OrganizationAccessInvitationsSection.tsx" },
+        { "path": "src/components/Settings/OrganizationAccessMembersSection.tsx" },
+        { "path": "src/components/Settings/OrganizationIncomingSharesSection.tsx" },
+        { "path": "src/components/Settings/OrganizationOutgoingSharesSection.tsx" },
+        { "path": "src/components/Settings/OrganizationOverviewMembersSection.tsx" }
+      ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/components/Settings/OrganizationAccessInvitationsSection.tsx",
+          "patterns": ["roleBadgeClass"]
+        },
+        {
+          "path": "src/components/Settings/OrganizationAccessMembersSection.tsx",
+          "patterns": ["roleBadgeClass"]
+        },
+        {
+          "path": "src/components/Settings/OrganizationIncomingSharesSection.tsx",
+          "patterns": ["roleBadgeClass"]
+        },
+        {
+          "path": "src/components/Settings/OrganizationOutgoingSharesSection.tsx",
+          "patterns": ["roleBadgeClass"]
+        },
+        {
+          "path": "src/components/Settings/OrganizationOverviewMembersSection.tsx",
+          "patterns": ["roleBadgeClass"]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/OrganizationBadges.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "organization-share-status-badge-shell",
+      "category": "metadata-badge",
+      "summary": "Organization share status badges must compose OrganizationShareStatusBadge so pending/active labels and tones stay canonical across incoming and outgoing share tables.",
+      "canonical": {
+        "path": "src/components/shared/OrganizationBadges.tsx",
+        "export": "OrganizationShareStatusBadge"
+      },
+      "requiredConsumers": [
+        { "path": "src/components/Settings/OrganizationIncomingSharesSection.tsx" },
+        { "path": "src/components/Settings/OrganizationOutgoingSharesSection.tsx" }
+      ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/components/Settings/OrganizationIncomingSharesSection.tsx",
+          "patterns": ["statusBadgeClass"]
+        },
+        {
+          "path": "src/components/Settings/OrganizationOutgoingSharesSection.tsx",
+          "patterns": ["statusBadgeClass"]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/OrganizationBadges.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "platform-table-loading-state",
       "category": "platform-table-loading-state",
       "summary": "Platform page and table loading states must compose PlatformTableLoadingState instead of recreating local TableCard status rows.",
@@ -1109,6 +1195,46 @@
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "src/components/shared/StatusIndicatorBadge.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "organization-role-badge-local-shell",
+      "category": "metadata-badge",
+      "summary": "Organization settings sections must not call roleBadgeClass directly; compose OrganizationRoleBadge so role tone mapping and badge shell stay canonical.",
+      "canonical": {
+        "path": "src/components/shared/OrganizationBadges.tsx",
+        "export": "OrganizationRoleBadge"
+      },
+      "scopes": ["src/components/Settings"],
+      "extensions": [".tsx"],
+      "allPatterns": ["roleBadgeClass("],
+      "legacyReason": "Retired migration debt. Organization role badges belong to OrganizationRoleBadge and MetadataBadge.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/OrganizationBadges.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "organization-share-status-badge-local-shell",
+      "category": "metadata-badge",
+      "summary": "Organization share tables must not recreate local statusBadgeClass helpers; compose OrganizationShareStatusBadge for canonical pending/active labels and tones.",
+      "canonical": {
+        "path": "src/components/shared/OrganizationBadges.tsx",
+        "export": "OrganizationShareStatusBadge"
+      },
+      "scopes": ["src/components/Settings"],
+      "extensions": [".tsx"],
+      "allPatterns": ["statusBadgeClass("],
+      "legacyReason": "Retired migration debt. Organization share status badges belong to OrganizationShareStatusBadge and MetadataBadge.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/OrganizationBadges.test.tsx",
         "scripts/shared-template-audit.mjs"
       ]
     },

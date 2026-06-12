@@ -1,5 +1,6 @@
 import { Component, For, Show } from 'solid-js';
-import { formatOrgDate, roleBadgeClass } from '@/utils/orgUtils';
+import { OrganizationRoleBadge } from '@/components/shared/OrganizationBadges';
+import { formatOrgDate } from '@/utils/orgUtils';
 import type { useOrganizationAccessPanelState } from './useOrganizationAccessPanelState';
 
 interface OrganizationAccessInvitationsSectionProps {
@@ -30,11 +31,7 @@ export const OrganizationAccessInvitationsSection: Component<
                       {formatOrgDate(invitation.invitedAt)}
                     </div>
                   </div>
-                  <span
-                    class={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${roleBadgeClass(invitation.role)}`}
-                  >
-                    {invitation.role}
-                  </span>
+                  <OrganizationRoleBadge role={invitation.role} />
                 </div>
                 <div class="mt-3 flex gap-2">
                   <button
@@ -79,11 +76,7 @@ export const OrganizationAccessInvitationsSection: Component<
                   </div>
                 </div>
                 <div class="flex items-center gap-2">
-                  <span
-                    class={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${roleBadgeClass(invitation.role)}`}
-                  >
-                    {invitation.role}
-                  </span>
+                  <OrganizationRoleBadge role={invitation.role} />
                   <button
                     type="button"
                     onClick={() => void props.state.revokeInvitation(invitation.userId)}

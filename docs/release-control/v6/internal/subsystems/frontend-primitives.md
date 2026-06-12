@@ -493,6 +493,11 @@ not a replacement status card, CTA band, or page-local nested card.
    copyable command/path/value rows must use `CopyableCodeRow` instead of
    recreating local copy icons, copied-state checks, disabled empty-value
    handling, or `font-mono` code-row shells.
+   Read-only metadata chips belong to `MetadataBadge` and domain wrappers over
+   it. Organization role and share-status chips must use
+   `OrganizationRoleBadge` and `OrganizationShareStatusBadge`, so role/status
+   tone mapping, pill shape, fit behavior, and whitespace handling do not drift
+   across organization overview, access, and sharing surfaces.
    Inline detail content belongs to the shared detail-section primitive family.
    Feature surfaces may own the platform-specific rows, section labels, and
    source model, but section row shaping, empty-row compaction, value tone

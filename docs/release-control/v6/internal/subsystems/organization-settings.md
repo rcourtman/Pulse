@@ -76,6 +76,12 @@ create, review, and approve cross-organization shares.
    come from `frontend-primitives` through `PulseDataGrid`/`Table`; do not add
    organization-local `overflow-x-auto`, negative-margin, or side-border
    compensation around grids.
+   Organization role and share-status badges follow the same primitive
+   boundary: role/status semantics remain organization-owned, but visible badge
+   shell, tone vocabulary, and label rendering must compose
+   `OrganizationRoleBadge` / `OrganizationShareStatusBadge` over the shared
+   `MetadataBadge` primitive instead of using `roleBadgeClass`,
+   `statusBadgeClass`, or local pill span classes in each section.
 3. Route organization and RBAC frontend transport changes through `frontend-modern/src/api/orgs.ts` and `frontend-modern/src/api/rbac.ts`
 4. Keep backend organization management and lifecycle handlers aligned through `internal/api/org_handlers.go` and `internal/api/org_lifecycle_handlers.go`
    Organization resource shares may reference the canonical Docker / Podman
@@ -94,7 +100,7 @@ create, review, and approve cross-organization shares.
 
 ## Forbidden Paths
 
-1. Duplicating organization role normalization or badge styling outside the canonical organization presentation helpers
+1. Duplicating organization role normalization or badge styling outside the canonical organization presentation helpers and shared organization badge wrappers
 2. Reintroducing organization settings copy, validation, or empty-state strings directly inside feature panels instead of the shared organization presentation helpers
 3. Letting share-role, RBAC role-assignment, or membership semantics drift between `internal/models/organization.go` and the governed organization settings surfaces
 
@@ -102,9 +108,10 @@ create, review, and approve cross-organization shares.
 
 1. Update the organization model, settings surfaces, and proof files together when role/share semantics move
 2. Keep organization settings copy and validation inside the canonical organization presentation helpers
-3. Keep the shared organization and RBAC transport proof routes explicit in `registry.json`; default fallback proof routing is not allowed for this subsystem
-4. Update this contract whenever a new organization settings, role-management, or organization-domain helper entry point becomes canonical runtime surface area
-5. Keep RBAC feature-gate copy on the organization presentation owner. RBAC
+3. Keep organization role and share-status badge rendering on `OrganizationRoleBadge` / `OrganizationShareStatusBadge` and the shared metadata-badge registry rules
+4. Keep the shared organization and RBAC transport proof routes explicit in `registry.json`; default fallback proof routing is not allowed for this subsystem
+5. Update this contract whenever a new organization settings, role-management, or organization-domain helper entry point becomes canonical runtime surface area
+6. Keep RBAC feature-gate copy on the organization presentation owner. RBAC
    may describe capability availability on paid self-hosted and hosted plans,
    but must not use Pro-badge titles or local browser upgrade telemetry in
    `RBACFeatureGateSection.tsx` or `useRBACFeatureGateState.ts`.

@@ -1,11 +1,14 @@
 import { Component, Show } from 'solid-js';
+import {
+  OrganizationRoleBadge,
+  OrganizationShareStatusBadge,
+} from '@/components/shared/OrganizationBadges';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 import { normalizeOrganizationShareRole } from '@/utils/organizationRolePresentation';
-import { formatOrgDate, roleBadgeClass } from '@/utils/orgUtils';
+import { formatOrgDate } from '@/utils/orgUtils';
 import {
   getOrganizationOutgoingSharesEmptyState,
   getOrganizationShareStatusDescription,
-  getOrganizationShareStatusLabel,
 } from '@/utils/organizationSettingsPresentation';
 import Trash2 from 'lucide-solid/icons/trash-2';
 import type { useOrganizationSharingPanelState } from './useOrganizationSharingPanelState';
@@ -17,11 +20,6 @@ interface OrganizationOutgoingSharesSectionProps {
 export const OrganizationOutgoingSharesSection: Component<
   OrganizationOutgoingSharesSectionProps
 > = (props) => {
-  const statusBadgeClass = (status: 'pending' | 'accepted') =>
-    status === 'pending'
-      ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200'
-      : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200';
-
   return (
     <div class="space-y-2 p-4 sm:p-6">
       <h4 class="text-sm font-semibold text-base-content">Outgoing Shares</h4>
@@ -55,13 +53,7 @@ export const OrganizationOutgoingSharesSection: Component<
             label: 'Access',
             render: (share) => {
               const role = normalizeOrganizationShareRole(share.accessRole);
-              return (
-                <span
-                  class={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${roleBadgeClass(role)}`}
-                >
-                  {role}
-                </span>
-              );
+              return <OrganizationRoleBadge role={role} />;
             },
           },
           {
@@ -69,11 +61,7 @@ export const OrganizationOutgoingSharesSection: Component<
             label: 'Status',
             render: (share) => (
               <div class="flex flex-col gap-1">
-                <span
-                  class={`inline-flex w-fit rounded-full px-2 py-0.5 text-xs font-medium ${statusBadgeClass(share.status)}`}
-                >
-                  {getOrganizationShareStatusLabel(share.status)}
-                </span>
+                <OrganizationShareStatusBadge status={share.status} />
                 <span class="text-xs text-muted">
                   {getOrganizationShareStatusDescription(
                     share.status,
