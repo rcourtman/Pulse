@@ -15,6 +15,7 @@ import {
   AI_CHAT_COMMAND_HELP_SEARCH_PLACEHOLDER,
   AI_CHAT_COMMAND_HELP_TITLE,
 } from '@/utils/aiChatPresentation';
+import { SearchField } from '@/components/shared/SearchField';
 
 interface AssistantCommandHelpDialogProps {
   availability?: AssistantSlashCommandAvailability;
@@ -139,14 +140,15 @@ export function AssistantCommandHelpDialog(props: AssistantCommandHelpDialogProp
           </button>
         </div>
         <div class="border-b border-border px-3 py-2">
-          <input
-            ref={searchInputRef}
+          <SearchField
+            inputRef={(element) => {
+              searchInputRef = element;
+            }}
             value={commandSearchQuery()}
-            onInput={(event) => setCommandSearchQuery(event.currentTarget.value)}
-            type="search"
-            aria-label={AI_CHAT_COMMAND_HELP_SEARCH_LABEL}
+            onChange={setCommandSearchQuery}
+            title={AI_CHAT_COMMAND_HELP_SEARCH_LABEL}
             placeholder={AI_CHAT_COMMAND_HELP_SEARCH_PLACEHOLDER}
-            class="h-9 w-full rounded-md border border-border bg-surface px-3 text-sm text-base-content placeholder:text-muted focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            onKeyDown={handleKeyDown}
           />
         </div>
         <div

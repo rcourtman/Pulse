@@ -5,6 +5,7 @@ import type {
   InfrastructureSourcePickerItemPresentation,
   InfrastructureSourcePickerRouteStep,
 } from '@/utils/infrastructureOnboardingPresentation';
+import { SearchField } from '@/components/shared/SearchField';
 import {
   getInfrastructureGovernanceBadgeLabel,
   getInfrastructureSourcePickerItems,
@@ -17,9 +18,6 @@ interface InfrastructureSourcePickerProps {
 
 const readinessBadgeClass =
   'inline-flex items-center rounded-full border border-blue-200 bg-blue-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200';
-
-const searchInputClass =
-  'h-10 w-full rounded-md border border-border bg-surface py-2 pl-9 pr-3 text-sm text-base-content outline-none transition-colors placeholder:text-muted focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20';
 
 // Primary-path cards present the main onboarding journeys up front so users
 // pick a path before scanning the per-source card grid. The grid below stays
@@ -150,20 +148,12 @@ export const InfrastructureSourcePicker: Component<InfrastructureSourcePickerPro
       </Show>
 
       <div class="border-b border-border pb-4">
-        <label class="relative block">
-          <span class="sr-only">Search infrastructure type</span>
-          <Search
-            aria-hidden="true"
-            class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
-          />
-          <input
-            type="search"
-            value={query()}
-            onInput={(event) => setQuery(event.currentTarget.value)}
-            class={searchInputClass}
-            placeholder="Search sources, devices, services..."
-          />
-        </label>
+        <SearchField
+          value={query()}
+          onChange={setQuery}
+          title="Search infrastructure type"
+          placeholder="Search sources, devices, services..."
+        />
       </div>
 
       <section class="space-y-2">

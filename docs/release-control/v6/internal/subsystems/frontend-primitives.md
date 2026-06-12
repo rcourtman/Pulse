@@ -2416,6 +2416,12 @@ small leading status-dot glyph used by filter options. Page and feature
 surfaces must not copy the chip-dot `<span>` factory or import the legacy
 `PageControls` deck for resource-list filtering; those drift checks live in
 `shared-template-registry.json` and run through `shared-template-audit.mjs`.
+Search controls are registry-backed too. `SearchField` owns simple search
+input chrome, clear affordance, keyboard forwarding, focus handling, aria
+labels, and trailing-control padding, while `SearchInput` owns resource-list
+search enhancements such as history, tips, and type-to-search wiring. Product
+surfaces must compose those primitives instead of rendering native
+`type="search"` inputs or recreating search icon/clear/input classes locally.
 Segmented selectors are registry-backed too. `FilterButtonGroup` owns the
 settings, prominent, compact, and equal segmented selector shells, including
 active-button tone, disabled-option behavior, pressed-state semantics,

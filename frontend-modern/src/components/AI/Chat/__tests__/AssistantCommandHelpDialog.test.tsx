@@ -10,9 +10,12 @@ describe('AssistantCommandHelpDialog', () => {
 
     const search = screen.getByLabelText('Search Assistant commands');
     await waitFor(() => expect(document.activeElement).toBe(search));
+    expect(search).toHaveAttribute('type', 'text');
+    expect(screen.queryByRole('searchbox')).not.toBeInTheDocument();
 
     fireEvent.input(search, { target: { value: 'runtime' } });
 
+    expect(screen.getByRole('button', { name: 'Clear search' })).toBeInTheDocument();
     expect(screen.getByRole('listbox', { name: 'Assistant commands' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: /\/status/ })).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: /\/models/ })).not.toBeInTheDocument();

@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import calloutCardSource from '@/components/shared/CalloutCard.tsx?raw';
+import assistantCommandHelpDialogSource from '@/components/AI/Chat/AssistantCommandHelpDialog.tsx?raw';
+import aiChatSource from '@/components/AI/Chat/index.tsx?raw';
 import aiModelPickerSource from '@/components/shared/AIModelPicker.tsx?raw';
 import commandPaletteModalSource from '@/components/shared/CommandPaletteModal.tsx?raw';
 import commandPaletteModelSource from '@/components/shared/commandPaletteModel.ts?raw';
@@ -155,6 +157,9 @@ import reportingPanelSource from '@/components/Settings/ReportingPanel.tsx?raw';
 import rolesPanelSource from '@/components/Settings/RolesPanel.tsx?raw';
 import updatesSettingsPanelSource from '@/components/Settings/UpdatesSettingsPanel.tsx?raw';
 import userAssignmentsPanelSource from '@/components/Settings/UserAssignmentsPanel.tsx?raw';
+import infrastructureSourcePickerSource from '@/components/Settings/InfrastructureSourcePicker.tsx?raw';
+import resourcePickerSource from '@/components/Settings/ResourcePicker.tsx?raw';
+import settingsPageShellSource from '@/components/Settings/SettingsPageShell.tsx?raw';
 import patrolIntelligenceHeaderSource from '@/features/patrol/PatrolIntelligenceHeader.tsx?raw';
 import filterBarSource from '@/components/shared/FilterBar/FilterBar.tsx?raw';
 import filterChipSource from '@/components/shared/FilterBar/FilterChip.tsx?raw';
@@ -1871,6 +1876,49 @@ describe('shared primitive guardrails', () => {
   });
 
   it('keeps search field on shell, runtime, and model owners', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        allowedPaths?: string[];
+        ignoredPaths?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find((rule) => rule.id === 'search-field-shell');
+    const registeredGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'search-control-native-search-input',
+    );
+
+    expect(registeredRule?.canonical?.path).toBe('src/components/shared/SearchField.tsx');
+    expect(registeredRule?.canonical?.export).toBe('SearchField');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/components/AI/Chat/AssistantCommandHelpDialog.tsx',
+      'src/components/AI/Chat/index.tsx',
+      'src/components/Settings/InfrastructureSourcePicker.tsx',
+      'src/components/Settings/ResourcePicker.tsx',
+      'src/components/Settings/UserAssignmentsPanel.tsx',
+      'src/components/shared/AIModelPicker.tsx',
+      'src/components/shared/CommandPaletteModal.tsx',
+      'src/components/shared/SearchInput.tsx',
+    ]);
+    expect(registeredGuard?.canonical?.path).toBe('src/components/shared/SearchField.tsx');
+    expect(registeredGuard?.canonical?.export).toBe('SearchField');
+    expect(registeredGuard?.allPatterns).toEqual(['type="search"']);
+    expect(registeredGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(registeredGuard?.ignoredPaths).toEqual([
+      'src/components/shared/SharedPrimitives.guardrails.test.ts',
+    ]);
+    expect(registeredGuard?.scopes).toEqual(
+      expect.arrayContaining(['src/components', 'src/features', 'src/pages']),
+    );
+
     expect(searchFieldSource).toContain('useSearchFieldState');
     expect(searchFieldSource).not.toContain('let inputEl: HTMLInputElement');
     expect(searchFieldSource).not.toContain(
@@ -1888,9 +1936,42 @@ describe('shared primitive guardrails', () => {
     expect(searchFieldModelSource).toContain('shouldShowSearchFieldClearButton');
     expect(searchFieldModelSource).toContain('getSearchFieldInputPaddingRightClass');
     expect(searchFieldModelSource).toContain("return 'pr-14 sm:pr-20'");
+
+    for (const source of [
+      assistantCommandHelpDialogSource,
+      aiChatSource,
+      infrastructureSourcePickerSource,
+      resourcePickerSource,
+      userAssignmentsPanelSource,
+      aiModelPickerSource,
+      commandPaletteModalSource,
+      searchInputSource,
+    ]) {
+      expect(source).toContain('SearchField');
+      expect(source).not.toContain('type="search"');
+    }
   });
 
   it('keeps search input on shell, runtime, and model owners', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+      }>;
+    };
+    const registeredRule = registry.rules?.find((rule) => rule.id === 'search-input-shell');
+
+    expect(registeredRule?.canonical?.path).toBe('src/components/shared/SearchInput.tsx');
+    expect(registeredRule?.canonical?.export).toBe('SearchInput');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/components/Docker/SwarmServicesDrawer.tsx',
+      'src/components/Kubernetes/K8sDeploymentsDrawer.tsx',
+      'src/components/Kubernetes/K8sNamespacesDrawer.tsx',
+      'src/components/Settings/SettingsPageShell.tsx',
+      'src/components/shared/FilterBar/FilterBar.tsx',
+    ]);
+
     expect(searchInputSource).toContain('useSearchInputState');
     expect(searchInputSource).not.toContain('let searchInputEl: HTMLInputElement');
     expect(searchInputSource).not.toContain('useTypeToSearch');
@@ -1928,6 +2009,16 @@ describe('shared primitive guardrails', () => {
     expect(searchInputEnhancementsModelSource).toContain('getSearchHistoryToggleTitle');
     expect(searchInputEnhancementsModelSource).toContain('SEARCH_HISTORY_CLEAR_LABEL');
     expect(searchInputEnhancementsModelSource).toContain('SEARCH_HISTORY_MENU_CLASS');
+
+    for (const source of [
+      swarmServicesDrawerSource,
+      k8sDeploymentsDrawerSource,
+      k8sNamespacesDrawerSource,
+      settingsPageShellSource,
+      filterBarSource,
+    ]) {
+      expect(source).toContain('SearchInput');
+    }
   });
 
   it('keeps search tips popover on shell, runtime, and model owners', () => {

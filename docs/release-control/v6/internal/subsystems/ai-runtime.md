@@ -2752,7 +2752,11 @@ keyboard-selectable. The button, slash-triggered help, dialog search, and
 keyboard selection must use the same `ASSISTANT_SLASH_COMMANDS` registry,
 `filterAssistantSlashCommands`, `AssistantCommandHelpDialog`, and
 `executeSlashCommand` path as `/help` and `/commands`; they must not introduce
-a second command registry or a separate provider-bound prompt path.
+a second command registry or a separate provider-bound prompt path. The command
+dialog search box must compose the frontend-primitives `SearchField` so the
+shared search-control registry owns clear-button behavior, input chrome,
+keyboard forwarding, and native-search-input drift prevention while AI runtime
+keeps ownership of command filtering and execution semantics.
 
 Primary nav moved to governed platform/runtime destinations on 2026-05-16 and
 was clarified on 2026-05-25 through `frontend-modern/src/App.tsx` and

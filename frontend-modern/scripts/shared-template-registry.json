@@ -282,6 +282,51 @@
       ]
     },
     {
+      "id": "search-field-shell",
+      "category": "search-control",
+      "summary": "Product surfaces with simple search fields must compose SearchField for the shared icon, clear button, keyboard, focus, aria, and input chrome instead of rendering native search inputs.",
+      "canonical": {
+        "path": "src/components/shared/SearchField.tsx",
+        "export": "SearchField"
+      },
+      "requiredConsumers": [
+        { "path": "src/components/AI/Chat/AssistantCommandHelpDialog.tsx" },
+        { "path": "src/components/AI/Chat/index.tsx" },
+        { "path": "src/components/Settings/InfrastructureSourcePicker.tsx" },
+        { "path": "src/components/Settings/ResourcePicker.tsx" },
+        { "path": "src/components/Settings/UserAssignmentsPanel.tsx" },
+        { "path": "src/components/shared/AIModelPicker.tsx" },
+        { "path": "src/components/shared/CommandPaletteModal.tsx" },
+        { "path": "src/components/shared/SearchInput.tsx" }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/__tests__/SearchField.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "search-input-shell",
+      "category": "search-control",
+      "summary": "Resource-list and drawer search boxes that need history, tips, or type-to-search behavior must compose SearchInput instead of rebuilding search-enhancement controls locally.",
+      "canonical": {
+        "path": "src/components/shared/SearchInput.tsx",
+        "export": "SearchInput"
+      },
+      "requiredConsumers": [
+        { "path": "src/components/Docker/SwarmServicesDrawer.tsx" },
+        { "path": "src/components/Kubernetes/K8sDeploymentsDrawer.tsx" },
+        { "path": "src/components/Kubernetes/K8sNamespacesDrawer.tsx" },
+        { "path": "src/components/Settings/SettingsPageShell.tsx" },
+        { "path": "src/components/shared/FilterBar/FilterBar.tsx" }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/__tests__/SearchInput.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "filter-button-group-shell",
       "category": "segmented-selector",
       "summary": "Settings and compact feature segmented selectors must compose FilterButtonGroup instead of recreating active-button group styling locally.",
@@ -592,6 +637,25 @@
       "allPatterns": ["@/components/shared/PageControls"],
       "legacyReason": "Retired migration debt. Resource-list filter surfaces must compose FilterBar; no page-level filter exceptions are currently allowed.",
       "allowedPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "search-control-native-search-input",
+      "category": "search-control",
+      "summary": "Product surfaces must not render native type=search inputs; they must compose SearchField or SearchInput so search chrome, clear behavior, keyboard handling, and aria labels stay canonical.",
+      "canonical": {
+        "path": "src/components/shared/SearchField.tsx",
+        "export": "SearchField"
+      },
+      "scopes": ["src/components", "src/features", "src/pages"],
+      "extensions": [".tsx"],
+      "allPatterns": ["type=\"search\""],
+      "legacyReason": "Retired migration debt. Search controls must use SearchField or SearchInput; native search inputs are not allowed in product surfaces.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "scripts/shared-template-audit.mjs"
