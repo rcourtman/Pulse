@@ -1,6 +1,7 @@
 import { For, Show, createMemo, type Component } from 'solid-js';
 import { Copy, X } from 'lucide-solid';
 import { Dialog } from '@/components/shared/Dialog';
+import { Button } from '@/components/shared/Button';
 import { copyToClipboard } from '@/utils/clipboard';
 import { notificationStore } from '@/stores/notifications';
 import {
@@ -15,9 +16,6 @@ interface InfrastructureAgentUpdatesDialogProps {
   targets: readonly InfrastructureAgentUpdateTarget[];
   onClose: () => void;
 }
-
-const closeButtonClass =
-  'inline-flex h-9 w-9 items-center justify-center rounded-md border border-border text-base-content transition-colors hover:bg-surface-hover';
 
 const copyButtonClass =
   'absolute right-2 top-2 inline-flex min-h-10 min-w-10 items-center justify-center rounded-md bg-surface-hover p-2 text-muted transition-colors hover:text-base-content disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-9 sm:min-w-9';
@@ -60,14 +58,15 @@ export const InfrastructureAgentUpdatesDialog: Component<InfrastructureAgentUpda
               Copy the update command for each host that is behind the current Pulse Agent target.
             </p>
           </div>
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="iconMd"
             onClick={props.onClose}
-            class={closeButtonClass}
             aria-label="Close agent update commands"
           >
             <X class="h-4 w-4" />
-          </button>
+          </Button>
         </div>
 
         <div class="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">

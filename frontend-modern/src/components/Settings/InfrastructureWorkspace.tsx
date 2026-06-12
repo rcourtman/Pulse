@@ -91,8 +91,6 @@ const ADD_STEP_TO_INSTALLER_FOCUS: Partial<
   kubernetes: 'kubernetes',
 };
 
-const closeButtonClass =
-  'inline-flex h-9 w-9 items-center justify-center rounded-md border border-border text-base-content transition-colors hover:bg-surface-hover';
 const buttonClass =
   'inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md border border-border px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60';
 
@@ -934,14 +932,15 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                 <h2 class="text-base font-semibold text-base-content">{addDialogTitle()}</h2>
                 <p class="text-sm text-muted">{addDialogDescription()}</p>
               </div>
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="iconMd"
                 onClick={closeAddFlow}
-                class={closeButtonClass}
                 aria-label="Close add infrastructure dialog"
               >
                 <X class="h-4 w-4" />
-              </button>
+              </Button>
             </div>
 
             <div class="min-h-0 flex-1 overflow-y-auto">
@@ -1003,14 +1002,15 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                     <h2 class="text-base font-semibold text-base-content">{editDialogTitle()}</h2>
                     <p class="text-sm text-muted">{editDialogDescription()}</p>
                   </div>
-                  <button
+                  <Button
                     type="button"
+                    variant="outline"
+                    size="iconMd"
                     onClick={closeEditFlow}
-                    class={closeButtonClass}
                     aria-label="Close edit infrastructure dialog"
                   >
                     <X class="h-4 w-4" />
-                  </button>
+                  </Button>
                 </div>
 
                 <div class="min-h-0 flex-1 overflow-y-auto">

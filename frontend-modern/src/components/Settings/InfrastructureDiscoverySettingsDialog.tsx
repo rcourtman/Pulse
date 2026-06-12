@@ -1,6 +1,7 @@
 import { Component, Show } from 'solid-js';
 import X from 'lucide-solid/icons/x';
 import { Dialog } from '@/components/shared/Dialog';
+import { Button } from '@/components/shared/Button';
 import { DiscoverySettingsForm } from './DiscoverySettingsForm';
 import type { DiscoverySettingsFormProps } from './discoverySettingsModel';
 
@@ -8,9 +9,6 @@ interface InfrastructureDiscoverySettingsDialogProps extends DiscoverySettingsFo
   isOpen: boolean;
   onClose: () => void;
 }
-
-const closeButtonClass =
-  'inline-flex h-9 w-9 items-center justify-center rounded-md border border-border text-base-content transition-colors hover:bg-surface-hover';
 
 export const InfrastructureDiscoverySettingsDialog: Component<
   InfrastructureDiscoverySettingsDialogProps
@@ -32,14 +30,15 @@ export const InfrastructureDiscoverySettingsDialog: Component<
                 source discovery.
               </p>
             </div>
-            <button
+            <Button
               type="button"
+              variant="outline"
+              size="iconMd"
               onClick={props.onClose}
-              class={closeButtonClass}
               aria-label="Close discovery settings dialog"
             >
               <X class="h-4 w-4" />
-            </button>
+            </Button>
           </div>
 
           <div class="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6">

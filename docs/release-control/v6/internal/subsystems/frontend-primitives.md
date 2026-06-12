@@ -467,11 +467,12 @@ not a replacement status card, CTA band, or page-local nested card.
    compact row actions, and other repeated command affordances must not copy
    local `inline-flex ... rounded-md ...` Tailwind shells just because the page
    needs a one-off action. The shared `mdCompact` size owns the common
-   settings/action `px-3 py-2 text-sm` shape, and the shared `xs` size owns the
-   compact settings row-action `px-2.5 py-1 text-xs` shape. If a new
-   surface needs a variant that the shared primitive does not expose, extend
-   the primitive and registry guard rather than adding a page-local class
-   string.
+   settings/action `px-3 py-2 text-sm` shape, the shared `xs` size owns the
+   compact settings row-action `px-2.5 py-1 text-xs` shape, and the shared
+   `iconMd` size owns the settings dialog close-button `h-9 w-9` icon shape.
+   If a new surface needs a variant that the shared primitive does not expose,
+   extend the primitive and registry guard rather than adding a page-local
+   class string.
    Framed product table surfaces must consume the shared `TableCard` frame and
    `TableCardHeader` title/action band instead of composing page-local `Card`
    border, background, overflow, or table-title chrome. Feature owners may own

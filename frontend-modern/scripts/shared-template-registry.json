@@ -195,6 +195,8 @@
         { "path": "src/components/Settings/AvailabilitySettingsPanel.tsx" },
         { "path": "src/components/Settings/ConnectionEditor/ConnectionEditor.tsx" },
         { "path": "src/components/Settings/DataHandlingPanel.tsx" },
+        { "path": "src/components/Settings/InfrastructureAgentUpdatesDialog.tsx" },
+        { "path": "src/components/Settings/InfrastructureDiscoverySettingsDialog.tsx" },
         { "path": "src/components/Settings/InfrastructureInstallerSection.tsx" },
         { "path": "src/components/Settings/InfrastructureSourceManager.tsx" },
         { "path": "src/components/Settings/InfrastructureWorkspace.tsx" },
@@ -1099,6 +1101,28 @@
         "rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content"
       ],
       "legacyReason": "Retired migration debt. Compact settings row actions belong to the shared Button primitive family.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/Button.test.tsx"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "button-outline-settings-dialog-close-local-shell",
+      "category": "action-button",
+      "summary": "Settings dialog close buttons must not copy the h-9 w-9 bordered icon shell; use Button with the outline variant and iconMd size.",
+      "canonical": {
+        "path": "src/components/shared/buttonModel.ts",
+        "export": "getButtonClass"
+      },
+      "scopes": ["src/components/Settings", "src/features", "src/pages"],
+      "extensions": [".tsx"],
+      "allPatterns": [
+        "h-9 w-9 items-center justify-center rounded-md border border-border text-base-content transition-colors hover:bg-surface-hover"
+      ],
+      "legacyReason": "Retired migration debt. Settings dialog close buttons belong to the shared Button primitive family.",
       "allowedPaths": [],
       "ignoredPaths": ["src/components/shared/Button.test.tsx"],
       "proof": [

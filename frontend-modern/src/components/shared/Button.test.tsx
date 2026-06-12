@@ -20,6 +20,7 @@ describe('Button', () => {
     expect(buttonModelSource).toContain('export const BUTTON_SIZE_CLASSES');
     expect(buttonModelSource).toContain("xs: 'px-2.5 py-1 text-xs'");
     expect(buttonModelSource).toContain("mdCompact: 'px-3 py-2 text-sm'");
+    expect(buttonModelSource).toContain("iconMd: 'h-9 w-9 p-0'");
   });
 
   it('renders command buttons with the shared secondary shell', () => {

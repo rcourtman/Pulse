@@ -108,6 +108,8 @@ import webhookConfigFormSource from '@/components/Alerts/WebhookConfigForm.tsx?r
 import reportMergeModalSource from '@/components/Infrastructure/ReportMergeModal.tsx?raw';
 import availabilitySettingsPanelSource from '@/components/Settings/AvailabilitySettingsPanel.tsx?raw';
 import connectionEditorSource from '@/components/Settings/ConnectionEditor/ConnectionEditor.tsx?raw';
+import infrastructureAgentUpdatesDialogSource from '@/components/Settings/InfrastructureAgentUpdatesDialog.tsx?raw';
+import infrastructureDiscoverySettingsDialogSource from '@/components/Settings/InfrastructureDiscoverySettingsDialog.tsx?raw';
 import selfHostedCommercialRecoverySectionSource from '@/components/Settings/SelfHostedCommercialRecoverySection.tsx?raw';
 import suggestProfileModalSource from '@/components/Settings/SuggestProfileModal.tsx?raw';
 import alertAppriseDestinationsSectionSource from '@/features/alerts/AlertAppriseDestinationsSection.tsx?raw';
@@ -1515,6 +1517,9 @@ describe('shared primitive guardrails', () => {
     const settingsRowActionGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'button-outline-settings-row-action-local-shell',
     );
+    const settingsDialogCloseGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'button-outline-settings-dialog-close-local-shell',
+    );
 
     expect(registeredRule?.canonical?.path).toBe('src/components/shared/Button.tsx');
     expect(registeredRule?.canonical?.export).toBe('Button');
@@ -1525,6 +1530,8 @@ describe('shared primitive guardrails', () => {
       'src/components/Settings/AvailabilitySettingsPanel.tsx',
       'src/components/Settings/ConnectionEditor/ConnectionEditor.tsx',
       'src/components/Settings/DataHandlingPanel.tsx',
+      'src/components/Settings/InfrastructureAgentUpdatesDialog.tsx',
+      'src/components/Settings/InfrastructureDiscoverySettingsDialog.tsx',
       'src/components/Settings/InfrastructureInstallerSection.tsx',
       'src/components/Settings/InfrastructureSourceManager.tsx',
       'src/components/Settings/InfrastructureWorkspace.tsx',
@@ -1563,6 +1570,22 @@ describe('shared primitive guardrails', () => {
     ]);
     expect(settingsRowActionGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(settingsRowActionGuard?.ignoredPaths).toEqual(['src/components/shared/Button.test.tsx']);
+    expect(settingsDialogCloseGuard?.canonical?.path).toBe(
+      'src/components/shared/buttonModel.ts',
+    );
+    expect(settingsDialogCloseGuard?.canonical?.export).toBe('getButtonClass');
+    expect(settingsDialogCloseGuard?.allPatterns).toEqual([
+      'h-9 w-9 items-center justify-center rounded-md border border-border text-base-content transition-colors hover:bg-surface-hover',
+    ]);
+    expect(settingsDialogCloseGuard?.scopes).toEqual([
+      'src/components/Settings',
+      'src/features',
+      'src/pages',
+    ]);
+    expect(settingsDialogCloseGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(settingsDialogCloseGuard?.ignoredPaths).toEqual([
+      'src/components/shared/Button.test.tsx',
+    ]);
 
     expect(buttonSource).toContain('export function Button');
     expect(buttonSource).toContain('export function ButtonLink');
@@ -1588,6 +1611,9 @@ describe('shared primitive guardrails', () => {
     expect(availabilitySettingsPanelSource).not.toContain(
       'rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content',
     );
+    expect(availabilitySettingsPanelSource).not.toContain(
+      'h-9 w-9 items-center justify-center rounded-md border border-border text-base-content transition-colors hover:bg-surface-hover',
+    );
     expect(connectionEditorSource).toContain('@/components/shared/Button');
     expect(connectionEditorSource).not.toContain(
       'rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content',
@@ -1601,6 +1627,14 @@ describe('shared primitive guardrails', () => {
     expect(infrastructureInstallerSectionSource).not.toContain(
       'rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-base-content',
     );
+    expect(infrastructureAgentUpdatesDialogSource).toContain('@/components/shared/Button');
+    expect(infrastructureAgentUpdatesDialogSource).not.toContain(
+      'h-9 w-9 items-center justify-center rounded-md border border-border text-base-content transition-colors hover:bg-surface-hover',
+    );
+    expect(infrastructureDiscoverySettingsDialogSource).toContain('@/components/shared/Button');
+    expect(infrastructureDiscoverySettingsDialogSource).not.toContain(
+      'h-9 w-9 items-center justify-center rounded-md border border-border text-base-content transition-colors hover:bg-surface-hover',
+    );
     expect(infrastructureSourceManagerSource).toContain('@/components/shared/Button');
     expect(infrastructureSourceManagerSource).not.toContain(
       'rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-base-content',
@@ -1611,6 +1645,9 @@ describe('shared primitive guardrails', () => {
     expect(infrastructureWorkspaceSource).toContain('@/components/shared/Button');
     expect(infrastructureWorkspaceSource).not.toContain(
       'rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content',
+    );
+    expect(infrastructureWorkspaceSource).not.toContain(
+      'h-9 w-9 items-center justify-center rounded-md border border-border text-base-content transition-colors hover:bg-surface-hover',
     );
     expect(patrolIntelligenceWorkspaceSource).toContain('@/components/shared/Button');
     expect(patrolIntelligenceWorkspaceSource).not.toContain(

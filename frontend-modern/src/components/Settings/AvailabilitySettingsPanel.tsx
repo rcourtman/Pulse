@@ -34,9 +34,6 @@ import {
   shouldOpenAvailabilityTargetAddDialog,
 } from './availabilitySettingsModel';
 
-const closeButtonClass =
-  'inline-flex h-9 w-9 items-center justify-center rounded-md border border-border text-base-content transition-colors hover:bg-surface-hover';
-
 type AvailabilityDialogState =
   | { mode: 'add'; initialTargetKind?: AvailabilityTargetKind }
   | { mode: 'edit'; target: AvailabilityTarget }
@@ -348,14 +345,15 @@ export const AvailabilitySettingsPanel: Component = () => {
                     <h2 class="text-base font-semibold text-base-content">{dialogTitle()}</h2>
                     <p class="text-sm text-muted">{dialogDescription()}</p>
                   </div>
-                  <button
+                  <Button
                     type="button"
+                    variant="outline"
+                    size="iconMd"
                     onClick={() => closeDialog(true)}
-                    class={closeButtonClass}
                     aria-label="Close availability check dialog"
                   >
                     <X class="h-4 w-4" />
-                  </button>
+                  </Button>
                 </div>
                 <div class="min-h-0 flex-1 overflow-y-auto p-4">
                   <AvailabilityTargetSlot
