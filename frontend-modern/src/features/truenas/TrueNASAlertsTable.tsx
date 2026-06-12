@@ -23,13 +23,13 @@ import {
   type TrueNASIncidentSeverityFilter,
 } from './truenasPageModel';
 import {
-  TrueNASInlineDetailTable,
-  compactTrueNASDetailRows,
-  compactTrueNASDetailSections,
-  makeTrueNASDetailRow,
-  type TrueNASDetailSection,
-  type TrueNASDetailTone,
-} from '@/components/Infrastructure/TrueNASDetailTable';
+  InlineDetailPanel,
+  compactDetailRows,
+  compactDetailSections,
+  makeDetailRow,
+  type DetailSection,
+  type DetailValueTone,
+} from '@/components/shared/DetailSectionTable';
 import type { Resource, ResourceType } from '@/types/resource';
 import { getAlertFilteredEmptyState } from '@/utils/alertOverviewPresentation';
 
@@ -115,8 +115,8 @@ const formatStartedAt = (value: string | undefined): string => {
   });
 };
 
-type AlertDetailTone = TrueNASDetailTone;
-type AlertDetailSection = TrueNASDetailSection;
+type AlertDetailTone = DetailValueTone;
+type AlertDetailSection = DetailSection;
 
 const detailDateTime = (value?: string): string | null => {
   if (!value) return null;
@@ -131,9 +131,7 @@ const detailDateTime = (value?: string): string | null => {
   });
 };
 
-const detailRow = makeTrueNASDetailRow;
-const compactDetailRows = compactTrueNASDetailRows;
-const compactDetailSections = compactTrueNASDetailSections;
+const detailRow = makeDetailRow;
 
 const alertTone = (severity: TrueNASIncidentRow['severityBucket']): AlertDetailTone => {
   if (severity === 'critical') return 'danger';
@@ -182,13 +180,13 @@ const buildAlertDetailSections = (incident: TrueNASIncidentRow): AlertDetailSect
 const AlertDetailTable: Component<{ incident: TrueNASIncidentRow; onClose: () => void }> = (
   props,
 ) => (
-  <TrueNASInlineDetailTable
+  <InlineDetailPanel
     testId="truenas-alert-detail"
     detailFor={props.incident.id}
-    detailKind="alert"
     title="Alert detail"
     summary={`${severityLabel(props.incident.severity)} · ${formatCode(props.incident.code)}`}
     sections={buildAlertDetailSections(props.incident)}
+    detailAttributes={{ 'data-truenas-alert-detail-for': props.incident.id }}
     onClose={props.onClose}
   />
 );

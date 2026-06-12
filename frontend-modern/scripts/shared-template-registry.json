@@ -115,6 +115,54 @@
       ]
     },
     {
+      "id": "inline-detail-section-panel-shell",
+      "category": "row-detail",
+      "summary": "Inline platform detail content must compose DetailSectionTable or InlineDetailPanel for shared detail rows, value tones, section tables, and close actions instead of recreating local field grids or provider-named detail primitives.",
+      "canonical": {
+        "path": "src/components/shared/DetailSectionTable.tsx",
+        "export": "DetailSection"
+      },
+      "requiredConsumers": [
+        { "path": "src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx" },
+        { "path": "src/components/Infrastructure/resourceDetailDrawerKubernetesModel.ts" },
+        { "path": "src/components/Infrastructure/resourceDetailDrawerTrueNASModel.ts" },
+        { "path": "src/features/docker/DockerAlertsTable.tsx" },
+        { "path": "src/features/kubernetes/KubernetesAlertsTable.tsx" },
+        { "path": "src/features/truenas/TrueNASAlertsTable.tsx" },
+        { "path": "src/features/truenas/TrueNASProtectionTable.tsx" },
+        { "path": "src/features/truenas/TrueNASServicesTable.tsx" },
+        { "path": "src/features/vmware/VsphereActivityTable.tsx" },
+        { "path": "src/features/vmware/VsphereAlertsTable.tsx" }
+      ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/components/Infrastructure/resourceDetailDrawerKubernetesModel.ts",
+          "patterns": ["makeTrueNASDetailRow", "TrueNASDetailSection", "trueNASDetailTableModel"]
+        },
+        {
+          "path": "src/features/docker/DockerAlertsTable.tsx",
+          "patterns": ["const DetailField", "XIcon class=\"h-4 w-4\""]
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesAlertsTable.tsx",
+          "patterns": ["const DetailField", "XIcon class=\"h-4 w-4\""]
+        },
+        {
+          "path": "src/features/vmware/VsphereActivityTable.tsx",
+          "patterns": ["const DetailField", "XIcon class=\"h-4 w-4\""]
+        },
+        {
+          "path": "src/features/vmware/VsphereAlertsTable.tsx",
+          "patterns": ["const DetailField", "XIcon class=\"h-4 w-4\""]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/__tests__/DetailSectionTable.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "table-card-frame-shell",
       "category": "table-card",
       "summary": "Product table surfaces must compose TableCard for the shared card frame instead of recreating local overflow-hidden bordered table wrappers.",
@@ -1245,6 +1293,55 @@
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "src/components/shared/Button.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "inline-detail-local-field-grid-shell",
+      "category": "row-detail",
+      "summary": "Inline platform detail content must not recreate local DetailField grids; use DetailSectionTable or InlineDetailPanel.",
+      "canonical": {
+        "path": "src/components/shared/DetailSectionTable.tsx",
+        "export": "InlineDetailPanel"
+      },
+      "scopes": [
+        "src/components/Infrastructure",
+        "src/features/docker",
+        "src/features/kubernetes",
+        "src/features/truenas",
+        "src/features/vmware"
+      ],
+      "extensions": [".tsx"],
+      "allPatterns": [
+        "const DetailField",
+        "font-semibold uppercase tracking-wide text-muted",
+        "grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+      ],
+      "legacyReason": "Retired migration debt. Inline detail field grids belong to DetailSectionTable / InlineDetailPanel so detail sections, value tones, truncation, and close actions stay canonical.",
+      "allowedPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/__tests__/DetailSectionTable.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "inline-detail-provider-named-primitive-import",
+      "category": "row-detail",
+      "summary": "Platform-neutral detail section tables must not import the retired provider-named TrueNAS detail primitive.",
+      "canonical": {
+        "path": "src/components/shared/DetailSectionTable.tsx",
+        "export": "DetailSectionTable"
+      },
+      "scopes": ["src/components", "src/features"],
+      "extensions": [".ts", ".tsx"],
+      "allPatterns": ["TrueNASDetailTable"],
+      "legacyReason": "Retired migration debt. Provider-specific names must not own platform-neutral detail tables; use DetailSectionTable / detailSectionModel.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/__tests__/DetailSectionTable.test.tsx",
         "scripts/shared-template-audit.mjs"
       ]
     },

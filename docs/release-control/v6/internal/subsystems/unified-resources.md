@@ -252,6 +252,13 @@ affordance itself must compose
 `PlatformResourceDetailTableRow.tsx` contract. Future platform tables must not
 add page-local chevron buttons, bespoke `aria-expanded` handling, or local
 event-propagation variants for row detail expansion.
+Inline detail section content follows the same ownership split.
+Unified-resource consumers own the source-specific section rows, labels,
+resource identities, and severity/status semantics, but repeated section-row
+compaction, table rendering, value-tone classes, and inline close-action chrome
+must compose the frontend-primitives-owned `DetailSectionTable`,
+`InlineDetailPanel`, and `detailSectionModel.ts` primitives instead of
+recreating local `DetailField` grids or provider-named neutral detail tables.
 The split also applies to web-interface launch affordances. Unified-resource
 tables own whether a row has a saved, inferred, or source-native web-interface
 URL and how that URL is derived, but the visible launch affordance belongs on

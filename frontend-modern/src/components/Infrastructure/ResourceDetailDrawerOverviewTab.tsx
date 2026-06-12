@@ -26,7 +26,7 @@ import { ResourceOperatorStateSection } from './ResourceOperatorStateSection';
 import { MaintenanceVerificationSection } from './MaintenanceVerificationSection';
 import { InlineResourceSummaryTables, ResourceSummaryCards } from './ResourceDetailSummary';
 import { ResourceInvestigationContextTables } from './ResourceInvestigationContextTables';
-import { TrueNASDetailSectionTable } from './TrueNASDetailTable';
+import { DetailSectionTable } from '@/components/shared/DetailSectionTable';
 import {
   RESOURCE_CHANGE_KIND_ORDER,
   RESOURCE_CHANGE_SOURCE_ADAPTER_ORDER,
@@ -82,7 +82,7 @@ const TrueNASDetailsDisclosure: Component<{
     contentClass={props.contentClass ?? 'mt-3 space-y-3'}
     dataTestId="resource-truenas-details-section"
   >
-    <TrueNASDetailSectionTable sections={props.drawer.trueNASDetailSections()} />
+    <DetailSectionTable sections={props.drawer.trueNASDetailSections()} />
   </SupportDisclosure>
 );
 
@@ -102,7 +102,7 @@ const KubernetesDetailsDisclosure: Component<{
     contentClass={props.contentClass ?? 'mt-3 space-y-3'}
     dataTestId="resource-kubernetes-details-section"
   >
-    <TrueNASDetailSectionTable sections={props.drawer.kubernetesDetailSections()} />
+    <DetailSectionTable sections={props.drawer.kubernetesDetailSections()} />
   </SupportDisclosure>
 );
 

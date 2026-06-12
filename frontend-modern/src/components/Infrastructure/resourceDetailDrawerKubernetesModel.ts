@@ -1,14 +1,12 @@
 import type { Resource, ResourceKubernetesPodContainerStatus } from '@/types/resource';
-// Reuses the platform-neutral section/row shape (and the section table
-// renderer) introduced for the TrueNAS drawer details.
 import {
-  compactTrueNASDetailRows as compactRows,
-  compactTrueNASDetailSections as compactSections,
-  makeTrueNASDetailRow as makeRow,
-  type TrueNASDetailSection,
-} from './trueNASDetailTableModel';
+  compactDetailRows as compactRows,
+  compactDetailSections as compactSections,
+  makeDetailRow as makeRow,
+  type DetailSection,
+} from '@/components/shared/detailSectionModel';
 
-export type ResourceDetailDrawerKubernetesSection = TrueNASDetailSection;
+export type ResourceDetailDrawerKubernetesSection = DetailSection;
 
 const asString = (value?: string | null): string | null => {
   const trimmed = value?.trim();
@@ -27,11 +25,7 @@ const formatBytes = (bytes?: number): string | null => {
   return `${scaled.toFixed(scaled >= 100 ? 0 : scaled >= 10 ? 1 : 2)} ${units[unitIndex]}`;
 };
 
-const formatNodeBudget = (
-  cores?: number,
-  memoryBytes?: number,
-  pods?: number,
-): string | null => {
+const formatNodeBudget = (cores?: number, memoryBytes?: number, pods?: number): string | null => {
   const parts: string[] = [];
   if (typeof cores === 'number' && Number.isFinite(cores) && cores > 0) {
     parts.push(`${cores} cores`);
@@ -82,7 +76,7 @@ export const buildKubernetesDetailSections = (
   const k = resource.kubernetes;
   if (!k) return [];
 
-  const sections: Array<TrueNASDetailSection | null> = [];
+  const sections: Array<DetailSection | null> = [];
 
   if (resource.type === 'pod') {
     const podRows = compactRows([makeRow('QoS class', k.qosClass)]);
@@ -149,10 +143,9 @@ export const buildKubernetesDetailsSummary = (resource: Resource): string | null
     return parts.length > 0 ? parts.join(' · ') : null;
   }
   if (isKubernetesNodeResource(resource)) {
-    const parts = [
-      asString(k.osImage),
-      k.unschedulable === true ? 'Cordoned' : null,
-    ].filter(Boolean);
+    const parts = [asString(k.osImage), k.unschedulable === true ? 'Cordoned' : null].filter(
+      Boolean,
+    );
     return parts.length > 0 ? parts.join(' · ') : null;
   }
   if (resource.type === 'k8s-cluster') {

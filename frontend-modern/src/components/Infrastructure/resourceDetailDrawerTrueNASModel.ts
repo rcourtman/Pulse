@@ -10,19 +10,19 @@ import type {
   ResourceTrueNASVMMeta,
 } from '@/types/resource';
 import {
-  compactTrueNASDetailRows,
-  compactTrueNASDetailSections,
-  makeTrueNASDetailRow,
-  type TrueNASDetailRow,
-  type TrueNASDetailSection,
-  type TrueNASDetailTone,
-} from './trueNASDetailTableModel';
+  compactDetailRows,
+  compactDetailSections,
+  makeDetailRow,
+  type DetailRow,
+  type DetailSection,
+  type DetailValueTone,
+} from '@/components/shared/detailSectionModel';
 
-export type ResourceDetailDrawerTrueNASRowTone = TrueNASDetailTone;
+export type ResourceDetailDrawerTrueNASRowTone = DetailValueTone;
 
-export type ResourceDetailDrawerTrueNASRow = TrueNASDetailRow;
+export type ResourceDetailDrawerTrueNASRow = DetailRow;
 
-export type ResourceDetailDrawerTrueNASSection = TrueNASDetailSection;
+export type ResourceDetailDrawerTrueNASSection = DetailSection;
 
 const asString = (value?: string | null): string | null => {
   const trimmed = value?.trim();
@@ -105,9 +105,9 @@ const yesNoValue = (value?: boolean): string | null => {
   return value ? 'Yes' : 'No';
 };
 
-const row = makeTrueNASDetailRow;
-const compactRows = compactTrueNASDetailRows;
-const compactSections = compactTrueNASDetailSections;
+const row = makeDetailRow;
+const compactRows = compactDetailRows;
+const compactSections = compactDetailSections;
 
 const isTrueNASScopedResource = (resource: Resource): boolean =>
   resource.platformType === 'truenas' ||

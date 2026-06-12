@@ -9,6 +9,8 @@ import aiModelPickerSource from '@/components/shared/AIModelPicker.tsx?raw';
 import buttonSource from '@/components/shared/Button.tsx?raw';
 import buttonModelSource from '@/components/shared/buttonModel.ts?raw';
 import copyableCodeRowSource from '@/components/shared/CopyableCodeRow.tsx?raw';
+import detailSectionTableSource from '@/components/shared/DetailSectionTable.tsx?raw';
+import detailSectionModelSource from '@/components/shared/detailSectionModel.ts?raw';
 import commandPaletteModalSource from '@/components/shared/CommandPaletteModal.tsx?raw';
 import commandPaletteModelSource from '@/components/shared/commandPaletteModel.ts?raw';
 import columnPickerSource from '@/components/shared/ColumnPicker.tsx?raw';
@@ -174,6 +176,8 @@ import alertResourceTableDesktopSource from '@/components/Alerts/AlertResourceTa
 import aiCostDashboardSource from '@/components/AI/AICostDashboard.tsx?raw';
 import resourceDetailSummarySource from '@/components/Infrastructure/ResourceDetailSummary.tsx?raw';
 import resourceDetailDrawerDebugTabSource from '@/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx?raw';
+import resourceDetailDrawerKubernetesModelSource from '@/components/Infrastructure/resourceDetailDrawerKubernetesModel.ts?raw';
+import resourceDetailDrawerTrueNASModelSource from '@/components/Infrastructure/resourceDetailDrawerTrueNASModel.ts?raw';
 import aiSettingsDialogsSource from '@/components/Settings/AISettingsDialogs.tsx?raw';
 import agentProfilesPanelSource from '@/components/Settings/AgentProfilesPanel.tsx?raw';
 import apiTokenManagerSource from '@/components/Settings/APITokenManager.tsx?raw';
@@ -207,8 +211,14 @@ import useSavedViewsSource from '@/components/shared/FilterBar/useSavedViews.ts?
 import storagePageControlsSource from '@/components/Storage/StoragePageControls.tsx?raw';
 import orgSwitcherSource from '@/components/OrgSwitcher.tsx?raw';
 import resourceDetailDrawerOverviewTabSource from '@/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx?raw';
+import dockerAlertsTableSource from '@/features/docker/DockerAlertsTable.tsx?raw';
+import kubernetesAlertsTableSource from '@/features/kubernetes/KubernetesAlertsTable.tsx?raw';
 import proxmoxBackupsTableSharedSource from '@/features/proxmox/proxmoxBackupsTableShared.tsx?raw';
+import truenasAlertsTableSource from '@/features/truenas/TrueNASAlertsTable.tsx?raw';
+import truenasServicesTableSource from '@/features/truenas/TrueNASServicesTable.tsx?raw';
 import truenasSystemsTableSource from '@/features/truenas/TrueNASSystemsTable.tsx?raw';
+import vsphereActivityTableSource from '@/features/vmware/VsphereActivityTable.tsx?raw';
+import vsphereAlertsTableSource from '@/features/vmware/VsphereAlertsTable.tsx?raw';
 
 const sharedSources = import.meta.glob(['./*.tsx', './cards/*.tsx', './responsive/*.tsx'], {
   query: '?raw',
@@ -2543,6 +2553,111 @@ describe('shared primitive guardrails', () => {
       expect(source).not.toContain(
         'bg-surface-alt px-4 py-4 border-b border-border-subtle shadow-inner',
       );
+    }
+  });
+
+  it('keeps inline detail section content on the shared detail primitive', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+        forbiddenPatterns?: Array<{ path?: string; patterns?: string[] }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        allowedPaths?: string[];
+        scopes?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find(
+      (rule) => rule.id === 'inline-detail-section-panel-shell',
+    );
+    const fieldGridGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'inline-detail-local-field-grid-shell',
+    );
+    const providerNamedGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'inline-detail-provider-named-primitive-import',
+    );
+
+    expect(registeredRule?.canonical?.path).toBe('src/components/shared/DetailSectionTable.tsx');
+    expect(registeredRule?.canonical?.export).toBe('DetailSection');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
+      expect.arrayContaining([
+        'src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx',
+        'src/components/Infrastructure/resourceDetailDrawerKubernetesModel.ts',
+        'src/components/Infrastructure/resourceDetailDrawerTrueNASModel.ts',
+        'src/features/docker/DockerAlertsTable.tsx',
+        'src/features/kubernetes/KubernetesAlertsTable.tsx',
+        'src/features/truenas/TrueNASAlertsTable.tsx',
+        'src/features/truenas/TrueNASProtectionTable.tsx',
+        'src/features/truenas/TrueNASServicesTable.tsx',
+        'src/features/vmware/VsphereActivityTable.tsx',
+        'src/features/vmware/VsphereAlertsTable.tsx',
+      ]),
+    );
+    expect(registeredRule?.forbiddenPatterns).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: 'src/components/Infrastructure/resourceDetailDrawerKubernetesModel.ts',
+          patterns: expect.arrayContaining(['makeTrueNASDetailRow', 'trueNASDetailTableModel']),
+        }),
+      ]),
+    );
+
+    expect(fieldGridGuard?.canonical?.path).toBe('src/components/shared/DetailSectionTable.tsx');
+    expect(fieldGridGuard?.canonical?.export).toBe('InlineDetailPanel');
+    expect(fieldGridGuard?.allPatterns).toEqual([
+      'const DetailField',
+      'font-semibold uppercase tracking-wide text-muted',
+      'grid gap-3 sm:grid-cols-2 lg:grid-cols-3',
+    ]);
+    expect(fieldGridGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(providerNamedGuard?.canonical?.path).toBe(
+      'src/components/shared/DetailSectionTable.tsx',
+    );
+    expect(providerNamedGuard?.canonical?.export).toBe('DetailSectionTable');
+    expect(providerNamedGuard?.allPatterns).toEqual(['TrueNASDetailTable']);
+    expect(providerNamedGuard?.allowedPaths ?? []).toHaveLength(0);
+
+    expect(detailSectionModelSource).toContain('export type DetailSection');
+    expect(detailSectionModelSource).toContain('makeDetailRow');
+    expect(detailSectionTableSource).toContain('DetailSectionTable');
+    expect(detailSectionTableSource).toContain('InlineDetailPanel');
+    expect(detailSectionTableSource).toContain('variant="outline"');
+
+    for (const source of [
+      resourceDetailDrawerKubernetesModelSource,
+      resourceDetailDrawerTrueNASModelSource,
+    ]) {
+      expect(source).toContain('@/components/shared/detailSectionModel');
+      expect(source).toContain('DetailSection');
+      expect(source).not.toContain('trueNASDetailTableModel');
+      expect(source).not.toContain('makeTrueNASDetailRow');
+    }
+
+    expect(resourceDetailDrawerOverviewTabSource).toContain('DetailSectionTable');
+    expect(resourceDetailDrawerOverviewTabSource).not.toContain('TrueNASDetailSectionTable');
+
+    for (const source of [
+      dockerAlertsTableSource,
+      kubernetesAlertsTableSource,
+      truenasAlertsTableSource,
+      truenasProtectionTableSource,
+      truenasServicesTableSource,
+      vsphereActivityTableSource,
+      vsphereAlertsTableSource,
+    ]) {
+      expect(source).toContain('InlineDetailPanel');
+      expect(source).toContain('build');
+      expect(source).toContain('DetailSections');
+      expect(source).not.toContain('const DetailField');
+      expect(source).not.toContain('grid gap-3 sm:grid-cols-2 lg:grid-cols-3');
+      expect(source).not.toContain('TrueNASInlineDetailTable');
+      expect(source).not.toContain('TrueNASDetailTable');
+      expect(source).not.toContain('XIcon class="h-4 w-4"');
     }
   });
 

@@ -167,6 +167,8 @@ work extends shared components instead of creating new local variants.
 138. `frontend-modern/src/components/shared/buttonModel.ts`
 139. `frontend-modern/src/components/shared/Button.test.tsx`
 140. `frontend-modern/src/components/shared/CopyableCodeRow.tsx`
+141. `frontend-modern/src/components/shared/DetailSectionTable.tsx`
+142. `frontend-modern/src/components/shared/detailSectionModel.ts`
 
 ## Shared Boundaries
 
@@ -480,6 +482,12 @@ not a replacement status card, CTA band, or page-local nested card.
    copyable command/path/value rows must use `CopyableCodeRow` instead of
    recreating local copy icons, copied-state checks, disabled empty-value
    handling, or `font-mono` code-row shells.
+   Inline detail content belongs to the shared detail-section primitive family.
+   Feature surfaces may own the platform-specific rows, section labels, and
+   source model, but section row shaping, empty-row compaction, value tone
+   classes, table rendering, and inline close-action chrome must come from
+   `detailSectionModel.ts`, `DetailSectionTable`, and `InlineDetailPanel`
+   instead of local `DetailField` grids or provider-named reusable primitives.
    Framed product table surfaces must consume the shared `TableCard` frame and
    `TableCardHeader` title/action band instead of composing page-local `Card`
    border, background, overflow, or table-title chrome. Feature owners may own
@@ -2537,6 +2545,13 @@ owns the row/cell/content shell and row-click containment for platform,
 workload, and infrastructure inline drawers; callers may pass row-specific
 `data-*` attributes, colspan, and content classes, but they must not recreate
 the surface-alt detail row shell locally.
+Inline detail section content is registry-backed separately from the row shell.
+`DetailSectionTable`, `InlineDetailPanel`, and `detailSectionModel.ts` own
+detail row compaction, section-table rendering, value-tone classes, and the
+inline close action for platform alert/activity/protection/service detail
+panels; consumers may own the platform-specific section data, but they must not
+recreate local `DetailField` grids or route platform-neutral detail tables
+through a provider-named primitive.
 Platform row-detail disclosure controls are also registry-backed templates.
 `frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx`
 owns `PlatformResourceDetailToggleButton`, which composes

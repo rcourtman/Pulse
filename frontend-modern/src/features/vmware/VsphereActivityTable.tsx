@@ -1,5 +1,12 @@
 import { For, Show, type Component, type JSX } from 'solid-js';
-import XIcon from 'lucide-solid/icons/x';
+import {
+  InlineDetailPanel,
+  compactDetailRows,
+  compactDetailSections,
+  makeDetailRow,
+  type DetailSection,
+  type DetailValueTone,
+} from '@/components/shared/DetailSectionTable';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
@@ -133,57 +140,70 @@ const detailDateTime = (value?: string): string => {
   });
 };
 
-const DetailField: Component<{ label: string; value: string | undefined }> = (props) => (
-  <div class="min-w-0">
-    <dt class="text-[10px] font-semibold uppercase tracking-wide text-muted">{props.label}</dt>
-    <dd class="mt-1 truncate text-xs text-base-content" title={props.value || '-'}>
-      {props.value || '-'}
-    </dd>
-  </div>
-);
+type ActivityDetailTone = DetailValueTone;
+type ActivityDetailSection = DetailSection;
 
-const ActivityDetail: Component<{ activity: VmwareActivityRow; onClose: () => void }> = (props) => {
-  const meta = () => props.activity.resource.vmware;
-  return (
-    <div data-testid="vsphere-activity-detail" class="space-y-3">
-      <div class="flex min-w-0 items-start justify-between gap-3">
-        <div class="min-w-0">
-          <div class="text-sm font-semibold text-base-content">vSphere activity detail</div>
-          <div class="mt-0.5 truncate text-xs text-muted" title={props.activity.title}>
-            {formatActivityKind(props.activity.activityKind)} · {props.activity.title}
-          </div>
-        </div>
-        <button
-          type="button"
-          class="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted hover:bg-surface-hover hover:text-base-content"
-          aria-label="Close"
-          onClick={props.onClose}
-        >
-          <XIcon class="h-4 w-4" />
-        </button>
-      </div>
+const detailRow = makeDetailRow;
 
-      <dl class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <DetailField label="Resource" value={props.activity.resourceName} />
-        <DetailField label="Entity" value={formatEntityType(props.activity.entityType)} />
-        <DetailField label="Managed object" value={props.activity.managedObjectId} />
-        <DetailField label="Kind" value={formatActivityKind(props.activity.activityKind)} />
-        <DetailField label="Activity" value={props.activity.title} />
-        <DetailField label="State" value={formatActivityState(props.activity)} />
-        <DetailField label="Message" value={props.activity.message} />
-        <DetailField label="Description" value={props.activity.description} />
-        <DetailField label="Actor" value={props.activity.actor} />
-        <DetailField label="Native ID" value={props.activity.nativeId} />
-        <DetailField label="vCenter" value={meta()?.connectionName || meta()?.vcenterHost} />
-        <DetailField label="Datacenter" value={meta()?.datacenterName} />
-        <DetailField label="Cluster" value={meta()?.clusterName || meta()?.computeResourceName} />
-        <DetailField label="Occurred" value={detailDateTime(props.activity.occurredAt)} />
-        <DetailField label="Observed" value={detailDateTime(props.activity.observedAt)} />
-        <DetailField label="Source" value={formatIdentifierLabel(props.activity.source)} />
-      </dl>
-    </div>
-  );
+const activityTone = (bucket: VmwareActivityStateBucket): ActivityDetailTone => {
+  if (bucket === 'success') return 'success';
+  if (bucket === 'running') return 'warning';
+  if (bucket === 'failed') return 'danger';
+  return 'muted';
 };
+
+const buildActivityDetailSections = (activity: VmwareActivityRow): ActivityDetailSection[] => {
+  const meta = activity.resource.vmware;
+  return compactDetailSections([
+    {
+      label: 'Activity',
+      rows: compactDetailRows([
+        detailRow('Kind', formatActivityKind(activity.activityKind)),
+        detailRow('State', formatActivityState(activity), {
+          tone: activityTone(activity.stateBucket),
+        }),
+        detailRow('Activity', activity.title),
+        detailRow('Message', activity.message),
+        detailRow('Description', activity.description),
+      ]),
+    },
+    {
+      label: 'Affected resource',
+      rows: compactDetailRows([
+        detailRow('Resource', activity.resourceName),
+        detailRow('Type', formatResourceType(activity.resourceType)),
+        detailRow('Entity', formatEntityType(activity.entityType)),
+        detailRow('Managed object', activity.managedObjectId),
+        detailRow('vCenter', meta?.connectionName || meta?.vcenterHost),
+        detailRow('Datacenter', meta?.datacenterName),
+        detailRow('Cluster', meta?.clusterName || meta?.computeResourceName),
+        detailRow('Resource ID', activity.resourceId),
+      ]),
+    },
+    {
+      label: 'Source',
+      rows: compactDetailRows([
+        detailRow('Native ID', activity.nativeId),
+        detailRow('Actor', activity.actor),
+        detailRow('Source', formatIdentifierLabel(activity.source)),
+        detailRow('Occurred', detailDateTime(activity.occurredAt)),
+        detailRow('Observed', detailDateTime(activity.observedAt)),
+      ]),
+    },
+  ]);
+};
+
+const ActivityDetail: Component<{ activity: VmwareActivityRow; onClose: () => void }> = (props) => (
+  <InlineDetailPanel
+    testId="vsphere-activity-detail"
+    detailFor={props.activity.id}
+    title="vSphere activity detail"
+    summary={`${formatActivityKind(props.activity.activityKind)} · ${props.activity.title}`}
+    sections={buildActivityDetailSections(props.activity)}
+    detailAttributes={{ 'data-vsphere-activity-detail-for': props.activity.id }}
+    onClose={props.onClose}
+  />
+);
 
 export const VsphereActivityTable: Component<{
   activity: VmwareActivityRow[];

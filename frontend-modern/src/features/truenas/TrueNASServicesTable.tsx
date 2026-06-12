@@ -24,13 +24,13 @@ import {
   type TrueNASServiceStatusFilter,
 } from './truenasPageModel';
 import {
-  TrueNASInlineDetailTable,
-  compactTrueNASDetailRows,
-  compactTrueNASDetailSections,
-  makeTrueNASDetailRow,
-  type TrueNASDetailSection,
-  type TrueNASDetailTone,
-} from '@/components/Infrastructure/TrueNASDetailTable';
+  InlineDetailPanel,
+  compactDetailRows,
+  compactDetailSections,
+  makeDetailRow,
+  type DetailSection,
+  type DetailValueTone,
+} from '@/components/shared/DetailSectionTable';
 
 const TRUENAS_SERVICE_STATUS_OPTIONS: PlatformTableFilterOption<TrueNASServiceStatusFilter>[] = [
   { value: 'all', label: 'All' },
@@ -81,17 +81,15 @@ const serviceStatusVariant = (
   return 'muted';
 };
 
-type ServiceDetailTone = TrueNASDetailTone;
-type ServiceDetailSection = TrueNASDetailSection;
+type ServiceDetailTone = DetailValueTone;
+type ServiceDetailSection = DetailSection;
 
 const detailBool = (value?: boolean): string | null => {
   if (value === undefined) return null;
   return value ? 'Enabled' : 'Disabled';
 };
 
-const detailRow = makeTrueNASDetailRow;
-const compactDetailRows = compactTrueNASDetailRows;
-const compactDetailSections = compactTrueNASDetailSections;
+const detailRow = makeDetailRow;
 
 const serviceTone = (row: TrueNASServiceRow): ServiceDetailTone => {
   const status = mapTrueNASServiceStatus(row);
@@ -145,15 +143,15 @@ const buildServiceDetailSections = (row: TrueNASServiceRow): ServiceDetailSectio
 };
 
 const ServiceDetailTable: Component<{ row: TrueNASServiceRow; onClose: () => void }> = (props) => (
-  <TrueNASInlineDetailTable
+  <InlineDetailPanel
     testId="truenas-service-detail"
     detailFor={props.row.id}
-    detailKind="service"
     title="Service detail"
     summary={`${formatServiceName(props.row.service.service)} · ${titleCase(
       mapTrueNASServiceStatus(props.row),
     )}`}
     sections={buildServiceDetailSections(props.row)}
+    detailAttributes={{ 'data-truenas-service-detail-for': props.row.id }}
     onClose={props.onClose}
   />
 );

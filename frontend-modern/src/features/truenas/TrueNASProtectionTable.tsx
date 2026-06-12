@@ -36,13 +36,13 @@ import {
   type TrueNASProtectionStatusFilter,
 } from './truenasPageModel';
 import {
-  TrueNASInlineDetailTable,
-  compactTrueNASDetailRows,
-  compactTrueNASDetailSections,
-  makeTrueNASDetailRow,
-  type TrueNASDetailSection,
-  type TrueNASDetailTone,
-} from '@/components/Infrastructure/TrueNASDetailTable';
+  InlineDetailPanel,
+  compactDetailRows,
+  compactDetailSections,
+  makeDetailRow,
+  type DetailSection,
+  type DetailValueTone,
+} from '@/components/shared/DetailSectionTable';
 
 const TRUENAS_PROTECTION_STATUS_OPTIONS: PlatformTableFilterOption<TrueNASProtectionStatusFilter>[] =
   [
@@ -176,8 +176,8 @@ const formatPointTime = (point: RecoveryPoint): string => {
 const sizeLabel = (point: RecoveryPoint): string =>
   typeof point.sizeBytes === 'number' && point.sizeBytes > 0 ? formatBytes(point.sizeBytes) : '-';
 
-type ProtectionDetailTone = TrueNASDetailTone;
-type ProtectionDetailSection = TrueNASDetailSection;
+type ProtectionDetailTone = DetailValueTone;
+type ProtectionDetailSection = DetailSection;
 
 const detailBool = (value?: boolean | null): string | null => {
   if (value == null) return null;
@@ -198,9 +198,7 @@ const detailDateTime = (value?: string | null): string | null => {
   });
 };
 
-const detailRow = makeTrueNASDetailRow;
-const compactDetailRows = compactTrueNASDetailRows;
-const compactDetailSections = compactTrueNASDetailSections;
+const detailRow = makeDetailRow;
 
 const outcomeTone = (point: RecoveryPoint): ProtectionDetailTone => {
   const outcome = normalizeRecoveryOutcome(point.outcome);
@@ -292,15 +290,15 @@ const DatasetCell: Component<{ point: RecoveryPoint; detailToggle?: JSX.Element 
 };
 
 const ProtectionDetailTable: Component<{ point: RecoveryPoint; onClose: () => void }> = (props) => (
-  <TrueNASInlineDetailTable
+  <InlineDetailPanel
     testId="truenas-protection-detail"
     detailFor={props.point.id}
-    detailKind="protection"
     title="Protection detail"
     summary={`${kindLabel(mapTrueNASProtectionKind(props.point))} · ${getRecoveryOutcomeLabel(
       normalizeRecoveryOutcome(props.point.outcome),
     )}`}
     sections={buildProtectionDetailSections(props.point)}
+    detailAttributes={{ 'data-truenas-protection-detail-for': props.point.id }}
     onClose={props.onClose}
   />
 );

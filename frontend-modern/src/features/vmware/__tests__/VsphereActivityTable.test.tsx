@@ -113,7 +113,7 @@ describe('VsphereActivityTable', () => {
     const detail = within(screen.getByTestId('vsphere-activity-detail'));
     expect(detail.getByText('vSphere activity detail')).toBeInTheDocument();
     expect(detail.getByText('Managed object')).toBeInTheDocument();
-    expect(detail.getByText('vm-201')).toBeInTheDocument();
+    expect(detail.getAllByText('vm-201').length).toBeGreaterThan(0);
     expect(detail.getByText('Native ID')).toBeInTheDocument();
     expect(detail.getByText('task-901')).toBeInTheDocument();
     expect(detail.getByText('Description')).toBeInTheDocument();

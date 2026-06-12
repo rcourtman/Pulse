@@ -1,5 +1,12 @@
 import { For, Show, type Component, type JSX } from 'solid-js';
-import XIcon from 'lucide-solid/icons/x';
+import {
+  InlineDetailPanel,
+  compactDetailRows,
+  compactDetailSections,
+  makeDetailRow,
+  type DetailSection,
+  type DetailValueTone,
+} from '@/components/shared/DetailSectionTable';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
@@ -141,52 +148,67 @@ const detailDateTime = (value?: string): string => {
   });
 };
 
-const DetailField: Component<{ label: string; value: string | undefined }> = (props) => (
-  <div class="min-w-0">
-    <dt class="text-[10px] font-semibold uppercase tracking-wide text-muted">{props.label}</dt>
-    <dd class="mt-1 truncate text-xs text-base-content" title={props.value || '-'}>
-      {props.value || '-'}
-    </dd>
-  </div>
-);
+type AlertDetailTone = DetailValueTone;
+type AlertDetailSection = DetailSection;
 
-const AlertDetail: Component<{ incident: DockerIncidentRow; onClose: () => void }> = (props) => {
-  const docker = () => props.incident.resource.docker;
-  return (
-    <div data-testid="docker-alert-detail" class="space-y-3">
-      <div class="flex min-w-0 items-start justify-between gap-3">
-        <div class="min-w-0">
-          <div class="text-sm font-semibold text-base-content">Docker alert detail</div>
-          <div class="mt-0.5 truncate text-xs text-muted" title={props.incident.summary}>
-            {severityLabel(props.incident.severity)} · {formatCode(props.incident.code)}
-          </div>
-        </div>
-        <button
-          type="button"
-          class="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted hover:bg-surface-hover hover:text-base-content"
-          aria-label="Close"
-          onClick={props.onClose}
-        >
-          <XIcon class="h-4 w-4" />
-        </button>
-      </div>
+const detailRow = makeDetailRow;
 
-      <dl class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <DetailField label="Summary" value={props.incident.summary} />
-        <DetailField label="Signal" value={props.incident.label} />
-        <DetailField label="Severity" value={severityLabel(props.incident.severity)} />
-        <DetailField label="Resource" value={props.incident.resourceName} />
-        <DetailField label="Type" value={formatResourceType(props.incident.resourceType)} />
-        <DetailField label="Host" value={docker()?.hostname} />
-        <DetailField label="Runtime" value={docker()?.runtime} />
-        <DetailField label="Swarm cluster" value={docker()?.swarm?.clusterName} />
-        <DetailField label="Started" value={detailDateTime(props.incident.startedAt)} />
-        <DetailField label="Source" value={props.incident.source} />
-        <DetailField label="Action" value={props.incident.action} />
-      </dl>
-    </div>
-  );
+const alertTone = (severity: DockerIncidentRow['severityBucket']): AlertDetailTone => {
+  if (severity === 'critical') return 'danger';
+  if (severity === 'warning') return 'warning';
+  return 'muted';
 };
+
+const buildAlertDetailSections = (incident: DockerIncidentRow): AlertDetailSection[] => {
+  const docker = incident.resource.docker;
+  return compactDetailSections([
+    {
+      label: 'Alert',
+      rows: compactDetailRows([
+        detailRow('Severity', severityLabel(incident.severity), {
+          tone: alertTone(incident.severityBucket),
+        }),
+        detailRow('Summary', incident.summary),
+        detailRow('Signal', incident.label),
+        detailRow('Code', formatCode(incident.code), { title: incident.code }),
+      ]),
+    },
+    {
+      label: 'Affected resource',
+      rows: compactDetailRows([
+        detailRow('Name', incident.resourceName),
+        detailRow('Type', formatResourceType(incident.resourceType)),
+        detailRow('Host', docker?.hostname),
+        detailRow('Runtime', docker?.runtime),
+        detailRow('Swarm cluster', docker?.swarm?.clusterName),
+        detailRow('Resource ID', incident.resourceId),
+      ]),
+    },
+    {
+      label: 'Source',
+      rows: compactDetailRows([
+        detailRow('Started', detailDateTime(incident.startedAt)),
+        detailRow('Provider', incident.source),
+      ]),
+    },
+    {
+      label: 'Action',
+      rows: compactDetailRows([detailRow('Recommended', incident.action)]),
+    },
+  ]);
+};
+
+const AlertDetail: Component<{ incident: DockerIncidentRow; onClose: () => void }> = (props) => (
+  <InlineDetailPanel
+    testId="docker-alert-detail"
+    detailFor={props.incident.id}
+    title="Docker alert detail"
+    summary={`${severityLabel(props.incident.severity)} · ${formatCode(props.incident.code)}`}
+    sections={buildAlertDetailSections(props.incident)}
+    detailAttributes={{ 'data-docker-alert-detail-for': props.incident.id }}
+    onClose={props.onClose}
+  />
+);
 
 export const DockerAlertsTable: Component<{
   incidents: DockerIncidentRow[];

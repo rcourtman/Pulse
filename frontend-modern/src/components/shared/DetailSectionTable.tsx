@@ -1,17 +1,18 @@
-import { For, type Component } from 'solid-js';
-import { Table, TableBody, TableCell, TableHead, TableRow } from '@/components/shared/Table';
-import type { TrueNASDetailSection, TrueNASDetailTone } from './trueNASDetailTableModel';
+import { For, type Component, type JSX } from 'solid-js';
+import { Button } from './Button';
+import { Table, TableBody, TableCell, TableHead, TableRow } from './Table';
+import type { DetailSection, DetailValueTone } from './detailSectionModel';
 
 export {
-  compactTrueNASDetailRows,
-  compactTrueNASDetailSections,
-  makeTrueNASDetailRow,
-  type TrueNASDetailRow,
-  type TrueNASDetailSection,
-  type TrueNASDetailTone,
-} from './trueNASDetailTableModel';
+  compactDetailRows,
+  compactDetailSections,
+  makeDetailRow,
+  type DetailRow,
+  type DetailSection,
+  type DetailValueTone,
+} from './detailSectionModel';
 
-const detailValueToneClass = (tone: TrueNASDetailTone | undefined): string => {
+const detailValueToneClass = (tone: DetailValueTone | undefined): string => {
   if (tone === 'accent') return 'text-cyan-700 dark:text-cyan-300';
   if (tone === 'success') return 'text-emerald-700 dark:text-emerald-300';
   if (tone === 'warning') return 'text-amber-700 dark:text-amber-300';
@@ -20,14 +21,8 @@ const detailValueToneClass = (tone: TrueNASDetailTone | undefined): string => {
   return 'text-base-content';
 };
 
-const truenasDetailAttribute = (
-  detailKind: 'alert' | 'protection' | 'service' | undefined,
-  detailFor: string,
-): Record<string, string> =>
-  detailKind ? { [`data-truenas-${detailKind}-detail-for`]: detailFor } : {};
-
-export const TrueNASDetailSectionTable: Component<{
-  sections: TrueNASDetailSection[];
+export const DetailSectionTable: Component<{
+  sections: DetailSection[];
   class?: string;
 }> = (props) => (
   <div class={props.class ?? 'overflow-hidden rounded border border-border bg-surface'}>
@@ -69,36 +64,40 @@ export const TrueNASDetailSectionTable: Component<{
   </div>
 );
 
-export const TrueNASInlineDetailTable: Component<{
+export const InlineDetailPanel: Component<{
   testId: string;
   detailFor: string;
-  detailKind?: 'alert' | 'protection' | 'service';
-  title: string;
-  summary: string;
-  sections: TrueNASDetailSection[];
+  title: JSX.Element;
+  summary?: JSX.Element;
+  sections: DetailSection[];
   onClose: () => void;
+  class?: string;
+  tableClass?: string;
+  detailAttributes?: Record<string, string>;
 }> = (props) => (
   <div
-    class="space-y-3"
+    class={props.class ?? 'space-y-3'}
+    {...(props.detailAttributes ?? {})}
     data-testid={props.testId}
-    data-truenas-inline-detail-for={props.detailFor}
-    {...truenasDetailAttribute(props.detailKind, props.detailFor)}
+    data-inline-detail-for={props.detailFor}
   >
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
         <div class="text-[11px] font-medium uppercase tracking-wide text-base-content">
           {props.title}
         </div>
-        <div class="mt-1 text-[10px] text-muted">{props.summary}</div>
+        {props.summary ? <div class="mt-1 text-[10px] text-muted">{props.summary}</div> : null}
       </div>
-      <button
+      <Button
         type="button"
-        class="inline-flex items-center rounded-md border border-border bg-surface px-2.5 py-1 text-[10px] font-medium text-base-content transition-colors hover:bg-base"
+        variant="outline"
+        size="xs"
+        class="bg-surface text-[10px] hover:bg-base"
         onClick={props.onClose}
       >
         Close
-      </button>
+      </Button>
     </div>
-    <TrueNASDetailSectionTable sections={props.sections} />
+    <DetailSectionTable sections={props.sections} class={props.tableClass} />
   </div>
 );
