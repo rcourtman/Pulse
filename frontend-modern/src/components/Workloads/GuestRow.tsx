@@ -26,6 +26,7 @@ import {
 import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButton';
 import { DiscoveryReadinessBadge } from '@/components/shared/DiscoveryReadinessBadge';
 import { getWorkloadGuestDiskStatusMessage } from '@/utils/workloadGuestPresentation';
+import { WebInterfaceNameLink } from '@/components/shared/WebInterfaceNameLink';
 import type { GuestRowProps } from './guestRowModel';
 import { useGuestRowState } from './useGuestRowState';
 import type { WorkloadTableMetric } from './workloadMetricHistoryModel';
@@ -191,30 +192,12 @@ export function GuestRow(props: GuestRowProps) {
                 size="xs"
               />
               <div class="flex items-center gap-1.5 min-w-0 group/name">
-                <Show
-                  when={customUrl()}
-                  fallback={
-                    <span
-                      class="text-[11px] font-medium text-base-content select-none truncate"
-                      title={props.guest.name}
-                    >
-                      {props.guest.name}
-                    </span>
-                  }
-                >
-                  {(href) => (
-                    <a
-                      href={href()}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline select-none truncate"
-                      title={`Open ${href()}`}
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      {props.guest.name}
-                    </a>
-                  )}
-                </Show>
+                <WebInterfaceNameLink
+                  name={props.guest.name}
+                  url={customUrl()}
+                  class="text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline select-none truncate"
+                  fallbackClass="text-[11px] font-medium text-base-content select-none truncate"
+                />
                 {/* Show backup indicator in name cell only if backup column is hidden */}
                 <Show when={!isColVisible('backup') && supportsBackup()}>
                   <BackupIndicator

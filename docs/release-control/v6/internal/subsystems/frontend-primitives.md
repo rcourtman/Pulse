@@ -2355,6 +2355,13 @@ Missing-suggested-URL diagnostics remain useful only when the operator has no
 saved or entered URL; once a custom web-interface URL is present, the shared
 field must suppress "no suggested URL" warnings so Discovery does not make a
 valid manual endpoint look broken.
+Saved web-interface launch affordances must also stay on a shared primitive
+instead of page-local table columns or one-off external-link anchors.
+`frontend-modern/src/components/shared/WebInterfaceNameLink.tsx` owns the
+resource-name link shell, new-tab safety attributes, row-click/key propagation
+containment, fallback text, and accessible launch labels. Workload guest rows
+and standalone machine rows compose that primitive so a saved URL is opened by
+clicking the resource name on every comparable runtime table.
 The shared help icon now follows that same owner split.
 `frontend-modern/src/components/shared/HelpIcon.tsx` stays the render shell,
 `frontend-modern/src/components/shared/useHelpIconState.ts` owns open state,

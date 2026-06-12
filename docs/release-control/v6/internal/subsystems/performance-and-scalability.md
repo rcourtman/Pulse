@@ -161,6 +161,11 @@ regression protection.
    `docker.uptimeSeconds`, `kubernetes.uptimeSeconds`); platforms whose
    adapters only populate the canonical field — vSphere is the working
    example — would otherwise render blank uptime cells for every row.
+   Workload guest rows may compose the shared saved web-interface name-link
+   shell from `frontend-primitives`, but row rendering must receive any saved
+   URL from already-loaded row metadata and must not add per-row metadata
+   fetches, Discovery probes, or page-local external-link logic on the table
+   hot path.
 4. Keep shared auth gating in `internal/api/router.go` cheap and local: pre-auth quick-setup and recovery routing may short-circuit on loopback/session/token checks, but they must not trigger chart, metrics, or broad persistence fan-out on the protected request hot path.
    The same rule applies to public setup-script lifecycle routes: `/api/auto-register`
    and `/api/auto-unregister` may bypass the global auth wall so their handlers can

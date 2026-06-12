@@ -89,6 +89,7 @@ import selectionCardGroupStateSource from '@/components/shared/useSelectionCardG
 import webInterfaceUrlFieldSource from '@/components/shared/WebInterfaceUrlField.tsx?raw';
 import webInterfaceUrlFieldModelSource from '@/components/shared/webInterfaceUrlFieldModel.ts?raw';
 import webInterfaceUrlFieldStateSource from '@/components/shared/useWebInterfaceUrlFieldState.ts?raw';
+import webInterfaceNameLinkSource from '@/components/shared/WebInterfaceNameLink.tsx?raw';
 import upgradeNavigationSource from '@/utils/upgradeNavigation.ts?raw';
 import guestRowSource from '@/components/Workloads/GuestRow.tsx?raw';
 import workloadsTableSource from '@/components/Workloads/WorkloadsTable.tsx?raw';
@@ -96,6 +97,8 @@ import workloadPanelSource from '@/components/Workloads/WorkloadPanel.tsx?raw';
 import guestRowStateSource from '@/components/Workloads/useGuestRowState.ts?raw';
 import workloadSelectionStateSource from '@/components/Workloads/useWorkloadSelectionState.ts?raw';
 import proxmoxNodesTableSource from '@/features/proxmox/ProxmoxNodesTable.tsx?raw';
+import agentsMachinesTableSource from '@/features/standalone/AgentsMachinesTable.tsx?raw';
+import agentMachineTableModelSource from '@/features/standalone/agentMachineTableModel.ts?raw';
 import unifiedResourceHostTableCardSource from '@/components/Infrastructure/UnifiedResourceHostTableCard.tsx?raw';
 import unifiedResourceServiceInfrastructureCardSource from '@/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx?raw';
 import unifiedResourcePBSTableSectionSource from '@/components/Infrastructure/UnifiedResourcePBSTableSection.tsx?raw';
@@ -268,7 +271,9 @@ describe('shared primitive guardrails', () => {
     expect(aiModelPickerSource).toContain('const handleOptionKeyDown = (');
     expect(aiModelPickerSource).toContain('role="dialog"');
     expect(aiModelPickerSource).toContain('role="listbox"');
-    expect(aiModelPickerSource).toContain('aria-controls={isOpen() ? `${pickerId}-listbox` : undefined}');
+    expect(aiModelPickerSource).toContain(
+      'aria-controls={isOpen() ? `${pickerId}-listbox` : undefined}',
+    );
     expect(aiModelPickerSource).toContain('onKeyDown={(event) => handleOptionKeyDown');
     expect(aiModelPickerSource).toContain('aria-selected={isSelectedRoute(model.id)}');
     expect(aiModelPickerSource).toContain('aria-label={optionAriaLabel(');
@@ -905,6 +910,23 @@ describe('shared primitive guardrails', () => {
     expect(webInterfaceUrlFieldModelSource).toContain('validateWebInterfaceCustomUrl');
     expect(webInterfaceUrlFieldModelSource).toContain('getWebInterfaceSuggestedUrlFallback');
     expect(webInterfaceUrlFieldModelSource).toContain('shouldShowWebInterfaceSuggestedUrl');
+  });
+
+  it('keeps runtime web-interface launch on the shared resource-name template', () => {
+    expect(webInterfaceNameLinkSource).toContain('export const WebInterfaceNameLink');
+    expect(webInterfaceNameLinkSource).toContain('target="_blank"');
+    expect(webInterfaceNameLinkSource).toContain('rel="noopener noreferrer"');
+    expect(webInterfaceNameLinkSource).toContain('event.stopPropagation()');
+    expect(webInterfaceNameLinkSource).toContain('Open web interface for');
+
+    expect(guestRowSource).toContain('WebInterfaceNameLink');
+    expect(agentsMachinesTableSource).toContain('WebInterfaceNameLink');
+    expect(guestRowSource).not.toContain('target="_blank"');
+    expect(agentsMachinesTableSource).not.toContain('target="_blank"');
+    expect(agentsMachinesTableSource).not.toContain('AgentMachineWebLinkCell');
+    expect(agentsMachinesTableSource).not.toContain('data-agent-machine-web-link');
+    expect(agentMachineTableModelSource).not.toContain("id: 'web'");
+    expect(agentMachineTableModelSource).not.toContain("label: 'Web'");
   });
 
   it('keeps help icon on shell, runtime, and model owners', () => {

@@ -500,7 +500,7 @@ describe('AgentsMachinesTable', () => {
     });
   });
 
-  it('opens saved agent web interface URLs from machine rows', async () => {
+  it('opens saved agent web interface URLs from the machine name', async () => {
     getAllAgentMetadataMock.mockResolvedValueOnce({
       'web-host': { id: 'web-host', customUrl: 'https://web-host.local:9443' },
     });
@@ -522,9 +522,14 @@ describe('AgentsMachinesTable', () => {
 
     const link = await screen.findByRole('link', { name: 'Open web interface for Web Host' });
     expect(link).toHaveAttribute('href', 'https://web-host.local:9443');
+    expect(link).toHaveTextContent('Web Host');
+    expect(screen.queryByRole('columnheader', { name: 'Web' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Add web interface URL for Web Host' }),
+    ).not.toBeInTheDocument();
   });
 
-  it('keeps machine web links in sync when detail metadata changes', async () => {
+  it('keeps machine name web links in sync when detail metadata changes', async () => {
     render(() => (
       <AgentsMachinesTable
         resources={[
@@ -539,15 +544,6 @@ describe('AgentsMachinesTable', () => {
         emptyDescription="Install Pulse Agent."
       />
     ));
-
-    await fireEvent.click(
-      screen.getByRole('button', { name: 'Add web interface URL for Event Host' }),
-    );
-    expect(screen.getByTestId('resource-detail-drawer')).toBeInTheDocument();
-    expect(screen.getByTestId('resource-detail-drawer')).toHaveAttribute(
-      'data-initial-show-access-context',
-      'true',
-    );
 
     window.dispatchEvent(
       new CustomEvent(RESOURCE_METADATA_CHANGED_EVENT, {

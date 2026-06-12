@@ -1,8 +1,6 @@
 import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
-import ExternalLinkIcon from 'lucide-solid/icons/external-link';
 import Loader2Icon from 'lucide-solid/icons/loader-2';
 import MoreHorizontalIcon from 'lucide-solid/icons/more-horizontal';
-import PlusIcon from 'lucide-solid/icons/plus';
 import Trash2Icon from 'lucide-solid/icons/trash-2';
 import {
   For,
@@ -23,6 +21,7 @@ import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import { ColumnPicker } from '@/components/shared/ColumnPicker';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TemperatureGauge } from '@/components/shared/TemperatureGauge';
+import { WebInterfaceNameLink } from '@/components/shared/WebInterfaceNameLink';
 import {
   Table,
   TableBody,
@@ -721,65 +720,6 @@ const AgentMachineRaidCell: Component<{
   );
 };
 
-const AgentMachineWebLinkCell: Component<{
-  url: string;
-  name: string;
-  canConfigure: boolean;
-  onConfigure: () => void;
-}> = (props) => {
-  const url = () => asTrimmedString(props.url) ?? '';
-  const label = () => `Open web interface for ${props.name}`;
-  const configureLabel = () => `Add web interface URL for ${props.name}`;
-
-  return (
-    <div class="flex justify-center">
-      <Show
-        when={url()}
-        fallback={
-          <Show
-            when={props.canConfigure}
-            fallback={
-              <span class="inline-flex h-7 w-7 items-center justify-center text-xs text-muted">
-                —
-              </span>
-            }
-          >
-            <button
-              type="button"
-              class="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
-              title="Add web interface URL"
-              aria-label={configureLabel()}
-              onClick={(event) => {
-                event.stopPropagation();
-                props.onConfigure();
-              }}
-              onKeyDown={(event) => event.stopPropagation()}
-            >
-              <PlusIcon class="h-3.5 w-3.5 opacity-60" />
-            </button>
-          </Show>
-        }
-      >
-        {(href) => (
-          <a
-            data-agent-machine-web-link
-            href={href()}
-            target="_blank"
-            rel="noopener noreferrer"
-            class="inline-flex h-7 w-7 items-center justify-center rounded-md text-blue-600 transition-colors hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 dark:text-blue-400 dark:hover:bg-blue-950 dark:hover:text-blue-300"
-            title={href()}
-            aria-label={label()}
-            onClick={(event) => event.stopPropagation()}
-            onKeyDown={(event) => event.stopPropagation()}
-          >
-            <ExternalLinkIcon class="h-3.5 w-3.5" />
-          </a>
-        )}
-      </Show>
-    </div>
-  );
-};
-
 const AgentMachineActionsCell: Component<{
   name: string;
   agentId: string;
@@ -1129,8 +1069,6 @@ const machineColumnWidthClass = (columnId: AgentMachineColumnId): string => {
       return 'hidden md:table-cell md:w-[5%]';
     case 'lastSeen':
       return 'hidden lg:table-cell lg:w-[6%]';
-    case 'web':
-      return 'hidden xl:table-cell xl:w-[4%]';
     case 'ip':
       return 'hidden xl:table-cell xl:w-[8%]';
     case 'raid':
@@ -1246,7 +1184,6 @@ export const AgentsMachinesTable: Component<{
   );
   const drawer = createPlatformResourceDetailState({ idPrefix: 'agents-machine-drawer' });
   const [agentMetadataById, setAgentMetadataById] = createSignal<Record<string, AgentMetadata>>({});
-  const [accessTargetResourceId, setAccessTargetResourceId] = createSignal<string | null>(null);
   const [actionsMenuResourceId, setActionsMenuResourceId] = createSignal<string | null>(null);
   const [confirmingRemovalResourceId, setConfirmingRemovalResourceId] = createSignal<string | null>(
     null,
@@ -1335,7 +1272,6 @@ export const AgentsMachinesTable: Component<{
       await removeAgentMetadata(agentMetadataIdFor(machine));
       setLocallyRemovedResourceIds((current) => ({ ...current, [resourceId]: true }));
       drawer.close(machine);
-      if (accessTargetResourceId() === resourceId) setAccessTargetResourceId(null);
       notificationStore.success(`${name} removed from Pulse`);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to remove machine';
@@ -1561,13 +1497,8 @@ export const AgentsMachinesTable: Component<{
                     const agentMetadataId = () => agentMetadataIdFor(machine);
                     const agentRemovalId = () => agentRemovalIdFor(machine);
                     const savedWebInterfaceUrl = () => savedAgentCustomUrlFor(agentMetadataId());
-                    const clearAccessTargetIfCurrent = () => {
-                      if (accessTargetResourceId() === machine.id) setAccessTargetResourceId(null);
-                    };
                     const toggleDetails = () => {
-                      const wasExpanded = isExpanded();
                       drawer.toggle(machine);
-                      if (wasExpanded) clearAccessTargetIfCurrent();
                     };
                     const handleDetailsActivationKey: JSX.EventHandler<
                       HTMLTableRowElement,
@@ -1605,9 +1536,12 @@ export const AgentsMachinesTable: Component<{
                                 title={machine.status || 'unknown'}
                                 ariaHidden
                               />
-                              <span class="truncate font-semibold text-base-content" title={name()}>
-                                {name()}
-                              </span>
+                              <WebInterfaceNameLink
+                                name={name()}
+                                url={savedWebInterfaceUrl()}
+                                class="truncate font-semibold text-blue-600 hover:text-blue-700 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
+                                fallbackClass="truncate font-semibold text-base-content"
+                              />
                             </div>
                             <Show
                               when={machineSubtitle()}
@@ -1756,21 +1690,6 @@ export const AgentsMachinesTable: Component<{
                               {lastSeenLabel()}
                             </TableCell>
                           </Show>
-                          <Show when={columnVisibility.isColumnVisible('web')}>
-                            <TableCell
-                              class={`${getPlatformTableCellClassForKind('badge')} ${machineColumnWidthClass('web')} text-base-content`}
-                            >
-                              <AgentMachineWebLinkCell
-                                url={savedWebInterfaceUrl()}
-                                name={name()}
-                                canConfigure={Boolean(agentMetadataId())}
-                                onConfigure={() => {
-                                  setAccessTargetResourceId(machine.id);
-                                  drawer.open(machine);
-                                }}
-                              />
-                            </TableCell>
-                          </Show>
                           <Show when={columnVisibility.isColumnVisible('ip')}>
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('text')} ${machineColumnWidthClass('ip')} text-base-content`}
@@ -1828,10 +1747,8 @@ export const AgentsMachinesTable: Component<{
                           open={isExpanded()}
                           detailRowId={detailRowId()}
                           colSpan={detailColspan()}
-                          initialShowAccessContext={accessTargetResourceId() === machine.id}
                           onClose={() => {
                             drawer.close(machine);
-                            clearAccessTargetIfCurrent();
                           }}
                         />
                       </>

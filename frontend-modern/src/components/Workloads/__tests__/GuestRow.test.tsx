@@ -753,6 +753,8 @@ describe('GuestRow', () => {
       const link = container.querySelector('a[href="https://example.com"]');
       expect(link).toBeTruthy();
       expect(link?.getAttribute('target')).toBe('_blank');
+      expect(link?.getAttribute('rel')).toBe('noopener noreferrer');
+      expect(link?.getAttribute('aria-label')).toBe('Open web interface for test-vm');
       expect(link?.textContent).toBe('test-vm');
       expect(container.querySelector('td[data-workload-col="link"]')).toBeNull();
     });

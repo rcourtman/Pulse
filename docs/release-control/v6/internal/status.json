@@ -3718,6 +3718,87 @@
           "evidence_tier": "test-proof"
         }
       ]
+    },
+    {
+      "id": "RA33",
+      "summary": "Comparable Pulse pages must compose repeated user-facing affordances from shared templates once a pattern exists: resource actions, fields, state badges, table controls, row affordances, and launch links must be owned in one shared primitive/model boundary with automated usage guardrails instead of drifting into page-local variants.",
+      "kind": "invariant",
+      "blocking_level": "repo-ready",
+      "proof_type": "automated",
+      "lane_ids": [
+        "L8",
+        "L13"
+      ],
+      "subsystem_ids": [
+        "frontend-primitives",
+        "monitoring"
+      ],
+      "release_gate_ids": [],
+      "proof_commands": [
+        {
+          "id": "shared-primitive-guardrails",
+          "run": [
+            "npm",
+            "--prefix",
+            "frontend-modern",
+            "test",
+            "--",
+            "--run",
+            "src/components/shared/SharedPrimitives.guardrails.test.ts"
+          ]
+        },
+        {
+          "id": "shared-template-drift-guardrails",
+          "run": [
+            "node",
+            "frontend-modern/scripts/shared-template-audit.mjs"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/status.json",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/frontend-primitives.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/scripts/shared-template-audit.mjs",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/shared/WebInterfaceNameLink.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Workloads/GuestRow.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/features/standalone/agentMachineTableModel.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "evidence_reference_policy": {
