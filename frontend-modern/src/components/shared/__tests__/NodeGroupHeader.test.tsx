@@ -46,5 +46,10 @@ describe('NodeGroupHeader', () => {
     expect(screen.getByText('PVE 9.1.9')).toBeInTheDocument();
     expect(screen.getByText('62°C')).toBeInTheDocument();
     expect(screen.getByText('2h')).toBeInTheDocument();
+
+    const link = screen.getByRole('link', { name: 'Open web interface for pve1' });
+    expect(link).toHaveAttribute('href', 'https://pve1:8006');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
   });
 });

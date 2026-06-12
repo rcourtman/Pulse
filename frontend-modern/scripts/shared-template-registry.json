@@ -11,6 +11,9 @@
       },
       "requiredConsumers": [
         {
+          "path": "src/components/shared/NodeGroupHeader.tsx"
+        },
+        {
           "path": "src/components/Workloads/GuestRow.tsx"
         },
         {
@@ -23,6 +26,10 @@
       "forbiddenPatterns": [
         {
           "path": "src/components/Workloads/GuestRow.tsx",
+          "patterns": ["target=\"_blank\"", "rel=\"noopener noreferrer\""]
+        },
+        {
+          "path": "src/components/shared/NodeGroupHeader.tsx",
           "patterns": ["target=\"_blank\"", "rel=\"noopener noreferrer\""]
         },
         {
@@ -53,6 +60,7 @@
       ],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/__tests__/NodeGroupHeader.test.tsx",
         "src/features/standalone/__tests__/AgentsMachinesTable.test.tsx",
         "src/components/Workloads/__tests__/GuestRow.test.tsx",
         "src/features/proxmox/__tests__/ProxmoxNodesTable.test.tsx",

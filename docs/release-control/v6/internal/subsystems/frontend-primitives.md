@@ -2363,12 +2363,12 @@ Saved web-interface launch affordances must also stay on a shared primitive
 instead of page-local table columns or one-off external-link anchors.
 `frontend-modern/src/components/shared/WebInterfaceNameLink.tsx` owns the
 resource-name link shell, new-tab safety attributes, row-click/key propagation
-containment, fallback text, and accessible launch labels. Workload guest rows
-standalone machine rows, and Proxmox node rows compose that primitive so a saved
-or inferred URL is opened by clicking the resource name on every comparable
-runtime table. Runtime/platform tables must not add separate `Web` columns,
-page-local external-link anchors, or duplicated new-tab safety handling for
-that launch affordance.
+containment, fallback text, and accessible launch labels. Workload guest rows,
+grouped node headers, standalone machine rows, and Proxmox node rows compose
+that primitive so a saved or inferred URL is opened by clicking the resource
+name on every comparable runtime table. Runtime/platform tables must not add
+separate `Web` columns, page-local external-link anchors, or duplicated new-tab
+safety handling for that launch affordance.
 Shared-template drift enforcement is registry-backed:
 `frontend-modern/scripts/shared-template-registry.json` is the canonical list of
 standardized repeated affordances, required consumers, and forbidden local

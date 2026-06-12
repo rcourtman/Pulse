@@ -650,7 +650,8 @@ describe('shared primitive guardrails', () => {
     expect(storageGroupRowSource).not.toContain('kind="scope"');
     expect(unifiedResourceHostTableCardSource).not.toContain('kind="scope"');
 
-    expect(nodeGroupHeaderSource).toContain('event.stopPropagation()');
+    expect(nodeGroupHeaderSource).toContain('WebInterfaceNameLink');
+    expect(webInterfaceNameLinkSource).toContain('event.stopPropagation()');
   });
 
   it('keeps upgrade navigation split across shell, runtime, and utility owners', () => {
@@ -942,18 +943,22 @@ describe('shared primitive guardrails', () => {
     expect(webInterfaceNameLinkSource).toContain('Open web interface for');
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
       expect.arrayContaining([
+        'src/components/shared/NodeGroupHeader.tsx',
         'src/components/Workloads/GuestRow.tsx',
         'src/features/standalone/AgentsMachinesTable.tsx',
         'src/features/proxmox/ProxmoxNodesTable.tsx',
       ]),
     );
 
+    expect(nodeGroupHeaderSource).toContain('WebInterfaceNameLink');
     expect(guestRowSource).toContain('WebInterfaceNameLink');
     expect(agentsMachinesTableSource).toContain('WebInterfaceNameLink');
     expect(proxmoxNodesTableSource).toContain('WebInterfaceNameLink');
+    expect(nodeGroupHeaderSource).not.toContain('target="_blank"');
     expect(guestRowSource).not.toContain('target="_blank"');
     expect(agentsMachinesTableSource).not.toContain('target="_blank"');
     expect(proxmoxNodesTableSource).not.toContain('target="_blank"');
+    expect(nodeGroupHeaderSource).not.toContain('rel="noopener noreferrer"');
     expect(agentsMachinesTableSource).not.toContain('AgentMachineWebLinkCell');
     expect(agentsMachinesTableSource).not.toContain('data-agent-machine-web-link');
     expect(proxmoxNodesTableSource).not.toContain('data-proxmox-host-web-link');

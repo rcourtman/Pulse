@@ -11,6 +11,7 @@ import {
   getGroupedTableRowCellClass,
   getGroupedTableRowClass,
 } from './groupedTableRowPresentation';
+import { WebInterfaceNameLink } from './WebInterfaceNameLink';
 
 interface NodeGroupHeaderProps {
   node: Node;
@@ -51,16 +52,12 @@ export const NodeGroupHeader: Component<NodeGroupHeaderProps> = (props) => {
         ariaLabel={nodeStatus().label}
         size="xs"
       />
-      <a
-        href={nodeUrl()}
-        target="_blank"
-        rel="noopener noreferrer"
+      <WebInterfaceNameLink
+        name={displayName()}
+        url={nodeUrl()}
         class="transition-colors duration-150 hover:text-sky-600 dark:hover:text-sky-400"
         title={`Open ${props.node.name} web interface`}
-        onClick={(event) => event.stopPropagation()}
-      >
-        {displayName()}
-      </a>
+      />
       <Show when={showActualName()}>
         <span class="text-[10px] text-muted">({props.node.name})</span>
       </Show>
