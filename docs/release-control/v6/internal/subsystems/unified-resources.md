@@ -214,6 +214,14 @@ filter semantics, drawer handoffs, and resource projections, while
 Future platform tables must keep that split: row data and platform semantics
 stay in the unified-resource consumer, and the repeated table shell stays in the
 shared frontend primitive.
+That same split applies to platform row-detail disclosure controls. Platform
+tables own which row opens, which resource label is exposed, and which
+source-specific detail payload or drawer is rendered, but the disclosure
+affordance itself must compose
+`PlatformResourceDetailToggleButton` from the frontend-primitives-owned
+`PlatformResourceDetailTableRow.tsx` contract. Future platform tables must not
+add page-local chevron buttons, bespoke `aria-expanded` handling, or local
+event-propagation variants for row detail expansion.
 Product-originated resource references may arrive as registered unified
 resource IDs, source-specific IDs, or canonical identity aliases. The
 unified-resource registry owns resolving those references through

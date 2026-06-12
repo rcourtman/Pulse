@@ -15,6 +15,7 @@ import {
   type PlatformResourceStatusFilter,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
+import { PlatformResourceDetailToggleButton } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { Resource } from '@/types/resource';
 import { ProxmoxMailGatewayDrawer } from './ProxmoxMailGatewayDrawer';
 
@@ -126,6 +127,7 @@ export const ProxmoxMailGatewayTable: Component<{
                     const version = () => asTrimmedString(pmg()?.version) || '—';
                     const indicator = () => getSimpleStatusIndicator(instance.status);
                     const isOpen = () => selectedId() === instance.id;
+                    const detailRowId = () => `proxmox-mail-gateway-detail-${instance.id}`;
                     return (
                       <>
                         <TableRow
@@ -133,10 +135,17 @@ export const ProxmoxMailGatewayTable: Component<{
                             isOpen() ? 'bg-surface-hover' : ''
                           }`}
                           onClick={() => toggleSelected(instance.id)}
+                          aria-controls={isOpen() ? detailRowId() : undefined}
                           aria-expanded={isOpen()}
                         >
                           <TableCell class={getPlatformTableCellClassForKind('name')}>
                             <div class="flex items-center gap-2 min-w-0">
+                              <PlatformResourceDetailToggleButton
+                                expanded={isOpen()}
+                                resourceLabel={name()}
+                                controlsId={detailRowId()}
+                                onToggle={() => toggleSelected(instance.id)}
+                              />
                               <StatusDot
                                 size="sm"
                                 variant={indicator().variant}
@@ -197,6 +206,7 @@ export const ProxmoxMailGatewayTable: Component<{
                         <Show when={isOpen()}>
                           <TableRow data-inline-detail-for={instance.id}>
                             <TableCell
+                              id={detailRowId()}
                               colspan={10}
                               class="p-0 border-b border-border bg-surface-alt"
                             >

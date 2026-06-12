@@ -17,6 +17,7 @@ import {
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
+  PlatformResourceDetailToggleButton,
   PlatformResourceDetailTableRow,
   createPlatformResourceDetailState,
   createPlatformResourceLabelResolver,
@@ -182,7 +183,9 @@ export const getTrueNASStorageTopologyIndentClass = (depth: number): string => {
   return 'pl-12 sm:pl-16';
 };
 
-const ResourceCell: Component<{ row: TrueNASStorageTopologyRow }> = (props) => {
+const ResourceCell: Component<{ row: TrueNASStorageTopologyRow; detailToggle?: JSX.Element }> = (
+  props,
+) => {
   const displayStatus = () => getTrueNASResourceDisplayStatus(props.row.resource);
   const indicator = () => getSimpleStatusIndicator(displayStatus());
   const name = () => resourceName(props.row.resource);
@@ -193,6 +196,7 @@ const ResourceCell: Component<{ row: TrueNASStorageTopologyRow }> = (props) => {
       )}`}
       data-truenas-storage-indent-depth={props.row.depth}
     >
+      {props.detailToggle}
       <StatusDot size="sm" variant={indicator().variant} title={indicator().label} />
       <div class="min-w-0">
         <div class="truncate font-medium text-base-content" title={name()}>
@@ -310,7 +314,17 @@ export const TrueNASStorageTopologyTable: Component<{
                           tabIndex={0}
                         >
                           <TableCell class={getPlatformTableCellClassForKind('name')}>
-                            <ResourceCell row={row} />
+                            <ResourceCell
+                              row={row}
+                              detailToggle={
+                                <PlatformResourceDetailToggleButton
+                                  expanded={isExpanded()}
+                                  resourceLabel={resourceName(resource())}
+                                  controlsId={detailRowId()}
+                                  onToggle={() => drawer.toggle(resource())}
+                                />
+                              }
+                            />
                           </TableCell>
                           <TableCell class={getPlatformTableCellClassForKind('text')}>
                             <span class="text-base-content">{kindLabel(row.kind)}</span>

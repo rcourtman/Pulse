@@ -18,6 +18,7 @@ import {
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
 } from '@/features/platformPage/sharedPlatformPage';
+import { PlatformResourceDetailToggleButton } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { Disk } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import {
@@ -277,6 +278,12 @@ export const DockerHostsTable: Component<{
                             class={`${getPlatformTableCellClassForKind('name')} w-[40%] md:w-auto`}
                           >
                             <div class="flex min-w-0 items-center gap-2">
+                              <PlatformResourceDetailToggleButton
+                                expanded={isSelected()}
+                                resourceLabel={name()}
+                                controlsId={detailRowId()}
+                                onToggle={toggleDrawer}
+                              />
                               <StatusDot
                                 size="sm"
                                 variant={indicator().variant}

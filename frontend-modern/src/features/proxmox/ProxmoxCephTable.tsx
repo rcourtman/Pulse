@@ -21,6 +21,7 @@ import {
   type PlatformTableFilterOption,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
+import { PlatformResourceDetailToggleButton } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { Resource, ResourceCephServiceMeta } from '@/types/resource';
 import { ProxmoxCephClusterDrawer } from './ProxmoxCephClusterDrawer';
 
@@ -271,6 +272,7 @@ export const ProxmoxCephTable: Component<{
                     const name = asTrimmedString(cluster.name) || cluster.id;
                     const fsid = asTrimmedString(cluster.ceph?.fsid) || '—';
                     const isOpen = () => selectedId() === cluster.id;
+                    const detailRowId = () => `proxmox-ceph-detail-${cluster.id}`;
                     return (
                       <>
                         <TableRow
@@ -278,10 +280,17 @@ export const ProxmoxCephTable: Component<{
                             isOpen() ? 'bg-surface-hover' : ''
                           }`}
                           onClick={() => toggleSelected(cluster.id)}
+                          aria-controls={isOpen() ? detailRowId() : undefined}
                           aria-expanded={isOpen()}
                         >
                           <TableCell class={getPlatformTableCellClassForKind('name')}>
                             <div class="flex items-center gap-2 min-w-0">
+                              <PlatformResourceDetailToggleButton
+                                expanded={isOpen()}
+                                resourceLabel={name}
+                                controlsId={detailRowId()}
+                                onToggle={() => toggleSelected(cluster.id)}
+                              />
                               <span class="font-semibold text-base-content truncate" title={name}>
                                 {name}
                               </span>
@@ -362,6 +371,7 @@ export const ProxmoxCephTable: Component<{
                         <Show when={isOpen()}>
                           <TableRow data-inline-detail-for={cluster.id}>
                             <TableCell
+                              id={detailRowId()}
                               colspan={10}
                               class="p-0 border-b border-border bg-surface-alt"
                             >

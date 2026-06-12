@@ -21,6 +21,7 @@ import {
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
+  PlatformResourceDetailToggleButton,
   createPlatformResourceDetailState,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
@@ -262,7 +263,7 @@ const buildProtectionDetailSections = (point: RecoveryPoint): ProtectionDetailSe
   ]);
 };
 
-const DatasetCell: Component<{ point: RecoveryPoint }> = (props) => {
+const DatasetCell: Component<{ point: RecoveryPoint; detailToggle?: JSX.Element }> = (props) => {
   const status = () => mapTrueNASProtectionStatus(props.point);
   const kind = () => mapTrueNASProtectionKind(props.point);
   const name = () => datasetLabel(props.point);
@@ -270,6 +271,7 @@ const DatasetCell: Component<{ point: RecoveryPoint }> = (props) => {
 
   return (
     <div class="flex min-w-0 items-center gap-2">
+      {props.detailToggle}
       <StatusDot
         size="sm"
         variant={protectionVariant(status())}
@@ -436,7 +438,17 @@ export const TrueNASProtectionTable: Component<{
                               tabIndex={0}
                             >
                               <TableCell class={getPlatformTableCellClassForKind('name')}>
-                                <DatasetCell point={point} />
+                                <DatasetCell
+                                  point={point}
+                                  detailToggle={
+                                    <PlatformResourceDetailToggleButton
+                                      expanded={isExpanded()}
+                                      resourceLabel={datasetLabel(point)}
+                                      controlsId={detailRowId()}
+                                      onToggle={() => detail.toggle(point)}
+                                    />
+                                  }
+                                />
                               </TableCell>
                               <TableCell class={getPlatformTableCellClassForKind('text')}>
                                 <span class="block truncate text-base-content" title={artifact()}>

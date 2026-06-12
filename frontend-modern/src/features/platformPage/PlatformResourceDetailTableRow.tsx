@@ -1,6 +1,7 @@
 import { Show, createSignal, type Component, type JSX } from 'solid-js';
 import { ResourceDetailDrawer } from '@/components/Infrastructure/ResourceDetailDrawer';
 import { hasTrueNASDetailSections } from '@/components/Infrastructure/resourceDetailDrawerTrueNASModel';
+import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButton';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import type { Resource } from '@/types/resource';
 import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
@@ -24,6 +25,23 @@ export const PLATFORM_RESOURCE_DETAIL_ROW_CLASS =
 
 export const getPlatformResourceDetailRowClass = (expanded: boolean): string =>
   `${PLATFORM_RESOURCE_DETAIL_ROW_CLASS}${expanded ? ' bg-surface-hover' : ''}`;
+
+export const PlatformResourceDetailToggleButton: Component<{
+  expanded: boolean;
+  resourceLabel: string;
+  controlsId?: string;
+  class?: string;
+  onToggle: () => void;
+}> = (props) => (
+  <SummaryRowActionButton
+    kind="disclosure"
+    expanded={props.expanded}
+    subjectLabel={`details for ${props.resourceLabel}`}
+    controlsId={props.controlsId}
+    class={props.class}
+    onAction={props.onToggle}
+  />
+);
 
 export function createPlatformResourceDetailState(options: {
   idPrefix: string;

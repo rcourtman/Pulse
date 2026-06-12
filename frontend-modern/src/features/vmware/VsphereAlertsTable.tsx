@@ -13,6 +13,7 @@ import {
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
+  PlatformResourceDetailToggleButton,
   createPlatformResourceDetailState,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
@@ -283,6 +284,12 @@ export const VsphereAlertsTable: Component<{
                         >
                           <TableCell class={getPlatformTableCellClassForKind('name')}>
                             <div class="flex min-w-0 items-center gap-2">
+                              <PlatformResourceDetailToggleButton
+                                expanded={isExpanded()}
+                                resourceLabel={incident.resourceName}
+                                controlsId={detailRowId()}
+                                onToggle={() => drawer.toggle(incident)}
+                              />
                               <StatusDot
                                 size="sm"
                                 variant={severityVariant(incident.severityBucket)}

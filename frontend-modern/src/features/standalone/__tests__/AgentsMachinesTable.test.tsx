@@ -443,18 +443,20 @@ describe('AgentsMachinesTable', () => {
       />
     ));
 
-    const icon = container.querySelector('[data-agent-machine-expand-icon]');
-    expect(icon).not.toBeNull();
-    expect(icon).not.toHaveClass('rotate-90');
+    expect(
+      screen.getByRole('button', { name: 'Expand details for Expandable Machine' }),
+    ).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByTestId('resource-detail-drawer')).not.toBeInTheDocument();
 
     const row = container.querySelector('[data-agents-machine-row="expandable-machine"]');
     expect(row).not.toBeNull();
-    if (!row || !icon) return;
+    if (!row) return;
 
     await fireEvent.click(row);
 
-    expect(icon).toHaveClass('rotate-90');
+    expect(
+      screen.getByRole('button', { name: 'Collapse details for Expandable Machine' }),
+    ).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByTestId('resource-detail-drawer')).toBeInTheDocument();
   });
 

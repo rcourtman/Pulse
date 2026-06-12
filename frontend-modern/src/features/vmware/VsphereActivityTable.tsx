@@ -13,6 +13,7 @@ import {
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
+  PlatformResourceDetailToggleButton,
   createPlatformResourceDetailState,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
@@ -287,6 +288,12 @@ export const VsphereActivityTable: Component<{
                         >
                           <TableCell class={getPlatformTableCellClassForKind('name')}>
                             <div class="flex min-w-0 items-center gap-2">
+                              <PlatformResourceDetailToggleButton
+                                expanded={isExpanded()}
+                                resourceLabel={activity.resourceName}
+                                controlsId={detailRowId()}
+                                onToggle={() => drawer.toggle(activity)}
+                              />
                               <StatusDot
                                 size="sm"
                                 variant={activityStateVariant(activity.stateBucket)}

@@ -1,5 +1,4 @@
 import { For, Show, type Accessor, type JSX } from 'solid-js';
-import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
 
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
@@ -11,6 +10,7 @@ import {
   getPlatformTableHeadClassForKind,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
+import { PlatformResourceDetailToggleButton } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { StatusIndicatorVariant } from '@/utils/status';
 
 import {
@@ -212,6 +212,7 @@ export function ProxmoxCoverageTable(props: {
                   [...row.artifacts]
                     .sort((left, right) => (right.createdMs ?? 0) - (left.createdMs ?? 0))
                     .slice(0, 8);
+                const detailRowId = () => `proxmox-coverage-evidence-${row.key}`;
                 return (
                   <>
                     <TableRow class="hover:bg-surface-hover">
@@ -219,20 +220,12 @@ export function ProxmoxCoverageTable(props: {
                         class={`${getPlatformTableCellClassForKind('name')} text-base-content`}
                       >
                         <div class="flex min-w-0 items-start gap-2">
-                          <button
-                            type="button"
-                            class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-sm text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
-                            onClick={() => props.onToggleExpand(row.key)}
-                            aria-label={`${isExpanded() ? 'Hide' : 'Show'} restore evidence for ${row.workload.label}`}
-                            aria-expanded={isExpanded()}
-                          >
-                            <ChevronRightIcon
-                              class={`h-3.5 w-3.5 transition-transform ${
-                                isExpanded() ? 'rotate-90' : ''
-                              }`}
-                              aria-hidden="true"
-                            />
-                          </button>
+                          <PlatformResourceDetailToggleButton
+                            expanded={isExpanded()}
+                            resourceLabel={row.workload.label}
+                            controlsId={detailRowId()}
+                            onToggle={() => props.onToggleExpand(row.key)}
+                          />
                           <div class="min-w-0">
                             <span class="block truncate font-semibold">
                               {row.workload.name || row.workload.label}
@@ -361,8 +354,8 @@ export function ProxmoxCoverageTable(props: {
                       </Show>
                     </TableRow>
                     <Show when={isExpanded()}>
-                      <TableRow class="bg-surface-alt/40">
-                        <TableCell class="px-3 py-2" colspan={columnCount()}>
+                      <TableRow class="bg-surface-alt/40" data-inline-detail-for={row.key}>
+                        <TableCell id={detailRowId()} class="px-3 py-2" colspan={columnCount()}>
                           <Show
                             when={evidence().length > 0}
                             fallback={

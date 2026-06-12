@@ -12,6 +12,7 @@ import {
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
+  PlatformResourceDetailToggleButton,
   createPlatformResourceDetailState,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
@@ -252,6 +253,12 @@ export const TrueNASServicesTable: Component<{
                         >
                           <TableCell class={getPlatformTableCellClassForKind('name')}>
                             <div class="flex min-w-0 items-center gap-2">
+                              <PlatformResourceDetailToggleButton
+                                expanded={isExpanded()}
+                                resourceLabel={formatServiceName(row.service.service)}
+                                controlsId={detailRowId()}
+                                onToggle={() => detail.toggle(row)}
+                              />
                               <StatusDot
                                 size="sm"
                                 variant={serviceStatusVariant(status())}

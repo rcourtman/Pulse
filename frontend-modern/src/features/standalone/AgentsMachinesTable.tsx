@@ -1,4 +1,3 @@
-import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
 import Loader2Icon from 'lucide-solid/icons/loader-2';
 import MoreHorizontalIcon from 'lucide-solid/icons/more-horizontal';
 import Trash2Icon from 'lucide-solid/icons/trash-2';
@@ -31,6 +30,7 @@ import {
   hostAgentVersion,
 } from '@/features/platformPage/agentVersion';
 import {
+  PlatformResourceDetailToggleButton,
   PlatformResourceDetailTableRow,
   createPlatformResourceDetailState,
   getPlatformResourceDetailRowClass,
@@ -1514,11 +1514,11 @@ export const AgentsMachinesTable: Component<{
                             class={`${getPlatformTableCellClassForKind('name')} ${machineColumnWidthClass('machine')}`}
                           >
                             <div class="flex min-w-0 items-center gap-2">
-                              <ChevronRightIcon
-                                data-agent-machine-expand-icon
-                                class="h-3.5 w-3.5 shrink-0 text-muted transition-transform duration-150"
-                                classList={{ 'rotate-90': isExpanded() }}
-                                aria-hidden="true"
+                              <PlatformResourceDetailToggleButton
+                                expanded={isExpanded()}
+                                resourceLabel={name()}
+                                controlsId={detailRowId()}
+                                onToggle={toggleDetails}
                               />
                               <StatusDot
                                 size="sm"

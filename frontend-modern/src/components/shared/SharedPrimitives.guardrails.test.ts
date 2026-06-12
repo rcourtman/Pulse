@@ -92,6 +92,7 @@ import webInterfaceUrlFieldStateSource from '@/components/shared/useWebInterface
 import webInterfaceNameLinkSource from '@/components/shared/WebInterfaceNameLink.tsx?raw';
 import sharedTemplateRegistrySource from '../../../scripts/shared-template-registry.json?raw';
 import sharedPlatformPageSource from '@/features/platformPage/sharedPlatformPage.tsx?raw';
+import platformResourceDetailTableRowSource from '@/features/platformPage/PlatformResourceDetailTableRow.tsx?raw';
 import upgradeNavigationSource from '@/utils/upgradeNavigation.ts?raw';
 import guestRowSource from '@/components/Workloads/GuestRow.tsx?raw';
 import workloadsTableSource from '@/components/Workloads/WorkloadsTable.tsx?raw';
@@ -100,6 +101,7 @@ import guestRowStateSource from '@/components/Workloads/useGuestRowState.ts?raw'
 import workloadSelectionStateSource from '@/components/Workloads/useWorkloadSelectionState.ts?raw';
 import dockerHostsTableSource from '@/features/docker/DockerHostsTable.tsx?raw';
 import kubernetesNodesTableSource from '@/features/kubernetes/KubernetesNodesTable.tsx?raw';
+import proxmoxCoverageTableSource from '@/features/proxmox/ProxmoxCoverageTable.tsx?raw';
 import proxmoxNodesTableSource from '@/features/proxmox/ProxmoxNodesTable.tsx?raw';
 import vsphereHostsTableSource from '@/features/vmware/VsphereHostsTable.tsx?raw';
 import agentsMachinesTableSource from '@/features/standalone/AgentsMachinesTable.tsx?raw';
@@ -626,6 +628,8 @@ describe('shared primitive guardrails', () => {
     expect(summaryRowActionButtonSource).toContain('aria-expanded');
     expect(summaryRowActionButtonSource).toContain('aria-pressed');
     expect(summaryRowActionButtonSource).toContain('data-row-action="true"');
+    expect(platformResourceDetailTableRowSource).toContain('PlatformResourceDetailToggleButton');
+    expect(platformResourceDetailTableRowSource).toContain('SummaryRowActionButton');
 
     for (const source of [
       guestRowSource,
@@ -979,6 +983,54 @@ describe('shared primitive guardrails', () => {
       expect(source).not.toContain('TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}');
       expect(source).not.toContain('TableBody class={PLATFORM_TABLE_BODY_CLASS}');
     }
+  });
+
+  it('keeps platform row-detail disclosure controls on the shared toggle primitive', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      requiredPatternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        triggerPatterns?: string[];
+        requiredPatterns?: string[];
+        allowedPaths?: string[];
+      }>;
+    };
+    const requiredGuards = registry.requiredPatternGuards ?? [];
+    const sharedStateGuard = requiredGuards.find(
+      (guard) => guard.id === 'platform-row-detail-toggle-shared-state',
+    );
+    const inlineDetailGuard = requiredGuards.find(
+      (guard) => guard.id === 'platform-row-detail-toggle-inline-detail',
+    );
+
+    for (const guard of [sharedStateGuard, inlineDetailGuard]) {
+      expect(guard?.canonical?.path).toBe(
+        'src/features/platformPage/PlatformResourceDetailTableRow.tsx',
+      );
+      expect(guard?.canonical?.export).toBe('PlatformResourceDetailToggleButton');
+      expect(guard?.requiredPatterns).toContain('PlatformResourceDetailToggleButton');
+      expect(guard?.allowedPaths ?? []).toHaveLength(0);
+    }
+    expect(sharedStateGuard?.triggerPatterns).toContain('createPlatformResourceDetailState');
+    expect(inlineDetailGuard?.triggerPatterns).toEqual(['data-inline', 'aria-expanded']);
+
+    expect(platformResourceDetailTableRowSource).toContain(
+      'export const PlatformResourceDetailToggleButton',
+    );
+    expect(platformResourceDetailTableRowSource).toContain('subjectLabel={`details for');
+    expect(platformResourceDetailTableRowSource).toContain('SummaryRowActionButton');
+
+    for (const source of [
+      dockerHostsTableSource,
+      kubernetesNodesTableSource,
+      proxmoxCoverageTableSource,
+      proxmoxNodesTableSource,
+      vsphereHostsTableSource,
+      agentsMachinesTableSource,
+    ]) {
+      expect(source).toContain('PlatformResourceDetailToggleButton');
+    }
+    expect(agentsMachinesTableSource).not.toContain('data-agent-machine-expand-icon');
   });
 
   it('keeps help icon on shell, runtime, and model owners', () => {

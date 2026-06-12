@@ -12,6 +12,9 @@ const toRegistryPath = (path) => relative(root, path).split('\\').join('/');
 const registry = readJson(registryPath);
 const rules = Array.isArray(registry.rules) ? registry.rules : [];
 const patternGuards = Array.isArray(registry.patternGuards) ? registry.patternGuards : [];
+const requiredPatternGuards = Array.isArray(registry.requiredPatternGuards)
+  ? registry.requiredPatternGuards
+  : [];
 
 const failures = [];
 
@@ -156,6 +159,79 @@ for (const guard of patternGuards) {
   }
 }
 
+for (const guard of requiredPatternGuards) {
+  if (!guard.id) failures.push('required pattern guard is missing id');
+  if (!guard.summary) failures.push(`${guard.id}: missing summary`);
+  if (!guard.category) failures.push(`${guard.id}: missing category`);
+  if (!guard.canonical?.path) failures.push(`${guard.id}: missing canonical.path`);
+
+  if (!guard.id || !guard.canonical?.path) continue;
+
+  verifyCanonicalExport(guard.id, guard.canonical);
+
+  const triggerPatterns = Array.isArray(guard.triggerPatterns) ? guard.triggerPatterns : [];
+  if (triggerPatterns.length === 0) {
+    failures.push(`${guard.id}: missing triggerPatterns`);
+    continue;
+  }
+
+  const requiredPatterns = Array.isArray(guard.requiredPatterns) ? guard.requiredPatterns : [];
+  if (requiredPatterns.length === 0) {
+    failures.push(`${guard.id}: missing requiredPatterns`);
+    continue;
+  }
+
+  const scopes = Array.isArray(guard.scopes) ? guard.scopes : [];
+  if (scopes.length === 0) {
+    failures.push(`${guard.id}: missing scopes`);
+    continue;
+  }
+
+  const extensions = guard.extensions ?? ['.ts', '.tsx'];
+  const allowedEntries = guard.allowedPaths ?? [];
+  const allowedPaths = new Set(allowedEntries.map(getAllowedPath).filter(Boolean));
+  const files = [...new Set(scopes.flatMap((scope) => collectFiles(scope, extensions)))].sort();
+
+  for (const file of files) {
+    if (file === guard.canonical.path) continue;
+
+    const source = read(file);
+    const triggered = triggerPatterns.every((pattern) => source.includes(pattern));
+    if (!triggered) continue;
+
+    if (allowedPaths.has(file)) continue;
+
+    for (const pattern of requiredPatterns) {
+      if (!source.includes(pattern)) {
+        failures.push(
+          `${guard.id}: ${file} matches ${JSON.stringify(
+            triggerPatterns,
+          )} but does not compose ${guard.canonical.path}`,
+        );
+        break;
+      }
+    }
+  }
+
+  for (const allowedPath of allowedPaths) {
+    if (!fileExists(allowedPath)) {
+      failures.push(`${guard.id}: allowed path ${allowedPath} does not exist`);
+      continue;
+    }
+
+    if (allowedPath === guard.canonical.path) {
+      failures.push(`${guard.id}: canonical path ${allowedPath} must not be allowlisted`);
+      continue;
+    }
+
+    const source = read(allowedPath);
+    const stillTriggered = triggerPatterns.every((pattern) => source.includes(pattern));
+    if (!stillTriggered) {
+      failures.push(`${guard.id}: allowed path ${allowedPath} is stale; remove it from the guard`);
+    }
+  }
+}
+
 if (failures.length > 0) {
   console.error('Shared template audit failed:');
   for (const failure of failures) {
@@ -167,7 +243,9 @@ if (failures.length > 0) {
 console.log(
   `Shared template audit passed (${rules.length} rule${rules.length === 1 ? '' : 's'}, ${
     patternGuards.length
-  } pattern guard${patternGuards.length === 1 ? '' : 's'} from ${relative(
+  } pattern guard${patternGuards.length === 1 ? '' : 's'}, ${
+    requiredPatternGuards.length
+  } required pattern guard${requiredPatternGuards.length === 1 ? '' : 's'} from ${relative(
     process.cwd(),
     resolve(root, registryPath),
   )})`,

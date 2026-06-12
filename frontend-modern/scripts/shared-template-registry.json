@@ -66,5 +66,57 @@
         "scripts/shared-template-audit.mjs"
       ]
     }
+  ],
+  "requiredPatternGuards": [
+    {
+      "id": "platform-row-detail-toggle-shared-state",
+      "category": "row-disclosure",
+      "summary": "Platform rows using shared resource-detail expansion state must render the canonical disclosure toggle instead of relying on row-only click behavior or local chevrons.",
+      "canonical": {
+        "path": "src/features/platformPage/PlatformResourceDetailTableRow.tsx",
+        "export": "PlatformResourceDetailToggleButton"
+      },
+      "scopes": [
+        "src/features/docker",
+        "src/features/kubernetes",
+        "src/features/proxmox",
+        "src/features/standalone",
+        "src/features/truenas",
+        "src/features/vmware"
+      ],
+      "extensions": [".tsx"],
+      "triggerPatterns": ["createPlatformResourceDetailState"],
+      "requiredPatterns": ["PlatformResourceDetailToggleButton"],
+      "allowedPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-row-detail-toggle-inline-detail",
+      "category": "row-disclosure",
+      "summary": "Platform tables that render page-local inline detail rows must compose the canonical disclosure toggle in the owning row.",
+      "canonical": {
+        "path": "src/features/platformPage/PlatformResourceDetailTableRow.tsx",
+        "export": "PlatformResourceDetailToggleButton"
+      },
+      "scopes": [
+        "src/features/docker",
+        "src/features/kubernetes",
+        "src/features/proxmox",
+        "src/features/standalone",
+        "src/features/truenas",
+        "src/features/vmware"
+      ],
+      "extensions": [".tsx"],
+      "triggerPatterns": ["data-inline", "aria-expanded"],
+      "requiredPatterns": ["PlatformResourceDetailToggleButton"],
+      "allowedPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    }
   ]
 }

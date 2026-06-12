@@ -244,7 +244,7 @@ describe('ProxmoxBackupsTable', () => {
 
     // Per-source detail is one click down inside the workload's row.
     await fireEvent.click(
-      screen.getByRole('button', { name: /show restore evidence for pbs-docker/i }),
+      screen.getByRole('button', { name: /expand details for pbs-docker/i }),
     );
     expect(screen.getByText('Restore evidence')).toBeInTheDocument();
     expect(screen.getAllByText('PVE file').length).toBeGreaterThan(0);

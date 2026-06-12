@@ -34,6 +34,7 @@ import {
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
 } from '@/features/platformPage/sharedPlatformPage';
+import { PlatformResourceDetailToggleButton } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import { type WorkloadsMetricDisplayMode } from '@/components/Workloads/workloadsFilterModel';
 import { type WorkloadTableMetricHistoryRange } from '@/components/Workloads/workloadMetricHistoryModel';
 import type { Disk, Node as LegacyNode } from '@/types/api';
@@ -368,6 +369,12 @@ export const ProxmoxNodesTable: Component<{
                     return (
                       <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
                         <div class="flex min-w-0 items-center gap-2">
+                          <PlatformResourceDetailToggleButton
+                            expanded={isSelected()}
+                            resourceLabel={name()}
+                            controlsId={detailRowId()}
+                            onToggle={toggleNodeDrawer}
+                          />
                           <StatusDot
                             size="sm"
                             variant={indicator().variant}

@@ -19,6 +19,7 @@ import {
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
+  PlatformResourceDetailToggleButton,
   PlatformResourceDetailTableRow,
   createPlatformResourceDetailState,
   createPlatformResourceLabelResolver,
@@ -28,6 +29,7 @@ import {
   DockerResourceNameCell,
   dockerHostName,
   dockerJoinValues,
+  dockerResourceName,
   dockerTextValue,
   type DockerNativeTableProps,
 } from './DockerNativeTableShared';
@@ -368,7 +370,18 @@ export const DockerContainersTable: Component<DockerNativeTableProps> = (props) 
                       switch (column.id) {
                         case 'container':
                           return (
-                            <DockerResourceNameCell resource={resource} indicator={indicator} />
+                            <DockerResourceNameCell
+                              resource={resource}
+                              indicator={indicator}
+                              detailToggle={
+                                <PlatformResourceDetailToggleButton
+                                  expanded={isExpanded()}
+                                  resourceLabel={dockerResourceName(resource)}
+                                  controlsId={detailRowId()}
+                                  onToggle={() => drawer.toggle(resource)}
+                                />
+                              }
+                            />
                           );
                         case 'host':
                           return (

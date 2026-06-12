@@ -12,6 +12,7 @@ import {
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
+  PlatformResourceDetailToggleButton,
   createPlatformResourceDetailState,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
@@ -20,6 +21,7 @@ import {
   DockerResourceNameCell,
   dockerHostName,
   dockerJoinValues,
+  dockerResourceName,
   dockerTextValue,
   type DockerNativeTableProps,
 } from './DockerNativeTableShared';
@@ -445,7 +447,17 @@ export const DockerNetworksTable: Component<DockerNetworksTableProps> = (props) 
                           onKeyDown={drawer.handleActivationKey(resource)}
                           tabIndex={0}
                         >
-                          <DockerResourceNameCell resource={resource} />
+                          <DockerResourceNameCell
+                            resource={resource}
+                            detailToggle={
+                              <PlatformResourceDetailToggleButton
+                                expanded={isExpanded()}
+                                resourceLabel={dockerResourceName(resource)}
+                                controlsId={detailRowId()}
+                                onToggle={() => drawer.toggle(resource)}
+                              />
+                            }
+                          />
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >

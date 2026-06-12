@@ -3142,6 +3142,7 @@
         "frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx",
         "frontend-modern/src/components/SetupWizard/SetupWizard.tsx",
         "frontend-modern/src/components/Toast/Toast.tsx",
+        "frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx",
         "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx",
         "frontend-modern/src/hooks/createNonSuspendingQuery.ts",
         "frontend-modern/src/index.css",
@@ -3576,6 +3577,7 @@
             "match_files": [
               "frontend-modern/scripts/shared-template-audit.mjs",
               "frontend-modern/scripts/shared-template-registry.json",
+              "frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx",
               "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx"
             ],
             "allow_same_subsystem_tests": false,

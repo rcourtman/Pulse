@@ -156,6 +156,7 @@ work extends shared components instead of creating new local variants.
 129. `frontend-modern/scripts/shared-template-audit.mjs`
 130. `frontend-modern/scripts/shared-template-registry.json`
 131. `frontend-modern/src/features/platformPage/sharedPlatformPage.tsx`
+131a. `frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx`
 132. `frontend-modern/src/utils/platformSupportManifest.generated.ts`
 133. `frontend-modern/src/utils/platformSupportManifest.ts`
 134. `frontend-modern/src/utils/sourcePlatformOptions.ts`
@@ -2382,6 +2383,14 @@ divide frame locally. Platform table consumers must preserve the owner split:
 frontend-primitives owns the repeated `PlatformTableShell` frame and guardrail
 registry, while platform and unified-resource consumers own the source-specific
 row fields, drawers, and resource semantics.
+Platform row-detail disclosure controls are also registry-backed templates.
+`frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx`
+owns `PlatformResourceDetailToggleButton`, which composes
+`SummaryRowActionButton` for the canonical row-detail affordance, accessible
+label, `aria-expanded`, `aria-controls`, and propagation containment. Platform
+tables that use `createPlatformResourceDetailState` or render local inline
+detail rows must compose that toggle; they may still own the detail row content,
+drawer payload, and platform-specific fields.
 The shared help icon now follows that same owner split.
 `frontend-modern/src/components/shared/HelpIcon.tsx` stays the render shell,
 `frontend-modern/src/components/shared/useHelpIconState.ts` owns open state,

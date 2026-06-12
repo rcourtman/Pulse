@@ -13,6 +13,7 @@ import {
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
+  PlatformResourceDetailToggleButton,
   PlatformResourceDetailTableRow,
   createPlatformResourceDetailState,
   createPlatformResourceLabelResolver,
@@ -182,6 +183,12 @@ export const KubernetesAutoscalingTable: Component<{
                         >
                           <TableCell class={getPlatformTableCellClassForKind('name')}>
                             <div class="flex min-w-0 items-center gap-2">
+                              <PlatformResourceDetailToggleButton
+                                expanded={isExpanded()}
+                                resourceLabel={name()}
+                                controlsId={detailRowId()}
+                                onToggle={() => drawer.toggle(resource)}
+                              />
                               <StatusDot
                                 size="sm"
                                 variant={indicator().variant}

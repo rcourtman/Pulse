@@ -55,7 +55,7 @@ export const dockerLabelsSummary = (labels: Record<string, string> | undefined):
 export const dockerHostName = (resource: Resource): string =>
   dockerTextValue(resource.docker?.hostname);
 
-const dockerResourceName = (resource: Resource): string =>
+export const dockerResourceName = (resource: Resource): string =>
   asTrimmedString(resource.name) || asTrimmedString(resource.displayName) || resource.id;
 
 export const DockerResourceNameCell: Component<{
@@ -64,6 +64,7 @@ export const DockerResourceNameCell: Component<{
   // domain-specific mapper (mapDockerContainerStatus, mapDockerTaskStatus,
   // etc.) rather than from the generic resource.status triad.
   indicator?: StatusIndicator;
+  detailToggle?: JSX.Element;
 }> = (props) => {
   const resolvedIndicator = (): StatusIndicator =>
     props.indicator ?? getSimpleStatusIndicator(props.resource.status);
@@ -72,6 +73,7 @@ export const DockerResourceNameCell: Component<{
   return (
     <TableCell class={getPlatformTableCellClassForKind('name')}>
       <div class="flex min-w-0 items-center gap-2">
+        {props.detailToggle}
         <StatusDot
           size="sm"
           variant={resolvedIndicator().variant}
