@@ -135,6 +135,7 @@ const ALLOWLIST = new Set([
   'src/utils/systemLogsPresentation.ts',
   'src/utils/systemSettingsPresentation.ts',
   'src/utils/settingsShellPresentation.ts',
+  'src/i18n/messages.ts',
   'src/utils/updatesPresentation.ts',
   'src/utils/alertThresholdsPresentation.ts',
   'src/utils/environmentLockPresentation.ts',
