@@ -86,13 +86,24 @@ const renderInRouter = (component: () => JSX.Element) =>
     </Router>
   ));
 
+const setViewportWidth = (width: number) => {
+  Object.defineProperty(window, 'innerWidth', {
+    configurable: true,
+    writable: true,
+    value: width,
+  });
+};
+
 afterEach(() => {
+  setViewportWidth(1024);
   cleanup();
   vi.clearAllMocks();
 });
 
 describe('Docker native tables', () => {
   it('renders Docker container API fields', () => {
+    setViewportWidth(1500);
+
     renderInRouter(() => (
       <DockerContainersTable
         resources={[

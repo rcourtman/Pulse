@@ -1,11 +1,13 @@
-import { For, Show, createMemo, type Component } from 'solid-js';
+import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { useSearchParams } from '@solidjs/router';
 import type { FilterDef } from '@/components/shared/FilterBar';
 import { UpdateButton } from '@/components/shared/ContainerUpdateBadge';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
+import { getWorkloadTableLayoutMode } from '@/components/Workloads/guestRowModel';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
 import {
   Table,
   TableBody,
@@ -47,6 +49,12 @@ import {
   mapDockerContainerStatus,
   type DockerResourceStatusFilter,
 } from './dockerPageModel';
+import {
+  getDockerContainerColumnWidthStyle,
+  getDockerContainerTableMinWidthClass,
+  getDockerContainerVisibleColumnsForLayout,
+  type DockerContainerTableColumn,
+} from './dockerContainerTableModel';
 import type { DockerContainerUpdateStatus } from '@/types/api';
 import type { Resource } from '@/types/resource';
 
@@ -182,6 +190,8 @@ const containerUpdateAction = (
 };
 
 export const DockerContainersTable: Component<DockerNativeTableProps> = (props) => {
+  const breakpoint = useBreakpoint();
+  const layoutMode = createMemo(() => getWorkloadTableLayoutMode(breakpoint.width()));
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
     initialStatus: 'all' as DockerResourceStatusFilter,
@@ -241,7 +251,11 @@ export const DockerContainersTable: Component<DockerNativeTableProps> = (props) 
     }
     return kinds.size > 1;
   });
-  const drawerColSpan = createMemo(() => (showRuntimeColumn() ? 13 : 12));
+  const visibleColumns = createMemo(() =>
+    getDockerContainerVisibleColumnsForLayout(layoutMode(), showRuntimeColumn()),
+  );
+  const visibleColumnIds = createMemo(() => visibleColumns().map((column) => column.id));
+  const drawerColSpan = createMemo(() => visibleColumns().length);
   const drawer = createPlatformResourceDetailState({ idPrefix: 'docker-container-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
 
@@ -287,69 +301,32 @@ export const DockerContainersTable: Component<DockerNativeTableProps> = (props) 
         >
           <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
             <TableCardHeader title={props.title ?? 'Containers'} />
-            <Table class="min-w-[1010px] table-fixed text-xs md:min-w-[1900px]">
+            <Table class={`${getDockerContainerTableMinWidthClass()} table-fixed text-xs`}>
+              <colgroup>
+                <For each={visibleColumns()}>
+                  {(column) => (
+                    <col
+                      style={getDockerContainerColumnWidthStyle(
+                        column.id,
+                        layoutMode(),
+                        visibleColumnIds(),
+                      )}
+                    />
+                  )}
+                </For>
+              </colgroup>
               <TableHeader>
                 <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} w-[220px]`}>
-                    Container
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[140px]`}
-                  >
-                    Host
-                  </TableHead>
-                  <Show when={showRuntimeColumn()}>
-                    <TableHead
-                      class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[130px]`}
-                    >
-                      Runtime
-                    </TableHead>
-                  </Show>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} w-[260px]`}>
-                    Image
-                  </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} w-[100px]`}>
-                    State
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[100px]`}
-                  >
-                    Health
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('metric-bar')} w-[110px] md:w-[140px]`}
-                  >
-                    CPU
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('metric-bar')} w-[110px] md:w-[140px]`}
-                  >
-                    <span class="md:hidden">Mem</span>
-                    <span class="hidden md:inline">Memory</span>
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} w-[110px]`}
-                  >
-                    Restarts
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[190px]`}
-                  >
-                    Ports
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[150px]`}
-                  >
-                    Networks
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[180px]`}
-                  >
-                    Mounts
-                  </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} w-[130px]`}>
-                    Updates
-                  </TableHead>
+                  <For each={visibleColumns()}>
+                    {(column) => (
+                      <TableHead class={getPlatformTableHeadClassForKind(column.kind)}>
+                        <Show when={column.id === 'memory'} fallback={<>{column.label}</>}>
+                          <span class="md:hidden">Mem</span>
+                          <span class="hidden md:inline">Memory</span>
+                        </Show>
+                      </TableHead>
+                    )}
+                  </For>
                 </TableRow>
               </TableHeader>
               <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
@@ -379,6 +356,173 @@ export const DockerContainersTable: Component<DockerNativeTableProps> = (props) 
                     const action = containerUpdateAction(resource);
                     const detailRowId = () => drawer.detailRowId(resource);
                     const isExpanded = () => drawer.isExpanded(resource);
+                    const renderColumnCell = (column: DockerContainerTableColumn): JSX.Element => {
+                      switch (column.id) {
+                        case 'container':
+                          return (
+                            <DockerResourceNameCell resource={resource} indicator={indicator} />
+                          );
+                        case 'host':
+                          return (
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content`}
+                            >
+                              <span class="block max-w-full truncate" title={host()}>
+                                {host()}
+                              </span>
+                            </TableCell>
+                          );
+                        case 'runtime':
+                          return (
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content`}
+                            >
+                              <span class="block max-w-full truncate" title={runtime()}>
+                                {runtime()}
+                              </span>
+                            </TableCell>
+                          );
+                        case 'image':
+                          return (
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content`}
+                            >
+                              <span class="block max-w-full truncate" title={image()}>
+                                {image()}
+                              </span>
+                            </TableCell>
+                          );
+                        case 'state':
+                          return (
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content`}
+                            >
+                              <span class="block max-w-full truncate" title={state()}>
+                                {state()}
+                              </span>
+                            </TableCell>
+                          );
+                        case 'health':
+                          return (
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content`}
+                            >
+                              <span class="block max-w-full truncate" title={health()}>
+                                {health()}
+                              </span>
+                            </TableCell>
+                          );
+                        case 'cpu':
+                          return (
+                            <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
+                              <ResponsiveMetricCell
+                                class="w-full"
+                                value={cpuPercent() ?? 0}
+                                type="cpu"
+                                resourceId={metricsKey()}
+                                isRunning={running() && cpuPercent() !== undefined}
+                                showMobile={false}
+                              />
+                            </TableCell>
+                          );
+                        case 'memory':
+                          return (
+                            <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
+                              <Show
+                                when={running() && hasMemoryMetric()}
+                                fallback={metricFallback()}
+                              >
+                                <StackedMemoryBar
+                                  used={memoryUsed()}
+                                  total={memoryTotal()}
+                                  percentOnly={memoryPercentOnly()}
+                                />
+                              </Show>
+                            </TableCell>
+                          );
+                        case 'restarts':
+                          return (
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content`}
+                            >
+                              <Show
+                                when={typeof resource.docker?.restartCount === 'number'}
+                                fallback={<span>—</span>}
+                              >
+                                <span
+                                  class={`tabular-nums ${
+                                    restartCount() > RESTART_ATTENTION_THRESHOLD
+                                      ? 'font-medium text-red-600 dark:text-red-400'
+                                      : ''
+                                  }`}
+                                >
+                                  {resource.docker?.restartCount}
+                                </span>
+                              </Show>
+                            </TableCell>
+                          );
+                        case 'ports':
+                          return (
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content`}
+                            >
+                              <span
+                                class="block max-w-full truncate font-mono text-[11px]"
+                                title={ports()}
+                              >
+                                {ports()}
+                              </span>
+                            </TableCell>
+                          );
+                        case 'networks':
+                          return (
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content`}
+                            >
+                              <span class="block max-w-full truncate" title={networks()}>
+                                {networks()}
+                              </span>
+                            </TableCell>
+                          );
+                        case 'mounts':
+                          return (
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content`}
+                            >
+                              <span class="block max-w-full truncate" title={mounts()}>
+                                {mounts()}
+                              </span>
+                            </TableCell>
+                          );
+                        case 'updates':
+                          return (
+                            <TableCell
+                              class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content`}
+                            >
+                              <Show
+                                when={action}
+                                fallback={
+                                  <span class="block max-w-full truncate" title={updateTitle()}>
+                                    {updates()}
+                                  </span>
+                                }
+                              >
+                                {(updateAction) => (
+                                  <UpdateButton
+                                    agentId={updateAction().agentId}
+                                    containerId={updateAction().containerId}
+                                    containerName={updateAction().containerName}
+                                    updateStatus={updateAction().updateStatus}
+                                  />
+                                )}
+                              </Show>
+                            </TableCell>
+                          );
+                        default:
+                          column.id satisfies never;
+                          return <></>;
+                      }
+                    };
 
                     return (
                       <>
@@ -391,129 +535,7 @@ export const DockerContainersTable: Component<DockerNativeTableProps> = (props) 
                           onKeyDown={drawer.handleActivationKey(resource)}
                           tabIndex={0}
                         >
-                          <DockerResourceNameCell resource={resource} indicator={indicator} />
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                          >
-                            <span class="block max-w-full truncate" title={host()}>
-                              {host()}
-                            </span>
-                          </TableCell>
-                          <Show when={showRuntimeColumn()}>
-                            <TableCell
-                              class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                            >
-                              <span class="block max-w-full truncate" title={runtime()}>
-                                {runtime()}
-                              </span>
-                            </TableCell>
-                          </Show>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                          >
-                            <span class="block max-w-full truncate" title={image()}>
-                              {image()}
-                            </span>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                          >
-                            {state()}
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                          >
-                            {health()}
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('metric-bar')} w-[110px] md:w-auto`}
-                          >
-                            <ResponsiveMetricCell
-                              class="w-full"
-                              value={cpuPercent() ?? 0}
-                              type="cpu"
-                              resourceId={metricsKey()}
-                              isRunning={running() && cpuPercent() !== undefined}
-                              showMobile={false}
-                            />
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('metric-bar')} w-[110px] md:w-auto`}
-                          >
-                            <Show
-                              when={running() && hasMemoryMetric()}
-                              fallback={metricFallback()}
-                            >
-                              <StackedMemoryBar
-                                used={memoryUsed()}
-                                total={memoryTotal()}
-                                percentOnly={memoryPercentOnly()}
-                              />
-                            </Show>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                          >
-                            <Show
-                              when={typeof resource.docker?.restartCount === 'number'}
-                              fallback={<span>—</span>}
-                            >
-                              <span
-                                class={`tabular-nums ${
-                                  restartCount() > RESTART_ATTENTION_THRESHOLD
-                                    ? 'font-medium text-red-600 dark:text-red-400'
-                                    : ''
-                                }`}
-                              >
-                                {resource.docker?.restartCount}
-                              </span>
-                            </Show>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                          >
-                            <span
-                              class="block max-w-full truncate font-mono text-[11px]"
-                              title={ports()}
-                            >
-                              {ports()}
-                            </span>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                          >
-                            <span class="block max-w-full truncate" title={networks()}>
-                              {networks()}
-                            </span>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                          >
-                            <span class="block max-w-full truncate" title={mounts()}>
-                              {mounts()}
-                            </span>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                          >
-                            <Show
-                              when={action}
-                              fallback={
-                                <span class="block max-w-full truncate" title={updateTitle()}>
-                                  {updates()}
-                                </span>
-                              }
-                            >
-                              {(updateAction) => (
-                                <UpdateButton
-                                  agentId={updateAction().agentId}
-                                  containerId={updateAction().containerId}
-                                  containerName={updateAction().containerName}
-                                  updateStatus={updateAction().updateStatus}
-                                />
-                              )}
-                            </Show>
-                          </TableCell>
+                          <For each={visibleColumns()}>{(column) => renderColumnCell(column)}</For>
                         </TableRow>
                         <PlatformResourceDetailTableRow
                           resource={resource}
