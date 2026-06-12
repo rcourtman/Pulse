@@ -108,6 +108,7 @@ import webhookConfigFormSource from '@/components/Alerts/WebhookConfigForm.tsx?r
 import reportMergeModalSource from '@/components/Infrastructure/ReportMergeModal.tsx?raw';
 import availabilitySettingsPanelSource from '@/components/Settings/AvailabilitySettingsPanel.tsx?raw';
 import connectionEditorSource from '@/components/Settings/ConnectionEditor/ConnectionEditor.tsx?raw';
+import copyCommandBlockSource from '@/components/Settings/CopyCommandBlock.tsx?raw';
 import infrastructureAgentUpdatesDialogSource from '@/components/Settings/InfrastructureAgentUpdatesDialog.tsx?raw';
 import infrastructureDiscoverySettingsDialogSource from '@/components/Settings/InfrastructureDiscoverySettingsDialog.tsx?raw';
 import selfHostedCommercialRecoverySectionSource from '@/components/Settings/SelfHostedCommercialRecoverySection.tsx?raw';
@@ -1511,6 +1512,9 @@ describe('shared primitive guardrails', () => {
     const registeredGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'button-secondary-command-local-shell',
     );
+    const commandCopyGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'button-command-copy-local-shell',
+    );
     const settingsActionGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'button-secondary-settings-action-local-shell',
     );
@@ -1529,6 +1533,7 @@ describe('shared primitive guardrails', () => {
       'src/components/Settings/AgentProfilesPanel.tsx',
       'src/components/Settings/AvailabilitySettingsPanel.tsx',
       'src/components/Settings/ConnectionEditor/ConnectionEditor.tsx',
+      'src/components/Settings/CopyCommandBlock.tsx',
       'src/components/Settings/DataHandlingPanel.tsx',
       'src/components/Settings/InfrastructureAgentUpdatesDialog.tsx',
       'src/components/Settings/InfrastructureDiscoverySettingsDialog.tsx',
@@ -1546,6 +1551,16 @@ describe('shared primitive guardrails', () => {
     expect(registeredGuard?.scopes).toEqual(['src/components', 'src/features', 'src/pages']);
     expect(registeredGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(registeredGuard?.ignoredPaths).toEqual(['src/components/shared/Button.test.tsx']);
+    expect(commandCopyGuard?.canonical?.path).toBe('src/components/shared/Button.tsx');
+    expect(commandCopyGuard?.canonical?.export).toBe('CommandCopyButton');
+    expect(commandCopyGuard?.allPatterns).toEqual([
+      'absolute right-2 top-2',
+      'items-center justify-center',
+      'bg-surface-hover p-2',
+    ]);
+    expect(commandCopyGuard?.scopes).toEqual(['src/components', 'src/features', 'src/pages']);
+    expect(commandCopyGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(commandCopyGuard?.ignoredPaths).toEqual(['src/components/shared/Button.test.tsx']);
     expect(settingsActionGuard?.canonical?.path).toBe('src/components/shared/buttonModel.ts');
     expect(settingsActionGuard?.canonical?.export).toBe('getButtonClass');
     expect(settingsActionGuard?.allPatterns).toEqual([
@@ -1588,6 +1603,7 @@ describe('shared primitive guardrails', () => {
     ]);
 
     expect(buttonSource).toContain('export function Button');
+    expect(buttonSource).toContain('export function CommandCopyButton');
     expect(buttonSource).toContain('export function ButtonLink');
     expect(buttonSource).toContain('getButtonClass');
     expect(buttonModelSource).toContain('BUTTON_VARIANT_CLASSES');
@@ -1618,16 +1634,26 @@ describe('shared primitive guardrails', () => {
     expect(connectionEditorSource).not.toContain(
       'rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content',
     );
+    expect(copyCommandBlockSource).toContain('@/components/shared/Button');
+    expect(copyCommandBlockSource).toContain('CommandCopyButton');
+    expect(copyCommandBlockSource).not.toContain('absolute right-2 top-2');
+    expect(copyCommandBlockSource).not.toContain('bg-surface-hover p-2');
     expect(dataHandlingPanelSource).toContain('@/components/shared/Button');
     expect(dataHandlingPanelSource).toContain('ButtonLink');
     expect(dataHandlingPanelSource).not.toContain(
       'rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-base-content',
     );
     expect(infrastructureInstallerSectionSource).toContain('@/components/shared/Button');
+    expect(infrastructureInstallerSectionSource).toContain('CommandCopyButton');
     expect(infrastructureInstallerSectionSource).not.toContain(
       'rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-base-content',
     );
+    expect(infrastructureInstallerSectionSource).not.toContain('absolute right-2 top-2');
+    expect(infrastructureInstallerSectionSource).not.toContain('bg-surface-hover p-2');
     expect(infrastructureAgentUpdatesDialogSource).toContain('@/components/shared/Button');
+    expect(infrastructureAgentUpdatesDialogSource).toContain('CommandCopyButton');
+    expect(infrastructureAgentUpdatesDialogSource).not.toContain('absolute right-2 top-2');
+    expect(infrastructureAgentUpdatesDialogSource).not.toContain('bg-surface-hover p-2');
     expect(infrastructureAgentUpdatesDialogSource).not.toContain(
       'h-9 w-9 items-center justify-center rounded-md border border-border text-base-content transition-colors hover:bg-surface-hover',
     );

@@ -194,6 +194,7 @@
         { "path": "src/components/Settings/AgentProfilesPanel.tsx" },
         { "path": "src/components/Settings/AvailabilitySettingsPanel.tsx" },
         { "path": "src/components/Settings/ConnectionEditor/ConnectionEditor.tsx" },
+        { "path": "src/components/Settings/CopyCommandBlock.tsx" },
         { "path": "src/components/Settings/DataHandlingPanel.tsx" },
         { "path": "src/components/Settings/InfrastructureAgentUpdatesDialog.tsx" },
         { "path": "src/components/Settings/InfrastructureDiscoverySettingsDialog.tsx" },
@@ -1057,6 +1058,30 @@
         "rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content"
       ],
       "legacyReason": "Retired migration debt. Standard secondary command buttons belong to the shared Button primitive family, including button-styled links.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/Button.test.tsx"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "button-command-copy-local-shell",
+      "category": "action-button",
+      "summary": "Command-copy controls must not recreate the absolute top-right icon-button shell; use CommandCopyButton from the shared Button primitive family.",
+      "canonical": {
+        "path": "src/components/shared/Button.tsx",
+        "export": "CommandCopyButton"
+      },
+      "scopes": ["src/components", "src/features", "src/pages"],
+      "extensions": [".tsx"],
+      "allPatterns": [
+        "absolute right-2 top-2",
+        "items-center justify-center",
+        "bg-surface-hover p-2"
+      ],
+      "legacyReason": "Retired migration debt. Command-copy icon buttons belong to CommandCopyButton so position, sizing, icon, focus, disabled, and aria behavior stay canonical.",
       "allowedPaths": [],
       "ignoredPaths": ["src/components/shared/Button.test.tsx"],
       "proof": [

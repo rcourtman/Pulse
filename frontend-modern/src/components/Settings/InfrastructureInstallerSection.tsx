@@ -1,6 +1,6 @@
 import type { Component } from 'solid-js';
 import { For, Show, createEffect, createMemo, createSignal } from 'solid-js';
-import { Button } from '@/components/shared/Button';
+import { Button, CommandCopyButton } from '@/components/shared/Button';
 import { FormSelect } from '@/components/shared/FormSelect';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { copyToClipboard } from '@/utils/clipboard';
@@ -649,8 +649,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                                 {snippet.label}
                               </h6>
                               <div class="relative">
-                                <button
-                                  type="button"
+                                <CommandCopyButton
                                   onClick={async () => {
                                     const success = await copyToClipboard(copyCommand());
                                     if (success) {
@@ -663,21 +662,9 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                                       );
                                     }
                                   }}
-                                  class="absolute right-2 top-2 inline-flex min-h-10 min-w-10 items-center justify-center rounded-md bg-surface-hover p-2 transition-colors hover:text-slate-200 sm:min-h-9 sm:min-w-9"
                                   title="Copy command"
-                                >
-                                  <svg
-                                    width="16"
-                                    height="16"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    stroke-width="2"
-                                  >
-                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                                    <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
-                                  </svg>
-                                </button>
+                                  label={`Copy ${snippet.label} command`}
+                                />
                                 <pre class="overflow-x-auto rounded-md bg-base p-3 pr-12 text-xs text-base-content">
                                   <code>{copyCommand()}</code>
                                 </pre>
@@ -875,8 +862,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
             <div class="space-y-1">
               <span class="text-xs font-medium text-muted">Linux / macOS / FreeBSD</span>
               <div class="relative">
-                <button
-                  type="button"
+                <CommandCopyButton
                   onClick={async () => {
                     const success = await copyToClipboard(state.getUninstallCommand());
                     if (success) {
@@ -885,21 +871,9 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                       notificationStore.error(getUnifiedAgentClipboardCopyErrorMessage());
                     }
                   }}
-                  class="absolute right-2 top-2 inline-flex min-h-10 min-w-10 items-center justify-center rounded-md bg-surface-hover p-2 text-slate-400 transition-colors hover:bg-slate-700 hover:text-slate-200 sm:min-h-9 sm:min-w-9"
                   title="Copy command"
-                >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  >
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                    <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
-                  </svg>
-                </button>
+                  label="Copy Linux macOS FreeBSD uninstall command"
+                />
                 <pre class="overflow-x-auto rounded-md bg-slate-950 p-3 pr-12 font-mono text-xs text-red-400">
                   <code>{state.getUninstallCommand()}</code>
                 </pre>
@@ -925,8 +899,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                 Windows (PowerShell as Administrator)
               </span>
               <div class="relative">
-                <button
-                  type="button"
+                <CommandCopyButton
                   onClick={async () => {
                     const success = await copyToClipboard(state.getWindowsUninstallCommand());
                     if (success) {
@@ -935,21 +908,9 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                       notificationStore.error(getUnifiedAgentClipboardCopyErrorMessage());
                     }
                   }}
-                  class="absolute right-2 top-2 inline-flex min-h-10 min-w-10 items-center justify-center rounded-md bg-surface-hover p-2 text-slate-400 transition-colors hover:bg-slate-700 hover:text-slate-200 sm:min-h-9 sm:min-w-9"
                   title="Copy command"
-                >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  >
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                    <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
-                  </svg>
-                </button>
+                  label="Copy Windows uninstall command"
+                />
                 <pre class="overflow-x-auto rounded-md bg-slate-950 p-3 pr-12 font-mono text-xs text-red-400">
                   <code>{state.getWindowsUninstallCommand()}</code>
                 </pre>

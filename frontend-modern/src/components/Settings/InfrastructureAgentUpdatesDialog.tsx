@@ -1,7 +1,7 @@
 import { For, Show, createMemo, type Component } from 'solid-js';
-import { Copy, X } from 'lucide-solid';
+import { X } from 'lucide-solid';
 import { Dialog } from '@/components/shared/Dialog';
-import { Button } from '@/components/shared/Button';
+import { Button, CommandCopyButton } from '@/components/shared/Button';
 import { copyToClipboard } from '@/utils/clipboard';
 import { notificationStore } from '@/stores/notifications';
 import {
@@ -16,9 +16,6 @@ interface InfrastructureAgentUpdatesDialogProps {
   targets: readonly InfrastructureAgentUpdateTarget[];
   onClose: () => void;
 }
-
-const copyButtonClass =
-  'absolute right-2 top-2 inline-flex min-h-10 min-w-10 items-center justify-center rounded-md bg-surface-hover p-2 text-muted transition-colors hover:text-base-content disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-9 sm:min-w-9';
 
 export const InfrastructureAgentUpdatesDialog: Component<InfrastructureAgentUpdatesDialogProps> = (
   props,
@@ -191,15 +188,11 @@ export const InfrastructureAgentUpdatesDialog: Component<InfrastructureAgentUpda
                         }
                       >
                         <div class="relative">
-                          <button
-                            type="button"
+                          <CommandCopyButton
                             onClick={() => void copyCommand(command())}
-                            class={copyButtonClass}
                             title="Copy update command"
-                            aria-label={`Copy update command for ${target.displayName}`}
-                          >
-                            <Copy class="h-4 w-4" />
-                          </button>
+                            label={`Copy update command for ${target.displayName}`}
+                          />
                           <pre class="overflow-x-auto rounded-md bg-base p-3 pr-12 text-xs text-base-content">
                             <code>{command()}</code>
                           </pre>

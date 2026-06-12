@@ -1,7 +1,7 @@
 import { Route, Router } from '@solidjs/router';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Button, ButtonLink } from './Button';
+import { Button, ButtonLink, CommandCopyButton } from './Button';
 import buttonSource from './Button.tsx?raw';
 import buttonModelSource from './buttonModel.ts?raw';
 
@@ -50,6 +50,26 @@ describe('Button', () => {
     ));
 
     expect(screen.getByRole('button', { name: 'Refresh' })).toBeDisabled();
+  });
+
+  it('renders command-copy icon buttons through the shared primitive', () => {
+    const onClick = vi.fn();
+
+    render(() => <CommandCopyButton onClick={onClick} label="Copy install command" />);
+
+    const button = screen.getByRole('button', { name: 'Copy install command' });
+    expect(button).toHaveAttribute('type', 'button');
+    expect(button).toHaveAttribute('title', 'Copy install command');
+    expect(button).toHaveClass('absolute');
+    expect(button).toHaveClass('right-2');
+    expect(button).toHaveClass('top-2');
+    expect(button).toHaveClass('min-h-10');
+    expect(button).toHaveClass('min-w-10');
+    expect(button).toHaveClass('bg-surface-hover');
+    expect(button).toHaveClass('p-2');
+
+    button.click();
+    expect(onClick).toHaveBeenCalledTimes(1);
   });
 
   it('renders in-app button links through the router', () => {

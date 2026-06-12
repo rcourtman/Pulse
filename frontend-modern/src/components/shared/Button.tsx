@@ -1,4 +1,5 @@
 import { A } from '@solidjs/router';
+import CopyIcon from 'lucide-solid/icons/copy';
 import { JSX, Show, mergeProps, splitProps } from 'solid-js';
 import { getButtonClass, type ButtonSize, type ButtonVariant } from './buttonModel';
 
@@ -15,6 +16,11 @@ export interface ButtonLinkProps extends JSX.AnchorHTMLAttributes<HTMLAnchorElem
   size?: ButtonSize;
   class?: string;
   hardNavigation?: boolean;
+}
+
+export interface CommandCopyButtonProps
+  extends Omit<ButtonProps, 'children' | 'isLoading' | 'size' | 'variant'> {
+  label?: string;
 }
 
 export function Button(props: ButtonProps) {
@@ -65,6 +71,29 @@ export function Button(props: ButtonProps) {
       ) : null}
       {local.children}
     </button>
+  );
+}
+
+export function CommandCopyButton(props: CommandCopyButtonProps) {
+  const merged = mergeProps({ label: 'Copy command', type: 'button' as const }, props);
+  const [local, rest] = splitProps(merged, ['label', 'class', 'title', 'aria-label']);
+
+  return (
+    <Button
+      {...rest}
+      variant="ghost"
+      size="icon"
+      class={[
+        'absolute right-2 top-2 min-h-10 min-w-10 bg-surface-hover text-muted hover:text-base-content sm:min-h-9 sm:min-w-9',
+        local.class,
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      title={local.title ?? local.label}
+      aria-label={local['aria-label'] ?? local.label}
+    >
+      <CopyIcon class="h-4 w-4" />
+    </Button>
   );
 }
 
