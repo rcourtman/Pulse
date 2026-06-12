@@ -92,8 +92,15 @@ import webInterfaceUrlFieldStateSource from '@/components/shared/useWebInterface
 import webInterfaceNameLinkSource from '@/components/shared/WebInterfaceNameLink.tsx?raw';
 import inlineDetailTableRowSource from '@/components/shared/InlineDetailTableRow.tsx?raw';
 import sharedTemplateRegistrySource from '../../../scripts/shared-template-registry.json?raw';
+import dockerPageSurfaceSource from '@/features/docker/DockerPageSurface.tsx?raw';
+import kubernetesPageSurfaceSource from '@/features/kubernetes/KubernetesPageSurface.tsx?raw';
+import proxmoxPageSurfaceSource from '@/features/proxmox/ProxmoxPageSurface.tsx?raw';
+import standalonePageSurfaceSource from '@/features/standalone/StandalonePageSurface.tsx?raw';
 import sharedPlatformPageSource from '@/features/platformPage/sharedPlatformPage.tsx?raw';
 import platformResourceDetailTableRowSource from '@/features/platformPage/PlatformResourceDetailTableRow.tsx?raw';
+import truenasPageSurfaceSource from '@/features/truenas/TrueNASPageSurface.tsx?raw';
+import truenasProtectionTableSource from '@/features/truenas/TrueNASProtectionTable.tsx?raw';
+import vmwarePageSurfaceSource from '@/features/vmware/VmwarePageSurface.tsx?raw';
 import upgradeNavigationSource from '@/utils/upgradeNavigation.ts?raw';
 import guestRowSource from '@/components/Workloads/GuestRow.tsx?raw';
 import workloadsTableSource from '@/components/Workloads/WorkloadsTable.tsx?raw';
@@ -1062,6 +1069,82 @@ describe('shared primitive guardrails', () => {
       expect(source).not.toContain('@/components/shared/EmptyState');
       expect(source).not.toContain('<EmptyState');
       expect(source).not.toContain('<Card padding="lg">');
+    }
+  });
+
+  it('keeps platform table loading states on the shared status-row template', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        allowedPaths?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find(
+      (rule) => rule.id === 'platform-table-loading-state',
+    );
+    const registeredGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-table-loading-state-local-status-row',
+    );
+    const requiredConsumerPaths = [
+      'src/features/docker/DockerPageSurface.tsx',
+      'src/features/kubernetes/KubernetesPageSurface.tsx',
+      'src/features/proxmox/ProxmoxPageSurface.tsx',
+      'src/features/standalone/StandalonePageSurface.tsx',
+      'src/features/truenas/TrueNASPageSurface.tsx',
+      'src/features/truenas/TrueNASProtectionTable.tsx',
+      'src/features/vmware/VmwarePageSurface.tsx',
+    ];
+
+    expect(registeredRule?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(registeredRule?.canonical?.export).toBe('PlatformTableLoadingState');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
+      expect.arrayContaining(requiredConsumerPaths),
+    );
+    expect(registeredGuard?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(registeredGuard?.canonical?.export).toBe('PlatformTableLoadingState');
+    expect(registeredGuard?.allPatterns).toEqual([
+      'role="status"',
+      'px-3 py-2 text-xs text-muted',
+    ]);
+    expect(registeredGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(registeredGuard?.scopes).toEqual(
+      expect.arrayContaining([
+        'src/features/docker',
+        'src/features/kubernetes',
+        'src/features/proxmox',
+        'src/features/standalone',
+        'src/features/truenas',
+        'src/features/vmware',
+      ]),
+    );
+
+    expect(sharedPlatformPageSource).toContain('export function PlatformTableLoadingState');
+    expect(sharedPlatformPageSource).toContain('role="status"');
+    expect(sharedPlatformPageSource).toContain('px-3 py-2 text-xs text-muted');
+
+    for (const source of [
+      dockerPageSurfaceSource,
+      kubernetesPageSurfaceSource,
+      proxmoxPageSurfaceSource,
+      standalonePageSurfaceSource,
+      truenasPageSurfaceSource,
+      truenasProtectionTableSource,
+      vmwarePageSurfaceSource,
+    ]) {
+      expect(source).toContain('PlatformTableLoadingState');
+      expect(source).not.toContain('<div class="px-3 py-2 text-xs text-muted" role="status">');
     }
   });
 

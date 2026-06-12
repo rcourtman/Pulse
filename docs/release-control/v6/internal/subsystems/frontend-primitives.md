@@ -2393,6 +2393,11 @@ Docker, Kubernetes, Proxmox, Standalone, TrueNAS, vSphere, and future platform
 feature tables; source-specific consumers own only the empty-state icon, title,
 description, and actions. Platform feature tables must not import
 `EmptyState` directly or recreate a `Card`-wrapped empty-state shell.
+Platform table loading states are registry-backed too.
+`PlatformTableLoadingState` owns the repeated table-card compact
+`role="status"` loading row for platform pages and tables; platform consumers
+own only the title and description copy. Platform feature surfaces must not
+recreate the `TableCard` plus compact status-row shell locally.
 Filter bars are registry-backed too. `FilterBar` owns resource-list filtering
 as a catalog of `FilterDef` entries, while `filterChipStatusDot` owns the
 small leading status-dot glyph used by filter options. Page and feature

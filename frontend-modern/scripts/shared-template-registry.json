@@ -115,6 +115,29 @@
       ]
     },
     {
+      "id": "platform-table-loading-state",
+      "category": "platform-table-loading-state",
+      "summary": "Platform page and table loading states must compose PlatformTableLoadingState instead of recreating local TableCard status rows.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "PlatformTableLoadingState"
+      },
+      "requiredConsumers": [
+        { "path": "src/features/docker/DockerPageSurface.tsx" },
+        { "path": "src/features/kubernetes/KubernetesPageSurface.tsx" },
+        { "path": "src/features/proxmox/ProxmoxPageSurface.tsx" },
+        { "path": "src/features/standalone/StandalonePageSurface.tsx" },
+        { "path": "src/features/truenas/TrueNASPageSurface.tsx" },
+        { "path": "src/features/truenas/TrueNASProtectionTable.tsx" },
+        { "path": "src/features/vmware/VmwarePageSurface.tsx" }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/platformOverviewLayout.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "filter-bar-catalog-shell",
       "category": "filter-bar",
       "summary": "Resource-list filter surfaces must compose the shared FilterBar catalog shell instead of recreating page-local filter rows or legacy PageControls decks.",
@@ -211,6 +234,31 @@
       "extensions": [".tsx"],
       "allPatterns": ["@/components/shared/EmptyState"],
       "legacyReason": "Retired migration debt. Platform table empty states must use PlatformTableEmptyState; no platform feature exceptions are currently allowed.",
+      "allowedPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-table-loading-state-local-status-row",
+      "category": "platform-table-loading-state",
+      "summary": "Platform feature loading states must compose PlatformTableLoadingState instead of recreating the compact TableCard status row locally.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "PlatformTableLoadingState"
+      },
+      "scopes": [
+        "src/features/docker",
+        "src/features/kubernetes",
+        "src/features/proxmox",
+        "src/features/standalone",
+        "src/features/truenas",
+        "src/features/vmware"
+      ],
+      "extensions": [".tsx"],
+      "allPatterns": ["role=\"status\"", "px-3 py-2 text-xs text-muted"],
+      "legacyReason": "Retired migration debt. Platform table loading states must use PlatformTableLoadingState; no compact local status-row exceptions are currently allowed.",
       "allowedPaths": [],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
