@@ -41,6 +41,7 @@ product API routes free of maintainer commercial analytics.
 5. `frontend-modern/src/types/api.ts`
 6. `frontend-modern/src/types/actionAudit.ts`
 7. `frontend-modern/src/api/actionAudit.ts`
+7a. `frontend-modern/src/api/resourceActions.ts`
 6. `frontend-modern/src/api/responseUtils.ts`
 7. `frontend-modern/src/components/Settings/APITokenManager.tsx`
 8. `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`
@@ -3523,6 +3524,11 @@ and its typed payload mirror in `frontend-modern/src/types/actionAudit.ts` are
 the canonical browser-side reader for `GET /api/audit/actions`; resource
 workflow surfaces must consume that client instead of rebuilding audit query
 URLs or silently ignoring the endpoint's gated-unavailable state.
+The frontend resource-action client in `frontend-modern/src/api/resourceActions.ts`
+is the canonical browser-side writer for `/api/actions/plan`,
+`/api/actions/{id}/decision`, and `/api/actions/{id}/execute`; Docker / Podman
+container lifecycle controls and future resource workflow buttons must consume
+that client rather than posting directly from feature-local fetch helpers.
 Those relationship and timeline payloads now also carry `lastSeenAt` freshness
 and optional metadata through the same owned contract, so the drawer can
 preserve provenance without inventing a separate relationship-detail schema.

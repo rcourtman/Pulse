@@ -290,8 +290,12 @@ unified-resource owner supplies API-object-specific container, image, volume,
 network, Swarm node, task, secret, and config columns through dedicated native
 tables. The Docker containers tab must use the native
 `DockerContainersTable` for container state, health, restart, image, port,
-network, mount, update, and host/runtime columns rather than embedding
-`WorkloadsSurface`. Swarm services must surface the API-reported rollout/update
+network, mount, update, governed lifecycle actions, and host/runtime columns
+rather than embedding `WorkloadsSurface`. The lifecycle action column is a
+compact icon-button primitive over unified-resource capabilities and the shared
+resource-action API client; it must not grow Docker/Podman shell, SSH, or
+provider calls inside the table component. Swarm services must surface the
+API-reported rollout/update
 state in the native services table, and engine storage rows must expose a
 stable row hook so platform-page browser proof can verify the storage tab is
 hydrated from runtime disk-usage data. Kubernetes deployments must surface the
@@ -2364,6 +2368,13 @@ presentation for product surfaces that display state rather than toggle it.
 Product components must compose `StatusIndicatorBadge` instead of calling
 `getStatusIndicatorBadgeToneClasses` directly; low-level status utilities may
 still expose the tone mapping for that primitive and utility-level tests.
+Read-only metadata badges follow the same primitive-owned shell rule.
+`frontend-modern/src/components/shared/MetadataBadge.tsx` owns filled and
+outlined appearances, compact sizing, shape, typed tone vocabulary, fit
+behavior, and whitespace handling. Product surfaces such as Patrol findings
+may own the labels and state-to-tone mapping in their presentation helpers, but
+they must render visible metadata chips through `MetadataBadge` instead of
+recreating local bordered xs spans.
 Patrol run-history, status-bar, and runtime-summary status labels follow this
 state-badge boundary: Patrol may derive the status label and typed variant in
 `patrolRunPresentation.ts` or `patrolSummaryPresentation.ts`, but

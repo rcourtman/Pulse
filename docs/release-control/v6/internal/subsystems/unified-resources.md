@@ -54,6 +54,9 @@ cross-source deduplication.
 32. `frontend-modern/src/components/Docker/SwarmServicesDrawer.tsx`
 33. `frontend-modern/src/features/docker/DockerConfigsTable.tsx`
 34. `frontend-modern/src/features/docker/DockerContainersTable.tsx`
+34a. `frontend-modern/src/features/docker/DockerContainerLifecycleControls.tsx`
+34b. `frontend-modern/src/features/docker/dockerContainerLifecycleActions.ts`
+34c. `frontend-modern/src/features/docker/dockerContainerTableModel.ts`
 35. `frontend-modern/src/features/docker/DockerImagesTable.tsx`
 36. `frontend-modern/src/features/docker/DockerNativeTableShared.tsx`
 37. `frontend-modern/src/features/docker/DockerNetworksTable.tsx`
@@ -1233,6 +1236,13 @@ trail inside the resource-detail workflow through the canonical
 `frontend-modern/src/utils/actionAuditPresentation.ts` labels. The resource
 drawer must treat gated action-audit reads as unavailable rather than turning
 ordinary infrastructure inspection into an upgrade-prompt path.
+Docker / Podman container lifecycle controls in
+`frontend-modern/src/features/docker/DockerContainerLifecycleControls.tsx` and
+`dockerContainerLifecycleActions.ts` are unified-resource capability consumers:
+they may enable start/stop/restart only from backend-advertised resource
+capabilities and must use `sourceStatus`, `docker.agentId`, `docker.runtime`,
+and `docker.security` only for disabled-state explanation, never as a
+feature-local execution bypass.
 
 `InfrastructureSummary.tsx` and `infrastructureSummaryModel.ts` now surface
 `degraded` and `alerting` resource counts alongside the existing `online` and

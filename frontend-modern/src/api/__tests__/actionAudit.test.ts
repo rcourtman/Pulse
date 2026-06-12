@@ -5,7 +5,13 @@ vi.mock('@/utils/apiClient', () => ({
 }));
 
 import { ActionAuditAPI } from '@/api/actionAudit';
+import { ResourceActionsAPI } from '@/api/resourceActions';
 import { apiFetchJSON } from '@/utils/apiClient';
+import type {
+  ActionDecisionResponse,
+  ActionExecutionResponse,
+  ResourceActionRequest,
+} from '@/types/actionAudit';
 
 describe('ActionAuditAPI', () => {
   const apiFetchJSONMock = vi.mocked(apiFetchJSON);
@@ -216,5 +222,86 @@ describe('ActionAuditAPI', () => {
       count: 0,
       resourceId: 'vm:42',
     });
+  });
+
+  it('plans resource actions through the governed action endpoint', async () => {
+    const request: ResourceActionRequest = {
+      requestId: 'req-docker-restart',
+      resourceId: 'docker:container:abc123',
+      capabilityName: 'docker.container.restart',
+      reason: 'restart after configuration update',
+      requestedBy: 'operator',
+    };
+
+    apiFetchJSONMock.mockResolvedValueOnce({
+      actionId: 'action-docker-restart',
+      requestId: request.requestId,
+      allowed: true,
+      requiresApproval: true,
+      approvalPolicy: 'admin',
+      rollbackAvailable: false,
+    });
+
+    const response = await ResourceActionsAPI.planAction(request);
+
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/actions/plan', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+    expect(response).toMatchObject({
+      actionId: 'action-docker-restart',
+      requestId: request.requestId,
+      allowed: true,
+      requiresApproval: true,
+    });
+  });
+
+  it('records decisions and executes actions through encoded governed action routes', async () => {
+    const decision: ActionDecisionResponse = {
+      actionId: 'action/docker/restart',
+      outcome: 'approved',
+      decidedAt: '2026-06-12T20:40:00Z',
+    };
+    const execution: ActionExecutionResponse = {
+      actionId: 'action/docker/restart',
+      state: 'completed',
+      result: {
+        success: true,
+        output: 'container restarted',
+      },
+    };
+
+    apiFetchJSONMock.mockResolvedValueOnce(decision).mockResolvedValueOnce(execution);
+
+    await expect(
+      ResourceActionsAPI.decideAction(
+        'action/docker/restart',
+        'approved',
+        'operator confirmed restart',
+      ),
+    ).resolves.toEqual(decision);
+    await expect(ResourceActionsAPI.executeAction('action/docker/restart')).resolves.toEqual(
+      execution,
+    );
+
+    expect(apiFetchJSONMock).toHaveBeenNthCalledWith(
+      1,
+      '/api/actions/action%2Fdocker%2Frestart/decision',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          outcome: 'approved',
+          reason: 'operator confirmed restart',
+        }),
+      },
+    );
+    expect(apiFetchJSONMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/actions/action%2Fdocker%2Frestart/execute',
+      {
+        method: 'POST',
+        body: JSON.stringify({}),
+      },
+    );
   });
 });

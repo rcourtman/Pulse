@@ -49,6 +49,7 @@ import {
 } from './dockerContainerTableModel';
 import type { DockerContainerUpdateStatus } from '@/types/api';
 import type { Resource } from '@/types/resource';
+import { DockerContainerLifecycleControls } from './DockerContainerLifecycleControls';
 
 type DockerNetwork = NonNullable<NonNullable<Resource['docker']>['networks']>[number];
 type DockerMount = NonNullable<NonNullable<Resource['docker']>['mounts']>[number];
@@ -532,6 +533,12 @@ export const DockerContainersTable: Component<DockerNativeTableProps> = (props) 
                                   />
                                 )}
                               </Show>
+                            </TableCell>
+                          );
+                        case 'actions':
+                          return (
+                            <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
+                              <DockerContainerLifecycleControls resource={resource} />
                             </TableCell>
                           );
                         default:

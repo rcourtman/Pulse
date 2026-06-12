@@ -4,6 +4,7 @@ import type { JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { MonitoringAPI } from '@/api/monitoring';
+import { ResourceActionsAPI } from '@/api/resourceActions';
 import type { Resource } from '@/types/resource';
 import { DockerContainersTable } from '../DockerContainersTable';
 import { DockerConfigsTable } from '../DockerConfigsTable';
@@ -19,6 +20,48 @@ import { DockerVolumesTable } from '../DockerVolumesTable';
 vi.mock('@/api/monitoring', () => ({
   MonitoringAPI: {
     updateDockerContainer: vi.fn().mockResolvedValue({ success: true }),
+  },
+}));
+
+vi.mock('@/api/resourceActions', () => ({
+  ResourceActionsAPI: {
+    planAction: vi.fn().mockResolvedValue({
+      actionId: 'action-1',
+      requestId: 'request-1',
+      allowed: true,
+      requiresApproval: true,
+      approvalPolicy: 'admin',
+      rollbackAvailable: false,
+      plannedAt: '2026-06-12T20:00:00Z',
+      expiresAt: '2026-06-12T20:05:00Z',
+      resourceVersion: 'resource-version',
+      policyVersion: 'policy-version',
+      planHash: 'plan-hash',
+    }),
+    decideAction: vi.fn().mockResolvedValue({
+      actionId: 'action-1',
+      state: 'approved',
+      approval: {
+        actor: 'operator',
+        method: 'api',
+        timestamp: '2026-06-12T20:00:01Z',
+        outcome: 'approved',
+      },
+      audit: {},
+    }),
+    executeAction: vi.fn().mockResolvedValue({
+      actionId: 'action-1',
+      state: 'completed',
+      result: { success: true },
+      audit: {},
+    }),
+  },
+}));
+
+vi.mock('@/stores/notifications', () => ({
+  notificationStore: {
+    success: vi.fn(),
+    error: vi.fn(),
   },
 }));
 
@@ -116,6 +159,7 @@ describe('Docker native tables', () => {
             cpu: { current: 42 },
             memory: { current: 50, used: 512 * 1024 * 1024, total: 1024 * 1024 * 1024 },
             docker: {
+              agentId: 'agent-1',
               hostname: 'edge-01',
               runtime: 'docker',
               runtimeVersion: '27.5.1',
@@ -148,6 +192,7 @@ describe('Docker native tables', () => {
             name: 'edge-cache',
             status: 'running',
             docker: {
+              agentId: 'agent-2',
               hostname: 'edge-02',
               runtime: 'podman',
               runtimeVersion: '5.2.1',
@@ -171,6 +216,7 @@ describe('Docker native tables', () => {
     expect(screen.getByText('Memory')).toBeInTheDocument();
     expect(screen.getByText('Restarts')).toBeInTheDocument();
     expect(screen.getByText('Updates')).toBeInTheDocument();
+    expect(screen.getByText('Actions')).toBeInTheDocument();
     expect(screen.queryByText('Health')).not.toBeInTheDocument();
     expect(screen.queryByText('State')).not.toBeInTheDocument();
     expect(screen.getByText('edge-web')).toBeInTheDocument();
@@ -404,6 +450,109 @@ describe('Docker native tables', () => {
         'edge-web',
       ),
     );
+  });
+
+  it('runs Docker lifecycle row actions through the governed action API', async () => {
+    renderInRouter(() => (
+      <DockerContainersTable
+        resources={[
+          makeResource({
+            id: 'container-1',
+            type: 'app-container',
+            name: 'edge-web',
+            status: 'running',
+            docker: {
+              agentId: 'agent-edge',
+              hostSourceId: 'docker-host-edge',
+              containerId: 'native-container-1',
+              hostname: 'edge-01',
+              image: 'nginx:latest',
+              runtime: 'docker',
+              containerState: 'running',
+            },
+            capabilities: [
+              {
+                name: 'restart',
+                type: 'common',
+                platform: 'docker',
+                minimumApprovalLevel: 'admin',
+              },
+              {
+                name: 'stop',
+                type: 'common',
+                platform: 'docker',
+                minimumApprovalLevel: 'admin',
+              },
+            ],
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No containers"
+        emptyDescription="No containers"
+        showToolbar={false}
+      />
+    ));
+
+    const restartButton = screen.getByRole('button', {
+      name: 'Restart edge-web through governed action',
+    });
+    fireEvent.click(restartButton);
+    fireEvent.click(screen.getByRole('button', { name: 'Click again to restart edge-web' }));
+
+    await waitFor(() =>
+      expect(ResourceActionsAPI.planAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          resourceId: 'container-1',
+          capabilityName: 'restart',
+          requestedBy: 'ui:docker-page',
+        }),
+      ),
+    );
+    await waitFor(() =>
+      expect(ResourceActionsAPI.executeAction).toHaveBeenCalledWith(
+        'action-1',
+        expect.stringContaining('restart Docker container edge-web'),
+      ),
+    );
+    expect(ResourceActionsAPI.decideAction).toHaveBeenCalledWith(
+      'action-1',
+      'approved',
+      expect.stringContaining('restart Docker container edge-web'),
+    );
+  });
+
+  it('shows disabled Docker lifecycle buttons with explicit unavailable reasons', () => {
+    renderInRouter(() => (
+      <DockerContainersTable
+        resources={[
+          makeResource({
+            id: 'container-1',
+            type: 'app-container',
+            name: 'edge-web',
+            status: 'running',
+            docker: {
+              agentId: 'agent-edge',
+              containerId: 'native-container-1',
+              hostname: 'edge-01',
+              image: 'nginx:latest',
+              runtime: 'docker',
+              containerState: 'running',
+            },
+            sourceStatus: { docker: { status: 'stale' } },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No containers"
+        emptyDescription="No containers"
+        showToolbar={false}
+      />
+    ));
+
+    expect(
+      screen.getByRole('button', {
+        name: 'Restart unavailable: Docker inventory is stale; refresh inventory before running lifecycle actions.',
+      }),
+    ).toBeDisabled();
   });
 
   it('renders container rows with status mapped from containerState + health + exitCode, attention rows first', () => {

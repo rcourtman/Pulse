@@ -14,6 +14,7 @@ import type {
   HostSensorSummary,
   HostRAIDArray,
   Memory,
+  DockerRuntimeCommand,
   PBSBackupJob,
   PBSGarbageJob,
   PBSJobHealthEvidence,
@@ -309,6 +310,12 @@ export interface ResourceCapability {
   minimumApprovalLevel?: string;
   platform?: string;
   params?: ResourceCapabilityParam[];
+}
+
+export interface ResourceSourceStatus {
+  status?: string;
+  lastSeen?: string;
+  error?: string;
 }
 
 export interface ResourceChange {
@@ -642,6 +649,7 @@ export interface ResourceDockerMeta {
   serviceId?: string;
   serviceName?: string;
   hostSourceId?: string;
+  agentId?: string;
   containerId?: string;
   hostname?: string;
   displayName?: string;
@@ -669,7 +677,12 @@ export interface ResourceDockerMeta {
   containersUsage?: DockerStorageUsageMeta;
   volumesUsage?: DockerStorageUsageMeta;
   buildCacheUsage?: DockerStorageUsageMeta;
-  command?: Record<string, unknown>;
+  command?: DockerRuntimeCommand | Record<string, unknown>;
+  security?: {
+    authorizationPlugins?: string[];
+    mutatingCommandsBlocked?: boolean;
+    mutatingCommandsBlockedReason?: string;
+  };
   image?: string;
   imageId?: string;
   repoTags?: string[];
@@ -1409,6 +1422,7 @@ export interface Resource {
   policy?: ResourcePolicy;
   aiSafeSummary?: string;
   capabilities?: ResourceCapability[];
+  sourceStatus?: Record<string, ResourceSourceStatus>;
   relationships?: ResourceRelationship[];
   recentChanges?: ResourceChange[];
   facetCounts?: ResourceFacetCounts;

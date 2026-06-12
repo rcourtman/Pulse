@@ -18,6 +18,8 @@ export interface ActionAuditRequest {
   requestedBy: string;
 }
 
+export type ResourceActionRequest = ActionAuditRequest;
+
 export interface ActionAuditPreflight {
   target?: string;
   currentState?: string;
@@ -105,4 +107,18 @@ export interface ActionAuditListResponse {
   count: number;
   resourceId?: string;
   available: boolean;
+}
+
+export interface ActionDecisionResponse {
+  actionId: string;
+  state: ActionAuditState;
+  approval: ActionAuditApprovalRecord;
+  audit: ActionAuditRecord;
+}
+
+export interface ActionExecutionResponse {
+  actionId: string;
+  state: ActionAuditState;
+  result?: ActionAuditExecutionResult;
+  audit: ActionAuditRecord;
 }

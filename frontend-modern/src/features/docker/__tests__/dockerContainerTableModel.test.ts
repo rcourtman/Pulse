@@ -7,17 +7,17 @@ import {
 } from '../dockerContainerTableModel';
 
 describe('dockerContainerTableModel', () => {
-  it('keeps the mobile container table on identity, state, live metrics, and update action', () => {
+  it('keeps the mobile container table on identity, state, live metrics, and governed actions', () => {
     const columns = getDockerContainerVisibleColumnsForLayout('mobile', true, true, true);
     const ids = columns.map((column) => column.id);
 
-    expect(ids).toEqual(['container', 'state', 'cpu', 'memory', 'updates']);
+    expect(ids).toEqual(['container', 'state', 'cpu', 'memory', 'updates', 'actions']);
     expect(getDockerContainerTableMinWidthClass()).toBe('min-w-full');
     expect(getDockerContainerColumnWidthStyle('container', 'mobile', ids)).toEqual({
-      width: '32%',
+      width: '28.0702%',
     });
     expect(getDockerContainerColumnWidthStyle('memory', 'mobile', ids)).toEqual({
-      width: '22%',
+      width: '19.2982%',
     });
   });
 
@@ -26,7 +26,7 @@ describe('dockerContainerTableModel', () => {
       getDockerContainerVisibleColumnsForLayout('tablet', true, false, false).map(
         (column) => column.id,
       ),
-    ).toEqual(['container', 'host', 'cpu', 'memory', 'updates']);
+    ).toEqual(['container', 'host', 'cpu', 'memory', 'updates', 'actions']);
   });
 
   it('adds restarts only when the current row set has restart signal to scan', () => {
@@ -74,6 +74,7 @@ describe('dockerContainerTableModel', () => {
       'restarts',
       'ports',
       'updates',
+      'actions',
     ]);
     expect(ids).not.toContain('health');
     expect(ids).not.toContain('networks');

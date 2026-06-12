@@ -15,7 +15,8 @@ export type DockerContainerTableColumnId =
   | 'ports'
   | 'networks'
   | 'mounts'
-  | 'updates';
+  | 'updates'
+  | 'actions';
 
 export type DockerContainerTableColumn = {
   id: DockerContainerTableColumnId;
@@ -39,6 +40,7 @@ const DOCKER_CONTAINER_COLUMN_MIN_LAYOUT: Record<
   cpu: 'mobile',
   memory: 'mobile',
   updates: 'mobile',
+  actions: 'mobile',
   host: 'tablet',
   restarts: 'tablet',
   image: 'compact',
@@ -61,6 +63,7 @@ const DOCKER_CONTAINER_COLUMNS: DockerContainerTableColumn[] = [
   { id: 'networks', label: 'Networks', kind: 'text' },
   { id: 'mounts', label: 'Mounts', kind: 'text' },
   { id: 'updates', label: 'Updates', kind: 'badge' },
+  { id: 'actions', label: 'Actions', kind: 'badge' },
 ];
 
 const DOCKER_CONTAINER_DESKTOP_WIDTHS: Record<DockerContainerTableColumnId, number> = {
@@ -76,6 +79,7 @@ const DOCKER_CONTAINER_DESKTOP_WIDTHS: Record<DockerContainerTableColumnId, numb
   networks: 8,
   mounts: 9,
   updates: 7,
+  actions: 8,
 };
 
 const DOCKER_CONTAINER_RESPONSIVE_WIDTHS: Record<
@@ -88,6 +92,7 @@ const DOCKER_CONTAINER_RESPONSIVE_WIDTHS: Record<
     cpu: 18,
     memory: 22,
     updates: 14,
+    actions: 14,
   },
   tablet: {
     container: 28,
@@ -97,6 +102,7 @@ const DOCKER_CONTAINER_RESPONSIVE_WIDTHS: Record<
     memory: 18,
     restarts: 6,
     updates: 7,
+    actions: 8,
   },
   compact: {
     container: 18,
@@ -109,6 +115,7 @@ const DOCKER_CONTAINER_RESPONSIVE_WIDTHS: Record<
     restarts: 7,
     ports: 12,
     updates: 8,
+    actions: 8,
   },
 };
 
