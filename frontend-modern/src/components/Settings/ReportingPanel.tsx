@@ -4,6 +4,7 @@ import Download from 'lucide-solid/icons/download';
 import BarChart from 'lucide-solid/icons/bar-chart';
 import TableProperties from 'lucide-solid/icons/table-properties';
 import OperationsPanel from '@/components/Settings/OperationsPanel';
+import { Button } from '@/components/shared/Button';
 import { CalloutCard } from '@/components/shared/CalloutCard';
 import { formControl, formField, formHelpText, formLabel } from '@/components/shared/Form';
 import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
@@ -115,13 +116,9 @@ export function ReportingPanel() {
           <div class="space-y-4 p-4 sm:p-6">
             <p class="text-sm text-warning">{reportingCatalogError()}</p>
             <div class="flex justify-end">
-              <button
-                type="button"
-                class="rounded-md border border-base-300 bg-base-100 px-4 py-2 text-sm font-medium text-base-content transition-colors hover:bg-base-200"
-                onClick={reloadReportingCatalog}
-              >
+              <Button variant="secondary" size="md" onClick={reloadReportingCatalog}>
                 Retry
-              </button>
+              </Button>
             </div>
           </div>
         </OperationsPanel>
@@ -237,24 +234,23 @@ export function ReportingPanel() {
                 </div>
 
                 <div class="flex justify-end">
-                  <button
-                    class={`flex w-full items-center justify-center gap-2 rounded-md px-6 py-3 font-semibold transition-all sm:w-auto ${
-                      generating()
-                        ? 'cursor-not-allowed bg-slate-300 text-slate-500'
-                        : 'bg-blue-600 text-white hover:bg-blue-700'
-                    }`}
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    class="w-full gap-2 font-semibold sm:w-auto"
+                    isLoading={generating()}
                     disabled={generating()}
                     onClick={handleGenerate}
                   >
-                    <Show when={generating()} fallback={<Download size={20} />}>
-                      <div class="h-5 w-5 animate-spin rounded-full border-2 border-t-white border-white" />
+                    <Show when={!generating()}>
+                      <Download size={20} />
                     </Show>
                     {generating()
                       ? 'Generating...'
                       : selectedResources().length > 0
                         ? `Generate Report (${selectedResources().length} resource${selectedResources().length !== 1 ? 's' : ''})`
                         : 'Generate Report'}
-                  </button>
+                  </Button>
                 </div>
               </section>
             </Show>
@@ -284,20 +280,19 @@ export function ReportingPanel() {
                 </Show>
 
                 <div class="flex justify-end">
-                  <button
-                    class={`flex w-full items-center justify-center gap-2 rounded-md px-6 py-3 font-semibold transition-all sm:w-auto ${
-                      exportingInventory()
-                        ? 'cursor-not-allowed bg-slate-300 text-slate-500'
-                        : 'bg-emerald-600 text-white hover:bg-emerald-700'
-                    }`}
+                  <Button
+                    variant="success"
+                    size="lg"
+                    class="w-full gap-2 font-semibold sm:w-auto"
+                    isLoading={exportingInventory()}
                     disabled={exportingInventory()}
                     onClick={handleExportVMInventory}
                   >
-                    <Show when={exportingInventory()} fallback={<TableProperties size={20} />}>
-                      <div class="h-5 w-5 animate-spin rounded-full border-2 border-t-white border-white" />
+                    <Show when={!exportingInventory()}>
+                      <TableProperties size={20} />
                     </Show>
                     {exportingInventory() ? 'Exporting...' : 'Export VM Inventory'}
-                  </button>
+                  </Button>
                 </div>
               </section>
             </Show>

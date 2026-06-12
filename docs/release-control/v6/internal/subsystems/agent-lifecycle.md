@@ -25,7 +25,7 @@ that binary, not separate customer-facing agent products.
 
 1. `internal/api/agent_install_command_shared.go`
 2. `internal/api/config_setup_handlers.go`
-2a. `internal/api/setup_script_render.go`
+   2a. `internal/api/setup_script_render.go`
 3. `internal/api/unified_agent.go`
 4. `internal/agentupdate/update.go`
 5. `internal/hostagent/agent.go`
@@ -46,16 +46,16 @@ that binary, not separate customer-facing agent products.
 20. `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx`
 21. `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx`
 22. `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx`
-22a. `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx`
+    22a. `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx`
 23. `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`
-23a. `frontend-modern/src/components/Settings/InfrastructureAgentUpdatesDialog.tsx`
+    23a. `frontend-modern/src/components/Settings/InfrastructureAgentUpdatesDialog.tsx`
 24. `frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx`
 25. `frontend-modern/src/components/Settings/InfrastructureSourcePicker.tsx`
 26. `frontend-modern/src/components/Settings/InfrastructureDiscoverySettingsDialog.tsx`
 27. `frontend-modern/src/components/Settings/DiscoverySettingsForm.tsx`
 28. `frontend-modern/src/components/Settings/discoverySettingsModel.ts`
 29. `frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts`
-29a. `frontend-modern/src/components/Settings/infrastructureAgentUpdateCommandsModel.ts`
+    29a. `frontend-modern/src/components/Settings/infrastructureAgentUpdateCommandsModel.ts`
 30. `frontend-modern/src/components/Settings/proxmoxSettingsModel.ts`
 31. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`
 32. `frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts`
@@ -69,7 +69,7 @@ that binary, not separate customer-facing agent products.
 40. `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`
 41. `frontend-modern/src/utils/agentProfilesPresentation.ts`
 42. `frontend-modern/src/utils/agentInstallCommand.ts`
-42a. `frontend-modern/src/utils/agentVersion.ts`
+    42a. `frontend-modern/src/utils/agentVersion.ts`
 43. `frontend-modern/src/utils/infrastructureOnboardingPresentation.ts`
 44. `frontend-modern/src/api/nodes.ts`
 45. `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`
@@ -137,7 +137,7 @@ presented as proof that a guest-local agent is installed.
     behavior aligned so the Machines onboarding path does not diverge by OS.
 18. `frontend-modern/src/utils/infrastructureSettingsPresentation.ts` shared with `api-contracts`: the infrastructure settings presentation helper is both an agent lifecycle control surface and an API-backed direct-node/discovery settings boundary.
 19. `internal/api/agent_install_command_shared.go` shared with `api-contracts`: agent install command assembly is both an agent lifecycle control surface and a canonical API payload contract boundary.
-19a. `internal/api/cloud_agent_install_command.go` shared with `api-contracts`, `cloud-paid`: hosted tenant agent install command generation is both an agent lifecycle enrollment surface and a provider-hosted tenant boundary.
+    19a. `internal/api/cloud_agent_install_command.go` shared with `api-contracts`, `cloud-paid`: hosted tenant agent install command generation is both an agent lifecycle enrollment surface and a provider-hosted tenant boundary.
     The hosted PVE/PBS install command path must stay on the same token-file
     command transport as the normal lifecycle install helpers, while failing
     closed unless hosted mode is active, the target org exists, and the minted
@@ -791,8 +791,8 @@ helpers or recreating badge spans inline.
    access control; target-org approval remains organization-settings plus
    security/privacy ownership even when the implementation moves through the
    shared backend API tree.
-6. Keep legacy Unified Agent compatibility names explicitly secondary when touching shared `internal/api/` runtime helpers: the legacy host-route family and `host-agent:*` scope names may remain as ingress or migration aliases, but they must not retake primary ownership in router state, live runtime scope checks, handler commentary, or operator-facing guidance.
-7. Add or change the unified agent CLI entrypoint, version/help exit semantics, or startup argument/error routing through `cmd/pulse-agent/main.go`.
+7. Keep legacy Unified Agent compatibility names explicitly secondary when touching shared `internal/api/` runtime helpers: the legacy host-route family and `host-agent:*` scope names may remain as ingress or migration aliases, but they must not retake primary ownership in router state, live runtime scope checks, handler commentary, or operator-facing guidance.
+8. Add or change the unified agent CLI entrypoint, version/help exit semantics, or startup argument/error routing through `cmd/pulse-agent/main.go`.
    The CLI entrypoint owns propagation of persistence context into runtime-owned helpers. When installer-selected state roots differ from the default, `cmd/pulse-agent/main.go` must pass that exact `StateDir` through both the host-agent runtime and updater startup paths instead of letting one path silently fall back to `/var/lib/pulse-agent`.
    The same runtime-owned boundary also owns Pulse control-plane URL validation for agent startup, remote config, updater continuity, and command transport. Non-loopback control-plane URLs remain HTTPS/WSS by default, but explicitly insecure agent/dev-runtime flows may use plain HTTP/WS for LAN development control planes; installer-persisted dev URLs must not be accepted by one runtime path and rejected by another.
    The unified agent CLI copy follows the same command-execution vocabulary as the install surface. `cmd/pulse-agent/main.go` may keep the `--enable-commands` flag name for compatibility, but the help text and inline comments must describe command execution as Pulse command execution for Patrol actions and governed Proxmox LXC Docker inventory rather than reviving AI auto-fix language.
@@ -808,7 +808,7 @@ helpers or recreating badge spans inline.
    when `--enable-docker=false` or `PULSE_ENABLE_DOCKER=false` is set on
    the host, auto-detection and remote config must not start the Docker /
    Podman module.
-8. Add or change installer flags, persisted service arguments, or upgrade-safe re-entry behavior through `scripts/install.sh` and `scripts/install.ps1`.
+9. Add or change installer flags, persisted service arguments, or upgrade-safe re-entry behavior through `scripts/install.sh` and `scripts/install.ps1`.
    On Unix systemd hosts, `scripts/install.sh` must keep the default agent unit
    hardened, but command-enabled Proxmox VE agents selected with
    `--enable-commands --enable-proxmox` and type `pve` or `all` must explicitly
@@ -820,11 +820,11 @@ helpers or recreating badge spans inline.
    Approval-gated command execution must expose stable rejection reasons for
    invalid approval grants so fleet operators can distinguish missing, expired,
    mismatched, and signature-invalid grants through agent metrics.
-9. Preserve canonical token-lifecycle reads in shared `internal/api/` auth/security helpers so lifecycle-adjacent setup and install flows do not revoke a displayed relay pairing token after `lastUsedAt` proves that an already paired device is actively depending on that credential.
-10. Preserve backend-owned Pulse Mobile relay runtime credential minting in those same shared `internal/api/` auth/security helpers so lifecycle-adjacent setup and install flows reuse the canonical mobile token route instead of reintroducing wildcard or browser-authored runtime token bundles.
-11. Preserve the dedicated backend-owned `relay:mobile:access` capability and its governed backward-compatible route inventory plus the shared helper call sites around it, so lifecycle-adjacent setup and install flows do not widen the mobile device credential back into general AI chat/execute scope ownership.
-12. Preserve shipped security-doc guidance in shared lifecycle setup helpers so `internal/api/config_setup_handlers.go` and adjacent install/setup runtime paths point operators at the running build's local security documentation route rather than GitHub `main` links.
-13. Keep shared `internal/api/router.go` workload-chart downsampling presentation-only: when that router caps mixed-cadence workload history into equal-time buckets for operator-facing cards, lifecycle-adjacent setup and fleet surfaces must not reuse the shaped chart samples as heartbeat, enrollment, or last-seen authority.
+10. Preserve canonical token-lifecycle reads in shared `internal/api/` auth/security helpers so lifecycle-adjacent setup and install flows do not revoke a displayed relay pairing token after `lastUsedAt` proves that an already paired device is actively depending on that credential.
+11. Preserve backend-owned Pulse Mobile relay runtime credential minting in those same shared `internal/api/` auth/security helpers so lifecycle-adjacent setup and install flows reuse the canonical mobile token route instead of reintroducing wildcard or browser-authored runtime token bundles.
+12. Preserve the dedicated backend-owned `relay:mobile:access` capability and its governed backward-compatible route inventory plus the shared helper call sites around it, so lifecycle-adjacent setup and install flows do not widen the mobile device credential back into general AI chat/execute scope ownership.
+13. Preserve shipped security-doc guidance in shared lifecycle setup helpers so `internal/api/config_setup_handlers.go` and adjacent install/setup runtime paths point operators at the running build's local security documentation route rather than GitHub `main` links.
+14. Keep shared `internal/api/router.go` workload-chart downsampling presentation-only: when that router caps mixed-cadence workload history into equal-time buckets for operator-facing cards, lifecycle-adjacent setup and fleet surfaces must not reuse the shaped chart samples as heartbeat, enrollment, or last-seen authority.
     That same presentation-only boundary must preserve canonical millisecond timestamps when it serializes chart points, so lifecycle-adjacent first-host and fleet surfaces do not misread rounded chart samples as duplicate or restarted heartbeat evidence.
     The same rule now applies to storage summary interaction. Shared sticky-card or row-hover focus behavior on infrastructure, workloads, and storage may reuse the canonical chart transport, but lifecycle-adjacent install, enrollment, and fleet surfaces must not treat highlighted summary series or sticky-shell state as agent freshness or setup progress.
     The same rule now applies to infrastructure-summary metric filters. Shared
@@ -845,7 +845,7 @@ helpers or recreating badge spans inline.
     the omitted `usage` or `total` series as missing lifecycle telemetry or
     enrollment-state evidence.
     Dashboard storage trend consumers on that shared router boundary must now reuse the single `/api/storage-charts` summary response instead of fanning out per-pool `/api/metrics-store/history` reads, and lifecycle surfaces still must treat that batched storage summary transport as presentation context only rather than install, enrollment, or freshness truth.
-14. Keep install-script serving fallback-free, and keep the lifecycle
+15. Keep install-script serving fallback-free, and keep the lifecycle
     agent-download fallback pinned to published release lineage. The served
     install-script endpoints (/install.sh, /install.ps1) have no GitHub fallback:
     `internal/api/unified_agent.go` serves the locally bundled AGENT installer
@@ -856,7 +856,7 @@ helpers or recreating badge spans inline.
     tags and explicit RC prerelease tags as release assets; working-line dev
     prereleases and build-metadata versions must fail closed so install/repair do
     not depend on unpublished or branch-local URLs.
-15. Keep self-hosted purchase handoff state on the adjacent commercial/auth
+16. Keep self-hosted purchase handoff state on the adjacent commercial/auth
     boundary. When shared `internal/api/router.go`,
     `internal/api/router_routes_cloud.go`, `internal/api/licensing_handlers.go`,
     or `internal/api/demo_mode_commercial.go` evolve public
@@ -941,16 +941,16 @@ helpers or recreating badge spans inline.
     compact: the persistent page may expose only a concise discovery status
     line plus `Run discovery` / `Discovery settings` actions, while new-source
     admission stays on the per-platform table actions instead of competing
-   with discovery at the top of the page. Command-backed discovery sweeps and
-   forced single-resource refreshes remain API/AI-owned admin operations:
-   lifecycle surfaces may expose the controls, but route-level authority must
-   require `settings:write` plus the Discovery enablement gate, not
-   `monitoring:write`, enrollment state, or any fleet lifecycle shortcut.
-   Forced workload discovery also remains API/service-owned for endpoint
-   identity: lifecycle surfaces must not fill a Proxmox parent node or agent
-   name into workload trigger hostnames when the operator did not provide one,
-   because the discovery service resolves VM and system-container names from
-   canonical state before suggesting URLs or classifying known services.
+    with discovery at the top of the page. Command-backed discovery sweeps and
+    forced single-resource refreshes remain API/AI-owned admin operations:
+    lifecycle surfaces may expose the controls, but route-level authority must
+    require `settings:write` plus the Discovery enablement gate, not
+    `monitoring:write`, enrollment state, or any fleet lifecycle shortcut.
+    Forced workload discovery also remains API/service-owned for endpoint
+    identity: lifecycle surfaces must not fill a Proxmox parent node or agent
+    name into workload trigger hostnames when the operator did not provide one,
+    because the discovery service resolves VM and system-container names from
+    canonical state before suggesting URLs or classifying known services.
     The editor's probe step calls the aggregator probe endpoint and
     dispatches the detected or manually-selected type into a credential
     slot; it must not bypass the probe endpoint or fabricate probe
@@ -1077,7 +1077,7 @@ helpers or recreating badge spans inline.
    may accept a preview-provided connected-resource override, but the live
    first-session runtime path must keep `/api/state` polling as the sole
    source of connected-system truth when no override is supplied.
-7a. Keep lifecycle-neutral shared `internal/api/` changes from altering agent
+   7a. Keep lifecycle-neutral shared `internal/api/` changes from altering agent
    setup, registration, install, or profile payloads by accident. AI runtime
    or entitlement work that touches shared router or handler wiring must keep
    lifecycle public routes, setup-token validation, and agent profile payloads
@@ -1091,6 +1091,11 @@ helpers or recreating badge spans inline.
    narrative, including an explicit advanced-options disclosure so first-time
    operators see token generation, command copy, and status confirmation
    before non-default connection controls.
+   Setup handoff and connected-system completion actions in that installer
+   surface must keep their lifecycle meaning, destination, and token/download
+   behavior here, while composing the frontend-primitives `Button` variants for
+   success, outlined success, and ghost success chrome instead of carrying
+   lifecycle-local emerald button shells.
 9. Keep `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`
    and `frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts`
    aligned with that same lifecycle path. The bare
@@ -1130,7 +1135,7 @@ helpers or recreating badge spans inline.
     `tests/integration/tests/11-first-session.spec.ts` must refresh first-run
     state through `/api/security/dev/reset-first-run`, then prove the
     canonical `Add infrastructure` handoff and the explicit `Install Pulse
-    Agent` secondary handoff against the live setup wizard instead of relying
+Agent` secondary handoff against the live setup wizard instead of relying
     on stale bootstrap tokens, dashboard fallbacks, or preview-only coverage.
     The primary handoff must land on the shared infrastructure onboarding
     contract at `/settings/infrastructure?add=pick` and normalize back to

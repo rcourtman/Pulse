@@ -271,6 +271,36 @@ describe('settings architecture guardrails', () => {
     );
   });
 
+  it('keeps settings command actions on the shared button primitive', () => {
+    expect(reportingPanelSource).toContain("import { Button } from '@/components/shared/Button';");
+    expect(reportingPanelSource).toContain('<Button');
+    expect(reportingPanelSource).toContain('variant="primary"');
+    expect(reportingPanelSource).toContain('variant="success"');
+    expect(reportingPanelSource).toContain('isLoading={generating()}');
+    expect(reportingPanelSource).toContain('isLoading={exportingInventory()}');
+    expect(reportingPanelSource).not.toContain(
+      'flex w-full items-center justify-center gap-2 rounded-md px-6 py-3 font-semibold transition-all sm:w-auto',
+    );
+    expect(reportingPanelSource).not.toContain('bg-blue-600 text-white hover:bg-blue-700');
+    expect(reportingPanelSource).not.toContain('bg-emerald-600 text-white hover:bg-emerald-700');
+
+    expect(infrastructureInstallerSectionSource).toContain(
+      "import { Button, CommandCopyButton } from '@/components/shared/Button';",
+    );
+    expect(infrastructureInstallerSectionSource).toContain('variant="success"');
+    expect(infrastructureInstallerSectionSource).toContain('variant="successOutline"');
+    expect(infrastructureInstallerSectionSource).toContain('variant="successGhost"');
+    expect(infrastructureInstallerSectionSource).not.toContain(
+      'inline-flex items-center justify-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700',
+    );
+    expect(infrastructureInstallerSectionSource).not.toContain(
+      'inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900 transition-colors hover:bg-emerald-100',
+    );
+    expect(infrastructureInstallerSectionSource).not.toContain(
+      'inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100',
+    );
+  });
+
   it('keeps telemetry disclosure aligned with the security privacy contract', () => {
     expect(generalSettingsPanelSource).toContain('aggregate self-hosted adoption');
     expect(generalSettingsPanelSource).toContain('counts, and coarse feature flags');

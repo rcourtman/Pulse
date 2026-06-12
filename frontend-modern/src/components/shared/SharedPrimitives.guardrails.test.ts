@@ -1563,6 +1563,18 @@ describe('shared primitive guardrails', () => {
     const settingsPrimaryActionGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'button-primary-settings-action-local-shell',
     );
+    const settingsSuccessActionGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'button-success-settings-action-local-shell',
+    );
+    const settingsSuccessOutlineActionGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'button-success-outline-settings-action-local-shell',
+    );
+    const settingsSuccessGhostActionGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'button-success-ghost-settings-action-local-shell',
+    );
+    const largeReportingActionGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'button-large-reporting-action-local-shell',
+    );
     const settingsDangerActionGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'button-danger-settings-action-local-shell',
     );
@@ -1611,6 +1623,7 @@ describe('shared primitive guardrails', () => {
       'src/components/Settings/InfrastructureInstallerSection.tsx',
       'src/components/Settings/InfrastructureSourceManager.tsx',
       'src/components/Settings/InfrastructureWorkspace.tsx',
+      'src/components/Settings/ReportingPanel.tsx',
       'src/components/Settings/ResourcePicker.tsx',
       'src/features/patrol/PatrolIntelligenceWorkspace.tsx',
       'src/features/standalone/StandalonePageSurface.tsx',
@@ -1622,6 +1635,24 @@ describe('shared primitive guardrails', () => {
           patterns: expect.arrayContaining([
             'hover:border-red-500 hover:text-red-400',
             'w-full sm:w-auto min-h-10 sm:min-h-9 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm rounded-md border border-border',
+          ]),
+        }),
+        expect.objectContaining({
+          path: 'src/components/Settings/ReportingPanel.tsx',
+          patterns: expect.arrayContaining([
+            'rounded-md border border-base-300 bg-base-100 px-4 py-2 text-sm font-medium text-base-content',
+            'flex w-full items-center justify-center gap-2 rounded-md px-6 py-3 font-semibold transition-all sm:w-auto',
+            'bg-blue-600 text-white hover:bg-blue-700',
+            'bg-emerald-600 text-white hover:bg-emerald-700',
+          ]),
+        }),
+        expect.objectContaining({
+          path: 'src/components/Settings/InfrastructureInstallerSection.tsx',
+          patterns: expect.arrayContaining([
+            'inline-flex items-center justify-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700',
+            'inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900 transition-colors hover:bg-emerald-100',
+            'inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100',
+            'inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100',
           ]),
         }),
       ]),
@@ -1686,6 +1717,68 @@ describe('shared primitive guardrails', () => {
     ]);
     expect(settingsPrimaryActionGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(settingsPrimaryActionGuard?.ignoredPaths).toEqual([
+      'src/components/shared/Button.test.tsx',
+    ]);
+    expect(settingsSuccessActionGuard?.canonical?.path).toBe(
+      'src/components/shared/buttonModel.ts',
+    );
+    expect(settingsSuccessActionGuard?.canonical?.export).toBe('getButtonClass');
+    expect(settingsSuccessActionGuard?.allPatterns).toEqual([
+      'rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white',
+    ]);
+    expect(settingsSuccessActionGuard?.scopes).toEqual([
+      'src/components/Settings',
+      'src/features',
+      'src/pages',
+    ]);
+    expect(settingsSuccessActionGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(settingsSuccessActionGuard?.ignoredPaths).toEqual([
+      'src/components/shared/Button.test.tsx',
+    ]);
+    expect(settingsSuccessOutlineActionGuard?.canonical?.path).toBe(
+      'src/components/shared/buttonModel.ts',
+    );
+    expect(settingsSuccessOutlineActionGuard?.canonical?.export).toBe('getButtonClass');
+    expect(settingsSuccessOutlineActionGuard?.allPatterns).toEqual([
+      'rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900',
+    ]);
+    expect(settingsSuccessOutlineActionGuard?.scopes).toEqual([
+      'src/components/Settings',
+      'src/features',
+      'src/pages',
+    ]);
+    expect(settingsSuccessOutlineActionGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(settingsSuccessOutlineActionGuard?.ignoredPaths).toEqual([
+      'src/components/shared/Button.test.tsx',
+    ]);
+    expect(settingsSuccessGhostActionGuard?.canonical?.path).toBe(
+      'src/components/shared/buttonModel.ts',
+    );
+    expect(settingsSuccessGhostActionGuard?.canonical?.export).toBe('getButtonClass');
+    expect(settingsSuccessGhostActionGuard?.allPatterns).toEqual([
+      'rounded-md px-3 py-2 text-sm font-medium text-emerald-900',
+    ]);
+    expect(settingsSuccessGhostActionGuard?.scopes).toEqual([
+      'src/components/Settings',
+      'src/features',
+      'src/pages',
+    ]);
+    expect(settingsSuccessGhostActionGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(settingsSuccessGhostActionGuard?.ignoredPaths).toEqual([
+      'src/components/shared/Button.test.tsx',
+    ]);
+    expect(largeReportingActionGuard?.canonical?.path).toBe('src/components/shared/buttonModel.ts');
+    expect(largeReportingActionGuard?.canonical?.export).toBe('getButtonClass');
+    expect(largeReportingActionGuard?.allPatterns).toEqual([
+      'flex w-full items-center justify-center gap-2 rounded-md px-6 py-3 font-semibold transition-all sm:w-auto',
+    ]);
+    expect(largeReportingActionGuard?.scopes).toEqual([
+      'src/components/Settings',
+      'src/features',
+      'src/pages',
+    ]);
+    expect(largeReportingActionGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(largeReportingActionGuard?.ignoredPaths).toEqual([
       'src/components/shared/Button.test.tsx',
     ]);
     expect(settingsDangerActionGuard?.canonical?.path).toBe('src/components/shared/buttonModel.ts');
@@ -1790,6 +1883,9 @@ describe('shared primitive guardrails', () => {
     expect(buttonModelSource).toContain('BUTTON_VARIANT_CLASSES');
     expect(buttonModelSource).toContain('BUTTON_SIZE_CLASSES');
     expect(buttonModelSource).toContain('primaryFlat:');
+    expect(buttonModelSource).toContain('success:');
+    expect(buttonModelSource).toContain('successOutline:');
+    expect(buttonModelSource).toContain('successGhost:');
     expect(buttonModelSource).toContain('COPY_VALUE_BUTTON_VARIANT_CLASSES');
     expect(buttonModelSource).toContain('COPY_VALUE_BUTTON_SIZE_CLASSES');
     expect(buttonModelSource).toContain('dangerOutline:');
@@ -1861,8 +1957,23 @@ describe('shared primitive guardrails', () => {
     );
     expect(infrastructureInstallerSectionSource).toContain('@/components/shared/Button');
     expect(infrastructureInstallerSectionSource).toContain('CommandCopyButton');
+    expect(infrastructureInstallerSectionSource).toContain('variant="success"');
+    expect(infrastructureInstallerSectionSource).toContain('variant="successOutline"');
+    expect(infrastructureInstallerSectionSource).toContain('variant="successGhost"');
     expect(infrastructureInstallerSectionSource).not.toContain(
       'rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-base-content',
+    );
+    expect(infrastructureInstallerSectionSource).not.toContain(
+      'inline-flex items-center justify-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700',
+    );
+    expect(infrastructureInstallerSectionSource).not.toContain(
+      'inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900 transition-colors hover:bg-emerald-100',
+    );
+    expect(infrastructureInstallerSectionSource).not.toContain(
+      'inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100',
+    );
+    expect(infrastructureInstallerSectionSource).not.toContain(
+      'inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100',
     );
     expect(infrastructureInstallerSectionSource).not.toContain('absolute right-2 top-2');
     expect(infrastructureInstallerSectionSource).not.toContain('bg-surface-hover p-2');
@@ -1907,6 +2018,17 @@ describe('shared primitive guardrails', () => {
     expect(resourcePickerSource).not.toContain(
       'w-full sm:w-auto min-h-10 sm:min-h-9 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm rounded-md border border-border',
     );
+    expect(reportingPanelSource).toContain('@/components/shared/Button');
+    expect(reportingPanelSource).toContain('<Button');
+    expect(reportingPanelSource).toContain('variant="success"');
+    expect(reportingPanelSource).not.toContain(
+      'rounded-md border border-base-300 bg-base-100 px-4 py-2 text-sm font-medium text-base-content',
+    );
+    expect(reportingPanelSource).not.toContain(
+      'flex w-full items-center justify-center gap-2 rounded-md px-6 py-3 font-semibold transition-all sm:w-auto',
+    );
+    expect(reportingPanelSource).not.toContain('bg-blue-600 text-white hover:bg-blue-700');
+    expect(reportingPanelSource).not.toContain('bg-emerald-600 text-white hover:bg-emerald-700');
     expect(discoveryTabSource).toContain('@/components/shared/Button');
     expect(discoveryTabSource).toContain('@/components/shared/CopyableCodeRow');
     expect(discoveryTabSource).toContain('CopyValueButton');

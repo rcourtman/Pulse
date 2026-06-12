@@ -23,6 +23,9 @@ describe('Button', () => {
       "secondary: 'border border-border bg-surface text-base-content shadow-sm hover:bg-surface-hover'",
     );
     expect(buttonModelSource).toContain('primaryFlat:');
+    expect(buttonModelSource).toContain('success:');
+    expect(buttonModelSource).toContain('successOutline:');
+    expect(buttonModelSource).toContain('successGhost:');
     expect(buttonModelSource).toContain(
       "'border border-border bg-surface text-muted hover:bg-surface-hover hover:text-base-content'",
     );
@@ -76,6 +79,15 @@ describe('Button', () => {
         <Button variant="dangerOutline" size="settingsAction">
           Remove source
         </Button>
+        <Button variant="success" size="settingsAction">
+          Open infrastructure
+        </Button>
+        <Button variant="successOutline" size="settingsAction">
+          Open inventory
+        </Button>
+        <Button variant="successGhost" size="settingsAction">
+          Dismiss
+        </Button>
       </>
     ));
 
@@ -88,6 +100,18 @@ describe('Button', () => {
     expect(removeButton).toHaveClass('min-h-10');
     expect(removeButton).toHaveClass('border-rose-300');
     expect(removeButton).toHaveClass('text-rose-700');
+
+    const openInfrastructureButton = screen.getByRole('button', { name: 'Open infrastructure' });
+    expect(openInfrastructureButton).toHaveClass('bg-emerald-600');
+    expect(openInfrastructureButton).toHaveClass('text-white');
+
+    const openInventoryButton = screen.getByRole('button', { name: 'Open inventory' });
+    expect(openInventoryButton).toHaveClass('border-emerald-300');
+    expect(openInventoryButton).toHaveClass('text-emerald-900');
+
+    const dismissButton = screen.getByRole('button', { name: 'Dismiss' });
+    expect(dismissButton).toHaveClass('border-transparent');
+    expect(dismissButton).toHaveClass('text-emerald-900');
   });
 
   it('renders command-copy icon buttons through the shared primitive', () => {

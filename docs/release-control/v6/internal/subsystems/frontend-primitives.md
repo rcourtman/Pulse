@@ -473,9 +473,15 @@ not a replacement status card, CTA band, or page-local nested card.
    settings/action `px-3 py-2 text-sm` shape, the shared `xs` size owns the
    compact settings row-action `px-2.5 py-1 text-xs` shape, and the shared
    `iconMd` size owns the settings dialog close-button `h-9 w-9` icon shape.
+   Positive completion or continuation actions such as infrastructure handoff
+   and reporting exports use the shared `success`, `successOutline`, and
+   `successGhost` Button variants instead of carrying page-local emerald action
+   shells.
    Settings selection helpers such as `ResourcePicker` must use the same
    `Button` primitive for select-all, clear, and chip remove actions instead of
    restoring footer-local action shells.
+   Reporting surfaces must use the same primitive for retry, generate, and
+   export actions rather than restoring large local CTA button shells.
    If a new surface needs a variant that the shared primitive does not expose,
    extend the primitive and registry guard rather than adding a page-local
    class string.

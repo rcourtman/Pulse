@@ -256,4 +256,29 @@ describe('ReportingPanel', () => {
     screen.getByRole('button', { name: 'Retry' }).click();
     expect(reloadReportingCatalog).toHaveBeenCalledOnce();
   });
+
+  it('routes reporting command actions through shared button variants', () => {
+    const handleGenerate = vi.fn();
+    const handleExportVMInventory = vi.fn();
+    useReportingPanelStateMock.mockReturnValue(
+      buildState({
+        handleExportVMInventory,
+        handleGenerate,
+      }),
+    );
+
+    render(() => <ReportingPanel />);
+
+    const generateButton = screen.getByRole('button', { name: 'Generate Report' });
+    expect(generateButton).toHaveClass('bg-blue-600');
+    expect(generateButton).toHaveClass('px-6');
+    generateButton.click();
+    expect(handleGenerate).toHaveBeenCalledOnce();
+
+    const exportButton = screen.getByRole('button', { name: 'Export VM Inventory' });
+    expect(exportButton).toHaveClass('bg-emerald-600');
+    expect(exportButton).toHaveClass('px-6');
+    exportButton.click();
+    expect(handleExportVMInventory).toHaveBeenCalledOnce();
+  });
 });

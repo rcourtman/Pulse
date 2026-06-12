@@ -1,6 +1,9 @@
 export type ButtonVariant =
   | 'primary'
   | 'primaryFlat'
+  | 'success'
+  | 'successOutline'
+  | 'successGhost'
   | 'secondary'
   | 'danger'
   | 'dangerOutline'
@@ -22,6 +25,11 @@ export const BUTTON_BASE_CLASS =
 export const BUTTON_VARIANT_CLASSES: Record<ButtonVariant, string> = {
   primary: 'border border-transparent bg-blue-600 text-white shadow-sm hover:bg-blue-700',
   primaryFlat: 'border border-transparent bg-blue-600 text-white hover:bg-blue-700',
+  success: 'border border-transparent bg-emerald-600 text-white shadow-sm hover:bg-emerald-700',
+  successOutline:
+    'border border-emerald-300 bg-white text-emerald-900 hover:bg-emerald-100 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-100 dark:hover:bg-emerald-800',
+  successGhost:
+    'border border-transparent bg-transparent text-emerald-900 hover:bg-emerald-100 dark:text-emerald-100 dark:hover:bg-emerald-800',
   secondary: 'border border-border bg-surface text-base-content shadow-sm hover:bg-surface-hover',
   danger: 'border border-transparent bg-rose-600 text-white shadow-sm hover:bg-rose-700',
   dangerOutline:

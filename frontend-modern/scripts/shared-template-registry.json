@@ -259,6 +259,7 @@
         { "path": "src/components/Settings/InfrastructureInstallerSection.tsx" },
         { "path": "src/components/Settings/InfrastructureSourceManager.tsx" },
         { "path": "src/components/Settings/InfrastructureWorkspace.tsx" },
+        { "path": "src/components/Settings/ReportingPanel.tsx" },
         { "path": "src/components/Settings/ResourcePicker.tsx" },
         { "path": "src/features/patrol/PatrolIntelligenceWorkspace.tsx" },
         { "path": "src/features/standalone/StandalonePageSurface.tsx" }
@@ -269,6 +270,24 @@
           "patterns": [
             "hover:border-red-500 hover:text-red-400",
             "w-full sm:w-auto min-h-10 sm:min-h-9 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm rounded-md border border-border"
+          ]
+        },
+        {
+          "path": "src/components/Settings/ReportingPanel.tsx",
+          "patterns": [
+            "rounded-md border border-base-300 bg-base-100 px-4 py-2 text-sm font-medium text-base-content",
+            "flex w-full items-center justify-center gap-2 rounded-md px-6 py-3 font-semibold transition-all sm:w-auto",
+            "bg-blue-600 text-white hover:bg-blue-700",
+            "bg-emerald-600 text-white hover:bg-emerald-700"
+          ]
+        },
+        {
+          "path": "src/components/Settings/InfrastructureInstallerSection.tsx",
+          "patterns": [
+            "inline-flex items-center justify-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700",
+            "inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900 transition-colors hover:bg-emerald-100",
+            "inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100",
+            "inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100"
           ]
         }
       ],
@@ -1427,6 +1446,90 @@
       "extensions": [".tsx"],
       "allPatterns": ["rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white"],
       "legacyReason": "Retired migration debt. Primary settings actions belong to the shared Button primitive family.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/Button.test.tsx"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "button-success-settings-action-local-shell",
+      "category": "action-button",
+      "summary": "Settings and infrastructure surfaces must not copy the emerald px-3 py-2 success action-button shell; use Button with the success variant and mdCompact or settingsAction size.",
+      "canonical": {
+        "path": "src/components/shared/buttonModel.ts",
+        "export": "getButtonClass"
+      },
+      "scopes": ["src/components/Settings", "src/features", "src/pages"],
+      "extensions": [".tsx"],
+      "allPatterns": ["rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white"],
+      "legacyReason": "Retired migration debt. Positive settings actions belong to the shared Button primitive family.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/Button.test.tsx"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "button-success-outline-settings-action-local-shell",
+      "category": "action-button",
+      "summary": "Settings and infrastructure surfaces must not copy the emerald outlined px-3 py-2 success action-button shell; use Button with the successOutline variant and mdCompact or settingsAction size.",
+      "canonical": {
+        "path": "src/components/shared/buttonModel.ts",
+        "export": "getButtonClass"
+      },
+      "scopes": ["src/components/Settings", "src/features", "src/pages"],
+      "extensions": [".tsx"],
+      "allPatterns": [
+        "rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900"
+      ],
+      "legacyReason": "Retired migration debt. Positive outlined settings actions belong to the shared Button primitive family.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/Button.test.tsx"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "button-success-ghost-settings-action-local-shell",
+      "category": "action-button",
+      "summary": "Settings and infrastructure surfaces must not copy the emerald ghost px-3 py-2 success action-button shell; use Button with the successGhost variant and mdCompact or settingsAction size.",
+      "canonical": {
+        "path": "src/components/shared/buttonModel.ts",
+        "export": "getButtonClass"
+      },
+      "scopes": ["src/components/Settings", "src/features", "src/pages"],
+      "extensions": [".tsx"],
+      "allPatterns": ["rounded-md px-3 py-2 text-sm font-medium text-emerald-900"],
+      "legacyReason": "Retired migration debt. Positive ghost settings actions belong to the shared Button primitive family.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/Button.test.tsx"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "button-large-reporting-action-local-shell",
+      "category": "action-button",
+      "summary": "Reporting and similar settings CTA rows must not copy the large full-width action-button shell; use Button with the lg size and contextual variant.",
+      "canonical": {
+        "path": "src/components/shared/buttonModel.ts",
+        "export": "getButtonClass"
+      },
+      "scopes": ["src/components/Settings", "src/features", "src/pages"],
+      "extensions": [".tsx"],
+      "allPatterns": [
+        "flex w-full items-center justify-center gap-2 rounded-md px-6 py-3 font-semibold transition-all sm:w-auto"
+      ],
+      "legacyReason": "Retired migration debt. Large settings/report actions belong to the shared Button primitive family.",
       "allowedPaths": [],
       "ignoredPaths": ["src/components/shared/Button.test.tsx"],
       "proof": [

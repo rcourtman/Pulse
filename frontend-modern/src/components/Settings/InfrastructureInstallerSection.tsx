@@ -215,32 +215,28 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                 </p>
               </div>
               <div class="flex flex-wrap gap-2 lg:w-64 lg:flex-col">
-                <button
-                  type="button"
+                <Button
+                  variant="successOutline"
+                  size="mdCompact"
                   onClick={() =>
                     void state.copySetupHandoffField(
                       handoff().apiToken,
                       'Copied first-run admin API token.',
                     )
                   }
-                  class="inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-100 dark:hover:bg-emerald-800"
                 >
                   Copy admin token
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  variant="successOutline"
+                  size="mdCompact"
                   onClick={state.downloadSetupHandoff}
-                  class="inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-100 dark:hover:bg-emerald-800"
                 >
                   Download credentials
-                </button>
-                <button
-                  type="button"
-                  onClick={state.clearSetupHandoff}
-                  class="inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100 dark:text-emerald-100 dark:hover:bg-emerald-800"
-                >
+                </Button>
+                <Button variant="successGhost" size="mdCompact" onClick={state.clearSetupHandoff}>
                   Dismiss
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -788,20 +784,20 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                       </div>
                       <Show when={isConnected()}>
                         <div class="flex flex-col gap-2 sm:flex-row">
-                          <button
-                            type="button"
+                          <Button
+                            variant="success"
+                            size="mdCompact"
                             onClick={state.openInfrastructure}
-                            class="inline-flex items-center justify-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700"
                           >
                             Open infrastructure
-                          </button>
-                          <button
-                            type="button"
+                          </Button>
+                          <Button
+                            variant="successOutline"
+                            size="mdCompact"
                             onClick={state.openInfrastructureInventory}
-                            class="inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900 transition-colors hover:bg-emerald-100 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-100 dark:hover:bg-emerald-800"
                           >
                             Open inventory
-                          </button>
+                          </Button>
                         </div>
                       </Show>
                     </div>
