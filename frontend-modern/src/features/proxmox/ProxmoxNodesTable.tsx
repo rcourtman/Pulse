@@ -13,8 +13,6 @@ import { useAlertsActivation } from '@/stores/alertsActivation';
 import { getAlertStyles } from '@/utils/alerts';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
-import { TableCard } from '@/components/shared/TableCard';
-import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import { NodeDrawer } from '@/components/Workloads/NodeDrawer';
 import { toDiscoveryConfig } from '@/components/Infrastructure/resourceDetailDiscoveryModel';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
@@ -22,14 +20,7 @@ import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
 import { MetricMiniSparkline } from '@/components/Workloads/MetricMiniSparkline';
 import { TemperatureGauge } from '@/components/shared/TemperatureGauge';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/shared/Table';
+import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { getNodeExternalUrl } from '@/utils/nodes';
 import { asTrimmedString } from '@/utils/stringUtils';
@@ -38,10 +29,8 @@ import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import { useWorkloadTableMetricHistory } from '@/components/Workloads/useWorkloadTableMetricHistory';
 import { getWorkloadTableLayoutMode } from '@/components/Workloads/guestRowModel';
 import {
-  PLATFORM_TABLE_BODY_CLASS,
-  PLATFORM_TABLE_CARD_CLASS,
-  PLATFORM_TABLE_HEADER_ROW_CLASS,
   PlatformTableEmptyState,
+  PlatformTableShell,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
 } from '@/features/platformPage/sharedPlatformPage';
@@ -158,9 +147,7 @@ const getHostSortValue = (
     case 'disk':
       return node.disk?.current ?? null;
     case 'temp':
-      return typeof node.temperature === 'number' && node.temperature > 0
-        ? node.temperature
-        : null;
+      return typeof node.temperature === 'number' && node.temperature > 0 ? node.temperature : null;
     case 'uptime':
       return node.uptime ?? null;
     case 'vms':
@@ -260,9 +247,10 @@ export const ProxmoxNodesTable: Component<{
         />
       }
     >
-      <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
-        <TableCardHeader title="Nodes" />
-        <Table class={`${getProxmoxHostTableMinWidthClass(layoutMode())} table-fixed text-xs`}>
+      <PlatformTableShell
+        title="Nodes"
+        tableClass={`${getProxmoxHostTableMinWidthClass(layoutMode())} table-fixed text-xs`}
+        colgroup={
           <colgroup>
             <For each={visibleColumns()}>
               {(column) => (
@@ -276,370 +264,363 @@ export const ProxmoxNodesTable: Component<{
               )}
             </For>
           </colgroup>
-          <TableHeader>
-            <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-              <For each={visibleColumns()}>
-                {(column) => (
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind(column.kind)} ${
-                      column.id !== 'web' ? 'cursor-pointer hover:bg-surface-hover' : ''
-                    }`}
-                    aria-sort={
-                      sortKey() === column.id
-                        ? sortDirection() === 'asc'
-                          ? 'ascending'
-                          : 'descending'
-                        : undefined
-                    }
-                    onClick={() => handleSort(column.id)}
-                  >
-                    {column.label}
-                    {sortKey() === column.id && (sortDirection() === 'asc' ? ' ▲' : ' ▼')}
-                  </TableHead>
-                )}
-              </For>
-            </TableRow>
-          </TableHeader>
-          <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
-            <For each={sortedNodes()}>
-              {(node) => {
-                const name = () => asTrimmedString(node.name) || node.id;
-                const drawerNode = createMemo(() => nodeFromResource(node));
-                const detailRowId = () => `proxmox-host-drawer-${node.id}`;
-                const isSelected = () => selectedNodeId() === node.id;
-                const toggleNodeDrawer = () =>
-                  setSelectedNodeId((current) => (current === node.id ? null : node.id));
-                const handleActivationKey: JSX.EventHandler<HTMLTableRowElement, KeyboardEvent> = (
-                  event,
-                ) => {
-                  if (event.key !== 'Enter' && event.key !== ' ') return;
-                  event.preventDefault();
-                  toggleNodeDrawer();
-                };
-                const version = () => asTrimmedString(getResourceVersion(node));
-                const cluster = () => getResourceClusterLabel(node);
-                const counts = () => countGuestsForNode(props.guests, getResourceNodeName(node));
-                const indicator = () => getSimpleStatusIndicator(node.status);
-                const isOnline = () => indicator().variant === 'success';
-                const uptime = () => formatNodeUptime(node.uptime);
-                const metricsKey = () => buildMetricKeyForUnifiedResource(node);
-                const temperature = () => node.temperature;
-                const cpuPercent = () => node.cpu?.current ?? 0;
-                const memoryUsed = () => node.memory?.used ?? 0;
-                const memoryTotal = () => node.memory?.total ?? 0;
-                const memoryPercent = () =>
-                  memoryTotal() > 0
-                    ? (memoryUsed() / memoryTotal()) * 100
-                    : typeof node.memory?.current === 'number'
-                      ? node.memory.current
-                      : 0;
-                const memoryPercentOnly = () =>
-                  !memoryTotal() && typeof node.memory?.current === 'number'
+        }
+        header={
+          <For each={visibleColumns()}>
+            {(column) => (
+              <TableHead
+                class={`${getPlatformTableHeadClassForKind(column.kind)} ${
+                  column.id !== 'web' ? 'cursor-pointer hover:bg-surface-hover' : ''
+                }`}
+                aria-sort={
+                  sortKey() === column.id
+                    ? sortDirection() === 'asc'
+                      ? 'ascending'
+                      : 'descending'
+                    : undefined
+                }
+                onClick={() => handleSort(column.id)}
+              >
+                {column.label}
+                {sortKey() === column.id && (sortDirection() === 'asc' ? ' ▲' : ' ▼')}
+              </TableHead>
+            )}
+          </For>
+        }
+        body={
+          <For each={sortedNodes()}>
+            {(node) => {
+              const name = () => asTrimmedString(node.name) || node.id;
+              const drawerNode = createMemo(() => nodeFromResource(node));
+              const detailRowId = () => `proxmox-host-drawer-${node.id}`;
+              const isSelected = () => selectedNodeId() === node.id;
+              const toggleNodeDrawer = () =>
+                setSelectedNodeId((current) => (current === node.id ? null : node.id));
+              const handleActivationKey: JSX.EventHandler<HTMLTableRowElement, KeyboardEvent> = (
+                event,
+              ) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                toggleNodeDrawer();
+              };
+              const version = () => asTrimmedString(getResourceVersion(node));
+              const cluster = () => getResourceClusterLabel(node);
+              const counts = () => countGuestsForNode(props.guests, getResourceNodeName(node));
+              const indicator = () => getSimpleStatusIndicator(node.status);
+              const isOnline = () => indicator().variant === 'success';
+              const uptime = () => formatNodeUptime(node.uptime);
+              const metricsKey = () => buildMetricKeyForUnifiedResource(node);
+              const temperature = () => node.temperature;
+              const cpuPercent = () => node.cpu?.current ?? 0;
+              const memoryUsed = () => node.memory?.used ?? 0;
+              const memoryTotal = () => node.memory?.total ?? 0;
+              const memoryPercent = () =>
+                memoryTotal() > 0
+                  ? (memoryUsed() / memoryTotal()) * 100
+                  : typeof node.memory?.current === 'number'
                     ? node.memory.current
-                    : undefined;
-                const diskPercent = () => node.disk?.current ?? 0;
-                const aggregateDisk = (): Disk | undefined =>
-                  node.disk
-                    ? ({
-                        total: node.disk.total ?? 0,
-                        used: node.disk.used ?? 0,
-                        free: node.disk.free ?? 0,
-                        usage: node.disk.current ?? 0,
-                      } as Disk)
-                    : undefined;
-                const legacyNode = () => projectResourceToLegacyNode(node);
-                const externalUrl = () => {
-                  const shimmed = drawerNode();
-                  return shimmed ? getNodeExternalUrl(shimmed) : '';
-                };
-                const pendingUpdates = () => drawerNode()?.pendingUpdates ?? 0;
-                const alertStyles = createMemo(() =>
-                  getAlertStyles(node.id, activeAlerts, alertsEnabled()),
-                );
-                const alertAccentTone = createMemo<'critical' | 'warning' | 'acknowledged' | undefined>(
-                  () => {
-                    const styles = alertStyles();
-                    if (styles.hasUnacknowledgedAlert) {
-                      return styles.severity === 'critical' ? 'critical' : 'warning';
-                    }
-                    return styles.hasAcknowledgedOnlyAlert ? 'acknowledged' : undefined;
-                  },
-                );
-                const rowAlertBg = () => {
-                  const styles = alertStyles();
-                  if (!styles.hasUnacknowledgedAlert) return '';
-                  return styles.severity === 'critical'
-                    ? 'bg-red-50 dark:bg-red-950'
-                    : 'bg-yellow-50 dark:bg-yellow-950';
-                };
-                const cpuSeries = () => metricHistory.getNodeMetricSeries(legacyNode(), 'cpu');
-                const memorySeries = () =>
-                  metricHistory.getNodeMetricSeries(legacyNode(), 'memory');
-                const diskSeries = () => metricHistory.getNodeMetricSeries(legacyNode(), 'disk');
-                const renderColumnCell = (column: ProxmoxHostTableColumn): JSX.Element => {
-                  switch (column.id) {
-                    case 'node':
-                      return (
-                        <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
-                          <div class="flex min-w-0 items-center gap-2">
-                            <StatusDot
-                              size="sm"
-                              variant={indicator().variant}
-                              title={node.status || 'unknown'}
-                              ariaHidden
-                            />
-                            <span class="truncate font-semibold text-base-content" title={name()}>
-                              {name()}
+                    : 0;
+              const memoryPercentOnly = () =>
+                !memoryTotal() && typeof node.memory?.current === 'number'
+                  ? node.memory.current
+                  : undefined;
+              const diskPercent = () => node.disk?.current ?? 0;
+              const aggregateDisk = (): Disk | undefined =>
+                node.disk
+                  ? ({
+                      total: node.disk.total ?? 0,
+                      used: node.disk.used ?? 0,
+                      free: node.disk.free ?? 0,
+                      usage: node.disk.current ?? 0,
+                    } as Disk)
+                  : undefined;
+              const legacyNode = () => projectResourceToLegacyNode(node);
+              const externalUrl = () => {
+                const shimmed = drawerNode();
+                return shimmed ? getNodeExternalUrl(shimmed) : '';
+              };
+              const pendingUpdates = () => drawerNode()?.pendingUpdates ?? 0;
+              const alertStyles = createMemo(() =>
+                getAlertStyles(node.id, activeAlerts, alertsEnabled()),
+              );
+              const alertAccentTone = createMemo<
+                'critical' | 'warning' | 'acknowledged' | undefined
+              >(() => {
+                const styles = alertStyles();
+                if (styles.hasUnacknowledgedAlert) {
+                  return styles.severity === 'critical' ? 'critical' : 'warning';
+                }
+                return styles.hasAcknowledgedOnlyAlert ? 'acknowledged' : undefined;
+              });
+              const rowAlertBg = () => {
+                const styles = alertStyles();
+                if (!styles.hasUnacknowledgedAlert) return '';
+                return styles.severity === 'critical'
+                  ? 'bg-red-50 dark:bg-red-950'
+                  : 'bg-yellow-50 dark:bg-yellow-950';
+              };
+              const cpuSeries = () => metricHistory.getNodeMetricSeries(legacyNode(), 'cpu');
+              const memorySeries = () => metricHistory.getNodeMetricSeries(legacyNode(), 'memory');
+              const diskSeries = () => metricHistory.getNodeMetricSeries(legacyNode(), 'disk');
+              const renderColumnCell = (column: ProxmoxHostTableColumn): JSX.Element => {
+                switch (column.id) {
+                  case 'node':
+                    return (
+                      <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
+                        <div class="flex min-w-0 items-center gap-2">
+                          <StatusDot
+                            size="sm"
+                            variant={indicator().variant}
+                            title={node.status || 'unknown'}
+                            ariaHidden
+                          />
+                          <span class="truncate font-semibold text-base-content" title={name()}>
+                            {name()}
+                          </span>
+                          <Show when={isOnline() && pendingUpdates() > 0}>
+                            <span
+                              class={`rounded px-1 py-0 text-[9px] font-medium whitespace-nowrap ${
+                                pendingUpdates() >= 10
+                                  ? 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-400'
+                                  : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-400'
+                              }`}
+                              title={`${pendingUpdates()} pending apt update${pendingUpdates() !== 1 ? 's' : ''}`}
+                            >
+                              {pendingUpdates()} updates
                             </span>
-                            <Show when={isOnline() && pendingUpdates() > 0}>
-                              <span
-                                class={`rounded px-1 py-0 text-[9px] font-medium whitespace-nowrap ${
-                                  pendingUpdates() >= 10
-                                    ? 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-400'
-                                    : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-400'
-                                }`}
-                                title={`${pendingUpdates()} pending apt update${pendingUpdates() !== 1 ? 's' : ''}`}
-                              >
-                                {pendingUpdates()} updates
-                              </span>
+                          </Show>
+                        </div>
+                      </TableCell>
+                    );
+                  case 'version':
+                    return (
+                      <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
+                        <Show when={version()} fallback={<span class="text-muted">—</span>}>
+                          <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 font-mono text-[10px] text-base-content">
+                            {version()}
+                          </span>
+                        </Show>
+                      </TableCell>
+                    );
+                  case 'uptime':
+                    return (
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind(column.kind)} tabular-nums ${
+                          uptime().warn
+                            ? 'text-orange-600 dark:text-orange-400'
+                            : 'text-base-content'
+                        }`}
+                      >
+                        {uptime().label}
+                      </TableCell>
+                    );
+                  case 'cpu':
+                    return (
+                      <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
+                        <Show
+                          when={isSparklineMode()}
+                          fallback={
+                            <ResponsiveMetricCell
+                              class="w-full"
+                              value={cpuPercent()}
+                              type="cpu"
+                              resourceId={metricsKey()}
+                              isRunning={isOnline()}
+                              showMobile={false}
+                            />
+                          }
+                        >
+                          <MetricMiniSparkline
+                            series={cpuSeries()}
+                            valueLabel={formatPercentLabel(cpuPercent())}
+                            title={`${name()} CPU history`}
+                          />
+                        </Show>
+                      </TableCell>
+                    );
+                  case 'memory':
+                    return (
+                      <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
+                        <Show
+                          when={isSparklineMode()}
+                          fallback={
+                            <Show
+                              when={
+                                isOnline() && (memoryTotal() > 0 || memoryPercentOnly() != null)
+                              }
+                              fallback={
+                                <div class="flex justify-center">
+                                  <span class="text-xs text-muted" aria-hidden="true">
+                                    —
+                                  </span>
+                                </div>
+                              }
+                            >
+                              <StackedMemoryBar
+                                used={memoryUsed()}
+                                total={memoryTotal()}
+                                percentOnly={memoryPercentOnly()}
+                                cache={drawerNode()?.memory?.cache || 0}
+                                swapUsed={drawerNode()?.memory?.swapUsed || 0}
+                                swapTotal={drawerNode()?.memory?.swapTotal || 0}
+                              />
                             </Show>
+                          }
+                        >
+                          <MetricMiniSparkline
+                            series={memorySeries()}
+                            valueLabel={formatPercentLabel(memoryPercent())}
+                            title={`${name()} memory history`}
+                          />
+                        </Show>
+                      </TableCell>
+                    );
+                  case 'disk':
+                    return (
+                      <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
+                        <Show
+                          when={isSparklineMode()}
+                          fallback={
+                            <Show
+                              when={isOnline() && (aggregateDisk() || node.agent?.disks?.length)}
+                              fallback={
+                                <div class="flex justify-center">
+                                  <span class="text-xs text-muted" aria-hidden="true">
+                                    —
+                                  </span>
+                                </div>
+                              }
+                            >
+                              <StackedDiskBar
+                                mode={
+                                  (node.agent?.disks?.length ?? 0) > 1 ? 'vertical-bars' : undefined
+                                }
+                                disks={normalizeDiskArray(node.agent?.disks)}
+                                aggregateDisk={aggregateDisk()}
+                              />
+                            </Show>
+                          }
+                        >
+                          <MetricMiniSparkline
+                            series={diskSeries()}
+                            valueLabel={formatPercentLabel(diskPercent())}
+                            title={`${name()} disk history`}
+                          />
+                        </Show>
+                      </TableCell>
+                    );
+                  case 'temp':
+                    return (
+                      <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
+                        <Show
+                          when={typeof temperature() === 'number' && (temperature() as number) > 0}
+                          fallback={<span class="text-xs text-muted">—</span>}
+                        >
+                          <TemperatureGauge value={temperature() as number} />
+                        </Show>
+                      </TableCell>
+                    );
+                  case 'vms':
+                    return (
+                      <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
+                        <span class={counts().vms > 0 ? VMS_BADGE : ZERO_BADGE}>
+                          {counts().vms}
+                        </span>
+                      </TableCell>
+                    );
+                  case 'cts':
+                    return (
+                      <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
+                        <span class={counts().containers > 0 ? CTS_BADGE : ZERO_BADGE}>
+                          {counts().containers}
+                        </span>
+                      </TableCell>
+                    );
+                  case 'cluster':
+                    return (
+                      <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
+                        <span class="inline-flex items-center rounded-md bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-base-content">
+                          {cluster()}
+                        </span>
+                      </TableCell>
+                    );
+                  case 'web':
+                    return (
+                      <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
+                        <Show when={externalUrl()} fallback={<span class="text-muted">—</span>}>
+                          {(href) => (
+                            <a
+                              data-proxmox-host-web-link
+                              href={href()}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              class="inline-flex h-6 w-6 items-center justify-center rounded-md text-blue-600 transition-colors hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 dark:text-blue-400 dark:hover:bg-blue-950 dark:hover:text-blue-300"
+                              title={`Open ${name()} web interface`}
+                              aria-label={`Open ${name()} web interface`}
+                              onClick={(event) => event.stopPropagation()}
+                              onKeyDown={(event) => event.stopPropagation()}
+                            >
+                              <ExternalLinkIcon class="h-3.5 w-3.5" />
+                            </a>
+                          )}
+                        </Show>
+                      </TableCell>
+                    );
+                  default:
+                    column.id satisfies never;
+                    return <></>;
+                }
+              };
+
+              return (
+                <>
+                  <TableRow
+                    class={`host-row cursor-pointer text-[11px] outline-none sm:text-xs ${
+                      isSelected() ? 'bg-surface-hover' : rowAlertBg()
+                    } ${isOnline() ? '' : 'opacity-60'} focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-1 focus-visible:ring-offset-surface`}
+                    aria-controls={isSelected() ? detailRowId() : undefined}
+                    aria-expanded={isSelected() ? 'true' : 'false'}
+                    data-proxmox-host-row={node.id}
+                    data-workload-alert-accent={alertAccentTone()}
+                    onClick={toggleNodeDrawer}
+                    onKeyDown={handleActivationKey}
+                    tabIndex={0}
+                  >
+                    <For each={visibleColumns()}>{(column) => renderColumnCell(column)}</For>
+                  </TableRow>
+                  <Show when={isSelected() && drawerNode()}>
+                    {(selectedNode) => (
+                      <TableRow data-inline-node-detail-for={node.id}>
+                        <TableCell
+                          id={detailRowId()}
+                          colspan={visibleColumns().length}
+                          class="p-0 border-b border-border bg-surface-alt"
+                        >
+                          <div
+                            class="px-2 py-3 sm:px-4 sm:py-4"
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            <NodeDrawer
+                              node={selectedNode()}
+                              disks={normalizeDiskArray(node.agent?.disks)}
+                              discoveryTarget={(() => {
+                                const config = toDiscoveryConfig(node);
+                                return config
+                                  ? { agentId: config.agentId, hostname: config.hostname }
+                                  : undefined;
+                              })()}
+                            />
                           </div>
                         </TableCell>
-                      );
-                    case 'version':
-                      return (
-                        <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
-                          <Show when={version()} fallback={<span class="text-muted">—</span>}>
-                            <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 font-mono text-[10px] text-base-content">
-                              {version()}
-                            </span>
-                          </Show>
-                        </TableCell>
-                      );
-                    case 'uptime':
-                      return (
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind(column.kind)} tabular-nums ${
-                            uptime().warn
-                              ? 'text-orange-600 dark:text-orange-400'
-                              : 'text-base-content'
-                          }`}
-                        >
-                          {uptime().label}
-                        </TableCell>
-                      );
-                    case 'cpu':
-                      return (
-                        <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
-                          <Show
-                            when={isSparklineMode()}
-                            fallback={
-                              <ResponsiveMetricCell
-                                class="w-full"
-                                value={cpuPercent()}
-                                type="cpu"
-                                resourceId={metricsKey()}
-                                isRunning={isOnline()}
-                                showMobile={false}
-                              />
-                            }
-                          >
-                            <MetricMiniSparkline
-                              series={cpuSeries()}
-                              valueLabel={formatPercentLabel(cpuPercent())}
-                              title={`${name()} CPU history`}
-                            />
-                          </Show>
-                        </TableCell>
-                      );
-                    case 'memory':
-                      return (
-                        <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
-                          <Show
-                            when={isSparklineMode()}
-                            fallback={
-                              <Show
-                                when={
-                                  isOnline() && (memoryTotal() > 0 || memoryPercentOnly() != null)
-                                }
-                                fallback={
-                                  <div class="flex justify-center">
-                                    <span class="text-xs text-muted" aria-hidden="true">
-                                      —
-                                    </span>
-                                  </div>
-                                }
-                              >
-                                <StackedMemoryBar
-                                  used={memoryUsed()}
-                                  total={memoryTotal()}
-                                  percentOnly={memoryPercentOnly()}
-                                  cache={drawerNode()?.memory?.cache || 0}
-                                  swapUsed={drawerNode()?.memory?.swapUsed || 0}
-                                  swapTotal={drawerNode()?.memory?.swapTotal || 0}
-                                />
-                              </Show>
-                            }
-                          >
-                            <MetricMiniSparkline
-                              series={memorySeries()}
-                              valueLabel={formatPercentLabel(memoryPercent())}
-                              title={`${name()} memory history`}
-                            />
-                          </Show>
-                        </TableCell>
-                      );
-                    case 'disk':
-                      return (
-                        <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
-                          <Show
-                            when={isSparklineMode()}
-                            fallback={
-                              <Show
-                                when={isOnline() && (aggregateDisk() || node.agent?.disks?.length)}
-                                fallback={
-                                  <div class="flex justify-center">
-                                    <span class="text-xs text-muted" aria-hidden="true">
-                                      —
-                                    </span>
-                                  </div>
-                                }
-                              >
-                                <StackedDiskBar
-                                  mode={
-                                    (node.agent?.disks?.length ?? 0) > 1
-                                      ? 'vertical-bars'
-                                      : undefined
-                                  }
-                                  disks={normalizeDiskArray(node.agent?.disks)}
-                                  aggregateDisk={aggregateDisk()}
-                                />
-                              </Show>
-                            }
-                          >
-                            <MetricMiniSparkline
-                              series={diskSeries()}
-                              valueLabel={formatPercentLabel(diskPercent())}
-                              title={`${name()} disk history`}
-                            />
-                          </Show>
-                        </TableCell>
-                      );
-                    case 'temp':
-                      return (
-                        <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
-                          <Show
-                            when={
-                              typeof temperature() === 'number' && (temperature() as number) > 0
-                            }
-                            fallback={<span class="text-xs text-muted">—</span>}
-                          >
-                            <TemperatureGauge value={temperature() as number} />
-                          </Show>
-                        </TableCell>
-                      );
-                    case 'vms':
-                      return (
-                        <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
-                          <span class={counts().vms > 0 ? VMS_BADGE : ZERO_BADGE}>
-                            {counts().vms}
-                          </span>
-                        </TableCell>
-                      );
-                    case 'cts':
-                      return (
-                        <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
-                          <span class={counts().containers > 0 ? CTS_BADGE : ZERO_BADGE}>
-                            {counts().containers}
-                          </span>
-                        </TableCell>
-                      );
-                    case 'cluster':
-                      return (
-                        <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
-                          <span class="inline-flex items-center rounded-md bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-base-content">
-                            {cluster()}
-                          </span>
-                        </TableCell>
-                      );
-                    case 'web':
-                      return (
-                        <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
-                          <Show when={externalUrl()} fallback={<span class="text-muted">—</span>}>
-                            {(href) => (
-                              <a
-                                data-proxmox-host-web-link
-                                href={href()}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                class="inline-flex h-6 w-6 items-center justify-center rounded-md text-blue-600 transition-colors hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 dark:text-blue-400 dark:hover:bg-blue-950 dark:hover:text-blue-300"
-                                title={`Open ${name()} web interface`}
-                                aria-label={`Open ${name()} web interface`}
-                                onClick={(event) => event.stopPropagation()}
-                                onKeyDown={(event) => event.stopPropagation()}
-                              >
-                                <ExternalLinkIcon class="h-3.5 w-3.5" />
-                              </a>
-                            )}
-                          </Show>
-                        </TableCell>
-                      );
-                    default:
-                      column.id satisfies never;
-                      return <></>;
-                  }
-                };
-
-                return (
-                  <>
-                    <TableRow
-                      class={`host-row cursor-pointer text-[11px] outline-none sm:text-xs ${
-                        isSelected() ? 'bg-surface-hover' : rowAlertBg()
-                      } ${isOnline() ? '' : 'opacity-60'} focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-1 focus-visible:ring-offset-surface`}
-                      aria-controls={isSelected() ? detailRowId() : undefined}
-                      aria-expanded={isSelected() ? 'true' : 'false'}
-                      data-proxmox-host-row={node.id}
-                      data-workload-alert-accent={alertAccentTone()}
-                      onClick={toggleNodeDrawer}
-                      onKeyDown={handleActivationKey}
-                      tabIndex={0}
-                    >
-                      <For each={visibleColumns()}>{(column) => renderColumnCell(column)}</For>
-                    </TableRow>
-                    <Show when={isSelected() && drawerNode()}>
-                      {(selectedNode) => (
-                        <TableRow data-inline-node-detail-for={node.id}>
-                          <TableCell
-                            id={detailRowId()}
-                            colspan={visibleColumns().length}
-                            class="p-0 border-b border-border bg-surface-alt"
-                          >
-                            <div
-                              class="px-2 py-3 sm:px-4 sm:py-4"
-                              onClick={(event) => event.stopPropagation()}
-                            >
-                              <NodeDrawer
-                                node={selectedNode()}
-                                disks={normalizeDiskArray(node.agent?.disks)}
-                                discoveryTarget={(() => {
-                                  const config = toDiscoveryConfig(node);
-                                  return config
-                                    ? { agentId: config.agentId, hostname: config.hostname }
-                                    : undefined;
-                                })()}
-                              />
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </Show>
-                  </>
-                );
-              }}
-            </For>
-          </TableBody>
-        </Table>
-      </TableCard>
+                      </TableRow>
+                    )}
+                  </Show>
+                </>
+              );
+            }}
+          </For>
+        }
+      />
     </Show>
   );
 };

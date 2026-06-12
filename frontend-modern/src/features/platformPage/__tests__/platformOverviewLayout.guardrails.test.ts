@@ -57,9 +57,7 @@ import vsphereHostsTableSource from '@/features/vmware/VsphereHostsTable.tsx?raw
 
 const platformTableSources = [
   agentsMachinesTableSource,
-  proxmoxNodesTableSource,
   dockerContainersTableSource,
-  dockerHostsTableSource,
   dockerImagesTableSource,
   dockerVolumesTableSource,
   dockerNetworksTableSource,
@@ -72,7 +70,6 @@ const platformTableSources = [
   kubernetesClustersTableSource,
   kubernetesConfigTableSource,
   kubernetesControllersTableSource,
-  kubernetesNodesTableSource,
   kubernetesPodsTableSource,
   kubernetesDeploymentsTableSource,
   kubernetesEventsTableSource,
@@ -90,6 +87,12 @@ const platformTableSources = [
   vsphereActivityTableSource,
   vsphereAlertsTableSource,
   vsphereDatastoresTableSource,
+];
+
+const platformShellTableSources = [
+  proxmoxNodesTableSource,
+  dockerHostsTableSource,
+  kubernetesNodesTableSource,
   vsphereHostsTableSource,
 ];
 
@@ -159,6 +162,7 @@ describe('platform overview layout guardrails', () => {
     expect(sharedPlatformPageSource).toContain('getPlatformTableCellClass');
     expect(sharedPlatformPageSource).toContain('PlatformTableToolbar');
     expect(sharedPlatformPageSource).toContain('PlatformTableLoadingState');
+    expect(sharedPlatformPageSource).toContain('PlatformTableShell');
     expect(sharedPlatformPageSource).toContain('createPlatformTableFilterState');
     expect(sharedPlatformPageSource).toContain('PLATFORM_HEALTH_FILTER_OPTIONS');
 
@@ -170,6 +174,16 @@ describe('platform overview layout guardrails', () => {
       expect(source).toContain('PLATFORM_TABLE_BODY_CLASS');
       expect(source).toContain('getPlatformTableHeadClass');
       expect(source).toContain('getPlatformTableCellClass');
+    }
+
+    for (const source of platformShellTableSources) {
+      expect(source).toContain('PlatformTableShell');
+      expect(source).toContain('getPlatformTableHeadClass');
+      expect(source).toContain('getPlatformTableCellClass');
+      expect(source).not.toContain('TableCard class={PLATFORM_TABLE_CARD_CLASS}');
+      expect(source).not.toContain('TableCardHeader');
+      expect(source).not.toContain('TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}');
+      expect(source).not.toContain('TableBody class={PLATFORM_TABLE_BODY_CLASS}');
     }
 
     for (const source of platformToolbarTableSources) {
@@ -391,9 +405,7 @@ describe('platform overview layout guardrails', () => {
     // AgentsMachinesTable uses a column-config pattern: kind helpers are
     // applied dynamically in the table render, with labels living in the
     // model. Assert against the model's column declarations.
-    expect(agentsMachinesTableSource).toMatch(
-      /getPlatformTableHeadClassForKind\(kind\(\)\)/,
-    );
+    expect(agentsMachinesTableSource).toMatch(/getPlatformTableHeadClassForKind\(kind\(\)\)/);
     expect(agentMachineTableModelSource).toMatch(
       /id:\s*'machine'[\s\S]{0,80}?label:\s*'Machine'[\s\S]{0,80}?kind:\s*'name'/,
     );

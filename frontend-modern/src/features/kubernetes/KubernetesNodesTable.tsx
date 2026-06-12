@@ -1,26 +1,15 @@
 import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
-import { TableCard } from '@/components/shared/TableCard';
-import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/shared/Table';
+import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
-  PLATFORM_TABLE_BODY_CLASS,
-  PLATFORM_TABLE_CARD_CLASS,
-  PLATFORM_TABLE_HEADER_ROW_CLASS,
   PLATFORM_HEALTH_FILTER_OPTIONS,
-  PlatformTableToolbar,
   PlatformTableEmptyState,
+  PlatformTableShell,
+  PlatformTableToolbar,
   createPlatformTableFilterState,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
@@ -143,12 +132,12 @@ export const KubernetesNodesTable: Component<{
             />
           }
         >
-          <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
-            <TableCardHeader title={props.title ?? 'Nodes'} />
-            <Table class="min-w-full table-fixed text-xs md:min-w-[1100px] 2xl:min-w-[1280px]">
-              <TableHeader>
-                <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                  {/*
+          <PlatformTableShell
+            title={props.title ?? 'Nodes'}
+            tableClass="min-w-full table-fixed text-xs md:min-w-[1100px] 2xl:min-w-[1280px]"
+            header={
+              <>
+                {/*
                     Desktop widths: Node gets headroom for cluster-style
                     names, Runtime gets room for "containerd://1.7.20"
                     -style values, Capacity gets room for "6 cores /
@@ -158,48 +147,49 @@ export const KubernetesNodesTable: Component<{
                     desktop gets extra room without forcing normal desktop
                     viewports to hide Capacity behind horizontal scroll.
                   */}
-                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[15%]`}>
-                    Node
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}
-                  >
-                    Cluster
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}
-                  >
-                    Roles
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[8%]`}
-                  >
-                    Kubelet
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[15%]`}
-                  >
-                    Runtime
-                  </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[11%]`}>
-                    CPU
-                  </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[11%]`}>
-                    Memory
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[6%]`}
-                  >
-                    Uptime
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[14%]`}
-                  >
-                    Capacity
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
+                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[15%]`}>
+                  Node
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}
+                >
+                  Cluster
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}
+                >
+                  Roles
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[8%]`}
+                >
+                  Kubelet
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[15%]`}
+                >
+                  Runtime
+                </TableHead>
+                <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[11%]`}>
+                  CPU
+                </TableHead>
+                <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[11%]`}>
+                  Memory
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[6%]`}
+                >
+                  Uptime
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[14%]`}
+                >
+                  Capacity
+                </TableHead>
+              </>
+            }
+            body={
+              <>
                 <For each={sortedRows()}>
                   {(node) => {
                     const meta = () => node.kubernetes;
@@ -330,9 +320,9 @@ export const KubernetesNodesTable: Component<{
                     );
                   }}
                 </For>
-              </TableBody>
-            </Table>
-          </TableCard>
+              </>
+            }
+          />
         </Show>
       </div>
     </Show>

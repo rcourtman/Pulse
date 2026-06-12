@@ -184,6 +184,14 @@ workload, service, storage, configuration, policy, and event object rows belong
 in their workflow tabs. If a future Overview repeats a detailed table, the
 owning workflow must be retired or the Overview content must be reduced to
 aggregate signal.
+Platform host overview tables are unified-resource consumers even when their
+visual table frame is frontend-primitives-owned. `DockerHostsTable.tsx`,
+`KubernetesNodesTable.tsx`, `ProxmoxNodesTable.tsx`, and
+`VsphereHostsTable.tsx` own source-specific row fields over canonical
+`Resource` projections, while `PlatformTableShell` owns the shared table card,
+header row, and body frame. Future host overview tables must keep that split:
+row data and platform semantics stay in the unified-resource consumer, and the
+repeated table shell stays in the shared frontend primitive.
 Product-originated resource references may arrive as registered unified
 resource IDs, source-specific IDs, or canonical identity aliases. The
 unified-resource registry owns resolving those references through

@@ -2,29 +2,18 @@ import { For, Show, createMemo, createSignal, type Component, type JSX } from 's
 import { StatusDot } from '@/components/shared/StatusDot';
 import { DockerHostDrawer } from './DockerHostDrawer';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
-import { TableCard } from '@/components/shared/TableCard';
-import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/shared/Table';
+import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { normalizeDiskArray } from '@/utils/format';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
-  PLATFORM_TABLE_BODY_CLASS,
-  PLATFORM_TABLE_CARD_CLASS,
-  PLATFORM_TABLE_HEADER_ROW_CLASS,
   PLATFORM_HEALTH_FILTER_OPTIONS,
-  PlatformTableToolbar,
   PlatformTableEmptyState,
+  PlatformTableShell,
+  PlatformTableToolbar,
   createPlatformTableFilterState,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
@@ -158,73 +147,72 @@ export const DockerHostsTable: Component<{
             />
           }
         >
-          <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
-            <TableCardHeader title={props.title ?? 'Hosts'} />
-            <Table class="min-w-full table-fixed text-xs md:min-w-[1240px]">
-              <TableHeader>
-                <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                  {/*
+          <PlatformTableShell
+            title={props.title ?? 'Hosts'}
+            tableClass="min-w-full table-fixed text-xs md:min-w-[1240px]"
+            header={
+              <>
+                {/*
                     Desktop widths balance the three bar-metric columns (CPU /
                     Memory / Disk) against the short-content columns so the
                     bars aren't squeezed by table-fixed's equal split. Mobile
                     widths (w-[40%], w-[20%]) are unchanged.
                   */}
+                <TableHead class={`${getPlatformTableHeadClassForKind('name')} w-[40%] md:w-[13%]`}>
+                  Host
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[7%]`}
+                >
+                  System
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[7%]`}
+                >
+                  Version
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[9%]`}
+                >
+                  Containers
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('metric-bar')} w-[20%] md:w-[14%]`}
+                >
+                  CPU
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('metric-bar')} w-[20%] md:w-[14%]`}
+                >
+                  <span class="md:hidden">Mem</span>
+                  <span class="hidden md:inline">Memory</span>
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('metric-bar')} w-[20%] md:w-[14%]`}
+                >
+                  Disk
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[6%]`}
+                >
+                  Uptime
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[6%]`}
+                >
+                  Temp
+                </TableHead>
+                <Show when={showSwarmColumn()}>
                   <TableHead
-                    class={`${getPlatformTableHeadClassForKind('name')} w-[40%] md:w-[13%]`}
+                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}
                   >
-                    Host
+                    Swarm role
                   </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[7%]`}
-                  >
-                    System
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[7%]`}
-                  >
-                    Version
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[9%]`}
-                  >
-                    Containers
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('metric-bar')} w-[20%] md:w-[14%]`}
-                  >
-                    CPU
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('metric-bar')} w-[20%] md:w-[14%]`}
-                  >
-                    <span class="md:hidden">Mem</span>
-                    <span class="hidden md:inline">Memory</span>
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('metric-bar')} w-[20%] md:w-[14%]`}
-                  >
-                    Disk
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[6%]`}
-                  >
-                    Uptime
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[6%]`}
-                  >
-                    Temp
-                  </TableHead>
-                  <Show when={showSwarmColumn()}>
-                    <TableHead
-                      class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}
-                    >
-                      Swarm role
-                    </TableHead>
-                  </Show>
-                </TableRow>
-              </TableHeader>
-              <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
+                </Show>
+              </>
+            }
+            body={
+              <>
                 <For each={tableState.filtered()}>
                   {(host) => {
                     const docker = () =>
@@ -412,9 +400,9 @@ export const DockerHostsTable: Component<{
                     );
                   }}
                 </For>
-              </TableBody>
-            </Table>
-          </TableCard>
+              </>
+            }
+          />
         </Show>
       </div>
     </Show>

@@ -64,7 +64,6 @@
         "src/features/docker/DockerAlertsTable.tsx",
         "src/features/docker/DockerConfigsTable.tsx",
         "src/features/docker/DockerContainersTable.tsx",
-        "src/features/docker/DockerHostsTable.tsx",
         "src/features/docker/DockerImagesTable.tsx",
         "src/features/docker/DockerNetworksTable.tsx",
         "src/features/docker/DockerSecretsTable.tsx",
@@ -81,7 +80,6 @@
         "src/features/kubernetes/KubernetesDeploymentsTable.tsx",
         "src/features/kubernetes/KubernetesEventsTable.tsx",
         "src/features/kubernetes/KubernetesNetworkingTable.tsx",
-        "src/features/kubernetes/KubernetesNodesTable.tsx",
         "src/features/kubernetes/KubernetesPodsTable.tsx",
         "src/features/kubernetes/KubernetesPolicyTable.tsx",
         "src/features/kubernetes/KubernetesServicesTable.tsx",
@@ -90,7 +88,6 @@
         "src/features/proxmox/ProxmoxCephTable.tsx",
         "src/features/proxmox/ProxmoxCoverageTable.tsx",
         "src/features/proxmox/ProxmoxMailGatewayTable.tsx",
-        "src/features/proxmox/ProxmoxNodesTable.tsx",
         "src/features/proxmox/ProxmoxRecoverableTable.tsx",
         "src/features/proxmox/ProxmoxReplicationTable.tsx",
         "src/features/standalone/AgentsMachinesTable.tsx",
@@ -106,7 +103,6 @@
         "src/features/vmware/VsphereActivityTable.tsx",
         "src/features/vmware/VsphereAlertsTable.tsx",
         "src/features/vmware/VsphereDatastoresTable.tsx",
-        "src/features/vmware/VsphereHostsTable.tsx",
         "src/features/vmware/VsphereNetworksTable.tsx"
       ],
       "proof": [

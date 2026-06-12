@@ -98,7 +98,10 @@ import workloadsTableSource from '@/components/Workloads/WorkloadsTable.tsx?raw'
 import workloadPanelSource from '@/components/Workloads/WorkloadPanel.tsx?raw';
 import guestRowStateSource from '@/components/Workloads/useGuestRowState.ts?raw';
 import workloadSelectionStateSource from '@/components/Workloads/useWorkloadSelectionState.ts?raw';
+import dockerHostsTableSource from '@/features/docker/DockerHostsTable.tsx?raw';
+import kubernetesNodesTableSource from '@/features/kubernetes/KubernetesNodesTable.tsx?raw';
 import proxmoxNodesTableSource from '@/features/proxmox/ProxmoxNodesTable.tsx?raw';
+import vsphereHostsTableSource from '@/features/vmware/VsphereHostsTable.tsx?raw';
 import agentsMachinesTableSource from '@/features/standalone/AgentsMachinesTable.tsx?raw';
 import agentMachineTableModelSource from '@/features/standalone/agentMachineTableModel.ts?raw';
 import unifiedResourceHostTableCardSource from '@/components/Infrastructure/UnifiedResourceHostTableCard.tsx?raw';
@@ -355,7 +358,6 @@ describe('shared primitive guardrails', () => {
 
     for (const source of [
       workloadsTableSource,
-      proxmoxNodesTableSource,
       unifiedResourceHostTableCardSource,
       unifiedResourceServiceInfrastructureCardSource,
       storageContentCardSource,
@@ -964,6 +966,19 @@ describe('shared primitive guardrails', () => {
     expect(sharedPlatformPageSource).toContain('TableCard class={props.cardClass');
     expect(sharedPlatformPageSource).toContain('TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}');
     expect(sharedPlatformPageSource).toContain('TableBody class={PLATFORM_TABLE_BODY_CLASS}');
+
+    for (const [path, source] of [
+      ['src/features/docker/DockerHostsTable.tsx', dockerHostsTableSource],
+      ['src/features/kubernetes/KubernetesNodesTable.tsx', kubernetesNodesTableSource],
+      ['src/features/proxmox/ProxmoxNodesTable.tsx', proxmoxNodesTableSource],
+      ['src/features/vmware/VsphereHostsTable.tsx', vsphereHostsTableSource],
+    ] as const) {
+      expect(registeredGuard?.allowedPaths ?? []).not.toContain(path);
+      expect(source).toContain('PlatformTableShell');
+      expect(source).not.toContain('TableCard class={PLATFORM_TABLE_CARD_CLASS}');
+      expect(source).not.toContain('TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}');
+      expect(source).not.toContain('TableBody class={PLATFORM_TABLE_BODY_CLASS}');
+    }
   });
 
   it('keeps help icon on shell, runtime, and model owners', () => {

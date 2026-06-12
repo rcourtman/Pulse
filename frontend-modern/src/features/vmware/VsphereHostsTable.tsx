@@ -1,17 +1,8 @@
 import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
-import { TableCard } from '@/components/shared/TableCard';
-import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/shared/Table';
+import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { formatUptime } from '@/utils/format';
@@ -23,12 +14,10 @@ import {
 } from './vmwarePageModel';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
-  PLATFORM_TABLE_BODY_CLASS,
-  PLATFORM_TABLE_CARD_CLASS,
-  PLATFORM_TABLE_HEADER_ROW_CLASS,
   PLATFORM_HEALTH_FILTER_OPTIONS,
-  PlatformTableToolbar,
   PlatformTableEmptyState,
+  PlatformTableShell,
+  PlatformTableToolbar,
   createPlatformTableFilterState,
   filterPlatformResources,
   getPlatformTableCellClassForKind,
@@ -133,70 +122,69 @@ export const VsphereHostsTable: Component<{
             />
           }
         >
-          <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
-            <TableCardHeader title={props.title ?? 'Hosts'} />
-            <Table class="min-w-full table-fixed text-xs md:min-w-[1240px]">
-              <TableHeader>
-                <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                  {/*
+          <PlatformTableShell
+            title={props.title ?? 'Hosts'}
+            tableClass="min-w-full table-fixed text-xs md:min-w-[1240px]"
+            header={
+              <>
+                {/*
                     Desktop widths give the Host FQDN room, balance the CPU
                     and Memory bars, and trim the Datacenter / Cluster /
                     Power / vCenter text columns and the Datastores / VMs
                     integer-count columns to what their content actually
                     needs. Mobile widths are unchanged.
                   */}
-                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[16%]`}>
-                    Host
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[6%]`}
-                  >
-                    Version
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}
-                  >
-                    Datacenter
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}
-                  >
-                    Cluster
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[7%]`}
-                  >
-                    Power
-                  </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[12%]`}>
-                    CPU
-                  </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[13%]`}>
-                    Memory
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[7%]`}
-                  >
-                    Datastores
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[4%]`}
-                  >
-                    VMs
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[6%]`}
-                  >
-                    Uptime
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[9%]`}
-                  >
-                    vCenter
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
+                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[16%]`}>
+                  Host
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[6%]`}
+                >
+                  Version
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}
+                >
+                  Datacenter
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}
+                >
+                  Cluster
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[7%]`}
+                >
+                  Power
+                </TableHead>
+                <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[12%]`}>
+                  CPU
+                </TableHead>
+                <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[13%]`}>
+                  Memory
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[7%]`}
+                >
+                  Datastores
+                </TableHead>
+                <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[4%]`}>
+                  VMs
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[6%]`}
+                >
+                  Uptime
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[9%]`}
+                >
+                  vCenter
+                </TableHead>
+              </>
+            }
+            body={
+              <>
                 <For each={tableState.filtered()}>
                   {(host) => {
                     const meta = () => host.vmware;
@@ -353,9 +341,9 @@ export const VsphereHostsTable: Component<{
                     );
                   }}
                 </For>
-              </TableBody>
-            </Table>
-          </TableCard>
+              </>
+            }
+          />
         </Show>
       </div>
     </Show>
