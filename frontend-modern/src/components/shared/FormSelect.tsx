@@ -1,4 +1,4 @@
-import { Show, createEffect, createUniqueId, splitProps } from 'solid-js';
+import { Show, createEffect, createUniqueId, onCleanup, splitProps } from 'solid-js';
 import type { Component, JSX } from 'solid-js';
 import { formField, formHelpText, formLabel, formSelect } from '@/components/shared/Form';
 
@@ -26,6 +26,7 @@ export const FormSelect: Component<FormSelectProps> = (props) => {
     'id',
     'label',
     'labelClass',
+    'ref',
     'aria-describedby',
     'class',
     'selectBaseClass',
@@ -52,18 +53,32 @@ export const FormSelect: Component<FormSelectProps> = (props) => {
     const value = local.value;
     if (!selectElement || value === undefined || value === null) return;
 
-    if (Array.isArray(value)) {
-      const selectedValues = new Set(value.map(String));
-      for (const option of Array.from(selectElement.options)) {
-        option.selected = selectedValues.has(option.value);
-      }
-      return;
-    }
+    const applyValue = () => {
+      if (!selectElement) return;
 
-    const nextValue = String(value);
-    if (selectElement.value !== nextValue) {
-      selectElement.value = nextValue;
-    }
+      if (Array.isArray(value)) {
+        const selectedValues = new Set(value.map(String));
+        for (const option of Array.from(selectElement.options)) {
+          option.selected = selectedValues.has(option.value);
+        }
+        return;
+      }
+
+      const nextValue = String(value);
+      const optionValues = Array.from(selectElement.options, (option) => option.value);
+      const resolvedValue = optionValues.includes(nextValue) ? nextValue : '';
+      if (selectElement.value !== resolvedValue) {
+        selectElement.value = resolvedValue;
+      }
+    };
+
+    applyValue();
+
+    if (typeof MutationObserver !== 'function') return;
+
+    const observer = new MutationObserver(() => applyValue());
+    observer.observe(selectElement, { childList: true, subtree: true });
+    onCleanup(() => observer.disconnect());
   });
 
   return (
@@ -74,6 +89,9 @@ export const FormSelect: Component<FormSelectProps> = (props) => {
       <select
         ref={(element) => {
           selectElement = element;
+          if (typeof local.ref === 'function') {
+            local.ref(element);
+          }
         }}
         {...selectProps}
         id={selectId()}

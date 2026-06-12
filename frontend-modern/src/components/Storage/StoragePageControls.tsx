@@ -2,6 +2,7 @@ import { Component, JSX, Show, createMemo } from 'solid-js';
 import DatabaseIcon from 'lucide-solid/icons/database';
 import HardDriveIcon from 'lucide-solid/icons/hard-drive';
 import { FilterBar, filterChipStatusDot, type FilterDef } from '@/components/shared/FilterBar';
+import { FormSelect } from '@/components/shared/FormSelect';
 import { Subtabs } from '@/components/shared/Subtabs';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { STORAGE_KEYS } from '@/utils/localStorage';
@@ -315,17 +316,20 @@ export const StoragePageControls: Component<StoragePageControlsProps> = (props) 
           viewOptionsTrailing={
             <>
               <div class={STORAGE_FILTER_SORT_WRAP_CLASS}>
-                <select
+                <FormSelect
+                  label="Sort by"
+                  labelClass="sr-only"
+                  fieldBaseClass="contents"
+                  selectBaseClass={STORAGE_FILTER_SORT_SELECT_CLASS}
                   value={props.sortKey()}
                   onChange={(event) => handleSortKeyChange(event.currentTarget.value)}
                   disabled={sortDisabled()}
                   aria-label="Sort by"
-                  class={STORAGE_FILTER_SORT_SELECT_CLASS}
                 >
                   {DEFAULT_STORAGE_SORT_OPTIONS.map((option) => (
                     <option value={option.value}>{option.label}</option>
                   ))}
-                </select>
+                </FormSelect>
                 <button
                   type="button"
                   title={getStorageSortDirectionTitle(props.sortDirection())}

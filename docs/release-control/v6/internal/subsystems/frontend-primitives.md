@@ -2453,11 +2453,12 @@ green/yellow span classes in storage components or storage-backup presentation
 helpers.
 Native select controls are registry-backed too. `FormSelect` owns label/id
 wiring, helper-text description merging, value synchronization, default select
-chrome, and compact styling hooks for native selects. Workloads guest and node
-history range controls must compose `FormSelect` rather than recreating a
-screen-reader label plus raw `<select>` shell locally, and future native-select
-migrations should extend that primitive instead of forking labelled select
-wrappers.
+chrome, dynamic-option value synchronization, and compact styling hooks for
+native selects. Product components and shared filter/menu internals must
+compose `FormSelect` rather than recreating screen-reader labels, native
+`<select>` shells, value-reapply effects, or compact select chrome locally; the
+only raw native select in frontend runtime code should live inside that
+primitive.
 Native textarea controls follow the same contract. `FormTextarea` owns
 label/id wiring, helper-text description merging, value synchronization, default
 textarea chrome, and compact styling hooks for multi-line text fields. Alert

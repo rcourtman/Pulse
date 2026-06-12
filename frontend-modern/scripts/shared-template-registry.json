@@ -192,6 +192,9 @@
         { "path": "src/components/AI/FindingsPanel.tsx" },
         { "path": "src/components/Alerts/EmailProviderSelect.tsx" },
         { "path": "src/components/Alerts/WebhookConfigForm.tsx" },
+        { "path": "src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx" },
+        { "path": "src/components/Kubernetes/K8sDeploymentsDrawer.tsx" },
+        { "path": "src/components/OrgSwitcher.tsx" },
         { "path": "src/components/Settings/AIChatMaintenanceSection.tsx" },
         { "path": "src/components/Settings/AIModelSelectionSection.tsx" },
         { "path": "src/components/Settings/AIRuntimeControlsSection.tsx" },
@@ -209,8 +212,11 @@
         { "path": "src/components/Settings/SystemLogsPanel.tsx" },
         { "path": "src/components/Settings/UpdatesSettingsPanel.tsx" },
         { "path": "src/components/Storage/DiskDetail.tsx" },
+        { "path": "src/components/Storage/StoragePageControls.tsx" },
         { "path": "src/components/Storage/StoragePoolDetail.tsx" },
         { "path": "src/components/Workloads/GuestDrawerHistory.tsx" },
+        { "path": "src/components/shared/FilterBar/AddFilterMenu.tsx" },
+        { "path": "src/components/shared/FilterToolbar.tsx" },
         { "path": "src/features/alerts/AlertAppriseDestinationsSection.tsx" },
         { "path": "src/features/alerts/AlertEscalationSection.tsx" },
         { "path": "src/features/alerts/AlertQuietHoursSection.tsx" },
@@ -851,19 +857,24 @@
       ]
     },
     {
-      "id": "form-select-local-guest-history-range-select",
+      "id": "form-select-local-native-select",
       "category": "form-control",
-      "summary": "Guest and node drawer history range controls must compose FormSelect instead of recreating the labelled native select locally.",
+      "summary": "Product and shared filter components must compose FormSelect instead of recreating labelled native select shells locally.",
       "canonical": {
         "path": "src/components/shared/FormSelect.tsx",
         "export": "FormSelect"
       },
-      "scopes": ["src/components/Workloads"],
+      "scopes": ["src/components", "src/features"],
       "extensions": [".tsx"],
-      "allPatterns": ["<select", "guest-history-range"],
-      "legacyReason": "Retired migration debt. Guest history range controls must use FormSelect for label/id/select chrome wiring.",
+      "allPatterns": ["<select"],
+      "legacyReason": "Retired migration debt. Native select controls must use FormSelect for label/id/select chrome wiring and dynamic option value synchronization.",
       "allowedPaths": [],
-      "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
+      "ignoredPaths": [
+        "src/components/Infrastructure/__tests__/ResourceDetailDrawer.docker-container.test.tsx",
+        "src/components/Infrastructure/__tests__/ResourceDetailDrawer.machine-history.test.tsx",
+        "src/components/shared/FilterToolbar.test.tsx",
+        "src/components/shared/SharedPrimitives.guardrails.test.ts"
+      ],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "scripts/shared-template-audit.mjs"

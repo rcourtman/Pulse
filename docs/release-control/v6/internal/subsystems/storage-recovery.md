@@ -1665,7 +1665,10 @@ Storage filter option labels for grouped views, node/host filters, sort
 controls, and source selectors are also canonical presentation contracts:
 storage surfaces must consume `frontend-modern/src/components/Storage/storagePageState.ts`
 and `frontend-modern/src/utils/storageSources.ts` rather than re-declaring
-page-local title casing or alternate all-option labels.
+page-local title casing or alternate all-option labels. The storage toolbar may
+own sort/filter semantics, but native select label/id/chrome and dynamic value
+sync must come from the frontend-primitives-owned `FormSelect` rather than a
+storage-local raw `<select>` wrapper.
 Recovery all-history, all-item-type, and all-platform defaults follow the same
 shared filter-option contract through
 `frontend-modern/src/utils/recoveryTablePresentation.ts`, so recovery history

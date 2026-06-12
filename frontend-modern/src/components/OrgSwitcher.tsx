@@ -1,5 +1,6 @@
 import { For, Show, createMemo } from 'solid-js';
 import type { Organization } from '@/api/orgs';
+import { FormSelect } from '@/components/shared/FormSelect';
 
 interface OrgSwitcherProps {
   orgs: Organization[];
@@ -28,21 +29,21 @@ export function OrgSwitcher(props: OrgSwitcherProps) {
           </span>
         }
       >
-        <label class="sr-only" for="org-switcher-select">
-          Organization
-        </label>
-        <select
+        <FormSelect
           id="org-switcher-select"
+          label="Organization"
+          labelClass="sr-only"
+          fieldBaseClass="contents"
+          selectBaseClass="h-7 max-w-44 rounded-md border border-border bg-surface px-2 text-xs text-base-content shadow-sm transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
           aria-label="Organization"
           value={props.selectedOrgId}
           disabled={Boolean(props.loading)}
           onChange={(event) => props.onChange(event.currentTarget.value)}
-          class="h-7 max-w-44 rounded-md border border-border bg-surface px-2 text-xs text-base-content shadow-sm transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <For each={props.orgs}>
             {(org) => <option value={org.id}>{org.displayName || org.id}</option>}
           </For>
-        </select>
+        </FormSelect>
       </Show>
       <Show when={props.loading}>
         <svg

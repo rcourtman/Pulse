@@ -4,6 +4,7 @@ import {
   filterLabelClass,
   filterSelectClass,
 } from '@/components/shared/FilterToolbar';
+import { FormSelect } from '@/components/shared/FormSelect';
 import {
   isFilterSet,
   type FilterDef,
@@ -102,39 +103,36 @@ export const AddFilterMenu: Component<AddFilterMenuProps> = (props) => {
   };
 
   return (
-    <div class={`${filterGroupClass} flex-shrink-0`}>
-      <label for={selectId} class={filterLabelClass}>
-        Filter
-      </label>
-      <select
-        id={selectId}
-        value=""
-        onChange={handleChange}
-        disabled={isDisabled()}
-        aria-label="Filter"
-        class={`${filterSelectClass} min-w-[9rem] disabled:cursor-not-allowed disabled:opacity-50`}
-      >
-        <option value="">
-          {isDisabled() ? 'No filters' : 'Add filter'}
-        </option>
-        <For each={selectableGroups()}>
-          {(group) => (
-            <optgroup label={GROUP_LABELS[group.key]}>
-              <For each={group.filters}>
-                {(filter) => (
-                  <For each={filter.options}>
-                    {(option) => (
-                      <option value={option.token}>
-                        {filter.filter.label}: {option.option.label}
-                      </option>
-                    )}
-                  </For>
-                )}
-              </For>
-            </optgroup>
-          )}
-        </For>
-      </select>
-    </div>
+    <FormSelect
+      id={selectId}
+      label="Filter"
+      fieldBaseClass={`${filterGroupClass} flex-shrink-0`}
+      labelClass={filterLabelClass}
+      selectBaseClass={filterSelectClass}
+      selectClass="min-w-[9rem] disabled:cursor-not-allowed disabled:opacity-50"
+      value=""
+      onChange={handleChange}
+      disabled={isDisabled()}
+      aria-label="Filter"
+    >
+      <option value="">{isDisabled() ? 'No filters' : 'Add filter'}</option>
+      <For each={selectableGroups()}>
+        {(group) => (
+          <optgroup label={GROUP_LABELS[group.key]}>
+            <For each={group.filters}>
+              {(filter) => (
+                <For each={filter.options}>
+                  {(option) => (
+                    <option value={option.token}>
+                      {filter.filter.label}: {option.option.label}
+                    </option>
+                  )}
+                </For>
+              )}
+            </For>
+          </optgroup>
+        )}
+      </For>
+    </FormSelect>
   );
 };

@@ -16,6 +16,7 @@ import {
 import toggleSource from './Toggle.tsx?raw';
 import toggleModelSource from './toggleModel.ts?raw';
 import toggleStateSource from './useToggleState.ts?raw';
+import filterToolbarSource from './FilterToolbar.tsx?raw';
 
 describe('FilterHeader', () => {
   afterEach(() => {
@@ -157,6 +158,13 @@ describe('FilterHeader', () => {
     expect(toggleModelSource).toContain('getToggleTrackClass');
     expect(toggleModelSource).toContain('getToggleKnobClass');
     expect(toggleModelSource).toContain('ToggleChangeEvent');
+  });
+
+  it('keeps labelled filter selects on the shared FormSelect primitive', () => {
+    expect(filterToolbarSource).toContain("import { FormSelect } from './FormSelect';");
+    expect(filterToolbarSource).toContain('<FormSelect');
+    expect(filterToolbarSource).not.toContain('<select');
+    expect(filterToolbarSource).not.toContain('MutationObserver');
   });
 
   it('keeps controlled select state when options materialize asynchronously', async () => {

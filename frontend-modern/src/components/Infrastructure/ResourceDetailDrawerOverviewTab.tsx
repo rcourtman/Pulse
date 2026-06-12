@@ -15,6 +15,7 @@ import { DisksCard } from '@/components/shared/cards/DisksCard';
 import { TemperaturesCard } from '@/components/shared/cards/TemperaturesCard';
 import { RaidCard } from '@/components/shared/cards/RaidCard';
 import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
+import { FormSelect } from '@/components/shared/FormSelect';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
 import { getAllFilterOptionLabel } from '@/components/shared/filterOptionPresentation';
 import { getServiceHealthPresentation } from '@/utils/serviceHealthPresentation';
@@ -423,54 +424,54 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
             </div>
             <Show when={drawer.showHistoryFilters() || drawer.hasTimelineFilters()}>
               <div class="mt-3 space-y-2">
-                <label class="space-y-1 text-[10px]">
-                  <span class="text-muted">Change kind</span>
-                  <select
-                    class="w-full rounded border border-border bg-base px-2 py-1 text-[11px] text-base-content"
-                    value={drawer.timelineKindFilter()}
-                    onChange={(event) =>
-                      drawer.setTimelineKindFilter(
-                        (event.currentTarget.value || '') as ResourceChangeKind | '',
-                      )
-                    }
-                  >
-                    <For each={timelineKindOptions}>
-                      {(option) => <option value={option.value}>{option.label}</option>}
-                    </For>
-                  </select>
-                </label>
-                <label class="space-y-1 text-[10px]">
-                  <span class="text-muted">Source type</span>
-                  <select
-                    class="w-full rounded border border-border bg-base px-2 py-1 text-[11px] text-base-content"
-                    value={drawer.timelineSourceTypeFilter()}
-                    onChange={(event) =>
-                      drawer.setTimelineSourceTypeFilter(
-                        (event.currentTarget.value || '') as ResourceChangeSourceType | '',
-                      )
-                    }
-                  >
-                    <For each={timelineSourceTypeOptions}>
-                      {(option) => <option value={option.value}>{option.label}</option>}
-                    </For>
-                  </select>
-                </label>
-                <label class="space-y-1 text-[10px]">
-                  <span class="text-muted">Source adapter</span>
-                  <select
-                    class="w-full rounded border border-border bg-base px-2 py-1 text-[11px] text-base-content"
-                    value={drawer.timelineSourceAdapterFilter()}
-                    onChange={(event) =>
-                      drawer.setTimelineSourceAdapterFilter(
-                        (event.currentTarget.value || '') as ResourceChangeSourceAdapter | '',
-                      )
-                    }
-                  >
-                    <For each={timelineSourceAdapterOptions}>
-                      {(option) => <option value={option.value}>{option.label}</option>}
-                    </For>
-                  </select>
-                </label>
+                <FormSelect
+                  label="Change kind"
+                  fieldBaseClass="space-y-1 text-[10px]"
+                  labelClass="text-muted"
+                  selectBaseClass="w-full rounded border border-border bg-base px-2 py-1 text-[11px] text-base-content"
+                  value={drawer.timelineKindFilter()}
+                  onChange={(event) =>
+                    drawer.setTimelineKindFilter(
+                      (event.currentTarget.value || '') as ResourceChangeKind | '',
+                    )
+                  }
+                >
+                  <For each={timelineKindOptions}>
+                    {(option) => <option value={option.value}>{option.label}</option>}
+                  </For>
+                </FormSelect>
+                <FormSelect
+                  label="Source type"
+                  fieldBaseClass="space-y-1 text-[10px]"
+                  labelClass="text-muted"
+                  selectBaseClass="w-full rounded border border-border bg-base px-2 py-1 text-[11px] text-base-content"
+                  value={drawer.timelineSourceTypeFilter()}
+                  onChange={(event) =>
+                    drawer.setTimelineSourceTypeFilter(
+                      (event.currentTarget.value || '') as ResourceChangeSourceType | '',
+                    )
+                  }
+                >
+                  <For each={timelineSourceTypeOptions}>
+                    {(option) => <option value={option.value}>{option.label}</option>}
+                  </For>
+                </FormSelect>
+                <FormSelect
+                  label="Source adapter"
+                  fieldBaseClass="space-y-1 text-[10px]"
+                  labelClass="text-muted"
+                  selectBaseClass="w-full rounded border border-border bg-base px-2 py-1 text-[11px] text-base-content"
+                  value={drawer.timelineSourceAdapterFilter()}
+                  onChange={(event) =>
+                    drawer.setTimelineSourceAdapterFilter(
+                      (event.currentTarget.value || '') as ResourceChangeSourceAdapter | '',
+                    )
+                  }
+                >
+                  <For each={timelineSourceAdapterOptions}>
+                    {(option) => <option value={option.value}>{option.label}</option>}
+                  </For>
+                </FormSelect>
 
                 <Show when={drawer.hasTimelineFilters()}>
                   <div class="flex justify-end">

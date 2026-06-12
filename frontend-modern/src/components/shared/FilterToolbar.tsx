@@ -1,6 +1,7 @@
-import { Component, For, JSX, Show, createEffect, onCleanup, splitProps } from 'solid-js';
+import { Component, For, JSX, Show, splitProps } from 'solid-js';
 import BarChartIcon from 'lucide-solid/icons/bar-chart';
 import ListFilterIcon from 'lucide-solid/icons/list-filter';
+import { FormSelect } from './FormSelect';
 import { FilterButtonGroup, type FilterOption } from './FilterButtonGroup';
 
 export const filterToolbarShellClass = '';
@@ -312,54 +313,21 @@ export const LabeledFilterSelect: Component<LabeledFilterSelectProps> = (props) 
     'children',
     'groupClass',
     'selectClass',
-    'value',
+    'aria-label',
   ]);
-  let selectRef: HTMLSelectElement | undefined;
-  const selectId = () => (typeof selectProps.id === 'string' ? selectProps.id : undefined);
-
-  createEffect(() => {
-    const nextValue = local.value;
-    if (!selectRef || typeof nextValue !== 'string') return;
-    const applyValue = () => {
-      if (!selectRef) return;
-      const resolvedValue = resolveFilterSelectDomValue(
-        nextValue,
-        Array.from(selectRef.options, (option) => option.value),
-      );
-      if (typeof resolvedValue !== 'string') return;
-      for (const option of Array.from(selectRef.options)) {
-        const shouldSelect = option.value === resolvedValue;
-        if (option.selected !== shouldSelect) {
-          option.selected = shouldSelect;
-        }
-      }
-      if (selectRef.value !== resolvedValue) {
-        selectRef.value = resolvedValue;
-      }
-    };
-
-    applyValue();
-
-    const observer = new MutationObserver(() => applyValue());
-    observer.observe(selectRef, { childList: true, subtree: true });
-    onCleanup(() => observer.disconnect());
-  });
 
   return (
-    <div class={`${filterGroupClass} ${local.groupClass ?? ''}`.trim()}>
-      <label for={selectId()} class={filterLabelClass}>
-        {local.label}
-      </label>
-      <select
-        {...selectProps}
-        ref={selectRef}
-        value={local.value}
-        aria-label={selectProps['aria-label'] ?? local.label}
-        class={`${filterSelectClass} ${local.selectClass ?? ''}`.trim()}
-      >
-        {local.children}
-      </select>
-    </div>
+    <FormSelect
+      {...selectProps}
+      label={local.label}
+      aria-label={local['aria-label'] ?? local.label}
+      fieldBaseClass={`${filterGroupClass} ${local.groupClass ?? ''}`.trim()}
+      labelClass={filterLabelClass}
+      selectBaseClass={filterSelectClass}
+      selectClass={local.selectClass}
+    >
+      {local.children}
+    </FormSelect>
   );
 };
 

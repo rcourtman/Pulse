@@ -186,6 +186,8 @@ import filterBarIndexSource from '@/components/shared/FilterBar/index.ts?raw';
 import savedViewsMenuSource from '@/components/shared/FilterBar/SavedViewsMenu.tsx?raw';
 import useSavedViewsSource from '@/components/shared/FilterBar/useSavedViews.ts?raw';
 import storagePageControlsSource from '@/components/Storage/StoragePageControls.tsx?raw';
+import orgSwitcherSource from '@/components/OrgSwitcher.tsx?raw';
+import resourceDetailDrawerOverviewTabSource from '@/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx?raw';
 import proxmoxBackupsTableSharedSource from '@/features/proxmox/proxmoxBackupsTableShared.tsx?raw';
 import truenasSystemsTableSource from '@/features/truenas/TrueNASSystemsTable.tsx?raw';
 
@@ -325,7 +327,7 @@ describe('shared primitive guardrails', () => {
     };
     const registeredRule = registry.rules?.find((rule) => rule.id === 'form-select-shell');
     const registeredGuard = registry.patternGuards?.find(
-      (guard) => guard.id === 'form-select-local-guest-history-range-select',
+      (guard) => guard.id === 'form-select-local-native-select',
     );
 
     expect(registeredRule?.canonical?.path).toBe('src/components/shared/FormSelect.tsx');
@@ -334,6 +336,9 @@ describe('shared primitive guardrails', () => {
       'src/components/AI/FindingsPanel.tsx',
       'src/components/Alerts/EmailProviderSelect.tsx',
       'src/components/Alerts/WebhookConfigForm.tsx',
+      'src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx',
+      'src/components/Kubernetes/K8sDeploymentsDrawer.tsx',
+      'src/components/OrgSwitcher.tsx',
       'src/components/Settings/AIChatMaintenanceSection.tsx',
       'src/components/Settings/AIModelSelectionSection.tsx',
       'src/components/Settings/AIRuntimeControlsSection.tsx',
@@ -351,8 +356,11 @@ describe('shared primitive guardrails', () => {
       'src/components/Settings/SystemLogsPanel.tsx',
       'src/components/Settings/UpdatesSettingsPanel.tsx',
       'src/components/Storage/DiskDetail.tsx',
+      'src/components/Storage/StoragePageControls.tsx',
       'src/components/Storage/StoragePoolDetail.tsx',
       'src/components/Workloads/GuestDrawerHistory.tsx',
+      'src/components/shared/FilterBar/AddFilterMenu.tsx',
+      'src/components/shared/FilterToolbar.tsx',
       'src/features/alerts/AlertAppriseDestinationsSection.tsx',
       'src/features/alerts/AlertEscalationSection.tsx',
       'src/features/alerts/AlertQuietHoursSection.tsx',
@@ -360,10 +368,13 @@ describe('shared primitive guardrails', () => {
     ]);
     expect(registeredGuard?.canonical?.path).toBe('src/components/shared/FormSelect.tsx');
     expect(registeredGuard?.canonical?.export).toBe('FormSelect');
-    expect(registeredGuard?.allPatterns).toEqual(['<select', 'guest-history-range']);
-    expect(registeredGuard?.scopes).toEqual(['src/components/Workloads']);
+    expect(registeredGuard?.allPatterns).toEqual(['<select']);
+    expect(registeredGuard?.scopes).toEqual(['src/components', 'src/features']);
     expect(registeredGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(registeredGuard?.ignoredPaths).toEqual([
+      'src/components/Infrastructure/__tests__/ResourceDetailDrawer.docker-container.test.tsx',
+      'src/components/Infrastructure/__tests__/ResourceDetailDrawer.machine-history.test.tsx',
+      'src/components/shared/FilterToolbar.test.tsx',
       'src/components/shared/SharedPrimitives.guardrails.test.ts',
     ]);
 
@@ -377,15 +388,27 @@ describe('shared primitive guardrails', () => {
     expect(formSelectSource).toContain('id={selectId()}');
     expect(formSelectSource).toContain('aria-describedby={describedBy()}');
     expect(formSelectSource).toContain('createEffect');
+    expect(formSelectSource).toContain('MutationObserver');
     expect(formSelectSource).toContain("'value'");
-    expect(formSelectSource).toContain('selectElement.value = nextValue');
+    expect(formSelectSource).toContain('selectElement.value = resolvedValue');
     expect(formSelectSource).toContain('local.selectBaseClass ?? formSelect');
     expect(formSelectSource).toContain('local.fieldBaseClass ?? formField');
 
-    expect(guestDrawerHistorySource).toContain('FormSelect');
+    for (const source of [
+      addFilterMenuSource,
+      filterToolbarSource,
+      guestDrawerHistorySource,
+      k8sDeploymentsDrawerSource,
+      orgSwitcherSource,
+      resourceDetailDrawerOverviewTabSource,
+      storagePageControlsSource,
+    ]) {
+      expect(source).toContain('FormSelect');
+      expect(source).not.toContain('<select');
+    }
+
     expect(guestDrawerHistorySource).toContain('id="guest-history-range"');
     expect(guestDrawerHistorySource).toContain('data-testid="guest-history-range-control"');
-    expect(guestDrawerHistorySource).not.toContain('<select');
   });
 
   it('keeps native form textareas on the shared labelled primitive', () => {

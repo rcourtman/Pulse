@@ -1109,6 +1109,11 @@ in `frontend-modern/src/routing/resourceLinks.ts` now serialize query state
 only; the owning platform/runtime route supplies the pathname. New drawer or
 correlation surfaces must anchor on platform routes (or stay-in-place drawer
 expansion) instead of resurrecting the retired top-level paths.
+Unified-resource drawers and Kubernetes drill-down controls may own resource
+timeline filter semantics, namespace choices, and destination routes, but their
+native select chrome must compose the frontend-primitives-owned `FormSelect`.
+`ResourceDetailDrawerOverviewTab.tsx` and `K8sDeploymentsDrawer.tsx` must not
+recreate raw labelled `<select>` controls for those filters locally.
 
 The Proxmox platform page is a route-level consumer of canonical unified
 resources, not a new resource source. It filters the existing resource snapshot
