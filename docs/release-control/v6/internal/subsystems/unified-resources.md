@@ -132,6 +132,28 @@ cross-source deduplication.
 110. `frontend-modern/src/features/kubernetes/KubernetesPolicyTable.tsx`
 111. `frontend-modern/src/features/kubernetes/KubernetesAutoscalingTable.tsx`
 112. `frontend-modern/src/features/kubernetes/KubernetesEventsTable.tsx`
+113. `frontend-modern/src/features/docker/DockerAlertsTable.tsx`
+114. `frontend-modern/src/features/docker/DockerServicesTable.tsx`
+115. `frontend-modern/src/features/docker/DockerStorageUsageTable.tsx`
+116. `frontend-modern/src/features/kubernetes/KubernetesAlertsTable.tsx`
+117. `frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx`
+118. `frontend-modern/src/features/proxmox/ProxmoxCephTable.tsx`
+119. `frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx`
+120. `frontend-modern/src/features/proxmox/ProxmoxMailGatewayTable.tsx`
+121. `frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx`
+122. `frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx`
+123. `frontend-modern/src/features/truenas/TrueNASAlertsTable.tsx`
+124. `frontend-modern/src/features/truenas/TrueNASAppsTable.tsx`
+125. `frontend-modern/src/features/truenas/TrueNASNetworkSharesTable.tsx`
+126. `frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx`
+127. `frontend-modern/src/features/truenas/TrueNASServicesTable.tsx`
+128. `frontend-modern/src/features/truenas/TrueNASStorageTopologyTable.tsx`
+129. `frontend-modern/src/features/truenas/TrueNASSystemsTable.tsx`
+130. `frontend-modern/src/features/truenas/TrueNASVirtualMachinesTable.tsx`
+131. `frontend-modern/src/features/vmware/VsphereActivityTable.tsx`
+132. `frontend-modern/src/features/vmware/VsphereAlertsTable.tsx`
+133. `frontend-modern/src/features/vmware/VsphereDatastoresTable.tsx`
+134. `frontend-modern/src/features/vmware/VsphereNetworksTable.tsx`
 
 ## Shared Boundaries
 
@@ -184,14 +206,14 @@ workload, service, storage, configuration, policy, and event object rows belong
 in their workflow tabs. If a future Overview repeats a detailed table, the
 owning workflow must be retired or the Overview content must be reduced to
 aggregate signal.
-Platform host overview tables are unified-resource consumers even when their
-visual table frame is frontend-primitives-owned. `DockerHostsTable.tsx`,
-`KubernetesNodesTable.tsx`, `ProxmoxNodesTable.tsx`, and
-`VsphereHostsTable.tsx` own source-specific row fields over canonical
-`Resource` projections, while `PlatformTableShell` owns the shared table card,
-header row, and body frame. Future host overview tables must keep that split:
-row data and platform semantics stay in the unified-resource consumer, and the
-repeated table shell stays in the shared frontend primitive.
+Platform native tables are unified-resource consumers even when their visual
+table frame is frontend-primitives-owned. Docker / Podman, Kubernetes, Proxmox,
+Standalone, TrueNAS, and vSphere platform tables own source-specific row fields,
+filter semantics, drawer handoffs, and resource projections, while
+`PlatformTableShell` owns the shared table card, header row, and body frame.
+Future platform tables must keep that split: row data and platform semantics
+stay in the unified-resource consumer, and the repeated table shell stays in the
+shared frontend primitive.
 Product-originated resource references may arrive as registered unified
 resource IDs, source-specific IDs, or canonical identity aliases. The
 unified-resource registry owns resolving those references through
@@ -290,11 +312,13 @@ container inventory table.
 9. `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts` shared with `performance-and-scalability`: unified resource table state derivation, sort-cycle policy, service sorting, and responsive column layout are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 10. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts` shared with `performance-and-scalability`: unified resource table state, grouping, and windowing are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 11. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts` shared with `performance-and-scalability`: unified resource table viewport sync and selected-row reveal are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-15. `frontend-modern/src/utils/platformSupportManifest.generated.ts` shared with `frontend-primitives`: the generated platform support projection is both a canonical unified-resource platform union boundary and a shared frontend source/platform vocabulary boundary.
+12. `frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx` shared with `storage-recovery`: Proxmox backup server table rows are both a storage/recovery backup-health surface and a unified-resource platform-table consumer boundary.
+13. `frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx` shared with `storage-recovery`: Proxmox recoverable workload table rows are both a storage/recovery coverage surface and a unified-resource platform-table consumer boundary.
+14. `frontend-modern/src/utils/platformSupportManifest.generated.ts` shared with `frontend-primitives`: the generated platform support projection is both a canonical unified-resource platform union boundary and a shared frontend source/platform vocabulary boundary.
     It must carry the manifest `surface_kind` distinction so `docker` remains
     machine-readable as a `runtime-lens` while owning infrastructure sources
     remain `platform` entries.
-16. `frontend-modern/src/utils/sourcePlatforms.ts` shared with `frontend-primitives`: the source platform normalizer is both a canonical unified-resource source adapter boundary and a shared frontend source/platform vocabulary boundary.
+15. `frontend-modern/src/utils/sourcePlatforms.ts` shared with `frontend-primitives`: the source platform normalizer is both a canonical unified-resource source adapter boundary and a shared frontend source/platform vocabulary boundary.
     That shared vocabulary boundary owns the generic `docker` platform label:
     selectors, badges, and filter options render it as "Docker / Podman" so
     v5 Docker users can still find the runtime surface while Podman-backed
@@ -316,7 +340,7 @@ container inventory table.
     display/source family; `platformScopes` is the overlap set used when a
     runtime workload belongs to both Docker and an owning infrastructure
     platform.
-17. `internal/api/resources.go` shared with `api-contracts`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
+16. `internal/api/resources.go` shared with `api-contracts`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
     App-container Discovery targets are part of that shared payload contract.
     Backend resources must expose frontend-facing `resourceType=app-container`
     with the reporting Docker/Podman agent id and the stable container name as

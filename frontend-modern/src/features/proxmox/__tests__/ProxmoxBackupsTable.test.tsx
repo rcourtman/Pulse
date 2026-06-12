@@ -4,6 +4,10 @@ import type { JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ProxmoxBackupsTable } from '../ProxmoxBackupsTable';
+import {
+  PLATFORM_TABLE_BODY_CLASS,
+  PLATFORM_TABLE_HEADER_ROW_CLASS,
+} from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
 import { getRecoveryFullDateLabel } from '@/utils/recoveryDatePresentation';
 
@@ -123,6 +127,41 @@ const workloadResource = {
   proxmox: { vmid: 112, node: 'pve-a', instance: 'pve-a' },
 } as Resource;
 
+const pbsServerResource = {
+  id: 'pbs-main',
+  type: 'pbs',
+  name: 'pbs-main',
+  displayName: 'pbs-main',
+  platformId: 'pbs-main',
+  platformType: 'proxmox-pbs',
+  sourceType: 'api',
+  status: 'online',
+  lastSeen: Date.parse('2026-05-25T00:00:00Z'),
+  cpu: { current: 12 },
+  memory: { current: 40, total: 8_000, used: 3_200, free: 4_800 },
+  uptime: 86_400,
+  pbs: {
+    instanceId: 'pbs-main',
+    version: '3.2.1',
+    connectionHealth: 'healthy',
+    datastores: [
+      { name: 'main', total: 10_000, used: 4_000, available: 6_000, usagePercent: 40 },
+    ],
+  },
+} as Resource;
+
+const expectClassTokens = (element: Element | null, className: string): void => {
+  expect(element).not.toBeNull();
+  for (const token of className.split(/\s+/).filter(Boolean)) {
+    expect(element).toHaveClass(token);
+  }
+};
+
+const expectCanonicalPlatformTableShell = (table: HTMLElement): void => {
+  expectClassTokens(table.querySelector('thead tr'), PLATFORM_TABLE_HEADER_ROW_CLASS);
+  expectClassTokens(table.querySelector('tbody'), PLATFORM_TABLE_BODY_CLASS);
+};
+
 afterEach(() => {
   cleanup();
   apiFetchMock.mockReset();
@@ -133,7 +172,11 @@ describe('ProxmoxBackupsTable', () => {
     mockBackupAPIs();
 
     renderInRouter(() => (
-      <ProxmoxBackupsTable emptyIcon={<span />} workloads={[workloadResource]} />
+      <ProxmoxBackupsTable
+        emptyIcon={<span />}
+        workloads={[workloadResource]}
+        servers={[pbsServerResource]}
+      />
     ));
 
     // Default view is the v5-parity backup feed: one row PER backup, so the
@@ -157,6 +200,11 @@ describe('ProxmoxBackupsTable', () => {
         name: `${getRecoveryFullDateLabel('2026-05-25')} 3 backups`,
       }),
     ).toBeInTheDocument();
+    const tables = screen.getAllByRole('table');
+    expect(tables).toHaveLength(2);
+    for (const table of tables) {
+      expectCanonicalPlatformTableShell(table);
+    }
     expect(apiFetchMock).toHaveBeenCalledWith('/api/backups/pbs');
     expect(apiFetchMock).toHaveBeenCalledWith('/api/backups/pve');
   });

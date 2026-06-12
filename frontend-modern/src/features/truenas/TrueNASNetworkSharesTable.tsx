@@ -1,27 +1,16 @@
 import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
-import { TableCard } from '@/components/shared/TableCard';
-import { TableCardHeader } from '@/components/shared/TableCardHeader';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/shared/Table';
+import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
-  PLATFORM_TABLE_BODY_CLASS,
-  PLATFORM_TABLE_CARD_CLASS,
-  PLATFORM_TABLE_HEADER_ROW_CLASS,
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   type PlatformTableFilterOption,
+  PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   PlatformResourceDetailTableRow,
@@ -168,36 +157,37 @@ export const TrueNASNetworkSharesTable: Component<{
             />
           }
         >
-          <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
-            <TableCardHeader title="Network Shares" />
-            <Table class="min-w-full table-fixed text-xs md:min-w-[960px]">
-              <TableHeader>
-                <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[23%]`}>
-                    Share
-                  </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[11%]`}>
-                    Protocol
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[27%]`}
-                  >
-                    Path
-                  </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[19%]`}>
-                    Access
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden lg:table-cell md:w-[13%]`}
-                  >
-                    Clients
-                  </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('badge')} md:w-[7%]`}>
-                    State
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
+          <PlatformTableShell
+            title="Network Shares"
+            tableClass="min-w-full table-fixed text-xs md:min-w-[960px]"
+            header={
+              <>
+                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[23%]`}>
+                  Share
+                </TableHead>
+                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[11%]`}>
+                  Protocol
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[27%]`}
+                >
+                  Path
+                </TableHead>
+                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[19%]`}>
+                  Access
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden lg:table-cell md:w-[13%]`}
+                >
+                  Clients
+                </TableHead>
+                <TableHead class={`${getPlatformTableHeadClassForKind('badge')} md:w-[7%]`}>
+                  State
+                </TableHead>
+              </>
+            }
+            body={
+              <>
                 <For each={tableState.filtered()}>
                   {(resource) => {
                     const share = () => shareMeta(resource);
@@ -291,9 +281,9 @@ export const TrueNASNetworkSharesTable: Component<{
                     );
                   }}
                 </For>
-              </TableBody>
-            </Table>
-          </TableCard>
+              </>
+            }
+          />
         </Show>
       </div>
     </Show>

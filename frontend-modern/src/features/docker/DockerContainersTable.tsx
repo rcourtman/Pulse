@@ -5,29 +5,18 @@ import { UpdateButton } from '@/components/shared/ContainerUpdateBadge';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import { getWorkloadTableLayoutMode } from '@/components/Workloads/guestRowModel';
-import { TableCard } from '@/components/shared/TableCard';
-import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/shared/Table';
+import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
-  PLATFORM_TABLE_BODY_CLASS,
-  PLATFORM_TABLE_CARD_CLASS,
-  PLATFORM_TABLE_HEADER_ROW_CLASS,
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
+  PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   PlatformResourceDetailTableRow,
@@ -316,9 +305,10 @@ export const DockerContainersTable: Component<DockerNativeTableProps> = (props) 
             />
           }
         >
-          <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
-            <TableCardHeader title={props.title ?? 'Containers'} />
-            <Table class={`${getDockerContainerTableMinWidthClass()} table-fixed text-xs`}>
+          <PlatformTableShell
+            title={props.title ?? 'Containers'}
+            tableClass={`${getDockerContainerTableMinWidthClass()} table-fixed text-xs`}
+            colgroup={
               <colgroup>
                 <For each={visibleColumns()}>
                   {(column) => (
@@ -332,21 +322,23 @@ export const DockerContainersTable: Component<DockerNativeTableProps> = (props) 
                   )}
                 </For>
               </colgroup>
-              <TableHeader>
-                <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                  <For each={visibleColumns()}>
-                    {(column) => (
-                      <TableHead class={getPlatformTableHeadClassForKind(column.kind)}>
-                        <Show when={column.id === 'memory'} fallback={<>{column.label}</>}>
-                          <span class="md:hidden">Mem</span>
-                          <span class="hidden md:inline">Memory</span>
-                        </Show>
-                      </TableHead>
-                    )}
-                  </For>
-                </TableRow>
-              </TableHeader>
-              <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
+            }
+            header={
+              <>
+                <For each={visibleColumns()}>
+                  {(column) => (
+                    <TableHead class={getPlatformTableHeadClassForKind(column.kind)}>
+                      <Show when={column.id === 'memory'} fallback={<>{column.label}</>}>
+                        <span class="md:hidden">Mem</span>
+                        <span class="hidden md:inline">Memory</span>
+                      </Show>
+                    </TableHead>
+                  )}
+                </For>
+              </>
+            }
+            body={
+              <>
                 <For each={sortedRows()}>
                   {(resource) => {
                     const indicator = mapDockerContainerStatus(resource);
@@ -555,9 +547,9 @@ export const DockerContainersTable: Component<DockerNativeTableProps> = (props) 
                     );
                   }}
                 </For>
-              </TableBody>
-            </Table>
-          </TableCard>
+              </>
+            }
+          />
         </Show>
       </div>
     </Show>

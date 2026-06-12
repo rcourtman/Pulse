@@ -1,27 +1,16 @@
 import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
-import { TableCard } from '@/components/shared/TableCard';
-import { TableCardHeader } from '@/components/shared/TableCardHeader';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/shared/Table';
+import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { getResourceTypeLabel } from '@/utils/resourceTypePresentation';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
-  PLATFORM_TABLE_BODY_CLASS,
-  PLATFORM_TABLE_CARD_CLASS,
-  PLATFORM_TABLE_HEADER_ROW_CLASS,
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
+  PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   PlatformResourceDetailTableRow,
@@ -220,51 +209,50 @@ export const KubernetesControllersTable: Component<{
             />
           }
         >
-          <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
-            <TableCardHeader title={props.title ?? 'Workload Controllers'} />
-            <Table class="min-w-full table-fixed text-xs md:min-w-[1120px]">
-              <TableHeader>
-                <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[18%]`}>
-                    Controller
-                  </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[9%]`}>
-                    Kind
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[14%]`}
-                  >
-                    Scope
-                  </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[12%]`}>
-                    Target
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[8%]`}
-                  >
-                    Current
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[10%]`}
-                  >
-                    Ready/Done
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[9%]`}
-                  >
-                    Available
-                  </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[11%]`}>
-                    Exceptions
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[9%]`}
-                  >
-                    Detail
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
+          <PlatformTableShell
+            title={props.title ?? 'Workload Controllers'}
+            tableClass="min-w-full table-fixed text-xs md:min-w-[1120px]"
+            header={
+              <>
+                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[18%]`}>
+                  Controller
+                </TableHead>
+                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[9%]`}>
+                  Kind
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[14%]`}
+                >
+                  Scope
+                </TableHead>
+                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[12%]`}>
+                  Target
+                </TableHead>
+                <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[8%]`}>
+                  Current
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[10%]`}
+                >
+                  Ready/Done
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[9%]`}
+                >
+                  Available
+                </TableHead>
+                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[11%]`}>
+                  Exceptions
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[9%]`}
+                >
+                  Detail
+                </TableHead>
+              </>
+            }
+            body={
+              <>
                 <For each={sortedRows()}>
                   {(resource) => {
                     const indicator = () => mapKubernetesControllerStatus(resource);
@@ -279,92 +267,92 @@ export const KubernetesControllersTable: Component<{
 
                     return (
                       <>
-                      <TableRow
-                        class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
-                        aria-controls={isExpanded() ? detailRowId() : undefined}
-                        aria-expanded={isExpanded() ? 'true' : 'false'}
-                        data-kubernetes-controller-row={resource.id}
-                        onClick={() => drawer.toggle(resource)}
-                        onKeyDown={drawer.handleActivationKey(resource)}
-                        tabIndex={0}
-                      >
-                        <TableCell class={getPlatformTableCellClassForKind('name')}>
-                          <div class="flex min-w-0 items-center gap-2">
-                            <StatusDot
-                              size="sm"
-                              variant={indicator().variant}
-                              title={indicator().label}
-                              ariaHidden
-                            />
-                            <span class="truncate font-semibold text-base-content" title={name()}>
-                              {name()}
+                        <TableRow
+                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
+                          aria-controls={isExpanded() ? detailRowId() : undefined}
+                          aria-expanded={isExpanded() ? 'true' : 'false'}
+                          data-kubernetes-controller-row={resource.id}
+                          onClick={() => drawer.toggle(resource)}
+                          onKeyDown={drawer.handleActivationKey(resource)}
+                          tabIndex={0}
+                        >
+                          <TableCell class={getPlatformTableCellClassForKind('name')}>
+                            <div class="flex min-w-0 items-center gap-2">
+                              <StatusDot
+                                size="sm"
+                                variant={indicator().variant}
+                                title={indicator().label}
+                                ariaHidden
+                              />
+                              <span class="truncate font-semibold text-base-content" title={name()}>
+                                {name()}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            {kind()}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                          >
+                            <span class="inline-block max-w-[12rem] truncate" title={scope()}>
+                              {scope()}
                             </span>
-                          </div>
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                        >
-                          {kind()}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                        >
-                          <span class="inline-block max-w-[12rem] truncate" title={scope()}>
-                            {scope()}
-                          </span>
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                        >
-                          <span class="inline-block max-w-[12rem] truncate" title={target()}>
-                            {target()}
-                          </span>
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                        >
-                          {numberValue(currentValue(resource))}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                        >
-                          {numberValue(readyOrDoneValue(resource))}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
-                        >
-                          {numberValue(availableValue(resource))}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                        >
-                          <span class="inline-block max-w-[13rem] truncate" title={exceptions()}>
-                            {exceptions()}
-                          </span>
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                        >
-                          <span class="inline-block max-w-[14rem] truncate" title={detail()}>
-                            {detail()}
-                          </span>
-                        </TableCell>
-                      </TableRow>
-                      <PlatformResourceDetailTableRow
-                        resource={resource}
-                        open={isExpanded()}
-                        detailRowId={detailRowId()}
-                        colSpan={9}
-                        resolveResourceLabel={resolveResourceLabel}
-                        onClose={() => drawer.close(resource)}
-                      />
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            <span class="inline-block max-w-[12rem] truncate" title={target()}>
+                              {target()}
+                            </span>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                          >
+                            {numberValue(currentValue(resource))}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                          >
+                            {numberValue(readyOrDoneValue(resource))}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
+                          >
+                            {numberValue(availableValue(resource))}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            <span class="inline-block max-w-[13rem] truncate" title={exceptions()}>
+                              {exceptions()}
+                            </span>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                          >
+                            <span class="inline-block max-w-[14rem] truncate" title={detail()}>
+                              {detail()}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                        <PlatformResourceDetailTableRow
+                          resource={resource}
+                          open={isExpanded()}
+                          detailRowId={detailRowId()}
+                          colSpan={9}
+                          resolveResourceLabel={resolveResourceLabel}
+                          onClose={() => drawer.close(resource)}
+                        />
                       </>
                     );
                   }}
                 </For>
-              </TableBody>
-            </Table>
-          </TableCard>
+              </>
+            }
+          />
         </Show>
       </div>
     </Show>

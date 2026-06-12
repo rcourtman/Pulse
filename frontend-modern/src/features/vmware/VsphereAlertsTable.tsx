@@ -1,20 +1,8 @@
 import { For, Show, type Component, type JSX } from 'solid-js';
 import XIcon from 'lucide-solid/icons/x';
 import { StatusDot } from '@/components/shared/StatusDot';
-import { TableCard } from '@/components/shared/TableCard';
-import { TableCardHeader } from '@/components/shared/TableCardHeader';
+import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/shared/Table';
-import {
-  PLATFORM_TABLE_BODY_CLASS,
-  PLATFORM_TABLE_CARD_CLASS,
-  PLATFORM_TABLE_HEADER_ROW_CLASS,
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
@@ -22,6 +10,7 @@ import {
   getPlatformTableHeadClassForKind,
   platformChipStatusDot,
   type PlatformTableFilterOption,
+  PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   createPlatformResourceDetailState,
@@ -243,38 +232,39 @@ export const VsphereAlertsTable: Component<{
             />
           }
         >
-          <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
-            <TableCardHeader title="Health Signals" />
-            <Table class="min-w-full table-fixed text-xs md:min-w-[1040px]">
-              <TableHeader>
-                <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[20%]`}>
-                    Resource
-                  </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('badge')} md:w-[10%]`}>
-                    Severity
-                  </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[34%]`}>
-                    Signal
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[14%]`}
-                  >
-                    vCenter
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden lg:table-cell md:w-[12%]`}
-                  >
-                    Entity
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden xl:table-cell md:w-[10%]`}
-                  >
-                    Started
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
+          <PlatformTableShell
+            title="Health Signals"
+            tableClass="min-w-full table-fixed text-xs md:min-w-[1040px]"
+            header={
+              <>
+                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[20%]`}>
+                  Resource
+                </TableHead>
+                <TableHead class={`${getPlatformTableHeadClassForKind('badge')} md:w-[10%]`}>
+                  Severity
+                </TableHead>
+                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[34%]`}>
+                  Signal
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[14%]`}
+                >
+                  vCenter
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden lg:table-cell md:w-[12%]`}
+                >
+                  Entity
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden xl:table-cell md:w-[10%]`}
+                >
+                  Started
+                </TableHead>
+              </>
+            }
+            body={
+              <>
                 <For each={tableState.filtered()}>
                   {(incident) => {
                     const meta = () => incident.resource.vmware;
@@ -308,7 +298,6 @@ export const VsphereAlertsTable: Component<{
                                 <div class="truncate text-[10px] text-muted">
                                   {formatResourceType(incident.resourceType)}
                                   <Show when={incident.resource.parentName}>
-                                    {' '}
                                     on {incident.resource.parentName}
                                   </Show>
                                 </div>
@@ -387,9 +376,9 @@ export const VsphereAlertsTable: Component<{
                     );
                   }}
                 </For>
-              </TableBody>
-            </Table>
-          </TableCard>
+              </>
+            }
+          />
         </Show>
       </div>
     </Show>

@@ -1,24 +1,13 @@
 import { For, Show, createMemo, type Component } from 'solid-js';
-import { TableCard } from '@/components/shared/TableCard';
-import { TableCardHeader } from '@/components/shared/TableCardHeader';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/shared/Table';
+import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
-  PLATFORM_TABLE_BODY_CLASS,
-  PLATFORM_TABLE_CARD_CLASS,
-  PLATFORM_TABLE_HEADER_ROW_CLASS,
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
+  PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   DockerResourceNameCell,
@@ -77,43 +66,44 @@ export const DockerTasksTable: Component<DockerNativeTableProps> = (props) => {
             />
           }
         >
-          <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
-            <TableCardHeader title={props.title ?? 'Swarm Tasks'} />
-            <Table class="min-w-full table-fixed text-xs md:min-w-[1160px]">
-              <TableHeader>
-                <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[18%]`}>
-                    Task
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[18%]`}
-                  >
-                    Service
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[8%]`}
-                  >
-                    Slot
-                  </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[12%]`}>
-                    Desired
-                  </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[16%]`}>
-                    Current
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[16%]`}
-                  >
-                    Node
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[12%]`}
-                  >
-                    Started
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
+          <PlatformTableShell
+            title={props.title ?? 'Swarm Tasks'}
+            tableClass="min-w-full table-fixed text-xs md:min-w-[1160px]"
+            header={
+              <>
+                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[18%]`}>
+                  Task
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[18%]`}
+                >
+                  Service
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[8%]`}
+                >
+                  Slot
+                </TableHead>
+                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[12%]`}>
+                  Desired
+                </TableHead>
+                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[16%]`}>
+                  Current
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[16%]`}
+                >
+                  Node
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[12%]`}
+                >
+                  Started
+                </TableHead>
+              </>
+            }
+            body={
+              <>
                 <For each={sortedRows()}>
                   {(resource) => (
                     <TableRow class="text-[11px] sm:text-xs" data-docker-task-row={resource.id}>
@@ -168,9 +158,9 @@ export const DockerTasksTable: Component<DockerNativeTableProps> = (props) => {
                     </TableRow>
                   )}
                 </For>
-              </TableBody>
-            </Table>
-          </TableCard>
+              </>
+            }
+          />
         </Show>
       </div>
     </Show>

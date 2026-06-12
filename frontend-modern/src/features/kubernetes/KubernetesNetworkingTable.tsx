@@ -1,27 +1,16 @@
 import { For, Show, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
-import { TableCard } from '@/components/shared/TableCard';
-import { TableCardHeader } from '@/components/shared/TableCardHeader';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/shared/Table';
+import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
-  PLATFORM_TABLE_BODY_CLASS,
-  PLATFORM_TABLE_CARD_CLASS,
-  PLATFORM_TABLE_HEADER_ROW_CLASS,
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
+  PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   PlatformResourceDetailTableRow,
@@ -179,41 +168,42 @@ export const KubernetesNetworkingTable: Component<{
             />
           }
         >
-          <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
-            <TableCardHeader title={props.title ?? 'Ingresses and EndpointSlices'} />
-            <Table class="min-w-full table-fixed text-xs md:min-w-[1180px]">
-              <TableHeader>
-                <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[19%]`}>
-                    Resource
-                  </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[12%]`}>
-                    Kind
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[14%]`}
-                  >
-                    Scope
-                  </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[12%]`}>
-                    Type / class
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[18%]`}
-                  >
-                    Address / hosts
-                  </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[12%]`}>
-                    Ports
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[13%]`}
-                  >
-                    Targets
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
+          <PlatformTableShell
+            title={props.title ?? 'Ingresses and EndpointSlices'}
+            tableClass="min-w-full table-fixed text-xs md:min-w-[1180px]"
+            header={
+              <>
+                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[19%]`}>
+                  Resource
+                </TableHead>
+                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[12%]`}>
+                  Kind
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[14%]`}
+                >
+                  Scope
+                </TableHead>
+                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[12%]`}>
+                  Type / class
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[18%]`}
+                >
+                  Address / hosts
+                </TableHead>
+                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[12%]`}>
+                  Ports
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[13%]`}
+                >
+                  Targets
+                </TableHead>
+              </>
+            }
+            body={
+              <>
                 <For each={tableState.filtered()}>
                   {(resource) => {
                     const indicator = () => getSimpleStatusIndicator(resource.status);
@@ -306,9 +296,9 @@ export const KubernetesNetworkingTable: Component<{
                     );
                   }}
                 </For>
-              </TableBody>
-            </Table>
-          </TableCard>
+              </>
+            }
+          />
         </Show>
       </div>
     </Show>

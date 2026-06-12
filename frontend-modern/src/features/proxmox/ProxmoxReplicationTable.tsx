@@ -3,26 +3,16 @@ import ArrowRightIcon from 'lucide-solid/icons/arrow-right';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { StatusDot } from '@/components/shared/StatusDot';
-import { TableCard } from '@/components/shared/TableCard';
 import type { StatusIndicatorVariant } from '@/utils/status';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/shared/Table';
+import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { apiFetch } from '@/utils/apiClient';
 import { formatRelativeTime } from '@/utils/format';
 import {
-  PLATFORM_TABLE_BODY_CLASS,
-  PLATFORM_TABLE_CARD_CLASS,
-  PLATFORM_TABLE_HEADER_ROW_CLASS,
   PlatformTableToolbar,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   type PlatformTableFilterOption,
+  PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { ReplicationJob, ReplicationJobsResponse } from '@/types/api';
 
@@ -261,35 +251,34 @@ export const ProxmoxReplicationTable: Component<{
                 </Card>
               }
             >
-              <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
-                <Table class="min-w-[1200px] text-xs">
-                  <TableHeader>
-                    <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                      <TableHead class={getPlatformTableHeadClassForKind('text')}>Status</TableHead>
-                      <TableHead class={getPlatformTableHeadClassForKind('text')}>Job</TableHead>
-                      <TableHead class={getPlatformTableHeadClassForKind('name')}>Guest</TableHead>
-                      <TableHead class={getPlatformTableHeadClassForKind('text')}>
-                        Source → Target
-                      </TableHead>
-                      <TableHead class={getPlatformTableHeadClassForKind('text')}>
-                        Schedule
-                      </TableHead>
-                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                        Last sync
-                      </TableHead>
-                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                        Next sync
-                      </TableHead>
-                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                        Duration
-                      </TableHead>
-                      <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                        Fail count
-                      </TableHead>
-                      <TableHead class={getPlatformTableHeadClassForKind('text')}>Error</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
+              <PlatformTableShell
+                tableClass="min-w-[1200px] text-xs"
+                header={
+                  <>
+                    <TableHead class={getPlatformTableHeadClassForKind('text')}>Status</TableHead>
+                    <TableHead class={getPlatformTableHeadClassForKind('text')}>Job</TableHead>
+                    <TableHead class={getPlatformTableHeadClassForKind('name')}>Guest</TableHead>
+                    <TableHead class={getPlatformTableHeadClassForKind('text')}>
+                      Source → Target
+                    </TableHead>
+                    <TableHead class={getPlatformTableHeadClassForKind('text')}>Schedule</TableHead>
+                    <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                      Last sync
+                    </TableHead>
+                    <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                      Next sync
+                    </TableHead>
+                    <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                      Duration
+                    </TableHead>
+                    <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                      Fail count
+                    </TableHead>
+                    <TableHead class={getPlatformTableHeadClassForKind('text')}>Error</TableHead>
+                  </>
+                }
+                body={
+                  <>
                     <For each={filtered()}>
                       {(job) => {
                         const classification = classifyJob(job);
@@ -385,9 +374,9 @@ export const ProxmoxReplicationTable: Component<{
                         );
                       }}
                     </For>
-                  </TableBody>
-                </Table>
-              </TableCard>
+                  </>
+                }
+              />
             </Show>
           </div>
         </Show>

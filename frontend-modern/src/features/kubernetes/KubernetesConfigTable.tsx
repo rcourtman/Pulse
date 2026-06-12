@@ -1,27 +1,16 @@
 import { For, Show, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
-import { TableCard } from '@/components/shared/TableCard';
-import { TableCardHeader } from '@/components/shared/TableCardHeader';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/shared/Table';
+import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
-  PLATFORM_TABLE_BODY_CLASS,
-  PLATFORM_TABLE_CARD_CLASS,
-  PLATFORM_TABLE_HEADER_ROW_CLASS,
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
+  PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   PlatformResourceDetailTableRow,
@@ -234,43 +223,42 @@ export const KubernetesConfigTable: Component<{
             />
           }
         >
-          <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
-            <TableCardHeader
-              title={props.title ?? 'Namespaces, ConfigMaps, Secrets, ServiceAccounts, RBAC'}
-            />
-            <Table class="min-w-full table-fixed text-xs md:min-w-[1160px]">
-              <TableHeader>
-                <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[18%]`}>
-                    Resource
-                  </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[13%]`}>
-                    Kind
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[16%]`}
-                  >
-                    Scope
-                  </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[16%]`}>
-                    Lifecycle / trust
-                  </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[14%]`}>
-                    Data shape
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[13%]`}
-                  >
-                    Token refs
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}
-                  >
-                    Labels
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
+          <PlatformTableShell
+            title={props.title ?? 'Namespaces, ConfigMaps, Secrets, ServiceAccounts, RBAC'}
+            tableClass="min-w-full table-fixed text-xs md:min-w-[1160px]"
+            header={
+              <>
+                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[18%]`}>
+                  Resource
+                </TableHead>
+                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[13%]`}>
+                  Kind
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[16%]`}
+                >
+                  Scope
+                </TableHead>
+                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[16%]`}>
+                  Lifecycle / trust
+                </TableHead>
+                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[14%]`}>
+                  Data shape
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[13%]`}
+                >
+                  Token refs
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}
+                >
+                  Labels
+                </TableHead>
+              </>
+            }
+            body={
+              <>
                 <For each={tableState.filtered()}>
                   {(resource) => {
                     const indicator = () => getSimpleStatusIndicator(resource.status);
@@ -286,82 +274,82 @@ export const KubernetesConfigTable: Component<{
 
                     return (
                       <>
-                      <TableRow
-                        class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
-                        aria-controls={isExpanded() ? detailRowId() : undefined}
-                        aria-expanded={isExpanded() ? 'true' : 'false'}
-                        data-kubernetes-config-row={resource.id}
-                        onClick={() => drawer.toggle(resource)}
-                        onKeyDown={drawer.handleActivationKey(resource)}
-                        tabIndex={0}
-                      >
-                        <TableCell class={getPlatformTableCellClassForKind('name')}>
-                          <div class="flex min-w-0 items-center gap-2">
-                            <StatusDot
-                              size="sm"
-                              variant={indicator().variant}
-                              title={resource.status || 'unknown'}
-                              ariaHidden
-                            />
-                            <span class="truncate font-semibold text-base-content" title={name()}>
-                              {name()}
+                        <TableRow
+                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
+                          aria-controls={isExpanded() ? detailRowId() : undefined}
+                          aria-expanded={isExpanded() ? 'true' : 'false'}
+                          data-kubernetes-config-row={resource.id}
+                          onClick={() => drawer.toggle(resource)}
+                          onKeyDown={drawer.handleActivationKey(resource)}
+                          tabIndex={0}
+                        >
+                          <TableCell class={getPlatformTableCellClassForKind('name')}>
+                            <div class="flex min-w-0 items-center gap-2">
+                              <StatusDot
+                                size="sm"
+                                variant={indicator().variant}
+                                title={resource.status || 'unknown'}
+                                ariaHidden
+                              />
+                              <span class="truncate font-semibold text-base-content" title={name()}>
+                                {name()}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            {kind()}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                          >
+                            <span class="inline-block max-w-[13rem] truncate" title={scope()}>
+                              {scope()}
                             </span>
-                          </div>
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                        >
-                          {kind()}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                        >
-                          <span class="inline-block max-w-[13rem] truncate" title={scope()}>
-                            {scope()}
-                          </span>
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                        >
-                          {state()}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                        >
-                          <span class="inline-block max-w-[13rem] truncate" title={data().title}>
-                            {data().label}
-                          </span>
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                        >
-                          <span class="inline-block max-w-[13rem] truncate" title={refs().title}>
-                            {refs().label}
-                          </span>
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                        >
-                          <span class="inline-block max-w-[9rem] truncate" title={labels().title}>
-                            {labels().label}
-                          </span>
-                        </TableCell>
-                      </TableRow>
-                      <PlatformResourceDetailTableRow
-                        resource={resource}
-                        open={isExpanded()}
-                        detailRowId={detailRowId()}
-                        colSpan={7}
-                        resolveResourceLabel={resolveResourceLabel}
-                        onClose={() => drawer.close(resource)}
-                      />
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            {state()}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          >
+                            <span class="inline-block max-w-[13rem] truncate" title={data().title}>
+                              {data().label}
+                            </span>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                          >
+                            <span class="inline-block max-w-[13rem] truncate" title={refs().title}>
+                              {refs().label}
+                            </span>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                          >
+                            <span class="inline-block max-w-[9rem] truncate" title={labels().title}>
+                              {labels().label}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                        <PlatformResourceDetailTableRow
+                          resource={resource}
+                          open={isExpanded()}
+                          detailRowId={detailRowId()}
+                          colSpan={7}
+                          resolveResourceLabel={resolveResourceLabel}
+                          onClose={() => drawer.close(resource)}
+                        />
                       </>
                     );
                   }}
                 </For>
-              </TableBody>
-            </Table>
-          </TableCard>
+              </>
+            }
+          />
         </Show>
       </div>
     </Show>

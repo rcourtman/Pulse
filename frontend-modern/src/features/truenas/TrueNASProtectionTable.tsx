@@ -1,15 +1,6 @@
 import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
-import { TableCard } from '@/components/shared/TableCard';
-import { TableCardHeader } from '@/components/shared/TableCardHeader';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/shared/Table';
+import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { formatBytes } from '@/utils/format';
 import {
   getRecoveryOutcomeBadgeClass,
@@ -19,9 +10,6 @@ import {
 import { asTrimmedString } from '@/utils/stringUtils';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import {
-  PLATFORM_TABLE_BODY_CLASS,
-  PLATFORM_TABLE_CARD_CLASS,
-  PLATFORM_TABLE_HEADER_ROW_CLASS,
   PlatformErrorState,
   PlatformTableEmptyState,
   PlatformTableLoadingState,
@@ -30,6 +18,7 @@ import {
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   type PlatformTableFilterOption,
+  PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   createPlatformResourceDetailState,
@@ -386,45 +375,44 @@ export const TrueNASProtectionTable: Component<{
                 />
               }
             >
-              <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
-                <TableCardHeader
-                  title="Snapshots & Replication"
-                  actions={
-                    <span class="text-[10px] font-medium text-muted">
-                      {tableState.total()} event{tableState.total() === 1 ? '' : 's'}
-                    </span>
-                  }
-                />
-                <Table class="min-w-full table-fixed text-xs md:min-w-[960px]">
-                  <TableHeader>
-                    <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                      <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[22%]`}>
-                        Dataset
-                      </TableHead>
-                      <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[25%]`}>
-                        Artifact
-                      </TableHead>
-                      <TableHead
-                        class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[23%]`}
-                      >
-                        Target
-                      </TableHead>
-                      <TableHead
-                        class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[12%]`}
-                      >
-                        Completed
-                      </TableHead>
-                      <TableHead
-                        class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden lg:table-cell md:w-[8%]`}
-                      >
-                        Size
-                      </TableHead>
-                      <TableHead class={`${getPlatformTableHeadClassForKind('badge')} md:w-[9%]`}>
-                        Outcome
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
+              <PlatformTableShell
+                title="Snapshots & Replication"
+                actions={
+                  <span class="text-[10px] font-medium text-muted">
+                    {tableState.total()} event{tableState.total() === 1 ? '' : 's'}
+                  </span>
+                }
+                tableClass="min-w-full table-fixed text-xs md:min-w-[960px]"
+                header={
+                  <>
+                    <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[22%]`}>
+                      Dataset
+                    </TableHead>
+                    <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[25%]`}>
+                      Artifact
+                    </TableHead>
+                    <TableHead
+                      class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[23%]`}
+                    >
+                      Target
+                    </TableHead>
+                    <TableHead
+                      class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[12%]`}
+                    >
+                      Completed
+                    </TableHead>
+                    <TableHead
+                      class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden lg:table-cell md:w-[8%]`}
+                    >
+                      Size
+                    </TableHead>
+                    <TableHead class={`${getPlatformTableHeadClassForKind('badge')} md:w-[9%]`}>
+                      Outcome
+                    </TableHead>
+                  </>
+                }
+                body={
+                  <>
                     <For each={tableState.filtered()}>
                       {(point) => {
                         const outcome = () => normalizeRecoveryOutcome(point.outcome);
@@ -520,9 +508,9 @@ export const TrueNASProtectionTable: Component<{
                         );
                       }}
                     </For>
-                  </TableBody>
-                </Table>
-              </TableCard>
+                  </>
+                }
+              />
             </Show>
           </div>
         </Show>

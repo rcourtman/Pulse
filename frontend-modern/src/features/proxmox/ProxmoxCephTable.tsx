@@ -11,25 +11,15 @@ import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { StatusDot } from '@/components/shared/StatusDot';
 import type { StatusIndicatorVariant } from '@/utils/status';
-import { TableCard } from '@/components/shared/TableCard';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/shared/Table';
+import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { formatBytes } from '@/utils/format';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
-  PLATFORM_TABLE_BODY_CLASS,
-  PLATFORM_TABLE_CARD_CLASS,
-  PLATFORM_TABLE_HEADER_ROW_CLASS,
   PlatformTableToolbar,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   type PlatformTableFilterOption,
+  PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource, ResourceCephServiceMeta } from '@/types/resource';
 import { ProxmoxCephClusterDrawer } from './ProxmoxCephClusterDrawer';
@@ -249,33 +239,32 @@ export const ProxmoxCephTable: Component<{
             </Card>
           }
         >
-          <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
-            <Table class="min-w-[1100px] text-xs">
-              <TableHeader>
-                <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                  <TableHead class={getPlatformTableHeadClassForKind('name')}>Cluster</TableHead>
-                  <TableHead class={getPlatformTableHeadClassForKind('text')}>Health</TableHead>
-                  <TableHead class={getPlatformTableHeadClassForKind('text')}>FSID</TableHead>
-                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                    Quorum
-                  </TableHead>
-                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                    OSDs
-                  </TableHead>
-                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                    PGs
-                  </TableHead>
-                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                    Pools
-                  </TableHead>
-                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                    Capacity
-                  </TableHead>
-                  <TableHead class={getPlatformTableHeadClassForKind('text')}>Services</TableHead>
-                  <TableHead class={getPlatformTableHeadClassForKind('text')}>Detail</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
+          <PlatformTableShell
+            tableClass="min-w-[1100px] text-xs"
+            header={
+              <>
+                <TableHead class={getPlatformTableHeadClassForKind('name')}>Cluster</TableHead>
+                <TableHead class={getPlatformTableHeadClassForKind('text')}>Health</TableHead>
+                <TableHead class={getPlatformTableHeadClassForKind('text')}>FSID</TableHead>
+                <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                  Quorum
+                </TableHead>
+                <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                  OSDs
+                </TableHead>
+                <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>PGs</TableHead>
+                <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                  Pools
+                </TableHead>
+                <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                  Capacity
+                </TableHead>
+                <TableHead class={getPlatformTableHeadClassForKind('text')}>Services</TableHead>
+                <TableHead class={getPlatformTableHeadClassForKind('text')}>Detail</TableHead>
+              </>
+            }
+            body={
+              <>
                 <For each={filtered()}>
                   {(cluster) => {
                     const ind = indicatorFor(classify(cluster));
@@ -389,9 +378,9 @@ export const ProxmoxCephTable: Component<{
                     );
                   }}
                 </For>
-              </TableBody>
-            </Table>
-          </TableCard>
+              </>
+            }
+          />
         </Show>
       </div>
     </Show>

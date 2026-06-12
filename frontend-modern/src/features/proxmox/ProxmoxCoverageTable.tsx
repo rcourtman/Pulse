@@ -4,15 +4,12 @@ import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { StatusDot } from '@/components/shared/StatusDot';
-import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/shared/Table';
-import { TableCard } from '@/components/shared/TableCard';
+import { TableCell, TableRow } from '@/components/shared/Table';
 import { formatBytes } from '@/utils/format';
 import {
-  PLATFORM_TABLE_BODY_CLASS,
-  PLATFORM_TABLE_CARD_CLASS,
-  PLATFORM_TABLE_HEADER_ROW_CLASS,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
+  PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { StatusIndicatorVariant } from '@/utils/status';
 
@@ -120,8 +117,9 @@ export function ProxmoxCoverageTable(props: {
         </Card>
       }
     >
-      <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
-        <Table class="min-w-[1000px] table-fixed text-xs">
+      <PlatformTableShell
+        tableClass="min-w-[1000px] table-fixed text-xs"
+        colgroup={
           <colgroup>
             <For each={visibleColumns()}>
               {(column) => (
@@ -129,82 +127,84 @@ export function ProxmoxCoverageTable(props: {
               )}
             </For>
           </colgroup>
-          <TableHeader>
-            <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
+        }
+        header={
+          <>
+            <SortableHead
+              label="Workload"
+              sortKey="workload"
+              currentSort={props.sortKey}
+              direction={props.sortDirection}
+              onSort={props.onSort}
+              align="left"
+              headClass={getPlatformTableHeadClassForKind('name')}
+            />
+            <SortableHead
+              label="Posture"
+              sortKey="posture"
+              currentSort={props.sortKey}
+              direction={props.sortDirection}
+              onSort={props.onSort}
+              align="left"
+              headClass={getPlatformTableHeadClassForKind('text')}
+            />
+            <SortableHead
+              label="Restore"
+              sortKey="latest"
+              currentSort={props.sortKey}
+              direction={props.sortDirection}
+              onSort={props.onSort}
+              align="right"
+              headClass={getPlatformTableHeadClassForKind('numeric-value')}
+            />
+            <Show when={props.showPbsColumn}>
               <SortableHead
-                label="Workload"
-                sortKey="workload"
-                currentSort={props.sortKey}
-                direction={props.sortDirection}
-                onSort={props.onSort}
-                align="left"
-                headClass={getPlatformTableHeadClassForKind('name')}
-              />
-              <SortableHead
-                label="Posture"
-                sortKey="posture"
+                label="PBS snapshot"
+                sortKey="pbs"
                 currentSort={props.sortKey}
                 direction={props.sortDirection}
                 onSort={props.onSort}
                 align="left"
                 headClass={getPlatformTableHeadClassForKind('text')}
               />
+            </Show>
+            <Show when={props.showArchiveColumn}>
               <SortableHead
-                label="Restore"
-                sortKey="latest"
+                label="PVE file"
+                sortKey="archive"
                 currentSort={props.sortKey}
                 direction={props.sortDirection}
                 onSort={props.onSort}
-                align="right"
-                headClass={getPlatformTableHeadClassForKind('numeric-value')}
+                align="left"
+                headClass={getPlatformTableHeadClassForKind('text')}
               />
-              <Show when={props.showPbsColumn}>
-                <SortableHead
-                  label="PBS snapshot"
-                  sortKey="pbs"
-                  currentSort={props.sortKey}
-                  direction={props.sortDirection}
-                  onSort={props.onSort}
-                  align="left"
-                  headClass={getPlatformTableHeadClassForKind('text')}
-                />
-              </Show>
-              <Show when={props.showArchiveColumn}>
-                <SortableHead
-                  label="PVE file"
-                  sortKey="archive"
-                  currentSort={props.sortKey}
-                  direction={props.sortDirection}
-                  onSort={props.onSort}
-                  align="left"
-                  headClass={getPlatformTableHeadClassForKind('text')}
-                />
-              </Show>
-              <Show when={props.showSnapshotColumn}>
-                <SortableHead
-                  label="Guest snapshot"
-                  sortKey="snapshot"
-                  currentSort={props.sortKey}
-                  direction={props.sortDirection}
-                  onSort={props.onSort}
-                  align="left"
-                  headClass={getPlatformTableHeadClassForKind('text')}
-                />
-              </Show>
-              <Show when={props.showTaskColumn}>
-                <SortableHead
-                  label="Task"
-                  sortKey="task"
-                  currentSort={props.sortKey}
-                  direction={props.sortDirection}
-                  onSort={props.onSort}
-                  align="left"
-                  headClass={getPlatformTableHeadClassForKind('text')}
-                />
-              </Show>
-            </TableRow>
-          </TableHeader>
-          <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
+            </Show>
+            <Show when={props.showSnapshotColumn}>
+              <SortableHead
+                label="Guest snapshot"
+                sortKey="snapshot"
+                currentSort={props.sortKey}
+                direction={props.sortDirection}
+                onSort={props.onSort}
+                align="left"
+                headClass={getPlatformTableHeadClassForKind('text')}
+              />
+            </Show>
+            <Show when={props.showTaskColumn}>
+              <SortableHead
+                label="Task"
+                sortKey="task"
+                currentSort={props.sortKey}
+                direction={props.sortDirection}
+                onSort={props.onSort}
+                align="left"
+                headClass={getPlatformTableHeadClassForKind('text')}
+              />
+            </Show>
+          </>
+        }
+        body={
+          <>
             <For each={props.rows}>
               {(row) => {
                 const isExpanded = () => props.expandedKeys.has(row.key);
@@ -449,9 +449,9 @@ export function ProxmoxCoverageTable(props: {
                 );
               }}
             </For>
-          </TableBody>
-        </Table>
-      </TableCard>
+          </>
+        }
+      />
     </Show>
   );
 }

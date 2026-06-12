@@ -1,27 +1,16 @@
 import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
-import { TableCard } from '@/components/shared/TableCard';
-import { TableCardHeader } from '@/components/shared/TableCardHeader';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/shared/Table';
+import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { formatRelativeTime } from '@/utils/format';
 import {
-  PLATFORM_TABLE_BODY_CLASS,
-  PLATFORM_TABLE_CARD_CLASS,
-  PLATFORM_TABLE_HEADER_ROW_CLASS,
   PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformTableToolbar,
   PlatformTableEmptyState,
   createPlatformTableFilterState,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
+  PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   PlatformResourceDetailTableRow,
@@ -114,59 +103,54 @@ export const KubernetesDeploymentsTable: Component<{
             />
           }
         >
-          <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
-            <TableCardHeader title={props.title ?? 'Deployments'} />
-            <Table class="min-w-full table-fixed text-xs md:min-w-[1320px]">
-              <TableHeader>
-                <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                  {/*
+          <PlatformTableShell
+            title={props.title ?? 'Deployments'}
+            tableClass="min-w-full table-fixed text-xs md:min-w-[1320px]"
+            header={
+              <>
+                {/*
                     Desktop widths: Deployment, Namespace, and Cluster take
                     the biggest shares because their content can be long.
                     The integer-count columns (Desired / Updated / Ready /
                     Available) trim to what their headers plus 1-2 digit
                     values need. Mobile widths are unchanged.
                   */}
-                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[25%]`}>
-                    Deployment
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[20%]`}
-                  >
-                    Namespace
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[17%]`}
-                  >
-                    Cluster
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[8%]`}
-                  >
-                    Desired
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[8%]`}
-                  >
-                    Updated
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[7%]`}
-                  >
-                    Ready
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[9%]`}
-                  >
-                    Available
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[6%]`}
-                  >
-                    Age
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
+                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[25%]`}>
+                  Deployment
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[20%]`}
+                >
+                  Namespace
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[17%]`}
+                >
+                  Cluster
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[8%]`}
+                >
+                  Desired
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[8%]`}
+                >
+                  Updated
+                </TableHead>
+                <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[7%]`}>
+                  Ready
+                </TableHead>
+                <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[9%]`}>
+                  Available
+                </TableHead>
+                <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[6%]`}>
+                  Age
+                </TableHead>
+              </>
+            }
+            body={
+              <>
                 <For each={sortedRows()}>
                   {(deployment) => {
                     const name = () => asTrimmedString(deployment.name) || deployment.id;
@@ -178,81 +162,84 @@ export const KubernetesDeploymentsTable: Component<{
                     const isExpanded = () => drawer.isExpanded(deployment);
                     return (
                       <>
-                      <TableRow
-                        class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
-                        aria-controls={isExpanded() ? detailRowId() : undefined}
-                        aria-expanded={isExpanded() ? 'true' : 'false'}
-                        data-kubernetes-deployment-row={deployment.id}
-                        onClick={() => drawer.toggle(deployment)}
-                        onKeyDown={drawer.handleActivationKey(deployment)}
-                        tabIndex={0}
-                      >
-                        <TableCell class={getPlatformTableCellClassForKind('name')}>
-                          <div class="flex min-w-0 items-center gap-2">
-                            <StatusDot
-                              size="sm"
-                              variant={indicator().variant}
-                              title={indicator().label}
-                              ariaHidden
-                            />
-                            <span class="truncate font-semibold text-base-content" title={name()}>
-                              {name()}
+                        <TableRow
+                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
+                          aria-controls={isExpanded() ? detailRowId() : undefined}
+                          aria-expanded={isExpanded() ? 'true' : 'false'}
+                          data-kubernetes-deployment-row={deployment.id}
+                          onClick={() => drawer.toggle(deployment)}
+                          onKeyDown={drawer.handleActivationKey(deployment)}
+                          tabIndex={0}
+                        >
+                          <TableCell class={getPlatformTableCellClassForKind('name')}>
+                            <div class="flex min-w-0 items-center gap-2">
+                              <StatusDot
+                                size="sm"
+                                variant={indicator().variant}
+                                title={indicator().label}
+                                ariaHidden
+                              />
+                              <span class="truncate font-semibold text-base-content" title={name()}>
+                                {name()}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                          >
+                            {ns()}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                          >
+                            {cluster()}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
+                          >
+                            {replicaCount(deployment.kubernetes?.desiredReplicas)}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
+                          >
+                            {replicaCount(deployment.kubernetes?.updatedReplicas)}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                          >
+                            {replicaCount(deployment.kubernetes?.readyReplicas)}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                          >
+                            {replicaCount(deployment.kubernetes?.availableReplicas)}
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                          >
+                            <span
+                              class="tabular-nums"
+                              title={deployment.kubernetes?.createdAt || ''}
+                            >
+                              {age()}
                             </span>
-                          </div>
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                        >
-                          {ns()}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                        >
-                          {cluster()}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
-                        >
-                          {replicaCount(deployment.kubernetes?.desiredReplicas)}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
-                        >
-                          {replicaCount(deployment.kubernetes?.updatedReplicas)}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                        >
-                          {replicaCount(deployment.kubernetes?.readyReplicas)}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                        >
-                          {replicaCount(deployment.kubernetes?.availableReplicas)}
-                        </TableCell>
-                        <TableCell
-                          class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                        >
-                          <span class="tabular-nums" title={deployment.kubernetes?.createdAt || ''}>
-                            {age()}
-                          </span>
-                        </TableCell>
-                      </TableRow>
-                      <PlatformResourceDetailTableRow
-                        resource={deployment}
-                        open={isExpanded()}
-                        detailRowId={detailRowId()}
-                        colSpan={8}
-                        resolveResourceLabel={resolveResourceLabel}
-                        onClose={() => drawer.close(deployment)}
-                      />
+                          </TableCell>
+                        </TableRow>
+                        <PlatformResourceDetailTableRow
+                          resource={deployment}
+                          open={isExpanded()}
+                          detailRowId={detailRowId()}
+                          colSpan={8}
+                          resolveResourceLabel={resolveResourceLabel}
+                          onClose={() => drawer.close(deployment)}
+                        />
                       </>
                     );
                   }}
                 </For>
-              </TableBody>
-            </Table>
-          </TableCard>
+              </>
+            }
+          />
         </Show>
       </div>
     </Show>

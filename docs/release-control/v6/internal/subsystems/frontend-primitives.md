@@ -2375,15 +2375,13 @@ primitive.
 Platform table frames are one of those registry-backed templates.
 `frontend-modern/src/features/platformPage/sharedPlatformPage.tsx` owns
 `PlatformTableShell`, including the canonical table card, header row, and body
-divide styling. New platform tables must start from `PlatformTableShell`; the
-legacy table-frame allowlist in `shared-template-registry.json` is migration
-debt, not precedent, and must shrink as existing tables are moved onto the
-shared shell.
-Host overview tables for Docker, Kubernetes, Proxmox, and vSphere now compose
-that shared shell directly. Future host overview tables must preserve the split:
+divide styling. Platform table frames now have no local-frame exceptions in
+`shared-template-registry.json`: new and existing platform tables must compose
+`PlatformTableShell` instead of recreating the `TableCard`, header row, or body
+divide frame locally. Platform table consumers must preserve the owner split:
 frontend-primitives owns the repeated `PlatformTableShell` frame and guardrail
-registry, while unified-resource consumers own the platform-specific row fields,
-drawers, and resource semantics.
+registry, while platform and unified-resource consumers own the source-specific
+row fields, drawers, and resource semantics.
 The shared help icon now follows that same owner split.
 `frontend-modern/src/components/shared/HelpIcon.tsx` stays the render shell,
 `frontend-modern/src/components/shared/useHelpIconState.ts` owns open state,

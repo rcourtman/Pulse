@@ -1,26 +1,15 @@
 import { For, Show, createMemo, createSignal, type Component } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
-import { TableCard } from '@/components/shared/TableCard';
-import { TableCardHeader } from '@/components/shared/TableCardHeader';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/shared/Table';
+import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
-  PLATFORM_TABLE_BODY_CLASS,
-  PLATFORM_TABLE_CARD_CLASS,
-  PLATFORM_TABLE_HEADER_ROW_CLASS,
   type PlatformTableFilterOption,
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
+  PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   createPlatformResourceDetailState,
@@ -200,7 +189,10 @@ const AttachmentRowCard: Component<{ row: DockerNetworkAttachmentRow }> = (props
 
 const AttachmentDetail: Component<{ rows: readonly DockerNetworkAttachmentRow[] }> = (props) => {
   const [showAll, setShowAll] = createSignal(false);
-  const tableState = createPlatformTableFilterState<DockerNetworkAttachmentRow, AttachmentStatusFilter>({
+  const tableState = createPlatformTableFilterState<
+    DockerNetworkAttachmentRow,
+    AttachmentStatusFilter
+  >({
     resources: () => [...props.rows],
     initialStatus: 'all',
     filter: filterAttachmentRows,
@@ -401,38 +393,39 @@ export const DockerNetworksTable: Component<DockerNetworksTableProps> = (props) 
             />
           }
         >
-          <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
-            <TableCardHeader title={props.title ?? 'Networks'} />
-            <Table class="min-w-[850px] table-fixed text-xs md:min-w-[1320px]">
-              <TableHeader>
-                <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('name')} w-[220px]`}>
-                    Network
-                  </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} w-[360px]`}>
-                    Attached workloads
-                  </TableHead>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('text')} w-[150px]`}>
-                    Attention
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[300px]`}
-                  >
-                    Subnets
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[140px]`}
-                  >
-                    Driver
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[140px]`}
-                  >
-                    Host
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
+          <PlatformTableShell
+            title={props.title ?? 'Networks'}
+            tableClass="min-w-[850px] table-fixed text-xs md:min-w-[1320px]"
+            header={
+              <>
+                <TableHead class={`${getPlatformTableHeadClassForKind('name')} w-[220px]`}>
+                  Network
+                </TableHead>
+                <TableHead class={`${getPlatformTableHeadClassForKind('text')} w-[360px]`}>
+                  Attached workloads
+                </TableHead>
+                <TableHead class={`${getPlatformTableHeadClassForKind('text')} w-[150px]`}>
+                  Attention
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[300px]`}
+                >
+                  Subnets
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[140px]`}
+                >
+                  Driver
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[140px]`}
+                >
+                  Host
+                </TableHead>
+              </>
+            }
+            body={
+              <>
                 <For each={tableState.filtered()}>
                   {(resource) => {
                     const detailRowId = () => drawer.detailRowId(resource);
@@ -517,9 +510,9 @@ export const DockerNetworksTable: Component<DockerNetworksTableProps> = (props) 
                     );
                   }}
                 </For>
-              </TableBody>
-            </Table>
-          </TableCard>
+              </>
+            }
+          />
         </Show>
       </div>
     </Show>

@@ -2,21 +2,10 @@ import { For, Show, createSignal, type Component, type JSX } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { StatusDot } from '@/components/shared/StatusDot';
-import { TableCard } from '@/components/shared/TableCard';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/shared/Table';
+import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
-  PLATFORM_TABLE_BODY_CLASS,
-  PLATFORM_TABLE_CARD_CLASS,
-  PLATFORM_TABLE_HEADER_ROW_CLASS,
   PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformTableToolbar,
   createPlatformTableFilterState,
@@ -24,6 +13,7 @@ import {
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   type PlatformResourceStatusFilter,
+  PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
 import { ProxmoxMailGatewayDrawer } from './ProxmoxMailGatewayDrawer';
@@ -95,39 +85,40 @@ export const ProxmoxMailGatewayTable: Component<{
             </Card>
           }
         >
-          <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
-            <Table class="min-w-[1080px] text-xs">
-              <TableHeader>
-                <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                  <TableHead class={getPlatformTableHeadClassForKind('name')}>Instance</TableHead>
-                  <TableHead class={getPlatformTableHeadClassForKind('text')}>Version</TableHead>
-                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                    Nodes
-                  </TableHead>
-                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                    Uptime
-                  </TableHead>
-                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                    Mail in
-                  </TableHead>
-                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                    Spam
-                  </TableHead>
-                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                    Virus
-                  </TableHead>
-                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                    Quarantine
-                  </TableHead>
-                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                    Queue
-                  </TableHead>
-                  <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                    Deferred
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
+          <PlatformTableShell
+            tableClass="min-w-[1080px] text-xs"
+            header={
+              <>
+                <TableHead class={getPlatformTableHeadClassForKind('name')}>Instance</TableHead>
+                <TableHead class={getPlatformTableHeadClassForKind('text')}>Version</TableHead>
+                <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                  Nodes
+                </TableHead>
+                <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                  Uptime
+                </TableHead>
+                <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                  Mail in
+                </TableHead>
+                <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                  Spam
+                </TableHead>
+                <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                  Virus
+                </TableHead>
+                <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                  Quarantine
+                </TableHead>
+                <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                  Queue
+                </TableHead>
+                <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
+                  Deferred
+                </TableHead>
+              </>
+            }
+            body={
+              <>
                 <For each={tableState.filtered()}>
                   {(instance) => {
                     const pmg = () => instance.pmg;
@@ -222,9 +213,9 @@ export const ProxmoxMailGatewayTable: Component<{
                     );
                   }}
                 </For>
-              </TableBody>
-            </Table>
-          </TableCard>
+              </>
+            }
+          />
         </Show>
       </div>
     </Show>

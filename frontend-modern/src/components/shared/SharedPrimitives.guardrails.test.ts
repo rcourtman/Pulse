@@ -961,7 +961,7 @@ describe('shared primitive guardrails', () => {
       'src/features/platformPage/sharedPlatformPage.tsx',
     );
     expect(registeredGuard?.canonical?.export).toBe('PlatformTableShell');
-    expect(registeredGuard?.allowedPaths?.length).toBeGreaterThan(0);
+    expect(registeredGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(sharedPlatformPageSource).toContain('export function PlatformTableShell');
     expect(sharedPlatformPageSource).toContain('TableCard class={props.cardClass');
     expect(sharedPlatformPageSource).toContain('TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}');

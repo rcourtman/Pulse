@@ -3,6 +3,7 @@ import agentsMachinesTableSource from '@/features/standalone/AgentsMachinesTable
 import agentMachineTableModelSource from '@/features/standalone/agentMachineTableModel.ts?raw';
 import standalonePageModelSource from '@/features/standalone/standalonePageModel.ts?raw';
 import standalonePageSurfaceSource from '@/features/standalone/StandalonePageSurface.tsx?raw';
+import dockerAlertsTableSource from '@/features/docker/DockerAlertsTable.tsx?raw';
 import dockerConfigsTableSource from '@/features/docker/DockerConfigsTable.tsx?raw';
 import dockerContainersTableSource from '@/features/docker/DockerContainersTable.tsx?raw';
 import dockerHostsTableSource from '@/features/docker/DockerHostsTable.tsx?raw';
@@ -11,9 +12,11 @@ import dockerNetworksTableSource from '@/features/docker/DockerNetworksTable.tsx
 import dockerPageSurfaceSource from '@/features/docker/DockerPageSurface.tsx?raw';
 import dockerSecretsTableSource from '@/features/docker/DockerSecretsTable.tsx?raw';
 import dockerServicesTableSource from '@/features/docker/DockerServicesTable.tsx?raw';
+import dockerStorageUsageTableSource from '@/features/docker/DockerStorageUsageTable.tsx?raw';
 import dockerSwarmNodesTableSource from '@/features/docker/DockerSwarmNodesTable.tsx?raw';
 import dockerTasksTableSource from '@/features/docker/DockerTasksTable.tsx?raw';
 import dockerVolumesTableSource from '@/features/docker/DockerVolumesTable.tsx?raw';
+import kubernetesAlertsTableSource from '@/features/kubernetes/KubernetesAlertsTable.tsx?raw';
 import kubernetesAutoscalingTableSource from '@/features/kubernetes/KubernetesAutoscalingTable.tsx?raw';
 import kubernetesClustersTableSource from '@/features/kubernetes/KubernetesClustersTable.tsx?raw';
 import kubernetesConfigTableSource from '@/features/kubernetes/KubernetesConfigTable.tsx?raw';
@@ -46,6 +49,7 @@ import truenasAppsTableSource from '@/features/truenas/TrueNASAppsTable.tsx?raw'
 import truenasNetworkSharesTableSource from '@/features/truenas/TrueNASNetworkSharesTable.tsx?raw';
 import truenasPageSurfaceSource from '@/features/truenas/TrueNASPageSurface.tsx?raw';
 import truenasProtectionTableSource from '@/features/truenas/TrueNASProtectionTable.tsx?raw';
+import truenasServicesTableSource from '@/features/truenas/TrueNASServicesTable.tsx?raw';
 import truenasStorageTopologyTableSource from '@/features/truenas/TrueNASStorageTopologyTable.tsx?raw';
 import truenasSystemsTableSource from '@/features/truenas/TrueNASSystemsTable.tsx?raw';
 import truenasVirtualMachinesTableSource from '@/features/truenas/TrueNASVirtualMachinesTable.tsx?raw';
@@ -54,22 +58,28 @@ import vsphereActivityTableSource from '@/features/vmware/VsphereActivityTable.t
 import vsphereAlertsTableSource from '@/features/vmware/VsphereAlertsTable.tsx?raw';
 import vsphereDatastoresTableSource from '@/features/vmware/VsphereDatastoresTable.tsx?raw';
 import vsphereHostsTableSource from '@/features/vmware/VsphereHostsTable.tsx?raw';
+import vsphereNetworksTableSource from '@/features/vmware/VsphereNetworksTable.tsx?raw';
 
 const platformTableSources = [
   agentsMachinesTableSource,
+  dockerAlertsTableSource,
   dockerContainersTableSource,
+  dockerHostsTableSource,
   dockerImagesTableSource,
   dockerVolumesTableSource,
   dockerNetworksTableSource,
+  dockerStorageUsageTableSource,
   dockerSwarmNodesTableSource,
   dockerServicesTableSource,
   dockerTasksTableSource,
   dockerSecretsTableSource,
   dockerConfigsTableSource,
+  kubernetesAlertsTableSource,
   kubernetesAutoscalingTableSource,
   kubernetesClustersTableSource,
   kubernetesConfigTableSource,
   kubernetesControllersTableSource,
+  kubernetesNodesTableSource,
   kubernetesPodsTableSource,
   kubernetesDeploymentsTableSource,
   kubernetesEventsTableSource,
@@ -81,19 +91,26 @@ const platformTableSources = [
   truenasAppsTableSource,
   truenasNetworkSharesTableSource,
   truenasProtectionTableSource,
+  truenasServicesTableSource,
   truenasStorageTopologyTableSource,
   truenasSystemsTableSource,
   truenasVirtualMachinesTableSource,
   vsphereActivityTableSource,
   vsphereAlertsTableSource,
   vsphereDatastoresTableSource,
+  vsphereHostsTableSource,
+  vsphereNetworksTableSource,
 ];
 
 const platformShellTableSources = [
+  ...platformTableSources,
   proxmoxNodesTableSource,
-  dockerHostsTableSource,
-  kubernetesNodesTableSource,
-  vsphereHostsTableSource,
+  proxmoxBackupServersTableSource,
+  proxmoxCoverageTableSource,
+  proxmoxRecoverableTableSource,
+  proxmoxCephTableSource,
+  proxmoxMailGatewayTableSource,
+  proxmoxReplicationTableSource,
 ];
 
 const platformToolbarTableSources = [
@@ -166,16 +183,6 @@ describe('platform overview layout guardrails', () => {
     expect(sharedPlatformPageSource).toContain('createPlatformTableFilterState');
     expect(sharedPlatformPageSource).toContain('PLATFORM_HEALTH_FILTER_OPTIONS');
 
-    for (const source of platformTableSources) {
-      expect(source).toContain('TableCard');
-      expect(source).toContain('TableCardHeader');
-      expect(source).toContain('PLATFORM_TABLE_CARD_CLASS');
-      expect(source).toContain('PLATFORM_TABLE_HEADER_ROW_CLASS');
-      expect(source).toContain('PLATFORM_TABLE_BODY_CLASS');
-      expect(source).toContain('getPlatformTableHeadClass');
-      expect(source).toContain('getPlatformTableCellClass');
-    }
-
     for (const source of platformShellTableSources) {
       expect(source).toContain('PlatformTableShell');
       expect(source).toContain('getPlatformTableHeadClass');
@@ -202,12 +209,12 @@ describe('platform overview layout guardrails', () => {
 
   it('keeps Proxmox detail tables on the shared platform table primitives', () => {
     for (const source of proxmoxBespokeTableSources) {
-      expect(source).toContain('TableCard');
-      expect(source).toContain('PLATFORM_TABLE_CARD_CLASS');
-      expect(source).toContain('PLATFORM_TABLE_HEADER_ROW_CLASS');
-      expect(source).toContain('PLATFORM_TABLE_BODY_CLASS');
+      expect(source).toContain('PlatformTableShell');
       expect(source).toContain('getPlatformTableHeadClassForKind');
       expect(source).toContain('getPlatformTableCellClassForKind');
+      expect(source).not.toContain('TableCard class={PLATFORM_TABLE_CARD_CLASS}');
+      expect(source).not.toContain('TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}');
+      expect(source).not.toContain('TableBody class={PLATFORM_TABLE_BODY_CLASS}');
       expect(source).not.toContain('border-collapse text-xs');
       expect(source).not.toContain('bg-surface-alt text-muted border-b border-border');
     }

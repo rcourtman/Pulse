@@ -1,22 +1,12 @@
 import { For, Show, type JSX } from 'solid-js';
 
 import { StatusDot } from '@/components/shared/StatusDot';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/shared/Table';
-import { TableCard } from '@/components/shared/TableCard';
+import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { formatBytes, formatUptime } from '@/utils/format';
 import {
-  PLATFORM_TABLE_BODY_CLASS,
-  PLATFORM_TABLE_CARD_CLASS,
-  PLATFORM_TABLE_HEADER_ROW_CLASS,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
+  PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { PBSBackup } from '@/types/api';
 import type { Resource, ResourcePBSDatastore } from '@/types/resource';
@@ -153,8 +143,9 @@ export function ProxmoxBackupServersTable(props: {
 
   return (
     <Show when={rows().length > 0}>
-      <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
-        <Table class="min-w-[1020px] table-fixed text-xs">
+      <PlatformTableShell
+        tableClass="min-w-[1020px] table-fixed text-xs"
+        colgroup={
           <colgroup>
             <col style={{ width: '16%' }} />
             <col style={{ width: '10%' }} />
@@ -167,27 +158,23 @@ export function ProxmoxBackupServersTable(props: {
             <col style={{ width: '7%' }} />
             <col style={{ width: '7%' }} />
           </colgroup>
-          <TableHeader>
-            <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-              <TableHead class={getPlatformTableHeadClassForKind('name')}>Backup server</TableHead>
-              <TableHead class={getPlatformTableHeadClassForKind('text')}>Status</TableHead>
-              <TableHead class={getPlatformTableHeadClassForKind('text')}>Version</TableHead>
-              <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>CPU</TableHead>
-              <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                Memory
-              </TableHead>
-              <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                Uptime
-              </TableHead>
-              <TableHead class={getPlatformTableHeadClassForKind('text')}>Datastore</TableHead>
-              <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>Used</TableHead>
-              <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
-                Backups
-              </TableHead>
-              <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>Dedup</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
+        }
+        header={
+          <>
+            <TableHead class={getPlatformTableHeadClassForKind('name')}>Backup server</TableHead>
+            <TableHead class={getPlatformTableHeadClassForKind('text')}>Status</TableHead>
+            <TableHead class={getPlatformTableHeadClassForKind('text')}>Version</TableHead>
+            <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>CPU</TableHead>
+            <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>Memory</TableHead>
+            <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>Uptime</TableHead>
+            <TableHead class={getPlatformTableHeadClassForKind('text')}>Datastore</TableHead>
+            <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>Used</TableHead>
+            <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>Backups</TableHead>
+            <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>Dedup</TableHead>
+          </>
+        }
+        body={
+          <>
             <For each={rows()}>
               {(row) => {
                 const pct = () => (row.datastore ? usagePercent(row.datastore) : undefined);
@@ -309,9 +296,9 @@ export function ProxmoxBackupServersTable(props: {
                 );
               }}
             </For>
-          </TableBody>
-        </Table>
-      </TableCard>
+          </>
+        }
+      />
     </Show>
   );
 }

@@ -3,21 +3,9 @@ import { For, Show, type Component, type JSX } from 'solid-js';
 import PlusIcon from 'lucide-solid/icons/plus';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import { StatusDot } from '@/components/shared/StatusDot';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/shared/Table';
-import { TableCard } from '@/components/shared/TableCard';
-import { TableCardHeader } from '@/components/shared/TableCardHeader';
+import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
-  PLATFORM_TABLE_BODY_CLASS,
-  PLATFORM_TABLE_CARD_CLASS,
-  PLATFORM_TABLE_HEADER_ROW_CLASS,
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
@@ -25,6 +13,7 @@ import {
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   type PlatformResourceStatusFilter,
+  PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource, ResourceAvailabilityMeta } from '@/types/resource';
 import { formatRelativeTime } from '@/utils/format';
@@ -131,63 +120,60 @@ export const AvailabilityChecksTable: Component<{
             />
           }
         >
-          <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
-            <TableCardHeader
-              title="Availability checks"
-              actions={
-                <div class="flex flex-wrap items-center justify-end gap-2">
-                  <A href={buildAvailabilityTargetAddPath('service')} class={settingsLinkClass}>
-                    <PlusIcon class="h-3.5 w-3.5" />
-                    Add service/device check
-                  </A>
-                  <A href={buildAvailabilitySettingsPath()} class={settingsLinkClass}>
-                    <SettingsIcon class="h-3.5 w-3.5" />
-                    Manage
-                  </A>
-                </div>
-              }
-            />
-            <Table class="min-w-full table-fixed text-xs md:min-w-[900px]">
-              <TableHeader>
-                <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('name')} w-[42%] md:w-[22%]`}
-                  >
-                    Check
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[12%]`}
-                  >
-                    Method
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[28%]`}
-                  >
-                    Target
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} w-[28%] md:w-[12%]`}
-                  >
-                    Result
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[10%]`}
-                  >
-                    Checked
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden lg:table-cell lg:w-[8%]`}
-                  >
-                    Failures
-                  </TableHead>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden lg:table-cell lg:w-[8%]`}
-                  >
-                    Interval
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
+          <PlatformTableShell
+            title="Availability checks"
+            actions={
+              <div class="flex flex-wrap items-center justify-end gap-2">
+                <A href={buildAvailabilityTargetAddPath('service')} class={settingsLinkClass}>
+                  <PlusIcon class="h-3.5 w-3.5" />
+                  Add service/device check
+                </A>
+                <A href={buildAvailabilitySettingsPath()} class={settingsLinkClass}>
+                  <SettingsIcon class="h-3.5 w-3.5" />
+                  Manage
+                </A>
+              </div>
+            }
+            tableClass="min-w-full table-fixed text-xs md:min-w-[900px]"
+            header={
+              <>
+                <TableHead class={`${getPlatformTableHeadClassForKind('name')} w-[42%] md:w-[22%]`}>
+                  Check
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[12%]`}
+                >
+                  Method
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[28%]`}
+                >
+                  Target
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} w-[28%] md:w-[12%]`}
+                >
+                  Result
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[10%]`}
+                >
+                  Checked
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden lg:table-cell lg:w-[8%]`}
+                >
+                  Failures
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden lg:table-cell lg:w-[8%]`}
+                >
+                  Interval
+                </TableHead>
+              </>
+            }
+            body={
+              <>
                 <For each={tableState.filtered()}>
                   {(check) => {
                     const availability = () => availabilityFor(check);
@@ -260,9 +246,9 @@ export const AvailabilityChecksTable: Component<{
                     );
                   }}
                 </For>
-              </TableBody>
-            </Table>
-          </TableCard>
+              </>
+            }
+          />
         </Show>
       </div>
     </Show>

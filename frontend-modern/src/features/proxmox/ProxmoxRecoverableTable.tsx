@@ -2,26 +2,16 @@ import { For, Show, type Accessor, type JSX } from 'solid-js';
 
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/shared/Table';
-import { TableCard } from '@/components/shared/TableCard';
+import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { formatBytes } from '@/utils/format';
 import {
   getRecoveryFullDateLabel,
   recoveryDateKeyFromTimestamp,
 } from '@/utils/recoveryDatePresentation';
 import {
-  PLATFORM_TABLE_BODY_CLASS,
-  PLATFORM_TABLE_CARD_CLASS,
-  PLATFORM_TABLE_HEADER_ROW_CLASS,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
+  PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 
 import type { RecoverableArtifact } from './proxmoxBackupRecoveryModel';
@@ -163,86 +153,75 @@ export function ProxmoxRecoverableTable(props: {
         </Card>
       }
     >
-      <TableCard class={PLATFORM_TABLE_CARD_CLASS}>
-        <Table class="min-w-[1080px] table-fixed text-xs">
-          {/* Keep column widths stable; long locations/details truncate with title text. */}
-          <colgroup>
-            <col style={{ width: '17%' }} />
-            <col style={{ width: '7%' }} />
-            <col style={{ width: '8%' }} />
-            <col style={{ width: '8%' }} />
-            <col style={{ width: '14%' }} />
-            <col style={{ width: '11%' }} />
-            <col style={{ width: '13%' }} />
-            <col style={{ width: '8%' }} />
-            <col style={{ width: '14%' }} />
-          </colgroup>
-          <TableHeader>
-            <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>
-              <SortableHead
-                label="Workload"
-                sortKey="workload"
-                currentSort={props.sortKey}
-                direction={props.sortDirection}
-                onSort={props.onSort}
-                align="left"
-                headClass={getPlatformTableHeadClassForKind('name')}
-              />
-              <TableHead class={getPlatformTableHeadClassForKind('text')}>Type</TableHead>
-              <TableHead class={getPlatformTableHeadClassForKind('text')}>
-                {PROXMOX_BACKUP_COLUMN_LABELS.targetId}
-              </TableHead>
-              <SortableHead
-                label="Source"
-                sortKey="source"
-                currentSort={props.sortKey}
-                direction={props.sortDirection}
-                onSort={props.onSort}
-                align="left"
-                headClass={getPlatformTableHeadClassForKind('text')}
-              />
-              <SortableHead
-                label="Location"
-                sortKey="location"
-                currentSort={props.sortKey}
-                direction={props.sortDirection}
-                onSort={props.onSort}
-                align="left"
-                headClass={getPlatformTableHeadClassForKind('text')}
-              />
-              <SortableHead
-                label={PROXMOX_BACKUP_COLUMN_LABELS.created}
-                sortKey="created"
-                currentSort={props.sortKey}
-                direction={props.sortDirection}
-                onSort={props.onSort}
-                align="right"
-                headClass={getPlatformTableHeadClassForKind('numeric-value')}
-              />
-              <SortableHead
-                label="Size"
-                sortKey="size"
-                currentSort={props.sortKey}
-                direction={props.sortDirection}
-                onSort={props.onSort}
-                align="center"
-                headClass={getPlatformTableHeadClassForKind('metric-bar')}
-              />
-              <SortableHead
-                label="State"
-                sortKey="state"
-                currentSort={props.sortKey}
-                direction={props.sortDirection}
-                onSort={props.onSort}
-                align="left"
-                headClass={getPlatformTableHeadClassForKind('text')}
-              />
-              <TableHead class={getPlatformTableHeadClassForKind('text')}>
-                {PROXMOX_BACKUP_COLUMN_LABELS.details}
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody class={PLATFORM_TABLE_BODY_CLASS}>
+      <PlatformTableShell
+        tableClass="min-w-[1080px] table-fixed text-xs"
+        header={
+          <>
+            <SortableHead
+              label="Workload"
+              sortKey="workload"
+              currentSort={props.sortKey}
+              direction={props.sortDirection}
+              onSort={props.onSort}
+              align="left"
+              headClass={getPlatformTableHeadClassForKind('name')}
+            />
+            <TableHead class={getPlatformTableHeadClassForKind('text')}>Type</TableHead>
+            <TableHead class={getPlatformTableHeadClassForKind('text')}>
+              {PROXMOX_BACKUP_COLUMN_LABELS.targetId}
+            </TableHead>
+            <SortableHead
+              label="Source"
+              sortKey="source"
+              currentSort={props.sortKey}
+              direction={props.sortDirection}
+              onSort={props.onSort}
+              align="left"
+              headClass={getPlatformTableHeadClassForKind('text')}
+            />
+            <SortableHead
+              label="Location"
+              sortKey="location"
+              currentSort={props.sortKey}
+              direction={props.sortDirection}
+              onSort={props.onSort}
+              align="left"
+              headClass={getPlatformTableHeadClassForKind('text')}
+            />
+            <SortableHead
+              label={PROXMOX_BACKUP_COLUMN_LABELS.created}
+              sortKey="created"
+              currentSort={props.sortKey}
+              direction={props.sortDirection}
+              onSort={props.onSort}
+              align="right"
+              headClass={getPlatformTableHeadClassForKind('numeric-value')}
+            />
+            <SortableHead
+              label="Size"
+              sortKey="size"
+              currentSort={props.sortKey}
+              direction={props.sortDirection}
+              onSort={props.onSort}
+              align="center"
+              headClass={getPlatformTableHeadClassForKind('metric-bar')}
+            />
+            <SortableHead
+              label="State"
+              sortKey="state"
+              currentSort={props.sortKey}
+              direction={props.sortDirection}
+              onSort={props.onSort}
+              align="left"
+              headClass={getPlatformTableHeadClassForKind('text')}
+            />
+            <TableHead class={getPlatformTableHeadClassForKind('text')}>
+              {PROXMOX_BACKUP_COLUMN_LABELS.details}
+            </TableHead>
+          </>
+        }
+        body={
+          <>
             <Show
               when={showDayGroups()}
               fallback={<For each={props.artifacts}>{(artifact) => renderRow(artifact)}</For>}
@@ -267,9 +246,9 @@ export function ProxmoxRecoverableTable(props: {
                 )}
               </For>
             </Show>
-          </TableBody>
-        </Table>
-      </TableCard>
+          </>
+        }
+      />
     </Show>
   );
 }
