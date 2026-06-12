@@ -7,13 +7,7 @@ afterEach(cleanup);
 describe('StatusDot', () => {
   it('renders shared variant, size, pulse, and accessible status semantics', () => {
     render(() => (
-      <StatusDot
-        variant="warning"
-        size="md"
-        pulse
-        title="Attention"
-        ariaLabel="Attention"
-      />
+      <StatusDot variant="warning" size="md" pulse title="Attention" ariaLabel="Attention" />
     ));
 
     const dot = screen.getByRole('img', { name: 'Attention' });
@@ -38,5 +32,13 @@ describe('StatusDot', () => {
     expect(dot).toHaveClass('bg-emerald-500');
     expect(dot).toHaveAttribute('aria-hidden', 'true');
     expect(dot).not.toHaveAttribute('role');
+  });
+
+  it('renders informational indicators from the shared variant catalog', () => {
+    render(() => <StatusDot variant="info" ariaLabel="Informational" />);
+
+    const dot = screen.getByRole('img', { name: 'Informational' });
+
+    expect(dot).toHaveClass('bg-blue-500');
   });
 });

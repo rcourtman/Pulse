@@ -69,7 +69,9 @@ describe('PatrolIntelligenceSummary', () => {
     expect(
       screen.getByText('Recent activity mix: 1 full, 1 alert-triggered, 1 anomaly-triggered'),
     ).toBeInTheDocument();
-    expect(screen.getByText('Trigger mode: 4 queued · busy mode · anomalies off')).toBeInTheDocument();
+    expect(
+      screen.getByText('Trigger mode: 4 queued · busy mode · anomalies off'),
+    ).toBeInTheDocument();
   });
 
   it('does not surface disabled run actions on the compact assessment strip', () => {

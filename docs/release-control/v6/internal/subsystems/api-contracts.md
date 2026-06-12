@@ -1092,6 +1092,11 @@ the canonical monitored-system blocked payload.
    and the Patrol findings empty-state behavior, so `0 active findings` only renders as a healthy frontend conclusion when the same governed AI summary contract still reports healthy overall health; degraded or not-fully-verified health predictions must flow through to the Patrol findings surface instead of being replaced by page-local "looks healthy" copy
    and the Patrol assessment headline plus compact summary-strip behavior, so the same governed AI summary contract decides whether the page leads with verified health, issues detected, coverage incomplete, or another attention state instead of letting count-only page fragments emit a stale `No issues found` conclusion
    and the Patrol summary shell treatment itself, so the same governed summary contract still lands inside the shared neutral page-card base while severity travels through compact header accents and icon badges instead of a page-local full-width semantic background
+   and the Patrol summary/workspace badge treatment, so the API-owned finding,
+   runtime, and run-history counts remain semantic input only while visible
+   state and count badges route through frontend-primitives-owned
+   `StatusIndicatorBadge` and `MetadataBadge` instead of page-local class
+   strings in the Patrol section owners
    and the Patrol verification summary derived from run history, so the page also states whether recent Patrol evidence came from a successful full patrol or only from scoped/erroring runs instead of leaving verification scope implicit
    and the same-day activity-mix explanation derived from that governed run history, so when a recent full patrol is followed by alert-triggered or anomaly-triggered scoped work the verification surface can explain the mix directly instead of reconstructing it from page-local timing heuristics
    and the Patrol status recency split, so `last_patrol_at` remains reserved for completed full Patrol sweeps while scoped runs and verification checks advance `last_activity_at` without claiming a fresh full-estate verification pass

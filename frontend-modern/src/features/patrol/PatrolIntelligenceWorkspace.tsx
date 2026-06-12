@@ -8,6 +8,7 @@ import { ResourcePolicySummary } from '@/components/Infrastructure/ResourcePolic
 import { ResourceCorrelationSummary } from '@/components/Infrastructure/ResourceCorrelationSummary';
 import { ResourceChangeSummary } from '@/components/Infrastructure/ResourceChangeSummary';
 import { Button } from '@/components/shared/Button';
+import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import {
   getPatrolSupportingContextCorrelationSummary,
   getPatrolSupportingContextToggleLabel,
@@ -55,13 +56,10 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
         >
           Findings
           <Show when={(state.findingsTabBadgeCount() ?? 0) > 0}>
-            <span
-              aria-hidden="true"
-              class={`ml-1.5 px-1.5 py-0.5 text-xs rounded-full ${findingsBadgePresentation().toneClasses}`}
-            >
-              {' '}
+            {' '}
+            <MetadataBadge aria-hidden="true" tone={findingsBadgePresentation().tone} size="xs">
               {state.findingsTabBadgeCount()}
-            </span>
+            </MetadataBadge>
           </Show>
         </button>
         <button
@@ -78,13 +76,10 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
         >
           Runs
           <Show when={state.displayRunHistory().length > 0}>
-            <span
-              aria-hidden="true"
-              class="ml-1.5 px-1.5 py-0.5 text-xs rounded-full bg-surface-alt text-muted"
-            >
-              {' '}
+            {' '}
+            <MetadataBadge aria-hidden="true" tone="muted" size="xs">
               {state.displayRunHistory().length}
-            </span>
+            </MetadataBadge>
           </Show>
         </button>
       </div>

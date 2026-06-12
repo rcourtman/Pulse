@@ -65,7 +65,8 @@ const parseKubernetesEventObservedTime = (resource: Resource): number => {
 };
 
 export const compareKubernetesEvents = (left: Resource, right: Resource): number => {
-  const timeDelta = parseKubernetesEventObservedTime(right) - parseKubernetesEventObservedTime(left);
+  const timeDelta =
+    parseKubernetesEventObservedTime(right) - parseKubernetesEventObservedTime(left);
   if (timeDelta !== 0) return timeDelta;
   return left.id.localeCompare(right.id);
 };
@@ -86,7 +87,12 @@ const POD_CONTAINER_FATAL_REASONS = new Set([
 ]);
 
 const normalizeKubernetesToken = (value: unknown): string =>
-  typeof value === 'string' ? value.trim().toLowerCase().replace(/[\s_-]/g, '') : '';
+  typeof value === 'string'
+    ? value
+        .trim()
+        .toLowerCase()
+        .replace(/[\s_-]/g, '')
+    : '';
 
 const displayName = (resource: Resource): string =>
   asTrimmedString(resource.displayName) ||
@@ -123,13 +129,14 @@ const podAllContainersReady = (containers: ResourceKubernetesPodContainerStatus[
   containers.length > 0 && containers.every((container) => container.ready === true);
 
 export function mapKubernetesPodStatus(resource: Resource): StatusIndicator {
-  const phase = normalizeKubernetesToken(resource.kubernetes?.podPhase || resource.kubernetes?.phase);
+  const phase = normalizeKubernetesToken(
+    resource.kubernetes?.podPhase || resource.kubernetes?.phase,
+  );
   const containers = resource.kubernetes?.podContainers ?? [];
 
   if (phase === 'failed') return { variant: 'danger', label: 'Failed' };
   if (podHasFatalContainer(containers)) {
-    const reason =
-      containers.find(containerHasFatalReason)?.reason?.trim() || 'Container error';
+    const reason = containers.find(containerHasFatalReason)?.reason?.trim() || 'Container error';
     return { variant: 'danger', label: reason };
   }
   if (phase === 'pending') return { variant: 'warning', label: 'Pending' };
@@ -141,7 +148,10 @@ export function mapKubernetesPodStatus(resource: Resource): StatusIndicator {
   if (phase === 'succeeded') return { variant: 'success', label: 'Succeeded' };
   if (phase === 'unknown') return { variant: 'muted', label: 'Unknown' };
   if (!phase) return { variant: 'muted', label: 'Unknown' };
-  return { variant: 'muted', label: eventTypeLabel(resource.kubernetes?.podPhase ?? '', 'Unknown') };
+  return {
+    variant: 'muted',
+    label: eventTypeLabel(resource.kubernetes?.podPhase ?? '', 'Unknown'),
+  };
 }
 
 export function mapKubernetesNodeStatus(resource: Resource): StatusIndicator {
@@ -181,24 +191,15 @@ const replicaIndicator = (
 };
 
 export function mapKubernetesDeploymentStatus(resource: Resource): StatusIndicator {
-  return replicaIndicator(
-    resource.kubernetes?.desiredReplicas,
-    resource.kubernetes?.readyReplicas,
-  );
+  return replicaIndicator(resource.kubernetes?.desiredReplicas, resource.kubernetes?.readyReplicas);
 }
 
 export function mapKubernetesReplicaSetStatus(resource: Resource): StatusIndicator {
-  return replicaIndicator(
-    resource.kubernetes?.desiredReplicas,
-    resource.kubernetes?.readyReplicas,
-  );
+  return replicaIndicator(resource.kubernetes?.desiredReplicas, resource.kubernetes?.readyReplicas);
 }
 
 export function mapKubernetesStatefulSetStatus(resource: Resource): StatusIndicator {
-  return replicaIndicator(
-    resource.kubernetes?.desiredReplicas,
-    resource.kubernetes?.readyReplicas,
-  );
+  return replicaIndicator(resource.kubernetes?.desiredReplicas, resource.kubernetes?.readyReplicas);
 }
 
 export function mapKubernetesDaemonSetStatus(resource: Resource): StatusIndicator {
@@ -249,15 +250,17 @@ export function mapKubernetesControllerStatus(resource: Resource): StatusIndicat
 const STATUS_VARIANT_RANK: Record<StatusIndicatorVariant, number> = {
   danger: 0,
   warning: 1,
-  muted: 2,
-  success: 3,
+  info: 2,
+  muted: 3,
+  success: 4,
 };
 
 const compareByStatus = (
   mapper: (resource: Resource) => StatusIndicator,
 ): ((left: Resource, right: Resource) => number) => {
   return (left, right) => {
-    const rankDelta = STATUS_VARIANT_RANK[mapper(left).variant] - STATUS_VARIANT_RANK[mapper(right).variant];
+    const rankDelta =
+      STATUS_VARIANT_RANK[mapper(left).variant] - STATUS_VARIANT_RANK[mapper(right).variant];
     if (rankDelta !== 0) return rankDelta;
     return displayName(left).localeCompare(displayName(right));
   };
@@ -337,8 +340,8 @@ const hasKubernetesIncidentRollup = (resource: Resource): boolean =>
   (resource.incidentCount ?? 0) > 0 ||
   Boolean(
     asTrimmedString(resource.incidentCode) ||
-      asTrimmedString(resource.incidentSummary) ||
-      asTrimmedString(resource.incidentLabel),
+    asTrimmedString(resource.incidentSummary) ||
+    asTrimmedString(resource.incidentLabel),
   );
 
 const buildKubernetesIncidentRow = (

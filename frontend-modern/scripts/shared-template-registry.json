@@ -544,12 +544,28 @@
       "requiredConsumers": [
         { "path": "src/components/Settings/AgentProfilesPanel.tsx" },
         { "path": "src/components/Settings/DiagnosticsResultsPanel.tsx" },
-        { "path": "src/components/patrol/RunHistoryEntry.tsx" }
+        { "path": "src/components/patrol/RunHistoryEntry.tsx" },
+        { "path": "src/components/patrol/PatrolStatusBar.tsx" },
+        { "path": "src/features/patrol/PatrolIntelligenceSummary.tsx" }
       ],
       "forbiddenPatterns": [
         {
           "path": "src/components/patrol/RunHistoryEntry.tsx",
           "patterns": ["runStatus.badgeClass"]
+        },
+        {
+          "path": "src/components/patrol/PatrolStatusBar.tsx",
+          "patterns": [
+            "lastRunStatus.badgeClass",
+            "rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700"
+          ]
+        },
+        {
+          "path": "src/features/patrol/PatrolIntelligenceSummary.tsx",
+          "patterns": [
+            "runtimeShellPresentation().badgeClass",
+            "inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]"
+          ]
         }
       ],
       "proof": [
@@ -568,7 +584,9 @@
       },
       "requiredConsumers": [
         { "path": "src/components/shared/OrganizationBadges.tsx" },
-        { "path": "src/components/patrol/RunHistoryEntry.tsx" }
+        { "path": "src/components/patrol/RunHistoryEntry.tsx" },
+        { "path": "src/components/patrol/PatrolStatusBar.tsx" },
+        { "path": "src/features/patrol/PatrolIntelligenceWorkspace.tsx" }
       ],
       "forbiddenPatterns": [
         {
@@ -576,6 +594,18 @@
           "patterns": [
             "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium",
             "inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50"
+          ]
+        },
+        {
+          "path": "src/components/patrol/PatrolStatusBar.tsx",
+          "patterns": ["text-blue-600 dark:text-blue-400\">Findings snapshot unavailable"]
+        },
+        {
+          "path": "src/features/patrol/PatrolIntelligenceWorkspace.tsx",
+          "patterns": [
+            "findingsBadgePresentation().toneClasses",
+            "ml-1.5 px-1.5 py-0.5 text-xs rounded-full",
+            "bg-surface-alt text-muted"
           ]
         }
       ],

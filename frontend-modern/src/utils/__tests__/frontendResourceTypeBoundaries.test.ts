@@ -2660,8 +2660,7 @@ describe('frontend resource type boundaries', () => {
     expect(storageDomainSource).toContain('export const getCephDisconnectedStatePresentation');
     expect(storageDomainSource).toContain('export const getCephNoClustersStatePresentation');
     expect(storageDomainSource).toContain('export const getCephPoolsSearchEmptyStatePresentation');
-    for (const source of [
-    ]) {
+    for (const source of []) {
       expect(source).toContain("from '@/components/shared/Table'");
       expect(source).not.toContain('<table');
       expect(source).not.toContain('<thead');
@@ -3556,6 +3555,22 @@ describe('frontend resource type boundaries', () => {
     );
     expect(patrolIntelligenceHeaderSource).not.toContain(
       'flex-1 py-1.5 px-2 text-xs font-semibold rounded-md transition-all duration-200',
+    );
+    expect(patrolIntelligenceSummarySource).toContain('StatusIndicatorBadge');
+    expect(patrolIntelligenceSummarySource).toContain('runtimeShellPresentation().badgeVariant');
+    expect(patrolIntelligenceSummarySource).not.toContain('runtimeShellPresentation().badgeClass');
+    expect(patrolIntelligenceSummarySource).not.toContain(
+      'inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]',
+    );
+    expect(patrolSummaryPresentationSource).toContain('badgeVariant:');
+    expect(patrolSummaryPresentationSource).not.toContain('badgeClass:');
+    expect(patrolIntelligenceWorkspaceSource).toContain('MetadataBadge');
+    expect(patrolIntelligenceWorkspaceSource).toContain('findingsBadgePresentation().tone');
+    expect(patrolIntelligenceWorkspaceSource).not.toContain(
+      'findingsBadgePresentation().toneClasses',
+    );
+    expect(patrolIntelligenceWorkspaceSource).not.toContain(
+      'ml-1.5 px-1.5 py-0.5 text-xs rounded-full',
     );
     expect(appSource).not.toContain("import('./pages/Operations')");
     expect(appSource).not.toContain('<Route path="/operations/*"');

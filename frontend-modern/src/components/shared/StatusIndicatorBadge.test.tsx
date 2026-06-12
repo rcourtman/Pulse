@@ -19,12 +19,7 @@ describe('StatusIndicatorBadge', () => {
 
   it('renders custom state labels without forcing a dot or uppercase text', () => {
     render(() => (
-      <StatusIndicatorBadge
-        variant="warning"
-        label="Cooldown: Missing"
-        size="md"
-        shape="rounded"
-      />
+      <StatusIndicatorBadge variant="warning" label="Cooldown: Missing" size="md" shape="rounded" />
     ));
 
     const badge = screen.getByText('Cooldown: Missing');
@@ -33,5 +28,17 @@ describe('StatusIndicatorBadge', () => {
     expect(badge).toHaveClass('bg-amber-100');
     expect(badge.querySelector('[aria-hidden="true"]')).toBeNull();
     expect(badge).not.toHaveClass('uppercase');
+  });
+
+  it('renders informational state badges through the shared variant catalog', () => {
+    render(() => (
+      <StatusIndicatorBadge label="Run in progress" variant="info" size="xs" shape="rounded" />
+    ));
+
+    const badge = screen.getByText('Run in progress');
+    expect(badge).toHaveClass('rounded');
+    expect(badge).toHaveClass('text-[10px]');
+    expect(badge).toHaveClass('bg-blue-100');
+    expect(badge).toHaveClass('text-blue-700');
   });
 });

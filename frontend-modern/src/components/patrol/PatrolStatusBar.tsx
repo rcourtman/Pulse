@@ -12,6 +12,8 @@ import {
   type PatrolRuntimeState,
   type PatrolTriggerStatus,
 } from '@/api/patrol';
+import { MetadataBadge } from '@/components/shared/MetadataBadge';
+import { StatusIndicatorBadge } from '@/components/shared/StatusIndicatorBadge';
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import { formatRelativeTime } from '@/utils/format';
 import { formatTriggerReason } from '@/utils/patrolFormat';
@@ -133,9 +135,12 @@ export const PatrolStatusBar: Component<PatrolStatusBarProps> = (props) => {
                     Recent activity
                   </span>
                   <Show when={showRunInProgress()}>
-                    <span class="rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300">
-                      Run in progress
-                    </span>
+                    <StatusIndicatorBadge
+                      label="Run in progress"
+                      variant="info"
+                      size="xs"
+                      shape="rounded"
+                    />
                   </Show>
                 </>
               }
@@ -184,13 +189,18 @@ export const PatrolStatusBar: Component<PatrolStatusBarProps> = (props) => {
           <Show when={resolvedStats()!.lastRun}>
             <span class="text-xs text-muted">
               Latest: {resolvedStats()!.lastRunTypeLabel} <span class="text-muted">·</span>{' '}
-              <span class={`px-1.5 py-0.5 rounded ${resolvedStats()!.lastRunStatus.badgeClass}`}>
-                {resolvedStats()!.lastRunStatus.label}
-              </span>
+              <StatusIndicatorBadge
+                label={resolvedStats()!.lastRunStatus.label}
+                variant={resolvedStats()!.lastRunStatus.variant}
+                size="xs"
+                shape="rounded"
+              />
               <Show when={resolvedStats()!.lastRunHasFindingsSnapshot === false}>
                 {' '}
                 <span class="text-muted">·</span>{' '}
-                <span class="text-blue-600 dark:text-blue-400">Findings snapshot unavailable</span>
+                <MetadataBadge tone="info" size="xs" shape="rounded">
+                  Findings snapshot unavailable
+                </MetadataBadge>
               </Show>
             </span>
           </Show>

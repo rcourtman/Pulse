@@ -6,6 +6,7 @@ import {
   getPatrolRecencyPresentation,
   getPatrolSummaryMetricState,
 } from '@/utils/patrolSummaryPresentation';
+import { StatusIndicatorBadge } from '@/components/shared/StatusIndicatorBadge';
 import {
   formatPatrolActivityBreakdown,
   getPatrolActivityBreakdown,
@@ -169,11 +170,12 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
           <div
             class={`flex flex-wrap items-center justify-between gap-3 border-b border-border-subtle px-4 py-3 ${runtimeShellPresentation().headerClass}`}
           >
-            <span
-              class={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${runtimeShellPresentation().badgeClass}`}
-            >
-              Patrol runtime
-            </span>
+            <StatusIndicatorBadge
+              label="Patrol runtime"
+              variant={runtimeShellPresentation().badgeVariant}
+              size="md"
+              uppercase
+            />
             <Show when={recency().timestamp}>
               <p class="text-xs font-medium text-muted">
                 {recency().label}{' '}

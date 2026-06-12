@@ -225,6 +225,11 @@ Platform filter option semantics follow that split too: unified-resource
 consumers own the source-specific status buckets and labels, while the repeated
 FilterBar chip leading-dot presentation must use the frontend-primitives-owned
 `filterChipStatusDot` helper instead of page-local span factories.
+Platform resource status ranking follows the same split. Docker / Podman and
+Kubernetes page models own their source-specific attention ordering, but any
+rank table over shared `StatusIndicatorVariant` values must include the full
+shared variant vocabulary, including informational states, instead of assuming
+only success/warning/danger/muted status classes.
 Platform table empty states use that same split. Unified-resource consumers own
 the source-specific empty-state vocabulary, action choice, and evidence rule
 that decides why a table is empty, but the table-card empty-state shell itself

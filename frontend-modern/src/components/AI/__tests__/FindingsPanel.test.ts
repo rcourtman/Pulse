@@ -394,7 +394,7 @@ describe('aiFindingPresentation', () => {
           },
         ]),
       ).toEqual({
-        toneClasses: 'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300',
+        tone: 'info',
       });
     });
 
@@ -410,7 +410,7 @@ describe('aiFindingPresentation', () => {
           },
         ]),
       ).toEqual({
-        toneClasses: getFindingSeverityToneClasses('warning'),
+        tone: 'warning',
       });
     });
   });
@@ -759,7 +759,9 @@ describe('aiFindingPresentation', () => {
     it('routes the findings tab badge tone through the shared patrol findings badge helper', () => {
       expect(patrolWorkspaceSource).toContain('getPatrolFindingsBadgePresentation');
       expect(patrolWorkspaceSource).toContain('state.findingsTabBadgeFindings()');
-      expect(patrolWorkspaceSource).toContain('findingsBadgePresentation().toneClasses');
+      expect(patrolWorkspaceSource).toContain('MetadataBadge');
+      expect(patrolWorkspaceSource).toContain('findingsBadgePresentation().tone');
+      expect(patrolWorkspaceSource).not.toContain('findingsBadgePresentation().toneClasses');
     });
 
     it('does not stack a detected loop-state badge on top of acknowledged active findings', () => {

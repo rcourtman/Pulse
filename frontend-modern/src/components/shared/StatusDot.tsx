@@ -17,6 +17,7 @@ const VARIANT_CLASSES: Record<StatusIndicatorVariant, string> = {
   success: 'bg-emerald-500 dark:bg-emerald-400',
   warning: 'bg-amber-500 dark:bg-amber-400',
   danger: 'bg-red-500 dark:bg-red-400',
+  info: 'bg-blue-500 dark:bg-blue-400',
   muted: 'bg-slate-400',
 };
 

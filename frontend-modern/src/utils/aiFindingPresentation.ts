@@ -229,7 +229,7 @@ export interface FindingManualControlsPresentation {
 }
 
 export interface PatrolFindingsBadgePresentation {
-  toneClasses: string;
+  tone: 'danger' | 'warning' | 'info' | 'muted';
 }
 
 export interface FindingSeverityPresentation {
@@ -308,35 +308,31 @@ export const getPatrolFindingsBadgePresentation = (
       (finding) => finding.severity === 'critical' && !isPatrolRuntimeFinding(finding),
     )
   ) {
-    return { toneClasses: getFindingSeverityToneClasses('critical') };
+    return { tone: 'danger' };
   }
   if (
     activeFindings.some(
       (finding) => finding.severity === 'critical' && isPatrolRuntimeFinding(finding),
     )
   ) {
-    return {
-      toneClasses: 'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300',
-    };
+    return { tone: 'info' };
   }
   if (
     activeFindings.some(
       (finding) => finding.severity === 'warning' && !isPatrolRuntimeFinding(finding),
     )
   ) {
-    return { toneClasses: getFindingSeverityToneClasses('warning') };
+    return { tone: 'warning' };
   }
   if (
     activeFindings.some(
       (finding) => finding.severity === 'warning' && isPatrolRuntimeFinding(finding),
     )
   ) {
-    return {
-      toneClasses: 'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300',
-    };
+    return { tone: 'info' };
   }
 
-  return { toneClasses: 'bg-surface-alt text-muted' };
+  return { tone: 'muted' };
 };
 
 export const getFindingSeverityCompactLabel = (
@@ -553,9 +549,7 @@ export const hasFindingInvestigationHandoffPointer = (
   >,
 ): boolean =>
   Boolean(
-    finding.investigationOutcome ||
-    finding.investigationSessionId ||
-    finding.lastInvestigatedAt,
+    finding.investigationOutcome || finding.investigationSessionId || finding.lastInvestigatedAt,
   );
 
 const ATTENTION_OUTCOMES = new Set([

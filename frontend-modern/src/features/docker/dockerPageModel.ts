@@ -183,8 +183,9 @@ const titleCase = (value: string): string =>
 const STATUS_VARIANT_RANK: Record<StatusIndicatorVariant, number> = {
   danger: 0,
   warning: 1,
-  muted: 2,
-  success: 3,
+  info: 2,
+  muted: 3,
+  success: 4,
 };
 
 const compareByDockerStatus = (
