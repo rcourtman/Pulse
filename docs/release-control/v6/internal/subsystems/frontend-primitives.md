@@ -2416,6 +2416,11 @@ small leading status-dot glyph used by filter options. Page and feature
 surfaces must not copy the chip-dot `<span>` factory or import the legacy
 `PageControls` deck for resource-list filtering; those drift checks live in
 `shared-template-registry.json` and run through `shared-template-audit.mjs`.
+Grouped/list table-mode controls are registry-backed as well.
+`GroupedTableModeSegmentedControl` owns the shared `Group by` label,
+`Grouped` / `List` labels, tooltip titles, and icons for table mode switching.
+Resource surfaces must compose that primitive instead of copying grouped/list
+segmented-control labels locally.
 Inline detail table rows are also registry-backed. `InlineDetailTableRow`
 owns the row/cell/content shell and row-click containment for platform,
 workload, and infrastructure inline drawers; callers may pass row-specific

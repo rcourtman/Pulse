@@ -239,6 +239,20 @@
         "src/components/shared/FilterBar/FilterBar.test.tsx",
         "scripts/shared-template-audit.mjs"
       ]
+    },
+    {
+      "id": "grouped-table-mode-segmented-control",
+      "category": "table-mode-control",
+      "summary": "Grouped/list table-mode controls must compose GroupedTableModeSegmentedControl instead of recreating grouped/list labels, titles, or icons locally.",
+      "canonical": {
+        "path": "src/components/shared/GroupedTableModeSegmentedControl.tsx",
+        "export": "GroupedTableModeSegmentedControl"
+      },
+      "requiredConsumers": [{ "path": "src/components/Workloads/WorkloadsFilter.tsx" }],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
     }
   ],
   "patternGuards": [
@@ -333,6 +347,24 @@
       "extensions": [".tsx"],
       "allPatterns": ["aria-current={", "border-b-2", "border-b border-border"],
       "legacyReason": "Retired migration debt. Platform page section tabs must use PlatformSectionTabs; no page-local tab-bar exceptions are currently allowed.",
+      "allowedPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "grouped-table-mode-local-segmented-control",
+      "category": "table-mode-control",
+      "summary": "Resource surfaces must not copy the grouped/list table-mode segmented-control labels owned by GroupedTableModeSegmentedControl.",
+      "canonical": {
+        "path": "src/components/shared/GroupedTableModeSegmentedControl.tsx",
+        "export": "GroupedTableModeSegmentedControl"
+      },
+      "scopes": ["src/components", "src/features"],
+      "extensions": [".tsx"],
+      "allPatterns": ["Grouped table view", "Flat list view"],
+      "legacyReason": "Retired migration debt. Grouped/list table-mode controls must use GroupedTableModeSegmentedControl; no local label/title copies are currently allowed.",
       "allowedPaths": [],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",

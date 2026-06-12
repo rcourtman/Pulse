@@ -598,6 +598,44 @@ describe('shared primitive guardrails', () => {
   });
 
   it('keeps grouped/list table-mode controls on one shared presentation contract', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        allowedPaths?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find(
+      (rule) => rule.id === 'grouped-table-mode-segmented-control',
+    );
+    const registeredGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'grouped-table-mode-local-segmented-control',
+    );
+
+    expect(registeredRule?.canonical?.path).toBe(
+      'src/components/shared/GroupedTableModeSegmentedControl.tsx',
+    );
+    expect(registeredRule?.canonical?.export).toBe('GroupedTableModeSegmentedControl');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/components/Workloads/WorkloadsFilter.tsx',
+    ]);
+    expect(registeredGuard?.canonical?.path).toBe(
+      'src/components/shared/GroupedTableModeSegmentedControl.tsx',
+    );
+    expect(registeredGuard?.canonical?.export).toBe('GroupedTableModeSegmentedControl');
+    expect(registeredGuard?.allPatterns).toEqual(['Grouped table view', 'Flat list view']);
+    expect(registeredGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(registeredGuard?.scopes).toEqual(
+      expect.arrayContaining(['src/components', 'src/features']),
+    );
+
     expect(groupedTableModeSegmentedControlSource).toContain('GroupedTableModeSegmentedControl');
     expect(groupedTableModeSegmentedControlSource).toContain('GROUPED_TABLE_MODE_ARIA_LABEL');
     expect(groupedTableModeSegmentedControlSource).toContain(
