@@ -1,5 +1,6 @@
 import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
 import ArrowRightIcon from 'lucide-solid/icons/arrow-right';
+import { filterChipStatusDot } from '@/components/shared/FilterBar';
 import { StatusDot } from '@/components/shared/StatusDot';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
@@ -24,14 +25,27 @@ import type { ReplicationJob, ReplicationJobsResponse } from '@/types/api';
 
 type ReplicationStatusFilter = 'all' | 'healthy' | 'failed' | 'pending' | 'disabled';
 
-const statusDot = (className: string) => <span class={`h-2 w-2 rounded-full ${className}`} />;
-
 const STATUS_FILTER_OPTIONS: PlatformTableFilterOption<ReplicationStatusFilter>[] = [
   { value: 'all', label: 'All' },
-  { value: 'healthy', label: 'Healthy', tone: 'success', leading: statusDot('bg-emerald-500') },
-  { value: 'failed', label: 'Failed', tone: 'danger', leading: statusDot('bg-red-500') },
-  { value: 'pending', label: 'Pending', tone: 'warning', leading: statusDot('bg-amber-500') },
-  { value: 'disabled', label: 'Disabled', tone: 'muted', leading: statusDot('bg-slate-400') },
+  {
+    value: 'healthy',
+    label: 'Healthy',
+    tone: 'success',
+    leading: filterChipStatusDot('bg-emerald-500'),
+  },
+  { value: 'failed', label: 'Failed', tone: 'danger', leading: filterChipStatusDot('bg-red-500') },
+  {
+    value: 'pending',
+    label: 'Pending',
+    tone: 'warning',
+    leading: filterChipStatusDot('bg-amber-500'),
+  },
+  {
+    value: 'disabled',
+    label: 'Disabled',
+    tone: 'muted',
+    leading: filterChipStatusDot('bg-slate-400'),
+  },
 ];
 
 interface ReplicationStatusIndicator {

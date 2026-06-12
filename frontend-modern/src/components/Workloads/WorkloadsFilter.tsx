@@ -4,7 +4,12 @@ import BoxesIcon from 'lucide-solid/icons/boxes';
 import MonitorIcon from 'lucide-solid/icons/monitor';
 import XIcon from 'lucide-solid/icons/x';
 import { ColumnPicker } from '@/components/shared/ColumnPicker';
-import { FilterBar, type FilterDef, type FilterSelectOption } from '@/components/shared/FilterBar';
+import {
+  FilterBar,
+  filterChipStatusDot,
+  type FilterDef,
+  type FilterSelectOption,
+} from '@/components/shared/FilterBar';
 import { ChartVisibilityToggleButton, FilterActionButton } from '@/components/shared/FilterToolbar';
 import { GroupedTableModeSegmentedControl } from '@/components/shared/GroupedTableModeSegmentedControl';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
@@ -23,8 +28,6 @@ import {
 import { WORKLOAD_STATUS_FILTER_OPTIONS, WORKLOAD_TYPE_OPTIONS } from './workloadFilterConfigModel';
 
 const PROXMOX_PLATFORM_FILTER = 'proxmox-pve';
-
-const statusDot = (className: string) => <span class={`h-2 w-2 rounded-full ${className}`} />;
 
 export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
   const { isMobile } = useBreakpoint();
@@ -62,11 +65,11 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
       label: option.label,
       leading:
         option.value === 'running'
-          ? statusDot('bg-emerald-500')
+          ? filterChipStatusDot('bg-emerald-500')
           : option.value === 'degraded'
-            ? statusDot('bg-amber-500')
+            ? filterChipStatusDot('bg-amber-500')
             : option.value === 'stopped'
-              ? statusDot('bg-red-500')
+              ? filterChipStatusDot('bg-red-500')
               : undefined,
       tone:
         option.value === 'running'
@@ -86,8 +89,8 @@ export const WorkloadsFilter: Component<WorkloadsFilterProps> = (props) => {
   };
 
   const runtimeChipDot = (value: string): JSX.Element | undefined => {
-    if (value === 'docker') return statusDot('bg-sky-500');
-    if (value === 'podman') return statusDot('bg-violet-500');
+    if (value === 'docker') return filterChipStatusDot('bg-sky-500');
+    if (value === 'podman') return filterChipStatusDot('bg-violet-500');
     return undefined;
   };
 

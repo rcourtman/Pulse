@@ -150,10 +150,12 @@ import filterBarSource from '@/components/shared/FilterBar/FilterBar.tsx?raw';
 import filterChipSource from '@/components/shared/FilterBar/FilterChip.tsx?raw';
 import addFilterMenuSource from '@/components/shared/FilterBar/AddFilterMenu.tsx?raw';
 import filterCatalogSource from '@/components/shared/FilterBar/filterCatalog.ts?raw';
+import filterBarOptionPresentationSource from '@/components/shared/FilterBar/filterOptionPresentation.tsx?raw';
 import filterBarIndexSource from '@/components/shared/FilterBar/index.ts?raw';
 import savedViewsMenuSource from '@/components/shared/FilterBar/SavedViewsMenu.tsx?raw';
 import useSavedViewsSource from '@/components/shared/FilterBar/useSavedViews.ts?raw';
 import storagePageControlsSource from '@/components/Storage/StoragePageControls.tsx?raw';
+import proxmoxBackupsTableSharedSource from '@/features/proxmox/proxmoxBackupsTableShared.tsx?raw';
 
 const sharedSources = import.meta.glob(['./*.tsx', './cards/*.tsx', './responsive/*.tsx'], {
   query: '?raw',
@@ -1057,7 +1059,7 @@ describe('shared primitive guardrails', () => {
       vsphereHostsTableSource,
     ]) {
       expect(source).toContain('PlatformTableEmptyState');
-      expect(source).not.toContain("@/components/shared/EmptyState");
+      expect(source).not.toContain('@/components/shared/EmptyState');
       expect(source).not.toContain('<EmptyState');
       expect(source).not.toContain('<Card padding="lg">');
     }
@@ -1405,14 +1407,71 @@ describe('shared primitive guardrails', () => {
   });
 
   it('keeps the chip-based FilterBar on a catalog descriptor with shell, chip, and add-menu owners', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        allowedPaths?: string[];
+        ignoredPaths?: string[];
+      }>;
+    };
+    const filterBarRule = registry.rules?.find((rule) => rule.id === 'filter-bar-catalog-shell');
+    const legacyPageControlsGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'filter-bar-consumer-legacy-page-controls',
+    );
+    const chipDotGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'filter-chip-status-dot-local-factory',
+    );
+
+    expect(filterBarRule?.canonical?.path).toBe('src/components/shared/FilterBar/FilterBar.tsx');
+    expect(filterBarRule?.canonical?.export).toBe('FilterBar');
+    expect(filterBarRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
+      expect.arrayContaining([
+        'src/components/Alerts/ThresholdsTable.tsx',
+        'src/components/Settings/AuditLogPanel.tsx',
+        'src/components/Storage/StoragePageControls.tsx',
+        'src/components/Workloads/WorkloadsFilter.tsx',
+        'src/features/alerts/AlertHistoryFiltersCard.tsx',
+        'src/features/platformPage/sharedPlatformPage.tsx',
+        'src/features/proxmox/ProxmoxBackupsTable.tsx',
+      ]),
+    );
+    expect(legacyPageControlsGuard?.canonical?.path).toBe(
+      'src/components/shared/FilterBar/FilterBar.tsx',
+    );
+    expect(legacyPageControlsGuard?.canonical?.export).toBe('FilterBar');
+    expect(legacyPageControlsGuard?.allPatterns).toEqual(['@/components/shared/PageControls']);
+    expect(legacyPageControlsGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(chipDotGuard?.canonical?.path).toBe(
+      'src/components/shared/FilterBar/filterOptionPresentation.tsx',
+    );
+    expect(chipDotGuard?.canonical?.export).toBe('filterChipStatusDot');
+    expect(chipDotGuard?.allPatterns).toEqual(['h-2 w-2 rounded-full ' + '${className}']);
+    expect(chipDotGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(chipDotGuard?.ignoredPaths).toEqual([
+      'src/components/shared/SharedPrimitives.guardrails.test.ts',
+    ]);
+
     expect(filterBarIndexSource).toContain("export { FilterBar } from './FilterBar';");
     expect(filterBarIndexSource).toContain("export { FilterChip } from './FilterChip';");
     expect(filterBarIndexSource).toContain("export { AddFilterMenu } from './AddFilterMenu';");
     expect(filterBarIndexSource).toContain("export { SavedViewsMenu } from './SavedViewsMenu';");
     expect(filterBarIndexSource).toContain("export { useSavedViews } from './useSavedViews';");
+    expect(filterBarIndexSource).toContain(
+      "export { filterChipStatusDot } from './filterOptionPresentation';",
+    );
     expect(filterBarIndexSource).toContain('isFilterSet');
     expect(filterBarIndexSource).toContain('clearFilter');
     expect(filterBarIndexSource).toContain('formatFilterChipValue');
+    expect(filterBarOptionPresentationSource).toContain('export const filterChipStatusDot');
+    expect(filterBarOptionPresentationSource).toContain('h-2 w-2 rounded-full');
+    expect(filterBarOptionPresentationSource).toContain('aria-hidden="true"');
 
     expect(filterCatalogSource).toContain('export interface FilterDef');
     expect(filterCatalogSource).toContain('defaultValue: string');
@@ -1530,9 +1589,11 @@ describe('shared primitive guardrails', () => {
     // render as inline primary controls; Node/Platform/Namespace/Runtime
     // remain selector-backed catalog filters. The xl-breakpoint
     // segmented↔select swap retires here.
-    expect(workloadsFilterSource).toContain(
-      "import { FilterBar, type FilterDef, type FilterSelectOption } from '@/components/shared/FilterBar';",
-    );
+    expect(workloadsFilterSource).toContain("from '@/components/shared/FilterBar';");
+    expect(workloadsFilterSource).toContain('FilterBar,');
+    expect(workloadsFilterSource).toContain('filterChipStatusDot,');
+    expect(workloadsFilterSource).toContain('type FilterDef,');
+    expect(workloadsFilterSource).toContain('type FilterSelectOption,');
     expect(workloadsFilterSource).toContain('<FilterBar');
     expect(workloadsFilterSource).toContain("ariaLabel={props.ariaLabel ?? 'Workloads filters'}");
     expect(workloadsFilterSource).toContain("id: 'workloads-type'");
@@ -1548,6 +1609,7 @@ describe('shared primitive guardrails', () => {
     expect(workloadsFilterSource).not.toContain('LabeledFilterToggleGroup');
     expect(workloadsFilterSource).not.toContain('LabeledFilterSelect');
     expect(workloadsFilterSource).not.toContain('useWorkloadsFilterState');
+    expect(workloadsFilterSource).not.toContain('const statusDot = (className: string)');
 
     // StoragePageControls — Subtabs sit above the FilterBar; sort key/sort
     // direction live in viewOptionsTrailing as raw view-options (not chips).
@@ -1556,10 +1618,12 @@ describe('shared primitive guardrails', () => {
     // catalog. The legacy
     // 3-layer indirection (StoragePageControls → StorageControls →
     // StorageFilter) collapses to one component.
-    expect(storagePageControlsSource).toContain(
-      "import { FilterBar, type FilterDef } from '@/components/shared/FilterBar';",
-    );
+    expect(storagePageControlsSource).toContain("from '@/components/shared/FilterBar';");
+    expect(storagePageControlsSource).toContain('FilterBar,');
+    expect(storagePageControlsSource).toContain('filterChipStatusDot,');
+    expect(storagePageControlsSource).toContain('type FilterDef');
     expect(storagePageControlsSource).toContain('<FilterBar');
+    expect(storagePageControlsSource).toContain('filterChipStatusDot');
     expect(storagePageControlsSource).toContain('<Subtabs');
     expect(storagePageControlsSource).toContain(
       "ariaLabel={props.filterAriaLabel ?? 'Storage filters'}",
@@ -1585,6 +1649,7 @@ describe('shared primitive guardrails', () => {
     expect(storagePageControlsSource).not.toContain('<StorageFilter');
     expect(storagePageControlsSource).not.toContain('LabeledFilterSelect');
     expect(storagePageControlsSource).not.toContain('FilterSegmentedControl');
+    expect(storagePageControlsSource).not.toContain('storageStatusDot');
     // Storage's three-layer indirection retired — StoragePageControls no
     // longer imports the deleted StorageFilter / StorageControls modules,
     // and reads the canonical Storage types directly from storagePageState
@@ -1598,5 +1663,15 @@ describe('shared primitive guardrails', () => {
     expect(storagePageControlsSource).toContain(
       "import type { StorageGroupKey, StorageSortKey } from './useStorageModel';",
     );
+    expect(sharedPlatformPageSource).toContain('filterChipStatusDot');
+    expect(sharedPlatformPageSource).not.toContain('platformChipStatusDot');
+    for (const source of [
+      proxmoxBackupsTableSharedSource,
+      proxmoxCephTableSource,
+      proxmoxReplicationTableSource,
+    ]) {
+      expect(source).toContain('filterChipStatusDot');
+      expect(source).not.toContain('const statusDot = (className: string)');
+    }
   });
 });

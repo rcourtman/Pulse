@@ -2,6 +2,7 @@ import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
+import { filterChipStatusDot } from '@/components/shared/FilterBar';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
@@ -10,7 +11,6 @@ import {
   createPlatformTableFilterState,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
-  platformChipStatusDot,
   type PlatformTableFilterOption,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
@@ -34,25 +34,25 @@ const VSPHERE_DATASTORE_STATUS_OPTIONS: PlatformTableFilterOption<VmwareDatastor
     value: 'accessible',
     label: 'Accessible',
     tone: 'success',
-    leading: platformChipStatusDot('bg-emerald-500'),
+    leading: filterChipStatusDot('bg-emerald-500'),
   },
   {
     value: 'attention',
     label: 'Attention',
     tone: 'warning',
-    leading: platformChipStatusDot('bg-amber-500'),
+    leading: filterChipStatusDot('bg-amber-500'),
   },
   {
     value: 'inaccessible',
     label: 'Inaccessible',
     tone: 'danger',
-    leading: platformChipStatusDot('bg-red-500'),
+    leading: filterChipStatusDot('bg-red-500'),
   },
   {
     value: 'maintenance',
     label: 'Maintenance',
     tone: 'warning',
-    leading: platformChipStatusDot('bg-amber-500'),
+    leading: filterChipStatusDot('bg-amber-500'),
   },
   { value: 'unknown', label: 'Unknown' },
 ];

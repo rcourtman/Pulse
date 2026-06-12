@@ -113,6 +113,60 @@
         "src/components/shared/__tests__/InlineDetailTableRow.test.tsx",
         "scripts/shared-template-audit.mjs"
       ]
+    },
+    {
+      "id": "filter-bar-catalog-shell",
+      "category": "filter-bar",
+      "summary": "Resource-list filter surfaces must compose the shared FilterBar catalog shell instead of recreating page-local filter rows or legacy PageControls decks.",
+      "canonical": {
+        "path": "src/components/shared/FilterBar/FilterBar.tsx",
+        "export": "FilterBar"
+      },
+      "requiredConsumers": [
+        { "path": "src/components/Alerts/ThresholdsTable.tsx" },
+        { "path": "src/components/Settings/AuditLogPanel.tsx" },
+        { "path": "src/components/Storage/StoragePageControls.tsx" },
+        { "path": "src/components/Workloads/WorkloadsFilter.tsx" },
+        { "path": "src/features/alerts/AlertHistoryFiltersCard.tsx" },
+        { "path": "src/features/platformPage/sharedPlatformPage.tsx" },
+        { "path": "src/features/proxmox/ProxmoxBackupsTable.tsx" }
+      ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/components/Storage/StoragePageControls.tsx",
+          "patterns": [
+            "from '@/components/shared/PageControls'",
+            "<PageControls",
+            "<StorageControls",
+            "<StorageFilter",
+            "LabeledFilterSelect",
+            "FilterSegmentedControl"
+          ]
+        },
+        {
+          "path": "src/components/Workloads/WorkloadsFilter.tsx",
+          "patterns": [
+            "from '@/components/shared/PageControls'",
+            "<PageControls",
+            "LabeledFilterSelect",
+            "LabeledFilterToggleGroup"
+          ]
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxBackupsTable.tsx",
+          "patterns": [
+            "from '@/components/shared/PageControls'",
+            "<PageControls",
+            "LabeledFilterSelect",
+            "LabeledFilterToggleGroup"
+          ]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/FilterBar/FilterBar.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
     }
   ],
   "patternGuards": [
@@ -158,6 +212,43 @@
       "allPatterns": ["@/components/shared/EmptyState"],
       "legacyReason": "Retired migration debt. Platform table empty states must use PlatformTableEmptyState; no platform feature exceptions are currently allowed.",
       "allowedPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "filter-bar-consumer-legacy-page-controls",
+      "category": "filter-bar",
+      "summary": "Page and feature filter surfaces must not import the legacy PageControls deck when they should be expressed as a FilterBar catalog.",
+      "canonical": {
+        "path": "src/components/shared/FilterBar/FilterBar.tsx",
+        "export": "FilterBar"
+      },
+      "scopes": ["src/components", "src/features"],
+      "extensions": [".tsx"],
+      "allPatterns": ["@/components/shared/PageControls"],
+      "legacyReason": "Retired migration debt. Resource-list filter surfaces must compose FilterBar; no page-level filter exceptions are currently allowed.",
+      "allowedPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "filter-chip-status-dot-local-factory",
+      "category": "filter-bar",
+      "summary": "Filter option status-dot leading icons must use the FilterBar presentation helper instead of page-local span factories.",
+      "canonical": {
+        "path": "src/components/shared/FilterBar/filterOptionPresentation.tsx",
+        "export": "filterChipStatusDot"
+      },
+      "scopes": ["src/components", "src/features"],
+      "extensions": [".tsx"],
+      "allPatterns": ["h-2 w-2 rounded-full ${className}"],
+      "legacyReason": "Retired migration debt. Filter chip leading-dot presentation is owned by the FilterBar primitive family.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "scripts/shared-template-audit.mjs"

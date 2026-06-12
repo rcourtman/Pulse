@@ -374,6 +374,9 @@ regression protection.
     Non-Docker Workloads surfaces keep the global `disk` default unless they
     declare their own scoped contract.
 18. Extend workload filter active-count, reset semantics, and mobile toolbar state through `frontend-modern/src/components/Workloads/workloadsFilterModel.ts` (defaults, `countActiveWorkloadsFilters`, `hasActiveWorkloadsFilters`) rather than rebuilding filter-local state inside `frontend-modern/src/components/Workloads/WorkloadsFilter.tsx`. Workloads filter presentation now composes the shared `FilterBar` (`frontend-modern/src/components/shared/FilterBar/FilterBar.tsx`) with a per-page `FilterDef[]` catalog rather than the legacy `PageControls` structured control deck. High-frequency Type and Status filters stay in that catalog but render as inline compact segmented controls (`inline: true`), while longer or dynamic scope filters continue through the "+ Filter" menu and chip popovers. View options (grouped/list, charts, columns) sit in the shared `viewOptionsTrailing` slot.
+    Workload filter option semantics stay workload-owned, but FilterBar chip
+    presentation is frontend-primitives-owned: status and runtime leading dots
+    must use `filterChipStatusDot` rather than workload-local span factories.
     WorkloadsFilter remains the shared interaction shell only; platform-owned
     embedded Workloads surfaces must pass page-owned aria labels, search
     placeholders, empty-search copy, status labels, and forced view-mode

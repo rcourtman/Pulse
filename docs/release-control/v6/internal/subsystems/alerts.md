@@ -202,6 +202,9 @@ FilterBar chip and "+ Filter" pattern for resource filtering, and alert tables
 must use the canonical platform table column-kind alignment helpers from
 `frontend-modern/src/features/platformPage/` rather than hard-coded table
 alignment classes.
+Alert filter option semantics stay alert-owned, but FilterBar chip
+presentation is frontend-primitives-owned: severity filter leading dots must
+use `filterChipStatusDot` rather than alert-local span factories.
 Guest metric canonical state remains resource-backed and therefore node-scoped
 for Proxmox guests, so node moves must not strand active alert state on the
 previous resource ID. When a guest metric alert survives a node move, alerts

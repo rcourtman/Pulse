@@ -7,6 +7,7 @@ import {
   type Component,
   type JSX,
 } from 'solid-js';
+import { filterChipStatusDot } from '@/components/shared/FilterBar';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import type { StatusIndicatorVariant } from '@/utils/status';
@@ -38,13 +39,26 @@ import { ProxmoxCephClusterDrawer } from './ProxmoxCephClusterDrawer';
 
 type CephStatusFilter = 'all' | 'healthy' | 'warning' | 'critical';
 
-const statusDot = (className: string) => <span class={`h-2 w-2 rounded-full ${className}`} />;
-
 const STATUS_FILTER_OPTIONS: PlatformTableFilterOption<CephStatusFilter>[] = [
   { value: 'all', label: 'All' },
-  { value: 'healthy', label: 'Healthy', tone: 'success', leading: statusDot('bg-emerald-500') },
-  { value: 'warning', label: 'Warning', tone: 'warning', leading: statusDot('bg-amber-500') },
-  { value: 'critical', label: 'Critical', tone: 'danger', leading: statusDot('bg-red-500') },
+  {
+    value: 'healthy',
+    label: 'Healthy',
+    tone: 'success',
+    leading: filterChipStatusDot('bg-emerald-500'),
+  },
+  {
+    value: 'warning',
+    label: 'Warning',
+    tone: 'warning',
+    leading: filterChipStatusDot('bg-amber-500'),
+  },
+  {
+    value: 'critical',
+    label: 'Critical',
+    tone: 'danger',
+    leading: filterChipStatusDot('bg-red-500'),
+  },
 ];
 
 function classify(resource: Resource): CephStatusFilter {

@@ -1,4 +1,4 @@
-import { FilterBar, type FilterDef } from '@/components/shared/FilterBar';
+import { FilterBar, filterChipStatusDot, type FilterDef } from '@/components/shared/FilterBar';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import {
   ALERT_HISTORY_ALL_TIME_FILTER_LABEL,
@@ -6,8 +6,6 @@ import {
 } from '@/utils/alertOverviewPresentation';
 import type { AlertHistoryRange, AlertSeverityFilter } from './alertHistoryModel';
 import type { AlertHistoryState } from './useAlertHistoryState';
-
-const severityDot = (className: string) => <span class={`h-2 w-2 rounded-full ${className}`} />;
 
 interface AlertHistoryFiltersCardProps {
   state: AlertHistoryState;
@@ -37,21 +35,20 @@ export function AlertHistoryFiltersCard(props: AlertHistoryFiltersCardProps) {
       group: 'status',
       inline: true,
       value: props.state.severityFilter,
-      setValue: (value: string) =>
-        props.state.setSeverityFilter(value as AlertSeverityFilter),
+      setValue: (value: string) => props.state.setSeverityFilter(value as AlertSeverityFilter),
       defaultValue: 'all',
       options: () => [
         { value: 'all', label: 'All' },
         {
           value: 'critical',
           label: 'Critical',
-          leading: severityDot('bg-red-500'),
+          leading: filterChipStatusDot('bg-red-500'),
           tone: 'danger',
         },
         {
           value: 'warning',
           label: 'Warning',
-          leading: severityDot('bg-amber-500'),
+          leading: filterChipStatusDot('bg-amber-500'),
           tone: 'warning',
         },
       ],

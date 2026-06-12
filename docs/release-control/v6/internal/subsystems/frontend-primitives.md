@@ -84,6 +84,7 @@ work extends shared components instead of creating new local variants.
 59. `frontend-modern/src/components/shared/FilterBar/index.ts`
 59a. `frontend-modern/src/components/shared/FilterBar/SavedViewsMenu.tsx`
 59b. `frontend-modern/src/components/shared/FilterBar/useSavedViews.ts`
+59c. `frontend-modern/src/components/shared/FilterBar/filterOptionPresentation.tsx`
 60. `frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts`
 61. `frontend-modern/src/features/`
 62. `frontend-modern/src/components/SetupWizard/SetupWizard.tsx`
@@ -2392,6 +2393,12 @@ Docker, Kubernetes, Proxmox, Standalone, TrueNAS, vSphere, and future platform
 feature tables; source-specific consumers own only the empty-state icon, title,
 description, and actions. Platform feature tables must not import
 `EmptyState` directly or recreate a `Card`-wrapped empty-state shell.
+Filter bars are registry-backed too. `FilterBar` owns resource-list filtering
+as a catalog of `FilterDef` entries, while `filterChipStatusDot` owns the
+small leading status-dot glyph used by filter options. Page and feature
+surfaces must not copy the chip-dot `<span>` factory or import the legacy
+`PageControls` deck for resource-list filtering; those drift checks live in
+`shared-template-registry.json` and run through `shared-template-audit.mjs`.
 Inline detail table rows are also registry-backed. `InlineDetailTableRow`
 owns the row/cell/content shell and row-click containment for platform,
 workload, and infrastructure inline drawers; callers may pass row-specific
@@ -2496,10 +2503,11 @@ rail as view options, matching the v5 filter-bar pattern, and keeps longer or
 dynamic scope filters in the menu/chip path. Feature surfaces must not fork
 local filter rows or bury high-frequency Type, Status, or Group-by filters
 behind an extra menu just to regain one-click behavior.
-Pages that have not yet migrated (the alert-history filter card,
-Kubernetes deployments drawer) keep using `PageControls` and
-`LabeledFilterSelect`, but new resource-list filter surfaces should reach for
-`FilterBar` with a catalog rather than reintroducing a per-page select row.
+Legacy `PageControls` and labelled select/toggle primitives are not the
+resource-list filter shape. If a future surface needs a new filtering
+affordance, it should extend the FilterBar catalog model or add a new
+registry-backed shared primitive rather than reintroducing a per-page select
+row.
 
 Pages may opt into saved views by passing `savedViewsKey` to
 `FilterBar`. The `useSavedViews` hook owns the localStorage IO + URL

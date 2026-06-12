@@ -2,6 +2,7 @@ import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
+import { filterChipStatusDot } from '@/components/shared/FilterBar';
 import { formatBytes } from '@/utils/format';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
@@ -12,7 +13,6 @@ import {
   createPlatformTableFilterState,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
-  platformChipStatusDot,
   type PlatformTableFilterOption,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
@@ -40,19 +40,19 @@ const TRUENAS_STORAGE_STATUS_OPTIONS: PlatformTableFilterOption<TrueNASStorageSt
     value: 'healthy',
     label: 'Healthy',
     tone: 'success',
-    leading: platformChipStatusDot('bg-emerald-500'),
+    leading: filterChipStatusDot('bg-emerald-500'),
   },
   {
     value: 'attention',
     label: 'Attention',
     tone: 'warning',
-    leading: platformChipStatusDot('bg-amber-500'),
+    leading: filterChipStatusDot('bg-amber-500'),
   },
   {
     value: 'offline',
     label: 'Offline',
     tone: 'danger',
-    leading: platformChipStatusDot('bg-red-500'),
+    leading: filterChipStatusDot('bg-red-500'),
   },
 ];
 

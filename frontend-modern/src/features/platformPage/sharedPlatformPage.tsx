@@ -4,7 +4,7 @@ import TriangleAlertIcon from 'lucide-solid/icons/triangle-alert';
 import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { type FilterOption as PlatformTableFilterOption } from '@/components/shared/FilterButtonGroup';
-import { FilterBar, type FilterDef } from '@/components/shared/FilterBar';
+import { FilterBar, filterChipStatusDot, type FilterDef } from '@/components/shared/FilterBar';
 import { type SearchInputProps } from '@/components/shared/SearchInput';
 import { Table, TableBody, TableHeader, TableRow } from '@/components/shared/Table';
 import { TableCard } from '@/components/shared/TableCard';
@@ -174,11 +174,7 @@ export function PlatformErrorState(props: {
 // 'running' vs 'online', 'stopped' vs 'offline') collapse to one chip set.
 export type PlatformResourceStatusFilter = 'all' | 'online' | 'degraded' | 'offline';
 
-export const platformChipStatusDot = (className: string) => (
-  <span class={`h-2 w-2 rounded-full ${className}`} />
-);
-
-const statusDot = platformChipStatusDot;
+const statusDot = filterChipStatusDot;
 
 export const PLATFORM_STATUS_FILTER_OPTIONS: PlatformTableFilterOption<PlatformResourceStatusFilter>[] =
   [

@@ -979,6 +979,9 @@ recovery scope, or a storage/recovery-owned secret source.
     forking the toolbar. The source scope flows through
     `forcedSourceFilter` as a typed page input; the source filter remains
     available in the toolbar only when not forced.
+    Storage filter option semantics stay storage-owned, but FilterBar chip
+    presentation is frontend-primitives-owned: storage status leading dots must
+    use `filterChipStatusDot` rather than storage-local span factories.
 41. Keep agent memory composition descriptive on the shared unified-resource
     contract. `internal/unifiedresources/types.go` carries the reclaimable
     page-cache split (`AgentMemoryMeta.cache`, holding used + cache + free

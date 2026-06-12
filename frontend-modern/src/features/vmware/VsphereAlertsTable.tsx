@@ -3,13 +3,13 @@ import XIcon from 'lucide-solid/icons/x';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
+import { filterChipStatusDot } from '@/components/shared/FilterBar';
 import {
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
-  platformChipStatusDot,
   type PlatformTableFilterOption,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
@@ -33,19 +33,19 @@ const VSPHERE_INCIDENT_STATUS_OPTIONS: PlatformTableFilterOption<VmwareIncidentS
     value: 'critical',
     label: 'Critical',
     tone: 'danger',
-    leading: platformChipStatusDot('bg-red-500'),
+    leading: filterChipStatusDot('bg-red-500'),
   },
   {
     value: 'warning',
     label: 'Warning',
     tone: 'warning',
-    leading: platformChipStatusDot('bg-amber-500'),
+    leading: filterChipStatusDot('bg-amber-500'),
   },
   {
     value: 'info',
     label: 'Info',
     tone: 'success',
-    leading: platformChipStatusDot('bg-emerald-500'),
+    leading: filterChipStatusDot('bg-emerald-500'),
   },
 ];
 

@@ -1,7 +1,7 @@
 import { Component, JSX, Show, createMemo } from 'solid-js';
 import DatabaseIcon from 'lucide-solid/icons/database';
 import HardDriveIcon from 'lucide-solid/icons/hard-drive';
-import { FilterBar, type FilterDef } from '@/components/shared/FilterBar';
+import { FilterBar, filterChipStatusDot, type FilterDef } from '@/components/shared/FilterBar';
 import { Subtabs } from '@/components/shared/Subtabs';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { STORAGE_KEYS } from '@/utils/localStorage';
@@ -82,10 +82,6 @@ type StoragePageControlsProps = {
   // saved queries from one platform do not leak into another.
   savedViewsKey?: string;
 };
-
-const storageStatusDot = (className: string) => (
-  <span class={`h-2 w-2 rounded-full ${className}`} />
-);
 
 export const StoragePageControls: Component<StoragePageControlsProps> = (props) => {
   const { isMobile } = useBreakpoint();
@@ -222,13 +218,13 @@ export const StoragePageControls: Component<StoragePageControlsProps> = (props) 
             label: option.label,
             leading:
               option.value === 'available'
-                ? storageStatusDot('bg-emerald-500')
+                ? filterChipStatusDot('bg-emerald-500')
                 : option.value === 'warning' || option.value === 'attention'
-                  ? storageStatusDot('bg-amber-500')
+                  ? filterChipStatusDot('bg-amber-500')
                   : option.value === 'critical'
-                    ? storageStatusDot('bg-red-500')
+                    ? filterChipStatusDot('bg-red-500')
                     : option.value === 'offline' || option.value === 'unknown'
-                      ? storageStatusDot('bg-slate-400')
+                      ? filterChipStatusDot('bg-slate-400')
                       : undefined,
             tone:
               option.value === 'available'

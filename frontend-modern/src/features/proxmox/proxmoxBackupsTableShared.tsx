@@ -2,6 +2,7 @@ import { Show, type Accessor } from 'solid-js';
 import ArrowDownIcon from 'lucide-solid/icons/arrow-down';
 import ArrowUpIcon from 'lucide-solid/icons/arrow-up';
 import ArrowUpDownIcon from 'lucide-solid/icons/arrow-up-down';
+import { filterChipStatusDot } from '@/components/shared/FilterBar';
 import { type FilterOption } from '@/components/shared/FilterButtonGroup';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { TableHead } from '@/components/shared/Table';
@@ -30,8 +31,6 @@ import type {
 // the orchestrating ProxmoxBackupsTable so each sub-view can import only what
 // it renders.
 
-const statusDot = (className: string) => <span class={`h-2 w-2 rounded-full ${className}`} />;
-
 export const PROXMOX_BACKUP_COLUMN_LABELS = {
   targetId: 'Target ID',
   created: 'Created',
@@ -56,35 +55,75 @@ export const ARCHIVE_STATUS_FILTERS: FilterOption<
   'all' | 'protected' | 'verified' | 'unverified'
 >[] = [
   { value: 'all', label: 'All' },
-  { value: 'protected', label: 'Protected', tone: 'info', leading: statusDot('bg-blue-500') },
-  { value: 'verified', label: 'Verified', tone: 'success', leading: statusDot('bg-emerald-500') },
+  {
+    value: 'protected',
+    label: 'Protected',
+    tone: 'info',
+    leading: filterChipStatusDot('bg-blue-500'),
+  },
+  {
+    value: 'verified',
+    label: 'Verified',
+    tone: 'success',
+    leading: filterChipStatusDot('bg-emerald-500'),
+  },
   {
     value: 'unverified',
     label: 'Unverified',
     tone: 'warning',
-    leading: statusDot('bg-amber-500'),
+    leading: filterChipStatusDot('bg-amber-500'),
   },
 ];
 
 export const PBS_STATUS_FILTERS: FilterOption<'all' | 'protected' | 'verified' | 'unverified'>[] = [
   { value: 'all', label: 'All' },
-  { value: 'protected', label: 'Protected', tone: 'info', leading: statusDot('bg-blue-500') },
-  { value: 'verified', label: 'Verified', tone: 'success', leading: statusDot('bg-emerald-500') },
-  { value: 'unverified', label: 'Unverified', tone: 'warning', leading: statusDot('bg-amber-500') },
+  {
+    value: 'protected',
+    label: 'Protected',
+    tone: 'info',
+    leading: filterChipStatusDot('bg-blue-500'),
+  },
+  {
+    value: 'verified',
+    label: 'Verified',
+    tone: 'success',
+    leading: filterChipStatusDot('bg-emerald-500'),
+  },
+  {
+    value: 'unverified',
+    label: 'Unverified',
+    tone: 'warning',
+    leading: filterChipStatusDot('bg-amber-500'),
+  },
 ];
 
 export const TASK_STATUS_FILTERS: FilterOption<'all' | 'ok' | 'failed' | 'running'>[] = [
   { value: 'all', label: 'All' },
-  { value: 'ok', label: 'OK', tone: 'success', leading: statusDot('bg-emerald-500') },
-  { value: 'failed', label: 'Failed', tone: 'danger', leading: statusDot('bg-red-500') },
-  { value: 'running', label: 'Running', tone: 'info', leading: statusDot('bg-blue-500') },
+  { value: 'ok', label: 'OK', tone: 'success', leading: filterChipStatusDot('bg-emerald-500') },
+  { value: 'failed', label: 'Failed', tone: 'danger', leading: filterChipStatusDot('bg-red-500') },
+  { value: 'running', label: 'Running', tone: 'info', leading: filterChipStatusDot('bg-blue-500') },
 ];
 
 export const COVERAGE_FILTERS: FilterOption<CoverageFilterValue>[] = [
   { value: 'all', label: 'All' },
-  { value: 'attention', label: 'Attention', tone: 'warning', leading: statusDot('bg-amber-500') },
-  { value: 'current', label: 'Current', tone: 'success', leading: statusDot('bg-emerald-500') },
-  { value: 'uncovered', label: 'Uncovered', tone: 'danger', leading: statusDot('bg-red-500') },
+  {
+    value: 'attention',
+    label: 'Attention',
+    tone: 'warning',
+    leading: filterChipStatusDot('bg-amber-500'),
+  },
+  {
+    value: 'current',
+    label: 'Current',
+    tone: 'success',
+    leading: filterChipStatusDot('bg-emerald-500'),
+  },
+  {
+    value: 'uncovered',
+    label: 'Uncovered',
+    tone: 'danger',
+    leading: filterChipStatusDot('bg-red-500'),
+  },
 ];
 
 const recoverableSourceFilterOption = (
@@ -98,7 +137,7 @@ const recoverableSourceFilterOption = (
     compactLabel: presentation.compactFilterLabel,
     title: presentation.filterTitle,
     tone: 'info',
-    leading: statusDot(presentation.timelineSwatchClassName),
+    leading: filterChipStatusDot(presentation.timelineSwatchClassName),
   };
 };
 
@@ -107,8 +146,18 @@ export const RECOVERABLE_FILTERS: FilterOption<RecoverableFilterValue>[] = [
   recoverableSourceFilterOption('pbs'),
   recoverableSourceFilterOption('archive'),
   recoverableSourceFilterOption('snapshot'),
-  { value: 'verified', label: 'Verified', tone: 'success', leading: statusDot('bg-emerald-500') },
-  { value: 'unverified', label: 'Unverified', tone: 'warning', leading: statusDot('bg-amber-500') },
+  {
+    value: 'verified',
+    label: 'Verified',
+    tone: 'success',
+    leading: filterChipStatusDot('bg-emerald-500'),
+  },
+  {
+    value: 'unverified',
+    label: 'Unverified',
+    tone: 'warning',
+    leading: filterChipStatusDot('bg-amber-500'),
+  },
 ];
 
 export const SNAPSHOT_FILTERS: FilterOption<SnapshotFilterValue>[] = [
@@ -117,19 +166,19 @@ export const SNAPSHOT_FILTERS: FilterOption<SnapshotFilterValue>[] = [
     value: 'recent',
     label: 'Recent ≤30d',
     tone: 'success',
-    leading: statusDot('bg-emerald-500'),
+    leading: filterChipStatusDot('bg-emerald-500'),
   },
   {
     value: 'stale',
     label: 'Stale >30d',
     tone: 'warning',
-    leading: statusDot('bg-amber-500'),
+    leading: filterChipStatusDot('bg-amber-500'),
   },
   {
     value: 'with-ram',
     label: 'With RAM',
     tone: 'info',
-    leading: statusDot('bg-violet-500'),
+    leading: filterChipStatusDot('bg-violet-500'),
   },
 ];
 

@@ -465,6 +465,9 @@ describe('tab path helpers', () => {
     expect(alertHistoryFrequencyCardSource).toContain('getAlertBucketCountLabel');
     expect(alertHistoryFiltersCardSource).toContain('export function AlertHistoryFiltersCard');
     expect(alertHistoryFiltersCardSource).toContain('getAlertHistorySearchPlaceholder');
+    expect(alertHistoryFiltersCardSource).toContain('filterChipStatusDot');
+    expect(alertHistoryFiltersCardSource).not.toContain('severityDot');
+    expect(alertHistoryFiltersCardSource).not.toContain('h-2 w-2 rounded-full ${className}');
     expect(alertResourceIncidentsPanelSource).toContain(
       'export function AlertResourceIncidentsPanel',
     );

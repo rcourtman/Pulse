@@ -3,13 +3,13 @@ import XIcon from 'lucide-solid/icons/x';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
+import { filterChipStatusDot } from '@/components/shared/FilterBar';
 import {
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
-  platformChipStatusDot,
   type PlatformTableFilterOption,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
@@ -34,19 +34,19 @@ const VSPHERE_ACTIVITY_STATUS_OPTIONS: PlatformTableFilterOption<VmwareActivityS
     value: 'tasks',
     label: 'Tasks',
     tone: 'success',
-    leading: platformChipStatusDot('bg-emerald-500'),
+    leading: filterChipStatusDot('bg-emerald-500'),
   },
   {
     value: 'events',
     label: 'Events',
     tone: 'info',
-    leading: platformChipStatusDot('bg-blue-500'),
+    leading: filterChipStatusDot('bg-blue-500'),
   },
   {
     value: 'failed',
     label: 'Failed',
     tone: 'danger',
-    leading: platformChipStatusDot('bg-red-500'),
+    leading: filterChipStatusDot('bg-red-500'),
   },
 ];
 
