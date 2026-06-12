@@ -8,6 +8,7 @@ import {
   PLATFORM_TABLE_BODY_CLASS,
   PLATFORM_TABLE_HEADER_ROW_CLASS,
 } from '@/features/platformPage/sharedPlatformPage';
+import { TABLE_CARD_FRAME_CLASS } from '@/components/shared/TableCard';
 import type { Resource } from '@/types/resource';
 import { getRecoveryFullDateLabel } from '@/utils/recoveryDatePresentation';
 
@@ -264,5 +265,17 @@ describe('ProxmoxBackupsTable', () => {
     await fireEvent.input(searchInput, { target: { value: 'no-such-guest' } });
 
     expect(screen.queryByText('pbs-docker')).not.toBeInTheDocument();
+    const emptyStateHeading = screen.getByRole('heading', {
+      name: /no recoverable artifacts match current filters/i,
+    });
+    expect(emptyStateHeading).toBeInTheDocument();
+    expect(
+      screen.getByText('Adjust the search, source filter, or selected day to see more artifacts.'),
+    ).toBeInTheDocument();
+    expectClassTokens(
+      emptyStateHeading.closest(`.${TABLE_CARD_FRAME_CLASS}`),
+      TABLE_CARD_FRAME_CLASS,
+    );
+    expect(emptyStateHeading.closest('.border-dashed')).not.toBeNull();
   });
 });

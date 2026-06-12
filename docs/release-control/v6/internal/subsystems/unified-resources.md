@@ -215,6 +215,11 @@ filter semantics, drawer handoffs, and resource projections, while
 Future platform tables must keep that split: row data and platform semantics
 stay in the unified-resource consumer, and the repeated table shell stays in the
 shared frontend primitive.
+Platform table empty states use that same split. Unified-resource consumers own
+the source-specific empty-state vocabulary, action choice, and evidence rule
+that decides why a table is empty, but the table-card empty-state shell itself
+must compose the frontend-primitives-owned `PlatformTableEmptyState` primitive
+instead of importing `EmptyState` directly or wrapping it in a page-local card.
 The same split applies to inline detail row shells on platform, native-resource,
 workload, and infrastructure tables. Unified-resource consumers own row
 identity, source-specific drawer content, expansion state, and resource

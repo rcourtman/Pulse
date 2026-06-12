@@ -7,8 +7,6 @@ import {
   type Component,
   type JSX,
 } from 'solid-js';
-import { Card } from '@/components/shared/Card';
-import { EmptyState } from '@/components/shared/EmptyState';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import type { StatusIndicatorVariant } from '@/utils/status';
@@ -20,6 +18,7 @@ import {
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   type PlatformTableFilterOption,
+  PlatformTableEmptyState,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import { PlatformResourceDetailToggleButton } from '@/features/platformPage/PlatformResourceDetailTableRow';
@@ -207,13 +206,11 @@ export const ProxmoxCephTable: Component<{
     <Show
       when={total() > 0}
       fallback={
-        <Card padding="lg">
-          <EmptyState
-            icon={props.emptyIcon}
-            title={props.emptyTitle}
-            description={props.emptyDescription}
-          />
-        </Card>
+        <PlatformTableEmptyState
+          icon={props.emptyIcon}
+          title={props.emptyTitle}
+          description={props.emptyDescription}
+        />
       }
     >
       <div class="space-y-3">
@@ -232,13 +229,11 @@ export const ProxmoxCephTable: Component<{
         <Show
           when={filtered().length > 0}
           fallback={
-            <Card padding="lg">
-              <EmptyState
-                icon={props.emptyIcon}
-                title="No clusters match current filters"
-                description="Adjust the search or status filter to see more clusters."
-              />
-            </Card>
+            <PlatformTableEmptyState
+              icon={props.emptyIcon}
+              title="No clusters match current filters"
+              description="Adjust the search or status filter to see more clusters."
+            />
           }
         >
           <PlatformTableShell

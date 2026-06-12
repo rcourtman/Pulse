@@ -1,6 +1,4 @@
 import { For, Show, createSignal, type Component, type JSX } from 'solid-js';
-import { Card } from '@/components/shared/Card';
-import { EmptyState } from '@/components/shared/EmptyState';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
@@ -14,6 +12,7 @@ import {
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   type PlatformResourceStatusFilter,
+  PlatformTableEmptyState,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import { PlatformResourceDetailToggleButton } from '@/features/platformPage/PlatformResourceDetailTableRow';
@@ -58,9 +57,7 @@ export const ProxmoxMailGatewayTable: Component<{
     <Show
       when={props.resources.length > 0}
       fallback={
-        <Card padding="lg">
-          <EmptyState title={props.emptyTitle} description={props.emptyDescription} />
-        </Card>
+        <PlatformTableEmptyState title={props.emptyTitle} description={props.emptyDescription} />
       }
     >
       <div class="space-y-3">
@@ -79,12 +76,10 @@ export const ProxmoxMailGatewayTable: Component<{
         <Show
           when={tableState.filtered().length > 0}
           fallback={
-            <Card padding="lg">
-              <EmptyState
-                title="No instances match current filters"
-                description="Adjust the search or status filter to see more instances."
-              />
-            </Card>
+            <PlatformTableEmptyState
+              title="No instances match current filters"
+              description="Adjust the search or status filter to see more instances."
+            />
           }
         >
           <PlatformTableShell

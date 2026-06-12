@@ -2386,6 +2386,12 @@ divide frame locally. Platform table consumers must preserve the owner split:
 frontend-primitives owns the repeated `PlatformTableShell` frame and guardrail
 registry, while platform and unified-resource consumers own the source-specific
 row fields, drawers, and resource semantics.
+Platform table empty states follow the same registry-backed ownership.
+`PlatformTableEmptyState` owns the repeated table-card empty-state shell for
+Docker, Kubernetes, Proxmox, Standalone, TrueNAS, vSphere, and future platform
+feature tables; source-specific consumers own only the empty-state icon, title,
+description, and actions. Platform feature tables must not import
+`EmptyState` directly or recreate a `Card`-wrapped empty-state shell.
 Inline detail table rows are also registry-backed. `InlineDetailTableRow`
 owns the row/cell/content shell and row-click containment for platform,
 workload, and infrastructure inline drawers; callers may pass row-specific

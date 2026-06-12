@@ -1,7 +1,5 @@
 import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
 import ArrowRightIcon from 'lucide-solid/icons/arrow-right';
-import { Card } from '@/components/shared/Card';
-import { EmptyState } from '@/components/shared/EmptyState';
 import { StatusDot } from '@/components/shared/StatusDot';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
@@ -12,6 +10,7 @@ import {
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   type PlatformTableFilterOption,
+  PlatformTableEmptyState,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { ReplicationJob, ReplicationJobsResponse } from '@/types/api';
@@ -184,46 +183,40 @@ export const ProxmoxReplicationTable: Component<{
     <Show
       when={!props.error}
       fallback={
-        <Card padding="lg">
-          <EmptyState
-            icon={props.emptyIcon}
-            title="Could not load replication jobs"
-            description={(props.error as Error | undefined)?.message ?? 'Refresh to retry.'}
-            actions={
-              <button
-                type="button"
-                onClick={() => props.onRetry()}
-                class="inline-flex min-h-10 items-center rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-surface-hover"
-              >
-                Refresh
-              </button>
-            }
-          />
-        </Card>
+        <PlatformTableEmptyState
+          icon={props.emptyIcon}
+          title="Could not load replication jobs"
+          description={(props.error as Error | undefined)?.message ?? 'Refresh to retry.'}
+          actions={
+            <button
+              type="button"
+              onClick={() => props.onRetry()}
+              class="inline-flex min-h-10 items-center rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-surface-hover"
+            >
+              Refresh
+            </button>
+          }
+        />
       }
     >
       <Show
         when={props.jobs !== undefined}
         fallback={
-          <Card padding="lg">
-            <EmptyState
-              icon={props.emptyIcon}
-              title="Loading replication jobs"
-              description="Reading scheduled replication state from PVE."
-            />
-          </Card>
+          <PlatformTableEmptyState
+            icon={props.emptyIcon}
+            title="Loading replication jobs"
+            description="Reading scheduled replication state from PVE."
+          />
         }
       >
         <Show
           when={total() > 0}
           fallback={
-            <Card padding="lg">
-              <EmptyState
-                icon={props.emptyIcon}
-                title={props.emptyTitle}
-                description={props.emptyDescription}
-              />
-            </Card>
+            <PlatformTableEmptyState
+              icon={props.emptyIcon}
+              title={props.emptyTitle}
+              description={props.emptyDescription}
+            />
           }
         >
           <div class="space-y-3">
@@ -242,13 +235,11 @@ export const ProxmoxReplicationTable: Component<{
             <Show
               when={filtered().length > 0}
               fallback={
-                <Card padding="lg">
-                  <EmptyState
-                    icon={props.emptyIcon}
-                    title="No replication jobs match current filters"
-                    description="Adjust the search or status filter to see more jobs."
-                  />
-                </Card>
+                <PlatformTableEmptyState
+                  icon={props.emptyIcon}
+                  title="No replication jobs match current filters"
+                  description="Adjust the search or status filter to see more jobs."
+                />
               }
             >
               <PlatformTableShell

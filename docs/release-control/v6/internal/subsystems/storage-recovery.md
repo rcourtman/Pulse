@@ -124,6 +124,11 @@ explicit uncovered and failed-latest-task states, rather than from source-detail
 row counts alone. PBS server/datastore rows may display backup counts, but the
 counts must come from the PBS backup API artifact identity, not from a
 datastore-capacity approximation.
+Those Proxmox backup workflows own recovery semantics, source-specific
+empty-state copy, and retry/filter actions, but their table empty-state frame
+must compose the frontend-primitives-owned `PlatformTableEmptyState` shell
+instead of importing `EmptyState` directly or wrapping it in a backup-local
+card.
 The Proxmox overview workload table's Backup column is the primary
 glance-level protection signal for current guests. It must remain visible,
 dense, and backed by the canonical guest `LastBackup` synchronization from PVE

@@ -1,7 +1,5 @@
 import { For, Show, type Accessor, type JSX } from 'solid-js';
 
-import { Card } from '@/components/shared/Card';
-import { EmptyState } from '@/components/shared/EmptyState';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableRow } from '@/components/shared/Table';
@@ -9,6 +7,7 @@ import { formatBytes } from '@/utils/format';
 import {
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
+  PlatformTableEmptyState,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import { PlatformResourceDetailToggleButton } from '@/features/platformPage/PlatformResourceDetailTableRow';
@@ -101,21 +100,17 @@ export function ProxmoxCoverageTable(props: {
     <Show
       when={props.rows.length > 0}
       fallback={
-        <Card padding="lg">
-          <EmptyState
-            icon={props.emptyIcon}
-            title={
-              !props.hasAnyRows
-                ? props.emptyTitle
-                : 'No workload coverage rows match current filters'
-            }
-            description={
-              !props.hasAnyRows
-                ? props.emptyDescription
-                : 'Adjust the search, posture filter, or selected day to see more workloads.'
-            }
-          />
-        </Card>
+        <PlatformTableEmptyState
+          icon={props.emptyIcon}
+          title={
+            !props.hasAnyRows ? props.emptyTitle : 'No workload coverage rows match current filters'
+          }
+          description={
+            !props.hasAnyRows
+              ? props.emptyDescription
+              : 'Adjust the search, posture filter, or selected day to see more workloads.'
+          }
+        />
       }
     >
       <PlatformTableShell

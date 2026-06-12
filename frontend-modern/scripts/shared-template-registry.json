@@ -137,6 +137,31 @@
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "scripts/shared-template-audit.mjs"
       ]
+    },
+    {
+      "id": "platform-table-empty-state-local-empty-state",
+      "category": "platform-table-empty-state",
+      "summary": "Platform feature tables must compose PlatformTableEmptyState for their table/card empty-state shell instead of importing EmptyState directly.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "PlatformTableEmptyState"
+      },
+      "scopes": [
+        "src/features/docker",
+        "src/features/kubernetes",
+        "src/features/proxmox",
+        "src/features/standalone",
+        "src/features/truenas",
+        "src/features/vmware"
+      ],
+      "extensions": [".tsx"],
+      "allPatterns": ["@/components/shared/EmptyState"],
+      "legacyReason": "Retired migration debt. Platform table empty states must use PlatformTableEmptyState; no platform feature exceptions are currently allowed.",
+      "allowedPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
     }
   ],
   "requiredPatternGuards": [

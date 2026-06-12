@@ -102,9 +102,14 @@ import guestRowStateSource from '@/components/Workloads/useGuestRowState.ts?raw'
 import workloadSelectionStateSource from '@/components/Workloads/useWorkloadSelectionState.ts?raw';
 import dockerHostsTableSource from '@/features/docker/DockerHostsTable.tsx?raw';
 import kubernetesNodesTableSource from '@/features/kubernetes/KubernetesNodesTable.tsx?raw';
+import proxmoxBackupsTableSource from '@/features/proxmox/ProxmoxBackupsTable.tsx?raw';
+import proxmoxCephTableSource from '@/features/proxmox/ProxmoxCephTable.tsx?raw';
 import proxmoxCoverageTableSource from '@/features/proxmox/ProxmoxCoverageTable.tsx?raw';
+import proxmoxMailGatewayTableSource from '@/features/proxmox/ProxmoxMailGatewayTable.tsx?raw';
 import proxmoxNodesTableSource from '@/features/proxmox/ProxmoxNodesTable.tsx?raw';
 import proxmoxHostTableModelSource from '@/features/proxmox/proxmoxHostTableModel.ts?raw';
+import proxmoxRecoverableTableSource from '@/features/proxmox/ProxmoxRecoverableTable.tsx?raw';
+import proxmoxReplicationTableSource from '@/features/proxmox/ProxmoxReplicationTable.tsx?raw';
 import vsphereHostsTableSource from '@/features/vmware/VsphereHostsTable.tsx?raw';
 import agentsMachinesTableSource from '@/features/standalone/AgentsMachinesTable.tsx?raw';
 import agentMachineTableModelSource from '@/features/standalone/agentMachineTableModel.ts?raw';
@@ -1002,6 +1007,59 @@ describe('shared primitive guardrails', () => {
       expect(source).not.toContain('TableCard class={PLATFORM_TABLE_CARD_CLASS}');
       expect(source).not.toContain('TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}');
       expect(source).not.toContain('TableBody class={PLATFORM_TABLE_BODY_CLASS}');
+    }
+  });
+
+  it('keeps platform table empty states on the shared shell template', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      patternGuards: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        allowedPaths?: string[];
+      }>;
+    };
+    const registeredGuard = registry.patternGuards.find(
+      (guard) => guard.id === 'platform-table-empty-state-local-empty-state',
+    );
+
+    expect(registeredGuard?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(registeredGuard?.canonical?.export).toBe('PlatformTableEmptyState');
+    expect(registeredGuard?.allPatterns).toEqual(['@/components/shared/EmptyState']);
+    expect(registeredGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(registeredGuard?.scopes).toEqual(
+      expect.arrayContaining([
+        'src/features/docker',
+        'src/features/kubernetes',
+        'src/features/proxmox',
+        'src/features/standalone',
+        'src/features/truenas',
+        'src/features/vmware',
+      ]),
+    );
+    expect(sharedPlatformPageSource).toContain('export function PlatformTableEmptyState');
+    expect(sharedPlatformPageSource).toContain('icon?: JSX.Element');
+    expect(sharedPlatformPageSource).toContain("from '@/components/shared/EmptyState'");
+
+    for (const source of [
+      dockerHostsTableSource,
+      kubernetesNodesTableSource,
+      proxmoxBackupsTableSource,
+      proxmoxCephTableSource,
+      proxmoxCoverageTableSource,
+      proxmoxMailGatewayTableSource,
+      proxmoxRecoverableTableSource,
+      proxmoxReplicationTableSource,
+      proxmoxNodesTableSource,
+      vsphereHostsTableSource,
+    ]) {
+      expect(source).toContain('PlatformTableEmptyState');
+      expect(source).not.toContain("@/components/shared/EmptyState");
+      expect(source).not.toContain('<EmptyState');
+      expect(source).not.toContain('<Card padding="lg">');
     }
   });
 

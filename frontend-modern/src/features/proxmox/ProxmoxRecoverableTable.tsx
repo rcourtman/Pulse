@@ -1,7 +1,5 @@
 import { For, Show, type Accessor, type JSX } from 'solid-js';
 
-import { Card } from '@/components/shared/Card';
-import { EmptyState } from '@/components/shared/EmptyState';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { formatBytes } from '@/utils/format';
 import {
@@ -11,6 +9,7 @@ import {
 import {
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
+  PlatformTableEmptyState,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 
@@ -136,21 +135,19 @@ export function ProxmoxRecoverableTable(props: {
     <Show
       when={props.artifacts.length > 0}
       fallback={
-        <Card padding="lg">
-          <EmptyState
-            icon={props.emptyIcon}
-            title={
-              !props.hasAnyArtifacts
-                ? props.emptyTitle
-                : 'No recoverable artifacts match current filters'
-            }
-            description={
-              !props.hasAnyArtifacts
-                ? props.emptyDescription
-                : 'Adjust the search, source filter, or selected day to see more artifacts.'
-            }
-          />
-        </Card>
+        <PlatformTableEmptyState
+          icon={props.emptyIcon}
+          title={
+            !props.hasAnyArtifacts
+              ? props.emptyTitle
+              : 'No recoverable artifacts match current filters'
+          }
+          description={
+            !props.hasAnyArtifacts
+              ? props.emptyDescription
+              : 'Adjust the search, source filter, or selected day to see more artifacts.'
+          }
+        />
       }
     >
       <PlatformTableShell

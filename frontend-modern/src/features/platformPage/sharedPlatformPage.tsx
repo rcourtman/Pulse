@@ -55,7 +55,7 @@ export function PlatformSectionTabs<TabId extends string>(props: {
 }
 
 export function PlatformTableEmptyState(props: {
-  icon: JSX.Element;
+  icon?: JSX.Element;
   title: string;
   description: string;
   actions?: JSX.Element;

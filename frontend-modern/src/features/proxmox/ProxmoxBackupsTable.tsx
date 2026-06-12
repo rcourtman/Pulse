@@ -2,12 +2,11 @@ import { Show, createMemo, createResource, createSignal, type Component, type JS
 import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
 import CalendarIcon from 'lucide-solid/icons/calendar';
 import ShieldCheckIcon from 'lucide-solid/icons/shield-check';
-import { Card } from '@/components/shared/Card';
-import { EmptyState } from '@/components/shared/EmptyState';
 import { useSearchParams } from '@solidjs/router';
 import { FilterBar, type FilterDef, type FilterSelectOption } from '@/components/shared/FilterBar';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { apiFetch } from '@/utils/apiClient';
+import { PlatformTableEmptyState } from '@/features/platformPage/sharedPlatformPage';
 import {
   getRecoveryFilterDateLabel,
   recoveryDateKeyFromTimestamp,
@@ -438,34 +437,30 @@ export const ProxmoxBackupsTable: Component<{
     <Show
       when={!backups.error}
       fallback={
-        <Card padding="lg">
-          <EmptyState
-            icon={props.emptyIcon}
-            title="Could not load Proxmox backup inventory"
-            description={(backups.error as Error | undefined)?.message ?? 'Refresh to retry.'}
-            actions={
-              <button
-                type="button"
-                onClick={() => void refetch()}
-                class="inline-flex min-h-10 items-center rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-surface-hover"
-              >
-                Refresh
-              </button>
-            }
-          />
-        </Card>
+        <PlatformTableEmptyState
+          icon={props.emptyIcon}
+          title="Could not load Proxmox backup inventory"
+          description={(backups.error as Error | undefined)?.message ?? 'Refresh to retry.'}
+          actions={
+            <button
+              type="button"
+              onClick={() => void refetch()}
+              class="inline-flex min-h-10 items-center rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-surface-hover"
+            >
+              Refresh
+            </button>
+          }
+        />
       }
     >
       <Show
         when={backups() !== undefined}
         fallback={
-          <Card padding="lg">
-            <EmptyState
-              icon={props.emptyIcon}
-              title="Loading Proxmox backup inventory"
-              description="Reading PBS snapshots, PVE backup files, guest snapshots, and recent backup tasks."
-            />
-          </Card>
+          <PlatformTableEmptyState
+            icon={props.emptyIcon}
+            title="Loading Proxmox backup inventory"
+            description="Reading PBS snapshots, PVE backup files, guest snapshots, and recent backup tasks."
+          />
         }
       >
         <div class="space-y-3">
