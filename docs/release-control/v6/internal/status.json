@@ -1,6 +1,6 @@
 {
   "version": "6.0",
-  "updated_at": "2026-04-29",
+  "updated_at": "2026-06-12",
   "scope": {
     "active_repos": [
       "pulse",
@@ -6908,8 +6908,69 @@
       "subsystem_ids": []
     }
   ],
-  "coverage_gaps": [],
-  "candidate_lanes": [],
+  "coverage_gaps": [
+    {
+      "id": "localized-product-surfaces",
+      "summary": "Pulse now has a durable localization direction, but translated product coverage is not modeled by the existing lane map: website/acquisition copy, install and troubleshooting docs, first-run and settings UI, alerts/operator actions, mobile handoff, and commercial trust surfaces need explicit locale readiness instead of ad hoc page-by-page translation. First-wave languages are German and Spanish; French and Brazilian Portuguese are the next planned expansion candidates, followed by Japanese, Simplified Chinese, and Korean when QA capacity and audience evidence justify them.",
+      "owner": "project-owner",
+      "status": "planned",
+      "recorded_at": "2026-06-12",
+      "lane_ids": [
+        "L2",
+        "L3",
+        "L5",
+        "L8",
+        "L9"
+      ],
+      "subsystem_ids": [
+        "cloud-paid",
+        "frontend-primitives"
+      ],
+      "proposed_resolution": "new-lane",
+      "coverage_impact": 8,
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/frontend-primitives.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/settingsNavCatalog.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/i18n/messages.ts",
+          "kind": "file"
+        }
+      ]
+    }
+  ],
+  "candidate_lanes": [
+    {
+      "id": "localized-product-surfaces",
+      "name": "Localized Product Surfaces",
+      "summary": "Promote localization into a governed product lane covering i18n architecture, locale fallback and QA, German and Spanish first-wave translations, website and docs localization, first-run/settings/core monitoring/alerts copy, mobile handoff copy, commercial trust surfaces, and guardrails that keep machine-facing identifiers, commands, config keys, API fields, logs, and resource names untranslated.",
+      "status": "proposed",
+      "recorded_at": "2026-06-12",
+      "target_id": "v6-product-lane-expansion",
+      "current_lane_ids": [
+        "L2",
+        "L3",
+        "L5",
+        "L8",
+        "L9"
+      ],
+      "coverage_gap_ids": [
+        "localized-product-surfaces"
+      ],
+      "subsystem_ids": [
+        "cloud-paid",
+        "frontend-primitives"
+      ]
+    }
+  ],
   "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",

@@ -17,8 +17,8 @@ import {
 } from '@/stores/license';
 import { DEFAULT_SETTINGS_TAB, type SettingsTab } from './settingsNavigationModel';
 import { tabFeatureRequirements } from './settingsFeatureGates';
-import { SETTINGS_HEADER_META } from './settingsHeaderMeta';
-import { getSettingsNavItem, SETTINGS_NAV_GROUPS } from './settingsNavCatalog';
+import { getSettingsHeaderMeta } from './settingsHeaderMeta';
+import { getSettingsNavGroups, getSettingsNavItem } from './settingsNavCatalog';
 import { shouldBlockSettingsRouteItem, shouldHideSettingsNavItem } from './settingsNavVisibility';
 
 interface UseSettingsAccessParams {
@@ -95,22 +95,29 @@ export function useSettingsAccess({
     };
   });
 
+  const settingsNavGroups = createMemo(() => getSettingsNavGroups());
+  const settingsHeaderMeta = createMemo(() => getSettingsHeaderMeta());
+
   const routeTabGroups = createMemo(() =>
-    SETTINGS_NAV_GROUPS.map((group) => ({
-      ...group,
-      items: group.items.filter(
-        (item) => !shouldBlockSettingsRouteItem(item.id, routeAccessContext()),
-      ),
-    })).filter((group) => group.items.length > 0),
+    settingsNavGroups()
+      .map((group) => ({
+        ...group,
+        items: group.items.filter(
+          (item) => !shouldBlockSettingsRouteItem(item.id, routeAccessContext()),
+        ),
+      }))
+      .filter((group) => group.items.length > 0),
   );
 
   const navTabGroups = createMemo(() =>
-    SETTINGS_NAV_GROUPS.map((group) => ({
-      ...group,
-      items: group.items.filter(
-        (item) => !shouldHideSettingsNavItem(item.id, routeAccessContext()),
-      ),
-    })).filter((group) => group.items.length > 0),
+    settingsNavGroups()
+      .map((group) => ({
+        ...group,
+        items: group.items.filter(
+          (item) => !shouldHideSettingsNavItem(item.id, routeAccessContext()),
+        ),
+      }))
+      .filter((group) => group.items.length > 0),
   );
 
   const flatTabs = createMemo(() => routeTabGroups().flatMap((group) => group.items));
@@ -135,7 +142,7 @@ export function useSettingsAccess({
       .map((group) => {
         const filteredItems = group.items.filter((item) => {
           const matchLabel = item.label.toLowerCase().includes(q);
-          const description = SETTINGS_HEADER_META[item.id]?.description?.toLowerCase() || '';
+          const description = settingsHeaderMeta()[item.id]?.description?.toLowerCase() || '';
           const matchDesc = description.includes(q);
           return matchLabel || matchDesc;
         });

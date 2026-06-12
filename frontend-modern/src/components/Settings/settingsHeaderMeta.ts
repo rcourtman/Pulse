@@ -1,4 +1,5 @@
-import type { SettingsHeaderMetaMap } from './settingsNavigationModel';
+import { t, type I18nMessageKey, type SupportedLocale } from '@/i18n';
+import type { SettingsHeaderMetaMap, SettingsTab } from './settingsNavigationModel';
 import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from './selfHostedBillingPresentation';
 import { RELAY_SETTINGS_DESCRIPTION } from '@/utils/relayPresentation';
 import {
@@ -118,3 +119,126 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
     description: 'Configure real-time delivery of audit events to external systems.',
   },
 };
+
+const SETTINGS_HEADER_META_KEYS = {
+  'infrastructure-systems': {
+    title: 'settings.header.infrastructure.title',
+    description: 'settings.header.infrastructure.description',
+  },
+  'monitoring-availability': {
+    title: 'settings.header.monitoringAvailability.title',
+    description: 'settings.header.monitoringAvailability.description',
+  },
+  'system-general': {
+    title: 'settings.header.systemGeneral.title',
+    description: 'settings.header.systemGeneral.description',
+  },
+  'system-network': {
+    title: 'settings.header.systemNetwork.title',
+    description: 'settings.header.systemNetwork.description',
+  },
+  'system-updates': {
+    title: 'settings.header.systemUpdates.title',
+    description: 'settings.header.systemUpdates.description',
+  },
+  'system-recovery': {
+    title: 'settings.header.systemRecovery.title',
+    description: 'settings.header.systemRecovery.description',
+  },
+  'system-ai': {
+    title: 'settings.header.systemAi.title',
+    description: 'settings.header.systemAi.description',
+  },
+  'system-relay': {
+    title: 'settings.header.systemRelay.title',
+    description: 'settings.header.systemRelay.description',
+  },
+  'system-billing': {
+    title: 'settings.header.systemBilling.title',
+    description: 'settings.header.systemBilling.description',
+  },
+  'support-diagnostics': {
+    title: 'settings.header.supportDiagnostics.title',
+    description: 'settings.header.supportDiagnostics.description',
+  },
+  'support-reporting': {
+    title: 'settings.header.supportReporting.title',
+    description: 'settings.header.supportReporting.description',
+  },
+  'support-logs': {
+    title: 'settings.header.supportLogs.title',
+    description: 'settings.header.supportLogs.description',
+  },
+  'organization-overview': {
+    title: 'settings.header.organizationOverview.title',
+    description: 'settings.header.organizationOverview.description',
+  },
+  'organization-access': {
+    title: 'settings.header.organizationAccess.title',
+    description: 'settings.header.organizationAccess.description',
+  },
+  'organization-sharing': {
+    title: 'settings.header.organizationSharing.title',
+    description: 'settings.header.organizationSharing.description',
+  },
+  'organization-billing': {
+    title: 'settings.header.organizationBilling.title',
+    description: 'settings.header.organizationBilling.description',
+  },
+  'organization-billing-admin': {
+    title: 'settings.header.organizationBillingAdmin.title',
+    description: 'settings.header.organizationBillingAdmin.description',
+  },
+  api: {
+    title: 'settings.header.api.title',
+    description: 'settings.header.api.description',
+  },
+  'security-overview': {
+    title: 'settings.header.securityOverview.title',
+    description: 'settings.header.securityOverview.description',
+  },
+  'security-data-handling': {
+    title: 'settings.header.securityDataHandling.title',
+    description: 'settings.header.securityDataHandling.description',
+  },
+  'security-auth': {
+    title: 'settings.header.securityAuth.title',
+    description: 'settings.header.securityAuth.description',
+  },
+  'security-sso': {
+    title: 'settings.header.securitySso.title',
+    description: 'settings.header.securitySso.description',
+  },
+  'security-roles': {
+    title: 'settings.header.securityRoles.title',
+    description: 'settings.header.securityRoles.description',
+  },
+  'security-users': {
+    title: 'settings.header.securityUsers.title',
+    description: 'settings.header.securityUsers.description',
+  },
+  'security-audit': {
+    title: 'settings.header.securityAudit.title',
+    description: 'settings.header.securityAudit.description',
+  },
+  'security-webhooks': {
+    title: 'settings.header.securityWebhooks.title',
+    description: 'settings.header.securityWebhooks.description',
+  },
+} as const satisfies Record<SettingsTab, { title: I18nMessageKey; description: I18nMessageKey }>;
+
+export function getSettingsHeaderMeta(locale?: SupportedLocale): SettingsHeaderMetaMap {
+  return Object.fromEntries(
+    Object.entries(SETTINGS_HEADER_META_KEYS).map(([tab, keys]) => [
+      tab,
+      {
+        title: t(keys.title, {}, locale),
+        description: t(keys.description, {}, locale),
+      },
+    ]),
+  ) as SettingsHeaderMetaMap;
+}
+
+export function getInfrastructureReadOnlyHeaderDescription(locale?: SupportedLocale): string {
+  return t('settings.header.infrastructure.readOnlyDescription', {}, locale);
+}

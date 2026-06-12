@@ -19,8 +19,14 @@ import CreditCard from 'lucide-solid/icons/credit-card';
 import FileText from 'lucide-solid/icons/file-text';
 import Terminal from 'lucide-solid/icons/terminal';
 import { PulseLogoIcon } from '@/components/icons/PulseLogoIcon';
+import { t, type I18nMessageKey, type SupportedLocale } from '@/i18n';
 import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from './selfHostedBillingPresentation';
-import type { SettingsNavGroup, SettingsNavItem, SettingsTab } from './settingsNavigationModel';
+import type {
+  SettingsNavGroup,
+  SettingsNavGroupId,
+  SettingsNavItem,
+  SettingsTab,
+} from './settingsNavigationModel';
 
 export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
   {
@@ -264,10 +270,67 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
   },
 ];
 
+const SETTINGS_NAV_GROUP_LABEL_KEYS = {
+  infrastructure: 'settings.nav.group.infrastructure',
+  monitoring: 'settings.nav.group.monitoring',
+  organization: 'settings.nav.group.organization',
+  system: 'settings.nav.group.system',
+  support: 'settings.nav.group.support',
+  security: 'settings.nav.group.security',
+} as const satisfies Record<SettingsNavGroupId, I18nMessageKey>;
+
+const SETTINGS_NAV_ITEM_LABEL_KEYS = {
+  'infrastructure-systems': 'settings.nav.item.infrastructure',
+  'monitoring-availability': 'settings.nav.item.availabilityChecks',
+  'system-general': 'settings.nav.item.general',
+  'system-network': 'settings.nav.item.network',
+  'system-updates': 'settings.nav.item.updates',
+  'system-recovery': 'settings.nav.item.recovery',
+  'system-ai': 'settings.nav.item.assistantPatrol',
+  'system-relay': 'settings.nav.item.remoteAccess',
+  'system-billing': 'settings.nav.item.plans',
+  'support-diagnostics': 'settings.nav.item.diagnosticsHealth',
+  'support-reporting': 'settings.nav.item.dataReports',
+  'support-logs': 'settings.nav.item.systemLogs',
+  'organization-overview': 'settings.nav.item.organizationOverview',
+  'organization-access': 'settings.nav.item.organizationAccess',
+  'organization-billing': 'settings.nav.item.billing',
+  'organization-billing-admin': 'settings.nav.item.billingAdmin',
+  'organization-sharing': 'settings.nav.item.sharing',
+  api: 'settings.nav.item.apiAccess',
+  'security-overview': 'settings.nav.item.securityOverview',
+  'security-data-handling': 'settings.nav.item.resourcePrivacy',
+  'security-auth': 'settings.nav.item.authentication',
+  'security-sso': 'settings.nav.item.singleSignOn',
+  'security-roles': 'settings.nav.item.roles',
+  'security-users': 'settings.nav.item.users',
+  'security-audit': 'settings.nav.item.auditLog',
+  'security-webhooks': 'settings.nav.item.auditWebhooks',
+} as const satisfies Record<SettingsTab, I18nMessageKey>;
+
+function localizeSettingsNavItem(item: SettingsNavItem, locale?: SupportedLocale): SettingsNavItem {
+  return {
+    ...item,
+    label: t(SETTINGS_NAV_ITEM_LABEL_KEYS[item.id], {}, locale),
+  };
+}
+
+export function getSettingsNavGroups(locale?: SupportedLocale): SettingsNavGroup[] {
+  return SETTINGS_NAV_GROUPS.map((group) => ({
+    ...group,
+    label: t(SETTINGS_NAV_GROUP_LABEL_KEYS[group.id], {}, locale),
+    items: group.items.map((item) => localizeSettingsNavItem(item, locale)),
+  }));
+}
+
 const settingsNavItemsByTab = new Map<SettingsTab, SettingsNavItem>(
   SETTINGS_NAV_GROUPS.flatMap((group) => group.items.map((item) => [item.id, item] as const)),
 );
 
-export function getSettingsNavItem(tab: SettingsTab): SettingsNavItem | undefined {
-  return settingsNavItemsByTab.get(tab);
+export function getSettingsNavItem(
+  tab: SettingsTab,
+  locale?: SupportedLocale,
+): SettingsNavItem | undefined {
+  const item = settingsNavItemsByTab.get(tab);
+  return item ? localizeSettingsNavItem(item, locale) : undefined;
 }

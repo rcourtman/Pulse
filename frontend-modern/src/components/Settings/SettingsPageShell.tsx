@@ -5,8 +5,8 @@ import { PageHeader } from '@/components/shared/PageHeader';
 import { SearchInput } from '@/components/shared/SearchInput';
 import {
   getSettingsSearchEmptyState,
+  getSettingsShellCopy,
   getSettingsUnsavedChangesBanner,
-  SETTINGS_SHELL_COPY,
 } from '@/utils/settingsShellPresentation';
 import type { SettingsHeaderMeta, SettingsNavGroup, SettingsTab } from './settingsNavigationModel';
 import { isInfrastructureSettingsTab } from './settingsNavigationModel';
@@ -32,6 +32,7 @@ interface SettingsPageShellProps {
 }
 
 export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
+  const shellCopy = () => getSettingsShellCopy();
   const unsavedChangesBanner = () => getSettingsUnsavedChangesBanner();
   const infrastructureWorkspaceActive = () => isInfrastructureSettingsTab(props.activeTab());
   const isSidebarItemActive = (itemId: SettingsTab) =>
@@ -94,7 +95,7 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
       <Card padding="none" class="relative flex lg:flex-row overflow-hidden min-h-[600px]">
         <div
           class={`${props.isMobileMenuOpen() ? 'flex flex-col w-full' : 'hidden lg:flex lg:flex-col'} ${props.sidebarCollapsed() ? 'lg:w-16 lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:w-72 lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative border-b border-border lg:border-b-0 lg:border-r lg:align-top flex-shrink-0 transition-all duration-200 bg-surface lg:bg-transparent z-10`}
-          aria-label={SETTINGS_SHELL_COPY.navigationAriaLabel}
+          aria-label={shellCopy().navigationAriaLabel}
           aria-expanded={!props.sidebarCollapsed()}
         >
           <div
@@ -103,13 +104,13 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
             <Show when={!props.sidebarCollapsed()}>
               <div class="flex items-center justify-between pb-2 border-b border-border">
                 <h2 class="text-sm font-semibold text-base-content">
-                  {SETTINGS_SHELL_COPY.navigationTitle}
+                  {shellCopy().navigationTitle}
                 </h2>
                 <button
                   type="button"
                   onClick={() => props.setSidebarCollapsed(true)}
                   class="p-1 rounded-md hover:bg-surface-hover transition-colors"
-                  aria-label={SETTINGS_SHELL_COPY.collapseSidebarLabel}
+                  aria-label={shellCopy().collapseSidebarLabel}
                 >
                   <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path
@@ -127,7 +128,7 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
                 type="button"
                 onClick={() => props.setSidebarCollapsed(false)}
                 class="w-full p-2 rounded-md hover:bg-surface-hover transition-colors"
-                aria-label={SETTINGS_SHELL_COPY.expandSidebarLabel}
+                aria-label={shellCopy().expandSidebarLabel}
               >
                 <svg class="w-5 h-5 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path
@@ -145,11 +146,11 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
                   <SearchInput
                     value={props.searchQuery}
                     onChange={props.setSearchQuery}
-                    placeholder={SETTINGS_SHELL_COPY.searchPlaceholder}
+                    placeholder={shellCopy().searchPlaceholder}
                     class="w-full"
                     captureBackspace
                     clearOnEscape
-                    shortcutHint={SETTINGS_SHELL_COPY.searchShortcutHint}
+                    shortcutHint={shellCopy().searchShortcutHint}
                   />
                 </div>
               </Show>
@@ -248,7 +249,7 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
                 >
                   <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
                 </svg>
-                {SETTINGS_SHELL_COPY.mobileBackLabel}
+                {shellCopy().mobileBackLabel}
               </button>
               <div class="ml-auto font-semibold text-base-content pr-3">
                 <Show when={props.flatTabs().find((tab) => tab.id === props.activeTab())}>

@@ -987,7 +987,7 @@ describe('frontend resource type boundaries', () => {
     );
     expect(settingsPanelRegistrySource).toContain('buildSettingsPanelRegistryContext');
     expect(settingsShellSource).not.toContain('getInfrastructurePanelProps: () => ({');
-    expect(settingsPageShellSource).toContain('SETTINGS_SHELL_COPY');
+    expect(settingsPageShellSource).toContain('getSettingsShellCopy');
     expect(settingsPageShellSource).toContain('getSettingsUnsavedChangesBanner');
     expect(settingsPageShellSource).not.toContain('Unsaved changes');
     expect(settingsPageShellSource).not.toContain('Search settings...');
@@ -1013,7 +1013,7 @@ describe('frontend resource type boundaries', () => {
     expect(settingsTypesSource).toContain("from './settingsNavigationModel'");
     expect(settingsDialogsSource).toContain('UpdateConfirmationModal');
     expect(settingsDialogsSource).toContain('BackupTransferDialogs');
-    expect(settingsShellStateSource).toContain('SETTINGS_HEADER_META');
+    expect(settingsShellStateSource).toContain('getSettingsHeaderMeta');
     expect(settingsShellStateSource).toContain('setSidebarCollapsed');
     expect(settingsNavCatalogSource).toContain('export const SETTINGS_NAV_GROUPS');
     expect(settingsNavVisibilitySource).toContain('shouldHideSettingsNavItem');

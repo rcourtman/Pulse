@@ -1,6 +1,9 @@
 import { Accessor, createMemo, createSignal } from 'solid-js';
 import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
-import { SETTINGS_HEADER_META } from './settingsHeaderMeta';
+import {
+  getInfrastructureReadOnlyHeaderDescription,
+  getSettingsHeaderMeta,
+} from './settingsHeaderMeta';
 import { isInfrastructureSettingsTab, type SettingsTab } from './settingsNavigationModel';
 
 interface UseSettingsShellStateParams {
@@ -10,23 +13,23 @@ interface UseSettingsShellStateParams {
 export function useSettingsShellState({ activeTab }: UseSettingsShellStateParams) {
   const headerMeta = createMemo(() => {
     const tab = activeTab();
+    const headerMetaByTab = getSettingsHeaderMeta();
     if (isInfrastructureSettingsTab(tab) && presentationPolicyIsReadOnly()) {
       return {
-        title: 'Infrastructure',
-        description:
-          'Review the current top-level monitored systems and reporting posture. Setup changes stay unavailable in this read-only session.',
+        title: headerMetaByTab['infrastructure-systems'].title,
+        description: getInfrastructureReadOnlyHeaderDescription(),
       };
     }
 
     if (isInfrastructureSettingsTab(tab)) {
       return {
-        title: 'Infrastructure',
-        description: SETTINGS_HEADER_META['infrastructure-systems'].description,
+        title: headerMetaByTab['infrastructure-systems'].title,
+        description: headerMetaByTab['infrastructure-systems'].description,
       };
     }
 
     return (
-      SETTINGS_HEADER_META[tab] ?? {
+      headerMetaByTab[tab] ?? {
         title: 'Settings',
         description: 'Manage Pulse configuration.',
       }

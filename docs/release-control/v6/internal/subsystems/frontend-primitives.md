@@ -65,6 +65,7 @@ work extends shared components instead of creating new local variants.
 40. `frontend-modern/src/utils/systemSettingsPresentation.ts`
 41. `frontend-modern/src/utils/aiSettingsPresentation.ts`
 42. `frontend-modern/src/utils/settingsShellPresentation.ts`
+42a. `frontend-modern/src/i18n/`
 43. `frontend-modern/src/utils/textPresentation.ts`
 44. `frontend-modern/src/components/Settings/UpdateInstallGuide.tsx`
 45. `frontend-modern/src/components/Settings/updatesSettingsModel.ts`
@@ -169,8 +170,19 @@ work extends shared components instead of creating new local variants.
 140. `frontend-modern/src/components/shared/CopyableCodeRow.tsx`
 141. `frontend-modern/src/components/shared/DetailSectionTable.tsx`
 142. `frontend-modern/src/components/shared/detailSectionModel.ts`
+143. `frontend-modern/src/components/Settings/__tests__/settingsLocalization.test.ts`
+144. `frontend-modern/src/i18n/__tests__/i18n.test.ts`
 
 ## Shared Boundaries
+
+Frontend localization is a shared primitive boundary. Locale support must flow
+through typed message catalogs with an English fallback and explicit seed
+locale coverage rather than page-local string switches. Customer-facing shell,
+navigation, settings, first-run, empty-state, and alert copy may be localized,
+but machine-facing values must remain stable: commands, environment variables,
+API fields, config keys, log lines, error codes, hostnames, resource names, and
+vendor object names stay untranslated unless the owning runtime contract
+explicitly says otherwise.
 
 Alert thresholds consume the shared FilterBar primitive and route state, while
 the alerts subsystem owns the resource data and platform-specific threshold
