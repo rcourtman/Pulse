@@ -164,7 +164,7 @@
         "export": "StatusDot"
       },
       "requiredConsumers": [
-        { "path": "src/components/Settings/DiagnosticsResultsPanel.tsx" },
+        { "path": "src/components/shared/StatusIndicatorBadge.tsx" },
         { "path": "src/components/Settings/ResourcePicker.tsx" },
         { "path": "src/components/Storage/StoragePoolDetail.tsx" },
         { "path": "src/components/shared/NodeGroupHeader.tsx" },
@@ -284,6 +284,24 @@
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "src/components/shared/Toggle.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "status-indicator-badge-shell",
+      "category": "status-indicator",
+      "summary": "Read-only health/state badges must compose StatusIndicatorBadge for shared status-to-tone mapping, sizing, dot wiring, and label presentation instead of recreating local badge spans with getStatusIndicatorBadgeToneClasses.",
+      "canonical": {
+        "path": "src/components/shared/StatusIndicatorBadge.tsx",
+        "export": "StatusIndicatorBadge"
+      },
+      "requiredConsumers": [
+        { "path": "src/components/Settings/AgentProfilesPanel.tsx" },
+        { "path": "src/components/Settings/DiagnosticsResultsPanel.tsx" }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/StatusIndicatorBadge.test.tsx",
         "scripts/shared-template-audit.mjs"
       ]
     },
@@ -809,6 +827,26 @@
       "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "status-indicator-badge-local-tone-helper",
+      "category": "status-indicator",
+      "summary": "Product components must compose StatusIndicatorBadge instead of calling getStatusIndicatorBadgeToneClasses directly for read-only health/state badges.",
+      "canonical": {
+        "path": "src/components/shared/StatusIndicatorBadge.tsx",
+        "export": "StatusIndicatorBadge"
+      },
+      "scopes": ["src/components", "src/features"],
+      "extensions": [".tsx"],
+      "allPatterns": ["getStatusIndicatorBadgeToneClasses("],
+      "legacyReason": "Retired migration debt. Read-only status badges must route through StatusIndicatorBadge; status utilities may still expose tone classes for the shared primitive and non-component tests.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/StatusIndicatorBadge.test.tsx",
         "scripts/shared-template-audit.mjs"
       ]
     },

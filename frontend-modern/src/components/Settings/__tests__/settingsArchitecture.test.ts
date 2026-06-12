@@ -75,6 +75,7 @@ import infrastructureOnboardingPresentationSource from '../../../utils/infrastru
 import selfHostedBillingPresentationSource from '../selfHostedBillingPresentation.ts?raw';
 import systemSettingsPresentationSource from '../../../utils/systemSettingsPresentation.ts?raw';
 import auditLogPresentationSource from '../../../utils/auditLogPresentation.ts?raw';
+import statusIndicatorBadgeSource from '../../shared/StatusIndicatorBadge.tsx?raw';
 
 const settingsRuntimeSources = import.meta.glob(['../*.tsx', '../ConnectionEditor/**/*.tsx'], {
   query: '?raw',
@@ -882,5 +883,18 @@ describe('settings architecture guardrails', () => {
     expect(diagnosticsModelSource).not.toContain(
       'export interface InfrastructureOnboardingSummary',
     );
+  });
+
+  it('keeps read-only settings status indicators on the shared badge primitive', () => {
+    expect(statusIndicatorBadgeSource).toContain('getSimpleStatusIndicator');
+    expect(statusIndicatorBadgeSource).toContain('getStatusIndicatorBadgeToneClasses');
+    expect(statusIndicatorBadgeSource).toContain('StatusDot');
+
+    expect(agentProfilesPanelSource).toContain('StatusIndicatorBadge');
+    expect(agentProfilesPanelSource).not.toContain('getStatusIndicatorBadgeToneClasses');
+
+    expect(diagnosticsResultsPanelSource).toContain('StatusIndicatorBadge');
+    expect(diagnosticsResultsPanelSource).not.toContain('const StatusBadge');
+    expect(diagnosticsResultsPanelSource).not.toContain('getStatusIndicatorBadgeToneClasses');
   });
 });

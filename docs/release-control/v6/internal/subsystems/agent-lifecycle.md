@@ -487,6 +487,11 @@ boundary. `AgentProfilesPanel.tsx` and `SuggestProfileModal.tsx` may own agent
 profile lifecycle behavior and API mutations, but multi-line form controls in
 those surfaces must compose `FormTextarea` instead of local raw `<textarea>`
 wrappers.
+Agent profile read-only state indicators follow the same presentation split:
+`AgentProfilesPanel.tsx` may own lifecycle status labels and assignment state,
+but badge tone, optional dot wiring, sizing, and shell classes must compose the
+frontend-primitives-owned `StatusIndicatorBadge` instead of calling status tone
+helpers or recreating badge spans inline.
 
 ## Extension Points
 

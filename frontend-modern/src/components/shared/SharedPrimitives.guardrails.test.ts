@@ -42,6 +42,7 @@ import searchInputModelSource from '@/components/shared/searchInputModel.ts?raw'
 import statusDotSource from '@/components/shared/StatusDot.tsx?raw';
 import statusBadgeSource from '@/components/shared/StatusBadge.tsx?raw';
 import statusBadgeModelSource from '@/components/shared/statusBadgeModel.ts?raw';
+import statusIndicatorBadgeSource from '@/components/shared/StatusIndicatorBadge.tsx?raw';
 import discoveryReadinessBadgeSource from '@/components/shared/DiscoveryReadinessBadge.tsx?raw';
 import subtabsSource from '@/components/shared/Subtabs.tsx?raw';
 import toggleSource from '@/components/shared/Toggle.tsx?raw';
@@ -1362,6 +1363,59 @@ describe('shared primitive guardrails', () => {
     expect(statusBadgeModelSource).toContain("labelEnabled ?? 'Enabled'");
   });
 
+  it('keeps read-only status indicator badges on the shared shell template', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        allowedPaths?: string[];
+        ignoredPaths?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find(
+      (rule) => rule.id === 'status-indicator-badge-shell',
+    );
+    const registeredGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'status-indicator-badge-local-tone-helper',
+    );
+
+    expect(registeredRule?.canonical?.path).toBe(
+      'src/components/shared/StatusIndicatorBadge.tsx',
+    );
+    expect(registeredRule?.canonical?.export).toBe('StatusIndicatorBadge');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/components/Settings/AgentProfilesPanel.tsx',
+      'src/components/Settings/DiagnosticsResultsPanel.tsx',
+    ]);
+    expect(registeredGuard?.canonical?.path).toBe(
+      'src/components/shared/StatusIndicatorBadge.tsx',
+    );
+    expect(registeredGuard?.canonical?.export).toBe('StatusIndicatorBadge');
+    expect(registeredGuard?.allPatterns).toEqual(['getStatusIndicatorBadgeToneClasses(']);
+    expect(registeredGuard?.scopes).toEqual(['src/components', 'src/features']);
+    expect(registeredGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(registeredGuard?.ignoredPaths).toEqual([
+      'src/components/shared/SharedPrimitives.guardrails.test.ts',
+    ]);
+
+    expect(statusIndicatorBadgeSource).toContain('getSimpleStatusIndicator');
+    expect(statusIndicatorBadgeSource).toContain('getStatusIndicatorBadgeToneClasses');
+    expect(statusIndicatorBadgeSource).toContain('StatusDot');
+    expect(statusIndicatorBadgeSource).toContain('STATUS_INDICATOR_BADGE_SHAPE_CLASSES');
+    expect(agentProfilesPanelSource).toContain('StatusIndicatorBadge');
+    expect(agentProfilesPanelSource).not.toContain('getStatusIndicatorBadgeToneClasses');
+    expect(diagnosticsResultsPanelSource).toContain('StatusIndicatorBadge');
+    expect(diagnosticsResultsPanelSource).not.toContain('const StatusBadge');
+    expect(diagnosticsResultsPanelSource).not.toContain('getStatusIndicatorBadgeToneClasses');
+  });
+
   it('keeps resource status dots on the shared StatusDot primitive', () => {
     const registry = JSON.parse(sharedTemplateRegistrySource) as {
       rules?: Array<{
@@ -1386,7 +1440,7 @@ describe('shared primitive guardrails', () => {
     expect(registeredRule?.canonical?.path).toBe('src/components/shared/StatusDot.tsx');
     expect(registeredRule?.canonical?.export).toBe('StatusDot');
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
-      'src/components/Settings/DiagnosticsResultsPanel.tsx',
+      'src/components/shared/StatusIndicatorBadge.tsx',
       'src/components/Settings/ResourcePicker.tsx',
       'src/components/Storage/StoragePoolDetail.tsx',
       'src/components/shared/NodeGroupHeader.tsx',
@@ -1414,6 +1468,7 @@ describe('shared primitive guardrails', () => {
     expect(statusDotSource).toContain('const VARIANT_CLASSES');
     expect(statusDotSource).toContain("warning: 'bg-amber-500 dark:bg-amber-400'");
     expect(statusDotSource).toContain('aria-hidden={ariaHidden()}');
+    expect(statusIndicatorBadgeSource).toContain('StatusDot');
     expect(storagePoolDetailSource).toContain('StatusDot');
     expect(storagePoolDetailSource).toContain('getLinkedDiskHealthDotVariant');
     expect(storagePoolDetailSource).not.toContain('getLinkedDiskHealthDotClass');
@@ -1421,7 +1476,7 @@ describe('shared primitive guardrails', () => {
     expect(storagePoolDetailSource).not.toContain('h-2 w-2 rounded-full bg-green-500');
 
     for (const source of [
-      diagnosticsResultsPanelSource,
+      statusIndicatorBadgeSource,
       resourcePickerSource,
       storagePoolDetailSource,
       nodeGroupHeaderSource,

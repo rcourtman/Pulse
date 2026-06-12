@@ -4,6 +4,7 @@ import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Dialog } from '@/components/shared/Dialog';
 import { FormSelect } from '@/components/shared/FormSelect';
 import { FormTextarea } from '@/components/shared/FormTextarea';
+import { StatusIndicatorBadge } from '@/components/shared/StatusIndicatorBadge';
 import { UpgradeLink } from '@/components/shared/UpgradeLink';
 import { SuggestProfileModal } from './SuggestProfileModal';
 import { KNOWN_SETTINGS, type SelectSetting, type StringSetting } from './agentProfileSettings';
@@ -38,7 +39,6 @@ export const AgentProfilesPanel: Component = () => {
     getProfileById,
     getProfileOptionLabel,
     getSettingsCount,
-    getStatusIndicatorBadgeToneClasses,
     getUpgradeActionDestination,
     getUpgradeActionButtonClass,
     handleAssign,
@@ -289,11 +289,10 @@ export const AgentProfilesPanel: Component = () => {
                     render: (agent) => {
                       const indicator = () => getAgentStatusIndicator({ status: agent.status });
                       return (
-                        <span
-                          class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getStatusIndicatorBadgeToneClasses(indicator().variant)}`}
-                        >
-                          {indicator().label}
-                        </span>
+                        <StatusIndicatorBadge
+                          variant={indicator().variant}
+                          label={indicator().label}
+                        />
                       );
                     },
                   },

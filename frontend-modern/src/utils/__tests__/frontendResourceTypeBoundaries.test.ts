@@ -3423,7 +3423,8 @@ describe('frontend resource type boundaries', () => {
     expect(diagnosticsPanelSource).not.toContain(
       "'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'",
     );
-    expect(diagnosticsResultsPanelSource).toContain('getStatusIndicatorBadgeToneClasses(');
+    expect(diagnosticsResultsPanelSource).toContain('StatusIndicatorBadge');
+    expect(diagnosticsResultsPanelSource).not.toContain('getStatusIndicatorBadgeToneClasses(');
     expect(diagnosticsResultsPanelSource).toContain('DIAGNOSTICS_EMPTY_PBS_MESSAGE');
     expect(diagnosticsResultsPanelSource).toContain('DIAGNOSTICS_EMPTY_STATE_COPY');
     expect(diagnosticsStateSource).toContain('export const useDiagnosticsPanelState =');

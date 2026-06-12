@@ -14,8 +14,7 @@ import Server from 'lucide-solid/icons/server';
 import Shield from 'lucide-solid/icons/shield';
 import Sparkles from 'lucide-solid/icons/sparkles';
 import XCircle from 'lucide-solid/icons/x-circle';
-import { StatusDot } from '@/components/shared/StatusDot';
-import { getSimpleStatusIndicator, getStatusIndicatorBadgeToneClasses } from '@/utils/status';
+import { StatusIndicatorBadge } from '@/components/shared/StatusIndicatorBadge';
 import { getSemanticTonePresentation } from '@/utils/semanticTonePresentation';
 import {
   DIAGNOSTICS_EMPTY_PBS_MESSAGE,
@@ -45,27 +44,6 @@ const DiagnosticCard: Component<{
       </div>
       <div class="space-y-1.5 text-xs text-muted">{props.children}</div>
     </div>
-  );
-};
-
-const StatusBadge: Component<{
-  label?: string;
-  status: 'online' | 'offline' | 'warning' | 'unknown';
-}> = (props) => {
-  const indicator = () => getSimpleStatusIndicator(props.status);
-
-  return (
-    <span
-      class={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${getStatusIndicatorBadgeToneClasses(indicator().variant)}`}
-    >
-      <StatusDot
-        variant={indicator().variant}
-        size="xs"
-        ariaHidden={true}
-        class="translate-y-[0.5px]"
-      />
-      {props.label || indicator().label}
-    </span>
   );
 };
 
@@ -149,7 +127,12 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
                     <span class="max-w-[120px] truncate" title={node.host}>
                       {node.name}
                     </span>
-                    <StatusBadge status={node.connected ? 'online' : 'offline'} />
+                    <StatusIndicatorBadge
+                      status={node.connected ? 'online' : 'offline'}
+                      dot
+                      uppercase
+                      size="xs"
+                    />
                   </div>
                 )}
               </For>
@@ -186,7 +169,12 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
                       <span class="max-w-[120px] truncate" title={pbs.host}>
                         {pbs.name}
                       </span>
-                      <StatusBadge status={pbs.connected ? 'online' : 'offline'} />
+                      <StatusIndicatorBadge
+                        status={pbs.connected ? 'online' : 'offline'}
+                        dot
+                        uppercase
+                        size="xs"
+                      />
                     </div>
                   )}
                 </For>
@@ -238,7 +226,7 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
                   <p class="text-xs text-muted">History persistence health</p>
                 </div>
                 <div class="ml-auto">
-                  <StatusBadge
+                  <StatusIndicatorBadge
                     status={
                       props.diagnosticsData?.metricsStore?.status === 'healthy'
                         ? 'online'
@@ -249,6 +237,9 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
                             : 'offline'
                     }
                     label={props.diagnosticsData?.metricsStore?.status || 'unknown'}
+                    dot
+                    uppercase
+                    size="xs"
                   />
                 </div>
               </div>
@@ -317,9 +308,12 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
                   <p class="text-xs text-muted">Authentication status</p>
                 </div>
                 <div class="ml-auto">
-                  <StatusBadge
+                  <StatusIndicatorBadge
                     status={props.diagnosticsData?.apiTokens?.enabled ? 'online' : 'warning'}
                     label={props.diagnosticsData?.apiTokens?.enabled ? 'Enabled' : 'Disabled'}
+                    dot
+                    uppercase
+                    size="xs"
                   />
                 </div>
               </div>
@@ -393,22 +387,24 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
                 </div>
               </div>
               <div class="flex flex-wrap gap-2">
-                <span
-                  class={`rounded px-2 py-1 text-xs font-medium ${getStatusIndicatorBadgeToneClasses(
-                    props.diagnosticsData?.alerts?.missingCooldown ? 'warning' : 'success',
-                  )}`}
-                >
-                  Cooldown:{' '}
-                  {props.diagnosticsData?.alerts?.missingCooldown ? 'Missing' : 'Configured'}
-                </span>
-                <span
-                  class={`rounded px-2 py-1 text-xs font-medium ${getStatusIndicatorBadgeToneClasses(
-                    props.diagnosticsData?.alerts?.missingGroupingWindow ? 'warning' : 'success',
-                  )}`}
-                >
-                  Grouping:{' '}
-                  {props.diagnosticsData?.alerts?.missingGroupingWindow ? 'Disabled' : 'Enabled'}
-                </span>
+                <StatusIndicatorBadge
+                  variant={props.diagnosticsData?.alerts?.missingCooldown ? 'warning' : 'success'}
+                  label={`Cooldown: ${
+                    props.diagnosticsData?.alerts?.missingCooldown ? 'Missing' : 'Configured'
+                  }`}
+                  size="md"
+                  shape="rounded"
+                />
+                <StatusIndicatorBadge
+                  variant={
+                    props.diagnosticsData?.alerts?.missingGroupingWindow ? 'warning' : 'success'
+                  }
+                  label={`Grouping: ${
+                    props.diagnosticsData?.alerts?.missingGroupingWindow ? 'Disabled' : 'Enabled'
+                  }`}
+                  size="md"
+                  shape="rounded"
+                />
               </div>
               <Show when={(props.diagnosticsData?.alerts?.notes?.length || 0) > 0}>
                 <ul class="mt-3 list-disc space-y-1 border-t border-border-subtle pt-2 pl-4 text-xs text-muted">
@@ -431,7 +427,7 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
                   <p class="text-xs text-muted">Pulse Assistant Service</p>
                 </div>
                 <div class="ml-auto">
-                  <StatusBadge
+                  <StatusIndicatorBadge
                     status={
                       props.diagnosticsData?.aiChat?.running
                         ? 'online'
@@ -444,8 +440,11 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
                         ? 'Running'
                         : props.diagnosticsData?.aiChat?.enabled
                           ? 'Stopped'
-                          : 'Disabled'
+                        : 'Disabled'
                     }
+                    dot
+                    uppercase
+                    size="xs"
                   />
                 </div>
               </div>

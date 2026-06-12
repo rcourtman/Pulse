@@ -40,7 +40,6 @@ import {
 } from '@/utils/resourceIdentity';
 import {
   getAgentStatusIndicator,
-  getStatusIndicatorBadgeToneClasses,
   isConnectedHealthStatus,
 } from '@/utils/status';
 
@@ -342,7 +341,6 @@ export const useAgentProfilesPanelState = () => {
     getProfileById,
     getProfileOptionLabel,
     getSettingsCount,
-    getStatusIndicatorBadgeToneClasses,
     getUpgradeActionDestination,
     getUpgradeActionButtonClass,
     handleAssign,

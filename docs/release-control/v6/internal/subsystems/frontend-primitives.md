@@ -2298,6 +2298,13 @@ gating and click runtime, and
 label/title fallback policy, and status-badge class selection. Future status
 badge work should extend those owners instead of pushing label/title policy or
 disabled click handling back into the shell.
+Read-only health/state badges are a separate shared primitive.
+`frontend-modern/src/components/shared/StatusIndicatorBadge.tsx` owns
+status-to-tone mapping, optional dot wiring, sizing, shape, and label
+presentation for product surfaces that display state rather than toggle it.
+Product components must compose `StatusIndicatorBadge` instead of calling
+`getStatusIndicatorBadgeToneClasses` directly; low-level status utilities may
+still expose the tone mapping for that primitive and utility-level tests.
 The shared segmented selector now follows that same owner split.
 `frontend-modern/src/components/shared/FilterButtonGroup.tsx` stays the render
 shell, `frontend-modern/src/components/shared/useFilterButtonGroupState.ts`
