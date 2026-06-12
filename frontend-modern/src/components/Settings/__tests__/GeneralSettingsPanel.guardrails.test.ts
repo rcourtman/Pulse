@@ -18,6 +18,16 @@ describe('GeneralSettingsPanel guardrails', () => {
     expect(generalSettingsPanelSource).toContain('Telemetry payload preview');
   });
 
+  it('routes telemetry command controls through the shared Button primitive', () => {
+    expect(generalSettingsPanelSource).toContain(
+      "import { Button } from '@/components/shared/Button';",
+    );
+    expect(generalSettingsPanelSource).toContain('size="settingsActionXs"');
+    expect(generalSettingsPanelSource).not.toContain(
+      'inline-flex items-center rounded-md border border-border bg-surface px-3 py-2 text-xs font-medium text-base-content transition hover:bg-surface-hover',
+    );
+  });
+
   it('keeps maintainer commercial event controls out of customer settings', () => {
     expect(generalSettingsPanelSource).not.toContain('Disable local-only commercial events');
     expect(generalSettingsPanelSource).not.toContain('commercial handoff events');

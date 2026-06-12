@@ -471,7 +471,9 @@ not a replacement status card, CTA band, or page-local nested card.
    local `inline-flex ... rounded-md ...` Tailwind shells just because the page
    needs a one-off action. The shared `mdCompact` size owns the common
    settings/action `px-3 py-2 text-sm` shape, the shared `xs` size owns the
-   compact settings row-action `px-2.5 py-1 text-xs` shape, and the shared
+   compact settings row-action `px-2.5 py-1 text-xs` shape, the shared
+   `settingsActionXs` size owns compact settings/privacy `px-3 py-2 text-xs`
+   action controls such as telemetry preview/reset buttons, and the shared
    `iconMd` size owns the settings dialog close-button `h-9 w-9` icon shape.
    Positive completion or continuation actions such as infrastructure handoff
    and reporting exports use the shared `success`, `successOutline`, and

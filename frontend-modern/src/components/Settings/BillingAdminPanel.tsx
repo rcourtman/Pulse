@@ -1,5 +1,6 @@
 import { Component, Show } from 'solid-js';
 import SettingsPanel from '@/components/shared/SettingsPanel';
+import { Button } from '@/components/shared/Button';
 import {
   ORGANIZATION_SETTINGS_UNAVAILABLE_CLASS as ORGANIZATION_SETTINGS_PANEL_UNAVAILABLE_CLASS,
   ORGANIZATION_SETTINGS_UNAVAILABLE_MESSAGE as ORGANIZATION_SETTINGS_PANEL_UNAVAILABLE_MESSAGE,
@@ -22,16 +23,17 @@ export const BillingAdminPanel: Component = () => {
       <SettingsPanel
         title="Billing Admin"
         action={
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="sm"
+            class="w-full sm:w-auto"
             onClick={() => {
               void state.refreshOrganizations();
             }}
             disabled={state.loadingOrgs()}
-            class="w-full sm:w-auto px-3 py-1.5 text-xs font-medium rounded-md border border-border bg-surface hover:bg-surface-hover disabled:opacity-50"
           >
             Refresh
-          </button>
+          </Button>
         }
         bodyClass="space-y-4"
       >

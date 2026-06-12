@@ -308,6 +308,10 @@ customer-facing presentation boundary for outbound telemetry controls and
 assemble customer-visible props for the shared settings shell. Privacy or telemetry
 behavior must not drift into `frontend-modern/src/components/Settings/Settings.tsx`
 or the registry hook just because the shell wiring changed.
+Telemetry preview, copy, and install-ID rotation controls keep their
+security/privacy behavior in that surface, but their button chrome must compose
+the frontend-primitives `Button` family instead of carrying privacy-local
+compact action shells.
 That shell split now also applies to tab-save coordination: the dedicated
 `frontend-modern/src/components/Settings/settingsTabSaveBehavior.ts` owner may
 decide which settings tabs participate in shell-level save prompts, but it must

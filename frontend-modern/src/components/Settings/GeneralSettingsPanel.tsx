@@ -1,5 +1,6 @@
 import { Component, Show, Accessor, Setter } from 'solid-js';
 import SettingsPanel from '@/components/shared/SettingsPanel';
+import { Button } from '@/components/shared/Button';
 import { Toggle } from '@/components/shared/Toggle';
 import { EnvironmentLockBadge } from '@/components/shared/EnvironmentLockBadge';
 import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
@@ -76,20 +77,14 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
     if (props.pvePollingEnvLocked()) return;
 
     props.setPVEPollingSelection(value);
-    props.setPVEPollingInterval(
-      value === 'custom' ? props.pvePollingCustomSeconds() : value,
-    );
+    props.setPVEPollingInterval(value === 'custom' ? props.pvePollingCustomSeconds() : value);
     props.setHasUnsavedChanges(true);
   };
 
   return (
     <div class="space-y-6">
       {/* Appearance Card */}
-      <SettingsPanel
-        title="Appearance"
-        noPadding
-        bodyClass="divide-y divide-border"
-      >
+      <SettingsPanel title="Appearance" noPadding bodyClass="divide-y divide-border">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-6">
           <div class="flex items-center gap-3 min-w-0">
             {/* Animated theme icon */}
@@ -210,30 +205,30 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
           </div>
 
           <div class="flex flex-wrap gap-3">
-            <button
-              type="button"
-              class="inline-flex items-center rounded-md border border-border bg-surface px-3 py-2 text-xs font-medium text-base-content transition hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
+            <Button
+              variant="secondary"
+              size="settingsActionXs"
               disabled={props.loadingTelemetryPreview()}
               onClick={() => void props.handleLoadTelemetryPreview()}
             >
               {props.telemetryPreview() ? 'Refresh payload' : 'Preview payload'}
-            </button>
-            <button
-              type="button"
-              class="inline-flex items-center rounded-md border border-border bg-surface px-3 py-2 text-xs font-medium text-base-content transition hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
+            </Button>
+            <Button
+              variant="secondary"
+              size="settingsActionXs"
               disabled={props.resettingTelemetryInstallID()}
               onClick={() => void props.handleResetTelemetryInstallID()}
             >
               Reset ID
-            </button>
+            </Button>
             <Show when={props.telemetryPreviewPayload()}>
-              <button
-                type="button"
-                class="inline-flex items-center rounded-md border border-border bg-surface px-3 py-2 text-xs font-medium text-base-content transition hover:bg-surface-hover"
+              <Button
+                variant="secondary"
+                size="settingsActionXs"
                 onClick={() => void props.handleCopyTelemetryPreview()}
               >
                 Copy JSON
-              </button>
+              </Button>
             </Show>
           </div>
 
@@ -245,8 +240,8 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
                 </p>
                 <Show when={!props.telemetryPreviewEnabled()}>
                   <p class="text-xs text-muted leading-relaxed">
-                    Telemetry is currently disabled. This preview shows the payload Pulse would
-                    send if you enable it.
+                    Telemetry is currently disabled. This preview shows the payload Pulse would send
+                    if you enable it.
                   </p>
                 </Show>
               </div>

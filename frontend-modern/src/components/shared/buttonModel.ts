@@ -14,6 +14,7 @@ export type ButtonSize =
   | 'sm'
   | 'mdCompact'
   | 'settingsAction'
+  | 'settingsActionXs'
   | 'md'
   | 'lg'
   | 'icon'
@@ -43,6 +44,7 @@ export const BUTTON_SIZE_CLASSES: Record<ButtonSize, string> = {
   sm: 'px-2.5 py-1.5 text-xs',
   mdCompact: 'px-3 py-2 text-sm',
   settingsAction: 'min-h-10 px-3 py-2 text-sm sm:min-h-9',
+  settingsActionXs: 'min-h-10 px-3 py-2 text-xs sm:min-h-9',
   md: 'px-4 py-2 text-sm',
   lg: 'px-6 py-3 text-base',
   icon: 'p-2',

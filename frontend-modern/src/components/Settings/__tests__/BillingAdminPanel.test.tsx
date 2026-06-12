@@ -79,7 +79,9 @@ describe('BillingAdminPanel', () => {
       stripe_customer_id: 'cus_123',
     };
     getBillingStateMock.mockResolvedValue(stateWithoutPlan);
-    putBillingStateMock.mockImplementation(async (_orgID: string, payload: Record<string, unknown>) => payload);
+    putBillingStateMock.mockImplementation(
+      async (_orgID: string, payload: Record<string, unknown>) => payload,
+    );
 
     render(() => <BillingAdminPanel />);
 
@@ -107,7 +109,9 @@ describe('BillingAdminPanel', () => {
       plan_version: 'cloud_power',
     };
     getBillingStateMock.mockResolvedValue(stateWithPlan);
-    putBillingStateMock.mockImplementation(async (_orgID: string, payload: Record<string, unknown>) => payload);
+    putBillingStateMock.mockImplementation(
+      async (_orgID: string, payload: Record<string, unknown>) => payload,
+    );
 
     render(() => <BillingAdminPanel />);
 
@@ -127,6 +131,12 @@ describe('BillingAdminPanel', () => {
   });
 
   it('keeps hosted billing admin split into shell, runtime, and table owners', () => {
+    expect(billingAdminPanelSource).toContain('@/components/shared/Button');
+    expect(billingAdminPanelSource).toContain('variant="secondary"');
+    expect(billingAdminPanelSource).toContain('size="sm"');
+    expect(billingAdminPanelSource).not.toContain(
+      'w-full sm:w-auto px-3 py-1.5 text-xs font-medium rounded-md border border-border bg-surface hover:bg-surface-hover disabled:opacity-50',
+    );
     expect(billingAdminPanelSource).toContain('./useBillingAdminPanelState');
     expect(billingAdminPanelSource).toContain('./BillingAdminOrganizationsTable');
     expect(billingAdminPanelSource).not.toContain('createSignal(');

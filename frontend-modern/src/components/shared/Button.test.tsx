@@ -37,6 +37,9 @@ describe('Button', () => {
     expect(buttonModelSource).toContain("xs: 'px-2.5 py-1 text-xs'");
     expect(buttonModelSource).toContain("mdCompact: 'px-3 py-2 text-sm'");
     expect(buttonModelSource).toContain("settingsAction: 'min-h-10 px-3 py-2 text-sm sm:min-h-9'");
+    expect(buttonModelSource).toContain(
+      "settingsActionXs: 'min-h-10 px-3 py-2 text-xs sm:min-h-9'",
+    );
     expect(buttonModelSource).toContain("chip: 'gap-1 px-1.5 py-0.5 text-[10px]'");
     expect(buttonModelSource).toContain("iconMd: 'h-9 w-9 p-0'");
   });
@@ -88,6 +91,9 @@ describe('Button', () => {
         <Button variant="successGhost" size="settingsAction">
           Dismiss
         </Button>
+        <Button variant="secondary" size="settingsActionXs">
+          Preview payload
+        </Button>
       </>
     ));
 
@@ -112,6 +118,11 @@ describe('Button', () => {
     const dismissButton = screen.getByRole('button', { name: 'Dismiss' });
     expect(dismissButton).toHaveClass('border-transparent');
     expect(dismissButton).toHaveClass('text-emerald-900');
+
+    const previewButton = screen.getByRole('button', { name: 'Preview payload' });
+    expect(previewButton).toHaveClass('min-h-10');
+    expect(previewButton).toHaveClass('text-xs');
+    expect(previewButton).toHaveClass('px-3');
   });
 
   it('renders command-copy icon buttons through the shared primitive', () => {

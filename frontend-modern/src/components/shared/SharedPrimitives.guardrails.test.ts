@@ -181,6 +181,7 @@ import resourceDetailDrawerTrueNASModelSource from '@/components/Infrastructure/
 import aiSettingsDialogsSource from '@/components/Settings/AISettingsDialogs.tsx?raw';
 import agentProfilesPanelSource from '@/components/Settings/AgentProfilesPanel.tsx?raw';
 import apiTokenManagerSource from '@/components/Settings/APITokenManager.tsx?raw';
+import billingAdminPanelSource from '@/components/Settings/BillingAdminPanel.tsx?raw';
 import diagnosticsResultsPanelSource from '@/components/Settings/DiagnosticsResultsPanel.tsx?raw';
 import dockerRuntimeSettingsCardSource from '@/components/Settings/DockerRuntimeSettingsCard.tsx?raw';
 import dataHandlingPanelSource from '@/components/Settings/DataHandlingPanel.tsx?raw';
@@ -1554,6 +1555,9 @@ describe('shared primitive guardrails', () => {
     const commandCopyGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'button-command-copy-local-shell',
     );
+    const compactSettingsActionGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'button-compact-settings-action-local-shell',
+    );
     const settingsActionGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'button-secondary-settings-action-local-shell',
     );
@@ -1611,6 +1615,7 @@ describe('shared primitive guardrails', () => {
       'src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx',
       'src/components/Settings/AgentProfilesPanel.tsx',
       'src/components/Settings/AvailabilitySettingsPanel.tsx',
+      'src/components/Settings/BillingAdminPanel.tsx',
       'src/components/Settings/ConnectionEditor/AddressProbeStep.tsx',
       'src/components/Settings/ConnectionEditor/ConnectionEditor.tsx',
       'src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx',
@@ -1618,6 +1623,7 @@ describe('shared primitive guardrails', () => {
       'src/components/Settings/ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx',
       'src/components/Settings/CopyCommandBlock.tsx',
       'src/components/Settings/DataHandlingPanel.tsx',
+      'src/components/Settings/GeneralSettingsPanel.tsx',
       'src/components/Settings/InfrastructureAgentUpdatesDialog.tsx',
       'src/components/Settings/InfrastructureDiscoverySettingsDialog.tsx',
       'src/components/Settings/InfrastructureInstallerSection.tsx',
@@ -1630,6 +1636,18 @@ describe('shared primitive guardrails', () => {
     ]);
     expect(registeredRule?.forbiddenPatterns).toEqual(
       expect.arrayContaining([
+        expect.objectContaining({
+          path: 'src/components/Settings/GeneralSettingsPanel.tsx',
+          patterns: expect.arrayContaining([
+            'inline-flex items-center rounded-md border border-border bg-surface px-3 py-2 text-xs font-medium text-base-content transition hover:bg-surface-hover',
+          ]),
+        }),
+        expect.objectContaining({
+          path: 'src/components/Settings/BillingAdminPanel.tsx',
+          patterns: expect.arrayContaining([
+            'w-full sm:w-auto px-3 py-1.5 text-xs font-medium rounded-md border border-border bg-surface hover:bg-surface-hover disabled:opacity-50',
+          ]),
+        }),
         expect.objectContaining({
           path: 'src/components/Settings/ResourcePicker.tsx',
           patterns: expect.arrayContaining([
@@ -1675,6 +1693,22 @@ describe('shared primitive guardrails', () => {
     expect(commandCopyGuard?.scopes).toEqual(['src/components', 'src/features', 'src/pages']);
     expect(commandCopyGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(commandCopyGuard?.ignoredPaths).toEqual(['src/components/shared/Button.test.tsx']);
+    expect(compactSettingsActionGuard?.canonical?.path).toBe(
+      'src/components/shared/buttonModel.ts',
+    );
+    expect(compactSettingsActionGuard?.canonical?.export).toBe('getButtonClass');
+    expect(compactSettingsActionGuard?.allPatterns).toEqual([
+      'rounded-md border border-border bg-surface px-3 py-2 text-xs font-medium text-base-content',
+    ]);
+    expect(compactSettingsActionGuard?.scopes).toEqual([
+      'src/components/Settings',
+      'src/features',
+      'src/pages',
+    ]);
+    expect(compactSettingsActionGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(compactSettingsActionGuard?.ignoredPaths).toEqual([
+      'src/components/shared/Button.test.tsx',
+    ]);
     expect(settingsActionGuard?.canonical?.path).toBe('src/components/shared/buttonModel.ts');
     expect(settingsActionGuard?.canonical?.export).toBe('getButtonClass');
     expect(settingsActionGuard?.allPatterns).toEqual([
@@ -1883,6 +1917,7 @@ describe('shared primitive guardrails', () => {
     expect(buttonModelSource).toContain('BUTTON_VARIANT_CLASSES');
     expect(buttonModelSource).toContain('BUTTON_SIZE_CLASSES');
     expect(buttonModelSource).toContain('primaryFlat:');
+    expect(buttonModelSource).toContain('settingsActionXs:');
     expect(buttonModelSource).toContain('success:');
     expect(buttonModelSource).toContain('successOutline:');
     expect(buttonModelSource).toContain('successGhost:');
@@ -1954,6 +1989,16 @@ describe('shared primitive guardrails', () => {
     expect(dataHandlingPanelSource).toContain('ButtonLink');
     expect(dataHandlingPanelSource).not.toContain(
       'rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-base-content',
+    );
+    expect(generalSettingsPanelSource).toContain('@/components/shared/Button');
+    expect(generalSettingsPanelSource).toContain('size="settingsActionXs"');
+    expect(generalSettingsPanelSource).not.toContain(
+      'inline-flex items-center rounded-md border border-border bg-surface px-3 py-2 text-xs font-medium text-base-content transition hover:bg-surface-hover',
+    );
+    expect(billingAdminPanelSource).toContain('@/components/shared/Button');
+    expect(billingAdminPanelSource).toContain('size="sm"');
+    expect(billingAdminPanelSource).not.toContain(
+      'w-full sm:w-auto px-3 py-1.5 text-xs font-medium rounded-md border border-border bg-surface hover:bg-surface-hover disabled:opacity-50',
     );
     expect(infrastructureInstallerSectionSource).toContain('@/components/shared/Button');
     expect(infrastructureInstallerSectionSource).toContain('CommandCopyButton');
