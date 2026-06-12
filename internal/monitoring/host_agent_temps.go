@@ -31,11 +31,20 @@ func shouldSkipTemperatureSSHCollection(hostAgentTemp *models.Temperature) bool 
 		return false
 	}
 
-	if hostAgentTemp.HasSMART {
-		return hostAgentTemp.HasSMART
+	return hasUsableSMARTTemperature(hostAgentTemp)
+}
+
+func hasUsableSMARTTemperature(temp *models.Temperature) bool {
+	if temp == nil || !temp.HasSMART {
+		return false
 	}
 
-	return hostAgentTemp.HasCPU || hostAgentTemp.HasGPU || hostAgentTemp.HasNVMe
+	for _, disk := range temp.SMART {
+		if disk.Temperature > 0 && !disk.StandbySkipped {
+			return true
+		}
+	}
+	return false
 }
 
 // getHostAgentTemperatureByID looks for a matching host agent by node ID first,
@@ -178,7 +187,7 @@ func (m *Monitor) getClusterSensorTemperature(nodeName string) *models.Temperatu
 // - "nvme0", "nvme1", etc. -> NVMe temperatures
 // - "gpu_edge", "gpu_junction", etc. -> GPU temperatures
 func convertHostSensorsToTemperature(sensors models.HostSensorSummary, lastSeen time.Time) *models.Temperature {
-	if len(sensors.TemperatureCelsius) == 0 {
+	if len(sensors.TemperatureCelsius) == 0 && len(sensors.SMART) == 0 {
 		return nil
 	}
 
@@ -309,7 +318,7 @@ func convertHostSensorsToTemperature(sensors models.HostSensorSummary, lastSeen 
 				continue
 			}
 			temp.SMART = append(temp.SMART, models.DiskTemp{
-				Device:      "/dev/" + disk.Device,
+				Device:      canonicalSMARTDevicePath(disk.Device),
 				Serial:      disk.Serial,
 				WWN:         disk.WWN,
 				Model:       disk.Model,
@@ -337,6 +346,14 @@ func convertHostSensorsToTemperature(sensors models.HostSensorSummary, lastSeen 
 		Msg("Converted host agent sensors to temperature data")
 
 	return temp
+}
+
+func canonicalSMARTDevicePath(device string) string {
+	normalized := normalizeSMARTDeviceIdentifier(device)
+	if normalized == "" {
+		return ""
+	}
+	return "/dev/" + normalized
 }
 
 // isHostAgentTemperatureRecent checks if the host agent temperature data is recent enough to use.
@@ -372,7 +389,6 @@ func mergeTemperatureData(hostAgentTemp, proxyTemp *models.Temperature) *models.
 		HasCPU:       hostAgentTemp.HasCPU,
 		HasGPU:       hostAgentTemp.HasGPU,
 		HasNVMe:      hostAgentTemp.HasNVMe,
-		HasSMART:     hostAgentTemp.HasSMART || proxyTemp.HasSMART,
 		// The legacy-format marker describes the node's SSH sensor setup; a
 		// linked host agent doesn't fix that setup, so the flag survives the
 		// merge (the UI gate hides the notice once disk temps actually arrive).
@@ -388,12 +404,20 @@ func mergeTemperatureData(hostAgentTemp, proxyTemp *models.Temperature) *models.
 		result.HasCPU = true
 	}
 
-	// Merge SMART data - prefer host agent if available, fall back to proxy
-	if hostAgentTemp.HasSMART {
+	// Merge SMART data. Prefer host-agent SMART only when it carries usable
+	// temperatures; otherwise let the SSH/proxy wrapper fill disk temps and keep
+	// host-agent SMART inventory only when neither side has temperatures.
+	switch {
+	case hasUsableSMARTTemperature(hostAgentTemp):
 		result.SMART = hostAgentTemp.SMART
-	} else if proxyTemp.HasSMART {
+	case hasUsableSMARTTemperature(proxyTemp):
+		result.SMART = proxyTemp.SMART
+	case hostAgentTemp.HasSMART:
+		result.SMART = hostAgentTemp.SMART
+	case proxyTemp.HasSMART:
 		result.SMART = proxyTemp.SMART
 	}
+	result.HasSMART = len(result.SMART) > 0
 
 	// Merge GPU data - prefer host agent if available
 	if !hostAgentTemp.HasGPU && proxyTemp.HasGPU {

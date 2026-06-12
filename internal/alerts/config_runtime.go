@@ -271,6 +271,15 @@ func alertPrimaryResourceType(alert *Alert) string {
 	return keys[0]
 }
 
+func alertResourceTypeKeysContain(keys []string, target string) bool {
+	for _, key := range keys {
+		if key == target {
+			return true
+		}
+	}
+	return false
+}
+
 // reevaluateActiveAlertsLocked re-evaluates all active alerts against the current configuration.
 // This should only be called with m.mu already locked.
 func (m *Manager) reevaluateActiveAlertsLocked() {
@@ -337,13 +346,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 			threshold = getThresholdForMetric(thresholds, metricType)
 		}
 
-		isAgentResource := false
-		for _, key := range resourceTypeKeys {
-			if key == "agent" {
-				isAgentResource = true
-				break
-			}
-		}
+		isAgentResource := alertResourceTypeKeysContain(resourceTypeKeys, "agent")
 		if !handledModernPlatformType && isAgentResource {
 			if m.config.DisableAllAgents {
 				alertsToResolve = append(alertsToResolve, alertID)
@@ -407,7 +410,9 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 			threshold = getThresholdForMetric(thresholds, metricType)
 		}
 
-		if threshold == nil && !handledModernPlatformType && !strings.Contains(resourceID, ":") && (alert.Instance == "Node" || alert.Instance == alert.Node) {
+		isNodeResource := primaryResourceType == "" || primaryResourceType == "node"
+		isStorageResource := alertResourceTypeKeysContain(resourceTypeKeys, "storage")
+		if threshold == nil && !handledModernPlatformType && isNodeResource && !strings.Contains(resourceID, ":") && (alert.Instance == "Node" || alert.Instance == alert.Node) {
 			if m.config.DisableAllNodes {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
@@ -418,7 +423,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 				continue
 			}
 			threshold = getThresholdForMetric(thresholds, metricType)
-		} else if threshold == nil && !handledModernPlatformType && (alert.Instance == "Storage" || strings.Contains(alert.ResourceID, ":storage/")) {
+		} else if threshold == nil && !handledModernPlatformType && (isStorageResource || alert.Instance == "Storage" || strings.Contains(alert.ResourceID, ":storage/")) {
 			if m.config.DisableAllStorage {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue

@@ -1040,7 +1040,9 @@ func TestMonitoringTemperatureFallbackUsesSMARTAwareSSHSkipRule(t *testing.T) {
 	requiredSnippets := map[string][]string{
 		"host_agent_temps.go": {
 			"func shouldSkipTemperatureSSHCollection(hostAgentTemp *models.Temperature) bool {",
-			"return hostAgentTemp.HasSMART",
+			"return hasUsableSMARTTemperature(hostAgentTemp)",
+			"func hasUsableSMARTTemperature(temp *models.Temperature) bool {",
+			"disk.Temperature > 0 && !disk.StandbySkipped",
 		},
 		"monitor_polling_node_helpers.go": {
 			"skipSSHCollection := shouldSkipTemperatureSSHCollection(hostAgentTemp)",

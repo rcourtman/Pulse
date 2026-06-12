@@ -3,6 +3,8 @@ package alerts
 import (
 	"testing"
 	"time"
+
+	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 )
 
 func fixedQuietHoursTestManager(now time.Time, quietHours QuietHours) *Manager {
@@ -168,6 +170,51 @@ func TestShouldSuppressNotificationQuietHours(t *testing.T) {
 		}
 		if m.ShouldSuppressResolvedNotification(alert) {
 			t.Fatal("expected recovery notification to enter quiet-hours replay queue")
+		}
+	})
+
+	t.Run("manual re-dispatch of offline alert keeps quiet-hours replay metadata", func(t *testing.T) {
+		m := newManagerWithQuietHoursSuppress(QuietHoursSuppression{Offline: true})
+		m.config.ActivationState = ActivationActive
+
+		received := make(chan *Alert, 1)
+		m.SetAlertCallback(func(alert *Alert) {
+			received <- alert
+		})
+
+		state, alert := testNewCanonicalAlert("pbs1", canonicalConnectivitySpecID("pbs1"), string(alertspecs.AlertSpecKindConnectivity), "offline")
+		alert.Level = AlertLevelCritical
+		alert.Metadata = map[string]interface{}{
+			"resourceType": "pbs",
+		}
+
+		m.mu.Lock()
+		m.setActiveAlertNoLock(state, alert)
+		m.mu.Unlock()
+
+		m.NotifyExistingAlert(state)
+
+		select {
+		case dispatched := <-received:
+			if dispatched.Metadata[MetadataQuietHoursSuppressed] != true {
+				t.Fatalf("expected quiet-hours replay metadata, got %#v", dispatched.Metadata)
+			}
+			if dispatched.Metadata[MetadataQuietHoursSuppressionReason] != "offline" {
+				t.Fatalf("expected offline suppression reason, got %#v", dispatched.Metadata[MetadataQuietHoursSuppressionReason])
+			}
+			rawReplayAt, ok := dispatched.Metadata[MetadataQuietHoursReplayAt].(string)
+			if !ok || rawReplayAt == "" {
+				t.Fatalf("expected quiet-hours replay timestamp, got %#v", dispatched.Metadata[MetadataQuietHoursReplayAt])
+			}
+			replayAt, err := time.Parse(time.RFC3339, rawReplayAt)
+			if err != nil {
+				t.Fatalf("expected RFC3339 replay timestamp, got %q: %v", rawReplayAt, err)
+			}
+			if !replayAt.After(m.now()) {
+				t.Fatalf("expected replay timestamp after quiet-hours dispatch time, got %s", replayAt)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("expected quiet-hours annotated re-dispatch callback")
 		}
 	})
 }

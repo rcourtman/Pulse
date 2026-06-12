@@ -288,6 +288,40 @@ func TestReevaluateActiveAlertsUsesSharedStorageOverrideResolution(t *testing.T)
 	}
 }
 
+func TestReevaluateActiveAlertsUsesStorageMetadataForCephPoolAlias(t *testing.T) {
+	m := newTestManager(t)
+	resourceID := "pve5-ceph-pool-data_replication"
+
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.StorageDefault = HysteresisThreshold{Trigger: 95, Clear: 90}
+	m.config.Overrides = map[string]ThresholdConfig{
+		"agent:pve5-ceph-pool-data_replication": {
+			Usage: &HysteresisThreshold{Trigger: 50, Clear: 45},
+		},
+	}
+	state, alert := testNewCanonicalAlert(resourceID, canonicalMetricSpecID(resourceID, "usage"), string(alertspecs.AlertSpecKindMetricThreshold), "usage")
+	alert.Value = 60
+	alert.Threshold = 50
+	alert.ResourceName = "data_replication"
+	alert.Node = "pve5"
+	alert.Instance = "pve5"
+	alert.Metadata = map[string]interface{}{
+		"resourceType": "Storage",
+	}
+	m.setActiveAlertNoLock(state, alert)
+	m.reevaluateActiveAlertsLocked()
+	m.mu.Unlock()
+
+	m.mu.RLock()
+	_, exists := m.activeAlerts[state]
+	m.mu.RUnlock()
+
+	if !exists {
+		t.Fatalf("expected Ceph pool storage alert to remain active under agent-prefixed alias override")
+	}
+}
+
 func TestStorageThresholdResolutionUsesAliasIDs(t *testing.T) {
 	m := newTestManager(t)
 

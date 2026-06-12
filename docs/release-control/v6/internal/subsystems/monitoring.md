@@ -950,19 +950,23 @@ and SMART merges, so skipped or background disk refresh no longer treats the
 snapshot as internal truth for that path.
 That same monitoring-owned disk merge path must also treat host-agent SMART
 attributes as canonical fill data for the Proxmox disk view. When a linked
-host agent reports SMART health or NVMe `percentage_used` for a physical disk
-that Proxmox itself exposes without trustworthy health or wearout, the merge
-path in `internal/monitoring/monitor.go` must promote that data into the
-canonical physical-disk model and the Proxmox polling runtime in
-`internal/monitoring/monitor_pve.go` must evaluate disk alerts only after that
-merged disk view exists, so controller-backed disks do not lose health and
-endurance coverage between collection and alerting.
+host agent reports SMART health, SMART identity, ZFS pool membership, or NVMe
+`percentage_used` for a physical disk that Proxmox itself exposes without
+trustworthy health, wearout, model, serial, WWN, type, size, or pool data, the
+merge path in `internal/monitoring/monitor.go` must promote that missing data
+into the canonical physical-disk model without overwriting provider truth. The
+Proxmox polling runtime in `internal/monitoring/monitor_pve.go` must evaluate
+disk alerts only after that merged disk view exists, so controller-backed disks
+do not lose health and endurance coverage between collection and alerting.
 That same host-agent temperature boundary must not suppress SSH SMART disk
 collection just because the agent already reported CPU package or NVMe
 temperatures. `internal/monitoring/monitor_polling_node_helpers.go` may skip
-SSH only once the host-agent temperature payload already has SMART disk data,
-so nodes keep their disk-temperature and SMART augmentation when the host agent
-is present but lacks SMART support.
+SSH only once the host-agent temperature payload already has usable SMART disk
+temperatures rather than identity-only or zero-temperature SMART rows. Those
+identity-only host-agent rows must still allow wrapper or proxy SMART
+augmentation, and proxy SMART temperatures may replace them so nodes keep their
+disk-temperature and SMART augmentation when the host agent is present but lacks
+usable SMART temperature support.
 Legacy SSH temperature collection must also use the Pulse sensor-wrapper
 contract before falling back to raw lm-sensors output. `internal/monitoring/temperature.go`
 must request `/usr/local/sbin/pulse-sensors` when it exists, parse the wrapper

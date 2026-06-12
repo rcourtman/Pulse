@@ -255,6 +255,11 @@ alerts must evaluate the normalized pool storage id while accepting legacy
 `agent:<host>-ceph-pool-<name>` override keys as aliases, so operators do not
 lose saved thresholds when the same physical Ceph pool moves between
 host-agent-only fallback and Proxmox API canonical discovery.
+Active alert reevaluation after threshold or config changes must use canonical
+resource type metadata before the legacy node fallback. Host-agent Ceph pool
+alerts may carry no-colon resource ids with `Instance == Node`, but when
+metadata or resource type says storage they must keep using storage threshold
+resolution and source-alias overrides instead of node defaults.
 
 Browser metric severity colors are also alert-backed. Workloads,
 Infrastructure, and Storage may pass resolved display thresholds into their

@@ -544,6 +544,25 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 			continue
 		}
 
+		if strings.TrimSpace(updated[i].Model) == "" && strings.TrimSpace(matched.Model) != "" {
+			updated[i].Model = strings.TrimSpace(matched.Model)
+		}
+		if strings.TrimSpace(updated[i].Serial) == "" && strings.TrimSpace(matched.Serial) != "" {
+			updated[i].Serial = strings.TrimSpace(matched.Serial)
+		}
+		if strings.TrimSpace(updated[i].WWN) == "" && strings.TrimSpace(matched.WWN) != "" {
+			updated[i].WWN = strings.TrimSpace(matched.WWN)
+		}
+		if strings.TrimSpace(updated[i].Type) == "" && strings.TrimSpace(matched.Type) != "" {
+			updated[i].Type = strings.TrimSpace(matched.Type)
+		}
+		if updated[i].Size <= 0 && matched.SizeBytes > 0 {
+			updated[i].Size = matched.SizeBytes
+		}
+		if strings.TrimSpace(updated[i].StorageGroup) == "" && strings.TrimSpace(matched.Pool) != "" {
+			updated[i].StorageGroup = strings.TrimSpace(matched.Pool)
+		}
+
 		// Merge temperature if not already set
 		if updated[i].Temperature == 0 && matched.Temperature > 0 {
 			updated[i].Temperature = matched.Temperature

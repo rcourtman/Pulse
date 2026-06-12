@@ -170,15 +170,15 @@ func TestShouldSkipTemperatureSSHCollection(t *testing.T) {
 		}
 	})
 
-	t.Run("recent cpu only host agent temp skips", func(t *testing.T) {
+	t.Run("recent cpu only host agent temp does not skip", func(t *testing.T) {
 		host := &models.Temperature{
 			Available:  true,
 			HasCPU:     true,
 			CPUPackage: 55,
 			LastUpdate: time.Now(),
 		}
-		if !shouldSkipTemperatureSSHCollection(host) {
-			t.Fatal("expected recent CPU-only host agent temp to skip SSH collection")
+		if shouldSkipTemperatureSSHCollection(host) {
+			t.Fatal("expected recent CPU-only host agent temp to allow SSH SMART augmentation")
 		}
 	})
 
@@ -216,6 +216,19 @@ func TestShouldSkipTemperatureSSHCollection(t *testing.T) {
 		}
 		if !shouldSkipTemperatureSSHCollection(host) {
 			t.Fatal("expected SMART-capable host agent temp to skip SSH collection")
+		}
+	})
+
+	t.Run("host agent smart inventory without temperatures does not skip", func(t *testing.T) {
+		host := &models.Temperature{
+			Available:  true,
+			HasCPU:     true,
+			HasSMART:   true,
+			SMART:      []models.DiskTemp{{Device: "/dev/sda", Temperature: 0}},
+			LastUpdate: time.Now(),
+		}
+		if shouldSkipTemperatureSSHCollection(host) {
+			t.Fatal("expected identity-only SMART rows to allow SSH SMART augmentation")
 		}
 	})
 }
@@ -455,7 +468,7 @@ func TestConvertHostSensorsToTemperature_ExtraBranches(t *testing.T) {
 		sensors := models.HostSensorSummary{
 			TemperatureCelsius: map[string]float64{"cpu_package": 45.0},
 			SMART: []models.HostDiskSMART{
-				{Device: "sda", Temperature: 35, Standby: false},
+				{Device: "/dev/sda [sat]", Temperature: 35, Standby: false},
 				{Device: "sdb", Temperature: 0, Standby: true},
 			},
 		}
@@ -463,6 +476,22 @@ func TestConvertHostSensorsToTemperature_ExtraBranches(t *testing.T) {
 		assert.NotNil(t, result)
 		assert.Len(t, result.SMART, 1)
 		assert.Equal(t, "/dev/sda", result.SMART[0].Device)
+	})
+
+	t.Run("SMART-only sensors stay available", func(t *testing.T) {
+		sensors := models.HostSensorSummary{
+			SMART: []models.HostDiskSMART{
+				{Device: "/dev/sdc", Temperature: 37},
+			},
+		}
+		result := convertHostSensorsToTemperature(sensors, time.Now())
+		assert.NotNil(t, result)
+		assert.True(t, result.Available)
+		assert.True(t, result.HasSMART)
+		if assert.Len(t, result.SMART, 1) {
+			assert.Equal(t, "/dev/sdc", result.SMART[0].Device)
+			assert.Equal(t, 37, result.SMART[0].Temperature)
+		}
 	})
 
 	t.Run("GPU merge into same device", func(t *testing.T) {
@@ -650,5 +679,24 @@ func TestMergeTemperatureData_HistoricalOverrides(t *testing.T) {
 		assert.True(t, result.HasNVMe)
 		assert.Len(t, result.GPU, 1)
 		assert.Len(t, result.NVMe, 1)
+	})
+
+	t.Run("proxy SMART temperatures replace host inventory rows", func(t *testing.T) {
+		host := &models.Temperature{
+			CPUPackage: 50.0,
+			HasCPU:     true,
+			HasSMART:   true,
+			SMART:      []models.DiskTemp{{Device: "/dev/sda", Temperature: 0}},
+		}
+		proxy := &models.Temperature{
+			HasSMART: true,
+			SMART:    []models.DiskTemp{{Device: "/dev/sda", Temperature: 39}},
+		}
+
+		result := mergeTemperatureData(host, proxy)
+		assert.True(t, result.HasSMART)
+		if assert.Len(t, result.SMART, 1) {
+			assert.Equal(t, 39, result.SMART[0].Temperature)
+		}
 	})
 }
