@@ -1164,6 +1164,7 @@ the canonical monitored-system blocked payload.
    and the Patrol runtime-remediation destination shared with the AI settings endpoint, so summary actions, run-history runtime-failure actions, and runtime-finding actions may reuse the governed provider-settings route while still presenting that destination to Patrol operators as Patrol provider configuration instead of generic `AI Settings` copy
    and the Patrol route-shell destination itself, so the thin page shell at `frontend-modern/src/pages/AIIntelligence.tsx` may continue to bridge the shared AI-runtime payload boundary while exposing `/patrol` as the canonical product route and keeping retired `/ai` browser entry points unregistered
    and the Patrol route-shell accessibility boundary, so brand icons in `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx` stay decorative when the same heading already exposes visible Patrol text, preventing duplicate accessible names such as `Pulse Patrol Patrol`
+   and the Patrol autonomy selector boundary, so the header composes the shared `frontend-modern/src/components/shared/FilterButtonGroup.tsx` segmented primitive for the `Monitor` / `Investigate` / `Remediate` presentation while the API contract remains the sole owner of accepted autonomy values, license-required rejection shape, and the monitor-only clamp
 9. Route frontend API-client parsed error propagation, API-error-status fallback handling, allowed-status handling, custom status-specific error handling, command-trigger success envelope handling, shared response parsing pipelines, missing-resource lookup handling, metadata CRUD routing, stream event consumption, response status, collection normalization, scalar payload coercion, and structured error normalization through canonical shared helpers under `frontend-modern/src/api/`
    Assistant chat stream workflow-state payloads are part of this same
    frontend API-client boundary. `workflow_state` events must keep `phase`,
@@ -5334,6 +5335,12 @@ owners must not rely on that 402 as normal control flow for stale local state:
 when the current entitlement locks safe remediation, they submit `monitor` even
 if older persisted settings or a previous entitlement left `approval`,
 `assisted`, or `full` in memory.
+The Patrol header presentation for that API boundary must compose the shared
+`frontend-modern/src/components/shared/FilterButtonGroup.tsx` segmented
+selector: the endpoint contract still owns the accepted autonomy values and
+license-required response shape, while the frontend owns only the option
+mapping and entitlement-derived disabled state. Local Patrol selector styling
+must not become a second source of truth for the API's monitor-only clamp.
 The reporting transport contract now also carries an optional narrative
 interpretation layer alongside the deterministic data surface. The Go-side
 `pkg/reporting.MetricReportRequest` gains optional `Narrator` and

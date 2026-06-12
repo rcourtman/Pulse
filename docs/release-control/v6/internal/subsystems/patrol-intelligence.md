@@ -597,6 +597,13 @@ surface must render any Patrol readiness
 provider, model, and summary carried by the failure object, and keep the
 provider-settings action immediately available before the operator chooses to
 open the Assistant handoff.
+The Patrol autonomy selector in that header must compose the shared
+`frontend-modern/src/components/shared/FilterButtonGroup.tsx` segmented
+variant instead of rebuilding a local active-button group. Patrol owns only
+the domain options (`Monitor`, `Investigate`, `Remediate`), entitlement locks,
+and the `full`-as-remediate presentation mapping; the shared primitive owns
+the equal-width segmented shell, pressed-state semantics, disabled-option
+behavior, and active/inactive selector styling.
 That same Patrol-owned presentation rule also applies to the findings empty
 state: `frontend-modern/src/components/AI/FindingsPanel.tsx` must not treat
 `0 active findings` as equivalent to "your infrastructure looks healthy" when

@@ -30,6 +30,7 @@ describe('FilterButtonGroup', () => {
     expect(filterButtonGroupModelSource).toContain('getFilterButtonGroupButtonClass');
     expect(filterButtonGroupModelSource).toContain('getFilterButtonGroupCompactLabel');
     expect(filterButtonGroupModelSource).toContain("prominent: 'grid grid-cols-1 gap-2'");
+    expect(filterButtonGroupModelSource).toContain('segmented:');
     expect(filterButtonGroupModelSource).toContain('compact:');
     expect(filterButtonGroupModelSource).toContain('inline-flex items-center gap-1');
   });
@@ -167,5 +168,31 @@ describe('FilterButtonGroup', () => {
 
     expect(visualLabel).toHaveClass('inline-flex');
     expect(visualLabel).toHaveClass('whitespace-nowrap');
+  });
+
+  it('supports equal-width segmented controls for compact feature settings', () => {
+    render(() => (
+      <FilterButtonGroup
+        ariaLabel="Patrol autonomy level"
+        options={[
+          { value: 'monitor', label: 'Monitor' },
+          { value: 'approval', label: 'Investigate', disabled: true },
+          { value: 'assisted', label: 'Remediate', disabled: true },
+        ]}
+        value="monitor"
+        onChange={() => undefined}
+        variant="segmented"
+      />
+    ));
+
+    const group = screen.getByRole('group', { name: 'Patrol autonomy level' });
+    const activeButton = within(group).getByRole('button', { name: 'Monitor' });
+    const disabledButton = within(group).getByRole('button', { name: 'Investigate' });
+
+    expect(activeButton.className).toContain('flex-1');
+    expect(activeButton.className).toContain('bg-surface');
+    expect(activeButton.className).toContain('text-blue-600');
+    expect(disabledButton).toBeDisabled();
+    expect(disabledButton.className).toContain('opacity-50');
   });
 });

@@ -10,6 +10,8 @@ import { PageHeader } from '@/components/shared/PageHeader';
 import { Toggle, TogglePrimitive } from '@/components/shared/Toggle';
 import { CountdownTimer } from '@/components/patrol';
 import { FormSelect } from '@/components/shared/FormSelect';
+import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
+import type { PatrolAutonomyLevel } from '@/api/patrol';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { formatRelativeTime } from '@/utils/format';
 import { groupModelsByProvider } from '@/utils/patrolFormat';
@@ -20,6 +22,8 @@ import { getPatrolRecencyPresentation } from '@/utils/patrolSummaryPresentation'
 import { PATROL_PROVIDER_SETTINGS_ACTION } from '@/utils/patrolRuntimeActions';
 import type { PatrolConfigurationFailureInput } from './patrolInvestigationContextModel';
 import type { PatrolIntelligenceState } from './usePatrolIntelligenceState';
+
+type PatrolSelectableAutonomyLevel = Exclude<PatrolAutonomyLevel, 'full'>;
 
 const isNonEmptyConfigurationDetail = (value?: string | null): value is string =>
   Boolean(value?.trim());
@@ -73,6 +77,34 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
     if (!model || models.length === 0) return false;
     return !models.some((candidate) => candidate.id === model);
   });
+  const selectedAutonomyLevel = createMemo<PatrolSelectableAutonomyLevel>(() => {
+    const level = state.autonomyLevel();
+    return level === 'full' ? 'assisted' : level;
+  });
+  const getAutonomyOptionTitle = (level: PatrolSelectableAutonomyLevel) => {
+    const isProLocked = () => state.autoFixLocked() && level !== 'monitor';
+    if (!presentationPolicyHidesUpgradePrompts() && isProLocked()) {
+      return level === 'approval'
+        ? 'Investigation is not enabled on this plan'
+        : 'Safe remediation workflows are not enabled on this plan';
+    }
+    return undefined;
+  };
+  const autonomyLevelOptions = createMemo<FilterOption<PatrolSelectableAutonomyLevel>[]>(() => [
+    { value: 'monitor', label: 'Monitor' },
+    {
+      value: 'approval',
+      label: 'Investigate',
+      disabled: state.autoFixLocked(),
+      title: getAutonomyOptionTitle('approval'),
+    },
+    {
+      value: 'assisted',
+      label: 'Remediate',
+      disabled: state.autoFixLocked(),
+      title: getAutonomyOptionTitle('assisted'),
+    },
+  ]);
 
   return (
     <div class="space-y-4">
@@ -288,41 +320,15 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
                       </label>
                     </div>
 
-                    <div class="flex items-center bg-base rounded-md p-1 border shadow-inner">
-                      <For each={['monitor', 'approval', 'assisted'] as const}>
-                        {(level) => {
-                          const isProLocked = () =>
-                            state.autoFixLocked() && (level === 'approval' || level === 'assisted');
-                          const isDisabled = () => !state.patrolEnabledLocal() || isProLocked();
-                          const isActive = () =>
-                            level === 'assisted'
-                              ? state.autonomyLevel() === 'assisted' ||
-                                state.autonomyLevel() === 'full'
-                              : state.autonomyLevel() === level;
-
-                          return (
-                            <button
-                              onClick={() => state.handleAutonomyChange(level)}
-                              disabled={isDisabled()}
-                              title={
-                                !presentationPolicyHidesUpgradePrompts() && isProLocked()
-                                  ? level === 'approval'
-                                    ? 'Investigation is not enabled on this plan'
-                                    : 'Safe remediation workflows are not enabled on this plan'
-                                  : undefined
-                              }
-                              class={`flex-1 py-1.5 px-2 text-xs font-semibold rounded-md transition-all duration-200 ${isActive() ? ' text-blue-600 dark:text-blue-400 shadow-[0_1px_3px_rgba(0,0,0,0.1)]' : isDisabled() ? ' ' : 'text-muted hover:text-base-content hover:bg-surface-hover'} ${isDisabled() ? 'opacity-50 cursor-not-allowed' : ''}`}
-                            >
-                              {level === 'monitor'
-                                ? 'Monitor'
-                                : level === 'approval'
-                                  ? 'Investigate'
-                                  : 'Remediate'}
-                            </button>
-                          );
-                        }}
-                      </For>
-                    </div>
+                    <FilterButtonGroup
+                      ariaLabel="Patrol autonomy level"
+                      class="w-full"
+                      disabled={!state.patrolEnabledLocal()}
+                      options={autonomyLevelOptions()}
+                      value={selectedAutonomyLevel()}
+                      onChange={(level) => state.handleAutonomyChange(level)}
+                      variant="segmented"
+                    />
                     <Show when={!presentationPolicyHidesUpgradePrompts() && state.autoFixLocked()}>
                       <div class="pl-1 text-[11px] text-muted">
                         Investigation and safe remediation workflows are not enabled on this plan.

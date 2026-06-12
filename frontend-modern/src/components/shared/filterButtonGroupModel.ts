@@ -13,7 +13,12 @@ export interface FilterOption<T extends string | number> {
   disabled?: boolean;
 }
 
-export type FilterButtonGroupVariant = 'default' | 'settings' | 'compact' | 'prominent';
+export type FilterButtonGroupVariant =
+  | 'default'
+  | 'settings'
+  | 'compact'
+  | 'prominent'
+  | 'segmented';
 export type FilterButtonGroupOptionTone =
   | 'default'
   | 'info'
@@ -39,6 +44,8 @@ const groupClassByVariant: Record<FilterButtonGroupVariant, string> = {
   compact:
     'inline-flex items-center gap-1 bg-surface-hover rounded-md p-0.5 ring-1 ring-border-subtle overflow-x-auto scrollbar-hide',
   prominent: 'grid grid-cols-1 gap-2',
+  segmented:
+    'flex items-center gap-1 rounded-md border border-border bg-base p-1 shadow-inner overflow-x-auto scrollbar-hide',
 };
 
 const labelClassByVariant: Partial<Record<FilterButtonGroupVariant, string>> = {
@@ -106,6 +113,16 @@ export function getFilterButtonGroupButtonClass(
         ? `bg-surface shadow-sm ring-1 ${activeToneClassByOptionTone[tone]}`
         : 'text-muted hover:bg-surface-hover hover:text-base-content',
       disabled ? 'opacity-60 cursor-not-allowed' : '',
+    ].join(' ');
+  }
+
+  if (variant === 'segmented') {
+    return [
+      'flex-1 min-h-8 px-2 py-1.5 text-xs font-semibold rounded-md transition-all whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2',
+      active
+        ? 'bg-surface text-blue-600 shadow-sm dark:text-blue-400'
+        : 'text-muted hover:text-base-content hover:bg-surface-hover',
+      disabled ? 'opacity-50 cursor-not-allowed' : '',
     ].join(' ');
   }
 

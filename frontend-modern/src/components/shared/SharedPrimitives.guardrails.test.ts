@@ -154,6 +154,7 @@ import reportingPanelSource from '@/components/Settings/ReportingPanel.tsx?raw';
 import rolesPanelSource from '@/components/Settings/RolesPanel.tsx?raw';
 import updatesSettingsPanelSource from '@/components/Settings/UpdatesSettingsPanel.tsx?raw';
 import userAssignmentsPanelSource from '@/components/Settings/UserAssignmentsPanel.tsx?raw';
+import patrolIntelligenceHeaderSource from '@/features/patrol/PatrolIntelligenceHeader.tsx?raw';
 import filterBarSource from '@/components/shared/FilterBar/FilterBar.tsx?raw';
 import filterChipSource from '@/components/shared/FilterBar/FilterChip.tsx?raw';
 import addFilterMenuSource from '@/components/shared/FilterBar/AddFilterMenu.tsx?raw';
@@ -187,7 +188,54 @@ describe('shared primitive guardrails', () => {
     expect(rawTableUsers).toEqual(['./PulseDataGrid.tsx']);
   });
 
-  it('routes canonical settings segmented selectors through FilterButtonGroup', () => {
+  it('routes canonical settings and feature segmented selectors through FilterButtonGroup', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        allowedPaths?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find(
+      (rule) => rule.id === 'filter-button-group-shell',
+    );
+    const registeredGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'filter-button-group-local-segmented-control-styles',
+    );
+
+    expect(registeredRule?.canonical?.path).toBe(
+      'src/components/shared/FilterButtonGroup.tsx',
+    );
+    expect(registeredRule?.canonical?.export).toBe('FilterButtonGroup');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/components/Settings/GeneralSettingsPanel.tsx',
+      'src/components/Settings/ReportingPanel.tsx',
+      'src/features/patrol/PatrolIntelligenceHeader.tsx',
+    ]);
+    expect(registeredGuard?.canonical?.path).toBe(
+      'src/components/shared/filterButtonGroupModel.ts',
+    );
+    expect(registeredGuard?.canonical?.export).toBe('getFilterButtonGroupButtonClass');
+    expect(registeredGuard?.allPatterns).toEqual([
+      'flex items-center bg-base rounded-md p-1 border shadow-inner',
+      'flex-1 py-1.5 px-2 text-xs font-semibold rounded-md transition-all duration-200',
+    ]);
+    expect(registeredGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(registeredGuard?.scopes).toEqual(
+      expect.arrayContaining([
+        'src/components/Settings',
+        'src/features',
+        'src/pages',
+      ]),
+    );
+
     expect(filterButtonGroupSource).toContain('useFilterButtonGroupState');
     expect(filterButtonGroupSource).toContain('getFilterButtonGroupClass');
     expect(filterButtonGroupSource).toContain('getFilterButtonGroupButtonClass');
@@ -200,6 +248,7 @@ describe('shared primitive guardrails', () => {
     expect(filterButtonGroupStateSource).toContain('props.disabled || option.disabled');
     expect(filterButtonGroupStateSource).toContain('props.onChange(option.value)');
     expect(filterButtonGroupModelSource).toContain("prominent: 'grid grid-cols-1 gap-2'");
+    expect(filterButtonGroupModelSource).toContain('segmented:');
     expect(filterButtonGroupModelSource).toContain('touch-scroll');
     expect(filterButtonGroupModelSource).toContain('getFilterButtonGroupButtonClass');
     expect(filterButtonGroupModelSource).toContain('getFilterButtonGroupCompactLabel');
@@ -215,6 +264,15 @@ describe('shared primitive guardrails', () => {
     expect(reportingPanelSource).toContain('variant="prominent"');
     expect(reportingPanelSource).not.toContain('getReportingToggleButtonClass');
     expect(reportingPanelSource).not.toContain('<For each={REPORTING_RANGE_OPTIONS}>');
+    expect(patrolIntelligenceHeaderSource).toContain('FilterButtonGroup');
+    expect(patrolIntelligenceHeaderSource).toContain('variant="segmented"');
+    expect(patrolIntelligenceHeaderSource).toContain('selectedAutonomyLevel');
+    expect(patrolIntelligenceHeaderSource).not.toContain(
+      'flex items-center bg-base rounded-md p-1 border shadow-inner',
+    );
+    expect(patrolIntelligenceHeaderSource).not.toContain(
+      'flex-1 py-1.5 px-2 text-xs font-semibold rounded-md transition-all duration-200',
+    );
   });
 
   it('keeps AI model picker labels route-aware for gateway providers', () => {

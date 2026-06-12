@@ -2416,6 +2416,12 @@ small leading status-dot glyph used by filter options. Page and feature
 surfaces must not copy the chip-dot `<span>` factory or import the legacy
 `PageControls` deck for resource-list filtering; those drift checks live in
 `shared-template-registry.json` and run through `shared-template-audit.mjs`.
+Segmented selectors are registry-backed too. `FilterButtonGroup` owns the
+settings, prominent, compact, and equal segmented selector shells, including
+active-button tone, disabled-option behavior, pressed-state semantics,
+compact labels, and horizontal scroll treatment through the shared
+shell/state/model split. Settings and compact feature surfaces must compose
+that primitive instead of copying active-button selector styling locally.
 Chart visibility display actions are registry-backed too.
 `ChartVisibilityToggleButton` owns the `Show charts` / `Hide charts` label,
 pressed-state, title, icon, and toolbar action styling for summary-bearing

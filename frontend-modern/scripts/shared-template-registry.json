@@ -241,6 +241,25 @@
       ]
     },
     {
+      "id": "filter-button-group-shell",
+      "category": "segmented-selector",
+      "summary": "Settings and compact feature segmented selectors must compose FilterButtonGroup instead of recreating active-button group styling locally.",
+      "canonical": {
+        "path": "src/components/shared/FilterButtonGroup.tsx",
+        "export": "FilterButtonGroup"
+      },
+      "requiredConsumers": [
+        { "path": "src/components/Settings/GeneralSettingsPanel.tsx" },
+        { "path": "src/components/Settings/ReportingPanel.tsx" },
+        { "path": "src/features/patrol/PatrolIntelligenceHeader.tsx" }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/FilterButtonGroup.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "chart-visibility-toggle-button",
       "category": "display-toggle",
       "summary": "Summary-bearing filter surfaces must compose ChartVisibilityToggleButton for chart show/hide display actions instead of recreating one-off chart toggle buttons.",
@@ -513,6 +532,27 @@
       "legacyReason": "Retired migration debt. Filter chip leading-dot presentation is owned by the FilterBar primitive family.",
       "allowedPaths": [],
       "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "filter-button-group-local-segmented-control-styles",
+      "category": "segmented-selector",
+      "summary": "Settings and feature surfaces must not copy the compact active-button segmented-control styling owned by FilterButtonGroup.",
+      "canonical": {
+        "path": "src/components/shared/filterButtonGroupModel.ts",
+        "export": "getFilterButtonGroupButtonClass"
+      },
+      "scopes": ["src/components/Settings", "src/features", "src/pages"],
+      "extensions": [".tsx"],
+      "allPatterns": [
+        "flex items-center bg-base rounded-md p-1 border shadow-inner",
+        "flex-1 py-1.5 px-2 text-xs font-semibold rounded-md transition-all duration-200"
+      ],
+      "legacyReason": "Retired migration debt. Settings and compact feature segmented selectors must use FilterButtonGroup; local active-button selector styling forks are not allowed.",
+      "allowedPaths": [],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "scripts/shared-template-audit.mjs"

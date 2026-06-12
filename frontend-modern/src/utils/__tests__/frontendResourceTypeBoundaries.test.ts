@@ -3542,6 +3542,16 @@ describe('frontend resource type boundaries', () => {
     expect(patrolIntelligenceHeaderSource).toContain(
       '!presentationPolicyHidesUpgradePrompts() && state.alertAnalysisLocked()',
     );
+    expect(patrolIntelligenceHeaderSource).toContain(
+      "from '@/components/shared/FilterButtonGroup'",
+    );
+    expect(patrolIntelligenceHeaderSource).toContain('variant="segmented"');
+    expect(patrolIntelligenceHeaderSource).not.toContain(
+      'flex items-center bg-base rounded-md p-1 border shadow-inner',
+    );
+    expect(patrolIntelligenceHeaderSource).not.toContain(
+      'flex-1 py-1.5 px-2 text-xs font-semibold rounded-md transition-all duration-200',
+    );
     expect(appSource).not.toContain("import('./pages/Operations')");
     expect(appSource).not.toContain('<Route path="/operations/*"');
     expect(settingsNavigationModelSource).not.toContain(
