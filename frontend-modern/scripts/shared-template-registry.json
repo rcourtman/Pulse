@@ -221,6 +221,66 @@
       ]
     },
     {
+      "id": "copy-value-action-shell",
+      "category": "copy-action",
+      "summary": "Copy-value icon and chip controls must compose CopyValueButton for shared copied-state iconography, disabled handling, focus, sizing, and aria behavior instead of recreating page-local copy buttons.",
+      "canonical": {
+        "path": "src/components/shared/Button.tsx",
+        "export": "CopyValueButton"
+      },
+      "requiredConsumers": [
+        { "path": "src/components/Discovery/DiscoveryTab.tsx" },
+        { "path": "src/components/shared/WebInterfaceUrlField.tsx" }
+      ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/components/Discovery/DiscoveryTab.tsx",
+          "patterns": [
+            "interface CopyValueButtonProps",
+            "const CopyValueButton",
+            "CopyIcon class=\"h-3.5 w-3.5\"",
+            "CheckIcon class=\"h-3.5 w-3.5 text-emerald-600"
+          ]
+        },
+        {
+          "path": "src/components/shared/WebInterfaceUrlField.tsx",
+          "patterns": [
+            "CopyIcon class=\"h-3.5 w-3.5\"",
+            "CheckIcon class=\"h-3.5 w-3.5 text-emerald-600"
+          ]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "copyable-code-row-shell",
+      "category": "copy-action",
+      "summary": "Copyable code/value rows must compose CopyableCodeRow for the shared code surface and copy action instead of recreating local font-mono row shells.",
+      "canonical": {
+        "path": "src/components/shared/CopyableCodeRow.tsx",
+        "export": "CopyableCodeRow"
+      },
+      "requiredConsumers": [{ "path": "src/components/Discovery/DiscoveryTab.tsx" }],
+      "forbiddenPatterns": [
+        {
+          "path": "src/components/Discovery/DiscoveryTab.tsx",
+          "patterns": [
+            "const CopyableCodeRow",
+            "flex items-start gap-2 rounded bg-surface-alt px-2 py-1.5"
+          ]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "form-select-shell",
       "category": "form-control",
       "summary": "Native select controls must compose FormSelect for shared label/id/help wiring, value synchronization, and select chrome instead of recreating labelled select wrappers locally.",
@@ -1101,6 +1161,94 @@
       ]
     },
     {
+      "id": "copy-value-neutral-local-button-shell",
+      "category": "copy-action",
+      "summary": "Copy-value controls must not copy the neutral bordered icon-button shell; use CopyValueButton with the neutral variant.",
+      "canonical": {
+        "path": "src/components/shared/Button.tsx",
+        "export": "CopyValueButton"
+      },
+      "scopes": ["src/components", "src/features", "src/pages"],
+      "extensions": [".tsx"],
+      "allPatterns": [
+        "inline-flex min-h-7 min-w-7 shrink-0 items-center justify-center rounded border border-border bg-surface px-2 text-muted transition-colors hover:bg-surface-hover hover:text-base-content",
+        "fallback={<CopyIcon class=\"h-3.5 w-3.5\" />}"
+      ],
+      "legacyReason": "Retired migration debt. Neutral copy-value icon buttons belong to CopyValueButton.",
+      "allowedPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "copy-value-muted-local-button-shell",
+      "category": "copy-action",
+      "summary": "Copy-value controls must not copy the muted icon-button shell; use CopyValueButton with the ghost variant.",
+      "canonical": {
+        "path": "src/components/shared/Button.tsx",
+        "export": "CopyValueButton"
+      },
+      "scopes": ["src/components", "src/features", "src/pages"],
+      "extensions": [".tsx"],
+      "allPatterns": [
+        "inline-flex min-h-8 min-w-8 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-base-content",
+        "fallback={<CopyIcon class=\"h-3.5 w-3.5\" />}"
+      ],
+      "legacyReason": "Retired migration debt. Muted copy-value icon buttons belong to CopyValueButton.",
+      "allowedPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "copy-value-accent-local-button-shell",
+      "category": "copy-action",
+      "summary": "Copy-value controls must not copy the blue suggested-value icon-button shell; use CopyValueButton with the accent variant.",
+      "canonical": {
+        "path": "src/components/shared/Button.tsx",
+        "export": "CopyValueButton"
+      },
+      "scopes": ["src/components", "src/features", "src/pages"],
+      "extensions": [".tsx"],
+      "allPatterns": [
+        "inline-flex min-h-7 min-w-7 shrink-0 items-center justify-center rounded text-blue-700 transition-colors hover:bg-blue-100 dark:text-blue-200 dark:hover:bg-blue-950",
+        "fallback={<CopyIcon class=\"h-3.5 w-3.5\" />}"
+      ],
+      "legacyReason": "Retired migration debt. Accent copy-value icon buttons belong to CopyValueButton.",
+      "allowedPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "copyable-code-row-local-shell",
+      "category": "copy-action",
+      "summary": "Copyable code/value rows must not copy the local surface-alt font-mono row shell; use CopyableCodeRow.",
+      "canonical": {
+        "path": "src/components/shared/CopyableCodeRow.tsx",
+        "export": "CopyableCodeRow"
+      },
+      "scopes": ["src/components", "src/features", "src/pages"],
+      "extensions": [".tsx"],
+      "allPatterns": [
+        "flex items-start gap-2 rounded bg-surface-alt px-2 py-1.5",
+        "break-all font-mono text-xs text-base-content"
+      ],
+      "legacyReason": "Retired migration debt. Copyable code rows belong to CopyableCodeRow so code styling and copy behavior stay canonical.",
+      "allowedPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "button-secondary-settings-action-local-shell",
       "category": "action-button",
       "summary": "Settings and infrastructure surfaces must not copy the standard secondary px-3 py-2 action-button shell; use Button or ButtonLink with the mdCompact size.",
@@ -1154,9 +1302,7 @@
       },
       "scopes": ["src/components/Settings", "src/features", "src/pages"],
       "extensions": [".tsx"],
-      "allPatterns": [
-        "rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white"
-      ],
+      "allPatterns": ["rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white"],
       "legacyReason": "Retired migration debt. Primary settings actions belong to the shared Button primitive family.",
       "allowedPaths": [],
       "ignoredPaths": ["src/components/shared/Button.test.tsx"],
@@ -1176,9 +1322,7 @@
       },
       "scopes": ["src/components/Settings", "src/features", "src/pages"],
       "extensions": [".tsx"],
-      "allPatterns": [
-        "rounded-md bg-rose-600 px-3 py-2 text-sm font-medium text-white"
-      ],
+      "allPatterns": ["rounded-md bg-rose-600 px-3 py-2 text-sm font-medium text-white"],
       "legacyReason": "Retired migration debt. Confirmed destructive settings actions belong to the shared Button primitive family.",
       "allowedPaths": [],
       "ignoredPaths": ["src/components/shared/Button.test.tsx"],

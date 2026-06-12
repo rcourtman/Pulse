@@ -166,6 +166,7 @@ work extends shared components instead of creating new local variants.
 137. `frontend-modern/src/components/shared/Button.tsx`
 138. `frontend-modern/src/components/shared/buttonModel.ts`
 139. `frontend-modern/src/components/shared/Button.test.tsx`
+140. `frontend-modern/src/components/shared/CopyableCodeRow.tsx`
 
 ## Shared Boundaries
 
@@ -473,6 +474,12 @@ not a replacement status card, CTA band, or page-local nested card.
    If a new surface needs a variant that the shared primitive does not expose,
    extend the primitive and registry guard rather than adding a page-local
    class string.
+   Copy-value affordances belong to the same shared button family. Feature
+   surfaces may own the copied value, success/error notification, and adjacent
+   product copy, but icon/chip copy controls must use `CopyValueButton`, and
+   copyable command/path/value rows must use `CopyableCodeRow` instead of
+   recreating local copy icons, copied-state checks, disabled empty-value
+   handling, or `font-mono` code-row shells.
    Framed product table surfaces must consume the shared `TableCard` frame and
    `TableCardHeader` title/action band instead of composing page-local `Card`
    border, background, overflow, or table-title chrome. Feature owners may own

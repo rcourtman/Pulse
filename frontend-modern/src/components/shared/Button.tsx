@@ -1,7 +1,15 @@
 import { A } from '@solidjs/router';
+import CheckIcon from 'lucide-solid/icons/check';
 import CopyIcon from 'lucide-solid/icons/copy';
 import { JSX, Show, mergeProps, splitProps } from 'solid-js';
-import { getButtonClass, type ButtonSize, type ButtonVariant } from './buttonModel';
+import {
+  getButtonClass,
+  getCopyValueButtonClass,
+  type ButtonSize,
+  type ButtonVariant,
+  type CopyValueButtonSize,
+  type CopyValueButtonVariant,
+} from './buttonModel';
 
 export interface ButtonProps extends JSX.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
@@ -18,9 +26,25 @@ export interface ButtonLinkProps extends JSX.AnchorHTMLAttributes<HTMLAnchorElem
   hardNavigation?: boolean;
 }
 
-export interface CommandCopyButtonProps
-  extends Omit<ButtonProps, 'children' | 'isLoading' | 'size' | 'variant'> {
+export interface CommandCopyButtonProps extends Omit<
+  ButtonProps,
+  'children' | 'isLoading' | 'size' | 'variant'
+> {
   label?: string;
+}
+
+export interface CopyValueButtonProps extends Omit<
+  JSX.ButtonHTMLAttributes<HTMLButtonElement>,
+  'children' | 'onClick' | 'value'
+> {
+  value?: string | null;
+  copied?: boolean;
+  onCopyValue: (value: string) => void | Promise<void>;
+  label: string;
+  variant?: CopyValueButtonVariant;
+  size?: CopyValueButtonSize;
+  class?: string;
+  children?: JSX.Element;
 }
 
 export function Button(props: ButtonProps) {
@@ -94,6 +118,56 @@ export function CommandCopyButton(props: CommandCopyButtonProps) {
     >
       <CopyIcon class="h-4 w-4" />
     </Button>
+  );
+}
+
+export function CopyValueButton(props: CopyValueButtonProps) {
+  const merged = mergeProps(
+    {
+      variant: 'neutral' as CopyValueButtonVariant,
+      size: 'md' as CopyValueButtonSize,
+      type: 'button' as const,
+    },
+    props,
+  );
+  const [local, rest] = splitProps(merged, [
+    'value',
+    'copied',
+    'onCopyValue',
+    'label',
+    'variant',
+    'size',
+    'class',
+    'children',
+    'disabled',
+    'title',
+    'aria-label',
+  ]);
+  const trimmedValue = () => (local.value ?? '').trim();
+
+  return (
+    <button
+      {...rest}
+      type="button"
+      class={getCopyValueButtonClass({
+        variant: local.variant,
+        size: local.size,
+        class: local.class,
+      })}
+      disabled={local.disabled || !trimmedValue()}
+      onClick={() => {
+        const value = trimmedValue();
+        if (!value) return;
+        void local.onCopyValue(value);
+      }}
+      title={local.title ?? local.label}
+      aria-label={local['aria-label'] ?? local.label}
+    >
+      {local.children}
+      <Show when={local.copied} fallback={<CopyIcon class="h-3.5 w-3.5" aria-hidden="true" />}>
+        <CheckIcon class="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+      </Show>
+    </button>
   );
 }
 

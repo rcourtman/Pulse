@@ -8,6 +8,7 @@ import aiChatSource from '@/components/AI/Chat/index.tsx?raw';
 import aiModelPickerSource from '@/components/shared/AIModelPicker.tsx?raw';
 import buttonSource from '@/components/shared/Button.tsx?raw';
 import buttonModelSource from '@/components/shared/buttonModel.ts?raw';
+import copyableCodeRowSource from '@/components/shared/CopyableCodeRow.tsx?raw';
 import commandPaletteModalSource from '@/components/shared/CommandPaletteModal.tsx?raw';
 import commandPaletteModelSource from '@/components/shared/commandPaletteModel.ts?raw';
 import columnPickerSource from '@/components/shared/ColumnPicker.tsx?raw';
@@ -101,6 +102,7 @@ import webInterfaceUrlFieldStateSource from '@/components/shared/useWebInterface
 import webInterfaceNameLinkSource from '@/components/shared/WebInterfaceNameLink.tsx?raw';
 import inlineDetailTableRowSource from '@/components/shared/InlineDetailTableRow.tsx?raw';
 import sharedTemplateRegistrySource from '../../../scripts/shared-template-registry.json?raw';
+import discoveryTabSource from '@/components/Discovery/DiscoveryTab.tsx?raw';
 import emailProviderSelectSource from '@/components/Alerts/EmailProviderSelect.tsx?raw';
 import incidentTimelinePanelSource from '@/components/Alerts/IncidentTimelinePanel.tsx?raw';
 import thresholdsTableDockerIgnoredPrefixesSectionSource from '@/components/Alerts/ThresholdsTableDockerIgnoredPrefixesSection.tsx?raw';
@@ -1540,6 +1542,22 @@ describe('shared primitive guardrails', () => {
     const settingsDialogCloseGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'button-outline-settings-dialog-close-local-shell',
     );
+    const copyValueRule = registry.rules?.find((rule) => rule.id === 'copy-value-action-shell');
+    const copyableCodeRowRule = registry.rules?.find(
+      (rule) => rule.id === 'copyable-code-row-shell',
+    );
+    const copyValueNeutralGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'copy-value-neutral-local-button-shell',
+    );
+    const copyValueMutedGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'copy-value-muted-local-button-shell',
+    );
+    const copyValueAccentGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'copy-value-accent-local-button-shell',
+    );
+    const copyableCodeRowGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'copyable-code-row-local-shell',
+    );
 
     expect(registeredRule?.canonical?.path).toBe('src/components/shared/Button.tsx');
     expect(registeredRule?.canonical?.export).toBe('Button');
@@ -1625,9 +1643,7 @@ describe('shared primitive guardrails', () => {
     expect(settingsPrimaryActionGuard?.ignoredPaths).toEqual([
       'src/components/shared/Button.test.tsx',
     ]);
-    expect(settingsDangerActionGuard?.canonical?.path).toBe(
-      'src/components/shared/buttonModel.ts',
-    );
+    expect(settingsDangerActionGuard?.canonical?.path).toBe('src/components/shared/buttonModel.ts');
     expect(settingsDangerActionGuard?.canonical?.export).toBe('getButtonClass');
     expect(settingsDangerActionGuard?.allPatterns).toEqual([
       'rounded-md bg-rose-600 px-3 py-2 text-sm font-medium text-white',
@@ -1669,9 +1685,7 @@ describe('shared primitive guardrails', () => {
     ]);
     expect(settingsRowActionGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(settingsRowActionGuard?.ignoredPaths).toEqual(['src/components/shared/Button.test.tsx']);
-    expect(settingsDialogCloseGuard?.canonical?.path).toBe(
-      'src/components/shared/buttonModel.ts',
-    );
+    expect(settingsDialogCloseGuard?.canonical?.path).toBe('src/components/shared/buttonModel.ts');
     expect(settingsDialogCloseGuard?.canonical?.export).toBe('getButtonClass');
     expect(settingsDialogCloseGuard?.allPatterns).toEqual([
       'h-9 w-9 items-center justify-center rounded-md border border-border text-base-content transition-colors hover:bg-surface-hover',
@@ -1685,15 +1699,57 @@ describe('shared primitive guardrails', () => {
     expect(settingsDialogCloseGuard?.ignoredPaths).toEqual([
       'src/components/shared/Button.test.tsx',
     ]);
+    expect(copyValueRule?.canonical?.path).toBe('src/components/shared/Button.tsx');
+    expect(copyValueRule?.canonical?.export).toBe('CopyValueButton');
+    expect(copyValueRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/components/Discovery/DiscoveryTab.tsx',
+      'src/components/shared/WebInterfaceUrlField.tsx',
+    ]);
+    expect(copyableCodeRowRule?.canonical?.path).toBe('src/components/shared/CopyableCodeRow.tsx');
+    expect(copyableCodeRowRule?.canonical?.export).toBe('CopyableCodeRow');
+    expect(copyableCodeRowRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/components/Discovery/DiscoveryTab.tsx',
+    ]);
+    expect(copyValueNeutralGuard?.canonical?.path).toBe('src/components/shared/Button.tsx');
+    expect(copyValueNeutralGuard?.canonical?.export).toBe('CopyValueButton');
+    expect(copyValueNeutralGuard?.allPatterns).toEqual([
+      'inline-flex min-h-7 min-w-7 shrink-0 items-center justify-center rounded border border-border bg-surface px-2 text-muted transition-colors hover:bg-surface-hover hover:text-base-content',
+      'fallback={<CopyIcon class="h-3.5 w-3.5" />}',
+    ]);
+    expect(copyValueMutedGuard?.canonical?.path).toBe('src/components/shared/Button.tsx');
+    expect(copyValueMutedGuard?.canonical?.export).toBe('CopyValueButton');
+    expect(copyValueMutedGuard?.allPatterns).toEqual([
+      'inline-flex min-h-8 min-w-8 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-base-content',
+      'fallback={<CopyIcon class="h-3.5 w-3.5" />}',
+    ]);
+    expect(copyValueAccentGuard?.canonical?.path).toBe('src/components/shared/Button.tsx');
+    expect(copyValueAccentGuard?.canonical?.export).toBe('CopyValueButton');
+    expect(copyValueAccentGuard?.allPatterns).toEqual([
+      'inline-flex min-h-7 min-w-7 shrink-0 items-center justify-center rounded text-blue-700 transition-colors hover:bg-blue-100 dark:text-blue-200 dark:hover:bg-blue-950',
+      'fallback={<CopyIcon class="h-3.5 w-3.5" />}',
+    ]);
+    expect(copyableCodeRowGuard?.canonical?.path).toBe('src/components/shared/CopyableCodeRow.tsx');
+    expect(copyableCodeRowGuard?.canonical?.export).toBe('CopyableCodeRow');
+    expect(copyableCodeRowGuard?.allPatterns).toEqual([
+      'flex items-start gap-2 rounded bg-surface-alt px-2 py-1.5',
+      'break-all font-mono text-xs text-base-content',
+    ]);
 
     expect(buttonSource).toContain('export function Button');
     expect(buttonSource).toContain('export function CommandCopyButton');
+    expect(buttonSource).toContain('export function CopyValueButton');
     expect(buttonSource).toContain('export function ButtonLink');
     expect(buttonSource).toContain('getButtonClass');
+    expect(buttonSource).toContain('getCopyValueButtonClass');
+    expect(copyableCodeRowSource).toContain('CopyValueButton');
     expect(buttonModelSource).toContain('BUTTON_VARIANT_CLASSES');
     expect(buttonModelSource).toContain('BUTTON_SIZE_CLASSES');
+    expect(buttonModelSource).toContain('primaryFlat:');
+    expect(buttonModelSource).toContain('COPY_VALUE_BUTTON_VARIANT_CLASSES');
+    expect(buttonModelSource).toContain('COPY_VALUE_BUTTON_SIZE_CLASSES');
     expect(buttonModelSource).toContain('dangerOutline:');
     expect(buttonModelSource).toContain('settingsAction:');
+    expect(buttonModelSource).toContain('getCopyValueButtonClass');
     expect(chatMessagesSource).toContain('@/components/shared/Button');
     expect(chatMessagesSource).not.toContain(
       'rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content',
@@ -1799,6 +1855,24 @@ describe('shared primitive guardrails', () => {
     );
     expect(infrastructureWorkspaceSource).not.toContain(
       'h-9 w-9 items-center justify-center rounded-md border border-border text-base-content transition-colors hover:bg-surface-hover',
+    );
+    expect(discoveryTabSource).toContain('@/components/shared/Button');
+    expect(discoveryTabSource).toContain('@/components/shared/CopyableCodeRow');
+    expect(discoveryTabSource).toContain('CopyValueButton');
+    expect(discoveryTabSource).toContain('CopyableCodeRow');
+    expect(discoveryTabSource).not.toContain('interface CopyValueButtonProps');
+    expect(discoveryTabSource).not.toContain('const CopyValueButton');
+    expect(discoveryTabSource).not.toContain('const CopyableCodeRow');
+    expect(discoveryTabSource).not.toContain(
+      'inline-flex min-h-7 min-w-7 shrink-0 items-center justify-center rounded border border-border bg-surface px-2 text-muted transition-colors hover:bg-surface-hover hover:text-base-content',
+    );
+    expect(discoveryTabSource).not.toContain(
+      'flex items-start gap-2 rounded bg-surface-alt px-2 py-1.5',
+    );
+    expect(webInterfaceUrlFieldSource).toContain('CopyValueButton');
+    expect(webInterfaceUrlFieldSource).not.toContain('CopyIcon class="h-3.5 w-3.5"');
+    expect(webInterfaceUrlFieldSource).not.toContain(
+      'inline-flex min-h-8 min-w-8 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-base-content',
     );
     expect(patrolIntelligenceWorkspaceSource).toContain('@/components/shared/Button');
     expect(patrolIntelligenceWorkspaceSource).not.toContain(

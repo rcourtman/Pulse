@@ -1,5 +1,6 @@
 export type ButtonVariant =
   | 'primary'
+  | 'primaryFlat'
   | 'secondary'
   | 'danger'
   | 'dangerOutline'
@@ -20,6 +21,7 @@ export const BUTTON_BASE_CLASS =
 
 export const BUTTON_VARIANT_CLASSES: Record<ButtonVariant, string> = {
   primary: 'border border-transparent bg-blue-600 text-white shadow-sm hover:bg-blue-700',
+  primaryFlat: 'border border-transparent bg-blue-600 text-white hover:bg-blue-700',
   secondary: 'border border-border bg-surface text-base-content shadow-sm hover:bg-surface-hover',
   danger: 'border border-transparent bg-rose-600 text-white shadow-sm hover:bg-rose-700',
   dangerOutline:
@@ -50,6 +52,44 @@ export const getButtonClass = (options: ButtonClassOptions = {}): string =>
     BUTTON_BASE_CLASS,
     BUTTON_VARIANT_CLASSES[options.variant ?? 'secondary'],
     BUTTON_SIZE_CLASSES[options.size ?? 'md'],
+    options.class,
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+export type CopyValueButtonVariant = 'neutral' | 'ghost' | 'accent' | 'chip';
+export type CopyValueButtonSize = 'xs' | 'sm' | 'md' | 'lg' | 'chip';
+
+export const COPY_VALUE_BUTTON_BASE_CLASS =
+  'inline-flex shrink-0 items-center justify-center rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
+
+export const COPY_VALUE_BUTTON_VARIANT_CLASSES: Record<CopyValueButtonVariant, string> = {
+  neutral:
+    'border border-border bg-surface text-muted hover:bg-surface-hover hover:text-base-content',
+  ghost: 'text-muted hover:bg-surface-hover hover:text-base-content',
+  accent: 'text-blue-700 hover:bg-blue-100 dark:text-blue-200 dark:hover:bg-blue-950',
+  chip: 'bg-surface-alt text-base-content hover:bg-surface-hover',
+};
+
+export const COPY_VALUE_BUTTON_SIZE_CLASSES: Record<CopyValueButtonSize, string> = {
+  xs: 'min-h-5 min-w-5',
+  sm: 'min-h-6 min-w-6',
+  md: 'min-h-7 min-w-7',
+  lg: 'min-h-8 min-w-8 rounded-md',
+  chip: 'gap-1 px-1.5 py-0.5 text-[10px]',
+};
+
+export type CopyValueButtonClassOptions = {
+  variant?: CopyValueButtonVariant;
+  size?: CopyValueButtonSize;
+  class?: string;
+};
+
+export const getCopyValueButtonClass = (options: CopyValueButtonClassOptions = {}): string =>
+  [
+    COPY_VALUE_BUTTON_BASE_CLASS,
+    COPY_VALUE_BUTTON_VARIANT_CLASSES[options.variant ?? 'neutral'],
+    COPY_VALUE_BUTTON_SIZE_CLASSES[options.size ?? 'md'],
     options.class,
   ]
     .filter(Boolean)

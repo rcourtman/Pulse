@@ -1,7 +1,6 @@
 import { Component, Show } from 'solid-js';
-import CheckIcon from 'lucide-solid/icons/check';
-import CopyIcon from 'lucide-solid/icons/copy';
 import ExternalLinkIcon from 'lucide-solid/icons/external-link';
+import { Button, CopyValueButton } from './Button';
 import { DiscoveryProvenanceMarker } from './DiscoveryProvenanceMarker';
 import { useWebInterfaceUrlFieldState } from './useWebInterfaceUrlFieldState';
 import type { WebInterfaceUrlFieldProps } from './webInterfaceUrlFieldModel';
@@ -36,14 +35,14 @@ export const WebInterfaceUrlField: Component<WebInterfaceUrlFieldProps> = (props
             }}
             disabled={state.urlSaving()}
           />
-          <button
-            type="button"
-            class="px-2.5 py-1.5 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          <Button
+            variant="primaryFlat"
+            size="sm"
             disabled={state.urlSaving() || state.urlValue().trim() === state.normalizedCurrentUrl()}
             onClick={() => void state.handleSaveUrl()}
           >
             Save
-          </button>
+          </Button>
           <Show when={state.normalizedCurrentUrl()}>
             <a
               href={state.normalizedCurrentUrl()}
@@ -57,31 +56,25 @@ export const WebInterfaceUrlField: Component<WebInterfaceUrlFieldProps> = (props
             </a>
           </Show>
           <Show when={state.normalizedCurrentUrl()}>
-            <button
-              type="button"
-              class="inline-flex min-h-8 min-w-8 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-base-content"
-              onClick={() => void state.handleCopyUrl(state.normalizedCurrentUrl())}
-              title="Copy URL"
-              aria-label="Copy URL"
-            >
-              <Show
-                when={state.copiedUrlValue() === state.normalizedCurrentUrl()}
-                fallback={<CopyIcon class="h-3.5 w-3.5" />}
-              >
-                <CheckIcon class="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-              </Show>
-            </button>
+            <CopyValueButton
+              value={state.normalizedCurrentUrl()}
+              copied={state.copiedUrlValue() === state.normalizedCurrentUrl()}
+              onCopyValue={state.handleCopyUrl}
+              label="Copy URL"
+              variant="ghost"
+              size="lg"
+            />
           </Show>
           <Show when={state.normalizedCurrentUrl()}>
-            <button
-              type="button"
-              class="px-2.5 py-1.5 text-xs font-medium rounded-md text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900 disabled:opacity-50 transition-colors"
+            <Button
+              variant="dangerOutline"
+              size="sm"
               disabled={state.urlSaving()}
               onClick={() => void state.handleDeleteUrl()}
               title="Remove URL"
             >
               Remove
-            </button>
+            </Button>
           </Show>
         </div>
 
@@ -145,28 +138,23 @@ export const WebInterfaceUrlField: Component<WebInterfaceUrlFieldProps> = (props
               >
                 <ExternalLinkIcon class="h-3.5 w-3.5" />
               </a>
-              <button
-                type="button"
-                class="inline-flex min-h-7 min-w-7 shrink-0 items-center justify-center rounded text-blue-700 transition-colors hover:bg-blue-100 dark:text-blue-200 dark:hover:bg-blue-950"
-                onClick={() => void state.handleCopyUrl(state.normalizedSuggestedUrl())}
-                title="Copy suggested URL"
-                aria-label="Copy suggested URL"
-              >
-                <Show
-                  when={state.copiedUrlValue() === state.normalizedSuggestedUrl()}
-                  fallback={<CopyIcon class="h-3.5 w-3.5" />}
-                >
-                  <CheckIcon class="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                </Show>
-              </button>
-              <button
-                type="button"
-                class="px-2 py-1 text-xs font-medium rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors flex-shrink-0"
+              <CopyValueButton
+                value={state.normalizedSuggestedUrl()}
+                copied={state.copiedUrlValue() === state.normalizedSuggestedUrl()}
+                onCopyValue={state.handleCopyUrl}
+                label="Copy suggested URL"
+                variant="accent"
+                size="md"
+              />
+              <Button
+                variant="primaryFlat"
+                size="xs"
+                class="flex-shrink-0"
                 onClick={() => state.setUrlValue(state.normalizedSuggestedUrl())}
                 disabled={state.urlSaving()}
               >
                 {state.normalizedCurrentUrl() ? 'Use instead' : 'Use this'}
-              </button>
+              </Button>
             </div>
           </div>
         </Show>
