@@ -38,6 +38,7 @@ import searchInputSource from '@/components/shared/SearchInput.tsx?raw';
 import searchInputEnhancementsSource from '@/components/shared/SearchInputEnhancements.tsx?raw';
 import searchInputEnhancementsModelSource from '@/components/shared/searchInputEnhancementsModel.ts?raw';
 import searchInputModelSource from '@/components/shared/searchInputModel.ts?raw';
+import statusDotSource from '@/components/shared/StatusDot.tsx?raw';
 import statusBadgeSource from '@/components/shared/StatusBadge.tsx?raw';
 import statusBadgeModelSource from '@/components/shared/statusBadgeModel.ts?raw';
 import discoveryReadinessBadgeSource from '@/components/shared/DiscoveryReadinessBadge.tsx?raw';
@@ -139,7 +140,9 @@ import storageGroupPresentationSource from '@/features/storageBackups/groupPrese
 import storagePoolRowSource from '@/components/Storage/StoragePoolRow.tsx?raw';
 import storageContentCardSource from '@/components/Storage/StorageContentCard.tsx?raw';
 import storagePoolsTableSource from '@/components/Storage/StoragePoolsTable.tsx?raw';
+import storagePoolDetailSource from '@/components/Storage/StoragePoolDetail.tsx?raw';
 import diskListSource from '@/components/Storage/DiskList.tsx?raw';
+import alertOverviewStatsCardsSource from '@/features/alerts/AlertOverviewStatsCards.tsx?raw';
 import alertHistoryTableSectionSource from '@/features/alerts/AlertHistoryTableSection.tsx?raw';
 import alertHistoryTableGroupRowSource from '@/features/alerts/AlertHistoryTableGroupRow.tsx?raw';
 import alertResourceTableDesktopSource from '@/components/Alerts/AlertResourceTableDesktop.tsx?raw';
@@ -148,6 +151,7 @@ import resourceDetailSummarySource from '@/components/Infrastructure/ResourceDet
 import aiSettingsDialogsSource from '@/components/Settings/AISettingsDialogs.tsx?raw';
 import agentProfilesPanelSource from '@/components/Settings/AgentProfilesPanel.tsx?raw';
 import apiTokenManagerSource from '@/components/Settings/APITokenManager.tsx?raw';
+import diagnosticsResultsPanelSource from '@/components/Settings/DiagnosticsResultsPanel.tsx?raw';
 import generalSettingsPanelSource from '@/components/Settings/GeneralSettingsPanel.tsx?raw';
 import organizationAccessMembersSectionSource from '@/components/Settings/OrganizationAccessMembersSection.tsx?raw';
 import organizationIncomingSharesSectionSource from '@/components/Settings/OrganizationIncomingSharesSection.tsx?raw';
@@ -171,6 +175,7 @@ import savedViewsMenuSource from '@/components/shared/FilterBar/SavedViewsMenu.t
 import useSavedViewsSource from '@/components/shared/FilterBar/useSavedViews.ts?raw';
 import storagePageControlsSource from '@/components/Storage/StoragePageControls.tsx?raw';
 import proxmoxBackupsTableSharedSource from '@/features/proxmox/proxmoxBackupsTableShared.tsx?raw';
+import truenasSystemsTableSource from '@/features/truenas/TrueNASSystemsTable.tsx?raw';
 
 const sharedSources = import.meta.glob(['./*.tsx', './cards/*.tsx', './responsive/*.tsx'], {
   query: '?raw',
@@ -1124,6 +1129,79 @@ describe('shared primitive guardrails', () => {
     expect(statusBadgeModelSource).toContain('getStatusBadgeLabel');
     expect(statusBadgeModelSource).toContain('getStatusBadgeTitle');
     expect(statusBadgeModelSource).toContain("labelEnabled ?? 'Enabled'");
+  });
+
+  it('keeps resource status dots on the shared StatusDot primitive', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        allowedPaths?: string[];
+        ignoredPaths?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find((rule) => rule.id === 'status-dot-shell');
+    const registeredGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'status-dot-local-linked-disk-health-dot',
+    );
+
+    expect(registeredRule?.canonical?.path).toBe('src/components/shared/StatusDot.tsx');
+    expect(registeredRule?.canonical?.export).toBe('StatusDot');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/components/Settings/DiagnosticsResultsPanel.tsx',
+      'src/components/Settings/ResourcePicker.tsx',
+      'src/components/Storage/StoragePoolDetail.tsx',
+      'src/components/shared/NodeGroupHeader.tsx',
+      'src/features/alerts/AlertOverviewStatsCards.tsx',
+      'src/features/docker/DockerHostsTable.tsx',
+      'src/features/kubernetes/KubernetesNodesTable.tsx',
+      'src/features/truenas/TrueNASSystemsTable.tsx',
+      'src/features/vmware/VsphereHostsTable.tsx',
+    ]);
+    expect(registeredGuard?.canonical?.path).toBe('src/components/shared/StatusDot.tsx');
+    expect(registeredGuard?.canonical?.export).toBe('StatusDot');
+    expect(registeredGuard?.allPatterns).toEqual([
+      'h-2 w-2 rounded-full bg-yellow-500',
+      'h-2 w-2 rounded-full bg-green-500',
+    ]);
+    expect(registeredGuard?.scopes).toEqual([
+      'src/components/Storage',
+      'src/features/storageBackups',
+    ]);
+    expect(registeredGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(registeredGuard?.ignoredPaths).toEqual([
+      'src/components/shared/SharedPrimitives.guardrails.test.ts',
+    ]);
+
+    expect(statusDotSource).toContain('const VARIANT_CLASSES');
+    expect(statusDotSource).toContain("warning: 'bg-amber-500 dark:bg-amber-400'");
+    expect(statusDotSource).toContain('aria-hidden={ariaHidden()}');
+    expect(storagePoolDetailSource).toContain('StatusDot');
+    expect(storagePoolDetailSource).toContain('getLinkedDiskHealthDotVariant');
+    expect(storagePoolDetailSource).not.toContain('getLinkedDiskHealthDotClass');
+    expect(storagePoolDetailSource).not.toContain('h-2 w-2 rounded-full bg-yellow-500');
+    expect(storagePoolDetailSource).not.toContain('h-2 w-2 rounded-full bg-green-500');
+
+    for (const source of [
+      diagnosticsResultsPanelSource,
+      resourcePickerSource,
+      storagePoolDetailSource,
+      nodeGroupHeaderSource,
+      alertOverviewStatsCardsSource,
+      dockerHostsTableSource,
+      kubernetesNodesTableSource,
+      truenasSystemsTableSource,
+      vsphereHostsTableSource,
+    ]) {
+      expect(source).toContain('StatusDot');
+    }
   });
 
   it('keeps discovery readiness badges presentation-only and accessible', () => {

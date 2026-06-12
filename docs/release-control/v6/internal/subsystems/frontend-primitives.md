@@ -2416,6 +2416,13 @@ small leading status-dot glyph used by filter options. Page and feature
 surfaces must not copy the chip-dot `<span>` factory or import the legacy
 `PageControls` deck for resource-list filtering; those drift checks live in
 `shared-template-registry.json` and run through `shared-template-audit.mjs`.
+Status indicator dots are registry-backed too. `StatusDot` owns the shared
+size, color-token, pulse, title, aria, and decorative-status behavior for
+resource and health dots, while feature owners supply only the status
+semantics. Storage linked-disk health rows must derive a `StatusDot` variant
+through `getLinkedDiskHealthDotVariant` and must not recreate local rounded
+green/yellow span classes in storage components or storage-backup presentation
+helpers.
 Search controls are registry-backed too. `SearchField` owns simple search
 input chrome, clear affordance, keyboard forwarding, focus handling, aria
 labels, and trailing-control padding, while `SearchInput` owns resource-list

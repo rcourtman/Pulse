@@ -1260,7 +1260,8 @@ describe('frontend resource type boundaries', () => {
     expect(diskListSource).not.toContain('function extractDiskData(');
     expect(diskListSource).not.toContain('const filteredDisks = createMemo(() => {');
     expect(diskListSource).not.toContain('const diskDataById = createMemo(() => {');
-    expect(storagePoolDetailSource).toContain('getLinkedDiskHealthDotClass');
+    expect(storagePoolDetailSource).toContain('StatusDot');
+    expect(storagePoolDetailSource).toContain('getLinkedDiskHealthDotVariant');
     expect(storagePoolDetailSource).toContain('getLinkedDiskTemperatureTextClass');
     expect(storagePoolDetailSource).toContain('getZfsScanTextClass');
     expect(storagePoolDetailSource).toContain('getZfsErrorTextClass');
@@ -1714,7 +1715,7 @@ describe('frontend resource type boundaries', () => {
     expect(diskDetailPresentationSource).toContain(
       'export function getDiskAttributeValueTextClass',
     );
-    expect(diskDetailPresentationSource).toContain('export function getLinkedDiskHealthDotClass');
+    expect(diskDetailPresentationSource).toContain('export function getLinkedDiskHealthDotVariant');
     expect(diskDetailPresentationSource).toContain(
       'export function getLinkedDiskTemperatureTextClass',
     );

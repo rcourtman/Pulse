@@ -2,13 +2,14 @@ import type { PhysicalDiskPresentationData } from '@/features/storageBackups/dis
 import type { HistoryTimeRange } from '@/api/charts';
 import { formatPowerOnHours } from '@/utils/format';
 import { formatTemperature } from '@/utils/temperature';
+import type { StatusIndicatorVariant } from '@/utils/status';
 
 export function getDiskAttributeValueTextClass(ok: boolean): string {
   return ok ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
 }
 
-export function getLinkedDiskHealthDotClass(hasIssue: boolean): string {
-  return hasIssue ? 'h-2 w-2 rounded-full bg-yellow-500' : 'h-2 w-2 rounded-full bg-green-500';
+export function getLinkedDiskHealthDotVariant(hasIssue: boolean): StatusIndicatorVariant {
+  return hasIssue ? 'warning' : 'success';
 }
 
 export function getLinkedDiskTemperatureTextClass(tempCelsius: number): string {

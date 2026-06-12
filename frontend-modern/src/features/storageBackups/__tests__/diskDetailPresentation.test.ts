@@ -7,7 +7,7 @@ import {
   getDiskDetailHistoryCharts,
   getDiskDetailHistoryFallbackMessage,
   getDiskDetailLiveBadgeLabel,
-  getLinkedDiskHealthDotClass,
+  getLinkedDiskHealthDotVariant,
   getLinkedDiskTemperatureTextClass,
 } from '@/features/storageBackups/diskDetailPresentation';
 
@@ -18,8 +18,8 @@ describe('diskDetailPresentation', () => {
   });
 
   it('returns canonical linked-disk state presentation', () => {
-    expect(getLinkedDiskHealthDotClass(true)).toBe('h-2 w-2 rounded-full bg-yellow-500');
-    expect(getLinkedDiskHealthDotClass(false)).toBe('h-2 w-2 rounded-full bg-green-500');
+    expect(getLinkedDiskHealthDotVariant(true)).toBe('warning');
+    expect(getLinkedDiskHealthDotVariant(false)).toBe('success');
     expect(getLinkedDiskTemperatureTextClass(65)).toBe('text-red-500');
     expect(getLinkedDiskTemperatureTextClass(55)).toBe('text-yellow-500');
   });

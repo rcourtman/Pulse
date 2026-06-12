@@ -156,6 +156,31 @@
       ]
     },
     {
+      "id": "status-dot-shell",
+      "category": "status-indicator",
+      "summary": "Resource and health indicator dots must compose StatusDot for shared size, variant, pulse, title, and aria behavior instead of recreating local rounded status spans.",
+      "canonical": {
+        "path": "src/components/shared/StatusDot.tsx",
+        "export": "StatusDot"
+      },
+      "requiredConsumers": [
+        { "path": "src/components/Settings/DiagnosticsResultsPanel.tsx" },
+        { "path": "src/components/Settings/ResourcePicker.tsx" },
+        { "path": "src/components/Storage/StoragePoolDetail.tsx" },
+        { "path": "src/components/shared/NodeGroupHeader.tsx" },
+        { "path": "src/features/alerts/AlertOverviewStatsCards.tsx" },
+        { "path": "src/features/docker/DockerHostsTable.tsx" },
+        { "path": "src/features/kubernetes/KubernetesNodesTable.tsx" },
+        { "path": "src/features/truenas/TrueNASSystemsTable.tsx" },
+        { "path": "src/features/vmware/VsphereHostsTable.tsx" }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/__tests__/StatusDot.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "platform-table-loading-state",
       "category": "platform-table-loading-state",
       "summary": "Platform page and table loading states must compose PlatformTableLoadingState instead of recreating local TableCard status rows.",
@@ -654,6 +679,25 @@
       "extensions": [".tsx"],
       "allPatterns": ["type=\"search\""],
       "legacyReason": "Retired migration debt. Search controls must use SearchField or SearchInput; native search inputs are not allowed in product surfaces.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "status-dot-local-linked-disk-health-dot",
+      "category": "status-indicator",
+      "summary": "Storage linked-disk health rows must not recreate the retired green/yellow raw dot classes owned by StatusDot.",
+      "canonical": {
+        "path": "src/components/shared/StatusDot.tsx",
+        "export": "StatusDot"
+      },
+      "scopes": ["src/components/Storage", "src/features/storageBackups"],
+      "extensions": [".ts", ".tsx"],
+      "allPatterns": ["h-2 w-2 rounded-full bg-yellow-500", "h-2 w-2 rounded-full bg-green-500"],
+      "legacyReason": "Retired migration debt. Linked-disk health indicators must use StatusDot variants instead of local green/yellow dot classes.",
       "allowedPaths": [],
       "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
       "proof": [

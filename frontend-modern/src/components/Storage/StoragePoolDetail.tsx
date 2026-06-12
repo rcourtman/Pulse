@@ -1,6 +1,7 @@
 import { Component, For, Show, createEffect, createMemo } from 'solid-js';
 import { FormSelect } from '@/components/shared/FormSelect';
 import { HistoryChart } from '@/components/shared/HistoryChart';
+import { StatusDot } from '@/components/shared/StatusDot';
 import type { HistoryTimeRange } from '@/api/charts';
 import { maxHistoryDays } from '@/stores/license';
 import {
@@ -8,7 +9,7 @@ import {
   resolveHistoryRangeWithinLimit,
 } from '@/components/Storage/historyRangeAccess';
 import {
-  getLinkedDiskHealthDotClass,
+  getLinkedDiskHealthDotVariant,
   getLinkedDiskTemperatureTextClass,
 } from '@/features/storageBackups/diskDetailPresentation';
 import {
@@ -199,8 +200,10 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
                         <span class={STORAGE_DETAIL_LINKED_DISK_PATH_CLASS} title={disk.devPath}>
                           {disk.devPath}
                         </span>
-                        <span
-                          class={`flex-shrink-0 ${getLinkedDiskHealthDotClass(disk.hasIssue)}`}
+                        <StatusDot
+                          variant={getLinkedDiskHealthDotVariant(disk.hasIssue)}
+                          size="sm"
+                          ariaHidden
                         />
                         <span class={STORAGE_DETAIL_LINKED_DISK_MODEL_CLASS}>{disk.model}</span>
                         <Show when={disk.role}>

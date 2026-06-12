@@ -1678,6 +1678,12 @@ payload as its disk-health truth. When API-backed platforms such as TrueNAS
 raise SMART-backed disk incidents, those reasons must surface through
 `physicalDisk.risk.reasons` so storage rows and disk detail use the same shared
 disk-health contract instead of depending on incident-only side channels.
+Linked-disk health indicators on storage pool detail rows keep the same owner
+split: storage derives the health semantics through
+`getLinkedDiskHealthDotVariant`, while the shared frontend primitive
+`StatusDot` owns the visible dot chrome, size, color-token, and aria behavior.
+Storage components and `features/storageBackups` presentation helpers must not
+recreate raw green/yellow rounded-dot classes locally.
 That same storage page ownership now also includes contextual focus behavior
 for pools and disks. Expanding a storage row may set a focused metrics-target
 ID for shared summary emphasis, but `frontend-modern/src/components/Storage/StorageSummary.tsx`
