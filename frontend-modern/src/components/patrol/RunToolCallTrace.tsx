@@ -12,6 +12,7 @@ import {
   type ToolCallVerification,
   type ToolCallVerificationStatus,
 } from '@/api/patrol';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import {
   getToolCallResultBadgeTone,
@@ -141,7 +142,7 @@ export const RunToolCallTrace: Component<RunToolCallTraceProps> = (props) => {
         <Show when={expanded()}>
           <Show when={toolCalls.loading}>
             <div class="flex items-center gap-2 text-xs text-muted py-2 mt-2">
-              <span class="h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+              <LoadingSpinner size="sm" />
               {getToolCallsLoadingState()}
             </div>
           </Show>

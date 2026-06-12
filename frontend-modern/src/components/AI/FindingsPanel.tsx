@@ -14,6 +14,7 @@ import { Component, createSignal, createEffect, Show, For, createMemo } from 'so
 import { useLocation } from '@solidjs/router';
 import { Card } from '@/components/shared/Card';
 import { FormSelect } from '@/components/shared/FormSelect';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { aiIntelligenceStore, type UnifiedFinding } from '@/stores/aiIntelligence';
 import { notificationStore } from '@/stores/notifications';
@@ -909,9 +910,12 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                       finding.investigationStatus === 'pending'
                     }
                   >
-                    <span
-                      class={`h-2 w-2 rounded-full ${finding.investigationStatus === 'running' ? 'border border-current border-t-transparent animate-spin' : 'bg-current animate-pulse'}`}
-                    />
+                    <Show
+                      when={finding.investigationStatus === 'running'}
+                      fallback={<span class="h-2 w-2 rounded-full bg-current animate-pulse" />}
+                    >
+                      <LoadingSpinner size="xs" />
+                    </Show>
                   </Show>
                   {getInvestigationStatusLabel(finding.investigationStatus!)}
                 </MetadataBadge>
@@ -1661,7 +1665,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       {/* Loading/Error states */}
       <Show when={shouldShowLoadingState()}>
         <div class="p-4 text-sm text-muted flex items-center gap-2">
-          <span class="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+          <LoadingSpinner size="md" />
           Loading findings...
         </div>
       </Show>

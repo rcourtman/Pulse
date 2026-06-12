@@ -20,6 +20,7 @@ describe('RunToolCallTrace', () => {
 
   it('keeps tool-call result chips on the shared MetadataBadge primitive', () => {
     expect(runToolCallTraceSource).toContain('MetadataBadge');
+    expect(runToolCallTraceSource).toContain('LoadingSpinner');
     expect(runToolCallTraceSource).toContain('RUN_TOOL_CALL_BADGE_PROPS');
     expect(runToolCallTraceSource).toContain('getToolCallResultBadgeTone');
     expect(runToolCallTraceSource).not.toContain('getToolCallResultBadgeClass');

@@ -4,6 +4,7 @@ import { Suspense, createSignal } from 'solid-js';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 import { resetAIRuntimeState } from '@/stores/aiRuntimeState';
 import { getPublicPricingUrl } from '@/utils/pricingHandoff';
+import patrolIntelligenceHeaderSource from '@/features/patrol/PatrolIntelligenceHeader.tsx?raw';
 import patrolIntelligenceStateSource from '@/features/patrol/usePatrolIntelligenceState.ts?raw';
 
 import { AIIntelligence } from '../AIIntelligence';
@@ -342,6 +343,10 @@ describe('AIIntelligence entitlement gating', () => {
     expect(patrolIntelligenceStateSource).toContain('PATROL_REFRESH_TIMEOUT_MS');
     expect(patrolIntelligenceStateSource).toContain('finishRefresh(requestId)');
     expect(patrolIntelligenceStateSource).toContain('requestId === refreshRequestId');
+  });
+
+  it('keeps Patrol header loading indicators on the shared LoadingSpinner primitive', () => {
+    expect(patrolIntelligenceHeaderSource).toContain('LoadingSpinner');
   });
 
   beforeEach(() => {

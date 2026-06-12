@@ -11,6 +11,7 @@ import { Toggle, TogglePrimitive } from '@/components/shared/Toggle';
 import { CountdownTimer } from '@/components/patrol';
 import { FormSelect } from '@/components/shared/FormSelect';
 import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import type { PatrolAutonomyLevel } from '@/api/patrol';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { formatRelativeTime } from '@/utils/format';
@@ -527,7 +528,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
                       class="w-full py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md shadow-sm transition-all focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-blue-300 disabled:hover:bg-blue-300 dark:disabled:bg-blue-900 flex items-center justify-center gap-2"
                     >
                       <Show when={state.isSavingAdvanced()}>
-                        <div class="animate-spin w-4 h-4 border-2 border-current border-t-transparent rounded-full"></div>
+                        <LoadingSpinner size="md" />
                       </Show>
                       <Show when={!state.isSavingAdvanced()}>Apply Configuration</Show>
                     </button>

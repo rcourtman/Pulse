@@ -16,6 +16,7 @@ import {
   getApprovalExpiryStatusLabel,
   getApprovalRiskPresentation,
 } from '@/utils/approvalRiskPresentation';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import ShieldAlertIcon from 'lucide-solid/icons/shield-alert';
 import CheckIcon from 'lucide-solid/icons/check';
@@ -134,7 +135,7 @@ export const ApprovalBanner: Component<ApprovalBannerProps> = (props) => {
                 class="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white text-xs font-medium rounded-md transition-colors"
               >
                 <Show when={actionLoading() === firstApproval()!.id}>
-                  <span class="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <LoadingSpinner size="sm" tone="inverse" />
                 </Show>
                 <Show when={actionLoading() !== firstApproval()!.id}>
                   <CheckIcon class="w-3.5 h-3.5" />

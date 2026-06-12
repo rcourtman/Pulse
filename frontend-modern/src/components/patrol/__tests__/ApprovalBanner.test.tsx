@@ -48,6 +48,7 @@ describe('ApprovalBanner', () => {
 
   it('keeps approval risk chips on the shared MetadataBadge primitive', () => {
     expect(approvalBannerSource).toContain('MetadataBadge');
+    expect(approvalBannerSource).toContain('LoadingSpinner');
     expect(approvalBannerSource).toContain('APPROVAL_BANNER_BADGE_PROPS');
     expect(approvalBannerSource).toContain('firstApprovalRisk()!.badgeTone');
     expect(approvalBannerSource).not.toContain('firstApprovalRisk()!.badgeClass');

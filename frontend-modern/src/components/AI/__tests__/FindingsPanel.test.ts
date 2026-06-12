@@ -53,6 +53,12 @@ const patrolWorkspaceSource = readFileSync(
 );
 
 describe('FindingsPanel assistant handoff', () => {
+  it('routes finding loading indicators through the shared LoadingSpinner primitive', () => {
+    expect(findingsPanelSource).toContain("from '@/components/shared/LoadingSpinner'");
+    expect(findingsPanelSource).toContain('<LoadingSpinner size="xs" />');
+    expect(findingsPanelSource).toContain('<LoadingSpinner size="md" />');
+  });
+
   it('routes Patrol investigation records into the Assistant briefing context', () => {
     expect(findingsPanelSource).toContain('buildPatrolAssistantFindingHandoff');
     expect(findingsPanelSource).toContain('buildPatrolAssistantApprovalBriefingInput');

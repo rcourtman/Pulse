@@ -7,6 +7,7 @@ import {
   getInvestigationOutcomeLabel,
   getInvestigationStatusBadgeTone,
 } from '@/utils/aiFindingPresentation';
+import investigationSectionSource from '../InvestigationSection.tsx?raw';
 import InvestigationSection from '../InvestigationSection';
 
 const getInvestigationMock = vi.hoisted(() => vi.fn<() => Promise<Investigation>>());
@@ -45,6 +46,10 @@ describe('InvestigationSection', () => {
 
   afterEach(() => {
     cleanup();
+  });
+
+  it('keeps investigation loading indicators on the shared LoadingSpinner primitive', () => {
+    expect(investigationSectionSource).toContain('LoadingSpinner');
   });
 
   it('renders investigation status badges from the shared finding presentation contract', async () => {

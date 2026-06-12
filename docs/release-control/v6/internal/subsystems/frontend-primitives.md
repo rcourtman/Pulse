@@ -2552,6 +2552,11 @@ semantics. Storage linked-disk health rows must derive a `StatusDot` variant
 through `getLinkedDiskHealthDotVariant` and must not recreate local rounded
 green/yellow span classes in storage components or storage-backup presentation
 helpers.
+Loading indicators are registry-backed too. `LoadingSpinner` owns the shared
+border-based spinner shell, size catalog, tone catalog, decorative status, and
+accessible status label behavior. Patrol and AI finding surfaces must compose
+that primitive for loading and action-pending spinners; icon-specific refresh
+rotation remains local icon state, not a loading-spinner shell.
 Native select controls are registry-backed too. `FormSelect` owns label/id
 wiring, helper-text description merging, value synchronization, default select
 chrome, dynamic-option value synchronization, and compact styling hooks for

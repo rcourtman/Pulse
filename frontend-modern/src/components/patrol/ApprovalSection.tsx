@@ -11,6 +11,7 @@ import { notificationStore } from '@/stores/notifications';
 import { aiChatStore } from '@/stores/aiChat';
 import { hasFeature } from '@/stores/license';
 import { AIAPI, type ApprovalRequest, type ApprovalExecutionResult } from '@/api/ai';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { getApprovalRiskPresentation } from '@/utils/approvalRiskPresentation';
 import {
@@ -240,7 +241,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
           class="flex-1 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white text-xs font-medium rounded flex items-center justify-center gap-1.5"
         >
           <Show when={actionLoading() === 'reapprove'}>
-            <span class="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            <LoadingSpinner size="sm" tone="inverse" />
           </Show>
           <Show when={actionLoading() !== 'reapprove'}>
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -322,7 +323,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                       class="flex-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white text-xs font-medium rounded flex items-center justify-center gap-1.5"
                     >
                       <Show when={actionLoading() === approval.id}>
-                        <span class="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <LoadingSpinner size="sm" tone="inverse" />
                       </Show>
                       <Show when={actionLoading() !== approval.id}>
                         <svg

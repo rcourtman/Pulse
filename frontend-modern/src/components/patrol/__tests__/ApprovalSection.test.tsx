@@ -88,6 +88,10 @@ describe('ApprovalSection', () => {
     openMock.mockReset();
   });
 
+  it('keeps approval action loading indicators on the shared LoadingSpinner primitive', () => {
+    expect(approvalSectionSource).toContain('LoadingSpinner');
+  });
+
   afterEach(() => {
     cleanup();
   });

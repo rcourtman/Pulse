@@ -26,6 +26,7 @@ import {
 } from '@/utils/aiFindingPresentation';
 import { getInvestigationSectionState } from '@/utils/patrolEmptyStatePresentation';
 import { buildPatrolInvestigationRecordPresentation } from '@/features/patrol/patrolInvestigationContextModel';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { InvestigationMessages } from './InvestigationMessages';
 import { notificationStore } from '@/stores/notifications';
@@ -167,7 +168,7 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
       {/* Loading */}
       <Show when={!investigationSectionState().empty && investigationSectionState().text}>
         <div class="flex items-center gap-2 text-xs text-muted py-2">
-          <span class="h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+          <LoadingSpinner size="sm" />
           {investigationSectionState().text}
         </div>
       </Show>

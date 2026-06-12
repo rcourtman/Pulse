@@ -47,6 +47,7 @@ import searchInputEnhancementsSource from '@/components/shared/SearchInputEnhanc
 import searchInputEnhancementsModelSource from '@/components/shared/searchInputEnhancementsModel.ts?raw';
 import searchInputModelSource from '@/components/shared/searchInputModel.ts?raw';
 import statusDotSource from '@/components/shared/StatusDot.tsx?raw';
+import loadingSpinnerSource from '@/components/shared/LoadingSpinner.tsx?raw';
 import statusBadgeSource from '@/components/shared/StatusBadge.tsx?raw';
 import statusBadgeModelSource from '@/components/shared/statusBadgeModel.ts?raw';
 import statusIndicatorBadgeSource from '@/components/shared/StatusIndicatorBadge.tsx?raw';
@@ -215,6 +216,7 @@ import patrolIntelligenceSummarySource from '@/features/patrol/PatrolIntelligenc
 import patrolIntelligenceWorkspaceSource from '@/features/patrol/PatrolIntelligenceWorkspace.tsx?raw';
 import approvalBannerSource from '@/components/patrol/ApprovalBanner.tsx?raw';
 import approvalSectionSource from '@/components/patrol/ApprovalSection.tsx?raw';
+import investigationMessagesSource from '@/components/patrol/InvestigationMessages.tsx?raw';
 import investigationSectionSource from '@/components/patrol/InvestigationSection.tsx?raw';
 import runHistoryEntrySource from '@/components/patrol/RunHistoryEntry.tsx?raw';
 import runToolCallTraceSource from '@/components/patrol/RunToolCallTrace.tsx?raw';
@@ -1856,6 +1858,65 @@ describe('shared primitive guardrails', () => {
       vsphereHostsTableSource,
     ]) {
       expect(source).toContain('StatusDot');
+    }
+  });
+
+  it('keeps Patrol and AI loading spinners on the shared LoadingSpinner primitive', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        allowedPaths?: string[];
+        ignoredPaths?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find((rule) => rule.id === 'loading-spinner-shell');
+    const registeredGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'patrol-ai-local-loading-spinner-shell',
+    );
+
+    expect(registeredRule?.canonical?.path).toBe('src/components/shared/LoadingSpinner.tsx');
+    expect(registeredRule?.canonical?.export).toBe('LoadingSpinner');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/components/AI/FindingsPanel.tsx',
+      'src/components/patrol/ApprovalBanner.tsx',
+      'src/components/patrol/ApprovalSection.tsx',
+      'src/components/patrol/InvestigationMessages.tsx',
+      'src/components/patrol/InvestigationSection.tsx',
+      'src/components/patrol/RunToolCallTrace.tsx',
+      'src/features/patrol/PatrolIntelligenceHeader.tsx',
+    ]);
+    expect(registeredGuard?.canonical?.path).toBe('src/components/shared/LoadingSpinner.tsx');
+    expect(registeredGuard?.canonical?.export).toBe('LoadingSpinner');
+    expect(registeredGuard?.allPatterns).toEqual(['border-t-transparent', 'animate-spin']);
+    expect(registeredGuard?.scopes).toEqual([
+      'src/components/patrol',
+      'src/features/patrol',
+      'src/components/AI/FindingsPanel.tsx',
+    ]);
+    expect(registeredGuard?.allowedPaths ?? []).toHaveLength(0);
+
+    expect(loadingSpinnerSource).toContain('getLoadingSpinnerClass');
+    expect(loadingSpinnerSource).toContain('aria-hidden={ariaHidden()}');
+
+    for (const source of [
+      findingsPanelSource,
+      approvalBannerSource,
+      approvalSectionSource,
+      investigationMessagesSource,
+      investigationSectionSource,
+      runToolCallTraceSource,
+      patrolIntelligenceHeaderSource,
+    ]) {
+      expect(source).toContain('LoadingSpinner');
+      expect(source).not.toMatch(/border(?:-\d)?[^\n]*border-t-transparent[^\n]*animate-spin/);
     }
   });
 

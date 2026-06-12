@@ -62,9 +62,12 @@ Patrol-specific presentation helpers.
    visible run-history, status-bar, and runtime-summary state badges must
    compose the shared `StatusIndicatorBadge`, and
    resource/outcome/snapshot/scoped-run/status-bar/workspace-tab metadata chips
-   must compose the shared `MetadataBadge`. If Patrol needs a new badge shape
-   or tone, extend the shared primitive and registry guard instead of adding
-   page-local rounded pill spans.
+   must compose the shared `MetadataBadge`. Patrol and AI finding loading
+   indicators must compose the shared `LoadingSpinner` for border-based spinner
+   shell, size, tone, and accessibility behavior; icon-specific refresh
+   rotation remains local icon state. If Patrol needs a new badge shape, tone,
+   or loading indicator variant, extend the shared primitive and registry guard
+   instead of adding page-local rounded pill spans or spinner spans.
 3. Keep remediation execution badge copy and severity styling aligned through `frontend-modern/src/components/patrol/RemediationStatus.tsx` and `frontend-modern/src/utils/remediationPresentation.ts`
 4. Add or change Patrol header, summary, status runtime-state presentation, or runtime provider action presentation through `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`, `frontend-modern/src/features/patrol/PatrolIntelligenceSummary.tsx`, `frontend-modern/src/components/patrol/PatrolStatusBar.tsx`, `frontend-modern/src/utils/patrolRuntimePresentation.ts`, and `frontend-modern/src/utils/patrolRuntimeActions.ts`
    Patrol summary presentation may show recent activity mix and trigger mode as
@@ -83,6 +86,7 @@ Patrol-specific presentation helpers.
 2. Duplicating Patrol finding severity, lifecycle, alert-identity, or approval-risk derivation outside the governed Patrol presentation helpers
 3. Letting the Patrol page, local store, and findings UI drift into separate shadow truths for the same Patrol status or finding lifecycle state
 4. Recreating Patrol run-history, status-bar, runtime-summary, or workspace-tab status/metadata badge shells locally instead of composing `StatusIndicatorBadge` and `MetadataBadge`
+5. Recreating border-based Patrol or AI finding loading spinner shells locally instead of composing `LoadingSpinner`
 
 ## Completion Obligations
 

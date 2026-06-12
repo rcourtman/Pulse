@@ -276,6 +276,67 @@
       ]
     },
     {
+      "id": "loading-spinner-shell",
+      "category": "loading-indicator",
+      "summary": "Patrol, AI, and shared loading indicators must compose LoadingSpinner for shared size, tone, and accessibility behavior instead of recreating border-based animate-spin spans.",
+      "canonical": {
+        "path": "src/components/shared/LoadingSpinner.tsx",
+        "export": "LoadingSpinner"
+      },
+      "requiredConsumers": [
+        { "path": "src/components/AI/FindingsPanel.tsx" },
+        { "path": "src/components/patrol/ApprovalBanner.tsx" },
+        { "path": "src/components/patrol/ApprovalSection.tsx" },
+        { "path": "src/components/patrol/InvestigationMessages.tsx" },
+        { "path": "src/components/patrol/InvestigationSection.tsx" },
+        { "path": "src/components/patrol/RunToolCallTrace.tsx" },
+        { "path": "src/features/patrol/PatrolIntelligenceHeader.tsx" }
+      ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/components/AI/FindingsPanel.tsx",
+          "patterns": [
+            "border border-current border-t-transparent animate-spin",
+            "h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin"
+          ]
+        },
+        {
+          "path": "src/components/patrol/ApprovalBanner.tsx",
+          "patterns": ["h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin"]
+        },
+        {
+          "path": "src/components/patrol/ApprovalSection.tsx",
+          "patterns": ["h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin"]
+        },
+        {
+          "path": "src/components/patrol/InvestigationMessages.tsx",
+          "patterns": ["h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin"]
+        },
+        {
+          "path": "src/components/patrol/InvestigationSection.tsx",
+          "patterns": ["h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin"]
+        },
+        {
+          "path": "src/components/patrol/RunToolCallTrace.tsx",
+          "patterns": ["h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin"]
+        },
+        {
+          "path": "src/features/patrol/PatrolIntelligenceHeader.tsx",
+          "patterns": ["animate-spin w-4 h-4 border-2 border-current border-t-transparent rounded-full"]
+        }
+      ],
+      "proof": [
+        "src/components/shared/LoadingSpinner.test.tsx",
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/AI/__tests__/FindingsPanel.test.ts",
+        "src/components/patrol/__tests__/ApprovalBanner.test.tsx",
+        "src/components/patrol/__tests__/ApprovalSection.test.tsx",
+        "src/components/patrol/__tests__/InvestigationSection.test.tsx",
+        "src/components/patrol/__tests__/RunToolCallTrace.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "button-command-shell",
       "category": "action-button",
       "summary": "Standard command buttons and button-styled route actions must compose Button or ButtonLink for shared variants, sizes, focus, disabled, loading, and safe-link behavior instead of recreating local Tailwind button shells.",
@@ -1067,6 +1128,30 @@
     }
   ],
   "patternGuards": [
+    {
+      "id": "patrol-ai-local-loading-spinner-shell",
+      "category": "loading-indicator",
+      "summary": "Patrol and AI finding surfaces must not recreate border-based loading spinners locally; compose LoadingSpinner so size, tone, and accessibility behavior stay shared.",
+      "canonical": {
+        "path": "src/components/shared/LoadingSpinner.tsx",
+        "export": "LoadingSpinner"
+      },
+      "scopes": [
+        "src/components/patrol",
+        "src/features/patrol",
+        "src/components/AI/FindingsPanel.tsx"
+      ],
+      "extensions": [".tsx"],
+      "allPatterns": ["border-t-transparent", "animate-spin"],
+      "legacyReason": "Retired migration debt. Patrol action-pending, investigation-loading, header-saving, and AI finding-loading spinners compose LoadingSpinner for shared shell, sizing, tone, and accessible status behavior.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
+      "proof": [
+        "src/components/shared/LoadingSpinner.test.tsx",
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
     {
       "id": "platform-table-shell-local-frame",
       "category": "platform-table-shell",

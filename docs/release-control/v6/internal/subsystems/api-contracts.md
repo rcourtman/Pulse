@@ -1107,6 +1107,9 @@ the canonical monitored-system blocked payload.
    state and count badges route through frontend-primitives-owned
    `StatusIndicatorBadge` and `MetadataBadge` instead of page-local class
    strings in the Patrol section owners
+   and Patrol loading indicator state remains API data only while the visible
+   header and finding loading spinners route through frontend-primitives-owned
+   `LoadingSpinner` instead of encoding API state in page-local spinner shells
    and the Patrol verification summary derived from run history, so the page also states whether recent Patrol evidence came from a successful full patrol or only from scoped/erroring runs instead of leaving verification scope implicit
    and the same-day activity-mix explanation derived from that governed run history, so when a recent full patrol is followed by alert-triggered or anomaly-triggered scoped work the verification surface can explain the mix directly instead of reconstructing it from page-local timing heuristics
    and the Patrol status recency split, so `last_patrol_at` remains reserved for completed full Patrol sweeps while scoped runs and verification checks advance `last_activity_at` without claiming a fresh full-estate verification pass

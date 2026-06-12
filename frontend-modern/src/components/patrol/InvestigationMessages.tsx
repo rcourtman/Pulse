@@ -7,6 +7,7 @@
 
 import { Component, createResource, Show, For } from 'solid-js';
 import { getInvestigationMessages, formatTimestamp, type ChatMessage } from '@/api/patrol';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { getInvestigationMessagesState } from '@/utils/patrolEmptyStatePresentation';
 
 interface InvestigationMessagesProps {
@@ -35,7 +36,7 @@ export const InvestigationMessages: Component<InvestigationMessagesProps> = (pro
     <div class="mt-2">
       <Show when={!getInvestigationMessagesState(messages.loading, !!messages()?.length).empty && getInvestigationMessagesState(messages.loading, !!messages()?.length).text}>
         <div class="flex items-center gap-2 text-xs text-muted py-2">
-          <span class="h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+          <LoadingSpinner size="sm" />
           {getInvestigationMessagesState(messages.loading, !!messages()?.length).text}
         </div>
       </Show>
