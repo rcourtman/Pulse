@@ -4,6 +4,7 @@ import type { JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ProxmoxBackupsTable } from '../ProxmoxBackupsTable';
+import proxmoxBackupsTableSource from '../ProxmoxBackupsTable.tsx?raw';
 import {
   PLATFORM_TABLE_BODY_CLASS,
   PLATFORM_TABLE_HEADER_ROW_CLASS,
@@ -277,5 +278,15 @@ describe('ProxmoxBackupsTable', () => {
       TABLE_CARD_FRAME_CLASS,
     );
     expect(emptyStateHeading.closest('.border-dashed')).not.toBeNull();
+  });
+
+  it('routes top-level loading and error states through shared platform primitives', () => {
+    expect(proxmoxBackupsTableSource).toContain('PlatformErrorState');
+    expect(proxmoxBackupsTableSource).toContain('PlatformTableLoadingState');
+    expect(proxmoxBackupsTableSource).toContain('title="Could not load Proxmox backup inventory"');
+    expect(proxmoxBackupsTableSource).toContain('title="Loading Proxmox backup inventory"');
+    expect(proxmoxBackupsTableSource).not.toContain(
+      'inline-flex min-h-10 items-center rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-surface-hover',
+    );
   });
 });

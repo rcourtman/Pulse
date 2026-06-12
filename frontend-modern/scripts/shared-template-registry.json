@@ -125,7 +125,34 @@
       "requiredConsumers": [
         { "path": "src/features/docker/DockerPageSurface.tsx" },
         { "path": "src/features/kubernetes/KubernetesPageSurface.tsx" },
+        { "path": "src/features/proxmox/ProxmoxBackupsTable.tsx" },
         { "path": "src/features/proxmox/ProxmoxPageSurface.tsx" },
+        { "path": "src/features/proxmox/ProxmoxReplicationTable.tsx" },
+        { "path": "src/features/standalone/StandalonePageSurface.tsx" },
+        { "path": "src/features/truenas/TrueNASPageSurface.tsx" },
+        { "path": "src/features/truenas/TrueNASProtectionTable.tsx" },
+        { "path": "src/features/vmware/VmwarePageSurface.tsx" }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/platformOverviewLayout.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-error-state",
+      "category": "platform-error-state",
+      "summary": "Platform page and table load failures must compose PlatformErrorState instead of recreating a local EmptyState plus Refresh action.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "PlatformErrorState"
+      },
+      "requiredConsumers": [
+        { "path": "src/features/docker/DockerPageSurface.tsx" },
+        { "path": "src/features/kubernetes/KubernetesPageSurface.tsx" },
+        { "path": "src/features/proxmox/ProxmoxBackupsTable.tsx" },
+        { "path": "src/features/proxmox/ProxmoxPageSurface.tsx" },
+        { "path": "src/features/proxmox/ProxmoxReplicationTable.tsx" },
         { "path": "src/features/standalone/StandalonePageSurface.tsx" },
         { "path": "src/features/truenas/TrueNASPageSurface.tsx" },
         { "path": "src/features/truenas/TrueNASProtectionTable.tsx" },
@@ -379,6 +406,31 @@
       "ignoredPaths": [
         "src/components/Workloads/__tests__/WorkloadsSurface.performance.contract.test.tsx"
       ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-error-state-required",
+      "category": "platform-error-state",
+      "summary": "Platform feature files that surface load-failure copy must compose PlatformErrorState for the canonical retry shell.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "PlatformErrorState"
+      },
+      "scopes": [
+        "src/features/docker",
+        "src/features/kubernetes",
+        "src/features/proxmox",
+        "src/features/standalone",
+        "src/features/truenas",
+        "src/features/vmware"
+      ],
+      "extensions": [".tsx"],
+      "triggerPatterns": ["title=\"Could not load"],
+      "requiredPatterns": ["PlatformErrorState"],
+      "allowedPaths": [],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "scripts/shared-template-audit.mjs"

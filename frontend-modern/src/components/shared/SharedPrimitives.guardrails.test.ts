@@ -1056,7 +1056,6 @@ describe('shared primitive guardrails', () => {
     for (const source of [
       dockerHostsTableSource,
       kubernetesNodesTableSource,
-      proxmoxBackupsTableSource,
       proxmoxCephTableSource,
       proxmoxCoverageTableSource,
       proxmoxMailGatewayTableSource,
@@ -1096,7 +1095,9 @@ describe('shared primitive guardrails', () => {
     const requiredConsumerPaths = [
       'src/features/docker/DockerPageSurface.tsx',
       'src/features/kubernetes/KubernetesPageSurface.tsx',
+      'src/features/proxmox/ProxmoxBackupsTable.tsx',
       'src/features/proxmox/ProxmoxPageSurface.tsx',
+      'src/features/proxmox/ProxmoxReplicationTable.tsx',
       'src/features/standalone/StandalonePageSurface.tsx',
       'src/features/truenas/TrueNASPageSurface.tsx',
       'src/features/truenas/TrueNASProtectionTable.tsx',
@@ -1137,7 +1138,9 @@ describe('shared primitive guardrails', () => {
     for (const source of [
       dockerPageSurfaceSource,
       kubernetesPageSurfaceSource,
+      proxmoxBackupsTableSource,
       proxmoxPageSurfaceSource,
+      proxmoxReplicationTableSource,
       standalonePageSurfaceSource,
       truenasPageSurfaceSource,
       truenasProtectionTableSource,
@@ -1145,6 +1148,87 @@ describe('shared primitive guardrails', () => {
     ]) {
       expect(source).toContain('PlatformTableLoadingState');
       expect(source).not.toContain('<div class="px-3 py-2 text-xs text-muted" role="status">');
+    }
+  });
+
+  it('keeps platform load-failure states on the shared error template', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+      }>;
+      requiredPatternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        triggerPatterns?: string[];
+        requiredPatterns?: string[];
+        scopes?: string[];
+        allowedPaths?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find((rule) => rule.id === 'platform-error-state');
+    const requiredGuard = registry.requiredPatternGuards?.find(
+      (guard) => guard.id === 'platform-error-state-required',
+    );
+    const requiredConsumerPaths = [
+      'src/features/docker/DockerPageSurface.tsx',
+      'src/features/kubernetes/KubernetesPageSurface.tsx',
+      'src/features/proxmox/ProxmoxBackupsTable.tsx',
+      'src/features/proxmox/ProxmoxPageSurface.tsx',
+      'src/features/proxmox/ProxmoxReplicationTable.tsx',
+      'src/features/standalone/StandalonePageSurface.tsx',
+      'src/features/truenas/TrueNASPageSurface.tsx',
+      'src/features/truenas/TrueNASProtectionTable.tsx',
+      'src/features/vmware/VmwarePageSurface.tsx',
+    ];
+    const localRefreshButtonClass =
+      'inline-flex min-h-10 items-center rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-surface-hover';
+
+    expect(registeredRule?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(registeredRule?.canonical?.export).toBe('PlatformErrorState');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
+      expect.arrayContaining(requiredConsumerPaths),
+    );
+    expect(requiredGuard?.canonical?.path).toBe('src/features/platformPage/sharedPlatformPage.tsx');
+    expect(requiredGuard?.canonical?.export).toBe('PlatformErrorState');
+    expect(requiredGuard?.triggerPatterns).toEqual(['title="Could not load']);
+    expect(requiredGuard?.requiredPatterns).toEqual(['PlatformErrorState']);
+    expect(requiredGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(requiredGuard?.scopes).toEqual(
+      expect.arrayContaining([
+        'src/features/docker',
+        'src/features/kubernetes',
+        'src/features/proxmox',
+        'src/features/standalone',
+        'src/features/truenas',
+        'src/features/vmware',
+      ]),
+    );
+
+    expect(sharedPlatformPageSource).toContain('export function PlatformErrorState');
+    expect(sharedPlatformPageSource).toContain('TriangleAlertIcon');
+    expect(sharedPlatformPageSource).toContain('onClick={props.onRefresh}');
+    expect(sharedPlatformPageSource).toContain('Refresh');
+
+    for (const source of [
+      dockerPageSurfaceSource,
+      kubernetesPageSurfaceSource,
+      proxmoxBackupsTableSource,
+      proxmoxPageSurfaceSource,
+      proxmoxReplicationTableSource,
+      standalonePageSurfaceSource,
+      truenasPageSurfaceSource,
+      truenasProtectionTableSource,
+      vmwarePageSurfaceSource,
+    ]) {
+      expect(source).toContain('PlatformErrorState');
+    }
+
+    for (const source of [proxmoxBackupsTableSource, proxmoxReplicationTableSource]) {
+      expect(source).not.toContain(localRefreshButtonClass);
     }
   });
 

@@ -224,6 +224,13 @@ the source-specific empty-state vocabulary, action choice, and evidence rule
 that decides why a table is empty, but the table-card empty-state shell itself
 must compose the frontend-primitives-owned `PlatformTableEmptyState` primitive
 instead of importing `EmptyState` directly or wrapping it in a page-local card.
+Platform loading and load-failure states follow the same boundary.
+Unified-resource consumers such as `ProxmoxReplicationTable` own the API query,
+resource-specific copy, retry callback, and evidence rule that decides which
+state applies, but repeated loading rows and retry shells must compose the
+frontend-primitives-owned `PlatformTableLoadingState` and `PlatformErrorState`
+primitives instead of recreating page-local table-card status rows or local
+Refresh-button error empty states.
 The same split applies to inline detail row shells on platform, native-resource,
 workload, and infrastructure tables. Unified-resource consumers own row
 identity, source-specific drawer content, expansion state, and resource

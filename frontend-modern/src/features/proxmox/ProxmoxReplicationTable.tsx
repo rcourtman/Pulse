@@ -8,10 +8,12 @@ import { apiFetch } from '@/utils/apiClient';
 import { formatRelativeTime } from '@/utils/format';
 import {
   PlatformTableToolbar,
+  PlatformErrorState,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   type PlatformTableFilterOption,
   PlatformTableEmptyState,
+  PlatformTableLoadingState,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { ReplicationJob, ReplicationJobsResponse } from '@/types/api';
@@ -197,27 +199,17 @@ export const ProxmoxReplicationTable: Component<{
     <Show
       when={!props.error}
       fallback={
-        <PlatformTableEmptyState
-          icon={props.emptyIcon}
+        <PlatformErrorState
           title="Could not load replication jobs"
           description={(props.error as Error | undefined)?.message ?? 'Refresh to retry.'}
-          actions={
-            <button
-              type="button"
-              onClick={() => props.onRetry()}
-              class="inline-flex min-h-10 items-center rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-surface-hover"
-            >
-              Refresh
-            </button>
-          }
+          onRefresh={() => props.onRetry()}
         />
       }
     >
       <Show
         when={props.jobs !== undefined}
         fallback={
-          <PlatformTableEmptyState
-            icon={props.emptyIcon}
+          <PlatformTableLoadingState
             title="Loading replication jobs"
             description="Reading scheduled replication state from PVE."
           />

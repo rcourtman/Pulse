@@ -82,6 +82,12 @@ interpreted as backup visibility, recovery readiness, restore capability, or a
 storage/recovery-owned command path. Suppressing those notices when the API has
 no deployable agent update target is likewise lifecycle/frontend behavior and
 does not change Proxmox backup or recovery evidence.
+Proxmox backup inventory loading and load-failure chrome is likewise a
+frontend-primitives dependency. `ProxmoxBackupsTable` owns the backup API
+queries, recovery model, filters, coverage split, and backup-specific error
+copy, but repeated loading and retry shells must compose
+`PlatformTableLoadingState` and `PlatformErrorState`; storage/recovery must not
+fork local table-card loading rows or refresh-button error empty states.
 Tenant report branding settings are adjacent tenant-local configuration, not a
 storage or recovery product state. `reportBranding` persisted in a tenant
 runtime's `system.json` should be preserved by the existing tenant data

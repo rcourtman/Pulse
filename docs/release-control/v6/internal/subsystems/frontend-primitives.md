@@ -2398,6 +2398,12 @@ Platform table loading states are registry-backed too.
 `role="status"` loading row for platform pages and tables; platform consumers
 own only the title and description copy. Platform feature surfaces must not
 recreate the `TableCard` plus compact status-row shell locally.
+Platform load-failure states are registry-backed as well.
+`PlatformErrorState` owns the repeated table-card error shell, warning icon,
+and Refresh action for platform page and table load failures; platform
+consumers own only the failure title, description, and refresh callback.
+Platform feature surfaces must not recreate an `EmptyState` plus local Refresh
+button for `Could not load...` states.
 Filter bars are registry-backed too. `FilterBar` owns resource-list filtering
 as a catalog of `FilterDef` entries, while `filterChipStatusDot` owns the
 small leading status-dot glyph used by filter options. Page and feature
