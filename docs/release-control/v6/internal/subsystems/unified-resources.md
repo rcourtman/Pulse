@@ -2282,6 +2282,15 @@ overlap: Docker/Podman resources reported from a Proxmox LXC carry both
 `proxmox-pve` and `docker`, but TrueNAS app containers that reuse
 `DockerData` for runtime metadata remain scoped to `truenas` and must not be
 promoted to Docker-managed action targets.
+That overlap is not default peer-row membership on every platform overview.
+The Docker / Podman runtime lens is the canonical detailed table for Docker
+containers, while the Proxmox Overview workload table stays focused on VMs and
+LXCs. Proxmox may surface Docker-inside-LXC evidence as LXC drawer detail, but
+it must not promote those `app-container` rows into the default Proxmox peer
+workload table or add always-visible child rows that compete with VM/LXC scan
+flow. That nested context must be read-only and keyed by the same canonical
+Proxmox guest identity and Docker host source identity used by the resource
+model; ambiguous runtime-host matches must be omitted rather than guessed.
 The same facet bundle now also returns grouped recent-change counts by
 canonical change kind, so the detail drawer can surface the distribution of
 state transitions, restarts, config updates, and anomalies without

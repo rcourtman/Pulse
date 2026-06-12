@@ -146,6 +146,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
           hasOsInfo={hasOsInfo()}
           ipAddresses={ipAddresses()}
           networkInterfaces={networkInterfaces()}
+          nestedWorkloadContext={props.nestedWorkloadContext}
           normalizedTags={normalizedTags()}
           onCustomUrlChange={props.onCustomUrlChange}
           customUrl={props.customUrl}

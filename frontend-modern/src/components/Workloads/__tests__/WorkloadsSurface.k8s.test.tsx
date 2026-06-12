@@ -233,6 +233,55 @@ describe('Workloads pod workloads integration', () => {
     expect(getByTestId('workloads-filter')).toHaveTextContent('host-filter-enabled');
   });
 
+  it('excludes app-container workloads when a platform page owns them as nested context', async () => {
+    mockLocationSearch = '?type=all';
+    mockWorkloads = [
+      {
+        id: 'pve-lxc-101',
+        vmid: 101,
+        name: 'media-lxc',
+        node: 'pve-a',
+        instance: 'pve-a',
+        status: 'running',
+        type: 'system-container',
+        workloadType: 'system-container',
+        platformType: 'proxmox-pve',
+        platformScopes: ['proxmox-pve'],
+      },
+      {
+        id: 'app-container:pve-a:grafana',
+        vmid: 0,
+        name: 'grafana',
+        node: 'media-lxc',
+        instance: 'pve-a',
+        status: 'running',
+        type: 'app-container',
+        workloadType: 'app-container',
+        platformType: 'docker',
+        platformScopes: ['proxmox-pve', 'docker'],
+        containerRuntime: 'docker',
+      },
+    ];
+
+    render(() => (
+      <WorkloadsSurface
+        vms={[]}
+        containers={[]}
+        nodes={[]}
+        useWorkloads
+        forcedPlatform="proxmox-pve"
+        forcedViewMode="all"
+        excludedWorkloadTypes={['app-container']}
+      />
+    ));
+
+    await waitFor(() => {
+      expect(screen.getByText('media-lxc')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText('grafana')).not.toBeInTheDocument();
+  });
+
   it('uses filtered-empty copy for table-only surfaces when filters remove every workload', () => {
     render(() => (
       <WorkloadsSurface

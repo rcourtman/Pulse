@@ -3,7 +3,7 @@ import { useNavigate } from '@solidjs/router';
 import { ConnectionsAPI, type ConnectionsListResponse } from '@/api/connections';
 import type { VM, Container, Node } from '@/types/api';
 import type { Resource } from '@/types/resource';
-import type { ViewMode, WorkloadGuest } from '@/types/workloads';
+import type { ViewMode, WorkloadGuest, WorkloadType } from '@/types/workloads';
 import { useWebSocket } from '@/contexts/appRuntime';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
@@ -18,7 +18,7 @@ import {
   getWorkloadsLoadingState,
   getWorkloadsNoInventoryState,
 } from '@/utils/workloadEmptyStatePresentation';
-import { getCanonicalWorkloadId } from '@/utils/workloads';
+import { getCanonicalWorkloadId, resolveWorkloadType } from '@/utils/workloads';
 import { nodeFromResource } from '@/utils/resourceStateAdapters';
 import {
   buildWorkloadSummaryGroupScopeMap,
@@ -40,6 +40,10 @@ import { useWorkloadsDerivedState } from './useWorkloadsDerivedState';
 import { useWorkloadRouteState } from './useWorkloadRouteState';
 import { buildWorkloadInventorySourceIssues } from './workloadInventorySourceIssues';
 import { useWorkloadTableMetricHistory } from './useWorkloadTableMetricHistory';
+import {
+  buildNestedWorkloadContextByGuestId,
+  type NestedWorkloadContextByGuestId,
+} from './nestedWorkloadContext';
 
 const WORKLOADS_INFRASTRUCTURE_SOURCES_QUERY =
   'type=agent,docker-host,k8s-cluster,k8s-node,pbs,pmg,storage,physical_disk,ceph';
@@ -62,6 +66,8 @@ export interface WorkloadsSurfaceProps {
   useWorkloads?: boolean;
   forcedPlatform?: string;
   forcedViewMode?: ViewMode;
+  excludedWorkloadTypes?: readonly WorkloadType[];
+  showNestedExcludedWorkloads?: boolean;
   forcedGroupingMode?: WorkloadsGroupingMode;
   defaultSortKey?: WorkloadsSortKey;
   filterAriaLabel?: string;
@@ -152,8 +158,28 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     return deduped;
   };
 
-  const allGuests = createMemo<WorkloadGuest[]>(() =>
-    workloadsEnabled() ? dedupeGuests(workloads.workloads()) : [],
+  const excludedWorkloadTypeSet = createMemo(() => new Set(props.excludedWorkloadTypes ?? []));
+  const rawGuests = createMemo<WorkloadGuest[]>(() =>
+    workloadsEnabled() ? workloads.workloads() : [],
+  );
+  const allGuests = createMemo<WorkloadGuest[]>(() => {
+    if (!workloadsEnabled()) return [];
+    const excludedTypes = excludedWorkloadTypeSet();
+    const visibleGuests =
+      excludedTypes.size === 0
+        ? rawGuests()
+        : rawGuests().filter((guest) => !excludedTypes.has(resolveWorkloadType(guest)));
+    return dedupeGuests(visibleGuests);
+  });
+  const nestedWorkloadContextByGuestId = createMemo<NestedWorkloadContextByGuestId>(() =>
+    props.showNestedExcludedWorkloads
+      ? buildNestedWorkloadContextByGuestId({
+          guests: rawGuests(),
+          visibleGuests: allGuests(),
+          excludedWorkloadTypes: props.excludedWorkloadTypes,
+          platformScope: props.forcedPlatform,
+        })
+      : {},
   );
 
   const [showFilters, setShowFilters] = usePersistentSignal<boolean>(
@@ -479,6 +505,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     navigate,
     nodeByInstance,
     namespaceFilterConfig,
+    nestedWorkloadContextByGuestId,
     platformFilterConfig: props.suppressPlatformFilter ? () => undefined : platformFilterConfig,
     platformOptions,
     reconnect,

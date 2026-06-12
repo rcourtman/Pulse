@@ -571,6 +571,38 @@ describe('GuestDrawer', () => {
     });
   });
 
+  describe('Nested workload context card', () => {
+    it('shows nested Docker container count, sample rows, and canonical Docker link', () => {
+      render(() => (
+        <GuestDrawer
+          guest={makeGuest({ name: 'media-lxc', type: 'lxc', workloadType: 'system-container' })}
+          nestedWorkloadContext={{
+            type: 'app-container',
+            label: 'Docker',
+            title: 'Nested Docker',
+            count: 2,
+            href: '/docker',
+            items: [
+              { id: 'container-1', name: 'frigate', runtimeLabel: 'Docker', status: 'running' },
+              { id: 'container-2', name: 'mosquitto', runtimeLabel: 'Docker', status: 'exited' },
+            ],
+          }}
+          onClose={vi.fn()}
+        />
+      ));
+
+      const card = screen.getByTestId('nested-workload-context-card');
+      expect(within(card).getByText('Nested Docker')).toBeInTheDocument();
+      expect(within(card).getByText('Containers')).toBeInTheDocument();
+      expect(within(card).getByText('2')).toBeInTheDocument();
+      expect(within(card).getByText('frigate')).toBeInTheDocument();
+      expect(within(card).getByText('mosquitto')).toBeInTheDocument();
+      expect(
+        within(card).getByRole('link', { name: 'Open Docker page for media-lxc' }),
+      ).toHaveAttribute('href', '/docker');
+    });
+  });
+
   // ── Agent info ──
 
   describe('Agent info', () => {

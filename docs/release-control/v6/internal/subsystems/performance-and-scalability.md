@@ -124,6 +124,8 @@ regression protection.
 102. `frontend-modern/src/useAppRuntimeState.ts`
 103. `frontend-modern/src/utils/storageSummaryCache.ts`
 104. `frontend-modern/src/components/Workloads/WorkloadsSurface.tsx`
+105. `frontend-modern/src/components/Workloads/nestedWorkloadContext.ts`
+106. `frontend-modern/src/components/Workloads/__tests__/nestedWorkloadContext.test.ts`
 
 ## Shared Boundaries
 
@@ -154,6 +156,17 @@ regression protection.
    `frontend-modern/src/hooks/useWorkloads.ts` must consume canonical
    `platformScopes`; page surfaces must not rebuild platform membership with
    ad hoc source or runtime scans.
+   Page-owned workload-type exclusions are part of that same hot path:
+   `useWorkloadsState` must apply them before dedupe, filter-option
+   derivation, summary statistics, and row rendering so a platform overview
+   that demotes nested workloads does not carry hidden rows through downstream
+   table state.
+   When a platform page still needs a visible signal for those demoted nested
+   workloads, `nestedWorkloadContext.ts` must derive a bounded summary from the
+   same raw workload snapshot before row rendering. That derivation must use
+   canonical workload IDs and ambiguity-safe runtime-host matching; row and
+   drawer components may render the summary they are given, but they must not
+   scan hidden workloads per row or guess ownership from ambiguous VMIDs.
    The same `useWorkloads.ts` mapping owns canonical-field fallback for
    per-row scalars the workload table reads. `WorkloadGuest.uptime` must
    fall back to the canonical `Resource.Uptime` field after the

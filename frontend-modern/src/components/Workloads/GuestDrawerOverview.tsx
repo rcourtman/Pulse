@@ -1,5 +1,6 @@
 import { For, Show } from 'solid-js';
 import { TerminalSquare } from 'lucide-solid';
+import BoxIcon from 'lucide-solid/icons/box';
 
 import { formatDiscoveryAge } from '@/api/discovery';
 import { buildInfrastructureOnboardingPath } from '@/components/Settings/infrastructureWorkspaceModel';
@@ -13,6 +14,7 @@ import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 
 import { DiskList } from './DiskList';
 import { getGuestDrawerMemoryRows, isGuestDrawerVM } from './guestDrawerModel';
+import type { NestedWorkloadContext } from './nestedWorkloadContext';
 import {
   IN_GUEST_AGENT_INSTALL_ACTION_LABEL,
   IN_GUEST_AGENT_INSTALL_TITLE,
@@ -35,6 +37,7 @@ interface GuestDrawerOverviewProps {
   showInGuestAgentInstallCue: boolean;
   ipAddresses: string[];
   networkInterfaces: NonNullable<GuestDrawerProps['guest']['networkInterfaces']>;
+  nestedWorkloadContext?: NestedWorkloadContext;
   normalizedTags: string[];
   onCustomUrlChange?: GuestDrawerProps['onCustomUrlChange'];
   customUrl?: GuestDrawerProps['customUrl'];
@@ -215,6 +218,54 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
           </div>
         </div>
 
+        <Show when={props.nestedWorkloadContext}>
+          {(context) => {
+            const visibleItems = () => context().items.slice(0, 4);
+            const hiddenCount = () => Math.max(0, context().count - visibleItems().length);
+            return (
+              <div
+                class="rounded border border-border bg-surface p-3 shadow-sm"
+                data-testid="nested-workload-context-card"
+              >
+                <div class="mb-2 flex items-center justify-between gap-2">
+                  <h3 class="truncate text-[11px] font-medium uppercase tracking-wide text-base-content">
+                    {context().title}
+                  </h3>
+                  <a
+                    href={context().href}
+                    class="inline-flex shrink-0 items-center gap-1 text-[10px] font-semibold text-blue-600 underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-blue-300"
+                    aria-label={`Open ${context().label} page for ${props.guest.name}`}
+                  >
+                    <BoxIcon class="h-3 w-3" aria-hidden="true" />
+                    <span>Open Docker</span>
+                  </a>
+                </div>
+                <div class="space-y-1.5 text-[11px]">
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-muted">Containers</span>
+                    <span class="font-medium text-base-content">{context().count}</span>
+                  </div>
+                  <For each={visibleItems()}>
+                    {(item) => (
+                      <div class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+                        <span class="truncate font-medium text-base-content" title={item.name}>
+                          {item.name}
+                        </span>
+                        <span class="rounded bg-surface-alt px-1.5 py-0.5 text-[10px] font-medium text-muted">
+                          {item.status}
+                        </span>
+                      </div>
+                    )}
+                  </For>
+                  <Show when={hiddenCount() > 0}>
+                    <div class="text-[10px] font-medium text-muted">+{hiddenCount()} more</div>
+                  </Show>
+                </div>
+              </div>
+            );
+          }}
+        </Show>
+
         {/* vSphere placement card: vCenter / Datacenter / Cluster live on
               WorkloadGuest.vmware and aren't surfaced by System (Node already
               shows the runtime host). Render only when the workload is a
@@ -324,7 +375,10 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
                 {(row) => (
                   <div class="flex items-center justify-between gap-2 min-w-0">
                     <span class="shrink-0 text-muted">{row.label}</span>
-                    <span class="truncate text-right font-medium text-base-content" title={row.value}>
+                    <span
+                      class="truncate text-right font-medium text-base-content"
+                      title={row.value}
+                    >
                       {row.value}
                     </span>
                   </div>

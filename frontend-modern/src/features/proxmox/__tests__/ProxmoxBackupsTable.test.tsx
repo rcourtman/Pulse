@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ProxmoxBackupsTable } from '../ProxmoxBackupsTable';
 import proxmoxBackupsTableSource from '../ProxmoxBackupsTable.tsx?raw';
+import proxmoxPageSurfaceSource from '../ProxmoxPageSurface.tsx?raw';
 import {
   PLATFORM_TABLE_BODY_CLASS,
   PLATFORM_TABLE_HEADER_ROW_CLASS,
@@ -146,9 +147,7 @@ const pbsServerResource = {
     instanceId: 'pbs-main',
     version: '3.2.1',
     connectionHealth: 'healthy',
-    datastores: [
-      { name: 'main', total: 10_000, used: 4_000, available: 6_000, usagePercent: 40 },
-    ],
+    datastores: [{ name: 'main', total: 10_000, used: 4_000, available: 6_000, usagePercent: 40 }],
   },
 } as Resource;
 
@@ -245,9 +244,7 @@ describe('ProxmoxBackupsTable', () => {
     expect(screen.getAllByText('Current').length).toBeGreaterThan(0);
 
     // Per-source detail is one click down inside the workload's row.
-    await fireEvent.click(
-      screen.getByRole('button', { name: /expand details for pbs-docker/i }),
-    );
+    await fireEvent.click(screen.getByRole('button', { name: /expand details for pbs-docker/i }));
     expect(screen.getByText('Restore evidence')).toBeInTheDocument();
     expect(screen.getAllByText('PVE file').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Snapshot').length).toBeGreaterThan(0);
@@ -288,5 +285,18 @@ describe('ProxmoxBackupsTable', () => {
     expect(proxmoxBackupsTableSource).not.toContain(
       'inline-flex min-h-10 items-center rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-surface-hover',
     );
+  });
+
+  it('keeps backup coverage fed by Proxmox VM/LXC guests when Overview demotes app containers', () => {
+    expect(proxmoxPageSurfaceSource).toContain(
+      'excludedWorkloadTypes: PROXMOX_WORKLOAD_EXCLUDED_TYPES',
+    );
+    expect(proxmoxPageSurfaceSource).toContain('showNestedExcludedWorkloads: true');
+    expect(proxmoxPageSurfaceSource).toContain(
+      'excludedWorkloadTypes={PROXMOX_WORKLOAD_EXCLUDED_TYPES}',
+    );
+    expect(proxmoxPageSurfaceSource).toContain('showNestedExcludedWorkloads');
+    expect(proxmoxPageSurfaceSource).toContain('workloads={model().guests}');
+    expect(proxmoxPageSurfaceSource).not.toContain('workloads={workloadsState.allGuests');
   });
 });

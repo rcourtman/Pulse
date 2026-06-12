@@ -63,6 +63,7 @@ const PROXMOX_RESOURCE_QUERY =
 
 const PROXMOX_PLATFORM_FILTER = 'proxmox-pve';
 const PROXMOX_WORKLOAD_STATUS_STORAGE_SCOPE = 'proxmox';
+const PROXMOX_WORKLOAD_EXCLUDED_TYPES = ['app-container'] as const;
 const VALID_TABS = new Set<ProxmoxPageTabId>(PROXMOX_TAB_SPECS.map((tab) => tab.id));
 const PROXMOX_WORKLOAD_STATUS_OPTIONS: readonly WorkloadsStatusOption[] = [
   { value: 'all', label: 'All' },
@@ -91,9 +92,7 @@ export function ProxmoxPageSurface() {
   const replicationJobCount = createMemo(() =>
     replicationJobs.error ? 0 : (replicationJobs() ?? []).length,
   );
-  const visibleTabs = createMemo(() =>
-    buildVisibleProxmoxTabSpecs(model(), replicationJobCount()),
-  );
+  const visibleTabs = createMemo(() => buildVisibleProxmoxTabSpecs(model(), replicationJobCount()));
   const visibleTabIds = createMemo(
     () => new Set<ProxmoxPageTabId>(visibleTabs().map((tab) => tab.id)),
   );
@@ -262,6 +261,8 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
     nodes: [],
     useWorkloads: true,
     forcedPlatform: PROXMOX_PLATFORM_FILTER,
+    excludedWorkloadTypes: PROXMOX_WORKLOAD_EXCLUDED_TYPES,
+    showNestedExcludedWorkloads: true,
     suppressPlatformFilter: true,
     // The polymorphic 'info' column always holds the VMID on a pure-Proxmox
     // surface, so label it with the platform vocabulary instead of 'Info'.
@@ -344,6 +345,8 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
         nodes={[]}
         useWorkloads
         forcedPlatform={PROXMOX_PLATFORM_FILTER}
+        excludedWorkloadTypes={PROXMOX_WORKLOAD_EXCLUDED_TYPES}
+        showNestedExcludedWorkloads
         compactGroupHeaders
         groupNodeDrawerMode="disabled"
         suppressFilterToolbar

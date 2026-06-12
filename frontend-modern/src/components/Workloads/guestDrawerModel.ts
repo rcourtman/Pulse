@@ -8,6 +8,7 @@ import type {
 import { formatHistoryChartTooltipValue } from '@/components/shared/historyChartModel';
 import { formatBytes, formatPercent } from '@/utils/format';
 import { getCanonicalWorkloadId, resolveWorkloadType } from '@/utils/workloads';
+import type { NestedWorkloadContext } from './nestedWorkloadContext';
 
 type Guest = WorkloadGuest;
 
@@ -17,6 +18,7 @@ export interface GuestDrawerProps {
   customUrl?: string;
   onCustomUrlChange?: (guestId: string, url: string) => void;
   parentNodeOnline?: boolean;
+  nestedWorkloadContext?: NestedWorkloadContext;
 }
 
 export type GuestDrawerTab = 'overview' | 'history' | 'discovery';
@@ -301,7 +303,10 @@ export const getGuestDrawerMemoryRows = (guest: Guest): GuestDrawerMemoryRow[] =
   const cache = memory.cache ?? 0;
 
   if (total > 0) {
-    rows.push({ label: 'Usage', value: `${formatPercent((used / total) * 100)} · ${formatBytes(used)}` });
+    rows.push({
+      label: 'Usage',
+      value: `${formatPercent((used / total) * 100)} · ${formatBytes(used)}`,
+    });
     rows.push({ label: 'Total', value: formatBytes(total) });
     if (cache > 0) {
       rows.push({ label: 'Reclaimable cache', value: formatBytes(cache) });

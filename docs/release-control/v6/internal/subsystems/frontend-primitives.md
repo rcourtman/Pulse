@@ -828,10 +828,17 @@ not a replacement status card, CTA band, or page-local nested card.
    canonical resource types.
    Workload page membership must use the canonical `platformScopes` list when
    present instead of treating `platformType` as exclusive ownership. A Docker
-   or Podman app-container can therefore be visible on both the container
-   runtime lens and its owning platform page, such as Proxmox when the runtime
-   is detected inside a PVE LXC, while TrueNAS app containers stay scoped to
-   TrueNAS even when their runtime metadata uses the shared Docker facet.
+   or Podman app-container can therefore carry both the container runtime lens
+   and its owning platform page in routing/filter context, such as Proxmox
+   when the runtime is detected inside a PVE LXC, while TrueNAS app containers
+   stay scoped to TrueNAS even when their runtime metadata uses the shared
+   Docker facet. That membership overlap is not permission to duplicate the
+   detailed container table into every platform overview: Proxmox Overview
+   keeps the default Workloads peer table to VMs and LXCs, and Docker-in-LXC
+   evidence belongs as LXC drawer detail while `/docker`
+   remains the canonical detailed Docker / Podman container lens. The overview
+   table should not add peer rows, badges, or child rows for Docker containers;
+   those signals compete with VM/LXC state and belong one click down.
    Primary navigation uses that same membership model: the Docker route is
    the container-runtime lens and may be labelled `Containers` in the shell,
    while shared source badges, filters, and runtime management copy continue

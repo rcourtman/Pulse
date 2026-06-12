@@ -256,6 +256,17 @@ describe('platform overview layout guardrails', () => {
 
     expect(proxmoxPageSurfaceSource).toContain('<ProxmoxNodesTable');
     expect(proxmoxPageSurfaceSource).toContain('<WorkloadsSurface');
+    expect(proxmoxPageSurfaceSource).toContain(
+      "const PROXMOX_WORKLOAD_EXCLUDED_TYPES = ['app-container'] as const",
+    );
+    expect(proxmoxPageSurfaceSource).toContain(
+      'excludedWorkloadTypes: PROXMOX_WORKLOAD_EXCLUDED_TYPES',
+    );
+    expect(proxmoxPageSurfaceSource).toContain('showNestedExcludedWorkloads: true');
+    expect(proxmoxPageSurfaceSource).toContain(
+      'excludedWorkloadTypes={PROXMOX_WORKLOAD_EXCLUDED_TYPES}',
+    );
+    expect(proxmoxPageSurfaceSource).toContain('showNestedExcludedWorkloads');
     expect(dockerPageSurfaceSource).toContain('<DockerHostsTable');
     expect(dockerPageSurfaceSource).toContain('<DockerContainersTable');
     expect(dockerPageSurfaceSource).toContain('<DockerImagesTable');

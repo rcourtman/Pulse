@@ -56,6 +56,7 @@ type WorkloadPanelProps = Pick<
   | 'focusedSummaryWorkloadGroupId'
   | 'hoveredSummaryWorkloadGroupScope'
   | 'isMobile'
+  | 'nestedWorkloadContextByGuestId'
   | 'nodeByInstance'
   | 'search'
   | 'selectedGuestId'
@@ -519,6 +520,8 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                     const pn = parentNode();
                     return pn ? isNodeOnline(pn) : true;
                   };
+                  const nestedWorkloadContext = () =>
+                    props.nestedWorkloadContextByGuestId()[guestId()];
 
                   return (
                     <ComponentErrorBoundary name="GuestRow">
@@ -564,6 +567,7 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                             guest={guest()}
                             onClose={() => props.setSelectedGuestId(null)}
                             customUrl={metadata()?.customUrl}
+                            nestedWorkloadContext={nestedWorkloadContext()}
                             onCustomUrlChange={props.handleCustomUrlUpdate}
                             parentNodeOnline={parentNodeOnline()}
                           />

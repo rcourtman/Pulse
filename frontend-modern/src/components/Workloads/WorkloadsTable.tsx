@@ -32,6 +32,7 @@ type WorkloadsTableProps = Pick<
   | 'focusedSummaryWorkloadGroupId'
   | 'hoveredSummaryWorkloadGroupScope'
   | 'isMobile'
+  | 'nestedWorkloadContextByGuestId'
   | 'nodeByInstance'
   | 'search'
   | 'selectedGuestId'
@@ -116,6 +117,7 @@ export function WorkloadsTable(props: WorkloadsTableProps) {
             focusedSummaryWorkloadGroupId={props.focusedSummaryWorkloadGroupId}
             hoveredSummaryWorkloadGroupScope={props.hoveredSummaryWorkloadGroupScope}
             isMobile={props.isMobile}
+            nestedWorkloadContextByGuestId={props.nestedWorkloadContextByGuestId}
             nodeByInstance={props.nodeByInstance}
             search={props.search}
             selectedGuestId={props.selectedGuestId}

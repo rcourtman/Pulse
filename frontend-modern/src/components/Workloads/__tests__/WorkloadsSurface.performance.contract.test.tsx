@@ -228,7 +228,16 @@ vi.mock('../WorkloadsFilter', () => ({
 }));
 
 vi.mock('../GuestDrawer', () => ({
-  GuestDrawer: () => <div data-testid="guest-drawer">drawer</div>,
+  GuestDrawer: (props: { nestedWorkloadContext?: { label: string; count: number } }) => (
+    <div data-testid="guest-drawer">
+      drawer
+      <span data-testid="drawer-nested-context">
+        {props.nestedWorkloadContext
+          ? `${props.nestedWorkloadContext.label} ${props.nestedWorkloadContext.count}`
+          : ''}
+      </span>
+    </div>
+  ),
 }));
 
 vi.mock('../NodeDrawer', () => ({
@@ -834,6 +843,55 @@ describe('Workloads performance contract', () => {
         expect(getGuestRowCount(container)).toBe(1);
       });
       expect(canonicalId).toBe('shared:node-x:42');
+    });
+
+    it('applies page-owned workload type exclusions before derived row state', async () => {
+      mockLocationSearch = '?type=all';
+      mockWorkloads = [
+        makeGuest(1, {
+          name: 'pve-lxc',
+          type: 'lxc',
+          workloadType: 'system-container',
+          platformType: 'proxmox-pve',
+          platformScopes: ['proxmox-pve'],
+        }),
+        makeGuest(2, {
+          name: 'nested-docker-container',
+          type: 'app-container',
+          workloadType: 'app-container',
+          platformType: 'docker',
+          platformScopes: ['proxmox-pve', 'docker'],
+          containerRuntime: 'docker',
+          dockerHostId: 'proxmox-lxc-docker:cluster-1:node-1:101',
+        }),
+      ];
+
+      const { container } = render(() => (
+        <WorkloadsSurface
+          vms={[]}
+          containers={[]}
+          nodes={[]}
+          useWorkloads
+          forcedPlatform="proxmox-pve"
+          forcedViewMode="all"
+          excludedWorkloadTypes={['app-container']}
+          showNestedExcludedWorkloads
+        />
+      ));
+
+      await waitFor(() => {
+        expect(container.querySelector('[data-testid="guest-row-pve-lxc"]')).toBeInTheDocument();
+      });
+
+      expect(getGuestRowCount(container)).toBe(1);
+      expect(
+        container.querySelector('[data-testid="guest-row-nested-docker-container"]'),
+      ).toBeNull();
+      expect(screen.queryByTestId('nested-workload-context-row')).toBeNull();
+
+      fireEvent.click(screen.getByTestId('guest-row-toggle-pve-lxc'));
+      expect(await screen.findByTestId('guest-drawer')).toBeInTheDocument();
+      expect(screen.getByTestId('drawer-nested-context')).toHaveTextContent('Docker 1');
     });
 
     it('routes org scope normalization through the shared helper', () => {

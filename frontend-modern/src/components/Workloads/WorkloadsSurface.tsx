@@ -3,10 +3,7 @@ import { Show } from 'solid-js';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { TableCard } from '@/components/shared/TableCard';
 import { WorkloadsFilter } from './WorkloadsFilter';
-import {
-  DEFAULT_WORKLOADS_VIEW_MODE,
-  hasActiveWorkloadsFilters,
-} from './workloadsFilterModel';
+import { DEFAULT_WORKLOADS_VIEW_MODE, hasActiveWorkloadsFilters } from './workloadsFilterModel';
 import { WorkloadsTable } from './WorkloadsTable';
 import {
   useWorkloadsState,
@@ -124,6 +121,7 @@ export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
             focusedSummaryWorkloadGroupId={state.focusedSummaryWorkloadGroupId}
             hoveredSummaryWorkloadGroupScope={state.hoveredSummaryWorkloadGroupScope}
             isMobile={state.isMobile}
+            nestedWorkloadContextByGuestId={state.nestedWorkloadContextByGuestId}
             nodeByInstance={state.nodeByInstance}
             search={state.search}
             selectedGuestId={state.selectedGuestId}
