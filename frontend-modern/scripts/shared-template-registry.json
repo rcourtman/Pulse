@@ -259,8 +259,18 @@
         { "path": "src/components/Settings/InfrastructureInstallerSection.tsx" },
         { "path": "src/components/Settings/InfrastructureSourceManager.tsx" },
         { "path": "src/components/Settings/InfrastructureWorkspace.tsx" },
+        { "path": "src/components/Settings/ResourcePicker.tsx" },
         { "path": "src/features/patrol/PatrolIntelligenceWorkspace.tsx" },
         { "path": "src/features/standalone/StandalonePageSurface.tsx" }
+      ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/components/Settings/ResourcePicker.tsx",
+          "patterns": [
+            "hover:border-red-500 hover:text-red-400",
+            "w-full sm:w-auto min-h-10 sm:min-h-9 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm rounded-md border border-border"
+          ]
+        }
       ],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
@@ -607,6 +617,12 @@
         { "path": "src/components/shared/CommandPaletteModal.tsx" },
         { "path": "src/components/shared/SearchInput.tsx" }
       ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/components/Settings/ResourcePicker.tsx",
+          "patterns": ["type=\"text\"", "onInput={(e) => setTagFilter"]
+        }
+      ],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "src/components/shared/__tests__/SearchField.test.tsx",
@@ -644,8 +660,18 @@
       },
       "requiredConsumers": [
         { "path": "src/components/Settings/GeneralSettingsPanel.tsx" },
+        { "path": "src/components/Settings/ResourcePicker.tsx" },
         { "path": "src/components/Settings/ReportingPanel.tsx" },
         { "path": "src/features/patrol/PatrolIntelligenceHeader.tsx" }
+      ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/components/Settings/ResourcePicker.tsx",
+          "patterns": [
+            "min-h-10 sm:min-h-9 min-w-10 px-3 py-2 rounded-md text-sm font-medium transition-all",
+            "<For each={RESOURCE_PICKER_TYPE_FILTERS}>"
+          ]
+        }
       ],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",

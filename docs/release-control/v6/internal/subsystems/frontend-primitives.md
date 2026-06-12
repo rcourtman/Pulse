@@ -473,6 +473,9 @@ not a replacement status card, CTA band, or page-local nested card.
    settings/action `px-3 py-2 text-sm` shape, the shared `xs` size owns the
    compact settings row-action `px-2.5 py-1 text-xs` shape, and the shared
    `iconMd` size owns the settings dialog close-button `h-9 w-9` icon shape.
+   Settings selection helpers such as `ResourcePicker` must use the same
+   `Button` primitive for select-all, clear, and chip remove actions instead of
+   restoring footer-local action shells.
    If a new surface needs a variant that the shared primitive does not expose,
    extend the primitive and registry guard rather than adding a page-local
    class string.
@@ -2507,12 +2510,18 @@ labels, and trailing-control padding, while `SearchInput` owns resource-list
 search enhancements such as history, tips, and type-to-search wiring. Product
 surfaces must compose those primitives instead of rendering native
 `type="search"` inputs or recreating search icon/clear/input classes locally.
+Settings resource selectors must use `SearchField` for both primary text
+search and secondary tag/resource filters instead of restoring native
+`type="text"` filter inputs beside a shared search field.
 Segmented selectors are registry-backed too. `FilterButtonGroup` owns the
 settings, prominent, compact, and equal segmented selector shells, including
 active-button tone, disabled-option behavior, pressed-state semantics,
 compact labels, and horizontal scroll treatment through the shared
 shell/state/model split. Settings and compact feature surfaces must compose
 that primitive instead of copying active-button selector styling locally.
+`ResourcePicker` report-domain filters are part of that boundary: the picker
+owns the reportable resource categories and labels, but the type selector shell
+must come from `FilterButtonGroup`.
 Chart visibility display actions are registry-backed too.
 `ChartVisibilityToggleButton` owns the `Show charts` / `Hide charts` label,
 pressed-state, title, icon, and toolbar action styling for summary-bearing

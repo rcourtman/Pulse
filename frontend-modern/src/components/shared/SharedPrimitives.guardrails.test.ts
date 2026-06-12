@@ -248,6 +248,7 @@ describe('shared primitive guardrails', () => {
         id: string;
         canonical?: { path?: string; export?: string };
         requiredConsumers?: Array<{ path?: string }>;
+        forbiddenPatterns?: Array<{ path?: string; patterns?: string[] }>;
       }>;
       patternGuards?: Array<{
         id: string;
@@ -266,9 +267,21 @@ describe('shared primitive guardrails', () => {
     expect(registeredRule?.canonical?.export).toBe('FilterButtonGroup');
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
       'src/components/Settings/GeneralSettingsPanel.tsx',
+      'src/components/Settings/ResourcePicker.tsx',
       'src/components/Settings/ReportingPanel.tsx',
       'src/features/patrol/PatrolIntelligenceHeader.tsx',
     ]);
+    expect(registeredRule?.forbiddenPatterns).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: 'src/components/Settings/ResourcePicker.tsx',
+          patterns: expect.arrayContaining([
+            'min-h-10 sm:min-h-9 min-w-10 px-3 py-2 rounded-md text-sm font-medium transition-all',
+            '<For each={RESOURCE_PICKER_TYPE_FILTERS}>',
+          ]),
+        }),
+      ]),
+    );
     expect(registeredGuard?.canonical?.path).toBe(
       'src/components/shared/filterButtonGroupModel.ts',
     );
@@ -306,6 +319,11 @@ describe('shared primitive guardrails', () => {
     expect(generalSettingsPanelSource).not.toContain(
       'props.pvePollingSelection() === option.value',
     );
+    expect(resourcePickerSource).toContain('FilterButtonGroup');
+    expect(resourcePickerSource).not.toContain('<For each={RESOURCE_PICKER_TYPE_FILTERS}>');
+    expect(resourcePickerSource).not.toContain(
+      'min-h-10 sm:min-h-9 min-w-10 px-3 py-2 rounded-md text-sm font-medium transition-all',
+    );
     expect(reportingPanelSource.match(/<FilterButtonGroup/g) ?? []).toHaveLength(2);
     expect(reportingPanelSource).toContain('variant="prominent"');
     expect(reportingPanelSource).not.toContain('getReportingToggleButtonClass');
@@ -336,6 +354,7 @@ describe('shared primitive guardrails', () => {
         id: string;
         canonical?: { path?: string; export?: string };
         requiredConsumers?: Array<{ path?: string }>;
+        forbiddenPatterns?: Array<{ path?: string; patterns?: string[] }>;
       }>;
       patternGuards?: Array<{
         id: string;
@@ -438,6 +457,7 @@ describe('shared primitive guardrails', () => {
         id: string;
         canonical?: { path?: string; export?: string };
         requiredConsumers?: Array<{ path?: string }>;
+        forbiddenPatterns?: Array<{ path?: string; patterns?: string[] }>;
       }>;
       patternGuards?: Array<{
         id: string;
@@ -529,6 +549,7 @@ describe('shared primitive guardrails', () => {
         id: string;
         canonical?: { path?: string; export?: string };
         requiredConsumers?: Array<{ path?: string }>;
+        forbiddenPatterns?: Array<{ path?: string; patterns?: string[] }>;
       }>;
       patternGuards?: Array<{
         id: string;
@@ -676,6 +697,7 @@ describe('shared primitive guardrails', () => {
         id: string;
         canonical?: { path?: string; export?: string };
         requiredConsumers?: Array<{ path?: string }>;
+        forbiddenPatterns?: Array<{ path?: string; patterns?: string[] }>;
       }>;
       patternGuards?: Array<{
         id: string;
@@ -1514,6 +1536,7 @@ describe('shared primitive guardrails', () => {
         id: string;
         canonical?: { path?: string; export?: string };
         requiredConsumers?: Array<{ path?: string }>;
+        forbiddenPatterns?: Array<{ path?: string; patterns?: string[] }>;
       }>;
       patternGuards?: Array<{
         id: string;
@@ -1588,9 +1611,21 @@ describe('shared primitive guardrails', () => {
       'src/components/Settings/InfrastructureInstallerSection.tsx',
       'src/components/Settings/InfrastructureSourceManager.tsx',
       'src/components/Settings/InfrastructureWorkspace.tsx',
+      'src/components/Settings/ResourcePicker.tsx',
       'src/features/patrol/PatrolIntelligenceWorkspace.tsx',
       'src/features/standalone/StandalonePageSurface.tsx',
     ]);
+    expect(registeredRule?.forbiddenPatterns).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: 'src/components/Settings/ResourcePicker.tsx',
+          patterns: expect.arrayContaining([
+            'hover:border-red-500 hover:text-red-400',
+            'w-full sm:w-auto min-h-10 sm:min-h-9 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm rounded-md border border-border',
+          ]),
+        }),
+      ]),
+    );
     expect(registeredGuard?.canonical?.path).toBe('src/components/shared/buttonModel.ts');
     expect(registeredGuard?.canonical?.export).toBe('getButtonClass');
     expect(registeredGuard?.allPatterns).toEqual([
@@ -1865,6 +1900,12 @@ describe('shared primitive guardrails', () => {
     );
     expect(infrastructureWorkspaceSource).not.toContain(
       'h-9 w-9 items-center justify-center rounded-md border border-border text-base-content transition-colors hover:bg-surface-hover',
+    );
+    expect(resourcePickerSource).toContain('@/components/shared/Button');
+    expect(resourcePickerSource).toContain('<Button');
+    expect(resourcePickerSource).not.toContain('hover:border-red-500 hover:text-red-400');
+    expect(resourcePickerSource).not.toContain(
+      'w-full sm:w-auto min-h-10 sm:min-h-9 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm rounded-md border border-border',
     );
     expect(discoveryTabSource).toContain('@/components/shared/Button');
     expect(discoveryTabSource).toContain('@/components/shared/CopyableCodeRow');
@@ -2751,6 +2792,7 @@ describe('shared primitive guardrails', () => {
         id: string;
         canonical?: { path?: string; export?: string };
         requiredConsumers?: Array<{ path?: string }>;
+        forbiddenPatterns?: Array<{ path?: string; patterns?: string[] }>;
       }>;
       patternGuards?: Array<{
         id: string;
@@ -2778,6 +2820,14 @@ describe('shared primitive guardrails', () => {
       'src/components/shared/CommandPaletteModal.tsx',
       'src/components/shared/SearchInput.tsx',
     ]);
+    expect(registeredRule?.forbiddenPatterns).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: 'src/components/Settings/ResourcePicker.tsx',
+          patterns: ['type="text"', 'onInput={(e) => setTagFilter'],
+        }),
+      ]),
+    );
     expect(registeredGuard?.canonical?.path).toBe('src/components/shared/SearchField.tsx');
     expect(registeredGuard?.canonical?.export).toBe('SearchField');
     expect(registeredGuard?.allPatterns).toEqual(['type="search"']);
@@ -2806,6 +2856,10 @@ describe('shared primitive guardrails', () => {
     expect(searchFieldModelSource).toContain('shouldShowSearchFieldClearButton');
     expect(searchFieldModelSource).toContain('getSearchFieldInputPaddingRightClass');
     expect(searchFieldModelSource).toContain("return 'pr-14 sm:pr-20'");
+    expect(resourcePickerSource.match(/<SearchField/g) ?? []).toHaveLength(2);
+    expect(resourcePickerSource).toContain('placeholder="Filter by tag..."');
+    expect(resourcePickerSource).not.toContain('type="text"');
+    expect(resourcePickerSource).not.toContain('onInput={(e) => setTagFilter');
 
     for (const source of [
       assistantCommandHelpDialogSource,

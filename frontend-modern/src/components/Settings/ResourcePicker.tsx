@@ -4,6 +4,8 @@ import CheckSquare from 'lucide-solid/icons/check-square';
 import XSquare from 'lucide-solid/icons/x-square';
 import { formControl } from '@/components/shared/Form';
 import { SearchField } from '@/components/shared/SearchField';
+import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
+import { Button } from '@/components/shared/Button';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { useResources } from '@/hooks/useResources';
 import type { Resource, ResourceType } from '@/types/resource';
@@ -41,6 +43,12 @@ export function ResourcePicker(props: ResourcePickerProps) {
   const [typeFilter, setTypeFilter] = createSignal<TypeFilter>('all');
   const [tagFilter, setTagFilter] = createSignal('');
   const maxSelection = () => props.maxSelection ?? DEFAULT_MAX_SELECTION;
+  const typeFilterOptions = createMemo<FilterOption<TypeFilter>[]>(() =>
+    RESOURCE_PICKER_TYPE_FILTERS.map((type) => ({
+      value: type,
+      label: getResourcePickerTypeFilterLabel(type),
+    })),
+  );
 
   // Filter to reportable resource types across infrastructure, workloads, storage, and recovery.
   const reportableResources = createMemo(() => {
@@ -123,10 +131,7 @@ export function ResourcePicker(props: ResourcePickerProps) {
       showWarning(
         `Maximum ${maxSelection()} resources can be selected. Only ${maxSelection() - current.length} more can be added.`,
       );
-      props.onSelectionChange([
-        ...current,
-        ...toAdd.slice(0, maxSelection() - current.length),
-      ]);
+      props.onSelectionChange([...current, ...toAdd.slice(0, maxSelection() - current.length)]);
       return;
     }
     props.onSelectionChange(newSelection);
@@ -144,44 +149,32 @@ export function ResourcePicker(props: ResourcePickerProps) {
     <div class="space-y-3">
       {/* Filter bar */}
       <div class="flex flex-col gap-3">
-        <div class="flex gap-2 flex-wrap">
-          {/* Search input */}
+        <div class="flex flex-wrap gap-2">
           <SearchField
-            class="flex-1 min-w-[200px]"
+            class="min-w-[200px] flex-1"
             inputClass={formControl}
             value={search()}
             onChange={setSearch}
             placeholder="Search by name or ID..."
           />
 
-          {/* Tag filter */}
-          <input
-            type="text"
-            class={`${formControl} w-40`}
+          <SearchField
+            class="w-full sm:w-48"
+            inputClass={formControl}
             placeholder="Filter by tag..."
-            aria-label="Filter resources by tag"
+            title="Filter resources by tag"
             value={tagFilter()}
-            onInput={(e) => setTagFilter(e.currentTarget.value)}
+            onChange={setTagFilter}
           />
         </div>
 
-        {/* Type toggle buttons */}
-        <div class="flex gap-1">
-          <For each={RESOURCE_PICKER_TYPE_FILTERS}>
-            {(type) => (
-              <button
-                class={`min-h-10 sm:min-h-9 min-w-10 px-3 py-2 rounded-md text-sm font-medium transition-all ${
-                  typeFilter() === type
-                    ? 'bg-blue-600 border border-blue-500 text-blue-400'
-                    : 'bg-surface border border-border text-muted hover:border-border'
-                }`}
-                onClick={() => setTypeFilter(type)}
-              >
-                {getResourcePickerTypeFilterLabel(type)}
-              </button>
-            )}
-          </For>
-        </div>
+        <FilterButtonGroup
+          options={typeFilterOptions()}
+          value={typeFilter()}
+          onChange={setTypeFilter}
+          ariaLabel="Resource type filter"
+          variant="settings"
+        />
       </div>
 
       {/* Resource list */}
@@ -319,21 +312,25 @@ export function ResourcePicker(props: ResourcePickerProps) {
       {/* Action bar */}
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div class="flex flex-col sm:flex-row gap-2">
-          <button
-            class="w-full sm:w-auto min-h-10 sm:min-h-9 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm rounded-md border border-border text-slate-400 hover:border-slate-500 hover:text-slate-300 transition-colors"
+          <Button
+            variant="outline"
+            size="settingsAction"
+            class="w-full gap-1.5 text-muted sm:w-auto"
             onClick={selectAllVisible}
           >
             <CheckSquare size={14} />
             Select all visible ({filteredResources().length})
-          </button>
+          </Button>
           <Show when={props.selected().length > 0}>
-            <button
-              class="w-full sm:w-auto min-h-10 sm:min-h-9 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm rounded-md border border-border text-slate-400 hover:border-red-500 hover:text-red-400 transition-colors"
+            <Button
+              variant="dangerOutline"
+              size="settingsAction"
+              class="w-full gap-1.5 sm:w-auto"
               onClick={clearAll}
             >
               <XSquare size={14} />
               Clear all
-            </button>
+            </Button>
           </Show>
         </div>
         <span class="text-xs sm:text-sm text-muted">
@@ -351,14 +348,16 @@ export function ResourcePicker(props: ResourcePickerProps) {
             {(item) => (
               <span class="inline-flex items-center gap-1 pl-2 pr-1 py-1 rounded-md bg-blue-600 border border-blue-500 text-sm text-blue-300">
                 {item.name}
-                <button
-                  class="p-0.5 rounded hover:bg-blue-500 transition-colors"
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  class="min-h-0 p-0.5 text-blue-300 hover:bg-blue-500"
                   onClick={() => removeSelected(item.id)}
                   aria-label={`Remove ${item.name}`}
                   title={`Remove ${item.name}`}
                 >
                   <X size={12} />
-                </button>
+                </Button>
               </span>
             )}
           </For>

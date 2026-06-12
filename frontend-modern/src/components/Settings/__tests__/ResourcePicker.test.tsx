@@ -205,6 +205,35 @@ describe('ResourcePicker', () => {
     expect(screen.queryByText('Production VM')).not.toBeInTheDocument();
   });
 
+  it('filters resources by tag through the shared search field', async () => {
+    mockResources = [
+      makeResource({
+        id: 'vm-prod-101',
+        type: 'vm',
+        name: 'Production VM',
+        displayName: 'Production VM',
+        tags: ['critical', 'finance'],
+      }),
+      makeResource({
+        id: 'host-dev-55',
+        type: 'agent',
+        name: 'Edge Host',
+        displayName: 'Edge Host',
+        status: 'online',
+        tags: ['lab'],
+      }),
+    ];
+
+    renderPicker();
+
+    const tagInput = screen.getByPlaceholderText('Filter by tag...');
+    fireEvent.input(tagInput, { target: { value: 'finance' } });
+
+    expect(await screen.findByText('Production VM')).toBeInTheDocument();
+    expect(screen.queryByText('Edge Host')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Clear search' })).toBeInTheDocument();
+  });
+
   it('toggles individual selection on and off', async () => {
     mockResources = [
       makeResource({ id: 'vm-1', type: 'vm', name: 'Alpha VM', displayName: 'Alpha VM' }),
