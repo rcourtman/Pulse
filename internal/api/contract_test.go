@@ -15066,6 +15066,7 @@ func TestContract_AgentSurfaceErrorCodesMatchManifestDeclarations(t *testing.T) 
 		"action_execution_encode_failed":  true,
 		"action_execution_failed":         true,
 		"action_not_executing":            true,
+		"action_policy_validation_failed": true,
 		"action_plan_validation_failed":   true,
 		"resource_registry_unavailable":   true,
 	}

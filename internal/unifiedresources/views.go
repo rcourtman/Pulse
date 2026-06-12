@@ -1701,6 +1701,15 @@ func (v DockerHostView) Command() *models.DockerHostCommandStatus {
 	return &copied
 }
 
+func (v DockerHostView) Security() *models.DockerHostSecurity {
+	if v.r == nil || v.r.Docker == nil || v.r.Docker.Security == nil {
+		return nil
+	}
+	copied := *v.r.Docker.Security
+	copied.AuthorizationPlugins = append([]string(nil), v.r.Docker.Security.AuthorizationPlugins...)
+	return &copied
+}
+
 // StoragePoolView wraps a storage resource.
 type StoragePoolView struct{ r *Resource }
 

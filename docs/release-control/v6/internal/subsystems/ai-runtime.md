@@ -2103,8 +2103,9 @@ deriving an older display status from `workflowStatusHistory`.
     persisted on `ExecutionResult.Verification` so the audit history
     shows not only what the action did but whether the read-back
     confirmed the intended state. Container-class verification is
-    deferred to pulse_docker's existing tool-level `docker inspect`
-    check; classes without a derivable verification command leave
+    deferred to pulse_docker's existing tool-level runtime inspect
+    check (`docker inspect` or `podman inspect`, according to the
+    resolved container runtime); classes without a derivable verification command leave
     `Verification` nil rather than fabricating a verified=true entry.
     The approval preflight presented to operators authors per-command-class
     safety and verification context on top of the default broker-level

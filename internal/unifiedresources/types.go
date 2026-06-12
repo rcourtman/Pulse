@@ -927,6 +927,7 @@ type DockerData struct {
 	PendingUninstall      bool                            `json:"pendingUninstall,omitempty"`
 	IsLegacy              bool                            `json:"isLegacy,omitempty"`
 	Command               *models.DockerHostCommandStatus `json:"command,omitempty"`
+	Security              *models.DockerHostSecurity      `json:"security,omitempty"`
 
 	// Container-specific fields (populated when Resource.Type == ResourceTypeAppContainer)
 	ContainerState string                      `json:"containerState,omitempty"`

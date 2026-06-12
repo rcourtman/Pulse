@@ -423,6 +423,14 @@ container inventory table.
    `resourceVersion`, `policyVersion`, or `planHash` drift as
    `action_plan_drift`, and record/publish a failed audit instead of leaving
    executor adapters to make stale-approval decisions.
+   Docker/Podman `app-container` lifecycle actions are part of that same
+   governed resource contract: `resourceFromDockerContainer` may advertise
+   `start`, `stop`, and `restart` only for fresh, supported, agent-backed
+   Docker/Podman reports whose daemon posture does not block mutating
+   commands. The API action executor must consume those capabilities through
+   `/api/actions/*` and the agent command server; platform rows or drawers
+   must not wire direct shell, SSH, provider, or runtime calls around this
+   capability contract.
    TrueNAS app inventory enters the model as native `TrueNASData.App`
    metadata on canonical `app-container` resources. The facet is sourced from
    the TrueNAS API app inventory (`app.query` plus active workload/stat

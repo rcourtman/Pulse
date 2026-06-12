@@ -1087,7 +1087,11 @@ func dockerHostModelFromView(host *unifiedresources.DockerHostView) models.Docke
 		AgentID:     strings.TrimSpace(host.AgentID()),
 		Hostname:    hostname,
 		DisplayName: displayName,
+		Runtime:     strings.TrimSpace(host.Runtime()),
 		Status:      string(host.Status()),
+		LastSeen:    host.LastSeen(),
+		Command:     host.Command(),
+		Security:    host.Security(),
 	}
 }
 

@@ -171,6 +171,14 @@ func DefaultPolicy() *CommandPolicy {
 			`^docker\s+images`,
 			`^docker\s+network\s+ls`,
 			`^docker\s+volume\s+ls`,
+			`^podman\s+ps`,
+			`^podman\s+logs\s`,
+			`^podman\s+inspect\s`,
+			`^podman\s+stats\s+--no-stream`,
+			`^podman\s+top\s`,
+			`^podman\s+images`,
+			`^podman\s+network\s+ls`,
+			`^podman\s+volume\s+ls`,
 
 			// Proxmox inspection (read-only)
 			`^pct\s+list`,
@@ -201,6 +209,7 @@ func DefaultPolicy() *CommandPolicy {
 
 			// Docker inspection (read-only)
 			`^docker\s+system\s+df`,
+			`^podman\s+system\s+df`,
 
 			// APT inspection (read-only)
 			`^apt\s+list`,
@@ -218,6 +227,9 @@ func DefaultPolicy() *CommandPolicy {
 			`^docker\s+(restart|stop|start|kill)\s`,
 			`^docker\s+exec\s`,
 			`^docker\s+rm\s`,
+			`^podman\s+(restart|stop|start|kill)\s`,
+			`^podman\s+exec\s`,
+			`^podman\s+rm\s`,
 
 			// Process control
 			`^kill\s`,

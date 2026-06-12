@@ -377,6 +377,20 @@ func (h *ResourceHandlers) HandleExecuteAction(w http.ResponseWriter, r *http.Re
 		writeJSONError(w, http.StatusInternalServerError, "action_plan_validation_failed", sanitizeErrorForClient(err, "Failed to validate action plan freshness"))
 		return
 	}
+	if err := h.validateActionExecutionPolicy(store, record); err != nil {
+		if unified.IsPermanentActionExecutionRefusal(err) {
+			if failed, persistErr := recordRefusedActionExecution(store, record, actor, now, err); persistErr == nil {
+				h.publishActionCompleted(failed)
+			} else {
+				writeJSONError(w, http.StatusInternalServerError, "action_execution_persist_failed", sanitizeErrorForClient(persistErr, "Failed to persist refused action execution"))
+				return
+			}
+			writeActionExecutionApplyError(w, err)
+			return
+		}
+		writeJSONError(w, http.StatusInternalServerError, "action_policy_validation_failed", sanitizeErrorForClient(err, "Failed to validate action policy"))
+		return
+	}
 
 	started, startEvent, err := unified.BeginActionExecution(record, actor, now)
 	if err != nil {
@@ -454,6 +468,24 @@ func (h *ResourceHandlers) validateActionPlanFresh(orgID string, record unified.
 	return nil
 }
 
+func (h *ResourceHandlers) validateActionExecutionPolicy(store unified.ResourceStore, record unified.ActionAuditRecord) error {
+	if store == nil {
+		return errors.New("action audit store unavailable")
+	}
+	normalized, err := unified.NormalizeActionAuditRecord(record)
+	if err != nil {
+		return err
+	}
+	state, found, err := store.GetResourceOperatorState(normalized.Request.ResourceID)
+	if err != nil || !found {
+		return err
+	}
+	if state.NeverAutoRemediate {
+		return unified.ErrResourceRemediationLocked
+	}
+	return nil
+}
+
 func recordRefusedActionExecution(store unified.ResourceStore, record unified.ActionAuditRecord, actor string, now time.Time, reason error) (unified.ActionAuditRecord, error) {
 	failed, event, err := unified.RefuseActionExecution(record, reason, actor, now)
 	if err != nil {
@@ -524,6 +556,8 @@ func writeActionExecutionApplyError(w http.ResponseWriter, err error) {
 		writeJSONError(w, http.StatusConflict, "action_dry_run_only", "Action plan is dry-run only and cannot be executed")
 	case errors.Is(err, unified.ErrActionPlanDrift):
 		writeJSONError(w, http.StatusConflict, "action_plan_drift", "Action plan no longer matches the current resource contract; re-plan before executing")
+	case errors.Is(err, unified.ErrResourceRemediationLocked):
+		writeJSONError(w, http.StatusConflict, "resource_remediation_locked", "Resource is operator-locked against automated remediation")
 	default:
 		writeJSONError(w, http.StatusInternalServerError, "action_execution_failed", sanitizeErrorForClient(err, "Action execution failed"))
 	}
@@ -536,7 +570,8 @@ func writeActionExecutionPersistError(w http.ResponseWriter, err error) {
 		errors.Is(err, unified.ErrActionExecutionFinal),
 		errors.Is(err, unified.ErrActionNotExecuting),
 		errors.Is(err, unified.ErrActionPlanExpired),
-		errors.Is(err, unified.ErrActionDryRunOnly):
+		errors.Is(err, unified.ErrActionDryRunOnly),
+		errors.Is(err, unified.ErrResourceRemediationLocked):
 		writeActionExecutionApplyError(w, err)
 	default:
 		writeJSONError(w, http.StatusInternalServerError, "action_execution_persist_failed", sanitizeErrorForClient(err, "Failed to persist action execution"))

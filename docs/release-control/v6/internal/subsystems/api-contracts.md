@@ -2493,7 +2493,8 @@ carries `missing_id`, `invalid_id`, `invalid_action_decision`,
 `invalid_action_execution`, `action_not_found`,
 `action_not_approved`, `action_already_executing`,
 `action_execution_final`, `action_dry_run_only`,
-`action_plan_drift`, `action_executor_unavailable`. 5xx internal-failure codes
+`action_plan_expired`, `action_plan_drift`,
+`resource_remediation_locked`, `action_executor_unavailable`. 5xx internal-failure codes
 (audit-store outages, encode failures) are not declared per
 capability; agents branch on 5xx generically.
 

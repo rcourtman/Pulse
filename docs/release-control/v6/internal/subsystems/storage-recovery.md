@@ -215,6 +215,11 @@ driver runs. Dry-run-only plans remain planning
 evidence only; storage and recovery surfaces must not present them as
 executable, dispatch them through provider-local restore/remediation paths, or
 bypass the API fail-closed execution gate.
+Docker / Podman start, stop, and restart actions are adjacent runtime actions,
+not storage or recovery controls: storage/recovery consumers may render their
+redacted action history as context, but must not treat container lifecycle
+capabilities, `DockerData`, or agent command verification as backup freshness,
+restore support, or a recovery-local execution path.
 Storage and recovery surfaces may consume Discovery context from the shared
 API boundary when it helps explain protected workloads or storage-adjacent
 services, including mock-mode config/data/log path examples. That context is

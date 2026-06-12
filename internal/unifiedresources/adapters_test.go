@@ -1,6 +1,7 @@
 package unifiedresources
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -36,6 +37,149 @@ func TestResourceFromProxmoxNodeIncludesTemperature(t *testing.T) {
 	if got, want := *resource.Proxmox.Temperature, 61.9; got != want {
 		t.Fatalf("temperature = %v, want %v", got, want)
 	}
+}
+
+func TestResourceFromDockerContainerAdvertisesLifecycleCapabilities(t *testing.T) {
+	now := time.Now().UTC()
+	host := models.DockerHost{
+		ID:       "docker-host-1",
+		AgentID:  "agent-1",
+		Hostname: "dock1",
+		Runtime:  "docker",
+		LastSeen: now,
+	}
+
+	running, _ := resourceFromDockerContainer(models.DockerContainer{
+		ID:    "abc123",
+		Name:  "web",
+		State: "running",
+	}, host)
+	if running.Docker == nil || running.Docker.AgentID != "agent-1" {
+		t.Fatalf("docker agent id was not projected onto container resource: %#v", running.Docker)
+	}
+	if got := capabilityNames(running.Capabilities); !reflect.DeepEqual(got, []string{"stop", "restart"}) {
+		t.Fatalf("running container capabilities = %#v, want stop/restart", got)
+	}
+	for _, capability := range running.Capabilities {
+		if capability.MinimumApprovalLevel != ApprovalAdmin {
+			t.Fatalf("capability %q approval = %q, want admin", capability.Name, capability.MinimumApprovalLevel)
+		}
+		if capability.Platform != "docker" || capability.InternalHandler != "docker.container.lifecycle" {
+			t.Fatalf("capability %q platform/handler = %q/%q", capability.Name, capability.Platform, capability.InternalHandler)
+		}
+	}
+
+	exited, _ := resourceFromDockerContainer(models.DockerContainer{
+		ID:    "def456",
+		Name:  "worker",
+		State: "exited",
+	}, host)
+	if got := capabilityNames(exited.Capabilities); !reflect.DeepEqual(got, []string{"start"}) {
+		t.Fatalf("exited container capabilities = %#v, want start", got)
+	}
+}
+
+func TestResourceFromDockerContainerLifecycleCapabilitiesFailClosed(t *testing.T) {
+	now := time.Now().UTC()
+	baseHost := models.DockerHost{
+		ID:       "docker-host-1",
+		AgentID:  "agent-1",
+		Hostname: "dock1",
+		Runtime:  "docker",
+		LastSeen: now,
+	}
+	container := models.DockerContainer{ID: "abc123", Name: "web", State: "running"}
+
+	cases := []struct {
+		name string
+		host models.DockerHost
+		ct   models.DockerContainer
+	}{
+		{
+			name: "missing agent",
+			host: func() models.DockerHost {
+				host := baseHost
+				host.AgentID = ""
+				return host
+			}(),
+			ct: container,
+		},
+		{
+			name: "stale inventory",
+			host: func() models.DockerHost {
+				host := baseHost
+				host.LastSeen = now.Add(-10 * time.Minute)
+				return host
+			}(),
+			ct: container,
+		},
+		{
+			name: "daemon mutation blocked",
+			host: func() models.DockerHost {
+				host := baseHost
+				host.Security = &models.DockerHostSecurity{MutatingCommandsBlocked: true, MutatingCommandsBlockedReason: "blocked"}
+				return host
+			}(),
+			ct: container,
+		},
+		{
+			name: "unsupported runtime",
+			host: func() models.DockerHost {
+				host := baseHost
+				host.Runtime = "containerd"
+				return host
+			}(),
+			ct: container,
+		},
+		{
+			name: "non-actionable state",
+			host: baseHost,
+			ct:   models.DockerContainer{ID: "abc123", Name: "web", State: "restarting"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resource, _ := resourceFromDockerContainer(tc.ct, tc.host)
+			if len(resource.Capabilities) != 0 {
+				t.Fatalf("capabilities = %#v, want none", resource.Capabilities)
+			}
+		})
+	}
+}
+
+func TestResourceFromDockerContainerPodmanLifecycleCapabilities(t *testing.T) {
+	resource, _ := resourceFromDockerContainer(models.DockerContainer{
+		ID:     "podman-1",
+		Name:   "api",
+		State:  "running",
+		Podman: &models.DockerPodmanContainer{PodName: "apps"},
+	}, models.DockerHost{
+		ID:       "podman-host-1",
+		AgentID:  "agent-1",
+		Hostname: "podman1",
+		LastSeen: time.Now().UTC(),
+	})
+
+	if got := capabilityNames(resource.Capabilities); !reflect.DeepEqual(got, []string{"stop", "restart"}) {
+		t.Fatalf("podman capabilities = %#v, want stop/restart", got)
+	}
+	for _, capability := range resource.Capabilities {
+		if capability.Platform != "podman" {
+			t.Fatalf("capability %q platform = %q, want podman", capability.Name, capability.Platform)
+		}
+	}
+	if resource.Docker == nil || resource.Docker.Runtime != "podman" {
+		t.Fatalf("podman runtime not projected: %#v", resource.Docker)
+	}
+}
+
+func capabilityNames(capabilities []ResourceCapability) []string {
+	names := make([]string, 0, len(capabilities))
+	for _, capability := range capabilities {
+		names = append(names, capability.Name)
+	}
+	return names
 }
 
 func TestResourceFromProxmoxNodeStoresEndpointIPAsIPAddress(t *testing.T) {

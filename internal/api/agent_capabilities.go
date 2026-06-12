@@ -463,14 +463,14 @@ var agentCapabilitiesManifest = AgentCapabilitiesManifest{
 		},
 		{
 			Name:             "execute_action",
-			Description:      "Execute a previously planned and (when required) approved action. Returns the persisted audit record with the execution result attached. Refuses with stable codes when the action is in the wrong lifecycle state (action_not_approved, action_already_executing, action_execution_final, action_dry_run_only, action_plan_expired), when the approved plan no longer matches the current resource/capability contract (action_plan_drift), or when the API instance has no executor wired (action_executor_unavailable). action.completed SSE events fire on every terminal state so agents watching the stream do not need to poll this endpoint after dispatch.",
+			Description:      "Execute a previously planned and (when required) approved action. Returns the persisted audit record with the execution result attached. Refuses with stable codes when the action is in the wrong lifecycle state (action_not_approved, action_already_executing, action_execution_final, action_dry_run_only, action_plan_expired), when the approved plan no longer matches the current resource/capability contract (action_plan_drift), when the target is operator-locked against automated remediation (resource_remediation_locked), or when the API instance has no executor wired (action_executor_unavailable). action.completed SSE events fire on every terminal state so agents watching the stream do not need to poll this endpoint after dispatch.",
 			Category:         "action",
 			Method:           http.MethodPost,
 			Path:             "/api/actions/{actionId}/execute",
 			Scope:            "ai:execute",
 			RequestBodyShape: "{ reason?: string }",
 			ResponseShape:    "ActionExecutionResponse",
-			ErrorCodes:       []string{"missing_id", "invalid_id", "invalid_action_execution", "action_not_found", "action_not_approved", "action_already_executing", "action_execution_final", "action_dry_run_only", "action_plan_expired", "action_plan_drift", "action_executor_unavailable"},
+			ErrorCodes:       []string{"missing_id", "invalid_id", "invalid_action_execution", "action_not_found", "action_not_approved", "action_already_executing", "action_execution_final", "action_dry_run_only", "action_plan_expired", "action_plan_drift", "resource_remediation_locked", "action_executor_unavailable"},
 		},
 	},
 }

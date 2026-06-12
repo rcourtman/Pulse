@@ -278,6 +278,11 @@ regression protection.
    action audit record to the agent SSE projection, but it must not perform
    executor dispatch, resource rescans, model calls, or persistence fan-out on
    the protected request setup path.
+   Docker / Podman lifecycle execution uses the same bounded setup rule:
+   `internal/api/router.go` may wire the API action executor once at startup,
+   while per-action resource refresh, policy validation, agent command dispatch,
+   polling verification, and audit completion must occur inside the route-local
+   execute handler path.
    Retiring self-hosted trial acquisition follows that same rule: removing
    `/auth/trial-activate` and `POST /api/license/trial/start` from public-path
    and CSRF inventories must stay as constant-time route-table absence rather

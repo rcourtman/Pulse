@@ -65,6 +65,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
 // readConsumerGoFiles returns the contents of all non-test .go files in the
@@ -215,6 +217,35 @@ func TestNoDirectStateAccessForMigratedResources(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestCloneResourceClonesDockerSecurityPosture(t *testing.T) {
+	original := Resource{
+		ID:   "app-container:docker-host-1:web",
+		Type: ResourceTypeAppContainer,
+		Docker: &DockerData{
+			HostSourceID: "docker-host-1",
+			Runtime:      "docker",
+			Security: &models.DockerHostSecurity{
+				AuthorizationPlugins:          []string{"opa"},
+				MutatingCommandsBlocked:       true,
+				MutatingCommandsBlockedReason: "authorization plugin configured",
+			},
+		},
+	}
+
+	cloned := cloneResource(&original)
+	if cloned.Docker == nil || cloned.Docker.Security == nil {
+		t.Fatalf("clone lost docker security posture: %#v", cloned.Docker)
+	}
+	if !reflect.DeepEqual(cloned.Docker.Security, original.Docker.Security) {
+		t.Fatalf("docker security posture clone = %#v, want %#v", cloned.Docker.Security, original.Docker.Security)
+	}
+
+	cloned.Docker.Security.AuthorizationPlugins[0] = "changed"
+	if got := original.Docker.Security.AuthorizationPlugins[0]; got != "opa" {
+		t.Fatalf("docker security posture was aliased through clone, original plugin = %q", got)
 	}
 }
 

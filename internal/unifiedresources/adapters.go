@@ -1176,7 +1176,8 @@ func resourceFromDockerHost(host models.DockerHost) (Resource, ResourceIdentity)
 		Hidden:                host.Hidden,
 		PendingUninstall:      host.PendingUninstall,
 		IsLegacy:              host.IsLegacy,
-		Command:               host.Command,
+		Command:               cloneDockerHostCommandStatus(host.Command),
+		Security:              cloneDockerHostSecurity(host.Security),
 		Swarm:                 convertSwarm(host.Swarm),
 		NetworkInterfaces:     convertInterfaces(host.NetworkInterfaces),
 		Disks:                 convertDisks(host.Disks),
@@ -1909,6 +1910,7 @@ func isZFSStorageType(storageType string) bool {
 
 func resourceFromDockerContainer(ct models.DockerContainer, host models.DockerHost) (Resource, ResourceIdentity) {
 	metrics := metricsFromDockerContainer(ct)
+	now := time.Now().UTC()
 	runtime := strings.TrimSpace(host.Runtime)
 	if runtime == "" {
 		if ct.Podman != nil {
@@ -1919,6 +1921,7 @@ func resourceFromDockerContainer(ct models.DockerContainer, host models.DockerHo
 	}
 	docker := &DockerData{
 		HostSourceID:   host.ID,
+		AgentID:        strings.TrimSpace(host.AgentID),
 		ContainerID:    ct.ID,
 		Hostname:       host.Hostname,
 		Image:          ct.Image,
@@ -1932,6 +1935,7 @@ func resourceFromDockerContainer(ct models.DockerContainer, host models.DockerHo
 		Runtime:        runtime,
 		RuntimeVersion: host.RuntimeVersion,
 		DockerVersion:  host.DockerVersion,
+		Security:       cloneDockerHostSecurity(host.Security),
 	}
 	if !ct.CreatedAt.IsZero() {
 		docker.CreatedAt = ct.CreatedAt.UTC().Format(time.RFC3339)
@@ -2004,19 +2008,101 @@ func resourceFromDockerContainer(ct models.DockerContainer, host models.DockerHo
 		}
 	}
 	resource := Resource{
-		Type:       ResourceTypeAppContainer,
-		Technology: runtime,
-		Name:       ct.Name,
-		Status:     statusFromDockerState(ct.State),
-		LastSeen:   host.LastSeen,
-		UpdatedAt:  time.Now().UTC(),
-		Metrics:    metrics,
+		Type:         ResourceTypeAppContainer,
+		Technology:   runtime,
+		Name:         ct.Name,
+		Status:       statusFromDockerState(ct.State),
+		LastSeen:     host.LastSeen,
+		UpdatedAt:    now,
+		Metrics:      metrics,
+		Capabilities: dockerContainerLifecycleCapabilities(ct, host, runtime, now),
 	}
 	resource.Docker = docker
 	identity := ResourceIdentity{
 		Hostnames: uniqueStrings([]string{ct.Name}),
 	}
 	return resource, identity
+}
+
+func dockerContainerLifecycleCapabilities(ct models.DockerContainer, host models.DockerHost, runtime string, now time.Time) []ResourceCapability {
+	runtime = normalizeDockerLifecycleRuntime(runtime, ct.Podman != nil)
+	if runtime == "" {
+		return nil
+	}
+	if strings.TrimSpace(host.AgentID) == "" {
+		return nil
+	}
+	if host.Security != nil && host.Security.MutatingCommandsBlocked {
+		return nil
+	}
+	if host.LastSeen.IsZero() {
+		return nil
+	}
+	if now.IsZero() {
+		now = time.Now().UTC()
+	} else {
+		now = now.UTC()
+	}
+	if threshold := defaultStaleThresholds[SourceDocker]; threshold > 0 && now.Sub(host.LastSeen.UTC()) > threshold {
+		return nil
+	}
+
+	switch strings.ToLower(strings.TrimSpace(ct.State)) {
+	case "running":
+		return dockerContainerLifecycleCapabilitySet(runtime, "stop", "restart")
+	case "created", "exited", "dead", "stopped":
+		return dockerContainerLifecycleCapabilitySet(runtime, "start")
+	default:
+		return nil
+	}
+}
+
+func normalizeDockerLifecycleRuntime(runtime string, podman bool) string {
+	switch strings.ToLower(strings.TrimSpace(runtime)) {
+	case "docker":
+		return "docker"
+	case "podman":
+		return "podman"
+	case "":
+		if podman {
+			return "podman"
+		}
+		return "docker"
+	default:
+		return ""
+	}
+}
+
+func dockerContainerLifecycleCapabilitySet(runtime string, names ...string) []ResourceCapability {
+	displayRuntime := "Docker"
+	if runtime == "podman" {
+		displayRuntime = "Podman"
+	}
+
+	capabilities := make([]ResourceCapability, 0, len(names))
+	for _, name := range names {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		capabilities = append(capabilities, ResourceCapability{
+			Name:                 name,
+			Type:                 CapabilityTypeCommon,
+			Description:          fmt.Sprintf("%s this %s container through its reporting Pulse agent.", titleAction(name), displayRuntime),
+			MinimumApprovalLevel: ApprovalAdmin,
+			Platform:             runtime,
+			InternalHandler:      "docker.container.lifecycle",
+		})
+	}
+	return capabilities
+}
+
+func titleAction(action string) string {
+	action = strings.TrimSpace(action)
+	if action == "" {
+		return "Run"
+	}
+	return strings.ToUpper(action[:1]) + action[1:]
 }
 
 func resourceFromDockerService(service models.DockerService, host models.DockerHost) (Resource, ResourceIdentity) {

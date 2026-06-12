@@ -230,6 +230,11 @@ the API-owned action audit records `executing` before dispatch and the
 terminal execution result afterward. Dry-run-only plans remain planning evidence
 only; lifecycle surfaces must not present them as executable, dispatch them
 through agent-local command paths, or bypass the API fail-closed execution gate.
+Docker / Podman container start, stop, and restart affordances follow that same
+boundary: lifecycle UI may consume unified-resource capabilities for enabled or
+disabled presentation, but execution must stay inside the API-owned action
+executor wired from `internal/api/router.go` and must not shell out, SSH, or call
+Docker / Podman from lifecycle-local code.
 Assistant session rename through `PATCH /api/ai/sessions/{id}` follows that
 same browser-safe history boundary. Lifecycle surfaces, MCP adapters, and
 agents may display the updated title as human navigation metadata, but they
@@ -1355,6 +1360,10 @@ The handlers were migrated from the platform-wide `APIError`
 envelope to the agent-stable `{"error", "message", "details"?}`
 shape so the substrate keeps a single envelope contract across
 read, write, and action capabilities.
+Docker / Podman lifecycle execution extends that same action category only:
+the manifest advertises the `execute_action` substrate, while per-resource
+container capabilities, policy checks, action audit records, and terminal
+verification remain API-owned facts rather than agent lifecycle state.
 
 The findings runtime now consumes operator-set per-resource state
 through a provider adapter wired in `internal/api/router.go` at

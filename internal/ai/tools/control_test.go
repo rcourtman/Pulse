@@ -126,7 +126,7 @@ func TestPulseToolExecutor_ExecuteControlDocker(t *testing.T) {
 	})
 
 	agentSrv.On("ExecuteCommand", mock.Anything, "agent1", mock.MatchedBy(func(payload agentexec.ExecuteCommandPayload) bool {
-		return payload.Command == "docker restart nginx"
+		return payload.Command == "docker restart 'nginx'"
 	})).Return(&agentexec.CommandResultPayload{
 		Stdout:   "OK",
 		ExitCode: 0,

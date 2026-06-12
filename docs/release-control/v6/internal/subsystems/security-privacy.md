@@ -599,6 +599,11 @@ read-only or mobile-only grant. `POST /api/actions/{id}/execute` is governed by
 the same `ai:execute` scope because it is the only API-owned handoff from
 approved intent into capability execution; missing executors must fail closed
 without creating execution lifecycle evidence.
+Docker / Podman container lifecycle execution stays under that same privileged
+handoff: the executor may use agent command execution only after scope,
+approval/policy, stale-plan, operator-lock, source-freshness, and runtime
+posture checks pass, and it must record redacted audit and verification facts
+instead of exposing raw command text through monitoring-readable surfaces.
 That same token-scope boundary now also governs Pulse Mobile relay runtime
 credentials: `internal/api/security_tokens.go` must mint only the dedicated
 backend-owned `relay:mobile:access` scope for new mobile relay tokens, and the

@@ -9,6 +9,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/safety"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rs/zerolog/log"
 )
 
@@ -128,7 +129,8 @@ func (e *PulseToolExecutor) executeDockerControl(ctx context.Context, args map[s
 		return NewTextResult(fmt.Sprintf("Could not find Docker container '%s': %v", containerName, err)), nil
 	}
 
-	command := fmt.Sprintf("docker %s %s", operation, container.Name)
+	runtimeCommand := dockerRuntimeCommand(dockerHost)
+	command := fmt.Sprintf("%s %s %s", runtimeCommand, operation, shellEscape(container.Name))
 	approvalTargetID := fmt.Sprintf("%s:%s", dockerHost.ID, container.Name)
 	if dockerHost.ID == "" {
 		approvalTargetID = fmt.Sprintf("%s:%s", dockerHost.Hostname, container.Name)
@@ -216,7 +218,7 @@ func (e *PulseToolExecutor) executeDockerControl(ctx context.Context, args map[s
 		output = redacted + fmt.Sprintf("\n\n[redacted %d sensitive value(s)]", n)
 	}
 
-	verify := e.verifyDockerContainerState(ctx, routing, container.ID, operation)
+	verify := e.verifyDockerContainerState(ctx, routing, runtimeCommand, container.ID, operation)
 	verify["ok"] = result.ExitCode == 0
 
 	response := map[string]interface{}{
@@ -235,9 +237,21 @@ func (e *PulseToolExecutor) executeDockerControl(ctx context.Context, args map[s
 	return NewJSONResultWithIsError(response, result.ExitCode != 0), nil
 }
 
+func dockerRuntimeCommand(dockerHost *models.DockerHost) string {
+	if dockerHost != nil {
+		switch strings.ToLower(strings.TrimSpace(dockerHost.Runtime)) {
+		case "podman":
+			return "podman"
+		case "docker":
+			return "docker"
+		}
+	}
+	return "docker"
+}
+
 // ========== Docker Updates Handler Implementations ==========
 
-func (e *PulseToolExecutor) verifyDockerContainerState(ctx context.Context, routing CommandRoutingResult, containerID, operation string) map[string]interface{} {
+func (e *PulseToolExecutor) verifyDockerContainerState(ctx context.Context, routing CommandRoutingResult, runtimeCommand, containerID, operation string) map[string]interface{} {
 	expectRunning := false
 	switch operation {
 	case "start", "restart":
@@ -246,7 +260,11 @@ func (e *PulseToolExecutor) verifyDockerContainerState(ctx context.Context, rout
 		expectRunning = false
 	}
 
-	inspectCmd := fmt.Sprintf("docker inspect -f '{{.State.Status}} {{.State.Running}}' %s", shellEscape(containerID))
+	runtimeCommand = strings.TrimSpace(runtimeCommand)
+	if runtimeCommand == "" {
+		runtimeCommand = "docker"
+	}
+	inspectCmd := fmt.Sprintf("%s inspect -f '{{.State.Status}} {{.State.Running}}' %s", runtimeCommand, shellEscape(containerID))
 
 	var lastOut string
 	var lastExit int
@@ -257,7 +275,7 @@ func (e *PulseToolExecutor) verifyDockerContainerState(ctx context.Context, rout
 			TargetID:   routing.TargetID,
 		})
 		if err != nil {
-			return map[string]interface{}{"confirmed": false, "method": "docker_inspect", "command": inspectCmd, "note": err.Error()}
+			return map[string]interface{}{"confirmed": false, "method": runtimeCommand + "_inspect", "command": inspectCmd, "note": err.Error()}
 		}
 		lastExit = res.ExitCode
 		lastOut = strings.TrimSpace(res.Stdout + "\n" + res.Stderr)
@@ -275,7 +293,7 @@ func (e *PulseToolExecutor) verifyDockerContainerState(ctx context.Context, rout
 		if res.ExitCode == 0 && observedStatus != "" && observedRunning == expectRunning {
 			return map[string]interface{}{
 				"confirmed": true,
-				"method":    "docker_inspect",
+				"method":    runtimeCommand + "_inspect",
 				"command":   inspectCmd,
 				"expected":  map[string]interface{}{"running": expectRunning},
 				"observed":  map[string]interface{}{"status": observedStatus, "running": observedRunning},
@@ -292,14 +310,14 @@ func (e *PulseToolExecutor) verifyDockerContainerState(ctx context.Context, rout
 				default:
 				}
 			}
-			return map[string]interface{}{"confirmed": false, "method": "docker_inspect", "command": inspectCmd, "note": "context canceled", "raw": lastOut, "exit_code": lastExit}
+			return map[string]interface{}{"confirmed": false, "method": runtimeCommand + "_inspect", "command": inspectCmd, "note": "context canceled", "raw": lastOut, "exit_code": lastExit}
 		case <-waitTimer.C:
 		}
 	}
 
 	return map[string]interface{}{
 		"confirmed": false,
-		"method":    "docker_inspect",
+		"method":    runtimeCommand + "_inspect",
 		"command":   inspectCmd,
 		"expected":  map[string]interface{}{"running": expectRunning},
 		"raw":       lastOut,

@@ -568,6 +568,10 @@ shared Docker host model, and `internal/monitoring/docker_commands.go` must
 refuse Docker daemon-mutating commands when authorization plugins are
 configured until the upstream Moby authz-plugin advisory line has a fixed Go
 module release.
+Unified-resource Docker / Podman lifecycle capabilities consume that preserved
+posture and must fail closed when it blocks mutation; monitoring remains the
+runtime truth producer and must not grow a monitor-local start/stop/restart
+transport around the governed action executor.
 That same collector boundary also owns the maintained engine-client seam.
 `internal/dockeragent/docker_client.go`, `internal/dockeragent/collect.go`,
 and `internal/dockeragent/swarm.go` must keep Pulse's package-local
