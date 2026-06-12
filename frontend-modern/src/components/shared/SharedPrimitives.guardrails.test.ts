@@ -90,6 +90,7 @@ import webInterfaceUrlFieldSource from '@/components/shared/WebInterfaceUrlField
 import webInterfaceUrlFieldModelSource from '@/components/shared/webInterfaceUrlFieldModel.ts?raw';
 import webInterfaceUrlFieldStateSource from '@/components/shared/useWebInterfaceUrlFieldState.ts?raw';
 import webInterfaceNameLinkSource from '@/components/shared/WebInterfaceNameLink.tsx?raw';
+import inlineDetailTableRowSource from '@/components/shared/InlineDetailTableRow.tsx?raw';
 import sharedTemplateRegistrySource from '../../../scripts/shared-template-registry.json?raw';
 import sharedPlatformPageSource from '@/features/platformPage/sharedPlatformPage.tsx?raw';
 import platformResourceDetailTableRowSource from '@/features/platformPage/PlatformResourceDetailTableRow.tsx?raw';
@@ -1012,6 +1013,7 @@ describe('shared primitive guardrails', () => {
         triggerPatterns?: string[];
         requiredPatterns?: string[];
         allowedPaths?: string[];
+        ignoredPaths?: string[];
       }>;
     };
     const requiredGuards = registry.requiredPatternGuards ?? [];
@@ -1050,6 +1052,84 @@ describe('shared primitive guardrails', () => {
       expect(source).toContain('PlatformResourceDetailToggleButton');
     }
     expect(agentsMachinesTableSource).not.toContain('data-agent-machine-expand-icon');
+  });
+
+  it('keeps inline detail table rows on the shared row shell primitive', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+      }>;
+      requiredPatternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        triggerPatterns?: string[];
+        requiredPatterns?: string[];
+        allowedPaths?: string[];
+        ignoredPaths?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find(
+      (rule) => rule.id === 'inline-detail-table-row-shell',
+    );
+    const requiredGuards = registry.requiredPatternGuards ?? [];
+    const inlineGuard = requiredGuards.find(
+      (guard) => guard.id === 'inline-detail-table-row-shared-shell',
+    );
+    const namedGuard = requiredGuards.find(
+      (guard) => guard.id === 'named-detail-table-row-shared-shell',
+    );
+
+    expect(registeredRule?.canonical?.path).toBe('src/components/shared/InlineDetailTableRow.tsx');
+    expect(registeredRule?.canonical?.export).toBe('InlineDetailTableRow');
+    expect(inlineDetailTableRowSource).toContain('INLINE_DETAIL_TABLE_CELL_CLASS');
+    expect(inlineDetailTableRowSource).toContain('INLINE_DETAIL_TABLE_CONTENT_CLASS');
+    expect(inlineDetailTableRowSource).toContain('event.stopPropagation()');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
+      expect.arrayContaining([
+        'src/components/Infrastructure/UnifiedResourceHostTableCard.tsx',
+        'src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx',
+        'src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx',
+        'src/components/Workloads/WorkloadPanel.tsx',
+        'src/features/docker/DockerHostsTable.tsx',
+        'src/features/docker/DockerNetworksTable.tsx',
+        'src/features/platformPage/PlatformResourceDetailTableRow.tsx',
+        'src/features/proxmox/ProxmoxCoverageTable.tsx',
+        'src/features/proxmox/ProxmoxNodesTable.tsx',
+      ]),
+    );
+
+    for (const guard of [inlineGuard, namedGuard]) {
+      expect(guard?.canonical?.path).toBe('src/components/shared/InlineDetailTableRow.tsx');
+      expect(guard?.canonical?.export).toBe('InlineDetailTableRow');
+      expect(guard?.requiredPatterns).toEqual(['InlineDetailTableRow']);
+      expect(guard?.allowedPaths ?? []).toHaveLength(0);
+    }
+    expect(inlineGuard?.triggerPatterns).toEqual(['data-inline', 'TableRow']);
+    expect(inlineGuard?.ignoredPaths).toEqual([
+      'src/components/Workloads/__tests__/WorkloadsSurface.performance.contract.test.tsx',
+    ]);
+    expect(namedGuard?.triggerPatterns).toEqual(['detail-row', 'TableRow']);
+    expect(namedGuard?.ignoredPaths ?? []).toHaveLength(0);
+
+    for (const source of [
+      platformResourceDetailTableRowSource,
+      dockerHostsTableSource,
+      proxmoxCoverageTableSource,
+      proxmoxNodesTableSource,
+      unifiedResourceHostTableCardSource,
+      unifiedResourcePBSTableSectionSource,
+      unifiedResourcePMGTableSectionSource,
+      workloadPanelSource,
+    ]) {
+      expect(source).toContain('InlineDetailTableRow');
+      expect(source).not.toContain('p-0 border-b border-border bg-surface-alt');
+      expect(source).not.toContain('border-b border-border bg-surface-alt p-0');
+      expect(source).not.toContain(
+        'bg-surface-alt px-4 py-4 border-b border-border-subtle shadow-inner',
+      );
+    }
   });
 
   it('keeps help icon on shell, runtime, and model owners', () => {

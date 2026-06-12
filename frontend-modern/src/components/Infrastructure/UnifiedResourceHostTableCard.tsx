@@ -9,6 +9,7 @@ import {
   getGroupedTableRowCellClass,
   getInteractiveGroupedTableRowClass,
 } from '@/components/shared/groupedTableRowPresentation';
+import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import { TableCard } from '@/components/shared/TableCard';
 import { hostOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
@@ -424,7 +425,9 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                           when={cpuPercentValue() !== null}
                           fallback={
                             <div class="flex justify-center">
-                              <span class="text-xs" aria-hidden="true">—</span>
+                              <span class="text-xs" aria-hidden="true">
+                                —
+                              </span>
                             </div>
                           }
                         >
@@ -445,7 +448,9 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                           when={memoryPercentValue() !== null}
                           fallback={
                             <div class="flex justify-center">
-                              <span class="text-xs" aria-hidden="true">—</span>
+                              <span class="text-xs" aria-hidden="true">
+                                —
+                              </span>
                             </div>
                           }
                         >
@@ -471,7 +476,9 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                           when={diskPercentValue() !== null}
                           fallback={
                             <div class="flex justify-center">
-                              <span class="text-xs" aria-hidden="true">—</span>
+                              <span class="text-xs" aria-hidden="true">
+                                —
+                              </span>
                             </div>
                           }
                         >
@@ -504,7 +511,9 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                               when={availabilityProbe()}
                               fallback={
                                 <div class="text-center">
-                                  <span class="text-xs text-slate-400" aria-hidden="true">—</span>
+                                  <span class="text-xs text-slate-400" aria-hidden="true">
+                                    —
+                                  </span>
                                 </div>
                               }
                             >
@@ -583,7 +592,9 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                           when={resource.diskIO}
                           fallback={
                             <div class="text-center">
-                              <span class="text-xs text-slate-400" aria-hidden="true">—</span>
+                              <span class="text-xs text-slate-400" aria-hidden="true">
+                                —
+                              </span>
                             </div>
                           }
                         >
@@ -644,7 +655,11 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                         <div class="flex justify-center">
                           <Show
                             when={resource.uptime}
-                            fallback={<span class="text-xs text-slate-400" aria-hidden="true">—</span>}
+                            fallback={
+                              <span class="text-xs text-slate-400" aria-hidden="true">
+                                —
+                              </span>
+                            }
                           >
                             <span class="text-xs text-base-content whitespace-nowrap">
                               {formatUptime(resource.uptime ?? 0)}
@@ -661,7 +676,11 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                         <div class="flex justify-center">
                           <Show
                             when={resource.temperature != null}
-                            fallback={<span class="text-xs text-slate-400" aria-hidden="true">—</span>}
+                            fallback={
+                              <span class="text-xs text-slate-400" aria-hidden="true">
+                                —
+                              </span>
+                            }
                           >
                             <span
                               class={`text-xs whitespace-nowrap font-medium ${
@@ -679,19 +698,19 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                       </TableCell>
                     </TableRow>
                     <Show when={isExpanded()}>
-                      <TableRow data-inline-detail-for={resource.id}>
-                        <TableCell
-                          id={detailControlsId()}
-                          colspan={9}
-                          class="bg-surface-alt px-4 py-4 border-b border-border-subtle shadow-inner"
-                        >
-                          <ResourceDetailDrawer
-                            resource={resource}
-                            resolveResourceLabel={table.resolveResourceLabel}
-                            onClose={() => tableProps.onExpandedResourceChange(null)}
-                          />
-                        </TableCell>
-                      </TableRow>
+                      <InlineDetailTableRow
+                        cellId={detailControlsId()}
+                        cellClass="border-border-subtle shadow-inner"
+                        colspan={9}
+                        contentClass="px-4 py-4"
+                        data-inline-detail-for={resource.id}
+                      >
+                        <ResourceDetailDrawer
+                          resource={resource}
+                          resolveResourceLabel={table.resolveResourceLabel}
+                          onClose={() => tableProps.onExpandedResourceChange(null)}
+                        />
+                      </InlineDetailTableRow>
                     </Show>
                   </>
                 );

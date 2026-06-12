@@ -1,5 +1,6 @@
 import { For, Show, type Component, type JSX } from 'solid-js';
 import XIcon from 'lucide-solid/icons/x';
+import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import {
@@ -360,26 +361,17 @@ export const VsphereActivityTable: Component<{
                           </TableCell>
                         </TableRow>
                         <Show when={isExpanded()}>
-                          <TableRow
+                          <InlineDetailTableRow
+                            cellId={detailRowId()}
+                            colspan={7}
                             data-inline-detail-for={activity.id}
                             data-vsphere-activity-detail-row={activity.id}
                           >
-                            <TableCell
-                              id={detailRowId()}
-                              colspan={7}
-                              class="border-b border-border bg-surface-alt p-0"
-                            >
-                              <div
-                                class="px-2 py-3 sm:px-4 sm:py-4"
-                                onClick={(event) => event.stopPropagation()}
-                              >
-                                <ActivityDetail
-                                  activity={activity}
-                                  onClose={() => drawer.close(activity)}
-                                />
-                              </div>
-                            </TableCell>
-                          </TableRow>
+                            <ActivityDetail
+                              activity={activity}
+                              onClose={() => drawer.close(activity)}
+                            />
+                          </InlineDetailTableRow>
                         </Show>
                       </>
                     );

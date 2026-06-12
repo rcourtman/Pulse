@@ -416,6 +416,12 @@ regression protection.
     the column label must remain present through an `sr-only` label so the
     header row exposes names such as Uptime, Image, Context, and Node instead
     of collapsing to only the visible text columns.
+    Inline detail table rows rendered from workload or infrastructure hot
+    paths must compose the frontend-primitives-owned
+    `InlineDetailTableRow` shell. Performance ownership remains on expansion
+    state, mounted-row budgets, viewport sync, and reveal timing; it must not
+    fork the repeated `TableRow` / `TableCell` / surface-alt / click-containment
+    shell inside workload, infrastructure, or platform table render paths.
     Pod-mode workload filters must use the workload-owned
     `K8s cluster` / `All K8s clusters` labels for Kubernetes context selection,
     rather than a generic `Cluster` label that can be confused with Proxmox

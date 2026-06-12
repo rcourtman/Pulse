@@ -1,6 +1,7 @@
 import { For, Show, createMemo } from 'solid-js';
 import type { Component } from 'solid-js';
 import { formatUptime } from '@/utils/format';
+import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import {
   buildSummaryDisclosureControlsId,
@@ -212,7 +213,11 @@ export const UnifiedResourcePBSTableSection: Component<UnifiedResourcePBSTableSe
                       <div class="flex justify-center">
                         <Show
                           when={pbsRow()?.datastores != null}
-                          fallback={<span class="text-xs text-slate-400" aria-hidden="true">—</span>}
+                          fallback={
+                            <span class="text-xs text-slate-400" aria-hidden="true">
+                              —
+                            </span>
+                          }
                         >
                           <span class="text-xs text-base-content">{pbsRow()!.datastores}</span>
                         </Show>
@@ -223,7 +228,11 @@ export const UnifiedResourcePBSTableSection: Component<UnifiedResourcePBSTableSe
                       <div class="flex justify-center">
                         <Show
                           when={pbsRow()?.activity}
-                          fallback={<span class="text-xs text-slate-400" aria-hidden="true">—</span>}
+                          fallback={
+                            <span class="text-xs text-slate-400" aria-hidden="true">
+                              —
+                            </span>
+                          }
                         >
                           <div
                             class="flex flex-col items-center leading-tight"
@@ -244,7 +253,11 @@ export const UnifiedResourcePBSTableSection: Component<UnifiedResourcePBSTableSe
                       <div class="flex justify-center">
                         <Show
                           when={pbsRow()?.health}
-                          fallback={<span class="text-xs text-slate-400" aria-hidden="true">—</span>}
+                          fallback={
+                            <span class="text-xs text-slate-400" aria-hidden="true">
+                              —
+                            </span>
+                          }
                         >
                           <span class={`text-xs font-medium ${healthClass()}`}>
                             {pbsRow()!.health}
@@ -271,7 +284,11 @@ export const UnifiedResourcePBSTableSection: Component<UnifiedResourcePBSTableSe
                       <div class="flex justify-center">
                         <Show
                           when={resource.uptime}
-                          fallback={<span class="text-xs text-slate-400" aria-hidden="true">—</span>}
+                          fallback={
+                            <span class="text-xs text-slate-400" aria-hidden="true">
+                              —
+                            </span>
+                          }
                         >
                           <span class="text-xs text-base-content whitespace-nowrap">
                             {formatUptime(resource.uptime ?? 0)}
@@ -284,7 +301,11 @@ export const UnifiedResourcePBSTableSection: Component<UnifiedResourcePBSTableSe
                       <div class="flex justify-center">
                         <Show
                           when={serviceLink()}
-                          fallback={<span class="text-xs text-slate-400" aria-hidden="true">—</span>}
+                          fallback={
+                            <span class="text-xs text-slate-400" aria-hidden="true">
+                              —
+                            </span>
+                          }
                         >
                           {(link) => (
                             <a
@@ -302,19 +323,19 @@ export const UnifiedResourcePBSTableSection: Component<UnifiedResourcePBSTableSe
                     </TableCell>
                   </TableRow>
                   <Show when={isExpanded()}>
-                    <TableRow data-inline-detail-for={resource.id}>
-                      <TableCell
-                        id={detailControlsId()}
-                        colspan={7}
-                        class="bg-surface-alt px-4 py-4 border-b border-border-subtle shadow-inner"
-                      >
-                        <ResourceDetailDrawer
-                          resource={resource}
-                          resolveResourceLabel={table.resolveResourceLabel}
-                          onClose={() => tableProps.onExpandedResourceChange(null)}
-                        />
-                      </TableCell>
-                    </TableRow>
+                    <InlineDetailTableRow
+                      cellId={detailControlsId()}
+                      cellClass="border-border-subtle shadow-inner"
+                      colspan={7}
+                      contentClass="px-4 py-4"
+                      data-inline-detail-for={resource.id}
+                    >
+                      <ResourceDetailDrawer
+                        resource={resource}
+                        resolveResourceLabel={table.resolveResourceLabel}
+                        onClose={() => tableProps.onExpandedResourceChange(null)}
+                      />
+                    </InlineDetailTableRow>
                   </Show>
                 </>
               );

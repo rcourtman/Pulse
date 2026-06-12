@@ -124,10 +124,13 @@ for (const guard of patternGuards) {
   const extensions = guard.extensions ?? ['.ts', '.tsx'];
   const allowedEntries = guard.allowedPaths ?? [];
   const allowedPaths = new Set(allowedEntries.map(getAllowedPath).filter(Boolean));
+  const ignoredEntries = guard.ignoredPaths ?? [];
+  const ignoredPaths = new Set(ignoredEntries.map(getAllowedPath).filter(Boolean));
   const files = [...new Set(scopes.flatMap((scope) => collectFiles(scope, extensions)))].sort();
 
   for (const file of files) {
     if (file === guard.canonical.path) continue;
+    if (ignoredPaths.has(file)) continue;
 
     const source = read(file);
     const matches = patterns.every((pattern) => source.includes(pattern));
@@ -155,6 +158,12 @@ for (const guard of patternGuards) {
     const stillMatches = patterns.every((pattern) => source.includes(pattern));
     if (!stillMatches) {
       failures.push(`${guard.id}: allowed path ${allowedPath} is stale; remove it from the guard`);
+    }
+  }
+
+  for (const ignoredPath of ignoredPaths) {
+    if (!fileExists(ignoredPath)) {
+      failures.push(`${guard.id}: ignored path ${ignoredPath} does not exist`);
     }
   }
 }
@@ -190,10 +199,13 @@ for (const guard of requiredPatternGuards) {
   const extensions = guard.extensions ?? ['.ts', '.tsx'];
   const allowedEntries = guard.allowedPaths ?? [];
   const allowedPaths = new Set(allowedEntries.map(getAllowedPath).filter(Boolean));
+  const ignoredEntries = guard.ignoredPaths ?? [];
+  const ignoredPaths = new Set(ignoredEntries.map(getAllowedPath).filter(Boolean));
   const files = [...new Set(scopes.flatMap((scope) => collectFiles(scope, extensions)))].sort();
 
   for (const file of files) {
     if (file === guard.canonical.path) continue;
+    if (ignoredPaths.has(file)) continue;
 
     const source = read(file);
     const triggered = triggerPatterns.every((pattern) => source.includes(pattern));
@@ -228,6 +240,12 @@ for (const guard of requiredPatternGuards) {
     const stillTriggered = triggerPatterns.every((pattern) => source.includes(pattern));
     if (!stillTriggered) {
       failures.push(`${guard.id}: allowed path ${allowedPath} is stale; remove it from the guard`);
+    }
+  }
+
+  for (const ignoredPath of ignoredPaths) {
+    if (!fileExists(ignoredPath)) {
+      failures.push(`${guard.id}: ignored path ${ignoredPath} does not exist`);
     }
   }
 }

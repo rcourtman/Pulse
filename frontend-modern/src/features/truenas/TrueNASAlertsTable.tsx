@@ -1,4 +1,5 @@
 import { For, Show, type Component, type JSX } from 'solid-js';
+import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import {
@@ -362,26 +363,17 @@ export const TrueNASAlertsTable: Component<{
                           </TableCell>
                         </TableRow>
                         <Show when={isExpanded()}>
-                          <TableRow
+                          <InlineDetailTableRow
+                            cellId={detailRowId()}
+                            colspan={6}
                             data-inline-detail-for={incident.id}
                             data-truenas-alert-detail-row={incident.id}
                           >
-                            <TableCell
-                              id={detailRowId()}
-                              colspan={6}
-                              class="border-b border-border bg-surface-alt p-0"
-                            >
-                              <div
-                                class="px-2 py-3 sm:px-4 sm:py-4"
-                                onClick={(event) => event.stopPropagation()}
-                              >
-                                <AlertDetailTable
-                                  incident={incident}
-                                  onClose={() => drawer.close(incident)}
-                                />
-                              </div>
-                            </TableCell>
-                          </TableRow>
+                            <AlertDetailTable
+                              incident={incident}
+                              onClose={() => drawer.close(incident)}
+                            />
+                          </InlineDetailTableRow>
                         </Show>
                       </>
                     );

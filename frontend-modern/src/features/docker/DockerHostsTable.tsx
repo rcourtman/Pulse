@@ -1,4 +1,5 @@
 import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
+import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { DockerHostDrawer } from './DockerHostDrawer';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
@@ -388,20 +389,13 @@ export const DockerHostsTable: Component<{
                           </Show>
                         </TableRow>
                         <Show when={isSelected()}>
-                          <TableRow data-inline-docker-host-detail-for={host.id}>
-                            <TableCell
-                              id={detailRowId()}
-                              colspan={drawerColspan()}
-                              class="p-0 border-b border-border bg-surface-alt"
-                            >
-                              <div
-                                class="px-2 py-3 sm:px-4 sm:py-4"
-                                onClick={(event) => event.stopPropagation()}
-                              >
-                                <DockerHostDrawer host={host} />
-                              </div>
-                            </TableCell>
-                          </TableRow>
+                          <InlineDetailTableRow
+                            cellId={detailRowId()}
+                            colspan={drawerColspan()}
+                            data-inline-docker-host-detail-for={host.id}
+                          >
+                            <DockerHostDrawer host={host} />
+                          </InlineDetailTableRow>
                         </Show>
                       </>
                     );

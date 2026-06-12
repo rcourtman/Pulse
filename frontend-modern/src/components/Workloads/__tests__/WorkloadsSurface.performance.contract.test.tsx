@@ -398,10 +398,14 @@ describe('Workloads platform-page embed contract', () => {
     expect(proxmoxSource).toContain('STORAGE_KEYS.WORKLOADS_METRIC_DISPLAY_MODE');
     expect(proxmoxSource).toContain('STORAGE_KEYS.WORKLOADS_METRIC_HISTORY_RANGE');
     expect(proxmoxSource).toContain('metricDisplayMode={metricDisplayMode}');
-    expect(proxmoxSource).toContain('setMetricDisplayMode={workloadsState.setWorkloadMetricDisplayMode}');
+    expect(proxmoxSource).toContain(
+      'setMetricDisplayMode={workloadsState.setWorkloadMetricDisplayMode}',
+    );
     expect(proxmoxSource).toContain('onMetricDisplayModeChange: props.setMetricDisplayMode,');
     expect(proxmoxSource).toContain('metricHistoryRange={metricHistoryRange}');
-    expect(proxmoxSource).toContain('setMetricHistoryRange={workloadsState.setWorkloadMetricHistoryRange}');
+    expect(proxmoxSource).toContain(
+      'setMetricHistoryRange={workloadsState.setWorkloadMetricHistoryRange}',
+    );
     expect(proxmoxSource).toContain('onMetricHistoryRangeChange: props.setMetricHistoryRange,');
 
     const nodesTableSource = (await import('../../../features/proxmox/ProxmoxNodesTable.tsx?raw'))
@@ -1004,7 +1008,9 @@ describe('Workloads performance contract', () => {
       expect(workloadsSelectionStateSource).toContain("from './workloadSelectionModel'");
       expect(workloadsSelectionStateSource).not.toContain('useNavigate');
       expect(workloadsSelectionStateSource).not.toContain('createRouteStateNavigateScheduler');
-      expect(workloadsSelectionStateSource).not.toContain('resolveWorkloadsSelectionNavigateTarget');
+      expect(workloadsSelectionStateSource).not.toContain(
+        'resolveWorkloadsSelectionNavigateTarget',
+      );
       expect(workloadsSelectionStateSource).not.toContain('parseWorkloadsLinkSearch');
       expect(workloadsSelectionStateSource).not.toContain('getCanonicalWorkloadId');
       expect(workloadSelectionModelSource).toContain('parseWorkloadsLinkSearch(search)');
@@ -1194,8 +1200,8 @@ describe('Workloads performance contract', () => {
       expect(guestRowSource).toContain('style={getGuestColumnStyle(');
       expect(guestRowSource).toContain('props.workloadTableLayoutMode');
       expect(guestRowSource).toContain('props.visibleColumnIds');
-      expect(guestRowSource).toContain('when={customUrl()}');
-      expect(guestRowSource).toContain('target="_blank"');
+      expect(guestRowSource).toContain('WebInterfaceNameLink');
+      expect(guestRowSource).not.toContain('target="_blank"');
       expect(guestRowSource).not.toContain('data-workload-col="link"');
       expect(guestRowSource).not.toContain('Open related infrastructure');
       expect(guestRowSource).not.toContain('export const GUEST_COLUMNS');
@@ -1263,7 +1269,9 @@ describe('Workloads performance contract', () => {
       expect(guestDrawerStateSource).not.toContain('buildInfrastructureHrefForWorkload');
       expect(guestDrawerStateSource).not.toContain("from '@/routing/resourceLinks'");
       expect(guestDrawerStateSource).toContain("from '@/hooks/createNonSuspendingQuery'");
-      expect(guestDrawerStateSource).toMatch(/createNonSuspendingQuery<\s*ResourceDiscovery \| null/);
+      expect(guestDrawerStateSource).toMatch(
+        /createNonSuspendingQuery<\s*ResourceDiscovery \| null/,
+      );
       expect(guestDrawerStateSource).not.toContain('createResource');
       expect(guestDrawerStateSource).toContain("from './workloadTopology'");
       expect(guestDrawerStateSource).not.toContain('./infrastructureLink');

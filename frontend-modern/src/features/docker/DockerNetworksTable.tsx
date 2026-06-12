@@ -1,4 +1,5 @@
 import { For, Show, createMemo, createSignal, type Component } from 'solid-js';
+import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import {
@@ -502,21 +503,15 @@ export const DockerNetworksTable: Component<DockerNetworksTableProps> = (props) 
                           </TableCell>
                         </TableRow>
                         <Show when={isExpanded()}>
-                          <TableRow data-docker-network-detail-row={resource.id}>
-                            <TableCell
-                              id={detailRowId()}
-                              colspan={6}
-                              class="border-b border-border bg-surface-alt p-0"
-                            >
-                              <div
-                                class="grid gap-4 px-2 py-3 sm:px-4 sm:py-4 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,24rem)]"
-                                onClick={(event) => event.stopPropagation()}
-                              >
-                                <AttachmentDetail rows={attachments()} />
-                                <NetworkConfigDetail resource={resource} />
-                              </div>
-                            </TableCell>
-                          </TableRow>
+                          <InlineDetailTableRow
+                            cellId={detailRowId()}
+                            colspan={6}
+                            contentClass="grid gap-4 px-2 py-3 sm:px-4 sm:py-4 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,24rem)]"
+                            data-docker-network-detail-row={resource.id}
+                          >
+                            <AttachmentDetail rows={attachments()} />
+                            <NetworkConfigDetail resource={resource} />
+                          </InlineDetailTableRow>
                         </Show>
                       </>
                     );

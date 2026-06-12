@@ -1,4 +1,5 @@
 import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
+import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { asTrimmedString } from '@/utils/stringUtils';
@@ -296,23 +297,14 @@ export const TrueNASServicesTable: Component<{
                           </TableCell>
                         </TableRow>
                         <Show when={isExpanded()}>
-                          <TableRow
+                          <InlineDetailTableRow
+                            cellId={detailRowId()}
+                            colspan={5}
                             data-inline-detail-for={row.id}
                             data-truenas-service-detail-row={row.id}
                           >
-                            <TableCell
-                              id={detailRowId()}
-                              colspan={5}
-                              class="border-b border-border bg-surface-alt p-0"
-                            >
-                              <div
-                                class="px-2 py-3 sm:px-4 sm:py-4"
-                                onClick={(event) => event.stopPropagation()}
-                              >
-                                <ServiceDetailTable row={row} onClose={() => detail.close(row)} />
-                              </div>
-                            </TableCell>
-                          </TableRow>
+                            <ServiceDetailTable row={row} onClose={() => detail.close(row)} />
+                          </InlineDetailTableRow>
                         </Show>
                       </>
                     );

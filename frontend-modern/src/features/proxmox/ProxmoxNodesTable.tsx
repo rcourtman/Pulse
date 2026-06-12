@@ -12,6 +12,7 @@ import { useAlertsActivation } from '@/stores/alertsActivation';
 import { getAlertStyles } from '@/utils/alerts';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { WebInterfaceNameLink } from '@/components/shared/WebInterfaceNameLink';
+import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { NodeDrawer } from '@/components/Workloads/NodeDrawer';
 import { toDiscoveryConfig } from '@/components/Infrastructure/resourceDetailDiscoveryModel';
@@ -576,29 +577,22 @@ export const ProxmoxNodesTable: Component<{
                   </TableRow>
                   <Show when={isSelected() && drawerNode()}>
                     {(selectedNode) => (
-                      <TableRow data-inline-node-detail-for={node.id}>
-                        <TableCell
-                          id={detailRowId()}
-                          colspan={visibleColumns().length}
-                          class="p-0 border-b border-border bg-surface-alt"
-                        >
-                          <div
-                            class="px-2 py-3 sm:px-4 sm:py-4"
-                            onClick={(event) => event.stopPropagation()}
-                          >
-                            <NodeDrawer
-                              node={selectedNode()}
-                              disks={normalizeDiskArray(node.agent?.disks)}
-                              discoveryTarget={(() => {
-                                const config = toDiscoveryConfig(node);
-                                return config
-                                  ? { agentId: config.agentId, hostname: config.hostname }
-                                  : undefined;
-                              })()}
-                            />
-                          </div>
-                        </TableCell>
-                      </TableRow>
+                      <InlineDetailTableRow
+                        cellId={detailRowId()}
+                        colspan={visibleColumns().length}
+                        data-inline-node-detail-for={node.id}
+                      >
+                        <NodeDrawer
+                          node={selectedNode()}
+                          disks={normalizeDiskArray(node.agent?.disks)}
+                          discoveryTarget={(() => {
+                            const config = toDiscoveryConfig(node);
+                            return config
+                              ? { agentId: config.agentId, hostname: config.hostname }
+                              : undefined;
+                          })()}
+                        />
+                      </InlineDetailTableRow>
                     )}
                   </Show>
                 </>

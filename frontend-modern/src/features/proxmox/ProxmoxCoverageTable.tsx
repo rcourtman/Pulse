@@ -2,6 +2,7 @@ import { For, Show, type Accessor, type JSX } from 'solid-js';
 
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
+import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { formatBytes } from '@/utils/format';
@@ -354,89 +355,94 @@ export function ProxmoxCoverageTable(props: {
                       </Show>
                     </TableRow>
                     <Show when={isExpanded()}>
-                      <TableRow class="bg-surface-alt/40" data-inline-detail-for={row.key}>
-                        <TableCell id={detailRowId()} class="px-3 py-2" colspan={columnCount()}>
-                          <Show
-                            when={evidence().length > 0}
-                            fallback={
-                              <div class="text-xs text-muted">
-                                No restore evidence has been discovered for this workload.
-                              </div>
-                            }
-                          >
-                            <div class="overflow-hidden">
-                              <div class="mb-1 flex items-center justify-between gap-2 text-[11px]">
-                                <span class="font-medium text-base-content">Restore evidence</span>
-                                <Show when={row.artifacts.length > evidence().length}>
-                                  <span class="text-muted">
-                                    Showing {evidence().length} of {row.artifacts.length}
-                                  </span>
-                                </Show>
-                              </div>
-                              <table class="w-full text-[11px]">
-                                <thead>
-                                  <tr class="bg-surface-alt text-muted">
-                                    <th class="px-2 py-0.5 text-left font-medium">Source</th>
-                                    <th class="px-2 py-0.5 text-left font-medium">Location</th>
-                                    <th class="px-2 py-0.5 text-right font-medium">
-                                      {PROXMOX_BACKUP_COLUMN_LABELS.created}
-                                    </th>
-                                    <th class="px-2 py-0.5 text-right font-medium">Size</th>
-                                    <th class="px-2 py-0.5 text-left font-medium">State</th>
-                                    <th class="px-2 py-0.5 text-left font-medium">
-                                      {PROXMOX_BACKUP_COLUMN_LABELS.details}
-                                    </th>
-                                  </tr>
-                                </thead>
-                                <tbody class="divide-y divide-border-subtle">
-                                  <For each={evidence()}>
-                                    {(artifact) => (
-                                      <tr class="hover:bg-surface-hover">
-                                        <td class="px-2 py-1">
-                                          <ArtifactSourceBadge artifact={artifact} />
-                                        </td>
-                                        <td class="px-2 py-1 text-base-content">
-                                          <span
-                                            class="inline-block max-w-[18rem] truncate"
-                                            title={artifact.location}
-                                          >
-                                            {artifact.location}
-                                          </span>
-                                        </td>
-                                        <td class="px-2 py-1 text-right text-base-content">
-                                          <ProxmoxBackupAgeText artifact={artifact} />
-                                        </td>
-                                        <td class="px-2 py-1 text-right tabular-nums text-base-content">
-                                          <Show
-                                            when={artifact.size && artifact.size > 0}
-                                            fallback={<span class="text-muted">No size</span>}
-                                          >
-                                            {formatBytes(artifact.size ?? 0)}
-                                          </Show>
-                                        </td>
-                                        <td class="px-2 py-1">
-                                          <ArtifactStateBadge
-                                            artifact={artifact}
-                                            label={artifactStateLabel(artifact)}
-                                          />
-                                        </td>
-                                        <td class="px-2 py-1 text-base-content">
-                                          <span
-                                            class="inline-block max-w-[24rem] truncate"
-                                            title={artifact.detail}
-                                          >
-                                            {artifact.detail || '—'}
-                                          </span>
-                                        </td>
-                                      </tr>
-                                    )}
-                                  </For>
-                                </tbody>
-                              </table>
+                      <InlineDetailTableRow
+                        cellId={detailRowId()}
+                        class="bg-surface-alt/40"
+                        cellClass="px-3 py-2"
+                        contentClass=""
+                        colspan={columnCount()}
+                        data-inline-detail-for={row.key}
+                      >
+                        <Show
+                          when={evidence().length > 0}
+                          fallback={
+                            <div class="text-xs text-muted">
+                              No restore evidence has been discovered for this workload.
                             </div>
-                          </Show>
-                        </TableCell>
-                      </TableRow>
+                          }
+                        >
+                          <div class="overflow-hidden">
+                            <div class="mb-1 flex items-center justify-between gap-2 text-[11px]">
+                              <span class="font-medium text-base-content">Restore evidence</span>
+                              <Show when={row.artifacts.length > evidence().length}>
+                                <span class="text-muted">
+                                  Showing {evidence().length} of {row.artifacts.length}
+                                </span>
+                              </Show>
+                            </div>
+                            <table class="w-full text-[11px]">
+                              <thead>
+                                <tr class="bg-surface-alt text-muted">
+                                  <th class="px-2 py-0.5 text-left font-medium">Source</th>
+                                  <th class="px-2 py-0.5 text-left font-medium">Location</th>
+                                  <th class="px-2 py-0.5 text-right font-medium">
+                                    {PROXMOX_BACKUP_COLUMN_LABELS.created}
+                                  </th>
+                                  <th class="px-2 py-0.5 text-right font-medium">Size</th>
+                                  <th class="px-2 py-0.5 text-left font-medium">State</th>
+                                  <th class="px-2 py-0.5 text-left font-medium">
+                                    {PROXMOX_BACKUP_COLUMN_LABELS.details}
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody class="divide-y divide-border-subtle">
+                                <For each={evidence()}>
+                                  {(artifact) => (
+                                    <tr class="hover:bg-surface-hover">
+                                      <td class="px-2 py-1">
+                                        <ArtifactSourceBadge artifact={artifact} />
+                                      </td>
+                                      <td class="px-2 py-1 text-base-content">
+                                        <span
+                                          class="inline-block max-w-[18rem] truncate"
+                                          title={artifact.location}
+                                        >
+                                          {artifact.location}
+                                        </span>
+                                      </td>
+                                      <td class="px-2 py-1 text-right text-base-content">
+                                        <ProxmoxBackupAgeText artifact={artifact} />
+                                      </td>
+                                      <td class="px-2 py-1 text-right tabular-nums text-base-content">
+                                        <Show
+                                          when={artifact.size && artifact.size > 0}
+                                          fallback={<span class="text-muted">No size</span>}
+                                        >
+                                          {formatBytes(artifact.size ?? 0)}
+                                        </Show>
+                                      </td>
+                                      <td class="px-2 py-1">
+                                        <ArtifactStateBadge
+                                          artifact={artifact}
+                                          label={artifactStateLabel(artifact)}
+                                        />
+                                      </td>
+                                      <td class="px-2 py-1 text-base-content">
+                                        <span
+                                          class="inline-block max-w-[24rem] truncate"
+                                          title={artifact.detail}
+                                        >
+                                          {artifact.detail || '—'}
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  )}
+                                </For>
+                              </tbody>
+                            </table>
+                          </div>
+                        </Show>
+                      </InlineDetailTableRow>
                     </Show>
                   </>
                 );

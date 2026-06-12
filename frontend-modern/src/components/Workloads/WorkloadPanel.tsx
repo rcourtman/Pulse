@@ -11,6 +11,7 @@ import {
   getGroupedTableRowClass,
   getInteractiveGroupedTableRowClass,
 } from '@/components/shared/groupedTableRowPresentation';
+import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { NodeGroupHeader } from '@/components/shared/NodeGroupHeader';
 import { createSummaryInteractiveRowPreviewHandlers } from '@/components/shared/summaryInteractionA11y';
 import { buildSummaryDisclosureControlsId } from '@/components/shared/summaryInteractionA11y';
@@ -496,19 +497,12 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                   />
                 </Show>
                 <Show when={shouldShowNodeDrawer()}>
-                  <TableRow data-inline-node-detail-for={groupKey()}>
-                    <TableCell
-                      colspan={props.totalColumns()}
-                      class="p-0 border-b border-border bg-surface-alt"
-                    >
-                      <div
-                        class="px-2 sm:px-4 py-3 sm:py-4"
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        <NodeDrawer node={node()!} />
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                  <InlineDetailTableRow
+                    colspan={props.totalColumns()}
+                    data-inline-node-detail-for={groupKey()}
+                  >
+                    <NodeDrawer node={node()!} />
+                  </InlineDetailTableRow>
                 </Show>
               </Show>
               <Index each={groupGuests()} fallback={<></>}>
@@ -561,26 +555,19 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                         onHoverChange={props.setHoveredWorkloadId}
                       />
                       <Show when={props.selectedGuestId() === guestId()}>
-                        <TableRow data-inline-detail-for={guestId()}>
-                          <TableCell
-                            id={detailControlsId()}
-                            colspan={props.totalColumns()}
-                            class="p-0 border-b border-border bg-surface-alt"
-                          >
-                            <div
-                              class="px-2 sm:px-4 py-3 sm:py-4"
-                              onClick={(event) => event.stopPropagation()}
-                            >
-                              <GuestDrawer
-                                guest={guest()}
-                                onClose={() => props.setSelectedGuestId(null)}
-                                customUrl={metadata()?.customUrl}
-                                onCustomUrlChange={props.handleCustomUrlUpdate}
-                                parentNodeOnline={parentNodeOnline()}
-                              />
-                            </div>
-                          </TableCell>
-                        </TableRow>
+                        <InlineDetailTableRow
+                          cellId={detailControlsId()}
+                          colspan={props.totalColumns()}
+                          data-inline-detail-for={guestId()}
+                        >
+                          <GuestDrawer
+                            guest={guest()}
+                            onClose={() => props.setSelectedGuestId(null)}
+                            customUrl={metadata()?.customUrl}
+                            onCustomUrlChange={props.handleCustomUrlUpdate}
+                            parentNodeOnline={parentNodeOnline()}
+                          />
+                        </InlineDetailTableRow>
                       </Show>
                     </ComponentErrorBoundary>
                   );

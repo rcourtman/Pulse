@@ -1,8 +1,8 @@
 import { Show, createSignal, type Component, type JSX } from 'solid-js';
 import { ResourceDetailDrawer } from '@/components/Infrastructure/ResourceDetailDrawer';
 import { hasTrueNASDetailSections } from '@/components/Infrastructure/resourceDetailDrawerTrueNASModel';
+import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButton';
-import { TableCell, TableRow } from '@/components/shared/Table';
 import type { Resource } from '@/types/resource';
 import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
 
@@ -102,27 +102,21 @@ export const PlatformResourceDetailTableRow: Component<{
 
   return (
     <Show when={props.open}>
-      <TableRow
+      <InlineDetailTableRow
+        cellId={props.detailRowId}
+        colspan={props.colSpan}
         data-inline-detail-for={props.resource.id}
         data-inline-platform-resource-detail-for={props.resource.id}
       >
-        <TableCell
-          id={props.detailRowId}
-          colspan={props.colSpan}
-          class="border-b border-border bg-surface-alt p-0"
-        >
-          <div class="px-2 py-3 sm:px-4 sm:py-4" onClick={(event) => event.stopPropagation()}>
-            <ResourceDetailDrawer
-              resource={props.resource}
-              presentation="table-row"
-              resolveResourceLabel={props.resolveResourceLabel}
-              initialShowAccessContext={props.initialShowAccessContext}
-              initialShowTrueNASDetails={initialShowTrueNASDetails()}
-              onClose={props.onClose}
-            />
-          </div>
-        </TableCell>
-      </TableRow>
+        <ResourceDetailDrawer
+          resource={props.resource}
+          presentation="table-row"
+          resolveResourceLabel={props.resolveResourceLabel}
+          initialShowAccessContext={props.initialShowAccessContext}
+          initialShowTrueNASDetails={initialShowTrueNASDetails()}
+          onClose={props.onClose}
+        />
+      </InlineDetailTableRow>
     </Show>
   );
 };

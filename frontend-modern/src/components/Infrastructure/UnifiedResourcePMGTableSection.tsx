@@ -1,6 +1,7 @@
 import { For, Show, createMemo } from 'solid-js';
 import type { Component } from 'solid-js';
 import { formatUptime } from '@/utils/format';
+import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import {
   buildSummaryDisclosureControlsId,
@@ -226,7 +227,11 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                       <div class="flex justify-center">
                         <Show
                           when={pmgRow()?.queue != null}
-                          fallback={<span class="text-xs text-slate-400" aria-hidden="true">—</span>}
+                          fallback={
+                            <span class="text-xs text-slate-400" aria-hidden="true">
+                              —
+                            </span>
+                          }
                         >
                           <span class={`text-xs font-medium ${queueClass()}`}>
                             {pmgRow()!.queue}
@@ -239,7 +244,11 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                       <div class="flex justify-center">
                         <Show
                           when={pmgRow()?.deferred != null}
-                          fallback={<span class="text-xs text-slate-400" aria-hidden="true">—</span>}
+                          fallback={
+                            <span class="text-xs text-slate-400" aria-hidden="true">
+                              —
+                            </span>
+                          }
                         >
                           <span class="text-xs text-base-content">{pmgRow()!.deferred}</span>
                         </Show>
@@ -254,7 +263,11 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                       <div class="flex justify-center">
                         <Show
                           when={pmgRow()?.hold != null}
-                          fallback={<span class="text-xs text-slate-400" aria-hidden="true">—</span>}
+                          fallback={
+                            <span class="text-xs text-slate-400" aria-hidden="true">
+                              —
+                            </span>
+                          }
                         >
                           <span class="text-xs text-base-content">{pmgRow()!.hold}</span>
                         </Show>
@@ -265,7 +278,11 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                       <div class="flex justify-center">
                         <Show
                           when={pmgRow()?.nodes != null}
-                          fallback={<span class="text-xs text-slate-400" aria-hidden="true">—</span>}
+                          fallback={
+                            <span class="text-xs text-slate-400" aria-hidden="true">
+                              —
+                            </span>
+                          }
                         >
                           <span class="text-xs text-base-content">{pmgRow()!.nodes}</span>
                         </Show>
@@ -276,7 +293,11 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                       <div class="flex justify-center">
                         <Show
                           when={pmgRow()?.health}
-                          fallback={<span class="text-xs text-slate-400" aria-hidden="true">—</span>}
+                          fallback={
+                            <span class="text-xs text-slate-400" aria-hidden="true">
+                              —
+                            </span>
+                          }
                         >
                           <span class={`text-xs font-medium ${healthClass()}`}>
                             {pmgRow()!.health}
@@ -303,7 +324,11 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                       <div class="flex justify-center">
                         <Show
                           when={resource.uptime}
-                          fallback={<span class="text-xs text-slate-400" aria-hidden="true">—</span>}
+                          fallback={
+                            <span class="text-xs text-slate-400" aria-hidden="true">
+                              —
+                            </span>
+                          }
                         >
                           <span class="text-xs text-base-content whitespace-nowrap">
                             {formatUptime(resource.uptime ?? 0)}
@@ -316,7 +341,11 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                       <div class="flex justify-center">
                         <Show
                           when={serviceLink()}
-                          fallback={<span class="text-xs text-slate-400" aria-hidden="true">—</span>}
+                          fallback={
+                            <span class="text-xs text-slate-400" aria-hidden="true">
+                              —
+                            </span>
+                          }
                         >
                           {(link) => (
                             <a
@@ -334,19 +363,19 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                     </TableCell>
                   </TableRow>
                   <Show when={isExpanded()}>
-                    <TableRow data-inline-detail-for={resource.id}>
-                      <TableCell
-                        id={detailControlsId()}
-                        colspan={9}
-                        class="bg-surface-alt px-4 py-4 border-b border-border-subtle shadow-inner"
-                      >
-                        <ResourceDetailDrawer
-                          resource={resource}
-                          resolveResourceLabel={table.resolveResourceLabel}
-                          onClose={() => tableProps.onExpandedResourceChange(null)}
-                        />
-                      </TableCell>
-                    </TableRow>
+                    <InlineDetailTableRow
+                      cellId={detailControlsId()}
+                      cellClass="border-border-subtle shadow-inner"
+                      colspan={9}
+                      contentClass="px-4 py-4"
+                      data-inline-detail-for={resource.id}
+                    >
+                      <ResourceDetailDrawer
+                        resource={resource}
+                        resolveResourceLabel={table.resolveResourceLabel}
+                        onClose={() => tableProps.onExpandedResourceChange(null)}
+                      />
+                    </InlineDetailTableRow>
                   </Show>
                 </>
               );

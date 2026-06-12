@@ -66,6 +66,53 @@
         "src/features/proxmox/__tests__/ProxmoxNodesTable.test.tsx",
         "src/features/proxmox/__tests__/proxmoxHostTableModel.test.ts"
       ]
+    },
+    {
+      "id": "inline-detail-table-row-shell",
+      "category": "row-detail",
+      "summary": "Platform, workload, and infrastructure inline detail rows must compose the shared row/cell/content shell instead of recreating page-local surface-alt drawer rows.",
+      "canonical": {
+        "path": "src/components/shared/InlineDetailTableRow.tsx",
+        "export": "InlineDetailTableRow"
+      },
+      "requiredConsumers": [
+        { "path": "src/components/Infrastructure/UnifiedResourceHostTableCard.tsx" },
+        { "path": "src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx" },
+        { "path": "src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx" },
+        { "path": "src/components/Workloads/WorkloadPanel.tsx" },
+        { "path": "src/features/docker/DockerAlertsTable.tsx" },
+        { "path": "src/features/docker/DockerHostsTable.tsx" },
+        { "path": "src/features/docker/DockerNetworksTable.tsx" },
+        { "path": "src/features/kubernetes/KubernetesAlertsTable.tsx" },
+        { "path": "src/features/platformPage/PlatformResourceDetailTableRow.tsx" },
+        { "path": "src/features/proxmox/ProxmoxCephTable.tsx" },
+        { "path": "src/features/proxmox/ProxmoxCoverageTable.tsx" },
+        { "path": "src/features/proxmox/ProxmoxMailGatewayTable.tsx" },
+        { "path": "src/features/proxmox/ProxmoxNodesTable.tsx" },
+        { "path": "src/features/truenas/TrueNASAlertsTable.tsx" },
+        { "path": "src/features/truenas/TrueNASProtectionTable.tsx" },
+        { "path": "src/features/truenas/TrueNASServicesTable.tsx" },
+        { "path": "src/features/vmware/VsphereActivityTable.tsx" },
+        { "path": "src/features/vmware/VsphereAlertsTable.tsx" }
+      ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/components/Workloads/WorkloadPanel.tsx",
+          "patterns": [
+            "p-0 border-b border-border bg-surface-alt",
+            "border-b border-border bg-surface-alt p-0"
+          ]
+        },
+        {
+          "path": "src/features/platformPage/PlatformResourceDetailTableRow.tsx",
+          "patterns": ["border-b border-border bg-surface-alt p-0"]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/__tests__/InlineDetailTableRow.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
     }
   ],
   "patternGuards": [
@@ -137,6 +184,63 @@
       "extensions": [".tsx"],
       "triggerPatterns": ["data-inline", "aria-expanded"],
       "requiredPatterns": ["PlatformResourceDetailToggleButton"],
+      "allowedPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "inline-detail-table-row-shared-shell",
+      "category": "row-detail",
+      "summary": "Files that render inline/detail table rows in platform, workload, or infrastructure surfaces must use InlineDetailTableRow for the shared row/cell/content shell.",
+      "canonical": {
+        "path": "src/components/shared/InlineDetailTableRow.tsx",
+        "export": "InlineDetailTableRow"
+      },
+      "scopes": [
+        "src/components/Infrastructure",
+        "src/components/Workloads",
+        "src/features/docker",
+        "src/features/kubernetes",
+        "src/features/platformPage",
+        "src/features/proxmox",
+        "src/features/truenas",
+        "src/features/vmware"
+      ],
+      "extensions": [".tsx"],
+      "triggerPatterns": ["data-inline", "TableRow"],
+      "requiredPatterns": ["InlineDetailTableRow"],
+      "allowedPaths": [],
+      "ignoredPaths": [
+        "src/components/Workloads/__tests__/WorkloadsSurface.performance.contract.test.tsx"
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "named-detail-table-row-shared-shell",
+      "category": "row-detail",
+      "summary": "Named platform detail rows such as Docker network detail rows must use InlineDetailTableRow even when their row attribute is not data-inline-*.",
+      "canonical": {
+        "path": "src/components/shared/InlineDetailTableRow.tsx",
+        "export": "InlineDetailTableRow"
+      },
+      "scopes": [
+        "src/components/Infrastructure",
+        "src/components/Workloads",
+        "src/features/docker",
+        "src/features/kubernetes",
+        "src/features/platformPage",
+        "src/features/proxmox",
+        "src/features/truenas",
+        "src/features/vmware"
+      ],
+      "extensions": [".tsx"],
+      "triggerPatterns": ["detail-row", "TableRow"],
+      "requiredPatterns": ["InlineDetailTableRow"],
       "allowedPaths": [],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",

@@ -215,6 +215,13 @@ filter semantics, drawer handoffs, and resource projections, while
 Future platform tables must keep that split: row data and platform semantics
 stay in the unified-resource consumer, and the repeated table shell stays in the
 shared frontend primitive.
+The same split applies to inline detail row shells on platform, native-resource,
+workload, and infrastructure tables. Unified-resource consumers own row
+identity, source-specific drawer content, expansion state, and resource
+semantics, but the repeated surface-alt table row, single-cell colspan wrapper,
+detail padding, and row-click containment must compose the
+frontend-primitives-owned `InlineDetailTableRow` primitive instead of
+rebuilding a local `TableRow` / `TableCell` detail shell.
 That same split applies to platform row-detail disclosure controls. Platform
 tables own which row opens, which resource label is exposed, and which
 source-specific detail payload or drawer is rendered, but the disclosure

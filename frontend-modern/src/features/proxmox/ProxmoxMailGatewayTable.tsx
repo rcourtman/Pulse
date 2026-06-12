@@ -1,6 +1,7 @@
 import { For, Show, createSignal, type Component, type JSX } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
+import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
@@ -204,20 +205,17 @@ export const ProxmoxMailGatewayTable: Component<{
                           </TableCell>
                         </TableRow>
                         <Show when={isOpen()}>
-                          <TableRow data-inline-detail-for={instance.id}>
-                            <TableCell
-                              id={detailRowId()}
-                              colspan={10}
-                              class="p-0 border-b border-border bg-surface-alt"
-                            >
-                              <div class="px-4 py-4" onClick={(event) => event.stopPropagation()}>
-                                <ProxmoxMailGatewayDrawer
-                                  instanceRow={instance}
-                                  onClose={() => setSelectedId(null)}
-                                />
-                              </div>
-                            </TableCell>
-                          </TableRow>
+                          <InlineDetailTableRow
+                            cellId={detailRowId()}
+                            colspan={10}
+                            contentClass="px-4 py-4"
+                            data-inline-detail-for={instance.id}
+                          >
+                            <ProxmoxMailGatewayDrawer
+                              instanceRow={instance}
+                              onClose={() => setSelectedId(null)}
+                            />
+                          </InlineDetailTableRow>
                         </Show>
                       </>
                     );

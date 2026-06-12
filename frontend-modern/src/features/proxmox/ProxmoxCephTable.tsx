@@ -9,6 +9,7 @@ import {
 } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
+import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
@@ -369,20 +370,14 @@ export const ProxmoxCephTable: Component<{
                           </TableCell>
                         </TableRow>
                         <Show when={isOpen()}>
-                          <TableRow data-inline-detail-for={cluster.id}>
-                            <TableCell
-                              id={detailRowId()}
-                              colspan={10}
-                              class="p-0 border-b border-border bg-surface-alt"
-                            >
-                              <div class="px-4 py-4" onClick={(event) => event.stopPropagation()}>
-                                <ProxmoxCephClusterDrawer
-                                  cluster={cluster}
-                                  onClose={closeSelected}
-                                />
-                              </div>
-                            </TableCell>
-                          </TableRow>
+                          <InlineDetailTableRow
+                            cellId={detailRowId()}
+                            colspan={10}
+                            contentClass="px-4 py-4"
+                            data-inline-detail-for={cluster.id}
+                          >
+                            <ProxmoxCephClusterDrawer cluster={cluster} onClose={closeSelected} />
+                          </InlineDetailTableRow>
                         </Show>
                       </>
                     );
