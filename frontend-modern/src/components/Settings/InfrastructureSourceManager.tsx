@@ -9,6 +9,7 @@ import {
   type Component,
 } from 'solid-js';
 import { AlertTriangle, Cpu, Plus, RotateCw, Search, SlidersHorizontal } from 'lucide-solid';
+import { Button } from '@/components/shared/Button';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import {
   Table,
@@ -66,18 +67,9 @@ const inlineButtonClass =
 // to an existing platform without competing with the primary CTA.
 const addSectionButtonClass =
   'inline-flex items-center justify-center gap-1 rounded px-2 py-0.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-950/30';
-const workspacePrimaryButtonClass =
-  'inline-flex min-h-9 items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60';
-const workspaceSecondaryButtonClass =
-  'inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60';
-const discoveryPrimaryButtonClass =
-  'inline-flex min-h-9 items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60';
-const discoverySecondaryButtonClass =
-  'inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60';
 const discoveryRowClass =
   'border-b border-border-subtle bg-blue-50/30 hover:bg-blue-50/40 dark:bg-blue-950/10 dark:hover:bg-blue-950/20';
-const discoveryScanTargetLabel =
-  'Proxmox VE, Proxmox Backup Server, and Proxmox Mail Gateway APIs';
+const discoveryScanTargetLabel = 'Proxmox VE, Proxmox Backup Server, and Proxmox Mail Gateway APIs';
 // The system column shows just the name on a single line. The OS / version
 // (standalone) or cluster identity (cluster) descriptor that used to sit on a
 // second line moves into the name's hover title, so every row stays one line
@@ -598,14 +590,16 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
       <div class="border-b border-border bg-surface px-4 py-3">
         <div class="flex flex-wrap items-center gap-2">
           <Show when={props.onAddInfrastructure}>
-            <button
+            <Button
               type="button"
+              variant="primary"
+              size="mdCompact"
+              class="min-h-9 gap-2"
               onClick={props.onAddInfrastructure}
-              class={workspacePrimaryButtonClass}
             >
               <Plus class="h-4 w-4" />
               Add infrastructure
-            </button>
+            </Button>
           </Show>
         </div>
       </div>
@@ -671,11 +665,13 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
         <Show when={!props.readOnly}>
           <div class="flex flex-wrap gap-2 lg:justify-end">
             <Show when={props.onRunDiscovery}>
-              <button
+              <Button
                 type="button"
+                variant="primary"
+                size="mdCompact"
+                class="min-h-9 gap-2"
                 onClick={props.onRunDiscovery}
                 disabled={props.discoveryScanStatus().scanning || !props.discoveryEnabled}
-                class={discoveryPrimaryButtonClass}
                 title={`Scan configured networks for reachable ${discoveryScanTargetLabel}. Discovered candidates appear here for review before they are added.`}
               >
                 <RotateCw
@@ -683,28 +679,32 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                   aria-hidden="true"
                 />
                 {props.discoveryScanStatus().scanning ? 'Scanning...' : 'Run discovery'}
-              </button>
+              </Button>
             </Show>
             <Show when={props.onOpenDiscoverySettings}>
-              <button
+              <Button
                 type="button"
+                variant="secondary"
+                size="mdCompact"
+                class="min-h-9 gap-2"
                 onClick={props.onOpenDiscoverySettings}
-                class={discoverySecondaryButtonClass}
                 title={`Configure which networks Pulse scans for ${discoveryScanTargetLabel}.`}
               >
                 <SlidersHorizontal class="h-4 w-4" aria-hidden="true" />
                 Discovery settings
-              </button>
+              </Button>
             </Show>
             <Show when={discoveredCandidateCount() > 0 && props.onReviewDiscoveredSource}>
-              <button
+              <Button
                 type="button"
+                variant="secondary"
+                size="mdCompact"
+                class="min-h-9 gap-2"
                 onClick={() => props.onReviewDiscoveredSource?.(props.discoveredNodes()[0])}
-                class={discoverySecondaryButtonClass}
               >
                 <Search class="h-4 w-4" aria-hidden="true" />
                 {discoveredCandidateCount() === 1 ? 'Review candidate' : 'Review first candidate'}
-              </button>
+              </Button>
             </Show>
           </div>
         </Show>
@@ -752,15 +752,17 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
             setupConfidenceAction().kind !== 'agent'
           }
         >
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="mdCompact"
             onClick={() => setupConfidenceAction().onClick?.()}
             disabled={setupConfidenceAction().disabled}
-            class={`${workspaceSecondaryButtonClass} self-start xl:self-center`}
+            class="min-h-9 gap-2 self-start xl:self-center"
           >
             {setupConfidenceActionIcon(setupConfidenceAction().kind)}
             {setupConfidenceAction().label}
-          </button>
+          </Button>
         </Show>
       </div>
 

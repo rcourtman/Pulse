@@ -12,6 +12,7 @@ import Plus from 'lucide-solid/icons/plus';
 import RotateCw from 'lucide-solid/icons/rotate-cw';
 import Activity from 'lucide-solid/icons/activity';
 import X from 'lucide-solid/icons/x';
+import { Button } from '@/components/shared/Button';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Dialog } from '@/components/shared/Dialog';
 import {
@@ -33,10 +34,6 @@ import {
   shouldOpenAvailabilityTargetAddDialog,
 } from './availabilitySettingsModel';
 
-const primaryButtonClass =
-  'inline-flex min-h-9 items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60';
-const secondaryButtonClass =
-  'inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60';
 const rowActionButtonClass =
   'inline-flex min-h-8 items-center justify-center rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60';
 const closeButtonClass =
@@ -200,23 +197,27 @@ export const AvailabilitySettingsPanel: Component = () => {
               </p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
-              <button
+              <Button
                 type="button"
+                variant="secondary"
+                size="mdCompact"
+                class="min-h-9 gap-2"
                 onClick={() => void loadTargets()}
                 disabled={loading()}
-                class={secondaryButtonClass}
               >
                 <RotateCw class={`h-4 w-4 ${loading() ? 'animate-spin' : ''}`} />
                 Refresh
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="primary"
+                size="mdCompact"
+                class="min-h-9 gap-2"
                 onClick={() => openAddDialog('service')}
-                class={primaryButtonClass}
               >
                 <Plus class="h-4 w-4" />
                 Add service/device check
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -253,14 +254,16 @@ export const AvailabilitySettingsPanel: Component = () => {
                     endpoint that only needs reachability monitoring.
                   </p>
                 </div>
-                <button
+                <Button
                   type="button"
+                  variant="primary"
+                  size="mdCompact"
+                  class="min-h-9 gap-2"
                   onClick={() => openAddDialog('service')}
-                  class={primaryButtonClass}
                 >
                   <Plus class="h-4 w-4" />
                   Add service/device check
-                </button>
+                </Button>
               </div>
             }
           >

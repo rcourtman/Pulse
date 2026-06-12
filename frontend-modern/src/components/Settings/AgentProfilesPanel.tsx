@@ -1,4 +1,5 @@
 import { Component, For, Show } from 'solid-js';
+import { Button } from '@/components/shared/Button';
 import { Card } from '@/components/shared/Card';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Dialog } from '@/components/shared/Dialog';
@@ -89,9 +90,7 @@ export const AgentProfilesPanel: Component = () => {
                   <Crown class="w-5 h-5 text-amber-600 dark:text-amber-400" />
                 </div>
                 <div>
-                  <h3 class="text-base font-semibold text-base-content">
-                    {featureGateCopy.title}
-                  </h3>
+                  <h3 class="text-base font-semibold text-base-content">{featureGateCopy.title}</h3>
                   <p class="text-sm text-muted">{featureGateCopy.subtitle}</p>
                 </div>
               </div>
@@ -116,25 +115,29 @@ export const AgentProfilesPanel: Component = () => {
             description="Reusable agent configurations"
             action={
               <div class="flex items-center gap-2">
-                <button
+                <Button
                   type="button"
+                  variant="primary"
+                  size="mdCompact"
                   onClick={handleCreate}
-                  class="inline-flex min-h-10 sm:min-h-9 items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 sm:px-4 sm:py-2 sm:text-sm"
+                  class="min-h-10 gap-2 sm:min-h-9 sm:px-4"
                 >
                   <Plus class="w-4 h-4" />
                   <span class="hidden sm:inline">New Profile</span>
                   <span class="sm:hidden">New</span>
-                </button>
+                </Button>
                 <Show when={aiAvailable()}>
-                  <button
+                  <Button
                     type="button"
+                    variant="secondary"
+                    size="mdCompact"
                     onClick={handleSuggest}
                     title="Suggest profiles for your estate"
-                    class="inline-flex min-h-10 sm:min-h-9 min-w-10 items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover sm:px-3 sm:py-2 sm:text-sm"
+                    class="min-h-10 min-w-10 gap-1.5 sm:min-h-9"
                   >
                     <Lightbulb class="w-3.5 h-3.5" />
                     <span class="hidden sm:inline">Ideas</span>
-                  </button>
+                  </Button>
                 </Show>
               </div>
             }

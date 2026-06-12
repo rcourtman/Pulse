@@ -191,7 +191,11 @@
       "requiredConsumers": [
         { "path": "src/components/AI/Chat/ChatMessages.tsx" },
         { "path": "src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx" },
+        { "path": "src/components/Settings/AgentProfilesPanel.tsx" },
+        { "path": "src/components/Settings/AvailabilitySettingsPanel.tsx" },
         { "path": "src/components/Settings/DataHandlingPanel.tsx" },
+        { "path": "src/components/Settings/InfrastructureInstallerSection.tsx" },
+        { "path": "src/components/Settings/InfrastructureSourceManager.tsx" },
         { "path": "src/features/patrol/PatrolIntelligenceWorkspace.tsx" },
         { "path": "src/features/standalone/StandalonePageSurface.tsx" }
       ],
@@ -1049,6 +1053,28 @@
         "rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content"
       ],
       "legacyReason": "Retired migration debt. Standard secondary command buttons belong to the shared Button primitive family, including button-styled links.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/Button.test.tsx"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "button-secondary-settings-action-local-shell",
+      "category": "action-button",
+      "summary": "Settings and infrastructure surfaces must not copy the standard secondary px-3 py-2 action-button shell; use Button or ButtonLink with the mdCompact size.",
+      "canonical": {
+        "path": "src/components/shared/buttonModel.ts",
+        "export": "getButtonClass"
+      },
+      "scopes": ["src/components/Settings", "src/features", "src/pages"],
+      "extensions": [".tsx"],
+      "allPatterns": [
+        "rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-base-content"
+      ],
+      "legacyReason": "Retired migration debt. Standard settings-sized secondary command buttons belong to the shared Button primitive family.",
       "allowedPaths": [],
       "ignoredPaths": ["src/components/shared/Button.test.tsx"],
       "proof": [

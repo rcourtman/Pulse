@@ -106,6 +106,7 @@ import incidentTimelinePanelSource from '@/components/Alerts/IncidentTimelinePan
 import thresholdsTableDockerIgnoredPrefixesSectionSource from '@/components/Alerts/ThresholdsTableDockerIgnoredPrefixesSection.tsx?raw';
 import webhookConfigFormSource from '@/components/Alerts/WebhookConfigForm.tsx?raw';
 import reportMergeModalSource from '@/components/Infrastructure/ReportMergeModal.tsx?raw';
+import availabilitySettingsPanelSource from '@/components/Settings/AvailabilitySettingsPanel.tsx?raw';
 import selfHostedCommercialRecoverySectionSource from '@/components/Settings/SelfHostedCommercialRecoverySection.tsx?raw';
 import suggestProfileModalSource from '@/components/Settings/SuggestProfileModal.tsx?raw';
 import alertAppriseDestinationsSectionSource from '@/features/alerts/AlertAppriseDestinationsSection.tsx?raw';
@@ -170,6 +171,7 @@ import diagnosticsResultsPanelSource from '@/components/Settings/DiagnosticsResu
 import dockerRuntimeSettingsCardSource from '@/components/Settings/DockerRuntimeSettingsCard.tsx?raw';
 import dataHandlingPanelSource from '@/components/Settings/DataHandlingPanel.tsx?raw';
 import generalSettingsPanelSource from '@/components/Settings/GeneralSettingsPanel.tsx?raw';
+import infrastructureInstallerSectionSource from '@/components/Settings/InfrastructureInstallerSection.tsx?raw';
 import organizationAccessMembersSectionSource from '@/components/Settings/OrganizationAccessMembersSection.tsx?raw';
 import organizationIncomingSharesSectionSource from '@/components/Settings/OrganizationIncomingSharesSection.tsx?raw';
 import organizationOutgoingSharesSectionSource from '@/components/Settings/OrganizationOutgoingSharesSection.tsx?raw';
@@ -1505,13 +1507,20 @@ describe('shared primitive guardrails', () => {
     const registeredGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'button-secondary-command-local-shell',
     );
+    const settingsActionGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'button-secondary-settings-action-local-shell',
+    );
 
     expect(registeredRule?.canonical?.path).toBe('src/components/shared/Button.tsx');
     expect(registeredRule?.canonical?.export).toBe('Button');
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
       'src/components/AI/Chat/ChatMessages.tsx',
       'src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx',
+      'src/components/Settings/AgentProfilesPanel.tsx',
+      'src/components/Settings/AvailabilitySettingsPanel.tsx',
       'src/components/Settings/DataHandlingPanel.tsx',
+      'src/components/Settings/InfrastructureInstallerSection.tsx',
+      'src/components/Settings/InfrastructureSourceManager.tsx',
       'src/features/patrol/PatrolIntelligenceWorkspace.tsx',
       'src/features/standalone/StandalonePageSurface.tsx',
     ]);
@@ -1523,6 +1532,18 @@ describe('shared primitive guardrails', () => {
     expect(registeredGuard?.scopes).toEqual(['src/components', 'src/features', 'src/pages']);
     expect(registeredGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(registeredGuard?.ignoredPaths).toEqual(['src/components/shared/Button.test.tsx']);
+    expect(settingsActionGuard?.canonical?.path).toBe('src/components/shared/buttonModel.ts');
+    expect(settingsActionGuard?.canonical?.export).toBe('getButtonClass');
+    expect(settingsActionGuard?.allPatterns).toEqual([
+      'rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-base-content',
+    ]);
+    expect(settingsActionGuard?.scopes).toEqual([
+      'src/components/Settings',
+      'src/features',
+      'src/pages',
+    ]);
+    expect(settingsActionGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(settingsActionGuard?.ignoredPaths).toEqual(['src/components/shared/Button.test.tsx']);
 
     expect(buttonSource).toContain('export function Button');
     expect(buttonSource).toContain('export function ButtonLink');
@@ -1537,7 +1558,27 @@ describe('shared primitive guardrails', () => {
     expect(resourceDetailDrawerDebugTabSource).not.toContain(
       'rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content',
     );
+    expect(agentProfilesPanelSource).toContain('@/components/shared/Button');
+    expect(agentProfilesPanelSource).not.toContain(
+      'rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-base-content',
+    );
+    expect(availabilitySettingsPanelSource).toContain('@/components/shared/Button');
+    expect(availabilitySettingsPanelSource).not.toContain(
+      'rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-base-content',
+    );
     expect(dataHandlingPanelSource).toContain('@/components/shared/Button');
+    expect(dataHandlingPanelSource).toContain('ButtonLink');
+    expect(dataHandlingPanelSource).not.toContain(
+      'rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-base-content',
+    );
+    expect(infrastructureInstallerSectionSource).toContain('@/components/shared/Button');
+    expect(infrastructureInstallerSectionSource).not.toContain(
+      'rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-base-content',
+    );
+    expect(infrastructureSourceManagerSource).toContain('@/components/shared/Button');
+    expect(infrastructureSourceManagerSource).not.toContain(
+      'rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-base-content',
+    );
     expect(patrolIntelligenceWorkspaceSource).toContain('@/components/shared/Button');
     expect(patrolIntelligenceWorkspaceSource).not.toContain(
       'rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content',

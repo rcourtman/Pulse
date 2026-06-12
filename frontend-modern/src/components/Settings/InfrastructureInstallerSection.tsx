@@ -1,5 +1,6 @@
 import type { Component } from 'solid-js';
 import { For, Show, createEffect, createMemo, createSignal } from 'solid-js';
+import { Button } from '@/components/shared/Button';
 import { FormSelect } from '@/components/shared/FormSelect';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { copyToClipboard } from '@/utils/clipboard';
@@ -472,15 +473,16 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                       or a specific install profile.
                     </p>
                   </div>
-                  <button
+                  <Button
                     type="button"
+                    variant="secondary"
+                    size="mdCompact"
                     onClick={() => setShowAdvancedOptions((current) => !current)}
-                    class="inline-flex items-center justify-center rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface"
                   >
                     {showAdvancedOptions()
                       ? 'Hide advanced connection and install options'
                       : 'Show advanced connection and install options'}
-                  </button>
+                  </Button>
                 </div>
               </div>
 

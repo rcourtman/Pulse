@@ -18,6 +18,7 @@ describe('Button', () => {
       "secondary: 'border border-border bg-surface text-base-content shadow-sm hover:bg-surface-hover'",
     );
     expect(buttonModelSource).toContain('export const BUTTON_SIZE_CLASSES');
+    expect(buttonModelSource).toContain("mdCompact: 'px-3 py-2 text-sm'");
   });
 
   it('renders command buttons with the shared secondary shell', () => {

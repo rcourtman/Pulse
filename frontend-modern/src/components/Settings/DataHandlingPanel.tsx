@@ -7,7 +7,7 @@ import Lock from 'lucide-solid/icons/lock';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import ShieldCheck from 'lucide-solid/icons/shield-check';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
-import Button from '@/components/shared/Button';
+import { Button, ButtonLink } from '@/components/shared/Button';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { settingsTabPath } from './settingsNavigationModel';
 import {
@@ -100,12 +100,14 @@ const EmptyPolicyPostureState: Component = () => (
           organization does not have visible monitored resources.
         </p>
       </div>
-      <a
+      <ButtonLink
         href={settingsTabPath('infrastructure-systems')}
-        class="inline-flex w-fit items-center justify-center rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
+        variant="secondary"
+        size="mdCompact"
+        class="w-fit"
       >
         Open Infrastructure
-      </a>
+      </ButtonLink>
     </div>
   </section>
 );

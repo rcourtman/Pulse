@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@solidjs/testing-library';
+import { Route, Router } from '@solidjs/router';
 import { DataHandlingPanel } from '../DataHandlingPanel';
 
 const unifiedResourcesState = vi.hoisted(() => ({
@@ -18,6 +19,13 @@ vi.mock('@/hooks/useUnifiedResources', () => ({
   }),
 }));
 
+const renderPanel = () =>
+  render(() => (
+    <Router>
+      <Route path="/" component={() => <DataHandlingPanel />} />
+    </Router>
+  ));
+
 describe('DataHandlingPanel', () => {
   beforeEach(() => {
     unifiedResourcesState.error = null;
@@ -33,10 +41,11 @@ describe('DataHandlingPanel', () => {
 
   afterEach(() => {
     cleanup();
+    window.history.replaceState({}, '', '/');
   });
 
   it('explains the empty resource posture instead of leading with zero-value counters', () => {
-    render(() => <DataHandlingPanel />);
+    renderPanel();
 
     expect(screen.getByText('Resource Data Policy')).toBeInTheDocument();
     expect(screen.getByText('Read-only resource privacy posture')).toBeInTheDocument();
@@ -68,7 +77,7 @@ describe('DataHandlingPanel', () => {
       },
     };
 
-    render(() => <DataHandlingPanel />);
+    renderPanel();
 
     expect(screen.getByText('Governed Resources')).toBeInTheDocument();
     expect(screen.getByText('Local-Only')).toBeInTheDocument();
