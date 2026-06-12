@@ -155,18 +155,41 @@ func TestInstallSHAgentServiceSecurityDefaults(t *testing.T) {
 		`if [[ "$HEALTH_ADDR_SET" == "true" ]]; then EXEC_ARG_ITEMS+=(--health-addr "$HEALTH_ADDR"); fi`,
 		`--health-addr) HEALTH_ADDR="$2"; HEALTH_ADDR_SET="true"; shift 2 ;;`,
 		`UMask=0077`,
-		`NoNewPrivileges=true`,
+		`local no_new_privileges="true"`,
+		`NoNewPrivileges=${no_new_privileges}`,
 		`PrivateTmp=true`,
 		`ProtectKernelTunables=true`,
 		`ProtectKernelModules=true`,
 		`ProtectControlGroups=true`,
 		`LockPersonality=true`,
-		`RestrictSUIDSGID=true`,
+		`local restrict_suidsgid="true"`,
+		`RestrictSUIDSGID=${restrict_suidsgid}`,
 		`SystemCallArchitectures=native`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(script, needle) {
 			t.Fatalf("install.sh missing agent service security default: %s", needle)
+		}
+	}
+}
+
+func TestInstallSHAllowsProxmoxCommandAgentLXCAttach(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatalf("read install.sh: %v", err)
+	}
+
+	script := string(content)
+	required := []string{
+		`systemd_agent_requires_lxc_attach() {`,
+		`if [[ "$ENABLE_COMMANDS" != "true" || "$ENABLE_PROXMOX" != "true" ]]; then`,
+		`""|pve|all)`,
+		`no_new_privileges="false"`,
+		`restrict_suidsgid="false"`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("install.sh missing Proxmox command-agent LXC attach service handling: %s", needle)
 		}
 	}
 }

@@ -719,6 +719,13 @@ payload shape change when the portal presents compact client rows.
 36. `internal/api/config_setup_handlers.go` shared with `agent-lifecycle`: auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
     That same shared boundary also owns reachable-host selection truth for canonical Proxmox registration: runtime callers may propose ordered `candidateHosts`, but the API contract must persist and echo the first candidate Pulse can actually reach instead of freezing the caller's rejected first preference into the stored node endpoint.
     That same canonical payload contract also owns strict-TLS truth for that selected host: `/api/auto-register` may only persist `VerifySSL=true` when Pulse actually captured a certificate fingerprint for the selected candidate, and it must not pretend public-CA verification is safe after every candidate fingerprint probe failed.
+    For PVE cluster sources, that same contract must distinguish primary
+    configured endpoints from covered cluster-member endpoints. A caller whose
+    candidate hosts match a non-primary `clusterEndpoints` entry is already
+    registered and must not rotate the shared Proxmox token, even if the
+    primary connection is currently disconnected. A caller whose candidates
+    match the primary configured endpoint may still drive disconnected-source
+    repair.
     That same contract now owns stale-marker verification as well: setup-token-authenticated `checkRegistration` requests may omit token completion fields and must answer `{registered:boolean}` from canonical candidate-host matching so runtime repair can distinguish real registrations from stale local marker files without rotating tokens first.
     That same contract owns auto-register WebSocket event intent: a successful
     completion that creates a new PVE/PBS node may broadcast

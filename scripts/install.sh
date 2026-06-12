@@ -701,30 +701,36 @@ ensure_freebsd_agent_enabled() {
 }
 
 render_systemd_agent_unit() {
-    local unit_path="$1"
-    local exec_path="$2"
-    local exec_args="$3"
-    local after_targets="$4"
+	local unit_path="$1"
+	local exec_path="$2"
+	local exec_args="$3"
+	local after_targets="$4"
     local wants_targets="$5"
     local run_as_user="$6"
     local log_target="$7"
     local env_line=""
     local wants_line=""
-    local user_line=""
-    local log_lines=""
+	local user_line=""
+	local log_lines=""
+	local no_new_privileges="true"
+	local restrict_suidsgid="true"
 
-    env_line="$SYSTEMD_ENV_LINES"
-    if [[ -n "$wants_targets" ]]; then
-        wants_line=$'\n'"Wants=${wants_targets}"
-    fi
+	env_line="$SYSTEMD_ENV_LINES"
+	if [[ -n "$wants_targets" ]]; then
+		wants_line=$'\n'"Wants=${wants_targets}"
+	fi
     if [[ -n "$run_as_user" ]]; then
         user_line=$'\n'"User=${run_as_user}"
     fi
-    if [[ -n "$log_target" ]]; then
-        log_lines=$'\n'"StandardOutput=append:${log_target}"$'\n'"StandardError=append:${log_target}"
-    fi
+	if [[ -n "$log_target" ]]; then
+		log_lines=$'\n'"StandardOutput=append:${log_target}"$'\n'"StandardError=append:${log_target}"
+	fi
+	if systemd_agent_requires_lxc_attach; then
+		no_new_privileges="false"
+		restrict_suidsgid="false"
+	fi
 
-    cat > "$unit_path" <<EOF
+	cat > "$unit_path" <<EOF
 [Unit]
 Description=Pulse Unified Agent
 After=${after_targets}${wants_line}
@@ -736,18 +742,32 @@ ExecStart=${exec_path} ${exec_args}${env_line}
 Restart=always
 RestartSec=5s${user_line}${log_lines}
 UMask=0077
-NoNewPrivileges=true
+NoNewPrivileges=${no_new_privileges}
 PrivateTmp=true
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
 LockPersonality=true
-RestrictSUIDSGID=true
+RestrictSUIDSGID=${restrict_suidsgid}
 SystemCallArchitectures=native
 
 [Install]
 WantedBy=multi-user.target
 EOF
+}
+
+systemd_agent_requires_lxc_attach() {
+	if [[ "$ENABLE_COMMANDS" != "true" || "$ENABLE_PROXMOX" != "true" ]]; then
+		return 1
+	fi
+	case "${PROXMOX_TYPE:-}" in
+		""|pve|all)
+			return 0
+			;;
+		*)
+			return 1
+			;;
+	esac
 }
 
 render_freebsd_rc_agent_script() {

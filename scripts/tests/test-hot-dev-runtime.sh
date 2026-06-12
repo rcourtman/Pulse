@@ -129,6 +129,16 @@ test_hot_dev_keeps_backend_launch_errors_in_debug_log() {
   assert_contains "backend LOG_FILE follows debug log override" "${output}" "LOG_FILE=\"\${BACKEND_DEBUG_LOG}\""
 }
 
+test_hot_dev_preserves_proxmox_guest_docker_env() {
+  local output
+  output="$(sed -n '1,760p' "${HOT_DEV}")"
+
+  assert_contains "hot-dev exports Proxmox guest Docker detection opt-in" "${output}" "export PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS"
+  assert_contains "backend launch preserves Proxmox guest Docker detection opt-in" "${output}" 'PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION="${PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION:-}"'
+  assert_contains "backend launch preserves Proxmox guest Docker inventory opt-in" "${output}" 'PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY="${PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY:-}"'
+  assert_contains "backend launch preserves scoped Proxmox guest Docker VMIDs" "${output}" 'PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS="${PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS:-}"'
+}
+
 test_hot_dev_avoids_self_killing_npm_wrapper() {
   local output
   output="$(sed -n '1,330p' "${HOT_DEV}")"
@@ -215,6 +225,7 @@ test_pulse_process_count_handles_zero_matches_under_pipefail
 test_pulse_process_count_counts_matching_processes
 test_hot_dev_uses_resilient_backend_process_count
 test_hot_dev_keeps_backend_launch_errors_in_debug_log
+test_hot_dev_preserves_proxmox_guest_docker_env
 test_hot_dev_avoids_self_killing_npm_wrapper
 test_hot_dev_network_defaults_are_local_first_with_explicit_lan_opt_in
 test_hot_dev_browser_urls_distinguish_bind_and_browser_hosts

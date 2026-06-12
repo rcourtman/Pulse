@@ -799,6 +799,13 @@ profile and assignment columns, but embedded table framing must route through
    the host, auto-detection and remote config must not start the Docker /
    Podman module.
 8. Add or change installer flags, persisted service arguments, or upgrade-safe re-entry behavior through `scripts/install.sh` and `scripts/install.ps1`.
+   On Unix systemd hosts, `scripts/install.sh` must keep the default agent unit
+   hardened, but command-enabled Proxmox VE agents selected with
+   `--enable-commands --enable-proxmox` and type `pve` or `all` must explicitly
+   allow the minimum `pct exec` / `lxc-attach` service posture by setting
+   `NoNewPrivileges=false` and `RestrictSUIDSGID=false`. That exception is
+   limited to the PVE command-agent path; it must not become the default for
+   Docker / Podman, host-only, PBS-only, or ordinary non-command agents.
    Persistence-sensitive NAS targets must keep one canonical continuity model here: installer-owned bootstraps may use flash-backed or immutable-root launch hooks only as thin trampolines, while the durable wrapper, state, and reboot-surviving binary copy stay in the governed persistent state directory that updater continuity also refreshes.
    Approval-gated command execution must expose stable rejection reasons for
    invalid approval grants so fleet operators can distinguish missing, expired,
@@ -2097,6 +2104,12 @@ server itself cannot use afterward. That same selection path must only persist
 selected host; if every candidate fingerprint probe fails, registration must
 fall back to the preferred normalized host with strict TLS disabled instead of
 pretending public-CA verification is now safe for a self-signed Proxmox node.
+Cluster-member Proxmox agents that match a non-primary endpoint of an existing
+cluster source are already registered for lifecycle purposes, even when the
+cluster source's primary connection is currently disconnected. Only the primary
+configured endpoint may drive disconnected-source repair and token rotation; a
+covered member endpoint must not rotate the cluster token just because it can
+reach `/api/auto-register`.
 That same canonical behavior also includes one auth transport for Proxmox
 completion: runtime-side Unified Agent and script callers must send `/api/auto-register`
 authentication through a one-time setup token in the request-body

@@ -15,7 +15,11 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const proxmoxGuestDockerInventoryMarker = "PULSE_DOCKER_GUEST_INVENTORY_V1"
+const (
+	proxmoxGuestDockerInventoryMarker      = "PULSE_DOCKER_GUEST_INVENTORY_V1"
+	proxmoxGuestDockerSocketMarker         = "PULSE_DOCKER_SOCKET"
+	proxmoxGuestDockerNegativeRecheckAfter = 5 * time.Minute
+)
 
 // DockerChecker provides the ability to check for Docker inside LXC containers.
 // This is typically implemented by wrapping the agentexec.Server.
@@ -155,6 +159,14 @@ func (m *Monitor) containerNeedsDockerCheck(ct models.Container, previousContain
 	// Never been checked
 	if prev.DockerCheckedAt.IsZero() {
 		return "first_check"
+	}
+
+	// Negative Docker checks can be transient during agent command enrollment,
+	// Proxmox token rotation, or Docker daemon startup. Recheck them on a short
+	// cadence so a single false result does not hide Docker-in-LXC inventory
+	// until the guest restarts.
+	if !prev.HasDocker && time.Since(prev.DockerCheckedAt) >= proxmoxGuestDockerNegativeRecheckAfter {
+		return "negative_cache_expired"
 	}
 
 	// Container restarted - uptime is less than before
@@ -402,36 +414,39 @@ func NewAgentDockerChecker(executeCommand func(ctx context.Context, hostname str
 }
 
 // CheckDockerInContainer checks if Docker is installed inside an LXC container
-// by running `pct exec <vmid> -- test -S /var/run/docker.sock` on the Proxmox node.
+// by running a socket probe inside the guest through the owning Proxmox node.
 func (c *AgentDockerChecker) CheckDockerInContainer(ctx context.Context, node string, vmid int) (bool, error) {
 	if c.executeCommand == nil {
 		return false, fmt.Errorf("no command executor configured")
 	}
 
-	// Check for Docker socket - this is the most reliable indicator
-	// We use test -S which checks if the file exists and is a socket
-	cmd := fmt.Sprintf("pct exec %d -- test -S /var/run/docker.sock && echo yes || echo no", vmid)
+	probe := fmt.Sprintf("if test -S /var/run/docker.sock; then printf '%s\\tyes\\n'; else printf '%s\\tno\\n'; fi", proxmoxGuestDockerSocketMarker, proxmoxGuestDockerSocketMarker)
+	cmd := fmt.Sprintf("pct exec %d -- sh -c %s", vmid, shellSingleQuote(probe))
 
 	stdout, exitCode, err := c.executeCommand(ctx, node, cmd, 10) // 10 second timeout
 	if err != nil {
 		return false, fmt.Errorf("command execution failed: %w", err)
 	}
 
-	// The test command itself might fail if container is not accessible
-	// but our echo fallback should always give us output
-	stdout = strings.TrimSpace(stdout)
-
-	// If we got "yes", Docker socket exists
-	if strings.Contains(stdout, "yes") {
-		return true, nil
+	output := strings.TrimSpace(stdout)
+	if exitCode != 0 {
+		return false, fmt.Errorf("container docker socket probe failed (exit code %d): %s", exitCode, output)
 	}
 
-	// If exit code is non-zero and we didn't get "no", the container might not be accessible
-	if exitCode != 0 && !strings.Contains(stdout, "no") {
-		return false, fmt.Errorf("container not accessible (exit code %d): %s", exitCode, stdout)
+	for _, rawLine := range strings.Split(output, "\n") {
+		fields := strings.Split(strings.TrimSpace(rawLine), "\t")
+		if len(fields) != 2 || fields[0] != proxmoxGuestDockerSocketMarker {
+			continue
+		}
+		switch strings.ToLower(strings.TrimSpace(fields[1])) {
+		case "yes":
+			return true, nil
+		case "no":
+			return false, nil
+		}
 	}
 
-	return false, nil
+	return false, fmt.Errorf("docker socket probe output missing %s marker: %s", proxmoxGuestDockerSocketMarker, output)
 }
 
 // AgentDockerInventoryCollector implements DockerInventoryCollector using the

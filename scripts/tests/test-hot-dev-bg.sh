@@ -882,6 +882,17 @@ test_hot_dev_bg_script_advertises_managed_entrypoint() {
   assert_contains "hot-dev-bg can recover a missing managed pid file" "${output}" "recover_managed_pid_file()"
 }
 
+test_hot_dev_bg_preserves_proxmox_guest_docker_env() {
+  local output
+  output="$(cat "${ROOT_DIR}/scripts/hot-dev-bg.sh")"
+
+  assert_contains "hot-dev-bg child preserves Proxmox guest Docker detection opt-in" "${output}" 'PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION="${PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION:-}"'
+  assert_contains "hot-dev-bg child preserves Proxmox guest Docker inventory opt-in" "${output}" 'PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY="${PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY:-}"'
+  assert_contains "hot-dev-bg child preserves scoped Proxmox guest Docker VMIDs" "${output}" 'PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS="${PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS:-}"'
+  assert_contains "hot-dev-bg child preserves debug log level" "${output}" 'LOG_LEVEL="${LOG_LEVEL:-}"'
+  assert_contains "hot-dev-bg restart takeover clears launchd before env-sensitive relaunch" "${output}" 'stop_launchd_hot_dev_job'
+}
+
 test_hot_dev_bg_recovers_stale_pid_file_from_live_supervisor() {
   local test_dir output
   test_dir="$(mktemp -d)"
@@ -1568,6 +1579,7 @@ main() {
   test_hot_dev_reconciles_agent_reachable_bind_address
   test_hot_dev_health_monitor_probes_api_health
   test_hot_dev_bg_script_advertises_managed_entrypoint
+  test_hot_dev_bg_preserves_proxmox_guest_docker_env
   test_hot_dev_bg_recovers_stale_pid_file_from_live_supervisor
   test_hot_dev_bg_preserves_pid_file_when_signal_probe_is_denied
   test_hot_dev_bg_status_degrades_ownership_when_process_inspection_is_restricted

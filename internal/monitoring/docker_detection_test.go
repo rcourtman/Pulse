@@ -277,15 +277,15 @@ func TestAgentDockerChecker_ParsesOutput(t *testing.T) {
 	}{
 		{
 			name:       "docker socket exists",
-			stdout:     "yes\n",
+			stdout:     proxmoxGuestDockerSocketMarker + "\tyes\n",
 			exitCode:   0,
 			wantDocker: true,
 			wantErr:    false,
 		},
 		{
 			name:       "docker socket does not exist",
-			stdout:     "no\n",
-			exitCode:   1,
+			stdout:     proxmoxGuestDockerSocketMarker + "\tno\n",
+			exitCode:   0,
 			wantDocker: false,
 			wantErr:    false,
 		},
@@ -293,6 +293,20 @@ func TestAgentDockerChecker_ParsesOutput(t *testing.T) {
 			name:       "container not accessible",
 			stdout:     "error: CT 101 is locked",
 			exitCode:   1,
+			wantDocker: false,
+			wantErr:    true,
+		},
+		{
+			name:       "host-side pct failure is not cached as no docker",
+			stdout:     "no\npct: CT 101 is locked",
+			exitCode:   255,
+			wantDocker: false,
+			wantErr:    true,
+		},
+		{
+			name:       "missing marker is an error",
+			stdout:     "no\n",
+			exitCode:   0,
 			wantDocker: false,
 			wantErr:    true,
 		},
@@ -316,6 +330,28 @@ func TestAgentDockerChecker_ParsesOutput(t *testing.T) {
 				t.Errorf("Expected hasDocker=%v, got %v", tt.wantDocker, hasDocker)
 			}
 		})
+	}
+}
+
+func TestAgentDockerChecker_ProbeRunsInsideContainer(t *testing.T) {
+	var gotCommand string
+	checker := NewAgentDockerChecker(func(ctx context.Context, hostname string, command string, timeout int) (string, int, error) {
+		gotCommand = command
+		return proxmoxGuestDockerSocketMarker + "\tyes\n", 0, nil
+	})
+
+	hasDocker, err := checker.CheckDockerInContainer(context.Background(), "node1", 101)
+	if err != nil {
+		t.Fatalf("CheckDockerInContainer returned error: %v", err)
+	}
+	if !hasDocker {
+		t.Fatal("expected Docker to be detected")
+	}
+	if !strings.Contains(gotCommand, "pct exec 101 -- sh -c") {
+		t.Fatalf("expected probe to execute inside the LXC, got %q", gotCommand)
+	}
+	if strings.Contains(gotCommand, "&& echo yes || echo no") {
+		t.Fatalf("host-side shell fallback must not mask pct exec failures: %q", gotCommand)
 	}
 }
 
@@ -819,6 +855,48 @@ func TestContainerNeedsDockerCheck(t *testing.T) {
 				"ct-1": {ID: "ct-1", Status: "stopped", DockerCheckedAt: time.Now()},
 			},
 			wantReason: "started",
+		},
+		{
+			name:      "recheck expired negative docker result",
+			container: models.Container{ID: "ct-1", Status: "running", Uptime: 7200},
+			previous: map[string]models.Container{
+				"ct-1": {
+					ID:              "ct-1",
+					Status:          "running",
+					Uptime:          3600,
+					HasDocker:       false,
+					DockerCheckedAt: time.Now().Add(-proxmoxGuestDockerNegativeRecheckAfter - time.Second),
+				},
+			},
+			wantReason: "negative_cache_expired",
+		},
+		{
+			name:      "keep fresh negative docker result",
+			container: models.Container{ID: "ct-1", Status: "running", Uptime: 7200},
+			previous: map[string]models.Container{
+				"ct-1": {
+					ID:              "ct-1",
+					Status:          "running",
+					Uptime:          3600,
+					HasDocker:       false,
+					DockerCheckedAt: time.Now().Add(-proxmoxGuestDockerNegativeRecheckAfter + time.Second),
+				},
+			},
+			wantReason: "",
+		},
+		{
+			name:      "keep positive docker result",
+			container: models.Container{ID: "ct-1", Status: "running", Uptime: 7200},
+			previous: map[string]models.Container{
+				"ct-1": {
+					ID:              "ct-1",
+					Status:          "running",
+					Uptime:          3600,
+					HasDocker:       true,
+					DockerCheckedAt: time.Now().Add(-proxmoxGuestDockerNegativeRecheckAfter - time.Hour),
+				},
+			},
+			wantReason: "",
 		},
 		{
 			name:      "no check needed - same state",

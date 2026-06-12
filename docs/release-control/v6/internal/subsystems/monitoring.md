@@ -167,7 +167,12 @@ truth for live infrastructure data.
    server opt-in. LXC Docker inventory may only emit Docker / Podman
    module-compatible reports into `ApplyDockerReport`, must skip guests with a
    linked online guest-local host agent, and must keep the command set to
-   minimal read-only Docker summary and aggregate stats collection.
+   minimal read-only Docker summary and aggregate stats collection. The socket
+   probe must run its yes/no marker inside the target LXC through `pct exec`;
+   host-side `pct` / `lxc-attach` failures are probe errors and must not be
+   converted into cached `HasDocker=false` results. Negative Docker detections
+   may be rechecked on a short cadence so command enrollment, daemon startup,
+   or transient Proxmox access failures do not hide later inventory.
 15. Add or change mock-mode Discovery context through the canonical mock
     fixture graph. Mock Discovery records must be derived from the same authored
     state graph as mock nodes, guests, Docker hosts, containers, and Kubernetes

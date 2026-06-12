@@ -884,9 +884,13 @@ func TestProxmoxGuestDockerInventoryUsesCanonicalReportIngestPath(t *testing.T) 
 	requiredSnippets := map[string][]string{
 		"docker_detection.go": {
 			"type DockerInventoryCollector interface {",
+			"proxmoxGuestDockerSocketMarker",
+			"proxmoxGuestDockerNegativeRecheckAfter",
 			"func (m *Monitor) CollectProxmoxGuestDockerInventory(ctx context.Context, containers []models.Container) {",
 			"m.hasOnlineHostAgentForContainer(ct.ID)",
 			"m.ApplyDockerReport(report, nil)",
+			"pct exec %d -- sh -c",
+			"container docker socket probe failed",
 			`docker ps -a --no-trunc --format 'CONTAINER\\t{{json .ID}}`,
 			`docker stats --no-stream --no-trunc --format 'STAT\\t{{json .ID}}`,
 			"ParseProxmoxGuestDockerInventoryVMIDs",
@@ -907,6 +911,9 @@ func TestProxmoxGuestDockerInventoryUsesCanonicalReportIngestPath(t *testing.T) 
 			if !strings.Contains(source, snippet) {
 				t.Fatalf("%s must contain %q", file, snippet)
 			}
+		}
+		if file == "docker_detection.go" && strings.Contains(source, "&& echo yes || echo no") {
+			t.Fatalf("%s must not mask host-side pct exec failures with a host-shell echo fallback", file)
 		}
 	}
 }

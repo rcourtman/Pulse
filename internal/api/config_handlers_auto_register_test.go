@@ -446,6 +446,56 @@ func TestHandleAutoRegisterCheckRegistrationReturnsFalseForMissingNode(t *testin
 	}
 }
 
+func TestAutoRegisteredPVEInstanceExistsTreatsClusterEndpointAsRegisteredWhenPrimaryDisconnected(t *testing.T) {
+	instances := []config.PVEInstance{
+		{
+			Name:        "delly",
+			Host:        "https://delly:8006",
+			ClusterName: "homelab",
+			IsCluster:   true,
+			ClusterEndpoints: []config.ClusterEndpoint{
+				{
+					NodeName: "minipc",
+					Host:     "https://minipc:8006",
+					IP:       "192.168.0.134",
+				},
+			},
+		},
+	}
+	connStatuses := map[string]bool{
+		"delly": false,
+	}
+
+	if !autoRegisteredPVEInstanceExists(instances, connStatuses, []string{"https://192.168.0.134:8006"}) {
+		t.Fatal("expected covered cluster endpoint to remain registered even while primary connection is disconnected")
+	}
+}
+
+func TestAutoRegisteredPVEInstanceExistsAllowsPrimaryDisconnectedRepair(t *testing.T) {
+	instances := []config.PVEInstance{
+		{
+			Name:        "delly",
+			Host:        "https://delly:8006",
+			ClusterName: "homelab",
+			IsCluster:   true,
+			ClusterEndpoints: []config.ClusterEndpoint{
+				{
+					NodeName: "minipc",
+					Host:     "https://minipc:8006",
+					IP:       "192.168.0.134",
+				},
+			},
+		},
+	}
+	connStatuses := map[string]bool{
+		"delly": false,
+	}
+
+	if autoRegisteredPVEInstanceExists(instances, connStatuses, []string{"https://delly:8006"}) {
+		t.Fatal("expected primary configured connection to be repairable when monitor confirms it is disconnected")
+	}
+}
+
 func TestHandleAutoRegisterRejectsMissingSource(t *testing.T) {
 	stubAutoRegisterNetworkDeps(t)
 

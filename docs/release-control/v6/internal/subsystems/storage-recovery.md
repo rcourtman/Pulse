@@ -356,6 +356,11 @@ recovery scope, or a storage/recovery-owned secret source.
    for host-side Docker-in-LXC collection must not be reinterpreted as backup
    freshness, restore coverage, storage protection evidence, or remediation
    authority for the LXC guest.
+   Proxmox auto-registration dedupe for cluster-member endpoints is likewise
+   adjacent API/lifecycle continuity: treating a non-primary cluster endpoint
+   as already registered prevents accidental shared-token rotation, but it does
+   not create backup visibility, recovery readiness, restore scope, or
+   storage-local authority for that endpoint.
    Global resource timeline routing may also pass through shared
    `internal/api/` handlers. Storage and recovery surfaces may read canonical
    timeline records as adjacent evidence, but they must not reinterpret an

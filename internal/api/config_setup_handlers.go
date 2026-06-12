@@ -705,6 +705,52 @@ func autoRegisterHostMatchesCandidates(existingHost string, candidates []string)
 	return false
 }
 
+func autoRegisterClusterEndpointMatchesCandidates(endpoint config.ClusterEndpoint, candidates []string) bool {
+	for _, endpointHost := range []string{
+		endpoint.Host,
+		endpoint.GuestURL,
+		endpoint.IPOverride,
+		endpoint.IP,
+	} {
+		if autoRegisterHostMatchesCandidates(endpointHost, candidates) {
+			return true
+		}
+		if normalized, err := normalizeNodeHost(endpointHost, "pve"); err == nil && autoRegisterHostMatchesCandidates(normalized, candidates) {
+			return true
+		}
+	}
+	return false
+}
+
+func autoRegisterPVEInstanceMatchesCandidates(node config.PVEInstance, candidates []string) (matched bool, primary bool) {
+	if autoRegisterHostMatchesCandidates(node.Host, candidates) {
+		return true, true
+	}
+	for _, endpoint := range node.ClusterEndpoints {
+		if autoRegisterClusterEndpointMatchesCandidates(endpoint, candidates) {
+			return true, false
+		}
+	}
+	return false, false
+}
+
+func autoRegisteredPVEInstanceExists(instances []config.PVEInstance, connStatuses map[string]bool, candidates []string) bool {
+	for _, node := range instances {
+		matched, primary := autoRegisterPVEInstanceMatchesCandidates(node, candidates)
+		if !matched {
+			continue
+		}
+		// A non-primary cluster endpoint is already covered by the cluster
+		// connection. Letting endpoint agents rotate the shared PVE token can
+		// invalidate the primary configured connection.
+		if primary && isKnownDisconnected(connStatuses, "pve", node.Name, node.Host) {
+			return false
+		}
+		return true
+	}
+	return false
+}
+
 func (h *ConfigHandlers) autoRegisteredNodeExists(ctx context.Context, req *AutoRegisterRequest, candidates []string) bool {
 	if req == nil {
 		return false
@@ -718,18 +764,7 @@ func (h *ConfigHandlers) autoRegisteredNodeExists(ctx context.Context, req *Auto
 
 	switch req.Type {
 	case "pve":
-		for _, node := range h.getConfig(ctx).PVEInstances {
-			if autoRegisterHostMatchesCandidates(node.Host, candidates) {
-				// Node exists in config. If the monitor has definitively confirmed
-				// it is disconnected (stale token), allow re-registration so the
-				// agent can update the token. Default to "registered" when there
-				// is no monitor status yet (e.g. startup race).
-				if isKnownDisconnected(connStatuses, "pve", node.Name, node.Host) {
-					return false
-				}
-				return true
-			}
-		}
+		return autoRegisteredPVEInstanceExists(h.getConfig(ctx).PVEInstances, connStatuses, candidates)
 	case "pbs":
 		for _, node := range h.getConfig(ctx).PBSInstances {
 			if autoRegisterHostMatchesCandidates(node.Host, candidates) {

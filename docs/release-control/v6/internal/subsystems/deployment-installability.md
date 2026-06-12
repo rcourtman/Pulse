@@ -277,6 +277,12 @@ TLS floor in the dynamic config.
    When enabled, the terminal summary must also state that Proxmox LXC Docker
    inventory still requires explicit server-side
    `PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true`.
+   For command-enabled PVE agents, the generated systemd unit must keep the
+   normal service hardening except for the two flags that block host-side
+   `pct exec` / `lxc-attach`: `NoNewPrivileges=false` and
+   `RestrictSUIDSGID=false`. That exception is deployment-owned operator truth
+   for the Proxmox LXC Docker inventory path and must not leak into non-PVE or
+   non-command agent installs.
 
 ## Extension Points
 
@@ -397,6 +403,13 @@ TLS floor in the dynamic config.
    first-run reset removes the runtime `.env`; otherwise the Pro backend fails
    closed before binding the API port and the supervisor loops without ever
    reaching browser-verifiable health.
+   Hot-dev backend launches, supervisor child launches, and takeover restarts
+   must also preserve `LOG_LEVEL` and the Proxmox guest-Docker opt-in
+   environment (`PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION`,
+   `PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY`, and
+   `PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS`) so live dev verification of
+   host-side LXC Docker inventory does not silently restart into default-off
+   monitoring.
 6. Add or change governed release-promotion workflow inputs, operator-facing promotion metadata, the canonical version file, prerelease feedback intake prompts, artifact publication lineage enforcement, release note or changelog packet composition, or stable-promotion rehearsal summaries through `.github/workflows/create-release.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/update-demo-server.yml`, `.github/ISSUE_TEMPLATE/v6_rc_feedback.yml`, `docs/RELEASE_NOTES.md`, `docs/releases/`, `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`, `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`, `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/release_control/render_release_body.py`, `scripts/release_control/record_rc_to_ga_rehearsal.py`, `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`, `scripts/release_control/release_promotion_policy_support.py`, `scripts/trigger-release.sh`, and `scripts/trigger-release-dry-run.sh`
    That release-promotion boundary also owns prerelease note packet lineage:
    shipped RC notes must remain historically accurate, the top-level
