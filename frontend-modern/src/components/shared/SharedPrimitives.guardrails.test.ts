@@ -90,6 +90,8 @@ import webInterfaceUrlFieldSource from '@/components/shared/WebInterfaceUrlField
 import webInterfaceUrlFieldModelSource from '@/components/shared/webInterfaceUrlFieldModel.ts?raw';
 import webInterfaceUrlFieldStateSource from '@/components/shared/useWebInterfaceUrlFieldState.ts?raw';
 import webInterfaceNameLinkSource from '@/components/shared/WebInterfaceNameLink.tsx?raw';
+import sharedTemplateRegistrySource from '../../../scripts/shared-template-registry.json?raw';
+import sharedPlatformPageSource from '@/features/platformPage/sharedPlatformPage.tsx?raw';
 import upgradeNavigationSource from '@/utils/upgradeNavigation.ts?raw';
 import guestRowSource from '@/components/Workloads/GuestRow.tsx?raw';
 import workloadsTableSource from '@/components/Workloads/WorkloadsTable.tsx?raw';
@@ -913,6 +915,18 @@ describe('shared primitive guardrails', () => {
   });
 
   it('keeps runtime web-interface launch on the shared resource-name template', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+      }>;
+    };
+    const registeredRule = registry.rules.find(
+      (rule) => rule.id === 'runtime-web-interface-name-link',
+    );
+
+    expect(registeredRule?.canonical?.path).toBe('src/components/shared/WebInterfaceNameLink.tsx');
+    expect(registeredRule?.canonical?.export).toBe('WebInterfaceNameLink');
     expect(webInterfaceNameLinkSource).toContain('export const WebInterfaceNameLink');
     expect(webInterfaceNameLinkSource).toContain('target="_blank"');
     expect(webInterfaceNameLinkSource).toContain('rel="noopener noreferrer"');
@@ -927,6 +941,29 @@ describe('shared primitive guardrails', () => {
     expect(agentsMachinesTableSource).not.toContain('data-agent-machine-web-link');
     expect(agentMachineTableModelSource).not.toContain("id: 'web'");
     expect(agentMachineTableModelSource).not.toContain("label: 'Web'");
+  });
+
+  it('keeps platform table frames on the shared shell template', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      patternGuards: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allowedPaths?: string[];
+      }>;
+    };
+    const registeredGuard = registry.patternGuards.find(
+      (guard) => guard.id === 'platform-table-shell-local-frame',
+    );
+
+    expect(registeredGuard?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(registeredGuard?.canonical?.export).toBe('PlatformTableShell');
+    expect(registeredGuard?.allowedPaths?.length).toBeGreaterThan(0);
+    expect(sharedPlatformPageSource).toContain('export function PlatformTableShell');
+    expect(sharedPlatformPageSource).toContain('TableCard class={props.cardClass');
+    expect(sharedPlatformPageSource).toContain('TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}');
+    expect(sharedPlatformPageSource).toContain('TableBody class={PLATFORM_TABLE_BODY_CLASS}');
   });
 
   it('keeps help icon on shell, runtime, and model owners', () => {

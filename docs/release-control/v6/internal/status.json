@@ -3774,6 +3774,11 @@
         },
         {
           "repo": "pulse",
+          "path": "frontend-modern/scripts/shared-template-registry.json",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts",
           "kind": "file",
           "evidence_tier": "test-proof"
@@ -3786,6 +3791,11 @@
         {
           "repo": "pulse",
           "path": "frontend-modern/src/components/Workloads/GuestRow.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx",
           "kind": "file"
         },
         {

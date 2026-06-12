@@ -153,11 +153,14 @@ work extends shared components instead of creating new local variants.
 126. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts`
 127. `frontend-modern/scripts/canonical-platform-audit.mjs`
 128. `frontend-modern/scripts/settings-diagnostics-boundary-audit.mjs`
-129. `frontend-modern/src/utils/platformSupportManifest.generated.ts`
-130. `frontend-modern/src/utils/platformSupportManifest.ts`
-131. `frontend-modern/src/utils/sourcePlatformOptions.ts`
-132. `frontend-modern/src/utils/sourcePlatforms.ts`
-133. `frontend-modern/src/utils/infrastructureOnboardingPresentation.ts`
+129. `frontend-modern/scripts/shared-template-audit.mjs`
+130. `frontend-modern/scripts/shared-template-registry.json`
+131. `frontend-modern/src/features/platformPage/sharedPlatformPage.tsx`
+132. `frontend-modern/src/utils/platformSupportManifest.generated.ts`
+133. `frontend-modern/src/utils/platformSupportManifest.ts`
+134. `frontend-modern/src/utils/sourcePlatformOptions.ts`
+135. `frontend-modern/src/utils/sourcePlatforms.ts`
+136. `frontend-modern/src/utils/infrastructureOnboardingPresentation.ts`
 
 ## Shared Boundaries
 
@@ -2362,6 +2365,20 @@ resource-name link shell, new-tab safety attributes, row-click/key propagation
 containment, fallback text, and accessible launch labels. Workload guest rows
 and standalone machine rows compose that primitive so a saved URL is opened by
 clicking the resource name on every comparable runtime table.
+Shared-template drift enforcement is registry-backed:
+`frontend-modern/scripts/shared-template-registry.json` is the canonical list of
+standardized repeated affordances, required consumers, and forbidden local
+patterns, while `frontend-modern/scripts/shared-template-audit.mjs` enforces
+that registry. Future repeated-affordance migrations must add or extend a
+registry rule as part of the same change that extracts or adopts the shared
+primitive.
+Platform table frames are one of those registry-backed templates.
+`frontend-modern/src/features/platformPage/sharedPlatformPage.tsx` owns
+`PlatformTableShell`, including the canonical table card, header row, and body
+divide styling. New platform tables must start from `PlatformTableShell`; the
+legacy table-frame allowlist in `shared-template-registry.json` is migration
+debt, not precedent, and must shrink as existing tables are moved onto the
+shared shell.
 The shared help icon now follows that same owner split.
 `frontend-modern/src/components/shared/HelpIcon.tsx` stays the render shell,
 `frontend-modern/src/components/shared/useHelpIconState.ts` owns open state,

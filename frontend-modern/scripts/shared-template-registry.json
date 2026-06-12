@@ -1,0 +1,118 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "id": "runtime-web-interface-name-link",
+      "category": "resource-launch",
+      "summary": "Runtime resource rows must launch saved web-interface URLs through the shared name-link template, not a page-local link or separate web column.",
+      "canonical": {
+        "path": "src/components/shared/WebInterfaceNameLink.tsx",
+        "export": "WebInterfaceNameLink"
+      },
+      "requiredConsumers": [
+        {
+          "path": "src/components/Workloads/GuestRow.tsx"
+        },
+        {
+          "path": "src/features/standalone/AgentsMachinesTable.tsx"
+        }
+      ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/components/Workloads/GuestRow.tsx",
+          "patterns": ["target=\"_blank\"", "rel=\"noopener noreferrer\""]
+        },
+        {
+          "path": "src/features/standalone/AgentsMachinesTable.tsx",
+          "patterns": [
+            "target=\"_blank\"",
+            "rel=\"noopener noreferrer\"",
+            "AgentMachineWebLinkCell",
+            "data-agent-machine-web-link"
+          ]
+        },
+        {
+          "path": "src/features/standalone/agentMachineTableModel.ts",
+          "patterns": ["id: 'web'", "label: 'Web'"]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/standalone/__tests__/AgentsMachinesTable.test.tsx",
+        "src/components/Workloads/__tests__/GuestRow.test.tsx"
+      ]
+    }
+  ],
+  "patternGuards": [
+    {
+      "id": "platform-table-shell-local-frame",
+      "category": "platform-table-shell",
+      "summary": "Platform tables must compose the shared PlatformTableShell frame instead of recreating the TableCard/TableHeader/TableBody shell locally.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "PlatformTableShell"
+      },
+      "scopes": ["src/features", "src/components"],
+      "extensions": [".tsx"],
+      "allPatterns": [
+        "TableCard class={PLATFORM_TABLE_CARD_CLASS}",
+        "TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}",
+        "TableBody class={PLATFORM_TABLE_BODY_CLASS}"
+      ],
+      "legacyReason": "Existing platform tables predate PlatformTableShell and are registered legacy migration debt. New tables must use the canonical shell.",
+      "allowedPaths": [
+        "src/features/docker/DockerAlertsTable.tsx",
+        "src/features/docker/DockerConfigsTable.tsx",
+        "src/features/docker/DockerContainersTable.tsx",
+        "src/features/docker/DockerHostsTable.tsx",
+        "src/features/docker/DockerImagesTable.tsx",
+        "src/features/docker/DockerNetworksTable.tsx",
+        "src/features/docker/DockerSecretsTable.tsx",
+        "src/features/docker/DockerServicesTable.tsx",
+        "src/features/docker/DockerStorageUsageTable.tsx",
+        "src/features/docker/DockerSwarmNodesTable.tsx",
+        "src/features/docker/DockerTasksTable.tsx",
+        "src/features/docker/DockerVolumesTable.tsx",
+        "src/features/kubernetes/KubernetesAlertsTable.tsx",
+        "src/features/kubernetes/KubernetesAutoscalingTable.tsx",
+        "src/features/kubernetes/KubernetesClustersTable.tsx",
+        "src/features/kubernetes/KubernetesConfigTable.tsx",
+        "src/features/kubernetes/KubernetesControllersTable.tsx",
+        "src/features/kubernetes/KubernetesDeploymentsTable.tsx",
+        "src/features/kubernetes/KubernetesEventsTable.tsx",
+        "src/features/kubernetes/KubernetesNetworkingTable.tsx",
+        "src/features/kubernetes/KubernetesNodesTable.tsx",
+        "src/features/kubernetes/KubernetesPodsTable.tsx",
+        "src/features/kubernetes/KubernetesPolicyTable.tsx",
+        "src/features/kubernetes/KubernetesServicesTable.tsx",
+        "src/features/kubernetes/KubernetesStorageTable.tsx",
+        "src/features/proxmox/ProxmoxBackupServersTable.tsx",
+        "src/features/proxmox/ProxmoxCephTable.tsx",
+        "src/features/proxmox/ProxmoxCoverageTable.tsx",
+        "src/features/proxmox/ProxmoxMailGatewayTable.tsx",
+        "src/features/proxmox/ProxmoxNodesTable.tsx",
+        "src/features/proxmox/ProxmoxRecoverableTable.tsx",
+        "src/features/proxmox/ProxmoxReplicationTable.tsx",
+        "src/features/standalone/AgentsMachinesTable.tsx",
+        "src/features/standalone/AvailabilityChecksTable.tsx",
+        "src/features/truenas/TrueNASAlertsTable.tsx",
+        "src/features/truenas/TrueNASAppsTable.tsx",
+        "src/features/truenas/TrueNASNetworkSharesTable.tsx",
+        "src/features/truenas/TrueNASProtectionTable.tsx",
+        "src/features/truenas/TrueNASServicesTable.tsx",
+        "src/features/truenas/TrueNASStorageTopologyTable.tsx",
+        "src/features/truenas/TrueNASSystemsTable.tsx",
+        "src/features/truenas/TrueNASVirtualMachinesTable.tsx",
+        "src/features/vmware/VsphereActivityTable.tsx",
+        "src/features/vmware/VsphereAlertsTable.tsx",
+        "src/features/vmware/VsphereDatastoresTable.tsx",
+        "src/features/vmware/VsphereHostsTable.tsx",
+        "src/features/vmware/VsphereNetworksTable.tsx"
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    }
+  ]
+}

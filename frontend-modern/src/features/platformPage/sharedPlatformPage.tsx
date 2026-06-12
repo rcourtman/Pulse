@@ -6,7 +6,9 @@ import { EmptyState } from '@/components/shared/EmptyState';
 import { type FilterOption as PlatformTableFilterOption } from '@/components/shared/FilterButtonGroup';
 import { FilterBar, type FilterDef } from '@/components/shared/FilterBar';
 import { type SearchInputProps } from '@/components/shared/SearchInput';
+import { Table, TableBody, TableHeader, TableRow } from '@/components/shared/Table';
 import { TableCard } from '@/components/shared/TableCard';
+import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
 import type { Resource } from '@/types/resource';
@@ -88,6 +90,32 @@ export type PlatformTableCellAlign = 'left' | 'right' | 'center';
 export const PLATFORM_TABLE_CARD_CLASS = 'rounded-md';
 export const PLATFORM_TABLE_HEADER_ROW_CLASS = 'bg-surface-alt text-muted border-b border-border';
 export const PLATFORM_TABLE_BODY_CLASS = 'divide-y divide-border';
+
+export type PlatformTableShellProps = {
+  title?: JSX.Element;
+  actions?: JSX.Element;
+  tableClass?: string;
+  tableWrapperClass?: string;
+  cardClass?: string;
+  colgroup?: JSX.Element;
+  header: JSX.Element;
+  body: JSX.Element;
+};
+
+export function PlatformTableShell(props: PlatformTableShellProps) {
+  return (
+    <TableCard class={props.cardClass ?? PLATFORM_TABLE_CARD_CLASS}>
+      <TableCardHeader title={props.title} actions={props.actions} />
+      <Table class={props.tableClass} wrapperClass={props.tableWrapperClass}>
+        {props.colgroup}
+        <TableHeader>
+          <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>{props.header}</TableRow>
+        </TableHeader>
+        <TableBody class={PLATFORM_TABLE_BODY_CLASS}>{props.body}</TableBody>
+      </Table>
+    </TableCard>
+  );
+}
 
 const getPlatformTableAlignClass = (align: PlatformTableCellAlign = 'left'): string => {
   if (align === 'right') return 'text-right';

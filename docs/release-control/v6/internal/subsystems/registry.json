@@ -3059,6 +3059,8 @@
         "frontend-modern/scripts/canonical-platform-audit.mjs",
         "frontend-modern/scripts/header-audit.mjs",
         "frontend-modern/scripts/settings-diagnostics-boundary-audit.mjs",
+        "frontend-modern/scripts/shared-template-audit.mjs",
+        "frontend-modern/scripts/shared-template-registry.json",
         "frontend-modern/src/components/Settings/AIChatMaintenanceSection.tsx",
         "frontend-modern/src/components/Settings/AIModelSelectionSection.tsx",
         "frontend-modern/src/components/Settings/AIProviderConfigurationSection.tsx",
@@ -3124,6 +3126,7 @@
         "frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx",
         "frontend-modern/src/components/SetupWizard/SetupWizard.tsx",
         "frontend-modern/src/components/Toast/Toast.tsx",
+        "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx",
         "frontend-modern/src/hooks/createNonSuspendingQuery.ts",
         "frontend-modern/src/index.css",
         "frontend-modern/src/routing/routePreload.ts",
@@ -3548,6 +3551,21 @@
             "exact_files": [
               "frontend-modern/src/components/shared/__tests__/SearchField.test.tsx",
               "frontend-modern/src/components/shared/__tests__/SearchInput.test.tsx"
+            ]
+          },
+          {
+            "id": "shared-template-drift-guardrails",
+            "label": "shared template drift guardrail proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/scripts/shared-template-audit.mjs",
+              "frontend-modern/scripts/shared-template-registry.json",
+              "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts"
             ]
           },
           {
