@@ -14,6 +14,7 @@ import { Component, createSignal, createEffect, Show, For, createMemo } from 'so
 import { useLocation } from '@solidjs/router';
 import { Card } from '@/components/shared/Card';
 import { FormSelect } from '@/components/shared/FormSelect';
+import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { aiIntelligenceStore, type UnifiedFinding } from '@/stores/aiIntelligence';
 import { notificationStore } from '@/stores/notifications';
 import { aiChatStore } from '@/stores/aiChat';
@@ -52,10 +53,10 @@ import {
   getFindingSeverityPresentation,
   getFindingSeveritySortOrder,
   getFindingResolutionReason,
-  getFindingLoopStateBadgeClasses,
-  getFindingStatusBadgeClasses,
+  getFindingLoopStateBadgeTone,
+  getFindingStatusBadgeTone,
   getFindingStatusLabel,
-  getFindingSourceBadgeClasses,
+  getFindingSourceBadgeTone,
   getFindingSourceLabel,
   getFindingManualControlsPresentation,
   getFindingPrimaryActionPresentation,
@@ -64,14 +65,20 @@ import {
   getFindingRecencyPresentation,
   hasFindingInvestigationDetails,
   hasFindingInvestigationHandoffPointer,
-  getInvestigationConfidenceBadgeClasses,
-  getInvestigationOutcomeBadgeClasses,
+  getInvestigationConfidenceBadgeTone,
+  getInvestigationOutcomeBadgeTone,
   getInvestigationOutcomeLabel,
   getInvestigationStatusLabel,
   getInvestigationOutcomeSortOrder,
-  getInvestigationStatusBadgeClasses,
+  getInvestigationStatusBadgeTone,
 } from '@/utils/aiFindingPresentation';
 import { copyToClipboard } from '@/utils/clipboard';
+
+const FINDING_ROW_BADGE_PROPS = {
+  appearance: 'outline',
+  size: 'xs',
+  shape: 'rounded',
+} as const;
 
 interface FindingsPanelProps {
   resourceId?: string;
@@ -811,30 +818,35 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             <div class="flex items-center gap-2 flex-wrap">
               {/* Status badge for non-active findings */}
               <Show when={finding.status !== 'active'}>
-                <span
-                  class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${getFindingStatusBadgeClasses(finding.status)}`}
+                <MetadataBadge
+                  {...FINDING_ROW_BADGE_PROPS}
+                  tone={getFindingStatusBadgeTone(finding.status)}
                 >
                   {getFindingStatusLabel(finding.status)}
-                </span>
+                </MetadataBadge>
               </Show>
               {/* Source badge - only show when requested */}
               <Show when={showSourceBadge}>
-                <span
-                  class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${getFindingSourceBadgeClasses(finding.source)}`}
+                <MetadataBadge
+                  {...FINDING_ROW_BADGE_PROPS}
+                  tone={getFindingSourceBadgeTone(finding.source)}
                 >
                   {getFindingSourceLabel(finding.source)}
-                </span>
+                </MetadataBadge>
               </Show>
               {/* Severity badge */}
-              <span
-                class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${severityPresentation.uppercase ? 'uppercase' : ''} ${severityPresentation.badgeClasses}`}
+              <MetadataBadge
+                {...FINDING_ROW_BADGE_PROPS}
+                tone={severityPresentation.badgeTone}
+                uppercase={severityPresentation.uppercase}
               >
                 {severityPresentation.label}
-              </span>
+              </MetadataBadge>
               {/* Alert-triggered badge */}
               <Show when={hasTriggeringAlert(finding)}>
-                <span
-                  class="px-1.5 py-0.5 border text-[10px] font-medium rounded border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900 text-amber-700 dark:text-amber-300"
+                <MetadataBadge
+                  {...FINDING_ROW_BADGE_PROPS}
+                  tone="warning"
                   title={
                     finding.alertType
                       ? `Alert: ${finding.alertType}`
@@ -842,12 +854,12 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                   }
                 >
                   Alert-triggered
-                </span>
+                </MetadataBadge>
               </Show>
               <Show when={finding.acknowledgedAt && finding.status === 'active'}>
-                <span class="px-1.5 py-0.5 border text-[10px] font-medium rounded border-border bg-surface-hover text-muted">
+                <MetadataBadge {...FINDING_ROW_BADGE_PROPS} tone="muted">
                   Acknowledged
-                </span>
+                </MetadataBadge>
               </Show>
               <Show
                 when={
@@ -858,20 +870,22 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                   !finding.investigationOutcome
                 }
               >
-                <span
-                  class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${getFindingLoopStateBadgeClasses(finding.loopState!)}`}
+                <MetadataBadge
+                  {...FINDING_ROW_BADGE_PROPS}
+                  tone={getFindingLoopStateBadgeTone(finding.loopState!)}
                   title={`Patrol loop: ${formatFindingLoopState(finding.loopState!)}`}
                 >
                   {formatFindingLoopState(finding.loopState!)}
-                </span>
+                </MetadataBadge>
               </Show>
               <Show when={isOutOfScope(finding)}>
-                <span
-                  class="px-1.5 py-0.5 border text-[10px] font-medium rounded border-amber-300 bg-amber-100 text-amber-900 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-100"
+                <MetadataBadge
+                  {...FINDING_ROW_BADGE_PROPS}
+                  tone="warning"
                   title="This finding references a resource outside the selected run scope."
                 >
                   Out of scope
-                </span>
+                </MetadataBadge>
               </Show>
               {/* Investigation status badge — only when no outcome badge will show */}
               <Show
@@ -884,8 +898,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                   )
                 }
               >
-                <span
-                  class={`px-1.5 py-0.5 border text-[10px] font-medium rounded flex items-center gap-1 ${getInvestigationStatusBadgeClasses(finding.investigationStatus!)}`}
+                <MetadataBadge
+                  {...FINDING_ROW_BADGE_PROPS}
+                  tone={getInvestigationStatusBadgeTone(finding.investigationStatus!)}
                   title={`Investigation: ${getInvestigationStatusLabel(finding.investigationStatus!)}`}
                 >
                   <Show
@@ -899,7 +914,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                     />
                   </Show>
                   {getInvestigationStatusLabel(finding.investigationStatus!)}
-                </span>
+                </MetadataBadge>
               </Show>
               {/* Investigation outcome badge — replaces status badge when outcome is known */}
               <Show
@@ -909,22 +924,24 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                   finding.investigationStatus !== 'pending'
                 }
               >
-                <span
-                  class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${getInvestigationOutcomeBadgeClasses(finding.investigationOutcome!)}`}
+                <MetadataBadge
+                  {...FINDING_ROW_BADGE_PROPS}
+                  tone={getInvestigationOutcomeBadgeTone(finding.investigationOutcome!)}
                 >
                   {getInvestigationOutcomeLabel(finding.investigationOutcome!)}
-                </span>
+                </MetadataBadge>
               </Show>
               {/* Investigation confidence badge — surfaces the seven-question
                   schema's confidence answer in the collapsed row so operators
                   can scan trust without expanding the card. */}
               <Show when={finding.investigationRecord?.confidence}>
-                <span
-                  class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${getInvestigationConfidenceBadgeClasses(finding.investigationRecord!.confidence!)}`}
+                <MetadataBadge
+                  {...FINDING_ROW_BADGE_PROPS}
+                  tone={getInvestigationConfidenceBadgeTone(finding.investigationRecord!.confidence!)}
                   title={`Investigation confidence: ${finding.investigationRecord!.confidence!}`}
                 >
                   {finding.investigationRecord!.confidence!} confidence
-                </span>
+                </MetadataBadge>
               </Show>
               {/* Regression pill — Pulse's "Learn" signal on the collapsed row.
                   A finding that has regressed before is not a one-off; it
@@ -932,12 +949,13 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                   Sits next to the confidence badge so trust + recurrence
                   can be scanned together without expanding the card. */}
               <Show when={(finding.regressionCount || 0) > 0}>
-                <span
-                  class="px-1.5 py-0.5 border text-[10px] font-medium rounded border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300"
+                <MetadataBadge
+                  {...FINDING_ROW_BADGE_PROPS}
+                  tone="warning"
                   title={`This finding has regressed ${finding.regressionCount} time${finding.regressionCount === 1 ? '' : 's'} after being resolved before.`}
                 >
                   regressed {finding.regressionCount}×
-                </span>
+                </MetadataBadge>
               </Show>
               {/* Title */}
               <span

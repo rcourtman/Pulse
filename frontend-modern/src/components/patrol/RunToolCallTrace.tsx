@@ -12,8 +12,9 @@ import {
   type ToolCallVerification,
   type ToolCallVerificationStatus,
 } from '@/api/patrol';
+import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import {
-  getToolCallResultBadgeClass,
+  getToolCallResultBadgeTone,
   getToolCallsLoadingState,
   getToolCallsUnavailableState,
 } from '@/utils/patrolRunPresentation';
@@ -32,6 +33,8 @@ const VERIFIED_LABELS: Record<ToolCallVerificationStatus, string> = {
 
 const verifiedStatus = (v?: ToolCallVerification): ToolCallVerificationStatus =>
   v?.status ?? 'unknown';
+
+const RUN_TOOL_CALL_BADGE_PROPS = { size: 'xs', shape: 'rounded' } as const;
 
 const verifiedTooltip = (v?: ToolCallVerification): string => {
   const status = verifiedStatus(v);
@@ -173,11 +176,12 @@ export const RunToolCallTrace: Component<RunToolCallTraceProps> = (props) => {
                           >
                             <VerifiedIcon status={status} />
                           </span>
-                          <span
-                            class={`px-1.5 py-0.5 rounded text-[10px] font-medium ${getToolCallResultBadgeClass(call.success)}`}
+                          <MetadataBadge
+                            {...RUN_TOOL_CALL_BADGE_PROPS}
+                            tone={getToolCallResultBadgeTone(call.success)}
                           >
                             {call.success ? 'success' : 'failed'}
-                          </span>
+                          </MetadataBadge>
                           <span class="text-muted font-mono">{call.duration_ms}ms</span>
                         </div>
                       </button>

@@ -15,7 +15,7 @@ import {
   getRunHistorySelectionHint,
   getToolCallsLoadingState,
   getToolCallsUnavailableState,
-  getToolCallResultBadgeClass,
+  getToolCallResultBadgeTone,
   getToolCallResultTextClass,
 } from '@/utils/patrolRunPresentation';
 
@@ -112,9 +112,9 @@ describe('patrolRunPresentation', () => {
     expect(presentation.variant).toBe('muted');
   });
 
-  it('maps tool call success and failure to canonical colors', () => {
-    expect(getToolCallResultBadgeClass(true)).toContain('green-100');
-    expect(getToolCallResultBadgeClass(false)).toContain('red-100');
+  it('maps tool call success and failure to canonical badge tones', () => {
+    expect(getToolCallResultBadgeTone(true)).toBe('success');
+    expect(getToolCallResultBadgeTone(false)).toBe('danger');
     expect(getToolCallResultTextClass(true)).toContain('text-emerald-600');
     expect(getToolCallResultTextClass(false)).toContain('text-red-600');
   });

@@ -5,6 +5,7 @@ import calloutCardSource from '@/components/shared/CalloutCard.tsx?raw';
 import assistantCommandHelpDialogSource from '@/components/AI/Chat/AssistantCommandHelpDialog.tsx?raw';
 import chatMessagesSource from '@/components/AI/Chat/ChatMessages.tsx?raw';
 import aiChatSource from '@/components/AI/Chat/index.tsx?raw';
+import findingsPanelSource from '@/components/AI/FindingsPanel.tsx?raw';
 import aiModelPickerSource from '@/components/shared/AIModelPicker.tsx?raw';
 import buttonSource from '@/components/shared/Button.tsx?raw';
 import buttonModelSource from '@/components/shared/buttonModel.ts?raw';
@@ -207,7 +208,11 @@ import settingsPageShellSource from '@/components/Settings/SettingsPageShell.tsx
 import patrolIntelligenceHeaderSource from '@/features/patrol/PatrolIntelligenceHeader.tsx?raw';
 import patrolIntelligenceSummarySource from '@/features/patrol/PatrolIntelligenceSummary.tsx?raw';
 import patrolIntelligenceWorkspaceSource from '@/features/patrol/PatrolIntelligenceWorkspace.tsx?raw';
+import approvalBannerSource from '@/components/patrol/ApprovalBanner.tsx?raw';
+import approvalSectionSource from '@/components/patrol/ApprovalSection.tsx?raw';
+import investigationSectionSource from '@/components/patrol/InvestigationSection.tsx?raw';
 import runHistoryEntrySource from '@/components/patrol/RunHistoryEntry.tsx?raw';
+import runToolCallTraceSource from '@/components/patrol/RunToolCallTrace.tsx?raw';
 import patrolStatusBarSource from '@/components/patrol/PatrolStatusBar.tsx?raw';
 import filterBarSource from '@/components/shared/FilterBar/FilterBar.tsx?raw';
 import filterChipSource from '@/components/shared/FilterBar/FilterChip.tsx?raw';
@@ -1602,13 +1607,31 @@ describe('shared primitive guardrails', () => {
     const patrolRunMetadataGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'patrol-run-metadata-badge-local-shell',
     );
+    const patrolInvestigationMetadataGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'patrol-investigation-metadata-badge-local-shell',
+    );
+    const patrolFindingMetadataGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'patrol-finding-metadata-badge-local-shell',
+    );
+    const patrolApprovalToolCallMetadataGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'patrol-approval-tool-call-metadata-badge-local-shell',
+    );
+    const proxmoxBackupMetadataGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'proxmox-backup-metadata-badge-local-shell',
+    );
 
     expect(metadataRule?.canonical?.path).toBe('src/components/shared/MetadataBadge.tsx');
     expect(metadataRule?.canonical?.export).toBe('MetadataBadge');
     expect(metadataRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
       'src/components/shared/OrganizationBadges.tsx',
+      'src/components/AI/FindingsPanel.tsx',
+      'src/components/patrol/ApprovalBanner.tsx',
+      'src/components/patrol/ApprovalSection.tsx',
+      'src/components/patrol/InvestigationSection.tsx',
       'src/components/patrol/RunHistoryEntry.tsx',
+      'src/components/patrol/RunToolCallTrace.tsx',
       'src/components/patrol/PatrolStatusBar.tsx',
+      'src/features/proxmox/proxmoxBackupsTableShared.tsx',
       'src/features/patrol/PatrolIntelligenceWorkspace.tsx',
     ]);
     expect(roleRule?.canonical?.path).toBe('src/components/shared/OrganizationBadges.tsx');
@@ -1637,8 +1660,42 @@ describe('shared primitive guardrails', () => {
       'rounded-full text-xs font-medium',
     ]);
     expect(patrolRunMetadataGuard?.scopes).toEqual(['src/components/patrol']);
+    expect(patrolFindingMetadataGuard?.canonical?.path).toBe(
+      'src/components/shared/MetadataBadge.tsx',
+    );
+    expect(patrolFindingMetadataGuard?.canonical?.export).toBe('MetadataBadge');
+    expect(patrolFindingMetadataGuard?.allPatterns).toEqual([
+      'px-1.5 py-0.5 border text-[10px] font-medium rounded',
+    ]);
+    expect(patrolFindingMetadataGuard?.scopes).toEqual(['src/components/AI']);
+    expect(patrolInvestigationMetadataGuard?.canonical?.path).toBe(
+      'src/components/shared/MetadataBadge.tsx',
+    );
+    expect(patrolInvestigationMetadataGuard?.canonical?.export).toBe('MetadataBadge');
+    expect(patrolInvestigationMetadataGuard?.allPatterns).toEqual([
+      'px-1.5 py-0.5 border text-[10px] font-medium rounded',
+    ]);
+    expect(patrolInvestigationMetadataGuard?.scopes).toEqual(['src/components/patrol']);
+    expect(patrolApprovalToolCallMetadataGuard?.canonical?.path).toBe(
+      'src/components/shared/MetadataBadge.tsx',
+    );
+    expect(patrolApprovalToolCallMetadataGuard?.canonical?.export).toBe('MetadataBadge');
+    expect(patrolApprovalToolCallMetadataGuard?.allPatterns).toEqual([
+      'px-1.5 py-0.5',
+      'text-[10px] font-medium rounded',
+    ]);
+    expect(patrolApprovalToolCallMetadataGuard?.scopes).toEqual(['src/components/patrol']);
+    expect(proxmoxBackupMetadataGuard?.canonical?.path).toBe(
+      'src/components/shared/MetadataBadge.tsx',
+    );
+    expect(proxmoxBackupMetadataGuard?.canonical?.export).toBe('MetadataBadge');
+    expect(proxmoxBackupMetadataGuard?.allPatterns).toEqual([
+      'rounded-sm px-1.5 py-0.5 text-[10px] font-semibold',
+    ]);
+    expect(proxmoxBackupMetadataGuard?.scopes).toEqual(['src/features/proxmox']);
 
     expect(metadataBadgeSource).toContain('METADATA_BADGE_TONE_CLASSES');
+    expect(metadataBadgeSource).toContain('MetadataBadgeAppearance');
     expect(metadataBadgeSource).toContain('getMetadataBadgeClass');
     expect(organizationBadgesSource).toContain('MetadataBadge');
     expect(organizationBadgesSource).toContain('getOrganizationRoleBadgeTone');
@@ -1685,6 +1742,41 @@ describe('shared primitive guardrails', () => {
     );
     expect(patrolIntelligenceWorkspaceSource).not.toContain(
       'ml-1.5 px-1.5 py-0.5 text-xs rounded-full',
+    );
+    expect(approvalBannerSource).toContain('MetadataBadge');
+    expect(approvalBannerSource).toContain('APPROVAL_BANNER_BADGE_PROPS');
+    expect(approvalBannerSource).not.toContain('firstApprovalRisk()!.badgeClass');
+    expect(approvalSectionSource).toContain('MetadataBadge');
+    expect(approvalSectionSource).toContain('APPROVAL_SECTION_BADGE_PROPS');
+    expect(approvalSectionSource).not.toContain('approvalRisk.badgeClass');
+    expect(approvalSectionSource).not.toContain('fixRisk.badgeClass');
+    expect(findingsPanelSource).toContain('MetadataBadge');
+    expect(findingsPanelSource).toContain('FINDING_ROW_BADGE_PROPS');
+    expect(findingsPanelSource).not.toContain(
+      'px-1.5 py-0.5 border text-[10px] font-medium rounded',
+    );
+    expect(findingsPanelSource).not.toContain('getFindingStatusBadgeClasses');
+    expect(findingsPanelSource).not.toContain('getFindingSourceBadgeClasses');
+    expect(findingsPanelSource).not.toContain('getFindingLoopStateBadgeClasses');
+    expect(findingsPanelSource).not.toContain('getInvestigationStatusBadgeClasses');
+    expect(findingsPanelSource).not.toContain('getInvestigationOutcomeBadgeClasses');
+    expect(findingsPanelSource).not.toContain('getInvestigationConfidenceBadgeClasses');
+    expect(investigationSectionSource).toContain('MetadataBadge');
+    expect(investigationSectionSource).toContain('INVESTIGATION_BADGE_PROPS');
+    expect(investigationSectionSource).not.toContain(
+      'px-1.5 py-0.5 border text-[10px] font-medium rounded',
+    );
+    expect(investigationSectionSource).not.toContain('getInvestigationStatusBadgeClasses');
+    expect(investigationSectionSource).not.toContain('getInvestigationOutcomeBadgeClasses');
+    expect(runToolCallTraceSource).toContain('MetadataBadge');
+    expect(runToolCallTraceSource).toContain('RUN_TOOL_CALL_BADGE_PROPS');
+    expect(runToolCallTraceSource).not.toContain('getToolCallResultBadgeClass');
+    expect(proxmoxBackupsTableSharedSource).toContain('MetadataBadge');
+    expect(proxmoxBackupsTableSharedSource).toContain('PROXMOX_BACKUP_METADATA_BADGE_PROPS');
+    expect(proxmoxBackupsTableSharedSource).toContain('presentation().badgeTone');
+    expect(proxmoxBackupsTableSharedSource).not.toContain('presentation().badgeClassName');
+    expect(proxmoxBackupsTableSharedSource).not.toContain(
+      'inline-flex items-center rounded-sm px-1.5 py-0.5 text-[10px] font-semibold',
     );
   });
 

@@ -6,29 +6,29 @@ import {
 } from '@/utils/approvalRiskPresentation';
 
 describe('approvalRiskPresentation', () => {
-  it('maps high and critical risk to danger styling', () => {
-    expect(getApprovalRiskPresentation('high').badgeClass).toContain('red-100');
-    expect(getApprovalRiskPresentation('critical').badgeClass).toContain('red-100');
+  it('maps high and critical risk to danger badge tone', () => {
+    expect(getApprovalRiskPresentation('high').badgeTone).toBe('danger');
+    expect(getApprovalRiskPresentation('critical').badgeTone).toBe('danger');
   });
 
-  it('maps medium risk to warning styling', () => {
-    expect(getApprovalRiskPresentation('medium').badgeClass).toContain('amber-100');
+  it('maps medium risk to warning badge tone', () => {
+    expect(getApprovalRiskPresentation('medium').badgeTone).toBe('warning');
   });
 
-  it('maps low risk to success styling', () => {
-    expect(getApprovalRiskPresentation('low').badgeClass).toContain('green-100');
+  it('maps low risk to success badge tone', () => {
+    expect(getApprovalRiskPresentation('low').badgeTone).toBe('success');
   });
 
   it('normalizes mixed-case values', () => {
     const presentation = getApprovalRiskPresentation(' High ');
     expect(presentation.label).toBe('high');
-    expect(presentation.badgeClass).toContain('red-100');
+    expect(presentation.badgeTone).toBe('danger');
   });
 
   it('falls back unknown values to a neutral badge', () => {
     const presentation = getApprovalRiskPresentation('unknown');
     expect(presentation.label).toBe('unknown');
-    expect(presentation.badgeClass).toContain('bg-surface-alt');
+    expect(presentation.badgeTone).toBe('muted');
   });
 
   it('handles missing values as unknown', () => {

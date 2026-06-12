@@ -506,11 +506,15 @@ not a replacement status card, CTA band, or page-local nested card.
    `OrganizationRoleBadge` and `OrganizationShareStatusBadge`, so role/status
    tone mapping, pill shape, fit behavior, and whitespace handling do not drift
    across organization overview, access, and sharing surfaces.
-   Patrol run-history/status-bar resource, outcome, snapshot, scoped-run,
+   Patrol finding, investigation, approval risk/state, tool-call result,
+   run-history/status-bar resource, outcome, snapshot, scoped-run,
    workspace-tab count, and contextual metadata chips must also compose
    `MetadataBadge`; Patrol remains the label/count/semantics owner, but the
    visible badge shell, sizing, tone vocabulary, and whitespace behavior stay in
    the shared primitive and `shared-template-registry.json`.
+   Proxmox backup source/state chips follow the same boundary: storage/recovery
+   owns backup-source labels and state semantics, while the visible chip shell
+   and tone vocabulary route through `MetadataBadge`.
    Inline detail content belongs to the shared detail-section primitive family.
    Feature surfaces may own the platform-specific rows, section labels, and
    source model, but section row shaping, empty-row compaction, value tone

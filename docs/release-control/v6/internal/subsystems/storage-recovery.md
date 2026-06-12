@@ -51,6 +51,8 @@ state.
 22. `frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx`
 23. `frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx`
 24. `frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx`
+25. `frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx`
+26. `frontend-modern/src/features/proxmox/proxmoxBackupSourcePresentation.ts`
 
 ## Shared Boundaries
 
@@ -88,6 +90,11 @@ queries, recovery model, filters, coverage split, and backup-specific error
 copy, but repeated loading and retry shells must compose
 `PlatformTableLoadingState` and `PlatformErrorState`; storage/recovery must not
 fork local table-card loading rows or refresh-button error empty states.
+Proxmox backup source/state chips are also a frontend-primitives boundary:
+`proxmoxBackupSourcePresentation.ts` owns backup-source labels and semantic
+badge tones, `proxmoxBackupsTableShared.tsx` owns the backup table helper
+composition, and visible source/state chips must render through `MetadataBadge`
+instead of restoring local rounded-sm xs badge spans.
 Tenant report branding settings are adjacent tenant-local configuration, not a
 storage or recovery product state. `reportBranding` persisted in a tenant
 runtime's `system.json` should be preserved by the existing tenant data

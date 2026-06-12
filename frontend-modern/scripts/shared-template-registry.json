@@ -584,11 +584,55 @@
       },
       "requiredConsumers": [
         { "path": "src/components/shared/OrganizationBadges.tsx" },
+        { "path": "src/components/AI/FindingsPanel.tsx" },
+        { "path": "src/components/patrol/ApprovalBanner.tsx" },
+        { "path": "src/components/patrol/ApprovalSection.tsx" },
+        { "path": "src/components/patrol/InvestigationSection.tsx" },
         { "path": "src/components/patrol/RunHistoryEntry.tsx" },
+        { "path": "src/components/patrol/RunToolCallTrace.tsx" },
         { "path": "src/components/patrol/PatrolStatusBar.tsx" },
+        { "path": "src/features/proxmox/proxmoxBackupsTableShared.tsx" },
         { "path": "src/features/patrol/PatrolIntelligenceWorkspace.tsx" }
       ],
       "forbiddenPatterns": [
+        {
+          "path": "src/components/AI/FindingsPanel.tsx",
+          "patterns": [
+            "px-1.5 py-0.5 border text-[10px] font-medium rounded",
+            "getFindingStatusBadgeClasses",
+            "getFindingSourceBadgeClasses",
+            "getFindingLoopStateBadgeClasses",
+            "getInvestigationStatusBadgeClasses",
+            "getInvestigationOutcomeBadgeClasses",
+            "getInvestigationConfidenceBadgeClasses"
+          ]
+        },
+        {
+          "path": "src/components/patrol/ApprovalBanner.tsx",
+          "patterns": [
+            "px-1.5 py-0.5 text-[10px] font-medium rounded",
+            "firstApprovalRisk()!.badgeClass"
+          ]
+        },
+        {
+          "path": "src/components/patrol/ApprovalSection.tsx",
+          "patterns": [
+            "px-1.5 py-0.5 text-[10px] font-medium rounded",
+            "approvalRisk.badgeClass",
+            "fixRisk.badgeClass",
+            "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"
+          ]
+        },
+        {
+          "path": "src/components/patrol/InvestigationSection.tsx",
+          "patterns": [
+            "px-1.5 py-0.5 border text-[10px] font-medium rounded",
+            "getInvestigationStatusBadgeClasses",
+            "getInvestigationOutcomeBadgeClasses",
+            "rounded border border-border bg-surface px-1.5 py-0.5 text-[10px] font-medium text-muted",
+            "rounded bg-surface px-1.5 py-0.5 text-[10px] font-medium text-muted"
+          ]
+        },
         {
           "path": "src/components/patrol/RunHistoryEntry.tsx",
           "patterns": [
@@ -597,8 +641,25 @@
           ]
         },
         {
+          "path": "src/components/patrol/RunToolCallTrace.tsx",
+          "patterns": [
+            "px-1.5 py-0.5 rounded text-[10px] font-medium",
+            "getToolCallResultBadgeClass"
+          ]
+        },
+        {
           "path": "src/components/patrol/PatrolStatusBar.tsx",
           "patterns": ["text-blue-600 dark:text-blue-400\">Findings snapshot unavailable"]
+        },
+        {
+          "path": "src/features/proxmox/proxmoxBackupsTableShared.tsx",
+          "patterns": [
+            "inline-flex items-center rounded-sm px-1.5 py-0.5 text-[10px] font-semibold",
+            "presentation().badgeClassName",
+            "rounded-sm bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold",
+            "rounded-sm bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold",
+            "rounded-sm bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold"
+          ]
         },
         {
           "path": "src/features/patrol/PatrolIntelligenceWorkspace.tsx",
@@ -1248,6 +1309,67 @@
       ]
     },
     {
+      "id": "patrol-finding-metadata-badge-local-shell",
+      "category": "metadata-badge",
+      "summary": "Patrol finding-row metadata chips must compose MetadataBadge instead of recreating local bordered xs badge spans.",
+      "canonical": {
+        "path": "src/components/shared/MetadataBadge.tsx",
+        "export": "MetadataBadge"
+      },
+      "scopes": ["src/components/AI"],
+      "extensions": [".tsx"],
+      "allPatterns": ["px-1.5 py-0.5 border text-[10px] font-medium rounded"],
+      "legacyReason": "Retired migration debt. Patrol finding row state, source, severity, investigation, confidence, and regression chips use MetadataBadge for shared shell, sizing, tone, and outline behavior.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/MetadataBadge.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "patrol-investigation-metadata-badge-local-shell",
+      "category": "metadata-badge",
+      "summary": "Patrol investigation metadata chips must compose MetadataBadge instead of recreating local bordered xs status, outcome, record, or tool badges.",
+      "canonical": {
+        "path": "src/components/shared/MetadataBadge.tsx",
+        "export": "MetadataBadge"
+      },
+      "scopes": ["src/components/patrol"],
+      "extensions": [".tsx"],
+      "allPatterns": ["px-1.5 py-0.5 border text-[10px] font-medium rounded"],
+      "legacyReason": "Retired migration debt. Patrol investigation status, outcome, durable-record, and tool chips use MetadataBadge for shared shell, sizing, tone, and outline behavior.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/patrol/__tests__/InvestigationSection.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "patrol-approval-tool-call-metadata-badge-local-shell",
+      "category": "metadata-badge",
+      "summary": "Patrol approval and tool-call metadata chips must compose MetadataBadge instead of recreating local xs risk, expiry, or result badges.",
+      "canonical": {
+        "path": "src/components/shared/MetadataBadge.tsx",
+        "export": "MetadataBadge"
+      },
+      "scopes": ["src/components/patrol"],
+      "extensions": [".tsx"],
+      "allPatterns": ["px-1.5 py-0.5", "text-[10px] font-medium rounded"],
+      "legacyReason": "Retired migration debt. Patrol approval risk, approval state, and tool-call result chips use MetadataBadge for shared shell, sizing, tone, and whitespace behavior.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/patrol/__tests__/ApprovalSection.test.tsx",
+        "src/components/patrol/__tests__/RunToolCallTrace.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "patrol-run-metadata-badge-local-shell",
       "category": "metadata-badge",
       "summary": "Patrol run-history metadata chips must compose MetadataBadge instead of recreating local rounded resource or outcome pill spans.",
@@ -1264,6 +1386,26 @@
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "src/components/shared/MetadataBadge.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "proxmox-backup-metadata-badge-local-shell",
+      "category": "metadata-badge",
+      "summary": "Proxmox backup source and state metadata chips must compose MetadataBadge instead of recreating local rounded-sm xs badge spans.",
+      "canonical": {
+        "path": "src/components/shared/MetadataBadge.tsx",
+        "export": "MetadataBadge"
+      },
+      "scopes": ["src/features/proxmox"],
+      "extensions": [".tsx"],
+      "allPatterns": ["rounded-sm px-1.5 py-0.5 text-[10px] font-semibold"],
+      "legacyReason": "Retired migration debt. Proxmox backup source/state chips use MetadataBadge for shared shell, sizing, tone vocabulary, and whitespace behavior.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/proxmox/__tests__/proxmoxBackupsTableShared.test.tsx",
         "scripts/shared-template-audit.mjs"
       ]
     },

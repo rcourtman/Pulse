@@ -1,6 +1,7 @@
 import type { UnifiedFinding } from '@/stores/aiIntelligence';
 import type { ApprovalRequest } from '@/api/ai';
 import type { InvestigationOutcome, InvestigationStatus } from '@/api/patrol';
+import type { MetadataBadgeTone } from '@/components/shared/MetadataBadge';
 import { isLivePendingApproval } from '@/utils/approvalState';
 import { getPatrolProviderSettingsAction } from '@/utils/patrolRuntimeActions';
 import { formatIdentifierLabel } from '@/utils/textPresentation';
@@ -8,6 +9,7 @@ import { formatIdentifierLabel } from '@/utils/textPresentation';
 const DEFAULT_BADGE_CLASSES = 'border-border bg-surface-alt text-muted';
 const DEFAULT_LOOP_STATE_CLASSES = 'border-border bg-surface-alt text-muted';
 const DEFAULT_FINDING_STATUS_LABEL = 'Dismissed';
+const DEFAULT_BADGE_TONE: MetadataBadgeTone = 'muted';
 
 const FINDING_SOURCE_LABELS: Record<string, string> = {
   threshold: 'Alert',
@@ -33,6 +35,15 @@ const FINDING_SOURCE_CLASSES: Record<string, string> = {
     'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900 dark:text-emerald-300',
 };
 
+const FINDING_SOURCE_TONES: Record<string, MetadataBadgeTone> = {
+  threshold: 'orange',
+  'ai-patrol': 'info',
+  anomaly: 'info',
+  'ai-chat': 'teal',
+  correlation: 'sky',
+  forecast: 'success',
+};
+
 const FINDING_SEVERITY_CLASSES: Record<string, string> = {
   critical:
     'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900 dark:text-red-300',
@@ -40,6 +51,13 @@ const FINDING_SEVERITY_CLASSES: Record<string, string> = {
     'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300',
   info: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300',
   watch: 'border-border bg-surface-alt text-base-content',
+};
+
+const FINDING_SEVERITY_TONES: Record<string, MetadataBadgeTone> = {
+  critical: 'danger',
+  warning: 'warning',
+  info: 'info',
+  watch: 'neutral',
 };
 
 const FINDING_SEVERITY_TONE_CLASSES: Record<string, string> = {
@@ -59,6 +77,14 @@ const INVESTIGATION_STATUS_CLASSES: Record<InvestigationStatus, string> = {
     'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900 dark:text-red-300',
   needs_attention:
     'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300',
+};
+
+const INVESTIGATION_STATUS_TONES: Record<InvestigationStatus, MetadataBadgeTone> = {
+  pending: 'muted',
+  running: 'info',
+  completed: 'success',
+  failed: 'danger',
+  needs_attention: 'warning',
 };
 
 const INVESTIGATION_STATUS_LABELS: Record<InvestigationStatus, string> = {
@@ -91,6 +117,20 @@ const FINDING_LOOP_STATE_CLASSES: Record<string, string> = {
   suppressed: 'border-border bg-surface-alt text-muted',
 };
 
+const FINDING_LOOP_STATE_TONES: Record<string, MetadataBadgeTone> = {
+  detected: 'info',
+  investigating: 'indigo',
+  remediation_planned: 'warning',
+  remediating: 'warning',
+  remediation_failed: 'danger',
+  needs_attention: 'warning',
+  timed_out: 'neutral',
+  resolved: 'success',
+  dismissed: 'muted',
+  snoozed: 'info',
+  suppressed: 'muted',
+};
+
 const FINDING_LIFECYCLE_LABELS: Record<string, string> = {
   detected: 'Detected',
   regressed: 'Regressed',
@@ -118,6 +158,12 @@ const FINDING_STATUS_BADGE_CLASSES: Record<string, string> = {
   snoozed:
     'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300',
   dismissed: DEFAULT_BADGE_CLASSES,
+};
+
+const FINDING_STATUS_BADGE_TONES: Record<string, MetadataBadgeTone> = {
+  resolved: 'success',
+  snoozed: 'info',
+  dismissed: 'muted',
 };
 
 const FINDING_STATUS_LABELS: Record<string, string> = {
@@ -158,6 +204,19 @@ const INVESTIGATION_OUTCOME_CLASSES: Record<InvestigationOutcome, string> = {
     'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900 dark:text-red-300',
   fix_verification_unknown:
     'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300',
+};
+
+const INVESTIGATION_OUTCOME_TONES: Record<InvestigationOutcome, MetadataBadgeTone> = {
+  resolved: 'success',
+  fix_queued: 'info',
+  fix_executed: 'success',
+  fix_failed: 'danger',
+  needs_attention: 'warning',
+  cannot_fix: 'muted',
+  timed_out: 'neutral',
+  fix_verified: 'success',
+  fix_verification_failed: 'danger',
+  fix_verification_unknown: 'warning',
 };
 
 const FINDING_SEVERITY_SORT_ORDER: Record<string, number> = {
@@ -235,6 +294,7 @@ export interface PatrolFindingsBadgePresentation {
 export interface FindingSeverityPresentation {
   label: string;
   badgeClasses: string;
+  badgeTone: MetadataBadgeTone;
   uppercase: boolean;
 }
 
@@ -249,9 +309,17 @@ export const getFindingSourceLabel = (source: UnifiedFinding['source'] | string)
 export const getFindingSourceBadgeClasses = (source: UnifiedFinding['source'] | string): string =>
   FINDING_SOURCE_CLASSES[source] || FINDING_SOURCE_CLASSES['ai-patrol'];
 
+export const getFindingSourceBadgeTone = (
+  source: UnifiedFinding['source'] | string,
+): MetadataBadgeTone => FINDING_SOURCE_TONES[source] || FINDING_SOURCE_TONES['ai-patrol'];
+
 export const getFindingSeverityBadgeClasses = (
   severity: UnifiedFinding['severity'] | string,
 ): string => FINDING_SEVERITY_CLASSES[severity] || DEFAULT_BADGE_CLASSES;
+
+export const getFindingSeverityBadgeTone = (
+  severity: UnifiedFinding['severity'] | string,
+): MetadataBadgeTone => FINDING_SEVERITY_TONES[severity] || DEFAULT_BADGE_TONE;
 
 export const getFindingSeverityPresentation = (
   finding: Pick<UnifiedFinding, 'severity' | 'resourceId' | 'resourceName' | 'title'>,
@@ -260,6 +328,7 @@ export const getFindingSeverityPresentation = (
     return {
       label: String(finding.severity),
       badgeClasses: getFindingSeverityBadgeClasses(finding.severity),
+      badgeTone: getFindingSeverityBadgeTone(finding.severity),
       uppercase: true,
     };
   }
@@ -269,6 +338,7 @@ export const getFindingSeverityPresentation = (
       label: 'Runtime critical',
       badgeClasses:
         'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900 dark:text-red-300',
+      badgeTone: 'danger',
       uppercase: false,
     };
   }
@@ -277,12 +347,16 @@ export const getFindingSeverityPresentation = (
     label: 'Runtime issue',
     badgeClasses:
       'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900 dark:text-sky-300',
+    badgeTone: 'sky',
     uppercase: false,
   };
 };
 
 export const getFindingStatusBadgeClasses = (status: string): string =>
   FINDING_STATUS_BADGE_CLASSES[status] || DEFAULT_BADGE_CLASSES;
+
+export const getFindingStatusBadgeTone = (status: string): MetadataBadgeTone =>
+  FINDING_STATUS_BADGE_TONES[status] || DEFAULT_BADGE_TONE;
 
 export const getFindingStatusLabel = (status: string): string =>
   FINDING_STATUS_LABELS[status] || DEFAULT_FINDING_STATUS_LABEL;
@@ -489,6 +563,11 @@ export const getFindingRecencyPresentation = (
 export const getInvestigationStatusBadgeClasses = (status: InvestigationStatus): string =>
   INVESTIGATION_STATUS_CLASSES[status] || DEFAULT_BADGE_CLASSES;
 
+export const getInvestigationStatusBadgeTone = (
+  status: InvestigationStatus | string,
+): MetadataBadgeTone =>
+  INVESTIGATION_STATUS_TONES[status as InvestigationStatus] || DEFAULT_BADGE_TONE;
+
 export const getInvestigationStatusLabel = (status: InvestigationStatus | string): string =>
   INVESTIGATION_STATUS_LABELS[status as InvestigationStatus] || String(status);
 
@@ -496,6 +575,11 @@ export const getInvestigationOutcomeBadgeClasses = (
   outcome: InvestigationOutcome | string,
 ): string =>
   INVESTIGATION_OUTCOME_CLASSES[outcome as InvestigationOutcome] || DEFAULT_BADGE_CLASSES;
+
+export const getInvestigationOutcomeBadgeTone = (
+  outcome: InvestigationOutcome | string,
+): MetadataBadgeTone =>
+  INVESTIGATION_OUTCOME_TONES[outcome as InvestigationOutcome] || DEFAULT_BADGE_TONE;
 
 export const getInvestigationOutcomeLabel = (outcome: InvestigationOutcome | string): string =>
   INVESTIGATION_OUTCOME_LABELS[outcome as InvestigationOutcome] || String(outcome);
@@ -509,8 +593,17 @@ const INVESTIGATION_CONFIDENCE_CLASSES: Record<string, string> = {
   low: 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-300',
 };
 
+const INVESTIGATION_CONFIDENCE_TONES: Record<string, MetadataBadgeTone> = {
+  high: 'success',
+  medium: 'neutral',
+  low: 'warning',
+};
+
 export const getInvestigationConfidenceBadgeClasses = (confidence: string): string =>
   INVESTIGATION_CONFIDENCE_CLASSES[confidence] || DEFAULT_BADGE_CLASSES;
+
+export const getInvestigationConfidenceBadgeTone = (confidence: string): MetadataBadgeTone =>
+  INVESTIGATION_CONFIDENCE_TONES[confidence] || DEFAULT_BADGE_TONE;
 
 export const getInvestigationOutcomeSortOrder = (
   outcome: InvestigationOutcome | string | undefined,
@@ -597,6 +690,9 @@ export const doesFindingNeedAttention = (
 
 export const getFindingLoopStateBadgeClasses = (loopState: string): string =>
   FINDING_LOOP_STATE_CLASSES[loopState] || DEFAULT_LOOP_STATE_CLASSES;
+
+export const getFindingLoopStateBadgeTone = (loopState: string): MetadataBadgeTone =>
+  FINDING_LOOP_STATE_TONES[loopState] || DEFAULT_BADGE_TONE;
 
 export const formatFindingLoopState = (loopState: string): string =>
   formatIdentifierLabel(loopState);

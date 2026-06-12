@@ -3,9 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { InvestigationRecord } from '@/api/ai';
 import type { Investigation } from '@/api/patrol';
 import {
-  getInvestigationOutcomeBadgeClasses,
+  getInvestigationOutcomeBadgeTone,
   getInvestigationOutcomeLabel,
-  getInvestigationStatusBadgeClasses,
+  getInvestigationStatusBadgeTone,
 } from '@/utils/aiFindingPresentation';
 import InvestigationSection from '../InvestigationSection';
 
@@ -62,7 +62,9 @@ describe('InvestigationSection', () => {
     render(() => <InvestigationSection findingId="finding-1" investigationStatus="running" />);
 
     const statusBadge = await screen.findByText('Running');
-    expect(statusBadge.className).toContain(getInvestigationStatusBadgeClasses('running'));
+    expect(getInvestigationStatusBadgeTone('running')).toBe('info');
+    expect(statusBadge.className).toContain('inline-flex');
+    expect(statusBadge.className).toContain('border-blue-200');
   });
 
   it('renders investigation outcome badges from the shared finding presentation contract', async () => {
@@ -81,9 +83,9 @@ describe('InvestigationSection', () => {
     render(() => <InvestigationSection findingId="finding-2" investigationStatus="completed" />);
 
     const outcomeBadge = await screen.findByText(getInvestigationOutcomeLabel('needs_attention'));
-    expect(outcomeBadge.className).toContain(
-      getInvestigationOutcomeBadgeClasses('needs_attention'),
-    );
+    expect(getInvestigationOutcomeBadgeTone('needs_attention')).toBe('warning');
+    expect(outcomeBadge.className).toContain('inline-flex');
+    expect(outcomeBadge.className).toContain('border-amber-200');
   });
 
   it('renders the durable Patrol investigation record through the inline investigation surface', async () => {

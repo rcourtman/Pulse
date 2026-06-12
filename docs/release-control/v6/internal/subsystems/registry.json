@@ -4984,7 +4984,9 @@
         "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts",
         "frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx",
         "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
+        "frontend-modern/src/features/proxmox/proxmoxBackupSourcePresentation.ts",
         "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+        "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx",
         "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
         "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
         "frontend-modern/src/hooks/useRecoveryPoints.ts",
@@ -5085,7 +5087,9 @@
               "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts",
               "frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx",
               "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
+              "frontend-modern/src/features/proxmox/proxmoxBackupSourcePresentation.ts",
               "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+              "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx",
               "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
               "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx"
             ],
@@ -5093,7 +5097,9 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/features/proxmox/__tests__/proxmoxBackupRecoveryModel.test.ts",
-              "frontend-modern/src/features/proxmox/__tests__/ProxmoxBackupsTable.test.tsx"
+              "frontend-modern/src/features/proxmox/__tests__/proxmoxBackupSourcePresentation.test.ts",
+              "frontend-modern/src/features/proxmox/__tests__/ProxmoxBackupsTable.test.tsx",
+              "frontend-modern/src/features/proxmox/__tests__/proxmoxBackupsTableShared.test.tsx"
             ]
           },
           {

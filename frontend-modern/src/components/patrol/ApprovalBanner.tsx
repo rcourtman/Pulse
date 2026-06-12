@@ -16,6 +16,7 @@ import {
   getApprovalExpiryStatusLabel,
   getApprovalRiskPresentation,
 } from '@/utils/approvalRiskPresentation';
+import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import ShieldAlertIcon from 'lucide-solid/icons/shield-alert';
 import CheckIcon from 'lucide-solid/icons/check';
 import XIcon from 'lucide-solid/icons/x';
@@ -23,6 +24,8 @@ import XIcon from 'lucide-solid/icons/x';
 interface ApprovalBannerProps {
   onScrollToFinding?: (findingId: string) => void;
 }
+
+const APPROVAL_BANNER_BADGE_PROPS = { size: 'xs', shape: 'rounded' } as const;
 
 export const ApprovalBanner: Component<ApprovalBannerProps> = (props) => {
   const [actionLoading, setActionLoading] = createSignal<string | null>(null);
@@ -97,11 +100,12 @@ export const ApprovalBanner: Component<ApprovalBannerProps> = (props) => {
                   <span class="text-sm font-medium text-amber-900 dark:text-amber-100">
                     Fix awaiting approval
                   </span>
-                  <span
-                    class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${firstApprovalRisk()!.badgeClass}`}
+                  <MetadataBadge
+                    {...APPROVAL_BANNER_BADGE_PROPS}
+                    tone={firstApprovalRisk()!.badgeTone}
                   >
                     {firstApprovalRisk()!.label} risk
-                  </span>
+                  </MetadataBadge>
                   <span class="text-xs text-amber-700 dark:text-amber-300">
                     {expiryStatusLabel(firstApproval()!.expiresAt)}
                   </span>

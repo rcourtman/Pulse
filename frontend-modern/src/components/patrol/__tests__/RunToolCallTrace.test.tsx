@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import runToolCallTraceSource from '../RunToolCallTrace.tsx?raw';
 import { RunToolCallTrace } from '../RunToolCallTrace';
 
 const getPatrolRunWithToolCallsMock = vi.hoisted(() => vi.fn());
@@ -15,6 +16,14 @@ describe('RunToolCallTrace', () => {
 
   afterEach(() => {
     cleanup();
+  });
+
+  it('keeps tool-call result chips on the shared MetadataBadge primitive', () => {
+    expect(runToolCallTraceSource).toContain('MetadataBadge');
+    expect(runToolCallTraceSource).toContain('RUN_TOOL_CALL_BADGE_PROPS');
+    expect(runToolCallTraceSource).toContain('getToolCallResultBadgeTone');
+    expect(runToolCallTraceSource).not.toContain('getToolCallResultBadgeClass');
+    expect(runToolCallTraceSource).not.toMatch(/px-1\.5 py-0\.5 rounded text-\[10px\] font-medium/);
   });
 
   it('loads tool calls for the selected run directly by id', async () => {

@@ -18,18 +18,26 @@ import {
 } from 'solid-js';
 import { getInvestigation, reinvestigateFinding, formatTimestamp } from '@/api/patrol';
 import {
-  getInvestigationOutcomeBadgeClasses,
+  getInvestigationConfidenceBadgeTone,
+  getInvestigationOutcomeBadgeTone,
   getInvestigationOutcomeLabel,
   getInvestigationStatusLabel,
-  getInvestigationStatusBadgeClasses,
+  getInvestigationStatusBadgeTone,
 } from '@/utils/aiFindingPresentation';
 import { getInvestigationSectionState } from '@/utils/patrolEmptyStatePresentation';
 import { buildPatrolInvestigationRecordPresentation } from '@/features/patrol/patrolInvestigationContextModel';
+import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { InvestigationMessages } from './InvestigationMessages';
 import { notificationStore } from '@/stores/notifications';
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import type { InvestigationRecord } from '@/api/ai';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
+
+const INVESTIGATION_BADGE_PROPS = {
+  appearance: 'outline',
+  size: 'xs',
+  shape: 'rounded',
+} as const;
 
 interface InvestigationSectionProps {
   findingId: string;
@@ -120,19 +128,21 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
             when={investigation()?.outcome}
             fallback={
               <Show when={investigation()?.status}>
-                <span
-                  class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${getInvestigationStatusBadgeClasses(investigation()!.status)}`}
+                <MetadataBadge
+                  {...INVESTIGATION_BADGE_PROPS}
+                  tone={getInvestigationStatusBadgeTone(investigation()!.status)}
                 >
                   {getInvestigationStatusLabel(investigation()!.status)}
-                </span>
+                </MetadataBadge>
               </Show>
             }
           >
-            <span
-              class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${getInvestigationOutcomeBadgeClasses(investigation()!.outcome!)}`}
+            <MetadataBadge
+              {...INVESTIGATION_BADGE_PROPS}
+              tone={getInvestigationOutcomeBadgeTone(investigation()!.outcome!)}
             >
               {getInvestigationOutcomeLabel(investigation()!.outcome!)}
-            </span>
+            </MetadataBadge>
           </Show>
           <Show when={props.investigationAttempts && props.investigationAttempts > 1}>
             <span class="text-[10px] text-muted">attempt {props.investigationAttempts}</span>
@@ -171,16 +181,27 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
         <div class="mb-2 rounded border border-border bg-surface-alt p-2">
           <div class="flex items-center gap-2 flex-wrap">
             <span class="text-xs font-medium text-base-content">Patrol record</span>
-            <span class="rounded border border-border bg-surface px-1.5 py-0.5 text-[10px] font-medium text-muted">
+            <MetadataBadge
+              {...INVESTIGATION_BADGE_PROPS}
+              tone={getInvestigationStatusBadgeTone(props.investigationRecord!.status)}
+            >
               {investigationRecord().statusLabel}
-            </span>
+            </MetadataBadge>
             <Show when={investigationRecord().outcomeLabel}>
-              <span class="rounded border border-border bg-surface px-1.5 py-0.5 text-[10px] font-medium text-muted">
+              <MetadataBadge
+                {...INVESTIGATION_BADGE_PROPS}
+                tone={getInvestigationOutcomeBadgeTone(props.investigationRecord!.outcome ?? '')}
+              >
                 {investigationRecord().outcomeLabel}
-              </span>
+              </MetadataBadge>
             </Show>
             <Show when={investigationRecord().confidenceLabel}>
-              <span class="text-[10px] text-muted">{investigationRecord().confidenceLabel}</span>
+              <MetadataBadge
+                {...INVESTIGATION_BADGE_PROPS}
+                tone={getInvestigationConfidenceBadgeTone(props.investigationRecord!.confidence ?? '')}
+              >
+                {investigationRecord().confidenceLabel}
+              </MetadataBadge>
             </Show>
           </div>
 
@@ -278,9 +299,9 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
             <div class="mt-2 flex flex-wrap gap-1">
               <For each={investigationRecord().toolsUsed}>
                 {(tool) => (
-                  <span class="rounded bg-surface px-1.5 py-0.5 text-[10px] font-medium text-muted">
+                  <MetadataBadge tone="muted" size="xs" shape="rounded">
                     {tool}
-                  </span>
+                  </MetadataBadge>
                 )}
               </For>
             </div>
@@ -327,9 +348,9 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
                 <div class="flex items-center gap-1 flex-wrap">
                   <For each={inv().tools_used}>
                     {(tool) => (
-                      <span class="px-1.5 py-0.5 rounded text-base-content text-[10px] font-medium">
+                      <MetadataBadge tone="neutral" size="xs" shape="rounded">
                         {tool}
-                      </span>
+                      </MetadataBadge>
                     )}
                   </For>
                 </div>

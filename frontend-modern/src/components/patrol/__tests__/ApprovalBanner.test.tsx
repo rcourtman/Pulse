@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import approvalBannerSource from '../ApprovalBanner.tsx?raw';
 import ApprovalBanner from '../ApprovalBanner';
 import type { ApprovalRequest } from '@/api/ai';
 import type { UnifiedFinding } from '@/stores/aiIntelligence';
@@ -43,6 +44,14 @@ describe('ApprovalBanner', () => {
   afterEach(() => {
     cleanup();
     vi.useRealTimers();
+  });
+
+  it('keeps approval risk chips on the shared MetadataBadge primitive', () => {
+    expect(approvalBannerSource).toContain('MetadataBadge');
+    expect(approvalBannerSource).toContain('APPROVAL_BANNER_BADGE_PROPS');
+    expect(approvalBannerSource).toContain('firstApprovalRisk()!.badgeTone');
+    expect(approvalBannerSource).not.toContain('firstApprovalRisk()!.badgeClass');
+    expect(approvalBannerSource).not.toMatch(/px-1\.5 py-0\.5 text-\[10px\] font-medium rounded/);
   });
 
   it('reviews the first approval-linked finding in canonical urgency order', () => {

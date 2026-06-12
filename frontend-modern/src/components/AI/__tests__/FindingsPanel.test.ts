@@ -20,22 +20,28 @@ import {
   getFindingResolutionReason,
   getFindingRecencyPresentation,
   getFindingLoopStateBadgeClasses,
+  getFindingLoopStateBadgeTone,
   getFindingSeverityBadgeClasses,
   getFindingSeverityPresentation,
   getFindingStatusBadgeClasses,
+  getFindingStatusBadgeTone,
   getFindingStatusLabel,
   getFindingSeverityToneClasses,
   getPatrolFindingsBadgePresentation,
   getFindingSourceBadgeClasses,
+  getFindingSourceBadgeTone,
   getFindingSourceLabel,
   hasFindingInvestigationDetails,
   hasPendingInvestigationFixApproval,
   isPatrolInvestigationFixApproval,
   getInvestigationOutcomeBadgeClasses,
+  getInvestigationOutcomeBadgeTone,
   getInvestigationOutcomeLabel,
   getInvestigationOutcomeSortOrder,
   getInvestigationStatusLabel,
   getInvestigationStatusBadgeClasses,
+  getInvestigationStatusBadgeTone,
+  getInvestigationConfidenceBadgeTone,
   doesFindingNeedAttention,
 } from '@/utils/aiFindingPresentation';
 import { PATROL_PROVIDER_SETTINGS_ACTION } from '@/utils/patrolRuntimeActions';
@@ -102,7 +108,7 @@ describe('FindingsPanel assistant handoff', () => {
     // operators without expanding the card. The badge sits next to the
     // investigation outcome badge so trust can be scanned in the row.
     expect(findingsPanelSource).toContain('finding.investigationRecord?.confidence');
-    expect(findingsPanelSource).toContain('getInvestigationConfidenceBadgeClasses');
+    expect(findingsPanelSource).toContain('getInvestigationConfidenceBadgeTone');
     expect(findingsPanelSource).toContain('confidence');
   });
 
@@ -362,6 +368,7 @@ describe('aiFindingPresentation', () => {
       ).toEqual({
         label: 'warning',
         badgeClasses: getFindingSeverityBadgeClasses('warning'),
+        badgeTone: 'warning',
         uppercase: true,
       });
     });
@@ -378,6 +385,7 @@ describe('aiFindingPresentation', () => {
         label: 'Runtime issue',
         badgeClasses:
           'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-900 dark:text-sky-300',
+        badgeTone: 'sky',
         uppercase: false,
       });
     });
@@ -418,9 +426,13 @@ describe('aiFindingPresentation', () => {
   describe('findingStatusPresentation', () => {
     it('returns canonical badge classes', () => {
       expect(getFindingStatusBadgeClasses('resolved')).toContain('green');
+      expect(getFindingStatusBadgeTone('resolved')).toBe('success');
       expect(getFindingStatusBadgeClasses('snoozed')).toContain('blue');
+      expect(getFindingStatusBadgeTone('snoozed')).toBe('info');
       expect(getFindingStatusBadgeClasses('dismissed')).toContain('bg-surface-alt');
+      expect(getFindingStatusBadgeTone('dismissed')).toBe('muted');
       expect(getFindingStatusBadgeClasses('unexpected')).toContain('bg-surface-alt');
+      expect(getFindingStatusBadgeTone('unexpected')).toBe('muted');
     });
 
     it('returns canonical labels', () => {
@@ -778,12 +790,17 @@ describe('aiFindingPresentation', () => {
       expect(findingsPanelSource).toContain('{formatTime(recency.timestamp)}');
     });
 
-    it('routes row badges through the shared severity presentation helper', () => {
+    it('routes row badges through shared metadata badge primitives', () => {
       expect(findingsPanelSource).toContain(
         'const severityPresentation = getFindingSeverityPresentation(finding);',
       );
-      expect(findingsPanelSource).toContain('severityPresentation.badgeClasses');
+      expect(findingsPanelSource).toContain('MetadataBadge');
+      expect(findingsPanelSource).toContain('FINDING_ROW_BADGE_PROPS');
+      expect(findingsPanelSource).toContain('severityPresentation.badgeTone');
       expect(findingsPanelSource).toContain('severityPresentation.label');
+      expect(findingsPanelSource).not.toContain(
+        'px-1.5 py-0.5 border text-[10px] font-medium rounded',
+      );
     });
 
     it('routes visible finding titles through the shared title presentation helper', () => {
@@ -806,32 +823,39 @@ describe('aiFindingPresentation', () => {
   describe('sourceColors', () => {
     it('has threshold color', () => {
       expect(getFindingSourceBadgeClasses('threshold')).toContain('orange');
+      expect(getFindingSourceBadgeTone('threshold')).toBe('orange');
     });
 
     it('has ai-patrol color', () => {
       expect(getFindingSourceBadgeClasses('ai-patrol')).toContain('blue');
+      expect(getFindingSourceBadgeTone('ai-patrol')).toBe('info');
     });
 
     it('has ai-chat color', () => {
       expect(getFindingSourceBadgeClasses('ai-chat')).toContain('teal');
+      expect(getFindingSourceBadgeTone('ai-chat')).toBe('teal');
     });
   });
 
   describe('investigationStatusColors', () => {
     it('has pending color', () => {
       expect(getInvestigationStatusBadgeClasses('pending')).toContain('bg-surface-alt');
+      expect(getInvestigationStatusBadgeTone('pending')).toBe('muted');
     });
 
     it('has running color', () => {
       expect(getInvestigationStatusBadgeClasses('running')).toContain('blue');
+      expect(getInvestigationStatusBadgeTone('running')).toBe('info');
     });
 
     it('has completed color', () => {
       expect(getInvestigationStatusBadgeClasses('completed')).toContain('green');
+      expect(getInvestigationStatusBadgeTone('completed')).toBe('success');
     });
 
     it('has failed color', () => {
       expect(getInvestigationStatusBadgeClasses('failed')).toContain('red');
+      expect(getInvestigationStatusBadgeTone('failed')).toBe('danger');
     });
 
     it('returns canonical status labels', () => {
@@ -847,11 +871,16 @@ describe('aiFindingPresentation', () => {
     it('returns canonical outcome labels and badge classes', () => {
       expect(getInvestigationOutcomeLabel('fix_verified')).toBe('Fix verified');
       expect(getInvestigationOutcomeBadgeClasses('fix_failed')).toContain('red');
+      expect(getInvestigationOutcomeBadgeTone('fix_failed')).toBe('danger');
       expect(getInvestigationOutcomeBadgeClasses('cannot_fix')).toContain('bg-surface-alt');
+      expect(getInvestigationOutcomeBadgeTone('cannot_fix')).toBe('muted');
       expect(getInvestigationOutcomeSortOrder('fix_failed')).toBe(0);
       expect(getInvestigationOutcomeSortOrder('needs_attention')).toBe(1);
       expect(getInvestigationOutcomeSortOrder('fix_queued')).toBe(2);
       expect(getInvestigationOutcomeSortOrder(undefined)).toBe(3);
+      expect(getInvestigationConfidenceBadgeTone('high')).toBe('success');
+      expect(getInvestigationConfidenceBadgeTone('medium')).toBe('neutral');
+      expect(getInvestigationConfidenceBadgeTone('low')).toBe('warning');
     });
 
     it('treats any investigation metadata as enough to render investigation details', () => {
@@ -961,14 +990,17 @@ describe('aiFindingPresentation', () => {
   describe('loopStateColors', () => {
     it('has detected color', () => {
       expect(getFindingLoopStateBadgeClasses('detected')).toContain('blue');
+      expect(getFindingLoopStateBadgeTone('detected')).toBe('info');
     });
 
     it('has resolved color', () => {
       expect(getFindingLoopStateBadgeClasses('resolved')).toContain('green');
+      expect(getFindingLoopStateBadgeTone('resolved')).toBe('success');
     });
 
     it('has remediation_failed color', () => {
       expect(getFindingLoopStateBadgeClasses('remediation_failed')).toContain('red');
+      expect(getFindingLoopStateBadgeTone('remediation_failed')).toBe('danger');
     });
   });
 

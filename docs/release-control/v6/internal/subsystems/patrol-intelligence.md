@@ -973,6 +973,24 @@ That same finding row should avoid redundant state stacking. When an active
 finding is already explicitly marked `Acknowledged`, the UI should not also add
 the baseline `detected` loop-state badge beside it; loop-state badges only add
 value there when they communicate a more specific Patrol state.
+Collapsed finding-row badges now follow the shared metadata badge boundary:
+`frontend-modern/src/utils/aiFindingPresentation.ts` owns Patrol-specific
+status/source/severity/investigation/confidence state-to-tone mapping, while
+`frontend-modern/src/components/AI/FindingsPanel.tsx` renders those chips
+through `MetadataBadge` with the shared outlined compact appearance. New
+finding-row badges must extend the Patrol presentation helper and
+`MetadataBadge` tone vocabulary rather than restoring local bordered xs spans.
+The inline investigation surface follows the same boundary:
+`frontend-modern/src/components/patrol/InvestigationSection.tsx` must compose
+`MetadataBadge` for live investigation status/outcome chips, durable Patrol
+record status/outcome/confidence chips, and tool metadata chips. Patrol may
+derive labels in `patrolInvestigationContextModel.ts` and tones in
+`aiFindingPresentation.ts`, but the visible chip shell stays primitive-owned.
+Approval and run tool-call detail chips follow the same rule:
+`frontend-modern/src/utils/approvalRiskPresentation.ts` and
+`frontend-modern/src/utils/patrolRunPresentation.ts` own risk/result labels and
+semantic badge tones, while `ApprovalBanner`, `ApprovalSection`, and
+`RunToolCallTrace` render those chips through `MetadataBadge`.
 When Patrol is currently running, that strip should still stay factual rather
 than switching to another verdict label: the runtime may add an explicit
 in-progress indicator, but the primary activity label remains recent activity

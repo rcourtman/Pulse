@@ -4,6 +4,7 @@ import ArrowUpIcon from 'lucide-solid/icons/arrow-up';
 import ArrowUpDownIcon from 'lucide-solid/icons/arrow-up-down';
 import { filterChipStatusDot } from '@/components/shared/FilterBar';
 import { type FilterOption } from '@/components/shared/FilterButtonGroup';
+import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { TableHead } from '@/components/shared/Table';
 import { WorkloadTypeBadge as SharedWorkloadTypeBadge } from '@/components/shared/WorkloadTypeBadge';
@@ -30,6 +31,8 @@ import type {
 // restore-points, source-detail, and job-history tables. Kept separate from
 // the orchestrating ProxmoxBackupsTable so each sub-view can import only what
 // it renders.
+
+const PROXMOX_BACKUP_METADATA_BADGE_PROPS = { size: 'xs', shape: 'rounded' } as const;
 
 export const PROXMOX_BACKUP_COLUMN_LABELS = {
   targetId: 'Target ID',
@@ -243,33 +246,37 @@ export function artifactStateLabel(artifact: RecoverableArtifact): string {
 export function ArtifactStateBadge(props: { artifact: RecoverableArtifact; label: string }) {
   if (props.artifact.sourceKind === 'snapshot') {
     return (
-      <span class="inline-flex items-center rounded-sm bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 dark:bg-violet-900/40 dark:text-violet-200">
+      <MetadataBadge {...PROXMOX_BACKUP_METADATA_BADGE_PROPS} tone="indigo">
         {props.label}
-      </span>
+      </MetadataBadge>
     );
   }
   if (props.artifact.protected) {
     return (
-      <span class="inline-flex items-center rounded-sm bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-900/40 dark:text-amber-200">
+      <MetadataBadge {...PROXMOX_BACKUP_METADATA_BADGE_PROPS} tone="warning">
         {props.label}
-      </span>
+      </MetadataBadge>
     );
   }
   if (props.artifact.verified === true) {
     return (
-      <span class="inline-flex items-center rounded-sm bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200">
+      <MetadataBadge {...PROXMOX_BACKUP_METADATA_BADGE_PROPS} tone="success">
         {props.label}
-      </span>
+      </MetadataBadge>
     );
   }
   if (props.artifact.verified === false) {
     return (
-      <span class="inline-flex items-center rounded-sm bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-900/40 dark:text-amber-200">
+      <MetadataBadge {...PROXMOX_BACKUP_METADATA_BADGE_PROPS} tone="warning">
         {props.label}
-      </span>
+      </MetadataBadge>
     );
   }
-  return <span class="text-muted">{props.label}</span>;
+  return (
+    <MetadataBadge {...PROXMOX_BACKUP_METADATA_BADGE_PROPS} tone="muted">
+      {props.label}
+    </MetadataBadge>
+  );
 }
 
 export function ArtifactSourceBadge(props: { artifact: RecoverableArtifact }) {
@@ -277,12 +284,13 @@ export function ArtifactSourceBadge(props: { artifact: RecoverableArtifact }) {
   const title = () => props.artifact.sourceTitle ?? presentation().sourceTitle;
 
   return (
-    <span
-      class={`inline-flex items-center rounded-sm px-1.5 py-0.5 text-[10px] font-semibold ${presentation().badgeClassName}`}
+    <MetadataBadge
+      {...PROXMOX_BACKUP_METADATA_BADGE_PROPS}
+      tone={presentation().badgeTone}
       title={title()}
     >
       {props.artifact.sourceLabel}
-    </span>
+    </MetadataBadge>
   );
 }
 

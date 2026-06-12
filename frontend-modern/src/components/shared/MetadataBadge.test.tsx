@@ -32,4 +32,19 @@ describe('MetadataBadge', () => {
       'shrink-0',
     );
   });
+
+  it('owns outlined badge appearance for compact metadata rows', () => {
+    const badgeClass = getMetadataBadgeClass({
+      tone: 'orange',
+      appearance: 'outline',
+      size: 'xs',
+      shape: 'rounded',
+    });
+
+    expect(badgeClass).toContain('border');
+    expect(badgeClass).toContain('border-orange-200');
+    expect(badgeClass).toContain('bg-orange-50');
+    expect(badgeClass).toContain('text-orange-700');
+    expect(badgeClass).toContain('text-[10px]');
+  });
 });

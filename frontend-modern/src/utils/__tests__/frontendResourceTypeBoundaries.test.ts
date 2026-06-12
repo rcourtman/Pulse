@@ -308,6 +308,8 @@ import storageGroupPresentationSource from '@/features/storageBackups/groupPrese
 import storageFilterPresentationSource from '@/features/storageBackups/storageFilterPresentation.ts?raw';
 import storageRowAlertPresentationSource from '@/features/storageBackups/storageRowAlertPresentation.ts?raw';
 import storagePoolsTablePresentationSource from '@/features/storageBackups/storagePoolsTablePresentation.ts?raw';
+import proxmoxBackupSourcePresentationSource from '@/features/proxmox/proxmoxBackupSourcePresentation.ts?raw';
+import proxmoxBackupsTableSharedSource from '@/features/proxmox/proxmoxBackupsTableShared.tsx?raw';
 import zfsPresentationSource from '@/features/storageBackups/zfsPresentation.ts?raw';
 import storageAdaptersSource from '@/features/storageBackups/storageAdapters.ts?raw';
 import alertsPageSource from '@/pages/Alerts.tsx?raw';
@@ -446,6 +448,8 @@ import ssoProvidersModelSource from '@/components/Settings/ssoProvidersModel.ts?
 import ssoProviderPresentationSource from '@/utils/ssoProviderPresentation.ts?raw';
 import userAssignmentsPanelSource from '@/components/Settings/UserAssignmentsPanel.tsx?raw';
 import userAssignmentsPanelStateSource from '@/components/Settings/useUserAssignmentsPanelState.ts?raw';
+import approvalBannerSource from '@/components/patrol/ApprovalBanner.tsx?raw';
+import approvalSectionSource from '@/components/patrol/ApprovalSection.tsx?raw';
 import investigationMessagesSource from '@/components/patrol/InvestigationMessages.tsx?raw';
 import investigationSectionSource from '@/components/patrol/InvestigationSection.tsx?raw';
 import runHistoryPanelSource from '@/components/patrol/RunHistoryPanel.tsx?raw';
@@ -479,6 +483,7 @@ import systemLogsPanelSource from '@/components/Settings/SystemLogsPanel.tsx?raw
 import systemLogsPanelStateSource from '@/components/Settings/useSystemLogsPanelState.ts?raw';
 import systemLogsPresentationSource from '@/utils/systemLogsPresentation.ts?raw';
 import patrolEmptyStatePresentationSource from '@/utils/patrolEmptyStatePresentation.ts?raw';
+import approvalRiskPresentationSource from '@/utils/approvalRiskPresentation.ts?raw';
 import patrolRunPresentationSource from '@/utils/patrolRunPresentation.ts?raw';
 import patrolSummaryPresentationSource from '@/utils/patrolSummaryPresentation.ts?raw';
 import aiCostDashboardSource from '@/components/AI/AICostDashboard.tsx?raw';
@@ -1394,6 +1399,12 @@ describe('frontend resource type boundaries', () => {
     expect(storageRowPresentationSource).toContain(
       'export function getCompactStoragePoolProtectionTitle',
     );
+    expect(proxmoxBackupSourcePresentationSource).toContain('badgeTone: MetadataBadgeTone');
+    expect(proxmoxBackupSourcePresentationSource).not.toContain('badgeClassName: string');
+    expect(proxmoxBackupsTableSharedSource).toContain('MetadataBadge');
+    expect(proxmoxBackupsTableSharedSource).toContain('PROXMOX_BACKUP_METADATA_BADGE_PROPS');
+    expect(proxmoxBackupsTableSharedSource).toContain('presentation().badgeTone');
+    expect(proxmoxBackupsTableSharedSource).not.toContain('presentation().badgeClassName');
     expect(storageGroupRowSource).toContain("from '@/features/storageBackups/groupPresentation'");
     expect(storageGroupRowSource).toContain('buildStorageGroupRowPresentation');
     expect(storageGroupRowSource).toContain('STORAGE_GROUP_ROW_CLASS');
@@ -1994,11 +2005,11 @@ describe('frontend resource type boundaries', () => {
     expect(securityWarningSource).not.toContain(
       "status()!.credentialsEncrypted ? 'text-green-600' : 'text-red-600'",
     );
-    expect(findingsPanelSource).toContain('getFindingStatusBadgeClasses');
+    expect(findingsPanelSource).toContain('getFindingStatusBadgeTone');
     expect(findingsPanelSource).toContain('getFindingStatusLabel');
     expect(findingsPanelSource).toContain('getFindingSeveritySortOrder');
     expect(findingsPanelSource).toContain('getInvestigationOutcomeSortOrder');
-    expect(findingsPanelSource).toContain('getInvestigationOutcomeBadgeClasses');
+    expect(findingsPanelSource).toContain('getInvestigationOutcomeBadgeTone');
     expect(findingsPanelSource).toContain('getInvestigationOutcomeLabel');
     expect(findingsPanelSource).toContain('getInvestigationStatusLabel');
     expect(findingsPanelSource).toContain('hasFindingInvestigationDetails');
@@ -2017,11 +2028,15 @@ describe('frontend resource type boundaries', () => {
     expect(findingsPanelSource).not.toContain('No active findings');
     expect(findingsPanelSource).not.toContain('No pending approvals.');
     expect(aiFindingPresentationSource).toContain('export const getFindingStatusBadgeClasses');
+    expect(aiFindingPresentationSource).toContain('export const getFindingStatusBadgeTone');
     expect(aiFindingPresentationSource).toContain('export const getFindingStatusLabel');
     expect(aiFindingPresentationSource).toContain('export const getFindingSeveritySortOrder');
     expect(aiFindingPresentationSource).toContain('export const getFindingSeverityCompactLabel');
     expect(aiFindingPresentationSource).toContain(
       'export const getInvestigationOutcomeBadgeClasses',
+    );
+    expect(aiFindingPresentationSource).toContain(
+      'export const getInvestigationOutcomeBadgeTone',
     );
     expect(aiFindingPresentationSource).toContain('export const getInvestigationOutcomeLabel');
     expect(aiFindingPresentationSource).toContain('export const getInvestigationStatusLabel');
@@ -2030,12 +2045,23 @@ describe('frontend resource type boundaries', () => {
     expect(aiFindingPresentationSource).toContain('export const getFindingResolutionReason');
     expect(aiFindingPresentationSource).toContain('export const buildFindingFilterOptions');
     expect(aiFindingPresentationSource).toContain('export const getFindingEmptyStateCopy');
-    expect(investigationSectionSource).toContain('getInvestigationOutcomeBadgeClasses');
+    expect(investigationSectionSource).toContain('getInvestigationOutcomeBadgeTone');
     expect(investigationSectionSource).toContain('getInvestigationOutcomeLabel');
     expect(investigationSectionSource).toContain('getInvestigationStatusLabel');
+    expect(investigationSectionSource).toContain('getInvestigationStatusBadgeTone');
+    expect(investigationSectionSource).toContain('MetadataBadge');
     expect(investigationSectionSource).not.toContain('investigationStatusLabels');
     expect(investigationSectionSource).not.toContain('investigationOutcomeLabels');
     expect(investigationSectionSource).not.toContain('investigationOutcomeColors');
+    expect(approvalRiskPresentationSource).toContain('badgeTone: MetadataBadgeTone');
+    expect(approvalRiskPresentationSource).not.toContain('badgeClass: string');
+    expect(approvalBannerSource).toContain('MetadataBadge');
+    expect(approvalBannerSource).toContain('APPROVAL_BANNER_BADGE_PROPS');
+    expect(approvalBannerSource).not.toContain('firstApprovalRisk()!.badgeClass');
+    expect(approvalSectionSource).toContain('MetadataBadge');
+    expect(approvalSectionSource).toContain('APPROVAL_SECTION_BADGE_PROPS');
+    expect(approvalSectionSource).not.toContain('approvalRisk.badgeClass');
+    expect(approvalSectionSource).not.toContain('fixRisk.badgeClass');
     expect(securityWarningSource).not.toContain('bg-red-50 dark:bg-red-900');
     expect(securityScorePresentationSource).toContain(
       'export function getSecurityScorePresentation',
@@ -3664,6 +3690,9 @@ describe('frontend resource type boundaries', () => {
     expect(runHistoryPanelSource).not.toContain('Loading run history…');
     expect(runToolCallTraceSource).toContain('getToolCallsLoadingState');
     expect(runToolCallTraceSource).toContain('getToolCallsUnavailableState');
+    expect(runToolCallTraceSource).toContain('MetadataBadge');
+    expect(runToolCallTraceSource).toContain('getToolCallResultBadgeTone');
+    expect(runToolCallTraceSource).not.toContain('getToolCallResultBadgeClass');
     expect(runToolCallTraceSource).not.toContain('Loading tool calls...');
     expect(runToolCallTraceSource).not.toContain('Tool call details not available for this run.');
     expect(patrolEmptyStatePresentationSource).toContain(
@@ -3679,6 +3708,8 @@ describe('frontend resource type boundaries', () => {
     expect(patrolRunPresentationSource).toContain('export function getRunHistoryLoadingState');
     expect(patrolRunPresentationSource).toContain('export function getToolCallsLoadingState');
     expect(patrolRunPresentationSource).toContain('export function getToolCallsUnavailableState');
+    expect(patrolRunPresentationSource).toContain('export function getToolCallResultBadgeTone');
+    expect(patrolRunPresentationSource).not.toContain('export function getToolCallResultBadgeClass');
     expect(systemLogsPanelSource).toContain('getSystemLogLineClass');
     expect(systemLogsPanelSource).toContain('getSystemLogBufferSummary');
     expect(systemLogsPanelSource).toContain('getSystemLogStreamPresentation');

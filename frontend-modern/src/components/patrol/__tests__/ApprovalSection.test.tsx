@@ -99,6 +99,16 @@ describe('ApprovalSection', () => {
     expect(approvalSectionSource).not.toContain('commercialPosture');
   });
 
+  it('keeps approval metadata chips on the shared MetadataBadge primitive', () => {
+    expect(approvalSectionSource).toContain('MetadataBadge');
+    expect(approvalSectionSource).toContain('APPROVAL_SECTION_BADGE_PROPS');
+    expect(approvalSectionSource).toContain('approvalRisk.badgeTone');
+    expect(approvalSectionSource).toContain('fixRisk.badgeTone');
+    expect(approvalSectionSource).not.toContain('approvalRisk.badgeClass');
+    expect(approvalSectionSource).not.toContain('fixRisk.badgeClass');
+    expect(approvalSectionSource).not.toMatch(/px-1\.5 py-0\.5 text-\[10px\] font-medium rounded/);
+  });
+
   it('keeps fix_queued findings actionable when approval and investigation details are unavailable', async () => {
     getInvestigationMock.mockResolvedValue(null);
 

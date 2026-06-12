@@ -11,23 +11,27 @@ describe('proxmoxBackupSourcePresentation', () => {
     expect(PROXMOX_BACKUP_SOURCE_KINDS).toEqual(['pbs', 'archive', 'snapshot']);
 
     expect(getProxmoxBackupSourcePresentation('pbs')).toMatchObject({
+      badgeTone: 'sky',
       badgeLabel: 'PBS',
       coverageColumnLabel: 'Latest PBS',
       filterLabel: 'PBS snapshots',
       timelineLabel: 'PBS snapshots',
     });
     expect(getProxmoxBackupSourcePresentation('archive')).toMatchObject({
+      badgeTone: 'info',
       badgeLabel: 'PVE file',
       coverageColumnLabel: 'Latest PVE file',
       filterLabel: 'PVE backup files',
       timelineLabel: 'PVE backup files',
     });
     expect(getProxmoxBackupSourcePresentation('snapshot')).toMatchObject({
+      badgeTone: 'indigo',
       badgeLabel: 'Snapshot',
       coverageColumnLabel: 'Latest snapshot',
       filterLabel: 'Guest snapshots',
       timelineLabel: 'Guest snapshots',
     });
+    expect(getProxmoxBackupSourcePresentation('pbs')).not.toHaveProperty('badgeClassName');
   });
 
   it('explains PVE file rows without making them look like direct PBS rows', () => {

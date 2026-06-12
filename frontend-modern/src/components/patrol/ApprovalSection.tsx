@@ -11,6 +11,7 @@ import { notificationStore } from '@/stores/notifications';
 import { aiChatStore } from '@/stores/aiChat';
 import { hasFeature } from '@/stores/license';
 import { AIAPI, type ApprovalRequest, type ApprovalExecutionResult } from '@/api/ai';
+import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { getApprovalRiskPresentation } from '@/utils/approvalRiskPresentation';
 import {
   buildPatrolAssistantFindingHandoff,
@@ -28,6 +29,8 @@ interface ApprovalSectionProps {
   resourceType?: string;
   resourceId?: string;
 }
+
+const APPROVAL_SECTION_BADGE_PROPS = { size: 'xs', shape: 'rounded' } as const;
 
 export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
   const [actionLoading, setActionLoading] = createSignal<string | null>(null);
@@ -297,11 +300,12 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                     />
                   </svg>
                   <span class="text-sm font-medium text-base-content">Fix Available</span>
-                  <span
-                    class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${approvalRisk.badgeClass}`}
+                  <MetadataBadge
+                    {...APPROVAL_SECTION_BADGE_PROPS}
+                    tone={approvalRisk.badgeTone}
                   >
                     {approvalRisk.label} risk
-                  </span>
+                  </MetadataBadge>
                 </div>
                 <div class="space-y-2 text-sm">
                   <div class="text-muted">{approval.context}</div>
@@ -396,14 +400,12 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                     />
                   </svg>
                   <span class="text-sm font-medium text-base-content">Fix Pending Approval</span>
-                  <span
-                    class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${fixRisk.badgeClass}`}
-                  >
+                  <MetadataBadge {...APPROVAL_SECTION_BADGE_PROPS} tone={fixRisk.badgeTone}>
                     {fixRisk.label} risk
-                  </span>
-                  <span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
+                  </MetadataBadge>
+                  <MetadataBadge {...APPROVAL_SECTION_BADGE_PROPS} tone="warning">
                     approval expired
-                  </span>
+                  </MetadataBadge>
                 </div>
                 <div class="space-y-2 text-sm">
                   <div class="text-muted">{fix.description}</div>
@@ -442,9 +444,9 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                 />
               </svg>
               <span class="text-sm font-medium text-base-content">Fix Pending Approval</span>
-              <span class="px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
+              <MetadataBadge {...APPROVAL_SECTION_BADGE_PROPS} tone="warning">
                 details unavailable
-              </span>
+              </MetadataBadge>
             </div>
             <div class="space-y-2 text-sm">
               <div class="text-muted">

@@ -1,4 +1,5 @@
 import type { PatrolRunRecord, PatrolRunStatus, PatrolTriggerStatus } from '@/api/patrol';
+import type { MetadataBadgeTone } from '@/components/shared/MetadataBadge';
 import { formatIdentifierLabel } from '@/utils/textPresentation';
 import { getCanonicalScopeResourceIds } from '@/utils/patrolFormat';
 import {
@@ -142,10 +143,8 @@ export function getPatrolRunStatusPresentation(
   }
 }
 
-export function getToolCallResultBadgeClass(success: boolean): string {
-  return success
-    ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-    : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300';
+export function getToolCallResultBadgeTone(success: boolean): MetadataBadgeTone {
+  return success ? 'success' : 'danger';
 }
 
 export function getToolCallResultTextClass(success: boolean): string {
