@@ -257,11 +257,18 @@ export const DockerContainersTable: Component<DockerNativeTableProps> = (props) 
         typeof resource.docker?.restartCount === 'number' && resource.docker.restartCount > 0,
     ),
   );
+  const showStateColumn = createMemo(() =>
+    scopedRows().some((resource) => {
+      const state = asTrimmedString(resource.docker?.containerState || resource.status);
+      return !!state && state.toLowerCase() !== 'running';
+    }),
+  );
   const visibleColumns = createMemo(() =>
     getDockerContainerVisibleColumnsForLayout(
       layoutMode(),
       showRuntimeColumn(),
       showRestartColumn(),
+      showStateColumn(),
     ),
   );
   const visibleColumnIds = createMemo(() => visibleColumns().map((column) => column.id));

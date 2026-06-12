@@ -118,11 +118,13 @@ export const getDockerContainerVisibleColumnsForLayout = (
   layoutMode: WorkloadTableLayoutMode,
   includeRuntime: boolean,
   includeRestarts: boolean,
+  includeState: boolean,
 ): DockerContainerTableColumn[] => {
   const layoutRank = DOCKER_CONTAINER_TABLE_LAYOUT_ORDER[layoutMode];
   return DOCKER_CONTAINER_COLUMNS.filter((column) => {
     if (column.id === 'runtime' && !includeRuntime) return false;
     if (column.id === 'restarts' && !includeRestarts) return false;
+    if (column.id === 'state' && !includeState) return false;
     return (
       DOCKER_CONTAINER_TABLE_LAYOUT_ORDER[DOCKER_CONTAINER_COLUMN_MIN_LAYOUT[column.id]] <=
       layoutRank

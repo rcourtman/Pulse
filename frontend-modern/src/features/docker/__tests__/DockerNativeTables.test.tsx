@@ -171,6 +171,7 @@ describe('Docker native tables', () => {
     expect(screen.getByText('Restarts')).toBeInTheDocument();
     expect(screen.getByText('Updates')).toBeInTheDocument();
     expect(screen.queryByText('Health')).not.toBeInTheDocument();
+    expect(screen.queryByText('State')).not.toBeInTheDocument();
     expect(screen.getByText('edge-web')).toBeInTheDocument();
     expect(screen.getByText('edge-01')).toBeInTheDocument();
     expect(screen.getByText('docker 27.5.1')).toBeInTheDocument();
@@ -276,6 +277,46 @@ describe('Docker native tables', () => {
     expect(screen.queryByText('Restarts')).not.toBeInTheDocument();
   });
 
+  it('shows the State column when any current container is not running', () => {
+    setViewportWidth(1500);
+
+    renderInRouter(() => (
+      <DockerContainersTable
+        resources={[
+          makeResource({
+            id: 'container-1',
+            type: 'app-container',
+            name: 'edge-web',
+            status: 'running',
+            docker: {
+              hostname: 'edge-01',
+              image: 'nginx:latest',
+              containerState: 'running',
+            },
+          }),
+          makeResource({
+            id: 'container-2',
+            type: 'app-container',
+            name: 'edge-cache',
+            status: 'offline',
+            docker: {
+              hostname: 'edge-02',
+              image: 'redis:7.4',
+              containerState: 'exited',
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No containers"
+        emptyDescription="No containers"
+        showToolbar={false}
+      />
+    ));
+
+    expect(screen.getByText('State')).toBeInTheDocument();
+    expect(screen.getByText('exited')).toBeInTheDocument();
+  });
+
   it('renders actionable Docker container updates with native agent and container IDs', async () => {
     renderInRouter(() => (
       <DockerContainersTable
@@ -357,6 +398,7 @@ describe('Docker native tables', () => {
     );
     // Two danger rows tied -> name-sorted; then warning; then success.
     expect(rows).toEqual(['dead', 'exited', 'restart', 'happy']);
+    expect(screen.getByText('State')).toBeInTheDocument();
     expect(screen.getByTitle('Dead')).toHaveClass('bg-red-500');
     expect(screen.getByTitle('Exited (137)')).toHaveClass('bg-red-500');
     expect(screen.getByTitle('Restarting')).toHaveClass('bg-amber-500');
