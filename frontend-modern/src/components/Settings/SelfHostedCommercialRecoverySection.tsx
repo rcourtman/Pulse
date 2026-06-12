@@ -1,5 +1,6 @@
 import { Component, Show } from 'solid-js';
-import { formField, formHelpText, labelClass, controlClass } from '@/components/shared/Form';
+import { formField, controlClass } from '@/components/shared/Form';
+import { FormTextarea } from '@/components/shared/FormTextarea';
 import { SELF_HOSTED_RECOVERY_PRESENTATION } from '@/utils/licensePresentation';
 import { TERMS_DOC_URL } from '@/utils/docsLinks';
 import { CommercialSection } from './CommercialBillingSections';
@@ -45,28 +46,29 @@ export const SelfHostedCommercialRecoverySection: Component<
 
       <div class="mt-4 space-y-4">
         <div class={formField}>
-          <label class={labelClass()} for="pulse-pro-license-key">
-            {SELF_HOSTED_RECOVERY_PRESENTATION.fieldLabel}
-          </label>
-          <textarea
+          <FormTextarea
             id="pulse-pro-license-key"
-            class={controlClass('min-h-[120px] font-mono')}
+            label={SELF_HOSTED_RECOVERY_PRESENTATION.fieldLabel}
+            fieldBaseClass="contents"
+            textareaBaseClass={controlClass('min-h-[120px] font-mono')}
             placeholder={SELF_HOSTED_RECOVERY_PRESENTATION.fieldPlaceholder}
             value={props.licenseKey}
             onInput={(event) => props.onLicenseKeyInput(event.currentTarget.value)}
+            help={
+              <>
+                {SELF_HOSTED_RECOVERY_PRESENTATION.helpTextBeforeTerms}{' '}
+                <a
+                  href={TERMS_DOC_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="inline-flex min-h-10 sm:min-h-9 items-center rounded px-1 text-blue-600 hover:underline"
+                >
+                  {SELF_HOSTED_RECOVERY_PRESENTATION.termsLabel}
+                </a>
+                {SELF_HOSTED_RECOVERY_PRESENTATION.helpTextAfterTerms}
+              </>
+            }
           />
-          <p class={formHelpText}>
-            {SELF_HOSTED_RECOVERY_PRESENTATION.helpTextBeforeTerms}{' '}
-            <a
-              href={TERMS_DOC_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              class="inline-flex min-h-10 sm:min-h-9 items-center rounded px-1 text-blue-600 hover:underline"
-            >
-              {SELF_HOSTED_RECOVERY_PRESENTATION.termsLabel}
-            </a>
-            {SELF_HOSTED_RECOVERY_PRESENTATION.helpTextAfterTerms}
-          </p>
           <div class="mt-3 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 p-3 text-sm text-amber-800 dark:text-amber-200">
             <p class="font-medium">
               {SELF_HOSTED_RECOVERY_PRESENTATION.privateRuntimeNotice.title}

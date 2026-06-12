@@ -4,6 +4,7 @@ import { filterIncidentEvents } from '@/features/alerts/types';
 import { IncidentEventFilters } from '@/components/Alerts/IncidentEventFilters';
 import { IncidentAssistantHandoffButton } from '@/components/Alerts/IncidentAssistantHandoffButton';
 import { IncidentTimelineEventCard } from '@/components/Alerts/IncidentTimelineEventCard';
+import { FormTextarea } from '@/components/shared/FormTextarea';
 import {
   getAlertTimelineEmptyState,
   getAlertTimelineFailureState,
@@ -92,8 +93,11 @@ export function IncidentTimelinePanel(props: IncidentTimelinePanelProps) {
               <p class="text-xs text-muted">{getAlertTimelineEmptyState().text}</p>
             </Show>
             <div class="flex flex-col gap-2">
-              <textarea
-                class={getAlertIncidentNoteTextareaClass()}
+              <FormTextarea
+                label="Incident note"
+                labelClass="sr-only"
+                fieldBaseClass="contents"
+                textareaBaseClass={getAlertIncidentNoteTextareaClass()}
                 rows={2}
                 placeholder={getAlertResourceIncidentNotePlaceholder()}
                 value={props.noteDraft}

@@ -1,6 +1,7 @@
 import { Component, Show, For, createMemo, createSignal } from 'solid-js';
 import { apiFetch } from '@/utils/apiClient';
 import { Dialog } from '@/components/shared/Dialog';
+import { FormTextarea } from '@/components/shared/FormTextarea';
 import { getSourcePlatformBadge } from '@/components/shared/sourcePlatformBadges';
 import { getSourcePlatformLabel } from '@/utils/sourcePlatforms';
 import { showError, showSuccess } from '@/utils/toast';
@@ -117,18 +118,16 @@ export const ReportMergeModal: Component<ReportMergeModalProps> = (props) => {
           </div>
         </div>
 
-        <div>
-          <label class="text-xs font-medium uppercase tracking-wide text-muted">
-            Notes (optional)
-          </label>
-          <textarea
-            value={notes()}
-            onInput={(event) => setNotes(event.currentTarget.value)}
-            rows={3}
-            class="mt-2 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            placeholder="Example: Agent running on a different host with same hostname."
-          />
-        </div>
+        <FormTextarea
+          label="Notes (optional)"
+          labelClass="text-xs font-medium uppercase tracking-wide text-muted"
+          fieldBaseClass="space-y-2"
+          value={notes()}
+          onInput={(event) => setNotes(event.currentTarget.value)}
+          rows={3}
+          textareaBaseClass="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          placeholder="Example: Agent running on a different host with same hostname."
+        />
 
         <Show when={error()}>
           <div

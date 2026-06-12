@@ -20,6 +20,7 @@ import filterButtonGroupModelSource from '@/components/shared/filterButtonGroupM
 import filterToolbarSource from '@/components/shared/FilterToolbar.tsx?raw';
 import filterOptionPresentationSource from '@/components/shared/filterOptionPresentation.ts?raw';
 import formSelectSource from '@/components/shared/FormSelect.tsx?raw';
+import formTextareaSource from '@/components/shared/FormTextarea.tsx?raw';
 import helpIconSource from '@/components/shared/HelpIcon.tsx?raw';
 import helpIconModelSource from '@/components/shared/helpIconModel.ts?raw';
 import historyChartHeaderSource from '@/components/shared/HistoryChartHeader.tsx?raw';
@@ -96,6 +97,14 @@ import webInterfaceUrlFieldStateSource from '@/components/shared/useWebInterface
 import webInterfaceNameLinkSource from '@/components/shared/WebInterfaceNameLink.tsx?raw';
 import inlineDetailTableRowSource from '@/components/shared/InlineDetailTableRow.tsx?raw';
 import sharedTemplateRegistrySource from '../../../scripts/shared-template-registry.json?raw';
+import emailProviderSelectSource from '@/components/Alerts/EmailProviderSelect.tsx?raw';
+import incidentTimelinePanelSource from '@/components/Alerts/IncidentTimelinePanel.tsx?raw';
+import thresholdsTableDockerIgnoredPrefixesSectionSource from '@/components/Alerts/ThresholdsTableDockerIgnoredPrefixesSection.tsx?raw';
+import webhookConfigFormSource from '@/components/Alerts/WebhookConfigForm.tsx?raw';
+import reportMergeModalSource from '@/components/Infrastructure/ReportMergeModal.tsx?raw';
+import selfHostedCommercialRecoverySectionSource from '@/components/Settings/SelfHostedCommercialRecoverySection.tsx?raw';
+import suggestProfileModalSource from '@/components/Settings/SuggestProfileModal.tsx?raw';
+import alertAppriseDestinationsSectionSource from '@/features/alerts/AlertAppriseDestinationsSection.tsx?raw';
 import dockerPageSurfaceSource from '@/features/docker/DockerPageSurface.tsx?raw';
 import kubernetesPageSurfaceSource from '@/features/kubernetes/KubernetesPageSurface.tsx?raw';
 import proxmoxPageSurfaceSource from '@/features/proxmox/ProxmoxPageSurface.tsx?raw';
@@ -375,6 +384,97 @@ describe('shared primitive guardrails', () => {
     expect(guestDrawerHistorySource).toContain('id="guest-history-range"');
     expect(guestDrawerHistorySource).toContain('data-testid="guest-history-range-control"');
     expect(guestDrawerHistorySource).not.toContain('<select');
+  });
+
+  it('keeps native form textareas on the shared labelled primitive', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        allowedPaths?: string[];
+        ignoredPaths?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find((rule) => rule.id === 'form-textarea-shell');
+    const alertGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'form-textarea-local-alert-fields',
+    );
+    const settingsGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'form-textarea-local-settings-fields',
+    );
+    const infrastructureGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'form-textarea-local-infrastructure-fields',
+    );
+
+    expect(registeredRule?.canonical?.path).toBe('src/components/shared/FormTextarea.tsx');
+    expect(registeredRule?.canonical?.export).toBe('FormTextarea');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/components/Alerts/EmailProviderSelect.tsx',
+      'src/components/Alerts/IncidentTimelinePanel.tsx',
+      'src/components/Alerts/ThresholdsTableDockerIgnoredPrefixesSection.tsx',
+      'src/components/Alerts/WebhookConfigForm.tsx',
+      'src/components/Infrastructure/ReportMergeModal.tsx',
+      'src/components/Settings/AgentProfilesPanel.tsx',
+      'src/components/Settings/SelfHostedCommercialRecoverySection.tsx',
+      'src/components/Settings/SuggestProfileModal.tsx',
+      'src/features/alerts/AlertAppriseDestinationsSection.tsx',
+    ]);
+    expect(alertGuard?.canonical?.path).toBe('src/components/shared/FormTextarea.tsx');
+    expect(alertGuard?.canonical?.export).toBe('FormTextarea');
+    expect(alertGuard?.allPatterns).toEqual(['<textarea']);
+    expect(alertGuard?.scopes).toEqual(['src/components/Alerts', 'src/features/alerts']);
+    expect(alertGuard?.allowedPaths).toEqual([
+      'src/components/Alerts/AlertResourceTableMobile.tsx',
+      'src/components/Alerts/AlertResourceTableRow.tsx',
+    ]);
+    expect(settingsGuard?.canonical?.path).toBe('src/components/shared/FormTextarea.tsx');
+    expect(settingsGuard?.canonical?.export).toBe('FormTextarea');
+    expect(settingsGuard?.allPatterns).toEqual(['<textarea']);
+    expect(settingsGuard?.scopes).toEqual(['src/components/Settings']);
+    expect(settingsGuard?.allowedPaths).toEqual(['src/components/Settings/SSOProvidersPanel.tsx']);
+    expect(infrastructureGuard?.canonical?.path).toBe('src/components/shared/FormTextarea.tsx');
+    expect(infrastructureGuard?.canonical?.export).toBe('FormTextarea');
+    expect(infrastructureGuard?.allPatterns).toEqual(['<textarea']);
+    expect(infrastructureGuard?.scopes).toEqual(['src/components/Infrastructure']);
+    expect(infrastructureGuard?.allowedPaths ?? []).toHaveLength(0);
+
+    expect(formTextareaSource).toContain("from '@/components/shared/Form'");
+    expect(formTextareaSource).toContain('createUniqueId');
+    expect(formTextareaSource).toContain('splitProps');
+    expect(formTextareaSource).toContain('interface FormTextareaProps');
+    expect(formTextareaSource).toContain('label: JSX.Element');
+    expect(formTextareaSource).toContain('<label for={textareaId()}');
+    expect(formTextareaSource).toContain('<textarea');
+    expect(formTextareaSource).toContain('id={textareaId()}');
+    expect(formTextareaSource).toContain('aria-describedby={describedBy()}');
+    expect(formTextareaSource).toContain('createEffect');
+    expect(formTextareaSource).toContain("'value'");
+    expect(formTextareaSource).toContain('textareaElement.value = nextValue');
+    expect(formTextareaSource).toContain('local.textareaBaseClass ?? formTextarea');
+    expect(formTextareaSource).toContain('local.fieldBaseClass ?? formField');
+
+    const migratedConsumers = [
+      emailProviderSelectSource,
+      incidentTimelinePanelSource,
+      thresholdsTableDockerIgnoredPrefixesSectionSource,
+      webhookConfigFormSource,
+      reportMergeModalSource,
+      agentProfilesPanelSource,
+      selfHostedCommercialRecoverySectionSource,
+      suggestProfileModalSource,
+      alertAppriseDestinationsSectionSource,
+    ];
+    for (const source of migratedConsumers) {
+      expect(source).toContain('FormTextarea');
+      expect(source).not.toContain('<textarea');
+    }
   });
 
   it('routes selectable settings cards through SelectionCardGroup', () => {

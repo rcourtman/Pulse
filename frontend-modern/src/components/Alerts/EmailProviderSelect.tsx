@@ -37,6 +37,7 @@ import {
   type EmailProviderSelectStateProps,
 } from './useEmailProviderSelectState';
 import { FormSelect } from '@/components/shared/FormSelect';
+import { FormTextarea } from '@/components/shared/FormTextarea';
 
 interface EmailProviderSelectProps extends EmailProviderSelectStateProps {
   config: UIEmailConfig;
@@ -214,30 +215,24 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
         </div>
       </div>
 
-      <div class={formField}>
-        <label for={fieldIds.recipients} class={labelClass()}>
-          {ALERT_EMAIL_RECIPIENTS_LABEL}
-        </label>
-        <textarea
-          id={fieldIds.recipients}
-          value={props.config.to.join('\n')}
-          onInput={(e) => {
-            // Keep raw lines while editing — trimming/filtering on every
-            // keystroke ate empty trailing lines and stripped typed
-            // whitespace, so users couldn't type past line 1. Empty
-            // entries are filtered in buildEmailConfigPayload at save.
-            props.onChange({ ...props.config, to: e.currentTarget.value.split('\n') });
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.stopPropagation();
-            }
-          }}
-          rows={3}
-          class={controlClass('px-2 py-1.5 font-mono leading-snug')}
-          placeholder={getAlertEmailRecipientsPlaceholder(props.config.from)}
-        />
-      </div>
+      <FormTextarea
+        id={fieldIds.recipients}
+        label={ALERT_EMAIL_RECIPIENTS_LABEL}
+        value={props.config.to.join('\n')}
+        onInput={(e) => {
+          // Keep raw lines while editing; trimming/filtering on every keystroke
+          // eats empty trailing lines and typed whitespace.
+          props.onChange({ ...props.config, to: e.currentTarget.value.split('\n') });
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.stopPropagation();
+          }
+        }}
+        rows={3}
+        textareaBaseClass={controlClass('px-2 py-1.5 font-mono leading-snug')}
+        placeholder={getAlertEmailRecipientsPlaceholder(props.config.from)}
+      />
 
       <div class="border-t border-border pt-3">
         <button

@@ -223,6 +223,31 @@
       ]
     },
     {
+      "id": "form-textarea-shell",
+      "category": "form-control",
+      "summary": "Native textarea controls must compose FormTextarea for shared label/id/help wiring, value synchronization, and textarea chrome instead of recreating labelled textarea wrappers locally.",
+      "canonical": {
+        "path": "src/components/shared/FormTextarea.tsx",
+        "export": "FormTextarea"
+      },
+      "requiredConsumers": [
+        { "path": "src/components/Alerts/EmailProviderSelect.tsx" },
+        { "path": "src/components/Alerts/IncidentTimelinePanel.tsx" },
+        { "path": "src/components/Alerts/ThresholdsTableDockerIgnoredPrefixesSection.tsx" },
+        { "path": "src/components/Alerts/WebhookConfigForm.tsx" },
+        { "path": "src/components/Infrastructure/ReportMergeModal.tsx" },
+        { "path": "src/components/Settings/AgentProfilesPanel.tsx" },
+        { "path": "src/components/Settings/SelfHostedCommercialRecoverySection.tsx" },
+        { "path": "src/components/Settings/SuggestProfileModal.tsx" },
+        { "path": "src/features/alerts/AlertAppriseDestinationsSection.tsx" }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/FormTextarea.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "platform-table-loading-state",
       "category": "platform-table-loading-state",
       "summary": "Platform page and table loading states must compose PlatformTableLoadingState instead of recreating local TableCard status rows.",
@@ -759,6 +784,66 @@
       "extensions": [".tsx"],
       "allPatterns": ["<select", "guest-history-range"],
       "legacyReason": "Retired migration debt. Guest history range controls must use FormSelect for label/id/select chrome wiring.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "form-textarea-local-alert-fields",
+      "category": "form-control",
+      "summary": "Alert destination and incident timeline textareas must compose FormTextarea; only the resource note editors remain as bounded residuals until their editor-specific migration.",
+      "canonical": {
+        "path": "src/components/shared/FormTextarea.tsx",
+        "export": "FormTextarea"
+      },
+      "scopes": ["src/components/Alerts", "src/features/alerts"],
+      "extensions": [".tsx"],
+      "allPatterns": ["<textarea"],
+      "legacyReason": "Bounded residual. Alert resource note editors still own row/mobile-specific editing behavior; new alert textareas must use FormTextarea.",
+      "allowedPaths": [
+        "src/components/Alerts/AlertResourceTableMobile.tsx",
+        "src/components/Alerts/AlertResourceTableRow.tsx"
+      ],
+      "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "form-textarea-local-settings-fields",
+      "category": "form-control",
+      "summary": "Settings textareas must compose FormTextarea; the SSO provider editor remains as bounded residual until its multi-field provider metadata editor is migrated.",
+      "canonical": {
+        "path": "src/components/shared/FormTextarea.tsx",
+        "export": "FormTextarea"
+      },
+      "scopes": ["src/components/Settings"],
+      "extensions": [".tsx"],
+      "allPatterns": ["<textarea"],
+      "legacyReason": "Bounded residual. SSO provider metadata textareas still require a dedicated editor migration; new settings textareas must use FormTextarea.",
+      "allowedPaths": ["src/components/Settings/SSOProvidersPanel.tsx"],
+      "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "form-textarea-local-infrastructure-fields",
+      "category": "form-control",
+      "summary": "Infrastructure modal textareas must compose FormTextarea instead of recreating labelled native textarea wrappers locally.",
+      "canonical": {
+        "path": "src/components/shared/FormTextarea.tsx",
+        "export": "FormTextarea"
+      },
+      "scopes": ["src/components/Infrastructure"],
+      "extensions": [".tsx"],
+      "allPatterns": ["<textarea"],
+      "legacyReason": "Retired migration debt. Infrastructure form textareas must use FormTextarea for label/id/help wiring.",
       "allowedPaths": [],
       "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
       "proof": [

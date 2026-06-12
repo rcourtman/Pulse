@@ -205,6 +205,13 @@ alignment classes.
 Alert filter option semantics stay alert-owned, but FilterBar chip
 presentation is frontend-primitives-owned: severity filter leading dots must
 use `filterChipStatusDot` rather than alert-local span factories.
+Alert notification and timeline form textareas are also shared-primitive
+consumers. Email recipient lists, Apprise target lists, webhook payload
+templates, threshold ignored-prefix input, and incident timeline notes must
+compose `FormTextarea` for label/id/help wiring and textarea chrome instead of
+recreating raw labelled `<textarea>` shells locally. Alert resource row/mobile
+note editors are the only bounded residual until their row-editor behavior is
+migrated through the same primitive.
 Guest metric canonical state remains resource-backed and therefore node-scoped
 for Proxmox guests, so node moves must not strand active alert state on the
 previous resource ID. When a guest metric alert survives a node move, alerts

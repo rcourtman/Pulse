@@ -1286,6 +1286,11 @@ including the existing-key field label/help text and legacy-key exchange
 notice, while `selfHostedBillingPresentation.ts` owns the first-class plan and
 license-state copy that belongs on the primary billing surface. That split
 prevents manual key redemption from drifting back into the main purchase path.
+The recovery key input is also a frontend-primitives consumer:
+`SelfHostedCommercialRecoverySection.tsx` must compose `FormTextarea` for the
+manual license-key field so label/id/help wiring and textarea chrome remain
+shared while cloud-paid continues to own the commercial copy and recovery
+actions.
 That same recovery boundary also owns the linked legal surface:
 `SelfHostedCommercialRecoverySection.tsx` must route its Terms-of-Service link
 through the shipped `TERMS.md` docs asset instead of sending operators to

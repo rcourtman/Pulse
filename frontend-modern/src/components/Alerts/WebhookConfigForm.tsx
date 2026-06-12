@@ -44,6 +44,7 @@ import {
   labelClass,
 } from '@/components/shared/Form';
 import { FormSelect } from '@/components/shared/FormSelect';
+import { FormTextarea } from '@/components/shared/FormTextarea';
 
 import type { CustomFieldInput, HeaderInput, WebhookConfigFormData } from './useWebhookConfigState';
 
@@ -203,27 +204,27 @@ export function WebhookConfigForm(props: WebhookConfigFormProps) {
       </Show>
 
       <Show when={props.formData().service === 'generic'}>
-        <div class={formField}>
-          <label class={labelClass('flex items-center gap-2')}>
-            Custom payload template (JSON)
-            <span class="text-xs text-muted">{ALERT_WEBHOOK_PAYLOAD_HELP_LABEL}</span>
-          </label>
-          <textarea
-            value={props.formData().payloadTemplate || ''}
-            onInput={(e) =>
-              props.setFormData((prev) => ({
-                ...prev,
-                payloadTemplate: e.currentTarget.value,
-              }))
-            }
-            placeholder={ALERT_WEBHOOK_PAYLOAD_TEMPLATE_PLACEHOLDER}
-            rows={8}
-            class={controlClass('px-2 py-1.5 text-xs font-mono min-h-[160px]')}
-          />
-          <p class={formHelpText + ' mt-1'}>
-            Available variables: {ALERT_WEBHOOK_PAYLOAD_VARIABLES}
-          </p>
-        </div>
+        <FormTextarea
+          label={
+            <>
+              Custom payload template (JSON)
+              <span class="text-xs text-muted">{ALERT_WEBHOOK_PAYLOAD_HELP_LABEL}</span>
+            </>
+          }
+          labelClass="flex items-center gap-2"
+          value={props.formData().payloadTemplate || ''}
+          onInput={(e) =>
+            props.setFormData((prev) => ({
+              ...prev,
+              payloadTemplate: e.currentTarget.value,
+            }))
+          }
+          placeholder={ALERT_WEBHOOK_PAYLOAD_TEMPLATE_PLACEHOLDER}
+          rows={8}
+          textareaBaseClass={controlClass('px-2 py-1.5 text-xs font-mono min-h-[160px]')}
+          help={<>Available variables: {ALERT_WEBHOOK_PAYLOAD_VARIABLES}</>}
+          helpClass="mt-1"
+        />
       </Show>
 
       <Show when={props.customFieldInputs().length > 0 || props.formData().service === 'pushover'}>

@@ -1136,6 +1136,8 @@ describe('ProLicensePanel', () => {
     expect(proLicensePanelSource).toContain('ProLicensePanelContent');
     expect(proLicensePanelSource).toContain('./ProLicensePlanSection');
     expect(proLicensePanelSource).toContain('SelfHostedCommercialRecoverySection');
+    expect(selfHostedCommercialRecoverySectionSource).toContain('FormTextarea');
+    expect(selfHostedCommercialRecoverySectionSource).not.toContain('<textarea');
     expect(proLicensePanelSource).toContain('SELF_HOSTED_PRO_BILLING_PRESENTATION');
     expect(proLicensePanelSource).toContain('value={state.activeSection()}');
     expect(proLicensePanelSource).toContain('<Subtabs');

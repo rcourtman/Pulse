@@ -482,6 +482,11 @@ Agent profile management tables follow that same presentation boundary:
 profile and assignment columns, but embedded table framing must route through
 `PulseDataGrid`'s shared frame variants instead of lifecycle-local
 `overflow-x-auto` or side-border wrappers.
+Agent profile prompt and description textareas follow the same shared primitive
+boundary. `AgentProfilesPanel.tsx` and `SuggestProfileModal.tsx` may own agent
+profile lifecycle behavior and API mutations, but multi-line form controls in
+those surfaces must compose `FormTextarea` instead of local raw `<textarea>`
+wrappers.
 
 ## Extension Points
 

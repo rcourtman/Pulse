@@ -1,6 +1,7 @@
 import { Show } from 'solid-js';
 
 import { Card } from '@/components/shared/Card';
+import { FormTextarea } from '@/components/shared/FormTextarea';
 import type { ThresholdsTableSectionProps } from '@/features/alerts/thresholds/thresholdsTableSectionProps';
 
 export function ThresholdsTableDockerIgnoredPrefixesSection(props: ThresholdsTableSectionProps) {
@@ -27,7 +28,10 @@ export function ThresholdsTableDockerIgnoredPrefixesSection(props: ThresholdsTab
           </button>
         </Show>
       </div>
-      <textarea
+      <FormTextarea
+        label={state.dockerIgnoredPrefixesPresentation.title}
+        labelClass="sr-only"
+        fieldBaseClass="contents"
         value={state.dockerIgnoredInput()}
         onInput={(event) => state.handleDockerIgnoredChange(event.currentTarget.value)}
         onKeyDown={(event) => {
@@ -37,7 +41,7 @@ export function ThresholdsTableDockerIgnoredPrefixesSection(props: ThresholdsTab
         }}
         placeholder={state.dockerIgnoredPrefixesPresentation.placeholder}
         rows={4}
-        class="mt-4 w-full rounded-md border border-border bg-surface p-3 text-sm text-base-content focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:focus:border-sky-400 dark:focus:ring-sky-600"
+        textareaBaseClass="mt-4 w-full rounded-md border border-border bg-surface p-3 text-sm text-base-content focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:focus:border-sky-400 dark:focus:ring-sky-600"
       />
     </Card>
   );

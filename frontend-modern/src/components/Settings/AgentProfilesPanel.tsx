@@ -3,6 +3,7 @@ import { Card } from '@/components/shared/Card';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Dialog } from '@/components/shared/Dialog';
 import { FormSelect } from '@/components/shared/FormSelect';
+import { FormTextarea } from '@/components/shared/FormTextarea';
 import { UpgradeLink } from '@/components/shared/UpgradeLink';
 import { SuggestProfileModal } from './SuggestProfileModal';
 import { KNOWN_SETTINGS, type SelectSetting, type StringSetting } from './agentProfileSettings';
@@ -359,18 +360,20 @@ export const AgentProfilesPanel: Component = () => {
                   </div>
 
                   {/* Profile Description */}
-                  <div class="space-y-1">
-                    <label class="block text-sm font-medium text-base-content">
-                      Description <span class="text-slate-400 font-normal">(optional)</span>
-                    </label>
-                    <textarea
-                      value={formDescription()}
-                      onInput={(e) => setFormDescription(e.currentTarget.value)}
-                      placeholder="What is this profile for?"
-                      rows={2}
-                      class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-800 resize-none"
-                    />
-                  </div>
+                  <FormTextarea
+                    label={
+                      <>
+                        Description <span class="text-slate-400 font-normal">(optional)</span>
+                      </>
+                    }
+                    labelClass="block text-sm font-medium text-base-content"
+                    fieldBaseClass="space-y-1"
+                    value={formDescription()}
+                    onInput={(e) => setFormDescription(e.currentTarget.value)}
+                    placeholder="What is this profile for?"
+                    rows={2}
+                    textareaBaseClass="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-800 resize-none"
+                  />
 
                   {/* Settings */}
                   <div class="space-y-3">

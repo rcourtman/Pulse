@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createSignal } from 'solid-js';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import type { UIEmailConfig } from '@/features/alerts/types';
+import emailProviderSelectSource from './EmailProviderSelect.tsx?raw';
 
 // --- Mock setup (must be before component import) ---
 const getEmailProvidersMock = vi.fn();
@@ -113,6 +114,14 @@ describe('EmailProviderSelect', () => {
     expect(screen.getByText('Username')).toBeInTheDocument();
     expect(screen.getByText('Password / API key')).toBeInTheDocument();
     expect(screen.getByText('Recipients (one per line)')).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Recipients (one per line)' }).tagName).toBe(
+      'TEXTAREA',
+    );
+  });
+
+  it('routes multi-line recipient input through FormTextarea', () => {
+    expect(emailProviderSelectSource).toContain('FormTextarea');
+    expect(emailProviderSelectSource).not.toContain('<textarea');
   });
 
   it('exposes canonical labels for provider and security selects', () => {

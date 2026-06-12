@@ -2442,6 +2442,14 @@ history range controls must compose `FormSelect` rather than recreating a
 screen-reader label plus raw `<select>` shell locally, and future native-select
 migrations should extend that primitive instead of forking labelled select
 wrappers.
+Native textarea controls follow the same contract. `FormTextarea` owns
+label/id wiring, helper-text description merging, value synchronization, default
+textarea chrome, and compact styling hooks for multi-line text fields. Alert
+destination fields, incident notes, infrastructure merge reports, commercial
+recovery input, and agent-profile prompt/description fields must compose
+`FormTextarea`; bounded residual raw textareas are limited to editor-specific
+surfaces called out in the shared-template registry until their dedicated
+migration slices retire them.
 Search controls are registry-backed too. `SearchField` owns simple search
 input chrome, clear affordance, keyboard forwarding, focus handling, aria
 labels, and trailing-control padding, while `SearchInput` owns resource-list

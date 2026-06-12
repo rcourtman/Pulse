@@ -15,6 +15,7 @@ import {
   type ConfigValidationResult,
 } from '@/api/agentProfiles';
 import { Dialog } from '@/components/shared/Dialog';
+import { FormTextarea } from '@/components/shared/FormTextarea';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { formatRelativeTime } from '@/utils/format';
@@ -257,15 +258,15 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
         <div class="px-6 py-4 space-y-4 overflow-y-auto flex-1">
           {/* Prompt Input */}
           <div class="space-y-2">
-            <label class="block text-sm font-medium text-base-content">
-              What kind of profile do you need?
-            </label>
-            <textarea
+            <FormTextarea
+              label="What kind of profile do you need?"
+              labelClass="block text-sm font-medium text-base-content"
+              fieldBaseClass="contents"
               value={prompt()}
               onInput={(e) => setPrompt(e.currentTarget.value)}
               placeholder="Describe the agents and use case for this profile..."
               rows={3}
-              class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-800 resize-none"
+              textareaBaseClass="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:border-blue-400 dark:focus:ring-blue-800 resize-none"
               disabled={loading()}
             />
             <Show when={suggestion()}>

@@ -5,6 +5,7 @@ import { TlsVerificationWarningBanner } from '@/components/shared/TlsVerificatio
 import { Toggle } from '@/components/shared/Toggle';
 import { formControl, formField, formHelpText, labelClass } from '@/components/shared/Form';
 import { FormSelect } from '@/components/shared/FormSelect';
+import { FormTextarea } from '@/components/shared/FormTextarea';
 import type { UIAppriseConfig } from './types';
 import {
   ALERT_DESTINATIONS_APPRISE_API_KEY_HEADER_HELP,
@@ -111,23 +112,20 @@ export function AlertAppriseDestinationsSection(props: AlertAppriseDestinationsS
           <option value="http">{ALERT_DESTINATIONS_APPRISE_MODE_HTTP_LABEL}</option>
         </FormSelect>
 
-        <div class={formField}>
-          <label for={fieldIds.targets} class={labelClass('text-xs uppercase tracking-[0.08em]')}>
-            {ALERT_DESTINATIONS_APPRISE_TARGETS_LABEL}
-          </label>
-          <textarea
-            id={fieldIds.targets}
-            rows={4}
-            class={`${formControl} min-h-[120px] font-mono`}
-            value={props.config.targetsText}
-            placeholder={ALERT_DESTINATIONS_APPRISE_TARGETS_PLACEHOLDER}
-            onInput={(event) => {
-              props.updateApprise({ targetsText: event.currentTarget.value });
-              props.setHasUnsavedChanges(true);
-            }}
-          />
-          <p class={formHelpText}>{getAlertDestinationsAppriseTargetsHelp(props.config.mode)}</p>
-        </div>
+        <FormTextarea
+          id={fieldIds.targets}
+          label={ALERT_DESTINATIONS_APPRISE_TARGETS_LABEL}
+          labelClass="text-xs uppercase tracking-[0.08em]"
+          rows={4}
+          textareaBaseClass={`${formControl} min-h-[120px] font-mono`}
+          value={props.config.targetsText}
+          placeholder={ALERT_DESTINATIONS_APPRISE_TARGETS_PLACEHOLDER}
+          onInput={(event) => {
+            props.updateApprise({ targetsText: event.currentTarget.value });
+            props.setHasUnsavedChanges(true);
+          }}
+          help={getAlertDestinationsAppriseTargetsHelp(props.config.mode)}
+        />
 
         <Show when={props.config.mode === 'cli'}>
           <div class={formField}>
