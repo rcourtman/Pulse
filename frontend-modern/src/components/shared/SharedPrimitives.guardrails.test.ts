@@ -778,8 +778,48 @@ describe('shared primitive guardrails', () => {
   });
 
   it('keeps column picker on shell, runtime, and model owners', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        allowedPaths?: string[];
+        ignoredPaths?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find((rule) => rule.id === 'column-picker-shell');
+    const registeredGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'column-picker-local-column-chooser',
+    );
+
+    expect(registeredRule?.canonical?.path).toBe('src/components/shared/ColumnPicker.tsx');
+    expect(registeredRule?.canonical?.export).toBe('ColumnPicker');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/components/Workloads/WorkloadsFilter.tsx',
+      'src/features/standalone/AgentsMachinesTable.tsx',
+    ]);
+    expect(registeredGuard?.canonical?.path).toBe('src/components/shared/ColumnPicker.tsx');
+    expect(registeredGuard?.canonical?.export).toBe('ColumnPicker');
+    expect(registeredGuard?.allPatterns).toEqual([
+      'Choose which columns to display',
+      'Show Columns',
+    ]);
+    expect(registeredGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(registeredGuard?.ignoredPaths).toEqual(['src/components/shared/ColumnPicker.test.tsx']);
+    expect(registeredGuard?.scopes).toEqual(
+      expect.arrayContaining(['src/components', 'src/features', 'src/pages']),
+    );
+
     expect(columnPickerSource).toContain('useColumnPickerState');
     expect(columnPickerSource).toContain('COLUMN_PICKER_PANEL_TITLE');
+    expect(columnPickerSource).toContain('COLUMN_PICKER_BUTTON_TITLE');
+    expect(columnPickerSource).toContain('filterUtilityBadgeClass');
     expect(columnPickerSource).not.toContain('createSignal');
     expect(columnPickerSource).not.toContain('createEffect');
     expect(columnPickerSource).not.toContain('document.addEventListener');
@@ -793,10 +833,19 @@ describe('shared primitive guardrails', () => {
     expect(columnPickerStateSource).toContain('hiddenCount');
 
     expect(columnPickerModelSource).toContain('COLUMN_PICKER_BUTTON_LABEL');
+    expect(columnPickerModelSource).toContain('COLUMN_PICKER_BUTTON_TITLE');
     expect(columnPickerModelSource).toContain('COLUMN_PICKER_PANEL_TITLE');
+    expect(columnPickerModelSource).toContain('COLUMN_PICKER_RESET_LABEL');
+    expect(columnPickerModelSource).toContain('COLUMN_PICKER_EMPTY_LABEL');
     expect(columnPickerModelSource).toContain('getHiddenColumnCount');
     expect(columnPickerModelSource).toContain('shouldShowColumnPickerReset');
     expect(columnPickerModelSource).toContain('getColumnPickerOptionTextClass');
+
+    for (const source of [workloadsFilterSource, agentsMachinesTableSource]) {
+      expect(source).toContain('ColumnPicker');
+      expect(source).not.toContain('Choose which columns to display');
+      expect(source).not.toContain('Show Columns');
+    }
   });
 
   it('keeps tag input on shell, runtime, and model owners', () => {

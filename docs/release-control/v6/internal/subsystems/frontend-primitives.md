@@ -2421,6 +2421,11 @@ Chart visibility display actions are registry-backed too.
 pressed-state, title, icon, and toolbar action styling for summary-bearing
 filter surfaces. Pages must compose that primitive instead of recreating local
 chart visibility buttons or one-option segmented controls.
+Column visibility controls are registry-backed too. `ColumnPicker` owns the
+column chooser trigger, panel title, reset action, empty-state copy, hidden
+count badge, dropdown width, and outside-click lifecycle through the shared
+shell/state/model split. Table surfaces must compose that primitive instead of
+recreating local column chooser buttons or panels.
 Grouped/list table-mode controls are registry-backed as well.
 `GroupedTableModeSegmentedControl` owns the shared `Group by` label,
 `Grouped` / `List` labels, tooltip titles, and icons for table mode switching.

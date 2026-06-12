@@ -256,6 +256,24 @@
       ]
     },
     {
+      "id": "column-picker-shell",
+      "category": "column-picker",
+      "summary": "Table column visibility controls must compose ColumnPicker instead of recreating column chooser trigger, panel, reset, or hidden-count chrome locally.",
+      "canonical": {
+        "path": "src/components/shared/ColumnPicker.tsx",
+        "export": "ColumnPicker"
+      },
+      "requiredConsumers": [
+        { "path": "src/components/Workloads/WorkloadsFilter.tsx" },
+        { "path": "src/features/standalone/AgentsMachinesTable.tsx" }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/ColumnPicker.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "grouped-table-mode-segmented-control",
       "category": "table-mode-control",
       "summary": "Grouped/list table-mode controls must compose GroupedTableModeSegmentedControl instead of recreating grouped/list labels, titles, or icons locally.",
@@ -382,6 +400,25 @@
       "legacyReason": "Retired migration debt. Chart visibility display actions must use ChartVisibilityToggleButton; local show/hide chart toggle copies are not allowed.",
       "allowedPaths": [],
       "ignoredPaths": ["src/components/Workloads/__tests__/WorkloadsFilter.test.tsx"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "column-picker-local-column-chooser",
+      "category": "column-picker",
+      "summary": "Table surfaces must not copy the column chooser title and panel copy owned by ColumnPicker.",
+      "canonical": {
+        "path": "src/components/shared/ColumnPicker.tsx",
+        "export": "ColumnPicker"
+      },
+      "scopes": ["src/components", "src/features", "src/pages"],
+      "extensions": [".tsx"],
+      "allPatterns": ["Choose which columns to display", "Show Columns"],
+      "legacyReason": "Retired migration debt. Table column visibility controls must use ColumnPicker; local column chooser copies are not allowed.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/ColumnPicker.test.tsx"],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "scripts/shared-template-audit.mjs"
