@@ -107,7 +107,11 @@ import thresholdsTableDockerIgnoredPrefixesSectionSource from '@/components/Aler
 import webhookConfigFormSource from '@/components/Alerts/WebhookConfigForm.tsx?raw';
 import reportMergeModalSource from '@/components/Infrastructure/ReportMergeModal.tsx?raw';
 import availabilitySettingsPanelSource from '@/components/Settings/AvailabilitySettingsPanel.tsx?raw';
+import addressProbeStepSource from '@/components/Settings/ConnectionEditor/AddressProbeStep.tsx?raw';
 import connectionEditorSource from '@/components/Settings/ConnectionEditor/ConnectionEditor.tsx?raw';
+import availabilityTargetSlotSource from '@/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx?raw';
+import trueNASCredentialSlotSource from '@/components/Settings/ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx?raw';
+import vmwareCredentialSlotSource from '@/components/Settings/ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx?raw';
 import copyCommandBlockSource from '@/components/Settings/CopyCommandBlock.tsx?raw';
 import infrastructureAgentUpdatesDialogSource from '@/components/Settings/InfrastructureAgentUpdatesDialog.tsx?raw';
 import infrastructureDiscoverySettingsDialogSource from '@/components/Settings/InfrastructureDiscoverySettingsDialog.tsx?raw';
@@ -1518,6 +1522,18 @@ describe('shared primitive guardrails', () => {
     const settingsActionGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'button-secondary-settings-action-local-shell',
     );
+    const settingsOutlineActionGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'button-outline-settings-action-local-shell',
+    );
+    const settingsPrimaryActionGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'button-primary-settings-action-local-shell',
+    );
+    const settingsDangerActionGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'button-danger-settings-action-local-shell',
+    );
+    const settingsDangerOutlineActionGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'button-danger-outline-settings-action-local-shell',
+    );
     const settingsRowActionGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'button-outline-settings-row-action-local-shell',
     );
@@ -1532,7 +1548,11 @@ describe('shared primitive guardrails', () => {
       'src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx',
       'src/components/Settings/AgentProfilesPanel.tsx',
       'src/components/Settings/AvailabilitySettingsPanel.tsx',
+      'src/components/Settings/ConnectionEditor/AddressProbeStep.tsx',
       'src/components/Settings/ConnectionEditor/ConnectionEditor.tsx',
+      'src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx',
+      'src/components/Settings/ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx',
+      'src/components/Settings/ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx',
       'src/components/Settings/CopyCommandBlock.tsx',
       'src/components/Settings/DataHandlingPanel.tsx',
       'src/components/Settings/InfrastructureAgentUpdatesDialog.tsx',
@@ -1573,6 +1593,70 @@ describe('shared primitive guardrails', () => {
     ]);
     expect(settingsActionGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(settingsActionGuard?.ignoredPaths).toEqual(['src/components/shared/Button.test.tsx']);
+    expect(settingsOutlineActionGuard?.canonical?.path).toBe(
+      'src/components/shared/buttonModel.ts',
+    );
+    expect(settingsOutlineActionGuard?.canonical?.export).toBe('getButtonClass');
+    expect(settingsOutlineActionGuard?.allPatterns).toEqual([
+      'rounded-md border border-border px-3 py-2 text-sm font-medium text-base-content',
+    ]);
+    expect(settingsOutlineActionGuard?.scopes).toEqual([
+      'src/components/Settings',
+      'src/features',
+      'src/pages',
+    ]);
+    expect(settingsOutlineActionGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(settingsOutlineActionGuard?.ignoredPaths).toEqual([
+      'src/components/shared/Button.test.tsx',
+    ]);
+    expect(settingsPrimaryActionGuard?.canonical?.path).toBe(
+      'src/components/shared/buttonModel.ts',
+    );
+    expect(settingsPrimaryActionGuard?.canonical?.export).toBe('getButtonClass');
+    expect(settingsPrimaryActionGuard?.allPatterns).toEqual([
+      'rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white',
+    ]);
+    expect(settingsPrimaryActionGuard?.scopes).toEqual([
+      'src/components/Settings',
+      'src/features',
+      'src/pages',
+    ]);
+    expect(settingsPrimaryActionGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(settingsPrimaryActionGuard?.ignoredPaths).toEqual([
+      'src/components/shared/Button.test.tsx',
+    ]);
+    expect(settingsDangerActionGuard?.canonical?.path).toBe(
+      'src/components/shared/buttonModel.ts',
+    );
+    expect(settingsDangerActionGuard?.canonical?.export).toBe('getButtonClass');
+    expect(settingsDangerActionGuard?.allPatterns).toEqual([
+      'rounded-md bg-rose-600 px-3 py-2 text-sm font-medium text-white',
+    ]);
+    expect(settingsDangerActionGuard?.scopes).toEqual([
+      'src/components/Settings',
+      'src/features',
+      'src/pages',
+    ]);
+    expect(settingsDangerActionGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(settingsDangerActionGuard?.ignoredPaths).toEqual([
+      'src/components/shared/Button.test.tsx',
+    ]);
+    expect(settingsDangerOutlineActionGuard?.canonical?.path).toBe(
+      'src/components/shared/buttonModel.ts',
+    );
+    expect(settingsDangerOutlineActionGuard?.canonical?.export).toBe('getButtonClass');
+    expect(settingsDangerOutlineActionGuard?.allPatterns).toEqual([
+      'rounded-md border border-rose-300 px-3 py-2 text-sm font-medium text-rose-700',
+    ]);
+    expect(settingsDangerOutlineActionGuard?.scopes).toEqual([
+      'src/components/Settings',
+      'src/features',
+      'src/pages',
+    ]);
+    expect(settingsDangerOutlineActionGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(settingsDangerOutlineActionGuard?.ignoredPaths).toEqual([
+      'src/components/shared/Button.test.tsx',
+    ]);
     expect(settingsRowActionGuard?.canonical?.path).toBe('src/components/shared/buttonModel.ts');
     expect(settingsRowActionGuard?.canonical?.export).toBe('getButtonClass');
     expect(settingsRowActionGuard?.allPatterns).toEqual([
@@ -1608,6 +1692,8 @@ describe('shared primitive guardrails', () => {
     expect(buttonSource).toContain('getButtonClass');
     expect(buttonModelSource).toContain('BUTTON_VARIANT_CLASSES');
     expect(buttonModelSource).toContain('BUTTON_SIZE_CLASSES');
+    expect(buttonModelSource).toContain('dangerOutline:');
+    expect(buttonModelSource).toContain('settingsAction:');
     expect(chatMessagesSource).toContain('@/components/shared/Button');
     expect(chatMessagesSource).not.toContain(
       'rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content',
@@ -1630,10 +1716,39 @@ describe('shared primitive guardrails', () => {
     expect(availabilitySettingsPanelSource).not.toContain(
       'h-9 w-9 items-center justify-center rounded-md border border-border text-base-content transition-colors hover:bg-surface-hover',
     );
+    expect(addressProbeStepSource).toContain('@/components/shared/Button');
+    expect(addressProbeStepSource).toContain('size="settingsAction"');
+    expect(addressProbeStepSource).not.toContain(
+      'rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white',
+    );
     expect(connectionEditorSource).toContain('@/components/shared/Button');
+    expect(connectionEditorSource).toContain('size="settingsAction"');
+    expect(connectionEditorSource).not.toContain(
+      'rounded-md border border-border px-3 py-2 text-sm font-medium text-base-content',
+    );
     expect(connectionEditorSource).not.toContain(
       'rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content',
     );
+    for (const credentialSlotSource of [
+      availabilityTargetSlotSource,
+      trueNASCredentialSlotSource,
+      vmwareCredentialSlotSource,
+    ]) {
+      expect(credentialSlotSource).toContain('@/components/shared/Button');
+      expect(credentialSlotSource).toContain('size="settingsAction"');
+      expect(credentialSlotSource).not.toContain(
+        'rounded-md border border-border px-3 py-2 text-sm font-medium text-base-content',
+      );
+      expect(credentialSlotSource).not.toContain(
+        'rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white',
+      );
+      expect(credentialSlotSource).not.toContain(
+        'rounded-md bg-rose-600 px-3 py-2 text-sm font-medium text-white',
+      );
+      expect(credentialSlotSource).not.toContain(
+        'rounded-md border border-rose-300 px-3 py-2 text-sm font-medium text-rose-700',
+      );
+    }
     expect(copyCommandBlockSource).toContain('@/components/shared/Button');
     expect(copyCommandBlockSource).toContain('CommandCopyButton');
     expect(copyCommandBlockSource).not.toContain('absolute right-2 top-2');
@@ -1669,6 +1784,16 @@ describe('shared primitive guardrails', () => {
       'rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content',
     );
     expect(infrastructureWorkspaceSource).toContain('@/components/shared/Button');
+    expect(infrastructureWorkspaceSource).toContain('size="settingsAction"');
+    expect(infrastructureWorkspaceSource).not.toContain(
+      'rounded-md border border-border px-3 py-2 text-sm font-medium text-base-content',
+    );
+    expect(infrastructureWorkspaceSource).not.toContain(
+      'rounded-md bg-rose-600 px-3 py-2 text-sm font-medium text-white',
+    );
+    expect(infrastructureWorkspaceSource).not.toContain(
+      'rounded-md border border-rose-300 px-3 py-2 text-sm font-medium text-rose-700',
+    );
     expect(infrastructureWorkspaceSource).not.toContain(
       'rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content',
     );

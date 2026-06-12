@@ -1,5 +1,6 @@
 import { Component, For, Show } from 'solid-js';
 import type { ProbeCandidate } from '@/api/connections';
+import { Button } from '@/components/shared/Button';
 import { formControl, formField, formHelpText, formLabel } from '@/components/shared/Form';
 import { formatConnectionErrorMessage } from '@/utils/connectionErrorPresentation';
 import { getInfrastructureAgentHostProfileSupportText } from '@/utils/infrastructureOnboardingPresentation';
@@ -51,13 +52,14 @@ export const AddressProbeStep: Component<AddressProbeStepProps> = (props) => {
       </div>
 
       <div class="flex items-center gap-2">
-        <button
+        <Button
           type="submit"
-          class="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500 disabled:opacity-60"
+          variant="primary"
+          size="settingsAction"
           disabled={props.state.phase() === 'probing' || props.state.address().trim().length === 0}
         >
           {props.state.phase() === 'probing' ? 'Probing…' : 'Probe API endpoint'}
-        </button>
+        </Button>
       </div>
 
       <Show when={props.state.phase() === 'error' && props.state.errorMessage().length > 0}>

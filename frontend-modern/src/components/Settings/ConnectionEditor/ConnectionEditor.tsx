@@ -109,13 +109,14 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
                   </p>
                 </div>
                 <Show when={props.onBackToCatalog}>
-                  <button
-                    type="button"
+                  <Button
+                    variant="outline"
+                    size="settingsAction"
                     onClick={props.onBackToCatalog}
-                    class="inline-flex items-center self-start rounded-md border border-border px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
+                    class="self-start"
                   >
                     ← Back to source types
-                  </button>
+                  </Button>
                 </Show>
               </div>
 

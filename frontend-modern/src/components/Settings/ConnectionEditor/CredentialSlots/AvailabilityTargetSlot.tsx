@@ -1,4 +1,5 @@
 import { Component, Show, createSignal, onMount } from 'solid-js';
+import { Button } from '@/components/shared/Button';
 import {
   formCheckbox,
   formControl,
@@ -21,11 +22,6 @@ import {
   availabilityPresetById,
   type AvailabilityTargetPresetID,
 } from '../availabilityTargetPresets';
-
-const buttonClass =
-  'inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md border border-border px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60';
-const primaryButtonClass =
-  'inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60';
 
 interface AvailabilityForm {
   id: string;
@@ -422,20 +418,30 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
       <div class="sticky bottom-0 -mx-4 mt-auto border-t border-border bg-surface px-4 py-3 shadow-[0_-8px_16px_rgba(15,23,42,0.04)]">
         <div class="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div class="flex flex-col gap-2 sm:flex-row">
-            <button type="button" onClick={props.onCancel} class={buttonClass} disabled={isBusy()}>
+            <Button
+              variant="outline"
+              size="settingsAction"
+              onClick={props.onCancel}
+              disabled={isBusy()}
+            >
               Cancel
-            </button>
-            <button type="button" onClick={handleTest} class={buttonClass} disabled={isBusy()}>
+            </Button>
+            <Button
+              variant="outline"
+              size="settingsAction"
+              onClick={handleTest}
+              disabled={isBusy()}
+            >
               {testing() ? 'Testing…' : 'Test probe'}
-            </button>
+            </Button>
           </div>
           <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Show when={isEditing() && props.onToggleEnabled}>
-              <button
-                type="button"
+              <Button
+                variant="outline"
+                size="settingsAction"
                 onClick={props.onToggleEnabled}
                 disabled={isBusy() || props.togglePending}
-                class={buttonClass}
               >
                 {props.togglePending
                   ? props.connectionEnabled
@@ -444,34 +450,30 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
                   : props.connectionEnabled
                     ? 'Pause target'
                     : 'Resume target'}
-              </button>
+              </Button>
             </Show>
             <Show when={isEditing() && props.onDelete}>
-              <button
-                type="button"
+              <Button
+                variant={props.deleteConfirming ? 'danger' : 'dangerOutline'}
+                size="settingsAction"
                 onClick={props.onDelete}
                 disabled={isBusy()}
-                class={
-                  props.deleteConfirming
-                    ? 'inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md bg-rose-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60'
-                    : 'inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md border border-rose-300 px-3 py-2 text-sm font-medium text-rose-700 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-rose-900 dark:text-rose-300 dark:hover:bg-rose-950'
-                }
               >
                 {props.deletePending
                   ? 'Removing…'
                   : props.deleteConfirming
                     ? 'Click again to confirm'
                     : 'Remove target'}
-              </button>
+              </Button>
             </Show>
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="settingsAction"
               onClick={handleSave}
-              class={primaryButtonClass}
               disabled={isBusy()}
             >
               {saving() ? 'Saving…' : isEditing() ? 'Save target' : addButtonLabel()}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

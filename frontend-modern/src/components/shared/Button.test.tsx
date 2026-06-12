@@ -17,9 +17,13 @@ describe('Button', () => {
     expect(buttonModelSource).toContain(
       "secondary: 'border border-border bg-surface text-base-content shadow-sm hover:bg-surface-hover'",
     );
+    expect(buttonModelSource).toContain('dangerOutline:');
     expect(buttonModelSource).toContain('export const BUTTON_SIZE_CLASSES');
     expect(buttonModelSource).toContain("xs: 'px-2.5 py-1 text-xs'");
     expect(buttonModelSource).toContain("mdCompact: 'px-3 py-2 text-sm'");
+    expect(buttonModelSource).toContain(
+      "settingsAction: 'min-h-10 px-3 py-2 text-sm sm:min-h-9'",
+    );
     expect(buttonModelSource).toContain("iconMd: 'h-9 w-9 p-0'");
   });
 
@@ -50,6 +54,29 @@ describe('Button', () => {
     ));
 
     expect(screen.getByRole('button', { name: 'Refresh' })).toBeDisabled();
+  });
+
+  it('renders settings action buttons through named size and variants', () => {
+    render(() => (
+      <>
+        <Button variant="primary" size="settingsAction">
+          Save source
+        </Button>
+        <Button variant="dangerOutline" size="settingsAction">
+          Remove source
+        </Button>
+      </>
+    ));
+
+    const saveButton = screen.getByRole('button', { name: 'Save source' });
+    expect(saveButton).toHaveClass('min-h-10');
+    expect(saveButton).toHaveClass('sm:min-h-9');
+    expect(saveButton).toHaveClass('bg-blue-600');
+
+    const removeButton = screen.getByRole('button', { name: 'Remove source' });
+    expect(removeButton).toHaveClass('min-h-10');
+    expect(removeButton).toHaveClass('border-rose-300');
+    expect(removeButton).toHaveClass('text-rose-700');
   });
 
   it('renders command-copy icon buttons through the shared primitive', () => {

@@ -91,9 +91,6 @@ const ADD_STEP_TO_INSTALLER_FOCUS: Partial<
   kubernetes: 'kubernetes',
 };
 
-const buttonClass =
-  'inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md border border-border px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60';
-
 const trimSentenceTerminal = (value: string): string => value.trim().replace(/\.+$/, '');
 
 const describeManagedSourceType = (type: ConnectionType | null): string => {
@@ -466,13 +463,14 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                 <div class="mt-1 line-clamp-3 break-all font-mono text-[11px] text-base-content">
                   {agentUninstallCommands().linux}
                 </div>
-                <button
-                  type="button"
+                <Button
+                  variant="outline"
+                  size="settingsAction"
                   onClick={() => void handleCopy(agentUninstallCommands().linux)}
-                  class={`${buttonClass} mt-3`}
+                  class="mt-3"
                 >
                   Copy uninstall command
-                </button>
+                </Button>
               </div>
 
               <div class="rounded-lg border border-border bg-surface-alt px-3 py-3">
@@ -482,13 +480,14 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                 <div class="mt-1 line-clamp-3 break-all font-mono text-[11px] text-base-content">
                   {agentUninstallCommands().windows}
                 </div>
-                <button
-                  type="button"
+                <Button
+                  variant="outline"
+                  size="settingsAction"
                   onClick={() => void handleCopy(agentUninstallCommands().windows)}
-                  class={`${buttonClass} mt-3`}
+                  class="mt-3"
                 >
                   Copy uninstall command
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -513,22 +512,18 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
         </Show>
 
         <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <button
-            type="button"
+          <Button
+            variant={removeConfirming() ? 'danger' : 'dangerOutline'}
+            size="settingsAction"
             onClick={() => void rowActions.requestRemove(connection)}
             disabled={removePending()}
-            class={
-              removeConfirming()
-                ? 'inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md bg-rose-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60'
-                : 'inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md border border-rose-300 px-3 py-2 text-sm font-medium text-rose-700 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-rose-900 dark:text-rose-300 dark:hover:bg-rose-950'
-            }
           >
             {removePending()
               ? 'Removing…'
               : removeConfirming()
                 ? 'Click again to confirm'
                 : 'Remove source'}
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -595,29 +590,25 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                 </Show>
 
                 <div class="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                  <button
-                    type="button"
+                  <Button
+                    variant="outline"
+                    size="settingsAction"
                     onClick={() => void handleCopy(agentUninstallCommands().linux)}
-                    class={buttonClass}
                   >
                     Copy uninstall command
-                  </button>
-                  <button
-                    type="button"
+                  </Button>
+                  <Button
+                    variant={removeConfirming() ? 'danger' : 'dangerOutline'}
+                    size="settingsAction"
                     onClick={() => void rowActions.requestRemove(connection)}
                     disabled={removePending()}
-                    class={
-                      removeConfirming()
-                        ? 'inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md bg-rose-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60'
-                        : 'inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md border border-rose-300 px-3 py-2 text-sm font-medium text-rose-700 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-rose-900 dark:text-rose-300 dark:hover:bg-rose-950'
-                    }
                   >
                     {removePending()
                       ? 'Removing…'
                       : removeConfirming()
                         ? 'Click again to confirm'
                         : 'Remove Pulse Agent'}
-                  </button>
+                  </Button>
                 </div>
               </div>
             );

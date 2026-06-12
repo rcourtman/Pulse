@@ -1,4 +1,5 @@
 import { Component, Show, createEffect, onMount } from 'solid-js';
+import { Button } from '@/components/shared/Button';
 import {
   formCheckbox,
   formControl,
@@ -11,11 +12,6 @@ import { TlsVerificationWarningBanner } from '@/components/shared/TlsVerificatio
 import { MonitoredSystemImpactPreview } from '../../MonitoredSystemImpactPreview';
 import type { TrueNASConnection } from '@/api/truenas';
 import type { TrueNASSettingsPanelState } from '../../useTrueNASSettingsPanelState';
-
-const buttonClass =
-  'inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md border border-border px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60';
-const primaryButtonClass =
-  'inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60';
 
 export interface TrueNASCredentialSlotProps {
   state: TrueNASSettingsPanelState;
@@ -314,9 +310,9 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
 
         <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Show when={isEditing() && props.onToggleEnabled}>
-            <button
-              type="button"
-              class={buttonClass}
+            <Button
+              variant="outline"
+              size="settingsAction"
               onClick={() => props.onToggleEnabled?.()}
               disabled={
                 props.state.saving() ||
@@ -332,16 +328,12 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
                 : props.connectionEnabled
                   ? 'Pause connection'
                   : 'Resume connection'}
-            </button>
+            </Button>
           </Show>
           <Show when={isEditing() && props.onDelete}>
-            <button
-              type="button"
-              class={
-                props.deleteConfirming
-                  ? 'inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md bg-rose-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60'
-                  : 'inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md border border-rose-300 px-3 py-2 text-sm font-medium text-rose-700 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-rose-900 dark:text-rose-300 dark:hover:bg-rose-950'
-              }
+            <Button
+              variant={props.deleteConfirming ? 'danger' : 'dangerOutline'}
+              size="settingsAction"
               onClick={() => props.onDelete?.()}
               disabled={
                 props.state.saving() ||
@@ -355,11 +347,11 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
                 : props.deleteConfirming
                   ? 'Click again to confirm'
                   : 'Delete connection'}
-            </button>
+            </Button>
           </Show>
-          <button
-            type="button"
-            class={buttonClass}
+          <Button
+            variant="outline"
+            size="settingsAction"
             onClick={handleCancel}
             disabled={
               props.state.saving() ||
@@ -369,10 +361,10 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
             }
           >
             Cancel
-          </button>
-          <button
-            type="button"
-            class={buttonClass}
+          </Button>
+          <Button
+            variant="outline"
+            size="settingsAction"
             onClick={() => void props.state.testCurrentForm()}
             disabled={
               props.state.saving() ||
@@ -382,19 +374,19 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
             }
           >
             {props.state.testing() ? 'Testing…' : 'Test connection'}
-          </button>
-          <button
-            type="button"
-            class={buttonClass}
+          </Button>
+          <Button
+            variant="outline"
+            size="settingsAction"
             onClick={() => void props.state.previewCurrentForm()}
             disabled={props.state.saving() || props.state.testing() || props.state.previewing()}
             title="Show the resources Pulse would ingest from this connection without saving or starting polling."
           >
             {props.state.previewing() ? 'Previewing…' : 'Preview impact'}
-          </button>
-          <button
-            type="button"
-            class={primaryButtonClass}
+          </Button>
+          <Button
+            variant="primary"
+            size="settingsAction"
             onClick={() => void props.state.saveCurrentForm()}
             disabled={
               props.state.saving() ||
@@ -411,7 +403,7 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
               : isEditing()
                 ? 'Update connection'
                 : 'Add connection'}
-          </button>
+          </Button>
         </div>
       </Show>
     </div>
