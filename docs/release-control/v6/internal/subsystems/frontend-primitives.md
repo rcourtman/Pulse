@@ -2443,6 +2443,12 @@ Grouped/list table-mode controls are registry-backed as well.
 `Grouped` / `List` labels, tooltip titles, and icons for table mode switching.
 Resource surfaces must compose that primitive instead of copying grouped/list
 segmented-control labels locally.
+Product table cards are registry-backed too. `TableCard` owns the shared
+bordered, no-padding, card-tone table frame, while `TableCardHeader` owns the
+title/action/clear chrome, clear button copy, aria label, and propagation
+containment for table-card headers. Product table surfaces must compose those
+primitives instead of recreating local overflow-hidden bordered wrappers or
+retired summary-table header aliases.
 Inline detail table rows are also registry-backed. `InlineDetailTableRow`
 owns the row/cell/content shell and row-click containment for platform,
 workload, and infrastructure inline drawers; callers may pass row-specific

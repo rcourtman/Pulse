@@ -104,6 +104,7 @@ import truenasProtectionTableSource from '@/features/truenas/TrueNASProtectionTa
 import vmwarePageSurfaceSource from '@/features/vmware/VmwarePageSurface.tsx?raw';
 import upgradeNavigationSource from '@/utils/upgradeNavigation.ts?raw';
 import guestRowSource from '@/components/Workloads/GuestRow.tsx?raw';
+import workloadsSurfaceSource from '@/components/Workloads/WorkloadsSurface.tsx?raw';
 import workloadsTableSource from '@/components/Workloads/WorkloadsTable.tsx?raw';
 import workloadPanelSource from '@/components/Workloads/WorkloadPanel.tsx?raw';
 import guestRowStateSource from '@/components/Workloads/useGuestRowState.ts?raw';
@@ -461,6 +462,51 @@ describe('shared primitive guardrails', () => {
   });
 
   it('keeps shared table card chrome on one canonical header owner', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        allowedPaths?: string[];
+        ignoredPaths?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find(
+      (rule) => rule.id === 'table-card-header-shell',
+    );
+    const registeredGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'table-card-header-local-summary-header',
+    );
+
+    expect(registeredRule?.canonical?.path).toBe(
+      'src/components/shared/TableCardHeader.tsx',
+    );
+    expect(registeredRule?.canonical?.export).toBe('TableCardHeader');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/components/Infrastructure/UnifiedResourceHostTableCard.tsx',
+      'src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx',
+      'src/components/Storage/StorageContentCard.tsx',
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    ]);
+    expect(registeredGuard?.canonical?.path).toBe(
+      'src/components/shared/TableCardHeader.tsx',
+    );
+    expect(registeredGuard?.canonical?.export).toBe('TableCardHeader');
+    expect(registeredGuard?.allPatterns).toEqual(['SummaryTableCardHeader']);
+    expect(registeredGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(registeredGuard?.ignoredPaths).toEqual([
+      'src/components/shared/SharedPrimitives.guardrails.test.ts',
+    ]);
+    expect(registeredGuard?.scopes).toEqual(
+      expect.arrayContaining(['src/components', 'src/features', 'src/pages']),
+    );
+
     expect(tableCardHeaderSource).toContain('Clear selection');
     expect(tableCardHeaderSource).toContain("props.clearLabel ?? 'Clear'");
     expect(tableCardHeaderSource).toContain('props.clearAriaLabel ??');
@@ -480,6 +526,54 @@ describe('shared primitive guardrails', () => {
   });
 
   it('keeps framed product table surfaces on the shared TableCard owner', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        allowedPaths?: string[];
+        ignoredPaths?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find(
+      (rule) => rule.id === 'table-card-frame-shell',
+    );
+    const registeredGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'table-card-frame-local-wrapper',
+    );
+
+    expect(registeredRule?.canonical?.path).toBe(
+      'src/components/shared/TableCard.tsx',
+    );
+    expect(registeredRule?.canonical?.export).toBe('TableCard');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/components/Infrastructure/UnifiedResourceHostTableCard.tsx',
+      'src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx',
+      'src/components/Storage/StorageContentCard.tsx',
+      'src/components/Workloads/WorkloadsSurface.tsx',
+      'src/components/Workloads/WorkloadsTable.tsx',
+      'src/features/alerts/AlertHistoryTableSection.tsx',
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    ]);
+    expect(registeredGuard?.canonical?.path).toBe('src/components/shared/TableCard.tsx');
+    expect(registeredGuard?.canonical?.export).toBe('TableCard');
+    expect(registeredGuard?.allPatterns).toEqual([
+      'overflow-hidden border-border-subtle bg-surface',
+    ]);
+    expect(registeredGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(registeredGuard?.ignoredPaths).toEqual([
+      'src/components/shared/SharedPrimitives.guardrails.test.ts',
+    ]);
+    expect(registeredGuard?.scopes).toEqual(
+      expect.arrayContaining(['src/components', 'src/features', 'src/pages']),
+    );
+
     expect(tableCardSource).toContain("export const TABLE_CARD_FRAME_CLASS = 'overflow-hidden'");
     expect(tableCardSource).toContain("Omit<CardProps, 'border' | 'padding' | 'tone'>");
     expect(tableCardSource).toContain('border={true}');
@@ -489,6 +583,9 @@ describe('shared primitive guardrails', () => {
 
     for (const source of [
       workloadsTableSource,
+      workloadsSurfaceSource,
+      alertHistoryTableSectionSource,
+      sharedPlatformPageSource,
       unifiedResourceHostTableCardSource,
       unifiedResourceServiceInfrastructureCardSource,
       storageContentCardSource,
