@@ -466,6 +466,9 @@ describe('settings architecture guardrails', () => {
   it('keeps Docker and Podman update-action copy on the system settings presentation owner', () => {
     expect(dockerRuntimeSettingsCardSource).toContain('DOCKER_UPDATE_ACTIONS_SECTION_TITLE');
     expect(dockerRuntimeSettingsCardSource).toContain('DOCKER_UPDATE_ACTIONS_ENV_VAR');
+    expect(dockerRuntimeSettingsCardSource).toContain('TogglePrimitive');
+    expect(dockerRuntimeSettingsCardSource).not.toContain('role="switch"');
+    expect(dockerRuntimeSettingsCardSource).not.toContain('aria-checked');
     expect(dockerRuntimeSettingsCardSource).not.toContain('Container Updates');
     expect(dockerRuntimeSettingsCardSource).not.toContain('container update actions');
 

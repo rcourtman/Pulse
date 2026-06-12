@@ -1,5 +1,6 @@
 import { Component, Accessor, Show } from 'solid-js';
 import { EnvironmentLockBadge } from '@/components/shared/EnvironmentLockBadge';
+import { TogglePrimitive } from '@/components/shared/Toggle';
 import { ENVIRONMENT_LOCK_BUTTON_TITLE } from '@/utils/environmentLockPresentation';
 import {
   DOCKER_UPDATE_ACTIONS_ENV_VAR,
@@ -29,7 +30,7 @@ export const DockerRuntimeSettingsCard: Component<DockerRuntimeSettingsCardProps
       <div class="flex items-start justify-between gap-4 rounded-md border border-border bg-surface-hover p-4">
         <div class="flex-1 space-y-1">
           <div class="flex items-center gap-2">
-            <span class="text-sm font-medium text-base-content">
+            <span id="docker-update-actions-toggle-label" class="text-sm font-medium text-base-content">
               {DOCKER_UPDATE_ACTIONS_TOGGLE_LABEL}
             </span>
             <Show when={props.disableDockerUpdateActionsLocked()}>
@@ -53,7 +54,9 @@ export const DockerRuntimeSettingsCard: Component<DockerRuntimeSettingsCardProps
               />
             </Show>
           </div>
-          <p class="text-xs text-muted">{DOCKER_UPDATE_ACTIONS_TOGGLE_DESCRIPTION}</p>
+          <p id="docker-update-actions-toggle-description" class="text-xs text-muted">
+            {DOCKER_UPDATE_ACTIONS_TOGGLE_DESCRIPTION}
+          </p>
           <p class="text-xs text-muted mt-1">
             Can also be set via environment variable:{' '}
             <code class="px-1 py-0.5 rounded bg-surface-hover text-base-content">
@@ -62,27 +65,18 @@ export const DockerRuntimeSettingsCard: Component<DockerRuntimeSettingsCardProps
           </p>
         </div>
         <div class="flex-shrink-0">
-          <button
-            type="button"
-            onClick={() =>
-              props.handleDisableDockerUpdateActionsChange(!props.disableDockerUpdateActions())
+          <TogglePrimitive
+            checked={props.disableDockerUpdateActions()}
+            onChange={(event) =>
+              props.handleDisableDockerUpdateActionsChange(event.currentTarget.checked)
             }
             disabled={props.disableDockerUpdateActionsLocked() || props.savingDockerUpdateActions()}
-            class={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-              props.disableDockerUpdateActions() ? 'bg-blue-600' : 'bg-surface-alt'
-            } ${props.disableDockerUpdateActionsLocked() ? 'opacity-50 cursor-not-allowed' : ''}`}
-            role="switch"
-            aria-checked={props.disableDockerUpdateActions()}
+            ariaLabelledBy="docker-update-actions-toggle-label"
+            ariaDescribedBy="docker-update-actions-toggle-description"
             title={
               props.disableDockerUpdateActionsLocked() ? ENVIRONMENT_LOCK_BUTTON_TITLE : undefined
             }
-          >
-            <span
-              class={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
-                props.disableDockerUpdateActions() ? 'translate-x-6' : 'translate-x-1'
-              }`}
-            />
-          </button>
+          />
         </div>
       </div>
     </div>

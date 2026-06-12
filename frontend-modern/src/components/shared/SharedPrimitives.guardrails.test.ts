@@ -162,6 +162,7 @@ import aiSettingsDialogsSource from '@/components/Settings/AISettingsDialogs.tsx
 import agentProfilesPanelSource from '@/components/Settings/AgentProfilesPanel.tsx?raw';
 import apiTokenManagerSource from '@/components/Settings/APITokenManager.tsx?raw';
 import diagnosticsResultsPanelSource from '@/components/Settings/DiagnosticsResultsPanel.tsx?raw';
+import dockerRuntimeSettingsCardSource from '@/components/Settings/DockerRuntimeSettingsCard.tsx?raw';
 import generalSettingsPanelSource from '@/components/Settings/GeneralSettingsPanel.tsx?raw';
 import organizationAccessMembersSectionSource from '@/components/Settings/OrganizationAccessMembersSection.tsx?raw';
 import organizationIncomingSharesSectionSource from '@/components/Settings/OrganizationIncomingSharesSection.tsx?raw';
@@ -1255,6 +1256,65 @@ describe('shared primitive guardrails', () => {
   });
 
   it('keeps toggle on shell, runtime, and model owners', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        allowedPaths?: string[];
+        ignoredPaths?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find((rule) => rule.id === 'toggle-shell');
+    const registeredGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'toggle-local-role-switch',
+    );
+
+    expect(registeredRule?.canonical?.path).toBe('src/components/shared/Toggle.tsx');
+    expect(registeredRule?.canonical?.export).toBe('Toggle');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/components/Alerts/AlertResourceTableDesktop.tsx',
+      'src/components/Alerts/AlertResourceTableMobile.tsx',
+      'src/components/Alerts/AlertResourceTableRow.tsx',
+      'src/components/Alerts/ThresholdsTableDockerServiceGapSection.tsx',
+      'src/components/Alerts/ThresholdsTableProxmoxBackupsSection.tsx',
+      'src/components/Infrastructure/ResourceOperatorStateSection.tsx',
+      'src/components/Settings/AIRuntimeControlsSection.tsx',
+      'src/components/Settings/AISettings.tsx',
+      'src/components/Settings/AuditLogPanel.tsx',
+      'src/components/Settings/DiscoverySettingsForm.tsx',
+      'src/components/Settings/DockerRuntimeSettingsCard.tsx',
+      'src/components/Settings/GeneralSettingsPanel.tsx',
+      'src/components/Settings/NodeModalMonitoringSection.tsx',
+      'src/components/Settings/RelaySettingsPanel.tsx',
+      'src/components/Settings/SSOProvidersPanel.tsx',
+      'src/components/Settings/SecurityAuthPanel.tsx',
+      'src/features/alerts/AlertAppriseDestinationsSection.tsx',
+      'src/features/alerts/AlertCooldownSection.tsx',
+      'src/features/alerts/AlertEmailDestinationsSection.tsx',
+      'src/features/alerts/AlertEscalationSection.tsx',
+      'src/features/alerts/AlertGroupingSection.tsx',
+      'src/features/alerts/AlertQuietHoursSection.tsx',
+      'src/features/alerts/AlertRecoverySection.tsx',
+      'src/features/patrol/PatrolIntelligenceHeader.tsx',
+    ]);
+    expect(registeredGuard?.canonical?.path).toBe('src/components/shared/Toggle.tsx');
+    expect(registeredGuard?.canonical?.export).toBe('Toggle');
+    expect(registeredGuard?.allPatterns).toEqual(['role="switch"', 'aria-checked']);
+    expect(registeredGuard?.scopes).toEqual(['src/components', 'src/features']);
+    expect(registeredGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(registeredGuard?.ignoredPaths).toEqual([
+      'src/components/Alerts/ResourceTable.test.tsx',
+      'src/components/shared/SharedPrimitives.guardrails.test.ts',
+      'src/components/shared/Toggle.test.tsx',
+    ]);
+
     expect(toggleSource).toContain('useToggleState');
     expect(toggleSource).toContain('getToggleTrackClass');
     expect(toggleSource).toContain('getToggleKnobClass');
@@ -1273,6 +1333,12 @@ describe('shared primitive guardrails', () => {
     expect(toggleModelSource).toContain('getToggleTrackClass');
     expect(toggleModelSource).toContain('getToggleKnobClass');
     expect(toggleModelSource).toContain('ToggleChangeEvent');
+
+    expect(dockerRuntimeSettingsCardSource).toContain('TogglePrimitive');
+    expect(dockerRuntimeSettingsCardSource).toContain('ariaLabelledBy');
+    expect(dockerRuntimeSettingsCardSource).toContain('ariaDescribedBy');
+    expect(dockerRuntimeSettingsCardSource).not.toContain('role="switch"');
+    expect(dockerRuntimeSettingsCardSource).not.toContain('aria-checked');
   });
 
   it('keeps status badge on shell, runtime, and model owners', () => {

@@ -248,6 +248,46 @@
       ]
     },
     {
+      "id": "toggle-shell",
+      "category": "toggle-control",
+      "summary": "Binary on/off controls must compose Toggle or TogglePrimitive for shared track/knob styling, disabled behavior, label/description wiring, and synthetic checked events instead of recreating local switch buttons.",
+      "canonical": {
+        "path": "src/components/shared/Toggle.tsx",
+        "export": "Toggle"
+      },
+      "requiredConsumers": [
+        { "path": "src/components/Alerts/AlertResourceTableDesktop.tsx" },
+        { "path": "src/components/Alerts/AlertResourceTableMobile.tsx" },
+        { "path": "src/components/Alerts/AlertResourceTableRow.tsx" },
+        { "path": "src/components/Alerts/ThresholdsTableDockerServiceGapSection.tsx" },
+        { "path": "src/components/Alerts/ThresholdsTableProxmoxBackupsSection.tsx" },
+        { "path": "src/components/Infrastructure/ResourceOperatorStateSection.tsx" },
+        { "path": "src/components/Settings/AIRuntimeControlsSection.tsx" },
+        { "path": "src/components/Settings/AISettings.tsx" },
+        { "path": "src/components/Settings/AuditLogPanel.tsx" },
+        { "path": "src/components/Settings/DiscoverySettingsForm.tsx" },
+        { "path": "src/components/Settings/DockerRuntimeSettingsCard.tsx" },
+        { "path": "src/components/Settings/GeneralSettingsPanel.tsx" },
+        { "path": "src/components/Settings/NodeModalMonitoringSection.tsx" },
+        { "path": "src/components/Settings/RelaySettingsPanel.tsx" },
+        { "path": "src/components/Settings/SSOProvidersPanel.tsx" },
+        { "path": "src/components/Settings/SecurityAuthPanel.tsx" },
+        { "path": "src/features/alerts/AlertAppriseDestinationsSection.tsx" },
+        { "path": "src/features/alerts/AlertCooldownSection.tsx" },
+        { "path": "src/features/alerts/AlertEmailDestinationsSection.tsx" },
+        { "path": "src/features/alerts/AlertEscalationSection.tsx" },
+        { "path": "src/features/alerts/AlertGroupingSection.tsx" },
+        { "path": "src/features/alerts/AlertQuietHoursSection.tsx" },
+        { "path": "src/features/alerts/AlertRecoverySection.tsx" },
+        { "path": "src/features/patrol/PatrolIntelligenceHeader.tsx" }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Toggle.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "platform-table-loading-state",
       "category": "platform-table-loading-state",
       "summary": "Platform page and table loading states must compose PlatformTableLoadingState instead of recreating local TableCard status rows.",
@@ -807,7 +847,10 @@
         "src/components/Alerts/AlertResourceTableMobile.tsx",
         "src/components/Alerts/AlertResourceTableRow.tsx"
       ],
-      "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
+      "ignoredPaths": [
+        "src/components/Alerts/EmailProviderSelect.test.tsx",
+        "src/components/shared/SharedPrimitives.guardrails.test.ts"
+      ],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "scripts/shared-template-audit.mjs"
@@ -826,7 +869,10 @@
       "allPatterns": ["<textarea"],
       "legacyReason": "Bounded residual. SSO provider metadata textareas still require a dedicated editor migration; new settings textareas must use FormTextarea.",
       "allowedPaths": ["src/components/Settings/SSOProvidersPanel.tsx"],
-      "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
+      "ignoredPaths": [
+        "src/components/Settings/__tests__/ProLicensePanel.test.tsx",
+        "src/components/shared/SharedPrimitives.guardrails.test.ts"
+      ],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "scripts/shared-template-audit.mjs"
@@ -848,6 +894,30 @@
       "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "toggle-local-role-switch",
+      "category": "toggle-control",
+      "summary": "Binary switch-looking controls must compose Toggle or TogglePrimitive instead of hand-rolling local role=switch buttons with aria-checked and custom track/knob classes.",
+      "canonical": {
+        "path": "src/components/shared/Toggle.tsx",
+        "export": "Toggle"
+      },
+      "scopes": ["src/components", "src/features"],
+      "extensions": [".tsx"],
+      "allPatterns": ["role=\"switch\"", "aria-checked"],
+      "legacyReason": "Retired migration debt. Local switch role buttons must route through the shared Toggle primitive; radios, checkboxes, and selection controls are governed separately.",
+      "allowedPaths": [],
+      "ignoredPaths": [
+        "src/components/Alerts/ResourceTable.test.tsx",
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Toggle.test.tsx"
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Toggle.test.tsx",
         "scripts/shared-template-audit.mjs"
       ]
     },

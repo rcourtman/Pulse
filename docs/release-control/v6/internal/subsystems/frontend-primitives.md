@@ -2281,6 +2281,12 @@ plus the synthetic toggle change-event runtime, and
 track/knob/container class policy, and the canonical toggle event type.
 Future toggle work should extend those owners instead of pushing synthetic
 event behavior or size/class policy back into the shell.
+Binary on/off controls are registry-backed too. Product surfaces must compose
+`Toggle` or `TogglePrimitive` for shared track/knob styling, disabled behavior,
+label/description wiring, and synthetic checked events instead of recreating
+local `role="switch"` buttons with `aria-checked` and page-local classes.
+Ordinary checkboxes, radio groups, and row-selection controls are separate
+affordances and must not be forced through this toggle primitive.
 The shared status badge now follows that same owner split.
 `frontend-modern/src/components/shared/StatusBadge.tsx` stays the render shell,
 `frontend-modern/src/components/shared/useStatusBadgeState.ts` owns disabled
