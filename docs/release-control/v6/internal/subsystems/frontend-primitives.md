@@ -2430,6 +2430,13 @@ semantics. Storage linked-disk health rows must derive a `StatusDot` variant
 through `getLinkedDiskHealthDotVariant` and must not recreate local rounded
 green/yellow span classes in storage components or storage-backup presentation
 helpers.
+Native select controls are registry-backed too. `FormSelect` owns label/id
+wiring, helper-text description merging, value synchronization, default select
+chrome, and compact styling hooks for native selects. Workloads guest and node
+history range controls must compose `FormSelect` rather than recreating a
+screen-reader label plus raw `<select>` shell locally, and future native-select
+migrations should extend that primitive instead of forking labelled select
+wrappers.
 Search controls are registry-backed too. `SearchField` owns simple search
 input chrome, clear affordance, keyboard forwarding, focus handling, aria
 labels, and trailing-control padding, while `SearchInput` owns resource-list

@@ -8,6 +8,7 @@ import {
   type ResourceType,
   type SingleMetricHistoryResponse,
 } from '@/api/charts';
+import { FormSelect } from '@/components/shared/FormSelect';
 import { filterSelectClass } from '@/components/shared/FilterToolbar';
 import {
   HISTORY_CHART_RANGES,
@@ -98,22 +99,20 @@ const formatRangeLabel = (range: HistoryTimeRange): string => {
 export const GuestDrawerHistoryRangeSelect: Component<GuestDrawerHistoryRangeSelectProps> = (
   props,
 ) => (
-  <>
-    <label class="sr-only" for="guest-history-range">
-      History range
-    </label>
-    <select
-      id="guest-history-range"
-      class={`${filterSelectClass} h-7 py-0 text-[11px]`}
-      data-testid="guest-history-range-control"
-      value={props.range}
-      onChange={(event) => props.onRangeChange(event.currentTarget.value as HistoryTimeRange)}
-    >
-      <For each={HISTORY_CHART_RANGES}>
-        {(option) => <option value={option}>{formatRangeLabel(option)}</option>}
-      </For>
-    </select>
-  </>
+  <FormSelect
+    id="guest-history-range"
+    label="History range"
+    labelClass="sr-only"
+    fieldBaseClass="contents"
+    selectBaseClass={`${filterSelectClass} h-7 py-0 text-[11px]`}
+    data-testid="guest-history-range-control"
+    value={props.range}
+    onChange={(event) => props.onRangeChange(event.currentTarget.value as HistoryTimeRange)}
+  >
+    <For each={HISTORY_CHART_RANGES}>
+      {(option) => <option value={option}>{formatRangeLabel(option)}</option>}
+    </For>
+  </FormSelect>
 );
 
 const normalizeHistoryResponse = (

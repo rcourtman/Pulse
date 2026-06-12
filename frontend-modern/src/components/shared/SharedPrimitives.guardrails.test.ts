@@ -107,6 +107,7 @@ import truenasProtectionTableSource from '@/features/truenas/TrueNASProtectionTa
 import vmwarePageSurfaceSource from '@/features/vmware/VmwarePageSurface.tsx?raw';
 import upgradeNavigationSource from '@/utils/upgradeNavigation.ts?raw';
 import guestRowSource from '@/components/Workloads/GuestRow.tsx?raw';
+import guestDrawerHistorySource from '@/components/Workloads/GuestDrawerHistory.tsx?raw';
 import workloadsSurfaceSource from '@/components/Workloads/WorkloadsSurface.tsx?raw';
 import workloadsTableSource from '@/components/Workloads/WorkloadsTable.tsx?raw';
 import workloadPanelSource from '@/components/Workloads/WorkloadPanel.tsx?raw';
@@ -296,6 +297,65 @@ describe('shared primitive guardrails', () => {
   });
 
   it('keeps native form selects on the shared labelled primitive', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        allowedPaths?: string[];
+        ignoredPaths?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find((rule) => rule.id === 'form-select-shell');
+    const registeredGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'form-select-local-guest-history-range-select',
+    );
+
+    expect(registeredRule?.canonical?.path).toBe('src/components/shared/FormSelect.tsx');
+    expect(registeredRule?.canonical?.export).toBe('FormSelect');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/components/AI/FindingsPanel.tsx',
+      'src/components/Alerts/EmailProviderSelect.tsx',
+      'src/components/Alerts/WebhookConfigForm.tsx',
+      'src/components/Settings/AIChatMaintenanceSection.tsx',
+      'src/components/Settings/AIModelSelectionSection.tsx',
+      'src/components/Settings/AIRuntimeControlsSection.tsx',
+      'src/components/Settings/AgentProfilesPanel.tsx',
+      'src/components/Settings/AuditLogPanel.tsx',
+      'src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx',
+      'src/components/Settings/ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx',
+      'src/components/Settings/InfrastructureInstallerSection.tsx',
+      'src/components/Settings/NodeModalMonitoringSection.tsx',
+      'src/components/Settings/OrganizationAccessManagementSection.tsx',
+      'src/components/Settings/OrganizationAccessMembersSection.tsx',
+      'src/components/Settings/OrganizationSharingCreateSection.tsx',
+      'src/components/Settings/RecoverySettingsPanel.tsx',
+      'src/components/Settings/RolesEditorDialog.tsx',
+      'src/components/Settings/SystemLogsPanel.tsx',
+      'src/components/Settings/UpdatesSettingsPanel.tsx',
+      'src/components/Storage/DiskDetail.tsx',
+      'src/components/Storage/StoragePoolDetail.tsx',
+      'src/components/Workloads/GuestDrawerHistory.tsx',
+      'src/features/alerts/AlertAppriseDestinationsSection.tsx',
+      'src/features/alerts/AlertEscalationSection.tsx',
+      'src/features/alerts/AlertQuietHoursSection.tsx',
+      'src/features/patrol/PatrolIntelligenceHeader.tsx',
+    ]);
+    expect(registeredGuard?.canonical?.path).toBe('src/components/shared/FormSelect.tsx');
+    expect(registeredGuard?.canonical?.export).toBe('FormSelect');
+    expect(registeredGuard?.allPatterns).toEqual(['<select', 'guest-history-range']);
+    expect(registeredGuard?.scopes).toEqual(['src/components/Workloads']);
+    expect(registeredGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(registeredGuard?.ignoredPaths).toEqual([
+      'src/components/shared/SharedPrimitives.guardrails.test.ts',
+    ]);
+
     expect(formSelectSource).toContain("from '@/components/shared/Form'");
     expect(formSelectSource).toContain('createUniqueId');
     expect(formSelectSource).toContain('splitProps');
@@ -310,6 +370,11 @@ describe('shared primitive guardrails', () => {
     expect(formSelectSource).toContain('selectElement.value = nextValue');
     expect(formSelectSource).toContain('local.selectBaseClass ?? formSelect');
     expect(formSelectSource).toContain('local.fieldBaseClass ?? formField');
+
+    expect(guestDrawerHistorySource).toContain('FormSelect');
+    expect(guestDrawerHistorySource).toContain('id="guest-history-range"');
+    expect(guestDrawerHistorySource).toContain('data-testid="guest-history-range-control"');
+    expect(guestDrawerHistorySource).not.toContain('<select');
   });
 
   it('routes selectable settings cards through SelectionCardGroup', () => {

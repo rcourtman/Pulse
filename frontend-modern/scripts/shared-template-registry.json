@@ -181,6 +181,48 @@
       ]
     },
     {
+      "id": "form-select-shell",
+      "category": "form-control",
+      "summary": "Native select controls must compose FormSelect for shared label/id/help wiring, value synchronization, and select chrome instead of recreating labelled select wrappers locally.",
+      "canonical": {
+        "path": "src/components/shared/FormSelect.tsx",
+        "export": "FormSelect"
+      },
+      "requiredConsumers": [
+        { "path": "src/components/AI/FindingsPanel.tsx" },
+        { "path": "src/components/Alerts/EmailProviderSelect.tsx" },
+        { "path": "src/components/Alerts/WebhookConfigForm.tsx" },
+        { "path": "src/components/Settings/AIChatMaintenanceSection.tsx" },
+        { "path": "src/components/Settings/AIModelSelectionSection.tsx" },
+        { "path": "src/components/Settings/AIRuntimeControlsSection.tsx" },
+        { "path": "src/components/Settings/AgentProfilesPanel.tsx" },
+        { "path": "src/components/Settings/AuditLogPanel.tsx" },
+        { "path": "src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx" },
+        { "path": "src/components/Settings/ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx" },
+        { "path": "src/components/Settings/InfrastructureInstallerSection.tsx" },
+        { "path": "src/components/Settings/NodeModalMonitoringSection.tsx" },
+        { "path": "src/components/Settings/OrganizationAccessManagementSection.tsx" },
+        { "path": "src/components/Settings/OrganizationAccessMembersSection.tsx" },
+        { "path": "src/components/Settings/OrganizationSharingCreateSection.tsx" },
+        { "path": "src/components/Settings/RecoverySettingsPanel.tsx" },
+        { "path": "src/components/Settings/RolesEditorDialog.tsx" },
+        { "path": "src/components/Settings/SystemLogsPanel.tsx" },
+        { "path": "src/components/Settings/UpdatesSettingsPanel.tsx" },
+        { "path": "src/components/Storage/DiskDetail.tsx" },
+        { "path": "src/components/Storage/StoragePoolDetail.tsx" },
+        { "path": "src/components/Workloads/GuestDrawerHistory.tsx" },
+        { "path": "src/features/alerts/AlertAppriseDestinationsSection.tsx" },
+        { "path": "src/features/alerts/AlertEscalationSection.tsx" },
+        { "path": "src/features/alerts/AlertQuietHoursSection.tsx" },
+        { "path": "src/features/patrol/PatrolIntelligenceHeader.tsx" }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/FormSelect.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "platform-table-loading-state",
       "category": "platform-table-loading-state",
       "summary": "Platform page and table loading states must compose PlatformTableLoadingState instead of recreating local TableCard status rows.",
@@ -698,6 +740,25 @@
       "extensions": [".ts", ".tsx"],
       "allPatterns": ["h-2 w-2 rounded-full bg-yellow-500", "h-2 w-2 rounded-full bg-green-500"],
       "legacyReason": "Retired migration debt. Linked-disk health indicators must use StatusDot variants instead of local green/yellow dot classes.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "form-select-local-guest-history-range-select",
+      "category": "form-control",
+      "summary": "Guest and node drawer history range controls must compose FormSelect instead of recreating the labelled native select locally.",
+      "canonical": {
+        "path": "src/components/shared/FormSelect.tsx",
+        "export": "FormSelect"
+      },
+      "scopes": ["src/components/Workloads"],
+      "extensions": [".tsx"],
+      "allPatterns": ["<select", "guest-history-range"],
+      "legacyReason": "Retired migration debt. Guest history range controls must use FormSelect for label/id/select chrome wiring.",
       "allowedPaths": [],
       "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
       "proof": [
