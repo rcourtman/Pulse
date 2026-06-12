@@ -15,6 +15,7 @@ import dialogSource from '@/components/shared/Dialog.tsx?raw';
 import dialogModelSource from '@/components/shared/dialogModel.ts?raw';
 import filterButtonGroupSource from '@/components/shared/FilterButtonGroup.tsx?raw';
 import filterButtonGroupModelSource from '@/components/shared/filterButtonGroupModel.ts?raw';
+import filterToolbarSource from '@/components/shared/FilterToolbar.tsx?raw';
 import filterOptionPresentationSource from '@/components/shared/filterOptionPresentation.ts?raw';
 import formSelectSource from '@/components/shared/FormSelect.tsx?raw';
 import helpIconSource from '@/components/shared/HelpIcon.tsx?raw';
@@ -595,6 +596,56 @@ describe('shared primitive guardrails', () => {
       expect(source).not.toContain('<td ');
       expect(source).not.toContain('<th ');
     }
+  });
+
+  it('keeps chart visibility display actions on the shared toolbar toggle', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        allowedPaths?: string[];
+        ignoredPaths?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find(
+      (rule) => rule.id === 'chart-visibility-toggle-button',
+    );
+    const registeredGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'chart-visibility-local-toggle-labels',
+    );
+
+    expect(registeredRule?.canonical?.path).toBe('src/components/shared/FilterToolbar.tsx');
+    expect(registeredRule?.canonical?.export).toBe('ChartVisibilityToggleButton');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/components/Workloads/WorkloadsFilter.tsx',
+    ]);
+    expect(registeredGuard?.canonical?.path).toBe('src/components/shared/FilterToolbar.tsx');
+    expect(registeredGuard?.canonical?.export).toBe('ChartVisibilityToggleButton');
+    expect(registeredGuard?.allPatterns).toEqual(['Show charts', 'Hide charts']);
+    expect(registeredGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(registeredGuard?.ignoredPaths).toEqual([
+      'src/components/Workloads/__tests__/WorkloadsFilter.test.tsx',
+    ]);
+    expect(registeredGuard?.scopes).toEqual(
+      expect.arrayContaining(['src/components/Workloads', 'src/features', 'src/pages']),
+    );
+
+    expect(filterToolbarSource).toContain('export const ChartVisibilityToggleButton');
+    expect(filterToolbarSource).toContain("local.collapsed ? 'Show charts' : 'Hide charts'");
+    expect(filterToolbarSource).toContain('active={!local.collapsed}');
+    expect(filterToolbarSource).toContain('aria-pressed={!local.collapsed}');
+    expect(filterToolbarSource).toContain('title={label()}');
+
+    expect(workloadsFilterSource).toContain('ChartVisibilityToggleButton');
+    expect(workloadsFilterSource).not.toContain('Show charts');
+    expect(workloadsFilterSource).not.toContain('Hide charts');
   });
 
   it('keeps grouped/list table-mode controls on one shared presentation contract', () => {

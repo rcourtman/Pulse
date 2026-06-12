@@ -241,6 +241,21 @@
       ]
     },
     {
+      "id": "chart-visibility-toggle-button",
+      "category": "display-toggle",
+      "summary": "Summary-bearing filter surfaces must compose ChartVisibilityToggleButton for chart show/hide display actions instead of recreating one-off chart toggle buttons.",
+      "canonical": {
+        "path": "src/components/shared/FilterToolbar.tsx",
+        "export": "ChartVisibilityToggleButton"
+      },
+      "requiredConsumers": [{ "path": "src/components/Workloads/WorkloadsFilter.tsx" }],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/FilterToolbar.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "grouped-table-mode-segmented-control",
       "category": "table-mode-control",
       "summary": "Grouped/list table-mode controls must compose GroupedTableModeSegmentedControl instead of recreating grouped/list labels, titles, or icons locally.",
@@ -348,6 +363,25 @@
       "allPatterns": ["aria-current={", "border-b-2", "border-b border-border"],
       "legacyReason": "Retired migration debt. Platform page section tabs must use PlatformSectionTabs; no page-local tab-bar exceptions are currently allowed.",
       "allowedPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "chart-visibility-local-toggle-labels",
+      "category": "display-toggle",
+      "summary": "Summary-bearing surfaces must not copy the Show charts / Hide charts display-toggle labels owned by ChartVisibilityToggleButton.",
+      "canonical": {
+        "path": "src/components/shared/FilterToolbar.tsx",
+        "export": "ChartVisibilityToggleButton"
+      },
+      "scopes": ["src/components/Workloads", "src/features", "src/pages"],
+      "extensions": [".tsx"],
+      "allPatterns": ["Show charts", "Hide charts"],
+      "legacyReason": "Retired migration debt. Chart visibility display actions must use ChartVisibilityToggleButton; local show/hide chart toggle copies are not allowed.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/Workloads/__tests__/WorkloadsFilter.test.tsx"],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "scripts/shared-template-audit.mjs"

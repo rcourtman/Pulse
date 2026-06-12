@@ -2416,6 +2416,11 @@ small leading status-dot glyph used by filter options. Page and feature
 surfaces must not copy the chip-dot `<span>` factory or import the legacy
 `PageControls` deck for resource-list filtering; those drift checks live in
 `shared-template-registry.json` and run through `shared-template-audit.mjs`.
+Chart visibility display actions are registry-backed too.
+`ChartVisibilityToggleButton` owns the `Show charts` / `Hide charts` label,
+pressed-state, title, icon, and toolbar action styling for summary-bearing
+filter surfaces. Pages must compose that primitive instead of recreating local
+chart visibility buttons or one-option segmented controls.
 Grouped/list table-mode controls are registry-backed as well.
 `GroupedTableModeSegmentedControl` owns the shared `Group by` label,
 `Grouped` / `List` labels, tooltip titles, and icons for table mode switching.
