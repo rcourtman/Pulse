@@ -261,6 +261,7 @@ vi.mock('../GuestRow', () => {
     GuestRow: (props: {
       guest: { id?: string; name: string };
       isExpanded?: boolean;
+      nestedWorkloadContext?: { label: string; count: number };
       onClick?: () => void;
     }) => {
       onMount(() => {
@@ -284,6 +285,11 @@ vi.mock('../GuestRow', () => {
               Toggle {props.guest.name}
             </button>
             <span>{props.guest.name}</span>
+            <span data-testid={`guest-row-nested-cue-${props.guest.name}`}>
+              {props.nestedWorkloadContext
+                ? `${props.nestedWorkloadContext.label} ${props.nestedWorkloadContext.count}`
+                : ''}
+            </span>
           </td>
           <td>running</td>
         </tr>
@@ -888,6 +894,7 @@ describe('Workloads performance contract', () => {
         container.querySelector('[data-testid="guest-row-nested-docker-container"]'),
       ).toBeNull();
       expect(screen.queryByTestId('nested-workload-context-row')).toBeNull();
+      expect(screen.getByTestId('guest-row-nested-cue-pve-lxc')).toHaveTextContent('Docker 1');
 
       fireEvent.click(screen.getByTestId('guest-row-toggle-pve-lxc'));
       expect(await screen.findByTestId('guest-drawer')).toBeInTheDocument();

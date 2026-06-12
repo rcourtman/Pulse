@@ -9,6 +9,7 @@ import type {
   WorkloadMetricHistoryReader,
   WorkloadTableMetric,
 } from './workloadMetricHistoryModel';
+import type { NestedWorkloadContext } from './nestedWorkloadContext';
 
 export type WorkloadTableLayoutMode = 'mobile' | 'tablet' | 'compact' | 'wide';
 
@@ -91,6 +92,7 @@ export interface GuestRowProps {
   ioEmphasis?: WorkloadIOEmphasis;
   metricDisplayMode?: 'bars' | 'sparklines';
   metricHistory?: WorkloadMetricHistoryReader;
+  nestedWorkloadContext?: Pick<NestedWorkloadContext, 'count' | 'label'>;
   workloadTableLayoutMode?: WorkloadTableLayoutMode;
   onHoverChange?: (guestId: string | null) => void;
 }

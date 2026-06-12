@@ -2294,7 +2294,10 @@ containers, while the Proxmox Overview workload table stays focused on VMs and
 LXCs. Proxmox may surface Docker-inside-LXC evidence as LXC drawer detail, but
 it must not promote those `app-container` rows into the default Proxmox peer
 workload table or add always-visible child rows that compete with VM/LXC scan
-flow. That nested context must be read-only and keyed by the same canonical
+flow. The peer row may expose only a compact nested-runtime cue derived from the
+same context so operators can discover that the LXC has nested containers
+without reading inline container details. That nested context must be read-only
+and keyed by the same canonical
 Proxmox guest identity and Docker host source identity used by the resource
 model; ambiguous runtime-host matches must be omitted rather than guessed. When
 that drawer links into the Docker / Podman runtime lens, it must carry the

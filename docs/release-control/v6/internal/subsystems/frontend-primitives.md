@@ -838,7 +838,10 @@ not a replacement status card, CTA band, or page-local nested card.
    evidence belongs as LXC drawer detail while `/docker`
    remains the canonical detailed Docker / Podman container lens. The overview
    table should not add peer rows, badges, or child rows for Docker containers;
-   those signals compete with VM/LXC state and belong one click down.
+   those signals compete with VM/LXC state and belong one click down. The
+   default row may carry only a quiet icon/count cue beside the guest name to
+   show nested runtime presence; names, metrics, state, and actions stay in the
+   drawer or Docker lens.
    Drawer-to-runtime navigation is still part of the shared platform-table
    affordance contract: when the LXC drawer exposes an `Open Docker` action for
    nested containers, that action must use the Docker host facet route state so

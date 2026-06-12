@@ -1,4 +1,5 @@
 import { createMemo, Show } from 'solid-js';
+import BoxIcon from 'lucide-solid/icons/box';
 import type { VM } from '@/types/api';
 import type { WorkloadGuest } from '@/types/workloads';
 import { formatUptime, formatSpeed, getShortImageName } from '@/utils/format';
@@ -98,6 +99,12 @@ export function GuestRow(props: GuestRowProps) {
   const metricDisplayMode = createMemo(() => props.metricDisplayMode ?? 'bars');
   const isSparklineMode = createMemo(() => metricDisplayMode() === 'sparklines');
   const detailControlsId = createMemo(() => buildSummaryDisclosureControlsId(guestId()));
+  const nestedWorkloadCueLabel = createMemo(() => {
+    const context = props.nestedWorkloadContext;
+    if (!context || context.count <= 0) return '';
+    const noun = context.count === 1 ? 'container' : 'containers';
+    return `${context.count} nested ${context.label} ${noun}. Open row for details.`;
+  });
   const normalizeMetricPercent = (value: number | null | undefined): number => {
     if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
     return value <= 1 ? Math.max(0, value * 100) : Math.max(0, value);
@@ -204,6 +211,17 @@ export function GuestRow(props: GuestRowProps) {
                     lastBackup={props.guest.lastBackup}
                     isTemplate={props.guest.template}
                   />
+                </Show>
+                <Show when={nestedWorkloadCueLabel()}>
+                  <span
+                    class="inline-flex shrink-0 items-center gap-0.5 text-[10px] font-medium leading-none text-muted"
+                    data-testid="nested-workload-cue"
+                    title={nestedWorkloadCueLabel()}
+                    aria-label={nestedWorkloadCueLabel()}
+                  >
+                    <BoxIcon class="h-3 w-3" aria-hidden="true" />
+                    <span class="tabular-nums">{props.nestedWorkloadContext?.count}</span>
+                  </span>
                 </Show>
               </div>
             </div>

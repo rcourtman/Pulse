@@ -166,7 +166,10 @@ regression protection.
    same raw workload snapshot before row rendering. That derivation must use
    canonical workload IDs and ambiguity-safe runtime-host matching; row and
    drawer components may render the summary they are given, but they must not
-   scan hidden workloads per row or guess ownership from ambiguous VMIDs.
+   scan hidden workloads per row or guess ownership from ambiguous VMIDs. Row
+   cues for nested runtimes must receive that precomputed summary through
+   `WorkloadPanel`/`GuestRow` props rather than deriving hidden-workload state
+   inside each row render.
    The same bounded derivation owns Docker host-facet handoff data for nested
    runtime links. `useWorkloads.ts` must carry the Docker runtime hostname onto
    `WorkloadGuest` so `nestedWorkloadContext.ts` can build a route-scoped Docker

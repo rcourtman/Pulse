@@ -555,6 +555,7 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                         ioEmphasis={props.workloadIOEmphasis()}
                         metricDisplayMode={props.workloadMetricDisplayMode()}
                         metricHistory={props.workloadMetricHistory}
+                        nestedWorkloadContext={nestedWorkloadContext()}
                         onHoverChange={props.setHoveredWorkloadId}
                       />
                       <Show when={props.selectedGuestId() === guestId()}>

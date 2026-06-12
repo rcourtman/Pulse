@@ -201,6 +201,24 @@ describe('GuestRow', () => {
       expect(screen.getByText('my-webserver')).toBeTruthy();
     });
 
+    it('renders a subtle nested workload cue when the row has drawer-only containers', () => {
+      renderGuestRow({
+        guest: makeGuest({ name: 'frigate', type: 'lxc', workloadType: 'system-container' }),
+        nestedWorkloadContext: {
+          label: 'Docker',
+          count: 2,
+        },
+      });
+
+      const cue = screen.getByTestId('nested-workload-cue');
+      expect(cue).toHaveAttribute(
+        'aria-label',
+        '2 nested Docker containers. Open row for details.',
+      );
+      expect(cue).toHaveTextContent('2');
+      expect(screen.queryByText('Nested Docker')).toBeNull();
+    });
+
     it('does not repeat the in-guest agent install action in every row', () => {
       renderGuestRow({
         guest: makeGuest({ agentVersion: undefined, status: 'running' }),
