@@ -1,4 +1,6 @@
 import { Component, For, Show } from 'solid-js';
+import InfoIcon from 'lucide-solid/icons/info';
+import { CalloutCard } from '@/components/shared/CalloutCard';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { Toggle } from '@/components/shared/Toggle';
 import type { ToggleChangeEvent } from '@/components/shared/Toggle';
@@ -47,29 +49,17 @@ export const DiscoverySettingsForm: Component<DiscoverySettingsFormProps> = (pro
 
   return (
     <div class="space-y-5">
-      <div class="rounded-md border border-amber-200 bg-amber-50/80 p-4 dark:border-amber-800 dark:bg-amber-950/40">
-        <div class="flex items-start gap-3">
-          <svg
-            class="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-600 dark:text-amber-400"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
-          </svg>
-          <div class="text-sm text-amber-900 dark:text-amber-100">
-            <p class="mb-1 font-medium">{priorityNotice.title}</p>
-            <ul class="space-y-1">
-              <For each={priorityNotice.items}>{(item) => <li>• {item}</li>}</For>
-            </ul>
-          </div>
-        </div>
-      </div>
+      <CalloutCard
+        tone="warning"
+        scale="compact"
+        padding="md"
+        title={priorityNotice.title}
+        icon={<InfoIcon class="h-5 w-5" />}
+      >
+        <ul class="space-y-1 text-sm">
+          <For each={priorityNotice.items}>{(item) => <li>• {item}</li>}</For>
+        </ul>
+      </CalloutCard>
 
       <section class="space-y-5">
         <SectionHeader

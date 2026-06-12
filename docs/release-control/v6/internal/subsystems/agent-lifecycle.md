@@ -235,6 +235,10 @@ boundary: lifecycle UI may consume unified-resource capabilities for enabled or
 disabled presentation, but execution must stay inside the API-owned action
 executor wired from `internal/api/router.go` and must not shell out, SSH, or call
 Docker / Podman from lifecycle-local code.
+Disconnected command-agent state is also API-owned readiness: lifecycle
+surfaces may reflect missing backend-advertised capabilities, but must not
+reconnect, substitute, or directly address an agent to make a stale container
+action executable.
 Assistant session rename through `PATCH /api/ai/sessions/{id}` follows that
 same browser-safe history boundary. Lifecycle surfaces, MCP adapters, and
 agents may display the updated title as human navigation metadata, but they
@@ -453,6 +457,11 @@ custom subnet selection a full-row operator control, not a narrow or hidden
 input target; common subnet chips and the custom subnet field must share the
 same environment-override and in-flight-save lock semantics as the scan-scope
 selector.
+The discovery settings safety notice may use the frontend-primitives-owned
+`CalloutCard` shell, but the lifecycle contract still owns the operator-facing
+scan-scope semantics: environment overrides, immediate persistence, automatic
+interface scan breadth, and custom-subnet guidance must remain visible before
+the selector rather than becoming feature-local styling copy.
 Adjacent Assistant resource-context handling in `internal/api/ai_handler.go`
 may reference agent-backed resources only as selected-resource, model-only
 context. It must not mutate agent lifecycle state, start agent discovery, or

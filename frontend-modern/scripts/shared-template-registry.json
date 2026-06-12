@@ -204,6 +204,53 @@
       ]
     },
     {
+      "id": "settings-callout-card-shell",
+      "category": "callout",
+      "summary": "Settings informational, warning, success, and danger callouts must compose CalloutCard for shared tone, density, icon, and copy layout instead of recreating local colored panel shells.",
+      "canonical": {
+        "path": "src/components/shared/CalloutCard.tsx",
+        "export": "CalloutCard"
+      },
+      "requiredConsumers": [
+        { "path": "src/components/Settings/AIProviderConfigurationSection.tsx" },
+        { "path": "src/components/Settings/ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx" },
+        { "path": "src/components/Settings/DiagnosticsResultsPanel.tsx" },
+        { "path": "src/components/Settings/DiscoverySettingsForm.tsx" },
+        { "path": "src/components/Settings/MonitoredSystemImpactPreview.tsx" },
+        { "path": "src/components/Settings/ReportingPanel.tsx" },
+        { "path": "src/components/Settings/SecurityAuthPanel.tsx" },
+        { "path": "src/components/Settings/SecurityOverviewPanel.tsx" }
+      ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/components/Settings/AIProviderConfigurationSection.tsx",
+          "patterns": [
+            "rounded border border-red-200",
+            "bg-red-50 dark:bg-red-900 px-2 py-1.5"
+          ]
+        },
+        {
+          "path": "src/components/Settings/DiagnosticsResultsPanel.tsx",
+          "patterns": [
+            "rounded-md border border-amber-200 bg-amber-50",
+            "rounded-md border border-red-200 bg-red-50"
+          ]
+        },
+        {
+          "path": "src/components/Settings/DiscoverySettingsForm.tsx",
+          "patterns": [
+            "rounded-md border border-amber-200 bg-amber-50/80",
+            "text-amber-900 dark:text-amber-100"
+          ]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/CalloutCard.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "status-dot-shell",
       "category": "status-indicator",
       "summary": "Resource and health indicator dots must compose StatusDot for shared size, variant, pulse, title, and aria behavior instead of recreating local rounded status spans.",

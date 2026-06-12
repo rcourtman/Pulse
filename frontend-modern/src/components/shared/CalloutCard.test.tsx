@@ -29,4 +29,19 @@ describe('CalloutCard', () => {
     const description = screen.getByText('Act carefully');
     expect(description.className).toContain('text-amber-800');
   });
+
+  it('supports compact settings callout scale', () => {
+    render(() => (
+      <CalloutCard
+        title="Compact notice"
+        description="Fits in dense settings panels"
+        tone="danger"
+        scale="compact"
+        padding="sm"
+      />
+    ));
+
+    expect(screen.getByText('Compact notice').className).toContain('text-sm');
+    expect(screen.getByText('Fits in dense settings panels').className).toContain('text-xs');
+  });
 });

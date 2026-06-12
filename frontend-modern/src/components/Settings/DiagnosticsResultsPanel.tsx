@@ -2,6 +2,7 @@ import { Component, For, Show } from 'solid-js';
 import type { JSX } from 'solid-js';
 import { formatRelativeTime } from '@/utils/format';
 import { Card } from '@/components/shared/Card';
+import { CalloutCard } from '@/components/shared/CalloutCard';
 import Activity from 'lucide-solid/icons/activity';
 import AlertTriangle from 'lucide-solid/icons/alert-triangle';
 import CheckCircle from 'lucide-solid/icons/check-circle';
@@ -278,21 +279,28 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
                 />
               </div>
               <Show when={(props.diagnosticsData?.metricsStore?.notes?.length || 0) > 0}>
-                <div class="mt-3 rounded-md border border-amber-200 bg-amber-50 p-2 dark:border-amber-800 dark:bg-amber-900">
-                  <div class="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-300">
-                    <AlertTriangle class="mt-0.5 h-4 w-4 flex-shrink-0" />
-                    <div class="space-y-1">
-                      <For each={props.diagnosticsData?.metricsStore?.notes || []}>
-                        {(note) => <div>{note}</div>}
-                      </For>
-                    </div>
+                <CalloutCard
+                  tone="warning"
+                  scale="compact"
+                  padding="sm"
+                  class="mt-3"
+                  icon={<AlertTriangle class="h-4 w-4" />}
+                >
+                  <div class="space-y-1 text-xs">
+                    <For each={props.diagnosticsData?.metricsStore?.notes || []}>
+                      {(note) => <div>{note}</div>}
+                    </For>
                   </div>
-                </div>
+                </CalloutCard>
               </Show>
               <Show when={props.diagnosticsData?.metricsStore?.error}>
-                <div class="mt-3 rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-700 dark:border-red-800 dark:bg-red-900 dark:text-red-300">
-                  {props.diagnosticsData?.metricsStore?.error}
-                </div>
+                <CalloutCard
+                  tone="danger"
+                  scale="compact"
+                  padding="sm"
+                  class="mt-3"
+                  description={props.diagnosticsData?.metricsStore?.error}
+                />
               </Show>
             </Card>
           </Show>

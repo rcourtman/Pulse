@@ -1285,17 +1285,20 @@ not a replacement status card, CTA band, or page-local nested card.
    capabilities before secondary billing or recovery detail so paid upgrades
    can confirm their entitlement immediately after activation without making
    default Community look like it is missing an activation key.
-7. Keep hosted settings-shell framing imports safe for bundle initialization.
+7. When settings surfaces need informational, warning, success, or danger
+   callouts, compose `frontend-modern/src/components/shared/CalloutCard.tsx`
+   and register the consumer in
+   `frontend-modern/scripts/shared-template-registry.json` instead of adding
+   feature-local colored panel shells. Compact settings notices must use the
+   shared `scale="compact"` density and keep proof in both
+   `frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts`
+   and
+   `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`.
+8. Keep hosted settings-shell framing imports safe for bundle initialization.
    Self-hosted billing titles, descriptions, and referral copy used by
    `settingsHeaderMeta.ts`, `settingsNavCatalog.ts`, and adjacent settings
    shells must flow through
    `frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts`
-8. Keep shared settings-shell AI control copy capability-scoped rather than
-   upsell-scoped. `AIRuntimeControlsSection.tsx` may describe read-only,
-   approval-required, and autonomous action posture, but option labels and
-   helper text must avoid tier labels or broad "executes everything" wording;
-   paid capability availability belongs to entitlement-backed visibility and
-   lock state, not local select copy.
    instead of importing generic commercial presentation helpers directly into
    hosted settings route shells.
    Contextual settings feature gates must use capability-owned presentation
@@ -1303,7 +1306,13 @@ not a replacement status card, CTA band, or page-local nested card.
    badge titles, Pro-suffixed option labels, monitored-system limit claims, or
    browser-local commercial/onboarding metrics wrappers in SSO, audit,
    reporting, AI controls, agent profiles, or shared warning banners.
-8. Keep first-session dashboard empty-state copy on
+9. Keep shared settings-shell AI control copy capability-scoped rather than
+   upsell-scoped. `AIRuntimeControlsSection.tsx` may describe read-only,
+   approval-required, and autonomous action posture, but option labels and
+   helper text must avoid tier labels or broad "executes everything" wording;
+   paid capability availability belongs to entitlement-backed visibility and
+   lock state, not local select copy.
+10. Keep first-session dashboard empty-state copy on
    `frontend-modern/src/utils/workloadEmptyStatePresentation.ts`, and make
    infrastructure setup guidance name the canonical destination explicitly
    instead of falling back to generic settings CTA labels.
@@ -3126,9 +3135,12 @@ Selectable settings cards for compact provider pickers and detail choice panels
 must now route through the shared `SelectionCardGroup` primitive instead of
 duplicating border-2 active-card styling in feature components.
 
-Settings informational callouts with icon-plus-copy layouts must now route
-through the shared `CalloutCard` primitive instead of maintaining feature-local
-blue bordered wrappers.
+Settings informational, warning, success, and danger callouts with icon-plus-copy
+layouts must now route through the shared `CalloutCard` primitive instead of
+maintaining feature-local colored bordered wrappers. The primitive owns the tone
+palette and the `scale="compact"` density used by smaller settings notices, and
+the `settings-callout-card-shell` shared-template registry rule requires current
+settings consumers to compose it instead of reintroducing local panel shells.
 
 Alert incident-event filter containers, labels, and chips must now route
 through the shared presentation helpers in

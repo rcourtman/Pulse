@@ -1,5 +1,6 @@
 import { For, Show, type Accessor, type Component, type Setter } from 'solid-js';
 import type { SetStoreFunction } from 'solid-js/store';
+import { CalloutCard } from '@/components/shared/CalloutCard';
 import { HelpIcon } from '@/components/shared/HelpIcon';
 import { controlClass } from '@/components/shared/Form';
 import { getAIProviderHealthPresentation } from '@/utils/aiProviderHealthPresentation';
@@ -90,20 +91,27 @@ export const AIProviderConfigurationSection: Component<AIProviderConfigurationSe
           </p>
         </Show>
         <Show when={props.providerIssueCount() > 0}>
-          <div class="rounded border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900 px-2 py-1.5">
-            <p class="text-xs text-red-700 dark:text-red-300">
-              {props.providerIssueCount()} provider{props.providerIssueCount() === 1 ? '' : 's'}{' '}
-              configured but currently not usable.
-            </p>
-            <For each={providerIssueProviders()}>
-              {(provider) => (
-                <p class="text-[11px] text-red-600 dark:text-red-300">
-                  <span class="font-medium">{getAIProviderDisplayName(provider) || provider}:</span>{' '}
-                  {props.providerHealth[provider].message}
-                </p>
-              )}
-            </For>
-          </div>
+          <CalloutCard
+            tone="danger"
+            scale="compact"
+            padding="sm"
+            title={`${props.providerIssueCount()} provider${
+              props.providerIssueCount() === 1 ? '' : 's'
+            } configured but currently not usable.`}
+          >
+            <div class="space-y-1 text-[11px]">
+              <For each={providerIssueProviders()}>
+                {(provider) => (
+                  <p>
+                    <span class="font-medium">
+                      {getAIProviderDisplayName(provider) || provider}:
+                    </span>{' '}
+                    {props.providerHealth[provider].message}
+                  </p>
+                )}
+              </For>
+            </div>
+          </CalloutCard>
         </Show>
       </div>
 

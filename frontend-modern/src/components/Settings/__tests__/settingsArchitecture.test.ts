@@ -29,6 +29,8 @@ import auditWebhookPanelSource from '../AuditWebhookPanel.tsx?raw';
 import reportingPanelSource from '../ReportingPanel.tsx?raw';
 import rbacFeatureGateSectionSource from '../RBACFeatureGateSection.tsx?raw';
 import recoverySettingsPanelSource from '../RecoverySettingsPanel.tsx?raw';
+import securityAuthPanelSource from '../SecurityAuthPanel.tsx?raw';
+import securityOverviewPanelSource from '../SecurityOverviewPanel.tsx?raw';
 import systemLogsPanelSource from '../SystemLogsPanel.tsx?raw';
 import updatesSettingsPanelSource from '../UpdatesSettingsPanel.tsx?raw';
 import updateInstallGuideSource from '../UpdateInstallGuide.tsx?raw';
@@ -306,6 +308,32 @@ describe('settings architecture guardrails', () => {
     );
     expect(infrastructureInstallerSectionSource).not.toContain(
       'inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100',
+    );
+  });
+
+  it('keeps settings callouts on the shared CalloutCard primitive', () => {
+    for (const source of [
+      aiProviderConfigurationSectionSource,
+      diagnosticsResultsPanelSource,
+      discoverySettingsFormSource,
+      monitoredSystemImpactPreviewSource,
+      reportingPanelSource,
+      securityAuthPanelSource,
+      securityOverviewPanelSource,
+      vmwareCredentialSlotSource,
+    ]) {
+      expect(source).toContain('CalloutCard');
+    }
+
+    expect(discoverySettingsFormSource).toContain('scale="compact"');
+    expect(aiProviderConfigurationSectionSource).toContain('scale="compact"');
+    expect(diagnosticsResultsPanelSource).toContain('scale="compact"');
+    expect(discoverySettingsFormSource).not.toContain(
+      'rounded-md border border-amber-200 bg-amber-50/80',
+    );
+    expect(aiProviderConfigurationSectionSource).not.toContain('rounded border border-red-200');
+    expect(diagnosticsResultsPanelSource).not.toContain(
+      'rounded-md border border-amber-200 bg-amber-50',
     );
   });
 

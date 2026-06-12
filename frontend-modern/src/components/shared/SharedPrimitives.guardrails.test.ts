@@ -182,16 +182,19 @@ import resourceDetailDrawerDebugTabSource from '@/components/Infrastructure/Reso
 import resourceDetailDrawerKubernetesModelSource from '@/components/Infrastructure/resourceDetailDrawerKubernetesModel.ts?raw';
 import resourceDetailDrawerTrueNASModelSource from '@/components/Infrastructure/resourceDetailDrawerTrueNASModel.ts?raw';
 import aiSettingsDialogsSource from '@/components/Settings/AISettingsDialogs.tsx?raw';
+import aiProviderConfigurationSectionSource from '@/components/Settings/AIProviderConfigurationSection.tsx?raw';
 import agentProfilesPanelSource from '@/components/Settings/AgentProfilesPanel.tsx?raw';
 import apiTokenManagerSource from '@/components/Settings/APITokenManager.tsx?raw';
 import auditLogPanelSource from '@/components/Settings/AuditLogPanel.tsx?raw';
 import billingAdminPanelSource from '@/components/Settings/BillingAdminPanel.tsx?raw';
 import diagnosticsResultsPanelSource from '@/components/Settings/DiagnosticsResultsPanel.tsx?raw';
+import discoverySettingsFormSource from '@/components/Settings/DiscoverySettingsForm.tsx?raw';
 import dockerRuntimeSettingsCardSource from '@/components/Settings/DockerRuntimeSettingsCard.tsx?raw';
 import dataHandlingPanelSource from '@/components/Settings/DataHandlingPanel.tsx?raw';
 import generalSettingsPanelSource from '@/components/Settings/GeneralSettingsPanel.tsx?raw';
 import infrastructureInstallerSectionSource from '@/components/Settings/InfrastructureInstallerSection.tsx?raw';
 import infrastructureWorkspaceSource from '@/components/Settings/InfrastructureWorkspace.tsx?raw';
+import monitoredSystemImpactPreviewSource from '@/components/Settings/MonitoredSystemImpactPreview.tsx?raw';
 import organizationAccessInvitationsSectionSource from '@/components/Settings/OrganizationAccessInvitationsSection.tsx?raw';
 import organizationAccessMembersSectionSource from '@/components/Settings/OrganizationAccessMembersSection.tsx?raw';
 import organizationIncomingSharesSectionSource from '@/components/Settings/OrganizationIncomingSharesSection.tsx?raw';
@@ -200,6 +203,8 @@ import organizationOverviewMembersSectionSource from '@/components/Settings/Orga
 import proLicensePlanSectionSource from '@/components/Settings/ProLicensePlanSection.tsx?raw';
 import reportingPanelSource from '@/components/Settings/ReportingPanel.tsx?raw';
 import rolesPanelSource from '@/components/Settings/RolesPanel.tsx?raw';
+import securityAuthPanelSource from '@/components/Settings/SecurityAuthPanel.tsx?raw';
+import securityOverviewPanelSource from '@/components/Settings/SecurityOverviewPanel.tsx?raw';
 import updatesSettingsPanelSource from '@/components/Settings/UpdatesSettingsPanel.tsx?raw';
 import userAssignmentsPanelSource from '@/components/Settings/UserAssignmentsPanel.tsx?raw';
 import infrastructureSourcePickerSource from '@/components/Settings/InfrastructureSourcePicker.tsx?raw';
@@ -2439,11 +2444,73 @@ describe('shared primitive guardrails', () => {
   });
 
   it('routes settings info callouts through CalloutCard', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+        forbiddenPatterns?: Array<{ path?: string; patterns?: string[] }>;
+      }>;
+    };
+    const registeredRule = registry.rules?.find(
+      (rule) => rule.id === 'settings-callout-card-shell',
+    );
+
+    expect(registeredRule?.canonical?.path).toBe('src/components/shared/CalloutCard.tsx');
+    expect(registeredRule?.canonical?.export).toBe('CalloutCard');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/components/Settings/AIProviderConfigurationSection.tsx',
+      'src/components/Settings/ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx',
+      'src/components/Settings/DiagnosticsResultsPanel.tsx',
+      'src/components/Settings/DiscoverySettingsForm.tsx',
+      'src/components/Settings/MonitoredSystemImpactPreview.tsx',
+      'src/components/Settings/ReportingPanel.tsx',
+      'src/components/Settings/SecurityAuthPanel.tsx',
+      'src/components/Settings/SecurityOverviewPanel.tsx',
+    ]);
+    expect(registeredRule?.forbiddenPatterns).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: 'src/components/Settings/AIProviderConfigurationSection.tsx',
+          patterns: expect.arrayContaining(['rounded border border-red-200']),
+        }),
+        expect.objectContaining({
+          path: 'src/components/Settings/DiagnosticsResultsPanel.tsx',
+          patterns: expect.arrayContaining(['rounded-md border border-amber-200 bg-amber-50']),
+        }),
+        expect.objectContaining({
+          path: 'src/components/Settings/DiscoverySettingsForm.tsx',
+          patterns: expect.arrayContaining([
+            'rounded-md border border-amber-200 bg-amber-50/80',
+          ]),
+        }),
+      ]),
+    );
     expect(calloutCardSource).toContain(
       "type CalloutTone = 'danger' | 'info' | 'success' | 'warning'",
     );
+    expect(calloutCardSource).toContain("type CalloutScale = 'default' | 'compact'");
     expect(reportingPanelSource).toContain('CalloutCard');
     expect(reportingPanelSource).not.toContain('rounded-md border border-blue-200 bg-blue-50 p-6');
+    for (const source of [
+      aiProviderConfigurationSectionSource,
+      diagnosticsResultsPanelSource,
+      discoverySettingsFormSource,
+      monitoredSystemImpactPreviewSource,
+      reportingPanelSource,
+      securityAuthPanelSource,
+      securityOverviewPanelSource,
+      vmwareCredentialSlotSource,
+    ]) {
+      expect(source).toContain('CalloutCard');
+    }
+    expect(aiProviderConfigurationSectionSource).not.toContain('rounded border border-red-200');
+    expect(diagnosticsResultsPanelSource).not.toContain(
+      'rounded-md border border-amber-200 bg-amber-50',
+    );
+    expect(discoverySettingsFormSource).not.toContain(
+      'rounded-md border border-amber-200 bg-amber-50/80',
+    );
   });
 
   it('keeps TLS verification warnings in the shared primitive boundary', () => {
