@@ -1610,7 +1610,11 @@ not a replacement status card, CTA band, or page-local nested card.
     `frontend-modern/src/components/shared/UpgradeLink.tsx`, and
     `frontend-modern/src/components/shared/useUpgradeNavigation.ts` instead of
     guessing from labels, hardcoding `target="_blank"`, or calling
-    `window.open(...)` from each feature surface.
+    `window.open(...)` from each feature surface. Inline upgrade links may use
+    `UpgradeLink`; button-styled upgrade CTAs must use `UpgradeButtonLink` so
+    width, tone, focus, route/new-tab behavior, and opener preservation stay on
+    the shared `ButtonLink` primitive instead of page-local Tailwind anchors or
+    commercial helper class strings.
 35. Keep same-shell platform/runtime route transitions on retained shared state.
     Active infrastructure consumers may show full-page loading only before the
     first compatible resource snapshot exists; once a fresh canonical snapshot
@@ -2450,6 +2454,12 @@ patterns, while `frontend-modern/scripts/shared-template-audit.mjs` enforces
 that registry. Future repeated-affordance migrations must add or extend a
 registry rule as part of the same change that extracts or adopts the shared
 primitive.
+Button-styled commercial upgrade CTAs are one of those registry-backed
+templates. `frontend-modern/src/components/shared/UpgradeLink.tsx` owns
+`UpgradeButtonLink`, and the registry requires gated settings, audit, agent
+profiles, and self-hosted plan CTA surfaces to compose it rather than styling
+`UpgradeLink` or anchors locally. Commercial presentation helpers may own the
+label and destination intent; they must not own CTA button chrome.
 Platform table frames are one of those registry-backed templates.
 `frontend-modern/src/features/platformPage/sharedPlatformPage.tsx` owns
 `PlatformTableShell`, including the canonical table card, header row, and body

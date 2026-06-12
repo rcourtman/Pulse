@@ -1028,11 +1028,11 @@ describe('frontend resource type boundaries', () => {
     expect(discoverySettingsStateSource).toContain('export function useDiscoverySettingsState');
     expect(discoverySettingsStateSource).toContain('normalizeSubnetList');
     expect(discoverySettingsStateSource).toContain('isValidCIDR');
-    // The canonical upgrade CTA contract (button class + label) now lives in
-    // the shared FeatureGateSection; gated panels route their paywall through
-    // it instead of re-deriving the button locally.
+    // The canonical upgrade CTA contract is split between the shared action-link
+    // shell and the shared label constant; gated panels do not re-derive button
+    // classes locally.
     expect(featureGateSectionSource).toContain('@/utils/upgradePresentation');
-    expect(featureGateSectionSource).toContain('getUpgradeActionButtonClass');
+    expect(featureGateSectionSource).toContain('UpgradeButtonLink');
     expect(featureGateSectionSource).toContain('UPGRADE_ACTION_LABEL');
     expect(featureGateSectionSource).toContain('@/components/shared/UpgradeLink');
     expect(reportingPanelSource).toContain('@/components/shared/FeatureGateSection');
@@ -1051,6 +1051,7 @@ describe('frontend resource type boundaries', () => {
     expect(userAssignmentsPanelStateSource).toContain('getUserAssignmentsLoadErrorMessage');
     expect(agentProfilesPanelSource).toContain('./useAgentProfilesPanelState');
     expect(agentProfilesPanelStateSource).toContain('@/utils/upgradePresentation');
+    expect(agentProfilesPanelSource).toContain('UpgradeButtonLink');
     expect(agentProfilesPanelSource).toContain('@/utils/agentProfilesPresentation');
     expect(agentProfilesPanelSource).toContain('getAgentProfilesEmptyState');
     expect(agentProfilesPanelSource).toContain('getAgentProfileAssignmentsEmptyState');
@@ -1058,13 +1059,14 @@ describe('frontend resource type boundaries', () => {
     expect(agentProfilesPanelSource).not.toContain(
       'No agents connected. Install an agent to assign profiles.',
     );
-    expect(auditLogPanelSource).toContain('@/utils/upgradePresentation');
+    expect(auditLogPanelSource).toContain('UpgradeButtonLink');
+    expect(auditLogPanelSource).not.toContain('@/utils/upgradePresentation');
     expect(auditWebhookPanelSource).toContain('@/components/shared/FeatureGateSection');
     expect(ssoProvidersPanelSource).not.toContain('@/utils/upgradePresentation');
     expect(upgradePresentationSource).toContain('export const UPGRADE_ACTION_LABEL');
     expect(upgradePresentationSource).not.toContain('UPGRADE_TRIAL_LABEL');
     expect(upgradePresentationSource).not.toContain('UPGRADE_TRIAL_LINK_CLASS');
-    expect(upgradePresentationSource).toContain('export function getUpgradeActionButtonClass');
+    expect(upgradePresentationSource).not.toContain('getUpgradeActionButtonClass');
     expect(organizationAccessManagementSectionSource).toContain(
       '@/utils/organizationRolePresentation',
     );
@@ -3453,7 +3455,8 @@ describe('frontend resource type boundaries', () => {
     expect(updateInstallGuideSource).toContain('@/components/Settings/CopyCommandBlock');
     expect(updateInstallGuideSource).toContain('buildUpdateInstallGuide');
     expect(copyCommandBlockSource).toContain('export function CopyCommandBlock');
-    expect(copyCommandBlockSource).toContain('aria-label="Copy to clipboard"');
+    expect(copyCommandBlockSource).toContain('CommandCopyButton');
+    expect(copyCommandBlockSource).toContain('label="Copy to clipboard"');
     expect(updatesSettingsModelSource).toContain('export function getUpdateChannelCardOptions');
     expect(updatesSettingsModelSource).toContain('export function buildUpdateInstallGuide');
     expect(reportingPanelStateSource).toContain('buildReportingRequest');

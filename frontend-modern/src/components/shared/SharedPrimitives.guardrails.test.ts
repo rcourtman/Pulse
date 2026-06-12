@@ -181,6 +181,7 @@ import resourceDetailDrawerTrueNASModelSource from '@/components/Infrastructure/
 import aiSettingsDialogsSource from '@/components/Settings/AISettingsDialogs.tsx?raw';
 import agentProfilesPanelSource from '@/components/Settings/AgentProfilesPanel.tsx?raw';
 import apiTokenManagerSource from '@/components/Settings/APITokenManager.tsx?raw';
+import auditLogPanelSource from '@/components/Settings/AuditLogPanel.tsx?raw';
 import billingAdminPanelSource from '@/components/Settings/BillingAdminPanel.tsx?raw';
 import diagnosticsResultsPanelSource from '@/components/Settings/DiagnosticsResultsPanel.tsx?raw';
 import dockerRuntimeSettingsCardSource from '@/components/Settings/DockerRuntimeSettingsCard.tsx?raw';
@@ -192,6 +193,7 @@ import organizationAccessMembersSectionSource from '@/components/Settings/Organi
 import organizationIncomingSharesSectionSource from '@/components/Settings/OrganizationIncomingSharesSection.tsx?raw';
 import organizationOutgoingSharesSectionSource from '@/components/Settings/OrganizationOutgoingSharesSection.tsx?raw';
 import organizationOverviewMembersSectionSource from '@/components/Settings/OrganizationOverviewMembersSection.tsx?raw';
+import proLicensePlanSectionSource from '@/components/Settings/ProLicensePlanSection.tsx?raw';
 import reportingPanelSource from '@/components/Settings/ReportingPanel.tsx?raw';
 import rolesPanelSource from '@/components/Settings/RolesPanel.tsx?raw';
 import updatesSettingsPanelSource from '@/components/Settings/UpdatesSettingsPanel.tsx?raw';
@@ -203,6 +205,7 @@ import patrolIntelligenceHeaderSource from '@/features/patrol/PatrolIntelligence
 import patrolIntelligenceWorkspaceSource from '@/features/patrol/PatrolIntelligenceWorkspace.tsx?raw';
 import filterBarSource from '@/components/shared/FilterBar/FilterBar.tsx?raw';
 import filterChipSource from '@/components/shared/FilterBar/FilterChip.tsx?raw';
+import featureGateSectionSource from '@/components/shared/FeatureGateSection.tsx?raw';
 import addFilterMenuSource from '@/components/shared/FilterBar/AddFilterMenu.tsx?raw';
 import filterCatalogSource from '@/components/shared/FilterBar/filterCatalog.ts?raw';
 import filterBarOptionPresentationSource from '@/components/shared/FilterBar/filterOptionPresentation.tsx?raw';
@@ -1191,8 +1194,11 @@ describe('shared primitive guardrails', () => {
 
   it('keeps upgrade navigation split across shell, runtime, and utility owners', () => {
     expect(upgradeLinkSource).toContain('destination.external');
-    expect(upgradeLinkSource).toContain("return local.target ?? '_blank';");
+    expect(upgradeLinkSource).toContain("return target ?? '_blank';");
     expect(upgradeLinkSource).toContain('target={target()}');
+    expect(upgradeLinkSource).toContain('export const UpgradeButtonLink');
+    expect(upgradeLinkSource).toContain('ButtonLink');
+    expect(upgradeLinkSource).toContain('preserveOpener={local.destination.preserveOpener}');
     expect(upgradeLinkSource).not.toContain('window.open');
     expect(upgradeLinkSource).not.toContain('useNavigate(');
 
@@ -1206,6 +1212,94 @@ describe('shared primitive guardrails', () => {
     expect(upgradeNavigationSource).toContain('resolveUpgradeDestination');
     expect(upgradeNavigationSource).toContain('navigateToUpgradeDestination');
     expect(upgradeNavigationSource).toContain("window.open(href, '_blank', 'noopener,noreferrer')");
+  });
+
+  it('keeps upgrade CTAs on the shared upgrade button primitive', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+        forbiddenPatterns?: Array<{ path?: string; patterns?: string[] }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        allowedPaths?: string[];
+        ignoredPaths?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find((rule) => rule.id === 'upgrade-action-button-link');
+    const helperGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'upgrade-action-local-class-helper',
+    );
+    const literalShellGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'upgrade-action-local-button-shell',
+    );
+
+    expect(registeredRule?.canonical?.path).toBe('src/components/shared/UpgradeLink.tsx');
+    expect(registeredRule?.canonical?.export).toBe('UpgradeButtonLink');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/components/Settings/AgentProfilesPanel.tsx',
+      'src/components/Settings/AuditLogPanel.tsx',
+      'src/components/Settings/ProLicensePlanSection.tsx',
+      'src/components/shared/FeatureGateSection.tsx',
+    ]);
+    expect(registeredRule?.forbiddenPatterns).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: 'src/utils/upgradePresentation.ts',
+          patterns: expect.arrayContaining(['getUpgradeActionButtonClass']),
+        }),
+        expect.objectContaining({
+          path: 'src/components/Settings/ProLicensePlanSection.tsx',
+          patterns: expect.arrayContaining([
+            'inline-flex items-center gap-1 mt-3 min-h-10 sm:min-h-9 rounded-md border border-current/20 px-3 py-2 text-xs font-medium hover:bg-black/5 dark:hover:bg-white/5',
+          ]),
+        }),
+      ]),
+    );
+    expect(helperGuard?.canonical?.path).toBe('src/components/shared/UpgradeLink.tsx');
+    expect(helperGuard?.canonical?.export).toBe('UpgradeButtonLink');
+    expect(helperGuard?.allPatterns).toEqual(['getUpgradeActionButtonClass']);
+    expect(helperGuard?.scopes).toEqual(['src/components', 'src/features', 'src/pages']);
+    expect(helperGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(helperGuard?.ignoredPaths).toEqual([
+      'src/components/shared/SharedPrimitives.guardrails.test.ts',
+    ]);
+    expect(literalShellGuard?.canonical?.path).toBe('src/components/shared/UpgradeLink.tsx');
+    expect(literalShellGuard?.canonical?.export).toBe('UpgradeButtonLink');
+    expect(literalShellGuard?.allPatterns).toEqual([
+      '<UpgradeLink',
+      'min-h-10 sm:min-h-9 rounded-md border',
+      'text-xs font-medium',
+    ]);
+    expect(literalShellGuard?.scopes).toEqual(['src/components', 'src/features', 'src/pages']);
+    expect(literalShellGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(literalShellGuard?.ignoredPaths).toEqual([
+      'src/components/Settings/AIRuntimeControlsSection.tsx',
+      'src/components/shared/SharedPrimitives.guardrails.test.ts',
+      'src/components/shared/__tests__/UpgradeLink.test.tsx',
+    ]);
+
+    for (const source of [
+      agentProfilesPanelSource,
+      auditLogPanelSource,
+      proLicensePlanSectionSource,
+      featureGateSectionSource,
+    ]) {
+      expect(source).toContain('UpgradeButtonLink');
+      expect(source).not.toContain('getUpgradeActionButtonClass');
+    }
+    expect(proLicensePlanSectionSource).toContain('ButtonLink');
+    expect(proLicensePlanSectionSource).not.toContain(
+      'inline-flex items-center gap-1 mt-3 min-h-10 sm:min-h-9 rounded-md border border-current/20 px-3 py-2 text-xs font-medium hover:bg-black/5 dark:hover:bg-white/5',
+    );
+    expect(proLicensePlanSectionSource).not.toContain(
+      'inline-flex items-center gap-1 mt-4 min-h-10 sm:min-h-9 rounded-md border border-border px-3 py-2 text-xs font-medium text-base-content hover:bg-surface-hover',
+    );
   });
 
   it('keeps column picker on shell, runtime, and model owners', () => {
@@ -1917,6 +2011,7 @@ describe('shared primitive guardrails', () => {
     expect(buttonModelSource).toContain('BUTTON_VARIANT_CLASSES');
     expect(buttonModelSource).toContain('BUTTON_SIZE_CLASSES');
     expect(buttonModelSource).toContain('primaryFlat:');
+    expect(buttonModelSource).toContain('warning:');
     expect(buttonModelSource).toContain('settingsActionXs:');
     expect(buttonModelSource).toContain('success:');
     expect(buttonModelSource).toContain('successOutline:');

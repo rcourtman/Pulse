@@ -5,7 +5,7 @@ import Info from 'lucide-solid/icons/info';
 import Play from 'lucide-solid/icons/play';
 import ShieldAlert from 'lucide-solid/icons/shield-alert';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
-import { UpgradeLink } from '@/components/shared/UpgradeLink';
+import { UpgradeButtonLink } from '@/components/shared/UpgradeLink';
 import { FilterBar, type FilterDef, type FilterSelectOption } from '@/components/shared/FilterBar';
 import { FormSelect } from '@/components/shared/FormSelect';
 import Toggle from '@/components/shared/Toggle';
@@ -30,7 +30,6 @@ import {
   getAuditLogLoadingState,
   getAuditVerificationBadgePresentation,
 } from '@/utils/auditLogPresentation';
-import { getUpgradeActionButtonClass } from '@/utils/upgradePresentation';
 import { useAuditLogPanelState } from '@/components/Settings/useAuditLogPanelState';
 
 export default function AuditLogPanel() {
@@ -215,15 +214,13 @@ export default function AuditLogPanel() {
             </div>
             <Show when={showFeatureGateAction()}>
               <div class="flex flex-col items-center gap-2">
-                <UpgradeLink
+                <UpgradeButtonLink
                   destination={upgradeDestination()}
-                  class={getUpgradeActionButtonClass({
-                    mobileFullWidth: false,
-                    tone: paidRuntimeRequired() ? 'warning' : 'primary',
-                  })}
+                  mobileFullWidth={false}
+                  tone={paidRuntimeRequired() ? 'warning' : 'primary'}
                 >
                   {upgradeActionLabel()}
-                </UpgradeLink>
+                </UpgradeButtonLink>
               </div>
             </Show>
           </div>

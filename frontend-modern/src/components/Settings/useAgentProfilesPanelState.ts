@@ -22,10 +22,7 @@ import type { ConnectedInfrastructureItem } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { formatRelativeTime } from '@/utils/format';
 import { logger } from '@/utils/logger';
-import {
-  getUpgradeActionButtonClass,
-  UPGRADE_ACTION_LABEL,
-} from '@/utils/upgradePresentation';
+import { UPGRADE_ACTION_LABEL } from '@/utils/upgradePresentation';
 import { KNOWN_SETTINGS } from './agentProfileSettings';
 import {
   getActionableAgentIdFromResource,
@@ -342,7 +339,6 @@ export const useAgentProfilesPanelState = () => {
     getProfileOptionLabel,
     getSettingsCount,
     getUpgradeActionDestination,
-    getUpgradeActionButtonClass,
     handleAssign,
     handleCreate,
     handleDelete,

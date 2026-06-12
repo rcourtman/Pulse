@@ -24,6 +24,7 @@ export interface ButtonLinkProps extends JSX.AnchorHTMLAttributes<HTMLAnchorElem
   size?: ButtonSize;
   class?: string;
   hardNavigation?: boolean;
+  preserveOpener?: boolean;
 }
 
 export interface CommandCopyButtonProps extends Omit<
@@ -183,6 +184,7 @@ export function ButtonLink(props: ButtonLinkProps) {
     'children',
     'href',
     'hardNavigation',
+    'preserveOpener',
     'rel',
     'target',
   ]);
@@ -198,7 +200,9 @@ export function ButtonLink(props: ButtonLinkProps) {
       local.target === '_blank' ||
       /^(https?:|mailto:|tel:)/.test(local.href),
     );
-  const rel = () => local.rel ?? (local.target === '_blank' ? 'noopener noreferrer' : undefined);
+  const rel = () =>
+    local.rel ??
+    (local.target === '_blank' && !local.preserveOpener ? 'noopener noreferrer' : undefined);
 
   return (
     <Show

@@ -6,7 +6,7 @@ import { Dialog } from '@/components/shared/Dialog';
 import { FormSelect } from '@/components/shared/FormSelect';
 import { FormTextarea } from '@/components/shared/FormTextarea';
 import { StatusIndicatorBadge } from '@/components/shared/StatusIndicatorBadge';
-import { UpgradeLink } from '@/components/shared/UpgradeLink';
+import { UpgradeButtonLink } from '@/components/shared/UpgradeLink';
 import { SuggestProfileModal } from './SuggestProfileModal';
 import { KNOWN_SETTINGS, type SelectSetting, type StringSetting } from './agentProfileSettings';
 import {
@@ -41,7 +41,6 @@ export const AgentProfilesPanel: Component = () => {
     getProfileOptionLabel,
     getSettingsCount,
     getUpgradeActionDestination,
-    getUpgradeActionButtonClass,
     handleAssign,
     handleCreate,
     handleDelete,
@@ -96,13 +95,14 @@ export const AgentProfilesPanel: Component = () => {
               </div>
               <p class="text-sm text-muted">{featureGateCopy.body}</p>
               <div class="flex flex-wrap items-center gap-3">
-                <UpgradeLink
+                <UpgradeButtonLink
                   destination={getUpgradeActionDestination('agent_profiles')}
-                  class={getUpgradeActionButtonClass({ tone: 'warning', mobileFullWidth: false })}
+                  tone="warning"
+                  mobileFullWidth={false}
                 >
                   <Crown class="w-4 h-4" />
                   {UPGRADE_ACTION_LABEL}
-                </UpgradeLink>
+                </UpgradeButtonLink>
               </div>
             </Card>
           </Show>

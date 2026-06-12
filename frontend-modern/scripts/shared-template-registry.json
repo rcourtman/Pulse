@@ -348,6 +348,51 @@
       ]
     },
     {
+      "id": "upgrade-action-button-link",
+      "category": "upgrade-action",
+      "summary": "Button-styled upgrade CTAs must compose UpgradeButtonLink so destination routing, new-tab safety, opener preservation, tone, width, and shared button styling stay canonical.",
+      "canonical": {
+        "path": "src/components/shared/UpgradeLink.tsx",
+        "export": "UpgradeButtonLink"
+      },
+      "requiredConsumers": [
+        { "path": "src/components/Settings/AgentProfilesPanel.tsx" },
+        { "path": "src/components/Settings/AuditLogPanel.tsx" },
+        { "path": "src/components/Settings/ProLicensePlanSection.tsx" },
+        { "path": "src/components/shared/FeatureGateSection.tsx" }
+      ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/utils/upgradePresentation.ts",
+          "patterns": ["getUpgradeActionButtonClass"]
+        },
+        {
+          "path": "src/components/Settings/AgentProfilesPanel.tsx",
+          "patterns": ["getUpgradeActionButtonClass"]
+        },
+        {
+          "path": "src/components/Settings/AuditLogPanel.tsx",
+          "patterns": ["getUpgradeActionButtonClass"]
+        },
+        {
+          "path": "src/components/shared/FeatureGateSection.tsx",
+          "patterns": ["getUpgradeActionButtonClass"]
+        },
+        {
+          "path": "src/components/Settings/ProLicensePlanSection.tsx",
+          "patterns": [
+            "inline-flex items-center gap-1 mt-3 min-h-10 sm:min-h-9 rounded-md border border-current/20 px-3 py-2 text-xs font-medium hover:bg-black/5 dark:hover:bg-white/5",
+            "inline-flex items-center gap-1 mt-4 min-h-10 sm:min-h-9 rounded-md border border-border px-3 py-2 text-xs font-medium text-base-content hover:bg-surface-hover"
+          ]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/__tests__/UpgradeLink.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "copyable-code-row-shell",
       "category": "copy-action",
       "summary": "Copyable code/value rows must compose CopyableCodeRow for the shared code surface and copy action instead of recreating local font-mono row shells.",
@@ -1264,6 +1309,54 @@
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "src/components/shared/Button.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "upgrade-action-local-class-helper",
+      "category": "upgrade-action",
+      "summary": "Product surfaces must not use a class helper to make upgrade CTAs look like buttons; compose UpgradeButtonLink instead.",
+      "canonical": {
+        "path": "src/components/shared/UpgradeLink.tsx",
+        "export": "UpgradeButtonLink"
+      },
+      "scopes": ["src/components", "src/features", "src/pages"],
+      "extensions": [".tsx"],
+      "allPatterns": ["getUpgradeActionButtonClass"],
+      "legacyReason": "Retired migration debt. Upgrade action button shape, routing, and link safety belong to UpgradeButtonLink.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/__tests__/UpgradeLink.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "upgrade-action-local-button-shell",
+      "category": "upgrade-action",
+      "summary": "Product surfaces must not style UpgradeLink as a local button; use UpgradeButtonLink for button-styled upgrade actions and reserve UpgradeLink for inline text links.",
+      "canonical": {
+        "path": "src/components/shared/UpgradeLink.tsx",
+        "export": "UpgradeButtonLink"
+      },
+      "scopes": ["src/components", "src/features", "src/pages"],
+      "extensions": [".tsx"],
+      "allPatterns": [
+        "<UpgradeLink",
+        "min-h-10 sm:min-h-9 rounded-md border",
+        "text-xs font-medium"
+      ],
+      "legacyReason": "Retired migration debt. Button-styled upgrade actions must use UpgradeButtonLink; inline copy links may continue using UpgradeLink.",
+      "allowedPaths": [],
+      "ignoredPaths": [
+        "src/components/Settings/AIRuntimeControlsSection.tsx",
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/__tests__/UpgradeLink.test.tsx"
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/__tests__/UpgradeLink.test.tsx",
         "scripts/shared-template-audit.mjs"
       ]
     },

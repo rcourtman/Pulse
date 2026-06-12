@@ -243,4 +243,29 @@ describe('Button', () => {
     expect(link).toHaveAttribute('target', '_blank');
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
   });
+
+  it('can preserve opener access for trusted new-tab button links', () => {
+    render(() => (
+      <Router>
+        <Route
+          path="/"
+          component={() => (
+            <ButtonLink
+              href="/auth/license-purchase-start?feature=relay"
+              target="_blank"
+              preserveOpener
+              size="sm"
+            >
+              Purchase
+            </ButtonLink>
+          )}
+        />
+      </Router>
+    ));
+
+    const link = screen.getByRole('link', { name: 'Purchase' });
+    expect(link).toHaveAttribute('href', '/auth/license-purchase-start?feature=relay');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).not.toHaveAttribute('rel');
+  });
 });

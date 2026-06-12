@@ -1,7 +1,7 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import { afterEach, describe, expect, it } from 'vitest';
-import { UpgradeLink } from '@/components/shared/UpgradeLink';
+import { UpgradeButtonLink, UpgradeLink } from '@/components/shared/UpgradeLink';
 
 describe('UpgradeLink', () => {
   afterEach(() => {
@@ -70,6 +70,60 @@ describe('UpgradeLink', () => {
             >
               Compare plans
             </UpgradeLink>
+          )}
+        />
+      </Router>
+    ));
+
+    const link = screen.getByRole('link', { name: 'Compare plans' });
+    expect(link).toHaveAttribute('href', '/auth/license-purchase-start?feature=relay');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).not.toHaveAttribute('rel');
+  });
+
+  it('renders upgrade actions through the shared button link shell', () => {
+    render(() => (
+      <Router>
+        <Route
+          path="/"
+          component={() => (
+            <UpgradeButtonLink
+              destination={{ href: '/settings/system/billing', external: false }}
+              tone="warning"
+              mobileFullWidth={false}
+            >
+              View plans
+            </UpgradeButtonLink>
+          )}
+        />
+      </Router>
+    ));
+
+    const link = screen.getByRole('link', { name: 'View plans' });
+    expect(link).toHaveAttribute('href', '/settings/system/billing');
+    expect(link).not.toHaveAttribute('target');
+    expect(link).toHaveClass('inline-flex');
+    expect(link).toHaveClass('bg-amber-100');
+    expect(link).toHaveClass('w-auto');
+  });
+
+  it('keeps opener access available for upgrade button purchase-start links', () => {
+    render(() => (
+      <Router>
+        <Route
+          path="/"
+          component={() => (
+            <UpgradeButtonLink
+              destination={{
+                href: '/auth/license-purchase-start?feature=relay',
+                external: false,
+                hardNavigation: true,
+                newTab: true,
+                preserveOpener: true,
+              }}
+            >
+              Compare plans
+            </UpgradeButtonLink>
           )}
         />
       </Router>

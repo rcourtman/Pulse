@@ -492,6 +492,12 @@ Agent profile read-only state indicators follow the same presentation split:
 but badge tone, optional dot wiring, sizing, and shell classes must compose the
 frontend-primitives-owned `StatusIndicatorBadge` instead of calling status tone
 helpers or recreating badge spans inline.
+Agent profile commercial gates follow the same primitive split:
+`AgentProfilesPanel.tsx` and `useAgentProfilesPanelState.ts` may own lifecycle
+entitlement checks, upgrade destinations, and label selection, but the
+button-styled upgrade action must compose frontend-primitives'
+`UpgradeButtonLink` instead of exporting or applying a lifecycle-local CTA
+class helper.
 
 ## Extension Points
 

@@ -582,6 +582,11 @@ or other self-hosted uncapped continuity plans.
     show active historical `subscription_state=trial` entitlement state, but
     they must not turn `trial_eligible`, `trial_eligibility_reason`, or an
     expired trial marker into a default Pro CTA or banner.
+    Plan action links with commercial upgrade destinations must compose
+    frontend-primitives' `UpgradeButtonLink`; non-upgrade external commercial
+    URLs must compose `ButtonLink`. `ProLicensePlanSection.tsx` must not
+    recreate local anchor button shells for purchase returns, private-runtime
+    actions, or plan-comparison CTAs.
 18. Add or change paid relay settings and pairing presentation through `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`, `frontend-modern/src/components/Settings/RelayPairingSection.tsx`, and `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`. The retired Dashboard shell must not be restored to carry a Relay onboarding card or equivalent blanket upsell — relay discovery stays inside its owning settings surface.
     Public demo and other read-only presentation policy states must suppress
     relay setup and upsell onboarding instead of inviting pairing or commercial
@@ -1270,12 +1275,15 @@ That same cloud-paid boundary also owns the shared entitlement and upgrade
 presentation helpers through `frontend-modern/src/utils/licensePresentation.ts`
 and `frontend-modern/src/utils/upgradePresentation.ts`. Commercial tier labels,
 feature minimum-tier messaging, migration/trial notices, billing-admin status
-labels, and upgrade CTA styling must extend those helpers instead of being
-forked into per-surface status-code branches that drift from backend error
-truth. The old self-hosted trial-start acquisition path is not a current v6
-commercial surface; denial and retry copy for ordinary self-hosted runtimes
-must be limited to owned purchase, recovery, portal, Cloud signup, or support
-handoff paths.
+labels, and generic upgrade CTA labels must extend those helpers instead of
+being forked into per-surface status-code branches that drift from backend
+error truth. Button-styled upgrade CTA chrome is owned by
+frontend-primitives' `UpgradeButtonLink`; commercial plan surfaces may choose
+the destination, label, and emphasis but must not recreate local Tailwind
+button anchors. The old self-hosted trial-start acquisition path is not a
+current v6 commercial surface; denial and retry copy for ordinary self-hosted
+runtimes must be limited to owned purchase, recovery, portal, Cloud signup, or
+support handoff paths.
 That same helper boundary also owns generic settings-paywall CTA labels. Under
 the v6 free-first self-hosted policy, non-billing feature gates must stay
 factual and route deliberate commercial intent to Plans with neutral "View

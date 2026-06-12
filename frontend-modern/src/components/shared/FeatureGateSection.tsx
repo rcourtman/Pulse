@@ -1,10 +1,9 @@
 import { Show, type Component, type JSX } from 'solid-js';
-import { UpgradeLink } from '@/components/shared/UpgradeLink';
 import {
-  getUpgradeActionButtonClass,
-  UPGRADE_ACTION_LABEL,
-  type UpgradeActionButtonTone,
-} from '@/utils/upgradePresentation';
+  UpgradeButtonLink,
+  type UpgradeButtonTone,
+} from '@/components/shared/UpgradeLink';
+import { UPGRADE_ACTION_LABEL } from '@/utils/upgradePresentation';
 import type { UpgradeDestination } from '@/utils/upgradeNavigation';
 
 export interface FeatureGateSectionProps {
@@ -25,7 +24,7 @@ export interface FeatureGateSectionProps {
   /** Upgrade button label. Defaults to the canonical "View plans". */
   upgradeLabel?: string;
   /** Upgrade button tone. Defaults to the primary blue treatment. */
-  upgradeButtonTone?: UpgradeActionButtonTone;
+  upgradeButtonTone?: UpgradeButtonTone;
 }
 
 /**
@@ -49,12 +48,12 @@ export const FeatureGateSection: Component<FeatureGateSectionProps> = (props) =>
     </div>
     <Show when={props.showUpgradePrompts}>
       <div class="flex flex-col sm:flex-row items-center gap-2">
-        <UpgradeLink
+        <UpgradeButtonLink
           destination={props.upgradeDestination}
-          class={getUpgradeActionButtonClass({ tone: props.upgradeButtonTone })}
+          tone={props.upgradeButtonTone}
         >
           {props.upgradeLabel ?? UPGRADE_ACTION_LABEL}
-        </UpgradeLink>
+        </UpgradeButtonLink>
       </div>
     </Show>
   </div>

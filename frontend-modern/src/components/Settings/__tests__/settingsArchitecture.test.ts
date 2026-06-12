@@ -480,6 +480,10 @@ describe('settings architecture guardrails', () => {
     }
 
     expect(agentProfilesPanelSource).not.toContain('Pro feature');
+    expect(agentProfilesPanelSource).toContain('UpgradeButtonLink');
+    expect(agentProfilesPanelSource).not.toContain('getUpgradeActionButtonClass');
+    expect(auditLogPanelSource).toContain('UpgradeButtonLink');
+    expect(auditLogPanelSource).not.toContain('getUpgradeActionButtonClass');
     expect(auditWebhookPanelSource).not.toContain('Audit Webhooks (Pro)');
     expect(reportingPanelSource).not.toContain('Advanced Reporting (Pro)');
     expect(rbacFeatureGateSectionSource).not.toContain('Custom Roles (Pro)');
