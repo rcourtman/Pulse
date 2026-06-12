@@ -47,23 +47,24 @@ type Resource struct {
 	ChildCount     int     `json:"childCount,omitempty"`
 	parentBySource map[DataSource]string
 
-	Tags                  []string                `json:"tags,omitempty"`
-	CustomURL             string                  `json:"customUrl,omitempty"`
-	Capabilities          []ResourceCapability    `json:"capabilities,omitempty"`
-	Relationships         []ResourceRelationship  `json:"relationships,omitempty"`
-	RecentChanges         []ResourceChange        `json:"recentChanges,omitempty"`
-	FacetCounts           ResourceFacetCounts     `json:"facetCounts,omitempty"`
-	Incidents             []ResourceIncident      `json:"incidents,omitempty"`
-	IncidentCount         int                     `json:"incidentCount,omitempty"`
-	IncidentCode          string                  `json:"incidentCode,omitempty"`
-	IncidentSeverity      storagehealth.RiskLevel `json:"incidentSeverity,omitempty"`
-	IncidentSummary       string                  `json:"incidentSummary,omitempty"`
-	IncidentCategory      string                  `json:"incidentCategory,omitempty"`
-	IncidentLabel         string                  `json:"incidentLabel,omitempty"`
-	IncidentPriority      int                     `json:"incidentPriority,omitempty"`
-	IncidentImpactSummary string                  `json:"incidentImpactSummary,omitempty"`
-	IncidentUrgency       string                  `json:"incidentUrgency,omitempty"`
-	IncidentAction        string                  `json:"incidentAction,omitempty"`
+	Tags                  []string                  `json:"tags,omitempty"`
+	CustomURL             string                    `json:"customUrl,omitempty"`
+	Capabilities          []ResourceCapability      `json:"capabilities,omitempty"`
+	ActionReadiness       []ResourceActionReadiness `json:"actionReadiness,omitempty"`
+	Relationships         []ResourceRelationship    `json:"relationships,omitempty"`
+	RecentChanges         []ResourceChange          `json:"recentChanges,omitempty"`
+	FacetCounts           ResourceFacetCounts       `json:"facetCounts,omitempty"`
+	Incidents             []ResourceIncident        `json:"incidents,omitempty"`
+	IncidentCount         int                       `json:"incidentCount,omitempty"`
+	IncidentCode          string                    `json:"incidentCode,omitempty"`
+	IncidentSeverity      storagehealth.RiskLevel   `json:"incidentSeverity,omitempty"`
+	IncidentSummary       string                    `json:"incidentSummary,omitempty"`
+	IncidentCategory      string                    `json:"incidentCategory,omitempty"`
+	IncidentLabel         string                    `json:"incidentLabel,omitempty"`
+	IncidentPriority      int                       `json:"incidentPriority,omitempty"`
+	IncidentImpactSummary string                    `json:"incidentImpactSummary,omitempty"`
+	IncidentUrgency       string                    `json:"incidentUrgency,omitempty"`
+	IncidentAction        string                    `json:"incidentAction,omitempty"`
 
 	// Source-specific payloads
 	Proxmox      *ProxmoxData      `json:"proxmox,omitempty"`

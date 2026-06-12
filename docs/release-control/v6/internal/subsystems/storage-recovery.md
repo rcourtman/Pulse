@@ -230,7 +230,9 @@ restore support, or a recovery-local execution path.
 Disconnected command-agent readiness for those lifecycle actions remains an
 API/runtime fail-closed condition; storage/recovery consumers may observe that
 an action is unavailable, but must not reinterpret it as recovery degradation
-or attempt a recovery-local container command path.
+or attempt a recovery-local container command path. Typed resource
+`actionReadiness` reasons are operator explanation only in this subsystem, not
+backup freshness, restore support, or recovery action authority.
 Storage and recovery surfaces may consume Discovery context from the shared
 API boundary when it helps explain protected workloads or storage-adjacent
 services, including mock-mode config/data/log path examples. That context is

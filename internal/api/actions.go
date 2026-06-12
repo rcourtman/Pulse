@@ -27,7 +27,7 @@ type ActionExecutor interface {
 // ActionAvailabilityChecker lets an executor contribute live readiness checks
 // before Pulse advertises or persists an executable action plan.
 type ActionAvailabilityChecker interface {
-	CheckActionAvailable(ctx context.Context, req unified.ActionRequest, resource unified.Resource) error
+	CheckActionAvailable(ctx context.Context, req unified.ActionRequest, resource unified.Resource) unified.ResourceActionReadiness
 }
 
 type actionDecisionRequest struct {
@@ -121,11 +121,12 @@ func (h *ResourceHandlers) HandlePlanAction(w http.ResponseWriter, r *http.Reque
 
 	req = normalizeActionRequestForAudit(req)
 	if checker, ok := h.actionExecutor.(ActionAvailabilityChecker); ok {
-		if err := checker.CheckActionAvailable(r.Context(), req, *resource); err != nil {
+		if readiness := checker.CheckActionAvailable(r.Context(), req, *resource); readiness.Name != "" && !readiness.Available {
 			writeJSONErrorWithDetails(w, http.StatusConflict, "action_execution_unavailable", "Action execution is unavailable", map[string]string{
 				"resourceId":     req.ResourceID,
 				"capabilityName": req.CapabilityName,
-				"reason":         sanitizeErrorForClient(err, "action execution is unavailable"),
+				"reasonCode":     readiness.ReasonCode,
+				"reason":         firstNonEmpty(readiness.Reason, "action execution is unavailable"),
 			})
 			return
 		}

@@ -255,6 +255,10 @@ metadata-only API responses, and the unified-resource owner supplies the
 Namespace, ConfigMap, Secret, and ServiceAccount-specific columns. Kubernetes
 Node inventory must also be reachable through a dedicated native tab, not only
 the overview stack, while retaining the shared `PlatformSectionTabs` shell.
+Feature-owned Docker / Podman action controls may render backend
+`actionReadiness` disabled reasons, but the shared primitive layer owns only the
+button/table affordance shell; it must not invent action availability, command
+agent state, or alternate execution routes.
 Kubernetes Service inventory must likewise stay on the shared tab, toolbar,
 table, table-alignment, and inline-detail primitives while the unified-resource
 owner supplies Service type, virtual IP, published port, and selector columns.

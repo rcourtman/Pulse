@@ -15150,6 +15150,43 @@ func TestContract_PlanActionDeclaresExecutionUnavailable(t *testing.T) {
 	}
 }
 
+func TestContract_ResourceActionReadinessPayloadShape(t *testing.T) {
+	payload, err := json.Marshal(unifiedresources.Resource{
+		ID:       "app-container:docker:web",
+		Type:     unifiedresources.ResourceTypeAppContainer,
+		Name:     "web",
+		Status:   unifiedresources.StatusOnline,
+		LastSeen: time.Date(2026, 6, 12, 12, 0, 0, 0, time.UTC),
+		Sources:  []unifiedresources.DataSource{unifiedresources.SourceDocker},
+		ActionReadiness: []unifiedresources.ResourceActionReadiness{
+			{
+				Name:       "restart",
+				Available:  false,
+				ReasonCode: "command_agent_disconnected",
+				Reason:     "Docker / Podman command agent is not connected.",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("marshal resource: %v", err)
+	}
+	body := string(payload)
+	for _, want := range []string{
+		`"actionReadiness":[`,
+		`"name":"restart"`,
+		`"available":false`,
+		`"reasonCode":"command_agent_disconnected"`,
+		`"reason":"Docker / Podman command agent is not connected."`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("resource action readiness payload missing %s: %s", want, body)
+		}
+	}
+	if strings.Contains(body, "InternalHandler") {
+		t.Fatalf("resource payload leaked internal action handler: %s", body)
+	}
+}
+
 // TestContract_AgentCapabilitiesManifestIsPublic pins the auth
 // contract for the discovery surface: the manifest must be in the
 // router's publicPaths list so it serves without a token. The

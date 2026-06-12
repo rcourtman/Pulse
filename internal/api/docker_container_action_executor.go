@@ -57,7 +57,7 @@ func (e dockerContainerActionExecutor) ExecuteAction(ctx context.Context, record
 		return nil, fmt.Errorf("docker container resource %q is not backed by a reporting Pulse agent", record.Request.ResourceID)
 	}
 	if !e.agents.IsAgentConnected(agentID) {
-		return nil, fmt.Errorf("docker container command agent %q is not connected", agentID)
+		return nil, fmt.Errorf("docker container command agent is not connected")
 	}
 
 	command := fmt.Sprintf("%s %s %s", runtime, operation, shellQuote(containerRef))
@@ -91,23 +91,24 @@ func (e dockerContainerActionExecutor) ExecuteAction(ctx context.Context, record
 	return execution, nil
 }
 
-func (e dockerContainerActionExecutor) CheckActionAvailable(ctx context.Context, req unified.ActionRequest, resource unified.Resource) error {
+func (e dockerContainerActionExecutor) CheckActionAvailable(ctx context.Context, req unified.ActionRequest, resource unified.Resource) unified.ResourceActionReadiness {
 	operation := strings.TrimSpace(req.CapabilityName)
 	capability, ok := findDockerLifecycleCapability(resource.Capabilities, operation)
 	if !ok || capability.InternalHandler != dockerContainerLifecycleHandler {
-		return nil
+		return unified.ResourceActionReadiness{}
 	}
+	readiness := unified.ResourceActionReadiness{Name: operation, Available: true}
 	if e.agents == nil {
-		return fmt.Errorf("docker container command agent manager is not available")
+		return unavailableDockerActionReadiness(operation, "command_agent_unavailable", "Docker / Podman command execution is not available.")
 	}
 	if _, err := e.executableDockerContainerResource(ctx, resource, operation); err != nil {
-		return err
+		return unavailableDockerActionReadiness(operation, dockerActionUnavailableReasonCode(err), dockerActionUnavailableReason(err))
 	}
 	agentID := strings.TrimSpace(resource.Docker.AgentID)
 	if !e.agents.IsAgentConnected(agentID) {
-		return fmt.Errorf("docker container command agent %q is not connected", agentID)
+		return unavailableDockerActionReadiness(operation, "command_agent_disconnected", "Docker / Podman command agent is not connected.")
 	}
-	return nil
+	return readiness
 }
 
 func (e dockerContainerActionExecutor) currentDockerContainerResource(ctx context.Context, resourceID, operation string) (unified.Resource, error) {
@@ -129,7 +130,7 @@ func (e dockerContainerActionExecutor) executableDockerContainerResource(_ conte
 	if resource.Type != unified.ResourceTypeAppContainer || resource.Docker == nil {
 		return unified.Resource{}, fmt.Errorf("resource %q is not a Docker or Podman container", resource.ID)
 	}
-	if status := resource.SourceStatus[unified.SourceDocker]; strings.EqualFold(strings.TrimSpace(status.Status), "stale") || strings.EqualFold(strings.TrimSpace(status.Status), "offline") {
+	if status := resource.SourceStatus[unified.SourceDocker]; strings.EqualFold(strings.TrimSpace(status.Status), "stale") || strings.EqualFold(strings.TrimSpace(status.Status), "offline") || strings.EqualFold(strings.TrimSpace(status.Status), "missing") {
 		return unified.Resource{}, fmt.Errorf("docker inventory for resource %q is %s", resource.ID, status.Status)
 	}
 	if resource.Docker.Security != nil && resource.Docker.Security.MutatingCommandsBlocked {
@@ -145,6 +146,53 @@ func (e dockerContainerActionExecutor) executableDockerContainerResource(_ conte
 		return unified.Resource{}, fmt.Errorf("resource %q advertises %s through unsupported handler %q", resource.ID, operation, capability.InternalHandler)
 	}
 	return resource, nil
+}
+
+func unavailableDockerActionReadiness(operation, reasonCode, reason string) unified.ResourceActionReadiness {
+	return unified.ResourceActionReadiness{
+		Name:       strings.TrimSpace(operation),
+		Available:  false,
+		ReasonCode: strings.TrimSpace(reasonCode),
+		Reason:     strings.TrimSpace(reason),
+	}
+}
+
+func dockerActionUnavailableReasonCode(err error) string {
+	if err == nil {
+		return "unavailable"
+	}
+	message := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(message, "not a docker or podman container"):
+		return "unsupported_resource"
+	case strings.Contains(message, "inventory") && (strings.Contains(message, "stale") || strings.Contains(message, "offline") || strings.Contains(message, "missing")):
+		return "stale_inventory"
+	case strings.Contains(message, "blocked by host policy"):
+		return "host_policy_blocked"
+	case strings.Contains(message, "does not currently advertise"):
+		return "capability_unavailable"
+	case strings.Contains(message, "unsupported handler"):
+		return "unsupported_handler"
+	default:
+		return "unavailable"
+	}
+}
+
+func dockerActionUnavailableReason(err error) string {
+	switch dockerActionUnavailableReasonCode(err) {
+	case "unsupported_resource":
+		return "Resource is not a Docker or Podman container."
+	case "stale_inventory":
+		return "Docker / Podman inventory is not fresh enough to run lifecycle actions."
+	case "host_policy_blocked":
+		return "Docker / Podman host policy blocks mutating lifecycle actions."
+	case "capability_unavailable":
+		return "Pulse does not currently advertise a fresh command capability for this container."
+	case "unsupported_handler":
+		return "This container action is not routed through the supported lifecycle executor."
+	default:
+		return "Docker / Podman lifecycle action is not currently available."
+	}
 }
 
 func findDockerLifecycleCapability(capabilities []unified.ResourceCapability, operation string) (unified.ResourceCapability, bool) {

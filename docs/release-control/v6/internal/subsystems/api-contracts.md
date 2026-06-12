@@ -1013,6 +1013,10 @@ the canonical monitored-system blocked payload.
    uses that hook for command-agent connectivity and runtime posture; browser
    controls may consume advertised capabilities, but must not replace this
    check with direct shell, SSH, provider, or agent-command calls.
+   Resource payloads may expose the same executor-owned unavailable state as
+   `actionReadiness[]` entries with stable `name`, `available`, `reasonCode`,
+   and `reason` fields so browser and agent clients can explain disabled
+   actions without treating unavailable capabilities as executable.
    Action approval decisions are API-owned as a separate non-execution
    contract: `POST /api/actions/{id}/decision` may only record an
    `approved` or `rejected` decision against a persisted `pending_approval`

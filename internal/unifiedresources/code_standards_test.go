@@ -572,9 +572,18 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 			"func RedactAuditRecord(record ActionAuditRecord) ActionAuditRecord",
 			"func redactActionExecutionResult(result *ExecutionResult) *ExecutionResult",
 		},
+		filepath.Join(".", "capabilities.go"): {
+			"type ResourceCapability struct",
+			"type ResourceActionReadiness struct",
+			"ReasonCode string `json:\"reasonCode,omitempty\"`",
+		},
+		filepath.Join(".", "types.go"): {
+			"ActionReadiness       []ResourceActionReadiness `json:\"actionReadiness,omitempty\"`",
+		},
 		filepath.Join("..", "api", "actions.go"): {
 			"type ActionExecutor interface",
 			"type ActionAvailabilityChecker interface",
+			"CheckActionAvailable(ctx context.Context, req unified.ActionRequest, resource unified.Resource) unified.ResourceActionReadiness",
 			"func (h *ResourceHandlers) HandleExecuteAction(w http.ResponseWriter, r *http.Request)",
 			"func (h *ResourceHandlers) validateActionPlanFresh(orgID string, record unified.ActionAuditRecord) error",
 			"func recordRefusedActionExecution(store unified.ResourceStore, record unified.ActionAuditRecord",
@@ -591,6 +600,7 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 			"func (h *ResourceHandlers) SetActionExecutor(executor ActionExecutor)",
 			"func (h *ResourceHandlers) SetActionCompletedPublisher(",
 			"func (h *ResourceHandlers) applyActionAvailability(ctx context.Context, resources []unified.Resource)",
+			"resources[i].ActionReadiness = readinesses",
 		},
 		filepath.Join("..", "api", "agent_events.go"): {
 			"func (b *AgentEventBroadcaster) PublishActionCompletedRecord(record unifiedresources.ActionAuditRecord)",

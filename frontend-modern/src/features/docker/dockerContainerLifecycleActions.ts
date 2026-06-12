@@ -89,6 +89,32 @@ const stateDisabledReason = (
   return undefined;
 };
 
+const actionReadinessDisabledReason = (
+  resource: Resource,
+  action: DockerContainerLifecycleAction,
+): string | undefined => {
+  const readiness = resource.actionReadiness?.find(
+    (item) => normalizeToken(item.name) === action && item.available === false,
+  );
+  if (!readiness) return undefined;
+  const reason = asTrimmedString(readiness.reason);
+  if (reason) return reason;
+  switch (normalizeToken(readiness.reasonCode)) {
+    case 'command_agent_disconnected':
+      return 'Docker / Podman command agent is not connected.';
+    case 'command_agent_unavailable':
+      return 'Docker / Podman command execution is not available.';
+    case 'stale_inventory':
+      return 'Docker / Podman inventory is not fresh enough to run lifecycle actions.';
+    case 'host_policy_blocked':
+      return 'Docker / Podman host policy blocks mutating lifecycle actions.';
+    case 'unsupported_handler':
+      return 'This container action is not routed through the supported lifecycle executor.';
+    default:
+      return undefined;
+  }
+};
+
 export const getDockerContainerLifecycleDisabledReason = (
   resource: Resource,
   action: DockerContainerLifecycleAction,
@@ -116,6 +142,9 @@ export const getDockerContainerLifecycleDisabledReason = (
 
   const stateReason = stateDisabledReason(resource, action);
   if (stateReason) return stateReason;
+
+  const readinessReason = actionReadinessDisabledReason(resource, action);
+  if (readinessReason) return readinessReason;
 
   if (!dockerContainerLifecycleCapability(resource, action)) {
     return `Pulse does not currently advertise a fresh ${action} command capability for this container.`;

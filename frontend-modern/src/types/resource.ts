@@ -312,6 +312,13 @@ export interface ResourceCapability {
   params?: ResourceCapabilityParam[];
 }
 
+export interface ResourceActionReadiness {
+  name: string;
+  available: boolean;
+  reasonCode?: string;
+  reason?: string;
+}
+
 export interface ResourceSourceStatus {
   status?: string;
   lastSeen?: string;
@@ -1422,6 +1429,7 @@ export interface Resource {
   policy?: ResourcePolicy;
   aiSafeSummary?: string;
   capabilities?: ResourceCapability[];
+  actionReadiness?: ResourceActionReadiness[];
   sourceStatus?: Record<string, ResourceSourceStatus>;
   relationships?: ResourceRelationship[];
   recentChanges?: ResourceChange[];

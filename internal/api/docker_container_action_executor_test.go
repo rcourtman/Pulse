@@ -48,6 +48,15 @@ func dockerActionCapabilityNames(capabilities []unified.ResourceCapability) []st
 	return names
 }
 
+func dockerActionReadinessByName(readinesses []unified.ResourceActionReadiness, name string) (unified.ResourceActionReadiness, bool) {
+	for _, readiness := range readinesses {
+		if readiness.Name == name {
+			return readiness, true
+		}
+	}
+	return unified.ResourceActionReadiness{}, false
+}
+
 func TestDockerContainerActionExecutorDispatchesPodmanRestartAndVerification(t *testing.T) {
 	now := time.Now().UTC()
 	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
@@ -116,15 +125,15 @@ func TestDockerContainerActionExecutorAvailabilityRequiresConnectedAgent(t *test
 	agents := &fakeDockerActionAgentCommander{connected: map[string]bool{"agent-1": false}}
 	executor := newDockerContainerActionExecutor(h, agents).(dockerContainerActionExecutor)
 
-	err := executor.CheckActionAvailable(context.Background(), unified.ActionRequest{
+	readiness := executor.CheckActionAvailable(context.Background(), unified.ActionRequest{
 		RequestID:      "req-availability",
 		ResourceID:     "app-container:api",
 		CapabilityName: "restart",
 		Reason:         "operator requested restart",
 		RequestedBy:    "operator",
 	}, resource)
-	if err == nil || !strings.Contains(err.Error(), `docker container command agent "agent-1" is not connected`) {
-		t.Fatalf("CheckActionAvailable err = %v, want disconnected agent", err)
+	if readiness.Available || readiness.ReasonCode != "command_agent_disconnected" || readiness.Reason != "Docker / Podman command agent is not connected." {
+		t.Fatalf("CheckActionAvailable readiness = %#v, want disconnected agent", readiness)
 	}
 	if len(agents.calls) != 0 {
 		t.Fatalf("agent calls = %#v, want none", agents.calls)
@@ -158,7 +167,8 @@ func TestHandlePlanActionRejectsDisconnectedDockerContainerAgent(t *testing.T) {
 		t.Fatalf("plan status = %d, want %d, body=%s", rec.Code, http.StatusConflict, rec.Body.String())
 	}
 	if !strings.Contains(rec.Body.String(), `"error":"action_execution_unavailable"`) ||
-		!strings.Contains(rec.Body.String(), `"reason":"action execution is unavailable"`) {
+		!strings.Contains(rec.Body.String(), `"reason":"Docker / Podman command agent is not connected."`) ||
+		!strings.Contains(rec.Body.String(), `"reasonCode":"command_agent_disconnected"`) {
 		t.Fatalf("unexpected response body: %s", rec.Body.String())
 	}
 	store, err := h.getStore("default")
@@ -203,6 +213,10 @@ func TestResourceResponsesFilterDisconnectedDockerLifecycleCapabilities(t *testi
 	if got := dockerActionCapabilityNames(list.Data[0].Capabilities); len(got) != 0 {
 		t.Fatalf("list capabilities = %#v, want none", got)
 	}
+	readiness, ok := dockerActionReadinessByName(list.Data[0].ActionReadiness, "restart")
+	if !ok || readiness.Available || readiness.ReasonCode != "command_agent_disconnected" {
+		t.Fatalf("list action readiness = %#v, ok=%v; want disconnected restart", list.Data[0].ActionReadiness, ok)
+	}
 
 	detailRec := httptest.NewRecorder()
 	detailReq := httptest.NewRequest(http.MethodGet, "/api/resources/app-container:api", nil)
@@ -216,6 +230,10 @@ func TestResourceResponsesFilterDisconnectedDockerLifecycleCapabilities(t *testi
 	}
 	if got := dockerActionCapabilityNames(detail.Capabilities); len(got) != 0 {
 		t.Fatalf("detail capabilities = %#v, want none", got)
+	}
+	readiness, ok = dockerActionReadinessByName(detail.ActionReadiness, "restart")
+	if !ok || readiness.Available || readiness.Reason != "Docker / Podman command agent is not connected." {
+		t.Fatalf("detail action readiness = %#v, ok=%v; want disconnected restart", detail.ActionReadiness, ok)
 	}
 }
 

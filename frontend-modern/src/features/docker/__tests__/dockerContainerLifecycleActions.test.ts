@@ -152,4 +152,23 @@ describe('dockerContainerLifecycleActions', () => {
       'Pulse does not currently advertise a fresh restart command capability for this container.',
     );
   });
+
+  it('prefers backend-owned action readiness reasons over generic missing capability copy', () => {
+    expect(
+      getDockerContainerLifecycleDisabledReason(
+        resource({
+          capabilities: [],
+          actionReadiness: [
+            {
+              name: 'restart',
+              available: false,
+              reasonCode: 'command_agent_disconnected',
+              reason: 'Docker / Podman command agent is not connected.',
+            },
+          ],
+        }),
+        'restart',
+      ),
+    ).toBe('Docker / Podman command agent is not connected.');
+  });
 });

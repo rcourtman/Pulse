@@ -446,6 +446,12 @@ container inventory table.
    same readiness boundary and fails closed with `action_execution_unavailable`
    before audit creation if the live command path disappears after the resource
    response was read.
+   When filtering an otherwise known lifecycle capability, the same resource
+   response must preserve a typed `actionReadiness` entry with the action name,
+   `available=false`, a stable reason code such as
+   `command_agent_disconnected`, and operator-safe copy. Frontend consumers may
+   use that field to explain disabled controls, while `capabilities` remains
+   the executable action set.
    TrueNAS app inventory enters the model as native `TrueNASData.App`
    metadata on canonical `app-container` resources. The facet is sourced from
    the TrueNAS API app inventory (`app.query` plus active workload/stat
@@ -1248,8 +1254,8 @@ Docker / Podman container lifecycle controls in
 `dockerContainerLifecycleActions.ts` are unified-resource capability consumers:
 they may enable start/stop/restart only from backend-advertised resource
 capabilities and must use `sourceStatus`, `docker.agentId`, `docker.runtime`,
-and `docker.security` only for disabled-state explanation, never as a
-feature-local execution bypass. The same controls may render in
+`docker.security`, and backend-owned `actionReadiness` only for disabled-state
+explanation, never as a feature-local execution bypass. The same controls may render in
 `DockerContainersTable.tsx` and the canonical `ResourceDetailDrawer.tsx` header
 only for Docker-source app containers backed by Docker or Podman runtime
 metadata; other app-container sources such as TrueNAS must not inherit Docker

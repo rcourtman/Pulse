@@ -40,3 +40,12 @@ type ResourceCapability struct {
 	InternalHandler      string              `json:"-"` // DO NOT expose execution plumbing to public surfaces
 	Params               []CapabilityParam   `json:"params,omitempty"`
 }
+
+// ResourceActionReadiness carries backend-owned current executability state
+// for a capability that may be known but unavailable right now.
+type ResourceActionReadiness struct {
+	Name       string `json:"name"`
+	Available  bool   `json:"available"`
+	ReasonCode string `json:"reasonCode,omitempty"`
+	Reason     string `json:"reason,omitempty"`
+}

@@ -319,6 +319,7 @@ func (h *ResourceHandlers) applyActionAvailability(ctx context.Context, resource
 			continue
 		}
 		filtered := make([]unified.ResourceCapability, 0, len(resources[i].Capabilities))
+		readinesses := make([]unified.ResourceActionReadiness, 0, len(resources[i].Capabilities))
 		for _, capability := range resources[i].Capabilities {
 			req := unified.ActionRequest{
 				RequestID:      "resource-capability-availability",
@@ -328,7 +329,9 @@ func (h *ResourceHandlers) applyActionAvailability(ctx context.Context, resource
 				Reason:         "Projecting currently executable resource capabilities.",
 				RequestedBy:    "system:resource-api",
 			}
-			if err := checker.CheckActionAvailable(ctx, req, resources[i]); err != nil {
+			readiness := checker.CheckActionAvailable(ctx, req, resources[i])
+			if readiness.Name != "" && !readiness.Available {
+				readinesses = append(readinesses, readiness)
 				continue
 			}
 			filtered = append(filtered, capability)
@@ -337,6 +340,9 @@ func (h *ResourceHandlers) applyActionAvailability(ctx context.Context, resource
 			resources[i].Capabilities = nil
 		} else {
 			resources[i].Capabilities = filtered
+		}
+		if len(readinesses) > 0 {
+			resources[i].ActionReadiness = readinesses
 		}
 	}
 }
