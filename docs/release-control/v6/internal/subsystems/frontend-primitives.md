@@ -294,7 +294,11 @@ network, mount, update, governed lifecycle actions, and host/runtime columns
 rather than embedding `WorkloadsSurface`. The lifecycle action column is a
 compact icon-button primitive over unified-resource capabilities and the shared
 resource-action API client; it must not grow Docker/Podman shell, SSH, or
-provider calls inside the table component. Swarm services must surface the
+provider calls inside the table component. The same governed lifecycle controls
+may appear in the resource detail header, while the platform table and drawer
+shells remain presentation owners only: they may pass a post-success refresh
+callback to their existing resource query, but must not own execution,
+approval, policy, or provider dispatch. Swarm services must surface the
 API-reported rollout/update
 state in the native services table, and engine storage rows must expose a
 stable row hook so platform-page browser proof can verify the storage tab is
@@ -2615,7 +2619,7 @@ owns `PlatformResourceDetailToggleButton`, which composes
 label, `aria-expanded`, `aria-controls`, and propagation containment. Platform
 tables that use `createPlatformResourceDetailState` or render local inline
 detail rows must compose that toggle; they may still own the detail row content,
-drawer payload, and platform-specific fields.
+drawer payload, post-success refresh callbacks, and platform-specific fields.
 The shared help icon now follows that same owner split.
 `frontend-modern/src/components/shared/HelpIcon.tsx` stays the render shell,
 `frontend-modern/src/components/shared/useHelpIconState.ts` owns open state,

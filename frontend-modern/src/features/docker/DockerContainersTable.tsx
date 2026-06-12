@@ -54,6 +54,10 @@ import { DockerContainerLifecycleControls } from './DockerContainerLifecycleCont
 type DockerNetwork = NonNullable<NonNullable<Resource['docker']>['networks']>[number];
 type DockerMount = NonNullable<NonNullable<Resource['docker']>['mounts']>[number];
 
+type DockerContainersTableProps = DockerNativeTableProps & {
+  onLifecycleActionSettled?: () => void | Promise<void>;
+};
+
 const networkLabel = (network: DockerNetwork): string => {
   const name = asTrimmedString(network.name);
   const address = asTrimmedString(network.ipv4) || asTrimmedString(network.ipv6);
@@ -182,7 +186,7 @@ const containerUpdateAction = (
   };
 };
 
-export const DockerContainersTable: Component<DockerNativeTableProps> = (props) => {
+export const DockerContainersTable: Component<DockerContainersTableProps> = (props) => {
   const breakpoint = useBreakpoint();
   const layoutMode = createMemo(() => getWorkloadTableLayoutMode(breakpoint.width()));
   const tableState = createPlatformTableFilterState({
@@ -538,7 +542,10 @@ export const DockerContainersTable: Component<DockerNativeTableProps> = (props) 
                         case 'actions':
                           return (
                             <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
-                              <DockerContainerLifecycleControls resource={resource} />
+                              <DockerContainerLifecycleControls
+                                resource={resource}
+                                onActionSettled={props.onLifecycleActionSettled}
+                              />
                             </TableCell>
                           );
                         default:
@@ -567,6 +574,7 @@ export const DockerContainersTable: Component<DockerNativeTableProps> = (props) 
                           colSpan={drawerColSpan()}
                           resolveResourceLabel={resolveResourceLabel}
                           onClose={() => drawer.close(resource)}
+                          onResourceActionSettled={props.onLifecycleActionSettled}
                         />
                       </>
                     );

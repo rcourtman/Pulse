@@ -14,6 +14,21 @@ import {
   type DockerContainerLifecycleAction,
 } from './dockerContainerLifecycleActions';
 
+export type DockerContainerLifecycleSurface = 'docker-page' | 'resource-detail';
+
+export type DockerContainerLifecycleSettledContext = {
+  action: DockerContainerLifecycleAction;
+  actionId: string;
+  resource: Resource;
+};
+
+export type DockerContainerLifecycleControlsProps = {
+  resource: Resource;
+  class?: string;
+  surface?: DockerContainerLifecycleSurface;
+  onActionSettled?: (context: DockerContainerLifecycleSettledContext) => void | Promise<void>;
+};
+
 const buttonBaseClass =
   'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded border text-muted transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-1 focus-visible:ring-offset-surface';
 const enabledButtonClass =
@@ -47,7 +62,15 @@ const iconForAction = (action: DockerContainerLifecycleAction): Component<{ clas
 const errorMessage = (error: unknown): string =>
   error instanceof Error && error.message.trim() ? error.message.trim() : 'Action failed';
 
-export const DockerContainerLifecycleControls: Component<{ resource: Resource }> = (props) => {
+const surfaceLabel = (surface: DockerContainerLifecycleSurface | undefined): string =>
+  surface === 'resource-detail' ? 'resource details' : 'Docker page';
+
+const requestedByForSurface = (surface: DockerContainerLifecycleSurface | undefined): string =>
+  surface === 'resource-detail' ? 'ui:resource-detail' : 'ui:docker-page';
+
+export const DockerContainerLifecycleControls: Component<DockerContainerLifecycleControlsProps> = (
+  props,
+) => {
   const [confirmingAction, setConfirmingAction] =
     createSignal<DockerContainerLifecycleAction | null>(null);
   const [runningAction, setRunningAction] = createSignal<DockerContainerLifecycleAction | null>(
@@ -69,7 +92,9 @@ export const DockerContainerLifecycleControls: Component<{ resource: Resource }>
 
     const containerName = dockerContainerLifecycleName(props.resource);
     const runtimeLabel = dockerContainerRuntimeLabel(props.resource);
-    const reason = `${action} ${runtimeLabel} container ${containerName} from the Docker page.`;
+    const reason = `${action} ${runtimeLabel} container ${containerName} from the ${surfaceLabel(
+      props.surface,
+    )}.`;
     setRunningAction(action);
     setConfirmingAction(null);
     setLastError('');
@@ -81,7 +106,7 @@ export const DockerContainerLifecycleControls: Component<{ resource: Resource }>
         capabilityName: action,
         params: {},
         reason,
-        requestedBy: 'ui:docker-page',
+        requestedBy: requestedByForSurface(props.surface),
       });
       if (!plan.allowed) {
         throw new Error(plan.message || 'Pulse refused the action plan.');
@@ -92,6 +117,15 @@ export const DockerContainerLifecycleControls: Component<{ resource: Resource }>
       const result = await ResourceActionsAPI.executeAction(plan.actionId, reason);
       if (result.result && !result.result.success) {
         throw new Error(result.result.errorMessage || 'The action did not complete successfully.');
+      }
+      try {
+        await props.onActionSettled?.({
+          action,
+          actionId: plan.actionId,
+          resource: props.resource,
+        });
+      } catch {
+        notificationStore.warning('Action requested. Refresh container inventory to verify state.');
       }
       setCompletedAction(action);
       window.setTimeout(
@@ -128,7 +162,11 @@ export const DockerContainerLifecycleControls: Component<{ resource: Resource }>
   };
 
   return (
-    <div class="inline-flex items-center justify-end gap-1" data-prevent-toggle>
+    <div
+      class={`inline-flex items-center justify-end gap-1 ${props.class ?? ''}`.trim()}
+      data-prevent-toggle
+      data-docker-container-actions-surface={props.surface ?? 'docker-page'}
+    >
       <For each={DOCKER_CONTAINER_LIFECYCLE_ACTIONS}>
         {(spec) => {
           const disabled = () =>

@@ -1,5 +1,6 @@
-import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ResourceActionsAPI } from '@/api/resourceActions';
 import type { Resource } from '@/types/resource';
 import { ResourceDetailDrawer } from '../ResourceDetailDrawer';
 
@@ -32,6 +33,37 @@ vi.mock('@/components/Workloads/GuestDrawerHistory', () => ({
   ),
 }));
 
+vi.mock('@/api/resourceActions', () => ({
+  ResourceActionsAPI: {
+    planAction: vi.fn().mockResolvedValue({
+      actionId: 'detail-action-1',
+      requestId: 'detail-request-1',
+      allowed: true,
+      requiresApproval: true,
+      approvalPolicy: 'admin',
+      rollbackAvailable: false,
+    }),
+    decideAction: vi.fn().mockResolvedValue({
+      actionId: 'detail-action-1',
+      outcome: 'approved',
+      decidedAt: '2026-06-12T20:00:01Z',
+    }),
+    executeAction: vi.fn().mockResolvedValue({
+      actionId: 'detail-action-1',
+      state: 'completed',
+      result: { success: true },
+    }),
+  },
+}));
+
+vi.mock('@/stores/notifications', () => ({
+  notificationStore: {
+    success: vi.fn(),
+    error: vi.fn(),
+    warning: vi.fn(),
+  },
+}));
+
 const resource = (overrides: Partial<Resource>): Resource =>
   ({
     id: overrides.id ?? 'app-container-1',
@@ -52,6 +84,70 @@ afterEach(() => {
 });
 
 describe('ResourceDetailDrawer for Docker containers', () => {
+  it('renders governed lifecycle controls in Docker container details', async () => {
+    const onResourceActionSettled = vi.fn();
+
+    render(() => (
+      <ResourceDetailDrawer
+        presentation="table-row"
+        onResourceActionSettled={onResourceActionSettled}
+        resource={resource({
+          id: 'app-container-web',
+          name: 'edge-web',
+          docker: {
+            agentId: 'agent-edge',
+            containerId: 'abc123def456',
+            containerState: 'running',
+            runtime: 'docker',
+            image: 'ghcr.io/example/edge-web:2026.05',
+          },
+          capabilities: [
+            {
+              name: 'restart',
+              type: 'common',
+              platform: 'docker',
+              minimumApprovalLevel: 'admin',
+            },
+          ],
+          sourceStatus: { docker: { status: 'online' } },
+        })}
+      />
+    ));
+
+    const restartButton = screen.getByRole('button', {
+      name: 'Restart edge-web through governed action',
+    });
+    expect(restartButton.closest('[data-docker-container-actions-surface]')).toHaveAttribute(
+      'data-docker-container-actions-surface',
+      'resource-detail',
+    );
+
+    fireEvent.click(restartButton);
+    fireEvent.click(screen.getByRole('button', { name: 'Click again to restart edge-web' }));
+
+    await waitFor(() =>
+      expect(ResourceActionsAPI.planAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          resourceId: 'app-container-web',
+          capabilityName: 'restart',
+          requestedBy: 'ui:resource-detail',
+        }),
+      ),
+    );
+    await waitFor(() =>
+      expect(ResourceActionsAPI.executeAction).toHaveBeenCalledWith(
+        'detail-action-1',
+        expect.stringContaining('from the resource details'),
+      ),
+    );
+    expect(ResourceActionsAPI.decideAction).toHaveBeenCalledWith(
+      'detail-action-1',
+      'approved',
+      expect.stringContaining('restart Docker container edge-web'),
+    );
+    await waitFor(() => expect(onResourceActionSettled).toHaveBeenCalledTimes(1));
+  });
+
   it('adds a metrics history tab for app-containers with a metrics target', async () => {
     render(() => (
       <ResourceDetailDrawer

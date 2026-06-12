@@ -1242,7 +1242,14 @@ Docker / Podman container lifecycle controls in
 they may enable start/stop/restart only from backend-advertised resource
 capabilities and must use `sourceStatus`, `docker.agentId`, `docker.runtime`,
 and `docker.security` only for disabled-state explanation, never as a
-feature-local execution bypass.
+feature-local execution bypass. The same controls may render in
+`DockerContainersTable.tsx` and the canonical `ResourceDetailDrawer.tsx` header
+only for Docker-source app containers backed by Docker or Podman runtime
+metadata; other app-container sources such as TrueNAS must not inherit Docker
+lifecycle controls from runtime-shaped metadata alone. After a governed request
+completes, the owning surface may ask its existing `useUnifiedResources` query
+to refetch the resource snapshot, but refresh is not an alternate execution,
+verification, or provider-control path.
 
 `InfrastructureSummary.tsx` and `infrastructureSummaryModel.ts` now surface
 `degraded` and `alerting` resource counts alongside the existing `online` and

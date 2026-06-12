@@ -24,6 +24,8 @@ import {
   DEFAULT_RESOURCE_DETAIL_DRAWER_PRESENTATION,
   type ResourceDetailDrawerPresentation,
 } from './resourceDetailDrawerPresentation';
+import { DockerContainerLifecycleControls } from '@/features/docker/DockerContainerLifecycleControls';
+import { isDockerContainerLifecycleResource } from '@/features/docker/dockerContainerLifecycleActions';
 
 interface ResourceDetailDrawerProps {
   resource: Resource;
@@ -32,6 +34,7 @@ interface ResourceDetailDrawerProps {
   resolveResourceLabel?: (resourceId: string) => string | null | undefined;
   initialShowAccessContext?: boolean;
   initialShowTrueNASDetails?: boolean;
+  onResourceActionSettled?: () => void | Promise<void>;
 }
 
 const TabAvailabilityNotice: Component<{ message: string }> = (props) => (
@@ -106,6 +109,13 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
         </div>
 
         <div class="flex shrink-0 items-center gap-1.5">
+          <Show when={isDockerContainerLifecycleResource(props.resource)}>
+            <DockerContainerLifecycleControls
+              resource={props.resource}
+              surface="resource-detail"
+              onActionSettled={props.onResourceActionSettled}
+            />
+          </Show>
           <Show when={drawer.assistantAvailable()}>
             <button
               type="button"
@@ -353,6 +363,7 @@ export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props
       resolveResourceLabel={props.resolveResourceLabel}
       initialShowAccessContext={props.initialShowAccessContext}
       initialShowTrueNASDetails={props.initialShowTrueNASDetails}
+      onResourceActionSettled={props.onResourceActionSettled}
     />
   );
 };

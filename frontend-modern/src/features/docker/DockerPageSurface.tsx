@@ -84,6 +84,9 @@ export function DockerPageSurface() {
   const serverVersionDisplay = createMemo(() =>
     formatAgentVersionDisplay(agentUpdateTargetVersion()),
   );
+  const refreshDockerResources = async () => {
+    await refetch();
+  };
 
   return (
     <div data-testid="docker-page" class="space-y-3">
@@ -136,6 +139,7 @@ export function DockerPageSurface() {
                 hostFilter={hostFilter()}
                 containers={model().containers}
                 incidents={model().incidents}
+                onLifecycleActionSettled={refreshDockerResources}
               />
             </Show>
             <Show when={activeTab() === 'images'}>
@@ -307,6 +311,7 @@ function DockerOverview(props: {
   hostFilter: string;
   containers: ReturnType<typeof buildDockerPageModel>['containers'];
   incidents: ReturnType<typeof buildDockerPageModel>['incidents'];
+  onLifecycleActionSettled?: () => void | Promise<void>;
 }) {
   const hostMatchesFilter = (resource: Resource, hostFilter: string): boolean => {
     const normalized = hostFilter.trim();
@@ -338,6 +343,7 @@ function DockerOverview(props: {
         emptyIcon={dockerIcon()}
         emptyTitle="No Docker or Podman containers"
         emptyDescription="Containers appear here when a Docker or Podman host reports workload inventory."
+        onLifecycleActionSettled={props.onLifecycleActionSettled}
       />
       <Show when={props.incidents.length > 0}>
         <DockerAlertsTable

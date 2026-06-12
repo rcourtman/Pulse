@@ -21,6 +21,16 @@ const STALE_SOURCE_STATUSES = new Set(['stale', 'offline', 'missing']);
 
 const normalizeToken = (value: unknown): string => (asTrimmedString(value) ?? '').toLowerCase();
 
+export const isDockerContainerLifecycleResource = (resource: Resource): boolean => {
+  if (resource.type !== 'app-container') return false;
+  const runtime = normalizeToken(resource.docker?.runtime);
+  const hasDockerSource =
+    normalizeToken(resource.platformType) === 'docker' ||
+    (resource.sources ?? []).some((source) => normalizeToken(source) === 'docker') ||
+    (resource.platformScopes ?? []).some((scope) => normalizeToken(scope) === 'docker');
+  return hasDockerSource && (runtime === 'docker' || runtime === 'podman');
+};
+
 export const dockerContainerLifecycleName = (resource: Resource): string =>
   (asTrimmedString(resource.name) ||
     asTrimmedString(resource.displayName) ||

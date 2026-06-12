@@ -2904,6 +2904,13 @@ describe('shared primitive guardrails', () => {
     );
     expect(platformResourceDetailTableRowSource).toContain('subjectLabel={`details for');
     expect(platformResourceDetailTableRowSource).toContain('SummaryRowActionButton');
+    expect(platformResourceDetailTableRowSource).toContain(
+      'onResourceActionSettled?: () => void | Promise<void>',
+    );
+    expect(platformResourceDetailTableRowSource).toContain(
+      'onResourceActionSettled={props.onResourceActionSettled}',
+    );
+    expect(platformResourceDetailTableRowSource).not.toContain('ResourceActionsAPI');
 
     for (const source of [
       dockerHostsTableSource,

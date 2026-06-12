@@ -453,6 +453,8 @@ describe('Docker native tables', () => {
   });
 
   it('runs Docker lifecycle row actions through the governed action API', async () => {
+    const onLifecycleActionSettled = vi.fn();
+
     renderInRouter(() => (
       <DockerContainersTable
         resources={[
@@ -490,6 +492,7 @@ describe('Docker native tables', () => {
         emptyTitle="No containers"
         emptyDescription="No containers"
         showToolbar={false}
+        onLifecycleActionSettled={onLifecycleActionSettled}
       />
     ));
 
@@ -519,6 +522,7 @@ describe('Docker native tables', () => {
       'approved',
       expect.stringContaining('restart Docker container edge-web'),
     );
+    expect(onLifecycleActionSettled).toHaveBeenCalledTimes(1);
   });
 
   it('shows disabled Docker lifecycle buttons with explicit unavailable reasons', () => {

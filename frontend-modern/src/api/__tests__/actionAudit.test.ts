@@ -8,6 +8,7 @@ import { ActionAuditAPI } from '@/api/actionAudit';
 import { ResourceActionsAPI } from '@/api/resourceActions';
 import { apiFetchJSON } from '@/utils/apiClient';
 import type {
+  ActionAuditRecord,
   ActionDecisionResponse,
   ActionExecutionResponse,
   ResourceActionRequest,
@@ -257,10 +258,37 @@ describe('ActionAuditAPI', () => {
   });
 
   it('records decisions and executes actions through encoded governed action routes', async () => {
+    const audit: ActionAuditRecord = {
+      id: 'action/docker/restart',
+      createdAt: '2026-06-12T20:39:00Z',
+      updatedAt: '2026-06-12T20:40:00Z',
+      state: 'approved',
+      request: {
+        requestId: 'req-docker-restart',
+        resourceId: 'docker:container:abc123',
+        capabilityName: 'docker.container.restart',
+        reason: 'operator confirmed restart',
+        requestedBy: 'operator',
+      },
+      plan: {
+        actionId: 'action/docker/restart',
+        requestId: 'req-docker-restart',
+        allowed: true,
+        requiresApproval: true,
+        approvalPolicy: 'admin',
+        rollbackAvailable: false,
+      },
+    };
     const decision: ActionDecisionResponse = {
       actionId: 'action/docker/restart',
-      outcome: 'approved',
-      decidedAt: '2026-06-12T20:40:00Z',
+      state: 'approved',
+      approval: {
+        actor: 'operator',
+        method: 'api',
+        timestamp: '2026-06-12T20:40:00Z',
+        outcome: 'approved',
+      },
+      audit,
     };
     const execution: ActionExecutionResponse = {
       actionId: 'action/docker/restart',
@@ -268,6 +296,15 @@ describe('ActionAuditAPI', () => {
       result: {
         success: true,
         output: 'container restarted',
+      },
+      audit: {
+        ...audit,
+        updatedAt: '2026-06-12T20:41:00Z',
+        state: 'completed',
+        result: {
+          success: true,
+          output: 'container restarted',
+        },
       },
     };
 

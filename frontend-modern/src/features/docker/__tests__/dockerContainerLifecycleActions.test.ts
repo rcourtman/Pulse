@@ -4,6 +4,7 @@ import type { Resource } from '@/types/resource';
 import {
   dockerContainerLifecycleCapability,
   getDockerContainerLifecycleDisabledReason,
+  isDockerContainerLifecycleResource,
 } from '../dockerContainerLifecycleActions';
 
 const resource = (overrides: Partial<Resource> = {}): Resource => ({
@@ -44,12 +45,40 @@ describe('dockerContainerLifecycleActions', () => {
   it('enables advertised runtime-matched capabilities', () => {
     const running = resource();
 
+    expect(isDockerContainerLifecycleResource(running)).toBe(true);
     expect(dockerContainerLifecycleCapability(running, 'restart')?.name).toBe('restart');
     expect(getDockerContainerLifecycleDisabledReason(running, 'restart')).toBeUndefined();
     expect(getDockerContainerLifecycleDisabledReason(running, 'stop')).toBeUndefined();
     expect(getDockerContainerLifecycleDisabledReason(running, 'start')).toBe(
       'Container is already running.',
     );
+  });
+
+  it('only identifies Docker and Podman app containers as lifecycle resources', () => {
+    expect(
+      isDockerContainerLifecycleResource(
+        resource({
+          platformType: 'truenas',
+          sources: ['truenas'],
+          docker: { runtime: 'docker', containerState: 'running' },
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      isDockerContainerLifecycleResource(
+        resource({ type: 'docker-host', docker: { runtime: 'docker' } }),
+      ),
+    ).toBe(false);
+    expect(
+      isDockerContainerLifecycleResource(
+        resource({ docker: { runtime: 'containerd', containerState: 'running' } }),
+      ),
+    ).toBe(false);
+    expect(
+      isDockerContainerLifecycleResource(
+        resource({ docker: { runtime: undefined, containerState: 'running' } }),
+      ),
+    ).toBe(false);
   });
 
   it('enables start for stopped containers and explains non-running stop/restart states', () => {
