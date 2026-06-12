@@ -247,6 +247,7 @@ describe('useWorkloads', () => {
           docker: {
             containerId: 'frigate',
             hostSourceId: 'proxmox-lxc-docker:pve-a:node-a:141',
+            hostname: 'homepage-docker.lab',
             runtime: 'docker',
             image: 'ghcr.io/blakeblackshear/frigate:stable',
           },
@@ -310,6 +311,7 @@ describe('useWorkloads', () => {
     expect(byName.get('frigate')?.platformType).toBe('docker');
     expect(byName.get('frigate')?.platformScopes).toEqual(['proxmox-pve', 'docker']);
     expect(byName.get('frigate')?.dockerHostId).toBe('proxmox-lxc-docker:pve-a:node-a:141');
+    expect(byName.get('frigate')?.dockerHostName).toBe('homepage-docker.lab');
     expect(byName.get('crm-app-01')?.platformType).toBe('vmware-vsphere');
     expect(byName.get('crm-app-01')?.node).toBe('esxi-01');
     expect(byName.get('crm-app-01')?.instance).toBe('Compute-A');

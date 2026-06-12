@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DOCKER_PATH,
+  DOCKER_QUERY_PARAMS,
   KUBERNETES_PATH,
   PMG_THRESHOLDS_PATH,
   PATROL_PATH,
@@ -12,6 +13,7 @@ import {
   TRUENAS_PATH,
   VMWARE_PATH,
   buildDockerPath,
+  buildDockerRouteSearch,
   buildKubernetesPath,
   buildRecoveryRouteSearch,
   buildProxmoxPath,
@@ -50,6 +52,14 @@ describe('resource link routing contract', () => {
     expect(buildDockerPath()).toBe('/docker/overview');
     expect(buildDockerPath('containers')).toBe('/docker/containers');
     expect(buildDockerPath('')).toBe('/docker');
+    expect(DOCKER_QUERY_PARAMS.host).toBe('host');
+    expect(buildDockerRouteSearch({ host: 'frigate.mist-stork.ts.net' })).toBe(
+      '?host=frigate.mist-stork.ts.net',
+    );
+    expect(buildDockerRouteSearch({ host: ' host with spaces ' })).toBe(
+      '?host=host+with+spaces',
+    );
+    expect(buildDockerRouteSearch({ host: '' })).toBe('');
 
     expect(KUBERNETES_PATH).toBe('/kubernetes');
     expect(buildKubernetesPath()).toBe('/kubernetes/overview');

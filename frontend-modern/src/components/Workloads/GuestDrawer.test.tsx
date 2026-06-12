@@ -581,7 +581,7 @@ describe('GuestDrawer', () => {
             label: 'Docker',
             title: 'Nested Docker',
             count: 2,
-            href: '/docker',
+            href: '/docker/overview?host=media-lxc.mist-stork.ts.net',
             items: [
               { id: 'container-1', name: 'frigate', runtimeLabel: 'Docker', status: 'running' },
               { id: 'container-2', name: 'mosquitto', runtimeLabel: 'Docker', status: 'exited' },
@@ -599,7 +599,7 @@ describe('GuestDrawer', () => {
       expect(within(card).getByText('mosquitto')).toBeInTheDocument();
       expect(
         within(card).getByRole('link', { name: 'Open Docker page for media-lxc' }),
-      ).toHaveAttribute('href', '/docker');
+      ).toHaveAttribute('href', '/docker/overview?host=media-lxc.mist-stork.ts.net');
     });
   });
 

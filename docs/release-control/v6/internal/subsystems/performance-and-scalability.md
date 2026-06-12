@@ -167,6 +167,11 @@ regression protection.
    canonical workload IDs and ambiguity-safe runtime-host matching; row and
    drawer components may render the summary they are given, but they must not
    scan hidden workloads per row or guess ownership from ambiguous VMIDs.
+   The same bounded derivation owns Docker host-facet handoff data for nested
+   runtime links. `useWorkloads.ts` must carry the Docker runtime hostname onto
+   `WorkloadGuest` so `nestedWorkloadContext.ts` can build a route-scoped Docker
+   link without scanning unified resources again inside drawers or Docker table
+   renderers.
    The same `useWorkloads.ts` mapping owns canonical-field fallback for
    per-row scalars the workload table reads. `WorkloadGuest.uptime` must
    fall back to the canonical `Resource.Uptime` field after the

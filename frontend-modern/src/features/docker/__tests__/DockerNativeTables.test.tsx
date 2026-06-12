@@ -95,6 +95,7 @@ const setViewportWidth = (width: number) => {
 };
 
 afterEach(() => {
+  window.history.pushState({}, '', '/');
   setViewportWidth(1024);
   cleanup();
   vi.clearAllMocks();
@@ -235,6 +236,50 @@ describe('Docker native tables', () => {
 
     expect(screen.queryByText('Runtime')).not.toBeInTheDocument();
     expect(screen.queryByText('docker 27.5.1')).not.toBeInTheDocument();
+  });
+
+  it('applies the URL host scope to container rows', () => {
+    window.history.pushState({}, '', '/?host=edge-02');
+
+    renderInRouter(() => (
+      <DockerContainersTable
+        resources={[
+          makeResource({
+            id: 'container-1',
+            type: 'app-container',
+            name: 'edge-web',
+            status: 'running',
+            docker: {
+              hostname: 'edge-01',
+              runtime: 'docker',
+              image: 'nginx:latest',
+              containerState: 'running',
+            },
+          }),
+          makeResource({
+            id: 'container-2',
+            type: 'app-container',
+            name: 'edge-cache',
+            status: 'running',
+            docker: {
+              hostname: 'edge-02',
+              runtime: 'docker',
+              image: 'redis:7.4',
+              containerState: 'running',
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No containers"
+        emptyDescription="No containers"
+        showToolbar={false}
+      />
+    ));
+
+    expect(screen.getByText('edge-cache')).toBeInTheDocument();
+    expect(screen.getByText('edge-02')).toBeInTheDocument();
+    expect(screen.queryByText('edge-web')).not.toBeInTheDocument();
+    expect(screen.queryByText('edge-01')).not.toBeInTheDocument();
   });
 
   it('hides the Restarts column when the current containers have no restart signal', () => {

@@ -49,6 +49,7 @@ describe('nested workload context', () => {
       platformScopes: ['proxmox-pve', 'docker'],
       containerRuntime: 'docker',
       dockerHostId: 'proxmox-lxc-docker:pve-a:node-a:141',
+      dockerHostName: 'media-lxc.mist-stork.ts.net',
       image: 'ghcr.io/blakeblackshear/frigate:stable',
     });
 
@@ -62,9 +63,53 @@ describe('nested workload context', () => {
     expect(result['pve-a:node-a:141']).toMatchObject({
       label: 'Docker',
       count: 1,
-      href: '/docker',
+      href: '/docker/overview?host=media-lxc.mist-stork.ts.net',
       items: [{ name: 'frigate', status: 'running' }],
     });
+  });
+
+  it('falls back to the Docker overview when nested containers do not share one host label', () => {
+    const lxc = makeGuest({
+      id: 'lxc-141',
+      vmid: 141,
+      name: 'media-lxc',
+      node: 'node-a',
+      instance: 'pve-a',
+      platformScopes: ['proxmox-pve'],
+    });
+    const firstContainer = makeGuest({
+      id: 'app-container:first',
+      vmid: 0,
+      name: 'first',
+      type: 'app-container',
+      workloadType: 'app-container',
+      platformType: 'docker',
+      platformScopes: ['proxmox-pve', 'docker'],
+      containerRuntime: 'docker',
+      dockerHostId: 'proxmox-lxc-docker:pve-a:node-a:141',
+      dockerHostName: 'first-host.local',
+    });
+    const secondContainer = makeGuest({
+      id: 'app-container:second',
+      vmid: 0,
+      name: 'second',
+      type: 'app-container',
+      workloadType: 'app-container',
+      platformType: 'docker',
+      platformScopes: ['proxmox-pve', 'docker'],
+      containerRuntime: 'docker',
+      dockerHostId: 'proxmox-lxc-docker:pve-a:node-a:141',
+      dockerHostName: 'second-host.local',
+    });
+
+    const result = buildNestedWorkloadContextByGuestId({
+      guests: [lxc, firstContainer, secondContainer],
+      visibleGuests: [lxc],
+      excludedWorkloadTypes: ['app-container'],
+      platformScope: 'proxmox-pve',
+    });
+
+    expect(result['pve-a:node-a:141']?.href).toBe('/docker/overview');
   });
 
   it('does not guess when Docker host identity only matches ambiguous VMIDs', () => {

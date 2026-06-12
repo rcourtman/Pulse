@@ -6,6 +6,7 @@ import { DockerPageSurface } from '../DockerPageSurface';
 
 const mocks = vi.hoisted(() => ({
   pathname: '/docker/overview',
+  searchParams: {} as Record<string, string>,
   useUnifiedResources: vi.fn(),
   DockerHostsTable: vi.fn(
     (props: { resources: Resource[]; showToolbar?: boolean; emptyTitle: string }) => (
@@ -82,6 +83,7 @@ vi.mock('@solidjs/router', () => ({
       return mocks.pathname;
     },
   }),
+  useSearchParams: () => [mocks.searchParams, vi.fn()],
 }));
 
 vi.mock('../DockerContainersTable', () => ({
@@ -213,6 +215,7 @@ const makeDockerNetwork = (overrides: Partial<Resource> = {}): Resource => ({
 
 beforeEach(() => {
   mocks.pathname = '/docker/overview';
+  mocks.searchParams = {};
   mocks.useUnifiedResources.mockReturnValue({
     error: () => null,
     loading: () => false,
@@ -273,6 +276,55 @@ describe('DockerPageSurface', () => {
     expect(screen.getByTestId('docker-containers-table')).toHaveAttribute(
       'data-show-toolbar',
       'undefined',
+    );
+  });
+
+  it('applies the URL host scope to the overview host table', () => {
+    mocks.searchParams = { host: 'frigate.mist-stork.ts.net' };
+    mocks.useUnifiedResources.mockReturnValue({
+      error: () => null,
+      loading: () => false,
+      refetch: vi.fn(),
+      resources: () => [
+        makeDockerHost({
+          id: 'agent:frigate',
+          name: 'frigate',
+          displayName: 'frigate',
+          docker: {
+            runtime: 'docker',
+            runtimeVersion: '29.5.1',
+            hostname: 'frigate.mist-stork.ts.net',
+            containerCount: 2,
+          } as NonNullable<Resource['docker']>,
+        }),
+        makeDockerHost({
+          id: 'agent:tower',
+          name: 'tower',
+          displayName: 'tower',
+          docker: {
+            runtime: 'docker',
+            runtimeVersion: '29.5.2',
+            hostname: 'tower',
+            containerCount: 1,
+          } as NonNullable<Resource['docker']>,
+        }),
+        makeDockerContainer({
+          id: 'app-container:frigate',
+          docker: {
+            runtime: 'docker',
+            hostname: 'frigate.mist-stork.ts.net',
+            image: 'ghcr.io/blakeblackshear/frigate:stable',
+          } as NonNullable<Resource['docker']>,
+        }),
+      ],
+    });
+
+    render(() => <DockerPageSurface />);
+
+    expect(screen.getByTestId('docker-hosts-table')).toHaveAttribute('data-resource-count', '1');
+    expect(screen.getByTestId('docker-containers-table')).toHaveAttribute(
+      'data-resource-count',
+      '1',
     );
   });
 

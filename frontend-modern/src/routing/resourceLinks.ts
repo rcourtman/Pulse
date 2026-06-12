@@ -31,6 +31,10 @@ export const VMWARE_DEFAULT_TAB = 'overview';
 export const PMG_THRESHOLDS_PATH = '/alerts/thresholds/mail-gateway';
 export const PATROL_PATH = '/patrol';
 
+export const DOCKER_QUERY_PARAMS = {
+  host: 'host',
+} as const;
+
 export const STORAGE_QUERY_PARAMS = {
   tab: 'tab',
   group: 'group',
@@ -95,6 +99,10 @@ type WorkloadsLinkOptions = {
   agent?: string | null;
   resource?: string | null;
   summaryGroup?: string | null;
+};
+
+type DockerLinkOptions = {
+  host?: string | null;
 };
 
 type StorageLinkOptions = {
@@ -189,6 +197,13 @@ export const buildStandalonePath = (tab: string = STANDALONE_DEFAULT_TAB): strin
 export const buildDockerPath = (tab: string = DOCKER_DEFAULT_TAB): string => {
   const normalized = tab.trim().replace(/^\/+|\/+$/g, '');
   return normalized ? `${DOCKER_PATH}/${normalized}` : DOCKER_PATH;
+};
+
+export const buildDockerRouteSearch = (options: DockerLinkOptions = {}): string => {
+  const params = new URLSearchParams();
+  const host = normalizeQueryValue(options.host);
+  if (host) params.set(DOCKER_QUERY_PARAMS.host, host);
+  return serializedRouteSearch(params);
 };
 
 export const buildKubernetesPath = (tab: string = KUBERNETES_DEFAULT_TAB): string => {

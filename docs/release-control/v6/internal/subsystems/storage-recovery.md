@@ -146,6 +146,10 @@ Workloads table demotes Docker-in-LXC `app-container` rows out of peer
 membership, the backup surface must still receive the page model's Proxmox
 guest inventory for VM/LXC coverage and must not reinterpret Docker runtime
 membership as backup or recovery ownership.
+Docker-in-LXC drawer links may add Docker runtime host route state through the
+shared `resourceLinks.ts` module, but that query state is Docker-lens scope
+only. Storage and recovery route builders/parsers must not reuse that Docker
+host facet or treat it as backup-source, datastore, node, or recovery ownership.
 The platform page embedding point may pass read-only Proxmox guest inventory
 into that backup surface solely for workload identity correlation; the backup
 surface must still source restore evidence from the PVE/PBS backup APIs rather

@@ -9,6 +9,7 @@ import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
+import { DOCKER_QUERY_PARAMS } from '@/routing/resourceLinks';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformTableEmptyState,
@@ -194,8 +195,12 @@ export const DockerContainersTable: Component<DockerNativeTableProps> = (props) 
   // only appears once more than one host is present (a single-host fleet has
   // nothing to scope by).
   const [searchParams, setSearchParams] = useSearchParams();
-  const hostFilter = () => (typeof searchParams.host === 'string' ? searchParams.host : '');
-  const setHostFilter = (value: string) => setSearchParams({ host: value || null });
+  const hostFilter = () => {
+    const host = searchParams[DOCKER_QUERY_PARAMS.host];
+    return typeof host === 'string' ? host : '';
+  };
+  const setHostFilter = (value: string) =>
+    setSearchParams({ [DOCKER_QUERY_PARAMS.host]: value || null });
   const hostOptions = createMemo(() => {
     const seen = new Set<string>();
     for (const resource of props.resources) {

@@ -1,4 +1,5 @@
 import type { WorkloadGuest, WorkloadType } from '@/types/workloads';
+import { buildDockerPath, buildDockerRouteSearch } from '@/routing/resourceLinks';
 import {
   getCanonicalWorkloadId,
   resolveWorkloadType,
@@ -6,7 +7,6 @@ import {
 } from '@/utils/workloads';
 
 const LXC_DOCKER_HOST_PREFIX = 'proxmox-lxc-docker:';
-const NESTED_WORKLOAD_DETAILS_PATH = '/docker';
 
 export interface NestedWorkloadContextItem {
   id: string;
@@ -32,6 +32,10 @@ interface BuildNestedWorkloadContextParams {
   excludedWorkloadTypes?: readonly WorkloadType[];
   platformScope?: string | null;
 }
+
+type NestedWorkloadContextBuildItem = NestedWorkloadContextItem & {
+  hostLabel: string;
+};
 
 const cleanText = (value?: string | number | null): string => String(value ?? '').trim();
 
@@ -103,11 +107,12 @@ const formatRuntimeLabel = (runtime?: string | null): string => {
 
 const formatStatusLabel = (status?: string | null): string => cleanText(status) || 'unknown';
 
-const createNestedItem = (guest: WorkloadGuest): NestedWorkloadContextItem => ({
+const createNestedItem = (guest: WorkloadGuest): NestedWorkloadContextBuildItem => ({
   id: getCanonicalWorkloadId(guest),
   name: cleanText(guest.name) || cleanText(guest.containerId) || getCanonicalWorkloadId(guest),
   status: formatStatusLabel(guest.status),
   runtimeLabel: formatRuntimeLabel(guest.containerRuntime),
+  hostLabel: cleanText(guest.dockerHostName) || cleanText(guest.contextLabel),
 });
 
 const chooseContextLabel = (items: readonly NestedWorkloadContextItem[]): string => {
@@ -115,6 +120,23 @@ const chooseContextLabel = (items: readonly NestedWorkloadContextItem[]): string
   if (labels.length === 1) return labels[0];
   return 'Containers';
 };
+
+const chooseDockerHostFilter = (items: readonly NestedWorkloadContextBuildItem[]): string => {
+  const labels = Array.from(new Set(items.map((item) => item.hostLabel).filter(Boolean)));
+  return labels.length === 1 ? labels[0] : '';
+};
+
+const buildNestedWorkloadHref = (host: string): string =>
+  `${buildDockerPath('overview')}${buildDockerRouteSearch({ host })}`;
+
+const toNestedWorkloadContextItem = (
+  item: NestedWorkloadContextBuildItem,
+): NestedWorkloadContextItem => ({
+  id: item.id,
+  name: item.name,
+  status: item.status,
+  runtimeLabel: item.runtimeLabel,
+});
 
 export const buildNestedWorkloadContextByGuestId = ({
   guests,
@@ -142,7 +164,7 @@ export const buildNestedWorkloadContextByGuestId = ({
     }
   }
 
-  const itemsByParentId = new Map<string, NestedWorkloadContextItem[]>();
+  const itemsByParentId = new Map<string, NestedWorkloadContextBuildItem[]>();
   for (const guest of guests) {
     if (resolveWorkloadType(guest) !== 'app-container') continue;
     if (!workloadMatchesPlatformScope(guest, platformScope)) continue;
@@ -166,13 +188,14 @@ export const buildNestedWorkloadContextByGuestId = ({
   for (const [parentId, items] of itemsByParentId) {
     const sortedItems = [...items].sort((a, b) => a.name.localeCompare(b.name));
     const label = chooseContextLabel(sortedItems);
+    const host = chooseDockerHostFilter(sortedItems);
     contexts[parentId] = {
       type: 'app-container',
       label,
       title: label === 'Containers' ? 'Nested containers' : `Nested ${label}`,
       count: sortedItems.length,
-      href: NESTED_WORKLOAD_DETAILS_PATH,
-      items: sortedItems,
+      href: buildNestedWorkloadHref(host),
+      items: sortedItems.map(toNestedWorkloadContextItem),
     };
   }
 

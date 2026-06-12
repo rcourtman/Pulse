@@ -543,6 +543,10 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
         : undefined,
     updateStatus: resource.docker?.updateStatus as WorkloadGuest['updateStatus'] | undefined,
     dockerHostId: dockerManagedAppContainer ? resource.docker?.hostSourceId : undefined,
+    dockerHostName:
+      workloadType === 'app-container'
+        ? (resource.docker?.hostname || '').trim() || undefined
+        : undefined,
     kubernetesAgentId: workloadType === 'pod' ? resource.kubernetes?.agentId : undefined,
     platformType,
     platformScopes,

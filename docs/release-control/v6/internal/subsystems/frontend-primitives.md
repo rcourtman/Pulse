@@ -839,6 +839,11 @@ not a replacement status card, CTA band, or page-local nested card.
    remains the canonical detailed Docker / Podman container lens. The overview
    table should not add peer rows, badges, or child rows for Docker containers;
    those signals compete with VM/LXC state and belong one click down.
+   Drawer-to-runtime navigation is still part of the shared platform-table
+   affordance contract: when the LXC drawer exposes an `Open Docker` action for
+   nested containers, that action must use the Docker host facet route state so
+   the target Docker Overview opens scoped to the same runtime instead of a
+   broad, visually unrelated container list.
    Primary navigation uses that same membership model: the Docker route is
    the container-runtime lens and may be labelled `Containers` in the shell,
    while shared source badges, filters, and runtime management copy continue

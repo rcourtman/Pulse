@@ -27,6 +27,8 @@ export type WorkloadGuest = (VM | Container) & {
   // Agent-managed Docker runtime host ID for Docker-specific update actions.
   // API-backed platforms such as TrueNAS must not populate this field.
   dockerHostId?: string;
+  // Docker/Podman host label used by the Docker runtime page's host facet.
+  dockerHostName?: string;
   // Kubernetes agent ID (when available) — preferred for actionable operations.
   kubernetesAgentId?: string;
   // Canonical discovery ownership. API-backed platforms such as TrueNAS should

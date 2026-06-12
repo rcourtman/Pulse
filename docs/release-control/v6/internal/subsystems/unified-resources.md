@@ -207,6 +207,12 @@ workload, service, storage, configuration, policy, and event object rows belong
 in their workflow tabs. If a future Overview repeats a detailed table, the
 owning workflow must be retired or the Overview content must be reduced to
 aggregate signal.
+Cross-platform handoffs into the Docker / Podman Overview must preserve runtime
+scope when the source surface knows it. A Proxmox LXC drawer that links to the
+Docker runtime lens must carry the unambiguous Docker host facet as route state,
+and Docker Overview must apply that host scope to both the runtime host summary
+and the primary container table so the handoff lands on the same runtime the
+operator just inspected.
 Platform native tables are unified-resource consumers even when their visual
 table frame is frontend-primitives-owned. Docker / Podman, Kubernetes, Proxmox,
 Standalone, TrueNAS, and vSphere platform tables own source-specific row fields,
@@ -2290,7 +2296,12 @@ it must not promote those `app-container` rows into the default Proxmox peer
 workload table or add always-visible child rows that compete with VM/LXC scan
 flow. That nested context must be read-only and keyed by the same canonical
 Proxmox guest identity and Docker host source identity used by the resource
-model; ambiguous runtime-host matches must be omitted rather than guessed.
+model; ambiguous runtime-host matches must be omitted rather than guessed. When
+that drawer links into the Docker / Podman runtime lens, it must carry the
+unambiguous Docker host facet in the route (`host=<runtime hostname>`) and the
+Docker overview must apply that scope to the host and container tables; if the
+runtime host label is missing or ambiguous, the handoff falls back to the
+unfiltered Docker overview.
 The same facet bundle now also returns grouped recent-change counts by
 canonical change kind, so the detail drawer can surface the distribution of
 state transitions, restarts, config updates, and anomalies without

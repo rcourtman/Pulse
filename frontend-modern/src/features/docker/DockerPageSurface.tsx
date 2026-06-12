@@ -1,4 +1,4 @@
-import { useLocation } from '@solidjs/router';
+import { useLocation, useSearchParams } from '@solidjs/router';
 import { Show, createMemo, createSignal } from 'solid-js';
 import { getPlatformIcon } from '@/features/platformPage/platformIcon';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
@@ -41,6 +41,9 @@ import {
 import { PlatformOutdatedAgentNotice } from '@/features/platformPage/PlatformOutdatedAgentNotice';
 import { updateStore } from '@/stores/updates';
 import { buildInfrastructureAgentUpdatesPath } from '@/components/Settings/infrastructureWorkspaceModel';
+import { DOCKER_QUERY_PARAMS } from '@/routing/resourceLinks';
+import { asTrimmedString } from '@/utils/stringUtils';
+import type { Resource } from '@/types/resource';
 
 const DOCKER_RESOURCE_QUERY =
   'type=agent,docker-host,app-container,docker-service,docker-image,docker-volume,docker-network,docker-task,docker-swarm-node,docker-secret,docker-config';
@@ -50,6 +53,7 @@ const dockerIcon = () => <DockerIcon class="h-6 w-6 text-slate-400" />;
 
 export function DockerPageSurface() {
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { resources, loading, error, refetch } = useUnifiedResources({
     query: DOCKER_RESOURCE_QUERY,
     cacheKey: 'docker-workspace',
@@ -64,6 +68,10 @@ export function DockerPageSurface() {
   const activeTab = createMemo<DockerPageTabId>(() =>
     tabs().some((tab) => tab.id === requestedTab()) ? requestedTab() : 'overview',
   );
+  const hostFilter = createMemo(() => {
+    const rawHost = searchParams[DOCKER_QUERY_PARAMS.host];
+    return typeof rawHost === 'string' ? rawHost.trim() : '';
+  });
   const agentUpdateTargetVersion = createMemo(
     () => updateStore.versionInfo()?.agentUpdateTargetVersion,
   );
@@ -125,6 +133,7 @@ export function DockerPageSurface() {
               <DockerOverview
                 hosts={model().hosts}
                 hostSourceCount={model().hosts.length}
+                hostFilter={hostFilter()}
                 containers={model().containers}
                 incidents={model().incidents}
               />
@@ -295,13 +304,29 @@ function DockerSwarm(props: { model: DockerPageModel }) {
 function DockerOverview(props: {
   hosts: ReturnType<typeof buildDockerPageModel>['hosts'];
   hostSourceCount: number;
+  hostFilter: string;
   containers: ReturnType<typeof buildDockerPageModel>['containers'];
   incidents: ReturnType<typeof buildDockerPageModel>['incidents'];
 }) {
+  const hostMatchesFilter = (resource: Resource, hostFilter: string): boolean => {
+    const normalized = hostFilter.trim();
+    if (!normalized) return true;
+    return [
+      resource.docker?.hostname,
+      resource.name,
+      resource.displayName,
+      resource.id,
+      resource.docker?.hostSourceId,
+    ].some((candidate) => asTrimmedString(candidate) === normalized);
+  };
+  const scopedHosts = createMemo(() =>
+    props.hosts.filter((host) => hostMatchesFilter(host, props.hostFilter)),
+  );
+
   return (
     <div class="space-y-4">
       <DockerHostsTable
-        resources={props.hosts}
+        resources={scopedHosts()}
         sourceCount={props.hostSourceCount}
         emptyIcon={dockerIcon()}
         emptyTitle="No Docker or Podman hosts"
