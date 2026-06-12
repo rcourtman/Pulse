@@ -96,7 +96,7 @@ bash install.sh --version "${PULSE_VERSION}"
 rm -f install.sh install.sh.sshsig
 ```
 
-Note: this installs the Pulse **server**. Agent installs use the command generated in **Settings → Unified Agents → Installation commands** (served from `/install.sh` on your Pulse server).
+Note: this installs the Pulse **server**. Agent installs and v5-to-v6 agent upgrades use the command generated in **Settings → Infrastructure → Install on a host** (served from `/install.sh` on your Pulse server).
 
 ### Option 2: Docker
 ```bash

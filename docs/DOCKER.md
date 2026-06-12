@@ -214,7 +214,7 @@ services:
 
 To disable registry checks entirely, set `PULSE_DISABLE_DOCKER_UPDATE_CHECKS=true` on the **agent**.
 
-You can also toggle "Hide Docker Update Buttons" from the UI: **Settings → Unified Agents** (Docker Settings card).
+You can also toggle "Hide Docker Update Buttons" from the UI in **Settings → System → General** under **Docker / Podman updates**.
 
 ---
 

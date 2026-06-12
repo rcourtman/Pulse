@@ -41,7 +41,11 @@ After upgrading the server, update existing agents separately using the command 
 
 `Settings -> Infrastructure -> Install on a host`
 
-That is the supported v5-to-v6 crossover path for agent testing.
+That is the supported v5-to-v6 crossover path for agent testing. The same
+screen is used for first installs and in-place upgrades of existing v5 agents.
+Version/status details appear in v6 only after an upgraded agent authenticates
+and sends a fresh report, so the UI is not an offline inventory of every v5
+service that existed before the server upgrade.
 
 ### Do I need to uninstall existing v5 agents before updating them?
 

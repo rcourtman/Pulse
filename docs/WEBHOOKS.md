@@ -6,7 +6,7 @@ Pulse includes built-in templates for popular services and a generic JSON templa
 
 1. Go to **Alerts → Notification Destinations**.
 2. Click **Add Webhook**.
-3. Select service type and paste the URL.
+3. Click the current service label (Generic by default) to open the service picker, choose the destination type, and paste the URL.
 
 ## 📝 Service URLs
 
@@ -51,6 +51,7 @@ For generic webhooks, use Go templates to format the JSON payload.
 - **Telegram templates**: `{{.ChatID}}` is populated from the URL query string.
 - **PagerDuty**: set `routing_key` as a custom field (or header) in the webhook config.
 - **Pushover**: add `token` and `user` custom fields (required). Legacy `app_token` and `user_token` inputs are migrated automatically.
+- **ntfy**: choose **ntfy** in the service picker before entering the topic URL. Leave the service as Generic only when you want to send a custom JSON payload.
 
 **Example Payload:**
 ```json

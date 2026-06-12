@@ -461,6 +461,12 @@ not bounce the operator back to GitHub `main` for section references that the
 running build already owns locally. Their Relay security section must also use
 the current Relay-and-higher entitlement boundary instead of stale Pro-only
 license wording.
+Agent-based Proxmox hardening guidance in those same security docs must also
+point operators to the current Infrastructure install or upgrade command
+surface and to post-report verification on the relevant platform page or
+Machines view. It must not revive the retired Settings Agents install-command
+route or imply that v6 can prove upgraded-agent state before the agent has
+authenticated and reported.
 That same governed settings trust boundary now also includes
 `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`,
 `frontend-modern/src/components/Settings/QuickSecuritySetup.tsx`,

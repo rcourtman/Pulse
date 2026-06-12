@@ -10,6 +10,7 @@ import unittest
 
 
 SCRIPT_DIR = Path(__file__).resolve().parents[1]
+REPO_ROOT = SCRIPT_DIR.parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
 import telemetry_adoption_report as report
@@ -93,6 +94,20 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
             ),
             "6.0.0-rc.2",
         )
+
+    def test_security_docs_use_current_agent_install_surface(self) -> None:
+        security_docs = (
+            REPO_ROOT / "SECURITY.md",
+            REPO_ROOT / "frontend-modern/public/docs/SECURITY.md",
+        )
+
+        for path in security_docs:
+            with self.subTest(path=path.relative_to(REPO_ROOT)):
+                content = path.read_text(encoding="utf-8")
+                self.assertIn("Settings → Infrastructure → Install on a host", content)
+                self.assertIn("Proxmox or Machines page", content)
+                self.assertNotIn("Settings → Agents → Installation commands", content)
+                self.assertNotIn("Settings -> Agents -> Installation commands", content)
 
     def test_summarize_rows_uses_latest_install_state_and_splits_release_validation(self) -> None:
         now = datetime.now(timezone.utc).replace(microsecond=0)

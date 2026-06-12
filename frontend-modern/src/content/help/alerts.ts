@@ -35,15 +35,4 @@ export const alertsHelpContent: HelpContent[] = [
     ],
     addedInVersion: 'v4.0.0',
   },
-  {
-    id: 'alerts.thresholds.perGuest',
-    title: 'Per-Guest Threshold Overrides',
-    description:
-      'Each VM or container can have custom threshold settings that override the defaults.\n\n' +
-      'Use this to set different thresholds for:\n' +
-      '- Database servers (higher memory thresholds)\n' +
-      '- Build servers (higher CPU thresholds)\n' +
-      '- Development VMs (more relaxed thresholds)',
-    addedInVersion: 'v4.2.0',
-  },
 ];

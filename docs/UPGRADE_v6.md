@@ -28,7 +28,7 @@ If you prefer CLI, use the installed update helper for the target version:
 sudo /bin/update --version vX.Y.Z
 ```
 
-`/bin/update` is installed by the supported systemd and Proxmox LXC server installer. If your host does not have it yet, follow the signed server-installer flow in [INSTALL.md](INSTALL.md). Agent updates still use the `/install.sh` command generated in **Settings → Infrastructure → Install on a host**.
+`/bin/update` is installed by the supported systemd and Proxmox LXC server installer. If your host does not have it yet, follow the signed server-installer flow in [INSTALL.md](INSTALL.md). Agent updates and v5-to-v6 agent upgrades still use the `/install.sh` command generated in **Settings → Infrastructure → Install on a host**; that screen is for both first installs and in-place agent upgrades.
 
 Operator note for builds after `v6.0.0-rc.2`: the historical Pulse update
 signer was not recovered. Hosts pinned to the `rc.2` trust root should not
@@ -66,14 +66,15 @@ No. Upgrade the existing Pulse server installation in place.
 
 ### Do I need to uninstall my existing Pulse Unified Agents first?
 
-No. Use the unified installer to upgrade existing agent deployments in place.
+No. Use the unified installer to upgrade existing agent deployments in place. Generate the current command from **Settings → Infrastructure → Install on a host**, then run it on the host that already has the v5 agent service. You do not need to remove the old service first.
 
 ### Does upgrading the Pulse server to v6 automatically upgrade my agents?
 
 No. The server upgrade and the Unified Agent upgrade are separate operations.
 After the server is on v6, use the generated install or upgrade command from
 **Settings → Infrastructure → Install on a host** when you want to move agents
-to v6.
+to v6. A v5 agent can be missing from v6 Reporting until it has upgraded,
+authenticated, and sent its first v6 report.
 
 ### Will an upgraded v5 agent keep the same identity in v6?
 
@@ -84,6 +85,24 @@ identity rather than creating a duplicate record during the upgrade.
 
 No. Existing installed agents are expected to continue through the v6
 compatibility boundary for legacy persisted agent scopes.
+
+If you create a replacement token during the upgrade, install or reconfigure the
+agent with the replacement before revoking the old token. Revoking the token
+currently used by an agent stops that agent from authenticating until it is
+reinstalled or reconfigured with a valid token.
+
+### Where do I check installed agent versions in v6?
+
+After an agent reports to v6, check the relevant platform page or **Machines**
+view for the agent-backed host and version/status details. Version and outdated
+agent notices appear only after the agent has successfully reported; they are
+not an offline inventory of every v5 service that existed before the server
+upgrade. On the host itself, confirm the local binary with:
+
+```bash
+pulse-agent --version
+systemctl status pulse-agent
+```
 
 ### Can one installed Pulse Unified Agent report to both a Pulse v5 instance and a Pulse v6 instance at the same time?
 

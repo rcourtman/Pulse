@@ -56,12 +56,12 @@ The agent will:
 Use this when you can run a command on the PBS host but do not want to install the agent.
 
 From Pulse's Settings page:
-1. Go to **Settings → Unified Agents**
-2. Click **Add Node**
-3. Open **Advanced** and select **API Only**
-4. Enter your PBS server's URL
-5. Click copy to get the setup command
-6. Run the command on your PBS server
+1. Go to **Settings → Infrastructure**.
+2. Click **Add infrastructure**.
+3. Choose **Proxmox Backup Server**.
+4. Use the API-only setup path and enter your PBS server's URL.
+5. Click copy to get the setup command.
+6. Run the command on your PBS server.
 
 Example (what the UI generates):
 ```bash

@@ -435,6 +435,18 @@ docker run --init -e HTTPS_ENABLED=true \
 
 API tokens provide scoped, revocable access to Pulse. Manage tokens in **Settings → Security → API Tokens**.
 
+The token shown during first-run setup is the primary automation API token for
+that Pulse instance. It is separate from your web login password and is meant
+for agents, scripts, integrations, kiosks, and temporary setup handoffs. Tokens
+are shown once; later token rows show only identifying hints such as prefix,
+suffix, label, scopes, and last-used metadata.
+
+Revoking a token is safe for Pulse itself, but it immediately breaks any agent,
+script, kiosk, or integration still using that token. When a consumer needs to
+stay online, create and install a replacement token first, then revoke the old
+one. An agent whose token has been revoked stops authenticating until it is
+reinstalled or reconfigured with a valid token.
+
 ### Token Scopes
 
 | Scope | Description |

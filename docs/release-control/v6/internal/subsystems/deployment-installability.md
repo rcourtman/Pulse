@@ -739,6 +739,12 @@ posture for install and support guidance: it describes activation, recovery,
 and BYOK/local AI setup, while explicitly keeping general in-app trials,
 trial-return callbacks, and hosted AI quickstart acquisition out of the
 ordinary upgrade path.
+That same upgrade guidance and the current shipped release notes must describe
+v5-to-v6 agent upgrades through the current Infrastructure install surface:
+`Settings → Infrastructure → Install on a host` is the supported path for both
+first installs and in-place agent upgrades, and v6 may only show agent
+version/status details after the upgraded agent authenticates and sends a fresh
+report rather than from an offline inventory of pre-upgrade v5 services.
 
 That same release-confidence lane now also owns the shipped Helm chart path,
 so release automation, packaged chart metadata, and chart-runtime smoke no

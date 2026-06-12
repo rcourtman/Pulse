@@ -195,6 +195,18 @@ Old metadata section.
         self.assertIn("operator-state", changelog)
         self.assertIn("Pulse Mobile pairing for handoff", support_pack)
 
+    def test_shipped_rc1_notes_document_current_agent_upgrade_surface(self) -> None:
+        repo_root = Path(__file__).resolve().parents[2]
+        release_notes = (repo_root / "docs/releases/RELEASE_NOTES_v6_RC1.md").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("Settings -> Infrastructure -> Install on a host", release_notes)
+        self.assertIn("first installs and in-place upgrades", release_notes)
+        self.assertIn("after an upgraded agent authenticates", release_notes)
+        self.assertNotIn("Settings -> Agents -> Installation commands", release_notes)
+        self.assertNotIn("Settings → Agents → Installation commands", release_notes)
+
     def test_agent_paradigm_release_notes_blurb_documents_distribution_path(self) -> None:
         """The agent-paradigm source draft must keep its honest scope:
         an integrator reading the blurb sees a published distribution

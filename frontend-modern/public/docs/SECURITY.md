@@ -43,8 +43,8 @@ environment where `PULSE_DOCKER=true`/`/.dockerenv` is detected.
 
 Preferred option (no SSH keys, no proxy wiring):
 
-1. Install the unified agent (`pulse-agent`) on each Proxmox host with Proxmox integration enabled.
-   - Use the UI to generate an install command in **Settings → Agents → Installation commands**, or run:
+1. Install or upgrade the unified agent (`pulse-agent`) on each Proxmox host with Proxmox integration enabled.
+   - Use the UI to generate an install or upgrade command in **Settings → Infrastructure → Install on a host**, or run:
      ```bash
      curl -fsSL http://pulse.example.com:7655/install.sh | \
        sudo bash -s -- --url http://pulse.example.com:7655 --token <api-token> --enable-proxmox
@@ -105,7 +105,7 @@ ls /home/pulse/.ssh/id_ed25519* 2>/dev/null && echo "⚠️  SSH keys present"
 
 Verify temperature collection is agent-based:
 
-- UI: **Settings → Agents** shows each Proxmox host connected and reporting.
+- UI: the Proxmox or Machines page shows the host as agent-backed after the agent reports.
 - On each Proxmox host:
   ```bash
   systemctl status pulse-agent

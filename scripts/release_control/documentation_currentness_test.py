@@ -183,6 +183,68 @@ class DocumentationCurrentnessTest(unittest.TestCase):
             for phrase in forbidden_phrases:
                 self.assertNotIn(phrase, content, msg=f"{rel} contains stale paid-cap wording: {phrase}")
 
+    def test_current_agent_docs_point_to_infrastructure_install_flow(self) -> None:
+        current_docs = (
+            "README.md",
+            "SECURITY.md",
+            "docs/CENTRALIZED_MANAGEMENT.md",
+            "docs/DOCKER.md",
+            "docs/PBS.md",
+            "docs/UNIFIED_AGENT.md",
+            "docs/UPGRADE_v6.md",
+            "docs/releases/RELEASE_NOTES_v6_RC1.md",
+            "frontend-modern/public/docs/SECURITY.md",
+        )
+        retired_agent_settings_paths = (
+            "Settings → Unified Agents",
+            "Settings -> Unified Agents",
+            "Settings → Agents → Installation commands",
+            "Settings -> Agents -> Installation commands",
+        )
+        for rel in current_docs:
+            content = read(rel)
+            for retired_path in retired_agent_settings_paths:
+                self.assertNotIn(retired_path, content, msg=f"{rel} still points at {retired_path}")
+
+        root_readme = read("README.md")
+        upgrade_doc = read("docs/UPGRADE_v6.md")
+        unified_agent_doc = read("docs/UNIFIED_AGENT.md")
+        self.assertIn("Settings → Infrastructure → Install on a host", root_readme)
+        self.assertIn("v5-to-v6 agent upgrades", root_readme)
+        self.assertIn("first installs and in-place agent upgrades", upgrade_doc)
+        self.assertIn("supported v5-to-v6 agent upgrade path", unified_agent_doc)
+        self.assertIn("Version and outdated", upgrade_doc)
+        self.assertIn("only after the agent has successfully reported", upgrade_doc)
+
+    def test_api_token_docs_explain_primary_token_and_revocation_safety(self) -> None:
+        config_doc = read("docs/CONFIGURATION.md")
+        public_config_doc = read("frontend-modern/public/docs/CONFIGURATION.md")
+
+        expected_fragments = (
+            "primary automation API token",
+            "separate from your web login password",
+            "Revoking a token is safe for Pulse itself",
+            "immediately breaks any agent",
+            "script, kiosk, or integration still using that token",
+            "create and install a replacement token first",
+        )
+        for content in (config_doc, public_config_doc):
+            for fragment in expected_fragments:
+                self.assertIn(fragment, content)
+
+    def test_webhook_docs_make_ntfy_service_picker_discoverable(self) -> None:
+        webhook_doc = read("docs/WEBHOOKS.md")
+
+        self.assertIn("Click the current service label (Generic by default) to open the service picker", webhook_doc)
+        self.assertIn("choose **ntfy** in the service picker before entering the topic URL", webhook_doc)
+
+    def test_alert_help_no_longer_documents_custom_threshold_overrides(self) -> None:
+        alerts_help = read("frontend-modern/src/content/help/alerts.ts")
+
+        self.assertNotIn("alerts.thresholds.perGuest", alerts_help)
+        self.assertNotIn("Per-Guest Threshold Overrides", alerts_help)
+        self.assertNotIn("custom threshold settings that override the defaults", alerts_help)
+
 
 if __name__ == "__main__":
     unittest.main()

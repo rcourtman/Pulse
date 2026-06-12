@@ -26,6 +26,17 @@ Generate an installation command in the UI:
 
 Choose a target profile in that screen when you want explicit install flags for Docker, Kubernetes, Proxmox VE, or Proxmox Backup Server.
 
+The same generated command is also the supported v5-to-v6 agent upgrade path.
+Run it on the host that already has the v5 `pulse-agent` service to replace the
+binary and service configuration in place; do not uninstall the old service
+first unless you are intentionally removing that host from Pulse.
+
+An installed agent is configured for one Pulse URL and one token. Do not point
+one running service at both a v5 server and a v6 server. After the upgrade,
+check the relevant platform page or **Machines** view once the agent has
+reported, and confirm the host-local version with `pulse-agent --version` if
+the UI has not received a fresh report yet.
+
 ### Linux (systemd)
 ```bash
 curl -fsSL http://<pulse-ip>:7655/install.sh | \
@@ -274,7 +285,7 @@ Behavior:
 - The agent fetches remote config on startup from `/api/agents/agent/{agent_id}/config`.
 - Profile settings override local flags/env for supported keys.
 - Profile changes take effect on the next agent restart.
-- Command execution (`commandsEnabled`) is controlled per agent in **Settings → Unified Agents** and can change live.
+- Command execution (`commandsEnabled`) is controlled per agent from the Infrastructure agent controls and can change live.
 - Remote config responses can be signed with `PULSE_AGENT_CONFIG_SIGNING_KEY` (base64 Ed25519 private key).
 - To require signed payloads, set `PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED=true` on Pulse and agents.
 - If you use a custom signing key, set `PULSE_AGENT_CONFIG_PUBLIC_KEYS` on agents to trust the matching public key.
