@@ -7,6 +7,7 @@ import { copyToClipboard } from '@/utils/clipboard';
 import { notificationStore } from '@/stores/notifications';
 import { updateStore } from '@/stores/updates';
 import { Dialog } from '@/components/shared/Dialog';
+import { Button } from '@/components/shared/Button';
 import { AgentProfilesPanel } from './AgentProfilesPanel';
 import { ConnectionEditor } from './ConnectionEditor/ConnectionEditor';
 import { NodeCredentialSlot } from './ConnectionEditor/CredentialSlots/NodeCredentialSlot';
@@ -360,13 +361,14 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     <div class="space-y-4">
       <Show when={runtimeCapabilitiesLoaded() && hasFeature('agent_profiles')}>
         <div class="flex items-center justify-end">
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="xs"
             onClick={() => setShowAgentProfiles((value) => !value)}
-            class="inline-flex items-center rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover"
           >
             {showAgentProfiles() ? 'Hide agent profiles' : 'Manage agent profiles'}
-          </button>
+          </Button>
         </div>
       </Show>
       <Show when={showAgentProfiles()}>

@@ -59,8 +59,6 @@ interface InfrastructureSourceManagerProps {
   onReviewDiscoveredSource?: (server: DiscoveredServer) => void;
 }
 
-const inlineButtonClass =
-  'inline-flex min-w-[4.5rem] items-center justify-center rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60';
 // Per-section 'Add' shortcuts are demoted to ghost text buttons so the
 // primary '+ Add infrastructure' CTA at the top of the page stays visually
 // dominant. They retain the 1-click shortcut for users adding another node
@@ -1014,13 +1012,15 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                   <Plus class="h-3.5 w-3.5" />
                                                 </button>
                                               </Show>
-                                              <button
+                                              <Button
                                                 type="button"
+                                                variant="outline"
+                                                size="xs"
+                                                class="min-w-[4.5rem]"
                                                 onClick={() => props.onOpenConnection?.(row)}
-                                                class={inlineButtonClass}
                                               >
                                                 Manage
-                                              </button>
+                                              </Button>
                                             </div>
                                           </Show>
                                         </TableCell>
@@ -1264,15 +1264,17 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                               <span class="text-xs text-muted">Read only</span>
                                             }
                                           >
-                                            <button
+                                            <Button
                                               type="button"
+                                              variant="outline"
+                                              size="xs"
+                                              class="min-w-[4.5rem]"
                                               onClick={() =>
                                                 props.onReviewDiscoveredSource?.(server)
                                               }
-                                              class={inlineButtonClass}
                                             >
                                               Review
-                                            </button>
+                                            </Button>
                                           </Show>
                                         </TableCell>
                                       </Show>
@@ -1504,13 +1506,15 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                       </span>
                                     </div>
                                     <Show when={!props.readOnly && rowInteractive(row)}>
-                                      <button
+                                      <Button
                                         type="button"
+                                        variant="outline"
+                                        size="xs"
+                                        class="min-w-[4.5rem] flex-shrink-0"
                                         onClick={() => props.onOpenConnection?.(row)}
-                                        class={`${inlineButtonClass} flex-shrink-0`}
                                       >
                                         Manage
-                                      </button>
+                                      </Button>
                                     </Show>
                                   </div>
                                   <Show when={row.problem}>
@@ -1582,13 +1586,15 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                     </span>
                                   </div>
                                   <Show when={!props.readOnly && props.onReviewDiscoveredSource}>
-                                    <button
+                                    <Button
                                       type="button"
+                                      variant="outline"
+                                      size="xs"
+                                      class="min-w-[4.5rem] flex-shrink-0"
                                       onClick={() => props.onReviewDiscoveredSource?.(server)}
-                                      class={`${inlineButtonClass} flex-shrink-0`}
                                     >
                                       Review
-                                    </button>
+                                    </Button>
                                   </Show>
                                 </footer>
                               </article>

@@ -10,6 +10,7 @@ import {
   getInfrastructureAgentHostProfileSupportText,
   getInfrastructureAutoDetectLabels,
 } from '@/utils/infrastructureOnboardingPresentation';
+import { Button } from '@/components/shared/Button';
 
 export type ConnectionEditorMode = 'add' | 'edit';
 
@@ -157,13 +158,14 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
               </Show>
             </div>
             <Show when={(props.mode ?? 'add') === 'add'}>
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="xs"
                 onClick={reopenProbe}
-                class="inline-flex items-center rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover"
               >
                 ← Back to API probe
-              </button>
+              </Button>
             </Show>
           </div>
         </Show>
@@ -176,13 +178,14 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
           }
         >
           <div class="border-b border-border bg-surface-alt px-4 py-2">
-            <button
+            <Button
               type="button"
+              variant="outline"
+              size="xs"
               onClick={props.onBackToCatalog}
-              class="inline-flex items-center rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover"
             >
               ← Back to source types
-            </button>
+            </Button>
           </div>
         </Show>
 

@@ -34,8 +34,6 @@ import {
   shouldOpenAvailabilityTargetAddDialog,
 } from './availabilitySettingsModel';
 
-const rowActionButtonClass =
-  'inline-flex min-h-8 items-center justify-center rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60';
 const closeButtonClass =
   'inline-flex h-9 w-9 items-center justify-center rounded-md border border-border text-base-content transition-colors hover:bg-surface-hover';
 
@@ -292,32 +290,38 @@ export const AvailabilitySettingsPanel: Component = () => {
                       </div>
                     </div>
                     <div class="flex flex-wrap items-center gap-2 md:justify-end">
-                      <button
+                      <Button
                         type="button"
+                        variant="outline"
+                        size="xs"
+                        class="min-h-8"
                         onClick={() => void testTarget(target)}
                         disabled={pending()}
-                        class={rowActionButtonClass}
                       >
                         {pending() ? 'Testing...' : 'Test'}
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
+                        variant="outline"
+                        size="xs"
+                        class="min-h-8"
                         onClick={() => void toggleTarget(target)}
                         disabled={pending()}
-                        class={rowActionButtonClass}
                       >
                         {target.enabled ? 'Pause' : 'Resume'}
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
+                        variant="outline"
+                        size="xs"
+                        class="min-h-8"
                         onClick={() => {
                           setDeleteConfirmingId(null);
                           setDialog({ mode: 'edit', target });
                         }}
-                        class={rowActionButtonClass}
                       >
                         Manage
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 );

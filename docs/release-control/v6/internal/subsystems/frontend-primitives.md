@@ -463,11 +463,12 @@ not a replacement status card, CTA band, or page-local nested card.
    danger/outline/ghost button chrome, sizes, focus rings, disabled/loading
    behavior, and safe new-tab link behavior must come from `Button`,
    `ButtonLink`, and `buttonModel.ts`. Empty states, platform page notices,
-   Patrol controls, settings panel actions, infrastructure setup controls, and
-   other repeated command affordances must not copy local `inline-flex ...
-   rounded-md ... bg-surface` Tailwind shells just because the page needs a
-   one-off action. The shared `mdCompact` size owns the common settings/action
-   `px-3 py-2 text-sm` shape. If a new
+   Patrol controls, settings panel actions, infrastructure setup controls,
+   compact row actions, and other repeated command affordances must not copy
+   local `inline-flex ... rounded-md ...` Tailwind shells just because the page
+   needs a one-off action. The shared `mdCompact` size owns the common
+   settings/action `px-3 py-2 text-sm` shape, and the shared `xs` size owns the
+   compact settings row-action `px-2.5 py-1 text-xs` shape. If a new
    surface needs a variant that the shared primitive does not expose, extend
    the primitive and registry guard rather than adding a page-local class
    string.
