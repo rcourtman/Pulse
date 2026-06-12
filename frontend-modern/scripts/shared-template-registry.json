@@ -165,6 +165,28 @@
       ]
     },
     {
+      "id": "platform-section-tabs",
+      "category": "platform-section-tabs",
+      "summary": "Platform page workflow tabs must compose PlatformSectionTabs instead of recreating page-local nav tab bars.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "PlatformSectionTabs"
+      },
+      "requiredConsumers": [
+        { "path": "src/features/docker/DockerPageSurface.tsx" },
+        { "path": "src/features/kubernetes/KubernetesPageSurface.tsx" },
+        { "path": "src/features/proxmox/ProxmoxPageSurface.tsx" },
+        { "path": "src/features/standalone/StandalonePageSurface.tsx" },
+        { "path": "src/features/truenas/TrueNASPageSurface.tsx" },
+        { "path": "src/features/vmware/VmwarePageSurface.tsx" }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/platformOverviewLayout.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "filter-bar-catalog-shell",
       "category": "filter-bar",
       "summary": "Resource-list filter surfaces must compose the shared FilterBar catalog shell instead of recreating page-local filter rows or legacy PageControls decks.",
@@ -286,6 +308,31 @@
       "extensions": [".tsx"],
       "allPatterns": ["role=\"status\"", "px-3 py-2 text-xs text-muted"],
       "legacyReason": "Retired migration debt. Platform table loading states must use PlatformTableLoadingState; no compact local status-row exceptions are currently allowed.",
+      "allowedPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-section-tabs-local-nav",
+      "category": "platform-section-tabs",
+      "summary": "Platform page surfaces must not recreate the active-link tab navigation owned by PlatformSectionTabs.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "PlatformSectionTabs"
+      },
+      "scopes": [
+        "src/features/docker",
+        "src/features/kubernetes",
+        "src/features/proxmox",
+        "src/features/standalone",
+        "src/features/truenas",
+        "src/features/vmware"
+      ],
+      "extensions": [".tsx"],
+      "allPatterns": ["aria-current={", "border-b-2", "border-b border-border"],
+      "legacyReason": "Retired migration debt. Platform page section tabs must use PlatformSectionTabs; no page-local tab-bar exceptions are currently allowed.",
       "allowedPaths": [],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",

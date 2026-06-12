@@ -2404,6 +2404,12 @@ and Refresh action for platform page and table load failures; platform
 consumers own only the failure title, description, and refresh callback.
 Platform feature surfaces must not recreate an `EmptyState` plus local Refresh
 button for `Could not load...` states.
+Platform section tabs are registry-backed too. `PlatformSectionTabs` owns the
+workflow tab shell, hidden-single-tab behavior, active-link styling, link
+targeting, and active-page aria state for platform pages; platform page
+surfaces own only tab specs, the active tab choice, and aria-label copy.
+Platform feature surfaces must not rebuild local nav tab bars with
+`aria-current` and border-tab styling.
 Filter bars are registry-backed too. `FilterBar` owns resource-list filtering
 as a catalog of `FilterDef` entries, while `filterChipStatusDot` owns the
 small leading status-dot glyph used by filter options. Page and feature

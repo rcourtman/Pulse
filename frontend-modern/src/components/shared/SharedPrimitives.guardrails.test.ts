@@ -1151,6 +1151,86 @@ describe('shared primitive guardrails', () => {
     }
   });
 
+  it('keeps platform section navigation on the shared tabs template', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        allowedPaths?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find((rule) => rule.id === 'platform-section-tabs');
+    const registeredGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-section-tabs-local-nav',
+    );
+    const requiredConsumerPaths = [
+      'src/features/docker/DockerPageSurface.tsx',
+      'src/features/kubernetes/KubernetesPageSurface.tsx',
+      'src/features/proxmox/ProxmoxPageSurface.tsx',
+      'src/features/standalone/StandalonePageSurface.tsx',
+      'src/features/truenas/TrueNASPageSurface.tsx',
+      'src/features/vmware/VmwarePageSurface.tsx',
+    ];
+    const platformPageSurfaceSources = [
+      dockerPageSurfaceSource,
+      kubernetesPageSurfaceSource,
+      proxmoxPageSurfaceSource,
+      standalonePageSurfaceSource,
+      truenasPageSurfaceSource,
+      vmwarePageSurfaceSource,
+    ];
+
+    expect(registeredRule?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(registeredRule?.canonical?.export).toBe('PlatformSectionTabs');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
+      expect.arrayContaining(requiredConsumerPaths),
+    );
+    expect(registeredGuard?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(registeredGuard?.canonical?.export).toBe('PlatformSectionTabs');
+    expect(registeredGuard?.allPatterns).toEqual([
+      'aria-current={',
+      'border-b-2',
+      'border-b border-border',
+    ]);
+    expect(registeredGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(registeredGuard?.scopes).toEqual(
+      expect.arrayContaining([
+        'src/features/docker',
+        'src/features/kubernetes',
+        'src/features/proxmox',
+        'src/features/standalone',
+        'src/features/truenas',
+        'src/features/vmware',
+      ]),
+    );
+
+    expect(sharedPlatformPageSource).toContain('export function PlatformSectionTabs');
+    expect(sharedPlatformPageSource).toContain('props.tabs.length > 1');
+    expect(sharedPlatformPageSource).toContain('href={tab.path}');
+    expect(sharedPlatformPageSource).toContain('border-b-2');
+    expect(sharedPlatformPageSource).toContain(
+      "aria-current={props.active === tab.id ? 'page' : undefined}",
+    );
+
+    for (const source of platformPageSurfaceSources) {
+      expect(source).toContain('PlatformSectionTabs');
+      expect(source).not.toContain('aria-current={');
+      expect(source).not.toContain('border-b-2');
+      expect(source).not.toContain('border-b border-border');
+    }
+  });
+
   it('keeps platform load-failure states on the shared error template', () => {
     const registry = JSON.parse(sharedTemplateRegistrySource) as {
       rules?: Array<{
