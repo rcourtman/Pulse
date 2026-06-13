@@ -563,7 +563,11 @@ func (r *Router) setupRoutes() {
 	// Agent execution server for AI tool use
 	r.agentExecServer = agentexec.NewServer(r.validateAgentExecToken)
 	if r.resourceHandlers != nil {
-		r.resourceHandlers.SetActionExecutor(newDockerContainerActionExecutor(r.resourceHandlers, r.agentExecServer))
+		r.resourceHandlers.SetActionExecutor(newRoutedActionExecutor(
+			r.resourceHandlers,
+			newDockerContainerActionExecutor(r.resourceHandlers, r.agentExecServer),
+			newProxmoxGuestActionExecutor(r.resourceHandlers, r.agentExecServer),
+		))
 	}
 	if r.monitor != nil {
 		r.configureProxmoxGuestDockerDetection(r.monitor)

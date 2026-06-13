@@ -33,6 +33,9 @@ product API routes free of maintainer commercial analytics.
 3. `internal/api/alerts.go`
 4. `internal/api/activity_audit_handlers.go`
 5. `internal/api/actions.go`
+5a. `internal/api/action_executor.go`
+5b. `internal/api/docker_container_action_executor.go`
+5c. `internal/api/proxmox_guest_action_executor.go`
 6. `internal/actionplanner/planner.go`
 7. `pkg/pulsecli/api_client.go`
 8. `pkg/pulsecli/actions.go`
@@ -1021,6 +1024,20 @@ the canonical monitored-system blocked payload.
    commands as trusted agent commands; the host-agent hard-block policy still
    applies, and the action audit remains the approval and lifecycle source of
    truth.
+   Proxmox QEMU VM and LXC lifecycle execution is part of that same API-owned
+   action contract. Proxmox guest resources may expose only conservative
+   lifecycle operations (`start`, `shutdown`, `reboot`, `stop`) and execution
+   must route through the registered action executor, not through platform
+   tables, Assistant tool shortcuts, direct Proxmox API mutation, SSH, or
+   guest-local agents. The executor must resolve a connected Proxmox node
+   command agent from the unified resource's linked node agent first, then the
+   canonical Proxmox node hostname, dispatch only vetted `qm` / `pct`
+   lifecycle commands as trusted action-owned agent commands after the API
+   action enters execution, and verify the resulting Proxmox state with
+   `qm status` / `pct status` before recording success. Templates, locked
+   guests, stale Proxmox inventory, incomplete VMID/node metadata, unsupported
+   handlers, and disconnected node command agents must fail closed through the
+   same readiness and audit model.
    Resource payloads may expose the same executor-owned unavailable state as
    `actionReadiness[]` entries with stable `name`, `available`, `reasonCode`,
    and `reason` fields so browser and agent clients can explain disabled

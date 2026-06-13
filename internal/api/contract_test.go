@@ -15193,8 +15193,12 @@ func TestContract_DockerLifecycleActionsResolveCommandAgentAndDispatchTrusted(t 
 		t.Fatalf("read docker_container_action_executor.go: %v", err)
 	}
 	src := string(source)
+	sharedSource, err := os.ReadFile("action_executor.go")
+	if err != nil {
+		t.Fatalf("read action_executor.go: %v", err)
+	}
+	sharedSrc := string(sharedSource)
 	for _, snippet := range []string{
-		"GetAgentForHost(hostname string) (string, bool)",
 		"func (e dockerContainerActionExecutor) connectedDockerCommandAgentID(resource unified.Resource) (string, error)",
 		"resource.Docker.AgentID",
 		"e.agents.GetAgentForHost(strings.TrimSpace(resource.Docker.Hostname))",
@@ -15204,9 +15208,52 @@ func TestContract_DockerLifecycleActionsResolveCommandAgentAndDispatchTrusted(t 
 			t.Fatalf("docker lifecycle executor must pin command-agent/trusted dispatch snippet %q", snippet)
 		}
 	}
+	if !strings.Contains(sharedSrc, "GetAgentForHost(hostname string) (string, bool)") {
+		t.Fatal("shared action command interface must keep hostname-based command-agent resolution available")
+	}
 	if strings.Index(src, "if agentID := strings.TrimSpace(resource.Docker.AgentID)") >
 		strings.Index(src, "e.agents.GetAgentForHost(strings.TrimSpace(resource.Docker.Hostname))") {
 		t.Fatal("docker lifecycle executor must try the Docker reporting agent id before falling back to hostname resolution")
+	}
+}
+
+func TestContract_ProxmoxLifecycleActionsResolveNodeCommandAgentAndVerifyState(t *testing.T) {
+	source, err := os.ReadFile("proxmox_guest_action_executor.go")
+	if err != nil {
+		t.Fatalf("read proxmox_guest_action_executor.go: %v", err)
+	}
+	src := string(source)
+	for _, snippet := range []string{
+		"func (e proxmoxGuestActionExecutor) connectedProxmoxNodeCommandAgentID(resource unified.Resource) (string, error)",
+		"resource.Proxmox.LinkedAgentID",
+		"e.agents.GetAgentForHost(strings.TrimSpace(resource.Proxmox.NodeName))",
+		"Trusted:    true",
+		"func (e proxmoxGuestActionExecutor) verifyProxmoxGuestState(",
+		"proxmoxGuestStatusCommand(kind, vmid)",
+		"parseProxmoxGuestStatus(lastOutput) == expected",
+	} {
+		if !strings.Contains(src, snippet) {
+			t.Fatalf("proxmox lifecycle executor must pin command-agent/trusted verification snippet %q", snippet)
+		}
+	}
+	if strings.Index(src, "if agentID := strings.TrimSpace(resource.Proxmox.LinkedAgentID)") >
+		strings.Index(src, "e.agents.GetAgentForHost(strings.TrimSpace(resource.Proxmox.NodeName))") {
+		t.Fatal("proxmox lifecycle executor must try the linked Proxmox node agent before falling back to node hostname resolution")
+	}
+
+	router, err := os.ReadFile("router.go")
+	if err != nil {
+		t.Fatalf("read router.go: %v", err)
+	}
+	routerSrc := string(router)
+	for _, snippet := range []string{
+		"newRoutedActionExecutor(",
+		"newDockerContainerActionExecutor(r.resourceHandlers, r.agentExecServer)",
+		"newProxmoxGuestActionExecutor(r.resourceHandlers, r.agentExecServer)",
+	} {
+		if !strings.Contains(routerSrc, snippet) {
+			t.Fatalf("router must register Docker and Proxmox action executors through routed action executor; missing %q", snippet)
+		}
 	}
 }
 

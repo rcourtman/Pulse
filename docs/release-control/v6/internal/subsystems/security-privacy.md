@@ -604,6 +604,13 @@ handoff: the executor may use agent command execution only after scope,
 approval/policy, stale-plan, operator-lock, source-freshness, and runtime
 posture checks pass, and it must record redacted audit and verification facts
 instead of exposing raw command text through monitoring-readable surfaces.
+Proxmox VM/LXC lifecycle execution is governed by the same privileged action
+handoff: `start`, `shutdown`, `reboot`, and `stop` may use a Proxmox node
+command agent only after the API action scope, approval/policy, stale-plan,
+operator-lock, fresh resource capability, and connected-agent checks pass. Raw
+`qm` / `pct` command text and command output must remain action-executor/audit
+implementation detail, with monitoring-readable surfaces receiving only
+redacted result, verification, and readiness facts.
 That same token-scope boundary now also governs Pulse Mobile relay runtime
 credentials: `internal/api/security_tokens.go` must mint only the dedicated
 backend-owned `relay:mobile:access` scope for new mobile relay tokens, and the

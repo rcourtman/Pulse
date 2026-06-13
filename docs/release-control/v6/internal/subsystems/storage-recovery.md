@@ -423,6 +423,12 @@ recovery scope, or a storage/recovery-owned secret source.
    for host-side Docker-in-LXC collection must not be reinterpreted as backup
    freshness, restore coverage, storage protection evidence, or remediation
    authority for the LXC guest.
+   Adjacent Proxmox VM/LXC lifecycle actions may also pass through the shared
+   API action executor and Proxmox node command-agent path, but storage and
+   recovery may consume their audit and refreshed resource state only as
+   operator context. Start, shutdown, reboot, or hard stop capability must not
+   be reinterpreted as backup freshness, restore safety, recovery entitlement,
+   or storage-local remediation authority.
    Proxmox auto-registration dedupe for cluster-member endpoints is likewise
    adjacent API/lifecycle continuity: treating a non-primary cluster endpoint
    as already registered prevents accidental shared-token rotation, but it does

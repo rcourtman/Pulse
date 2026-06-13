@@ -283,6 +283,11 @@ regression protection.
    while per-action resource refresh, policy validation, agent command dispatch,
    polling verification, and audit completion must occur inside the route-local
    execute handler path.
+   Proxmox VM/LXC lifecycle execution follows that same routed-executor budget:
+   router setup may register the Proxmox executor alongside Docker / Podman,
+   but it must not resolve guests, probe node agents, call `qm` / `pct`, poll
+   verification state, or refresh inventory outside the route-local action
+   plan/execute path.
    Retiring self-hosted trial acquisition follows that same rule: removing
    `/auth/trial-activate` and `POST /api/license/trial/start` from public-path
    and CSRF inventories must stay as constant-time route-table absence rather

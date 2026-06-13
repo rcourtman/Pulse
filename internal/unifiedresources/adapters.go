@@ -1528,6 +1528,7 @@ func resourceFromVM(vm models.VM) (Resource, ResourceIdentity) {
 		Proxmox:    proxmox,
 		Tags:       vm.Tags,
 	}
+	resource.Capabilities = proxmoxGuestLifecycleCapabilities("vm", "qemu", vm.Status, vm.Template, vm.Lock)
 	identity := ResourceIdentity{
 		Hostnames:   uniqueStrings([]string{vm.Name}),
 		IPAddresses: uniqueStrings(vm.IPAddresses),
@@ -1573,11 +1574,69 @@ func resourceFromContainer(ct models.Container) (Resource, ResourceIdentity) {
 		Proxmox:    proxmox,
 		Tags:       ct.Tags,
 	}
+	resource.Capabilities = proxmoxGuestLifecycleCapabilities("ct", "lxc", ct.Status, ct.Template, ct.Lock)
 	identity := ResourceIdentity{
 		Hostnames:   uniqueStrings([]string{ct.Name}),
 		IPAddresses: uniqueStrings(ct.IPAddresses),
 	}
 	return resource, identity
+}
+
+func proxmoxGuestLifecycleCapabilities(kind, platform, status string, template bool, lock string) []ResourceCapability {
+	if template || strings.TrimSpace(lock) != "" {
+		return nil
+	}
+	handler := ""
+	subject := ""
+	switch strings.ToLower(strings.TrimSpace(kind)) {
+	case "vm", "qemu":
+		handler = "proxmox.vm.lifecycle"
+		subject = "VM"
+	case "ct", "lxc", "container":
+		handler = "proxmox.ct.lifecycle"
+		subject = "LXC"
+	default:
+		return nil
+	}
+
+	status = strings.ToLower(strings.TrimSpace(status))
+	operations := []string{}
+	switch status {
+	case "running", "online":
+		operations = []string{"shutdown", "reboot", "stop"}
+	case "stopped", "offline":
+		operations = []string{"start"}
+	default:
+		return nil
+	}
+
+	capabilities := make([]ResourceCapability, 0, len(operations))
+	for _, operation := range operations {
+		capabilities = append(capabilities, ResourceCapability{
+			Name:                 operation,
+			Type:                 CapabilityTypeCommon,
+			Description:          proxmoxGuestLifecycleDescription(subject, operation),
+			MinimumApprovalLevel: ApprovalAdmin,
+			Platform:             strings.TrimSpace(platform),
+			InternalHandler:      handler,
+		})
+	}
+	return capabilities
+}
+
+func proxmoxGuestLifecycleDescription(subject, operation string) string {
+	switch operation {
+	case "start":
+		return "Start this Proxmox " + subject
+	case "shutdown":
+		return "Gracefully shut down this Proxmox " + subject
+	case "reboot":
+		return "Reboot this Proxmox " + subject
+	case "stop":
+		return "Hard stop this Proxmox " + subject
+	default:
+		return "Run Proxmox " + subject + " lifecycle action"
+	}
 }
 
 func convertGuestInterfaces(in []models.GuestNetworkInterface) []NetworkInterface {

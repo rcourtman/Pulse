@@ -240,6 +240,14 @@ mark its vetted container lifecycle dispatch as a trusted agent command after
 the API action has entered execution; lifecycle surfaces still consume only the
 resource payload, action readiness, and action-audit result rather than issuing
 or approving command-agent grants themselves.
+Proxmox VM and LXC lifecycle affordances follow the same adjacent boundary:
+lifecycle and fleet surfaces may consume backend-advertised `start`,
+`shutdown`, `reboot`, and `stop` capabilities and typed `actionReadiness`, but
+the only execution path is the API-owned action executor that resolves a
+connected Proxmox node command agent and records action audit plus verification.
+Lifecycle surfaces must not run `qm` / `pct`, SSH to a node, call Proxmox
+mutation APIs, or substitute a guest-local agent to perform VM/LXC lifecycle
+control.
 Disconnected command-agent state is also API-owned readiness: lifecycle
 surfaces may reflect missing backend-advertised capabilities, but must not
 reconnect, substitute, or directly address an agent to make a stale container

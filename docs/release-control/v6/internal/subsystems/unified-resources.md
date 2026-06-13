@@ -267,6 +267,13 @@ dense platform table rendering must use `PlatformTableRelativeTimeValue` /
 `formatPlatformTableRelativeTimeValue` for relative labels, compact defaults,
 invalid/empty markers, and tabular styling instead of importing
 `formatRelativeTime` or declaring local timestamp-age helpers in table files.
+Duration and interval cells keep the same split: unified-resource or
+source-specific consumers own which elapsed duration, human fallback, or poll
+interval field is meaningful, while dense platform table rendering must use
+`PlatformTableDurationValue` / `formatPlatformTableDurationValue` for
+seconds/minutes/hours labels, fallback text, invalid/empty markers, and
+tabular styling instead of declaring local seconds/minutes helpers in table
+files.
 Optional numeric table cells follow the same split: unified-resource consumers
 own which count or replica field is meaningful, whether the domain should
 zero-default an absent scheduler/service/inventory count, whether a
@@ -531,6 +538,17 @@ container inventory table.
    `command_agent_disconnected`, and operator-safe copy. Frontend consumers may
    use that field to explain disabled controls, while `capabilities` remains
    the executable action set.
+   Proxmox VM and LXC lifecycle actions are also part of that governed
+   resource contract. `resourceFromVM` and `resourceFromContainer` may advertise
+   `start` only for stopped guests and `shutdown`, `reboot`, and `stop` only
+   for running guests, and must fail closed for templates, locked guests, and
+   unknown transition states. The API action executor consumes those
+   capabilities through `/api/actions/*`, resolves the Proxmox node command
+   agent from the unified resource's linked node context, and records
+   `actionReadiness` when that command path is not currently connected.
+   Unified-resource consumers must not infer Proxmox lifecycle affordances from
+   table row status alone or issue direct `qm` / `pct`, SSH, provider API, or
+   guest-agent calls outside the governed action contract.
    TrueNAS app inventory enters the model as native `TrueNASData.App`
    metadata on canonical `app-container` resources. The facet is sourced from
    the TrueNAS API app inventory (`app.query` plus active workload/stat
@@ -1349,6 +1367,13 @@ lifecycle controls from runtime-shaped metadata alone. After a governed request
 completes, the owning surface may ask its existing `useUnifiedResources` query
 to refetch the resource snapshot, but refresh is not an alternate execution,
 verification, or provider-control path.
+Proxmox VM and LXC lifecycle affordances follow the same resource-owned rule:
+the backend advertises only status-appropriate `start`, `shutdown`, `reboot`,
+and `stop` capabilities for non-template, unlocked Proxmox guests, filters them
+when the owning node command agent is disconnected, and records disabled-state
+context in `actionReadiness`. Proxmox platform pages and detail drawers may
+consume those fields, but they must not treat row status, VMID, node name, or
+guest metadata as separate permission to run `qm` / `pct` or provider calls.
 
 `InfrastructureSummary.tsx` and `infrastructureSummaryModel.ts` now surface
 `degraded` and `alerting` resource counts alongside the existing `online` and

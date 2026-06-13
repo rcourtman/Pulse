@@ -174,6 +174,102 @@ func TestResourceFromDockerContainerPodmanLifecycleCapabilities(t *testing.T) {
 	}
 }
 
+func TestResourceFromProxmoxGuestAdvertisesLifecycleCapabilities(t *testing.T) {
+	now := time.Now().UTC()
+
+	vm, _ := resourceFromVM(models.VM{
+		ID:       "homelab:delly:160",
+		VMID:     160,
+		Name:     "windows-runner",
+		Node:     "delly",
+		Instance: "homelab",
+		Status:   "running",
+		LastSeen: now,
+	})
+	if got := capabilityNames(vm.Capabilities); !reflect.DeepEqual(got, []string{"shutdown", "reboot", "stop"}) {
+		t.Fatalf("running VM capabilities = %#v, want shutdown/reboot/stop", got)
+	}
+	for _, capability := range vm.Capabilities {
+		if capability.MinimumApprovalLevel != ApprovalAdmin {
+			t.Fatalf("VM capability %q approval = %q, want admin", capability.Name, capability.MinimumApprovalLevel)
+		}
+		if capability.Platform != "qemu" || capability.InternalHandler != "proxmox.vm.lifecycle" {
+			t.Fatalf("VM capability %q platform/handler = %q/%q", capability.Name, capability.Platform, capability.InternalHandler)
+		}
+	}
+
+	stoppedCT, _ := resourceFromContainer(models.Container{
+		ID:       "homelab:delly:101",
+		VMID:     101,
+		Name:     "homeassistant",
+		Node:     "delly",
+		Instance: "homelab",
+		Status:   "stopped",
+		LastSeen: now,
+	})
+	if got := capabilityNames(stoppedCT.Capabilities); !reflect.DeepEqual(got, []string{"start"}) {
+		t.Fatalf("stopped LXC capabilities = %#v, want start", got)
+	}
+	if stoppedCT.Capabilities[0].Platform != "lxc" || stoppedCT.Capabilities[0].InternalHandler != "proxmox.ct.lifecycle" {
+		t.Fatalf("LXC platform/handler = %q/%q", stoppedCT.Capabilities[0].Platform, stoppedCT.Capabilities[0].InternalHandler)
+	}
+}
+
+func TestResourceFromProxmoxGuestLifecycleCapabilitiesFailClosed(t *testing.T) {
+	now := time.Now().UTC()
+	cases := []struct {
+		name string
+		vm   models.VM
+	}{
+		{
+			name: "template",
+			vm: models.VM{
+				ID:       "homelab:delly:9000",
+				VMID:     9000,
+				Name:     "template",
+				Node:     "delly",
+				Instance: "homelab",
+				Status:   "stopped",
+				Template: true,
+				LastSeen: now,
+			},
+		},
+		{
+			name: "locked",
+			vm: models.VM{
+				ID:       "homelab:delly:161",
+				VMID:     161,
+				Name:     "locked",
+				Node:     "delly",
+				Instance: "homelab",
+				Status:   "running",
+				Lock:     "backup",
+				LastSeen: now,
+			},
+		},
+		{
+			name: "unknown transition state",
+			vm: models.VM{
+				ID:       "homelab:delly:162",
+				VMID:     162,
+				Name:     "transitioning",
+				Node:     "delly",
+				Instance: "homelab",
+				Status:   "migrating",
+				LastSeen: now,
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resource, _ := resourceFromVM(tc.vm)
+			if len(resource.Capabilities) != 0 {
+				t.Fatalf("capabilities = %#v, want none", resource.Capabilities)
+			}
+		})
+	}
+}
+
 func capabilityNames(capabilities []ResourceCapability) []string {
 	names := make([]string, 0, len(capabilities))
 	for _, capability := range capabilities {

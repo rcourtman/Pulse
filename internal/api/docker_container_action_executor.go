@@ -13,22 +13,20 @@ import (
 
 const dockerContainerLifecycleHandler = "docker.container.lifecycle"
 
-type dockerActionAgentCommander interface {
-	ExecuteCommand(ctx context.Context, agentID string, cmd agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error)
-	GetAgentForHost(hostname string) (string, bool)
-	IsAgentConnected(agentID string) bool
-}
-
 type dockerContainerActionExecutor struct {
 	resources *ResourceHandlers
-	agents    dockerActionAgentCommander
+	agents    actionAgentCommander
 }
 
-func newDockerContainerActionExecutor(resources *ResourceHandlers, agents dockerActionAgentCommander) ActionExecutor {
+func newDockerContainerActionExecutor(resources *ResourceHandlers, agents actionAgentCommander) ActionExecutor {
 	if resources == nil || agents == nil {
 		return nil
 	}
 	return dockerContainerActionExecutor{resources: resources, agents: agents}
+}
+
+func (e dockerContainerActionExecutor) ActionHandlerNames() []string {
+	return []string{dockerContainerLifecycleHandler}
 }
 
 func (e dockerContainerActionExecutor) ExecuteAction(ctx context.Context, record unified.ActionAuditRecord) (*unified.ExecutionResult, error) {
