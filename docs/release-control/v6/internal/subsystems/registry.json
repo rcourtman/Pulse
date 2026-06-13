@@ -1558,6 +1558,7 @@
       "owned_files": [
         "frontend-modern/src/components/Settings/APITokenManager.tsx",
         "frontend-modern/src/components/Settings/apiTokenManagerModel.ts",
+        "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx",
         "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx",
         "frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx",
         "frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx",
@@ -1819,6 +1820,27 @@
               "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
               "frontend-modern/src/types/api.ts"
+            ]
+          },
+          {
+            "id": "availability-target-settings-client-surface",
+            "label": "availability target settings client proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/api/availabilityTargets.ts",
+              "frontend-modern/src/components/Settings/availabilitySettingsModel.ts",
+              "frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx",
+              "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx",
+              "internal/api/availability_handlers.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/api/__tests__/availabilityTargets.test.ts",
+              "frontend-modern/src/components/Settings/__tests__/AvailabilitySettingsPanel.test.tsx",
+              "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+              "frontend-modern/src/components/Settings/ConnectionEditor/__tests__/AvailabilityTargetSlot.test.tsx",
+              "internal/api/availability_handlers_test.go"
             ]
           },
           {

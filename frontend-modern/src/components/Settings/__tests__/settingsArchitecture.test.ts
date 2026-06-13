@@ -59,6 +59,7 @@ import nodeModalMonitoringSectionSource from '../NodeModalMonitoringSection.tsx?
 import nodeModalSetupGuideSectionSource from '../NodeModalSetupGuideSection.tsx?raw';
 import nodeModalStatusFooterSource from '../NodeModalStatusFooter.tsx?raw';
 import nodeModalStateSource from '../useNodeModalState.ts?raw';
+import availabilityTargetSlotSource from '../ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx?raw';
 import trueNASCredentialSlotSource from '../ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx?raw';
 import vmwareCredentialSlotSource from '../ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx?raw';
 import organizationAccessManagementSectionSource from '../OrganizationAccessManagementSection.tsx?raw';
@@ -321,6 +322,9 @@ describe('settings architecture guardrails', () => {
       reportingPanelSource,
       securityAuthPanelSource,
       securityOverviewPanelSource,
+      addressProbeStepSource,
+      availabilityTargetSlotSource,
+      trueNASCredentialSlotSource,
       vmwareCredentialSlotSource,
     ]) {
       expect(source).toContain('CalloutCard');
@@ -329,12 +333,40 @@ describe('settings architecture guardrails', () => {
     expect(discoverySettingsFormSource).toContain('scale="compact"');
     expect(aiProviderConfigurationSectionSource).toContain('scale="compact"');
     expect(diagnosticsResultsPanelSource).toContain('scale="compact"');
+    for (const source of [
+      addressProbeStepSource,
+      availabilityTargetSlotSource,
+      trueNASCredentialSlotSource,
+      vmwareCredentialSlotSource,
+    ]) {
+      expect(source).toContain('scale="compact"');
+      expect(source).toContain('padding="sm"');
+    }
     expect(discoverySettingsFormSource).not.toContain(
       'rounded-md border border-amber-200 bg-amber-50/80',
     );
     expect(aiProviderConfigurationSectionSource).not.toContain('rounded border border-red-200');
     expect(diagnosticsResultsPanelSource).not.toContain(
       'rounded-md border border-amber-200 bg-amber-50',
+    );
+    expect(addressProbeStepSource).not.toContain('rounded-md border border-red-300 bg-red-50');
+    expect(addressProbeStepSource).not.toContain('rounded-md border border-amber-300 bg-amber-50');
+    expect(availabilityTargetSlotSource).not.toContain('testToneClass');
+    expect(availabilityTargetSlotSource).not.toContain('border-green-300 bg-green-50');
+    expect(availabilityTargetSlotSource).not.toContain(
+      'rounded-md border border-rose-300 bg-rose-50',
+    );
+    expect(trueNASCredentialSlotSource).not.toContain(
+      'rounded-md border border-amber-300 bg-amber-50',
+    );
+    expect(trueNASCredentialSlotSource).not.toContain(
+      'rounded-md border border-rose-300 bg-rose-50',
+    );
+    expect(vmwareCredentialSlotSource).not.toContain(
+      'rounded-md border border-amber-300 bg-amber-50',
+    );
+    expect(vmwareCredentialSlotSource).not.toContain(
+      'rounded-md border border-rose-300 bg-rose-50',
     );
   });
 

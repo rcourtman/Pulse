@@ -1357,6 +1357,10 @@ not a replacement status card, CTA band, or page-local nested card.
    `frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts`
    and
    `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`.
+   Connection-editor status, feature-disabled, delete-error, and probe-result
+   notices are part of the same settings callout boundary: the editor and
+   credential slots own the source-specific lifecycle or API meaning, while
+   `CalloutCard` owns the warning/success/danger shell and compact density.
 8. Keep hosted settings-shell framing imports safe for bundle initialization.
    Self-hosted billing titles, descriptions, and referral copy used by
    `settingsHeaderMeta.ts`, `settingsNavCatalog.ts`, and adjacent settings
@@ -3349,6 +3353,13 @@ maintaining feature-local colored bordered wrappers. The primitive owns the tone
 palette and the `scale="compact"` density used by smaller settings notices, and
 the `settings-callout-card-shell` shared-template registry rule requires current
 settings consumers to compose it instead of reintroducing local panel shells.
+Connection-editor status, feature-disabled, delete-error, and probe-result
+notices are part of that same settings callout boundary: the editor and
+credential slots own the source-specific lifecycle or API meaning, while
+`CalloutCard` owns the warning/success/danger shell and compact density.
+The `settings-connection-editor-local-*-callout-shell` pattern guards block
+future connection-editor files from reintroducing amber, red, or rose local
+notice shells.
 
 Settings external documentation text links must route through
 `ExternalTextLink`, while button-styled external actions route through

@@ -59,10 +59,15 @@ export const VMwareCredentialSlot: Component<VMwareCredentialSlotProps> = (props
   return (
     <div class="space-y-6">
       <Show when={props.state.featureDisabled()}>
-        <div class="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
-          {props.state.featureDisabledMessage() ||
-            'VMware connections are disabled for this Pulse tier.'}
-        </div>
+        <CalloutCard
+          tone="warning"
+          scale="compact"
+          padding="sm"
+          description={
+            props.state.featureDisabledMessage() ||
+            'VMware connections are disabled for this Pulse tier.'
+          }
+        />
       </Show>
 
       <Show when={!props.state.featureDisabled()}>
@@ -119,9 +124,7 @@ export const VMwareCredentialSlot: Component<VMwareCredentialSlotProps> = (props
             <input
               class={formControl}
               value={props.state.form().username}
-              onInput={(event) =>
-                props.state.updateForm({ username: event.currentTarget.value })
-              }
+              onInput={(event) => props.state.updateForm({ username: event.currentTarget.value })}
               placeholder="administrator@vsphere.local"
             />
           </label>
@@ -131,9 +134,7 @@ export const VMwareCredentialSlot: Component<VMwareCredentialSlotProps> = (props
               class={formControl}
               type="password"
               value={props.state.form().password}
-              onInput={(event) =>
-                props.state.updateForm({ password: event.currentTarget.value })
-              }
+              onInput={(event) => props.state.updateForm({ password: event.currentTarget.value })}
               placeholder={
                 props.state.form().hasStoredPassword
                   ? 'Saved password retained unless replaced'
@@ -169,9 +170,7 @@ export const VMwareCredentialSlot: Component<VMwareCredentialSlotProps> = (props
               type="checkbox"
               class={formCheckbox}
               checked={props.state.form().enabled}
-              onChange={(event) =>
-                props.state.updateForm({ enabled: event.currentTarget.checked })
-              }
+              onChange={(event) => props.state.updateForm({ enabled: event.currentTarget.checked })}
             />
             <span class="text-sm text-base-content">Enable this vCenter connection</span>
           </label>
@@ -246,12 +245,13 @@ export const VMwareCredentialSlot: Component<VMwareCredentialSlotProps> = (props
 
         <Show when={props.deleteError}>
           {(message) => (
-            <div
+            <CalloutCard
               role="alert"
-              class="rounded-md border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200"
-            >
-              {message()}
-            </div>
+              tone="danger"
+              scale="compact"
+              padding="sm"
+              description={message()}
+            />
           )}
         </Show>
 
@@ -326,9 +326,7 @@ export const VMwareCredentialSlot: Component<VMwareCredentialSlotProps> = (props
             variant="outline"
             size="settingsAction"
             onClick={() => void props.state.previewCurrentForm()}
-            disabled={
-              props.state.saving() || props.state.testing() || props.state.previewing()
-            }
+            disabled={props.state.saving() || props.state.testing() || props.state.previewing()}
             title="Show the resources Pulse would ingest from this connection without saving or starting polling."
           >
             {props.state.previewing() ? 'Previewing…' : 'Preview impact'}

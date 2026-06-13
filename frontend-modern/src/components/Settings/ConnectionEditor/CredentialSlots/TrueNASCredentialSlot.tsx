@@ -1,5 +1,6 @@
 import { Component, Show, createEffect, onMount } from 'solid-js';
 import { Button } from '@/components/shared/Button';
+import { CalloutCard } from '@/components/shared/CalloutCard';
 import {
   formCheckbox,
   formControl,
@@ -58,10 +59,15 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
   return (
     <div class="space-y-6">
       <Show when={props.state.featureDisabled()}>
-        <div class="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
-          {props.state.featureDisabledMessage() ||
-            'TrueNAS connections are disabled for this Pulse tier.'}
-        </div>
+        <CalloutCard
+          tone="warning"
+          scale="compact"
+          padding="sm"
+          description={
+            props.state.featureDisabledMessage() ||
+            'TrueNAS connections are disabled for this Pulse tier.'
+          }
+        />
       </Show>
 
       <Show when={!props.state.featureDisabled()}>
@@ -299,12 +305,13 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
 
         <Show when={props.deleteError}>
           {(message) => (
-            <div
+            <CalloutCard
               role="alert"
-              class="rounded-md border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200"
-            >
-              {message()}
-            </div>
+              tone="danger"
+              scale="compact"
+              padding="sm"
+              description={message()}
+            />
           )}
         </Show>
 

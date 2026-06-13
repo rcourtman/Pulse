@@ -1013,7 +1013,11 @@ class helper.
     they extract the inner form bodies from the per-type panels and
     render them inline under the editor while still driving the existing
     `TrueNASSettingsPanelState` and `VMwareSettingsPanelState` APIs for
-    save, test, preview, and impact-preview behavior. The add flow
+    save, test, preview, and impact-preview behavior. Feature-disabled,
+    delete-error, and probe guidance notices in the connection editor may
+    compose frontend-primitives' `CalloutCard`; agent-lifecycle owns the
+    selected-source lifecycle semantics and form handoff, not colored local
+    notice shells. The add flow
     must not reintroduce the full per-type workspace (Proxmox discovery
     card, configured nodes table, node-modal stack; TrueNAS/VMware
     connection list with headers and row actions) into the credential

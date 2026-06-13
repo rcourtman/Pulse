@@ -301,6 +301,13 @@
       },
       "requiredConsumers": [
         { "path": "src/components/Settings/AIProviderConfigurationSection.tsx" },
+        { "path": "src/components/Settings/ConnectionEditor/AddressProbeStep.tsx" },
+        {
+          "path": "src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx"
+        },
+        {
+          "path": "src/components/Settings/ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx"
+        },
         {
           "path": "src/components/Settings/ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx"
         },
@@ -315,6 +322,35 @@
         {
           "path": "src/components/Settings/AIProviderConfigurationSection.tsx",
           "patterns": ["rounded border border-red-200", "bg-red-50 dark:bg-red-900 px-2 py-1.5"]
+        },
+        {
+          "path": "src/components/Settings/ConnectionEditor/AddressProbeStep.tsx",
+          "patterns": [
+            "rounded-md border border-red-300 bg-red-50",
+            "rounded-md border border-amber-300 bg-amber-50"
+          ]
+        },
+        {
+          "path": "src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx",
+          "patterns": [
+            "border-green-300 bg-green-50",
+            "rounded-md border border-rose-300 bg-rose-50",
+            "testToneClass"
+          ]
+        },
+        {
+          "path": "src/components/Settings/ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx",
+          "patterns": [
+            "rounded-md border border-amber-300 bg-amber-50",
+            "rounded-md border border-rose-300 bg-rose-50"
+          ]
+        },
+        {
+          "path": "src/components/Settings/ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx",
+          "patterns": [
+            "rounded-md border border-amber-300 bg-amber-50",
+            "rounded-md border border-rose-300 bg-rose-50"
+          ]
         },
         {
           "path": "src/components/Settings/DiagnosticsResultsPanel.tsx",
@@ -2404,6 +2440,72 @@
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "src/components/shared/Button.test.tsx",
         "src/components/Alerts/ResourceTable.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "settings-connection-editor-local-warning-callout-shell",
+      "category": "callout",
+      "summary": "Connection editor settings code must not recreate amber warning callout shells locally; compose CalloutCard compact notices so tone, spacing, and dark-mode styling stay shared.",
+      "canonical": {
+        "path": "src/components/shared/CalloutCard.tsx",
+        "export": "CalloutCard"
+      },
+      "scopes": ["src/components/Settings/ConnectionEditor"],
+      "extensions": [".tsx"],
+      "allPatterns": ["rounded-md border", "bg-amber-50"],
+      "allowedPaths": [],
+      "ignoredPaths": [
+        "src/components/Settings/ConnectionEditor/__tests__/ConnectionEditor.test.tsx",
+        "src/components/shared/SharedPrimitives.guardrails.test.ts"
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/CalloutCard.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "settings-connection-editor-local-danger-callout-shell",
+      "category": "callout",
+      "summary": "Connection editor settings code must not recreate red or rose danger callout shells locally; compose CalloutCard compact notices so alert tone, spacing, and dark-mode styling stay shared.",
+      "canonical": {
+        "path": "src/components/shared/CalloutCard.tsx",
+        "export": "CalloutCard"
+      },
+      "scopes": ["src/components/Settings/ConnectionEditor"],
+      "extensions": [".tsx"],
+      "allPatterns": ["rounded-md border", "bg-rose-50"],
+      "allowedPaths": [],
+      "ignoredPaths": [
+        "src/components/Settings/ConnectionEditor/__tests__/ConnectionEditor.test.tsx",
+        "src/components/shared/SharedPrimitives.guardrails.test.ts"
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/CalloutCard.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "settings-connection-editor-local-red-callout-shell",
+      "category": "callout",
+      "summary": "Connection editor settings code must not recreate red danger callout shells locally; compose CalloutCard compact notices so alert tone, spacing, and dark-mode styling stay shared.",
+      "canonical": {
+        "path": "src/components/shared/CalloutCard.tsx",
+        "export": "CalloutCard"
+      },
+      "scopes": ["src/components/Settings/ConnectionEditor"],
+      "extensions": [".tsx"],
+      "allPatterns": ["rounded-md border", "bg-red-50"],
+      "allowedPaths": [],
+      "ignoredPaths": [
+        "src/components/Settings/ConnectionEditor/__tests__/ConnectionEditor.test.tsx",
+        "src/components/shared/SharedPrimitives.guardrails.test.ts"
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/CalloutCard.test.tsx",
         "scripts/shared-template-audit.mjs"
       ]
     },

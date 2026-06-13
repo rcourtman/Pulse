@@ -1,6 +1,7 @@
 import { Component, For, Show } from 'solid-js';
 import type { ProbeCandidate } from '@/api/connections';
 import { Button } from '@/components/shared/Button';
+import { CalloutCard } from '@/components/shared/CalloutCard';
 import { formControl, formField, formHelpText, formLabel } from '@/components/shared/Form';
 import { formatConnectionErrorMessage } from '@/utils/connectionErrorPresentation';
 import { getInfrastructureAgentHostProfileSupportText } from '@/utils/infrastructureOnboardingPresentation';
@@ -63,41 +64,52 @@ export const AddressProbeStep: Component<AddressProbeStepProps> = (props) => {
       </div>
 
       <Show when={props.state.phase() === 'error' && props.state.errorMessage().length > 0}>
-        <div class="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200">
-          {formatConnectionErrorMessage(props.state.errorMessage()) ?? props.state.errorMessage()}
-        </div>
+        <CalloutCard
+          role="alert"
+          tone="danger"
+          scale="compact"
+          padding="sm"
+          description={
+            formatConnectionErrorMessage(props.state.errorMessage()) ?? props.state.errorMessage()
+          }
+        />
       </Show>
 
       <Show when={props.state.phase() === 'no-match'}>
-        <div class="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
-          <div class="font-medium">No supported API-backed platform detected at that address.</div>
-          <div class="mt-1 text-xs">
-            <Show when={props.onChooseSourceTypeInstead}>
-              <button
-                type="button"
-                onClick={props.onChooseSourceTypeInstead}
-                class="font-medium underline underline-offset-2 hover:text-amber-950 dark:hover:text-amber-50"
+        <CalloutCard
+          tone="warning"
+          scale="compact"
+          padding="sm"
+          title="No supported API-backed platform detected at that address."
+          description={
+            <>
+              <Show when={props.onChooseSourceTypeInstead}>
+                <button
+                  type="button"
+                  onClick={props.onChooseSourceTypeInstead}
+                  class="font-semibold underline underline-offset-2"
+                >
+                  Choose a source type instead
+                </button>
+                <span>. </span>
+              </Show>
+              If this is one of the supported {getInfrastructureAgentHostProfileSupportText()},{' '}
+              <Show
+                when={props.onInstallAgent}
+                fallback={<span class="font-medium">install Pulse Agent instead</span>}
               >
-                Choose a source type instead
-              </button>
-              <span>. </span>
-            </Show>
-            If this is one of the supported {getInfrastructureAgentHostProfileSupportText()},{' '}
-            <Show
-              when={props.onInstallAgent}
-              fallback={<span class="font-medium">install Pulse Agent instead</span>}
-            >
-              <button
-                type="button"
-                onClick={props.onInstallAgent}
-                class="font-medium underline underline-offset-2 hover:text-amber-950 dark:hover:text-amber-50"
-              >
-                install Pulse Agent instead
-              </button>
-            </Show>
-            .
-          </div>
-        </div>
+                <button
+                  type="button"
+                  onClick={props.onInstallAgent}
+                  class="font-semibold underline underline-offset-2"
+                >
+                  install Pulse Agent instead
+                </button>
+              </Show>
+              .
+            </>
+          }
+        />
       </Show>
 
       <Show when={props.state.phase() === 'detected' && props.state.candidates().length > 0}>

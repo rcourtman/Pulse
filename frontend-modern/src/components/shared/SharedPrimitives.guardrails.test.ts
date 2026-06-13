@@ -3256,15 +3256,42 @@ describe('shared primitive guardrails', () => {
         requiredConsumers?: Array<{ path?: string }>;
         forbiddenPatterns?: Array<{ path?: string; patterns?: string[] }>;
       }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        scopes?: string[];
+        allPatterns?: string[];
+      }>;
     };
     const registeredRule = registry.rules?.find(
       (rule) => rule.id === 'settings-callout-card-shell',
     );
+    const registeredWarningGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'settings-connection-editor-local-warning-callout-shell',
+    );
+    const registeredDangerGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'settings-connection-editor-local-danger-callout-shell',
+    );
+    const registeredRedGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'settings-connection-editor-local-red-callout-shell',
+    );
 
     expect(registeredRule?.canonical?.path).toBe('src/components/shared/CalloutCard.tsx');
     expect(registeredRule?.canonical?.export).toBe('CalloutCard');
+    for (const guard of [registeredWarningGuard, registeredDangerGuard, registeredRedGuard]) {
+      expect(guard?.canonical?.path).toBe('src/components/shared/CalloutCard.tsx');
+      expect(guard?.canonical?.export).toBe('CalloutCard');
+      expect(guard?.scopes).toEqual(['src/components/Settings/ConnectionEditor']);
+      expect(guard?.allPatterns).toContain('rounded-md border');
+    }
+    expect(registeredWarningGuard?.allPatterns).toContain('bg-amber-50');
+    expect(registeredDangerGuard?.allPatterns).toContain('bg-rose-50');
+    expect(registeredRedGuard?.allPatterns).toContain('bg-red-50');
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
       'src/components/Settings/AIProviderConfigurationSection.tsx',
+      'src/components/Settings/ConnectionEditor/AddressProbeStep.tsx',
+      'src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx',
+      'src/components/Settings/ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx',
       'src/components/Settings/ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx',
       'src/components/Settings/DiagnosticsResultsPanel.tsx',
       'src/components/Settings/DiscoverySettingsForm.tsx',
@@ -3278,6 +3305,35 @@ describe('shared primitive guardrails', () => {
         expect.objectContaining({
           path: 'src/components/Settings/AIProviderConfigurationSection.tsx',
           patterns: expect.arrayContaining(['rounded border border-red-200']),
+        }),
+        expect.objectContaining({
+          path: 'src/components/Settings/ConnectionEditor/AddressProbeStep.tsx',
+          patterns: expect.arrayContaining([
+            'rounded-md border border-red-300 bg-red-50',
+            'rounded-md border border-amber-300 bg-amber-50',
+          ]),
+        }),
+        expect.objectContaining({
+          path: 'src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx',
+          patterns: expect.arrayContaining([
+            'border-green-300 bg-green-50',
+            'rounded-md border border-rose-300 bg-rose-50',
+            'testToneClass',
+          ]),
+        }),
+        expect.objectContaining({
+          path: 'src/components/Settings/ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx',
+          patterns: expect.arrayContaining([
+            'rounded-md border border-amber-300 bg-amber-50',
+            'rounded-md border border-rose-300 bg-rose-50',
+          ]),
+        }),
+        expect.objectContaining({
+          path: 'src/components/Settings/ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx',
+          patterns: expect.arrayContaining([
+            'rounded-md border border-amber-300 bg-amber-50',
+            'rounded-md border border-rose-300 bg-rose-50',
+          ]),
         }),
         expect.objectContaining({
           path: 'src/components/Settings/DiagnosticsResultsPanel.tsx',
@@ -3303,11 +3359,42 @@ describe('shared primitive guardrails', () => {
       reportingPanelSource,
       securityAuthPanelSource,
       securityOverviewPanelSource,
+      addressProbeStepSource,
+      availabilityTargetSlotSource,
+      trueNASCredentialSlotSource,
       vmwareCredentialSlotSource,
     ]) {
       expect(source).toContain('CalloutCard');
     }
+    for (const source of [
+      addressProbeStepSource,
+      availabilityTargetSlotSource,
+      trueNASCredentialSlotSource,
+      vmwareCredentialSlotSource,
+    ]) {
+      expect(source).toContain('scale="compact"');
+      expect(source).toContain('padding="sm"');
+    }
     expect(aiProviderConfigurationSectionSource).not.toContain('rounded border border-red-200');
+    expect(addressProbeStepSource).not.toContain('rounded-md border border-red-300 bg-red-50');
+    expect(addressProbeStepSource).not.toContain('rounded-md border border-amber-300 bg-amber-50');
+    expect(availabilityTargetSlotSource).not.toContain('testToneClass');
+    expect(availabilityTargetSlotSource).not.toContain('border-green-300 bg-green-50');
+    expect(availabilityTargetSlotSource).not.toContain(
+      'rounded-md border border-rose-300 bg-rose-50',
+    );
+    expect(trueNASCredentialSlotSource).not.toContain(
+      'rounded-md border border-amber-300 bg-amber-50',
+    );
+    expect(trueNASCredentialSlotSource).not.toContain(
+      'rounded-md border border-rose-300 bg-rose-50',
+    );
+    expect(vmwareCredentialSlotSource).not.toContain(
+      'rounded-md border border-amber-300 bg-amber-50',
+    );
+    expect(vmwareCredentialSlotSource).not.toContain(
+      'rounded-md border border-rose-300 bg-rose-50',
+    );
     expect(diagnosticsResultsPanelSource).not.toContain(
       'rounded-md border border-amber-200 bg-amber-50',
     );

@@ -1,5 +1,6 @@
 import { Component, Show, createSignal, onMount } from 'solid-js';
 import { Button } from '@/components/shared/Button';
+import { CalloutCard } from '@/components/shared/CalloutCard';
 import {
   formCheckbox,
   formControl,
@@ -102,11 +103,6 @@ const payloadFromForm = (form: AvailabilityForm): AvailabilityTarget => {
     failureThreshold: parsePositiveInt(form.failureThreshold),
   };
 };
-
-const testToneClass = (result: AvailabilityTestResponse) =>
-  result.success
-    ? 'border-green-300 bg-green-50 text-green-800 dark:border-green-900 dark:bg-green-950 dark:text-green-200'
-    : 'border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200';
 
 const presetSensitiveFormKeys: ReadonlySet<keyof AvailabilityForm> = new Set([
   'path',
@@ -379,33 +375,41 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
 
       <Show when={testResult()}>
         {(result) => (
-          <div class={`rounded-md border px-4 py-3 text-sm ${testToneClass(result())}`}>
-            {result().success
-              ? `Probe reached the target in ${result().latencyMillis} ms.`
-              : result().error || 'Probe failed.'}
-          </div>
+          <CalloutCard
+            role={result().success ? 'status' : 'alert'}
+            tone={result().success ? 'success' : 'danger'}
+            scale="compact"
+            padding="sm"
+            description={
+              result().success
+                ? `Probe reached the target in ${result().latencyMillis} ms.`
+                : result().error || 'Probe failed.'
+            }
+          />
         )}
       </Show>
 
       <Show when={error()}>
         {(message) => (
-          <div
+          <CalloutCard
             role="alert"
-            class="rounded-md border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200"
-          >
-            {message()}
-          </div>
+            tone="danger"
+            scale="compact"
+            padding="sm"
+            description={message()}
+          />
         )}
       </Show>
 
       <Show when={props.deleteError}>
         {(message) => (
-          <div
+          <CalloutCard
             role="alert"
-            class="rounded-md border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200"
-          >
-            {message()}
-          </div>
+            tone="danger"
+            scale="compact"
+            padding="sm"
+            description={message()}
+          />
         )}
       </Show>
 

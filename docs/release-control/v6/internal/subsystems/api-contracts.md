@@ -406,6 +406,10 @@ payload shape change when the portal presents compact client rows.
     `frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx`,
     `frontend-modern/src/components/Settings/availabilitySettingsModel.ts`,
     and `AvailabilityTargetSlot.tsx` own the browser transport shape.
+    Availability target probe-result and error notices may compose
+    frontend-primitives' `CalloutCard` for shared settings callout chrome;
+    API contracts own the target CRUD/test payload semantics and endpoint
+    routing, not local colored alert shells.
     Connections ledger rows with type
     `availability` must route management handoffs, pause, remove, and test
     actions to those availability-target endpoints and must not reuse node,
