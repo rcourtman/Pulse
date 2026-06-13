@@ -3914,6 +3914,122 @@ describe('shared primitive guardrails', () => {
     expect(proxmoxMailGatewayTableSource).toContain('format={formatLocaleCount}');
   });
 
+  it('keeps platform table scalar unit values on shared primitives', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+        forbiddenPatterns?: Array<{ path?: string; patterns?: string[] }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        allowedPaths?: string[];
+        ignoredPaths?: string[];
+      }>;
+    };
+    const percentRule = registry.rules?.find(
+      (rule) => rule.id === 'platform-table-percent-value-fallback',
+    );
+    const temperatureRule = registry.rules?.find(
+      (rule) => rule.id === 'platform-table-temperature-value-fallback',
+    );
+    const localPercentGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-table-local-percent-value-helper',
+    );
+    const localTemperatureGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-table-local-temperature-value-helper',
+    );
+    const percentConsumers: Array<[string, string]> = [
+      ['src/features/truenas/TrueNASSystemsTable.tsx', truenasSystemsTableSource],
+    ];
+    const temperatureConsumers: Array<[string, string]> = [
+      ['src/features/docker/DockerHostsTable.tsx', dockerHostsTableSource],
+      ['src/features/truenas/TrueNASSystemsTable.tsx', truenasSystemsTableSource],
+    ];
+    const localPercentPatterns = [
+      'const formatPercent',
+      '<span class="tabular-nums">{percent.toFixed(1)}%</span>',
+    ];
+    const localTemperaturePatterns = [
+      'const formatTemperature',
+      '<span class="tabular-nums">{celsius.toFixed(1)}°C</span>',
+    ];
+
+    expect(percentRule?.canonical?.path).toBe('src/features/platformPage/sharedPlatformPage.tsx');
+    expect(percentRule?.canonical?.export).toBe('PlatformTablePercentValue');
+    expect(percentRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
+      percentConsumers.map(([path]) => path),
+    );
+    expect(percentRule?.forbiddenPatterns).toEqual([
+      {
+        path: 'src/features/truenas/TrueNASSystemsTable.tsx',
+        patterns: localPercentPatterns,
+      },
+    ]);
+
+    expect(temperatureRule?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(temperatureRule?.canonical?.export).toBe('PlatformTableTemperatureValue');
+    expect(temperatureRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
+      temperatureConsumers.map(([path]) => path),
+    );
+    expect(temperatureRule?.forbiddenPatterns).toEqual([
+      {
+        path: 'src/features/docker/DockerHostsTable.tsx',
+        patterns: localTemperaturePatterns,
+      },
+      {
+        path: 'src/features/truenas/TrueNASSystemsTable.tsx',
+        patterns: localTemperaturePatterns,
+      },
+    ]);
+
+    expect(localPercentGuard?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(localPercentGuard?.canonical?.export).toBe('PlatformTablePercentValue');
+    expect(localPercentGuard?.allPatterns).toEqual(localPercentPatterns);
+    expect(localPercentGuard?.scopes).toEqual(['src/features/truenas']);
+    expect(localPercentGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(localPercentGuard?.ignoredPaths ?? []).toHaveLength(0);
+    expect(localTemperatureGuard?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(localTemperatureGuard?.canonical?.export).toBe('PlatformTableTemperatureValue');
+    expect(localTemperatureGuard?.allPatterns).toEqual(localTemperaturePatterns);
+    expect(localTemperatureGuard?.scopes).toEqual(['src/features/docker', 'src/features/truenas']);
+    expect(localTemperatureGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(localTemperatureGuard?.ignoredPaths ?? []).toHaveLength(0);
+
+    expect(sharedPlatformPageSource).toContain('export function PlatformTablePercentValue');
+    expect(sharedPlatformPageSource).toContain('export function PlatformTableTemperatureValue');
+    expect(sharedPlatformPageSource).toContain('formatOneDecimalPercent');
+    expect(sharedPlatformPageSource).toContain('formatOneDecimalCelsius');
+
+    for (const [path, source] of percentConsumers) {
+      expect(source).toContain('PlatformTablePercentValue');
+      const forbiddenPatterns =
+        percentRule?.forbiddenPatterns?.find((entry) => entry.path === path)?.patterns ?? [];
+      for (const pattern of forbiddenPatterns) {
+        expect(source).not.toContain(pattern);
+      }
+    }
+
+    for (const [path, source] of temperatureConsumers) {
+      expect(source).toContain('PlatformTableTemperatureValue');
+      const forbiddenPatterns =
+        temperatureRule?.forbiddenPatterns?.find((entry) => entry.path === path)?.patterns ?? [];
+      for (const pattern of forbiddenPatterns) {
+        expect(source).not.toContain(pattern);
+      }
+    }
+  });
+
   it('keeps platform table compact value summaries on the shared helper', () => {
     const registry = JSON.parse(sharedTemplateRegistrySource) as {
       rules?: Array<{

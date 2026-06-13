@@ -221,6 +221,43 @@ export function PlatformTableNumberValue(props: {
   return <span class="tabular-nums">{label()}</span>;
 }
 
+const formatOneDecimalPercent = (value: number): string => `${value.toFixed(1)}%`;
+const formatOneDecimalCelsius = (value: number): string => `${value.toFixed(1)}°C`;
+
+export function PlatformTablePercentValue(props: {
+  value: number | null | undefined;
+  emptyText?: string;
+}) {
+  const finiteValue = () =>
+    typeof props.value === 'number' && Number.isFinite(props.value) ? props.value : undefined;
+
+  return (
+    <PlatformTableNumberValue
+      value={finiteValue()}
+      emptyText={props.emptyText}
+      format={formatOneDecimalPercent}
+    />
+  );
+}
+
+export function PlatformTableTemperatureValue(props: {
+  value: number | null | undefined;
+  emptyText?: string;
+}) {
+  const finitePositiveValue = () =>
+    typeof props.value === 'number' && Number.isFinite(props.value) && props.value > 0
+      ? props.value
+      : undefined;
+
+  return (
+    <PlatformTableNumberValue
+      value={finitePositiveValue()}
+      emptyText={props.emptyText}
+      format={formatOneDecimalCelsius}
+    />
+  );
+}
+
 export const getPlatformTableFiniteMetric = (value: number | undefined): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 

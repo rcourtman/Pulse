@@ -2625,6 +2625,13 @@ that primitive instead of declaring local `numberValue`, `numericValue`,
 `replicaCount`, or `countCell` helpers. If a scheduler or service-domain count
 is intentionally zero-defaulted, the consuming table owns that field/default
 choice and still renders through `PlatformTableNumberValue`.
+One-decimal percent and positive Celsius cells are also shared platform-table
+value primitives. `PlatformTablePercentValue` owns percent formatting,
+tabular-number styling, and empty markers, while
+`PlatformTableTemperatureValue` owns finite positive Celsius validation,
+one-decimal `°C` formatting, tabular-number styling, and empty markers. Docker
+/ Podman host and TrueNAS system tables must compose those primitives instead
+of carrying local `formatPercent` or `formatTemperature` helpers.
 Platform table metric fallback rendering is also shared.
 `PlatformTableMetricFallback` owns the centered muted empty marker used in
 metric bar cells plus optional caller-owned fallback label/title text, and

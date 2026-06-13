@@ -257,6 +257,12 @@ formatter is needed, while dense platform table cells must use
 `PlatformTableNumberValue` for finite-number validation, tabular styling, and
 unknown empty-cell markers instead of carrying local `numberValue`,
 `numericValue`, `replicaCount`, or `countCell` helpers.
+Percent and temperature table cells follow the same split: unified-resource
+consumers own which usage percentage or temperature source is meaningful for
+the row, while dense platform table rendering must use
+`PlatformTablePercentValue` and `PlatformTableTemperatureValue` for one-decimal
+formatting, positive Celsius validation, tabular styling, and empty markers
+instead of local `formatPercent` or `formatTemperature` helpers.
 Metric bar fallbacks follow that split as well: unified-resource consumers own
 which CPU or memory value is selected, plus any source-specific fallback reason
 such as outdated standalone agent telemetry, while platform tables must use

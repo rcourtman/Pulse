@@ -14,6 +14,7 @@ import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformTableMetricFallback,
   PlatformTableEmptyState,
+  PlatformTableTemperatureValue,
   PlatformTableShell,
   PlatformTableToolbar,
   createPlatformTableFilterState,
@@ -40,11 +41,6 @@ import {
 // but omits the runtime context that distinguishes a Docker host from
 // any other agent. This bespoke table reuses canonical shared
 // primitives and surfaces the Docker-native columns.
-
-const formatTemperature = (celsius: number | undefined): JSX.Element => {
-  if (typeof celsius !== 'number' || celsius <= 0) return <span class="text-muted">—</span>;
-  return <span class="tabular-nums">{celsius.toFixed(1)}°C</span>;
-};
 
 const percentFromMetric = (metric: Resource['cpu'] | undefined): number | undefined =>
   getPlatformTableFiniteMetric(metric?.current);
@@ -372,7 +368,9 @@ export const DockerHostsTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
                           >
-                            {formatTemperature(host.temperature ?? docker()?.temperature)}
+                            <PlatformTableTemperatureValue
+                              value={host.temperature ?? docker()?.temperature}
+                            />
                           </TableCell>
                           <Show when={showSwarmColumn()}>
                             <TableCell

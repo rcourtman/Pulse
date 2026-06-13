@@ -9,6 +9,8 @@ import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformTableMetricFallback,
+  PlatformTablePercentValue,
+  PlatformTableTemperatureValue,
   PlatformTableToolbar,
   PlatformTableEmptyState,
   createPlatformTableFilterState,
@@ -46,17 +48,6 @@ import type { Resource } from '@/types/resource';
 // FilterButtonGroup, StatusDot) and counts the per-system children
 // client-side from the same TrueNAS resource scope already fetched by
 // the page (no extra API calls).
-
-const formatPercent = (percent?: number): JSX.Element => {
-  if (typeof percent !== 'number' || Number.isNaN(percent))
-    return <span class="text-muted">—</span>;
-  return <span class="tabular-nums">{percent.toFixed(1)}%</span>;
-};
-
-const formatTemperature = (celsius: number | undefined): JSX.Element => {
-  if (typeof celsius !== 'number' || celsius <= 0) return <span class="text-muted">—</span>;
-  return <span class="tabular-nums">{celsius.toFixed(1)}°C</span>;
-};
 
 const EMPTY_COUNTS: TrueNASSystemChildCounts = {
   pools: 0,
@@ -209,7 +200,7 @@ export const TrueNASSystemsTable: Component<{
                       typeof system.disk?.used === 'number' &&
                       typeof system.disk?.total === 'number'
                         ? `${formatPlatformTableBytesValue(system.disk.used)} / ${formatPlatformTableBytesValue(system.disk.total)}`
-                        : formatPercent(storagePercent());
+                        : undefined;
                     const c = () => countsBySystem().get(system.id) ?? EMPTY_COUNTS;
                     const uptimeLabel = () => formatPlatformTableUptimeValue(system.uptime);
                     const systemMeta = () =>
@@ -302,13 +293,22 @@ export const TrueNASSystemsTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('metric-bar')} text-base-content`}
                           >
-                            <span class="md:hidden">{formatPercent(storagePercent())}</span>
-                            <span class="hidden md:inline">{storageFullLabel()}</span>
+                            <span class="md:hidden">
+                              <PlatformTablePercentValue value={storagePercent()} />
+                            </span>
+                            <span class="hidden md:inline">
+                              <Show
+                                when={storageFullLabel()}
+                                fallback={<PlatformTablePercentValue value={storagePercent()} />}
+                              >
+                                {(label) => label()}
+                              </Show>
+                            </span>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
                           >
-                            {formatTemperature(system.temperature)}
+                            <PlatformTableTemperatureValue value={system.temperature} />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden whitespace-normal text-base-content lg:table-cell`}

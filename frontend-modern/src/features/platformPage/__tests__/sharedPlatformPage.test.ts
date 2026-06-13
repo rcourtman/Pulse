@@ -5,6 +5,8 @@ import type { Resource } from '@/types/resource';
 import {
   PlatformTableMetricFallback,
   PlatformTableNumberValue,
+  PlatformTablePercentValue,
+  PlatformTableTemperatureValue,
   createPlatformTableFilterState,
   formatPlatformTableBytesValue,
   formatPlatformTableTitleCaseValue,
@@ -328,6 +330,38 @@ describe('PlatformTableNumberValue', () => {
       }),
     );
     expect(screen.getByText('1,234')).toBeInTheDocument();
+  });
+});
+
+describe('PlatformTablePercentValue', () => {
+  it('renders finite percentages with one decimal place and shared tabular styling', () => {
+    const { container } = render(() => PlatformTablePercentValue({ value: 42.345 }));
+    const marker = container.querySelector('span');
+
+    expect(marker?.textContent).toBe('42.3%');
+    expect(marker?.classList.contains('tabular-nums')).toBe(true);
+
+    cleanup();
+    render(() => PlatformTablePercentValue({ value: Number.NaN, emptyText: '-' }));
+    expect(screen.getByText('-')).toBeInTheDocument();
+  });
+});
+
+describe('PlatformTableTemperatureValue', () => {
+  it('renders positive Celsius values with one decimal place and rejects absent readings', () => {
+    const { container } = render(() => PlatformTableTemperatureValue({ value: 38.86 }));
+    const marker = container.querySelector('span');
+
+    expect(marker?.textContent).toBe('38.9°C');
+    expect(marker?.classList.contains('tabular-nums')).toBe(true);
+
+    cleanup();
+    render(() => PlatformTableTemperatureValue({ value: 0, emptyText: 'No sensor' }));
+    expect(screen.getByText('No sensor')).toBeInTheDocument();
+
+    cleanup();
+    render(() => PlatformTableTemperatureValue({ value: Number.POSITIVE_INFINITY }));
+    expect(screen.getByText('—')).toBeInTheDocument();
   });
 });
 

@@ -1455,6 +1455,64 @@
       ]
     },
     {
+      "id": "platform-table-percent-value-fallback",
+      "category": "platform-table-text-value",
+      "summary": "Platform tables must use the shared percent-value primitive for one-decimal percent cells, tabular styling, and canonical empty-cell markers instead of recreating local formatPercent helpers.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "PlatformTablePercentValue"
+      },
+      "requiredConsumers": [{ "path": "src/features/truenas/TrueNASSystemsTable.tsx" }],
+      "forbiddenPatterns": [
+        {
+          "path": "src/features/truenas/TrueNASSystemsTable.tsx",
+          "patterns": [
+            "const formatPercent",
+            "<span class=\"tabular-nums\">{percent.toFixed(1)}%</span>"
+          ]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-table-temperature-value-fallback",
+      "category": "platform-table-text-value",
+      "summary": "Platform tables must use the shared temperature-value primitive for positive Celsius cells, tabular styling, and canonical empty-cell markers instead of recreating local formatTemperature helpers.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "PlatformTableTemperatureValue"
+      },
+      "requiredConsumers": [
+        { "path": "src/features/docker/DockerHostsTable.tsx" },
+        { "path": "src/features/truenas/TrueNASSystemsTable.tsx" }
+      ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/features/docker/DockerHostsTable.tsx",
+          "patterns": [
+            "const formatTemperature",
+            "<span class=\"tabular-nums\">{celsius.toFixed(1)}°C</span>"
+          ]
+        },
+        {
+          "path": "src/features/truenas/TrueNASSystemsTable.tsx",
+          "patterns": [
+            "const formatTemperature",
+            "<span class=\"tabular-nums\">{celsius.toFixed(1)}°C</span>"
+          ]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "platform-table-metric-fallback",
       "category": "platform-table-metric",
       "summary": "Platform tables must use shared metric fallback and finite-metric helpers instead of recreating local centered dash fallbacks and Number.isFinite wrappers.",
@@ -2122,6 +2180,52 @@
       "extensions": [".tsx"],
       "allPatterns": ["desiredTasks", "runningTasks", "class=\"tabular-nums\""],
       "legacyReason": "Retired migration debt. Swarm desired/running count cells must route through PlatformTableNumberValue so drawer tables and platform tables share numeric cell rendering.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-table-local-percent-value-helper",
+      "category": "platform-table-text-value",
+      "summary": "Platform tables must not recreate local formatPercent helpers for one-decimal percent cells.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "PlatformTablePercentValue"
+      },
+      "scopes": ["src/features/truenas"],
+      "extensions": [".tsx"],
+      "allPatterns": [
+        "const formatPercent",
+        "<span class=\"tabular-nums\">{percent.toFixed(1)}%</span>"
+      ],
+      "legacyReason": "Retired migration debt. One-decimal percent cells must compose PlatformTablePercentValue so percent formatting, tabular styling, and empty markers stay shared.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-table-local-temperature-value-helper",
+      "category": "platform-table-text-value",
+      "summary": "Platform tables must not recreate local formatTemperature helpers for positive Celsius cells.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "PlatformTableTemperatureValue"
+      },
+      "scopes": ["src/features/docker", "src/features/truenas"],
+      "extensions": [".tsx"],
+      "allPatterns": [
+        "const formatTemperature",
+        "<span class=\"tabular-nums\">{celsius.toFixed(1)}°C</span>"
+      ],
+      "legacyReason": "Retired migration debt. Positive Celsius table cells must compose PlatformTableTemperatureValue so validity, formatting, tabular styling, and empty markers stay shared.",
       "allowedPaths": [],
       "ignoredPaths": [],
       "proof": [
