@@ -504,6 +504,12 @@ and multi-provider SSO share the same Community-tier authentication control
 plane; security/privacy code may enforce authenticated settings capability
 reads and writes, but it must not turn SAML metadata, SAML runtime routes, or
 multi-provider administration into an `advanced_sso` paywall.
+SSO action chrome is intentionally not security-owned: add, edit, delete,
+test, preview, copy, close, and modal footer controls in
+`frontend-modern/src/components/Settings/SSOProvidersPanel.tsx` must compose
+the frontend-primitives `Button`, `ActionIconButton`, and `CopyValueButton`
+family while security/privacy owns the authority, capability, SAML/OIDC, and
+principal-trust semantics behind those controls.
 Audit-log filter option wording is part of that same trust surface: event,
 success, and verification filter labels must be sourced from
 `frontend-modern/src/utils/auditLogPresentation.ts` and the shared filter-option

@@ -1,4 +1,5 @@
 import { Component, For, Show } from 'solid-js';
+import { ActionIconButton, Button, CopyValueButton } from '@/components/shared/Button';
 import { EmptyState } from '@/components/shared/EmptyState';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
@@ -10,7 +11,6 @@ import Plus from 'lucide-solid/icons/plus';
 import Pencil from 'lucide-solid/icons/pencil';
 import Trash2 from 'lucide-solid/icons/trash-2';
 import Shield from 'lucide-solid/icons/shield';
-import Copy from 'lucide-solid/icons/copy';
 import CheckCircle from 'lucide-solid/icons/check-circle';
 import XCircle from 'lucide-solid/icons/x-circle';
 import Eye from 'lucide-solid/icons/eye';
@@ -78,24 +78,28 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
         title="Single Sign-On Providers"
         action={
           <div class="flex flex-wrap justify-end gap-2">
-            <button
+            <Button
               type="button"
               onClick={() => openAddModal('oidc')}
               disabled={!canManage()}
-              class="min-h-10 sm:min-h-9 px-3 py-2.5 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-1.5"
+              variant="primary"
+              size="settingsAction"
+              class="gap-1.5"
             >
               <Plus class="w-4 h-4" />
               {getSSOProviderAddButtonLabel('oidc')}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               onClick={() => openAddModal('saml')}
               disabled={!canManage()}
-              class="min-h-10 sm:min-h-9 px-3 py-2.5 text-sm font-medium border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors flex items-center gap-1.5"
+              variant="outline"
+              size="settingsAction"
+              class="gap-1.5"
             >
               <Plus class="w-4 h-4" />
               {getSSOProviderAddButtonLabel('saml')}
-            </button>
+            </Button>
           </div>
         }
         bodyClass="space-y-6"
@@ -161,24 +165,26 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                         disabled={!canManage()}
                         containerClass="items-center"
                       />
-                      <button
+                      <ActionIconButton
                         type="button"
                         onClick={() => openEditModal(provider)}
                         disabled={!canManage()}
-                        class="p-2 text-slate-500 hover:text-blue-600 hover:bg-surface-hover rounded-md transition-colors"
-                        title="Edit provider"
+                        label="Edit provider"
+                        tone="accent"
+                        size="md"
                       >
                         <Pencil class="w-4 h-4" />
-                      </button>
-                      <button
+                      </ActionIconButton>
+                      <ActionIconButton
                         type="button"
                         onClick={() => setDeleteConfirm(provider.id)}
                         disabled={!canManage()}
-                        class="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900 rounded-md transition-colors"
-                        title="Delete provider"
+                        label="Delete provider"
+                        tone="danger"
+                        size="md"
                       >
                         <Trash2 class="w-4 h-4" />
-                      </button>
+                      </ActionIconButton>
                     </div>
                   </div>
 
@@ -188,27 +194,29 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                       <div class="flex flex-wrap gap-4 text-xs">
                         <div class="flex items-center gap-1">
                           <span class="text-slate-500">SP Metadata:</span>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              copyToClipboard(provider.samlMetadataUrl || '', 'Metadata URL')
-                            }
-                            class="text-blue-600 hover:underline flex items-center gap-1"
+                          <CopyValueButton
+                            value={provider.samlMetadataUrl}
+                            onCopyValue={(value) => copyToClipboard(value, 'Metadata URL')}
+                            label="Copy SP metadata URL"
+                            variant="accent"
+                            size="chip"
+                            class="max-w-[18rem] text-xs"
                           >
-                            {provider.samlMetadataUrl}
-                            <Copy class="w-3 h-3" />
-                          </button>
+                            <span class="min-w-0 truncate">{provider.samlMetadataUrl}</span>
+                          </CopyValueButton>
                         </div>
                         <div class="flex items-center gap-1">
                           <span class="text-slate-500">ACS URL:</span>
-                          <button
-                            type="button"
-                            onClick={() => copyToClipboard(provider.samlAcsUrl || '', 'ACS URL')}
-                            class="text-blue-600 hover:underline flex items-center gap-1"
+                          <CopyValueButton
+                            value={provider.samlAcsUrl}
+                            onCopyValue={(value) => copyToClipboard(value, 'ACS URL')}
+                            label="Copy ACS URL"
+                            variant="accent"
+                            size="chip"
+                            class="max-w-[18rem] text-xs"
                           >
-                            {provider.samlAcsUrl}
-                            <Copy class="w-3 h-3" />
-                          </button>
+                            <span class="min-w-0 truncate">{provider.samlAcsUrl}</span>
+                          </CopyValueButton>
                         </div>
                       </div>
                     </div>
@@ -278,15 +286,17 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                           class={controlClass() + ' flex-1'}
                           required
                         />
-                        <button
+                        <Button
                           type="button"
                           onClick={testConnection}
                           disabled={testing() || !canTest()}
-                          class="px-3 py-2 text-sm font-medium bg-surface-hover text-base-content rounded-md hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                          variant="secondary"
+                          size="mdCompact"
+                          class="whitespace-nowrap"
                           title="Test connection to IdP"
                         >
                           {testing() ? 'Testing...' : 'Test'}
-                        </button>
+                        </Button>
                       </div>
                     </div>
                     <div class={formField}>
@@ -336,9 +346,9 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                       configure your Identity Provider.
                     </p>
                     <Show when={publicUrl()}>
-                      <div class="mt-2 flex items-center gap-2">
+                      <div class="mt-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
                         <span class="text-xs text-muted">SP Metadata:</span>
-                        <code class="text-xs bg-surface-hover px-2 py-0.5 rounded">
+                        <code class="inline-block max-w-full break-all rounded bg-surface-hover px-2 py-0.5 text-xs">
                           {publicUrl()}/api/saml/{form.id || '{id}'}/metadata
                         </code>
                       </div>
@@ -347,33 +357,39 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
 
                   <div class={formField}>
                     <label class={labelClass()}>IdP Metadata URL</label>
-                    <div class="flex gap-2">
+                    <div class="flex flex-col gap-2 sm:flex-row">
                       <input
                         type="url"
                         value={form.samlIdpMetadataUrl}
                         onInput={(e) => setForm('samlIdpMetadataUrl', e.currentTarget.value)}
                         placeholder="https://idp.example.com/metadata"
-                        class={controlClass() + ' flex-1'}
+                        class={controlClass() + ' min-w-0 flex-1'}
                       />
-                      <button
-                        type="button"
-                        onClick={testConnection}
-                        disabled={testing() || !canTest()}
-                        class="px-3 py-2 text-sm font-medium bg-surface-hover text-base-content rounded-md hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                        title="Test connection to IdP"
-                      >
-                        {testing() ? 'Testing...' : 'Test'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={fetchMetadataPreview}
-                        disabled={loadingPreview() || !form.samlIdpMetadataUrl.trim()}
-                        class="px-3 py-2 text-sm font-medium bg-surface-hover text-base-content rounded-md hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap flex items-center gap-1"
-                        title="Preview IdP metadata XML"
-                      >
-                        <Eye class="w-4 h-4" />
-                        {loadingPreview() ? 'Loading...' : 'Preview'}
-                      </button>
+                      <div class="flex gap-2">
+                        <Button
+                          type="button"
+                          onClick={testConnection}
+                          disabled={testing() || !canTest()}
+                          variant="secondary"
+                          size="mdCompact"
+                          class="flex-1 whitespace-nowrap sm:flex-none"
+                          title="Test connection to IdP"
+                        >
+                          {testing() ? 'Testing...' : 'Test'}
+                        </Button>
+                        <Button
+                          type="button"
+                          onClick={fetchMetadataPreview}
+                          disabled={loadingPreview() || !form.samlIdpMetadataUrl.trim()}
+                          variant="secondary"
+                          size="mdCompact"
+                          class="flex-1 gap-1 whitespace-nowrap sm:flex-none"
+                          title="Preview IdP metadata XML"
+                        >
+                          <Eye class="w-4 h-4" />
+                          {loadingPreview() ? 'Loading...' : 'Preview'}
+                        </Button>
+                      </div>
                     </div>
                     <p class={formHelpText}>URL to fetch IdP metadata (preferred method)</p>
                   </div>
@@ -545,28 +561,30 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                         </dl>
                       </Show>
                     </div>
-                    <button
+                    <ActionIconButton
                       type="button"
                       onClick={() => setTestResult(null)}
-                      aria-label="Dismiss test result"
-                      title="Dismiss"
-                      class="text-slate-400 hover:text-base-content"
+                      label="Dismiss test result"
+                      tone="muted"
+                      size="sm"
                     >
                       <X class="w-4 h-4" />
-                    </button>
+                    </ActionIconButton>
                   </div>
                 </div>
               </Show>
 
               {/* Advanced options (collapsed by default) */}
               <div class="pt-2">
-                <button
+                <Button
                   type="button"
-                  class="text-xs font-semibold text-base-content hover:underline"
+                  variant="ghost"
+                  size="xs"
+                  class="justify-start font-semibold hover:underline"
                   onClick={() => setAdvancedOpen(!advancedOpen())}
                 >
                   {advancedOpen() ? 'Hide' : 'Show'} access restrictions & role mapping
-                </button>
+                </Button>
 
                 <Show when={advancedOpen()}>
                   <div class="mt-4 space-y-4 p-4 bg-surface-alt rounded-md">
@@ -628,21 +646,24 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
 
               {/* Actions */}
               <div class="flex justify-end gap-3 pt-4 border-t border-border">
-                <button
+                <Button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  class="px-4 py-2 text-sm font-medium text-base-content border border-border rounded-md hover:bg-surface-hover"
+                  variant="outline"
+                  size="md"
                   disabled={saving()}
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
                   type="submit"
-                  class="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                  variant="primary"
+                  size="md"
+                  isLoading={saving()}
                   disabled={saving()}
                 >
                   {saving() ? 'Saving...' : editingProvider() ? 'Save Changes' : 'Create Provider'}
-                </button>
+                </Button>
               </div>
             </form>
           </div>
@@ -664,20 +685,22 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
               in using this provider.
             </p>
             <div class="flex justify-end gap-3">
-              <button
+              <Button
                 type="button"
                 onClick={() => setDeleteConfirm(null)}
-                class="px-4 py-2 text-sm font-medium text-base-content border border-border rounded-md hover:bg-surface-hover"
+                variant="outline"
+                size="md"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
                 onClick={() => handleDelete(deleteConfirm()!)}
-                class="px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-md hover:bg-red-700"
+                variant="danger"
+                size="md"
               >
                 Delete Provider
-              </button>
+              </Button>
             </div>
           </div>
         </Dialog>
@@ -695,15 +718,15 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
             {/* Modal header */}
             <div class="px-6 py-4 border-b border-border flex items-center justify-between flex-shrink-0">
               <h3 class="text-lg font-semibold text-base-content">IdP Metadata Preview</h3>
-              <button
+              <ActionIconButton
                 type="button"
                 onClick={() => setShowMetadataPreview(false)}
-                aria-label="Close metadata preview"
-                title="Close"
-                class="text-slate-400 hover:text-base-content"
+                label="Close metadata preview"
+                tone="muted"
+                size="md"
               >
                 <X class="w-5 h-5" />
-              </button>
+              </ActionIconButton>
             </div>
 
             {/* Parsed info summary */}
@@ -769,18 +792,16 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
             <div class="flex-1 overflow-auto p-4">
               <div class="flex items-center justify-between mb-2">
                 <h4 class="text-sm font-medium text-base-content">Raw XML</h4>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (metadataPreview()?.xml) {
-                      copyToClipboard(metadataPreview()!.xml, 'XML');
-                    }
-                  }}
-                  class="px-2 py-1 text-xs font-medium text-muted bg-surface-hover rounded hover:bg-surface-hover flex items-center gap-1"
+                <CopyValueButton
+                  value={metadataPreview()?.xml}
+                  onCopyValue={(value) => copyToClipboard(value, 'XML')}
+                  label="Copy metadata XML"
+                  variant="ghost"
+                  size="chip"
+                  class="text-xs text-muted"
                 >
-                  <Copy class="w-3 h-3" />
-                  Copy
-                </button>
+                  <span>Copy</span>
+                </CopyValueButton>
               </div>
               <pre class="text-xs bg-base text-base-content p-4 rounded-md overflow-x-auto whitespace-pre-wrap break-all font-mono">
                 {metadataPreview()?.xml}
@@ -789,13 +810,14 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
 
             {/* Modal footer */}
             <div class="px-6 py-4 border-t border-border flex justify-end flex-shrink-0">
-              <button
+              <Button
                 type="button"
                 onClick={() => setShowMetadataPreview(false)}
-                class="px-4 py-2 text-sm font-medium text-base-content border border-border rounded-md hover:bg-surface-hover"
+                variant="outline"
+                size="md"
               >
                 Close
-              </button>
+              </Button>
             </div>
           </div>
         </Dialog>

@@ -311,6 +311,22 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureInstallerSectionSource).not.toContain(
       'inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100',
     );
+
+    expect(ssoProvidersPanelSource).toContain(
+      "import { ActionIconButton, Button, CopyValueButton } from '@/components/shared/Button';",
+    );
+    expect(ssoProvidersPanelSource).toContain('size="settingsAction"');
+    expect(ssoProvidersPanelSource).toContain('ActionIconButton');
+    expect(ssoProvidersPanelSource).toContain('CopyValueButton');
+    expect(ssoProvidersPanelSource).not.toContain('<button');
+    expect(ssoProvidersPanelSource).not.toContain('lucide-solid/icons/copy');
+    expect(ssoProvidersPanelSource).not.toContain(
+      'min-h-10 sm:min-h-9 px-3 py-2.5 text-sm font-medium bg-blue-600',
+    );
+    expect(ssoProvidersPanelSource).not.toContain('p-2 text-slate-500 hover:text-blue-600');
+    expect(ssoProvidersPanelSource).not.toContain(
+      'text-blue-600 hover:underline flex items-center gap-1',
+    );
   });
 
   it('keeps settings callouts on the shared CalloutCard primitive', () => {
@@ -646,6 +662,9 @@ describe('settings architecture guardrails', () => {
   });
 
   it('keeps SAML SSO available without a self-hosted Pro upsell boundary', () => {
+    expect(ssoProvidersPanelSource).toContain('@/components/shared/Button');
+    expect(ssoProvidersPanelSource).toContain('ActionIconButton');
+    expect(ssoProvidersPanelSource).toContain('CopyValueButton');
     expect(ssoProvidersPanelSource).toContain("openAddModal('saml')");
     expect(ssoProvidersPanelSource).toContain('getSSOProviderAddButtonLabel');
     expect(ssoProvidersPanelSource).toContain('Groups Claim');

@@ -601,6 +601,34 @@
       ]
     },
     {
+      "id": "sso-provider-settings-action-shell",
+      "category": "action-button",
+      "summary": "SSO provider settings actions must compose the shared Button, ActionIconButton, and CopyValueButton primitives instead of restoring panel-local action buttons.",
+      "canonical": {
+        "path": "src/components/shared/Button.tsx",
+        "export": "Button"
+      },
+      "requiredConsumers": [{ "path": "src/components/Settings/SSOProvidersPanel.tsx" }],
+      "forbiddenPatterns": [
+        {
+          "path": "src/components/Settings/SSOProvidersPanel.tsx",
+          "patterns": [
+            "<button",
+            "lucide-solid/icons/copy",
+            "min-h-10 sm:min-h-9 px-3 py-2.5 text-sm font-medium bg-blue-600",
+            "p-2 text-slate-500 hover:text-blue-600",
+            "text-blue-600 hover:underline flex items-center gap-1"
+          ]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "src/components/Settings/__tests__/settingsArchitecture.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "status-dot-shell",
       "category": "status-indicator",
       "summary": "Resource and health indicator dots must compose StatusDot for shared size, variant, pulse, title, and aria behavior instead of recreating local rounded status spans.",
@@ -941,6 +969,7 @@
         { "path": "src/components/Settings/ReportingPanel.tsx" },
         { "path": "src/components/Settings/ResourcePicker.tsx" },
         { "path": "src/components/Settings/SelfHostedCommercialRecoverySection.tsx" },
+        { "path": "src/components/Settings/SSOProvidersPanel.tsx" },
         { "path": "src/components/UpdateConfirmationModal.tsx" },
         { "path": "src/components/UpdateProgressModal.tsx" },
         { "path": "src/components/Workloads/GuestDrawer.tsx" },
@@ -999,6 +1028,19 @@
           "patterns": [
             "min-h-10 sm:min-h-9 px-4 py-2.5 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed",
             "min-h-10 sm:min-h-9 px-4 py-2.5 text-sm font-medium rounded-md border border-border text-base-content hover:bg-surface-hover transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          ]
+        },
+        {
+          "path": "src/components/Settings/SSOProvidersPanel.tsx",
+          "patterns": [
+            "min-h-10 sm:min-h-9 px-3 py-2.5 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-1.5",
+            "min-h-10 sm:min-h-9 px-3 py-2.5 text-sm font-medium border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors flex items-center gap-1.5",
+            "px-3 py-2 text-sm font-medium bg-surface-hover text-base-content rounded-md hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap",
+            "px-3 py-2 text-sm font-medium bg-surface-hover text-base-content rounded-md hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap flex items-center gap-1",
+            "px-4 py-2 text-sm font-medium text-base-content border border-border rounded-md hover:bg-surface-hover",
+            "px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50",
+            "px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-md hover:bg-red-700",
+            "px-2 py-1 text-xs font-medium text-muted bg-surface-hover rounded hover:bg-surface-hover flex items-center gap-1"
           ]
         },
         {
@@ -1112,7 +1154,8 @@
         { "path": "src/components/Alerts/AlertResourceTableDesktop.tsx" },
         { "path": "src/components/Alerts/AlertResourceTableMobile.tsx" },
         { "path": "src/components/Alerts/AlertResourceTableRow.tsx" },
-        { "path": "src/components/Alerts/ResourceTable.tsx" }
+        { "path": "src/components/Alerts/ResourceTable.tsx" },
+        { "path": "src/components/Settings/SSOProvidersPanel.tsx" }
       ],
       "forbiddenPatterns": [
         {
@@ -1143,6 +1186,14 @@
             "<svg",
             "text-slate-400 hover:text-white bg-surface hover:bg-slate-700 rounded-full p-1.5"
           ]
+        },
+        {
+          "path": "src/components/Settings/SSOProvidersPanel.tsx",
+          "patterns": [
+            "p-2 text-slate-500 hover:text-blue-600 hover:bg-surface-hover rounded-md transition-colors",
+            "p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900 rounded-md transition-colors",
+            "class=\"text-slate-400 hover:text-base-content\""
+          ]
         }
       ],
       "proof": [
@@ -1162,6 +1213,7 @@
       },
       "requiredConsumers": [
         { "path": "src/components/Discovery/DiscoveryTab.tsx" },
+        { "path": "src/components/Settings/SSOProvidersPanel.tsx" },
         { "path": "src/components/shared/WebInterfaceUrlField.tsx" }
       ],
       "forbiddenPatterns": [
@@ -1172,6 +1224,13 @@
             "const CopyValueButton",
             "CopyIcon class=\"h-3.5 w-3.5\"",
             "CheckIcon class=\"h-3.5 w-3.5 text-emerald-600"
+          ]
+        },
+        {
+          "path": "src/components/Settings/SSOProvidersPanel.tsx",
+          "patterns": [
+            "text-blue-600 hover:underline flex items-center gap-1",
+            "Copy class=\"w-3 h-3\""
           ]
         },
         {
@@ -5458,6 +5517,115 @@
         "h-9 w-9 items-center justify-center rounded-md border border-border text-base-content transition-colors hover:bg-surface-hover"
       ],
       "legacyReason": "Retired migration debt. Settings dialog close buttons belong to the shared Button primitive family.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/Button.test.tsx"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "sso-provider-primary-action-local-shell",
+      "category": "action-button",
+      "summary": "SSO provider primary add/save actions must not recreate local blue settings button shells; use Button with the primary variant and settingsAction or md size.",
+      "canonical": {
+        "path": "src/components/shared/buttonModel.ts",
+        "export": "getButtonClass"
+      },
+      "scopes": ["src/components/Settings/SSOProvidersPanel.tsx"],
+      "extensions": [".tsx"],
+      "allPatterns": [
+        "min-h-10 sm:min-h-9 px-3 py-2.5 text-sm font-medium bg-blue-600 text-white rounded-md",
+        "hover:bg-blue-700 transition-colors"
+      ],
+      "legacyReason": "Retired migration debt. SSO provider primary actions belong to the shared Button primitive family.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/Button.test.tsx"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "sso-provider-secondary-action-local-shell",
+      "category": "action-button",
+      "summary": "SSO provider secondary add/test/preview actions must not recreate local bordered or surface-hover settings button shells; use Button with the outline or secondary variant.",
+      "canonical": {
+        "path": "src/components/shared/buttonModel.ts",
+        "export": "getButtonClass"
+      },
+      "scopes": ["src/components/Settings/SSOProvidersPanel.tsx"],
+      "extensions": [".tsx"],
+      "allPatterns": [
+        "text-sm font-medium border border-border text-base-content rounded-md",
+        "hover:bg-surface-hover transition-colors"
+      ],
+      "legacyReason": "Retired migration debt. SSO provider secondary actions belong to the shared Button primitive family.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/Button.test.tsx"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "sso-provider-inline-form-action-local-shell",
+      "category": "action-button",
+      "summary": "SSO provider inline Test and Preview form actions must not recreate local surface-hover button shells; use Button with the secondary variant and mdCompact size.",
+      "canonical": {
+        "path": "src/components/shared/buttonModel.ts",
+        "export": "getButtonClass"
+      },
+      "scopes": ["src/components/Settings/SSOProvidersPanel.tsx"],
+      "extensions": [".tsx"],
+      "allPatterns": [
+        "px-3 py-2 text-sm font-medium bg-surface-hover text-base-content rounded-md",
+        "disabled:cursor-not-allowed whitespace-nowrap"
+      ],
+      "legacyReason": "Retired migration debt. SSO provider inline form actions belong to the shared Button primitive family.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/Button.test.tsx"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "sso-provider-action-icon-local-shell",
+      "category": "action-button",
+      "summary": "SSO provider edit, delete, and close icon actions must not recreate local icon-button shells; use ActionIconButton.",
+      "canonical": {
+        "path": "src/components/shared/Button.tsx",
+        "export": "ActionIconButton"
+      },
+      "scopes": ["src/components/Settings/SSOProvidersPanel.tsx"],
+      "extensions": [".tsx"],
+      "allPatterns": ["p-2 text-slate-500", "rounded-md transition-colors"],
+      "legacyReason": "Retired migration debt. SSO provider icon actions belong to ActionIconButton.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/Button.test.tsx"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "sso-provider-copy-link-local-shell",
+      "category": "copy-action",
+      "summary": "SSO provider metadata copy controls must not recreate local link-like copy buttons; use CopyValueButton.",
+      "canonical": {
+        "path": "src/components/shared/Button.tsx",
+        "export": "CopyValueButton"
+      },
+      "scopes": ["src/components/Settings/SSOProvidersPanel.tsx"],
+      "extensions": [".tsx"],
+      "allPatterns": ["text-blue-600 hover:underline flex items-center gap-1"],
+      "legacyReason": "Retired migration debt. SSO provider metadata copy actions belong to CopyValueButton.",
       "allowedPaths": [],
       "ignoredPaths": ["src/components/shared/Button.test.tsx"],
       "proof": [

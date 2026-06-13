@@ -460,7 +460,11 @@ scan-friendly without hiding any container from drilldown.
 SSO provider settings changes must preserve the shared Community-tier action
 path: SAML and OIDC provider creation stay on the same settings-shell control
 surface, while paid-plan copy and compatibility feature probes stay out of the
-frontend primitive boundary.
+frontend primitive boundary. The SSO provider settings shell is a fully
+migrated shared-action consumer: add, test, preview, copy, close, cancel, save,
+delete, edit, and dismiss controls must compose the shared `Button`,
+`ActionIconButton`, and `CopyValueButton` primitives rather than restoring
+panel-local `<button>` shells.
 
 Feature surfaces under `frontend-modern/src/features/` may own product-specific
 assessment semantics, but they must keep those semantics in their governed

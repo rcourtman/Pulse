@@ -2906,6 +2906,21 @@ describe('shared primitive guardrails', () => {
     const settingsDialogCloseGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'button-outline-settings-dialog-close-local-shell',
     );
+    const ssoProviderPrimaryActionGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'sso-provider-primary-action-local-shell',
+    );
+    const ssoProviderSecondaryActionGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'sso-provider-secondary-action-local-shell',
+    );
+    const ssoProviderInlineFormActionGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'sso-provider-inline-form-action-local-shell',
+    );
+    const ssoProviderActionIconGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'sso-provider-action-icon-local-shell',
+    );
+    const ssoProviderCopyLinkGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'sso-provider-copy-link-local-shell',
+    );
     const drawerHeaderActionGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'button-drawer-header-action-local-shell',
     );
@@ -2915,6 +2930,9 @@ describe('shared primitive guardrails', () => {
     const copyValueRule = registry.rules?.find((rule) => rule.id === 'copy-value-action-shell');
     const copyableCodeRowRule = registry.rules?.find(
       (rule) => rule.id === 'copyable-code-row-shell',
+    );
+    const ssoProviderActionRule = registry.rules?.find(
+      (rule) => rule.id === 'sso-provider-settings-action-shell',
     );
     const copyValueNeutralGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'copy-value-neutral-local-button-shell',
@@ -2958,6 +2976,7 @@ describe('shared primitive guardrails', () => {
       'src/components/Settings/ReportingPanel.tsx',
       'src/components/Settings/ResourcePicker.tsx',
       'src/components/Settings/SelfHostedCommercialRecoverySection.tsx',
+      'src/components/Settings/SSOProvidersPanel.tsx',
       'src/components/UpdateConfirmationModal.tsx',
       'src/components/UpdateProgressModal.tsx',
       'src/components/Workloads/GuestDrawer.tsx',
@@ -3017,6 +3036,16 @@ describe('shared primitive guardrails', () => {
           patterns: expect.arrayContaining([
             'min-h-10 sm:min-h-9 px-4 py-2.5 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed',
             'min-h-10 sm:min-h-9 px-4 py-2.5 text-sm font-medium rounded-md border border-border text-base-content hover:bg-surface-hover transition-colors disabled:opacity-60 disabled:cursor-not-allowed',
+          ]),
+        }),
+        expect.objectContaining({
+          path: 'src/components/Settings/SSOProvidersPanel.tsx',
+          patterns: expect.arrayContaining([
+            'min-h-10 sm:min-h-9 px-3 py-2.5 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-1.5',
+            'min-h-10 sm:min-h-9 px-3 py-2.5 text-sm font-medium border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors flex items-center gap-1.5',
+            'px-3 py-2 text-sm font-medium bg-surface-hover text-base-content rounded-md hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap',
+            'px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50',
+            'px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-md hover:bg-red-700',
           ]),
         }),
         expect.objectContaining({
@@ -3288,6 +3317,76 @@ describe('shared primitive guardrails', () => {
     expect(settingsDialogCloseGuard?.ignoredPaths).toEqual([
       'src/components/shared/Button.test.tsx',
     ]);
+    expect(ssoProviderPrimaryActionGuard?.canonical?.path).toBe(
+      'src/components/shared/buttonModel.ts',
+    );
+    expect(ssoProviderPrimaryActionGuard?.canonical?.export).toBe('getButtonClass');
+    expect(ssoProviderPrimaryActionGuard?.allPatterns).toEqual([
+      'min-h-10 sm:min-h-9 px-3 py-2.5 text-sm font-medium bg-blue-600 text-white rounded-md',
+      'hover:bg-blue-700 transition-colors',
+    ]);
+    expect(ssoProviderPrimaryActionGuard?.scopes).toEqual([
+      'src/components/Settings/SSOProvidersPanel.tsx',
+    ]);
+    expect(ssoProviderPrimaryActionGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(ssoProviderPrimaryActionGuard?.ignoredPaths).toEqual([
+      'src/components/shared/Button.test.tsx',
+    ]);
+    expect(ssoProviderSecondaryActionGuard?.canonical?.path).toBe(
+      'src/components/shared/buttonModel.ts',
+    );
+    expect(ssoProviderSecondaryActionGuard?.canonical?.export).toBe('getButtonClass');
+    expect(ssoProviderSecondaryActionGuard?.allPatterns).toEqual([
+      'text-sm font-medium border border-border text-base-content rounded-md',
+      'hover:bg-surface-hover transition-colors',
+    ]);
+    expect(ssoProviderSecondaryActionGuard?.scopes).toEqual([
+      'src/components/Settings/SSOProvidersPanel.tsx',
+    ]);
+    expect(ssoProviderSecondaryActionGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(ssoProviderSecondaryActionGuard?.ignoredPaths).toEqual([
+      'src/components/shared/Button.test.tsx',
+    ]);
+    expect(ssoProviderInlineFormActionGuard?.canonical?.path).toBe(
+      'src/components/shared/buttonModel.ts',
+    );
+    expect(ssoProviderInlineFormActionGuard?.canonical?.export).toBe('getButtonClass');
+    expect(ssoProviderInlineFormActionGuard?.allPatterns).toEqual([
+      'px-3 py-2 text-sm font-medium bg-surface-hover text-base-content rounded-md',
+      'disabled:cursor-not-allowed whitespace-nowrap',
+    ]);
+    expect(ssoProviderInlineFormActionGuard?.scopes).toEqual([
+      'src/components/Settings/SSOProvidersPanel.tsx',
+    ]);
+    expect(ssoProviderInlineFormActionGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(ssoProviderInlineFormActionGuard?.ignoredPaths).toEqual([
+      'src/components/shared/Button.test.tsx',
+    ]);
+    expect(ssoProviderActionIconGuard?.canonical?.path).toBe('src/components/shared/Button.tsx');
+    expect(ssoProviderActionIconGuard?.canonical?.export).toBe('ActionIconButton');
+    expect(ssoProviderActionIconGuard?.allPatterns).toEqual([
+      'p-2 text-slate-500',
+      'rounded-md transition-colors',
+    ]);
+    expect(ssoProviderActionIconGuard?.scopes).toEqual([
+      'src/components/Settings/SSOProvidersPanel.tsx',
+    ]);
+    expect(ssoProviderActionIconGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(ssoProviderActionIconGuard?.ignoredPaths).toEqual([
+      'src/components/shared/Button.test.tsx',
+    ]);
+    expect(ssoProviderCopyLinkGuard?.canonical?.path).toBe('src/components/shared/Button.tsx');
+    expect(ssoProviderCopyLinkGuard?.canonical?.export).toBe('CopyValueButton');
+    expect(ssoProviderCopyLinkGuard?.allPatterns).toEqual([
+      'text-blue-600 hover:underline flex items-center gap-1',
+    ]);
+    expect(ssoProviderCopyLinkGuard?.scopes).toEqual([
+      'src/components/Settings/SSOProvidersPanel.tsx',
+    ]);
+    expect(ssoProviderCopyLinkGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(ssoProviderCopyLinkGuard?.ignoredPaths).toEqual([
+      'src/components/shared/Button.test.tsx',
+    ]);
     expect(drawerHeaderActionGuard?.canonical?.path).toBe('src/components/shared/Button.tsx');
     expect(drawerHeaderActionGuard?.canonical?.export).toBe('DrawerHeaderActionButton');
     expect(drawerHeaderActionGuard?.allPatterns).toEqual([
@@ -3317,6 +3416,7 @@ describe('shared primitive guardrails', () => {
       'src/components/Alerts/AlertResourceTableMobile.tsx',
       'src/components/Alerts/AlertResourceTableRow.tsx',
       'src/components/Alerts/ResourceTable.tsx',
+      'src/components/Settings/SSOProvidersPanel.tsx',
     ]);
     expect(actionIconRule?.forbiddenPatterns).toEqual(
       expect.arrayContaining([
@@ -3353,6 +3453,14 @@ describe('shared primitive guardrails', () => {
             'text-slate-400 hover:text-white bg-surface hover:bg-slate-700 rounded-full p-1.5',
           ]),
         }),
+        expect.objectContaining({
+          path: 'src/components/Settings/SSOProvidersPanel.tsx',
+          patterns: expect.arrayContaining([
+            'p-2 text-slate-500 hover:text-blue-600 hover:bg-surface-hover rounded-md transition-colors',
+            'p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900 rounded-md transition-colors',
+            'class="text-slate-400 hover:text-base-content"',
+          ]),
+        }),
       ]),
     );
     expect(alertResourceActionGuard?.canonical?.path).toBe('src/components/shared/Button.tsx');
@@ -3369,12 +3477,30 @@ describe('shared primitive guardrails', () => {
     expect(copyValueRule?.canonical?.export).toBe('CopyValueButton');
     expect(copyValueRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
       'src/components/Discovery/DiscoveryTab.tsx',
+      'src/components/Settings/SSOProvidersPanel.tsx',
       'src/components/shared/WebInterfaceUrlField.tsx',
     ]);
     expect(copyableCodeRowRule?.canonical?.path).toBe('src/components/shared/CopyableCodeRow.tsx');
     expect(copyableCodeRowRule?.canonical?.export).toBe('CopyableCodeRow');
     expect(copyableCodeRowRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
       'src/components/Discovery/DiscoveryTab.tsx',
+    ]);
+    expect(ssoProviderActionRule?.canonical?.path).toBe('src/components/shared/Button.tsx');
+    expect(ssoProviderActionRule?.canonical?.export).toBe('Button');
+    expect(ssoProviderActionRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/components/Settings/SSOProvidersPanel.tsx',
+    ]);
+    expect(ssoProviderActionRule?.forbiddenPatterns).toEqual([
+      {
+        path: 'src/components/Settings/SSOProvidersPanel.tsx',
+        patterns: [
+          '<button',
+          'lucide-solid/icons/copy',
+          'min-h-10 sm:min-h-9 px-3 py-2.5 text-sm font-medium bg-blue-600',
+          'p-2 text-slate-500 hover:text-blue-600',
+          'text-blue-600 hover:underline flex items-center gap-1',
+        ],
+      },
     ]);
     expect(copyValueNeutralGuard?.canonical?.path).toBe('src/components/shared/Button.tsx');
     expect(copyValueNeutralGuard?.canonical?.export).toBe('CopyValueButton');
@@ -3464,6 +3590,18 @@ describe('shared primitive guardrails', () => {
     expect(agentProfilesPanelSource).toContain('@/components/shared/Button');
     expect(agentProfilesPanelSource).not.toContain(
       'rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-base-content',
+    );
+    expect(ssoProvidersPanelSource).toContain('@/components/shared/Button');
+    expect(ssoProvidersPanelSource).toContain('ActionIconButton');
+    expect(ssoProvidersPanelSource).toContain('CopyValueButton');
+    expect(ssoProvidersPanelSource).not.toContain('<button');
+    expect(ssoProvidersPanelSource).not.toContain('lucide-solid/icons/copy');
+    expect(ssoProvidersPanelSource).not.toContain(
+      'min-h-10 sm:min-h-9 px-3 py-2.5 text-sm font-medium bg-blue-600',
+    );
+    expect(ssoProvidersPanelSource).not.toContain('p-2 text-slate-500 hover:text-blue-600');
+    expect(ssoProvidersPanelSource).not.toContain(
+      'text-blue-600 hover:underline flex items-center gap-1',
     );
     expect(apiAccessPanelSource).toContain('@/components/shared/Button');
     expect(apiAccessPanelSource).toContain('ButtonLink');
@@ -3628,6 +3766,24 @@ describe('shared primitive guardrails', () => {
     expect(selfHostedCommercialRecoverySectionSource).not.toContain(
       'min-h-10 sm:min-h-9 px-4 py-2.5 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed',
     );
+    expect(ssoProvidersPanelSource).toContain('@/components/shared/Button');
+    expect(ssoProvidersPanelSource).toContain('<Button');
+    expect(ssoProvidersPanelSource).toContain('ActionIconButton');
+    expect(ssoProvidersPanelSource).toContain('CopyValueButton');
+    expect(ssoProvidersPanelSource).toContain('variant="primary"');
+    expect(ssoProvidersPanelSource).toContain('size="settingsAction"');
+    for (const retiredPattern of [
+      'min-h-10 sm:min-h-9 px-3 py-2.5 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-1.5',
+      'min-h-10 sm:min-h-9 px-3 py-2.5 text-sm font-medium border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors flex items-center gap-1.5',
+      'p-2 text-slate-500 hover:text-blue-600 hover:bg-surface-hover rounded-md transition-colors',
+      'p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900 rounded-md transition-colors',
+      'text-blue-600 hover:underline flex items-center gap-1',
+      'px-3 py-2 text-sm font-medium bg-surface-hover text-base-content rounded-md hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap',
+      'px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50',
+      'px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-md hover:bg-red-700',
+    ]) {
+      expect(ssoProvidersPanelSource).not.toContain(retiredPattern);
+    }
     expect(selfHostedCommercialRecoverySectionSource).not.toContain(
       'min-h-10 sm:min-h-9 px-4 py-2.5 text-sm font-medium rounded-md border border-border text-base-content hover:bg-surface-hover transition-colors disabled:opacity-60 disabled:cursor-not-allowed',
     );
