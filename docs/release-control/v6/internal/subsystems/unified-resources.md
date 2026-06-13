@@ -250,6 +250,13 @@ right source-specific value, while dense platform table cells must use
 `formatPlatformTableBytesValue` for positive byte formatting and unknown /
 non-positive empty-cell markers instead of carrying table-local `formatBytes`
 wrappers or direct generic byte-formatter imports.
+Compact timestamp table cells follow the same boundary: unified-resource
+consumers own whether `completedAt`, `startedAt`, `occurredAt`, or `observedAt`
+is the right source-specific value for the row, while dense platform table
+rendering must use `PlatformTableDateTimeValue` /
+`formatPlatformTableDateTimeValue` for parsing, empty markers, compact Intl
+formatting, minimum-year filtering when platform adapters emit placeholder
+dates, tabular styling, and canonical `numeric-value` alignment.
 Optional numeric table cells follow the same split: unified-resource consumers
 own which count or replica field is meaningful, whether the domain should
 zero-default an absent scheduler/service/inventory count, whether a

@@ -30,7 +30,7 @@ import type { PlatformTableCellAlign } from './sharedPlatformPage';
  *                       Uptime, Temp, integer counts (VMs, CTs,
  *                       Containers, Pods, Pools, Datasets, Datastores,
  *                       Disks, Apps, Desired, Updated, Ready, Available),
- *                       Net I/O, Disk I/O.
+ *                       compact timestamps, Net I/O, Disk I/O.
  *
  *   - 'badge'          A pill or icon-only cell with no scannable value.
  *                       Backup, Tags, Update.
@@ -71,9 +71,10 @@ import type { PlatformTableCellAlign } from './sharedPlatformPage';
  *      not interleave bars with other column kinds.
  *   4. Diagnostic ('numeric-value') — Temperature.
  *   5. Time ('numeric-value') — Uptime always sits between the bar
- *      block (plus Temp) and the inventory counts. It is monitoring
- *      state, not identity, so it does not belong near the front of
- *      the row.
+ *      block (plus Temp) and the inventory counts. Compact timestamps
+ *      such as Completed / When also use this kind when present. Time
+ *      is monitoring state, not identity, so it does not belong near
+ *      the front of the row.
  *   6. Inventory counts ('numeric-value') — Containers, VMs, CTs, Pods,
  *      Pools, Datasets, Datastores, Disks, Apps, Desired / Updated /
  *      Ready / Available, Capacity.

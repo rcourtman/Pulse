@@ -1389,6 +1389,37 @@
       ]
     },
     {
+      "id": "platform-table-date-time-value",
+      "category": "platform-table-text-value",
+      "summary": "Platform tables must use the shared compact date-time value primitive for timestamp cells, tabular styling, and canonical empty-cell markers instead of recreating local compact toLocaleString helpers.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "PlatformTableDateTimeValue"
+      },
+      "requiredConsumers": [
+        { "path": "src/features/truenas/TrueNASProtectionTable.tsx" },
+        { "path": "src/features/vmware/VsphereActivityTable.tsx" }
+      ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/features/truenas/TrueNASProtectionTable.tsx",
+          "patterns": ["const formatPointTime", "formatPointTime(point)"]
+        },
+        {
+          "path": "src/features/vmware/VsphereActivityTable.tsx",
+          "patterns": [
+            "const formatActivityDate",
+            "formatActivityDate(activity.occurredAt || activity.observedAt)"
+          ]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "platform-table-number-value-fallback",
       "category": "platform-table-text-value",
       "summary": "Platform tables must use the shared number-value fallback primitive for finite numeric table cells, tabular styling, and canonical empty-cell markers instead of recreating local numberValue/countCell helpers.",
@@ -2314,6 +2345,50 @@
       "extensions": [".tsx"],
       "allPatterns": ["readyEndpointCount", "/${", " ready`"],
       "legacyReason": "Retired migration debt. Ready/total endpoint labels must compose formatPlatformTableCountRatioValue so zero-default, suffix, and empty-label behavior stay shared with count-ratio cells.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-table-local-truenas-date-time-helper",
+      "category": "platform-table-text-value",
+      "summary": "TrueNAS protection tables must not recreate compact completed-time helpers for timestamp cells.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "PlatformTableDateTimeValue"
+      },
+      "scopes": ["src/features/truenas/TrueNASProtectionTable.tsx"],
+      "extensions": [".tsx"],
+      "allPatterns": ["const formatPointTime", "toLocaleString(undefined, {", "minute: '2-digit'"],
+      "legacyReason": "Retired migration debt. Compact platform timestamp cells must compose PlatformTableDateTimeValue so date parsing, empty markers, and tabular styling stay shared.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-table-local-vsphere-activity-date-helper",
+      "category": "platform-table-text-value",
+      "summary": "vSphere activity tables must not recreate compact activity-date helpers for timestamp cells.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "PlatformTableDateTimeValue"
+      },
+      "scopes": ["src/features/vmware/VsphereActivityTable.tsx"],
+      "extensions": [".tsx"],
+      "allPatterns": [
+        "const formatActivityDate",
+        "toLocaleString(undefined, {",
+        "minute: '2-digit'"
+      ],
+      "legacyReason": "Retired migration debt. Compact platform timestamp cells must compose PlatformTableDateTimeValue so date parsing, empty markers, minimum-year handling, and tabular styling stay shared.",
       "allowedPaths": [],
       "ignoredPaths": [],
       "proof": [

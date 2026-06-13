@@ -12,6 +12,7 @@ import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { filterChipStatusDot } from '@/components/shared/FilterBar';
 import {
+  PlatformTableDateTimeValue,
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
@@ -112,19 +113,6 @@ const formatIdentifierLabel = (value: string): string =>
 
 const formatActivityState = (row: VmwareActivityRow): string =>
   row.state.trim() ? formatIdentifierLabel(row.state) : '-';
-
-const formatActivityDate = (value: string | undefined): string => {
-  if (!value) return '-';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '-';
-  if (parsed.getUTCFullYear() < 2000) return '-';
-  return parsed.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
 
 const detailDateTime = (value?: string): string => {
   if (!value) return '-';
@@ -283,7 +271,7 @@ export const VsphereActivityTable: Component<{
                   vCenter
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden xl:table-cell md:w-[8%]`}
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden xl:table-cell md:w-[8%]`}
                 >
                   When
                 </TableHead>
@@ -375,9 +363,13 @@ export const VsphereActivityTable: Component<{
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content xl:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content xl:table-cell`}
                           >
-                            {formatActivityDate(activity.occurredAt || activity.observedAt)}
+                            <PlatformTableDateTimeValue
+                              value={activity.occurredAt || activity.observedAt}
+                              emptyText="-"
+                              minYear={2000}
+                            />
                           </TableCell>
                         </TableRow>
                         <Show when={isExpanded()}>

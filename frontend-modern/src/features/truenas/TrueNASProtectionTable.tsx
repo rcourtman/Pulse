@@ -11,6 +11,7 @@ import { asTrimmedString } from '@/utils/stringUtils';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import {
   PlatformErrorState,
+  PlatformTableDateTimeValue,
   PlatformTableEmptyState,
   PlatformTableLoadingState,
   PlatformTableToolbar,
@@ -158,19 +159,6 @@ const targetSecondaryLabel = (point: RecoveryPoint): string => {
   const direction = detailString(point, 'direction');
   const state = detailString(point, 'lastState');
   return [direction, state].filter(Boolean).join(' / ');
-};
-
-const formatPointTime = (point: RecoveryPoint): string => {
-  const raw = asTrimmedString(point.completedAt) || asTrimmedString(point.startedAt);
-  if (!raw) return '-';
-  const parsed = new Date(raw);
-  if (Number.isNaN(parsed.getTime())) return '-';
-  return parsed.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
 };
 
 const sizeLabel = (point: RecoveryPoint): string =>
@@ -478,9 +466,15 @@ export const TrueNASProtectionTable: Component<{
                                 </Show>
                               </TableCell>
                               <TableCell
-                                class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
+                                class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                               >
-                                {formatPointTime(point)}
+                                <PlatformTableDateTimeValue
+                                  value={
+                                    asTrimmedString(point.completedAt) ||
+                                    asTrimmedString(point.startedAt)
+                                  }
+                                  emptyText="-"
+                                />
                               </TableCell>
                               <TableCell
                                 class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content lg:table-cell`}

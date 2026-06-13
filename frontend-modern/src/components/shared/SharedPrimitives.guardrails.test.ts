@@ -3783,6 +3783,102 @@ describe('shared primitive guardrails', () => {
     );
   });
 
+  it('keeps platform table date-time values on the shared primitive', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+        forbiddenPatterns?: Array<{ path?: string; patterns?: string[] }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        allowedPaths?: string[];
+        ignoredPaths?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find(
+      (rule) => rule.id === 'platform-table-date-time-value',
+    );
+    const truenasDateGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-table-local-truenas-date-time-helper',
+    );
+    const vsphereDateGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-table-local-vsphere-activity-date-helper',
+    );
+    const platformDateTimeConsumers: Array<[string, string]> = [
+      ['src/features/truenas/TrueNASProtectionTable.tsx', truenasProtectionTableSource],
+      ['src/features/vmware/VsphereActivityTable.tsx', vsphereActivityTableSource],
+    ];
+    const platformDateTimeConsumerPaths = platformDateTimeConsumers.map(([path]) => path);
+
+    expect(registeredRule?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(registeredRule?.canonical?.export).toBe('PlatformTableDateTimeValue');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
+      platformDateTimeConsumerPaths,
+    );
+    expect(registeredRule?.forbiddenPatterns).toEqual([
+      {
+        path: 'src/features/truenas/TrueNASProtectionTable.tsx',
+        patterns: ['const formatPointTime', 'formatPointTime(point)'],
+      },
+      {
+        path: 'src/features/vmware/VsphereActivityTable.tsx',
+        patterns: [
+          'const formatActivityDate',
+          'formatActivityDate(activity.occurredAt || activity.observedAt)',
+        ],
+      },
+    ]);
+    expect(truenasDateGuard?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(truenasDateGuard?.canonical?.export).toBe('PlatformTableDateTimeValue');
+    expect(truenasDateGuard?.allPatterns).toEqual([
+      'const formatPointTime',
+      'toLocaleString(undefined, {',
+      "minute: '2-digit'",
+    ]);
+    expect(truenasDateGuard?.scopes).toEqual(['src/features/truenas/TrueNASProtectionTable.tsx']);
+    expect(truenasDateGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(truenasDateGuard?.ignoredPaths ?? []).toHaveLength(0);
+    expect(vsphereDateGuard?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(vsphereDateGuard?.canonical?.export).toBe('PlatformTableDateTimeValue');
+    expect(vsphereDateGuard?.allPatterns).toEqual([
+      'const formatActivityDate',
+      'toLocaleString(undefined, {',
+      "minute: '2-digit'",
+    ]);
+    expect(vsphereDateGuard?.scopes).toEqual(['src/features/vmware/VsphereActivityTable.tsx']);
+    expect(vsphereDateGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(vsphereDateGuard?.ignoredPaths ?? []).toHaveLength(0);
+
+    expect(sharedPlatformPageSource).toContain('export function PlatformTableDateTimeValue');
+    expect(sharedPlatformPageSource).toContain('formatPlatformTableDateTimeValue');
+    expect(sharedPlatformPageSource).toContain('PLATFORM_TABLE_COMPACT_DATE_TIME_FORMAT');
+
+    for (const [path, source] of platformDateTimeConsumers) {
+      expect(source).toContain('PlatformTableDateTimeValue');
+      const forbiddenPatterns =
+        registeredRule?.forbiddenPatterns?.find((entry) => entry.path === path)?.patterns ?? [];
+      for (const pattern of forbiddenPatterns) {
+        expect(source).not.toContain(pattern);
+      }
+    }
+
+    expect(vsphereActivityTableSource).toContain(
+      "getPlatformTableHeadClassForKind('numeric-value')",
+    );
+    expect(vsphereActivityTableSource).toContain('minYear={2000}');
+  });
+
   it('keeps platform table number-value fallbacks on the shared primitive', () => {
     const registry = JSON.parse(sharedTemplateRegistrySource) as {
       rules?: Array<{

@@ -3,7 +3,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createRoot, createSignal } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import {
+  PLATFORM_TABLE_COMPACT_DATE_TIME_FORMAT,
   PlatformTableCountRatioValue,
+  PlatformTableDateTimeValue,
   PlatformTableMetricFallback,
   PlatformTableNumberValue,
   PlatformTablePercentValue,
@@ -11,6 +13,7 @@ import {
   createPlatformTableFilterState,
   formatPlatformTableBytesValue,
   formatPlatformTableCountRatioValue,
+  formatPlatformTableDateTimeValue,
   formatPlatformTableTitleCaseValue,
   formatPlatformTableUptimeValue,
   filterPlatformResources,
@@ -304,6 +307,58 @@ describe('formatPlatformTableBytesValue', () => {
     expect(formatPlatformTableBytesValue(1024)).toBe('1.00 KB');
     expect(formatPlatformTableBytesValue(1_536)).toBe('1.50 KB');
     expect(formatPlatformTableBytesValue(5 * 1024 * 1024 * 1024)).toBe('5.00 GB');
+  });
+});
+
+describe('formatPlatformTableDateTimeValue', () => {
+  it('formats compact table timestamps with canonical empty markers', () => {
+    const value = '2026-05-20T10:15:00Z';
+    const dateTimeFormat = {
+      ...PLATFORM_TABLE_COMPACT_DATE_TIME_FORMAT,
+      timeZone: 'UTC',
+      hour12: false,
+    } satisfies Intl.DateTimeFormatOptions;
+
+    expect(formatPlatformTableDateTimeValue(value, { dateTimeFormat })).toBe(
+      new Date(value).toLocaleString(undefined, dateTimeFormat),
+    );
+    expect(formatPlatformTableDateTimeValue('  ', { emptyText: '-' })).toBe('-');
+    expect(formatPlatformTableDateTimeValue('not-a-date', { emptyText: '-' })).toBe('-');
+    expect(formatPlatformTableDateTimeValue(undefined)).toBe('—');
+  });
+
+  it('supports caller-owned minimum year cutoffs for placeholder platform dates', () => {
+    expect(
+      formatPlatformTableDateTimeValue('1970-01-01T00:00:00Z', {
+        emptyText: '-',
+        minYear: 2000,
+      }),
+    ).toBe('-');
+  });
+});
+
+describe('PlatformTableDateTimeValue', () => {
+  it('renders compact timestamps with shared tabular styling', () => {
+    const value = '2026-05-20T10:15:00Z';
+    const dateTimeFormat = {
+      timeZone: 'UTC',
+      hour12: false,
+    } satisfies Intl.DateTimeFormatOptions;
+    const { container } = render(() =>
+      PlatformTableDateTimeValue({
+        value,
+        dateTimeFormat,
+      }),
+    );
+    const marker = container.querySelector('span');
+
+    expect(marker?.classList.contains('tabular-nums')).toBe(true);
+    expect(marker?.textContent).toBe(
+      new Date(value).toLocaleString(undefined, {
+        ...PLATFORM_TABLE_COMPACT_DATE_TIME_FORMAT,
+        ...dateTimeFormat,
+      }),
+    );
   });
 });
 

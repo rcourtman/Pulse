@@ -2616,6 +2616,14 @@ Podman native table helpers, Kubernetes node capacity cells, and TrueNAS
 system, VM, storage-topology, and protection byte cells must compose that
 helper instead of declaring local `formatBytes` wrappers, importing the generic
 formatter in table files, or reimplementing byte-unit precision there.
+Compact platform table timestamps follow the same rule.
+`PlatformTableDateTimeValue` and `formatPlatformTableDateTimeValue` own compact
+date-time parsing, invalid/empty markers, optional minimum-year filtering, Intl
+format options, and tabular-number styling for dense timestamp cells. TrueNAS
+protection completed-time cells and vSphere activity "When" cells must compose
+that primitive instead of declaring local compact `toLocaleString` helpers, and
+timestamp columns use the canonical `numeric-value` alignment kind because they
+are scannable scalar values.
 Platform table numeric fallback rendering is registry-backed too.
 `PlatformTableNumberValue` owns finite-number checking, tabular-number styling,
 custom empty-marker support, and caller-owned number formatting for dense

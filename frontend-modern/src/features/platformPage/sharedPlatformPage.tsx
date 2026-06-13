@@ -205,6 +205,67 @@ export const formatPlatformTableBytesValue = (
   return formatBytes(bytes);
 };
 
+export const PLATFORM_TABLE_COMPACT_DATE_TIME_FORMAT: Intl.DateTimeFormatOptions = {
+  month: 'short',
+  day: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+};
+
+export type PlatformTableDateTimeValueInput = string | number | Date | null | undefined;
+
+export type PlatformTableDateTimeValueOptions = {
+  emptyText?: string;
+  dateTimeFormat?: Intl.DateTimeFormatOptions;
+  minYear?: number;
+};
+
+const resolvePlatformTableDateTime = (value: PlatformTableDateTimeValueInput): Date | undefined => {
+  if (value == null) return undefined;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? undefined : value;
+
+  const raw = typeof value === 'string' ? value.trim() : value;
+  if (raw === '') return undefined;
+
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+};
+
+export const formatPlatformTableDateTimeValue = (
+  value: PlatformTableDateTimeValueInput,
+  options: PlatformTableDateTimeValueOptions = {},
+): string => {
+  const emptyText = options.emptyText ?? '—';
+  const parsed = resolvePlatformTableDateTime(value);
+  if (!parsed) return emptyText;
+  if (options.minYear !== undefined && parsed.getUTCFullYear() < options.minYear) {
+    return emptyText;
+  }
+  return parsed.toLocaleString(undefined, {
+    ...PLATFORM_TABLE_COMPACT_DATE_TIME_FORMAT,
+    ...options.dateTimeFormat,
+  });
+};
+
+export function PlatformTableDateTimeValue(props: {
+  value: PlatformTableDateTimeValueInput;
+  emptyText?: string;
+  dateTimeFormat?: Intl.DateTimeFormatOptions;
+  minYear?: number;
+}) {
+  const options = (): PlatformTableDateTimeValueOptions => {
+    const resolved: PlatformTableDateTimeValueOptions = {};
+    if (props.emptyText !== undefined) resolved.emptyText = props.emptyText;
+    if (props.dateTimeFormat !== undefined) resolved.dateTimeFormat = props.dateTimeFormat;
+    if (props.minYear !== undefined) resolved.minYear = props.minYear;
+    return resolved;
+  };
+
+  return (
+    <span class="tabular-nums">{formatPlatformTableDateTimeValue(props.value, options())}</span>
+  );
+}
+
 export function PlatformTableNumberValue(props: {
   value: number | undefined;
   emptyText?: string;
