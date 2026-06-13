@@ -2,6 +2,7 @@ import { Component, Show } from 'solid-js';
 import { formField, controlClass } from '@/components/shared/Form';
 import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
 import { FormTextarea } from '@/components/shared/FormTextarea';
+import { Button } from '@/components/shared/Button';
 import { SELF_HOSTED_RECOVERY_PRESENTATION } from '@/utils/licensePresentation';
 import { TERMS_DOC_URL } from '@/utils/docsLinks';
 import { CommercialSection } from './CommercialBillingSections';
@@ -91,24 +92,26 @@ export const SelfHostedCommercialRecoverySection: Component<
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
-          <button
-            class="min-h-10 sm:min-h-9 px-4 py-2.5 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          <Button
+            variant="primary"
+            size="settingsAction"
             onClick={props.onActivate}
             disabled={props.activating || !props.licenseKey.trim()}
           >
             {props.activating
               ? SELF_HOSTED_RECOVERY_PRESENTATION.activatePendingLabel
               : SELF_HOSTED_RECOVERY_PRESENTATION.activateIdleLabel}
-          </button>
-          <button
-            class="min-h-10 sm:min-h-9 px-4 py-2.5 text-sm font-medium rounded-md border border-border text-base-content hover:bg-surface-hover transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          </Button>
+          <Button
+            variant="outline"
+            size="settingsAction"
             onClick={props.onClear}
             disabled={props.clearing || props.loading || !props.hasLicenseDetails}
           >
             {props.clearing
               ? SELF_HOSTED_RECOVERY_PRESENTATION.clearPendingLabel
               : SELF_HOSTED_RECOVERY_PRESENTATION.clearIdleLabel}
-          </button>
+          </Button>
         </div>
       </div>
     </details>

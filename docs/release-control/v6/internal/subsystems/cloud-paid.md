@@ -594,6 +594,10 @@ or other self-hosted uncapped continuity plans.
     URLs must compose `ButtonLink`. `ProLicensePlanSection.tsx` must not
     recreate local anchor button shells for purchase returns, private-runtime
     actions, or plan-comparison CTAs.
+    Self-hosted plan refresh, entitlement retry, activation, and clear-license
+    actions are cloud-paid behaviors, but their button chrome must compose the
+    frontend-primitives `Button` family instead of carrying Pro-license-local
+    primary, secondary, or warning action class strings.
 18. Add or change paid relay settings and pairing presentation through `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`, `frontend-modern/src/components/Settings/RelayPairingSection.tsx`, and `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`. The retired Dashboard shell must not be restored to carry a Relay onboarding card or equivalent blanket upsell — relay discovery stays inside its owning settings surface.
     Public demo and other read-only presentation policy states must suppress
     relay setup and upsell onboarding instead of inviting pairing or commercial

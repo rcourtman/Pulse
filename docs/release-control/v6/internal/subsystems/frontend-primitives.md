@@ -559,6 +559,11 @@ not a replacement status card, CTA band, or page-local nested card.
    restoring footer-local action shells.
    Reporting surfaces must use the same primitive for retry, generate, and
    export actions rather than restoring large local CTA button shells.
+   Self-hosted commercial plan, retry, activation, and clear-key actions follow
+   the same shared Button boundary: commercial surfaces own the labels,
+   entitlement state, and click handlers, while `Button`, `ButtonLink`, and
+   `UpgradeButtonLink` own the primary, outline, warning, and upgrade/link
+   chrome.
    If a new surface needs a variant that the shared primitive does not expose,
    extend the primitive and registry guard rather than adding a page-local
    class string.

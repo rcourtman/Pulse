@@ -936,8 +936,11 @@
         { "path": "src/components/Settings/InfrastructureInstallerSection.tsx" },
         { "path": "src/components/Settings/InfrastructureSourceManager.tsx" },
         { "path": "src/components/Settings/InfrastructureWorkspace.tsx" },
+        { "path": "src/components/Settings/ProLicensePanel.tsx" },
+        { "path": "src/components/Settings/ProLicensePlanSection.tsx" },
         { "path": "src/components/Settings/ReportingPanel.tsx" },
         { "path": "src/components/Settings/ResourcePicker.tsx" },
+        { "path": "src/components/Settings/SelfHostedCommercialRecoverySection.tsx" },
         { "path": "src/components/UpdateConfirmationModal.tsx" },
         { "path": "src/components/UpdateProgressModal.tsx" },
         { "path": "src/components/Workloads/GuestDrawer.tsx" },
@@ -977,6 +980,25 @@
             "flex w-full items-center justify-center gap-2 rounded-md px-6 py-3 font-semibold transition-all sm:w-auto",
             "bg-blue-600 text-white hover:bg-blue-700",
             "bg-emerald-600 text-white hover:bg-emerald-700"
+          ]
+        },
+        {
+          "path": "src/components/Settings/ProLicensePanel.tsx",
+          "patterns": [
+            "inline-flex min-h-10 sm:min-h-9 items-center gap-2 px-3 py-2 text-sm font-medium rounded-md border border-border text-base-content hover:bg-surface-hover transition-colors disabled:opacity-60"
+          ]
+        },
+        {
+          "path": "src/components/Settings/ProLicensePlanSection.tsx",
+          "patterns": [
+            "mt-2 inline-flex min-h-10 sm:min-h-9 items-center gap-2 px-3 py-2 text-xs font-medium rounded-md border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-800 transition-colors disabled:opacity-60"
+          ]
+        },
+        {
+          "path": "src/components/Settings/SelfHostedCommercialRecoverySection.tsx",
+          "patterns": [
+            "min-h-10 sm:min-h-9 px-4 py-2.5 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed",
+            "min-h-10 sm:min-h-9 px-4 py-2.5 text-sm font-medium rounded-md border border-border text-base-content hover:bg-surface-hover transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           ]
         },
         {

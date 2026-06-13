@@ -5,6 +5,7 @@ import { ProLicensePlanSection } from './ProLicensePlanSection';
 import { SelfHostedCommercialRecoverySection } from './SelfHostedCommercialRecoverySection';
 import { useProLicensePanelState } from './useProLicensePanelState';
 import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from './selfHostedBillingPresentation';
+import { Button } from '@/components/shared/Button';
 import { Subtabs } from '@/components/shared/Subtabs';
 import {
   presentationPolicyHidesCommercialSurfaces,
@@ -53,14 +54,16 @@ const ProLicensePanelContent: Component = () => {
       <CommercialBillingShell
         title={SELF_HOSTED_PRO_BILLING_PRESENTATION.shellTitle}
         action={
-          <button
-            class="inline-flex min-h-10 sm:min-h-9 items-center gap-2 px-3 py-2 text-sm font-medium rounded-md border border-border text-base-content hover:bg-surface-hover transition-colors disabled:opacity-60"
+          <Button
+            variant="outline"
+            size="settingsAction"
+            class="gap-2"
             disabled={state.loading()}
             onClick={state.loadPanelData}
           >
             <RefreshCw class={`w-3.5 h-3.5 ${state.loading() ? 'animate-spin' : ''}`} />
             {SELF_HOSTED_PRO_BILLING_PRESENTATION.refreshLabel}
-          </button>
+          </Button>
         }
         loading={false}
       >

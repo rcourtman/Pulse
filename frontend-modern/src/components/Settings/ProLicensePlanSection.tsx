@@ -1,6 +1,6 @@
 import { Component, For, Show } from 'solid-js';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
-import { ButtonLink } from '@/components/shared/Button';
+import { Button, ButtonLink } from '@/components/shared/Button';
 import { UpgradeButtonLink } from '@/components/shared/UpgradeLink';
 import { licenseEntitlementsLoadError } from '@/stores/licenseEntitlements';
 import {
@@ -356,15 +356,17 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
           <p class="text-xs text-amber-700 dark:text-amber-300 mt-1">
             The license server could not be reached. Some features may be temporarily restricted.
           </p>
-          <button
+          <Button
             type="button"
-            class="mt-2 inline-flex min-h-10 sm:min-h-9 items-center gap-2 px-3 py-2 text-xs font-medium rounded-md border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-800 transition-colors disabled:opacity-60"
+            variant="warning"
+            size="settingsActionXs"
+            class="mt-2 gap-2"
             disabled={props.loading}
             onClick={props.onReload}
           >
             <RefreshCw class={`w-3 h-3 ${props.loading ? 'animate-spin' : ''}`} />
             Retry
-          </button>
+          </Button>
         </div>
       </Show>
       <Show when={!licenseEntitlementsLoadError()}>

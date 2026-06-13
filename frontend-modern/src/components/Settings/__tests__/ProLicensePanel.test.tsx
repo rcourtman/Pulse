@@ -1138,6 +1138,16 @@ describe('ProLicensePanel', () => {
     expect(proLicensePanelSource).toContain('SelfHostedCommercialRecoverySection');
     expect(selfHostedCommercialRecoverySectionSource).toContain('FormTextarea');
     expect(selfHostedCommercialRecoverySectionSource).not.toContain('<textarea');
+    expect(selfHostedCommercialRecoverySectionSource).toContain('@/components/shared/Button');
+    expect(selfHostedCommercialRecoverySectionSource).toContain('variant="primary"');
+    expect(selfHostedCommercialRecoverySectionSource).toContain('variant="outline"');
+    expect(selfHostedCommercialRecoverySectionSource).toContain('size="settingsAction"');
+    expect(selfHostedCommercialRecoverySectionSource).not.toContain(
+      'min-h-10 sm:min-h-9 px-4 py-2.5 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed',
+    );
+    expect(selfHostedCommercialRecoverySectionSource).not.toContain(
+      'min-h-10 sm:min-h-9 px-4 py-2.5 text-sm font-medium rounded-md border border-border text-base-content hover:bg-surface-hover transition-colors disabled:opacity-60 disabled:cursor-not-allowed',
+    );
     expect(proLicensePanelSource).toContain('SELF_HOSTED_PRO_BILLING_PRESENTATION');
     expect(proLicensePanelSource).toContain('value={state.activeSection()}');
     expect(proLicensePanelSource).toContain('<Subtabs');
@@ -1159,6 +1169,12 @@ describe('ProLicensePanel', () => {
     expect(proLicensePanelStateSource).not.toContain('runStartProTrialAction({');
     expect(proLicensePanelStateSource).not.toContain('startProTrial()');
     expect(proLicensePanelStateSource).toContain("'A license or activation key is required'");
+    expect(proLicensePanelSource).toContain('@/components/shared/Button');
+    expect(proLicensePanelSource).toContain('variant="outline"');
+    expect(proLicensePanelSource).toContain('size="settingsAction"');
+    expect(proLicensePanelSource).not.toContain(
+      'inline-flex min-h-10 sm:min-h-9 items-center gap-2 px-3 py-2 text-sm font-medium rounded-md border border-border text-base-content hover:bg-surface-hover transition-colors disabled:opacity-60',
+    );
     expect(proLicensePlanSectionSource).toContain('getLicenseStatusLoadingState');
     expect(proLicensePlanSectionSource).toContain('getNoActiveSelfHostedActivationState');
     expect(proLicensePlanSectionSource).not.toContain('getTrialEndedProLicenseNotice');
@@ -1167,7 +1183,13 @@ describe('ProLicensePanel', () => {
     expect(proLicensePlanSectionSource).toContain('currentPlanSummary.privateRuntimeAction');
     expect(proLicensePlanSectionSource).toContain('props.activationSuccessSummary');
     expect(proLicensePlanSectionSource).toContain('summary().actionUrl');
+    expect(proLicensePlanSectionSource).toContain('Button');
     expect(proLicensePlanSectionSource).toContain('ButtonLink');
+    expect(proLicensePlanSectionSource).toContain('variant="warning"');
+    expect(proLicensePlanSectionSource).toContain('size="settingsActionXs"');
+    expect(proLicensePlanSectionSource).not.toContain(
+      'mt-2 inline-flex min-h-10 sm:min-h-9 items-center gap-2 px-3 py-2 text-xs font-medium rounded-md border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-800 transition-colors disabled:opacity-60',
+    );
     expect(proLicensePlanSectionSource).toContain('UpgradeButtonLink');
     expect(selfHostedCommercialRecoverySectionSource).toContain('ExternalTextLink');
     expect(selfHostedCommercialRecoverySectionSource).not.toContain('target="_blank"');
