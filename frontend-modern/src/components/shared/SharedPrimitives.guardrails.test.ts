@@ -3616,6 +3616,7 @@ describe('shared primitive guardrails', () => {
       ['src/features/docker/DockerHostsTable.tsx', dockerHostsTableSource],
       ['src/features/kubernetes/KubernetesNodesTable.tsx', kubernetesNodesTableSource],
       ['src/features/proxmox/ProxmoxMailGatewayTable.tsx', proxmoxMailGatewayTableSource],
+      ['src/features/standalone/AgentsMachinesTable.tsx', agentsMachinesTableSource],
       ['src/features/truenas/TrueNASSystemsTable.tsx', truenasSystemsTableSource],
     ];
     const platformUptimeConsumerPaths = platformUptimeConsumers.map(([path]) => path);
@@ -3646,6 +3647,7 @@ describe('shared primitive guardrails', () => {
       'src/features/docker',
       'src/features/kubernetes',
       'src/features/proxmox',
+      'src/features/standalone',
       'src/features/truenas',
     ]);
     expect(localHelperGuard?.allowedPaths ?? []).toHaveLength(0);
@@ -3776,6 +3778,7 @@ describe('shared primitive guardrails', () => {
       ['src/features/docker/DockerHostsTable.tsx', dockerHostsTableSource],
       ['src/features/kubernetes/KubernetesClustersTable.tsx', kubernetesClustersTableSource],
       ['src/features/kubernetes/KubernetesNodesTable.tsx', kubernetesNodesTableSource],
+      ['src/features/standalone/AgentsMachinesTable.tsx', agentsMachinesTableSource],
       ['src/features/truenas/TrueNASAppsTable.tsx', truenasAppsTableSource],
       ['src/features/truenas/TrueNASSystemsTable.tsx', truenasSystemsTableSource],
       ['src/features/vmware/VsphereHostsTable.tsx', vsphereHostsTableSource],
@@ -3807,6 +3810,7 @@ describe('shared primitive guardrails', () => {
     expect(localHelperGuard?.scopes).toEqual([
       'src/features/docker',
       'src/features/kubernetes',
+      'src/features/standalone',
       'src/features/truenas',
       'src/features/vmware',
     ]);

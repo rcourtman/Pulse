@@ -198,11 +198,19 @@ export const formatPlatformTableUptimeValue = (
 export const getPlatformTableFiniteMetric = (value: number | undefined): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 
-export function PlatformTableMetricFallback() {
+export function PlatformTableMetricFallback(props: { label?: string; title?: string } = {}) {
+  const label = () => asTrimmedString(props.label);
+  const title = () => asTrimmedString(props.title);
+
   return (
     <div class="flex justify-center">
-      <span class="text-xs text-muted" aria-hidden="true">
-        —
+      <span
+        class={label() ? 'text-[9px] font-medium text-muted' : 'text-xs text-muted'}
+        title={title() || undefined}
+        aria-label={title() || label() || undefined}
+        aria-hidden={label() ? undefined : 'true'}
+      >
+        {label() || '—'}
       </span>
     </div>
   );

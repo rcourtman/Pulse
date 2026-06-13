@@ -1305,6 +1305,7 @@
         { "path": "src/features/docker/DockerHostsTable.tsx" },
         { "path": "src/features/kubernetes/KubernetesNodesTable.tsx" },
         { "path": "src/features/proxmox/ProxmoxMailGatewayTable.tsx" },
+        { "path": "src/features/standalone/AgentsMachinesTable.tsx" },
         { "path": "src/features/truenas/TrueNASSystemsTable.tsx" }
       ],
       "forbiddenPatterns": [
@@ -1318,6 +1319,10 @@
         },
         {
           "path": "src/features/proxmox/ProxmoxMailGatewayTable.tsx",
+          "patterns": ["const formatUptime"]
+        },
+        {
+          "path": "src/features/standalone/AgentsMachinesTable.tsx",
           "patterns": ["const formatUptime"]
         },
         {
@@ -1344,6 +1349,7 @@
         { "path": "src/features/docker/DockerHostsTable.tsx" },
         { "path": "src/features/kubernetes/KubernetesClustersTable.tsx" },
         { "path": "src/features/kubernetes/KubernetesNodesTable.tsx" },
+        { "path": "src/features/standalone/AgentsMachinesTable.tsx" },
         { "path": "src/features/truenas/TrueNASAppsTable.tsx" },
         { "path": "src/features/truenas/TrueNASSystemsTable.tsx" },
         { "path": "src/features/vmware/VsphereHostsTable.tsx" }
@@ -1363,6 +1369,10 @@
         },
         {
           "path": "src/features/kubernetes/KubernetesNodesTable.tsx",
+          "patterns": ["const finiteMetric", "const metricFallback"]
+        },
+        {
+          "path": "src/features/standalone/AgentsMachinesTable.tsx",
           "patterns": ["const finiteMetric", "const metricFallback"]
         },
         {
@@ -1878,6 +1888,7 @@
         "src/features/docker",
         "src/features/kubernetes",
         "src/features/proxmox",
+        "src/features/standalone",
         "src/features/truenas"
       ],
       "extensions": [".tsx"],
@@ -1902,6 +1913,7 @@
       "scopes": [
         "src/features/docker",
         "src/features/kubernetes",
+        "src/features/standalone",
         "src/features/truenas",
         "src/features/vmware"
       ],

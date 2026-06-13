@@ -1,7 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { cleanup, render, screen } from '@solidjs/testing-library';
+import { afterEach, describe, expect, it } from 'vitest';
 import { createRoot, createSignal } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import {
+  PlatformTableMetricFallback,
   createPlatformTableFilterState,
   formatPlatformTableTitleCaseValue,
   formatPlatformTableUptimeValue,
@@ -11,6 +13,8 @@ import {
   summarizePlatformTableValues,
   type PlatformResourceStatusFilter,
 } from '../sharedPlatformPage';
+
+afterEach(cleanup);
 
 const makeResource = (
   partial: Partial<Resource> & Pick<Resource, 'id' | 'type' | 'status'>,
@@ -291,5 +295,29 @@ describe('getPlatformTableFiniteMetric', () => {
     expect(getPlatformTableFiniteMetric(undefined)).toBeUndefined();
     expect(getPlatformTableFiniteMetric(Number.NaN)).toBeUndefined();
     expect(getPlatformTableFiniteMetric(Number.POSITIVE_INFINITY)).toBeUndefined();
+  });
+});
+
+describe('PlatformTableMetricFallback', () => {
+  it('renders the default empty metric marker as presentational text', () => {
+    const { container } = render(() => PlatformTableMetricFallback());
+    const marker = container.querySelector('span');
+
+    expect(marker?.textContent).toBe('—');
+    expect(marker?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('preserves caller-owned fallback labels and titles', () => {
+    render(() =>
+      PlatformTableMetricFallback({
+        label: 'old agent',
+        title: 'Update this agent for full machine telemetry.',
+      }),
+    );
+
+    const marker = screen.getByLabelText('Update this agent for full machine telemetry.');
+    expect(marker.textContent).toBe('old agent');
+    expect(marker.getAttribute('title')).toBe('Update this agent for full machine telemetry.');
+    expect(marker.getAttribute('aria-hidden')).toBeNull();
   });
 });

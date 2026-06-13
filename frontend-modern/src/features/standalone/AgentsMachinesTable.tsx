@@ -38,14 +38,17 @@ import {
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformTableEmptyState,
+  PlatformTableMetricFallback,
   PlatformTableResetFiltersButton,
+  PlatformTableShell,
   PlatformTableToolbar,
   createPlatformTableFilterState,
   filterPlatformResources,
+  formatPlatformTableUptimeValue,
+  getPlatformTableFiniteMetric,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   type PlatformResourceStatusFilter,
-  PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import { useColumnVisibility } from '@/hooks/useColumnVisibility';
 import type { Disk } from '@/types/api';
@@ -95,16 +98,6 @@ import {
   type AgentMachineTemperatureDetailSection,
 } from './agentMachineTableModel';
 
-const formatUptime = (seconds: number | undefined): string => {
-  if (!seconds || seconds <= 0) return '—';
-  const days = Math.floor(seconds / 86_400);
-  if (days > 0) return `${days}d`;
-  const hours = Math.floor(seconds / 3_600);
-  if (hours > 0) return `${hours}h`;
-  const mins = Math.floor(seconds / 60);
-  return `${mins}m`;
-};
-
 const formatLastSeen = (value: number | string | Date | undefined): string => {
   const timestampMillis = timestampMillisFrom(value);
   if (!timestampMillis) return '—';
@@ -121,21 +114,6 @@ type MetricFallbackReason = {
   label: string;
   title: string;
 };
-
-const metricFallback = (reason?: MetricFallbackReason) => (
-  <div class="flex justify-center">
-    <span
-      class={reason ? 'text-[9px] font-medium text-muted' : 'text-xs text-muted'}
-      title={reason?.title}
-      aria-label={reason?.title ?? 'No telemetry data'}
-    >
-      {reason?.label ?? '—'}
-    </span>
-  </div>
-);
-
-const finiteMetric = (value: number | undefined): number | undefined =>
-  typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 
 const hasPositiveTemperature = (celsius: number | undefined): celsius is number =>
   typeof celsius === 'number' && Number.isFinite(celsius) && celsius > 0;
@@ -854,43 +832,53 @@ const availabilityAddressFor = (machine: Resource): string => {
 };
 
 const memoryTotalFor = (machine: Resource): number =>
-  finiteMetric(machine.memory?.total) ?? finiteMetric(machine.agent?.memory?.total) ?? 0;
+  getPlatformTableFiniteMetric(machine.memory?.total) ??
+  getPlatformTableFiniteMetric(machine.agent?.memory?.total) ??
+  0;
 
 const memoryUsedFor = (machine: Resource): number =>
-  finiteMetric(machine.memory?.used) ?? finiteMetric(machine.agent?.memory?.used) ?? 0;
+  getPlatformTableFiniteMetric(machine.memory?.used) ??
+  getPlatformTableFiniteMetric(machine.agent?.memory?.used) ??
+  0;
 
 const memoryPercentOnlyFor = (machine: Resource): number | undefined => {
   if (memoryTotalFor(machine) > 0) return undefined;
-  return finiteMetric(machine.memory?.current) ?? finiteMetric(machine.agent?.memory?.usage);
+  return (
+    getPlatformTableFiniteMetric(machine.memory?.current) ??
+    getPlatformTableFiniteMetric(machine.agent?.memory?.usage)
+  );
 };
 
 const memoryBalloonFor = (machine: Resource): number | undefined =>
-  finiteMetric(machine.agent?.memory?.balloon);
+  getPlatformTableFiniteMetric(machine.agent?.memory?.balloon);
 
 const memoryCacheFor = (machine: Resource): number | undefined =>
-  finiteMetric(machine.agent?.memory?.cache);
+  getPlatformTableFiniteMetric(machine.agent?.memory?.cache);
 
 const memorySwapUsedFor = (machine: Resource): number | undefined =>
-  finiteMetric(machine.agent?.memory?.swapUsed);
+  getPlatformTableFiniteMetric(machine.agent?.memory?.swapUsed);
 
 const memorySwapTotalFor = (machine: Resource): number | undefined =>
-  finiteMetric(machine.agent?.memory?.swapTotal);
+  getPlatformTableFiniteMetric(machine.agent?.memory?.swapTotal);
 
 const cpuCoresFor = (machine: Resource): number | undefined => {
-  const cores = finiteMetric(machine.agent?.cpuCount);
+  const cores = getPlatformTableFiniteMetric(machine.agent?.cpuCount);
   return cores && cores > 0 ? cores : undefined;
 };
 
 const cpuLoadAverageFor = (machine: Resource): number | undefined =>
-  finiteMetric(machine.agent?.loadAverage?.[0]);
+  getPlatformTableFiniteMetric(machine.agent?.loadAverage?.[0]);
 
 const aggregateDiskFor = (machine: Resource): Disk | undefined => {
   if (!machine.disk) return undefined;
-  const total = finiteMetric(machine.disk.total) ?? 0;
-  const used = finiteMetric(machine.disk.used) ?? 0;
-  const free = finiteMetric(machine.disk.free) ?? (total > 0 ? Math.max(0, total - used) : 0);
+  const total = getPlatformTableFiniteMetric(machine.disk.total) ?? 0;
+  const used = getPlatformTableFiniteMetric(machine.disk.used) ?? 0;
+  const free =
+    getPlatformTableFiniteMetric(machine.disk.free) ?? (total > 0 ? Math.max(0, total - used) : 0);
   const usage =
-    total > 0 && used > 0 ? (used / total) * 100 : (finiteMetric(machine.disk.current) ?? 0);
+    total > 0 && used > 0
+      ? (used / total) * 100
+      : (getPlatformTableFiniteMetric(machine.disk.current) ?? 0);
   if (total <= 0 && usage <= 0) return undefined;
   return { total, used, free, usage };
 };
@@ -1431,6 +1419,12 @@ export const AgentsMachinesTable: Component<{
                       canRenderMetrics()
                         ? outdatedAgentTelemetryFallbackFor(machine, props.targetAgentVersion)
                         : undefined;
+                    const telemetryFallbackMarker = () => {
+                      const reason = telemetryFallback();
+                      return (
+                        <PlatformTableMetricFallback label={reason?.label} title={reason?.title} />
+                      );
+                    };
                     const metricsKey = () => buildMetricKeyForUnifiedResource(machine);
                     const alertResourceIds = () => hostOverrideIdCandidates(machine);
                     const cpuThresholds = () =>
@@ -1577,7 +1571,7 @@ export const AgentsMachinesTable: Component<{
                           >
                             <Show
                               when={canRenderMetrics() && cpuPercent() !== undefined}
-                              fallback={metricFallback(telemetryFallback())}
+                              fallback={telemetryFallbackMarker()}
                             >
                               <EnhancedCPUBar
                                 usage={cpuPercent() ?? 0}
@@ -1593,7 +1587,7 @@ export const AgentsMachinesTable: Component<{
                           >
                             <Show
                               when={canRenderMetrics() && hasMemoryMetric()}
-                              fallback={metricFallback(telemetryFallback())}
+                              fallback={telemetryFallbackMarker()}
                             >
                               <StackedMemoryBar
                                 used={memoryUsed()}
@@ -1613,7 +1607,7 @@ export const AgentsMachinesTable: Component<{
                           >
                             <Show
                               when={canRenderMetrics() && hasDiskMetric()}
-                              fallback={metricFallback(telemetryFallback())}
+                              fallback={telemetryFallbackMarker()}
                             >
                               <StackedDiskBar
                                 mode={(disks()?.length ?? 0) > 1 ? 'vertical-bars' : undefined}
@@ -1629,7 +1623,7 @@ export const AgentsMachinesTable: Component<{
                             >
                               <Show
                                 when={canRenderMetrics() && networkTotal() !== undefined}
-                                fallback={metricFallback(telemetryFallback())}
+                                fallback={telemetryFallbackMarker()}
                               >
                                 <AgentMachineNetworkCell
                                   network={machine.network}
@@ -1645,7 +1639,7 @@ export const AgentsMachinesTable: Component<{
                             >
                               <Show
                                 when={canRenderMetrics() && diskIOTotal() !== undefined}
-                                fallback={metricFallback(telemetryFallback())}
+                                fallback={telemetryFallbackMarker()}
                               >
                                 <AgentMachineDiskIOCell
                                   diskIO={machine.diskIO}
@@ -1659,7 +1653,9 @@ export const AgentsMachinesTable: Component<{
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('numeric-value')} ${machineColumnWidthClass('uptime')} text-base-content`}
                             >
-                              {formatUptime(machine.uptime ?? machine.agent?.uptimeSeconds)}
+                              {formatPlatformTableUptimeValue(
+                                machine.uptime ?? machine.agent?.uptimeSeconds,
+                              )}
                             </TableCell>
                           </Show>
                           <Show when={columnVisibility.isColumnVisible('temp')}>

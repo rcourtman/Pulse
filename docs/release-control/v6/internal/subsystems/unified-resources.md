@@ -241,12 +241,14 @@ labels, full title text, and normalized value lists instead of recreating local
 `compactList` or `summarizeValues` helpers.
 One-unit platform table uptime labels follow the same boundary:
 unified-resource consumers own which uptime field is displayed, but platform
-tables must use `formatPlatformTableUptimeValue` instead of recreating local
-days/hours/minutes `formatUptime` helpers for dense table cells.
+tables, including Standalone machines, must use
+`formatPlatformTableUptimeValue` instead of recreating local days/hours/minutes
+`formatUptime` helpers for dense table cells.
 Metric bar fallbacks follow that split as well: unified-resource consumers own
-which CPU or memory value is selected, while platform tables must use
+which CPU or memory value is selected, plus any source-specific fallback reason
+such as outdated standalone agent telemetry, while platform tables must use
 `PlatformTableMetricFallback` and `getPlatformTableFiniteMetric` instead of
-recreating local centered dash fallback markup or `Number.isFinite` wrappers.
+recreating local fallback markup or `Number.isFinite` wrappers.
 Platform filter option semantics follow that split too: unified-resource
 consumers own the source-specific status buckets and labels, while the repeated
 FilterBar chip leading-dot presentation must use the frontend-primitives-owned
