@@ -10,6 +10,8 @@
   [![License](https://img.shields.io/github/license/rcourtman/Pulse)](LICENSE)
 
   [Live Demo](https://demo.pulserelay.pro) • [Pulse Pro](https://pulserelay.pro) • [Documentation](docs/README.md) • [Report Bug](https://github.com/rcourtman/Pulse/issues)
+
+  Localized getting started: [Deutsch](docs/i18n/de/README.md) • [Español](docs/i18n/es/README.md)
 </div>
 
 ---

@@ -31,6 +31,10 @@ All other documents are supporting references unless explicitly required for evi
 
 ## 🚀 Getting Started
 
+- **Localized getting started**:
+  [Deutsch](i18n/de/README.md) • [Español](i18n/es/README.md).
+  These first-wave pages cover the public install path and preserve commands,
+  config keys, image names, activation keys, and product identifiers exactly.
 - **[Installation Guide](INSTALL.md)**
   Step-by-step guides for Docker, Kubernetes, and bare metal.
 - **[Configuration](CONFIGURATION.md)**  
