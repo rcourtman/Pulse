@@ -23,7 +23,12 @@ import {
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import { getPlatformAlertSeverityFilterOptions } from '@/features/platformPage/platformAlertSeverityFilterOptions';
-import type { ResourceType } from '@/types/resource';
+import {
+  formatPlatformAlertCode,
+  formatPlatformAlertDetailDateTime,
+  formatPlatformAlertResourceType,
+  formatPlatformAlertStartedAt,
+} from '@/utils/alertDetailPresentation';
 import { getAlertFilteredEmptyState } from '@/utils/alertOverviewPresentation';
 import {
   formatAlertSeverityLabel,
@@ -37,82 +42,6 @@ import {
 
 const KUBERNETES_INCIDENT_STATUS_OPTIONS =
   getPlatformAlertSeverityFilterOptions<KubernetesIncidentSeverityFilter>();
-
-const formatResourceType = (type: ResourceType): string => {
-  switch (type) {
-    case 'agent':
-      return 'Node';
-    case 'k8s-cluster':
-      return 'Cluster';
-    case 'k8s-node':
-      return 'Node';
-    case 'pod':
-      return 'Pod';
-    case 'k8s-deployment':
-      return 'Deployment';
-    case 'k8s-replicaset':
-      return 'ReplicaSet';
-    case 'k8s-statefulset':
-      return 'StatefulSet';
-    case 'k8s-daemonset':
-      return 'DaemonSet';
-    case 'k8s-job':
-      return 'Job';
-    case 'k8s-cronjob':
-      return 'CronJob';
-    case 'k8s-service':
-      return 'Service';
-    case 'k8s-ingress':
-      return 'Ingress';
-    case 'k8s-namespace':
-      return 'Namespace';
-    case 'k8s-event':
-      return 'Event';
-    case 'k8s-persistent-volume':
-      return 'PersistentVolume';
-    case 'k8s-persistent-volume-claim':
-      return 'PVC';
-    default:
-      return type;
-  }
-};
-
-const formatCode = (code: string): string => {
-  const normalized = code.trim().replace(/^k8s_/, '');
-  if (!normalized) return '-';
-  return normalized
-    .split(/[\s_-]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
-    .join(' ');
-};
-
-const formatStartedAt = (value: string | undefined): string => {
-  if (!value) return '-';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '-';
-  if (parsed.getUTCFullYear() < 2000) return '-';
-  return parsed.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
-
-const detailDateTime = (value?: string): string => {
-  if (!value) return '-';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  if (parsed.getUTCFullYear() < 2000) return '-';
-  return parsed.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
 
 type AlertDetailSection = DetailSection;
 
@@ -130,14 +59,16 @@ const buildAlertDetailSections = (incident: KubernetesIncidentRow): AlertDetailS
         }),
         detailRow('Summary', incident.summary),
         detailRow('Signal', incident.label),
-        detailRow('Code', formatCode(incident.code), { title: incident.code }),
+        detailRow('Code', formatPlatformAlertCode(incident.code, 'kubernetes'), {
+          title: incident.code,
+        }),
       ]),
     },
     {
       label: 'Affected resource',
       rows: compactDetailRows([
         detailRow('Name', incident.resourceName),
-        detailRow('Type', formatResourceType(incident.resourceType)),
+        detailRow('Type', formatPlatformAlertResourceType(incident.resourceType, 'kubernetes')),
         detailRow('Cluster', k?.clusterName || k?.clusterId),
         detailRow('Namespace', k?.namespace),
         detailRow('Node', k?.nodeName),
@@ -148,7 +79,7 @@ const buildAlertDetailSections = (incident: KubernetesIncidentRow): AlertDetailS
     {
       label: 'Source',
       rows: compactDetailRows([
-        detailRow('Started', detailDateTime(incident.startedAt)),
+        detailRow('Started', formatPlatformAlertDetailDateTime(incident.startedAt)),
         detailRow('Provider', incident.source),
       ]),
     },
@@ -166,8 +97,9 @@ const AlertDetail: Component<{ incident: KubernetesIncidentRow; onClose: () => v
     testId="kubernetes-alert-detail"
     detailFor={props.incident.id}
     title="Kubernetes alert detail"
-    summary={`${formatAlertSeverityLabel(props.incident.severity)} · ${formatCode(
+    summary={`${formatAlertSeverityLabel(props.incident.severity)} · ${formatPlatformAlertCode(
       props.incident.code,
+      'kubernetes',
     )}`}
     sections={buildAlertDetailSections(props.incident)}
     detailAttributes={{ 'data-kubernetes-alert-detail-for': props.incident.id }}
@@ -302,7 +234,10 @@ export const KubernetesAlertsTable: Component<{
                                   {incident.resourceName}
                                 </div>
                                 <div class="truncate text-[10px] text-muted">
-                                  {formatResourceType(incident.resourceType)}
+                                  {formatPlatformAlertResourceType(
+                                    incident.resourceType,
+                                    'kubernetes',
+                                  )}
                                   <Show when={k()?.ownerKind && k()?.ownerName}>
                                     · {k()?.ownerKind}/{k()?.ownerName}
                                   </Show>
@@ -331,13 +266,13 @@ export const KubernetesAlertsTable: Component<{
                               {scopeText()}
                             </span>
                             <span class="block truncate text-[10px] text-muted">
-                              {k()?.nodeName || formatCode(incident.code)}
+                              {k()?.nodeName || formatPlatformAlertCode(incident.code, 'kubernetes')}
                             </span>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content lg:table-cell`}
                           >
-                            {formatStartedAt(incident.startedAt)}
+                            {formatPlatformAlertStartedAt(incident.startedAt)}
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content xl:table-cell`}

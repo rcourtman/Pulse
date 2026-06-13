@@ -112,6 +112,7 @@ import sharedTemplateRegistrySource from '../../../scripts/shared-template-regis
 import discoveryTabSource from '@/components/Discovery/DiscoveryTab.tsx?raw';
 import emailProviderSelectSource from '@/components/Alerts/EmailProviderSelect.tsx?raw';
 import incidentTimelinePanelSource from '@/components/Alerts/IncidentTimelinePanel.tsx?raw';
+import alertDetailPresentationSource from '@/utils/alertDetailPresentation.ts?raw';
 import alertSeverityPresentationSource from '@/utils/alertSeverityPresentation.ts?raw';
 import thresholdsTableDockerIgnoredPrefixesSectionSource from '@/components/Alerts/ThresholdsTableDockerIgnoredPrefixesSection.tsx?raw';
 import webhookConfigFormSource from '@/components/Alerts/WebhookConfigForm.tsx?raw';
@@ -1708,17 +1709,38 @@ describe('shared primitive guardrails', () => {
     const detailToneRule = registry.rules?.find(
       (rule) => rule.id === 'platform-alert-severity-detail-tone',
     );
+    const detailFormatterRule = registry.rules?.find(
+      (rule) => rule.id === 'platform-alert-detail-formatters',
+    );
     const localHelperGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'platform-alert-severity-local-helper',
     );
     const localDetailToneGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'platform-alert-severity-local-detail-tone-helper',
     );
+    const localCodeFormatterGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-alert-local-code-formatter-helper',
+    );
+    const localResourceTypeFormatterGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-alert-local-resource-type-formatter-helper',
+    );
+    const localStartedAtFormatterGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-alert-local-started-at-formatter-helper',
+    );
+    const localDetailDateFormatterGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-alert-local-detail-date-formatter-helper',
+    );
+    const localEntityTypeFormatterGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-alert-local-entity-type-formatter-helper',
+    );
     const requiredGuard = registry.requiredPatternGuards?.find(
       (guard) => guard.id === 'platform-alert-severity-indicator-required',
     );
     const requiredFilterOptionsGuard = registry.requiredPatternGuards?.find(
       (guard) => guard.id === 'platform-alert-severity-filter-options-required',
+    );
+    const requiredDetailFormatterGuard = registry.requiredPatternGuards?.find(
+      (guard) => guard.id === 'platform-alert-detail-formatters-required',
     );
     const alertTableConsumerPaths = [
       'src/features/docker/DockerAlertsTable.tsx',
@@ -1742,6 +1764,11 @@ describe('shared primitive guardrails', () => {
     expect(detailToneRule?.canonical?.path).toBe('src/utils/alertSeverityPresentation.ts');
     expect(detailToneRule?.canonical?.export).toBe('getAlertSeverityDetailTone');
     expect(detailToneRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
+      alertTableConsumerPaths,
+    );
+    expect(detailFormatterRule?.canonical?.path).toBe('src/utils/alertDetailPresentation.ts');
+    expect(detailFormatterRule?.canonical?.export).toBe('formatPlatformAlertCode');
+    expect(detailFormatterRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
       alertTableConsumerPaths,
     );
     expect(registeredRule?.forbiddenPatterns).toEqual(
@@ -1789,6 +1816,45 @@ describe('shared primitive guardrails', () => {
         patterns: ['const alertTone', 'type AlertDetailTone'],
       })),
     );
+    expect(detailFormatterRule?.forbiddenPatterns).toEqual([
+      {
+        path: 'src/features/docker/DockerAlertsTable.tsx',
+        patterns: [
+          'const formatResourceType',
+          'const formatCode',
+          'const formatStartedAt',
+          'const detailDateTime',
+        ],
+      },
+      {
+        path: 'src/features/kubernetes/KubernetesAlertsTable.tsx',
+        patterns: [
+          'const formatResourceType',
+          'const formatCode',
+          'const formatStartedAt',
+          'const detailDateTime',
+        ],
+      },
+      {
+        path: 'src/features/truenas/TrueNASAlertsTable.tsx',
+        patterns: [
+          'const formatResourceType',
+          'const formatCode',
+          'const formatStartedAt',
+          'const detailDateTime',
+        ],
+      },
+      {
+        path: 'src/features/vmware/VsphereAlertsTable.tsx',
+        patterns: [
+          'const formatResourceType',
+          'const formatEntityType',
+          'const formatCode',
+          'const formatStartedAt',
+          'const detailDateTime',
+        ],
+      },
+    ]);
     expect(localHelperGuard?.canonical?.path).toBe('src/components/shared/AlertSeverityBadge.tsx');
     expect(localHelperGuard?.canonical?.export).toBe('AlertSeverityBadge');
     expect(localHelperGuard?.allPatterns).toEqual(['severityVariant', 'severityTextClass']);
@@ -1811,6 +1877,82 @@ describe('shared primitive guardrails', () => {
     ]);
     expect(localDetailToneGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(localDetailToneGuard?.ignoredPaths ?? []).toHaveLength(0);
+    expect(localCodeFormatterGuard?.canonical?.path).toBe('src/utils/alertDetailPresentation.ts');
+    expect(localCodeFormatterGuard?.canonical?.export).toBe('formatPlatformAlertCode');
+    expect(localCodeFormatterGuard?.allPatterns).toEqual(['const formatCode', 'IncidentRow']);
+    expect(localCodeFormatterGuard?.scopes).toEqual([
+      'src/features/docker',
+      'src/features/kubernetes',
+      'src/features/truenas',
+      'src/features/vmware',
+    ]);
+    expect(localCodeFormatterGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(localCodeFormatterGuard?.ignoredPaths ?? []).toHaveLength(0);
+    expect(localResourceTypeFormatterGuard?.canonical?.path).toBe(
+      'src/utils/alertDetailPresentation.ts',
+    );
+    expect(localResourceTypeFormatterGuard?.canonical?.export).toBe(
+      'formatPlatformAlertResourceType',
+    );
+    expect(localResourceTypeFormatterGuard?.allPatterns).toEqual([
+      'const formatResourceType',
+      'IncidentRow',
+    ]);
+    expect(localResourceTypeFormatterGuard?.scopes).toEqual([
+      'src/features/docker',
+      'src/features/kubernetes',
+      'src/features/truenas',
+      'src/features/vmware',
+    ]);
+    expect(localResourceTypeFormatterGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(localResourceTypeFormatterGuard?.ignoredPaths ?? []).toHaveLength(0);
+    expect(localStartedAtFormatterGuard?.canonical?.path).toBe(
+      'src/utils/alertDetailPresentation.ts',
+    );
+    expect(localStartedAtFormatterGuard?.canonical?.export).toBe('formatPlatformAlertStartedAt');
+    expect(localStartedAtFormatterGuard?.allPatterns).toEqual([
+      'const formatStartedAt',
+      'IncidentRow',
+    ]);
+    expect(localStartedAtFormatterGuard?.scopes).toEqual([
+      'src/features/docker',
+      'src/features/kubernetes',
+      'src/features/truenas',
+      'src/features/vmware',
+    ]);
+    expect(localStartedAtFormatterGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(localStartedAtFormatterGuard?.ignoredPaths ?? []).toHaveLength(0);
+    expect(localDetailDateFormatterGuard?.canonical?.path).toBe(
+      'src/utils/alertDetailPresentation.ts',
+    );
+    expect(localDetailDateFormatterGuard?.canonical?.export).toBe(
+      'formatPlatformAlertDetailDateTime',
+    );
+    expect(localDetailDateFormatterGuard?.allPatterns).toEqual([
+      'const detailDateTime',
+      'IncidentRow',
+    ]);
+    expect(localDetailDateFormatterGuard?.scopes).toEqual([
+      'src/features/docker',
+      'src/features/kubernetes',
+      'src/features/truenas',
+      'src/features/vmware',
+    ]);
+    expect(localDetailDateFormatterGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(localDetailDateFormatterGuard?.ignoredPaths ?? []).toHaveLength(0);
+    expect(localEntityTypeFormatterGuard?.canonical?.path).toBe(
+      'src/utils/alertDetailPresentation.ts',
+    );
+    expect(localEntityTypeFormatterGuard?.canonical?.export).toBe(
+      'formatPlatformAlertEntityType',
+    );
+    expect(localEntityTypeFormatterGuard?.allPatterns).toEqual([
+      'const formatEntityType',
+      'VmwareIncidentRow',
+    ]);
+    expect(localEntityTypeFormatterGuard?.scopes).toEqual(['src/features/vmware']);
+    expect(localEntityTypeFormatterGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(localEntityTypeFormatterGuard?.ignoredPaths ?? []).toHaveLength(0);
     expect(requiredGuard?.canonical?.path).toBe('src/components/shared/AlertSeverityBadge.tsx');
     expect(requiredGuard?.canonical?.export).toBe('AlertSeverityBadge');
     expect(requiredGuard?.triggerPatterns).toEqual([
@@ -1837,6 +1979,22 @@ describe('shared primitive guardrails', () => {
     ]);
     expect(requiredFilterOptionsGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(requiredFilterOptionsGuard?.ignoredPaths ?? []).toHaveLength(0);
+    expect(requiredDetailFormatterGuard?.canonical?.path).toBe(
+      'src/utils/alertDetailPresentation.ts',
+    );
+    expect(requiredDetailFormatterGuard?.canonical?.export).toBe('formatPlatformAlertCode');
+    expect(requiredDetailFormatterGuard?.triggerPatterns).toEqual([
+      'IncidentRow',
+      'incident.code',
+      'incident.startedAt',
+    ]);
+    expect(requiredDetailFormatterGuard?.requiredPatterns).toEqual([
+      'formatPlatformAlertCode',
+      'formatPlatformAlertStartedAt',
+      'formatPlatformAlertDetailDateTime',
+    ]);
+    expect(requiredDetailFormatterGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(requiredDetailFormatterGuard?.ignoredPaths ?? []).toHaveLength(0);
 
     expect(alertSeverityBadgeSource).toContain('StatusIndicatorBadge');
     expect(alertSeverityBadgeSource).toContain('StatusDot');
@@ -1848,6 +2006,11 @@ describe('shared primitive guardrails', () => {
     expect(alertSeverityPresentationSource).toContain('getAlertSeverityIndicatorVariant');
     expect(alertSeverityPresentationSource).toContain('getAlertSeverityDetailTone');
     expect(alertSeverityPresentationSource).toContain('formatAlertSeverityLabel');
+    expect(alertDetailPresentationSource).toContain('formatPlatformAlertCode');
+    expect(alertDetailPresentationSource).toContain('formatPlatformAlertResourceType');
+    expect(alertDetailPresentationSource).toContain('formatPlatformAlertEntityType');
+    expect(alertDetailPresentationSource).toContain('formatPlatformAlertStartedAt');
+    expect(alertDetailPresentationSource).toContain('formatPlatformAlertDetailDateTime');
 
     for (const source of [
       dockerAlertsTableSource,
@@ -1860,10 +2023,18 @@ describe('shared primitive guardrails', () => {
       expect(source).toContain('formatAlertSeverityLabel');
       expect(source).toContain('getAlertSeverityDetailTone');
       expect(source).toContain('getPlatformAlertSeverityFilterOptions');
+      expect(source).toContain('formatPlatformAlertCode');
+      expect(source).toContain('formatPlatformAlertResourceType');
+      expect(source).toContain('formatPlatformAlertStartedAt');
+      expect(source).toContain('formatPlatformAlertDetailDateTime');
       expect(source).not.toContain('severityVariant');
       expect(source).not.toContain('severityTextClass');
       expect(source).not.toContain('const alertTone');
       expect(source).not.toContain('type AlertDetailTone');
+      expect(source).not.toContain('const formatResourceType');
+      expect(source).not.toContain('const formatCode');
+      expect(source).not.toContain('const formatStartedAt');
+      expect(source).not.toContain('const detailDateTime');
       expect(source).not.toContain('filterChipStatusDot(');
       expect(source).not.toContain("value: 'critical'");
       expect(source).not.toContain("value: 'warning'");

@@ -23,7 +23,13 @@ import {
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import { getPlatformAlertSeverityFilterOptions } from '@/features/platformPage/platformAlertSeverityFilterOptions';
-import type { ResourceType } from '@/types/resource';
+import {
+  formatPlatformAlertCode,
+  formatPlatformAlertDetailDateTime,
+  formatPlatformAlertEntityType,
+  formatPlatformAlertResourceType,
+  formatPlatformAlertStartedAt,
+} from '@/utils/alertDetailPresentation';
 import { getAlertFilteredEmptyState } from '@/utils/alertOverviewPresentation';
 import {
   formatAlertSeverityLabel,
@@ -37,64 +43,6 @@ import {
 
 const VSPHERE_INCIDENT_STATUS_OPTIONS =
   getPlatformAlertSeverityFilterOptions<VmwareIncidentSeverityFilter>();
-
-const formatResourceType = (type: ResourceType): string => {
-  switch (type) {
-    case 'agent':
-      return 'Host';
-    case 'vm':
-      return 'VM';
-    case 'storage':
-      return 'Datastore';
-    default:
-      return type;
-  }
-};
-
-const formatEntityType = (value: string): string => {
-  const normalized = value.trim().toLowerCase();
-  if (normalized === 'host') return 'Host';
-  if (normalized === 'vm') return 'VM';
-  if (normalized === 'datastore') return 'Datastore';
-  return normalized ? normalized.charAt(0).toUpperCase() + normalized.slice(1) : '-';
-};
-
-const formatCode = (code: string): string => {
-  const normalized = code.trim().replace(/^vmware_/, '');
-  if (!normalized) return '-';
-  return normalized
-    .split(/[\s_-]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
-    .join(' ');
-};
-
-const formatStartedAt = (value: string | undefined): string => {
-  if (!value) return '-';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '-';
-  if (parsed.getUTCFullYear() < 2000) return '-';
-  return parsed.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
-
-const detailDateTime = (value?: string): string => {
-  if (!value) return '-';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  if (parsed.getUTCFullYear() < 2000) return '-';
-  return parsed.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
 
 type AlertDetailSection = DetailSection;
 
@@ -111,15 +59,17 @@ const buildAlertDetailSections = (incident: VmwareIncidentRow): AlertDetailSecti
         }),
         detailRow('Summary', incident.summary),
         detailRow('Signal', incident.label),
-        detailRow('Code', formatCode(incident.code), { title: incident.code }),
+        detailRow('Code', formatPlatformAlertCode(incident.code, 'vmware'), {
+          title: incident.code,
+        }),
       ]),
     },
     {
       label: 'Affected resource',
       rows: compactDetailRows([
         detailRow('Resource', incident.resourceName),
-        detailRow('Type', formatResourceType(incident.resourceType)),
-        detailRow('Entity', formatEntityType(incident.entityType)),
+        detailRow('Type', formatPlatformAlertResourceType(incident.resourceType, 'vmware')),
+        detailRow('Entity', formatPlatformAlertEntityType(incident.entityType)),
         detailRow('Managed object', incident.managedObjectId),
         detailRow('vCenter', meta?.connectionName || meta?.vcenterHost),
         detailRow('Datacenter', meta?.datacenterName),
@@ -130,7 +80,7 @@ const buildAlertDetailSections = (incident: VmwareIncidentRow): AlertDetailSecti
     {
       label: 'Source',
       rows: compactDetailRows([
-        detailRow('Started', detailDateTime(incident.startedAt)),
+        detailRow('Started', formatPlatformAlertDetailDateTime(incident.startedAt)),
         detailRow('Provider', incident.source),
       ]),
     },
@@ -146,8 +96,9 @@ const AlertDetail: Component<{ incident: VmwareIncidentRow; onClose: () => void 
     testId="vsphere-alert-detail"
     detailFor={props.incident.id}
     title="vSphere health detail"
-    summary={`${formatAlertSeverityLabel(props.incident.severity)} · ${formatCode(
+    summary={`${formatAlertSeverityLabel(props.incident.severity)} · ${formatPlatformAlertCode(
       props.incident.code,
+      'vmware',
     )}`}
     sections={buildAlertDetailSections(props.incident)}
     detailAttributes={{ 'data-vsphere-alert-detail-for': props.incident.id }}
@@ -276,7 +227,7 @@ export const VsphereAlertsTable: Component<{
                                   {incident.resourceName}
                                 </div>
                                 <div class="truncate text-[10px] text-muted">
-                                  {formatResourceType(incident.resourceType)}
+                                  {formatPlatformAlertResourceType(incident.resourceType, 'vmware')}
                                   <Show when={incident.resource.parentName}>
                                     on {incident.resource.parentName}
                                   </Show>
@@ -315,7 +266,7 @@ export const VsphereAlertsTable: Component<{
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content lg:table-cell`}
                           >
                             <span class="block truncate" title={incident.managedObjectId}>
-                              {formatEntityType(incident.entityType)}
+                              {formatPlatformAlertEntityType(incident.entityType)}
                             </span>
                             <span class="block truncate text-[10px] text-muted">
                               {incident.managedObjectId}
@@ -324,7 +275,7 @@ export const VsphereAlertsTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content xl:table-cell`}
                           >
-                            {formatStartedAt(incident.startedAt)}
+                            {formatPlatformAlertStartedAt(incident.startedAt)}
                           </TableCell>
                         </TableRow>
                         <Show when={isExpanded()}>

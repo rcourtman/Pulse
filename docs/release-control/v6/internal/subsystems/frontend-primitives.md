@@ -2433,6 +2433,15 @@ owns the canonical All/Critical/Warning/Info option labels, tones, and leading
 dots for platform alert table toolbars. Platform alert tables must call
 `getPlatformAlertSeverityFilterOptions` instead of declaring local severity
 filter arrays or calling `filterChipStatusDot` directly for those filters.
+Platform alert detail formatting follows the same by-construction primitive
+rule. `frontend-modern/src/utils/alertDetailPresentation.ts` owns the provider
+code labels, provider-specific resource-type labels, vSphere alert entity
+labels, started-at row labels, and full detail timestamp labels consumed by
+Docker, Kubernetes, TrueNAS, and vSphere alert tables. Those tables must call
+`formatPlatformAlertCode`, `formatPlatformAlertResourceType`,
+`formatPlatformAlertEntityType`, `formatPlatformAlertStartedAt`, and
+`formatPlatformAlertDetailDateTime` instead of declaring local formatter
+helpers.
 Read-only metadata badges follow the same primitive-owned shell rule.
 `frontend-modern/src/components/shared/MetadataBadge.tsx` owns filled and
 outlined appearances, compact sizing, shape, typed tone vocabulary, fit

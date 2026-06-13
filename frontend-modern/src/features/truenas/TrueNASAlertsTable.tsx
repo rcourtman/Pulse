@@ -28,7 +28,13 @@ import {
   makeDetailRow,
   type DetailSection,
 } from '@/components/shared/DetailSectionTable';
-import type { Resource, ResourceType } from '@/types/resource';
+import type { Resource } from '@/types/resource';
+import {
+  formatPlatformAlertCode,
+  formatPlatformAlertDetailDateTime,
+  formatPlatformAlertResourceType,
+  formatPlatformAlertStartedAt,
+} from '@/utils/alertDetailPresentation';
 import { getAlertFilteredEmptyState } from '@/utils/alertOverviewPresentation';
 import {
   formatAlertSeverityLabel,
@@ -38,64 +44,7 @@ import {
 const TRUENAS_INCIDENT_STATUS_OPTIONS =
   getPlatformAlertSeverityFilterOptions<TrueNASIncidentSeverityFilter>();
 
-const formatResourceType = (type: ResourceType): string => {
-  switch (type) {
-    case 'agent':
-      return 'System';
-    case 'storage':
-    case 'pool':
-      return 'Pool';
-    case 'dataset':
-      return 'Dataset';
-    case 'physical_disk':
-      return 'Disk';
-    case 'network-share':
-      return 'Share';
-    case 'vm':
-      return 'VM';
-    case 'app-container':
-      return 'App';
-    default:
-      return type;
-  }
-};
-
-const formatCode = (code: string): string => {
-  const normalized = code.trim().replace(/^truenas_/, '');
-  if (!normalized) return '-';
-  return normalized
-    .split(/[\s_-]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
-    .join(' ');
-};
-
-const formatStartedAt = (value: string | undefined): string => {
-  if (!value) return '-';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '-';
-  return parsed.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
-
 type AlertDetailSection = DetailSection;
-
-const detailDateTime = (value?: string): string | null => {
-  if (!value) return null;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
 
 const detailRow = makeDetailRow;
 
@@ -110,22 +59,24 @@ const buildAlertDetailSections = (incident: TrueNASIncidentRow): AlertDetailSect
         }),
         detailRow('Summary', incident.summary),
         detailRow('Label', incident.label),
-        detailRow('Code', formatCode(incident.code), { title: incident.code }),
-        detailRow('Category', formatCode(incident.category)),
+        detailRow('Code', formatPlatformAlertCode(incident.code, 'truenas'), {
+          title: incident.code,
+        }),
+        detailRow('Category', formatPlatformAlertCode(incident.category, 'truenas')),
       ]),
     },
     {
       label: 'Source',
       rows: compactDetailRows([
         detailRow('Provider', incident.source),
-        detailRow('Started', detailDateTime(incident.startedAt)),
+        detailRow('Started', formatPlatformAlertDetailDateTime(incident.startedAt)),
       ]),
     },
     {
       label: 'Affected resource',
       rows: compactDetailRows([
         detailRow('Name', incident.resourceName),
-        detailRow('Type', formatResourceType(incident.resourceType)),
+        detailRow('Type', formatPlatformAlertResourceType(incident.resourceType, 'truenas')),
         detailRow('Parent', parentName),
         detailRow('Resource ID', incident.resourceId),
       ]),
@@ -144,8 +95,9 @@ const AlertDetailTable: Component<{ incident: TrueNASIncidentRow; onClose: () =>
     testId="truenas-alert-detail"
     detailFor={props.incident.id}
     title="Alert detail"
-    summary={`${formatAlertSeverityLabel(props.incident.severity)} · ${formatCode(
+    summary={`${formatAlertSeverityLabel(props.incident.severity)} · ${formatPlatformAlertCode(
       props.incident.code,
+      'truenas',
     )}`}
     sections={buildAlertDetailSections(props.incident)}
     detailAttributes={{ 'data-truenas-alert-detail-for': props.incident.id }}
@@ -274,7 +226,10 @@ export const TrueNASAlertsTable: Component<{
                                   {incident.resourceName}
                                 </div>
                                 <div class="truncate text-[10px] text-muted">
-                                  {formatResourceType(incident.resourceType)}
+                                  {formatPlatformAlertResourceType(
+                                    incident.resourceType,
+                                    'truenas',
+                                  )}
                                   <Show when={incident.resource.parentName}>
                                     on {incident.resource.parentName}
                                   </Show>
@@ -300,7 +255,7 @@ export const TrueNASAlertsTable: Component<{
                             class={`${getPlatformTableCellClassForKind('text')} hidden md:table-cell`}
                           >
                             <span class="block truncate" title={incident.code}>
-                              {formatCode(incident.code)}
+                              {formatPlatformAlertCode(incident.code, 'truenas')}
                             </span>
                             <span class="block truncate text-[10px] text-muted">
                               {incident.source}
@@ -309,7 +264,7 @@ export const TrueNASAlertsTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content lg:table-cell`}
                           >
-                            {formatStartedAt(incident.startedAt)}
+                            {formatPlatformAlertStartedAt(incident.startedAt)}
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content xl:table-cell`}

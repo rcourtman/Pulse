@@ -858,6 +858,65 @@
       ]
     },
     {
+      "id": "platform-alert-detail-formatters",
+      "category": "detail-formatting",
+      "summary": "Platform alert tables must get provider code, resource-type, entity-type, and timestamp labels from alertDetailPresentation instead of defining table-local detail formatter helpers.",
+      "canonical": {
+        "path": "src/utils/alertDetailPresentation.ts",
+        "export": "formatPlatformAlertCode"
+      },
+      "requiredConsumers": [
+        { "path": "src/features/docker/DockerAlertsTable.tsx" },
+        { "path": "src/features/kubernetes/KubernetesAlertsTable.tsx" },
+        { "path": "src/features/truenas/TrueNASAlertsTable.tsx" },
+        { "path": "src/features/vmware/VsphereAlertsTable.tsx" }
+      ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/features/docker/DockerAlertsTable.tsx",
+          "patterns": [
+            "const formatResourceType",
+            "const formatCode",
+            "const formatStartedAt",
+            "const detailDateTime"
+          ]
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesAlertsTable.tsx",
+          "patterns": [
+            "const formatResourceType",
+            "const formatCode",
+            "const formatStartedAt",
+            "const detailDateTime"
+          ]
+        },
+        {
+          "path": "src/features/truenas/TrueNASAlertsTable.tsx",
+          "patterns": [
+            "const formatResourceType",
+            "const formatCode",
+            "const formatStartedAt",
+            "const detailDateTime"
+          ]
+        },
+        {
+          "path": "src/features/vmware/VsphereAlertsTable.tsx",
+          "patterns": [
+            "const formatResourceType",
+            "const formatEntityType",
+            "const formatCode",
+            "const formatStartedAt",
+            "const detailDateTime"
+          ]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/utils/__tests__/alertDetailPresentation.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "metadata-badge-shell",
       "category": "metadata-badge",
       "summary": "Read-only metadata chips must compose MetadataBadge so size, shape, tone vocabulary, fit behavior, and whitespace handling stay shared instead of being copied as page-local pill spans.",
@@ -1682,6 +1741,126 @@
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "src/utils/__tests__/alertSeverityPresentation.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-alert-local-code-formatter-helper",
+      "category": "detail-formatting",
+      "summary": "Platform alert tables must not recreate provider-code formatter helpers; alert code labels belong to alertDetailPresentation.",
+      "canonical": {
+        "path": "src/utils/alertDetailPresentation.ts",
+        "export": "formatPlatformAlertCode"
+      },
+      "scopes": [
+        "src/features/docker",
+        "src/features/kubernetes",
+        "src/features/truenas",
+        "src/features/vmware"
+      ],
+      "extensions": [".tsx"],
+      "allPatterns": ["const formatCode", "IncidentRow"],
+      "legacyReason": "Retired migration debt. Platform alert code labels must call formatPlatformAlertCode instead of carrying page-local prefix stripping and title casing.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/utils/__tests__/alertDetailPresentation.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-alert-local-resource-type-formatter-helper",
+      "category": "detail-formatting",
+      "summary": "Platform alert tables must not recreate resource-type formatter helpers; provider-specific resource labels belong to alertDetailPresentation.",
+      "canonical": {
+        "path": "src/utils/alertDetailPresentation.ts",
+        "export": "formatPlatformAlertResourceType"
+      },
+      "scopes": [
+        "src/features/docker",
+        "src/features/kubernetes",
+        "src/features/truenas",
+        "src/features/vmware"
+      ],
+      "extensions": [".tsx"],
+      "allPatterns": ["const formatResourceType", "IncidentRow"],
+      "legacyReason": "Retired migration debt. Platform alert resource-type labels must call formatPlatformAlertResourceType instead of carrying page-local switch maps.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/utils/__tests__/alertDetailPresentation.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-alert-local-started-at-formatter-helper",
+      "category": "detail-formatting",
+      "summary": "Platform alert tables must not recreate started-at timestamp formatter helpers; alert timestamp labels belong to alertDetailPresentation.",
+      "canonical": {
+        "path": "src/utils/alertDetailPresentation.ts",
+        "export": "formatPlatformAlertStartedAt"
+      },
+      "scopes": [
+        "src/features/docker",
+        "src/features/kubernetes",
+        "src/features/truenas",
+        "src/features/vmware"
+      ],
+      "extensions": [".tsx"],
+      "allPatterns": ["const formatStartedAt", "IncidentRow"],
+      "legacyReason": "Retired migration debt. Platform alert row timestamps must call formatPlatformAlertStartedAt instead of carrying page-local date formatting.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/utils/__tests__/alertDetailPresentation.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-alert-local-detail-date-formatter-helper",
+      "category": "detail-formatting",
+      "summary": "Platform alert tables must not recreate detail timestamp formatter helpers; alert detail date labels belong to alertDetailPresentation.",
+      "canonical": {
+        "path": "src/utils/alertDetailPresentation.ts",
+        "export": "formatPlatformAlertDetailDateTime"
+      },
+      "scopes": [
+        "src/features/docker",
+        "src/features/kubernetes",
+        "src/features/truenas",
+        "src/features/vmware"
+      ],
+      "extensions": [".tsx"],
+      "allPatterns": ["const detailDateTime", "IncidentRow"],
+      "legacyReason": "Retired migration debt. Platform alert detail timestamps must call formatPlatformAlertDetailDateTime instead of carrying page-local date formatting.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/utils/__tests__/alertDetailPresentation.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-alert-local-entity-type-formatter-helper",
+      "category": "detail-formatting",
+      "summary": "vSphere alert tables must not recreate entity-type formatter helpers; vSphere alert entity labels belong to alertDetailPresentation.",
+      "canonical": {
+        "path": "src/utils/alertDetailPresentation.ts",
+        "export": "formatPlatformAlertEntityType"
+      },
+      "scopes": ["src/features/vmware"],
+      "extensions": [".tsx"],
+      "allPatterns": ["const formatEntityType", "VmwareIncidentRow"],
+      "legacyReason": "Retired migration debt. vSphere alert entity labels must call formatPlatformAlertEntityType instead of carrying page-local normalization.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/utils/__tests__/alertDetailPresentation.test.ts",
         "scripts/shared-template-audit.mjs"
       ]
     },
@@ -2589,6 +2768,35 @@
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "src/features/platformPage/__tests__/platformAlertSeverityFilterOptions.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-alert-detail-formatters-required",
+      "category": "detail-formatting",
+      "summary": "Feature alert tables with incident-row detail code and started-at fields must compose the shared platform alert detail formatter primitive.",
+      "canonical": {
+        "path": "src/utils/alertDetailPresentation.ts",
+        "export": "formatPlatformAlertCode"
+      },
+      "scopes": [
+        "src/features/docker",
+        "src/features/kubernetes",
+        "src/features/truenas",
+        "src/features/vmware"
+      ],
+      "extensions": [".tsx"],
+      "triggerPatterns": ["IncidentRow", "incident.code", "incident.startedAt"],
+      "requiredPatterns": [
+        "formatPlatformAlertCode",
+        "formatPlatformAlertStartedAt",
+        "formatPlatformAlertDetailDateTime"
+      ],
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/utils/__tests__/alertDetailPresentation.test.ts",
         "scripts/shared-template-audit.mjs"
       ]
     },

@@ -23,7 +23,12 @@ import {
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import { getPlatformAlertSeverityFilterOptions } from '@/features/platformPage/platformAlertSeverityFilterOptions';
-import type { ResourceType } from '@/types/resource';
+import {
+  formatPlatformAlertCode,
+  formatPlatformAlertDetailDateTime,
+  formatPlatformAlertResourceType,
+  formatPlatformAlertStartedAt,
+} from '@/utils/alertDetailPresentation';
 import { getAlertFilteredEmptyState } from '@/utils/alertOverviewPresentation';
 import {
   formatAlertSeverityLabel,
@@ -37,70 +42,6 @@ import {
 
 const DOCKER_INCIDENT_STATUS_OPTIONS =
   getPlatformAlertSeverityFilterOptions<DockerIncidentSeverityFilter>();
-
-const formatResourceType = (type: ResourceType): string => {
-  switch (type) {
-    case 'agent':
-      return 'Host';
-    case 'app-container':
-      return 'Container';
-    case 'docker-service':
-      return 'Service';
-    case 'docker-task':
-      return 'Task';
-    case 'docker-swarm-node':
-      return 'Swarm Node';
-    case 'docker-image':
-      return 'Image';
-    case 'docker-volume':
-      return 'Volume';
-    case 'docker-network':
-      return 'Network';
-    case 'docker-secret':
-      return 'Secret';
-    case 'docker-config':
-      return 'Config';
-    default:
-      return type;
-  }
-};
-
-const formatCode = (code: string): string => {
-  const normalized = code.trim().replace(/^docker_/, '');
-  if (!normalized) return '-';
-  return normalized
-    .split(/[\s_-]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
-    .join(' ');
-};
-
-const formatStartedAt = (value: string | undefined): string => {
-  if (!value) return '-';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '-';
-  if (parsed.getUTCFullYear() < 2000) return '-';
-  return parsed.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
-
-const detailDateTime = (value?: string): string => {
-  if (!value) return '-';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  if (parsed.getUTCFullYear() < 2000) return '-';
-  return parsed.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
 
 type AlertDetailSection = DetailSection;
 
@@ -117,14 +58,16 @@ const buildAlertDetailSections = (incident: DockerIncidentRow): AlertDetailSecti
         }),
         detailRow('Summary', incident.summary),
         detailRow('Signal', incident.label),
-        detailRow('Code', formatCode(incident.code), { title: incident.code }),
+        detailRow('Code', formatPlatformAlertCode(incident.code, 'docker'), {
+          title: incident.code,
+        }),
       ]),
     },
     {
       label: 'Affected resource',
       rows: compactDetailRows([
         detailRow('Name', incident.resourceName),
-        detailRow('Type', formatResourceType(incident.resourceType)),
+        detailRow('Type', formatPlatformAlertResourceType(incident.resourceType, 'docker')),
         detailRow('Host', docker?.hostname),
         detailRow('Runtime', docker?.runtime),
         detailRow('Swarm cluster', docker?.swarm?.clusterName),
@@ -134,7 +77,7 @@ const buildAlertDetailSections = (incident: DockerIncidentRow): AlertDetailSecti
     {
       label: 'Source',
       rows: compactDetailRows([
-        detailRow('Started', detailDateTime(incident.startedAt)),
+        detailRow('Started', formatPlatformAlertDetailDateTime(incident.startedAt)),
         detailRow('Provider', incident.source),
       ]),
     },
@@ -150,8 +93,9 @@ const AlertDetail: Component<{ incident: DockerIncidentRow; onClose: () => void 
     testId="docker-alert-detail"
     detailFor={props.incident.id}
     title="Docker alert detail"
-    summary={`${formatAlertSeverityLabel(props.incident.severity)} · ${formatCode(
+    summary={`${formatAlertSeverityLabel(props.incident.severity)} · ${formatPlatformAlertCode(
       props.incident.code,
+      'docker',
     )}`}
     sections={buildAlertDetailSections(props.incident)}
     detailAttributes={{ 'data-docker-alert-detail-for': props.incident.id }}
@@ -280,7 +224,7 @@ export const DockerAlertsTable: Component<{
                                   {incident.resourceName}
                                 </div>
                                 <div class="truncate text-[10px] text-muted">
-                                  {formatResourceType(incident.resourceType)}
+                                  {formatPlatformAlertResourceType(incident.resourceType, 'docker')}
                                   <Show when={incident.resource.parentName}>
                                     on {incident.resource.parentName}
                                   </Show>
@@ -312,13 +256,13 @@ export const DockerAlertsTable: Component<{
                               {docker()?.hostname || docker()?.swarm?.clusterName || '-'}
                             </span>
                             <span class="block truncate text-[10px] text-muted">
-                              {docker()?.runtime || formatCode(incident.code)}
+                              {docker()?.runtime || formatPlatformAlertCode(incident.code, 'docker')}
                             </span>
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content lg:table-cell`}
                           >
-                            {formatStartedAt(incident.startedAt)}
+                            {formatPlatformAlertStartedAt(incident.startedAt)}
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content xl:table-cell`}

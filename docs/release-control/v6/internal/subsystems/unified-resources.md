@@ -1789,6 +1789,13 @@ severity-label helpers, detail severity row tones must use
 and their severity toolbar filters must use
 `getPlatformAlertSeverityFilterOptions` instead of restoring local
 All/Critical/Warning/Info option arrays,
+and platform alert detail fields must use
+`formatPlatformAlertCode`, `formatPlatformAlertResourceType`,
+`formatPlatformAlertEntityType`, `formatPlatformAlertStartedAt`, and
+`formatPlatformAlertDetailDateTime` from
+`frontend-modern/src/utils/alertDetailPresentation.ts` instead of restoring
+table-local provider code, resource-type, entity-type, or timestamp formatter
+helpers,
 and local operator identity labels now split from governed detail summaries:
 infrastructure tables, selectors, links, and drawer headings must preserve the
 canonical local instance identity (`displayName`, canonical display name,

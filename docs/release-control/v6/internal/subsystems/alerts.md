@@ -528,6 +528,13 @@ frontend-primitives owns the visible platform severity badge and dot shells in
 `frontend-modern/src/components/shared/AlertSeverityBadge.tsx`. Platform alert
 tables must consume that split instead of recreating provider-local severity
 label, text-class, detail-tone, or variant helpers.
+Platform alert detail field formatting is also a shared alerts presentation
+boundary. `frontend-modern/src/utils/alertDetailPresentation.ts` owns provider
+code labels, provider-specific resource-type labels, vSphere alert entity
+labels, row timestamp labels, and detail timestamp labels for Docker,
+Kubernetes, TrueNAS, and vSphere alert tables. Platform alert tables must call
+those helpers instead of recreating local `formatCode`, `formatResourceType`,
+`formatEntityType`, `formatStartedAt`, or `detailDateTime` helpers.
 Alert history filter defaults such as the all-time period option must likewise
 come from the alert overview/history presentation helper and the shared
 filter-option label primitive rather than hard-coded title-case strings in the
