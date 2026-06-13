@@ -553,6 +553,11 @@ not a replacement status card, CTA band, or page-local nested card.
    classes, table rendering, and inline close-action chrome must come from
    `detailSectionModel.ts`, `DetailSectionTable`, and `InlineDetailPanel`
    instead of local `DetailField` grids or provider-named reusable primitives.
+   Resource-detail drawer byte labels, integer labels, and count pluralization
+   are part of that same primitive family: provider drawer models choose the
+   fields and domain labels, but numeric detail values must route through
+   `formatDetailBytesValue`, `formatDetailIntegerValue`, and
+   `formatDetailCountValue` in `detailSectionModel.ts`.
    Framed product table surfaces must consume the shared `TableCard` frame and
    `TableCardHeader` title/action band instead of composing page-local `Card`
    border, background, overflow, or table-title chrome. Feature owners may own

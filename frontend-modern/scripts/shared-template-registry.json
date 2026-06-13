@@ -163,6 +163,48 @@
       ]
     },
     {
+      "id": "resource-detail-numeric-value-formatting",
+      "category": "row-detail",
+      "summary": "Resource detail drawer models must use the shared detail-section numeric formatting helpers for byte scaling, integer labels, and count pluralization instead of recreating provider-local byte/count helpers.",
+      "canonical": {
+        "path": "src/components/shared/detailSectionModel.ts",
+        "export": "formatDetailBytesValue"
+      },
+      "requiredConsumers": [
+        { "path": "src/components/Infrastructure/resourceDetailDrawerKubernetesModel.ts" },
+        { "path": "src/components/Infrastructure/resourceDetailDrawerTrueNASModel.ts" },
+        { "path": "src/components/Infrastructure/resourceDetailDrawerVmwareModel.ts" }
+      ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/components/Infrastructure/resourceDetailDrawerKubernetesModel.ts",
+          "patterns": ["const formatBytes", "const units = ['B', 'KB', 'MB', 'GB', 'TB']"]
+        },
+        {
+          "path": "src/components/Infrastructure/resourceDetailDrawerTrueNASModel.ts",
+          "patterns": [
+            "const formatInteger",
+            "const formatBytes",
+            "const formatCount",
+            "new Intl.NumberFormat().format"
+          ]
+        },
+        {
+          "path": "src/components/Infrastructure/resourceDetailDrawerVmwareModel.ts",
+          "patterns": [
+            "const formatCount",
+            "const formatCapacityBytes",
+            "const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']"
+          ]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/__tests__/DetailSectionTable.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "table-card-frame-shell",
       "category": "table-card",
       "summary": "Product table surfaces must compose TableCard for the shared card frame instead of recreating local overflow-hidden bordered table wrappers.",
@@ -3940,6 +3982,92 @@
       "legacyReason": "Retired migration debt. Provider-specific names must not own platform-neutral detail tables; use DetailSectionTable / detailSectionModel.",
       "allowedPaths": [],
       "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/__tests__/DetailSectionTable.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "resource-detail-local-byte-format-helper",
+      "category": "row-detail",
+      "summary": "Resource detail drawer models must not recreate local byte-scaling helpers.",
+      "canonical": {
+        "path": "src/components/shared/detailSectionModel.ts",
+        "export": "formatDetailBytesValue"
+      },
+      "scopes": [
+        "src/components/Infrastructure/resourceDetailDrawerKubernetesModel.ts",
+        "src/components/Infrastructure/resourceDetailDrawerTrueNASModel.ts"
+      ],
+      "extensions": [".ts"],
+      "allPatterns": ["const formatBytes", "const units = ['B'"],
+      "legacyReason": "Retired migration debt. Detail drawer byte labels must use formatDetailBytesValue so byte precision, zero handling, and unit scaling stay shared.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/__tests__/DetailSectionTable.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "resource-detail-local-capacity-byte-format-helper",
+      "category": "row-detail",
+      "summary": "Resource detail drawer models must not recreate compact local capacity byte helpers.",
+      "canonical": {
+        "path": "src/components/shared/detailSectionModel.ts",
+        "export": "formatDetailBytesValue"
+      },
+      "scopes": ["src/components/Infrastructure/resourceDetailDrawerVmwareModel.ts"],
+      "extensions": [".ts"],
+      "allPatterns": ["const formatCapacityBytes", "const units = ['B'"],
+      "legacyReason": "Retired migration debt. Compact detail drawer capacity labels must use formatDetailBytesValue with compact precision instead of local byte scaling.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/__tests__/DetailSectionTable.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "resource-detail-local-count-format-helper",
+      "category": "row-detail",
+      "summary": "Resource detail drawer models must not recreate local count pluralization helpers.",
+      "canonical": {
+        "path": "src/components/shared/detailSectionModel.ts",
+        "export": "formatDetailCountValue"
+      },
+      "scopes": [
+        "src/components/Infrastructure/resourceDetailDrawerTrueNASModel.ts",
+        "src/components/Infrastructure/resourceDetailDrawerVmwareModel.ts"
+      ],
+      "extensions": [".ts"],
+      "allPatterns": ["const formatCount"],
+      "legacyReason": "Retired migration debt. Detail drawer count labels must use formatDetailCountValue so integer formatting and pluralization stay shared.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/__tests__/DetailSectionTable.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "resource-detail-local-integer-format-helper",
+      "category": "row-detail",
+      "summary": "Resource detail drawer models must not recreate local integer formatters.",
+      "canonical": {
+        "path": "src/components/shared/detailSectionModel.ts",
+        "export": "formatDetailIntegerValue"
+      },
+      "scopes": ["src/components/Infrastructure/resourceDetailDrawerTrueNASModel.ts"],
+      "extensions": [".ts"],
+      "allPatterns": ["const formatInteger", "new Intl.NumberFormat().format"],
+      "legacyReason": "Retired migration debt. Detail drawer integer labels must use formatDetailIntegerValue so count-like numeric rows share locale formatting.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "src/components/shared/__tests__/DetailSectionTable.test.tsx",

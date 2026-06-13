@@ -5,6 +5,9 @@ import {
   InlineDetailPanel,
   compactDetailRows,
   compactDetailSections,
+  formatDetailBytesValue,
+  formatDetailCountValue,
+  formatDetailIntegerValue,
   makeDetailRow,
 } from '../DetailSectionTable';
 import detailSectionTableSource from '../DetailSectionTable.tsx?raw';
@@ -33,6 +36,24 @@ describe('DetailSectionTable', () => {
         { label: 'Host', rows: [makeDetailRow('Name', 'tower')!] },
       ]),
     ).toEqual([{ label: 'Host', rows: [{ label: 'Name', value: 'tower' }] }]);
+  });
+
+  it('keeps detail numeric formatting in the shared model', () => {
+    expect(formatDetailBytesValue(undefined)).toBeNull();
+    expect(formatDetailBytesValue(0)).toBeNull();
+    expect(formatDetailBytesValue(0, { allowZero: true })).toBe('0 B');
+    expect(formatDetailBytesValue(8 * 1024 ** 3)).toBe('8.00 GB');
+    expect(
+      formatDetailBytesValue(8 * 1024 ** 3, {
+        allowZero: true,
+        precision: 'compact',
+        trimWhole: true,
+      }),
+    ).toBe('8 GB');
+    expect(formatDetailIntegerValue(1234.6)).toBe(new Intl.NumberFormat().format(1235));
+    expect(formatDetailCountValue(1, 'disk')).toBe('1 disk');
+    expect(formatDetailCountValue(2, 'vCPU', 'vCPU')).toBe('2 vCPU');
+    expect(formatDetailCountValue(undefined, 'disk')).toBeNull();
   });
 
   it('renders section tables with shared value tone classes', () => {

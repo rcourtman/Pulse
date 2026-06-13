@@ -2,6 +2,7 @@ import type { Resource, ResourceKubernetesPodContainerStatus } from '@/types/res
 import {
   compactDetailRows as compactRows,
   compactDetailSections as compactSections,
+  formatDetailBytesValue,
   makeDetailRow as makeRow,
   type DetailSection,
 } from '@/components/shared/detailSectionModel';
@@ -13,24 +14,12 @@ const asString = (value?: string | null): string | null => {
   return trimmed ? trimmed : null;
 };
 
-const formatBytes = (bytes?: number): string | null => {
-  if (typeof bytes !== 'number' || !Number.isFinite(bytes) || bytes <= 0) return null;
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  let scaled = bytes;
-  let unitIndex = 0;
-  while (scaled >= 1024 && unitIndex < units.length - 1) {
-    scaled /= 1024;
-    unitIndex += 1;
-  }
-  return `${scaled.toFixed(scaled >= 100 ? 0 : scaled >= 10 ? 1 : 2)} ${units[unitIndex]}`;
-};
-
 const formatNodeBudget = (cores?: number, memoryBytes?: number, pods?: number): string | null => {
   const parts: string[] = [];
   if (typeof cores === 'number' && Number.isFinite(cores) && cores > 0) {
     parts.push(`${cores} cores`);
   }
-  const memory = formatBytes(memoryBytes);
+  const memory = formatDetailBytesValue(memoryBytes);
   if (memory) parts.push(memory);
   if (typeof pods === 'number' && Number.isFinite(pods) && pods > 0) {
     parts.push(`${pods} pods`);

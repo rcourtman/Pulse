@@ -6,6 +6,9 @@ import type { DetailSection, DetailValueTone } from './detailSectionModel';
 export {
   compactDetailRows,
   compactDetailSections,
+  formatDetailBytesValue,
+  formatDetailCountValue,
+  formatDetailIntegerValue,
   makeDetailRow,
   type DetailRow,
   type DetailSection,

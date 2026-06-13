@@ -363,6 +363,10 @@ compaction, table rendering, value-tone classes, and inline close-action chrome
 must compose the frontend-primitives-owned `DetailSectionTable`,
 `InlineDetailPanel`, and `detailSectionModel.ts` primitives instead of
 recreating local `DetailField` grids or provider-named neutral detail tables.
+Provider detail drawer models also own which byte, count, and integer fields
+are meaningful, but the formatting and pluralization of those repeated numeric
+detail values must use the shared `detailSectionModel.ts` helpers rather than
+provider-local byte scaling, integer, or count helpers.
 The split also applies to web-interface launch affordances. Unified-resource
 tables own whether a row has a saved, inferred, or source-native web-interface
 URL and how that URL is derived, but the visible launch affordance belongs on

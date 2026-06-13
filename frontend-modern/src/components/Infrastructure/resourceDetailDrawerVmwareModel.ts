@@ -8,6 +8,10 @@ import type {
   ResourceVMwareVirtualDisk,
 } from '@/types/resource';
 import { formatVmwareClusterServices } from '@/utils/vmwareDisplay';
+import {
+  formatDetailBytesValue,
+  formatDetailCountValue,
+} from '@/components/shared/detailSectionModel';
 
 export type ResourceDetailDrawerVMwareRowTone = 'default' | 'accent' | 'warning';
 
@@ -33,9 +37,6 @@ export type ResourceDetailDrawerVMwareSection = {
 };
 
 const asTrimmedString = (value?: string | null): string => (value || '').trim();
-
-const formatCount = (count: number, label: string): string =>
-  `${count} ${label}${count === 1 ? '' : 's'}`;
 
 const summarizeList = (values: string[] | undefined): string =>
   (values ?? []).map(asTrimmedString).filter(Boolean).join(', ');
@@ -74,22 +75,15 @@ const formatEnumLabel = (value?: string | null): string => {
     .join(' ');
 };
 
-const formatCapacityBytes = (value?: number): string => {
-  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return '';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
-  let size = value;
-  let unitIndex = 0;
-  while (size >= 1024 && unitIndex < units.length - 1) {
-    size /= 1024;
-    unitIndex += 1;
-  }
-  const precision = unitIndex === 0 || size >= 10 ? 0 : 1;
-  return `${size.toFixed(precision)} ${units[unitIndex]}`;
-};
-
 const formatMiB = (value?: number): string => {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return '';
-  return formatCapacityBytes(value * 1024 * 1024).replace(/\.0 ([A-Z]+)/, ' $1');
+  return (
+    formatDetailBytesValue(value * 1024 * 1024, {
+      allowZero: true,
+      precision: 'compact',
+      trimWhole: true,
+    }) ?? ''
+  );
 };
 
 const countSnapshotTree = (snapshots?: ResourceVMwareSnapshot[]): number =>
@@ -233,8 +227,7 @@ const hardwareRows = (vmware?: ResourceVMwareMeta): ResourceDetailDrawerVMwareRo
   if (!vmware?.hardware) return [];
   const hardware = vmware.hardware;
   const upgradeStatus = asTrimmedString(hardware.upgradeStatus).toUpperCase();
-  const upgradeAttention =
-    Boolean(upgradeStatus) && !['NONE', 'OK'].includes(upgradeStatus);
+  const upgradeAttention = Boolean(upgradeStatus) && !['NONE', 'OK'].includes(upgradeStatus);
   return filterNonEmptyRows([
     {
       label: 'Guest OS',
@@ -296,8 +289,7 @@ const toolsSummary = (tools?: ResourceVMwareTools): string => {
 const toolsRows = (tools?: ResourceVMwareTools): ResourceDetailDrawerVMwareRow[] => {
   if (!tools) return [];
   const versionStatus = asTrimmedString(tools.versionStatus).toUpperCase();
-  const versionAttention =
-    Boolean(versionStatus) && !['CURRENT', 'OK'].includes(versionStatus);
+  const versionAttention = Boolean(versionStatus) && !['CURRENT', 'OK'].includes(versionStatus);
   // Drawer surfaces what an operator scans for: is Tools running, is its
   // version current, has the guest asked for a reboot, did the last install
   // error. Install metadata (install type, upgrade policy, auto-update
@@ -359,7 +351,11 @@ const formatVirtualDiskAddress = (disk: ResourceVMwareVirtualDisk): string => {
 const virtualDiskValue = (disk: ResourceVMwareVirtualDisk): string => {
   const parts = [
     formatVirtualDiskAddress(disk),
-    formatCapacityBytes(disk.capacityBytes),
+    formatDetailBytesValue(disk.capacityBytes, {
+      allowZero: true,
+      precision: 'compact',
+      trimWhole: true,
+    }),
     asTrimmedString(disk.datastoreName),
     asTrimmedString(disk.backingType),
     asTrimmedString(disk.vmdkFile),
@@ -399,7 +395,7 @@ const vmwareEntityLabel = (entityType?: string): string => {
 const buildSignalValue = (count: number | undefined, label: string, summary?: string): string => {
   const parts: string[] = [];
   if (typeof count === 'number') {
-    parts.push(formatCount(Math.max(0, count), label));
+    parts.push(formatDetailCountValue(Math.max(0, count), label));
   }
   const trimmedSummary = asTrimmedString(summary);
   if (trimmedSummary) {
@@ -438,21 +434,21 @@ export const buildVMwareDetailsSummary = (
       ? Math.max(0, vmware.snapshotCount)
       : countSnapshotTree(vmware.snapshotTree);
   if (resourceType === 'vm' && snapshotCount > 0) {
-    parts.push(formatCount(snapshotCount, 'snapshot'));
+    parts.push(formatDetailCountValue(snapshotCount, 'snapshot'));
   }
   const networkAdapterCount = vmware.networkAdapters?.length ?? 0;
   if (resourceType === 'vm' && networkAdapterCount > 0) {
-    parts.push(formatCount(networkAdapterCount, 'vNIC'));
+    parts.push(formatDetailCountValue(networkAdapterCount, 'vNIC'));
   }
   const virtualDiskCount = vmware.virtualDisks?.length ?? 0;
   if (resourceType === 'vm' && virtualDiskCount > 0) {
-    parts.push(formatCount(virtualDiskCount, 'disk'));
+    parts.push(formatDetailCountValue(virtualDiskCount, 'disk'));
   }
   if (resourceType === 'network') {
     const hostCount = vmware.networkHostNames?.length ?? vmware.networkHostIds?.length ?? 0;
     const vmCount = vmware.networkVmNames?.length ?? vmware.networkVmIds?.length ?? 0;
-    if (hostCount > 0) parts.push(formatCount(hostCount, 'host'));
-    if (vmCount > 0) parts.push(formatCount(vmCount, 'VM'));
+    if (hostCount > 0) parts.push(formatDetailCountValue(hostCount, 'host'));
+    if (vmCount > 0) parts.push(formatDetailCountValue(vmCount, 'VM'));
   }
   const hardware = resourceType === 'vm' ? hardwareSummary(vmware.hardware) : '';
   if (hardware) {
@@ -463,10 +459,10 @@ export const buildVMwareDetailsSummary = (
     parts.push(tools);
   }
   if ((vmware.activeAlarmCount ?? 0) > 0) {
-    parts.push(formatCount(vmware.activeAlarmCount ?? 0, 'alarm'));
+    parts.push(formatDetailCountValue(vmware.activeAlarmCount ?? 0, 'alarm'));
   }
   if ((vmware.recentTaskCount ?? 0) > 0) {
-    parts.push(formatCount(vmware.recentTaskCount ?? 0, 'task'));
+    parts.push(formatDetailCountValue(vmware.recentTaskCount ?? 0, 'task'));
   }
 
   return parts.join(' · ');
@@ -616,7 +612,7 @@ export const buildVMwareDetailSections = (
       label: 'Snapshots',
       value:
         resourceType === 'vm' || typeof vmware.snapshotCount === 'number'
-          ? formatCount(
+          ? formatDetailCountValue(
               Math.max(
                 0,
                 typeof vmware.snapshotCount === 'number'

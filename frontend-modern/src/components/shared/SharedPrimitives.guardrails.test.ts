@@ -208,6 +208,7 @@ import resourceDetailDrawerSource from '@/components/Infrastructure/ResourceDeta
 import resourceDetailDrawerDebugTabSource from '@/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx?raw';
 import resourceDetailDrawerKubernetesModelSource from '@/components/Infrastructure/resourceDetailDrawerKubernetesModel.ts?raw';
 import resourceDetailDrawerTrueNASModelSource from '@/components/Infrastructure/resourceDetailDrawerTrueNASModel.ts?raw';
+import resourceDetailDrawerVmwareModelSource from '@/components/Infrastructure/resourceDetailDrawerVmwareModel.ts?raw';
 import aiSettingsDialogsSource from '@/components/Settings/AISettingsDialogs.tsx?raw';
 import aiProviderConfigurationSectionSource from '@/components/Settings/AIProviderConfigurationSection.tsx?raw';
 import agentProfilesPanelSource from '@/components/Settings/AgentProfilesPanel.tsx?raw';
@@ -5391,6 +5392,7 @@ describe('shared primitive guardrails', () => {
         canonical?: { path?: string; export?: string };
         allPatterns?: string[];
         allowedPaths?: string[];
+        ignoredPaths?: string[];
         scopes?: string[];
       }>;
     };
@@ -5402,6 +5404,21 @@ describe('shared primitive guardrails', () => {
     );
     const providerNamedGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'inline-detail-provider-named-primitive-import',
+    );
+    const numericFormatRule = registry.rules?.find(
+      (rule) => rule.id === 'resource-detail-numeric-value-formatting',
+    );
+    const localByteFormatGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'resource-detail-local-byte-format-helper',
+    );
+    const localCapacityByteFormatGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'resource-detail-local-capacity-byte-format-helper',
+    );
+    const localCountFormatGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'resource-detail-local-count-format-helper',
+    );
+    const localIntegerFormatGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'resource-detail-local-integer-format-helper',
     );
 
     expect(registeredRule?.canonical?.path).toBe('src/components/shared/DetailSectionTable.tsx');
@@ -5444,8 +5461,78 @@ describe('shared primitive guardrails', () => {
     expect(providerNamedGuard?.allPatterns).toEqual(['TrueNASDetailTable']);
     expect(providerNamedGuard?.allowedPaths ?? []).toHaveLength(0);
 
+    expect(numericFormatRule?.canonical?.path).toBe('src/components/shared/detailSectionModel.ts');
+    expect(numericFormatRule?.canonical?.export).toBe('formatDetailBytesValue');
+    expect(numericFormatRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/components/Infrastructure/resourceDetailDrawerKubernetesModel.ts',
+      'src/components/Infrastructure/resourceDetailDrawerTrueNASModel.ts',
+      'src/components/Infrastructure/resourceDetailDrawerVmwareModel.ts',
+    ]);
+    expect(numericFormatRule?.forbiddenPatterns).toEqual([
+      {
+        path: 'src/components/Infrastructure/resourceDetailDrawerKubernetesModel.ts',
+        patterns: ['const formatBytes', "const units = ['B', 'KB', 'MB', 'GB', 'TB']"],
+      },
+      {
+        path: 'src/components/Infrastructure/resourceDetailDrawerTrueNASModel.ts',
+        patterns: [
+          'const formatInteger',
+          'const formatBytes',
+          'const formatCount',
+          'new Intl.NumberFormat().format',
+        ],
+      },
+      {
+        path: 'src/components/Infrastructure/resourceDetailDrawerVmwareModel.ts',
+        patterns: [
+          'const formatCount',
+          'const formatCapacityBytes',
+          "const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']",
+        ],
+      },
+    ]);
+    expect(localByteFormatGuard?.canonical?.export).toBe('formatDetailBytesValue');
+    expect(localByteFormatGuard?.scopes).toEqual([
+      'src/components/Infrastructure/resourceDetailDrawerKubernetesModel.ts',
+      'src/components/Infrastructure/resourceDetailDrawerTrueNASModel.ts',
+    ]);
+    expect(localByteFormatGuard?.allPatterns).toEqual(['const formatBytes', "const units = ['B'"]);
+    expect(localByteFormatGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(localByteFormatGuard?.ignoredPaths ?? []).toHaveLength(0);
+    expect(localCapacityByteFormatGuard?.canonical?.export).toBe('formatDetailBytesValue');
+    expect(localCapacityByteFormatGuard?.scopes).toEqual([
+      'src/components/Infrastructure/resourceDetailDrawerVmwareModel.ts',
+    ]);
+    expect(localCapacityByteFormatGuard?.allPatterns).toEqual([
+      'const formatCapacityBytes',
+      "const units = ['B'",
+    ]);
+    expect(localCapacityByteFormatGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(localCapacityByteFormatGuard?.ignoredPaths ?? []).toHaveLength(0);
+    expect(localCountFormatGuard?.canonical?.export).toBe('formatDetailCountValue');
+    expect(localCountFormatGuard?.scopes).toEqual([
+      'src/components/Infrastructure/resourceDetailDrawerTrueNASModel.ts',
+      'src/components/Infrastructure/resourceDetailDrawerVmwareModel.ts',
+    ]);
+    expect(localCountFormatGuard?.allPatterns).toEqual(['const formatCount']);
+    expect(localCountFormatGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(localCountFormatGuard?.ignoredPaths ?? []).toHaveLength(0);
+    expect(localIntegerFormatGuard?.canonical?.export).toBe('formatDetailIntegerValue');
+    expect(localIntegerFormatGuard?.scopes).toEqual([
+      'src/components/Infrastructure/resourceDetailDrawerTrueNASModel.ts',
+    ]);
+    expect(localIntegerFormatGuard?.allPatterns).toEqual([
+      'const formatInteger',
+      'new Intl.NumberFormat().format',
+    ]);
+    expect(localIntegerFormatGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(localIntegerFormatGuard?.ignoredPaths ?? []).toHaveLength(0);
+
     expect(detailSectionModelSource).toContain('export type DetailSection');
     expect(detailSectionModelSource).toContain('makeDetailRow');
+    expect(detailSectionModelSource).toContain('formatDetailBytesValue');
+    expect(detailSectionModelSource).toContain('formatDetailCountValue');
+    expect(detailSectionModelSource).toContain('formatDetailIntegerValue');
     expect(detailSectionTableSource).toContain('DetailSectionTable');
     expect(detailSectionTableSource).toContain('InlineDetailPanel');
     expect(detailSectionTableSource).toContain('variant="outline"');
@@ -5459,6 +5546,21 @@ describe('shared primitive guardrails', () => {
       expect(source).not.toContain('trueNASDetailTableModel');
       expect(source).not.toContain('makeTrueNASDetailRow');
     }
+    for (const source of [
+      resourceDetailDrawerKubernetesModelSource,
+      resourceDetailDrawerTrueNASModelSource,
+      resourceDetailDrawerVmwareModelSource,
+    ]) {
+      expect(source).toContain('formatDetailBytesValue');
+      expect(source).not.toContain('const formatBytes');
+      expect(source).not.toContain('const formatCapacityBytes');
+    }
+    expect(resourceDetailDrawerTrueNASModelSource).toContain('formatDetailIntegerValue');
+    expect(resourceDetailDrawerTrueNASModelSource).toContain('formatDetailCountValue');
+    expect(resourceDetailDrawerVmwareModelSource).toContain('formatDetailCountValue');
+    expect(resourceDetailDrawerTrueNASModelSource).not.toContain('const formatInteger');
+    expect(resourceDetailDrawerTrueNASModelSource).not.toContain('const formatCount');
+    expect(resourceDetailDrawerVmwareModelSource).not.toContain('const formatCount');
 
     expect(resourceDetailDrawerOverviewTabSource).toContain('DetailSectionTable');
     expect(resourceDetailDrawerOverviewTabSource).not.toContain('TrueNASDetailSectionTable');

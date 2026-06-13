@@ -12,6 +12,9 @@ import type {
 import {
   compactDetailRows,
   compactDetailSections,
+  formatDetailBytesValue,
+  formatDetailCountValue,
+  formatDetailIntegerValue,
   makeDetailRow,
   type DetailRow,
   type DetailSection,
@@ -32,11 +35,6 @@ const asString = (value?: string | null): string | null => {
 const asPositiveNumber = (value?: number): number | null =>
   typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
 
-const formatInteger = (value?: number): string | null => {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
-  return new Intl.NumberFormat().format(Math.round(value));
-};
-
 const normalizeDelimitedLabel = (value?: string): string | null => {
   const trimmed = asString(value);
   if (!trimmed) return null;
@@ -45,19 +43,6 @@ const normalizeDelimitedLabel = (value?: string): string | null => {
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
     .join(' ');
-};
-
-const formatBytes = (bytes?: number): string | null => {
-  const value = asPositiveNumber(bytes);
-  if (!value) return null;
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  let scaled = value;
-  let unitIndex = 0;
-  while (scaled >= 1024 && unitIndex < units.length - 1) {
-    scaled /= 1024;
-    unitIndex += 1;
-  }
-  return `${scaled.toFixed(scaled >= 100 ? 0 : scaled >= 10 ? 1 : 2)} ${units[unitIndex]}`;
 };
 
 const formatPercent = (percent?: number): string | null => {
@@ -80,9 +65,6 @@ const formatDurationSeconds = (seconds?: number): string | null => {
   const minutes = Math.floor(value / 60);
   return minutes > 0 ? `${minutes}m` : '<1m';
 };
-
-const formatCount = (value: number, singular: string, plural = `${singular}s`): string =>
-  `${new Intl.NumberFormat().format(value)} ${value === 1 ? singular : plural}`;
 
 const summarizeList = (
   values: string[],
@@ -196,7 +178,10 @@ const buildTrueNASSystemSections = (
   ]);
 
   const serviceRows = compactRows([
-    row('Services', services.length > 0 ? formatCount(services.length, 'service') : null),
+    row(
+      'Services',
+      services.length > 0 ? formatDetailCountValue(services.length, 'service') : null,
+    ),
     ...(['running', 'attention', 'stopped', 'disabled'] as TrueNASServiceStatus[]).map((status) =>
       row(
         serviceStatusLabel(status),
@@ -241,8 +226,8 @@ const storageStateTone = (
 };
 
 const storageUsageLabel = (resource: Resource): string | null => {
-  const used = formatBytes(resource.disk?.used);
-  const total = formatBytes(resource.disk?.total);
+  const used = formatDetailBytesValue(resource.disk?.used);
+  const total = formatDetailBytesValue(resource.disk?.total);
   if (used && total) return `${used} / ${total}`;
   return formatPercent(resource.disk?.current);
 };
@@ -275,11 +260,11 @@ const buildTrueNASStorageSections = (
 
   const capacityRows = compactRows([
     row('Usage', storageUsageLabel(resource)),
-    row('Used', formatBytes(resource.disk?.used)),
-    row('Total', formatBytes(resource.disk?.total)),
+    row('Used', formatDetailBytesValue(resource.disk?.used)),
+    row('Total', formatDetailBytesValue(resource.disk?.total)),
     row('Percent', formatPercent(resource.disk?.current)),
-    row('Children', formatInteger(resource.childCount)),
-    row('Consumers', formatInteger(storage.consumerCount)),
+    row('Children', formatDetailIntegerValue(resource.childCount)),
+    row('Consumers', formatDetailIntegerValue(storage.consumerCount)),
   ]);
 
   const healthRows = compactRows([
@@ -329,7 +314,7 @@ const diskTypeLabel = (value?: string): string | null => {
 const formatDiskHours = (hours?: number): string | null => {
   const value = asPositiveNumber(hours);
   if (!value) return null;
-  return `${formatInteger(value) ?? value.toFixed(0)}h`;
+  return `${formatDetailIntegerValue(value) ?? value.toFixed(0)}h`;
 };
 
 const buildTrueNASDiskSections = (
@@ -345,7 +330,7 @@ const buildTrueNASDiskSections = (
     row('Serial', asString(disk.serial)),
     row('WWN', asString(disk.wwn)),
     row('Type', diskTypeLabel(disk.diskType)),
-    row('Size', formatBytes(disk.sizeBytes)),
+    row('Size', formatDetailBytesValue(disk.sizeBytes)),
   ]);
 
   const healthRows = compactRows([
@@ -357,7 +342,7 @@ const buildTrueNASDiskSections = (
       'Wearout',
       disk.wearout === undefined || disk.wearout < 0 ? null : formatPercent(disk.wearout),
     ),
-    row('RPM', formatInteger(disk.rpm)),
+    row('RPM', formatDetailIntegerValue(disk.rpm)),
     row('Role', normalizeDelimitedLabel(disk.storageRole)),
     row('Group', asString(disk.storageGroup) ?? asString(resource.parentName)),
     row('State', normalizeDelimitedLabel(disk.storageState)),
@@ -366,23 +351,23 @@ const buildTrueNASDiskSections = (
 
   const smartRows = compactRows([
     row('Power on', formatDiskHours(disk.smart?.powerOnHours)),
-    row('Power cycles', formatInteger(disk.smart?.powerCycles)),
-    row('Reallocated', formatInteger(disk.smart?.reallocatedSectors), {
+    row('Power cycles', formatDetailIntegerValue(disk.smart?.powerCycles)),
+    row('Reallocated', formatDetailIntegerValue(disk.smart?.reallocatedSectors), {
       tone: disk.smart?.reallocatedSectors ? 'warning' : 'default',
     }),
-    row('Pending sectors', formatInteger(disk.smart?.pendingSectors), {
+    row('Pending sectors', formatDetailIntegerValue(disk.smart?.pendingSectors), {
       tone: disk.smart?.pendingSectors ? 'warning' : 'default',
     }),
-    row('Offline uncorrectable', formatInteger(disk.smart?.offlineUncorrectable), {
+    row('Offline uncorrectable', formatDetailIntegerValue(disk.smart?.offlineUncorrectable), {
       tone: disk.smart?.offlineUncorrectable ? 'warning' : 'default',
     }),
-    row('CRC errors', formatInteger(disk.smart?.udmaCrcErrors), {
+    row('CRC errors', formatDetailIntegerValue(disk.smart?.udmaCrcErrors), {
       tone: disk.smart?.udmaCrcErrors ? 'warning' : 'default',
     }),
-    row('Media errors', formatInteger(disk.smart?.mediaErrors), {
+    row('Media errors', formatDetailIntegerValue(disk.smart?.mediaErrors), {
       tone: disk.smart?.mediaErrors ? 'warning' : 'default',
     }),
-    row('Unsafe shutdowns', formatInteger(disk.smart?.unsafeShutdowns)),
+    row('Unsafe shutdowns', formatDetailIntegerValue(disk.smart?.unsafeShutdowns)),
     row('Available spare', formatPercent(disk.smart?.availableSpare)),
     row('Percentage used', formatPercent(disk.smart?.percentageUsed)),
   ]);
@@ -456,7 +441,7 @@ const buildTrueNASAppSections = (
       tone: app.state?.toLowerCase() === 'running' ? 'success' : 'warning',
     }),
     row('Version', asString(app.humanVersion) ?? asString(app.version)),
-    row('Containers', formatInteger(containerCount)),
+    row('Containers', formatDetailIntegerValue(containerCount)),
     row('Custom app', yesNoValue(app.customApp)),
     row(
       'App updates',
@@ -499,12 +484,12 @@ const buildTrueNASAppSections = (
 
 const formatVMCpu = (vm: ResourceTrueNASVMMeta): string | null => {
   const vcpus = asPositiveNumber(vm.vcpus);
-  if (vcpus) return formatCount(vcpus, 'vCPU', 'vCPU');
+  if (vcpus) return formatDetailCountValue(vcpus, 'vCPU', 'vCPU');
   const cores = asPositiveNumber(vm.cores);
   const threads = asPositiveNumber(vm.threads);
   if (cores && threads) return `${cores} cores x ${threads} threads`;
-  if (cores) return formatCount(cores, 'core');
-  if (threads) return formatCount(threads, 'thread');
+  if (cores) return formatDetailCountValue(cores, 'core');
+  if (threads) return formatDetailCountValue(threads, 'thread');
   return null;
 };
 
@@ -512,8 +497,8 @@ const formatVMTopology = (vm: ResourceTrueNASVMMeta): string | null => {
   const cores = asPositiveNumber(vm.cores);
   const threads = asPositiveNumber(vm.threads);
   if (cores && threads) return `${cores} cores x ${threads} threads`;
-  if (cores) return formatCount(cores, 'core');
-  if (threads) return formatCount(threads, 'thread');
+  if (cores) return formatDetailCountValue(cores, 'core');
+  if (threads) return formatDetailCountValue(threads, 'thread');
   return null;
 };
 
@@ -531,8 +516,8 @@ const buildTrueNASVMSections = (
     row('Domain state', sameState ? null : domainState),
     row('vCPU', formatVMCpu(vm)),
     row('Topology', formatVMTopology(vm)),
-    row('Memory', formatBytes(vm.memoryBytes)),
-    row('Minimum memory', formatBytes(vm.minMemoryBytes)),
+    row('Memory', formatDetailBytesValue(vm.memoryBytes)),
+    row('Minimum memory', formatDetailBytesValue(vm.minMemoryBytes)),
     row('CPU mode', normalizeDelimitedLabel(vm.cpuMode)),
     row('CPU model', asString(vm.cpuModel)),
   ]);
@@ -540,18 +525,18 @@ const buildTrueNASVMSections = (
   const runtimeRows = compactRows([
     row('Bootloader', asString(vm.bootloader)),
     row('Machine', machine),
-    row('Process ID', formatInteger(vm.pid)),
+    row('Process ID', formatDetailIntegerValue(vm.pid)),
     row('UUID', asString(vm.uuid)),
   ]);
 
   const deviceRows = compactRows([
-    row('Total', formatInteger(vm.deviceCount)),
-    row('Disks', formatInteger(vm.diskCount)),
-    row('NICs', formatInteger(vm.nicCount)),
-    row('Displays', formatInteger(vm.displayCount)),
-    row('CD-ROMs', formatInteger(vm.cdromCount)),
-    row('USB', formatInteger(vm.usbCount)),
-    row('PCI', formatInteger(vm.pciCount)),
+    row('Total', formatDetailIntegerValue(vm.deviceCount)),
+    row('Disks', formatDetailIntegerValue(vm.diskCount)),
+    row('NICs', formatDetailIntegerValue(vm.nicCount)),
+    row('Displays', formatDetailIntegerValue(vm.displayCount)),
+    row('CD-ROMs', formatDetailIntegerValue(vm.cdromCount)),
+    row('USB', formatDetailIntegerValue(vm.usbCount)),
+    row('PCI', formatDetailIntegerValue(vm.pciCount)),
   ]);
 
   const flagRows = compactRows([
@@ -674,8 +659,8 @@ export const buildTrueNASDetailsSummary = (resource: Resource): string | null =>
     const summary = [
       normalizeDelimitedLabel(vm.state ?? vm.domainState),
       formatVMCpu(vm),
-      formatBytes(vm.memoryBytes),
-      deviceCount ? formatCount(deviceCount, 'device') : null,
+      formatDetailBytesValue(vm.memoryBytes),
+      deviceCount ? formatDetailCountValue(deviceCount, 'device') : null,
     ].filter((value): value is string => Boolean(value));
     return summary.length > 0 ? summary.join(', ') : null;
   }
@@ -686,9 +671,9 @@ export const buildTrueNASDetailsSummary = (resource: Resource): string | null =>
     const updateCount = [app.upgradeAvailable, app.imageUpdatesAvailable].filter(Boolean).length;
     const summary = [
       normalizeDelimitedLabel(app.state),
-      formatCount(app.containerCount ?? app.containers?.length ?? 0, 'container'),
-      formatCount(portCount, 'port'),
-      updateCount > 0 ? formatCount(updateCount, 'update') : null,
+      formatDetailCountValue(app.containerCount ?? app.containers?.length ?? 0, 'container'),
+      formatDetailCountValue(portCount, 'port'),
+      updateCount > 0 ? formatDetailCountValue(updateCount, 'update') : null,
     ].filter((value): value is string => Boolean(value));
     return summary.length > 0 ? summary.join(', ') : null;
   }
@@ -709,7 +694,7 @@ export const buildTrueNASDetailsSummary = (resource: Resource): string | null =>
     const summary = [
       diskTypeLabel(disk.diskType),
       normalizeDelimitedLabel(disk.health),
-      formatBytes(disk.sizeBytes),
+      formatDetailBytesValue(disk.sizeBytes),
       formatTemperature(disk.temperature),
     ].filter((value): value is string => Boolean(value));
     return summary.length > 0 ? summary.join(', ') : null;
@@ -721,7 +706,7 @@ export const buildTrueNASDetailsSummary = (resource: Resource): string | null =>
     const summary = [
       asString(truenas.version),
       formatDurationSeconds(truenas.uptimeSeconds ?? resource.uptime),
-      serviceCount !== undefined ? formatCount(serviceCount, 'service') : null,
+      serviceCount !== undefined ? formatDetailCountValue(serviceCount, 'service') : null,
       asString(truenas.storageRiskSummary) ?? asString(truenas.protectionSummary),
     ].filter((value): value is string => Boolean(value));
     return summary.length > 0 ? summary.join(', ') : null;
