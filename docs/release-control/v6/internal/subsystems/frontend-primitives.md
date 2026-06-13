@@ -145,6 +145,7 @@ work extends shared components instead of creating new local variants.
 115. `frontend-modern/src/utils/upgradeNavigation.ts`
 116. `frontend-modern/src/components/DemoBanner.tsx`
 116a. `frontend-modern/src/components/CommercialMigrationBanner.tsx`
+116b. `frontend-modern/src/components/GitHubStarBanner.tsx`
 117. `frontend-modern/src/components/Login.tsx`
 118. `frontend-modern/src/stores/sessionCapabilities.ts`
 119. `frontend-modern/src/stores/sessionPresentationPolicy.ts`
@@ -548,6 +549,11 @@ not a replacement status card, CTA band, or page-local nested card.
    disabled treatment, title fallback, and accessible name wiring must come
    from that shared primitive rather than page-local `<button>` plus inline SVG
    shells.
+   Global app-shell prompts are part of the same action boundary.
+   `frontend-modern/src/components/GitHubStarBanner.tsx` may own its display
+   timing, product copy, and GitHub destination, but its primary, defer, and
+   dismiss controls must compose `Button` and `ActionIconButton` instead of
+   carrying local floating-prompt button shells.
    Settings selection helpers such as `ResourcePicker` must use the same
    `Button` primitive for select-all, clear, and chip remove actions instead of
    restoring footer-local action shells.

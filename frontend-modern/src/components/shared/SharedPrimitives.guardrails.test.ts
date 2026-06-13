@@ -5,6 +5,7 @@ import calloutCardSource from '@/components/shared/CalloutCard.tsx?raw';
 import inlineNoticeSource from '@/components/shared/InlineNotice.tsx?raw';
 import demoBannerSource from '@/components/DemoBanner.tsx?raw';
 import commercialMigrationBannerSource from '@/components/CommercialMigrationBanner.tsx?raw';
+import gitHubStarBannerSource from '@/components/GitHubStarBanner.tsx?raw';
 import assistantCommandHelpDialogSource from '@/components/AI/Chat/AssistantCommandHelpDialog.tsx?raw';
 import chatMessagesSource from '@/components/AI/Chat/ChatMessages.tsx?raw';
 import aiChatSource from '@/components/AI/Chat/index.tsx?raw';
@@ -4030,6 +4031,48 @@ describe('shared primitive guardrails', () => {
     );
     expect(commercialMigrationBannerSource).not.toContain(
       'p-1 rounded transition-colors opacity-70 hover:opacity-100',
+    );
+  });
+
+  it('routes GitHub star prompt actions through Button primitives', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+        forbiddenPatterns?: Array<{ path?: string; patterns?: string[] }>;
+      }>;
+    };
+    const registeredRule = registry.rules?.find(
+      (rule) => rule.id === 'github-star-banner-action-shell',
+    );
+
+    expect(registeredRule?.canonical?.path).toBe('src/components/shared/Button.tsx');
+    expect(registeredRule?.canonical?.export).toBe('Button');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/components/GitHubStarBanner.tsx',
+    ]);
+    expect(registeredRule?.forbiddenPatterns).toEqual([
+      {
+        path: 'src/components/GitHubStarBanner.tsx',
+        patterns: [
+          'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-base-content',
+          'inline-flex min-h-9 items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700',
+          'inline-flex min-h-9 items-center justify-center rounded-md px-3 py-2 text-sm text-muted transition-colors hover:bg-surface-hover hover:text-base-content',
+        ],
+      },
+    ]);
+    expect(gitHubStarBannerSource).toContain('@/components/shared/Button');
+    expect(gitHubStarBannerSource).toContain('<ActionIconButton');
+    expect(gitHubStarBannerSource).toContain('<Button');
+    expect(gitHubStarBannerSource).not.toContain(
+      'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-base-content',
+    );
+    expect(gitHubStarBannerSource).not.toContain(
+      'inline-flex min-h-9 items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700',
+    );
+    expect(gitHubStarBannerSource).not.toContain(
+      'inline-flex min-h-9 items-center justify-center rounded-md px-3 py-2 text-sm text-muted transition-colors hover:bg-surface-hover hover:text-base-content',
     );
   });
 

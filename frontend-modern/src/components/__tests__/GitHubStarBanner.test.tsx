@@ -30,6 +30,12 @@ vi.mock('@/utils/logger', () => ({
 const DISMISSED_KEY = 'pulse-github-star-dismissed';
 const FIRST_SEEN_KEY = 'pulse-github-star-first-seen';
 const SNOOZED_KEY = 'pulse-github-star-snoozed-until';
+const LOCAL_DISMISS_BUTTON_CLASS =
+  'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-base-content';
+const LOCAL_PRIMARY_BUTTON_CLASS =
+  'inline-flex min-h-9 items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700';
+const LOCAL_DEFER_BUTTON_CLASS =
+  'inline-flex min-h-9 items-center justify-center rounded-md px-3 py-2 text-sm text-muted transition-colors hover:bg-surface-hover hover:text-base-content';
 
 async function renderBanner() {
   const mod = await import('../GitHubStarBanner');
@@ -82,6 +88,15 @@ describe('GitHubStarBanner', () => {
     expect(gitHubStarBannerSource).not.toContain('<Dialog');
     expect(gitHubStarBannerSource).toContain('aria-live="polite"');
     expect(gitHubStarBannerSource).toContain('z-30');
+  });
+
+  it('routes prompt action chrome through shared Button primitives', () => {
+    expect(gitHubStarBannerSource).toContain('@/components/shared/Button');
+    expect(gitHubStarBannerSource).toContain('<ActionIconButton');
+    expect(gitHubStarBannerSource).toContain('<Button');
+    expect(gitHubStarBannerSource).not.toContain(LOCAL_DISMISS_BUTTON_CLASS);
+    expect(gitHubStarBannerSource).not.toContain(LOCAL_PRIMARY_BUTTON_CLASS);
+    expect(gitHubStarBannerSource).not.toContain(LOCAL_DEFER_BUTTON_CLASS);
   });
 
   it('does not render on the first day infrastructure is seen (records first-seen date)', async () => {

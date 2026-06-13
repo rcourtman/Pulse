@@ -3124,6 +3124,7 @@
         "frontend-modern/scripts/shared-template-audit.mjs",
         "frontend-modern/scripts/shared-template-registry.json",
         "frontend-modern/src/components/CommercialMigrationBanner.tsx",
+        "frontend-modern/src/components/GitHubStarBanner.tsx",
         "frontend-modern/src/components/Login.tsx",
         "frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx",
         "frontend-modern/src/components/Settings/AIChatMaintenanceSection.tsx",
@@ -3258,6 +3259,21 @@
             "exact_files": [
               "frontend-modern/src/components/__tests__/CommercialMigrationBanner.test.tsx",
               "frontend-modern/src/components/shared/InlineNotice.test.tsx",
+              "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts"
+            ]
+          },
+          {
+            "id": "global-github-star-banner",
+            "label": "global GitHub star banner primitive proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/GitHubStarBanner.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/__tests__/GitHubStarBanner.test.tsx",
+              "frontend-modern/src/components/shared/Button.test.tsx",
               "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts"
             ]
           },

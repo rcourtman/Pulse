@@ -575,6 +575,32 @@
       ]
     },
     {
+      "id": "github-star-banner-action-shell",
+      "category": "action-button",
+      "summary": "The GitHub star prompt must compose Button and ActionIconButton for its primary, defer, and dismiss actions instead of carrying local floating-prompt button shells.",
+      "canonical": {
+        "path": "src/components/shared/Button.tsx",
+        "export": "Button"
+      },
+      "requiredConsumers": [{ "path": "src/components/GitHubStarBanner.tsx" }],
+      "forbiddenPatterns": [
+        {
+          "path": "src/components/GitHubStarBanner.tsx",
+          "patterns": [
+            "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-base-content",
+            "inline-flex min-h-9 items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700",
+            "inline-flex min-h-9 items-center justify-center rounded-md px-3 py-2 text-sm text-muted transition-colors hover:bg-surface-hover hover:text-base-content"
+          ]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/__tests__/GitHubStarBanner.test.tsx",
+        "src/components/shared/Button.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "status-dot-shell",
       "category": "status-indicator",
       "summary": "Resource and health indicator dots must compose StatusDot for shared size, variant, pulse, title, and aria behavior instead of recreating local rounded status spans.",

@@ -5,6 +5,7 @@ import {
   STORAGE_KEYS,
 } from '@/utils/localStorage';
 import { useWebSocket } from '@/contexts/appRuntime';
+import { ActionIconButton, Button } from '@/components/shared/Button';
 import GithubIcon from 'lucide-solid/icons/github';
 import StarIcon from 'lucide-solid/icons/star';
 import XIcon from 'lucide-solid/icons/x';
@@ -137,36 +138,35 @@ export function GitHubStarBanner() {
                   Enjoying Pulse?
                 </h2>
                 <p class="mt-1 text-xs leading-5 text-muted">
-                  Pulse is built and maintained by an independent developer. If it's been useful
-                  for monitoring your infrastructure, a GitHub star helps more than you'd think.
+                  Pulse is built and maintained by an independent developer. If it's been useful for
+                  monitoring your infrastructure, a GitHub star helps more than you'd think.
                 </p>
               </div>
-              <button
+              <ActionIconButton
                 onClick={handleDismiss}
-                class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-base-content"
+                label="Close and don't show again"
                 title="Don't show again"
-                aria-label="Close and don't show again"
+                tone="muted"
+                size="sm"
                 type="button"
               >
-                <XIcon class="h-4 w-4" />
-              </button>
+                <XIcon class="h-4 w-4" aria-hidden="true" />
+              </ActionIconButton>
             </div>
             <div class="mt-3 flex flex-wrap gap-2">
-              <button
+              <Button
                 onClick={handleStarClick}
-                class="inline-flex min-h-9 items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                variant="primary"
+                size="mdCompact"
+                class="gap-2"
                 type="button"
               >
-                <StarIcon class="h-4 w-4" />
+                <StarIcon class="h-4 w-4" aria-hidden="true" />
                 Star on GitHub
-              </button>
-              <button
-                onClick={handleMaybeLater}
-                class="inline-flex min-h-9 items-center justify-center rounded-md px-3 py-2 text-sm text-muted transition-colors hover:bg-surface-hover hover:text-base-content"
-                type="button"
-              >
+              </Button>
+              <Button onClick={handleMaybeLater} variant="ghost" size="mdCompact" type="button">
                 Maybe later
-              </button>
+              </Button>
             </div>
           </div>
         </div>
