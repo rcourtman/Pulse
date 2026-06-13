@@ -558,6 +558,12 @@ not a replacement status card, CTA band, or page-local nested card.
    fields and domain labels, but numeric detail values must route through
    `formatDetailBytesValue`, `formatDetailIntegerValue`, and
    `formatDetailCountValue` in `detailSectionModel.ts`.
+   VMware vSphere drawer detail sections follow the same boundary as TrueNAS
+   and Kubernetes: vSphere owns which rows are meaningful, while row shape,
+   section shape, tone classes, and table rendering must stay on
+   `DetailSection`, `DetailRow`, `makeDetailRow`, `compactDetailRows`,
+   `compactDetailSections`, and `DetailSectionTable` rather than provider-local
+   row/section aliases or custom vSphere card loops.
    Framed product table surfaces must consume the shared `TableCard` frame and
    `TableCardHeader` title/action band instead of composing page-local `Card`
    border, background, overflow, or table-title chrome. Feature owners may own

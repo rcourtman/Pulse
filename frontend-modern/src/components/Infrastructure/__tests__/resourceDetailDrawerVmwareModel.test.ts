@@ -5,6 +5,9 @@ import {
 } from '@/components/Infrastructure/resourceDetailDrawerVmwareModel';
 import type { ResourceVMwareMeta } from '@/types/resource';
 
+const findSection = (sections: ReturnType<typeof buildVMwareDetailSections>, label: string) =>
+  sections.find((section) => section.label === label);
+
 describe('resourceDetailDrawerVmwareModel', () => {
   it('surfaces vCenter cluster service state in placement context', () => {
     const vmware: ResourceVMwareMeta = {
@@ -18,9 +21,7 @@ describe('resourceDetailDrawerVmwareModel', () => {
       datastoreNames: ['shared-vsan'],
     };
 
-    const placement = buildVMwareDetailSections('vm', vmware).find(
-      (section) => section.id === 'placement',
-    );
+    const placement = findSection(buildVMwareDetailSections('vm', vmware), 'Placement');
 
     expect(placement?.rows).toEqual([
       { label: 'Datacenter', value: 'Lab DC' },
@@ -52,11 +53,11 @@ describe('resourceDetailDrawerVmwareModel', () => {
     );
 
     const sections = buildVMwareDetailSections('network', vmware);
-    expect(sections.find((section) => section.id === 'state')?.rows).toContainEqual({
+    expect(findSection(sections, 'State')?.rows).toContainEqual({
       label: 'Network type',
       value: 'Distributed Portgroup',
     });
-    expect(sections.find((section) => section.id === 'network')?.rows).toEqual([
+    expect(findSection(sections, 'Network')?.rows).toEqual([
       { label: 'Hosts', value: 'esxi-01.lab.local, esxi-02.lab.local' },
       { label: 'VMs', value: 'warehouse-api-01, etl-batch-01' },
     ]);
@@ -158,9 +159,8 @@ describe('resourceDetailDrawerVmwareModel', () => {
       'Lab VC · Read-only vCenter context · 2 snapshots · 1 vNIC · 1 disk · Hardware pending · Tools reboot requested',
     );
 
-    const hardware = buildVMwareDetailSections('vm', vmware).find(
-      (section) => section.id === 'hardware',
-    );
+    const vmwareSections = buildVMwareDetailSections('vm', vmware);
+    const hardware = findSection(vmwareSections, 'Virtual hardware');
 
     // Hardware section is deliberately pruned to operator-actionable rows.
     // Capability toggles (CPU/memory hot-add) and boot configuration (EFI
@@ -176,7 +176,7 @@ describe('resourceDetailDrawerVmwareModel', () => {
       { label: 'Upgrade status', value: 'Pending', tone: 'warning' },
     ]);
 
-    const tools = buildVMwareDetailSections('vm', vmware).find((section) => section.id === 'tools');
+    const tools = findSection(vmwareSections, 'VMware Tools');
 
     // Tools section is pruned to operator-actionable rows: Run state,
     // Version status (only when not current), Version, Guest reboot (only
@@ -188,7 +188,7 @@ describe('resourceDetailDrawerVmwareModel', () => {
       { label: 'Guest reboot', value: 'Requested', tone: 'warning' },
     ]);
 
-    const disks = buildVMwareDetailSections('vm', vmware).find((section) => section.id === 'disks');
+    const disks = findSection(vmwareSections, 'Virtual disks');
 
     expect(disks?.rows).toEqual([
       {
@@ -198,9 +198,7 @@ describe('resourceDetailDrawerVmwareModel', () => {
       },
     ]);
 
-    const network = buildVMwareDetailSections('vm', vmware).find(
-      (section) => section.id === 'network',
-    );
+    const network = findSection(vmwareSections, 'Network');
 
     expect(network?.rows).toEqual([
       {
@@ -211,9 +209,7 @@ describe('resourceDetailDrawerVmwareModel', () => {
       },
     ]);
 
-    const snapshots = buildVMwareDetailSections('vm', vmware).find(
-      (section) => section.id === 'snapshots',
-    );
+    const snapshots = findSection(vmwareSections, 'Snapshot tree');
 
     expect(snapshots?.rows).toEqual([
       {

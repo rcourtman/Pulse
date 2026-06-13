@@ -9,32 +9,15 @@ import type {
 } from '@/types/resource';
 import { formatVmwareClusterServices } from '@/utils/vmwareDisplay';
 import {
+  compactDetailRows as compactRows,
+  compactDetailSections as compactSections,
+  type DetailRow,
+  type DetailSection,
+  type DetailValueTone,
   formatDetailBytesValue,
   formatDetailCountValue,
+  makeDetailRow as makeRow,
 } from '@/components/shared/detailSectionModel';
-
-export type ResourceDetailDrawerVMwareRowTone = 'default' | 'accent' | 'warning';
-
-export type ResourceDetailDrawerVMwareRow = {
-  label: string;
-  value: string;
-  tone?: ResourceDetailDrawerVMwareRowTone;
-};
-
-export type ResourceDetailDrawerVMwareSection = {
-  id:
-    | 'state'
-    | 'placement'
-    | 'guest'
-    | 'hardware'
-    | 'tools'
-    | 'disks'
-    | 'network'
-    | 'signals'
-    | 'snapshots';
-  label: string;
-  rows: ResourceDetailDrawerVMwareRow[];
-};
 
 const asTrimmedString = (value?: string | null): string => (value || '').trim();
 
@@ -121,14 +104,15 @@ const snapshotValue = (snapshot: ResourceVMwareSnapshot): string => {
 const flattenSnapshotRows = (
   snapshots: ResourceVMwareSnapshot[] | undefined,
   depth = 0,
-): ResourceDetailDrawerVMwareRow[] => {
-  const rows: ResourceDetailDrawerVMwareRow[] = [];
+): DetailRow[] => {
+  const rows: DetailRow[] = [];
   for (const snapshot of snapshots ?? []) {
-    rows.push({
-      label: `${depth > 0 ? `${'-'.repeat(depth)} ` : ''}${snapshotDisplayName(snapshot)}`,
-      value: snapshotValue(snapshot) || asTrimmedString(snapshot.snapshot),
-      tone: snapshot.current ? 'accent' : 'default',
-    });
+    const snapshotRow = makeRow(
+      `${depth > 0 ? `${'-'.repeat(depth)} ` : ''}${snapshotDisplayName(snapshot)}`,
+      snapshotValue(snapshot) || asTrimmedString(snapshot.snapshot),
+      { tone: snapshot.current ? 'accent' : 'default' },
+    );
+    if (snapshotRow) rows.push(snapshotRow);
     rows.push(...flattenSnapshotRows(snapshot.children, depth + 1));
   }
   return rows;
@@ -174,25 +158,19 @@ const adapterValue = (adapter: ResourceVMwareNetworkAdapter): string => {
   return parts.join(' · ');
 };
 
-const adapterTone = (adapter: ResourceVMwareNetworkAdapter): ResourceDetailDrawerVMwareRowTone =>
+const adapterTone = (adapter: ResourceVMwareNetworkAdapter): DetailValueTone =>
   asTrimmedString(adapter.state).toLowerCase() === 'not_connected' ? 'warning' : 'default';
 
-const networkAdapterRows = (
-  adapters: ResourceVMwareNetworkAdapter[] | undefined,
-): ResourceDetailDrawerVMwareRow[] =>
-  (adapters ?? [])
-    .map((adapter) => ({
-      label: adapterDisplayName(adapter),
-      value: adapterValue(adapter),
-      tone: adapterTone(adapter),
-    }))
-    .filter((row) => row.value);
+const networkAdapterRows = (adapters: ResourceVMwareNetworkAdapter[] | undefined): DetailRow[] =>
+  compactRows(
+    (adapters ?? []).map((adapter) =>
+      makeRow(adapterDisplayName(adapter), adapterValue(adapter), {
+        tone: adapterTone(adapter),
+      }),
+    ),
+  );
 
-const filterNonEmptyRows = (
-  rows: ResourceDetailDrawerVMwareRow[],
-): ResourceDetailDrawerVMwareRow[] => rows.filter((row) => row.value);
-
-const getWarningTone = (hasWarning: boolean): ResourceDetailDrawerVMwareRowTone =>
+const getWarningTone = (hasWarning: boolean): DetailValueTone =>
   hasWarning ? 'warning' : 'default';
 
 const hardwareSummary = (hardware?: ResourceVMwareHardware): string => {
@@ -223,54 +201,36 @@ const cpuTopologyLabel = (vmware: ResourceVMwareMeta): string => {
   return parts.join(' · ');
 };
 
-const hardwareRows = (vmware?: ResourceVMwareMeta): ResourceDetailDrawerVMwareRow[] => {
+const hardwareRows = (vmware?: ResourceVMwareMeta): DetailRow[] => {
   if (!vmware?.hardware) return [];
   const hardware = vmware.hardware;
   const upgradeStatus = asTrimmedString(hardware.upgradeStatus).toUpperCase();
   const upgradeAttention = Boolean(upgradeStatus) && !['NONE', 'OK'].includes(upgradeStatus);
-  return filterNonEmptyRows([
-    {
-      label: 'Guest OS',
-      value: formatEnumLabel(hardware.guestOs),
-    },
-    {
-      label: 'Hardware version',
-      value: formatEnumLabel(hardware.version),
-    },
-    {
-      label: 'CPU topology',
-      value: cpuTopologyLabel(vmware),
-    },
-    {
-      label: 'Memory size',
-      value: formatMiB(vmware?.memorySizeMib),
-    },
+  return compactRows([
+    makeRow('Guest OS', formatEnumLabel(hardware.guestOs)),
+    makeRow('Hardware version', formatEnumLabel(hardware.version)),
+    makeRow('CPU topology', cpuTopologyLabel(vmware)),
+    makeRow('Memory size', formatMiB(vmware?.memorySizeMib)),
     // Upgrade and clone status only surface when something is actionable;
     // when everything is in the default state these rows resolve to empty
-    // strings and filterNonEmptyRows drops them. Capability toggles
+    // strings and compactRows drops them. Capability toggles
     // (CPU/memory hot-add, boot config) live in the raw API and stay out
     // of the operator drawer because they don't change minute to minute
     // and operators don't act on them from Pulse.
-    {
-      label: 'Upgrade status',
-      value: upgradeAttention ? formatEnumLabel(hardware.upgradeStatus) : '',
+    makeRow('Upgrade status', upgradeAttention ? formatEnumLabel(hardware.upgradeStatus) : '', {
       tone: getWarningTone(upgradeAttention),
-    },
-    {
-      label: 'Upgrade error',
-      value: asTrimmedString(hardware.upgradeErrorMessage),
-      tone: 'warning',
-    },
-    {
-      label: 'Instant clone frozen',
-      value: hardware.instantCloneFrozen === true ? formatBoolLabel(true) : '',
-      tone: getWarningTone(hardware.instantCloneFrozen === true),
-    },
-    {
-      label: 'Enter setup mode',
-      value: hardware.enterSetupMode === true ? formatBoolLabel(true) : '',
+    }),
+    makeRow('Upgrade error', asTrimmedString(hardware.upgradeErrorMessage), { tone: 'warning' }),
+    makeRow(
+      'Instant clone frozen',
+      hardware.instantCloneFrozen === true ? formatBoolLabel(true) : '',
+      {
+        tone: getWarningTone(hardware.instantCloneFrozen === true),
+      },
+    ),
+    makeRow('Enter setup mode', hardware.enterSetupMode === true ? formatBoolLabel(true) : '', {
       tone: getWarningTone(hardware.enterSetupMode === true),
-    },
+    }),
   ]);
 };
 
@@ -286,7 +246,7 @@ const toolsSummary = (tools?: ResourceVMwareTools): string => {
   return '';
 };
 
-const toolsRows = (tools?: ResourceVMwareTools): ResourceDetailDrawerVMwareRow[] => {
+const toolsRows = (tools?: ResourceVMwareTools): DetailRow[] => {
   if (!tools) return [];
   const versionStatus = asTrimmedString(tools.versionStatus).toUpperCase();
   const versionAttention = Boolean(versionStatus) && !['CURRENT', 'OK'].includes(versionStatus);
@@ -295,34 +255,21 @@ const toolsRows = (tools?: ResourceVMwareTools): ResourceDetailDrawerVMwareRow[]
   // error. Install metadata (install type, upgrade policy, auto-update
   // capability, attempt count, reboot components / time) stays in the raw
   // API; we only surface it when something is actionable.
-  return filterNonEmptyRows([
-    {
-      label: 'Run state',
-      value: formatEnumLabel(tools.runState),
+  return compactRows([
+    makeRow('Run state', formatEnumLabel(tools.runState), {
       tone: getWarningTone(
         Boolean(asTrimmedString(tools.runState)) &&
           !['RUNNING', 'STARTED'].includes(asTrimmedString(tools.runState).toUpperCase()),
       ),
-    },
-    {
-      label: 'Version status',
-      value: versionAttention ? formatEnumLabel(tools.versionStatus) : '',
+    }),
+    makeRow('Version status', versionAttention ? formatEnumLabel(tools.versionStatus) : '', {
       tone: getWarningTone(versionAttention),
-    },
-    {
-      label: 'Version',
-      value: asTrimmedString(tools.version),
-    },
-    {
-      label: 'Guest reboot',
-      value: tools.guestRebootRequested === true ? 'Requested' : '',
+    }),
+    makeRow('Version', asTrimmedString(tools.version)),
+    makeRow('Guest reboot', tools.guestRebootRequested === true ? 'Requested' : '', {
       tone: getWarningTone(tools.guestRebootRequested === true),
-    },
-    {
-      label: 'Last install error',
-      value: asTrimmedString(tools.errorMessage),
-      tone: 'warning',
-    },
+    }),
+    makeRow('Last install error', asTrimmedString(tools.errorMessage), { tone: 'warning' }),
   ]);
 };
 
@@ -363,16 +310,12 @@ const virtualDiskValue = (disk: ResourceVMwareVirtualDisk): string => {
   return parts.join(' · ');
 };
 
-const virtualDiskRows = (
-  disks: ResourceVMwareVirtualDisk[] | undefined,
-): ResourceDetailDrawerVMwareRow[] =>
-  (disks ?? [])
-    .map((disk) => ({
-      label: virtualDiskDisplayName(disk),
-      value: virtualDiskValue(disk),
-      tone: 'default' as ResourceDetailDrawerVMwareRowTone,
-    }))
-    .filter((row) => row.value);
+const virtualDiskRows = (disks: ResourceVMwareVirtualDisk[] | undefined): DetailRow[] =>
+  compactRows(
+    (disks ?? []).map((disk) =>
+      makeRow(virtualDiskDisplayName(disk), virtualDiskValue(disk), { tone: 'default' }),
+    ),
+  );
 
 const vmwareEntityLabel = (entityType?: string): string => {
   const normalized = asTrimmedString(entityType).toLowerCase();
@@ -404,17 +347,14 @@ const buildSignalValue = (count: number | undefined, label: string, summary?: st
   return parts.join(' · ');
 };
 
-const hasRows = (rows: ResourceDetailDrawerVMwareRow[]): boolean => rows.length > 0;
-
-const getStatusTone = (status?: string | null): ResourceDetailDrawerVMwareRowTone => {
+const getStatusTone = (status?: string | null): DetailValueTone => {
   const normalized = asTrimmedString(status).toLowerCase();
   if (normalized === 'red') return 'warning';
   if (normalized) return 'accent';
   return 'default';
 };
 
-const getAccentTone = (hasAccent: boolean): ResourceDetailDrawerVMwareRowTone =>
-  hasAccent ? 'accent' : 'default';
+const getAccentTone = (hasAccent: boolean): DetailValueTone => (hasAccent ? 'accent' : 'default');
 
 export const buildVMwareDetailsSummary = (
   resourceType: ResourceType,
@@ -471,173 +411,104 @@ export const buildVMwareDetailsSummary = (
 export const buildVMwareDetailSections = (
   resourceType: ResourceType,
   vmware?: ResourceVMwareMeta,
-): ResourceDetailDrawerVMwareSection[] => {
+): DetailSection[] => {
   if (!vmware) {
     return [];
   }
 
-  const stateRows = filterNonEmptyRows([
-    {
-      label: 'Connection',
-      value: asTrimmedString(vmware.connectionName),
-    },
-    {
-      label: 'vCenter',
-      value: asTrimmedString(vmware.vcenterHost),
-    },
-    {
-      label: 'Entity',
-      value: vmwareEntityLabel(vmware.entityType),
-    },
-    {
-      label: 'Overall status',
-      value: asTrimmedString(vmware.overallStatus),
+  const stateRows = compactRows([
+    makeRow('Connection', asTrimmedString(vmware.connectionName)),
+    makeRow('vCenter', asTrimmedString(vmware.vcenterHost)),
+    makeRow('Entity', vmwareEntityLabel(vmware.entityType)),
+    makeRow('Overall status', asTrimmedString(vmware.overallStatus), {
       tone: getStatusTone(vmware.overallStatus),
-    },
+    }),
     // Power state is already conveyed by the workload row's status dot and
     // the SYSTEM card. We only resurface Connection state here because it
     // matters when an ESXi host is disconnected and the row dot alone can't
     // tell you why.
-    {
-      label: 'Connection state',
-      value: formatEnumLabel(vmware.connectionState),
-    },
-    {
-      label: 'Datastore type',
-      value: asTrimmedString(vmware.datastoreType),
-    },
-    {
-      label: 'Accessible',
-      value: formatBoolLabel(vmware.datastoreAccessible),
+    makeRow('Connection state', formatEnumLabel(vmware.connectionState)),
+    makeRow('Datastore type', asTrimmedString(vmware.datastoreType)),
+    makeRow('Accessible', formatBoolLabel(vmware.datastoreAccessible), {
       tone: getWarningTone(vmware.datastoreAccessible === false),
-    },
-    {
-      label: 'Shared access',
-      value: formatBoolLabel(vmware.multipleHostAccess),
-    },
-    {
-      label: 'Maintenance',
-      value: asTrimmedString(vmware.maintenanceMode),
+    }),
+    makeRow('Shared access', formatBoolLabel(vmware.multipleHostAccess)),
+    makeRow('Maintenance', asTrimmedString(vmware.maintenanceMode), {
       tone: getWarningTone(Boolean(asTrimmedString(vmware.maintenanceMode))),
-    },
-    {
-      label: 'Network type',
-      value: formatEnumLabel(vmware.networkType),
-    },
+    }),
+    makeRow('Network type', formatEnumLabel(vmware.networkType)),
   ]);
 
-  const placementRows = filterNonEmptyRows([
-    {
-      label: 'Datacenter',
-      value: asTrimmedString(vmware.datacenterName),
-    },
-    {
-      label: 'Cluster',
-      value: asTrimmedString(vmware.clusterName),
-    },
-    {
-      label: 'Cluster services',
-      value: formatVmwareClusterServices(vmware),
-    },
-    {
-      label: 'Compute resource',
-      value: asTrimmedString(vmware.computeResourceName),
-    },
-    {
-      label: 'Folder',
-      value: asTrimmedString(vmware.folderName),
-    },
-    {
-      label: 'Resource pool',
-      value: asTrimmedString(vmware.resourcePoolName),
-    },
-    {
-      label: 'Runtime host',
-      value: asTrimmedString(vmware.runtimeHostName),
-    },
-    {
-      label: 'Datastores',
-      value: (vmware.datastoreNames ?? []).filter(Boolean).join(', '),
-    },
+  const placementRows = compactRows([
+    makeRow('Datacenter', asTrimmedString(vmware.datacenterName)),
+    makeRow('Cluster', asTrimmedString(vmware.clusterName)),
+    makeRow('Cluster services', formatVmwareClusterServices(vmware)),
+    makeRow('Compute resource', asTrimmedString(vmware.computeResourceName)),
+    makeRow('Folder', asTrimmedString(vmware.folderName)),
+    makeRow('Resource pool', asTrimmedString(vmware.resourcePoolName)),
+    makeRow('Runtime host', asTrimmedString(vmware.runtimeHostName)),
+    makeRow('Datastores', (vmware.datastoreNames ?? []).filter(Boolean).join(', ')),
   ]);
 
   // UUID fields (host / instance / BIOS) and datastoreUrl are API-shaped
   // identifiers an operator never types or compares from the drawer; they
   // are still available in the raw resource payload. Keep guest identity
   // human-readable.
-  const guestRows = filterNonEmptyRows([
-    {
-      label: 'Guest OS',
-      value: asTrimmedString(vmware.guestOsFamily),
-    },
-    {
-      label: 'Guest hostname',
-      value: asTrimmedString(vmware.guestHostname),
-    },
-    {
-      label: 'Guest IPs',
-      value: (vmware.guestIpAddresses ?? []).filter(Boolean).join(', '),
-    },
+  const guestRows = compactRows([
+    makeRow('Guest OS', asTrimmedString(vmware.guestOsFamily)),
+    makeRow('Guest hostname', asTrimmedString(vmware.guestHostname)),
+    makeRow('Guest IPs', (vmware.guestIpAddresses ?? []).filter(Boolean).join(', ')),
   ]);
 
   const networkRows =
     resourceType === 'vm'
       ? networkAdapterRows(vmware.networkAdapters)
-      : filterNonEmptyRows([
-          {
-            label: 'Hosts',
-            value: summarizeList(vmware.networkHostNames),
-          },
-          {
-            label: 'VMs',
-            value: summarizeList(vmware.networkVmNames),
-          },
+      : compactRows([
+          makeRow('Hosts', summarizeList(vmware.networkHostNames)),
+          makeRow('VMs', summarizeList(vmware.networkVmNames)),
         ]);
   const vmwareHardwareRows = resourceType === 'vm' ? hardwareRows(vmware) : [];
   const vmwareToolsRows = resourceType === 'vm' ? toolsRows(vmware.tools) : [];
   const diskRows = resourceType === 'vm' ? virtualDiskRows(vmware.virtualDisks) : [];
 
-  const signalRows = filterNonEmptyRows([
-    {
-      label: 'Alarms',
-      value: buildSignalValue(vmware.activeAlarmCount, 'alarm', vmware.activeAlarmSummary),
-      tone: getWarningTone((vmware.activeAlarmCount ?? 0) > 0),
-    },
-    {
-      label: 'Tasks',
-      value: buildSignalValue(vmware.recentTaskCount, 'task', vmware.recentTaskSummary),
+  const signalRows = compactRows([
+    makeRow(
+      'Alarms',
+      buildSignalValue(vmware.activeAlarmCount, 'alarm', vmware.activeAlarmSummary),
+      {
+        tone: getWarningTone((vmware.activeAlarmCount ?? 0) > 0),
+      },
+    ),
+    makeRow('Tasks', buildSignalValue(vmware.recentTaskCount, 'task', vmware.recentTaskSummary), {
       tone: getAccentTone((vmware.recentTaskCount ?? 0) > 0),
-    },
-    {
-      label: 'Snapshots',
-      value:
-        resourceType === 'vm' || typeof vmware.snapshotCount === 'number'
-          ? formatDetailCountValue(
-              Math.max(
-                0,
-                typeof vmware.snapshotCount === 'number'
-                  ? vmware.snapshotCount
-                  : countSnapshotTree(vmware.snapshotTree),
-              ),
-              'snapshot',
-            )
-          : '',
-    },
+    }),
+    makeRow(
+      'Snapshots',
+      resourceType === 'vm' || typeof vmware.snapshotCount === 'number'
+        ? formatDetailCountValue(
+            Math.max(
+              0,
+              typeof vmware.snapshotCount === 'number'
+                ? vmware.snapshotCount
+                : countSnapshotTree(vmware.snapshotTree),
+            ),
+            'snapshot',
+          )
+        : '',
+    ),
   ]);
 
   const snapshotRows = resourceType === 'vm' ? flattenSnapshotRows(vmware.snapshotTree) : [];
 
-  const sections: ResourceDetailDrawerVMwareSection[] = [
-    { id: 'state', label: 'State', rows: stateRows },
-    { id: 'placement', label: 'Placement', rows: placementRows },
-    { id: 'guest', label: 'Guest', rows: guestRows },
-    { id: 'hardware', label: 'Virtual hardware', rows: vmwareHardwareRows },
-    { id: 'tools', label: 'VMware Tools', rows: vmwareToolsRows },
-    { id: 'disks', label: 'Virtual disks', rows: diskRows },
-    { id: 'network', label: 'Network', rows: networkRows },
-    { id: 'signals', label: 'Signals', rows: signalRows },
-    { id: 'snapshots', label: 'Snapshot tree', rows: snapshotRows },
-  ];
-
-  return sections.filter((section) => hasRows(section.rows));
+  return compactSections([
+    { label: 'State', rows: stateRows },
+    { label: 'Placement', rows: placementRows },
+    { label: 'Guest', rows: guestRows },
+    { label: 'Virtual hardware', rows: vmwareHardwareRows },
+    { label: 'VMware Tools', rows: vmwareToolsRows },
+    { label: 'Virtual disks', rows: diskRows },
+    { label: 'Network', rows: networkRows },
+    { label: 'Signals', rows: signalRows },
+    { label: 'Snapshot tree', rows: snapshotRows },
+  ]);
 };

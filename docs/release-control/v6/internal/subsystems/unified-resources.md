@@ -367,6 +367,10 @@ Provider detail drawer models also own which byte, count, and integer fields
 are meaningful, but the formatting and pluralization of those repeated numeric
 detail values must use the shared `detailSectionModel.ts` helpers rather than
 provider-local byte scaling, integer, or count helpers.
+The same split applies to VMware vSphere detail sections: unified-resource
+VMware metadata owns the vCenter-specific row selection, but the section/row
+shape and renderer must be the shared frontend-primitives detail-section
+contract instead of a VMware-local row model or custom vSphere detail shell.
 The split also applies to web-interface launch affordances. Unified-resource
 tables own whether a row has a saved, inferred, or source-native web-interface
 URL and how that URL is derived, but the visible launch affordance belongs on

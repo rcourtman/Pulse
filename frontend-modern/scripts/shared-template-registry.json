@@ -126,6 +126,7 @@
         { "path": "src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx" },
         { "path": "src/components/Infrastructure/resourceDetailDrawerKubernetesModel.ts" },
         { "path": "src/components/Infrastructure/resourceDetailDrawerTrueNASModel.ts" },
+        { "path": "src/components/Infrastructure/resourceDetailDrawerVmwareModel.ts" },
         { "path": "src/features/docker/DockerAlertsTable.tsx" },
         { "path": "src/features/kubernetes/KubernetesAlertsTable.tsx" },
         { "path": "src/features/truenas/TrueNASAlertsTable.tsx" },
@@ -154,6 +155,19 @@
         {
           "path": "src/features/vmware/VsphereAlertsTable.tsx",
           "patterns": ["const DetailField", "XIcon class=\"h-4 w-4\""]
+        },
+        {
+          "path": "src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
+          "patterns": ["vmwareRowToneClass", "<For each={drawer.vmwareDetailSections()}"]
+        },
+        {
+          "path": "src/components/Infrastructure/resourceDetailDrawerVmwareModel.ts",
+          "patterns": [
+            "ResourceDetailDrawerVMwareRow",
+            "ResourceDetailDrawerVMwareSection",
+            "ResourceDetailDrawerVMwareRowTone",
+            "filterNonEmptyRows"
+          ]
         }
       ],
       "proof": [
@@ -3985,6 +3999,46 @@
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "src/components/shared/__tests__/DetailSectionTable.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "resource-detail-local-provider-row-model",
+      "category": "row-detail",
+      "summary": "Provider resource detail drawer models must not define provider-local row and section primitives.",
+      "canonical": {
+        "path": "src/components/shared/detailSectionModel.ts",
+        "export": "DetailSection"
+      },
+      "scopes": ["src/components/Infrastructure/resourceDetailDrawerVmwareModel.ts"],
+      "extensions": [".ts"],
+      "allPatterns": ["ResourceDetailDrawerVMwareRow", "ResourceDetailDrawerVMwareSection"],
+      "legacyReason": "Retired migration debt. Provider detail drawers own fields and labels, while row and section shape belongs to DetailSection / DetailRow in detailSectionModel.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/Infrastructure/__tests__/resourceDetailDrawerVmwareModel.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "resource-detail-local-vmware-detail-shell",
+      "category": "row-detail",
+      "summary": "The resource detail drawer must not render VMware detail sections with a local vSphere card/table shell.",
+      "canonical": {
+        "path": "src/components/shared/DetailSectionTable.tsx",
+        "export": "DetailSectionTable"
+      },
+      "scopes": ["src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx"],
+      "extensions": [".tsx"],
+      "allPatterns": ["vmwareRowToneClass", "<For each={drawer.vmwareDetailSections()}"],
+      "legacyReason": "Retired migration debt. VMware detail rows share the same DetailSectionTable renderer and tone classes as other provider detail drawers.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/Infrastructure/__tests__/resourceDetailDrawerVmwareModel.test.ts",
         "scripts/shared-template-audit.mjs"
       ]
     },

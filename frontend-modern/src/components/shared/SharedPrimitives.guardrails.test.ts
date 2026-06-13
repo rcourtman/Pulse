@@ -5405,6 +5405,12 @@ describe('shared primitive guardrails', () => {
     const providerNamedGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'inline-detail-provider-named-primitive-import',
     );
+    const providerRowModelGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'resource-detail-local-provider-row-model',
+    );
+    const vmwareDetailShellGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'resource-detail-local-vmware-detail-shell',
+    );
     const numericFormatRule = registry.rules?.find(
       (rule) => rule.id === 'resource-detail-numeric-value-formatting',
     );
@@ -5428,6 +5434,7 @@ describe('shared primitive guardrails', () => {
         'src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx',
         'src/components/Infrastructure/resourceDetailDrawerKubernetesModel.ts',
         'src/components/Infrastructure/resourceDetailDrawerTrueNASModel.ts',
+        'src/components/Infrastructure/resourceDetailDrawerVmwareModel.ts',
         'src/features/docker/DockerAlertsTable.tsx',
         'src/features/kubernetes/KubernetesAlertsTable.tsx',
         'src/features/truenas/TrueNASAlertsTable.tsx',
@@ -5442,6 +5449,22 @@ describe('shared primitive guardrails', () => {
         expect.objectContaining({
           path: 'src/components/Infrastructure/resourceDetailDrawerKubernetesModel.ts',
           patterns: expect.arrayContaining(['makeTrueNASDetailRow', 'trueNASDetailTableModel']),
+        }),
+        expect.objectContaining({
+          path: 'src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx',
+          patterns: expect.arrayContaining([
+            'vmwareRowToneClass',
+            '<For each={drawer.vmwareDetailSections()}',
+          ]),
+        }),
+        expect.objectContaining({
+          path: 'src/components/Infrastructure/resourceDetailDrawerVmwareModel.ts',
+          patterns: expect.arrayContaining([
+            'ResourceDetailDrawerVMwareRow',
+            'ResourceDetailDrawerVMwareSection',
+            'ResourceDetailDrawerVMwareRowTone',
+            'filterNonEmptyRows',
+          ]),
         }),
       ]),
     );
@@ -5460,6 +5483,32 @@ describe('shared primitive guardrails', () => {
     expect(providerNamedGuard?.canonical?.export).toBe('DetailSectionTable');
     expect(providerNamedGuard?.allPatterns).toEqual(['TrueNASDetailTable']);
     expect(providerNamedGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(providerRowModelGuard?.canonical?.path).toBe(
+      'src/components/shared/detailSectionModel.ts',
+    );
+    expect(providerRowModelGuard?.canonical?.export).toBe('DetailSection');
+    expect(providerRowModelGuard?.allPatterns).toEqual([
+      'ResourceDetailDrawerVMwareRow',
+      'ResourceDetailDrawerVMwareSection',
+    ]);
+    expect(providerRowModelGuard?.scopes).toEqual([
+      'src/components/Infrastructure/resourceDetailDrawerVmwareModel.ts',
+    ]);
+    expect(providerRowModelGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(providerRowModelGuard?.ignoredPaths ?? []).toHaveLength(0);
+    expect(vmwareDetailShellGuard?.canonical?.path).toBe(
+      'src/components/shared/DetailSectionTable.tsx',
+    );
+    expect(vmwareDetailShellGuard?.canonical?.export).toBe('DetailSectionTable');
+    expect(vmwareDetailShellGuard?.allPatterns).toEqual([
+      'vmwareRowToneClass',
+      '<For each={drawer.vmwareDetailSections()}',
+    ]);
+    expect(vmwareDetailShellGuard?.scopes).toEqual([
+      'src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx',
+    ]);
+    expect(vmwareDetailShellGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(vmwareDetailShellGuard?.ignoredPaths ?? []).toHaveLength(0);
 
     expect(numericFormatRule?.canonical?.path).toBe('src/components/shared/detailSectionModel.ts');
     expect(numericFormatRule?.canonical?.export).toBe('formatDetailBytesValue');
@@ -5540,12 +5589,24 @@ describe('shared primitive guardrails', () => {
     for (const source of [
       resourceDetailDrawerKubernetesModelSource,
       resourceDetailDrawerTrueNASModelSource,
+      resourceDetailDrawerVmwareModelSource,
     ]) {
       expect(source).toContain('@/components/shared/detailSectionModel');
       expect(source).toContain('DetailSection');
       expect(source).not.toContain('trueNASDetailTableModel');
       expect(source).not.toContain('makeTrueNASDetailRow');
     }
+    expect(resourceDetailDrawerVmwareModelSource).toContain('makeDetailRow');
+    expect(resourceDetailDrawerVmwareModelSource).toContain('compactDetailRows');
+    expect(resourceDetailDrawerVmwareModelSource).toContain('compactDetailSections');
+    expect(resourceDetailDrawerVmwareModelSource).not.toContain('ResourceDetailDrawerVMwareRow');
+    expect(resourceDetailDrawerVmwareModelSource).not.toContain(
+      'ResourceDetailDrawerVMwareSection',
+    );
+    expect(resourceDetailDrawerVmwareModelSource).not.toContain(
+      'ResourceDetailDrawerVMwareRowTone',
+    );
+    expect(resourceDetailDrawerVmwareModelSource).not.toContain('filterNonEmptyRows');
     for (const source of [
       resourceDetailDrawerKubernetesModelSource,
       resourceDetailDrawerTrueNASModelSource,
@@ -5563,7 +5624,14 @@ describe('shared primitive guardrails', () => {
     expect(resourceDetailDrawerVmwareModelSource).not.toContain('const formatCount');
 
     expect(resourceDetailDrawerOverviewTabSource).toContain('DetailSectionTable');
+    expect(resourceDetailDrawerOverviewTabSource).toContain(
+      '<DetailSectionTable sections={props.drawer.vmwareDetailSections()} />',
+    );
     expect(resourceDetailDrawerOverviewTabSource).not.toContain('TrueNASDetailSectionTable');
+    expect(resourceDetailDrawerOverviewTabSource).not.toContain('vmwareRowToneClass');
+    expect(resourceDetailDrawerOverviewTabSource).not.toContain(
+      '<For each={drawer.vmwareDetailSections()}',
+    );
 
     for (const source of [
       dockerAlertsTableSource,
