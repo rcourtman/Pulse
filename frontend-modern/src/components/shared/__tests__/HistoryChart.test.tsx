@@ -57,6 +57,13 @@ describe('HistoryChart', () => {
     expect(historyChartSource).toContain('HistoryChartHeader');
     expect(historyChartSource).toContain('HistoryChartOverlay');
     expect(historyChartSource).toContain('HistoryChartTooltip');
+    expect(historyChartOverlaySource).toContain("import { LoadingSpinner } from './LoadingSpinner'");
+    expect(historyChartOverlaySource).toContain(
+      '<LoadingSpinner size="xl" tone="info" label="Loading history" />',
+    );
+    expect(historyChartOverlaySource).not.toContain(
+      'w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin',
+    );
     expect(historyChartSource).not.toContain('ChartsAPI.getMetricsHistory');
     expect(historyChartSource).not.toContain('calculateOptimalPoints');
     expect(historyChartSource).not.toContain('setupCanvasDPR');

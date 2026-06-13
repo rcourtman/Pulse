@@ -1,4 +1,5 @@
 import { Component, Show } from 'solid-js';
+import { LoadingSpinner } from './LoadingSpinner';
 import type { HistoryChartState } from './useHistoryChartState';
 
 interface HistoryChartOverlayProps {
@@ -41,7 +42,7 @@ export const HistoryChartOverlay: Component<HistoryChartOverlayProps> = (props) 
 
       <Show when={props.chart.loading()}>
         <div class="absolute inset-0 flex items-center justify-center bg-surface -[1px]">
-          <div class="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <LoadingSpinner size="xl" tone="info" label="Loading history" />
         </div>
       </Show>
 

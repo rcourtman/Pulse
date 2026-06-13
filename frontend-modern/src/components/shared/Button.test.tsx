@@ -87,6 +87,9 @@ describe('Button', () => {
     ));
 
     expect(screen.getByRole('button', { name: 'Refresh' })).toBeDisabled();
+    expect(buttonSource).toContain("import { LoadingSpinner } from './LoadingSpinner'");
+    expect(buttonSource).toContain('<LoadingSpinner size="md" tone="current"');
+    expect(buttonSource).not.toContain('class="animate-spin -ml-1 mr-2 h-4 w-4 text-current"');
   });
 
   it('renders settings action buttons through named size and variants', () => {

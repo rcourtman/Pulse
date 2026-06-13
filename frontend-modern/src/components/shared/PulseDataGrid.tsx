@@ -7,6 +7,7 @@ import {
   TableHead,
   TableCell,
 } from '@/components/shared/Table';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import {
   getPulseDataGridAlignClass,
   getPulseDataGridFrameClass,
@@ -139,7 +140,7 @@ export function PulseDataGrid<T>(props: PulseDataGridProps<T>) {
                 class="px-4 py-8 text-center text-sm text-slate-500"
               >
                 <div class="flex items-center justify-center gap-2">
-                  <div class="w-4 h-4 rounded-full border-2 border-slate-300 border-t-blue-600 animate-spin"></div>
+                  <LoadingSpinner size="md" tone="info" />
                   Loading...
                 </div>
               </TableCell>

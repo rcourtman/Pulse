@@ -435,7 +435,7 @@
     {
       "id": "loading-spinner-shell",
       "category": "loading-indicator",
-      "summary": "Login, Settings, Patrol, AI, and shared loading indicators must compose LoadingSpinner for shared size, tone, and accessibility behavior instead of recreating border-based animate-spin spans.",
+      "summary": "Shared primitives, Login, Settings, Patrol, AI, and shared loading indicators must compose LoadingSpinner for shared size, tone, and accessibility behavior instead of recreating border-based animate-spin spans.",
       "canonical": {
         "path": "src/components/shared/LoadingSpinner.tsx",
         "export": "LoadingSpinner"
@@ -453,6 +453,9 @@
         { "path": "src/components/Settings/UpdatesSettingsPanel.tsx" },
         { "path": "src/components/Settings/UserAssignmentsDialog.tsx" },
         { "path": "src/components/Settings/UserAssignmentsPanel.tsx" },
+        { "path": "src/components/shared/Button.tsx" },
+        { "path": "src/components/shared/HistoryChartOverlay.tsx" },
+        { "path": "src/components/shared/PulseDataGrid.tsx" },
         { "path": "src/components/patrol/ApprovalBanner.tsx" },
         { "path": "src/components/patrol/ApprovalSection.tsx" },
         { "path": "src/components/patrol/InvestigationMessages.tsx" },
@@ -534,6 +537,24 @@
           ]
         },
         {
+          "path": "src/components/shared/Button.tsx",
+          "patterns": [
+            "class=\"animate-spin -ml-1 mr-2 h-4 w-4 text-current\""
+          ]
+        },
+        {
+          "path": "src/components/shared/HistoryChartOverlay.tsx",
+          "patterns": [
+            "w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"
+          ]
+        },
+        {
+          "path": "src/components/shared/PulseDataGrid.tsx",
+          "patterns": [
+            "w-4 h-4 rounded-full border-2 border-slate-300 border-t-blue-600 animate-spin"
+          ]
+        },
+        {
           "path": "src/components/patrol/ApprovalBanner.tsx",
           "patterns": [
             "h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin"
@@ -573,6 +594,9 @@
       "proof": [
         "src/components/shared/LoadingSpinner.test.tsx",
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "src/components/shared/__tests__/HistoryChart.test.tsx",
+        "src/components/shared/__tests__/PulseDataGrid.test.tsx",
         "src/components/AI/__tests__/FindingsPanel.test.ts",
         "src/components/__tests__/Login.test.tsx",
         "src/components/patrol/__tests__/ApprovalBanner.test.tsx",
@@ -2759,6 +2783,33 @@
       "proof": [
         "src/components/shared/LoadingSpinner.test.tsx",
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "shared-component-local-loading-spinner-shell",
+      "category": "loading-indicator",
+      "summary": "Shared primitive internals must not recreate local animate-spin loading shells; compose LoadingSpinner so pages inherit the canonical size, tone, and accessibility behavior by construction.",
+      "canonical": {
+        "path": "src/components/shared/LoadingSpinner.tsx",
+        "export": "LoadingSpinner"
+      },
+      "scopes": [
+        "src/components/shared/Button.tsx",
+        "src/components/shared/HistoryChartOverlay.tsx",
+        "src/components/shared/PulseDataGrid.tsx"
+      ],
+      "extensions": [".tsx"],
+      "allPatterns": ["animate-spin"],
+      "legacyReason": "Retired migration debt. Button loading state, PulseDataGrid loading rows, and HistoryChart overlays compose LoadingSpinner instead of local SVG or border spinner shells.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
+      "proof": [
+        "src/components/shared/LoadingSpinner.test.tsx",
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "src/components/shared/__tests__/HistoryChart.test.tsx",
+        "src/components/shared/__tests__/PulseDataGrid.test.tsx",
         "scripts/shared-template-audit.mjs"
       ]
     },

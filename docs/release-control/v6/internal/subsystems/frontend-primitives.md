@@ -1777,6 +1777,13 @@ not a replacement status card, CTA band, or page-local nested card.
 
 ## Current State
 
+Shared loading indicators are part of the active frontend primitive contract.
+`LoadingSpinner` owns pure loading and action-pending spinner shells for shared
+primitive internals such as `Button`, `PulseDataGrid`, and
+`HistoryChartOverlay`, as well as Login, Settings, Patrol, and AI finding
+surfaces; local `animate-spin` spinner shells in those consumers are governed
+by the shared-template registry rather than page-local discretion.
+
 AI settings provider fields are a governed frontend primitive, not a
 provider-local form fork. The shared provider configuration section must render
 provider-specific controls from `aiSettingsModel.ts` `extraFields`, including
@@ -2779,10 +2786,11 @@ green/yellow span classes in storage components or storage-backup presentation
 helpers.
 Loading indicators are registry-backed too. `LoadingSpinner` owns the shared
 border-based spinner shell, size catalog, tone catalog, decorative status, and
-accessible status label behavior. Settings, Patrol, and AI finding surfaces
-must compose that primitive for pure loading and action-pending spinners;
-icon-specific refresh rotation remains local icon state, not a loading-spinner
-shell.
+accessible status label behavior. Shared primitive internals such as `Button`,
+`PulseDataGrid`, and `HistoryChartOverlay`, plus Login, Settings, Patrol, and
+AI finding surfaces, must compose that primitive for pure loading and
+action-pending spinners; icon-specific refresh rotation remains local icon
+state, not a loading-spinner shell.
 Native select controls are registry-backed too. `FormSelect` owns label/id
 wiring, helper-text description merging, value synchronization, default select
 chrome, dynamic-option value synchronization, and compact styling hooks for

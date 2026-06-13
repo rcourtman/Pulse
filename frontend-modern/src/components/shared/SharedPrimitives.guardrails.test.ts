@@ -2460,7 +2460,7 @@ describe('shared primitive guardrails', () => {
     }
   });
 
-  it('keeps Login, Settings, Patrol, and AI loading spinners on the shared LoadingSpinner primitive', () => {
+  it('keeps shared, Login, Settings, Patrol, and AI loading spinners on the shared LoadingSpinner primitive', () => {
     const registry = JSON.parse(sharedTemplateRegistrySource) as {
       rules?: Array<{
         id: string;
@@ -2490,6 +2490,9 @@ describe('shared primitive guardrails', () => {
     const loginBorderGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'login-local-border-loading-spinner-shell',
     );
+    const sharedComponentSpinnerGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'shared-component-local-loading-spinner-shell',
+    );
 
     expect(registeredRule?.canonical?.path).toBe('src/components/shared/LoadingSpinner.tsx');
     expect(registeredRule?.canonical?.export).toBe('LoadingSpinner');
@@ -2506,6 +2509,9 @@ describe('shared primitive guardrails', () => {
       'src/components/Settings/UpdatesSettingsPanel.tsx',
       'src/components/Settings/UserAssignmentsDialog.tsx',
       'src/components/Settings/UserAssignmentsPanel.tsx',
+      'src/components/shared/Button.tsx',
+      'src/components/shared/HistoryChartOverlay.tsx',
+      'src/components/shared/PulseDataGrid.tsx',
       'src/components/patrol/ApprovalBanner.tsx',
       'src/components/patrol/ApprovalSection.tsx',
       'src/components/patrol/InvestigationMessages.tsx',
@@ -2541,6 +2547,17 @@ describe('shared primitive guardrails', () => {
     expect(loginBorderGuard?.allPatterns).toEqual(['border-t-transparent', 'animate-spin']);
     expect(loginBorderGuard?.scopes).toEqual(['src/components/Login.tsx']);
     expect(loginBorderGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(sharedComponentSpinnerGuard?.canonical?.path).toBe(
+      'src/components/shared/LoadingSpinner.tsx',
+    );
+    expect(sharedComponentSpinnerGuard?.canonical?.export).toBe('LoadingSpinner');
+    expect(sharedComponentSpinnerGuard?.allPatterns).toEqual(['animate-spin']);
+    expect(sharedComponentSpinnerGuard?.scopes).toEqual([
+      'src/components/shared/Button.tsx',
+      'src/components/shared/HistoryChartOverlay.tsx',
+      'src/components/shared/PulseDataGrid.tsx',
+    ]);
+    expect(sharedComponentSpinnerGuard?.allowedPaths ?? []).toHaveLength(0);
 
     expect(loadingSpinnerSource).toContain('getLoadingSpinnerClass');
     expect(loadingSpinnerSource).toContain('aria-hidden={ariaHidden()}');
@@ -2551,6 +2568,11 @@ describe('shared primitive guardrails', () => {
       'animate-spin h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4',
     );
     expect(loginSource).not.toContain('class="animate-spin -ml-1 mr-3 h-5 w-5 text-white"');
+
+    for (const source of [buttonSource, historyChartOverlaySource, pulseDataGridSource]) {
+      expect(source).toContain('LoadingSpinner');
+      expect(source).not.toContain('animate-spin');
+    }
 
     for (const source of [
       findingsPanelSource,

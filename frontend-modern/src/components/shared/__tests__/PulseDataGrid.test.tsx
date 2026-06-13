@@ -25,7 +25,12 @@ describe('PulseDataGrid', () => {
     expect(pulseDataGridSource).toContain('getPulseDataGridWidthAttr');
     expect(pulseDataGridSource).toContain('isPulseDataGridInteractiveTarget');
     expect(pulseDataGridSource).toContain("from '@/components/shared/Table'");
+    expect(pulseDataGridSource).toContain("from '@/components/shared/LoadingSpinner'");
     expect(pulseDataGridSource).toContain('<Table');
+    expect(pulseDataGridSource).toContain('<LoadingSpinner size="md" tone="info"');
+    expect(pulseDataGridSource).not.toContain(
+      'w-4 h-4 rounded-full border-2 border-slate-300 border-t-blue-600 animate-spin',
+    );
     expect(pulseDataGridSource).toContain('wrapperClass="scrollbar-hide"');
     expect(pulseDataGridSource).toContain('scrollbar-hide');
     expect(pulseDataGridSource).not.toContain('<div class="overflow-x-auto');
