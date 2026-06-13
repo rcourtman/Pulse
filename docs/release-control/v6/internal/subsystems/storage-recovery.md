@@ -95,6 +95,10 @@ Proxmox backup source/state chips are also a frontend-primitives boundary:
 badge tones, `proxmoxBackupsTableShared.tsx` owns the backup table helper
 composition, and visible source/state chips must render through `MetadataBadge`
 instead of restoring local rounded-sm xs badge spans.
+The Proxmox backup view selector follows the same ownership split:
+storage/recovery owns the chronological-versus-coverage view values and backup
+semantics, while the visible segmented selector shell must compose the
+frontend-primitives `FilterButtonGroup`.
 Tenant report branding settings are adjacent tenant-local configuration, not a
 storage or recovery product state. `reportBranding` persisted in a tenant
 runtime's `system.json` should be preserved by the existing tenant data

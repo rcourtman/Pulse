@@ -220,7 +220,21 @@ describe('ProxmoxBackupsTable', () => {
 
     await screen.findAllByText('pbs-docker');
 
+    expect(proxmoxBackupsTableSource).toContain(
+      "import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';",
+    );
+    expect(proxmoxBackupsTableSource).toContain('<FilterButtonGroup');
+    expect(proxmoxBackupsTableSource).toContain('variant="segmented"');
+    expect(proxmoxBackupsTableSource).not.toContain('const viewButtonClass');
+    expect(proxmoxBackupsTableSource).not.toContain(
+      'inline-flex items-center gap-1 rounded-md border border-border bg-surface p-1',
+    );
+    expect(proxmoxBackupsTableSource).not.toContain(
+      'inline-flex min-h-8 items-center gap-1.5 rounded-sm px-3 text-xs font-medium transition-colors',
+    );
+
     // The two top-level views exist...
+    expect(screen.getByRole('group', { name: /backups view/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /by date/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /coverage/i })).toBeInTheDocument();
     // ...and the old four-tab + sub-tab tree does not.

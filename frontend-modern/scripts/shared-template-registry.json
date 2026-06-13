@@ -2924,7 +2924,8 @@
         { "path": "src/components/Settings/GeneralSettingsPanel.tsx" },
         { "path": "src/components/Settings/ResourcePicker.tsx" },
         { "path": "src/components/Settings/ReportingPanel.tsx" },
-        { "path": "src/features/patrol/PatrolIntelligenceHeader.tsx" }
+        { "path": "src/features/patrol/PatrolIntelligenceHeader.tsx" },
+        { "path": "src/features/proxmox/ProxmoxBackupsTable.tsx" }
       ],
       "forbiddenPatterns": [
         {
@@ -2932,6 +2933,14 @@
           "patterns": [
             "min-h-10 sm:min-h-9 min-w-10 px-3 py-2 rounded-md text-sm font-medium transition-all",
             "<For each={RESOURCE_PICKER_TYPE_FILTERS}>"
+          ]
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxBackupsTable.tsx",
+          "patterns": [
+            "const viewButtonClass",
+            "inline-flex items-center gap-1 rounded-md border border-border bg-surface p-1",
+            "inline-flex min-h-8 items-center gap-1.5 rounded-sm px-3 text-xs font-medium transition-colors"
           ]
         }
       ],
@@ -4875,6 +4884,28 @@
       ],
       "legacyReason": "Retired migration debt. Settings and compact feature segmented selectors must use FilterButtonGroup; local active-button selector styling forks are not allowed.",
       "allowedPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "filter-button-group-local-feature-view-toggle-styles",
+      "category": "segmented-selector",
+      "summary": "Feature table view toggles must compose FilterButtonGroup instead of copying the compact bordered group and active view-button styling locally.",
+      "canonical": {
+        "path": "src/components/shared/filterButtonGroupModel.ts",
+        "export": "getFilterButtonGroupButtonClass"
+      },
+      "scopes": ["src/features"],
+      "extensions": [".tsx"],
+      "allPatterns": [
+        "inline-flex items-center gap-1 rounded-md border border-border bg-surface p-1",
+        "inline-flex min-h-8 items-center gap-1.5 rounded-sm px-3 text-xs font-medium transition-colors"
+      ],
+      "legacyReason": "Retired migration debt. Feature table view toggles must use FilterButtonGroup; local bordered segmented-view selector forks are not allowed.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/features/proxmox/__tests__/ProxmoxBackupsTable.test.tsx"],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "scripts/shared-template-audit.mjs"

@@ -386,11 +386,15 @@ describe('shared primitive guardrails', () => {
         allPatterns?: string[];
         scopes?: string[];
         allowedPaths?: string[];
+        ignoredPaths?: string[];
       }>;
     };
     const registeredRule = registry.rules?.find((rule) => rule.id === 'filter-button-group-shell');
     const registeredGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'filter-button-group-local-segmented-control-styles',
+    );
+    const registeredFeatureGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'filter-button-group-local-feature-view-toggle-styles',
     );
 
     expect(registeredRule?.canonical?.path).toBe('src/components/shared/FilterButtonGroup.tsx');
@@ -400,6 +404,7 @@ describe('shared primitive guardrails', () => {
       'src/components/Settings/ResourcePicker.tsx',
       'src/components/Settings/ReportingPanel.tsx',
       'src/features/patrol/PatrolIntelligenceHeader.tsx',
+      'src/features/proxmox/ProxmoxBackupsTable.tsx',
     ]);
     expect(registeredRule?.forbiddenPatterns).toEqual(
       expect.arrayContaining([
@@ -408,6 +413,14 @@ describe('shared primitive guardrails', () => {
           patterns: expect.arrayContaining([
             'min-h-10 sm:min-h-9 min-w-10 px-3 py-2 rounded-md text-sm font-medium transition-all',
             '<For each={RESOURCE_PICKER_TYPE_FILTERS}>',
+          ]),
+        }),
+        expect.objectContaining({
+          path: 'src/features/proxmox/ProxmoxBackupsTable.tsx',
+          patterns: expect.arrayContaining([
+            'const viewButtonClass',
+            'inline-flex items-center gap-1 rounded-md border border-border bg-surface p-1',
+            'inline-flex min-h-8 items-center gap-1.5 rounded-sm px-3 text-xs font-medium transition-colors',
           ]),
         }),
       ]),
@@ -424,6 +437,18 @@ describe('shared primitive guardrails', () => {
     expect(registeredGuard?.scopes).toEqual(
       expect.arrayContaining(['src/components/Settings', 'src/features', 'src/pages']),
     );
+    expect(registeredFeatureGuard?.canonical?.path).toBe(
+      'src/components/shared/filterButtonGroupModel.ts',
+    );
+    expect(registeredFeatureGuard?.canonical?.export).toBe('getFilterButtonGroupButtonClass');
+    expect(registeredFeatureGuard?.allPatterns).toEqual([
+      'inline-flex items-center gap-1 rounded-md border border-border bg-surface p-1',
+      'inline-flex min-h-8 items-center gap-1.5 rounded-sm px-3 text-xs font-medium transition-colors',
+    ]);
+    expect(registeredFeatureGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(registeredFeatureGuard?.ignoredPaths).toEqual([
+      'src/features/proxmox/__tests__/ProxmoxBackupsTable.test.tsx',
+    ]);
 
     expect(filterButtonGroupSource).toContain('useFilterButtonGroupState');
     expect(filterButtonGroupSource).toContain('getFilterButtonGroupClass');
@@ -470,6 +495,16 @@ describe('shared primitive guardrails', () => {
     );
     expect(patrolIntelligenceHeaderSource).not.toContain(
       'flex-1 py-1.5 px-2 text-xs font-semibold rounded-md transition-all duration-200',
+    );
+    expect(proxmoxBackupsTableSource).toContain('FilterButtonGroup');
+    expect(proxmoxBackupsTableSource).toContain('variant="segmented"');
+    expect(proxmoxBackupsTableSource).toContain('BACKUP_VIEW_OPTIONS');
+    expect(proxmoxBackupsTableSource).not.toContain('const viewButtonClass');
+    expect(proxmoxBackupsTableSource).not.toContain(
+      'inline-flex items-center gap-1 rounded-md border border-border bg-surface p-1',
+    );
+    expect(proxmoxBackupsTableSource).not.toContain(
+      'inline-flex min-h-8 items-center gap-1.5 rounded-sm px-3 text-xs font-medium transition-colors',
     );
   });
 

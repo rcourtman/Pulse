@@ -4,6 +4,7 @@ import CalendarIcon from 'lucide-solid/icons/calendar';
 import ShieldCheckIcon from 'lucide-solid/icons/shield-check';
 import { useSearchParams } from '@solidjs/router';
 import { FilterBar, type FilterDef, type FilterSelectOption } from '@/components/shared/FilterBar';
+import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { apiFetch } from '@/utils/apiClient';
 import {
@@ -64,6 +65,11 @@ import { ProxmoxRecoverableTable } from './ProxmoxRecoverableTable';
 // feed for "what ran when", and a guest coverage table for "what is protected".
 
 type BackupView = 'date' | 'coverage';
+
+const BACKUP_VIEW_OPTIONS: FilterOption<BackupView>[] = [
+  { value: 'date', label: 'By date', compactLabel: 'Date', icon: CalendarIcon },
+  { value: 'coverage', label: 'Coverage', icon: ShieldCheckIcon },
+];
 
 async function fetchPVEBackups(): Promise<PVEBackupsPayload> {
   const response = await apiFetch('/api/backups/pve');
@@ -431,11 +437,6 @@ export const ProxmoxBackupsTable: Component<{
     return filters;
   };
 
-  const viewButtonClass = (active: boolean): string =>
-    `inline-flex min-h-8 items-center gap-1.5 rounded-sm px-3 text-xs font-medium transition-colors ${
-      active ? 'bg-surface-hover text-base-content' : 'text-muted hover:text-base-content'
-    }`;
-
   return (
     <Show
       when={!backups.error}
@@ -526,30 +527,14 @@ export const ProxmoxBackupsTable: Component<{
             />
           </Show>
 
-          <div
-            role="group"
-            aria-label="Backups view"
-            class="inline-flex items-center gap-1 rounded-md border border-border bg-surface p-1"
-          >
-            <button
-              type="button"
-              class={viewButtonClass(view() === 'date')}
-              aria-pressed={view() === 'date'}
-              onClick={() => setView('date')}
-            >
-              <CalendarIcon class="h-4 w-4" aria-hidden="true" />
-              <span>By date</span>
-            </button>
-            <button
-              type="button"
-              class={viewButtonClass(view() === 'coverage')}
-              aria-pressed={view() === 'coverage'}
-              onClick={() => setView('coverage')}
-            >
-              <ShieldCheckIcon class="h-4 w-4" aria-hidden="true" />
-              <span>Coverage</span>
-            </button>
-          </div>
+          <FilterButtonGroup
+            options={BACKUP_VIEW_OPTIONS}
+            value={view()}
+            onChange={setView}
+            ariaLabel="Backups view"
+            variant="segmented"
+            class="inline-flex w-fit"
+          />
 
           <Show when={view() === 'date' && recoveryModel().recoverableArtifacts.length > 0}>
             <BackupActivityChart

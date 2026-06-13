@@ -1835,6 +1835,10 @@ SVGs.
 resource, workload, and Docker host drawers: centered row layout, status
 semantics, discovery loading copy, and canonical `LoadingSpinner` composition
 live there rather than in drawer-local fallback markup.
+`FilterButtonGroup` owns feature table view toggles as well as settings
+segmented selectors: page-specific labels and selected values stay in the
+owning feature model, but the visible segmented selector shell must come from
+the shared primitive rather than a local bordered button group.
 
 AI settings provider fields are a governed frontend primitive, not a
 provider-local form fork. The shared provider configuration section must render
