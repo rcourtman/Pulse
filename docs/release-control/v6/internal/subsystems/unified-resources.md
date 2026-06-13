@@ -229,6 +229,10 @@ unified-resource consumers own which source field is displayed, but platform
 tables must use the frontend-primitives-owned `formatPlatformTableTextValue`
 helper for trimmed-string empty-cell rendering instead of recreating local
 `textValue` helpers or inline `asTrimmedString(...) || '—'` fallbacks.
+Simple title-case state/status label fallback follows that boundary too:
+unified-resource consumers own which TrueNAS state or status value is shown,
+but TrueNAS platform tables must use `formatPlatformTableTitleCaseValue`
+instead of recreating local `titleCase` helpers.
 Platform filter option semantics follow that split too: unified-resource
 consumers own the source-specific status buckets and labels, while the repeated
 FilterBar chip leading-dot presentation must use the frontend-primitives-owned

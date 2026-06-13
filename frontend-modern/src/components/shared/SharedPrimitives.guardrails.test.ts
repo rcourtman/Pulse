@@ -254,8 +254,12 @@ import dockerAlertsTableSource from '@/features/docker/DockerAlertsTable.tsx?raw
 import kubernetesAlertsTableSource from '@/features/kubernetes/KubernetesAlertsTable.tsx?raw';
 import proxmoxBackupsTableSharedSource from '@/features/proxmox/proxmoxBackupsTableShared.tsx?raw';
 import truenasAlertsTableSource from '@/features/truenas/TrueNASAlertsTable.tsx?raw';
+import truenasAppsTableSource from '@/features/truenas/TrueNASAppsTable.tsx?raw';
+import truenasNetworkSharesTableSource from '@/features/truenas/TrueNASNetworkSharesTable.tsx?raw';
 import truenasServicesTableSource from '@/features/truenas/TrueNASServicesTable.tsx?raw';
+import truenasStorageTopologyTableSource from '@/features/truenas/TrueNASStorageTopologyTable.tsx?raw';
 import truenasSystemsTableSource from '@/features/truenas/TrueNASSystemsTable.tsx?raw';
+import truenasVirtualMachinesTableSource from '@/features/truenas/TrueNASVirtualMachinesTable.tsx?raw';
 import vsphereActivityTableSource from '@/features/vmware/VsphereActivityTable.tsx?raw';
 import vsphereAlertsTableSource from '@/features/vmware/VsphereAlertsTable.tsx?raw';
 
@@ -3514,6 +3518,73 @@ describe('shared primitive guardrails', () => {
       for (const pattern of forbiddenPatterns) {
         expect(source).not.toContain(pattern);
       }
+    }
+  });
+
+  it('keeps TrueNAS platform table title-case fallbacks on the shared helper', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+        forbiddenPatterns?: Array<{ path?: string; patterns?: string[] }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        allowedPaths?: string[];
+        ignoredPaths?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find(
+      (rule) => rule.id === 'platform-table-title-case-value-fallback',
+    );
+    const localHelperGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'truenas-platform-table-local-title-case-helper',
+    );
+    const truenasTitleCaseConsumers: Array<[string, string]> = [
+      ['src/features/truenas/TrueNASAppsTable.tsx', truenasAppsTableSource],
+      ['src/features/truenas/TrueNASNetworkSharesTable.tsx', truenasNetworkSharesTableSource],
+      ['src/features/truenas/TrueNASServicesTable.tsx', truenasServicesTableSource],
+      ['src/features/truenas/TrueNASStorageTopologyTable.tsx', truenasStorageTopologyTableSource],
+      ['src/features/truenas/TrueNASVirtualMachinesTable.tsx', truenasVirtualMachinesTableSource],
+    ];
+    const truenasTitleCaseConsumerPaths = truenasTitleCaseConsumers.map(([path]) => path);
+
+    expect(registeredRule?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(registeredRule?.canonical?.export).toBe('formatPlatformTableTitleCaseValue');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
+      truenasTitleCaseConsumerPaths,
+    );
+    expect(registeredRule?.forbiddenPatterns).toEqual(
+      truenasTitleCaseConsumerPaths.map((path) => ({
+        path,
+        patterns: ['const titleCase'],
+      })),
+    );
+    expect(localHelperGuard?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(localHelperGuard?.canonical?.export).toBe('formatPlatformTableTitleCaseValue');
+    expect(localHelperGuard?.allPatterns).toEqual([
+      'const titleCase',
+      'asTrimmedString(value)',
+      "return 'Unknown'",
+    ]);
+    expect(localHelperGuard?.scopes).toEqual(['src/features/truenas']);
+    expect(localHelperGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(localHelperGuard?.ignoredPaths ?? []).toHaveLength(0);
+
+    expect(sharedPlatformPageSource).toContain('export const formatPlatformTableTitleCaseValue');
+    expect(sharedPlatformPageSource).toContain("if (!normalized) return emptyText");
+
+    for (const [, source] of truenasTitleCaseConsumers) {
+      expect(source).toContain('formatPlatformTableTitleCaseValue');
+      expect(source).not.toContain('const titleCase');
     }
   });
 

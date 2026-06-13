@@ -1193,6 +1193,49 @@
       ]
     },
     {
+      "id": "platform-table-title-case-value-fallback",
+      "category": "platform-table-text-value",
+      "summary": "Platform tables must use the shared title-case fallback helper for status/state labels instead of recreating local titleCase helpers.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "formatPlatformTableTitleCaseValue"
+      },
+      "requiredConsumers": [
+        { "path": "src/features/truenas/TrueNASAppsTable.tsx" },
+        { "path": "src/features/truenas/TrueNASNetworkSharesTable.tsx" },
+        { "path": "src/features/truenas/TrueNASServicesTable.tsx" },
+        { "path": "src/features/truenas/TrueNASStorageTopologyTable.tsx" },
+        { "path": "src/features/truenas/TrueNASVirtualMachinesTable.tsx" }
+      ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/features/truenas/TrueNASAppsTable.tsx",
+          "patterns": ["const titleCase"]
+        },
+        {
+          "path": "src/features/truenas/TrueNASNetworkSharesTable.tsx",
+          "patterns": ["const titleCase"]
+        },
+        {
+          "path": "src/features/truenas/TrueNASServicesTable.tsx",
+          "patterns": ["const titleCase"]
+        },
+        {
+          "path": "src/features/truenas/TrueNASStorageTopologyTable.tsx",
+          "patterns": ["const titleCase"]
+        },
+        {
+          "path": "src/features/truenas/TrueNASVirtualMachinesTable.tsx",
+          "patterns": ["const titleCase"]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "platform-error-state",
       "category": "platform-error-state",
       "summary": "Platform page and table load failures must compose PlatformErrorState instead of recreating a local EmptyState plus Refresh action.",
@@ -1606,6 +1649,26 @@
       "extensions": [".tsx"],
       "allPatterns": ["const textValue", "asTrimmedString(value) || '—'"],
       "legacyReason": "Retired migration debt. Kubernetes platform table text cells must use formatPlatformTableTextValue for the shared trimmed-string empty-cell marker.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "truenas-platform-table-local-title-case-helper",
+      "category": "platform-table-text-value",
+      "summary": "TrueNAS platform tables must not recreate local titleCase helpers for status/state label fallback.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "formatPlatformTableTitleCaseValue"
+      },
+      "scopes": ["src/features/truenas"],
+      "extensions": [".tsx"],
+      "allPatterns": ["const titleCase", "asTrimmedString(value)", "return 'Unknown'"],
+      "legacyReason": "Retired migration debt. TrueNAS platform table status/state labels must use formatPlatformTableTitleCaseValue for the shared title-case fallback.",
       "allowedPaths": [],
       "ignoredPaths": [],
       "proof": [

@@ -2591,6 +2591,11 @@ trimmed-string plus canonical empty-cell marker behavior. Kubernetes platform
 tables must compose that helper instead of declaring local `textValue` helpers
 or inlining `asTrimmedString(...) || '—'` fallback expressions for table text
 cells.
+Platform table title-case fallback formatting follows the same rule.
+`formatPlatformTableTitleCaseValue` owns the repeated trimmed-string plus
+`Unknown` fallback behavior for state/status labels that need simple title
+case. TrueNAS platform tables must compose that helper instead of declaring
+local `titleCase` helpers.
 Platform load-failure states are registry-backed as well.
 `PlatformErrorState` owns the repeated table-card error shell, warning icon,
 and Refresh action for platform page and table load failures; platform

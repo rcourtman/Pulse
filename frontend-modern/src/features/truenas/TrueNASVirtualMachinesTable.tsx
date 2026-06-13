@@ -7,6 +7,7 @@ import {
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  formatPlatformTableTitleCaseValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   type PlatformTableFilterOption,
@@ -34,12 +35,6 @@ const TRUENAS_VM_STATUS_OPTIONS: PlatformTableFilterOption<TrueNASVMStatusFilter
 ];
 
 const vmMeta = (resource: Resource): ResourceTrueNASVMMeta | undefined => resource.truenas?.vm;
-
-const titleCase = (value: string | undefined): string => {
-  const normalized = asTrimmedString(value);
-  if (!normalized) return 'Unknown';
-  return normalized.charAt(0).toUpperCase() + normalized.slice(1).toLowerCase();
-};
 
 const formatBytes = (bytes: number | undefined): string => {
   if (!bytes || bytes <= 0) return '-';
@@ -203,7 +198,8 @@ export const TrueNASVirtualMachinesTable: Component<{
                       resource.id;
                     const displayStatus = () => getTrueNASResourceDisplayStatus(resource);
                     const indicator = () => getSimpleStatusIndicator(displayStatus());
-                    const stateLabel = () => titleCase(vm()?.state || vm()?.domainState);
+                    const stateLabel = () =>
+                      formatPlatformTableTitleCaseValue(vm()?.state || vm()?.domainState);
                     const devices = createMemo(() => formatDevices(vm()));
                     const flags = createMemo(() => flagLabels(vm()));
                     const detailRowId = () => drawer.detailRowId(resource);

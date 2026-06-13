@@ -7,6 +7,7 @@ import {
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  formatPlatformTableTitleCaseValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   type PlatformTableFilterOption,
@@ -50,12 +51,6 @@ const SERVICE_NAME_LABELS: Record<string, string> = {
   snmp: 'SNMP',
   ssh: 'SSH',
   ups: 'UPS',
-};
-
-const titleCase = (value: string | undefined): string => {
-  const normalized = asTrimmedString(value);
-  if (!normalized) return 'Unknown';
-  return normalized.charAt(0).toUpperCase() + normalized.slice(1).toLowerCase();
 };
 
 const formatServiceName = (value: string | undefined): string => {
@@ -122,7 +117,7 @@ const buildServiceDetailSections = (row: TrueNASServiceRow): ServiceDetailSectio
     {
       label: 'Runtime',
       rows: compactDetailRows([
-        detailRow('State', titleCase(asTrimmedString(row.service.state) || undefined), {
+        detailRow('State', formatPlatformTableTitleCaseValue(row.service.state), {
           tone: serviceTone(row),
         }),
         detailRow('Boot', detailBool(row.service.enabled), {
@@ -147,7 +142,7 @@ const ServiceDetailTable: Component<{ row: TrueNASServiceRow; onClose: () => voi
     testId="truenas-service-detail"
     detailFor={props.row.id}
     title="Service detail"
-    summary={`${formatServiceName(props.row.service.service)} · ${titleCase(
+    summary={`${formatServiceName(props.row.service.service)} · ${formatPlatformTableTitleCaseValue(
       mapTrueNASServiceStatus(props.row),
     )}`}
     sections={buildServiceDetailSections(props.row)}
@@ -261,7 +256,7 @@ export const TrueNASServicesTable: Component<{
                               <StatusDot
                                 size="sm"
                                 variant={serviceStatusVariant(status())}
-                                title={titleCase(status())}
+                                title={formatPlatformTableTitleCaseValue(status())}
                               />
                               <div class="min-w-0 truncate font-medium text-base-content">
                                 {formatServiceName(row.service.service)}
@@ -270,7 +265,7 @@ export const TrueNASServicesTable: Component<{
                           </TableCell>
                           <TableCell class={getPlatformTableCellClassForKind('badge')}>
                             <span class="inline-flex rounded-full border border-border px-2 py-0.5 text-[11px] font-medium text-base-content">
-                              {titleCase(rawState())}
+                              {formatPlatformTableTitleCaseValue(rawState())}
                             </span>
                           </TableCell>
                           <TableCell class={getPlatformTableCellClassForKind('badge')}>

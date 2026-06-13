@@ -11,6 +11,7 @@ import {
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  formatPlatformTableTitleCaseValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   type PlatformTableFilterOption,
@@ -47,12 +48,6 @@ const metricFallback = () => (
 
 const finiteMetric = (value: number | undefined): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-
-const titleCase = (value: string | undefined): string => {
-  const normalized = asTrimmedString(value);
-  if (!normalized) return 'Unknown';
-  return normalized.charAt(0).toUpperCase() + normalized.slice(1).toLowerCase();
-};
 
 const appMeta = (resource: Resource): ResourceTrueNASAppMeta | undefined => resource.truenas?.app;
 
@@ -280,7 +275,8 @@ export const TrueNASAppsTable: Component<{
                                   {name()}
                                 </div>
                                 <div class="truncate text-[10px] text-muted">
-                                  {titleCase(app()?.state)} on {resource.parentName || 'TrueNAS'}
+                                  {formatPlatformTableTitleCaseValue(app()?.state)} on{' '}
+                                  {resource.parentName || 'TrueNAS'}
                                   <Show when={app()?.customApp}> - Custom</Show>
                                 </div>
                               </div>

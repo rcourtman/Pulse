@@ -144,6 +144,15 @@ export const getPlatformTableCellClassForKind = (kind: PlatformTableColumnKind):
 export const formatPlatformTableTextValue = (value: unknown, emptyText = '—'): string =>
   asTrimmedString(value) || emptyText;
 
+export const formatPlatformTableTitleCaseValue = (
+  value: unknown,
+  emptyText = 'Unknown',
+): string => {
+  const normalized = asTrimmedString(value);
+  if (!normalized) return emptyText;
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1).toLowerCase();
+};
+
 export function PlatformErrorState(props: {
   title: string;
   description: string;

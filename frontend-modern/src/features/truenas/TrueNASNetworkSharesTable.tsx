@@ -7,6 +7,7 @@ import {
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  formatPlatformTableTitleCaseValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   type PlatformTableFilterOption,
@@ -36,12 +37,6 @@ const TRUENAS_SHARE_STATUS_OPTIONS: PlatformTableFilterOption<TrueNASShareStatus
 
 const shareMeta = (resource: Resource): ResourceTrueNASShareMeta | undefined =>
   resource.truenas?.share;
-
-const titleCase = (value: string | undefined): string => {
-  const normalized = asTrimmedString(value);
-  if (!normalized) return 'Unknown';
-  return normalized.charAt(0).toUpperCase() + normalized.slice(1).toLowerCase();
-};
 
 const formatProtocol = (share: ResourceTrueNASShareMeta | undefined): string =>
   asTrimmedString(share?.protocol)?.toUpperCase() || '-';
@@ -198,7 +193,8 @@ export const TrueNASNetworkSharesTable: Component<{
                     const access = createMemo(() => formatAccess(share()));
                     const clients = createMemo(() => formatClients(share()));
                     const security = createMemo(() => formatSecurity(share()));
-                    const stateLabel = () => titleCase(mapTrueNASShareStatus(resource));
+                    const stateLabel = () =>
+                      formatPlatformTableTitleCaseValue(mapTrueNASShareStatus(resource));
                     const detailRowId = () => drawer.detailRowId(resource);
                     const isExpanded = () => drawer.isExpanded(resource);
                     return (

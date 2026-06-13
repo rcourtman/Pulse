@@ -3,6 +3,7 @@ import { createRoot, createSignal } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import {
   createPlatformTableFilterState,
+  formatPlatformTableTitleCaseValue,
   filterPlatformResources,
   formatPlatformTableTextValue,
   type PlatformResourceStatusFilter,
@@ -221,5 +222,15 @@ describe('formatPlatformTableTextValue', () => {
     expect(formatPlatformTableTextValue(undefined)).toBe('—');
     expect(formatPlatformTableTextValue(null)).toBe('—');
     expect(formatPlatformTableTextValue(' ', 'n/a')).toBe('n/a');
+  });
+});
+
+describe('formatPlatformTableTitleCaseValue', () => {
+  it('formats table status labels with the canonical title-case fallback', () => {
+    expect(formatPlatformTableTitleCaseValue(' RUNNING ')).toBe('Running');
+    expect(formatPlatformTableTitleCaseValue('degraded')).toBe('Degraded');
+    expect(formatPlatformTableTitleCaseValue('')).toBe('Unknown');
+    expect(formatPlatformTableTitleCaseValue(undefined)).toBe('Unknown');
+    expect(formatPlatformTableTitleCaseValue(' ', 'Unavailable')).toBe('Unavailable');
   });
 });

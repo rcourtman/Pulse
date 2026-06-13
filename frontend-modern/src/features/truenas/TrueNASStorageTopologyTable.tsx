@@ -11,6 +11,7 @@ import {
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  formatPlatformTableTitleCaseValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   type PlatformTableFilterOption,
@@ -55,12 +56,6 @@ const TRUENAS_STORAGE_STATUS_OPTIONS: PlatformTableFilterOption<TrueNASStorageSt
     leading: filterChipStatusDot('bg-red-500'),
   },
 ];
-
-const titleCase = (value: string | undefined): string => {
-  const normalized = asTrimmedString(value);
-  if (!normalized) return 'Unknown';
-  return normalized.charAt(0).toUpperCase() + normalized.slice(1).toLowerCase();
-};
 
 const resourceName = (resource: Resource): string =>
   asTrimmedString(resource.displayName) || asTrimmedString(resource.name) || resource.id;
@@ -131,7 +126,7 @@ const riskLabel = (row: TrueNASStorageTopologyRow): string => {
   const risk =
     asTrimmedString(row.resource.storage?.risk?.level) ||
     asTrimmedString(row.resource.physicalDisk?.risk?.level);
-  if (risk) return titleCase(risk);
+  if (risk) return formatPlatformTableTitleCaseValue(risk);
   const incidentCount = row.resource.incidentCount ?? row.resource.incidents?.length ?? 0;
   if (incidentCount > 0) return `${incidentCount} alert${incidentCount === 1 ? '' : 's'}`;
   const mapped = mapTrueNASStorageStatus(row.resource);
