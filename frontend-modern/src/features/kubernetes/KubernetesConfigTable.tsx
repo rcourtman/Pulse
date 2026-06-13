@@ -8,6 +8,7 @@ import {
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  formatPlatformTableTextValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   PlatformTableShell,
@@ -29,8 +30,6 @@ import {
 // ConfigMaps and Secrets are intentionally rendered as API metadata. Pulse may
 // know that keys exist, but metadata-only collection must never imply that
 // payload data was read or expose key names in this table.
-
-const textValue = (value: string | undefined): string => asTrimmedString(value) || '—';
 
 const configName = (resource: Resource): string =>
   asTrimmedString(resource.displayName) || asTrimmedString(resource.name) || resource.id;
@@ -65,7 +64,7 @@ const summarizeValues = (
 
 const lifecycleOrTrust = (resource: Resource): string => {
   if (resource.type === 'k8s-namespace') {
-    return textValue(resource.kubernetes?.phase);
+    return formatPlatformTableTextValue(resource.kubernetes?.phase);
   }
   if (resource.type === 'k8s-configmap') {
     const parts = [
@@ -108,7 +107,7 @@ const lifecycleOrTrust = (resource: Resource): string => {
     if (kind && name) return `${kind}/${name}`;
     return kind || name || '—';
   }
-  return textValue(resource.status);
+  return formatPlatformTableTextValue(resource.status);
 };
 
 const dataShape = (resource: Resource): { label: string; title: string } => {

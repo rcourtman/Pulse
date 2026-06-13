@@ -8,6 +8,7 @@ import {
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  formatPlatformTableTextValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   PlatformTableShell,
@@ -29,8 +30,6 @@ import {
 // Services have a distinct API contract from Ingress and EndpointSlice:
 // operators need the Service type, virtual IP, exposed ports, node ports, and
 // selector together rather than in a generic networking/detail table.
-
-const textValue = (value: string | undefined): string => asTrimmedString(value) || '—';
 
 const serviceName = (resource: Resource): string =>
   asTrimmedString(resource.displayName) || asTrimmedString(resource.name) || resource.id;
@@ -169,8 +168,10 @@ export const KubernetesServicesTable: Component<{
                     const indicator = () => getSimpleStatusIndicator(resource.status);
                     const name = () => serviceName(resource);
                     const scope = () => kubernetesScopeLabel(resource);
-                    const serviceType = () => textValue(resource.kubernetes?.serviceType);
-                    const clusterIp = () => textValue(resource.kubernetes?.clusterIp);
+                    const serviceType = () =>
+                      formatPlatformTableTextValue(resource.kubernetes?.serviceType);
+                    const clusterIp = () =>
+                      formatPlatformTableTextValue(resource.kubernetes?.clusterIp);
                     const externalIps = () => externalIpSummary(resource);
                     const ports = () => portSummary(resource);
                     const selector = () => selectorSummary(resource);

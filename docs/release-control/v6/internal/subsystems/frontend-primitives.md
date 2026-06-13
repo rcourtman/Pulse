@@ -2584,6 +2584,13 @@ Platform table loading states are registry-backed too.
 `role="status"` loading row for platform pages and tables; platform consumers
 own only the title and description copy. Platform feature surfaces must not
 recreate the `TableCard` plus compact status-row shell locally.
+Platform table text-cell fallback formatting is a shared primitive as well.
+`formatPlatformTableTextValue` in
+`frontend-modern/src/features/platformPage/sharedPlatformPage.tsx` owns the
+trimmed-string plus canonical empty-cell marker behavior. Kubernetes platform
+tables must compose that helper instead of declaring local `textValue` helpers
+or inlining `asTrimmedString(...) || '—'` fallback expressions for table text
+cells.
 Platform load-failure states are registry-backed as well.
 `PlatformErrorState` owns the repeated table-card error shell, warning icon,
 and Refresh action for platform page and table load failures; platform

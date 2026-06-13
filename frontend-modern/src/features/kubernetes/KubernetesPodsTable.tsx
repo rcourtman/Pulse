@@ -7,6 +7,7 @@ import {
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  formatPlatformTableTextValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   PlatformTableShell,
@@ -26,8 +27,6 @@ import {
   mapKubernetesPodStatus,
   type KubernetesResourceStatusFilter,
 } from './kubernetesPageModel';
-
-const textValue = (value: string | undefined): string => asTrimmedString(value) || '—';
 
 const podName = (resource: Resource): string =>
   asTrimmedString(resource.kubernetes?.podName) ||
@@ -60,7 +59,7 @@ const ownerValue = (resource: Resource): string => {
 };
 
 const imageValue = (resource: Resource): string =>
-  textValue(resource.kubernetes?.image || podContainers(resource)[0]?.image);
+  formatPlatformTableTextValue(resource.kubernetes?.image || podContainers(resource)[0]?.image);
 
 const ageValue = (resource: Resource): string => {
   const seconds = resource.kubernetes?.uptimeSeconds ?? resource.uptime;
@@ -182,7 +181,7 @@ export const KubernetesPodsTable: Component<{
                     const indicator = () => mapKubernetesPodStatus(resource);
                     const name = () => podName(resource);
                     const scope = () => kubernetesScopeLabel(resource);
-                    const node = () => textValue(resource.kubernetes?.nodeName);
+                    const node = () => formatPlatformTableTextValue(resource.kubernetes?.nodeName);
                     const owner = () => ownerValue(resource);
                     const image = () => imageValue(resource);
                     const age = () => ageValue(resource);

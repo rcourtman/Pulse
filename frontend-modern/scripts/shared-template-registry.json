@@ -1115,6 +1115,84 @@
       ]
     },
     {
+      "id": "platform-table-text-value-fallback",
+      "category": "platform-table-text-value",
+      "summary": "Platform tables must use the shared text-cell fallback helper for trimmed strings and canonical empty-cell markers instead of recreating local textValue helpers.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "formatPlatformTableTextValue"
+      },
+      "requiredConsumers": [
+        { "path": "src/features/kubernetes/KubernetesAutoscalingTable.tsx" },
+        { "path": "src/features/kubernetes/KubernetesClustersTable.tsx" },
+        { "path": "src/features/kubernetes/KubernetesConfigTable.tsx" },
+        { "path": "src/features/kubernetes/KubernetesControllersTable.tsx" },
+        { "path": "src/features/kubernetes/KubernetesDeploymentsTable.tsx" },
+        { "path": "src/features/kubernetes/KubernetesEventsTable.tsx" },
+        { "path": "src/features/kubernetes/KubernetesNetworkingTable.tsx" },
+        { "path": "src/features/kubernetes/KubernetesNodesTable.tsx" },
+        { "path": "src/features/kubernetes/KubernetesPodsTable.tsx" },
+        { "path": "src/features/kubernetes/KubernetesPolicyTable.tsx" },
+        { "path": "src/features/kubernetes/KubernetesServicesTable.tsx" },
+        { "path": "src/features/kubernetes/KubernetesStorageTable.tsx" }
+      ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/features/kubernetes/KubernetesAutoscalingTable.tsx",
+          "patterns": ["const textValue"]
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesClustersTable.tsx",
+          "patterns": ["asTrimmedString(cluster.kubernetes?.context) || '—'"]
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesConfigTable.tsx",
+          "patterns": ["const textValue"]
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesControllersTable.tsx",
+          "patterns": ["const textValue"]
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesDeploymentsTable.tsx",
+          "patterns": ["asTrimmedString(deployment.kubernetes?.namespace) || '—'"]
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesEventsTable.tsx",
+          "patterns": ["const textValue"]
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesNetworkingTable.tsx",
+          "patterns": ["const textValue"]
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesNodesTable.tsx",
+          "patterns": ["asTrimmedString(meta()?.kubeletVersion) || '—'"]
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesPodsTable.tsx",
+          "patterns": ["const textValue"]
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesPolicyTable.tsx",
+          "patterns": ["const textValue"]
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesServicesTable.tsx",
+          "patterns": ["const textValue"]
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesStorageTable.tsx",
+          "patterns": ["const textValue"]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "platform-error-state",
       "category": "platform-error-state",
       "summary": "Platform page and table load failures must compose PlatformErrorState instead of recreating a local EmptyState plus Refresh action.",
@@ -1513,6 +1591,26 @@
       "allowedPaths": [],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "kubernetes-platform-table-local-text-value-helper",
+      "category": "platform-table-text-value",
+      "summary": "Kubernetes platform tables must not recreate local textValue helpers for trimmed-string empty-cell fallback.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "formatPlatformTableTextValue"
+      },
+      "scopes": ["src/features/kubernetes"],
+      "extensions": [".tsx"],
+      "allPatterns": ["const textValue", "asTrimmedString(value) || '—'"],
+      "legacyReason": "Retired migration debt. Kubernetes platform table text cells must use formatPlatformTableTextValue for the shared trimmed-string empty-cell marker.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
         "scripts/shared-template-audit.mjs"
       ]
     },

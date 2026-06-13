@@ -12,6 +12,7 @@ import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
 import type { Resource } from '@/types/resource';
+import { asTrimmedString } from '@/utils/stringUtils';
 import { formatVmwareClusterServices } from '@/utils/vmwareDisplay';
 import { getPlatformColumnAlign, type PlatformTableColumnKind } from './columnAlignment';
 
@@ -139,6 +140,9 @@ export const getPlatformTableHeadClassForKind = (kind: PlatformTableColumnKind):
 
 export const getPlatformTableCellClassForKind = (kind: PlatformTableColumnKind): string =>
   getPlatformTableCellClass(getPlatformColumnAlign(kind));
+
+export const formatPlatformTableTextValue = (value: unknown, emptyText = '—'): string =>
+  asTrimmedString(value) || emptyText;
 
 export function PlatformErrorState(props: {
   title: string;

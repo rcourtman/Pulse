@@ -11,6 +11,7 @@ import {
   PlatformTableToolbar,
   PlatformTableEmptyState,
   createPlatformTableFilterState,
+  formatPlatformTableTextValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   PlatformTableShell,
@@ -171,8 +172,8 @@ export const KubernetesClustersTable: Component<{
                       asTrimmedString(cluster.kubernetes?.clusterName) ||
                       asTrimmedString(cluster.name) ||
                       cluster.id;
-                    const context = () => asTrimmedString(cluster.kubernetes?.context) || '—';
-                    const version = () => asTrimmedString(cluster.kubernetes?.version) || '—';
+                    const context = () => formatPlatformTableTextValue(cluster.kubernetes?.context);
+                    const version = () => formatPlatformTableTextValue(cluster.kubernetes?.version);
                     const metricsKey = () => buildMetricKeyForUnifiedResource(cluster);
                     const cpuPercent = () => finiteMetric(cluster.cpu?.current);
                     const memoryTotal = () => finiteMetric(cluster.memory?.total) ?? 0;

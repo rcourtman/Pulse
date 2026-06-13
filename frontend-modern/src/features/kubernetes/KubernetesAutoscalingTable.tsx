@@ -8,6 +8,7 @@ import {
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  formatPlatformTableTextValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   PlatformTableShell,
@@ -26,13 +27,11 @@ import {
   type KubernetesResourceStatusFilter,
 } from './kubernetesPageModel';
 
-const textValue = (value: string | undefined): string => asTrimmedString(value) || '—';
-
 const autoscalerName = (resource: Resource): string =>
   asTrimmedString(resource.displayName) || asTrimmedString(resource.name) || resource.id;
 
 const targetRef = (resource: Resource): string =>
-  textValue(
+  formatPlatformTableTextValue(
     [resource.kubernetes?.targetKind, resource.kubernetes?.targetName].filter(Boolean).join('/'),
   );
 

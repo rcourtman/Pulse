@@ -4,6 +4,7 @@ import type { Resource } from '@/types/resource';
 import {
   createPlatformTableFilterState,
   filterPlatformResources,
+  formatPlatformTableTextValue,
   type PlatformResourceStatusFilter,
 } from '../sharedPlatformPage';
 
@@ -210,5 +211,15 @@ describe('filterPlatformResources', () => {
         dispose();
       }
     });
+  });
+});
+
+describe('formatPlatformTableTextValue', () => {
+  it('trims text values and uses the canonical platform-table empty cell marker', () => {
+    expect(formatPlatformTableTextValue('  kubelet  ')).toBe('kubelet');
+    expect(formatPlatformTableTextValue('')).toBe('—');
+    expect(formatPlatformTableTextValue(undefined)).toBe('—');
+    expect(formatPlatformTableTextValue(null)).toBe('—');
+    expect(formatPlatformTableTextValue(' ', 'n/a')).toBe('n/a');
   });
 });

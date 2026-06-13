@@ -11,6 +11,7 @@ import {
   PlatformTableShell,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  formatPlatformTableTextValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
 } from '@/features/platformPage/sharedPlatformPage';
@@ -196,8 +197,9 @@ export const KubernetesNodesTable: Component<{
                     const meta = () => node.kubernetes;
                     const name = () => asTrimmedString(node.name) || node.id;
                     const cluster = () => kubernetesClusterLabel(node) || '—';
-                    const kubelet = () => asTrimmedString(meta()?.kubeletVersion) || '—';
-                    const runtime = () => asTrimmedString(meta()?.containerRuntimeVersion) || '—';
+                    const kubelet = () => formatPlatformTableTextValue(meta()?.kubeletVersion);
+                    const runtime = () =>
+                      formatPlatformTableTextValue(meta()?.containerRuntimeVersion);
                     const capacityLabel = () => {
                       const cores = meta()?.capacityCpuCores;
                       const mem = meta()?.capacityMemoryBytes;

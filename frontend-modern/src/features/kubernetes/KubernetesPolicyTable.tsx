@@ -8,6 +8,7 @@ import {
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  formatPlatformTableTextValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   PlatformTableShell,
@@ -29,8 +30,6 @@ import {
 // Kubernetes policy resources carry very different API fields. Keep this table
 // on the documented NetworkPolicy, PDB, ResourceQuota, and LimitRange shapes
 // instead of collapsing them into generic spec/detail text.
-
-const textValue = (value: string | undefined): string => asTrimmedString(value) || '—';
 
 const policyName = (resource: Resource): string =>
   asTrimmedString(resource.displayName) || asTrimmedString(resource.name) || resource.id;
@@ -146,7 +145,7 @@ const policyShape = (resource: Resource): { label: string; title: string } => {
   if (resource.type === 'k8s-limit-range') {
     return { label: 'Limit range', title: '' };
   }
-  return { label: textValue(resource.kubernetes?.resourceKind), title: '' };
+  return { label: formatPlatformTableTextValue(resource.kubernetes?.resourceKind), title: '' };
 };
 
 const policySpec = (resource: Resource): { label: string; title: string } => {
@@ -183,7 +182,7 @@ const policyState = (resource: Resource): { label: string; title: string } => {
   if (resource.type === 'k8s-limit-range') {
     return { label: 'Namespace defaults', title: '' };
   }
-  return { label: textValue(resource.status), title: '' };
+  return { label: formatPlatformTableTextValue(resource.status), title: '' };
 };
 
 const labelSummary = (resource: Resource): { label: string; title: string } =>

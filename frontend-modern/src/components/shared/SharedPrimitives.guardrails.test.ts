@@ -149,7 +149,18 @@ import workloadPanelSource from '@/components/Workloads/WorkloadPanel.tsx?raw';
 import guestRowStateSource from '@/components/Workloads/useGuestRowState.ts?raw';
 import workloadSelectionStateSource from '@/components/Workloads/useWorkloadSelectionState.ts?raw';
 import dockerHostsTableSource from '@/features/docker/DockerHostsTable.tsx?raw';
+import kubernetesAutoscalingTableSource from '@/features/kubernetes/KubernetesAutoscalingTable.tsx?raw';
+import kubernetesClustersTableSource from '@/features/kubernetes/KubernetesClustersTable.tsx?raw';
+import kubernetesConfigTableSource from '@/features/kubernetes/KubernetesConfigTable.tsx?raw';
+import kubernetesControllersTableSource from '@/features/kubernetes/KubernetesControllersTable.tsx?raw';
+import kubernetesDeploymentsTableSource from '@/features/kubernetes/KubernetesDeploymentsTable.tsx?raw';
+import kubernetesEventsTableSource from '@/features/kubernetes/KubernetesEventsTable.tsx?raw';
+import kubernetesNetworkingTableSource from '@/features/kubernetes/KubernetesNetworkingTable.tsx?raw';
 import kubernetesNodesTableSource from '@/features/kubernetes/KubernetesNodesTable.tsx?raw';
+import kubernetesPodsTableSource from '@/features/kubernetes/KubernetesPodsTable.tsx?raw';
+import kubernetesPolicyTableSource from '@/features/kubernetes/KubernetesPolicyTable.tsx?raw';
+import kubernetesServicesTableSource from '@/features/kubernetes/KubernetesServicesTable.tsx?raw';
+import kubernetesStorageTableSource from '@/features/kubernetes/KubernetesStorageTable.tsx?raw';
 import proxmoxBackupsTableSource from '@/features/proxmox/ProxmoxBackupsTable.tsx?raw';
 import proxmoxCephTableSource from '@/features/proxmox/ProxmoxCephTable.tsx?raw';
 import proxmoxCoverageTableSource from '@/features/proxmox/ProxmoxCoverageTable.tsx?raw';
@@ -3430,6 +3441,79 @@ describe('shared primitive guardrails', () => {
     ]) {
       expect(source).toContain('PlatformTableLoadingState');
       expect(source).not.toContain('<div class="px-3 py-2 text-xs text-muted" role="status">');
+    }
+  });
+
+  it('keeps Kubernetes platform table text fallbacks on the shared helper', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+        forbiddenPatterns?: Array<{ path?: string; patterns?: string[] }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        allowedPaths?: string[];
+        ignoredPaths?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find(
+      (rule) => rule.id === 'platform-table-text-value-fallback',
+    );
+    const localHelperGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'kubernetes-platform-table-local-text-value-helper',
+    );
+    const kubernetesTextValueConsumers: Array<[string, string]> = [
+      ['src/features/kubernetes/KubernetesAutoscalingTable.tsx', kubernetesAutoscalingTableSource],
+      ['src/features/kubernetes/KubernetesClustersTable.tsx', kubernetesClustersTableSource],
+      ['src/features/kubernetes/KubernetesConfigTable.tsx', kubernetesConfigTableSource],
+      ['src/features/kubernetes/KubernetesControllersTable.tsx', kubernetesControllersTableSource],
+      ['src/features/kubernetes/KubernetesDeploymentsTable.tsx', kubernetesDeploymentsTableSource],
+      ['src/features/kubernetes/KubernetesEventsTable.tsx', kubernetesEventsTableSource],
+      ['src/features/kubernetes/KubernetesNetworkingTable.tsx', kubernetesNetworkingTableSource],
+      ['src/features/kubernetes/KubernetesNodesTable.tsx', kubernetesNodesTableSource],
+      ['src/features/kubernetes/KubernetesPodsTable.tsx', kubernetesPodsTableSource],
+      ['src/features/kubernetes/KubernetesPolicyTable.tsx', kubernetesPolicyTableSource],
+      ['src/features/kubernetes/KubernetesServicesTable.tsx', kubernetesServicesTableSource],
+      ['src/features/kubernetes/KubernetesStorageTable.tsx', kubernetesStorageTableSource],
+    ];
+    const kubernetesTextValueConsumerPaths = kubernetesTextValueConsumers.map(([path]) => path);
+
+    expect(registeredRule?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(registeredRule?.canonical?.export).toBe('formatPlatformTableTextValue');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
+      kubernetesTextValueConsumerPaths,
+    );
+    expect(localHelperGuard?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(localHelperGuard?.canonical?.export).toBe('formatPlatformTableTextValue');
+    expect(localHelperGuard?.allPatterns).toEqual([
+      'const textValue',
+      "asTrimmedString(value) || '—'",
+    ]);
+    expect(localHelperGuard?.scopes).toEqual(['src/features/kubernetes']);
+    expect(localHelperGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(localHelperGuard?.ignoredPaths ?? []).toHaveLength(0);
+
+    expect(sharedPlatformPageSource).toContain('export const formatPlatformTableTextValue');
+    expect(sharedPlatformPageSource).toContain("asTrimmedString(value) || emptyText");
+
+    for (const [path, source] of kubernetesTextValueConsumers) {
+      expect(source).toContain('formatPlatformTableTextValue');
+      expect(source).not.toContain('const textValue');
+      expect(source).not.toContain("asTrimmedString(value) || '—'");
+      const forbiddenPatterns =
+        registeredRule?.forbiddenPatterns?.find((entry) => entry.path === path)?.patterns ?? [];
+      for (const pattern of forbiddenPatterns) {
+        expect(source).not.toContain(pattern);
+      }
     }
   });
 

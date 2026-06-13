@@ -224,6 +224,11 @@ filter semantics, drawer handoffs, and resource projections, while
 Future platform tables must keep that split: row data and platform semantics
 stay in the unified-resource consumer, and the repeated table shell stays in the
 shared frontend primitive.
+Shared text-cell fallback behavior follows the same boundary:
+unified-resource consumers own which source field is displayed, but platform
+tables must use the frontend-primitives-owned `formatPlatformTableTextValue`
+helper for trimmed-string empty-cell rendering instead of recreating local
+`textValue` helpers or inline `asTrimmedString(...) || '—'` fallbacks.
 Platform filter option semantics follow that split too: unified-resource
 consumers own the source-specific status buckets and labels, while the repeated
 FilterBar chip leading-dot presentation must use the frontend-primitives-owned

@@ -8,6 +8,7 @@ import {
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  formatPlatformTableTextValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   PlatformTableShell,
@@ -28,13 +29,11 @@ import {
   type KubernetesResourceStatusFilter,
 } from './kubernetesPageModel';
 
-const textValue = (value: string | undefined): string => asTrimmedString(value) || '—';
-
 const eventName = (resource: Resource): string =>
   asTrimmedString(resource.displayName) || asTrimmedString(resource.name) || resource.id;
 
 const involvedObject = (resource: Resource): string =>
-  textValue(
+  formatPlatformTableTextValue(
     [resource.kubernetes?.involvedKind, resource.kubernetes?.involvedName]
       .filter(Boolean)
       .join('/'),
@@ -151,7 +150,8 @@ export const KubernetesEventsTable: Component<{
                     const name = () => eventName(resource);
                     const scope = () => kubernetesScopeLabel(resource);
                     const observed = () => observedTime(resource);
-                    const message = () => textValue(resource.kubernetes?.message);
+                    const message = () =>
+                      formatPlatformTableTextValue(resource.kubernetes?.message);
                     const detailRowId = () => drawer.detailRowId(resource);
                     const isExpanded = () => drawer.isExpanded(resource);
 
@@ -195,16 +195,16 @@ export const KubernetesEventsTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
-                            {textValue(resource.kubernetes?.eventType)}
+                            {formatPlatformTableTextValue(resource.kubernetes?.eventType)}
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
                             <span
                               class="inline-block max-w-[12rem] truncate"
-                              title={textValue(resource.kubernetes?.reason)}
+                              title={formatPlatformTableTextValue(resource.kubernetes?.reason)}
                             >
-                              {textValue(resource.kubernetes?.reason)}
+                              {formatPlatformTableTextValue(resource.kubernetes?.reason)}
                             </span>
                           </TableCell>
                           <TableCell

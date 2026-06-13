@@ -8,6 +8,7 @@ import {
   PlatformTableToolbar,
   PlatformTableEmptyState,
   createPlatformTableFilterState,
+  formatPlatformTableTextValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   PlatformTableShell,
@@ -155,7 +156,8 @@ export const KubernetesDeploymentsTable: Component<{
                 <For each={sortedRows()}>
                   {(deployment) => {
                     const name = () => asTrimmedString(deployment.name) || deployment.id;
-                    const ns = () => asTrimmedString(deployment.kubernetes?.namespace) || '—';
+                    const ns = () =>
+                      formatPlatformTableTextValue(deployment.kubernetes?.namespace);
                     const cluster = () => kubernetesClusterLabel(deployment) || '—';
                     const indicator = () => mapKubernetesDeploymentStatus(deployment);
                     const age = () => formatAge(deployment.kubernetes?.createdAt);

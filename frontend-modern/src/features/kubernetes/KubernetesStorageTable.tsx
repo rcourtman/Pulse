@@ -9,6 +9,7 @@ import {
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  formatPlatformTableTextValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   PlatformTableShell,
@@ -41,8 +42,6 @@ const ACCESS_MODE_LABELS: Record<string, string> = {
   ReadWriteOncePod: 'RWOP',
 };
 
-const textValue = (value: string | undefined): string => asTrimmedString(value) || '—';
-
 const storageName = (resource: Resource): string =>
   asTrimmedString(resource.displayName) || asTrimmedString(resource.name) || resource.id;
 
@@ -55,14 +54,14 @@ const storageKind = (resource: Resource): string => {
 
 const bindingOrPhase = (resource: Resource): string => {
   if (resource.type === 'k8s-storage-class') {
-    return textValue(resource.kubernetes?.volumeBindingMode || 'Immediate');
+    return formatPlatformTableTextValue(resource.kubernetes?.volumeBindingMode || 'Immediate');
   }
-  return textValue(resource.kubernetes?.phase);
+  return formatPlatformTableTextValue(resource.kubernetes?.phase);
 };
 
 const storageClass = (resource: Resource): string => {
   if (resource.type === 'k8s-storage-class') return storageName(resource);
-  return textValue(resource.kubernetes?.storageClass);
+  return formatPlatformTableTextValue(resource.kubernetes?.storageClass);
 };
 
 const capacityLabel = (resource: Resource): string => {
@@ -119,7 +118,7 @@ const policyLabel = (resource: Resource): { label: string; title: string } => {
 
 const bindingTarget = (resource: Resource): { label: string; title: string } => {
   if (resource.type === 'k8s-storage-class') {
-    const provisioner = textValue(resource.kubernetes?.provisioner);
+    const provisioner = formatPlatformTableTextValue(resource.kubernetes?.provisioner);
     const parameterKeys = resource.kubernetes?.parameterKeys ?? [];
     return {
       label: provisioner,

@@ -8,6 +8,7 @@ import {
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  formatPlatformTableTextValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   PlatformTableShell,
@@ -28,8 +29,6 @@ import {
   type KubernetesResourceStatusFilter,
 } from './kubernetesPageModel';
 
-const textValue = (value: string | undefined): string => asTrimmedString(value) || '—';
-
 const numberValue = (value: number | undefined): JSX.Element =>
   typeof value === 'number' ? <span class="tabular-nums">{value}</span> : <span>—</span>;
 
@@ -49,7 +48,7 @@ const targetValue = (resource: Resource): string => {
     case 'k8s-job':
       return `${resource.kubernetes?.desiredReplicas ?? 0} completions`;
     case 'k8s-cronjob':
-      return textValue(resource.kubernetes?.schedule);
+      return formatPlatformTableTextValue(resource.kubernetes?.schedule);
     default:
       return '—';
   }

@@ -8,6 +8,7 @@ import {
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  formatPlatformTableTextValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   PlatformTableShell,
@@ -25,8 +26,6 @@ import {
   kubernetesScopeLabel,
   type KubernetesResourceStatusFilter,
 } from './kubernetesPageModel';
-
-const textValue = (value: string | undefined): string => asTrimmedString(value) || '—';
 
 const resourceName = (resource: Resource): string =>
   asTrimmedString(resource.displayName) || asTrimmedString(resource.name) || resource.id;
@@ -65,7 +64,7 @@ const portLabel = (resource: Resource): { label: string; title: string } => {
 };
 
 const typeOrClass = (resource: Resource): string =>
-  textValue(resource.kubernetes?.className || resource.kubernetes?.addressType);
+  formatPlatformTableTextValue(resource.kubernetes?.className || resource.kubernetes?.addressType);
 
 const addressOrHosts = (resource: Resource): { label: string; title: string } => {
   if (resource.type === 'k8s-ingress') {
@@ -100,7 +99,7 @@ const targetSummary = (resource: Resource): { label: string; title: string } => 
           : hosts.label;
     return { label, title: hosts.title || label };
   }
-  const service = textValue(resource.kubernetes?.serviceName);
+  const service = formatPlatformTableTextValue(resource.kubernetes?.serviceName);
   const ready = resource.kubernetes?.readyEndpointCount;
   const total = resource.kubernetes?.endpointCount;
   const endpointLabel =
