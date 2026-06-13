@@ -358,6 +358,21 @@ export function PlatformTableDurationValue(props: {
   );
 }
 
+const formatPlatformTableWidthPercentage = (value: number): string =>
+  `${Number(value.toFixed(4))}%`;
+
+export const getPlatformTableWeightedColumnWidthStyle = <ColumnId extends string>(
+  columnId: ColumnId,
+  weights: Partial<Record<ColumnId, number>>,
+  visibleColumnIds: readonly ColumnId[],
+): JSX.CSSProperties => {
+  const columnWeight = weights[columnId] ?? 0;
+  const totalWeight = visibleColumnIds.reduce((total, id) => total + (weights[id] ?? 0), 0);
+  const width = totalWeight > 0 ? (columnWeight / totalWeight) * 100 : 0;
+
+  return { width: formatPlatformTableWidthPercentage(width) };
+};
+
 const platformTableIntegerFormatter = new Intl.NumberFormat(undefined, {
   maximumFractionDigits: 0,
 });

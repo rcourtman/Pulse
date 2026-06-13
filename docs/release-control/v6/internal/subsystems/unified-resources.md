@@ -278,6 +278,12 @@ That boundary covers Proxmox replication last-sync duration cells and
 Standalone availability-check poll interval cells, and future duration-like
 platform table values must join the same shared primitive registry rule before
 adding table-local formatting.
+Responsive table layout keeps the same split: unified-resource and
+source-specific table models own which columns are visible at each breakpoint
+and the relative weights for those columns, while dense platform table
+rendering must use `getPlatformTableWeightedColumnWidthStyle` for
+visible-column percentage normalization, zero-width fallback, and stable
+percentage formatting instead of declaring local width-percent helpers.
 Optional numeric table cells follow the same split: unified-resource consumers
 own which count or replica field is meaningful, whether the domain should
 zero-default an absent scheduler/service/inventory count, whether a

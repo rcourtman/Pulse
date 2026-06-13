@@ -25,6 +25,7 @@ import {
   filterPlatformResources,
   formatPlatformTableTextValue,
   getPlatformTableFiniteMetric,
+  getPlatformTableWeightedColumnWidthStyle,
   summarizePlatformTableValues,
   type PlatformResourceStatusFilter,
 } from '../sharedPlatformPage';
@@ -416,6 +417,33 @@ describe('PlatformTableDurationValue', () => {
 
     expect(marker?.classList.contains('tabular-nums')).toBe(true);
     expect(marker?.textContent).toBe('2m 5s');
+  });
+});
+
+describe('getPlatformTableWeightedColumnWidthStyle', () => {
+  it('normalizes visible weighted table columns into stable width percentages', () => {
+    const weights = {
+      container: 32,
+      state: 14,
+      cpu: 18,
+      memory: 22,
+      updates: 14,
+      actions: 14,
+    };
+    const visibleColumnIds = ['container', 'state', 'cpu', 'memory', 'updates', 'actions'] as const;
+
+    expect(
+      getPlatformTableWeightedColumnWidthStyle('container', weights, visibleColumnIds),
+    ).toEqual({
+      width: '28.0702%',
+    });
+    expect(getPlatformTableWeightedColumnWidthStyle('memory', weights, visibleColumnIds)).toEqual({
+      width: '19.2982%',
+    });
+  });
+
+  it('returns a zero width when no visible weighted columns are present', () => {
+    expect(getPlatformTableWeightedColumnWidthStyle('node', {}, [])).toEqual({ width: '0%' });
   });
 });
 

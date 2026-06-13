@@ -149,6 +149,7 @@ import workloadsTableSource from '@/components/Workloads/WorkloadsTable.tsx?raw'
 import workloadPanelSource from '@/components/Workloads/WorkloadPanel.tsx?raw';
 import guestRowStateSource from '@/components/Workloads/useGuestRowState.ts?raw';
 import workloadSelectionStateSource from '@/components/Workloads/useWorkloadSelectionState.ts?raw';
+import dockerContainerTableModelSource from '@/features/docker/dockerContainerTableModel.ts?raw';
 import dockerContainersTableSource from '@/features/docker/DockerContainersTable.tsx?raw';
 import dockerHostsTableSource from '@/features/docker/DockerHostsTable.tsx?raw';
 import dockerNativeTableSharedSource from '@/features/docker/DockerNativeTableShared.tsx?raw';
@@ -4320,6 +4321,82 @@ describe('shared primitive guardrails', () => {
       proxmoxMailGatewayTableSource,
     ]) {
       expect(source).toContain('PlatformTableNumberValue');
+    }
+  });
+
+  it('keeps responsive platform table column widths on the shared weighted helper', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+        forbiddenPatterns?: Array<{ path?: string; patterns?: string[] }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        allowedPaths?: string[];
+        ignoredPaths?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find(
+      (rule) => rule.id === 'platform-table-weighted-column-width-style',
+    );
+    const localHelperGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-table-local-weighted-width-helper',
+    );
+    const platformWidthConsumers: Array<[string, string]> = [
+      ['src/features/docker/dockerContainerTableModel.ts', dockerContainerTableModelSource],
+      ['src/features/proxmox/proxmoxHostTableModel.ts', proxmoxHostTableModelSource],
+    ];
+    const platformWidthConsumerPaths = platformWidthConsumers.map(([path]) => path);
+
+    expect(registeredRule?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(registeredRule?.canonical?.export).toBe('getPlatformTableWeightedColumnWidthStyle');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
+      platformWidthConsumerPaths,
+    );
+    expect(registeredRule?.forbiddenPatterns).toEqual([
+      {
+        path: 'src/features/docker/dockerContainerTableModel.ts',
+        patterns: ['const formatPercentage', 'value.toFixed(4)'],
+      },
+      {
+        path: 'src/features/proxmox/proxmoxHostTableModel.ts',
+        patterns: ['const formatPercentage', 'value.toFixed(4)'],
+      },
+    ]);
+    expect(localHelperGuard?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(localHelperGuard?.canonical?.export).toBe('getPlatformTableWeightedColumnWidthStyle');
+    expect(localHelperGuard?.allPatterns).toEqual([
+      'const formatPercentage',
+      'value.toFixed(4)',
+      'return { width: formatPercentage(width) }',
+    ]);
+    expect(localHelperGuard?.scopes).toEqual([
+      'src/features/docker/dockerContainerTableModel.ts',
+      'src/features/proxmox/proxmoxHostTableModel.ts',
+    ]);
+    expect(localHelperGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(localHelperGuard?.ignoredPaths ?? []).toHaveLength(0);
+
+    expect(sharedPlatformPageSource).toContain(
+      'export const getPlatformTableWeightedColumnWidthStyle',
+    );
+
+    for (const [path, source] of platformWidthConsumers) {
+      expect(source).toContain('getPlatformTableWeightedColumnWidthStyle');
+      const forbiddenPatterns =
+        registeredRule?.forbiddenPatterns?.find((entry) => entry.path === path)?.patterns ?? [];
+      for (const pattern of forbiddenPatterns) {
+        expect(source).not.toContain(pattern);
+      }
     }
   });
 

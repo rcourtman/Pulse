@@ -1560,6 +1560,34 @@
       ]
     },
     {
+      "id": "platform-table-weighted-column-width-style",
+      "category": "platform-table-layout",
+      "summary": "Responsive platform table models must use the shared weighted column-width helper for visible-column percentage normalization instead of declaring local percentage-format helpers.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "getPlatformTableWeightedColumnWidthStyle"
+      },
+      "requiredConsumers": [
+        { "path": "src/features/docker/dockerContainerTableModel.ts" },
+        { "path": "src/features/proxmox/proxmoxHostTableModel.ts" }
+      ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/features/docker/dockerContainerTableModel.ts",
+          "patterns": ["const formatPercentage", "value.toFixed(4)"]
+        },
+        {
+          "path": "src/features/proxmox/proxmoxHostTableModel.ts",
+          "patterns": ["const formatPercentage", "value.toFixed(4)"]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "platform-table-integer-value-format",
       "category": "platform-table-text-value",
       "summary": "Platform tables and drawers must use the shared integer formatter with PlatformTableNumberValue for locale-formatted count cells instead of recreating local toLocaleString or Math.round helpers.",
@@ -2785,6 +2813,33 @@
       "extensions": [".tsx"],
       "allPatterns": ["const formatInterval", "pollIntervalSeconds", "toFixed(1)}m"],
       "legacyReason": "Retired migration debt. Platform interval cells must compose PlatformTableDurationValue so seconds/minutes labels, empty markers, and tabular styling stay shared.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-table-local-weighted-width-helper",
+      "category": "platform-table-layout",
+      "summary": "Responsive platform table models must not recreate local weighted-width percentage helpers.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "getPlatformTableWeightedColumnWidthStyle"
+      },
+      "scopes": [
+        "src/features/docker/dockerContainerTableModel.ts",
+        "src/features/proxmox/proxmoxHostTableModel.ts"
+      ],
+      "extensions": [".ts"],
+      "allPatterns": [
+        "const formatPercentage",
+        "value.toFixed(4)",
+        "return { width: formatPercentage(width) }"
+      ],
+      "legacyReason": "Retired migration debt. Responsive platform table width normalization must use getPlatformTableWeightedColumnWidthStyle so percentage rounding and zero-width fallback stay shared.",
       "allowedPaths": [],
       "ignoredPaths": [],
       "proof": [

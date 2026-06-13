@@ -2645,6 +2645,13 @@ empty-cell markers, and tabular-number styling for dense platform table cells.
 Proxmox replication last-duration cells and Standalone availability-check poll
 interval cells must compose that primitive instead of declaring local
 seconds/minutes helpers.
+Responsive platform table width normalization is registry-backed too.
+`getPlatformTableWeightedColumnWidthStyle` owns visible-column weight
+normalization, zero-width fallback, and stable four-decimal percentage
+formatting for dense platform table models. Docker / Podman container columns
+and Proxmox host columns must keep their domain column IDs, layout breakpoints,
+and weight maps local, but must call that shared helper instead of declaring
+local `formatPercentage` / `toFixed(4)` width helpers.
 Platform table numeric fallback rendering is registry-backed too.
 `PlatformTableNumberValue` owns finite-number checking, tabular-number styling,
 custom empty-marker support, and caller-owned number formatting for dense

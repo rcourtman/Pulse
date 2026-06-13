@@ -2,6 +2,7 @@ import type { JSX } from 'solid-js';
 
 import type { WorkloadTableLayoutMode } from '@/components/Workloads/guestRowModel';
 import type { PlatformTableColumnKind } from '@/features/platformPage/columnAlignment';
+import { getPlatformTableWeightedColumnWidthStyle } from '@/features/platformPage/sharedPlatformPage';
 
 export type ProxmoxHostTableColumnId =
   | 'node'
@@ -82,8 +83,6 @@ const HOST_COLUMN_RESPONSIVE_WEIGHTS: Record<
   compact: HOST_COLUMN_DESKTOP_WIDTHS,
 };
 
-const formatPercentage = (value: number): string => `${Number(value.toFixed(4))}%`;
-
 // Column order follows the canonical recommended ordering documented in
 // columnAlignment.ts: identity → context → bars (CPU/Memory/Disk
 // contiguous) → diagnostic (Temp) → time (Uptime) → inventory counts
@@ -119,11 +118,7 @@ export const getProxmoxHostColumnWidthStyle = (
 ): JSX.CSSProperties => {
   const weights =
     layoutMode === 'wide' ? HOST_COLUMN_DESKTOP_WIDTHS : HOST_COLUMN_RESPONSIVE_WEIGHTS[layoutMode];
-  const columnWeight = weights[columnId] ?? 0;
-  const totalWeight = visibleColumnIds.reduce((total, id) => total + (weights[id] ?? 0), 0);
-  const width = totalWeight > 0 ? (columnWeight / totalWeight) * 100 : 0;
-
-  return { width: formatPercentage(width) };
+  return getPlatformTableWeightedColumnWidthStyle(columnId, weights, visibleColumnIds);
 };
 
 // Only the `wide` layout (>= 1440px viewport) reserves a fixed 1240px floor so
@@ -134,5 +129,4 @@ export const getProxmoxHostColumnWidthStyle = (
 // fits the container exactly and the bars scale down gracefully instead.
 export const getProxmoxHostTableMinWidthClass = (
   layoutMode: WorkloadTableLayoutMode,
-): 'min-w-full' | 'min-w-[1240px]' =>
-  layoutMode === 'wide' ? 'min-w-[1240px]' : 'min-w-full';
+): 'min-w-full' | 'min-w-[1240px]' => (layoutMode === 'wide' ? 'min-w-[1240px]' : 'min-w-full');
