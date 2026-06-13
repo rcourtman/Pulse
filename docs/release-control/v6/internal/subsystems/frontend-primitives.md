@@ -2683,6 +2683,15 @@ Docker, Kubernetes, Proxmox, Standalone, TrueNAS, vSphere, and future platform
 feature tables; source-specific consumers own only the empty-state icon, title,
 description, and actions. Platform feature tables must not import
 `EmptyState` directly or recreate a `Card`-wrapped empty-state shell.
+Embedded settings and patrol panel empty states follow the same
+shared-template registry, but compose `EmptyState` directly with
+`variant="panel"` when they are not platform table/card empty states. The
+primitive owns compact spacing, icon treatment, text hierarchy,
+framed-versus-panel density, and action-slot layout; feature panels own only
+the empty-state copy, icon choice, and callbacks. Migrated panels such as
+Agent profiles, Audit Webhooks, Audit Log, Availability, Diagnostics, SSO
+providers, and Patrol Run History must not recreate local `text-center` icon
+stacks, dashed empty-state frames, or page-local empty-state action buttons.
 Platform table loading states are registry-backed too.
 `PlatformTableLoadingState` owns the repeated table-card compact
 `role="status"` loading row for platform pages and tables; platform consumers

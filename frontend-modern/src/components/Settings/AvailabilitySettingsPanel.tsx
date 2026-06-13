@@ -13,6 +13,7 @@ import RotateCw from 'lucide-solid/icons/rotate-cw';
 import Activity from 'lucide-solid/icons/activity';
 import X from 'lucide-solid/icons/x';
 import { Button } from '@/components/shared/Button';
+import { EmptyState } from '@/components/shared/EmptyState';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Dialog } from '@/components/shared/Dialog';
 import {
@@ -236,30 +237,24 @@ export const AvailabilitySettingsPanel: Component = () => {
           <Show
             when={sortedTargets().length > 0}
             fallback={
-              <div class="flex flex-col items-center justify-center gap-3 px-4 py-12 text-center">
-                <div class="flex h-11 w-11 items-center justify-center rounded-md border border-border bg-surface-alt text-muted">
-                  <Activity class="h-5 w-5" />
-                </div>
-                <div class="space-y-1">
-                  <div class="text-sm font-semibold text-base-content">
-                    No availability checks yet
-                  </div>
-                  <p class="max-w-xl text-sm leading-6 text-muted">
-                    Add a ping, TCP port, MQTT broker, ESPHome device, HTTP health check, or another
-                    endpoint that only needs reachability monitoring.
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  variant="primary"
-                  size="mdCompact"
-                  class="min-h-9 gap-2"
-                  onClick={() => openAddDialog('service')}
-                >
-                  <Plus class="h-4 w-4" />
-                  Add service/device check
-                </Button>
-              </div>
+              <EmptyState
+                variant="panel"
+                icon={<Activity class="h-5 w-5" />}
+                title="No availability checks yet"
+                description="Add a ping, TCP port, MQTT broker, ESPHome device, HTTP health check, or another endpoint that only needs reachability monitoring."
+                actions={
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="mdCompact"
+                    class="min-h-9 gap-2"
+                    onClick={() => openAddDialog('service')}
+                  >
+                    <Plus class="h-4 w-4" />
+                    Add service/device check
+                  </Button>
+                }
+              />
             }
           >
             <For each={sortedTargets()}>

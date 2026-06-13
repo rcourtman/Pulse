@@ -4,6 +4,8 @@ import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import Info from 'lucide-solid/icons/info';
 import Play from 'lucide-solid/icons/play';
 import ShieldAlert from 'lucide-solid/icons/shield-alert';
+import { Button } from '@/components/shared/Button';
+import { EmptyState } from '@/components/shared/EmptyState';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 import { UpgradeButtonLink } from '@/components/shared/UpgradeLink';
 import { FilterBar, type FilterDef, type FilterSelectOption } from '@/components/shared/FilterBar';
@@ -466,30 +468,22 @@ export default function AuditLogPanel() {
       </Show>
 
       <Show when={!loading() && isPersistent() && filteredEvents().length === 0}>
-        <div class="text-center py-12 px-4 bg-surface-alt rounded-md border border-dashed border-border">
-          <div class="flex flex-col items-center max-w-sm mx-auto">
-            <Show
-              when={activeFilterCount() > 0}
-              fallback={<Shield class="w-12 h-12 text-slate-300 mb-4" />}
-            >
-              <ShieldAlert class="w-12 h-12 text-blue-300 dark:text-blue-900 mb-4" />
-            </Show>
-            <h3 class="text-lg font-medium text-base-content">
-              {getAuditLogEmptyState(activeFilterCount()).title}
-            </h3>
-            <p class="mt-2 text-sm text-muted">
-              {getAuditLogEmptyState(activeFilterCount()).description}
-            </p>
-            <Show when={activeFilterCount() > 0}>
-              <button
-                onClick={clearFilters}
-                class="mt-6 px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900"
-              >
+        <EmptyState
+          variant="panel"
+          icon={
+            activeFilterCount() > 0 ? <ShieldAlert class="h-5 w-5" /> : <Shield class="h-5 w-5" />
+          }
+          title={getAuditLogEmptyState(activeFilterCount()).title}
+          description={getAuditLogEmptyState(activeFilterCount()).description}
+          tone={activeFilterCount() > 0 ? 'info' : 'default'}
+          actions={
+            activeFilterCount() > 0 ? (
+              <Button type="button" variant="info" size="mdCompact" onClick={clearFilters}>
                 Clear all filters
-              </button>
-            </Show>
-          </div>
-        </div>
+              </Button>
+            ) : undefined
+          }
+        />
       </Show>
 
       <Show when={!loading() && isPersistent()}>

@@ -65,9 +65,14 @@ Patrol-specific presentation helpers.
    must compose the shared `MetadataBadge`. Patrol and AI finding loading
    indicators must compose the shared `LoadingSpinner` for border-based spinner
    shell, size, tone, and accessibility behavior; icon-specific refresh
-   rotation remains local icon state. If Patrol needs a new badge shape, tone,
-   or loading indicator variant, extend the shared primitive and registry guard
-   instead of adding page-local rounded pill spans or spinner spans.
+   rotation remains local icon state. Patrol run-history empty states own
+   Patrol-specific copy through the Patrol presentation helper, but compact
+   empty-state spacing, icon treatment, and text hierarchy must compose the
+   frontend-primitives-owned `EmptyState` `variant="panel"` instead of
+   page-local centered icon/text shells. If Patrol needs a new badge shape,
+   tone, loading indicator variant, or empty-state shell variant, extend the
+   shared primitive and registry guard instead of adding page-local rounded pill
+   spans, spinner spans, or empty-state wrappers.
 3. Keep remediation execution badge copy and severity styling aligned through `frontend-modern/src/components/patrol/RemediationStatus.tsx` and `frontend-modern/src/utils/remediationPresentation.ts`
 4. Add or change Patrol header, summary, status runtime-state presentation, or runtime provider action presentation through `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`, `frontend-modern/src/features/patrol/PatrolIntelligenceSummary.tsx`, `frontend-modern/src/components/patrol/PatrolStatusBar.tsx`, `frontend-modern/src/utils/patrolRuntimePresentation.ts`, and `frontend-modern/src/utils/patrolRuntimeActions.ts`
    Patrol summary presentation may show recent activity mix and trigger mode as

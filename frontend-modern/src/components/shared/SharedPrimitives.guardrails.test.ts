@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import calloutCardSource from '@/components/shared/CalloutCard.tsx?raw';
+import emptyStateSource from '@/components/shared/EmptyState.tsx?raw';
 import inlineNoticeSource from '@/components/shared/InlineNotice.tsx?raw';
 import demoBannerSource from '@/components/DemoBanner.tsx?raw';
 import commercialMigrationBannerSource from '@/components/CommercialMigrationBanner.tsx?raw';
@@ -235,6 +236,7 @@ import agentIntegrationsPanelSource from '@/components/Settings/AgentIntegration
 import apiAccessPanelSource from '@/components/Settings/APIAccessPanel.tsx?raw';
 import agentProfilesPanelSource from '@/components/Settings/AgentProfilesPanel.tsx?raw';
 import apiTokenManagerSource from '@/components/Settings/APITokenManager.tsx?raw';
+import auditWebhookPanelSource from '@/components/Settings/AuditWebhookPanel.tsx?raw';
 import auditLogPanelSource from '@/components/Settings/AuditLogPanel.tsx?raw';
 import billingAdminPanelSource from '@/components/Settings/BillingAdminPanel.tsx?raw';
 import diagnosticsResultsPanelSource from '@/components/Settings/DiagnosticsResultsPanel.tsx?raw';
@@ -274,6 +276,7 @@ import approvalBannerSource from '@/components/patrol/ApprovalBanner.tsx?raw';
 import approvalSectionSource from '@/components/patrol/ApprovalSection.tsx?raw';
 import investigationMessagesSource from '@/components/patrol/InvestigationMessages.tsx?raw';
 import investigationSectionSource from '@/components/patrol/InvestigationSection.tsx?raw';
+import runHistoryPanelSource from '@/components/patrol/RunHistoryPanel.tsx?raw';
 import runHistoryEntrySource from '@/components/patrol/RunHistoryEntry.tsx?raw';
 import runToolCallTraceSource from '@/components/patrol/RunToolCallTrace.tsx?raw';
 import patrolStatusBarSource from '@/components/patrol/PatrolStatusBar.tsx?raw';
@@ -4406,6 +4409,134 @@ describe('shared primitive guardrails', () => {
       expect(source).not.toContain('<EmptyState');
       expect(source).not.toContain('<Card padding="lg">');
     }
+  });
+
+  it('keeps embedded panel empty states on the shared EmptyState primitive', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+        forbiddenPatterns?: Array<{ path?: string; patterns?: string[] }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        extensions?: string[];
+        allowedPaths?: string[];
+        ignoredPaths?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find((rule) => rule.id === 'panel-empty-state-shell');
+    const centeredGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'settings-panel-local-centered-empty-state',
+    );
+    const actionGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'settings-panel-local-action-empty-state',
+    );
+    const dashedGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'settings-panel-local-dashed-empty-state',
+    );
+    const consumers: Array<[string, string]> = [
+      ['src/components/Settings/AgentProfilesPanel.tsx', agentProfilesPanelSource],
+      ['src/components/Settings/AuditWebhookPanel.tsx', auditWebhookPanelSource],
+      ['src/components/Settings/AuditLogPanel.tsx', auditLogPanelSource],
+      ['src/components/Settings/AvailabilitySettingsPanel.tsx', availabilitySettingsPanelSource],
+      ['src/components/Settings/DiagnosticsResultsPanel.tsx', diagnosticsResultsPanelSource],
+      ['src/components/patrol/RunHistoryPanel.tsx', runHistoryPanelSource],
+      ['src/components/Settings/SSOProvidersPanel.tsx', ssoProvidersPanelSource],
+    ];
+    const consumerPaths = consumers.map(([path]) => path);
+
+    expect(registeredRule?.canonical?.path).toBe('src/components/shared/EmptyState.tsx');
+    expect(registeredRule?.canonical?.export).toBe('EmptyState');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
+      consumerPaths,
+    );
+    expect(registeredRule?.forbiddenPatterns).toEqual([
+      {
+        path: 'src/components/Settings/AgentProfilesPanel.tsx',
+        patterns: ['text-center py-8 text-muted'],
+      },
+      {
+        path: 'src/components/Settings/AuditWebhookPanel.tsx',
+        patterns: [
+          'py-10 flex flex-col items-center justify-center text-muted border-2 border-dashed border-border rounded-md',
+        ],
+      },
+      {
+        path: 'src/components/Settings/AuditLogPanel.tsx',
+        patterns: [
+          'text-center py-12 px-4 bg-surface-alt rounded-md border border-dashed border-border',
+        ],
+      },
+      {
+        path: 'src/components/Settings/AvailabilitySettingsPanel.tsx',
+        patterns: ['flex flex-col items-center justify-center gap-3 px-4 py-12 text-center'],
+      },
+      {
+        path: 'src/components/Settings/DiagnosticsResultsPanel.tsx',
+        patterns: [
+          'Activity class="mx-auto mb-4 h-12 w-12 text-muted"',
+          'inline-flex min-h-10 items-center gap-2 rounded-md bg-blue-600',
+        ],
+      },
+      {
+        path: 'src/components/patrol/RunHistoryPanel.tsx',
+        patterns: ['text-center py-8'],
+      },
+      {
+        path: 'src/components/Settings/SSOProvidersPanel.tsx',
+        patterns: ['text-center py-8 text-muted'],
+      },
+    ]);
+    expect(centeredGuard?.canonical?.export).toBe('EmptyState');
+    expect(centeredGuard?.scopes).toEqual([
+      'src/components/Settings/AgentProfilesPanel.tsx',
+      'src/components/Settings/SSOProvidersPanel.tsx',
+    ]);
+    expect(centeredGuard?.extensions).toEqual(['.tsx']);
+    expect(centeredGuard?.allPatterns).toEqual(['text-center py-8 text-muted']);
+    expect(actionGuard?.canonical?.export).toBe('EmptyState');
+    expect(actionGuard?.scopes).toEqual(['src/components/Settings/AvailabilitySettingsPanel.tsx']);
+    expect(actionGuard?.allPatterns).toEqual([
+      'flex flex-col items-center justify-center gap-3 px-4 py-12 text-center',
+    ]);
+    expect(dashedGuard?.canonical?.export).toBe('EmptyState');
+    expect(dashedGuard?.scopes).toEqual(['src/components/Settings/AuditLogPanel.tsx']);
+    expect(dashedGuard?.allPatterns).toEqual([
+      'text-center py-12 px-4 bg-surface-alt rounded-md border border-dashed border-border',
+    ]);
+    for (const guard of [centeredGuard, actionGuard, dashedGuard]) {
+      expect(guard?.allowedPaths ?? []).toHaveLength(0);
+      expect(guard?.ignoredPaths ?? []).toHaveLength(0);
+    }
+
+    expect(emptyStateSource).toContain("variant: 'framed'");
+    expect(emptyStateSource).toContain("variant === 'framed'");
+    expect(emptyStateSource).toContain("'px-4 py-8'");
+
+    for (const [path, source] of consumers) {
+      expect(source).toContain('@/components/shared/EmptyState');
+      expect(source).toContain('<EmptyState');
+      const forbiddenPatterns =
+        registeredRule?.forbiddenPatterns?.find((entry) => entry.path === path)?.patterns ?? [];
+      for (const pattern of forbiddenPatterns) {
+        expect(source).not.toContain(pattern);
+      }
+    }
+    expect(availabilitySettingsPanelSource).toContain('variant="panel"');
+    expect(agentProfilesPanelSource.match(/variant="panel"/g) ?? []).toHaveLength(2);
+    expect(auditWebhookPanelSource).toContain('variant="panel"');
+    expect(diagnosticsResultsPanelSource).toContain('variant="panel"');
+    expect(runHistoryPanelSource).toContain('variant="panel"');
+    expect(ssoProvidersPanelSource).toContain('variant="panel"');
+    expect(auditLogPanelSource).toContain('<EmptyState');
+    expect(auditLogPanelSource).toContain('variant="panel"');
+    expect(auditLogPanelSource).toContain('tone={activeFilterCount() > 0 ?');
+    expect(auditLogPanelSource).not.toContain('Clear all filters</button>');
   });
 
   it('keeps platform table loading states on the shared status-row template', () => {

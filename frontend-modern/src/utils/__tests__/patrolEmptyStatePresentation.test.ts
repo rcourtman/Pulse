@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import runHistoryPanelSource from '@/components/patrol/RunHistoryPanel.tsx?raw';
 import {
   getInvestigationMessagesState,
   getInvestigationSectionState,
@@ -22,6 +23,9 @@ describe('patrolEmptyStatePresentation', () => {
     expect(getRunHistoryEmptyState()).toEqual({
       text: 'No patrol runs yet. Trigger a run to populate history.',
     });
+    expect(runHistoryPanelSource).toContain('@/components/shared/EmptyState');
+    expect(runHistoryPanelSource).toContain('variant="panel"');
+    expect(runHistoryPanelSource).not.toContain('text-center py-8');
   });
 
   it('returns investigation section loading and empty states', () => {
@@ -96,7 +100,8 @@ describe('patrolEmptyStatePresentation', () => {
       getPatrolFindingsEmptyState({
         filter: 'active',
         runtimeState: 'blocked',
-        blockedReason: 'Quickstart credits exhausted. Connect your API key to continue using Patrol.',
+        blockedReason:
+          'Quickstart credits exhausted. Connect your API key to continue using Patrol.',
       }),
     ).toEqual({
       title: 'Patrol paused',

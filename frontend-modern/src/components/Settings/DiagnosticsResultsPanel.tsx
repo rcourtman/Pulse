@@ -15,6 +15,8 @@ import Server from 'lucide-solid/icons/server';
 import Shield from 'lucide-solid/icons/shield';
 import Sparkles from 'lucide-solid/icons/sparkles';
 import XCircle from 'lucide-solid/icons/x-circle';
+import { Button } from '@/components/shared/Button';
+import { EmptyState } from '@/components/shared/EmptyState';
 import { StatusIndicatorBadge } from '@/components/shared/StatusIndicatorBadge';
 import { getSemanticTonePresentation } from '@/utils/semanticTonePresentation';
 import {
@@ -72,23 +74,26 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
     <Show
       when={props.diagnosticsData}
       fallback={
-        <Card padding="lg" class="text-center">
-          <div class="py-12">
-            <Activity class="mx-auto mb-4 h-12 w-12 text-muted" />
-            <h3 class="mb-2 text-lg font-medium text-base-content">
-              {DIAGNOSTICS_EMPTY_STATE_COPY.title}
-            </h3>
-            <p class="mb-6 text-sm text-muted">{DIAGNOSTICS_EMPTY_STATE_COPY.description}</p>
-            <button
-              type="button"
-              onClick={props.onRunDiagnostics}
-              disabled={props.loading}
-              class="inline-flex min-h-10 items-center gap-2 rounded-md bg-blue-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50 sm:min-h-9"
-            >
-              <RefreshCw class={`h-4 w-4 ${props.loading ? 'animate-spin' : ''}`} />
-              {DIAGNOSTICS_EMPTY_STATE_COPY.actionLabel}
-            </button>
-          </div>
+        <Card padding="lg">
+          <EmptyState
+            variant="panel"
+            icon={<Activity class="h-5 w-5" />}
+            title={DIAGNOSTICS_EMPTY_STATE_COPY.title}
+            description={DIAGNOSTICS_EMPTY_STATE_COPY.description}
+            actions={
+              <Button
+                type="button"
+                variant="primary"
+                size="settingsAction"
+                class="gap-2"
+                onClick={props.onRunDiagnostics}
+                disabled={props.loading}
+              >
+                <RefreshCw class={`h-4 w-4 ${props.loading ? 'animate-spin' : ''}`} />
+                {DIAGNOSTICS_EMPTY_STATE_COPY.actionLabel}
+              </Button>
+            }
+          />
         </Card>
       }
     >
@@ -448,7 +453,7 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
                         ? 'Running'
                         : props.diagnosticsData?.aiChat?.enabled
                           ? 'Stopped'
-                        : 'Disabled'
+                          : 'Disabled'
                     }
                     dot
                     uppercase

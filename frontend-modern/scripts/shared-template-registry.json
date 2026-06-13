@@ -1041,6 +1041,66 @@
       ]
     },
     {
+      "id": "panel-empty-state-shell",
+      "category": "empty-state",
+      "summary": "Embedded settings panel empty states must compose EmptyState for shared compact spacing, icon treatment, text hierarchy, and action slots instead of recreating local centered icon stacks.",
+      "canonical": {
+        "path": "src/components/shared/EmptyState.tsx",
+        "export": "EmptyState"
+      },
+      "requiredConsumers": [
+        { "path": "src/components/Settings/AgentProfilesPanel.tsx" },
+        { "path": "src/components/Settings/AuditWebhookPanel.tsx" },
+        { "path": "src/components/Settings/AuditLogPanel.tsx" },
+        { "path": "src/components/Settings/AvailabilitySettingsPanel.tsx" },
+        { "path": "src/components/Settings/DiagnosticsResultsPanel.tsx" },
+        { "path": "src/components/patrol/RunHistoryPanel.tsx" },
+        { "path": "src/components/Settings/SSOProvidersPanel.tsx" }
+      ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/components/Settings/AgentProfilesPanel.tsx",
+          "patterns": ["text-center py-8 text-muted"]
+        },
+        {
+          "path": "src/components/Settings/AuditWebhookPanel.tsx",
+          "patterns": [
+            "py-10 flex flex-col items-center justify-center text-muted border-2 border-dashed border-border rounded-md"
+          ]
+        },
+        {
+          "path": "src/components/Settings/AuditLogPanel.tsx",
+          "patterns": [
+            "text-center py-12 px-4 bg-surface-alt rounded-md border border-dashed border-border"
+          ]
+        },
+        {
+          "path": "src/components/Settings/AvailabilitySettingsPanel.tsx",
+          "patterns": ["flex flex-col items-center justify-center gap-3 px-4 py-12 text-center"]
+        },
+        {
+          "path": "src/components/Settings/DiagnosticsResultsPanel.tsx",
+          "patterns": [
+            "Activity class=\"mx-auto mb-4 h-12 w-12 text-muted\"",
+            "inline-flex min-h-10 items-center gap-2 rounded-md bg-blue-600"
+          ]
+        },
+        {
+          "path": "src/components/patrol/RunHistoryPanel.tsx",
+          "patterns": ["text-center py-8"]
+        },
+        {
+          "path": "src/components/Settings/SSOProvidersPanel.tsx",
+          "patterns": ["text-center py-8 text-muted"]
+        }
+      ],
+      "proof": [
+        "src/components/shared/EmptyState.test.tsx",
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "action-icon-button-shell",
       "category": "action-button",
       "summary": "Compact icon-only row and inline actions must compose ActionIconButton so size, tone, focus, disabled, title, aria-label, and icon behavior stay canonical instead of recreating page-local button and SVG shells.",
@@ -3217,6 +3277,71 @@
       "legacyReason": "Retired migration debt. Platform table empty states must use PlatformTableEmptyState; no platform feature exceptions are currently allowed.",
       "allowedPaths": [],
       "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "settings-panel-local-centered-empty-state",
+      "category": "empty-state",
+      "summary": "Migrated settings panels must not recreate centered text/icon empty-state shells.",
+      "canonical": {
+        "path": "src/components/shared/EmptyState.tsx",
+        "export": "EmptyState"
+      },
+      "scopes": [
+        "src/components/Settings/AgentProfilesPanel.tsx",
+        "src/components/Settings/SSOProvidersPanel.tsx"
+      ],
+      "extensions": [".tsx"],
+      "allPatterns": ["text-center py-8 text-muted"],
+      "legacyReason": "Retired migration debt. Embedded settings panel empty states must use EmptyState variant=\"panel\" instead of local centered icon/text stacks.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/EmptyState.test.tsx",
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "settings-panel-local-action-empty-state",
+      "category": "empty-state",
+      "summary": "Availability settings must not recreate the centered action empty-state shell.",
+      "canonical": {
+        "path": "src/components/shared/EmptyState.tsx",
+        "export": "EmptyState"
+      },
+      "scopes": ["src/components/Settings/AvailabilitySettingsPanel.tsx"],
+      "extensions": [".tsx"],
+      "allPatterns": ["flex flex-col items-center justify-center gap-3 px-4 py-12 text-center"],
+      "legacyReason": "Retired migration debt. Availability settings empty states must use EmptyState variant=\"panel\" with a Button action slot.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/EmptyState.test.tsx",
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "settings-panel-local-dashed-empty-state",
+      "category": "empty-state",
+      "summary": "Audit Log must not recreate a local dashed empty-state frame.",
+      "canonical": {
+        "path": "src/components/shared/EmptyState.tsx",
+        "export": "EmptyState"
+      },
+      "scopes": ["src/components/Settings/AuditLogPanel.tsx"],
+      "extensions": [".tsx"],
+      "allPatterns": [
+        "text-center py-12 px-4 bg-surface-alt rounded-md border border-dashed border-border"
+      ],
+      "legacyReason": "Retired migration debt. Audit Log empty states must use EmptyState so framed panel spacing, icon treatment, and action slots stay shared.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/EmptyState.test.tsx",
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "scripts/shared-template-audit.mjs"
       ]

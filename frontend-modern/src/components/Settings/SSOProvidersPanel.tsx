@@ -1,4 +1,5 @@
 import { Component, For, Show } from 'solid-js';
+import { EmptyState } from '@/components/shared/EmptyState';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
 import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
@@ -115,11 +116,12 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
         </Show>
 
         <Show when={!loading() && providers().length === 0}>
-          <div class="text-center py-8 text-muted">
-            <Shield class="w-12 h-12 mx-auto mb-3 opacity-40" />
-            <p class="text-sm">{getSSOProviderEmptyStateTitle()}</p>
-            <p class="text-xs mt-1">{getSSOProviderEmptyStateDescription()}</p>
-          </div>
+          <EmptyState
+            variant="panel"
+            icon={<Shield class="h-5 w-5" />}
+            title={getSSOProviderEmptyStateTitle()}
+            description={getSSOProviderEmptyStateDescription()}
+          />
         </Show>
 
         <Show when={!loading() && providers().length > 0}>

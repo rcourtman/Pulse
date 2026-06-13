@@ -6,6 +6,7 @@ import Trash2 from 'lucide-solid/icons/trash-2';
 import ExternalLink from 'lucide-solid/icons/external-link';
 import { Card } from '@/components/shared/Card';
 import { Dialog } from '@/components/shared/Dialog';
+import { EmptyState } from '@/components/shared/EmptyState';
 import { FeatureGateSection } from '@/components/shared/FeatureGateSection';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { formControl } from '@/components/shared/Form';
@@ -71,11 +72,7 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
 
   return (
     <div class="space-y-6">
-      <SettingsPanel
-        title="Audit Webhooks"
-        noPadding
-        bodyClass="divide-y divide-border"
-      >
+      <SettingsPanel title="Audit Webhooks" noPadding bodyClass="divide-y divide-border">
         <div class="space-y-6 p-4 sm:p-6">
           <Show when={!canManage()}>
             <div class={AUDIT_WEBHOOK_READONLY_NOTICE_CLASS}>
@@ -117,10 +114,11 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
               </For>
 
               <Show when={webhookUrls().length === 0}>
-                <div class="py-10 flex flex-col items-center justify-center text-muted border-2 border-dashed border-border rounded-md">
-                  <Globe size={36} class="opacity-40 mb-3" />
-                  <p class="text-sm">{emptyStateCopy().title}</p>
-                </div>
+                <EmptyState
+                  variant="panel"
+                  icon={<Globe class="h-5 w-5" />}
+                  title={emptyStateCopy().title}
+                />
               </Show>
             </div>
           </Show>
@@ -176,8 +174,8 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
             <p class="text-sm text-muted mb-4">
               This stops audit events from being delivered to{' '}
               <span class="font-medium text-base-content break-all">{urlToRemove()}</span>. Any
-              external receiver using this URL will stop receiving Pulse audit traffic. You can
-              add the URL back later if needed.
+              external receiver using this URL will stop receiving Pulse audit traffic. You can add
+              the URL back later if needed.
             </p>
             <div class="flex justify-end gap-3">
               <button

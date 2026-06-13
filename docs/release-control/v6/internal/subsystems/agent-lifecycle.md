@@ -533,6 +533,11 @@ Agent profile loading indicators follow that same split:
 profile semantics, but spinner shell, size, tone, and accessible status
 behavior must compose frontend-primitives' `LoadingSpinner` instead of
 lifecycle-local `animate-spin` border classes.
+Agent profile empty states follow that same split:
+`AgentProfilesPanel.tsx` may own profile and assignment empty-state copy and
+lifecycle conditions, but compact empty-state spacing, icon treatment, and text
+hierarchy must compose frontend-primitives' `EmptyState` `variant="panel"`
+instead of lifecycle-local centered icon/text shells.
 
 ## Extension Points
 

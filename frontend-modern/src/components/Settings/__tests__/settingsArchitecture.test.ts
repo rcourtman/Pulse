@@ -426,6 +426,43 @@ describe('settings architecture guardrails', () => {
     }
   });
 
+  it('keeps embedded settings panel empty states on the shared primitive', () => {
+    const panelEmptyStateConsumers = [
+      agentProfilesPanelSource,
+      auditWebhookPanelSource,
+      auditLogPanelSource,
+      availabilitySettingsPanelSource,
+      diagnosticsResultsPanelSource,
+      ssoProvidersPanelSource,
+    ];
+
+    for (const source of panelEmptyStateConsumers) {
+      expect(source).toContain('@/components/shared/EmptyState');
+      expect(source).toContain('<EmptyState');
+    }
+
+    expect(agentProfilesPanelSource.match(/variant="panel"/g) ?? []).toHaveLength(2);
+    expect(auditWebhookPanelSource).toContain('variant="panel"');
+    expect(auditLogPanelSource).toContain('variant="panel"');
+    expect(availabilitySettingsPanelSource).toContain('variant="panel"');
+    expect(diagnosticsResultsPanelSource).toContain('variant="panel"');
+    expect(ssoProvidersPanelSource).toContain('variant="panel"');
+    expect(agentProfilesPanelSource).not.toContain('text-center py-8 text-muted');
+    expect(auditWebhookPanelSource).not.toContain(
+      'py-10 flex flex-col items-center justify-center text-muted border-2 border-dashed border-border rounded-md',
+    );
+    expect(auditLogPanelSource).not.toContain(
+      'text-center py-12 px-4 bg-surface-alt rounded-md border border-dashed border-border',
+    );
+    expect(availabilitySettingsPanelSource).not.toContain(
+      'flex flex-col items-center justify-center gap-3 px-4 py-12 text-center',
+    );
+    expect(diagnosticsResultsPanelSource).not.toContain(
+      'inline-flex min-h-10 items-center gap-2 rounded-md bg-blue-600',
+    );
+    expect(ssoProvidersPanelSource).not.toContain('text-center py-8 text-muted');
+  });
+
   it('keeps telemetry disclosure aligned with the security privacy contract', () => {
     expect(generalSettingsPanelSource).toContain('aggregate self-hosted adoption');
     expect(generalSettingsPanelSource).toContain('counts, and coarse feature flags');

@@ -1,6 +1,7 @@
 import { For, Show } from 'solid-js';
 import type { Accessor } from 'solid-js';
 import type { PatrolRunRecord } from '@/api/patrol';
+import { EmptyState } from '@/components/shared/EmptyState';
 import { getRunHistoryEmptyState } from '@/utils/patrolEmptyStatePresentation';
 import {
   getRunHistoryLoadingState,
@@ -58,10 +59,11 @@ export function RunHistoryPanel(props: RunHistoryPanelProps) {
       </Show>
 
       <Show when={!props.loading && props.runs.length === 0}>
-        <div class="text-center py-8">
-          <RefreshCwIcon class="w-12 h-12 mx-auto text-slate-300 mb-3" />
-          <p class="text-sm text-muted">{getRunHistoryEmptyState().text}</p>
-        </div>
+        <EmptyState
+          variant="panel"
+          icon={<RefreshCwIcon class="h-5 w-5" />}
+          title={getRunHistoryEmptyState().text}
+        />
       </Show>
 
       <Show when={!props.loading && props.runs.length > 0}>

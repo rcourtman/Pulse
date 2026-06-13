@@ -1,6 +1,7 @@
 import { Component, For, Show } from 'solid-js';
 import { Button } from '@/components/shared/Button';
 import { Card } from '@/components/shared/Card';
+import { EmptyState } from '@/components/shared/EmptyState';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Dialog } from '@/components/shared/Dialog';
 import { FormSelect } from '@/components/shared/FormSelect';
@@ -147,19 +148,16 @@ export const AgentProfilesPanel: Component = () => {
           >
             <Show when={loading()}>
               <div class="flex items-center justify-center py-8">
-                <LoadingSpinner
-                  size="xl"
-                  tone="info"
-                  label="Loading configuration profiles"
-                />
+                <LoadingSpinner size="xl" tone="info" label="Loading configuration profiles" />
               </div>
             </Show>
 
             <Show when={!loading() && profiles().length === 0}>
-              <div class="text-center py-8 text-muted">
-                <Settings class="w-12 h-12 mx-auto mb-3 opacity-50" />
-                <p class="text-sm">{getAgentProfilesEmptyState()}</p>
-              </div>
+              <EmptyState
+                variant="panel"
+                icon={<Settings class="h-5 w-5" />}
+                title={getAgentProfilesEmptyState()}
+              />
             </Show>
 
             <Show when={!loading() && profiles().length > 0}>
@@ -232,10 +230,11 @@ export const AgentProfilesPanel: Component = () => {
             bodyClass="divide-y divide-border"
           >
             <Show when={connectedAgents().length === 0}>
-              <div class="text-center py-8 text-muted">
-                <Users class="w-12 h-12 mx-auto mb-3 opacity-50" />
-                <p class="text-sm">{getAgentProfileAssignmentsEmptyState()}</p>
-              </div>
+              <EmptyState
+                variant="panel"
+                icon={<Users class="h-5 w-5" />}
+                title={getAgentProfileAssignmentsEmptyState()}
+              />
             </Show>
 
             <Show when={connectedAgents().length > 0}>
