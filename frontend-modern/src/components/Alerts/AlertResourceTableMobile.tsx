@@ -2,6 +2,7 @@ import { For, Show } from 'solid-js';
 import RotateCcw from 'lucide-solid/icons/rotate-ccw';
 
 import { Card } from '@/components/shared/Card';
+import { FormTextarea } from '@/components/shared/FormTextarea';
 import { TogglePrimitive } from '@/components/shared/Toggle';
 import { AlertResourceGroupHeader } from './AlertResourceGroupHeader';
 import {
@@ -259,7 +260,12 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                             class="p-1.5 bg-blue-50 dark:bg-blue-900 text-blue-600 rounded"
                             aria-label={`Edit thresholds for ${getAlertResourceLabel(resource)}`}
                           >
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg
+                              class="w-4 h-4"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
                               <path
                                 stroke-linecap="round"
                                 stroke-linejoin="round"
@@ -276,7 +282,12 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                             class="p-1.5 bg-surface-hover text-slate-600 rounded"
                             aria-label="Cancel threshold edits"
                           >
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg
+                              class="w-4 h-4"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
                               <path
                                 stroke-linecap="round"
                                 stroke-linejoin="round"
@@ -291,7 +302,12 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                             class="p-1.5 bg-green-50 dark:bg-green-900 text-green-600 rounded"
                             aria-label={`Save threshold edits for ${getAlertResourceLabel(resource)}`}
                           >
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg
+                              class="w-4 h-4"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
                               <path
                                 stroke-linecap="round"
                                 stroke-linejoin="round"
@@ -321,8 +337,11 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                     </div>
 
                     <Show when={isEditing()}>
-                      <textarea
-                        class="w-full text-xs p-2 rounded border border-border bg-surface-alt"
+                      <FormTextarea
+                        label="Override note"
+                        labelClass="sr-only"
+                        fieldBaseClass="w-full"
+                        textareaBaseClass="w-full text-xs p-2 rounded border border-border bg-surface-alt"
                         rows={2}
                         placeholder={getAlertResourceTableEditNotePlaceholder()}
                         value={props.table.editingNote()}
@@ -368,17 +387,13 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                                   min={bounds.min}
                                   max={bounds.max}
                                   value={thresholds()?.[metric] ?? ''}
-                                  placeholder={getAlertResourceTableMetricPlaceholder(
-                                    isDisabled(),
-                                  )}
+                                  placeholder={getAlertResourceTableMetricPlaceholder(isDisabled())}
                                   class="w-16 text-right text-xs p-1 rounded border border-border bg-surface"
                                   onInput={(e) => {
                                     const nextValue = parseFloat(e.currentTarget.value);
                                     props.table.setEditingThresholds({
                                       ...props.table.editingThresholds(),
-                                      [metric]: Number.isNaN(nextValue)
-                                        ? undefined
-                                        : nextValue,
+                                      [metric]: Number.isNaN(nextValue) ? undefined : nextValue,
                                     });
                                   }}
                                 />

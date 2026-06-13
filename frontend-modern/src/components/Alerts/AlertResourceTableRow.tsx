@@ -1,6 +1,7 @@
 import { For, Show } from 'solid-js';
 import RotateCcw from 'lucide-solid/icons/rotate-ccw';
 
+import { FormTextarea } from '@/components/shared/FormTextarea';
 import { TogglePrimitive } from '@/components/shared/Toggle';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { ThresholdSlider } from '@/components/Workloads/ThresholdSlider';
@@ -305,19 +306,17 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
           </Show>
         </div>
         <Show when={isEditing()}>
-          <div class="mt-2 w-full">
-            <label class="sr-only" for={`note-${props.resource.id}`}>
-              Override note
-            </label>
-            <textarea
-              id={`note-${props.resource.id}`}
-              class="w-full rounded border border-border bg-surface px-2 py-1 text-xs text-base-content focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              rows={2}
-              placeholder={getAlertResourceTableOverrideNotePlaceholder()}
-              value={props.editingNote()}
-              onInput={(e) => props.setEditingNote(e.currentTarget.value)}
-            />
-          </div>
+          <FormTextarea
+            id={`note-${props.resource.id}`}
+            label="Override note"
+            labelClass="sr-only"
+            fieldBaseClass="mt-2 w-full"
+            textareaBaseClass="w-full rounded border border-border bg-surface px-2 py-1 text-xs text-base-content focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            rows={2}
+            placeholder={getAlertResourceTableOverrideNotePlaceholder()}
+            value={props.editingNote()}
+            onInput={(e) => props.setEditingNote(e.currentTarget.value)}
+          />
         </Show>
         <Show when={!isEditing() && props.resource.note}>
           <p class="mt-2 text-xs italic text-muted break-words">{props.resource.note as string}</p>

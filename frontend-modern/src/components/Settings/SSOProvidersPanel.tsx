@@ -2,6 +2,7 @@ import { Component, For, Show } from 'solid-js';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
 import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
+import { FormTextarea } from '@/components/shared/FormTextarea';
 import { Dialog } from '@/components/shared/Dialog';
 import Plus from 'lucide-solid/icons/plus';
 import Pencil from 'lucide-solid/icons/pencil';
@@ -132,14 +133,20 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                       </div>
                       <div class="min-w-0">
                         <div class="flex items-center gap-2">
-                          <span class="font-medium text-base-content truncate" title={provider.name}>
+                          <span
+                            class="font-medium text-base-content truncate"
+                            title={provider.name}
+                          >
                             {provider.name}
                           </span>
                           <span class={getSSOProviderTypeBadgeClass()}>
                             {getSSOProviderTypeLabel(provider.type)}
                           </span>
                         </div>
-                        <p class="text-xs text-muted truncate" title={getSSOProviderSummary(provider)}>
+                        <p
+                          class="text-xs text-muted truncate"
+                          title={getSSOProviderSummary(provider)}
+                        >
                           {getSSOProviderSummary(provider)}
                         </p>
                       </div>
@@ -393,16 +400,14 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                     </div>
                   </div>
 
-                  <div class={formField}>
-                    <label class={labelClass()}>IdP Certificate (PEM)</label>
-                    <textarea
-                      rows={4}
-                      value={form.samlIdpCertificate}
-                      onInput={(e) => setForm('samlIdpCertificate', e.currentTarget.value)}
-                      placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
-                      class={controlClass('font-mono text-xs')}
-                    />
-                  </div>
+                  <FormTextarea
+                    label="IdP Certificate (PEM)"
+                    rows={4}
+                    value={form.samlIdpCertificate}
+                    onInput={(e) => setForm('samlIdpCertificate', e.currentTarget.value)}
+                    placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
+                    textareaBaseClass={controlClass('font-mono text-xs')}
+                  />
 
                   <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div class={formField}>
@@ -470,7 +475,10 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                           <Show when={testResult()?.details?.entityId}>
                             <div class="flex gap-2">
                               <dt class="text-muted">Entity ID:</dt>
-                              <dd class="text-base-content truncate" title={testResult()?.details?.entityId}>
+                              <dd
+                                class="text-base-content truncate"
+                                title={testResult()?.details?.entityId}
+                              >
                                 {testResult()?.details?.entityId}
                               </dd>
                             </div>
@@ -478,7 +486,10 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                           <Show when={testResult()?.details?.ssoUrl}>
                             <div class="flex gap-2">
                               <dt class="text-muted">SSO URL:</dt>
-                              <dd class="text-base-content truncate" title={testResult()?.details?.ssoUrl}>
+                              <dd
+                                class="text-base-content truncate"
+                                title={testResult()?.details?.ssoUrl}
+                              >
                                 {testResult()?.details?.ssoUrl}
                               </dd>
                             </div>
@@ -486,7 +497,10 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                           <Show when={testResult()?.details?.tokenEndpoint}>
                             <div class="flex gap-2">
                               <dt class="text-muted">Token Endpoint:</dt>
-                              <dd class="text-base-content truncate" title={testResult()?.details?.tokenEndpoint}>
+                              <dd
+                                class="text-base-content truncate"
+                                title={testResult()?.details?.tokenEndpoint}
+                              >
                                 {testResult()?.details?.tokenEndpoint}
                               </dd>
                             </div>
@@ -569,49 +583,41 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                       </div>
                     </Show>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div class={formField}>
-                        <label class={labelClass()}>Allowed Groups</label>
-                        <textarea
-                          rows={2}
-                          value={form.allowedGroups}
-                          onInput={(e) => setForm('allowedGroups', e.currentTarget.value)}
-                          placeholder="admin, sso-users"
-                          class={controlClass('min-h-[60px]')}
-                        />
-                        <p class={formHelpText}>Comma-separated. Empty allows all.</p>
-                      </div>
-                      <div class={formField}>
-                        <label class={labelClass()}>Allowed Domains</label>
-                        <textarea
-                          rows={2}
-                          value={form.allowedDomains}
-                          onInput={(e) => setForm('allowedDomains', e.currentTarget.value)}
-                          placeholder="example.com, corp.io"
-                          class={controlClass('min-h-[60px]')}
-                        />
-                        <p class={formHelpText}>Email domains (without @)</p>
-                      </div>
-                      <div class={formField}>
-                        <label class={labelClass()}>Allowed Emails</label>
-                        <textarea
-                          rows={2}
-                          value={form.allowedEmails}
-                          onInput={(e) => setForm('allowedEmails', e.currentTarget.value)}
-                          placeholder={ALERT_EMAIL_REPLY_TO_PLACEHOLDER}
-                          class={controlClass('min-h-[60px]')}
-                        />
-                      </div>
-                      <div class={formField}>
-                        <label class={labelClass()}>Group Role Mappings</label>
-                        <textarea
-                          rows={2}
-                          value={form.groupRoleMappings}
-                          onInput={(e) => setForm('groupRoleMappings', e.currentTarget.value)}
-                          placeholder="admins=admin, ops=operator"
-                          class={controlClass('min-h-[60px]')}
-                        />
-                        <p class={formHelpText}>Format: group=roleId</p>
-                      </div>
+                      <FormTextarea
+                        label="Allowed Groups"
+                        rows={2}
+                        value={form.allowedGroups}
+                        onInput={(e) => setForm('allowedGroups', e.currentTarget.value)}
+                        placeholder="admin, sso-users"
+                        textareaBaseClass={controlClass('min-h-[60px]')}
+                        help="Comma-separated. Empty allows all."
+                      />
+                      <FormTextarea
+                        label="Allowed Domains"
+                        rows={2}
+                        value={form.allowedDomains}
+                        onInput={(e) => setForm('allowedDomains', e.currentTarget.value)}
+                        placeholder="example.com, corp.io"
+                        textareaBaseClass={controlClass('min-h-[60px]')}
+                        help="Email domains (without @)"
+                      />
+                      <FormTextarea
+                        label="Allowed Emails"
+                        rows={2}
+                        value={form.allowedEmails}
+                        onInput={(e) => setForm('allowedEmails', e.currentTarget.value)}
+                        placeholder={ALERT_EMAIL_REPLY_TO_PLACEHOLDER}
+                        textareaBaseClass={controlClass('min-h-[60px]')}
+                      />
+                      <FormTextarea
+                        label="Group Role Mappings"
+                        rows={2}
+                        value={form.groupRoleMappings}
+                        onInput={(e) => setForm('groupRoleMappings', e.currentTarget.value)}
+                        placeholder="admins=admin, ops=operator"
+                        textareaBaseClass={controlClass('min-h-[60px]')}
+                        help="Format: group=roleId"
+                      />
                     </div>
                   </div>
                 </Show>

@@ -293,9 +293,13 @@ describe('ResourceTable', () => {
       expect(alertResourceTableDesktopSource).toContain('AlertResourceGroupHeader');
       expect(alertResourceTableMobileSource).toContain('export function AlertResourceTableMobile');
       expect(alertResourceTableMobileSource).toContain('AlertResourceGroupHeader');
+      expect(alertResourceTableMobileSource).toContain('FormTextarea');
+      expect(alertResourceTableMobileSource).not.toContain(['<', 'textarea'].join(''));
       expect(alertResourceGroupHeaderSource).toContain('export function AlertResourceGroupHeader');
       expect(alertResourceTableRowSource).toContain('export function AlertResourceTableRow');
       expect(alertResourceTableRowSource).toContain('alertResourceSupportsMetric');
+      expect(alertResourceTableRowSource).toContain('FormTextarea');
+      expect(alertResourceTableRowSource).not.toContain(['<', 'textarea'].join(''));
       expect(alertResourceTableStateSource).toContain('export function useAlertResourceTableState');
       expect(alertResourceTableModelSource).toContain(
         'export function normalizeAlertResourceMetricKey',

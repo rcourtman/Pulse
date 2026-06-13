@@ -3600,7 +3600,7 @@
     {
       "id": "form-textarea-local-alert-fields",
       "category": "form-control",
-      "summary": "Alert destination and incident timeline textareas must compose FormTextarea; only the resource note editors remain as bounded residuals until their editor-specific migration.",
+      "summary": "Alert textareas must compose FormTextarea so labels, help text, controlled values, and multiline field styling stay canonical.",
       "canonical": {
         "path": "src/components/shared/FormTextarea.tsx",
         "export": "FormTextarea"
@@ -3608,11 +3608,8 @@
       "scopes": ["src/components/Alerts", "src/features/alerts"],
       "extensions": [".tsx"],
       "allPatterns": ["<textarea"],
-      "legacyReason": "Bounded residual. Alert resource note editors still own row/mobile-specific editing behavior; new alert textareas must use FormTextarea.",
-      "allowedPaths": [
-        "src/components/Alerts/AlertResourceTableMobile.tsx",
-        "src/components/Alerts/AlertResourceTableRow.tsx"
-      ],
+      "legacyReason": "Retired migration debt. Alert multiline fields belong to FormTextarea so row, mobile, destination, and timeline editors use the same labelled primitive.",
+      "allowedPaths": [],
       "ignoredPaths": [
         "src/components/Alerts/EmailProviderSelect.test.tsx",
         "src/components/shared/SharedPrimitives.guardrails.test.ts"
@@ -3625,7 +3622,7 @@
     {
       "id": "form-textarea-local-settings-fields",
       "category": "form-control",
-      "summary": "Settings textareas must compose FormTextarea; the SSO provider editor remains as bounded residual until its multi-field provider metadata editor is migrated.",
+      "summary": "Settings textareas must compose FormTextarea so labels, help text, controlled values, and multiline field styling stay canonical.",
       "canonical": {
         "path": "src/components/shared/FormTextarea.tsx",
         "export": "FormTextarea"
@@ -3633,8 +3630,8 @@
       "scopes": ["src/components/Settings"],
       "extensions": [".tsx"],
       "allPatterns": ["<textarea"],
-      "legacyReason": "Bounded residual. SSO provider metadata textareas still require a dedicated editor migration; new settings textareas must use FormTextarea.",
-      "allowedPaths": ["src/components/Settings/SSOProvidersPanel.tsx"],
+      "legacyReason": "Retired migration debt. Settings multiline fields belong to FormTextarea, including provider metadata and access mapping editors.",
+      "allowedPaths": [],
       "ignoredPaths": [
         "src/components/Settings/__tests__/ProLicensePanel.test.tsx",
         "src/components/shared/SharedPrimitives.guardrails.test.ts"

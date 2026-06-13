@@ -523,6 +523,8 @@ describe('settings architecture guardrails', () => {
     expect(ssoProvidersPanelSource).toContain("openAddModal('saml')");
     expect(ssoProvidersPanelSource).toContain('getSSOProviderAddButtonLabel');
     expect(ssoProvidersPanelSource).toContain('Groups Claim');
+    expect(ssoProvidersPanelSource).toContain('FormTextarea');
+    expect(ssoProvidersPanelSource).not.toContain(['<', 'textarea'].join(''));
     expect(ssoProvidersPanelSource).toContain(
       'Claim used for OIDC allowed groups and role mappings.',
     );

@@ -193,6 +193,10 @@ tabs. The thresholds platform IA is platform-shaped: Proxmox, Docker,
 Kubernetes, TrueNAS, vSphere, PBS, PMG, and Systems. Frontend primitives own
 the chip, reset, "+ Filter", and route-backed shell pattern; alerts must not
 replace that with page-local search/tab chrome or legacy neutral buckets.
+Native multiline form fields are also a shared primitive boundary.
+`FormTextarea` owns label/id/help wiring, controlled value synchronization, and
+textarea chrome for alert, settings, and infrastructure runtime surfaces; those
+surfaces must not recreate raw native `<textarea>` shells locally.
 
 The System Updates install guide is a shared settings primitive, not a
 deployment-lane-only panel. `UpdateInstallGuide` must render the canonical
@@ -2754,9 +2758,8 @@ label/id wiring, helper-text description merging, value synchronization, default
 textarea chrome, and compact styling hooks for multi-line text fields. Alert
 destination fields, incident notes, infrastructure merge reports, commercial
 recovery input, and agent-profile prompt/description fields must compose
-`FormTextarea`; bounded residual raw textareas are limited to editor-specific
-surfaces called out in the shared-template registry until their dedicated
-migration slices retire them.
+`FormTextarea`; alert, settings, and infrastructure runtime code must not
+recreate raw native `<textarea>` shells outside that primitive.
 Search controls are registry-backed too. `SearchField` owns simple search
 input chrome, clear affordance, keyboard forwarding, focus handling, aria
 labels, and trailing-control padding, while `SearchInput` owns resource-list

@@ -202,6 +202,8 @@ import alertOverviewStatsCardsSource from '@/features/alerts/AlertOverviewStatsC
 import alertHistoryTableSectionSource from '@/features/alerts/AlertHistoryTableSection.tsx?raw';
 import alertHistoryTableGroupRowSource from '@/features/alerts/AlertHistoryTableGroupRow.tsx?raw';
 import alertResourceTableDesktopSource from '@/components/Alerts/AlertResourceTableDesktop.tsx?raw';
+import alertResourceTableMobileSource from '@/components/Alerts/AlertResourceTableMobile.tsx?raw';
+import alertResourceTableRowSource from '@/components/Alerts/AlertResourceTableRow.tsx?raw';
 import aiCostDashboardSource from '@/components/AI/AICostDashboard.tsx?raw';
 import resourceDetailSummarySource from '@/components/Infrastructure/ResourceDetailSummary.tsx?raw';
 import resourceDetailDrawerSource from '@/components/Infrastructure/ResourceDetailDrawer.tsx?raw';
@@ -233,6 +235,7 @@ import reportingPanelSource from '@/components/Settings/ReportingPanel.tsx?raw';
 import rolesPanelSource from '@/components/Settings/RolesPanel.tsx?raw';
 import securityAuthPanelSource from '@/components/Settings/SecurityAuthPanel.tsx?raw';
 import securityOverviewPanelSource from '@/components/Settings/SecurityOverviewPanel.tsx?raw';
+import ssoProvidersPanelSource from '@/components/Settings/SSOProvidersPanel.tsx?raw';
 import updatesSettingsPanelSource from '@/components/Settings/UpdatesSettingsPanel.tsx?raw';
 import userAssignmentsPanelSource from '@/components/Settings/UserAssignmentsPanel.tsx?raw';
 import infrastructureSourcePickerSource from '@/components/Settings/InfrastructureSourcePicker.tsx?raw';
@@ -560,15 +563,12 @@ describe('shared primitive guardrails', () => {
     expect(alertGuard?.canonical?.export).toBe('FormTextarea');
     expect(alertGuard?.allPatterns).toEqual(['<textarea']);
     expect(alertGuard?.scopes).toEqual(['src/components/Alerts', 'src/features/alerts']);
-    expect(alertGuard?.allowedPaths).toEqual([
-      'src/components/Alerts/AlertResourceTableMobile.tsx',
-      'src/components/Alerts/AlertResourceTableRow.tsx',
-    ]);
+    expect(alertGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(settingsGuard?.canonical?.path).toBe('src/components/shared/FormTextarea.tsx');
     expect(settingsGuard?.canonical?.export).toBe('FormTextarea');
     expect(settingsGuard?.allPatterns).toEqual(['<textarea']);
     expect(settingsGuard?.scopes).toEqual(['src/components/Settings']);
-    expect(settingsGuard?.allowedPaths).toEqual(['src/components/Settings/SSOProvidersPanel.tsx']);
+    expect(settingsGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(infrastructureGuard?.canonical?.path).toBe('src/components/shared/FormTextarea.tsx');
     expect(infrastructureGuard?.canonical?.export).toBe('FormTextarea');
     expect(infrastructureGuard?.allPatterns).toEqual(['<textarea']);
@@ -597,8 +597,11 @@ describe('shared primitive guardrails', () => {
       webhookConfigFormSource,
       reportMergeModalSource,
       agentProfilesPanelSource,
+      alertResourceTableMobileSource,
+      alertResourceTableRowSource,
       selfHostedCommercialRecoverySectionSource,
       suggestProfileModalSource,
+      ssoProvidersPanelSource,
       alertAppriseDestinationsSectionSource,
     ];
     for (const source of migratedConsumers) {

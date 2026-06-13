@@ -94,6 +94,11 @@ operator-facing alert routing behavior for live runtime alerts.
 ## Shared Boundaries
 
 1. `internal/proxmoxidentity/backup_identity.go` shared with `monitoring`, `storage-recovery`: Proxmox PBS backup subject identity is a shared runtime boundary for monitoring backup freshness, backup-age alert attribution, and recovery-point guest mapping.
+Alert multiline field presentation is shared with frontend-primitives:
+notification, timeline, threshold ignored-prefix, and resource threshold note
+editors must compose the shared `FormTextarea` primitive for label/id/help
+wiring and textarea chrome instead of rendering raw native `<textarea>` shells
+in alert-owned runtime components.
 
 ## Extension Points
 
@@ -210,8 +215,7 @@ consumers. Email recipient lists, Apprise target lists, webhook payload
 templates, threshold ignored-prefix input, and incident timeline notes must
 compose `FormTextarea` for label/id/help wiring and textarea chrome instead of
 recreating raw labelled `<textarea>` shells locally. Alert resource row/mobile
-note editors are the only bounded residual until their row-editor behavior is
-migrated through the same primitive.
+note editors now follow the same primitive contract.
 Guest metric canonical state remains resource-backed and therefore node-scoped
 for Proxmox guests, so node moves must not strand active alert state on the
 previous resource ID. When a guest metric alert survives a node move, alerts
