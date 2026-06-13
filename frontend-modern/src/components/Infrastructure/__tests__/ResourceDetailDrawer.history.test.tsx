@@ -167,6 +167,9 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(resourceDetailDrawerShellSource).toContain("from './ResourceDetailDrawerDebugTab'");
     expect(resourceDetailDrawerShellSource).toContain('data-testid="resource-header-badges"');
     expect(resourceDetailDrawerShellSource).toContain('drawer.headerBadges()');
+    expect(resourceDetailDrawerShellSource).toContain('DrawerHeaderActionGroup');
+    expect(resourceDetailDrawerShellSource).toContain('DrawerHeaderActionButton');
+    expect(resourceDetailDrawerShellSource).toContain('DrawerHeaderIconButton');
     expect(resourceDetailDrawerShellSource).not.toContain('drawer.headerIdentity()');
     expect(resourceDetailDrawerShellSource).not.toContain('drawer.unifiedSourceBadges()');
     expect(resourceDetailDrawerShellSource).not.toContain('Change history');

@@ -514,6 +514,12 @@ not a replacement status card, CTA band, or page-local nested card.
    If a new surface needs a variant that the shared primitive does not expose,
    extend the primitive and registry guard rather than adding a page-local
    class string.
+   Drawer header command and icon actions belong to that same shared Button
+   primitive family. Workload and infrastructure drawers may own which actions
+   appear and the action labels, but the `h-8` Assistant, copy-context, close,
+   and future drawer-header action chrome must compose
+   `DrawerHeaderActionGroup`, `DrawerHeaderActionButton`, or
+   `DrawerHeaderIconButton` instead of copying drawer-local button classes.
    Copy-value affordances belong to the same shared button family. Feature
    surfaces may own the copied value, success/error notification, and adjacent
    product copy, but icon/chip copy controls must use `CopyValueButton`, and

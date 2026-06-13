@@ -1303,6 +1303,9 @@ describe('Workloads performance contract', () => {
       expect(guestDrawerSource).toContain('useGuestDrawerState');
       expect(guestDrawerSource).toContain('GuestDrawerOverview');
       expect(guestDrawerSource).toContain('GuestDrawerHistoryRangeSelect');
+      expect(guestDrawerSource).toContain('DrawerHeaderActionGroup');
+      expect(guestDrawerSource).toContain('DrawerHeaderActionButton');
+      expect(guestDrawerSource).toContain('DrawerHeaderIconButton');
       expect(guestDrawerSource).not.toContain('Open related infrastructure');
       expect(guestDrawerHistorySource).toContain('data-testid="guest-history-hover-time"');
       expect(guestDrawerHistorySource).toContain('data-testid="guest-history-range-control"');
@@ -1350,12 +1353,12 @@ describe('Workloads performance contract', () => {
       expect(guestDrawerOverviewSource).toContain('DiskList');
       expect(guestDrawerOverviewSource).toContain('Filesystems');
       expect(guestDrawerOverviewSource).toContain('InfoCardFrame');
-      expect(guestDrawerOverviewSource).not.toContain(
-        'rounded border border-border bg-surface p-3 shadow-sm',
-      );
-      expect(nodeDrawerOverviewSource).not.toContain(
-        'rounded border border-border bg-surface p-3 shadow-sm',
-      );
+      const retiredInfoCardFrameClass = [
+        'rounded border border-border',
+        'bg-surface p-3 shadow-sm',
+      ].join(' ');
+      expect(guestDrawerOverviewSource).not.toContain(retiredInfoCardFrameClass);
+      expect(nodeDrawerOverviewSource).not.toContain(retiredInfoCardFrameClass);
       expect(workloadTopologySource).toContain('export const workloadNodeScopeId');
       expect(workloadTopologySource).toContain('export const getKubernetesContextKey');
       expect(workloadTopologySource).toContain('export const getWorkloadDockerHostId');

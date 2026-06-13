@@ -1,7 +1,15 @@
 import { Route, Router } from '@solidjs/router';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Button, ButtonLink, CommandCopyButton, CopyValueButton } from './Button';
+import {
+  Button,
+  ButtonLink,
+  CommandCopyButton,
+  CopyValueButton,
+  DrawerHeaderActionButton,
+  DrawerHeaderActionGroup,
+  DrawerHeaderIconButton,
+} from './Button';
 import buttonSource from './Button.tsx?raw';
 import buttonModelSource from './buttonModel.ts?raw';
 import { CopyableCodeRow } from './CopyableCodeRow';
@@ -42,6 +50,9 @@ describe('Button', () => {
     );
     expect(buttonModelSource).toContain("chip: 'gap-1 px-1.5 py-0.5 text-[10px]'");
     expect(buttonModelSource).toContain("iconMd: 'h-9 w-9 p-0'");
+    expect(buttonModelSource).toContain('DRAWER_HEADER_ACTION_BUTTON_CLASS');
+    expect(buttonModelSource).toContain('DRAWER_HEADER_ICON_BUTTON_CLASS');
+    expect(buttonModelSource).toContain('getDrawerHeaderActionButtonClass');
   });
 
   it('renders command buttons with the shared secondary shell', () => {
@@ -181,6 +192,43 @@ describe('Button', () => {
     expect(chipButton).toHaveClass('text-[10px]');
 
     expect(screen.getByRole('button', { name: 'Copy blank' })).toBeDisabled();
+  });
+
+  it('renders drawer header actions through the shared button family', () => {
+    const onAsk = vi.fn();
+    const onClose = vi.fn();
+
+    render(() => (
+      <DrawerHeaderActionGroup data-testid="drawer-actions">
+        <DrawerHeaderActionButton onClick={onAsk} aria-label="Ask about alpha">
+          Ask
+        </DrawerHeaderActionButton>
+        <DrawerHeaderActionButton disabled aria-label="Copy alpha">
+          Copy
+        </DrawerHeaderActionButton>
+        <DrawerHeaderIconButton onClick={onClose} aria-label="Close drawer">
+          x
+        </DrawerHeaderIconButton>
+      </DrawerHeaderActionGroup>
+    ));
+
+    const group = screen.getByTestId('drawer-actions');
+    expect(group).toHaveClass('shrink-0');
+    expect(group).toHaveClass('gap-1.5');
+
+    const ask = screen.getByRole('button', { name: 'Ask about alpha' });
+    expect(ask).toHaveAttribute('type', 'button');
+    expect(ask).toHaveClass('h-8');
+    expect(ask).toHaveClass('bg-surface');
+    ask.click();
+    expect(onAsk).toHaveBeenCalledTimes(1);
+
+    expect(screen.getByRole('button', { name: 'Copy alpha' })).toBeDisabled();
+
+    const close = screen.getByRole('button', { name: 'Close drawer' });
+    expect(close).toHaveClass('w-8');
+    close.click();
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('renders copyable code rows through the shared copy primitive', () => {

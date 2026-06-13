@@ -1772,6 +1772,11 @@ and it no longer repeats that same provenance as a separate `Mode` row because
 the drawer header badges already own canonical source display,
 and the drawer header no longer carries the technical primary identity line;
 that canonical identifier now lives in the `Identity` card as `Primary ID`,
+and the drawer header action chrome is a frontend-primitives dependency:
+ResourceDetailDrawer may own which actions are available and how they call the
+resource state, but Assistant, copy-context, close, and future drawer-header
+actions must compose the shared Button drawer-header action primitives instead
+of restoring resource-drawer-local button classes,
 and local operator identity labels now split from governed detail summaries:
 infrastructure tables, selectors, links, and drawer headings must preserve the
 canonical local instance identity (`displayName`, canonical display name,

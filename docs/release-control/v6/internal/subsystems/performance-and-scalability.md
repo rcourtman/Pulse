@@ -1219,6 +1219,12 @@ Compact drawer card frames in `GuestDrawerOverview.tsx`,
 dependency: the Workloads hot path owns which cards render and what data they
 show, but the repeated bordered `bg-surface p-3 shadow-sm` frame must compose
 `InfoCardFrame` instead of carrying workload-local frame constants.
+The guest drawer header follows the same dependency boundary for its Assistant,
+copy-context, and close actions: Workloads owns availability and click
+handlers, while `frontend-modern/src/components/shared/Button.tsx` owns the
+drawer-header action group and button chrome through
+`DrawerHeaderActionGroup`, `DrawerHeaderActionButton`, and
+`DrawerHeaderIconButton`.
 That drawer state now also consumes the same shared
 `frontend-modern/src/routing/resourceLinks.ts` workload-to-infrastructure
 helper, so row and drawer navigation stay aligned without a second

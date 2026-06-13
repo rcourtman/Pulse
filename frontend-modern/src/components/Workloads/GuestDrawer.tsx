@@ -3,6 +3,11 @@ import CopyIcon from 'lucide-solid/icons/copy';
 import MessageSquareIcon from 'lucide-solid/icons/message-square';
 import XIcon from 'lucide-solid/icons/x';
 import { DiscoveryTab } from '../Discovery/DiscoveryTab';
+import {
+  DrawerHeaderActionButton,
+  DrawerHeaderActionGroup,
+  DrawerHeaderIconButton,
+} from '@/components/shared/Button';
 import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
 import { DiscoveryReadinessBadge } from '@/components/shared/DiscoveryReadinessBadge';
 import { Subtabs, type SubtabOption } from '@/components/shared/Subtabs';
@@ -66,39 +71,30 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
           statusVariant={headerIndicator().variant}
           statusLabel={headerIndicator().label}
         />
-        <div class="flex shrink-0 items-center gap-1.5">
+        <DrawerHeaderActionGroup>
           <Show when={assistantAvailable()}>
-            <button
-              type="button"
+            <DrawerHeaderActionButton
               onClick={() => openAssistantForGuest()}
-              class="inline-flex h-8 items-center gap-1.5 rounded border border-border bg-surface px-2 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               title={`Ask Pulse Assistant about ${props.guest.name}`}
               aria-label={`Ask Pulse Assistant about ${props.guest.name}`}
             >
               <MessageSquareIcon class="h-4 w-4" aria-hidden="true" />
               <span class="hidden sm:inline">Ask</span>
-            </button>
+            </DrawerHeaderActionButton>
           </Show>
-          <button
-            type="button"
+          <DrawerHeaderActionButton
             onClick={() => void copyAgentContext()}
             disabled={copyingAgentContext()}
-            class="inline-flex h-8 items-center gap-1.5 rounded border border-border bg-surface px-2 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-wait disabled:opacity-60"
             title={`Copy Pulse context for ${props.guest.name}`}
             aria-label={`Copy Pulse context for ${props.guest.name}`}
           >
             <CopyIcon class="h-4 w-4" aria-hidden="true" />
             <span class="hidden sm:inline">{agentContextCopied() ? 'Copied' : 'Copy'}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => props.onClose()}
-            class="inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-            aria-label="Close guest drawer"
-          >
+          </DrawerHeaderActionButton>
+          <DrawerHeaderIconButton onClick={() => props.onClose()} aria-label="Close guest drawer">
             <XIcon class="h-4 w-4" aria-hidden="true" />
-          </button>
-        </div>
+          </DrawerHeaderIconButton>
+        </DrawerHeaderActionGroup>
       </div>
       <Show when={discoveryReadinessPresentation()}>
         {(presentation) => (

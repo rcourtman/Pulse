@@ -389,6 +389,7 @@
       },
       "requiredConsumers": [
         { "path": "src/components/AI/Chat/ChatMessages.tsx" },
+        { "path": "src/components/Infrastructure/ResourceDetailDrawer.tsx" },
         { "path": "src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx" },
         { "path": "src/components/Settings/AgentProfilesPanel.tsx" },
         { "path": "src/components/Settings/AvailabilitySettingsPanel.tsx" },
@@ -414,6 +415,7 @@
         { "path": "src/components/Settings/InfrastructureWorkspace.tsx" },
         { "path": "src/components/Settings/ReportingPanel.tsx" },
         { "path": "src/components/Settings/ResourcePicker.tsx" },
+        { "path": "src/components/Workloads/GuestDrawer.tsx" },
         { "path": "src/features/patrol/PatrolIntelligenceWorkspace.tsx" },
         { "path": "src/features/standalone/StandalonePageSurface.tsx" }
       ],
@@ -1836,6 +1838,50 @@
         "bg-surface-hover p-2"
       ],
       "legacyReason": "Retired migration debt. Command-copy icon buttons belong to CommandCopyButton so position, sizing, icon, focus, disabled, and aria behavior stay canonical.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/Button.test.tsx"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "button-drawer-header-action-local-shell",
+      "category": "action-button",
+      "summary": "Drawer header command actions must compose DrawerHeaderActionButton for shared height, density, focus, disabled, and hover styling instead of copying drawer-local button classes.",
+      "canonical": {
+        "path": "src/components/shared/Button.tsx",
+        "export": "DrawerHeaderActionButton"
+      },
+      "scopes": ["src/components", "src/features", "src/pages"],
+      "extensions": [".tsx"],
+      "allPatterns": [
+        "inline-flex h-8 items-center gap-1.5 rounded border border-border bg-surface px-2 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+      ],
+      "legacyReason": "Retired migration debt. Drawer header Assistant and context-copy actions belong to the shared Button primitive family.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/Button.test.tsx"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "button-drawer-header-icon-local-shell",
+      "category": "action-button",
+      "summary": "Drawer header icon actions must compose DrawerHeaderIconButton for shared close/action chrome instead of copying drawer-local icon button classes.",
+      "canonical": {
+        "path": "src/components/shared/Button.tsx",
+        "export": "DrawerHeaderIconButton"
+      },
+      "scopes": ["src/components", "src/features", "src/pages"],
+      "extensions": [".tsx"],
+      "allPatterns": [
+        "inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+      ],
+      "legacyReason": "Retired migration debt. Drawer header close and icon actions belong to the shared Button primitive family.",
       "allowedPaths": [],
       "ignoredPaths": ["src/components/shared/Button.test.tsx"],
       "proof": [

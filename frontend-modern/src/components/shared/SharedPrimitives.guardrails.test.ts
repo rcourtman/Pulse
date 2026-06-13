@@ -137,6 +137,7 @@ import truenasProtectionTableSource from '@/features/truenas/TrueNASProtectionTa
 import vmwarePageSurfaceSource from '@/features/vmware/VmwarePageSurface.tsx?raw';
 import upgradeNavigationSource from '@/utils/upgradeNavigation.ts?raw';
 import guestRowSource from '@/components/Workloads/GuestRow.tsx?raw';
+import guestDrawerSource from '@/components/Workloads/GuestDrawer.tsx?raw';
 import guestDrawerHistorySource from '@/components/Workloads/GuestDrawerHistory.tsx?raw';
 import workloadsSurfaceSource from '@/components/Workloads/WorkloadsSurface.tsx?raw';
 import workloadsTableSource from '@/components/Workloads/WorkloadsTable.tsx?raw';
@@ -179,6 +180,7 @@ import alertHistoryTableGroupRowSource from '@/features/alerts/AlertHistoryTable
 import alertResourceTableDesktopSource from '@/components/Alerts/AlertResourceTableDesktop.tsx?raw';
 import aiCostDashboardSource from '@/components/AI/AICostDashboard.tsx?raw';
 import resourceDetailSummarySource from '@/components/Infrastructure/ResourceDetailSummary.tsx?raw';
+import resourceDetailDrawerSource from '@/components/Infrastructure/ResourceDetailDrawer.tsx?raw';
 import resourceDetailDrawerDebugTabSource from '@/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx?raw';
 import resourceDetailDrawerKubernetesModelSource from '@/components/Infrastructure/resourceDetailDrawerKubernetesModel.ts?raw';
 import resourceDetailDrawerTrueNASModelSource from '@/components/Infrastructure/resourceDetailDrawerTrueNASModel.ts?raw';
@@ -2064,6 +2066,12 @@ describe('shared primitive guardrails', () => {
     const settingsDialogCloseGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'button-outline-settings-dialog-close-local-shell',
     );
+    const drawerHeaderActionGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'button-drawer-header-action-local-shell',
+    );
+    const drawerHeaderIconGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'button-drawer-header-icon-local-shell',
+    );
     const copyValueRule = registry.rules?.find((rule) => rule.id === 'copy-value-action-shell');
     const copyableCodeRowRule = registry.rules?.find(
       (rule) => rule.id === 'copyable-code-row-shell',
@@ -2085,6 +2093,7 @@ describe('shared primitive guardrails', () => {
     expect(registeredRule?.canonical?.export).toBe('Button');
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
       'src/components/AI/Chat/ChatMessages.tsx',
+      'src/components/Infrastructure/ResourceDetailDrawer.tsx',
       'src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx',
       'src/components/Settings/AgentProfilesPanel.tsx',
       'src/components/Settings/AvailabilitySettingsPanel.tsx',
@@ -2104,6 +2113,7 @@ describe('shared primitive guardrails', () => {
       'src/components/Settings/InfrastructureWorkspace.tsx',
       'src/components/Settings/ReportingPanel.tsx',
       'src/components/Settings/ResourcePicker.tsx',
+      'src/components/Workloads/GuestDrawer.tsx',
       'src/features/patrol/PatrolIntelligenceWorkspace.tsx',
       'src/features/standalone/StandalonePageSurface.tsx',
     ]);
@@ -2344,6 +2354,28 @@ describe('shared primitive guardrails', () => {
     expect(settingsDialogCloseGuard?.ignoredPaths).toEqual([
       'src/components/shared/Button.test.tsx',
     ]);
+    expect(drawerHeaderActionGuard?.canonical?.path).toBe('src/components/shared/Button.tsx');
+    expect(drawerHeaderActionGuard?.canonical?.export).toBe('DrawerHeaderActionButton');
+    expect(drawerHeaderActionGuard?.allPatterns).toEqual([
+      'inline-flex h-8 items-center gap-1.5 rounded border border-border bg-surface px-2 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
+    ]);
+    expect(drawerHeaderActionGuard?.scopes).toEqual([
+      'src/components',
+      'src/features',
+      'src/pages',
+    ]);
+    expect(drawerHeaderActionGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(drawerHeaderActionGuard?.ignoredPaths).toEqual([
+      'src/components/shared/Button.test.tsx',
+    ]);
+    expect(drawerHeaderIconGuard?.canonical?.path).toBe('src/components/shared/Button.tsx');
+    expect(drawerHeaderIconGuard?.canonical?.export).toBe('DrawerHeaderIconButton');
+    expect(drawerHeaderIconGuard?.allPatterns).toEqual([
+      'inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
+    ]);
+    expect(drawerHeaderIconGuard?.scopes).toEqual(['src/components', 'src/features', 'src/pages']);
+    expect(drawerHeaderIconGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(drawerHeaderIconGuard?.ignoredPaths).toEqual(['src/components/shared/Button.test.tsx']);
     expect(copyValueRule?.canonical?.path).toBe('src/components/shared/Button.tsx');
     expect(copyValueRule?.canonical?.export).toBe('CopyValueButton');
     expect(copyValueRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
@@ -2383,6 +2415,9 @@ describe('shared primitive guardrails', () => {
     expect(buttonSource).toContain('export function Button');
     expect(buttonSource).toContain('export function CommandCopyButton');
     expect(buttonSource).toContain('export function CopyValueButton');
+    expect(buttonSource).toContain('export function DrawerHeaderActionButton');
+    expect(buttonSource).toContain('export function DrawerHeaderActionGroup');
+    expect(buttonSource).toContain('export function DrawerHeaderIconButton');
     expect(buttonSource).toContain('export function ButtonLink');
     expect(buttonSource).toContain('getButtonClass');
     expect(buttonSource).toContain('getCopyValueButtonClass');
@@ -2400,6 +2435,20 @@ describe('shared primitive guardrails', () => {
     expect(buttonModelSource).toContain('dangerOutline:');
     expect(buttonModelSource).toContain('settingsAction:');
     expect(buttonModelSource).toContain('getCopyValueButtonClass');
+    expect(buttonModelSource).toContain('getDrawerHeaderActionButtonClass');
+    expect(buttonModelSource).toContain('getDrawerHeaderIconButtonClass');
+    for (const drawerSource of [guestDrawerSource, resourceDetailDrawerSource]) {
+      expect(drawerSource).toContain('@/components/shared/Button');
+      expect(drawerSource).toContain('DrawerHeaderActionGroup');
+      expect(drawerSource).toContain('DrawerHeaderActionButton');
+      expect(drawerSource).toContain('DrawerHeaderIconButton');
+      expect(drawerSource).not.toContain(
+        'inline-flex h-8 items-center gap-1.5 rounded border border-border bg-surface px-2 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
+      );
+      expect(drawerSource).not.toContain(
+        'inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
+      );
+    }
     expect(chatMessagesSource).toContain('@/components/shared/Button');
     expect(chatMessagesSource).not.toContain(
       'rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content',

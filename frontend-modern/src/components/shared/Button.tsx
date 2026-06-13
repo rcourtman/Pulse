@@ -5,6 +5,9 @@ import { JSX, Show, mergeProps, splitProps } from 'solid-js';
 import {
   getButtonClass,
   getCopyValueButtonClass,
+  getDrawerHeaderActionButtonClass,
+  getDrawerHeaderActionGroupClass,
+  getDrawerHeaderIconButtonClass,
   type ButtonSize,
   type ButtonVariant,
   type CopyValueButtonSize,
@@ -44,6 +47,16 @@ export interface CopyValueButtonProps extends Omit<
   label: string;
   variant?: CopyValueButtonVariant;
   size?: CopyValueButtonSize;
+  class?: string;
+  children?: JSX.Element;
+}
+
+export interface DrawerHeaderActionGroupProps extends JSX.HTMLAttributes<HTMLDivElement> {
+  class?: string;
+  children?: JSX.Element;
+}
+
+export interface DrawerHeaderActionButtonProps extends JSX.ButtonHTMLAttributes<HTMLButtonElement> {
   class?: string;
   children?: JSX.Element;
 }
@@ -94,6 +107,38 @@ export function Button(props: ButtonProps) {
           ></path>
         </svg>
       ) : null}
+      {local.children}
+    </button>
+  );
+}
+
+export function DrawerHeaderActionGroup(props: DrawerHeaderActionGroupProps) {
+  const [local, rest] = splitProps(props, ['class', 'children']);
+
+  return (
+    <div {...rest} class={getDrawerHeaderActionGroupClass(local.class)}>
+      {local.children}
+    </div>
+  );
+}
+
+export function DrawerHeaderActionButton(props: DrawerHeaderActionButtonProps) {
+  const merged = mergeProps({ type: 'button' as const }, props);
+  const [local, rest] = splitProps(merged, ['class', 'children']);
+
+  return (
+    <button {...rest} class={getDrawerHeaderActionButtonClass(local.class)}>
+      {local.children}
+    </button>
+  );
+}
+
+export function DrawerHeaderIconButton(props: DrawerHeaderActionButtonProps) {
+  const merged = mergeProps({ type: 'button' as const }, props);
+  const [local, rest] = splitProps(merged, ['class', 'children']);
+
+  return (
+    <button {...rest} class={getDrawerHeaderIconButtonClass(local.class)}>
       {local.children}
     </button>
   );

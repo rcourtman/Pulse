@@ -4,6 +4,11 @@ import CopyIcon from 'lucide-solid/icons/copy';
 import MessageSquareIcon from 'lucide-solid/icons/message-square';
 import XIcon from 'lucide-solid/icons/x';
 import type { Resource } from '@/types/resource';
+import {
+  DrawerHeaderActionButton,
+  DrawerHeaderActionGroup,
+  DrawerHeaderIconButton,
+} from '@/components/shared/Button';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { Subtabs } from '@/components/shared/Subtabs';
 import { ReportMergeModal } from './ReportMergeModal';
@@ -108,7 +113,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
           </div>
         </div>
 
-        <div class="flex shrink-0 items-center gap-1.5">
+        <DrawerHeaderActionGroup>
           <Show when={isDockerContainerLifecycleResource(props.resource)}>
             <DockerContainerLifecycleControls
               resource={props.resource}
@@ -117,39 +122,33 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
             />
           </Show>
           <Show when={drawer.assistantAvailable()}>
-            <button
-              type="button"
+            <DrawerHeaderActionButton
               onClick={() => drawer.openAssistantForResource()}
-              class="inline-flex h-8 items-center gap-1.5 rounded border border-border bg-surface px-2 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               title={`Ask Pulse Assistant about ${drawer.displayName()}`}
               aria-label={`Ask Pulse Assistant about ${drawer.displayName()}`}
             >
               <MessageSquareIcon class="h-4 w-4" />
               <span class="hidden sm:inline">Ask</span>
-            </button>
+            </DrawerHeaderActionButton>
           </Show>
-          <button
-            type="button"
+          <DrawerHeaderActionButton
             onClick={() => void drawer.copyAgentContext()}
             disabled={drawer.copyingAgentContext()}
-            class="inline-flex h-8 items-center gap-1.5 rounded border border-border bg-surface px-2 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-wait disabled:opacity-60"
             title={`Copy Pulse context for ${drawer.displayName()}`}
             aria-label={`Copy Pulse context for ${drawer.displayName()}`}
           >
             <CopyIcon class="h-4 w-4" />
             <span class="hidden sm:inline">{drawer.agentContextCopied() ? 'Copied' : 'Copy'}</span>
-          </button>
+          </DrawerHeaderActionButton>
           <Show when={props.onClose}>
-            <button
-              type="button"
+            <DrawerHeaderIconButton
               onClick={() => props.onClose?.()}
-              class="inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               aria-label="Close resource drawer"
             >
               <XIcon class="h-4 w-4" />
-            </button>
+            </DrawerHeaderIconButton>
           </Show>
-        </div>
+        </DrawerHeaderActionGroup>
       </div>
 
       <Subtabs
