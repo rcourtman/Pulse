@@ -425,12 +425,12 @@ describe('AgentsMachinesTable', () => {
       />
     ));
 
-    expect(screen.queryByText('192.168.0.21 | seen 5m')).not.toBeInTheDocument();
+    expect(screen.queryByText('192.168.0.21 | seen 5m ago')).not.toBeInTheDocument();
 
     await fireEvent.click(screen.getByTitle('Choose which columns to display'));
     await fireEvent.click(screen.getByLabelText('Last seen'));
 
-    expect(screen.getByText('192.168.0.21 | seen 5m')).toBeInTheDocument();
+    expect(screen.getByText('192.168.0.21 | seen 5m ago')).toBeInTheDocument();
   });
 
   it('shows a row expansion affordance for machine details', async () => {

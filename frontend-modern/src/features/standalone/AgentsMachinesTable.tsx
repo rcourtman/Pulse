@@ -39,11 +39,13 @@ import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformTableEmptyState,
   PlatformTableMetricFallback,
+  PlatformTableRelativeTimeValue,
   PlatformTableResetFiltersButton,
   PlatformTableShell,
   PlatformTableToolbar,
   createPlatformTableFilterState,
   filterPlatformResources,
+  formatPlatformTableRelativeTimeValue,
   formatPlatformTableUptimeValue,
   getPlatformTableFiniteMetric,
   getPlatformTableCellClassForKind,
@@ -88,7 +90,6 @@ import {
   getAgentMachineTemperatureTitle,
   getNextAgentMachineSortState,
   sortAgentMachines,
-  timestampMillisFrom,
   type AgentMachineColumn,
   type AgentMachineColumnId,
   type AgentMachineDiskIODetail,
@@ -97,18 +98,6 @@ import {
   type AgentMachineSortKey,
   type AgentMachineTemperatureDetailSection,
 } from './agentMachineTableModel';
-
-const formatLastSeen = (value: number | string | Date | undefined): string => {
-  const timestampMillis = timestampMillisFrom(value);
-  if (!timestampMillis) return '—';
-  const ageSeconds = Math.max(0, Math.floor((Date.now() - timestampMillis) / 1000));
-  if (ageSeconds < 60) return 'now';
-  const minutes = Math.floor(ageSeconds / 60);
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 48) return `${hours}h`;
-  return `${Math.floor(hours / 24)}d`;
-};
 
 type MetricFallbackReason = {
   label: string;
@@ -1454,12 +1443,12 @@ export const AgentsMachinesTable: Component<{
                     const diskIOTotal = () => getAgentMachineDiskIOTotal(machine);
                     const diskIODetails = () => getAgentMachineDiskIODetails(machine);
                     const primaryIp = () => getAgentMachinePrimaryIp(machine);
+                    const lastSeenValue = () =>
+                      isAgentlessMachine(machine)
+                        ? availabilityFor(machine)?.lastChecked
+                        : machine.lastSeen;
                     const lastSeenLabel = () =>
-                      formatLastSeen(
-                        isAgentlessMachine(machine)
-                          ? availabilityFor(machine)?.lastChecked
-                          : machine.lastSeen,
-                      );
+                      formatPlatformTableRelativeTimeValue(lastSeenValue());
                     const machineSubtitle = () =>
                       machineRowSubtitleFor(
                         name(),
@@ -1673,7 +1662,7 @@ export const AgentsMachinesTable: Component<{
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('numeric-value')} ${machineColumnWidthClass('lastSeen')} text-base-content`}
                             >
-                              {lastSeenLabel()}
+                              <PlatformTableRelativeTimeValue value={lastSeenValue()} />
                             </TableCell>
                           </Show>
                           <Show when={columnVisibility.isColumnVisible('ip')}>

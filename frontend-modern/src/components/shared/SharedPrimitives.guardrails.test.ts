@@ -177,6 +177,7 @@ import proxmoxHostTableModelSource from '@/features/proxmox/proxmoxHostTableMode
 import proxmoxRecoverableTableSource from '@/features/proxmox/ProxmoxRecoverableTable.tsx?raw';
 import proxmoxReplicationTableSource from '@/features/proxmox/ProxmoxReplicationTable.tsx?raw';
 import vsphereHostsTableSource from '@/features/vmware/VsphereHostsTable.tsx?raw';
+import availabilityChecksTableSource from '@/features/standalone/AvailabilityChecksTable.tsx?raw';
 import agentsMachinesTableSource from '@/features/standalone/AgentsMachinesTable.tsx?raw';
 import agentMachineTableModelSource from '@/features/standalone/agentMachineTableModel.ts?raw';
 import unifiedResourceHostTableCardSource from '@/components/Infrastructure/UnifiedResourceHostTableCard.tsx?raw';
@@ -4048,6 +4049,8 @@ describe('shared primitive guardrails', () => {
       ['src/features/kubernetes/KubernetesEventsTable.tsx', kubernetesEventsTableSource],
       ['src/features/proxmox/proxmoxBackupsTableShared.tsx', proxmoxBackupsTableSharedSource],
       ['src/features/proxmox/ProxmoxReplicationTable.tsx', proxmoxReplicationTableSource],
+      ['src/features/standalone/AvailabilityChecksTable.tsx', availabilityChecksTableSource],
+      ['src/features/standalone/AgentsMachinesTable.tsx', agentsMachinesTableSource],
     ];
     const platformRelativeTimeConsumerPaths = platformRelativeTimeConsumers.map(([path]) => path);
 
@@ -4084,6 +4087,14 @@ describe('shared primitive guardrails', () => {
           'formatRelativeTime(job.lastSyncTime, { compact: true })',
         ],
       },
+      {
+        path: 'src/features/standalone/AgentsMachinesTable.tsx',
+        patterns: ['const formatLastSeen', 'Math.floor((Date.now() - timestampMillis) / 1000)'],
+      },
+      {
+        path: 'src/features/standalone/AvailabilityChecksTable.tsx',
+        patterns: ['formatRelativeTime(availability?.lastChecked', 'const formatChecked'],
+      },
     ]);
     expect(localHelperGuard?.canonical?.path).toBe(
       'src/features/platformPage/sharedPlatformPage.tsx',
@@ -4094,6 +4105,7 @@ describe('shared primitive guardrails', () => {
       'src/features/docker',
       'src/features/kubernetes',
       'src/features/proxmox',
+      'src/features/standalone',
     ]);
     expect(localHelperGuard?.pathIncludes).toEqual(['Table']);
     expect(localHelperGuard?.pathExcludes).toEqual(['__tests__']);

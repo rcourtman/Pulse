@@ -261,11 +261,12 @@ rendering must use `PlatformTableDateTimeValue` /
 formatting, minimum-year filtering when platform adapters emit placeholder
 dates, tabular styling, and canonical `numeric-value` alignment.
 Relative timestamp-age cells keep the same split: unified-resource consumers
-own whether created, observed, or sync time is the meaningful source-specific
-field, while dense platform table rendering must use
-`PlatformTableRelativeTimeValue` / `formatPlatformTableRelativeTimeValue` for
-relative labels, compact defaults, invalid/empty markers, and tabular styling
-instead of importing `formatRelativeTime` in table files.
+own whether created, observed, sync, agent `lastSeen`, or availability
+`lastChecked` time is the meaningful source-specific freshness field, while
+dense platform table rendering must use `PlatformTableRelativeTimeValue` /
+`formatPlatformTableRelativeTimeValue` for relative labels, compact defaults,
+invalid/empty markers, and tabular styling instead of importing
+`formatRelativeTime` or declaring local timestamp-age helpers in table files.
 Optional numeric table cells follow the same split: unified-resource consumers
 own which count or replica field is meaningful, whether the domain should
 zero-default an absent scheduler/service/inventory count, whether a

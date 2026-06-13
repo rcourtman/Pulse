@@ -7,6 +7,7 @@ import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformTableEmptyState,
+  PlatformTableRelativeTimeValue,
   PlatformTableToolbar,
   createPlatformTableFilterState,
   filterPlatformResources,
@@ -16,7 +17,6 @@ import {
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource, ResourceAvailabilityMeta } from '@/types/resource';
-import { formatRelativeTime } from '@/utils/format';
 import { getAvailabilityProbePresentation } from '@/utils/availabilityProbePresentation';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import {
@@ -46,9 +46,6 @@ const formatTarget = (resource: Resource): string => {
   }
   return address;
 };
-
-const formatChecked = (availability: ResourceAvailabilityMeta | undefined): string =>
-  formatRelativeTime(availability?.lastChecked, { compact: true, emptyText: 'Not checked' });
 
 const formatFailures = (availability: ResourceAvailabilityMeta | undefined): string => {
   const failures = availability?.consecutiveFailures;
@@ -230,7 +227,10 @@ export const AvailabilityChecksTable: Component<{
                         <TableCell
                           class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
                         >
-                          {formatChecked(availability())}
+                          <PlatformTableRelativeTimeValue
+                            value={availability()?.lastChecked}
+                            emptyText="Not checked"
+                          />
                         </TableCell>
                         <TableCell
                           class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content lg:table-cell`}

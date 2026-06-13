@@ -1486,7 +1486,9 @@
         { "path": "src/features/kubernetes/KubernetesDeploymentsTable.tsx" },
         { "path": "src/features/kubernetes/KubernetesEventsTable.tsx" },
         { "path": "src/features/proxmox/proxmoxBackupsTableShared.tsx" },
-        { "path": "src/features/proxmox/ProxmoxReplicationTable.tsx" }
+        { "path": "src/features/proxmox/ProxmoxReplicationTable.tsx" },
+        { "path": "src/features/standalone/AvailabilityChecksTable.tsx" },
+        { "path": "src/features/standalone/AgentsMachinesTable.tsx" }
       ],
       "forbiddenPatterns": [
         {
@@ -1513,6 +1515,14 @@
             "formatRelativeTime(job.lastSyncUnix * 1000, { compact: true })",
             "formatRelativeTime(job.lastSyncTime, { compact: true })"
           ]
+        },
+        {
+          "path": "src/features/standalone/AgentsMachinesTable.tsx",
+          "patterns": ["const formatLastSeen", "Math.floor((Date.now() - timestampMillis) / 1000)"]
+        },
+        {
+          "path": "src/features/standalone/AvailabilityChecksTable.tsx",
+          "patterns": ["formatRelativeTime(availability?.lastChecked", "const formatChecked"]
         }
       ],
       "proof": [
@@ -2696,7 +2706,12 @@
         "path": "src/features/platformPage/sharedPlatformPage.tsx",
         "export": "PlatformTableRelativeTimeValue"
       },
-      "scopes": ["src/features/docker", "src/features/kubernetes", "src/features/proxmox"],
+      "scopes": [
+        "src/features/docker",
+        "src/features/kubernetes",
+        "src/features/proxmox",
+        "src/features/standalone"
+      ],
       "extensions": [".tsx"],
       "pathIncludes": ["Table"],
       "pathExcludes": ["__tests__"],

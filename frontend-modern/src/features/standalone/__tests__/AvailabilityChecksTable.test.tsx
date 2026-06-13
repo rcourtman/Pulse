@@ -1,6 +1,6 @@
 import { Route, Router } from '@solidjs/router';
 import { cleanup, render, screen } from '@solidjs/testing-library';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Resource } from '@/types/resource';
 import { AvailabilityChecksTable } from '../AvailabilityChecksTable';
 
@@ -24,6 +24,7 @@ const availabilityResource = (overrides: Partial<Resource> = {}): Resource =>
       enabled: true,
       available: true,
       latencyMillis: 7,
+      lastChecked: 1_700_000_300_000,
       pollIntervalSeconds: 30,
       failureThreshold: 2,
     },
@@ -47,16 +48,22 @@ const renderTable = (resources: Resource[]) =>
     </Router>
   ));
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 describe('AvailabilityChecksTable', () => {
   it('renders agentless check status from unified network endpoint resources', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_700_000_600_000);
+
     renderTable([availabilityResource()]);
 
     expect(screen.getByText('Availability checks')).toBeInTheDocument();
     expect(screen.getByText('MQTT power meter')).toBeInTheDocument();
     expect(screen.getByText('TCP 1883')).toBeInTheDocument();
     expect(screen.getByText('power-meter-01.lab.local:1883')).toBeInTheDocument();
+    expect(screen.getByText('5m ago')).toBeInTheDocument();
     expect(screen.getByText('7 ms')).toBeInTheDocument();
   });
 

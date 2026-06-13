@@ -2634,8 +2634,10 @@ the repeated `formatRelativeTime` composition, compact-label default,
 invalid/empty markers, and tabular-number styling for dense platform table
 cells. Docker / Podman volume created-at cells, Kubernetes deployment age
 cells, Kubernetes event observed-time cells, Proxmox backup created-age cells,
-and Proxmox replication last-sync cells must compose that primitive instead of
-importing `formatRelativeTime` directly in table files.
+Proxmox replication last-sync cells, Standalone machine last-seen cells, and
+Standalone availability-check checked-at cells must compose that primitive
+instead of importing `formatRelativeTime` directly or declaring local
+timestamp-age helpers in table files.
 Platform table numeric fallback rendering is registry-backed too.
 `PlatformTableNumberValue` owns finite-number checking, tabular-number styling,
 custom empty-marker support, and caller-owned number formatting for dense
