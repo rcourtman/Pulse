@@ -390,6 +390,32 @@
       ]
     },
     {
+      "id": "error-boundary-callout-shell",
+      "category": "callout",
+      "summary": "Shared error-boundary fallback notices must compose CalloutCard and library icons for tone, spacing, and dark-mode styling instead of recreating local red panels or inline SVG alert glyphs.",
+      "canonical": {
+        "path": "src/components/shared/CalloutCard.tsx",
+        "export": "CalloutCard"
+      },
+      "requiredConsumers": [{ "path": "src/components/ErrorBoundary.tsx" }],
+      "forbiddenPatterns": [
+        {
+          "path": "src/components/ErrorBoundary.tsx",
+          "patterns": [
+            "<svg",
+            "bg-red-50 dark:bg-red-900 border border-red-200",
+            "p-4 bg-red-50 dark:bg-red-900 border border-red-200"
+          ]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/__tests__/ErrorBoundary.test.tsx",
+        "src/components/shared/CalloutCard.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "platform-inline-notice-shell",
       "category": "callout",
       "summary": "Platform inline notices must compose InlineNotice for shared dense notice tone, icon/content layout, and action-link chrome instead of copying platform-local amber notice shells.",
@@ -513,15 +539,11 @@
         },
         {
           "path": "src/components/Settings/AgentProfilesPanel.tsx",
-          "patterns": [
-            "animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"
-          ]
+          "patterns": ["animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"]
         },
         {
           "path": "src/components/Settings/RolesPanel.tsx",
-          "patterns": [
-            "animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"
-          ]
+          "patterns": ["animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"]
         },
         {
           "path": "src/components/Settings/SSOProvidersPanel.tsx",
@@ -543,21 +565,15 @@
         },
         {
           "path": "src/components/Settings/UserAssignmentsDialog.tsx",
-          "patterns": [
-            "animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"
-          ]
+          "patterns": ["animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"]
         },
         {
           "path": "src/components/Settings/UserAssignmentsPanel.tsx",
-          "patterns": [
-            "animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"
-          ]
+          "patterns": ["animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"]
         },
         {
           "path": "src/components/shared/Button.tsx",
-          "patterns": [
-            "class=\"animate-spin -ml-1 mr-2 h-4 w-4 text-current\""
-          ]
+          "patterns": ["class=\"animate-spin -ml-1 mr-2 h-4 w-4 text-current\""]
         },
         {
           "path": "src/components/shared/HistoryChartOverlay.tsx",
@@ -735,6 +751,7 @@
       },
       "requiredConsumers": [
         { "path": "src/components/AI/Chat/ChatMessages.tsx" },
+        { "path": "src/components/ErrorBoundary.tsx" },
         { "path": "src/components/Infrastructure/ResourceDetailDrawer.tsx" },
         { "path": "src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx" },
         { "path": "src/components/Settings/AgentProfilesPanel.tsx" },
@@ -809,10 +826,19 @@
             "inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100",
             "inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100"
           ]
+        },
+        {
+          "path": "src/components/ErrorBoundary.tsx",
+          "patterns": [
+            "px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700",
+            "px-4 py-2 bg-slate-600 text-white rounded hover:bg-slate-700",
+            "text-xs px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700"
+          ]
         }
       ],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/__tests__/ErrorBoundary.test.tsx",
         "src/components/shared/Button.test.tsx",
         "scripts/shared-template-audit.mjs"
       ]

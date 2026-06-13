@@ -520,6 +520,9 @@ not a replacement status card, CTA band, or page-local nested card.
    and reporting exports use the shared `success`, `successOutline`, and
    `successGhost` Button variants instead of carrying page-local emerald action
    shells.
+   Shared error-boundary fallback actions are also command buttons: reset,
+   reload, and retry controls must compose `Button` so emergency UI does not
+   become a separate local button vocabulary.
    Compact icon-only row, inline, and floating action controls belong to
    `ActionIconButton`. Feature surfaces may own the icon choice, click handler,
    label text, and layout slot, but icon-button size, tone, focus ring,
@@ -3391,6 +3394,10 @@ credential slots own the source-specific lifecycle or API meaning, while
 The `settings-connection-editor-local-*-callout-shell` pattern guards block
 future connection-editor files from reintroducing amber, red, or rose local
 notice shells.
+Shared error-boundary fallbacks use the same boundary: the fallback owns error
+copy and reset/reload handlers, while `CalloutCard` owns danger tone, spacing,
+dark-mode styling, and alert layout instead of inline red panels or raw SVG
+alert glyphs.
 
 Settings loading placeholders must route through the shared
 `SettingsLoadingSkeleton` primitive instead of local `animate-pulse` blocks.

@@ -115,6 +115,7 @@ import inlineDetailTableRowSource from '@/components/shared/InlineDetailTableRow
 import sharedTemplateRegistrySource from '../../../scripts/shared-template-registry.json?raw';
 import discoveryTabSource from '@/components/Discovery/DiscoveryTab.tsx?raw';
 import emailProviderSelectSource from '@/components/Alerts/EmailProviderSelect.tsx?raw';
+import errorBoundarySource from '@/components/ErrorBoundary.tsx?raw';
 import incidentTimelinePanelSource from '@/components/Alerts/IncidentTimelinePanel.tsx?raw';
 import alertDetailPresentationSource from '@/utils/alertDetailPresentation.ts?raw';
 import alertSeverityPresentationSource from '@/utils/alertSeverityPresentation.ts?raw';
@@ -2881,6 +2882,7 @@ describe('shared primitive guardrails', () => {
     expect(registeredRule?.canonical?.export).toBe('Button');
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
       'src/components/AI/Chat/ChatMessages.tsx',
+      'src/components/ErrorBoundary.tsx',
       'src/components/Infrastructure/ResourceDetailDrawer.tsx',
       'src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx',
       'src/components/Settings/AgentProfilesPanel.tsx',
@@ -2951,7 +2953,25 @@ describe('shared primitive guardrails', () => {
             'inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100',
           ]),
         }),
+        expect.objectContaining({
+          path: 'src/components/ErrorBoundary.tsx',
+          patterns: expect.arrayContaining([
+            'px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700',
+            'px-4 py-2 bg-slate-600 text-white rounded hover:bg-slate-700',
+            'text-xs px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700',
+          ]),
+        }),
       ]),
+    );
+    expect(errorBoundarySource).toContain('Button');
+    expect(errorBoundarySource).not.toContain(
+      'px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700',
+    );
+    expect(errorBoundarySource).not.toContain(
+      'px-4 py-2 bg-slate-600 text-white rounded hover:bg-slate-700',
+    );
+    expect(errorBoundarySource).not.toContain(
+      'text-xs px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700',
     );
     expect(registeredGuard?.canonical?.path).toBe('src/components/shared/buttonModel.ts');
     expect(registeredGuard?.canonical?.export).toBe('getButtonClass');
@@ -3674,6 +3694,44 @@ describe('shared primitive guardrails', () => {
     );
     expect(discoverySettingsFormSource).not.toContain(
       'rounded-md border border-amber-200 bg-amber-50/80',
+    );
+  });
+
+  it('routes shared error-boundary fallbacks through shared callout and button primitives', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+        forbiddenPatterns?: Array<{ path?: string; patterns?: string[] }>;
+      }>;
+    };
+    const registeredRule = registry.rules?.find(
+      (rule) => rule.id === 'error-boundary-callout-shell',
+    );
+
+    expect(registeredRule?.canonical?.path).toBe('src/components/shared/CalloutCard.tsx');
+    expect(registeredRule?.canonical?.export).toBe('CalloutCard');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/components/ErrorBoundary.tsx',
+    ]);
+    expect(registeredRule?.forbiddenPatterns).toEqual([
+      {
+        path: 'src/components/ErrorBoundary.tsx',
+        patterns: [
+          '<svg',
+          'bg-red-50 dark:bg-red-900 border border-red-200',
+          'p-4 bg-red-50 dark:bg-red-900 border border-red-200',
+        ],
+      },
+    ]);
+    expect(errorBoundarySource).toContain('CalloutCard');
+    expect(errorBoundarySource).toContain('Button');
+    expect(errorBoundarySource).toContain('lucide-solid/icons/alert-triangle');
+    expect(errorBoundarySource).not.toContain('<svg');
+    expect(errorBoundarySource).not.toContain('bg-red-50 dark:bg-red-900 border border-red-200');
+    expect(errorBoundarySource).not.toContain(
+      'p-4 bg-red-50 dark:bg-red-900 border border-red-200',
     );
   });
 

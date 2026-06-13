@@ -1,4 +1,8 @@
 import { Component, JSX, ErrorBoundary as SolidErrorBoundary } from 'solid-js';
+import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
+
+import { Button } from '@/components/shared/Button';
+import { CalloutCard } from '@/components/shared/CalloutCard';
 import { logError } from '@/utils/logger';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 
@@ -13,19 +17,7 @@ const DefaultErrorFallback: Component<{ error: Error; reset: () => void }> = (pr
     <div class="min-h-screen flex items-center justify-center bg-base p-4">
       <div class="max-w-md w-full bg-surface rounded-md shadow-sm p-6">
         <div class="flex items-center mb-4">
-          <svg
-            class="w-12 h-12 text-red-500 mr-3"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-            />
-          </svg>
+          <AlertTriangleIcon class="mr-3 h-12 w-12 text-red-500" aria-hidden="true" />
           <div>
             <SectionHeader
               title="Something went wrong"
@@ -37,28 +29,26 @@ const DefaultErrorFallback: Component<{ error: Error; reset: () => void }> = (pr
           </div>
         </div>
 
-        <div class="bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 rounded p-3 mb-4">
-          <p class="text-sm text-red-800 dark:text-red-200">
-            Please try again or reload the page. If the problem persists, contact your
-            administrator.
-          </p>
-        </div>
+        <CalloutCard
+          tone="danger"
+          scale="compact"
+          padding="sm"
+          class="mb-4"
+          description="Please try again or reload the page. If the problem persists, contact your administrator."
+        />
 
         <div class="flex gap-2">
-          <button
-            type="button"
-            onClick={props.reset}
-            class="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-          >
+          <Button onClick={props.reset} variant="primary" size="md" class="flex-1">
             Try Again
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
             onClick={() => window.location.reload()}
-            class="flex-1 px-4 py-2 bg-slate-600 text-white rounded hover:bg-slate-700 transition-colors"
+            variant="secondary"
+            size="md"
+            class="flex-1"
           >
             Reload Page
-          </button>
+          </Button>
         </div>
 
         <div class="mt-4 text-xs text-muted leading-relaxed">
@@ -102,36 +92,18 @@ export const ComponentErrorBoundary: Component<{
   return (
     <ErrorBoundary
       fallback={(error, reset) => (
-        <div class="p-4 bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 rounded">
-          <div class="flex items-center mb-2">
-            <svg
-              class="w-5 h-5 text-red-500 mr-2"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            <SectionHeader
-              title={`Error in ${props.name}`}
-              size="sm"
-              titleClass="text-red-800 dark:text-red-200"
-            />
-          </div>
-          <p class="text-xs text-red-700 dark:text-red-300 mb-2">{error.message}</p>
-          <button
-            type="button"
-            onClick={reset}
-            class="text-xs px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-          >
+        <CalloutCard
+          tone="danger"
+          scale="compact"
+          padding="md"
+          icon={<AlertTriangleIcon class="h-5 w-5" aria-hidden="true" />}
+          title={`Error in ${props.name}`}
+          description={error.message}
+        >
+          <Button onClick={reset} variant="danger" size="xs" class="mt-1">
             Retry
-          </button>
-        </div>
+          </Button>
+        </CalloutCard>
       )}
       onError={(error) => {
         logError(`Error in component ${props.name}`, error);

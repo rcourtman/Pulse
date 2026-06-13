@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import type { JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import errorBoundarySource from '@/components/ErrorBoundary.tsx?raw';
 
 /* ------------------------------------------------------------------ */
 /*  Mocks                                                              */
@@ -88,6 +89,17 @@ describe('ErrorBoundary', () => {
     expect(screen.getByText('Try Again')).toBeInTheDocument();
     expect(screen.getByText('Reload Page')).toBeInTheDocument();
     expect(screen.getByText(/Technical details are suppressed/)).toBeInTheDocument();
+  });
+
+  it('keeps fallback chrome on shared primitives', () => {
+    expect(errorBoundarySource).toContain('CalloutCard');
+    expect(errorBoundarySource).toContain('Button');
+    expect(errorBoundarySource).toContain('lucide-solid/icons/alert-triangle');
+    expect(errorBoundarySource).not.toContain('<svg');
+    expect(errorBoundarySource).not.toContain(
+      'px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700',
+    );
+    expect(errorBoundarySource).not.toContain('bg-red-50 dark:bg-red-900 border border-red-200');
   });
 
   /* ---------- Logs error via logError ---------- */
