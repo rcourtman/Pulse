@@ -112,6 +112,7 @@ import webInterfaceUrlFieldModelSource from '@/components/shared/webInterfaceUrl
 import webInterfaceUrlFieldStateSource from '@/components/shared/useWebInterfaceUrlFieldState.ts?raw';
 import webInterfaceNameLinkSource from '@/components/shared/WebInterfaceNameLink.tsx?raw';
 import inlineDetailTableRowSource from '@/components/shared/InlineDetailTableRow.tsx?raw';
+import toastSource from '@/components/Toast/Toast.tsx?raw';
 import sharedTemplateRegistrySource from '../../../scripts/shared-template-registry.json?raw';
 import discoveryTabSource from '@/components/Discovery/DiscoveryTab.tsx?raw';
 import emailProviderSelectSource from '@/components/Alerts/EmailProviderSelect.tsx?raw';
@@ -320,6 +321,45 @@ describe('shared primitive guardrails', () => {
       .sort();
 
     expect(rawTableUsers).toEqual(['./PulseDataGrid.tsx']);
+  });
+
+  it('keeps toast notification chrome on shared action and icon primitives', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+        forbiddenPatterns?: Array<{ path?: string; patterns?: string[] }>;
+      }>;
+    };
+    const registeredRule = registry.rules?.find((rule) => rule.id === 'toast-notification-shell');
+
+    expect(registeredRule?.canonical?.path).toBe('src/components/Toast/Toast.tsx');
+    expect(registeredRule?.canonical?.export).toBe('Toast');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/components/Toast/Toast.tsx',
+    ]);
+    expect(registeredRule?.forbiddenPatterns).toEqual([
+      {
+        path: 'src/components/Toast/Toast.tsx',
+        patterns: [
+          '<svg',
+          'const icons = {',
+          'flex-shrink-0 text-muted hover:text-base-content hover:bg-surface rounded-md p-1.5 transition-all duration-200',
+        ],
+      },
+    ]);
+    expect(toastSource).toContain('ActionIconButton');
+    expect(toastSource).toContain('lucide-solid/icons/check-circle');
+    expect(toastSource).toContain('lucide-solid/icons/circle-alert');
+    expect(toastSource).toContain('lucide-solid/icons/alert-triangle');
+    expect(toastSource).toContain('lucide-solid/icons/info');
+    expect(toastSource).toContain('lucide-solid/icons/x');
+    expect(toastSource).not.toContain('<svg');
+    expect(toastSource).not.toContain('const icons = {');
+    expect(toastSource).not.toContain(
+      'flex-shrink-0 text-muted hover:text-base-content hover:bg-surface rounded-md p-1.5 transition-all duration-200',
+    );
   });
 
   it('routes canonical settings and feature segmented selectors through FilterButtonGroup', () => {

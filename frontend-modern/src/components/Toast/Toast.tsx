@@ -1,5 +1,11 @@
 import { Component, createSignal, For, Show, onCleanup, onMount } from 'solid-js';
 import { Portal } from 'solid-js/web';
+import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
+import CheckCircleIcon from 'lucide-solid/icons/check-circle';
+import CircleAlertIcon from 'lucide-solid/icons/circle-alert';
+import InfoIcon from 'lucide-solid/icons/info';
+import XIcon from 'lucide-solid/icons/x';
+import { ActionIconButton } from '@/components/shared/Button';
 import { POLLING_INTERVALS } from '@/constants';
 import { getSemanticTonePresentation } from '@/utils/semanticTonePresentation';
 
@@ -24,47 +30,19 @@ export const Toast: Component<ToastProps> = (props) => {
   let autoRemoveTimer: number | undefined;
   let closeAnimationTimer: number | undefined;
 
-  const icons = {
-    success: (
-      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="2.5"
-          d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-        />
-      </svg>
-    ),
-    error: (
-      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="2.5"
-          d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-        />
-      </svg>
-    ),
-    warning: (
-      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="2.5"
-          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-        />
-      </svg>
-    ),
-    info: (
-      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="2.5"
-          d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-        />
-      </svg>
-    ),
+  const icon = () => {
+    const iconClass = 'h-5 w-5';
+    switch (props.toast.type) {
+      case 'success':
+        return <CheckCircleIcon class={iconClass} aria-hidden="true" />;
+      case 'error':
+        return <CircleAlertIcon class={iconClass} aria-hidden="true" />;
+      case 'warning':
+        return <AlertTriangleIcon class={iconClass} aria-hidden="true" />;
+      case 'info':
+      default:
+        return <InfoIcon class={iconClass} aria-hidden="true" />;
+    }
   };
 
   const iconTone = () => getSemanticTonePresentation(props.toast.type);
@@ -124,7 +102,7 @@ export const Toast: Component<ToastProps> = (props) => {
         <div
           class={`flex-shrink-0 flex items-center justify-center p-1.5 sm:p-2 rounded-md border bg-surface ${iconTone().iconClass} ${iconTone().panelClass}`}
         >
-          {icons[props.toast.type]}
+          {icon()}
         </div>
         <div class="flex-1">
           <h3 class="text-sm font-medium text-base-content">{props.toast.title}</h3>
@@ -140,22 +118,17 @@ export const Toast: Component<ToastProps> = (props) => {
             </details>
           </Show>
         </div>
-        <button
+        <ActionIconButton
           type="button"
           onClick={handleClose}
-          aria-label="Dismiss notification"
+          label="Dismiss notification"
           title="Dismiss"
-          class="flex-shrink-0 text-muted hover:text-base-content hover:bg-surface rounded-md p-1.5 transition-all duration-200"
+          tone="muted"
+          size="sm"
+          class="flex-shrink-0"
         >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
-        </button>
+          <XIcon class="h-4 w-4" aria-hidden="true" />
+        </ActionIconButton>
       </div>
     </div>
   );

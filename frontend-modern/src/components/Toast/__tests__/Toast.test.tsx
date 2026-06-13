@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { batch } from 'solid-js';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { Toast, ToastContainer } from '@/components/Toast/Toast';
+import toastSource from '@/components/Toast/Toast.tsx?raw';
 
 describe('Toast', () => {
   afterEach(() => {
@@ -92,5 +93,19 @@ describe('Toast', () => {
 
     // Message is directly visible as a subtitle
     expect(screen.getByText('The node is currently offline')).toBeInTheDocument();
+  });
+
+  it('keeps toast status and dismiss chrome on shared primitives', () => {
+    expect(toastSource).toContain('ActionIconButton');
+    expect(toastSource).toContain('lucide-solid/icons/check-circle');
+    expect(toastSource).toContain('lucide-solid/icons/circle-alert');
+    expect(toastSource).toContain('lucide-solid/icons/alert-triangle');
+    expect(toastSource).toContain('lucide-solid/icons/info');
+    expect(toastSource).toContain('lucide-solid/icons/x');
+    expect(toastSource).not.toContain('<svg');
+    expect(toastSource).not.toContain('const icons = {');
+    expect(toastSource).not.toContain(
+      'flex-shrink-0 text-muted hover:text-base-content hover:bg-surface rounded-md p-1.5 transition-all duration-200',
+    );
   });
 });

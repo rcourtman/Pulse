@@ -131,6 +131,32 @@
       ]
     },
     {
+      "id": "toast-notification-shell",
+      "category": "notification",
+      "summary": "Toast notification status icons and dismiss actions must compose library icons and ActionIconButton so every page inherits shared notification chrome instead of raw SVG glyphs or local close-button classes.",
+      "canonical": {
+        "path": "src/components/Toast/Toast.tsx",
+        "export": "Toast"
+      },
+      "requiredConsumers": [{ "path": "src/components/Toast/Toast.tsx" }],
+      "forbiddenPatterns": [
+        {
+          "path": "src/components/Toast/Toast.tsx",
+          "patterns": [
+            "<svg",
+            "const icons = {",
+            "flex-shrink-0 text-muted hover:text-base-content hover:bg-surface rounded-md p-1.5 transition-all duration-200"
+          ]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/Toast/__tests__/Toast.test.tsx",
+        "src/components/shared/Button.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "inline-detail-section-panel-shell",
       "category": "row-detail",
       "summary": "Inline platform detail content must compose DetailSectionTable or InlineDetailPanel for shared detail rows, value tones, section tables, and close actions instead of recreating local field grids or provider-named detail primitives.",

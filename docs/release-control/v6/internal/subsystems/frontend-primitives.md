@@ -205,6 +205,13 @@ Native multiline form fields are also a shared primitive boundary.
 textarea chrome for alert, settings, and infrastructure runtime surfaces; those
 surfaces must not recreate raw native `<textarea>` shells locally.
 
+Toast notification chrome is a shared primitive boundary. `Toast` owns the
+global notification stack shell, status icon placement, and dismiss action
+chrome; status glyphs must come from the shared library icon set and dismiss
+controls must compose `ActionIconButton`. Consumer-specific raw SVG status
+icons, toast-local close-button class strings, and page-local toast stacks are
+forbidden unless the shared-template registry is intentionally extended first.
+
 The System Updates install guide is a shared settings primitive, not a
 deployment-lane-only panel. `UpdateInstallGuide` must render the canonical
 update-plan readiness verdict inline with the update action, and a blocked
