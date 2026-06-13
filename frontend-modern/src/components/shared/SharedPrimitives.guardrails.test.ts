@@ -150,6 +150,7 @@ import guestRowStateSource from '@/components/Workloads/useGuestRowState.ts?raw'
 import workloadSelectionStateSource from '@/components/Workloads/useWorkloadSelectionState.ts?raw';
 import dockerContainersTableSource from '@/features/docker/DockerContainersTable.tsx?raw';
 import dockerHostsTableSource from '@/features/docker/DockerHostsTable.tsx?raw';
+import dockerNativeTableSharedSource from '@/features/docker/DockerNativeTableShared.tsx?raw';
 import kubernetesAutoscalingTableSource from '@/features/kubernetes/KubernetesAutoscalingTable.tsx?raw';
 import kubernetesClustersTableSource from '@/features/kubernetes/KubernetesClustersTable.tsx?raw';
 import kubernetesConfigTableSource from '@/features/kubernetes/KubernetesConfigTable.tsx?raw';
@@ -3662,6 +3663,95 @@ describe('shared primitive guardrails', () => {
       expect(source).not.toContain('seconds / 86_400');
       expect(source).not.toContain('return `${mins}m`');
     }
+  });
+
+  it('keeps platform table byte-size fallbacks on the shared helper', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+        forbiddenPatterns?: Array<{ path?: string; patterns?: string[] }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        allowedPaths?: string[];
+        ignoredPaths?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find(
+      (rule) => rule.id === 'platform-table-byte-value-fallback',
+    );
+    const localHelperGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-table-local-bytes-helper',
+    );
+    const platformByteValueConsumers: Array<[string, string]> = [
+      ['src/features/docker/DockerNativeTableShared.tsx', dockerNativeTableSharedSource],
+      ['src/features/kubernetes/KubernetesNodesTable.tsx', kubernetesNodesTableSource],
+      ['src/features/truenas/TrueNASSystemsTable.tsx', truenasSystemsTableSource],
+      ['src/features/truenas/TrueNASVirtualMachinesTable.tsx', truenasVirtualMachinesTableSource],
+    ];
+    const platformByteValueConsumerPaths = platformByteValueConsumers.map(([path]) => path);
+    const localFormatBytesHelperPatterns = [
+      'const formatBytes',
+      'value.toFixed(value >= 100 ? 0 : value >= 10 ? 1 : 2)',
+    ];
+
+    expect(registeredRule?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(registeredRule?.canonical?.export).toBe('formatPlatformTableBytesValue');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
+      platformByteValueConsumerPaths,
+    );
+    expect(registeredRule?.forbiddenPatterns).toEqual([
+      {
+        path: 'src/features/docker/DockerNativeTableShared.tsx',
+        patterns: ['formatBytes(value)'],
+      },
+      {
+        path: 'src/features/kubernetes/KubernetesNodesTable.tsx',
+        patterns: localFormatBytesHelperPatterns,
+      },
+      {
+        path: 'src/features/truenas/TrueNASSystemsTable.tsx',
+        patterns: localFormatBytesHelperPatterns,
+      },
+      {
+        path: 'src/features/truenas/TrueNASVirtualMachinesTable.tsx',
+        patterns: localFormatBytesHelperPatterns,
+      },
+    ]);
+    expect(localHelperGuard?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(localHelperGuard?.canonical?.export).toBe('formatPlatformTableBytesValue');
+    expect(localHelperGuard?.allPatterns).toEqual(localFormatBytesHelperPatterns);
+    expect(localHelperGuard?.scopes).toEqual([
+      'src/features/docker',
+      'src/features/kubernetes',
+      'src/features/truenas',
+    ]);
+    expect(localHelperGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(localHelperGuard?.ignoredPaths ?? []).toHaveLength(0);
+
+    expect(sharedPlatformPageSource).toContain('export const formatPlatformTableBytesValue');
+    expect(sharedPlatformPageSource).toContain('formatBytes(bytes)');
+
+    for (const [path, source] of platformByteValueConsumers) {
+      expect(source).toContain('formatPlatformTableBytesValue');
+      const forbiddenPatterns =
+        registeredRule?.forbiddenPatterns?.find((entry) => entry.path === path)?.patterns ?? [];
+      for (const pattern of forbiddenPatterns) {
+        expect(source).not.toContain(pattern);
+      }
+    }
+    expect(truenasVirtualMachinesTableSource).toContain(
+      "formatPlatformTableBytesValue(vm()?.memoryBytes, '-')",
+    );
   });
 
   it('keeps platform table compact value summaries on the shared helper', () => {

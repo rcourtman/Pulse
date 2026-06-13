@@ -2609,6 +2609,12 @@ canonical empty-cell marker behavior for dense platform table cells. Docker /
 Podman hosts, Kubernetes nodes, Proxmox Mail Gateway instances, Standalone
 machines, and TrueNAS systems must compose that helper instead of declaring
 local `formatUptime` helpers for the same days/hours/minutes fallback.
+Platform table byte-size formatting follows the same rule.
+`formatPlatformTableBytesValue` owns the repeated positive-byte formatting plus
+canonical empty-cell marker behavior for dense platform table cells. Docker /
+Podman native table helpers, Kubernetes node capacity cells, and TrueNAS
+system/VM byte cells must compose that helper instead of declaring local
+`formatBytes` wrappers or reimplementing byte-unit precision in table files.
 Platform table metric fallback rendering is also shared.
 `PlatformTableMetricFallback` owns the centered muted empty marker used in
 metric bar cells plus optional caller-owned fallback label/title text, and

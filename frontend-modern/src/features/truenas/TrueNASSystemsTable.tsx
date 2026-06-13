@@ -13,6 +13,7 @@ import {
   PlatformTableEmptyState,
   createPlatformTableFilterState,
   filterPlatformResources,
+  formatPlatformTableBytesValue,
   formatPlatformTableUptimeValue,
   getPlatformTableFiniteMetric,
   getPlatformTableCellClassForKind,
@@ -45,18 +46,6 @@ import type { Resource } from '@/types/resource';
 // FilterButtonGroup, StatusDot) and counts the per-system children
 // client-side from the same TrueNAS resource scope already fetched by
 // the page (no extra API calls).
-
-const formatBytes = (bytes: number | undefined): string => {
-  if (!bytes || bytes <= 0) return '—';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
-  let value = bytes;
-  let unitIdx = 0;
-  while (value >= 1024 && unitIdx < units.length - 1) {
-    value /= 1024;
-    unitIdx += 1;
-  }
-  return `${value.toFixed(value >= 100 ? 0 : value >= 10 ? 1 : 2)} ${units[unitIdx]}`;
-};
 
 const formatPercent = (percent?: number): JSX.Element => {
   if (typeof percent !== 'number' || Number.isNaN(percent))
@@ -219,7 +208,7 @@ export const TrueNASSystemsTable: Component<{
                     const storageFullLabel = () =>
                       typeof system.disk?.used === 'number' &&
                       typeof system.disk?.total === 'number'
-                        ? `${formatBytes(system.disk.used)} / ${formatBytes(system.disk.total)}`
+                        ? `${formatPlatformTableBytesValue(system.disk.used)} / ${formatPlatformTableBytesValue(system.disk.total)}`
                         : formatPercent(storagePercent());
                     const c = () => countsBySystem().get(system.id) ?? EMPTY_COUNTS;
                     const uptimeLabel = () => formatPlatformTableUptimeValue(system.uptime);
@@ -234,8 +223,7 @@ export const TrueNASSystemsTable: Component<{
                     const cpuPercent = () => getPlatformTableFiniteMetric(system.cpu?.current);
                     const memoryTotal = () =>
                       getPlatformTableFiniteMetric(system.memory?.total) ?? 0;
-                    const memoryUsed = () =>
-                      getPlatformTableFiniteMetric(system.memory?.used) ?? 0;
+                    const memoryUsed = () => getPlatformTableFiniteMetric(system.memory?.used) ?? 0;
                     const memoryPercentOnly = () =>
                       memoryTotal() > 0
                         ? undefined

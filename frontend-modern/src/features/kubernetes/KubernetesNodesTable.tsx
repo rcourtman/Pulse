@@ -12,6 +12,7 @@ import {
   PlatformTableShell,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  formatPlatformTableBytesValue,
   formatPlatformTableTextValue,
   formatPlatformTableUptimeValue,
   getPlatformTableFiniteMetric,
@@ -45,18 +46,6 @@ import {
 // canonical bar treatment (ResponsiveMetricCell / StackedMemoryBar) so
 // the Overview stack reads as one consistent surface alongside the
 // Docker / Proxmox / vSphere host tables.
-
-const formatBytes = (bytes: number | undefined): string => {
-  if (!bytes || bytes <= 0) return '—';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
-  let value = bytes;
-  let unitIdx = 0;
-  while (value >= 1024 && unitIdx < units.length - 1) {
-    value /= 1024;
-    unitIdx += 1;
-  }
-  return `${value.toFixed(value >= 100 ? 0 : value >= 10 ? 1 : 2)} ${units[unitIdx]}`;
-};
 
 const formatRoles = (roles: string[] | undefined): string => {
   if (!roles || roles.length === 0) return '—';
@@ -188,7 +177,9 @@ export const KubernetesNodesTable: Component<{
                       const pods = meta()?.capacityPods;
                       const parts: string[] = [];
                       if (typeof cores === 'number' && cores > 0) parts.push(`${cores} cores`);
-                      if (typeof mem === 'number' && mem > 0) parts.push(formatBytes(mem));
+                      if (typeof mem === 'number' && mem > 0) {
+                        parts.push(formatPlatformTableBytesValue(mem));
+                      }
                       if (typeof pods === 'number' && pods > 0) parts.push(`${pods} pods`);
                       return parts.join(' / ') || '—';
                     };
@@ -200,8 +191,7 @@ export const KubernetesNodesTable: Component<{
                     const indicator = () => mapKubernetesNodeStatus(node);
                     const metricsKey = () => buildMetricKeyForUnifiedResource(node);
                     const cpuPercent = () => getPlatformTableFiniteMetric(node.cpu?.current);
-                    const memoryTotal = () =>
-                      getPlatformTableFiniteMetric(node.memory?.total) ?? 0;
+                    const memoryTotal = () => getPlatformTableFiniteMetric(node.memory?.total) ?? 0;
                     const memoryUsed = () => getPlatformTableFiniteMetric(node.memory?.used) ?? 0;
                     const memoryPercentOnly = () =>
                       memoryTotal() > 0

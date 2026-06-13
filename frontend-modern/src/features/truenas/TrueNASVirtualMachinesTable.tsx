@@ -7,6 +7,7 @@ import {
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  formatPlatformTableBytesValue,
   formatPlatformTableTitleCaseValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
@@ -35,18 +36,6 @@ const TRUENAS_VM_STATUS_OPTIONS: PlatformTableFilterOption<TrueNASVMStatusFilter
 ];
 
 const vmMeta = (resource: Resource): ResourceTrueNASVMMeta | undefined => resource.truenas?.vm;
-
-const formatBytes = (bytes: number | undefined): string => {
-  if (!bytes || bytes <= 0) return '-';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  let value = bytes;
-  let unitIdx = 0;
-  while (value >= 1024 && unitIdx < units.length - 1) {
-    value /= 1024;
-    unitIdx += 1;
-  }
-  return `${value.toFixed(value >= 100 ? 0 : value >= 10 ? 1 : 2)} ${units[unitIdx]}`;
-};
 
 const formatCPU = (vm: ResourceTrueNASVMMeta | undefined): string => {
   const vcpus = vm?.vcpus;
@@ -254,7 +243,7 @@ export const TrueNASVirtualMachinesTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content sm:table-cell`}
                           >
-                            {formatBytes(vm()?.memoryBytes)}
+                            {formatPlatformTableBytesValue(vm()?.memoryBytes, '-')}
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}

@@ -1,10 +1,12 @@
 import { type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell } from '@/components/shared/Table';
-import { formatBytes } from '@/utils/format';
 import { getSimpleStatusIndicator, type StatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
-import { getPlatformTableCellClassForKind } from '@/features/platformPage/sharedPlatformPage';
+import {
+  formatPlatformTableBytesValue,
+  getPlatformTableCellClassForKind,
+} from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
 import type { DockerResourceStatusFilter } from './dockerPageModel';
 
@@ -25,7 +27,7 @@ export const dockerNumberValue = (value: number | undefined): JSX.Element =>
   typeof value === 'number' ? <span class="tabular-nums">{value}</span> : <span>—</span>;
 
 export const dockerByteValue = (value: number | undefined): string =>
-  typeof value === 'number' && value > 0 ? formatBytes(value) : '—';
+  formatPlatformTableBytesValue(value);
 
 export const dockerCpuValue = (nanoCpus: number | undefined): string => {
   if (typeof nanoCpus !== 'number' || nanoCpus <= 0) return '—';

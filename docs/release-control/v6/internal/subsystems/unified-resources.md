@@ -244,6 +244,12 @@ unified-resource consumers own which uptime field is displayed, but platform
 tables, including Standalone machines, must use
 `formatPlatformTableUptimeValue` instead of recreating local days/hours/minutes
 `formatUptime` helpers for dense table cells.
+Platform byte-size table cells follow that boundary too: unified-resource
+consumers own whether a capacity, memory, disk, or requested-size field is the
+right source-specific value, while dense platform table cells must use
+`formatPlatformTableBytesValue` for positive byte formatting and unknown /
+non-positive empty-cell markers instead of carrying table-local `formatBytes`
+wrappers.
 Metric bar fallbacks follow that split as well: unified-resource consumers own
 which CPU or memory value is selected, plus any source-specific fallback reason
 such as outdated standalone agent telemetry, while platform tables must use

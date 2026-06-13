@@ -5,6 +5,7 @@ import type { Resource } from '@/types/resource';
 import {
   PlatformTableMetricFallback,
   createPlatformTableFilterState,
+  formatPlatformTableBytesValue,
   formatPlatformTableTitleCaseValue,
   formatPlatformTableUptimeValue,
   filterPlatformResources,
@@ -285,6 +286,19 @@ describe('formatPlatformTableUptimeValue', () => {
     expect(formatPlatformTableUptimeValue(3_600)).toBe('1h');
     expect(formatPlatformTableUptimeValue(86_400)).toBe('1d');
     expect(formatPlatformTableUptimeValue(0, 'n/a')).toBe('n/a');
+  });
+});
+
+describe('formatPlatformTableBytesValue', () => {
+  it('formats positive byte values and preserves table-cell empty markers', () => {
+    expect(formatPlatformTableBytesValue(undefined)).toBe('—');
+    expect(formatPlatformTableBytesValue(0)).toBe('—');
+    expect(formatPlatformTableBytesValue(Number.NaN)).toBe('—');
+    expect(formatPlatformTableBytesValue(Number.POSITIVE_INFINITY)).toBe('—');
+    expect(formatPlatformTableBytesValue(undefined, '-')).toBe('-');
+    expect(formatPlatformTableBytesValue(1024)).toBe('1.00 KB');
+    expect(formatPlatformTableBytesValue(1_536)).toBe('1.50 KB');
+    expect(formatPlatformTableBytesValue(5 * 1024 * 1024 * 1024)).toBe('5.00 GB');
   });
 });
 

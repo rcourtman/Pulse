@@ -12,7 +12,7 @@ import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
 import type { Resource } from '@/types/resource';
-import { formatUptime } from '@/utils/format';
+import { formatBytes, formatUptime } from '@/utils/format';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { formatVmwareClusterServices } from '@/utils/vmwareDisplay';
 import { getPlatformColumnAlign, type PlatformTableColumnKind } from './columnAlignment';
@@ -193,6 +193,16 @@ export const formatPlatformTableUptimeValue = (
     return emptyText;
   }
   return formatUptime(seconds, true);
+};
+
+export const formatPlatformTableBytesValue = (
+  bytes: number | undefined,
+  emptyText = '—',
+): string => {
+  if (typeof bytes !== 'number' || !Number.isFinite(bytes) || bytes <= 0) {
+    return emptyText;
+  }
+  return formatBytes(bytes);
 };
 
 export const getPlatformTableFiniteMetric = (value: number | undefined): number | undefined =>

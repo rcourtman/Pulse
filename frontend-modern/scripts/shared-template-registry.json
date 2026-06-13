@@ -1337,6 +1337,44 @@
       ]
     },
     {
+      "id": "platform-table-byte-value-fallback",
+      "category": "platform-table-text-value",
+      "summary": "Platform tables must use the shared byte-size fallback helper for positive byte formatting and canonical empty-cell markers instead of recreating local formatBytes wrappers.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "formatPlatformTableBytesValue"
+      },
+      "requiredConsumers": [
+        { "path": "src/features/docker/DockerNativeTableShared.tsx" },
+        { "path": "src/features/kubernetes/KubernetesNodesTable.tsx" },
+        { "path": "src/features/truenas/TrueNASSystemsTable.tsx" },
+        { "path": "src/features/truenas/TrueNASVirtualMachinesTable.tsx" }
+      ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/features/docker/DockerNativeTableShared.tsx",
+          "patterns": ["formatBytes(value)"]
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesNodesTable.tsx",
+          "patterns": ["const formatBytes", "value.toFixed(value >= 100 ? 0 : value >= 10 ? 1 : 2)"]
+        },
+        {
+          "path": "src/features/truenas/TrueNASSystemsTable.tsx",
+          "patterns": ["const formatBytes", "value.toFixed(value >= 100 ? 0 : value >= 10 ? 1 : 2)"]
+        },
+        {
+          "path": "src/features/truenas/TrueNASVirtualMachinesTable.tsx",
+          "patterns": ["const formatBytes", "value.toFixed(value >= 100 ? 0 : value >= 10 ? 1 : 2)"]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "platform-table-metric-fallback",
       "category": "platform-table-metric",
       "summary": "Platform tables must use shared metric fallback and finite-metric helpers instead of recreating local centered dash fallbacks and Number.isFinite wrappers.",
@@ -1904,6 +1942,26 @@
       "extensions": [".tsx"],
       "allPatterns": ["const formatUptime", "seconds / 86_400", "return `${mins}m`"],
       "legacyReason": "Retired migration debt. Platform table uptime labels must use formatPlatformTableUptimeValue for the shared one-unit uptime fallback.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-table-local-bytes-helper",
+      "category": "platform-table-text-value",
+      "summary": "Platform tables must not recreate local formatBytes wrappers for positive byte-size empty-cell fallback.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "formatPlatformTableBytesValue"
+      },
+      "scopes": ["src/features/docker", "src/features/kubernetes", "src/features/truenas"],
+      "extensions": [".tsx"],
+      "allPatterns": ["const formatBytes", "value.toFixed(value >= 100 ? 0 : value >= 10 ? 1 : 2)"],
+      "legacyReason": "Retired migration debt. Platform table byte-size cells must use formatPlatformTableBytesValue for shared positive-byte formatting and empty-cell markers.",
       "allowedPaths": [],
       "ignoredPaths": [],
       "proof": [
