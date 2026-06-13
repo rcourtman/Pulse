@@ -913,6 +913,11 @@ AI-only summary payloads, or page-local heuristics.
     provider-owned nodes must not become machine-page members through
     hostname, `agent` platform scope, or agent telemetry alone; those facts
     surface as facets on the owning provider page.
+    `AgentsMachinesTable.tsx` may own row membership, resource-derived menu
+    eligibility, and remove-agent semantics for these projected rows, but the
+    compact row action trigger chrome stays under the frontend-primitives
+    `ActionIconButton` boundary rather than becoming a unified-resource-local
+    button shell.
     The default tab for each platform path must point at a sub-tab whose
     canonical unified-resource projection actually populates, and visible
     workflow subtabs must stay evidence-gated by the same canonical row or

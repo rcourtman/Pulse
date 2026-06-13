@@ -1259,7 +1259,8 @@
         { "path": "src/components/Alerts/ResourceTable.tsx" },
         { "path": "src/components/AI/Chat/index.tsx" },
         { "path": "src/components/Settings/RolesPanel.tsx" },
-        { "path": "src/components/Settings/SSOProvidersPanel.tsx" }
+        { "path": "src/components/Settings/SSOProvidersPanel.tsx" },
+        { "path": "src/features/standalone/AgentsMachinesTable.tsx" }
       ],
       "forbiddenPatterns": [
         {
@@ -1304,6 +1305,12 @@
             "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 dark:text-blue-200 dark:hover:bg-blue-900/60",
             "flex h-9 w-9 items-center justify-center rounded-md bg-blue-600 text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-45",
             "flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+          ]
+        },
+        {
+          "path": "src/features/standalone/AgentsMachinesTable.tsx",
+          "patterns": [
+            "inline-flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
           ]
         },
         {
@@ -3183,6 +3190,29 @@
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "src/components/shared/Button.test.tsx",
         "src/components/Alerts/ResourceTable.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "standalone-agent-machine-action-icon-local-shell",
+      "category": "action-button",
+      "summary": "Standalone machine row action triggers must not recreate local muted h-7 icon-button shells; compose ActionIconButton.",
+      "canonical": {
+        "path": "src/components/shared/Button.tsx",
+        "export": "ActionIconButton"
+      },
+      "scopes": ["src/features/standalone/AgentsMachinesTable.tsx"],
+      "extensions": [".tsx"],
+      "allPatterns": [
+        "inline-flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
+      ],
+      "legacyReason": "Retired migration debt. Standalone machine action triggers compose ActionIconButton for shared icon-action size, tone, focus, title, and accessible-label behavior.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/Button.test.tsx"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "src/features/standalone/__tests__/AgentsMachinesTable.test.tsx",
         "scripts/shared-template-audit.mjs"
       ]
     },

@@ -2982,6 +2982,9 @@ describe('shared primitive guardrails', () => {
     const alertResourceActionGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'alert-resource-action-local-svg-button-shell',
     );
+    const standaloneAgentMachineActionGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'standalone-agent-machine-action-icon-local-shell',
+    );
     const aiChatActionIconHeaderGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'ai-chat-action-icon-header-local-shell',
     );
@@ -3835,6 +3838,7 @@ describe('shared primitive guardrails', () => {
       'src/components/AI/Chat/index.tsx',
       'src/components/Settings/RolesPanel.tsx',
       'src/components/Settings/SSOProvidersPanel.tsx',
+      'src/features/standalone/AgentsMachinesTable.tsx',
     ]);
     expect(actionIconRule?.forbiddenPatterns).toEqual(
       expect.arrayContaining([
@@ -3887,6 +3891,12 @@ describe('shared primitive guardrails', () => {
           ]),
         }),
         expect.objectContaining({
+          path: 'src/features/standalone/AgentsMachinesTable.tsx',
+          patterns: expect.arrayContaining([
+            'inline-flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60',
+          ]),
+        }),
+        expect.objectContaining({
           path: 'src/components/Settings/SSOProvidersPanel.tsx',
           patterns: expect.arrayContaining([
             'p-2 text-slate-500 hover:text-blue-600 hover:bg-surface-hover rounded-md transition-colors',
@@ -3912,6 +3922,20 @@ describe('shared primitive guardrails', () => {
       'src/components/Alerts/ResourceTable.test.tsx',
       'src/components/shared/Button.test.tsx',
       'src/components/shared/SharedPrimitives.guardrails.test.ts',
+    ]);
+    expect(standaloneAgentMachineActionGuard?.canonical?.path).toBe(
+      'src/components/shared/Button.tsx',
+    );
+    expect(standaloneAgentMachineActionGuard?.canonical?.export).toBe('ActionIconButton');
+    expect(standaloneAgentMachineActionGuard?.allPatterns).toEqual([
+      'inline-flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60',
+    ]);
+    expect(standaloneAgentMachineActionGuard?.scopes).toEqual([
+      'src/features/standalone/AgentsMachinesTable.tsx',
+    ]);
+    expect(standaloneAgentMachineActionGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(standaloneAgentMachineActionGuard?.ignoredPaths).toEqual([
+      'src/components/shared/Button.test.tsx',
     ]);
     for (const guard of [
       aiChatActionIconHeaderGuard,
@@ -4079,6 +4103,11 @@ describe('shared primitive guardrails', () => {
     ]) {
       expect(aiChatSource).not.toContain(retiredActionIconShell);
     }
+    expect(agentsMachinesTableSource).toContain('@/components/shared/Button');
+    expect(agentsMachinesTableSource).toContain('ActionIconButton');
+    expect(agentsMachinesTableSource).not.toContain(
+      'inline-flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60',
+    );
     expect(resourceDetailDrawerDebugTabSource).toContain('@/components/shared/Button');
     expect(resourceDetailDrawerDebugTabSource).not.toContain(
       'rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content',

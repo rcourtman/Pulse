@@ -17,6 +17,7 @@ import { MonitoringAPI } from '@/api/monitoring';
 import { EnhancedCPUBar } from '@/components/Workloads/EnhancedCPUBar';
 import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
+import { ActionIconButton } from '@/components/shared/Button';
 import { ColumnPicker } from '@/components/shared/ColumnPicker';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TemperatureGauge } from '@/components/shared/TemperatureGauge';
@@ -720,12 +721,11 @@ const AgentMachineActionsCell: Component<{
         if (event.key === 'Escape' && props.menuOpen) props.onToggleMenu();
       }}
     >
-      <button
+      <ActionIconButton
         ref={triggerRef}
-        type="button"
-        class="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
-        title="Machine actions"
-        aria-label={`Machine actions for ${props.name}`}
+        label={`Machine actions for ${props.name}`}
+        tone="muted"
+        size="sm"
         aria-haspopup="menu"
         aria-expanded={props.menuOpen ? 'true' : 'false'}
         onClick={(event) => {
@@ -735,7 +735,7 @@ const AgentMachineActionsCell: Component<{
         }}
       >
         <MoreHorizontalIcon class="h-3.5 w-3.5" />
-      </button>
+      </ActionIconButton>
 
       <Show when={props.menuOpen}>
         <Portal mount={document.body}>

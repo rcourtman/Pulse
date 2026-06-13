@@ -557,6 +557,9 @@ not a replacement status card, CTA band, or page-local nested card.
    disabled treatment, title fallback, and accessible name wiring must come
    from that shared primitive rather than page-local `<button>` plus inline SVG
    shells.
+   Standalone machine row action triggers follow the same rule: the Machines
+   table owns remove-agent semantics and menu placement, while
+   `ActionIconButton` owns the compact muted trigger chrome.
    AI Chat follows that same boundary for drawer header controls, session row
    actions, transcript fallback close/download actions, activity-dock queued
    follow-up controls, composer send, footer help/route actions, and compact
