@@ -419,6 +419,7 @@ describe('shared primitive guardrails', () => {
         allPatterns?: string[];
         scopes?: string[];
         pathIncludes?: string[];
+        pathExcludes?: string[];
         allowedPaths?: string[];
         ignoredPaths?: string[];
       }>;
@@ -523,6 +524,7 @@ describe('shared primitive guardrails', () => {
         allPatterns?: string[];
         scopes?: string[];
         pathIncludes?: string[];
+        pathExcludes?: string[];
         allowedPaths?: string[];
         ignoredPaths?: string[];
       }>;
@@ -822,6 +824,7 @@ describe('shared primitive guardrails', () => {
         canonical?: { path?: string; export?: string };
         allPatterns?: string[];
         scopes?: string[];
+        pathIncludes?: string[];
         allowedPaths?: string[];
         ignoredPaths?: string[];
       }>;
@@ -1179,6 +1182,8 @@ describe('shared primitive guardrails', () => {
         canonical?: { path?: string; export?: string };
         allPatterns?: string[];
         scopes?: string[];
+        pathIncludes?: string[];
+        pathExcludes?: string[];
         allowedPaths?: string[];
         ignoredPaths?: string[];
       }>;
@@ -1362,6 +1367,8 @@ describe('shared primitive guardrails', () => {
         canonical?: { path?: string; export?: string };
         allPatterns?: string[];
         scopes?: string[];
+        pathIncludes?: string[];
+        pathExcludes?: string[];
         allowedPaths?: string[];
         ignoredPaths?: string[];
       }>;
@@ -3730,6 +3737,7 @@ describe('shared primitive guardrails', () => {
         allPatterns?: string[];
         scopes?: string[];
         pathIncludes?: string[];
+        pathExcludes?: string[];
         allowedPaths?: string[];
         ignoredPaths?: string[];
       }>;
@@ -3836,6 +3844,7 @@ describe('shared primitive guardrails', () => {
       'src/features/truenas',
     ]);
     expect(localHelperGuard?.pathIncludes).toEqual(['Table']);
+    expect(localHelperGuard?.pathExcludes).toEqual(['__tests__']);
     expect(localHelperGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(localHelperGuard?.ignoredPaths ?? []).toHaveLength(0);
     expect(localFormatBytesImportGuard?.canonical?.path).toBe(
@@ -3853,6 +3862,7 @@ describe('shared primitive guardrails', () => {
       'src/features/truenas',
     ]);
     expect(localFormatBytesImportGuard?.pathIncludes).toEqual(['Table']);
+    expect(localFormatBytesImportGuard?.pathExcludes).toEqual(['__tests__']);
     expect(localFormatBytesImportGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(localFormatBytesImportGuard?.ignoredPaths ?? []).toHaveLength(0);
 
@@ -3981,6 +3991,8 @@ describe('shared primitive guardrails', () => {
         canonical?: { path?: string; export?: string };
         allPatterns?: string[];
         scopes?: string[];
+        pathIncludes?: string[];
+        pathExcludes?: string[];
         allowedPaths?: string[];
         ignoredPaths?: string[];
       }>;
@@ -3995,6 +4007,7 @@ describe('shared primitive guardrails', () => {
       ['src/features/docker/DockerVolumesTable.tsx', dockerVolumesTableSource],
       ['src/features/kubernetes/KubernetesDeploymentsTable.tsx', kubernetesDeploymentsTableSource],
       ['src/features/kubernetes/KubernetesEventsTable.tsx', kubernetesEventsTableSource],
+      ['src/features/proxmox/proxmoxBackupsTableShared.tsx', proxmoxBackupsTableSharedSource],
       ['src/features/proxmox/ProxmoxReplicationTable.tsx', proxmoxReplicationTableSource],
     ];
     const platformRelativeTimeConsumerPaths = platformRelativeTimeConsumers.map(([path]) => path);
@@ -4022,6 +4035,10 @@ describe('shared primitive guardrails', () => {
         ],
       },
       {
+        path: 'src/features/proxmox/proxmoxBackupsTableShared.tsx',
+        patterns: ['formatRelativeTime(props.artifact.createdAt, { compact: true })'],
+      },
+      {
         path: 'src/features/proxmox/ProxmoxReplicationTable.tsx',
         patterns: [
           'formatRelativeTime(job.lastSyncUnix * 1000, { compact: true })',
@@ -4034,7 +4051,13 @@ describe('shared primitive guardrails', () => {
     );
     expect(localHelperGuard?.canonical?.export).toBe('PlatformTableRelativeTimeValue');
     expect(localHelperGuard?.allPatterns).toEqual(['formatRelativeTime(']);
-    expect(localHelperGuard?.scopes).toEqual(platformRelativeTimeConsumerPaths);
+    expect(localHelperGuard?.scopes).toEqual([
+      'src/features/docker',
+      'src/features/kubernetes',
+      'src/features/proxmox',
+    ]);
+    expect(localHelperGuard?.pathIncludes).toEqual(['Table']);
+    expect(localHelperGuard?.pathExcludes).toEqual(['__tests__']);
     expect(localHelperGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(localHelperGuard?.ignoredPaths ?? []).toHaveLength(0);
 

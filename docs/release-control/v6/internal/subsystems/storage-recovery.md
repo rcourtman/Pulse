@@ -156,6 +156,11 @@ or artifact size is meaningful backup/recovery evidence, while
 frontend-primitives owns byte-unit presentation through
 `formatPlatformTableBytesValue` instead of direct `formatBytes` imports in
 backup table files.
+Recoverable-artifact age labels follow the same split: storage/recovery owns
+which artifact creation timestamp and age band describe recovery freshness,
+while frontend-primitives owns compact relative-time rendering through
+`PlatformTableRelativeTimeValue` instead of direct `formatRelativeTime` imports
+in backup table files.
 Those Proxmox backup workflows own recovery semantics, source-specific
 empty-state copy, and retry/filter actions, but their table empty-state frame
 must compose the frontend-primitives-owned `PlatformTableEmptyState` shell

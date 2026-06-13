@@ -8,7 +8,7 @@ import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { TableHead } from '@/components/shared/Table';
 import { WorkloadTypeBadge as SharedWorkloadTypeBadge } from '@/components/shared/WorkloadTypeBadge';
-import { formatRelativeTime } from '@/utils/format';
+import { PlatformTableRelativeTimeValue } from '@/features/platformPage/sharedPlatformPage';
 
 import {
   getRecoveryAgeBand,
@@ -218,7 +218,6 @@ export function RowMetricBar(props: {
 
 export function ProxmoxBackupAgeText(props: { artifact: RecoverableArtifact }) {
   const band = () => getRecoveryAgeBand(props.artifact.createdMs);
-  const relative = () => formatRelativeTime(props.artifact.createdAt, { compact: true });
   const title = () => {
     const parts = [recoveryAgeTitleByBand[band()], props.artifact.createdAt].filter(Boolean);
     return parts.join(' · ');
@@ -226,7 +225,7 @@ export function ProxmoxBackupAgeText(props: { artifact: RecoverableArtifact }) {
 
   return (
     <span class={`font-semibold tabular-nums ${recoveryAgeClassByBand[band()]}`} title={title()}>
-      {relative() || '—'}
+      <PlatformTableRelativeTimeValue value={props.artifact.createdAt} />
     </span>
   );
 }

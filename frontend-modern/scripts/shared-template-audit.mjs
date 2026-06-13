@@ -73,8 +73,12 @@ const collectFiles = (scope, extensions) => {
 const getAllowedPath = (entry) => (typeof entry === 'string' ? entry : entry?.path);
 const filterGuardFiles = (files, guard) => {
   const pathIncludes = Array.isArray(guard.pathIncludes) ? guard.pathIncludes : [];
-  if (pathIncludes.length === 0) return files;
-  return files.filter((file) => pathIncludes.every((fragment) => file.includes(fragment)));
+  const pathExcludes = Array.isArray(guard.pathExcludes) ? guard.pathExcludes : [];
+  return files.filter(
+    (file) =>
+      pathIncludes.every((fragment) => file.includes(fragment)) &&
+      !pathExcludes.some((fragment) => file.includes(fragment)),
+  );
 };
 
 for (const rule of rules) {

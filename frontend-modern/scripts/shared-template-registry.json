@@ -1475,6 +1475,7 @@
         { "path": "src/features/docker/DockerVolumesTable.tsx" },
         { "path": "src/features/kubernetes/KubernetesDeploymentsTable.tsx" },
         { "path": "src/features/kubernetes/KubernetesEventsTable.tsx" },
+        { "path": "src/features/proxmox/proxmoxBackupsTableShared.tsx" },
         { "path": "src/features/proxmox/ProxmoxReplicationTable.tsx" }
       ],
       "forbiddenPatterns": [
@@ -1491,6 +1492,10 @@
           "patterns": [
             "formatRelativeTime(observedTimestamp(resource), { compact: true, emptyText: '—' })"
           ]
+        },
+        {
+          "path": "src/features/proxmox/proxmoxBackupsTableShared.tsx",
+          "patterns": ["formatRelativeTime(props.artifact.createdAt, { compact: true })"]
         },
         {
           "path": "src/features/proxmox/ProxmoxReplicationTable.tsx",
@@ -2400,6 +2405,7 @@
       ],
       "extensions": [".tsx"],
       "pathIncludes": ["Table"],
+      "pathExcludes": ["__tests__"],
       "allPatterns": ["const formatBytes", "value.toFixed(value >= 100 ? 0 : value >= 10 ? 1 : 2)"],
       "legacyReason": "Retired migration debt. Platform table byte-size cells must use formatPlatformTableBytesValue for shared positive-byte formatting and empty-cell markers.",
       "allowedPaths": [],
@@ -2426,6 +2432,7 @@
       ],
       "extensions": [".tsx"],
       "pathIncludes": ["Table"],
+      "pathExcludes": ["__tests__"],
       "allPatterns": ["import { formatBytes } from '@/utils/format';", "formatBytes("],
       "legacyReason": "Retired migration debt. Dense platform table byte cells must use formatPlatformTableBytesValue so positive-byte formatting and empty markers stay shared.",
       "allowedPaths": [],
@@ -2648,13 +2655,10 @@
         "path": "src/features/platformPage/sharedPlatformPage.tsx",
         "export": "PlatformTableRelativeTimeValue"
       },
-      "scopes": [
-        "src/features/docker/DockerVolumesTable.tsx",
-        "src/features/kubernetes/KubernetesDeploymentsTable.tsx",
-        "src/features/kubernetes/KubernetesEventsTable.tsx",
-        "src/features/proxmox/ProxmoxReplicationTable.tsx"
-      ],
+      "scopes": ["src/features/docker", "src/features/kubernetes", "src/features/proxmox"],
       "extensions": [".tsx"],
+      "pathIncludes": ["Table"],
+      "pathExcludes": ["__tests__"],
       "allPatterns": ["formatRelativeTime("],
       "legacyReason": "Retired migration debt. Platform table relative timestamp cells must compose PlatformTableRelativeTimeValue so compact labels, empty markers, and tabular styling stay shared.",
       "allowedPaths": [],

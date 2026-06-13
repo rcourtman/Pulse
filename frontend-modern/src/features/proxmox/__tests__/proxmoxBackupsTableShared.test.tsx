@@ -84,6 +84,11 @@ describe('proxmoxBackupsTableShared', () => {
       expect(source).not.toContain('formatBytes(');
     }
   });
+
+  it('keeps backup age text on the shared relative-time primitive', () => {
+    expect(proxmoxBackupsTableSharedSource).toContain('PlatformTableRelativeTimeValue');
+    expect(proxmoxBackupsTableSharedSource).not.toContain('formatRelativeTime(');
+  });
 });
 
 function artifact(overrides: Partial<RecoverableArtifact> = {}): RecoverableArtifact {
