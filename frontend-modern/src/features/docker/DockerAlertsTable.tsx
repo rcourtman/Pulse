@@ -10,14 +10,12 @@ import {
 import { AlertSeverityBadge, AlertSeverityDot } from '@/components/shared/AlertSeverityBadge';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
-import { filterChipStatusDot } from '@/components/shared/FilterBar';
 import {
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
-  type PlatformTableFilterOption,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
@@ -25,6 +23,7 @@ import {
   createPlatformResourceDetailState,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
+import { getPlatformAlertSeverityFilterOptions } from '@/features/platformPage/platformAlertSeverityFilterOptions';
 import type { ResourceType } from '@/types/resource';
 import { getAlertFilteredEmptyState } from '@/utils/alertOverviewPresentation';
 import { formatAlertSeverityLabel } from '@/utils/alertSeverityPresentation';
@@ -34,27 +33,8 @@ import {
   type DockerIncidentSeverityFilter,
 } from './dockerPageModel';
 
-const DOCKER_INCIDENT_STATUS_OPTIONS: PlatformTableFilterOption<DockerIncidentSeverityFilter>[] = [
-  { value: 'all', label: 'All' },
-  {
-    value: 'critical',
-    label: 'Critical',
-    tone: 'danger',
-    leading: filterChipStatusDot('bg-red-500'),
-  },
-  {
-    value: 'warning',
-    label: 'Warning',
-    tone: 'warning',
-    leading: filterChipStatusDot('bg-amber-500'),
-  },
-  {
-    value: 'info',
-    label: 'Info',
-    tone: 'success',
-    leading: filterChipStatusDot('bg-emerald-500'),
-  },
-];
+const DOCKER_INCIDENT_STATUS_OPTIONS =
+  getPlatformAlertSeverityFilterOptions<DockerIncidentSeverityFilter>();
 
 const formatResourceType = (type: ResourceType): string => {
   switch (type) {

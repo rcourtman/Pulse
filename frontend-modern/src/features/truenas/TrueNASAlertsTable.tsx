@@ -8,7 +8,6 @@ import {
   createPlatformTableFilterState,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
-  type PlatformTableFilterOption,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
@@ -16,6 +15,7 @@ import {
   createPlatformResourceDetailState,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
+import { getPlatformAlertSeverityFilterOptions } from '@/features/platformPage/platformAlertSeverityFilterOptions';
 import {
   filterTrueNASIncidents,
   type TrueNASIncidentRow,
@@ -33,13 +33,8 @@ import type { Resource, ResourceType } from '@/types/resource';
 import { getAlertFilteredEmptyState } from '@/utils/alertOverviewPresentation';
 import { formatAlertSeverityLabel } from '@/utils/alertSeverityPresentation';
 
-const TRUENAS_INCIDENT_STATUS_OPTIONS: PlatformTableFilterOption<TrueNASIncidentSeverityFilter>[] =
-  [
-    { value: 'all', label: 'All' },
-    { value: 'critical', label: 'Critical', tone: 'danger' },
-    { value: 'warning', label: 'Warning', tone: 'warning' },
-    { value: 'info', label: 'Info', tone: 'success' },
-  ];
+const TRUENAS_INCIDENT_STATUS_OPTIONS =
+  getPlatformAlertSeverityFilterOptions<TrueNASIncidentSeverityFilter>();
 
 const formatResourceType = (type: ResourceType): string => {
   switch (type) {

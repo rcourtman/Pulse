@@ -133,6 +133,7 @@ import kubernetesPageSurfaceSource from '@/features/kubernetes/KubernetesPageSur
 import proxmoxPageSurfaceSource from '@/features/proxmox/ProxmoxPageSurface.tsx?raw';
 import standalonePageSurfaceSource from '@/features/standalone/StandalonePageSurface.tsx?raw';
 import sharedPlatformPageSource from '@/features/platformPage/sharedPlatformPage.tsx?raw';
+import platformAlertSeverityFilterOptionsSource from '@/features/platformPage/platformAlertSeverityFilterOptions.tsx?raw';
 import platformResourceDetailTableRowSource from '@/features/platformPage/PlatformResourceDetailTableRow.tsx?raw';
 import truenasPageSurfaceSource from '@/features/truenas/TrueNASPageSurface.tsx?raw';
 import truenasProtectionTableSource from '@/features/truenas/TrueNASProtectionTable.tsx?raw';
@@ -1672,7 +1673,7 @@ describe('shared primitive guardrails', () => {
     );
   });
 
-  it('keeps platform alert severity indicators on the shared severity badge primitive', () => {
+  it('keeps platform alert severity indicators and filters on shared alert severity primitives', () => {
     const registry = JSON.parse(sharedTemplateRegistrySource) as {
       rules?: Array<{
         id: string;
@@ -1701,11 +1702,17 @@ describe('shared primitive guardrails', () => {
     const registeredRule = registry.rules?.find(
       (rule) => rule.id === 'platform-alert-severity-indicator-shell',
     );
+    const filterOptionsRule = registry.rules?.find(
+      (rule) => rule.id === 'platform-alert-severity-filter-options',
+    );
     const localHelperGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'platform-alert-severity-local-helper',
     );
     const requiredGuard = registry.requiredPatternGuards?.find(
       (guard) => guard.id === 'platform-alert-severity-indicator-required',
+    );
+    const requiredFilterOptionsGuard = registry.requiredPatternGuards?.find(
+      (guard) => guard.id === 'platform-alert-severity-filter-options-required',
     );
     const alertTableConsumerPaths = [
       'src/features/docker/DockerAlertsTable.tsx',
@@ -1719,12 +1726,52 @@ describe('shared primitive guardrails', () => {
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
       alertTableConsumerPaths,
     );
+    expect(filterOptionsRule?.canonical?.path).toBe(
+      'src/features/platformPage/platformAlertSeverityFilterOptions.tsx',
+    );
+    expect(filterOptionsRule?.canonical?.export).toBe('getPlatformAlertSeverityFilterOptions');
+    expect(filterOptionsRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
+      alertTableConsumerPaths,
+    );
     expect(registeredRule?.forbiddenPatterns).toEqual(
       alertTableConsumerPaths.map((path) => ({
         path,
         patterns: ['severityVariant', 'severityTextClass'],
       })),
     );
+    expect(filterOptionsRule?.forbiddenPatterns).toEqual([
+      {
+        path: 'src/features/docker/DockerAlertsTable.tsx',
+        patterns: [
+          'filterChipStatusDot(',
+          "value: 'critical'",
+          "value: 'warning'",
+          "value: 'info'",
+        ],
+      },
+      {
+        path: 'src/features/kubernetes/KubernetesAlertsTable.tsx',
+        patterns: [
+          'filterChipStatusDot(',
+          "value: 'critical'",
+          "value: 'warning'",
+          "value: 'info'",
+        ],
+      },
+      {
+        path: 'src/features/truenas/TrueNASAlertsTable.tsx',
+        patterns: ["value: 'critical'", "value: 'warning'", "value: 'info'"],
+      },
+      {
+        path: 'src/features/vmware/VsphereAlertsTable.tsx',
+        patterns: [
+          'filterChipStatusDot(',
+          "value: 'critical'",
+          "value: 'warning'",
+          "value: 'info'",
+        ],
+      },
+    ]);
     expect(localHelperGuard?.canonical?.path).toBe('src/components/shared/AlertSeverityBadge.tsx');
     expect(localHelperGuard?.canonical?.export).toBe('AlertSeverityBadge');
     expect(localHelperGuard?.allPatterns).toEqual(['severityVariant', 'severityTextClass']);
@@ -1746,10 +1793,30 @@ describe('shared primitive guardrails', () => {
     expect(requiredGuard?.requiredPatterns).toEqual(['AlertSeverityBadge', 'AlertSeverityDot']);
     expect(requiredGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(requiredGuard?.ignoredPaths ?? []).toHaveLength(0);
+    expect(requiredFilterOptionsGuard?.canonical?.path).toBe(
+      'src/features/platformPage/platformAlertSeverityFilterOptions.tsx',
+    );
+    expect(requiredFilterOptionsGuard?.canonical?.export).toBe(
+      'getPlatformAlertSeverityFilterOptions',
+    );
+    expect(requiredFilterOptionsGuard?.triggerPatterns).toEqual([
+      'severityBucket',
+      'PlatformTableToolbar',
+      'statusOptions',
+    ]);
+    expect(requiredFilterOptionsGuard?.requiredPatterns).toEqual([
+      'getPlatformAlertSeverityFilterOptions',
+    ]);
+    expect(requiredFilterOptionsGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(requiredFilterOptionsGuard?.ignoredPaths ?? []).toHaveLength(0);
 
     expect(alertSeverityBadgeSource).toContain('StatusIndicatorBadge');
     expect(alertSeverityBadgeSource).toContain('StatusDot');
     expect(alertSeverityBadgeSource).toContain('getAlertSeverityIndicator');
+    expect(platformAlertSeverityFilterOptionsSource).toContain(
+      'getPlatformAlertSeverityFilterOptions',
+    );
+    expect(platformAlertSeverityFilterOptionsSource).toContain('filterChipStatusDot');
     expect(alertSeverityPresentationSource).toContain('getAlertSeverityIndicatorVariant');
     expect(alertSeverityPresentationSource).toContain('formatAlertSeverityLabel');
 
@@ -1762,8 +1829,13 @@ describe('shared primitive guardrails', () => {
       expect(source).toContain('AlertSeverityBadge');
       expect(source).toContain('AlertSeverityDot');
       expect(source).toContain('formatAlertSeverityLabel');
+      expect(source).toContain('getPlatformAlertSeverityFilterOptions');
       expect(source).not.toContain('severityVariant');
       expect(source).not.toContain('severityTextClass');
+      expect(source).not.toContain('filterChipStatusDot(');
+      expect(source).not.toContain("value: 'critical'");
+      expect(source).not.toContain("value: 'warning'");
+      expect(source).not.toContain("value: 'info'");
       expect(source).not.toContain('text-red-700 dark:text-red-300');
       expect(source).not.toContain('text-amber-700 dark:text-amber-300');
     }

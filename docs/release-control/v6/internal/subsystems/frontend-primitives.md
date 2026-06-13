@@ -2425,6 +2425,12 @@ label formatting and severity-bucket-to-status-indicator mapping. Docker,
 Kubernetes, TrueNAS, vSphere, and future platform alert tables must compose
 `AlertSeverityBadge` and `AlertSeverityDot`; they must not recreate
 `severityVariant`, `severityTextClass`, or severity badge spans locally.
+Platform alert severity filters follow the same shared-template rule.
+`frontend-modern/src/features/platformPage/platformAlertSeverityFilterOptions.tsx`
+owns the canonical All/Critical/Warning/Info option labels, tones, and leading
+dots for platform alert table toolbars. Platform alert tables must call
+`getPlatformAlertSeverityFilterOptions` instead of declaring local severity
+filter arrays or calling `filterChipStatusDot` directly for those filters.
 Read-only metadata badges follow the same primitive-owned shell rule.
 `frontend-modern/src/components/shared/MetadataBadge.tsx` owns filled and
 outlined appearances, compact sizing, shape, typed tone vocabulary, fit

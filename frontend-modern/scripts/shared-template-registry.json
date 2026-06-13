@@ -767,6 +767,59 @@
       ]
     },
     {
+      "id": "platform-alert-severity-filter-options",
+      "category": "filter-options",
+      "summary": "Platform alert tables must get All/Critical/Warning/Info severity filter labels, tones, and leading dots from the shared platform alert severity filter-options primitive instead of recreating local option arrays.",
+      "canonical": {
+        "path": "src/features/platformPage/platformAlertSeverityFilterOptions.tsx",
+        "export": "getPlatformAlertSeverityFilterOptions"
+      },
+      "requiredConsumers": [
+        { "path": "src/features/docker/DockerAlertsTable.tsx" },
+        { "path": "src/features/kubernetes/KubernetesAlertsTable.tsx" },
+        { "path": "src/features/truenas/TrueNASAlertsTable.tsx" },
+        { "path": "src/features/vmware/VsphereAlertsTable.tsx" }
+      ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/features/docker/DockerAlertsTable.tsx",
+          "patterns": [
+            "filterChipStatusDot(",
+            "value: 'critical'",
+            "value: 'warning'",
+            "value: 'info'"
+          ]
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesAlertsTable.tsx",
+          "patterns": [
+            "filterChipStatusDot(",
+            "value: 'critical'",
+            "value: 'warning'",
+            "value: 'info'"
+          ]
+        },
+        {
+          "path": "src/features/truenas/TrueNASAlertsTable.tsx",
+          "patterns": ["value: 'critical'", "value: 'warning'", "value: 'info'"]
+        },
+        {
+          "path": "src/features/vmware/VsphereAlertsTable.tsx",
+          "patterns": [
+            "filterChipStatusDot(",
+            "value: 'critical'",
+            "value: 'warning'",
+            "value: 'info'"
+          ]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/platformAlertSeverityFilterOptions.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "metadata-badge-shell",
       "category": "metadata-badge",
       "summary": "Read-only metadata chips must compose MetadataBadge so size, shape, tone vocabulary, fit behavior, and whitespace handling stay shared instead of being copied as page-local pill spans.",
@@ -2448,6 +2501,31 @@
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "src/components/shared/AlertSeverityBadge.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-alert-severity-filter-options-required",
+      "category": "filter-options",
+      "summary": "Feature alert tables with severityBucket-backed PlatformTableToolbar status filters must compose the shared platform alert severity filter-options primitive.",
+      "canonical": {
+        "path": "src/features/platformPage/platformAlertSeverityFilterOptions.tsx",
+        "export": "getPlatformAlertSeverityFilterOptions"
+      },
+      "scopes": [
+        "src/features/docker",
+        "src/features/kubernetes",
+        "src/features/truenas",
+        "src/features/vmware"
+      ],
+      "extensions": [".tsx"],
+      "triggerPatterns": ["severityBucket", "PlatformTableToolbar", "statusOptions"],
+      "requiredPatterns": ["getPlatformAlertSeverityFilterOptions"],
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/platformAlertSeverityFilterOptions.test.tsx",
         "scripts/shared-template-audit.mjs"
       ]
     },
