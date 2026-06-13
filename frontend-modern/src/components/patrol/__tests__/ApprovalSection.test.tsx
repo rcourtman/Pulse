@@ -92,6 +92,21 @@ describe('ApprovalSection', () => {
     expect(approvalSectionSource).toContain('LoadingSpinner');
   });
 
+  it('keeps approval action controls on the shared Button primitive', () => {
+    expect(approvalSectionSource).toContain('@/components/shared/Button');
+    expect(approvalSectionSource).toContain('<Button');
+    expect(approvalSectionSource).toContain('variant="success"');
+    expect(approvalSectionSource).toContain('variant="warningSolid"');
+    expect(approvalSectionSource).toContain('variant="primary"');
+    expect(approvalSectionSource).toContain('variant="ghost"');
+    expect(approvalSectionSource).not.toContain('px-3 py-1.5 bg-green-600 hover:bg-green-700');
+    expect(approvalSectionSource).not.toContain('px-3 py-1.5 bg-amber-600 hover:bg-amber-700');
+    expect(approvalSectionSource).not.toContain('px-3 py-1.5 bg-blue-600 hover:bg-blue-700');
+    expect(approvalSectionSource).not.toContain(
+      'px-3 py-1.5 hover:bg-surface-hover disabled:opacity-50 text-muted',
+    );
+  });
+
   afterEach(() => {
     cleanup();
   });

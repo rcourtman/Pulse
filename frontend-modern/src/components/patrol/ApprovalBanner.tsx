@@ -16,6 +16,7 @@ import {
   getApprovalExpiryStatusLabel,
   getApprovalRiskPresentation,
 } from '@/utils/approvalRiskPresentation';
+import { Button } from '@/components/shared/Button';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import ShieldAlertIcon from 'lucide-solid/icons/shield-alert';
@@ -128,11 +129,13 @@ export const ApprovalBanner: Component<ApprovalBannerProps> = (props) => {
 
           <div class="flex items-center gap-2">
             <Show when={pending().length === 1 && firstApproval()}>
-              <button
+              <Button
                 type="button"
+                variant="success"
+                size="sm"
                 onClick={() => handleApprove(firstApproval()!)}
                 disabled={actionLoading() === firstApproval()!.id}
-                class="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white text-xs font-medium rounded-md transition-colors"
+                class="gap-1.5"
               >
                 <Show when={actionLoading() === firstApproval()!.id}>
                   <LoadingSpinner size="sm" tone="inverse" />
@@ -141,25 +144,29 @@ export const ApprovalBanner: Component<ApprovalBannerProps> = (props) => {
                   <CheckIcon class="w-3.5 h-3.5" />
                 </Show>
                 Approve & Execute
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="secondary"
+                size="sm"
                 onClick={() => handleDeny(firstApproval()!)}
                 disabled={actionLoading() === firstApproval()!.id}
-                class="flex items-center gap-1.5 px-3 py-1.5 bg-surface-alt hover:bg-surface-hover disabled:opacity-50 text-base-content text-xs font-medium rounded-md transition-colors"
+                class="gap-1.5"
               >
                 <XIcon class="w-3.5 h-3.5" />
                 Deny
-              </button>
+              </Button>
             </Show>
             <Show when={pending().length > 1}>
-              <button
+              <Button
                 type="button"
+                variant="warningSolid"
+                size="sm"
                 onClick={handleReview}
-                class="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium rounded-md transition-colors"
+                class="gap-1.5"
               >
                 Review
-              </button>
+              </Button>
             </Show>
           </div>
         </div>

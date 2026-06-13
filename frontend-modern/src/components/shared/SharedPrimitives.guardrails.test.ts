@@ -3003,6 +3003,18 @@ describe('shared primitive guardrails', () => {
     const settingsSuccessActionGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'button-success-settings-action-local-shell',
     );
+    const patrolSuccessApprovalActionGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'button-success-patrol-approval-action-local-shell',
+    );
+    const patrolWarningApprovalActionGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'button-warning-solid-patrol-approval-action-local-shell',
+    );
+    const patrolPrimaryApprovalActionGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'button-primary-patrol-approval-action-local-shell',
+    );
+    const patrolNeutralApprovalActionGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'button-neutral-patrol-approval-action-local-shell',
+    );
     const settingsSuccessOutlineActionGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'button-success-outline-settings-action-local-shell',
     );
@@ -3081,6 +3093,8 @@ describe('shared primitive guardrails', () => {
     expect(registeredRule?.canonical?.export).toBe('Button');
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
       'src/components/AI/Chat/ChatMessages.tsx',
+      'src/components/patrol/ApprovalBanner.tsx',
+      'src/components/patrol/ApprovalSection.tsx',
       'src/components/ErrorBoundary.tsx',
       'src/components/Infrastructure/ResourceDetailDrawer.tsx',
       'src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx',
@@ -3126,6 +3140,23 @@ describe('shared primitive guardrails', () => {
     ]);
     expect(registeredRule?.forbiddenPatterns).toEqual(
       expect.arrayContaining([
+        expect.objectContaining({
+          path: 'src/components/patrol/ApprovalBanner.tsx',
+          patterns: expect.arrayContaining([
+            'px-3 py-1.5 bg-green-600 hover:bg-green-700',
+            'px-3 py-1.5 bg-surface-alt hover:bg-surface-hover',
+            'px-3 py-1.5 bg-amber-600 hover:bg-amber-700',
+          ]),
+        }),
+        expect.objectContaining({
+          path: 'src/components/patrol/ApprovalSection.tsx',
+          patterns: expect.arrayContaining([
+            'px-3 py-1.5 bg-green-600 hover:bg-green-700',
+            'px-3 py-1.5 bg-amber-600 hover:bg-amber-700',
+            'px-3 py-1.5 bg-blue-600 hover:bg-blue-700',
+            'px-3 py-1.5 hover:bg-surface-hover disabled:opacity-50 text-muted',
+          ]),
+        }),
         expect.objectContaining({
           path: 'src/components/Settings/GeneralSettingsPanel.tsx',
           patterns: expect.arrayContaining([
@@ -3331,6 +3362,26 @@ describe('shared primitive guardrails', () => {
     expect(billingAdminOrganizationsTableSource).not.toContain(
       'px-2 py-1 text-xs rounded-md border border-border bg-surface hover:bg-surface-hover',
     );
+    expect(approvalBannerSource).toContain('@/components/shared/Button');
+    expect(approvalBannerSource).toContain('<Button');
+    expect(approvalBannerSource).toContain('variant="success"');
+    expect(approvalBannerSource).toContain('variant="secondary"');
+    expect(approvalBannerSource).toContain('variant="warningSolid"');
+    expect(approvalBannerSource).not.toContain('px-3 py-1.5 bg-green-600 hover:bg-green-700');
+    expect(approvalBannerSource).not.toContain('px-3 py-1.5 bg-surface-alt hover:bg-surface-hover');
+    expect(approvalBannerSource).not.toContain('px-3 py-1.5 bg-amber-600 hover:bg-amber-700');
+    expect(approvalSectionSource).toContain('@/components/shared/Button');
+    expect(approvalSectionSource).toContain('<Button');
+    expect(approvalSectionSource).toContain('variant="success"');
+    expect(approvalSectionSource).toContain('variant="warningSolid"');
+    expect(approvalSectionSource).toContain('variant="primary"');
+    expect(approvalSectionSource).toContain('variant="ghost"');
+    expect(approvalSectionSource).not.toContain('px-3 py-1.5 bg-green-600 hover:bg-green-700');
+    expect(approvalSectionSource).not.toContain('px-3 py-1.5 bg-amber-600 hover:bg-amber-700');
+    expect(approvalSectionSource).not.toContain('px-3 py-1.5 bg-blue-600 hover:bg-blue-700');
+    expect(approvalSectionSource).not.toContain(
+      'px-3 py-1.5 hover:bg-surface-hover disabled:opacity-50 text-muted',
+    );
     expect(registeredGuard?.canonical?.path).toBe('src/components/shared/buttonModel.ts');
     expect(registeredGuard?.canonical?.export).toBe('getButtonClass');
     expect(registeredGuard?.allPatterns).toEqual([
@@ -3437,6 +3488,70 @@ describe('shared primitive guardrails', () => {
     ]);
     expect(settingsSuccessActionGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(settingsSuccessActionGuard?.ignoredPaths).toEqual([
+      'src/components/shared/Button.test.tsx',
+    ]);
+    expect(patrolSuccessApprovalActionGuard?.canonical?.path).toBe(
+      'src/components/shared/buttonModel.ts',
+    );
+    expect(patrolSuccessApprovalActionGuard?.canonical?.export).toBe('getButtonClass');
+    expect(patrolSuccessApprovalActionGuard?.allPatterns).toEqual([
+      'px-3 py-1.5 bg-green-600 hover:bg-green-700',
+      'text-white text-xs font-medium rounded',
+    ]);
+    expect(patrolSuccessApprovalActionGuard?.scopes).toEqual([
+      'src/components/patrol',
+      'src/features/patrol',
+    ]);
+    expect(patrolSuccessApprovalActionGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(patrolSuccessApprovalActionGuard?.ignoredPaths).toEqual([
+      'src/components/shared/Button.test.tsx',
+    ]);
+    expect(patrolWarningApprovalActionGuard?.canonical?.path).toBe(
+      'src/components/shared/buttonModel.ts',
+    );
+    expect(patrolWarningApprovalActionGuard?.canonical?.export).toBe('getButtonClass');
+    expect(patrolWarningApprovalActionGuard?.allPatterns).toEqual([
+      'px-3 py-1.5 bg-amber-600 hover:bg-amber-700',
+      'text-white text-xs font-medium rounded',
+    ]);
+    expect(patrolWarningApprovalActionGuard?.scopes).toEqual([
+      'src/components/patrol',
+      'src/features/patrol',
+    ]);
+    expect(patrolWarningApprovalActionGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(patrolWarningApprovalActionGuard?.ignoredPaths).toEqual([
+      'src/components/shared/Button.test.tsx',
+    ]);
+    expect(patrolPrimaryApprovalActionGuard?.canonical?.path).toBe(
+      'src/components/shared/buttonModel.ts',
+    );
+    expect(patrolPrimaryApprovalActionGuard?.canonical?.export).toBe('getButtonClass');
+    expect(patrolPrimaryApprovalActionGuard?.allPatterns).toEqual([
+      'px-3 py-1.5 bg-blue-600 hover:bg-blue-700',
+      'text-white text-xs font-medium rounded',
+    ]);
+    expect(patrolPrimaryApprovalActionGuard?.scopes).toEqual([
+      'src/components/patrol',
+      'src/features/patrol',
+    ]);
+    expect(patrolPrimaryApprovalActionGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(patrolPrimaryApprovalActionGuard?.ignoredPaths).toEqual([
+      'src/components/shared/Button.test.tsx',
+    ]);
+    expect(patrolNeutralApprovalActionGuard?.canonical?.path).toBe(
+      'src/components/shared/buttonModel.ts',
+    );
+    expect(patrolNeutralApprovalActionGuard?.canonical?.export).toBe('getButtonClass');
+    expect(patrolNeutralApprovalActionGuard?.allPatterns).toEqual([
+      'px-3 py-1.5 bg-surface-alt hover:bg-surface-hover',
+      'text-base-content text-xs font-medium rounded-md',
+    ]);
+    expect(patrolNeutralApprovalActionGuard?.scopes).toEqual([
+      'src/components/patrol',
+      'src/features/patrol',
+    ]);
+    expect(patrolNeutralApprovalActionGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(patrolNeutralApprovalActionGuard?.ignoredPaths).toEqual([
       'src/components/shared/Button.test.tsx',
     ]);
     expect(settingsSuccessOutlineActionGuard?.canonical?.path).toBe(

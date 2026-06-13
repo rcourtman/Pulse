@@ -55,6 +55,17 @@ describe('ApprovalBanner', () => {
     expect(approvalBannerSource).not.toMatch(/px-1\.5 py-0\.5 text-\[10px\] font-medium rounded/);
   });
 
+  it('keeps approval action controls on the shared Button primitive', () => {
+    expect(approvalBannerSource).toContain('@/components/shared/Button');
+    expect(approvalBannerSource).toContain('<Button');
+    expect(approvalBannerSource).toContain('variant="success"');
+    expect(approvalBannerSource).toContain('variant="secondary"');
+    expect(approvalBannerSource).toContain('variant="warningSolid"');
+    expect(approvalBannerSource).not.toContain('px-3 py-1.5 bg-green-600 hover:bg-green-700');
+    expect(approvalBannerSource).not.toContain('px-3 py-1.5 bg-surface-alt hover:bg-surface-hover');
+    expect(approvalBannerSource).not.toContain('px-3 py-1.5 bg-amber-600 hover:bg-amber-700');
+  });
+
   it('reviews the first approval-linked finding in canonical urgency order', () => {
     state.pendingApprovals = [
       {

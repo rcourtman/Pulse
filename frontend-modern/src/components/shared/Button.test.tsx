@@ -37,6 +37,7 @@ describe('Button', () => {
     );
     expect(buttonModelSource).toContain('primaryFlat:');
     expect(buttonModelSource).toContain('success:');
+    expect(buttonModelSource).toContain('warningSolid:');
     expect(buttonModelSource).toContain('successOutline:');
     expect(buttonModelSource).toContain('successGhost:');
     expect(buttonModelSource).toContain('dangerGhost:');
@@ -105,6 +106,9 @@ describe('Button', () => {
         <Button variant="success" size="settingsAction">
           Open infrastructure
         </Button>
+        <Button variant="warningSolid" size="sm">
+          Review approvals
+        </Button>
         <Button variant="successOutline" size="settingsAction">
           Open inventory
         </Button>
@@ -136,6 +140,10 @@ describe('Button', () => {
     const openInfrastructureButton = screen.getByRole('button', { name: 'Open infrastructure' });
     expect(openInfrastructureButton).toHaveClass('bg-emerald-600');
     expect(openInfrastructureButton).toHaveClass('text-white');
+
+    const reviewApprovalsButton = screen.getByRole('button', { name: 'Review approvals' });
+    expect(reviewApprovalsButton).toHaveClass('bg-amber-600');
+    expect(reviewApprovalsButton).toHaveClass('text-white');
 
     const openInventoryButton = screen.getByRole('button', { name: 'Open inventory' });
     expect(openInventoryButton).toHaveClass('border-emerald-300');

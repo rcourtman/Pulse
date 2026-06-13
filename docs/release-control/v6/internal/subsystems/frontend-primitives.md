@@ -540,6 +540,10 @@ not a replacement status card, CTA band, or page-local nested card.
    and reporting exports use the shared `success`, `successOutline`, and
    `successGhost` Button variants instead of carrying page-local emerald action
    shells.
+   Patrol approval and remediation controls use that same primitive family:
+   Patrol owns approval/reapproval/denial/review/Assistant handoff behavior,
+   while `Button` owns success, warning-solid, primary, secondary, ghost,
+   disabled, focus, and compact action chrome.
    Shared error-boundary fallback actions are also command buttons: reset,
    reload, and retry controls must compose `Button` so emergency UI does not
    become a separate local button vocabulary.

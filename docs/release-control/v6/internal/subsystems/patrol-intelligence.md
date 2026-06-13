@@ -73,6 +73,11 @@ Patrol-specific presentation helpers.
    tone, loading indicator variant, or empty-state shell variant, extend the
    shared primitive and registry guard instead of adding page-local rounded pill
    spans, spinner spans, or empty-state wrappers.
+   Patrol approval and remediation actions own approval, denial, reapproval,
+   review, and Assistant handoff semantics, but their visible action chrome must
+   compose the shared `Button` primitive for success, warning-solid, primary,
+   secondary, ghost, disabled, focus, and compact action behavior instead of
+   page-local button shells.
 3. Keep remediation execution badge copy and severity styling aligned through `frontend-modern/src/components/patrol/RemediationStatus.tsx` and `frontend-modern/src/utils/remediationPresentation.ts`
 4. Add or change Patrol header, summary, status runtime-state presentation, or runtime provider action presentation through `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`, `frontend-modern/src/features/patrol/PatrolIntelligenceSummary.tsx`, `frontend-modern/src/components/patrol/PatrolStatusBar.tsx`, `frontend-modern/src/utils/patrolRuntimePresentation.ts`, and `frontend-modern/src/utils/patrolRuntimeActions.ts`
    Patrol summary presentation may show recent activity mix and trigger mode as

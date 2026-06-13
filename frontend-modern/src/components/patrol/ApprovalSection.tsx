@@ -5,12 +5,15 @@
  * States: Pending, Expired, Executed, Denied, Failed, Verified, VerificationFailed.
  */
 
+import CheckIcon from 'lucide-solid/icons/check';
+import MessageSquareIcon from 'lucide-solid/icons/message-square';
 import { Component, Show, createSignal, createResource, createMemo } from 'solid-js';
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import { notificationStore } from '@/stores/notifications';
 import { aiChatStore } from '@/stores/aiChat';
 import { hasFeature } from '@/stores/license';
 import { AIAPI, type ApprovalRequest, type ApprovalExecutionResult } from '@/api/ai';
+import { Button } from '@/components/shared/Button';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { getApprovalRiskPresentation } from '@/utils/approvalRiskPresentation';
@@ -234,44 +237,34 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
   const renderRecoveryActions = (assistantLabel: string, onAssistantClick: (e: Event) => void) => (
     <div class="flex items-center gap-2 mt-3 pt-3 border-t border-border-subtle">
       <Show when={canAutoFix()}>
-        <button
+        <Button
           type="button"
+          variant="warningSolid"
+          size="sm"
           onClick={handleReapprove}
           disabled={actionLoading() === 'reapprove'}
-          class="flex-1 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white text-xs font-medium rounded flex items-center justify-center gap-1.5"
+          class="flex-1 gap-1.5"
         >
           <Show when={actionLoading() === 'reapprove'}>
             <LoadingSpinner size="sm" tone="inverse" />
           </Show>
           <Show when={actionLoading() !== 'reapprove'}>
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M5 13l4 4L19 7"
-              />
-            </svg>
+            <CheckIcon class="w-3.5 h-3.5" />
           </Show>
           Re-approve & Execute
-        </button>
+        </Button>
       </Show>
       <Show when={!canAutoFix()}>
-        <button
+        <Button
           type="button"
+          variant="primary"
+          size="sm"
           onClick={onAssistantClick}
-          class="flex-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded flex items-center justify-center gap-1.5"
+          class="flex-1 gap-1.5"
         >
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-            />
-          </svg>
+          <MessageSquareIcon class="w-3.5 h-3.5" />
           {assistantLabel}
-        </button>
+        </Button>
       </Show>
     </div>
   );
@@ -301,10 +294,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                     />
                   </svg>
                   <span class="text-sm font-medium text-base-content">Fix Available</span>
-                  <MetadataBadge
-                    {...APPROVAL_SECTION_BADGE_PROPS}
-                    tone={approvalRisk.badgeTone}
-                  >
+                  <MetadataBadge {...APPROVAL_SECTION_BADGE_PROPS} tone={approvalRisk.badgeTone}>
                     {approvalRisk.label} risk
                   </MetadataBadge>
                 </div>
@@ -316,62 +306,44 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                 </div>
                 <div class="flex items-center gap-2 mt-3 pt-3 border-t border-border-subtle">
                   <Show when={canAutoFix()}>
-                    <button
+                    <Button
                       type="button"
+                      variant="success"
+                      size="sm"
                       onClick={(e) => handleApprove(approval, e)}
                       disabled={actionLoading() === approval.id}
-                      class="flex-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white text-xs font-medium rounded flex items-center justify-center gap-1.5"
+                      class="flex-1 gap-1.5"
                     >
                       <Show when={actionLoading() === approval.id}>
                         <LoadingSpinner size="sm" tone="inverse" />
                       </Show>
                       <Show when={actionLoading() !== approval.id}>
-                        <svg
-                          class="w-3.5 h-3.5"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M5 13l4 4L19 7"
-                          />
-                        </svg>
+                        <CheckIcon class="w-3.5 h-3.5" />
                       </Show>
                       Approve & Execute
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
+                      variant="ghost"
+                      size="sm"
                       onClick={(e) => handleDeny(approval, e)}
                       disabled={actionLoading() === approval.id}
-                      class="px-3 py-1.5 hover:bg-surface-hover disabled:opacity-50 text-muted text-xs font-medium rounded"
+                      class="text-muted"
                     >
                       Deny
-                    </button>
+                    </Button>
                   </Show>
                   <Show when={!canAutoFix()}>
-                    <button
+                    <Button
                       type="button"
+                      variant="primary"
+                      size="sm"
                       onClick={(e) => handleFixWithAssistant(approval, null, e)}
-                      class="flex-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded flex items-center justify-center gap-1.5"
+                      class="flex-1 gap-1.5"
                     >
-                      <svg
-                        class="w-3.5 h-3.5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                        />
-                      </svg>
+                      <MessageSquareIcon class="w-3.5 h-3.5" />
                       Fix with Assistant
-                    </button>
+                    </Button>
                   </Show>
                 </div>
               </>
