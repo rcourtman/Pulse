@@ -5,10 +5,10 @@ import { StatusDot } from '@/components/shared/StatusDot';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { apiFetch } from '@/utils/apiClient';
-import { formatRelativeTime } from '@/utils/format';
 import {
   PlatformTableToolbar,
   PlatformErrorState,
+  PlatformTableRelativeTimeValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   type PlatformTableFilterOption,
@@ -94,12 +94,11 @@ function formatGuestLabel(job: ReplicationJob): string {
   return '—';
 }
 
-function formatSyncTime(job: ReplicationJob): string {
+function syncTimeValue(job: ReplicationJob): number | string | undefined {
   if (job.lastSyncUnix && job.lastSyncUnix > 0) {
-    return formatRelativeTime(job.lastSyncUnix * 1000, { compact: true });
+    return job.lastSyncUnix * 1000;
   }
-  if (job.lastSyncTime) return formatRelativeTime(job.lastSyncTime, { compact: true });
-  return '—';
+  return job.lastSyncTime;
 }
 
 type NextSyncTone = 'overdue' | 'imminent' | 'normal' | 'muted';
@@ -325,7 +324,7 @@ export const ProxmoxReplicationTable: Component<{
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                             >
-                              {formatSyncTime(job)}
+                              <PlatformTableRelativeTimeValue value={syncTimeValue(job)} />
                             </TableCell>
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}

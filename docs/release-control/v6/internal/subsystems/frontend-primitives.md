@@ -2625,6 +2625,14 @@ protection completed-time cells and vSphere activity "When" cells must compose
 that primitive instead of declaring local compact `toLocaleString` helpers, and
 timestamp columns use the canonical `numeric-value` alignment kind because they
 are scannable scalar values.
+Relative timestamp-age cells follow the same rule.
+`PlatformTableRelativeTimeValue` and `formatPlatformTableRelativeTimeValue` own
+the repeated `formatRelativeTime` composition, compact-label default,
+invalid/empty markers, and tabular-number styling for dense platform table
+cells. Docker / Podman volume created-at cells, Kubernetes deployment age
+cells, Kubernetes event observed-time cells, and Proxmox replication last-sync
+cells must compose that primitive instead of importing `formatRelativeTime`
+directly in table files.
 Platform table numeric fallback rendering is registry-backed too.
 `PlatformTableNumberValue` owns finite-number checking, tabular-number styling,
 custom empty-marker support, and caller-owned number formatting for dense

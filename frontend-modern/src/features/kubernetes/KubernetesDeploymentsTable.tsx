@@ -2,10 +2,10 @@ import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { asTrimmedString } from '@/utils/stringUtils';
-import { formatRelativeTime } from '@/utils/format';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformTableNumberValue,
+  PlatformTableRelativeTimeValue,
   PlatformTableToolbar,
   PlatformTableEmptyState,
   createPlatformTableFilterState,
@@ -39,9 +39,6 @@ import {
 // desired / updated / ready / available replicas, and metadata age.
 // observedGeneration is deliberately not a column: without the spec
 // generation beside it the raw number is unactionable.
-
-const formatAge = (createdAt: string | undefined): string =>
-  formatRelativeTime(createdAt, { compact: true, emptyText: '—' }) || '—';
 
 export const KubernetesDeploymentsTable: Component<{
   resources: Resource[];
@@ -153,11 +150,9 @@ export const KubernetesDeploymentsTable: Component<{
                 <For each={sortedRows()}>
                   {(deployment) => {
                     const name = () => asTrimmedString(deployment.name) || deployment.id;
-                    const ns = () =>
-                      formatPlatformTableTextValue(deployment.kubernetes?.namespace);
+                    const ns = () => formatPlatformTableTextValue(deployment.kubernetes?.namespace);
                     const cluster = () => kubernetesClusterLabel(deployment) || '—';
                     const indicator = () => mapKubernetesDeploymentStatus(deployment);
-                    const age = () => formatAge(deployment.kubernetes?.createdAt);
                     const detailRowId = () => drawer.detailRowId(deployment);
                     const isExpanded = () => drawer.isExpanded(deployment);
                     return (
@@ -231,11 +226,10 @@ export const KubernetesDeploymentsTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            <span
-                              class="tabular-nums"
-                              title={deployment.kubernetes?.createdAt || ''}
-                            >
-                              {age()}
+                            <span title={deployment.kubernetes?.createdAt || ''}>
+                              <PlatformTableRelativeTimeValue
+                                value={deployment.kubernetes?.createdAt}
+                              />
                             </span>
                           </TableCell>
                         </TableRow>

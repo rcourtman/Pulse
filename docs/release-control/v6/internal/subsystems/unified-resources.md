@@ -258,6 +258,12 @@ rendering must use `PlatformTableDateTimeValue` /
 `formatPlatformTableDateTimeValue` for parsing, empty markers, compact Intl
 formatting, minimum-year filtering when platform adapters emit placeholder
 dates, tabular styling, and canonical `numeric-value` alignment.
+Relative timestamp-age cells keep the same split: unified-resource consumers
+own whether created, observed, or sync time is the meaningful source-specific
+field, while dense platform table rendering must use
+`PlatformTableRelativeTimeValue` / `formatPlatformTableRelativeTimeValue` for
+relative labels, compact defaults, invalid/empty markers, and tabular styling
+instead of importing `formatRelativeTime` in table files.
 Optional numeric table cells follow the same split: unified-resource consumers
 own which count or replica field is meaningful, whether the domain should
 zero-default an absent scheduler/service/inventory count, whether a

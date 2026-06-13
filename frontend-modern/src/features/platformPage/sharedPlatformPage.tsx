@@ -12,7 +12,7 @@ import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
 import type { Resource } from '@/types/resource';
-import { formatBytes, formatUptime } from '@/utils/format';
+import { formatBytes, formatRelativeTime, formatUptime } from '@/utils/format';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { formatVmwareClusterServices } from '@/utils/vmwareDisplay';
 import { getPlatformColumnAlign, type PlatformTableColumnKind } from './columnAlignment';
@@ -263,6 +263,44 @@ export function PlatformTableDateTimeValue(props: {
 
   return (
     <span class="tabular-nums">{formatPlatformTableDateTimeValue(props.value, options())}</span>
+  );
+}
+
+export type PlatformTableRelativeTimeValueInput = number | string | Date | null | undefined;
+
+export type PlatformTableRelativeTimeValueOptions = {
+  compact?: boolean;
+  emptyText?: string;
+};
+
+export const formatPlatformTableRelativeTimeValue = (
+  value: PlatformTableRelativeTimeValueInput,
+  options: PlatformTableRelativeTimeValueOptions = {},
+): string => {
+  const emptyText = options.emptyText ?? '—';
+  if (value == null || value === '') return emptyText;
+  return (
+    formatRelativeTime(value, {
+      compact: options.compact ?? true,
+      emptyText,
+    }) || emptyText
+  );
+};
+
+export function PlatformTableRelativeTimeValue(props: {
+  value: PlatformTableRelativeTimeValueInput;
+  compact?: boolean;
+  emptyText?: string;
+}) {
+  const options = (): PlatformTableRelativeTimeValueOptions => {
+    const resolved: PlatformTableRelativeTimeValueOptions = {};
+    if (props.compact !== undefined) resolved.compact = props.compact;
+    if (props.emptyText !== undefined) resolved.emptyText = props.emptyText;
+    return resolved;
+  };
+
+  return (
+    <span class="tabular-nums">{formatPlatformTableRelativeTimeValue(props.value, options())}</span>
   );
 }
 

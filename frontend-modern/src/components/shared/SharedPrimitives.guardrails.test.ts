@@ -152,6 +152,7 @@ import workloadSelectionStateSource from '@/components/Workloads/useWorkloadSele
 import dockerContainersTableSource from '@/features/docker/DockerContainersTable.tsx?raw';
 import dockerHostsTableSource from '@/features/docker/DockerHostsTable.tsx?raw';
 import dockerNativeTableSharedSource from '@/features/docker/DockerNativeTableShared.tsx?raw';
+import dockerVolumesTableSource from '@/features/docker/DockerVolumesTable.tsx?raw';
 import kubernetesAutoscalingTableSource from '@/features/kubernetes/KubernetesAutoscalingTable.tsx?raw';
 import kubernetesClustersTableSource from '@/features/kubernetes/KubernetesClustersTable.tsx?raw';
 import kubernetesConfigTableSource from '@/features/kubernetes/KubernetesConfigTable.tsx?raw';
@@ -3922,6 +3923,91 @@ describe('shared primitive guardrails', () => {
       "getPlatformTableHeadClassForKind('numeric-value')",
     );
     expect(vsphereActivityTableSource).toContain('minYear={2000}');
+  });
+
+  it('keeps platform table relative timestamps on the shared primitive', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+        forbiddenPatterns?: Array<{ path?: string; patterns?: string[] }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        allowedPaths?: string[];
+        ignoredPaths?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find(
+      (rule) => rule.id === 'platform-table-relative-time-value',
+    );
+    const localHelperGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-table-local-relative-time-helper',
+    );
+    const platformRelativeTimeConsumers: Array<[string, string]> = [
+      ['src/features/docker/DockerVolumesTable.tsx', dockerVolumesTableSource],
+      ['src/features/kubernetes/KubernetesDeploymentsTable.tsx', kubernetesDeploymentsTableSource],
+      ['src/features/kubernetes/KubernetesEventsTable.tsx', kubernetesEventsTableSource],
+      ['src/features/proxmox/ProxmoxReplicationTable.tsx', proxmoxReplicationTableSource],
+    ];
+    const platformRelativeTimeConsumerPaths = platformRelativeTimeConsumers.map(([path]) => path);
+
+    expect(registeredRule?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(registeredRule?.canonical?.export).toBe('PlatformTableRelativeTimeValue');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
+      platformRelativeTimeConsumerPaths,
+    );
+    expect(registeredRule?.forbiddenPatterns).toEqual([
+      {
+        path: 'src/features/docker/DockerVolumesTable.tsx',
+        patterns: ['formatRelativeTime(parsed)'],
+      },
+      {
+        path: 'src/features/kubernetes/KubernetesDeploymentsTable.tsx',
+        patterns: ["formatRelativeTime(createdAt, { compact: true, emptyText: '—' })"],
+      },
+      {
+        path: 'src/features/kubernetes/KubernetesEventsTable.tsx',
+        patterns: [
+          "formatRelativeTime(observedTimestamp(resource), { compact: true, emptyText: '—' })",
+        ],
+      },
+      {
+        path: 'src/features/proxmox/ProxmoxReplicationTable.tsx',
+        patterns: [
+          'formatRelativeTime(job.lastSyncUnix * 1000, { compact: true })',
+          'formatRelativeTime(job.lastSyncTime, { compact: true })',
+        ],
+      },
+    ]);
+    expect(localHelperGuard?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(localHelperGuard?.canonical?.export).toBe('PlatformTableRelativeTimeValue');
+    expect(localHelperGuard?.allPatterns).toEqual(['formatRelativeTime(']);
+    expect(localHelperGuard?.scopes).toEqual(platformRelativeTimeConsumerPaths);
+    expect(localHelperGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(localHelperGuard?.ignoredPaths ?? []).toHaveLength(0);
+
+    expect(sharedPlatformPageSource).toContain('export function PlatformTableRelativeTimeValue');
+    expect(sharedPlatformPageSource).toContain('formatPlatformTableRelativeTimeValue');
+    expect(sharedPlatformPageSource).toContain('formatRelativeTime(value');
+
+    for (const [path, source] of platformRelativeTimeConsumers) {
+      expect(source).toContain('PlatformTableRelativeTimeValue');
+      expect(source).not.toContain('formatRelativeTime(');
+      const forbiddenPatterns =
+        registeredRule?.forbiddenPatterns?.find((entry) => entry.path === path)?.patterns ?? [];
+      for (const pattern of forbiddenPatterns) {
+        expect(source).not.toContain(pattern);
+      }
+    }
   });
 
   it('keeps platform table integer count formatting on the shared helper', () => {

@@ -9,6 +9,7 @@ import {
   PlatformTableMetricFallback,
   PlatformTableNumberValue,
   PlatformTablePercentValue,
+  PlatformTableRelativeTimeValue,
   PlatformTableTemperatureValue,
   createPlatformTableFilterState,
   formatPlatformTableBytesValue,
@@ -16,6 +17,7 @@ import {
   formatPlatformTableDateTimeValue,
   formatPlatformTableIntegerValue,
   formatPlatformTablePercentValue,
+  formatPlatformTableRelativeTimeValue,
   formatPlatformTableTitleCaseValue,
   formatPlatformTableUptimeValue,
   filterPlatformResources,
@@ -361,6 +363,31 @@ describe('PlatformTableDateTimeValue', () => {
         ...dateTimeFormat,
       }),
     );
+  });
+});
+
+describe('formatPlatformTableRelativeTimeValue', () => {
+  it('formats relative timestamps with canonical table empty markers', () => {
+    const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+
+    expect(formatPlatformTableRelativeTimeValue(fiveMinutesAgo)).toBe('5m ago');
+    expect(formatPlatformTableRelativeTimeValue(fiveMinutesAgo, { compact: false })).toBe(
+      '5 mins ago',
+    );
+    expect(formatPlatformTableRelativeTimeValue(undefined)).toBe('—');
+    expect(formatPlatformTableRelativeTimeValue('', { emptyText: '-' })).toBe('-');
+    expect(formatPlatformTableRelativeTimeValue('not-a-date', { emptyText: '-' })).toBe('-');
+  });
+});
+
+describe('PlatformTableRelativeTimeValue', () => {
+  it('renders relative timestamps with shared tabular styling', () => {
+    const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+    const { container } = render(() => PlatformTableRelativeTimeValue({ value: fiveMinutesAgo }));
+    const marker = container.querySelector('span');
+
+    expect(marker?.classList.contains('tabular-nums')).toBe(true);
+    expect(marker?.textContent).toBe('5m ago');
   });
 });
 

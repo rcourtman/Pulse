@@ -2,11 +2,11 @@ import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { asTrimmedString } from '@/utils/stringUtils';
-import { formatRelativeTime } from '@/utils/format';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformTableEmptyState,
   PlatformTableNumberValue,
+  PlatformTableRelativeTimeValue,
   PlatformTableToolbar,
   createPlatformTableFilterState,
   formatPlatformTableTextValue,
@@ -46,10 +46,6 @@ const observedTimestamp = (resource: Resource): string =>
       resource.kubernetes?.firstSeen ||
       resource.kubernetes?.createdAt,
   ) || '';
-
-// Humanized for the cell ("2h ago"); the raw timestamp stays on the title.
-const observedTime = (resource: Resource): string =>
-  formatRelativeTime(observedTimestamp(resource), { compact: true, emptyText: '—' }) || '—';
 
 export const KubernetesEventsTable: Component<{
   resources: Resource[];
@@ -147,7 +143,7 @@ export const KubernetesEventsTable: Component<{
                       mapKubernetesEventSeverity(resource.kubernetes?.eventType);
                     const name = () => eventName(resource);
                     const scope = () => kubernetesScopeLabel(resource);
-                    const observed = () => observedTime(resource);
+                    const observed = () => observedTimestamp(resource);
                     const message = () =>
                       formatPlatformTableTextValue(resource.kubernetes?.message);
                     const detailRowId = () => drawer.detailRowId(resource);
@@ -225,9 +221,9 @@ export const KubernetesEventsTable: Component<{
                           >
                             <span
                               class="inline-block max-w-[12rem] truncate"
-                              title={observedTimestamp(resource) || observed()}
+                              title={observed() || '—'}
                             >
-                              {observed()}
+                              <PlatformTableRelativeTimeValue value={observed()} />
                             </span>
                           </TableCell>
                           <TableCell
