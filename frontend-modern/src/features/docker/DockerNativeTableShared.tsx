@@ -4,6 +4,7 @@ import { TableCell } from '@/components/shared/Table';
 import { getSimpleStatusIndicator, type StatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
+  PlatformTableNumberValue,
   formatPlatformTableBytesValue,
   getPlatformTableCellClassForKind,
 } from '@/features/platformPage/sharedPlatformPage';
@@ -24,7 +25,7 @@ export type DockerNativeTableProps = {
 export const dockerTextValue = (value: string | undefined): string => asTrimmedString(value) || '—';
 
 export const dockerNumberValue = (value: number | undefined): JSX.Element =>
-  typeof value === 'number' ? <span class="tabular-nums">{value}</span> : <span>—</span>;
+  PlatformTableNumberValue({ value });
 
 export const dockerByteValue = (value: number | undefined): string =>
   formatPlatformTableBytesValue(value);

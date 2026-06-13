@@ -3754,6 +3754,115 @@ describe('shared primitive guardrails', () => {
     );
   });
 
+  it('keeps platform table number-value fallbacks on the shared primitive', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+        forbiddenPatterns?: Array<{ path?: string; patterns?: string[] }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        allowedPaths?: string[];
+        ignoredPaths?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find(
+      (rule) => rule.id === 'platform-table-number-value-fallback',
+    );
+    const localNumberGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-table-local-number-value-helper',
+    );
+    const localCountGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-table-local-count-cell-helper',
+    );
+    const platformNumberValueConsumers: Array<[string, string]> = [
+      ['src/features/docker/DockerNativeTableShared.tsx', dockerNativeTableSharedSource],
+      ['src/features/kubernetes/KubernetesAutoscalingTable.tsx', kubernetesAutoscalingTableSource],
+      ['src/features/kubernetes/KubernetesControllersTable.tsx', kubernetesControllersTableSource],
+      ['src/features/kubernetes/KubernetesEventsTable.tsx', kubernetesEventsTableSource],
+      ['src/features/kubernetes/KubernetesPodsTable.tsx', kubernetesPodsTableSource],
+      ['src/features/proxmox/ProxmoxMailGatewayTable.tsx', proxmoxMailGatewayTableSource],
+    ];
+    const platformNumberValueConsumerPaths = platformNumberValueConsumers.map(([path]) => path);
+    const optionalNumberMarkupPattern =
+      'typeof value === \'number\' ? <span class="tabular-nums">{value}</span> : <span>—</span>';
+
+    expect(registeredRule?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(registeredRule?.canonical?.export).toBe('PlatformTableNumberValue');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
+      platformNumberValueConsumerPaths,
+    );
+    expect(registeredRule?.forbiddenPatterns).toEqual([
+      {
+        path: 'src/features/docker/DockerNativeTableShared.tsx',
+        patterns: [optionalNumberMarkupPattern],
+      },
+      {
+        path: 'src/features/kubernetes/KubernetesAutoscalingTable.tsx',
+        patterns: ['const numberValue', optionalNumberMarkupPattern],
+      },
+      {
+        path: 'src/features/kubernetes/KubernetesControllersTable.tsx',
+        patterns: ['const numberValue', optionalNumberMarkupPattern],
+      },
+      {
+        path: 'src/features/kubernetes/KubernetesEventsTable.tsx',
+        patterns: ['const numberValue', optionalNumberMarkupPattern],
+      },
+      {
+        path: 'src/features/kubernetes/KubernetesPodsTable.tsx',
+        patterns: ['const numericValue', optionalNumberMarkupPattern],
+      },
+      {
+        path: 'src/features/proxmox/ProxmoxMailGatewayTable.tsx',
+        patterns: ['const countCell', "value.toLocaleString() : '—'"],
+      },
+    ]);
+    expect(localNumberGuard?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(localNumberGuard?.canonical?.export).toBe('PlatformTableNumberValue');
+    expect(localNumberGuard?.allPatterns).toEqual([
+      '<span class="tabular-nums">{value}</span>',
+      '<span>—</span>',
+    ]);
+    expect(localNumberGuard?.scopes).toEqual(['src/features/docker', 'src/features/kubernetes']);
+    expect(localNumberGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(localNumberGuard?.ignoredPaths ?? []).toHaveLength(0);
+    expect(localCountGuard?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(localCountGuard?.canonical?.export).toBe('PlatformTableNumberValue');
+    expect(localCountGuard?.allPatterns).toEqual([
+      'const countCell',
+      "value.toLocaleString() : '—'",
+    ]);
+    expect(localCountGuard?.scopes).toEqual(['src/features/proxmox']);
+    expect(localCountGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(localCountGuard?.ignoredPaths ?? []).toHaveLength(0);
+
+    expect(sharedPlatformPageSource).toContain('export function PlatformTableNumberValue');
+    expect(sharedPlatformPageSource).toContain('Number.isFinite(value)');
+    expect(sharedPlatformPageSource).toContain('class="tabular-nums"');
+
+    for (const [path, source] of platformNumberValueConsumers) {
+      expect(source).toContain('PlatformTableNumberValue');
+      const forbiddenPatterns =
+        registeredRule?.forbiddenPatterns?.find((entry) => entry.path === path)?.patterns ?? [];
+      for (const pattern of forbiddenPatterns) {
+        expect(source).not.toContain(pattern);
+      }
+    }
+    expect(proxmoxMailGatewayTableSource).toContain('format={formatLocaleCount}');
+  });
+
   it('keeps platform table compact value summaries on the shared helper', () => {
     const registry = JSON.parse(sharedTemplateRegistrySource) as {
       rules?: Array<{

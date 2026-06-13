@@ -6,6 +6,7 @@ import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformTableEmptyState,
+  PlatformTableNumberValue,
   PlatformTableToolbar,
   createPlatformTableFilterState,
   formatPlatformTableTextValue,
@@ -46,9 +47,6 @@ const metricSources = (resource: Resource): { label: string; title: string } => 
 const labelSummary = (resource: Resource): { label: string; title: string } => {
   return summarizePlatformTableValues(resource.tags);
 };
-
-const numberValue = (value: number | undefined): JSX.Element =>
-  typeof value === 'number' ? <span class="tabular-nums">{value}</span> : <span>—</span>;
 
 const bounds = (resource: Resource): string => {
   const min = resource.kubernetes?.minReplicas;
@@ -213,12 +211,16 @@ export const KubernetesAutoscalingTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            {numberValue(resource.kubernetes?.currentReplicas)}
+                            <PlatformTableNumberValue
+                              value={resource.kubernetes?.currentReplicas}
+                            />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            {numberValue(resource.kubernetes?.desiredReplicas)}
+                            <PlatformTableNumberValue
+                              value={resource.kubernetes?.desiredReplicas}
+                            />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}

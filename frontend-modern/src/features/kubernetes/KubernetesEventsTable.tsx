@@ -6,6 +6,7 @@ import { formatRelativeTime } from '@/utils/format';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformTableEmptyState,
+  PlatformTableNumberValue,
   PlatformTableToolbar,
   createPlatformTableFilterState,
   formatPlatformTableTextValue,
@@ -49,9 +50,6 @@ const observedTimestamp = (resource: Resource): string =>
 // Humanized for the cell ("2h ago"); the raw timestamp stays on the title.
 const observedTime = (resource: Resource): string =>
   formatRelativeTime(observedTimestamp(resource), { compact: true, emptyText: '—' }) || '—';
-
-const numberValue = (value: number | undefined): JSX.Element =>
-  typeof value === 'number' ? <span class="tabular-nums">{value}</span> : <span>—</span>;
 
 export const KubernetesEventsTable: Component<{
   resources: Resource[];
@@ -220,7 +218,7 @@ export const KubernetesEventsTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            {numberValue(resource.kubernetes?.count)}
+                            <PlatformTableNumberValue value={resource.kubernetes?.count} />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}

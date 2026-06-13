@@ -205,6 +205,22 @@ export const formatPlatformTableBytesValue = (
   return formatBytes(bytes);
 };
 
+export function PlatformTableNumberValue(props: {
+  value: number | undefined;
+  emptyText?: string;
+  format?: (value: number) => string | number;
+}) {
+  const label = () => {
+    const value = props.value;
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      return props.emptyText ?? '—';
+    }
+    return props.format?.(value) ?? value;
+  };
+
+  return <span class="tabular-nums">{label()}</span>;
+}
+
 export const getPlatformTableFiniteMetric = (value: number | undefined): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 

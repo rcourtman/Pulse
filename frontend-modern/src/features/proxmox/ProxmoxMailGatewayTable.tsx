@@ -1,4 +1,4 @@
-import { For, Show, createSignal, type Component, type JSX } from 'solid-js';
+import { For, Show, createSignal, type Component } from 'solid-js';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
@@ -6,6 +6,7 @@ import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformTableNumberValue,
   PlatformTableToolbar,
   createPlatformTableFilterState,
   filterPlatformResources,
@@ -27,9 +28,7 @@ import { ProxmoxMailGatewayDrawer } from './ProxmoxMailGatewayDrawer';
 // operator columns. This bespoke table reuses canonical shared
 // primitives and surfaces those PMG-native columns.
 
-const countCell = (value: number | undefined): JSX.Element => (
-  <span class="tabular-nums">{typeof value === 'number' ? value.toLocaleString() : '—'}</span>
-);
+const formatLocaleCount = (value: number): string => value.toLocaleString();
 
 export const ProxmoxMailGatewayTable: Component<{
   resources: Resource[];
@@ -150,9 +149,12 @@ export const ProxmoxMailGatewayTable: Component<{
                             {version()}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            {countCell(pmg()?.nodeCount)}
+                            <PlatformTableNumberValue
+                              value={pmg()?.nodeCount}
+                              format={formatLocaleCount}
+                            />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
@@ -164,32 +166,50 @@ export const ProxmoxMailGatewayTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            {countCell(pmg()?.mailCountTotal)}
+                            <PlatformTableNumberValue
+                              value={pmg()?.mailCountTotal}
+                              format={formatLocaleCount}
+                            />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            {countCell(pmg()?.spamIn)}
+                            <PlatformTableNumberValue
+                              value={pmg()?.spamIn}
+                              format={formatLocaleCount}
+                            />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            {countCell(pmg()?.virusIn)}
+                            <PlatformTableNumberValue
+                              value={pmg()?.virusIn}
+                              format={formatLocaleCount}
+                            />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            {countCell(pmg()?.quarantine)}
+                            <PlatformTableNumberValue
+                              value={pmg()?.quarantine}
+                              format={formatLocaleCount}
+                            />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            {countCell(pmg()?.queueTotal ?? pmg()?.queueActive)}
+                            <PlatformTableNumberValue
+                              value={pmg()?.queueTotal ?? pmg()?.queueActive}
+                              format={formatLocaleCount}
+                            />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            {countCell(pmg()?.queueDeferred)}
+                            <PlatformTableNumberValue
+                              value={pmg()?.queueDeferred}
+                              format={formatLocaleCount}
+                            />
                           </TableCell>
                         </TableRow>
                         <Show when={isOpen()}>

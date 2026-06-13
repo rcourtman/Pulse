@@ -5,6 +5,7 @@ import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformTableEmptyState,
+  PlatformTableNumberValue,
   PlatformTableToolbar,
   createPlatformTableFilterState,
   formatPlatformTableTextValue,
@@ -69,9 +70,6 @@ const ageValue = (resource: Resource): string => {
   if (seconds < 86_400) return `${Math.floor(seconds / 3_600)}h`;
   return `${Math.floor(seconds / 86_400)}d`;
 };
-
-const numericValue = (value: number | undefined): JSX.Element =>
-  typeof value === 'number' ? <span class="tabular-nums">{value}</span> : <span>—</span>;
 
 export const KubernetesPodsTable: Component<{
   resources: Resource[];
@@ -250,7 +248,7 @@ export const KubernetesPodsTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            {numericValue(restartCount(resource))}
+                            <PlatformTableNumberValue value={restartCount(resource)} />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}

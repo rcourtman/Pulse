@@ -4,6 +4,7 @@ import { createRoot, createSignal } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import {
   PlatformTableMetricFallback,
+  PlatformTableNumberValue,
   createPlatformTableFilterState,
   formatPlatformTableBytesValue,
   formatPlatformTableTitleCaseValue,
@@ -299,6 +300,34 @@ describe('formatPlatformTableBytesValue', () => {
     expect(formatPlatformTableBytesValue(1024)).toBe('1.00 KB');
     expect(formatPlatformTableBytesValue(1_536)).toBe('1.50 KB');
     expect(formatPlatformTableBytesValue(5 * 1024 * 1024 * 1024)).toBe('5.00 GB');
+  });
+});
+
+describe('PlatformTableNumberValue', () => {
+  it('renders finite numbers with shared tabular styling and empty markers', () => {
+    const { container } = render(() => PlatformTableNumberValue({ value: 42 }));
+    const marker = container.querySelector('span');
+
+    expect(marker?.textContent).toBe('42');
+    expect(marker?.classList.contains('tabular-nums')).toBe(true);
+
+    cleanup();
+    render(() => PlatformTableNumberValue({ value: undefined }));
+    expect(screen.getByText('—')).toBeInTheDocument();
+  });
+
+  it('rejects non-finite values and supports caller-owned formatting', () => {
+    render(() => PlatformTableNumberValue({ value: Number.NaN, emptyText: '-' }));
+    expect(screen.getByText('-')).toBeInTheDocument();
+
+    cleanup();
+    render(() =>
+      PlatformTableNumberValue({
+        value: 1234,
+        format: (value) => value.toLocaleString(),
+      }),
+    );
+    expect(screen.getByText('1,234')).toBeInTheDocument();
   });
 });
 

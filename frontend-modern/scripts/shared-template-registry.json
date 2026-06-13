@@ -1375,6 +1375,68 @@
       ]
     },
     {
+      "id": "platform-table-number-value-fallback",
+      "category": "platform-table-text-value",
+      "summary": "Platform tables must use the shared number-value fallback primitive for finite numeric table cells, tabular styling, and canonical empty-cell markers instead of recreating local numberValue/countCell helpers.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "PlatformTableNumberValue"
+      },
+      "requiredConsumers": [
+        { "path": "src/features/docker/DockerNativeTableShared.tsx" },
+        { "path": "src/features/kubernetes/KubernetesAutoscalingTable.tsx" },
+        { "path": "src/features/kubernetes/KubernetesControllersTable.tsx" },
+        { "path": "src/features/kubernetes/KubernetesEventsTable.tsx" },
+        { "path": "src/features/kubernetes/KubernetesPodsTable.tsx" },
+        { "path": "src/features/proxmox/ProxmoxMailGatewayTable.tsx" }
+      ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/features/docker/DockerNativeTableShared.tsx",
+          "patterns": [
+            "typeof value === 'number' ? <span class=\"tabular-nums\">{value}</span> : <span>—</span>"
+          ]
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesAutoscalingTable.tsx",
+          "patterns": [
+            "const numberValue",
+            "typeof value === 'number' ? <span class=\"tabular-nums\">{value}</span> : <span>—</span>"
+          ]
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesControllersTable.tsx",
+          "patterns": [
+            "const numberValue",
+            "typeof value === 'number' ? <span class=\"tabular-nums\">{value}</span> : <span>—</span>"
+          ]
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesEventsTable.tsx",
+          "patterns": [
+            "const numberValue",
+            "typeof value === 'number' ? <span class=\"tabular-nums\">{value}</span> : <span>—</span>"
+          ]
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesPodsTable.tsx",
+          "patterns": [
+            "const numericValue",
+            "typeof value === 'number' ? <span class=\"tabular-nums\">{value}</span> : <span>—</span>"
+          ]
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxMailGatewayTable.tsx",
+          "patterns": ["const countCell", "value.toLocaleString() : '—'"]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "platform-table-metric-fallback",
       "category": "platform-table-metric",
       "summary": "Platform tables must use shared metric fallback and finite-metric helpers instead of recreating local centered dash fallbacks and Number.isFinite wrappers.",
@@ -1962,6 +2024,46 @@
       "extensions": [".tsx"],
       "allPatterns": ["const formatBytes", "value.toFixed(value >= 100 ? 0 : value >= 10 ? 1 : 2)"],
       "legacyReason": "Retired migration debt. Platform table byte-size cells must use formatPlatformTableBytesValue for shared positive-byte formatting and empty-cell markers.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-table-local-number-value-helper",
+      "category": "platform-table-text-value",
+      "summary": "Platform tables must not recreate local numberValue helpers for optional numeric table cells.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "PlatformTableNumberValue"
+      },
+      "scopes": ["src/features/docker", "src/features/kubernetes"],
+      "extensions": [".tsx"],
+      "allPatterns": ["<span class=\"tabular-nums\">{value}</span>", "<span>—</span>"],
+      "legacyReason": "Retired migration debt. Optional numeric platform table cells must use PlatformTableNumberValue for finite-number checks, tabular styling, and empty-cell markers.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-table-local-count-cell-helper",
+      "category": "platform-table-text-value",
+      "summary": "Platform tables must not recreate local countCell helpers for locale-formatted optional numeric table cells.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "PlatformTableNumberValue"
+      },
+      "scopes": ["src/features/proxmox"],
+      "extensions": [".tsx"],
+      "allPatterns": ["const countCell", "value.toLocaleString() : '—'"],
+      "legacyReason": "Retired migration debt. Locale-formatted count cells must compose PlatformTableNumberValue with a caller-owned format function instead of owning fallback markup locally.",
       "allowedPaths": [],
       "ignoredPaths": [],
       "proof": [

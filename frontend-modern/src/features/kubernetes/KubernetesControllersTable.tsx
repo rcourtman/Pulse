@@ -6,6 +6,7 @@ import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformTableEmptyState,
+  PlatformTableNumberValue,
   PlatformTableToolbar,
   createPlatformTableFilterState,
   formatPlatformTableTextValue,
@@ -28,9 +29,6 @@ import {
   mapKubernetesControllerStatus,
   type KubernetesResourceStatusFilter,
 } from './kubernetesPageModel';
-
-const numberValue = (value: number | undefined): JSX.Element =>
-  typeof value === 'number' ? <span class="tabular-nums">{value}</span> : <span>—</span>;
 
 const controllerName = (resource: Resource): string =>
   asTrimmedString(resource.displayName) || asTrimmedString(resource.name) || resource.id;
@@ -317,17 +315,17 @@ export const KubernetesControllersTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            {numberValue(currentValue(resource))}
+                            <PlatformTableNumberValue value={currentValue(resource)} />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            {numberValue(readyOrDoneValue(resource))}
+                            <PlatformTableNumberValue value={readyOrDoneValue(resource)} />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
                           >
-                            {numberValue(availableValue(resource))}
+                            <PlatformTableNumberValue value={availableValue(resource)} />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
