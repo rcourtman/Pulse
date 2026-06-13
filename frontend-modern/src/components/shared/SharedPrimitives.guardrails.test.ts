@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import calloutCardSource from '@/components/shared/CalloutCard.tsx?raw';
 import inlineNoticeSource from '@/components/shared/InlineNotice.tsx?raw';
+import demoBannerSource from '@/components/DemoBanner.tsx?raw';
 import assistantCommandHelpDialogSource from '@/components/AI/Chat/AssistantCommandHelpDialog.tsx?raw';
 import chatMessagesSource from '@/components/AI/Chat/ChatMessages.tsx?raw';
 import aiChatSource from '@/components/AI/Chat/index.tsx?raw';
@@ -3935,6 +3936,48 @@ describe('shared primitive guardrails', () => {
       expect(source).not.toContain('rounded-lg border border-amber-300 bg-amber-50');
       expect(source).not.toContain('text-amber-900 underline-offset-2');
     }
+  });
+
+  it('routes dismissible demo notices through InlineNotice banner primitives', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+        forbiddenPatterns?: Array<{ path?: string; patterns?: string[] }>;
+      }>;
+    };
+    const registeredRule = registry.rules?.find((rule) => rule.id === 'demo-banner-notice-shell');
+
+    expect(registeredRule?.canonical?.path).toBe('src/components/shared/InlineNotice.tsx');
+    expect(registeredRule?.canonical?.export).toBe('InlineNotice');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/components/DemoBanner.tsx',
+    ]);
+    expect(registeredRule?.forbiddenPatterns).toEqual([
+      {
+        path: 'src/components/DemoBanner.tsx',
+        patterns: [
+          '<svg',
+          '<button',
+          'bg-blue-50 dark:bg-blue-900 border-b border-blue-200 dark:border-blue-800',
+          'p-1 hover:bg-blue-100 dark:hover:bg-blue-800 rounded text-blue-600',
+        ],
+      },
+    ]);
+    expect(inlineNoticeSource).toContain('INLINE_NOTICE_LAYOUT_CLASSES');
+    expect(inlineNoticeSource).toContain('ActionIconButton');
+    expect(demoBannerSource).toContain('InlineNotice');
+    expect(demoBannerSource).toContain('layout="banner"');
+    expect(demoBannerSource).toContain('lucide-solid/icons/info');
+    expect(demoBannerSource).not.toContain('<svg');
+    expect(demoBannerSource).not.toContain('<button');
+    expect(demoBannerSource).not.toContain(
+      'bg-blue-50 dark:bg-blue-900 border-b border-blue-200 dark:border-blue-800',
+    );
+    expect(demoBannerSource).not.toContain(
+      'p-1 hover:bg-blue-100 dark:hover:bg-blue-800 rounded text-blue-600',
+    );
   });
 
   it('keeps TLS verification warnings in the shared primitive boundary', () => {

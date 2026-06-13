@@ -518,6 +518,33 @@
       ]
     },
     {
+      "id": "demo-banner-notice-shell",
+      "category": "callout",
+      "summary": "Dismissible global demo-mode notices must compose InlineNotice banner layout and shared dismiss chrome instead of copying local blue notice shells, raw SVG icons, or page-local close buttons.",
+      "canonical": {
+        "path": "src/components/shared/InlineNotice.tsx",
+        "export": "InlineNotice"
+      },
+      "requiredConsumers": [{ "path": "src/components/DemoBanner.tsx" }],
+      "forbiddenPatterns": [
+        {
+          "path": "src/components/DemoBanner.tsx",
+          "patterns": [
+            "<svg",
+            "<button",
+            "bg-blue-50 dark:bg-blue-900 border-b border-blue-200 dark:border-blue-800",
+            "p-1 hover:bg-blue-100 dark:hover:bg-blue-800 rounded text-blue-600"
+          ]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/__tests__/DemoBanner.test.tsx",
+        "src/components/shared/InlineNotice.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "status-dot-shell",
       "category": "status-indicator",
       "summary": "Resource and health indicator dots must compose StatusDot for shared size, variant, pulse, title, and aria behavior instead of recreating local rounded status spans.",

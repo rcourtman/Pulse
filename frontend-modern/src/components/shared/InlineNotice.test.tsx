@@ -1,5 +1,5 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
-import { afterEach, describe, expect, it } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { InlineNotice } from './InlineNotice';
 
 describe('InlineNotice', () => {
@@ -51,5 +51,29 @@ describe('InlineNotice', () => {
 
     const notice = screen.getByText('Shared informational notice.').closest('.rounded-lg');
     expect(notice?.className).toContain('border-blue-300');
+  });
+
+  it('owns dismissible banner notice layout and close action chrome', () => {
+    const onDismiss = vi.fn();
+
+    render(() => (
+      <InlineNotice
+        role="status"
+        tone="info"
+        layout="banner"
+        onDismiss={onDismiss}
+        dismissLabel="Dismiss demo banner"
+        dismissTitle="Dismiss"
+      >
+        Demo instance with mock data.
+      </InlineNotice>
+    ));
+
+    const notice = screen.getByRole('status');
+    expect(notice.className).toContain('rounded-none');
+    expect(notice.className).toContain('border-x-0');
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss demo banner' }));
+
+    expect(onDismiss).toHaveBeenCalledOnce();
   });
 });

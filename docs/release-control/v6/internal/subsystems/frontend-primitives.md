@@ -310,6 +310,11 @@ canonical `agent` resource type. Kubernetes is cluster-agent-backed: canonical
 rows, so the unified-resource owner must project the cluster agent identity and
 cluster-scoped agent version onto those node rows before the shared stale-agent
 collector can decide whether the node inventory is gated by an older agent.
+Global dismissible notice bars are also part of the shared `InlineNotice`
+boundary. `frontend-modern/src/components/DemoBanner.tsx` must compose
+`InlineNotice` with the `banner` layout, the shared icon library, and the
+primitive's dismiss slot instead of carrying a local blue notice shell, raw SVG
+status icon, or page-local close button classes.
 Kubernetes policy inventory follows that same primitive boundary while the
 unified-resource owner supplies NetworkPolicy policy type and rule-count
 columns, PodDisruptionBudget budget and observed health columns, ResourceQuota

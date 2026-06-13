@@ -1,19 +1,30 @@
+import XIcon from 'lucide-solid/icons/x';
 import { mergeProps, Show, splitProps, type JSX } from 'solid-js';
+import { ActionIconButton } from './Button';
 
 export type InlineNoticeTone = 'danger' | 'info' | 'success' | 'warning';
+export type InlineNoticeLayout = 'inline' | 'banner';
 
 interface InlineNoticeProps extends Omit<JSX.HTMLAttributes<HTMLDivElement>, 'class'> {
   tone?: InlineNoticeTone;
+  layout?: InlineNoticeLayout;
   icon?: JSX.Element;
   actionHref?: string;
   actionLabel?: JSX.Element;
   actionIcon?: JSX.Element;
   actionAriaLabel?: string;
+  onDismiss?: () => void;
+  dismissLabel?: string;
+  dismissTitle?: string;
   class?: string;
 }
 
-export const INLINE_NOTICE_BASE_CLASS =
-  'flex items-start gap-2 rounded-lg border px-3 py-2 text-sm';
+export const INLINE_NOTICE_BASE_CLASS = 'flex items-start gap-2 border px-3 py-2 text-sm';
+
+export const INLINE_NOTICE_LAYOUT_CLASSES: Record<InlineNoticeLayout, string> = {
+  inline: 'rounded-lg',
+  banner: 'rounded-none border-x-0 border-t-0',
+};
 
 export const INLINE_NOTICE_TONE_CLASSES: Record<InlineNoticeTone, string> = {
   danger:
@@ -44,23 +55,30 @@ const INLINE_NOTICE_ACTION_ICON_CLASS =
   'inline-flex h-3.5 w-3.5 items-center justify-center [&>svg]:h-3.5 [&>svg]:w-3.5';
 
 export function InlineNotice(props: InlineNoticeProps) {
-  const merged = mergeProps({ tone: 'warning' as InlineNoticeTone }, props);
+  const merged = mergeProps(
+    { tone: 'warning' as InlineNoticeTone, layout: 'inline' as InlineNoticeLayout },
+    props,
+  );
   const [local, rest] = splitProps(merged, [
     'tone',
+    'layout',
     'icon',
     'actionHref',
     'actionLabel',
     'actionIcon',
     'actionAriaLabel',
+    'onDismiss',
+    'dismissLabel',
+    'dismissTitle',
     'children',
     'class',
   ]);
 
   return (
     <div
-      class={`${INLINE_NOTICE_BASE_CLASS} ${INLINE_NOTICE_TONE_CLASSES[local.tone]} ${
-        local.class ?? ''
-      }`.trim()}
+      class={`${INLINE_NOTICE_BASE_CLASS} ${INLINE_NOTICE_LAYOUT_CLASSES[local.layout]} ${
+        INLINE_NOTICE_TONE_CLASSES[local.tone]
+      } ${local.class ?? ''}`.trim()}
       {...rest}
     >
       <Show when={local.icon}>
@@ -93,6 +111,21 @@ export function InlineNotice(props: InlineNoticeProps) {
           )}
         </Show>
       </div>
+      <Show when={local.onDismiss}>
+        {(onDismiss) => (
+          <ActionIconButton
+            type="button"
+            label={local.dismissLabel ?? 'Dismiss notice'}
+            title={local.dismissTitle ?? local.dismissLabel ?? 'Dismiss notice'}
+            tone="muted"
+            size="sm"
+            class="-mr-1 -mt-1"
+            onClick={() => onDismiss()()}
+          >
+            <XIcon class="h-4 w-4" aria-hidden="true" />
+          </ActionIconButton>
+        )}
+      </Show>
     </div>
   );
 }

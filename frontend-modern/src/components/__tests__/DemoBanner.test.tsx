@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import demoBannerSource from '@/components/DemoBanner.tsx?raw';
 
 /* ------------------------------------------------------------------ */
 /*  Mocks                                                              */
@@ -32,6 +33,19 @@ describe('DemoBanner', () => {
     const { DemoBanner } = await import('../DemoBanner');
     render(() => <DemoBanner />);
   }
+
+  it('keeps demo notice chrome on shared InlineNotice primitives', () => {
+    expect(demoBannerSource).toContain('InlineNotice');
+    expect(demoBannerSource).toContain('layout="banner"');
+    expect(demoBannerSource).toContain('lucide-solid/icons/info');
+    expect(demoBannerSource).not.toContain('<svg');
+    expect(demoBannerSource).not.toContain(
+      'bg-blue-50 dark:bg-blue-900 border-b border-blue-200 dark:border-blue-800',
+    );
+    expect(demoBannerSource).not.toContain(
+      'p-1 hover:bg-blue-100 dark:hover:bg-blue-800 rounded text-blue-600',
+    );
+  });
 
   /* ---------- Visibility ---------- */
 
