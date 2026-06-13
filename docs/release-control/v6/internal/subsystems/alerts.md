@@ -521,12 +521,13 @@ must use workload, VM, and container vocabulary instead of exposing internal
 guest override/filter names unless the UI is naming a backend field directly.
 Alert severity presentation has a split ownership boundary: alerts owns
 `formatAlertSeverityLabel`, compact severity labels, legacy alert severity
-class helpers, and severity-bucket-to-`StatusIndicatorVariant` mapping in
+class helpers, severity-bucket-to-`StatusIndicatorVariant` mapping, and
+severity-bucket-to-detail-row tone mapping in
 `frontend-modern/src/utils/alertSeverityPresentation.ts`, while
 frontend-primitives owns the visible platform severity badge and dot shells in
 `frontend-modern/src/components/shared/AlertSeverityBadge.tsx`. Platform alert
 tables must consume that split instead of recreating provider-local severity
-label, text-class, or variant helpers.
+label, text-class, detail-tone, or variant helpers.
 Alert history filter defaults such as the all-time period option must likewise
 come from the alert overview/history presentation helper and the shared
 filter-option label primitive rather than hard-coded title-case strings in the

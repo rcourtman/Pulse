@@ -1705,8 +1705,14 @@ describe('shared primitive guardrails', () => {
     const filterOptionsRule = registry.rules?.find(
       (rule) => rule.id === 'platform-alert-severity-filter-options',
     );
+    const detailToneRule = registry.rules?.find(
+      (rule) => rule.id === 'platform-alert-severity-detail-tone',
+    );
     const localHelperGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'platform-alert-severity-local-helper',
+    );
+    const localDetailToneGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-alert-severity-local-detail-tone-helper',
     );
     const requiredGuard = registry.requiredPatternGuards?.find(
       (guard) => guard.id === 'platform-alert-severity-indicator-required',
@@ -1731,6 +1737,11 @@ describe('shared primitive guardrails', () => {
     );
     expect(filterOptionsRule?.canonical?.export).toBe('getPlatformAlertSeverityFilterOptions');
     expect(filterOptionsRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
+      alertTableConsumerPaths,
+    );
+    expect(detailToneRule?.canonical?.path).toBe('src/utils/alertSeverityPresentation.ts');
+    expect(detailToneRule?.canonical?.export).toBe('getAlertSeverityDetailTone');
+    expect(detailToneRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
       alertTableConsumerPaths,
     );
     expect(registeredRule?.forbiddenPatterns).toEqual(
@@ -1772,6 +1783,12 @@ describe('shared primitive guardrails', () => {
         ],
       },
     ]);
+    expect(detailToneRule?.forbiddenPatterns).toEqual(
+      alertTableConsumerPaths.map((path) => ({
+        path,
+        patterns: ['const alertTone', 'type AlertDetailTone'],
+      })),
+    );
     expect(localHelperGuard?.canonical?.path).toBe('src/components/shared/AlertSeverityBadge.tsx');
     expect(localHelperGuard?.canonical?.export).toBe('AlertSeverityBadge');
     expect(localHelperGuard?.allPatterns).toEqual(['severityVariant', 'severityTextClass']);
@@ -1783,6 +1800,17 @@ describe('shared primitive guardrails', () => {
     ]);
     expect(localHelperGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(localHelperGuard?.ignoredPaths ?? []).toHaveLength(0);
+    expect(localDetailToneGuard?.canonical?.path).toBe('src/utils/alertSeverityPresentation.ts');
+    expect(localDetailToneGuard?.canonical?.export).toBe('getAlertSeverityDetailTone');
+    expect(localDetailToneGuard?.allPatterns).toEqual(['const alertTone', 'severityBucket']);
+    expect(localDetailToneGuard?.scopes).toEqual([
+      'src/features/docker',
+      'src/features/kubernetes',
+      'src/features/truenas',
+      'src/features/vmware',
+    ]);
+    expect(localDetailToneGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(localDetailToneGuard?.ignoredPaths ?? []).toHaveLength(0);
     expect(requiredGuard?.canonical?.path).toBe('src/components/shared/AlertSeverityBadge.tsx');
     expect(requiredGuard?.canonical?.export).toBe('AlertSeverityBadge');
     expect(requiredGuard?.triggerPatterns).toEqual([
@@ -1818,6 +1846,7 @@ describe('shared primitive guardrails', () => {
     );
     expect(platformAlertSeverityFilterOptionsSource).toContain('filterChipStatusDot');
     expect(alertSeverityPresentationSource).toContain('getAlertSeverityIndicatorVariant');
+    expect(alertSeverityPresentationSource).toContain('getAlertSeverityDetailTone');
     expect(alertSeverityPresentationSource).toContain('formatAlertSeverityLabel');
 
     for (const source of [
@@ -1829,9 +1858,12 @@ describe('shared primitive guardrails', () => {
       expect(source).toContain('AlertSeverityBadge');
       expect(source).toContain('AlertSeverityDot');
       expect(source).toContain('formatAlertSeverityLabel');
+      expect(source).toContain('getAlertSeverityDetailTone');
       expect(source).toContain('getPlatformAlertSeverityFilterOptions');
       expect(source).not.toContain('severityVariant');
       expect(source).not.toContain('severityTextClass');
+      expect(source).not.toContain('const alertTone');
+      expect(source).not.toContain('type AlertDetailTone');
       expect(source).not.toContain('filterChipStatusDot(');
       expect(source).not.toContain("value: 'critical'");
       expect(source).not.toContain("value: 'warning'");

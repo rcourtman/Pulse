@@ -27,11 +27,13 @@ import {
   compactDetailSections,
   makeDetailRow,
   type DetailSection,
-  type DetailValueTone,
 } from '@/components/shared/DetailSectionTable';
 import type { Resource, ResourceType } from '@/types/resource';
 import { getAlertFilteredEmptyState } from '@/utils/alertOverviewPresentation';
-import { formatAlertSeverityLabel } from '@/utils/alertSeverityPresentation';
+import {
+  formatAlertSeverityLabel,
+  getAlertSeverityDetailTone,
+} from '@/utils/alertSeverityPresentation';
 
 const TRUENAS_INCIDENT_STATUS_OPTIONS =
   getPlatformAlertSeverityFilterOptions<TrueNASIncidentSeverityFilter>();
@@ -80,7 +82,6 @@ const formatStartedAt = (value: string | undefined): string => {
   });
 };
 
-type AlertDetailTone = DetailValueTone;
 type AlertDetailSection = DetailSection;
 
 const detailDateTime = (value?: string): string | null => {
@@ -98,12 +99,6 @@ const detailDateTime = (value?: string): string | null => {
 
 const detailRow = makeDetailRow;
 
-const alertTone = (severity: TrueNASIncidentRow['severityBucket']): AlertDetailTone => {
-  if (severity === 'critical') return 'danger';
-  if (severity === 'warning') return 'warning';
-  return 'muted';
-};
-
 const buildAlertDetailSections = (incident: TrueNASIncidentRow): AlertDetailSection[] => {
   const parentName = incident.resource.parentName?.trim();
   return compactDetailSections([
@@ -111,7 +106,7 @@ const buildAlertDetailSections = (incident: TrueNASIncidentRow): AlertDetailSect
       label: 'Alert',
       rows: compactDetailRows([
         detailRow('Severity', formatAlertSeverityLabel(incident.severity), {
-          tone: alertTone(incident.severityBucket),
+          tone: getAlertSeverityDetailTone(incident.severityBucket),
         }),
         detailRow('Summary', incident.summary),
         detailRow('Label', incident.label),

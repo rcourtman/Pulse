@@ -49,6 +49,22 @@ export function getAlertSeverityIndicator(
   };
 }
 
+export type AlertSeverityDetailTone = 'danger' | 'warning' | 'muted';
+
+export function getAlertSeverityDetailTone(
+  level?: Alert['level'] | string | null,
+): AlertSeverityDetailTone {
+  switch (normalizeAlertSeverity(level)) {
+    case 'critical':
+      return 'danger';
+    case 'warning':
+      return 'warning';
+    case 'info':
+    default:
+      return 'muted';
+  }
+}
+
 export function getAlertSeverityBadgeClass(level: Alert['level'] | string): string {
   const base =
     'inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase';

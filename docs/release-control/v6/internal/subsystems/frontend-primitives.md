@@ -2421,10 +2421,12 @@ Platform alert severity indicators are a governed specialization of that same
 primitive family. `frontend-modern/src/components/shared/AlertSeverityBadge.tsx`
 owns the alert severity badge and dot shells, while
 `frontend-modern/src/utils/alertSeverityPresentation.ts` owns alert severity
-label formatting and severity-bucket-to-status-indicator mapping. Docker,
-Kubernetes, TrueNAS, vSphere, and future platform alert tables must compose
-`AlertSeverityBadge` and `AlertSeverityDot`; they must not recreate
-`severityVariant`, `severityTextClass`, or severity badge spans locally.
+label formatting, severity-bucket-to-status-indicator mapping, and
+severity-bucket-to-detail-row tone mapping. Docker, Kubernetes, TrueNAS,
+vSphere, and future platform alert tables must compose `AlertSeverityBadge`,
+`AlertSeverityDot`, and `getAlertSeverityDetailTone`; they must not recreate
+`severityVariant`, `severityTextClass`, `alertTone`, or severity badge spans
+locally.
 Platform alert severity filters follow the same shared-template rule.
 `frontend-modern/src/features/platformPage/platformAlertSeverityFilterOptions.tsx`
 owns the canonical All/Critical/Warning/Info option labels, tones, and leading

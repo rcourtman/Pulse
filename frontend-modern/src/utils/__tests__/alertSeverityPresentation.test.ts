@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   formatAlertSeverityLabel,
+  getAlertSeverityDetailTone,
   getAlertSeverityIndicator,
   getAlertSeverityBadgeClass,
   getAlertSeverityCompactLabel,
@@ -28,6 +29,13 @@ describe('alertSeverityPresentation', () => {
       variant: 'warning',
       label: 'Restart Loop',
     });
+  });
+
+  it('maps alert severity buckets to shared detail-row tones', () => {
+    expect(getAlertSeverityDetailTone('critical')).toBe('danger');
+    expect(getAlertSeverityDetailTone('warning')).toBe('warning');
+    expect(getAlertSeverityDetailTone('info')).toBe('muted');
+    expect(getAlertSeverityDetailTone('maintenance')).toBe('muted');
   });
 
   it('maps critical alerts to danger styling', () => {

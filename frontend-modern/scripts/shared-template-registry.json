@@ -820,6 +820,44 @@
       ]
     },
     {
+      "id": "platform-alert-severity-detail-tone",
+      "category": "detail-tone",
+      "summary": "Platform alert detail rows must get severity-to-detail-row tone mapping from alertSeverityPresentation instead of defining table-local alertTone helpers.",
+      "canonical": {
+        "path": "src/utils/alertSeverityPresentation.ts",
+        "export": "getAlertSeverityDetailTone"
+      },
+      "requiredConsumers": [
+        { "path": "src/features/docker/DockerAlertsTable.tsx" },
+        { "path": "src/features/kubernetes/KubernetesAlertsTable.tsx" },
+        { "path": "src/features/truenas/TrueNASAlertsTable.tsx" },
+        { "path": "src/features/vmware/VsphereAlertsTable.tsx" }
+      ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/features/docker/DockerAlertsTable.tsx",
+          "patterns": ["const alertTone", "type AlertDetailTone"]
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesAlertsTable.tsx",
+          "patterns": ["const alertTone", "type AlertDetailTone"]
+        },
+        {
+          "path": "src/features/truenas/TrueNASAlertsTable.tsx",
+          "patterns": ["const alertTone", "type AlertDetailTone"]
+        },
+        {
+          "path": "src/features/vmware/VsphereAlertsTable.tsx",
+          "patterns": ["const alertTone", "type AlertDetailTone"]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/utils/__tests__/alertSeverityPresentation.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "metadata-badge-shell",
       "category": "metadata-badge",
       "summary": "Read-only metadata chips must compose MetadataBadge so size, shape, tone vocabulary, fit behavior, and whitespace handling stay shared instead of being copied as page-local pill spans.",
@@ -1619,6 +1657,31 @@
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "src/components/shared/AlertSeverityBadge.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-alert-severity-local-detail-tone-helper",
+      "category": "detail-tone",
+      "summary": "Platform alert tables must not recreate alertTone severity detail-row helpers; detail tone mapping belongs to alertSeverityPresentation.",
+      "canonical": {
+        "path": "src/utils/alertSeverityPresentation.ts",
+        "export": "getAlertSeverityDetailTone"
+      },
+      "scopes": [
+        "src/features/docker",
+        "src/features/kubernetes",
+        "src/features/truenas",
+        "src/features/vmware"
+      ],
+      "extensions": [".tsx"],
+      "allPatterns": ["const alertTone", "severityBucket"],
+      "legacyReason": "Retired migration debt. Platform alert detail rows must call getAlertSeverityDetailTone instead of carrying page-local severity tone helpers.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/utils/__tests__/alertSeverityPresentation.test.ts",
         "scripts/shared-template-audit.mjs"
       ]
     },

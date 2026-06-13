@@ -5,7 +5,6 @@ import {
   compactDetailSections,
   makeDetailRow,
   type DetailSection,
-  type DetailValueTone,
 } from '@/components/shared/DetailSectionTable';
 import { AlertSeverityBadge, AlertSeverityDot } from '@/components/shared/AlertSeverityBadge';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
@@ -26,7 +25,10 @@ import {
 import { getPlatformAlertSeverityFilterOptions } from '@/features/platformPage/platformAlertSeverityFilterOptions';
 import type { ResourceType } from '@/types/resource';
 import { getAlertFilteredEmptyState } from '@/utils/alertOverviewPresentation';
-import { formatAlertSeverityLabel } from '@/utils/alertSeverityPresentation';
+import {
+  formatAlertSeverityLabel,
+  getAlertSeverityDetailTone,
+} from '@/utils/alertSeverityPresentation';
 import {
   filterDockerIncidents,
   type DockerIncidentRow,
@@ -100,16 +102,9 @@ const detailDateTime = (value?: string): string => {
   });
 };
 
-type AlertDetailTone = DetailValueTone;
 type AlertDetailSection = DetailSection;
 
 const detailRow = makeDetailRow;
-
-const alertTone = (severity: DockerIncidentRow['severityBucket']): AlertDetailTone => {
-  if (severity === 'critical') return 'danger';
-  if (severity === 'warning') return 'warning';
-  return 'muted';
-};
 
 const buildAlertDetailSections = (incident: DockerIncidentRow): AlertDetailSection[] => {
   const docker = incident.resource.docker;
@@ -118,7 +113,7 @@ const buildAlertDetailSections = (incident: DockerIncidentRow): AlertDetailSecti
       label: 'Alert',
       rows: compactDetailRows([
         detailRow('Severity', formatAlertSeverityLabel(incident.severity), {
-          tone: alertTone(incident.severityBucket),
+          tone: getAlertSeverityDetailTone(incident.severityBucket),
         }),
         detailRow('Summary', incident.summary),
         detailRow('Signal', incident.label),

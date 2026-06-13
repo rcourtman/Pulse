@@ -1784,7 +1784,9 @@ severity dots, badges, and severity label formatting must compose
 `AlertSeverityDot`, `AlertSeverityBadge`, and
 `formatAlertSeverityLabel` from the frontend-primitives-owned shared path
 instead of restoring table-local `severityVariant`, `severityTextClass`, or
-severity-label helpers, and their severity toolbar filters must use
+severity-label helpers, detail severity row tones must use
+`getAlertSeverityDetailTone` instead of restoring local `alertTone` helpers,
+and their severity toolbar filters must use
 `getPlatformAlertSeverityFilterOptions` instead of restoring local
 All/Critical/Warning/Info option arrays,
 and local operator identity labels now split from governed detail summaries:
