@@ -4,10 +4,7 @@ import { TogglePrimitive } from '@/components/shared/Toggle';
 import { ENVIRONMENT_LOCK_BUTTON_TITLE } from '@/utils/environmentLockPresentation';
 import {
   DOCKER_UPDATE_ACTIONS_ENV_VAR,
-  DOCKER_UPDATE_ACTIONS_SECTION_DESCRIPTION,
-  DOCKER_UPDATE_ACTIONS_SECTION_TITLE,
-  DOCKER_UPDATE_ACTIONS_TOGGLE_DESCRIPTION,
-  DOCKER_UPDATE_ACTIONS_TOGGLE_LABEL,
+  getDockerUpdateActionsPresentation,
 } from '@/utils/systemSettingsPresentation';
 
 interface DockerRuntimeSettingsCardProps {
@@ -22,16 +19,19 @@ export const DockerRuntimeSettingsCard: Component<DockerRuntimeSettingsCardProps
     <div class="space-y-4">
       <div class="space-y-1">
         <h3 class="text-base font-semibold text-base-content">
-          {DOCKER_UPDATE_ACTIONS_SECTION_TITLE}
+          {getDockerUpdateActionsPresentation().sectionTitle}
         </h3>
-        <p class="text-sm text-muted">{DOCKER_UPDATE_ACTIONS_SECTION_DESCRIPTION}</p>
+        <p class="text-sm text-muted">{getDockerUpdateActionsPresentation().sectionDescription}</p>
       </div>
 
       <div class="flex items-start justify-between gap-4 rounded-md border border-border bg-surface-hover p-4">
         <div class="flex-1 space-y-1">
           <div class="flex items-center gap-2">
-            <span id="docker-update-actions-toggle-label" class="text-sm font-medium text-base-content">
-              {DOCKER_UPDATE_ACTIONS_TOGGLE_LABEL}
+            <span
+              id="docker-update-actions-toggle-label"
+              class="text-sm font-medium text-base-content"
+            >
+              {getDockerUpdateActionsPresentation().toggleLabel}
             </span>
             <Show when={props.disableDockerUpdateActionsLocked()}>
               <EnvironmentLockBadge
@@ -55,10 +55,10 @@ export const DockerRuntimeSettingsCard: Component<DockerRuntimeSettingsCardProps
             </Show>
           </div>
           <p id="docker-update-actions-toggle-description" class="text-xs text-muted">
-            {DOCKER_UPDATE_ACTIONS_TOGGLE_DESCRIPTION}
+            {getDockerUpdateActionsPresentation().toggleDescription}
           </p>
           <p class="text-xs text-muted mt-1">
-            Can also be set via environment variable:{' '}
+            {getDockerUpdateActionsPresentation().environmentHint}{' '}
             <code class="px-1 py-0.5 rounded bg-surface-hover text-base-content">
               {DOCKER_UPDATE_ACTIONS_ENV_VAR}=true
             </code>

@@ -25,7 +25,9 @@ import { layoutStore } from '@/utils/layout';
 import {
   PVE_POLLING_MAX_SECONDS,
   PVE_POLLING_MIN_SECONDS,
-  PVE_POLLING_PRESETS,
+  getPvePollingCadenceSummary,
+  getPvePollingCustomOption,
+  getPvePollingPresetOptions,
 } from '@/utils/systemSettingsPresentation';
 import { PRIVACY_DOC_URL } from '@/utils/docsLinks';
 
@@ -48,12 +50,12 @@ const TEMPERATURE_UNIT_OPTIONS: FilterOption<'celsius' | 'fahrenheit'>[] = [
   { value: 'fahrenheit', label: 'Fahrenheit' },
 ];
 
-const PVE_POLLING_OPTIONS: FilterOption<number | 'custom'>[] = [
-  ...PVE_POLLING_PRESETS.map((option) => ({
-    label: option.label,
-    value: option.value,
-  })),
-  { value: 'custom', label: 'Custom' },
+const TELEMETRY_ENV_VAR = 'PULSE_TELEMETRY';
+const PVE_POLLING_INTERVAL_ENV_VAR = 'PVE_POLLING_INTERVAL';
+
+const getPvePollingOptions = (): FilterOption<number | 'custom'>[] => [
+  ...getPvePollingPresetOptions(),
+  getPvePollingCustomOption(),
 ];
 
 export interface GeneralSettingsPanelProps {
@@ -214,8 +216,8 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
 
       {/* Usage Data + Privacy Card */}
       <SettingsPanel
-        title="Usage data and privacy"
-        description="Control anonymous outbound telemetry from this Pulse instance."
+        title={t('settings.general.telemetry.section.title')}
+        description={t('settings.general.telemetry.section.description')}
         noPadding
         bodyClass="divide-y divide-border"
       >
@@ -224,21 +226,16 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
             <div class="flex-1 min-w-0 space-y-1">
               <div class="flex items-center gap-2">
                 <span class="text-sm font-medium text-base-content truncate">
-                  Anonymous outbound telemetry
+                  {t('settings.general.telemetry.title')}
                 </span>
                 <Show when={props.telemetryEnabledLocked()}>
-                  <EnvironmentLockBadge envVar="PULSE_TELEMETRY" />
+                  <EnvironmentLockBadge envVar={TELEMETRY_ENV_VAR} />
                 </Show>
               </div>
               <p class="text-xs text-muted leading-relaxed">
-                Help improve Pulse by sharing anonymous outbound usage data: a rotating install ID,
-                normalized release identity, runtime platform, aggregate self-hosted adoption
-                counts, and coarse feature flags. No hostnames, credentials, infrastructure
-                identifiers, prompts, chat messages, or personal information are sent. Telemetry
-                rows are retained for up to 90 days, and IP addresses are not stored in telemetry
-                rows.{' '}
+                {t('settings.general.telemetry.description')}{' '}
                 <ExternalTextLink href={PRIVACY_DOC_URL} variant="muted">
-                  Full details
+                  {t('settings.general.telemetry.fullDetails')}
                 </ExternalTextLink>
               </p>
             </div>
@@ -257,7 +254,9 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
               disabled={props.loadingTelemetryPreview()}
               onClick={() => void props.handleLoadTelemetryPreview()}
             >
-              {props.telemetryPreview() ? 'Refresh payload' : 'Preview payload'}
+              {props.telemetryPreview()
+                ? t('settings.general.telemetry.refreshPayload')
+                : t('settings.general.telemetry.previewPayload')}
             </Button>
             <Button
               variant="secondary"
@@ -265,7 +264,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
               disabled={props.resettingTelemetryInstallID()}
               onClick={() => void props.handleResetTelemetryInstallID()}
             >
-              Reset ID
+              {t('settings.general.telemetry.resetId')}
             </Button>
             <Show when={props.telemetryPreviewPayload()}>
               <Button
@@ -273,7 +272,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
                 size="settingsActionXs"
                 onClick={() => void props.handleCopyTelemetryPreview()}
               >
-                Copy JSON
+                {t('settings.general.telemetry.copyJson')}
               </Button>
             </Show>
           </div>
@@ -282,17 +281,16 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
             <div class="rounded-md border border-border bg-surface-alt">
               <div class="flex flex-col gap-1 border-b border-border px-4 py-3">
                 <p class="text-xs font-semibold uppercase tracking-wide text-muted">
-                  Current heartbeat payload
+                  {t('settings.general.telemetry.payloadTitle')}
                 </p>
                 <Show when={!props.telemetryPreviewEnabled()}>
                   <p class="text-xs text-muted leading-relaxed">
-                    Telemetry is currently disabled. This preview shows the payload Pulse would send
-                    if you enable it.
+                    {t('settings.general.telemetry.disabledPreview')}
                   </p>
                 </Show>
               </div>
               <pre
-                aria-label="Telemetry payload preview"
+                aria-label={t('settings.general.telemetry.payloadAriaLabel')}
                 class="overflow-x-auto px-4 py-3 text-xs leading-relaxed text-base-content"
               >
                 {props.telemetryPreviewPayload()}
@@ -311,8 +309,8 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
 
       {/* Monitoring Cadence Card */}
       <SettingsPanel
-        title="Monitoring cadence"
-        description="Control how frequently Pulse polls Proxmox VE nodes."
+        title={t('settings.general.monitoringCadence.section.title')}
+        description={t('settings.general.monitoringCadence.section.description')}
         noPadding
         bodyClass="divide-y divide-border"
       >
@@ -320,17 +318,10 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
           <div class="space-y-4">
             <div class="space-y-2">
               <p class="text-[10px] font-bold uppercase tracking-wider text-muted">
-                Current cadence: {props.pvePollingInterval()} seconds (
-                {props.pvePollingInterval() >= 60
-                  ? `${(props.pvePollingInterval() / 60).toFixed(
-                      props.pvePollingInterval() % 60 === 0 ? 0 : 1,
-                    )} minute${props.pvePollingInterval() / 60 === 1 ? '' : 's'}`
-                  : 'under a minute'}
-                )
+                {getPvePollingCadenceSummary(props.pvePollingInterval())}
               </p>
               <p class="text-xs text-muted leading-relaxed max-w-3xl">
-                Shorter intervals provide near-real-time updates at the cost of higher API and CPU
-                usage on each node. Set a longer interval to reduce load on busy clusters.
+                {t('settings.general.monitoringCadence.description')}
               </p>
             </div>
 
@@ -338,7 +329,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
               {/* Preset buttons */}
               <FilterButtonGroup
                 class="sm:grid-cols-2 xl:grid-cols-5"
-                options={PVE_POLLING_OPTIONS}
+                options={getPvePollingOptions()}
                 value={props.pvePollingSelection()}
                 onChange={handlePVEPollingSelection}
                 variant="prominent"
@@ -350,11 +341,13 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
                 <div class="mt-4 flex flex-col sm:flex-row sm:items-center gap-4 rounded-md border border-dashed border-border bg-surface-hover p-4 transition-all animate-in fade-in slide-in-from-top-1">
                   <div class="flex-1 min-w-0">
                     <label class="block text-sm font-medium text-base-content truncate">
-                      Custom polling interval
+                      {t('settings.general.monitoringCadence.custom.title')}
                     </label>
                     <p class="text-xs text-muted mt-0.5 line-clamp-2">
-                      Enter seconds ({PVE_POLLING_MIN_SECONDS}-{PVE_POLLING_MAX_SECONDS}). Applies
-                      to all clusters.
+                      {t('settings.general.monitoringCadence.custom.description', {
+                        min: PVE_POLLING_MIN_SECONDS,
+                        max: PVE_POLLING_MAX_SECONDS,
+                      })}
                     </p>
                   </div>
                   <input
@@ -397,7 +390,9 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
                     <circle cx="12" cy="16" r="0.5" />
                   </svg>
                   <span class="leading-relaxed">
-                    Managed via environment variable <strong>PVE_POLLING_INTERVAL</strong>.
+                    {t('settings.general.monitoringCadence.envLocked', {
+                      envVar: PVE_POLLING_INTERVAL_ENV_VAR,
+                    })}
                   </span>
                 </div>
               </Show>

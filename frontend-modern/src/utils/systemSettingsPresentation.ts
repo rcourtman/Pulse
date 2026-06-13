@@ -1,4 +1,11 @@
 import { getSourcePlatformLabel } from '@/utils/sourcePlatforms';
+import {
+  getActiveLocale,
+  normalizeLocale,
+  t,
+  type I18nMessageKey,
+  type SupportedLocale,
+} from '@/i18n';
 
 export const PVE_POLLING_MIN_SECONDS = 10;
 export const PVE_POLLING_MAX_SECONDS = 3600;
@@ -37,6 +44,85 @@ export const DOCKER_UPDATE_ACTIONS_SECTION_TITLE = `${DOCKER_PODMAN_SOURCE_LABEL
 export const DOCKER_UPDATE_ACTIONS_SECTION_DESCRIPTION = `Control how ${DOCKER_PODMAN_SOURCE_LABEL} update actions appear across Pulse.`;
 export const DOCKER_UPDATE_ACTIONS_TOGGLE_LABEL = 'Hide update buttons';
 export const DOCKER_UPDATE_ACTIONS_TOGGLE_DESCRIPTION = `When enabled, ${DOCKER_PODMAN_SOURCE_LABEL} "Update" actions are hidden across Pulse. Update detection still runs, so available updates remain visible.`;
+
+const PVE_POLLING_PRESET_LABEL_KEYS = {
+  10: 'settings.general.monitoringCadence.preset.realtime',
+  30: 'settings.general.monitoringCadence.preset.balanced',
+  60: 'settings.general.monitoringCadence.preset.low',
+  300: 'settings.general.monitoringCadence.preset.veryLow',
+} as const satisfies Record<(typeof PVE_POLLING_PRESETS)[number]['value'], I18nMessageKey>;
+
+const PVE_POLLING_PRESET_DURATIONS = {
+  10: '10s',
+  30: '30s',
+  60: '60s',
+  300: '5m',
+} as const satisfies Record<(typeof PVE_POLLING_PRESETS)[number]['value'], string>;
+
+function resolvePresentationLocale(locale?: SupportedLocale): SupportedLocale {
+  return locale ?? getActiveLocale();
+}
+
+export function getPvePollingPresetOptions(locale?: SupportedLocale) {
+  const presentationLocale = resolvePresentationLocale(locale);
+  return PVE_POLLING_PRESETS.map((option) => ({
+    value: option.value,
+    label: t(
+      PVE_POLLING_PRESET_LABEL_KEYS[option.value],
+      { duration: PVE_POLLING_PRESET_DURATIONS[option.value] },
+      presentationLocale,
+    ),
+  }));
+}
+
+export function getPvePollingCustomOption(locale?: SupportedLocale) {
+  return {
+    value: 'custom' as const,
+    label: t('settings.general.monitoringCadence.preset.custom', {}, locale),
+  };
+}
+
+export function formatPvePollingDuration(seconds: number, locale?: SupportedLocale): string {
+  const presentationLocale = normalizeLocale(resolvePresentationLocale(locale));
+  if (seconds < 60) {
+    return t('settings.general.monitoringCadence.duration.underMinute', {}, presentationLocale);
+  }
+
+  const minutes = seconds / 60;
+  const count = new Intl.NumberFormat(presentationLocale, {
+    maximumFractionDigits: minutes % 1 === 0 ? 0 : 1,
+  }).format(minutes);
+
+  return t(
+    minutes === 1
+      ? 'settings.general.monitoringCadence.duration.minute'
+      : 'settings.general.monitoringCadence.duration.minutes',
+    { count },
+    presentationLocale,
+  );
+}
+
+export function getPvePollingCadenceSummary(seconds: number, locale?: SupportedLocale): string {
+  const presentationLocale = resolvePresentationLocale(locale);
+  return t(
+    'settings.general.monitoringCadence.current',
+    { seconds, duration: formatPvePollingDuration(seconds, presentationLocale) },
+    presentationLocale,
+  );
+}
+
+export function getDockerUpdateActionsPresentation(
+  locale?: SupportedLocale,
+  sourceLabel = DOCKER_PODMAN_SOURCE_LABEL,
+) {
+  return {
+    sectionTitle: t('settings.general.docker.section.title', { sourceLabel }, locale),
+    sectionDescription: t('settings.general.docker.section.description', { sourceLabel }, locale),
+    toggleLabel: t('settings.general.docker.toggle.title', {}, locale),
+    toggleDescription: t('settings.general.docker.toggle.description', { sourceLabel }, locale),
+    environmentHint: t('settings.general.docker.envHint', {}, locale),
+  } as const;
+}
 
 export function getBackupIntervalSelectValue(
   backupPollingUseCustom: boolean,

@@ -6931,7 +6931,27 @@
       "evidence": [
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/localized-product-surfaces-foundation-2026-06-13.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/subsystems/frontend-primitives.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/__tests__/GeneralSettingsPanel.guardrails.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/__tests__/GeneralSettingsPanel.localization.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx",
           "kind": "file"
         },
         {
@@ -6943,6 +6963,11 @@
           "repo": "pulse",
           "path": "frontend-modern/src/i18n/messages.ts",
           "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/i18n/policy.ts",
+          "kind": "file"
         }
       ]
     }
@@ -6952,7 +6977,7 @@
       "id": "localized-product-surfaces",
       "name": "Localized Product Surfaces",
       "summary": "Promote localization into a governed product lane covering i18n architecture, locale fallback and QA, German and Spanish first-wave translations, website and docs localization, first-run/settings/core monitoring/alerts copy, mobile handoff copy, commercial trust surfaces, and guardrails that keep machine-facing identifiers, commands, config keys, API fields, logs, and resource names untranslated.",
-      "status": "proposed",
+      "status": "planned",
       "recorded_at": "2026-06-12",
       "target_id": "v6-product-lane-expansion",
       "current_lane_ids": [

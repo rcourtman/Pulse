@@ -5,12 +5,52 @@ export const EN_MESSAGES = {
   'settings.general.fullWidth.description':
     'Expand content to use all available screen width on large monitors.',
   'settings.general.fullWidth.title': 'Full-width mode',
+  'settings.general.docker.envHint': 'Can also be set via environment variable:',
+  'settings.general.docker.section.description':
+    'Control how {sourceLabel} update actions appear across Pulse.',
+  'settings.general.docker.section.title': '{sourceLabel} updates',
+  'settings.general.docker.toggle.description':
+    'When enabled, {sourceLabel} "Update" actions are hidden across Pulse. Update detection still runs, so available updates remain visible.',
+  'settings.general.docker.toggle.title': 'Hide update buttons',
   'settings.general.language.ariaLabel': 'App language',
   'settings.general.language.description':
     'Use this language for the app shell. Commands, resource names, and API fields stay unchanged.',
   'settings.general.language.title': 'Language',
+  'settings.general.monitoringCadence.current': 'Current cadence: {seconds} seconds ({duration})',
+  'settings.general.monitoringCadence.custom.description':
+    'Enter seconds ({min}-{max}). Applies to all clusters.',
+  'settings.general.monitoringCadence.custom.title': 'Custom polling interval',
+  'settings.general.monitoringCadence.description':
+    'Shorter intervals provide near-real-time updates at the cost of higher API and CPU usage on each node. Set a longer interval to reduce load on busy clusters.',
+  'settings.general.monitoringCadence.duration.minute': '{count} minute',
+  'settings.general.monitoringCadence.duration.minutes': '{count} minutes',
+  'settings.general.monitoringCadence.duration.underMinute': 'under a minute',
+  'settings.general.monitoringCadence.envLocked': 'Managed via environment variable {envVar}.',
+  'settings.general.monitoringCadence.preset.balanced': 'Balanced ({duration})',
+  'settings.general.monitoringCadence.preset.custom': 'Custom',
+  'settings.general.monitoringCadence.preset.low': 'Low ({duration})',
+  'settings.general.monitoringCadence.preset.realtime': 'Realtime ({duration})',
+  'settings.general.monitoringCadence.preset.veryLow': 'Very low ({duration})',
+  'settings.general.monitoringCadence.section.description':
+    'Control how frequently Pulse polls Proxmox VE nodes.',
+  'settings.general.monitoringCadence.section.title': 'Monitoring cadence',
   'settings.general.temperature.description': 'Display temperatures in Celsius or Fahrenheit.',
   'settings.general.temperature.title': 'Temperature unit',
+  'settings.general.telemetry.copyJson': 'Copy JSON',
+  'settings.general.telemetry.description':
+    'Help improve Pulse by sharing anonymous outbound usage data: a rotating install ID, normalized release identity, runtime platform, aggregate self-hosted adoption counts, and coarse feature flags. No hostnames, credentials, infrastructure identifiers, prompts, chat messages, or personal information are sent. Telemetry rows are retained for up to 90 days, and IP addresses are not stored in telemetry rows.',
+  'settings.general.telemetry.disabledPreview':
+    'Telemetry is currently disabled. This preview shows the payload Pulse would send if you enable it.',
+  'settings.general.telemetry.fullDetails': 'Full details',
+  'settings.general.telemetry.payloadAriaLabel': 'Telemetry payload preview',
+  'settings.general.telemetry.payloadTitle': 'Current heartbeat payload',
+  'settings.general.telemetry.previewPayload': 'Preview payload',
+  'settings.general.telemetry.refreshPayload': 'Refresh payload',
+  'settings.general.telemetry.resetId': 'Reset ID',
+  'settings.general.telemetry.section.description':
+    'Control anonymous outbound telemetry from this Pulse instance.',
+  'settings.general.telemetry.section.title': 'Usage data and privacy',
+  'settings.general.telemetry.title': 'Anonymous outbound telemetry',
   'settings.general.theme.description': 'Choose light, dark, or sync with your system theme.',
   'settings.general.theme.option.dark': 'Dark',
   'settings.general.theme.option.light': 'Light',
@@ -144,7 +184,62 @@ export const EN_MESSAGES = {
 
 export type I18nMessageKey = keyof typeof EN_MESSAGES;
 
-export const I18N_MESSAGES: Record<SupportedLocale, Record<I18nMessageKey, string>> = {
+export type I18nCatalog = Record<I18nMessageKey, string>;
+export type I18nCatalogs = Record<SupportedLocale, I18nCatalog>;
+
+export const SETTINGS_GENERAL_MIGRATED_MESSAGE_KEYS = [
+  'settings.header.systemGeneral.description',
+  'settings.header.systemGeneral.title',
+  'settings.nav.group.system',
+  'settings.nav.item.general',
+  'settings.general.appearance.title',
+  'settings.general.docker.envHint',
+  'settings.general.docker.section.description',
+  'settings.general.docker.section.title',
+  'settings.general.docker.toggle.description',
+  'settings.general.docker.toggle.title',
+  'settings.general.fullWidth.description',
+  'settings.general.fullWidth.title',
+  'settings.general.language.ariaLabel',
+  'settings.general.language.description',
+  'settings.general.language.title',
+  'settings.general.monitoringCadence.current',
+  'settings.general.monitoringCadence.custom.description',
+  'settings.general.monitoringCadence.custom.title',
+  'settings.general.monitoringCadence.description',
+  'settings.general.monitoringCadence.duration.minute',
+  'settings.general.monitoringCadence.duration.minutes',
+  'settings.general.monitoringCadence.duration.underMinute',
+  'settings.general.monitoringCadence.envLocked',
+  'settings.general.monitoringCadence.preset.balanced',
+  'settings.general.monitoringCadence.preset.custom',
+  'settings.general.monitoringCadence.preset.low',
+  'settings.general.monitoringCadence.preset.realtime',
+  'settings.general.monitoringCadence.preset.veryLow',
+  'settings.general.monitoringCadence.section.description',
+  'settings.general.monitoringCadence.section.title',
+  'settings.general.telemetry.copyJson',
+  'settings.general.telemetry.description',
+  'settings.general.telemetry.disabledPreview',
+  'settings.general.telemetry.fullDetails',
+  'settings.general.telemetry.payloadAriaLabel',
+  'settings.general.telemetry.payloadTitle',
+  'settings.general.telemetry.previewPayload',
+  'settings.general.telemetry.refreshPayload',
+  'settings.general.telemetry.resetId',
+  'settings.general.telemetry.section.description',
+  'settings.general.telemetry.section.title',
+  'settings.general.telemetry.title',
+  'settings.general.temperature.description',
+  'settings.general.temperature.title',
+  'settings.general.theme.description',
+  'settings.general.theme.option.dark',
+  'settings.general.theme.option.light',
+  'settings.general.theme.option.system',
+  'settings.general.theme.title',
+] as const satisfies readonly I18nMessageKey[];
+
+export const I18N_MESSAGES: I18nCatalogs = {
   en: EN_MESSAGES,
   de: {
     ...EN_MESSAGES,
@@ -152,12 +247,53 @@ export const I18N_MESSAGES: Record<SupportedLocale, Record<I18nMessageKey, strin
     'settings.general.fullWidth.description':
       'Nutzen Sie auf grossen Monitoren die gesamte verfuegbare Bildschirmbreite.',
     'settings.general.fullWidth.title': 'Volle Breite',
+    'settings.general.docker.envHint': 'Kann auch ueber Umgebungsvariable gesetzt werden:',
+    'settings.general.docker.section.description':
+      'Steuern Sie, wie {sourceLabel}-Updateaktionen in Pulse angezeigt werden.',
+    'settings.general.docker.section.title': '{sourceLabel}-Updates',
+    'settings.general.docker.toggle.description':
+      'Wenn aktiviert, werden {sourceLabel}-Aktionen "Update" in Pulse ausgeblendet. Die Update-Erkennung laeuft weiter, sodass verfuegbare Updates sichtbar bleiben.',
+    'settings.general.docker.toggle.title': 'Update-Schaltflaechen ausblenden',
     'settings.general.language.ariaLabel': 'App-Sprache',
     'settings.general.language.description':
       'Verwenden Sie diese Sprache fuer die App-Oberflaeche. Befehle, Ressourcennamen und API-Felder bleiben unveraendert.',
     'settings.general.language.title': 'Sprache',
+    'settings.general.monitoringCadence.current': 'Aktueller Takt: {seconds} Sekunden ({duration})',
+    'settings.general.monitoringCadence.custom.description':
+      'Sekunden eingeben ({min}-{max}). Gilt fuer alle Cluster.',
+    'settings.general.monitoringCadence.custom.title': 'Benutzerdefiniertes Abfrageintervall',
+    'settings.general.monitoringCadence.description':
+      'Kuerzere Intervalle liefern nahezu Echtzeit-Aktualisierungen auf Kosten hoeherer API- und CPU-Nutzung auf jedem Knoten. Waehlen Sie ein laengeres Intervall, um die Last auf ausgelasteten Clustern zu reduzieren.',
+    'settings.general.monitoringCadence.duration.minute': '{count} Minute',
+    'settings.general.monitoringCadence.duration.minutes': '{count} Minuten',
+    'settings.general.monitoringCadence.duration.underMinute': 'unter einer Minute',
+    'settings.general.monitoringCadence.envLocked':
+      'Wird ueber Umgebungsvariable {envVar} verwaltet.',
+    'settings.general.monitoringCadence.preset.balanced': 'Ausgewogen ({duration})',
+    'settings.general.monitoringCadence.preset.custom': 'Benutzerdefiniert',
+    'settings.general.monitoringCadence.preset.low': 'Niedrig ({duration})',
+    'settings.general.monitoringCadence.preset.realtime': 'Echtzeit ({duration})',
+    'settings.general.monitoringCadence.preset.veryLow': 'Sehr niedrig ({duration})',
+    'settings.general.monitoringCadence.section.description':
+      'Steuern Sie, wie oft Pulse Proxmox VE-Knoten abfragt.',
+    'settings.general.monitoringCadence.section.title': 'Monitoring-Takt',
     'settings.general.temperature.description': 'Temperaturen in Celsius oder Fahrenheit anzeigen.',
     'settings.general.temperature.title': 'Temperatureinheit',
+    'settings.general.telemetry.copyJson': 'JSON kopieren',
+    'settings.general.telemetry.description':
+      'Helfen Sie, Pulse zu verbessern, indem Sie anonyme ausgehende Nutzungsdaten teilen: eine rotierende Installations-ID, normalisierte Release-Identitaet, Laufzeitplattform, aggregierte Self-hosted-Nutzungszahlen und grobe Funktionsflags. Es werden keine Hostnamen, Zugangsdaten, Infrastrukturkennungen, Prompts, Chatnachrichten oder personenbezogenen Daten gesendet. Telemetriezeilen werden bis zu 90 Tage aufbewahrt, und IP-Adressen werden nicht in Telemetriezeilen gespeichert.',
+    'settings.general.telemetry.disabledPreview':
+      'Telemetrie ist derzeit deaktiviert. Diese Vorschau zeigt den Payload, den Pulse senden wuerde, wenn Sie sie aktivieren.',
+    'settings.general.telemetry.fullDetails': 'Details',
+    'settings.general.telemetry.payloadAriaLabel': 'Telemetrie-Payload-Vorschau',
+    'settings.general.telemetry.payloadTitle': 'Aktueller Heartbeat-Payload',
+    'settings.general.telemetry.previewPayload': 'Payload anzeigen',
+    'settings.general.telemetry.refreshPayload': 'Payload aktualisieren',
+    'settings.general.telemetry.resetId': 'ID zuruecksetzen',
+    'settings.general.telemetry.section.description':
+      'Steuern Sie anonyme ausgehende Telemetrie von dieser Pulse-Instanz.',
+    'settings.general.telemetry.section.title': 'Nutzungsdaten und Datenschutz',
+    'settings.general.telemetry.title': 'Anonyme ausgehende Telemetrie',
     'settings.general.theme.description': 'Waehlen Sie hell, dunkel oder die Systemeinstellung.',
     'settings.general.theme.option.dark': 'Dunkel',
     'settings.general.theme.option.light': 'Hell',
@@ -296,12 +432,54 @@ export const I18N_MESSAGES: Record<SupportedLocale, Record<I18nMessageKey, strin
     'settings.general.fullWidth.description':
       'Expande el contenido para usar todo el ancho disponible en monitores grandes.',
     'settings.general.fullWidth.title': 'Modo de ancho completo',
+    'settings.general.docker.envHint': 'También se puede definir mediante variable de entorno:',
+    'settings.general.docker.section.description':
+      'Controla cómo aparecen las acciones de actualización de {sourceLabel} en Pulse.',
+    'settings.general.docker.section.title': 'Actualizaciones de {sourceLabel}',
+    'settings.general.docker.toggle.description':
+      'Cuando está activado, las acciones "Update" de {sourceLabel} se ocultan en Pulse. La detección de actualizaciones sigue ejecutándose, por lo que las actualizaciones disponibles siguen visibles.',
+    'settings.general.docker.toggle.title': 'Ocultar botones de actualización',
     'settings.general.language.ariaLabel': 'Idioma de la app',
     'settings.general.language.description':
       'Usa este idioma para la interfaz de la app. Los comandos, nombres de recursos y campos API no cambian.',
     'settings.general.language.title': 'Idioma',
+    'settings.general.monitoringCadence.current':
+      'Cadencia actual: {seconds} segundos ({duration})',
+    'settings.general.monitoringCadence.custom.description':
+      'Introduce segundos ({min}-{max}). Se aplica a todos los clusters.',
+    'settings.general.monitoringCadence.custom.title': 'Intervalo de sondeo personalizado',
+    'settings.general.monitoringCadence.description':
+      'Los intervalos más cortos ofrecen actualizaciones casi en tiempo real a costa de mayor uso de API y CPU en cada nodo. Usa un intervalo más largo para reducir la carga en clusters ocupados.',
+    'settings.general.monitoringCadence.duration.minute': '{count} minuto',
+    'settings.general.monitoringCadence.duration.minutes': '{count} minutos',
+    'settings.general.monitoringCadence.duration.underMinute': 'menos de un minuto',
+    'settings.general.monitoringCadence.envLocked':
+      'Administrado mediante variable de entorno {envVar}.',
+    'settings.general.monitoringCadence.preset.balanced': 'Equilibrado ({duration})',
+    'settings.general.monitoringCadence.preset.custom': 'Personalizado',
+    'settings.general.monitoringCadence.preset.low': 'Bajo ({duration})',
+    'settings.general.monitoringCadence.preset.realtime': 'Tiempo real ({duration})',
+    'settings.general.monitoringCadence.preset.veryLow': 'Muy bajo ({duration})',
+    'settings.general.monitoringCadence.section.description':
+      'Controla con qué frecuencia Pulse sondea nodos de Proxmox VE.',
+    'settings.general.monitoringCadence.section.title': 'Cadencia de supervisión',
     'settings.general.temperature.description': 'Muestra temperaturas en Celsius o Fahrenheit.',
     'settings.general.temperature.title': 'Unidad de temperatura',
+    'settings.general.telemetry.copyJson': 'Copiar JSON',
+    'settings.general.telemetry.description':
+      'Ayuda a mejorar Pulse compartiendo datos de uso salientes anónimos: un ID de instalación rotativo, identidad de versión normalizada, plataforma de ejecución, conteos agregados de adopción autohospedada y flags de funciones de alto nivel. No se envían hostnames, credenciales, identificadores de infraestructura, prompts, mensajes de chat ni información personal. Las filas de telemetría se conservan hasta 90 días y las direcciones IP no se guardan en filas de telemetría.',
+    'settings.general.telemetry.disabledPreview':
+      'La telemetría está desactivada. Esta vista previa muestra el payload que Pulse enviaría si la activas.',
+    'settings.general.telemetry.fullDetails': 'Detalles completos',
+    'settings.general.telemetry.payloadAriaLabel': 'Vista previa del payload de telemetría',
+    'settings.general.telemetry.payloadTitle': 'Payload de heartbeat actual',
+    'settings.general.telemetry.previewPayload': 'Vista previa del payload',
+    'settings.general.telemetry.refreshPayload': 'Actualizar payload',
+    'settings.general.telemetry.resetId': 'Restablecer ID',
+    'settings.general.telemetry.section.description':
+      'Controla telemetría saliente anónima de esta instancia de Pulse.',
+    'settings.general.telemetry.section.title': 'Datos de uso y privacidad',
+    'settings.general.telemetry.title': 'Telemetría saliente anónima',
     'settings.general.theme.description':
       'Elige claro, oscuro o sincroniza con el tema del sistema.',
     'settings.general.theme.option.dark': 'Oscuro',

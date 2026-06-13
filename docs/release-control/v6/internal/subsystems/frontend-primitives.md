@@ -186,15 +186,21 @@ work extends shared components instead of creating new local variants.
 
 Frontend localization is a shared primitive boundary. Locale support must flow
 through typed message catalogs with an English fallback and explicit seed
-locale coverage rather than page-local string switches. The active app locale
-is a shared user preference initialized from stored or browser language and
-exposed through Settings > General; individual surfaces must consume that
-shared preference instead of creating local language toggles. Customer-facing
-shell, navigation, settings, first-run, empty-state, and alert copy may be
-localized, but machine-facing values must remain stable: commands, environment
-variables, API fields, config keys, log lines, error codes, hostnames, resource
-names, and vendor object names stay untranslated unless the owning runtime
-contract explicitly says otherwise.
+locale coverage rather than page-local string switches.
+`frontend-modern/src/i18n/locales.ts` owns locale normalization, the supported
+locale registry, and fallback chains; `frontend-modern/src/i18n/messages.ts`
+owns the typed catalog shape; and `frontend-modern/src/i18n/policy.ts` owns the
+first-wave non-translatable token rules. The active app locale is a shared user
+preference initialized from stored or browser language and exposed through
+Settings > General; individual surfaces must consume that shared preference
+instead of creating local language toggles. Customer-facing shell, navigation,
+settings, first-run, empty-state, and alert copy may be localized, but
+machine-facing values must remain stable: commands, environment variables, API
+fields, config keys, log lines, error codes, hostnames, resource names, product
+identifiers, and vendor object names stay untranslated unless the owning
+runtime contract explicitly says otherwise. Migrated settings surfaces must
+render customer-facing copy through the catalog and shared presentation helpers
+rather than reintroducing panel-local English.
 
 Alert thresholds consume the shared FilterBar primitive and route state, while
 the alerts subsystem owns the resource data and platform-specific threshold

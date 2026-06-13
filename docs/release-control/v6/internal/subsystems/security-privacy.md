@@ -92,7 +92,12 @@ controls as normal product settings.
 6. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts` shared with `frontend-primitives`: the data-handling settings model is both a security/privacy posture projection and a canonical settings-shell presentation boundary.
 7. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx` shared with `frontend-primitives`: the general settings privacy panel is both a security/privacy control surface and a canonical settings-shell presentation boundary.
    Privacy documentation links compose `ExternalTextLink`; security-privacy
-   owns the telemetry/privacy meaning and retention copy.
+   owns the telemetry/privacy meaning and retention copy. Localized settings
+   copy for this surface may route through `frontend-modern/src/i18n/messages.ts`
+   and `frontend-modern/src/i18n/policy.ts`, but translation must preserve the
+   governed privacy guarantees and leave machine-facing tokens such as
+   `PULSE_TELEMETRY`, API fields, config keys, commands, logs, and product or
+   source identifiers untranslated.
 8. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx` shared with `frontend-primitives`: the authentication settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
 9. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx` shared with `frontend-primitives`: the security overview settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
    Security guide links compose `ExternalTextLink`; security-privacy owns the
@@ -158,7 +163,7 @@ controls as normal product settings.
    email can support display, delivery, or migration, but request access must
    match the authenticated principal against stored `OwnerUserID` or member
    `UserID`.
-5. Change security/privacy settings presentation through the shared `frontend-modern/src/components/Settings/APIAccessPanel.tsx`, `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`, `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`, `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`, `frontend-modern/src/components/Settings/QuickSecuritySetup.tsx`, `frontend-modern/src/components/Settings/SecurityPostureSummary.tsx`, `frontend-modern/src/components/Settings/SSOProviderTypeIcon.tsx`, `frontend-modern/src/constants/apiScopes.ts`, `frontend-modern/src/utils/apiTokenPresentation.ts`, `frontend-modern/src/utils/securityAuthPresentation.ts`, `frontend-modern/src/utils/securityScorePresentation.ts`, `frontend-modern/src/utils/auditLogPresentation.ts`, and `frontend-modern/src/utils/auditWebhookPresentation.ts` boundary.
+5. Change security/privacy settings presentation through the shared `frontend-modern/src/components/Settings/APIAccessPanel.tsx`, `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`, `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`, `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`, `frontend-modern/src/components/Settings/QuickSecuritySetup.tsx`, `frontend-modern/src/components/Settings/SecurityPostureSummary.tsx`, `frontend-modern/src/components/Settings/SSOProviderTypeIcon.tsx`, `frontend-modern/src/constants/apiScopes.ts`, `frontend-modern/src/utils/apiTokenPresentation.ts`, `frontend-modern/src/utils/securityAuthPresentation.ts`, `frontend-modern/src/utils/securityScorePresentation.ts`, `frontend-modern/src/utils/auditLogPresentation.ts`, `frontend-modern/src/utils/auditWebhookPresentation.ts`, and the localized catalog/policy boundary in `frontend-modern/src/i18n/`.
 6. Change operator-facing telemetry/adoption reporting through `scripts/telemetry_adoption_report.py` together with the privacy disclosure whenever release-identity interpretation changes.
 7. Change data-at-rest encryption-key or control-plane magic-link HMAC key and storage-root hardening semantics through `internal/crypto/crypto.go`, `internal/cloudcp/auth/magiclink.go`, `internal/cloudcp/auth/magiclink_store.go`, and `internal/securityutil/secure_storage_dir.go` together so writable-but-not-owned runtime storage mounts stay supported without weakening file-level secrecy.
 8. Change auth-env password normalization, hosted commercial base URL
@@ -209,6 +214,10 @@ controls as normal product settings.
 3. Keep shared frontend settings proof routing aligned whenever security/privacy presentation changes.
 4. Keep the checked-in telemetry adoption report aligned with the same release-identity rules used by the runtime telemetry payload.
 5. Update this contract whenever a new canonical security, token, auth, or privacy surface becomes part of the governed trust boundary.
+5a. Keep localized privacy and telemetry settings copy covered by catalog
+    completeness, fallback, and non-translatable-token tests so translated
+    surfaces cannot weaken the governed privacy disclosure or turn machine
+    identifiers into localized prose.
 6. Keep Security Overview and Resource Privacy/Data Handling loading
    placeholders on the shared `SettingsLoadingSkeleton` primitive. This
    subsystem owns the security/privacy posture semantics; frontend-primitives

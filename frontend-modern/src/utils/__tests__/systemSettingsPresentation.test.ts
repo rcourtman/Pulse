@@ -8,11 +8,16 @@ import {
   DOCKER_UPDATE_ACTIONS_SECTION_TITLE,
   DOCKER_UPDATE_ACTIONS_TOGGLE_DESCRIPTION,
   DOCKER_UPDATE_ACTIONS_TOGGLE_LABEL,
+  formatPvePollingDuration,
   getBackupIntervalSelectValue,
   getBackupIntervalSummary,
   getCheckForUpdatesErrorMessage,
+  getDockerUpdateActionsPresentation,
   getDockerUpdateActionsUpdateErrorMessage,
   getHideLocalLoginUpdateErrorMessage,
+  getPvePollingCadenceSummary,
+  getPvePollingCustomOption,
+  getPvePollingPresetOptions,
   getStartUpdateErrorMessage,
   getSystemSettingsSaveErrorMessage,
   getTelemetryUpdateErrorMessage,
@@ -69,6 +74,33 @@ describe('systemSettingsPresentation', () => {
     );
   });
 
+  it('localizes migrated general settings polling copy without changing machine units', () => {
+    expect(getPvePollingPresetOptions('de')).toEqual([
+      { label: 'Echtzeit (10s)', value: 10 },
+      { label: 'Ausgewogen (30s)', value: 30 },
+      { label: 'Niedrig (60s)', value: 60 },
+      { label: 'Sehr niedrig (5m)', value: 300 },
+    ]);
+    expect(getPvePollingCustomOption('es')).toEqual({
+      label: 'Personalizado',
+      value: 'custom',
+    });
+    expect(formatPvePollingDuration(90, 'de')).toBe('1,5 Minuten');
+    expect(getPvePollingCadenceSummary(30, 'es')).toBe(
+      'Cadencia actual: 30 segundos (menos de un minuto)',
+    );
+  });
+
+  it('localizes Docker update-action copy while preserving product and command tokens', () => {
+    expect(getDockerUpdateActionsPresentation('de')).toMatchObject({
+      sectionTitle: 'Docker / Podman-Updates',
+      toggleLabel: 'Update-Schaltflaechen ausblenden',
+    });
+    expect(getDockerUpdateActionsPresentation('es').toggleDescription).toContain(
+      'acciones "Update" de Docker / Podman',
+    );
+  });
+
   it('returns canonical backup interval select values', () => {
     expect(getBackupIntervalSelectValue(false, 0)).toBe('0');
     expect(getBackupIntervalSelectValue(false, 300)).toBe('300');
@@ -91,9 +123,7 @@ describe('systemSettingsPresentation', () => {
   it('returns canonical system settings operational failure copy', () => {
     expect(getSystemSettingsSaveErrorMessage()).toBe('Unable to save settings.');
     expect(getSystemSettingsSaveErrorMessage('forbidden')).toBe('forbidden');
-    expect(getHideLocalLoginUpdateErrorMessage()).toBe(
-      'Unable to update local login visibility.',
-    );
+    expect(getHideLocalLoginUpdateErrorMessage()).toBe('Unable to update local login visibility.');
     expect(getDockerUpdateActionsUpdateErrorMessage()).toBe(
       'Unable to update Docker / Podman update actions.',
     );

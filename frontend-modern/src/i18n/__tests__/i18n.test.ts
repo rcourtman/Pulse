@@ -3,11 +3,18 @@ import {
   DEFAULT_LOCALE,
   FIRST_LOCALIZATION_LOCALES,
   I18N_MESSAGES,
+  LOCALIZATION_FOUNDATION,
+  LOCALIZED_SETTINGS_GENERAL_JOURNEY_KEYS,
+  NEVER_TRANSLATE_COPY_RULES,
   NEXT_LOCALIZATION_LOCALES,
+  SETTINGS_GENERAL_ALLOWED_IDENTICAL_TRANSLATIONS,
+  SETTINGS_GENERAL_NON_TRANSLATABLE_TOKENS,
+  SUPPORTED_LOCALE_REGISTRY,
   SUPPORTED_LOCALES,
   detectBrowserLocale,
   getActiveLocale,
   getInitialLocalePreference,
+  getLocaleFallbackChain,
   getStoredLocalePreference,
   normalizeLocale,
   setActiveLocale,
@@ -26,6 +33,7 @@ describe('i18n foundation', () => {
   it('normalizes supported locales and regional aliases', () => {
     expect(normalizeLocale('de-DE')).toBe('de');
     expect(normalizeLocale('es_MX')).toBe('es');
+    expect(normalizeLocale('es_MX_traditional')).toBe('es');
     expect(normalizeLocale('fr-FR')).toBe('en');
     expect(normalizeLocale(undefined)).toBe('en');
   });
@@ -70,6 +78,8 @@ describe('i18n foundation', () => {
   });
 
   it('falls back to the English catalog for unsupported locales and interpolates params', () => {
+    expect(getLocaleFallbackChain('de-DE')).toEqual(['de', 'en']);
+    expect(getLocaleFallbackChain('fr-FR')).toEqual(['en']);
     expect(t('settings.shell.searchEmpty', { query: 'alerts' }, 'pt-BR')).toBe(
       'No settings found for "alerts"',
     );
@@ -87,5 +97,69 @@ describe('i18n foundation', () => {
     expect(FIRST_LOCALIZATION_LOCALES).toEqual(['de', 'es']);
     expect(NEXT_LOCALIZATION_LOCALES).toEqual(['fr', 'pt-BR', 'ja', 'zh-Hans', 'ko']);
     expect(SUPPORTED_LOCALES).toEqual(['en', 'de', 'es']);
+    expect(SUPPORTED_LOCALE_REGISTRY.de).toMatchObject({
+      label: 'Deutsch',
+      englishLabel: 'German',
+      fallbackLocale: 'en',
+      rolloutStage: 'first-wave',
+    });
+  });
+
+  it('documents the frontend localization architecture and non-translation boundaries', () => {
+    expect(LOCALIZATION_FOUNDATION).toMatchObject({
+      ownerLayer: 'frontend-modern/src/i18n',
+      defaultLocale: 'en',
+      firstWaveLocales: ['de', 'es'],
+    });
+    expect(NEVER_TRANSLATE_COPY_RULES.join(' ')).toContain('environment variable names');
+    expect(NEVER_TRANSLATE_COPY_RULES.join(' ')).toContain('Resource names');
+    expect(SETTINGS_GENERAL_NON_TRANSLATABLE_TOKENS).toEqual(
+      expect.arrayContaining([
+        'Pulse',
+        'Proxmox VE',
+        'Docker / Podman',
+        'API',
+        'CPU',
+        'IP',
+        'JSON',
+        'PULSE_TELEMETRY',
+        'PVE_POLLING_INTERVAL',
+        'PULSE_DISABLE_DOCKER_UPDATE_ACTIONS',
+        '"Update"',
+      ]),
+    );
+  });
+
+  it('requires explicit first-wave translations for the migrated settings general journey', () => {
+    for (const locale of FIRST_LOCALIZATION_LOCALES) {
+      const allowedIdenticalKeys: ReadonlySet<I18nMessageKey> = new Set(
+        (SETTINGS_GENERAL_ALLOWED_IDENTICAL_TRANSLATIONS[locale] ??
+          []) as readonly I18nMessageKey[],
+      );
+      for (const key of LOCALIZED_SETTINGS_GENERAL_JOURNEY_KEYS) {
+        expect(I18N_MESSAGES[locale][key], `${locale}:${key}`).toBeTruthy();
+        if (!allowedIdenticalKeys.has(key)) {
+          expect(I18N_MESSAGES[locale][key], `${locale}:${key}`).not.toBe(I18N_MESSAGES.en[key]);
+        }
+      }
+    }
+  });
+
+  it('keeps machine-facing identifiers unchanged in first-wave settings general catalog copy', () => {
+    for (const locale of FIRST_LOCALIZATION_LOCALES) {
+      expect(I18N_MESSAGES[locale]['settings.general.language.description']).toContain('API');
+      expect(I18N_MESSAGES[locale]['settings.general.telemetry.description']).toContain('Pulse');
+      expect(I18N_MESSAGES[locale]['settings.general.telemetry.description']).toContain('IP');
+      expect(I18N_MESSAGES[locale]['settings.general.telemetry.copyJson']).toContain('JSON');
+      expect(
+        t(
+          'settings.general.monitoringCadence.envLocked',
+          {
+            envVar: 'PVE_POLLING_INTERVAL',
+          },
+          locale,
+        ),
+      ).toContain('PVE_POLLING_INTERVAL');
+    }
   });
 });

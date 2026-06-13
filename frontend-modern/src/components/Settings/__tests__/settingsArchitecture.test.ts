@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import settingsSource from '../Settings.tsx?raw';
+import { EN_MESSAGES } from '@/i18n/messages';
 import settingsDialogsSource from '../SettingsDialogs.tsx?raw';
 import settingsPageShellSource from '../SettingsPageShell.tsx?raw';
 import aiSettingsDialogsSource from '../AISettingsDialogs.tsx?raw';
@@ -556,13 +557,17 @@ describe('settings architecture guardrails', () => {
   });
 
   it('keeps telemetry disclosure aligned with the security privacy contract', () => {
-    expect(generalSettingsPanelSource).toContain('aggregate self-hosted adoption');
-    expect(generalSettingsPanelSource).toContain('counts, and coarse feature flags');
-    expect(generalSettingsPanelSource).toContain(
+    expect(EN_MESSAGES['settings.general.telemetry.description']).toContain(
+      'aggregate self-hosted adoption',
+    );
+    expect(EN_MESSAGES['settings.general.telemetry.description']).toContain(
+      'counts, and coarse feature flags',
+    );
+    expect(EN_MESSAGES['settings.general.telemetry.description']).toContain(
       'identifiers, prompts, chat messages, or personal information are sent.',
     );
-    expect(generalSettingsPanelSource).toContain('Telemetry payload preview');
-    expect(generalSettingsPanelSource).toContain('Reset ID');
+    expect(generalSettingsPanelSource).toContain('settings.general.telemetry.payloadAriaLabel');
+    expect(generalSettingsPanelSource).toContain('settings.general.telemetry.resetId');
     expect(generalSettingsPanelSource).not.toContain('license_tier');
     expect(generalSettingsPanelSource).not.toContain('api_tokens');
   });
@@ -758,7 +763,7 @@ describe('settings architecture guardrails', () => {
   });
 
   it('keeps Docker and Podman update-action copy on the system settings presentation owner', () => {
-    expect(dockerRuntimeSettingsCardSource).toContain('DOCKER_UPDATE_ACTIONS_SECTION_TITLE');
+    expect(dockerRuntimeSettingsCardSource).toContain('getDockerUpdateActionsPresentation');
     expect(dockerRuntimeSettingsCardSource).toContain('DOCKER_UPDATE_ACTIONS_ENV_VAR');
     expect(dockerRuntimeSettingsCardSource).toContain('TogglePrimitive');
     expect(dockerRuntimeSettingsCardSource).not.toContain('role="switch"');
@@ -767,6 +772,7 @@ describe('settings architecture guardrails', () => {
     expect(dockerRuntimeSettingsCardSource).not.toContain('container update actions');
 
     expect(systemSettingsPresentationSource).toContain("getSourcePlatformLabel('docker')");
+    expect(systemSettingsPresentationSource).toContain('getDockerUpdateActionsPresentation');
     expect(systemSettingsPresentationSource).toContain('DOCKER_UPDATE_ACTIONS_SECTION_TITLE');
     expect(systemSettingsPresentationSource).toContain('DOCKER_UPDATE_ACTIONS_ENV_VAR');
   });
