@@ -12,11 +12,13 @@ import { normalizeDiskArray } from '@/utils/format';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformTableMetricFallback,
   PlatformTableEmptyState,
   PlatformTableShell,
   PlatformTableToolbar,
   createPlatformTableFilterState,
   formatPlatformTableUptimeValue,
+  getPlatformTableFiniteMetric,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
 } from '@/features/platformPage/sharedPlatformPage';
@@ -44,38 +46,37 @@ const formatTemperature = (celsius: number | undefined): JSX.Element => {
   return <span class="tabular-nums">{celsius.toFixed(1)}°C</span>;
 };
 
-const metricFallback = () => (
-  <div class="flex justify-center">
-    <span class="text-xs text-muted" aria-hidden="true">
-      —
-    </span>
-  </div>
-);
-
-const finiteMetric = (value: number | undefined): number | undefined =>
-  typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-
 const percentFromMetric = (metric: Resource['cpu'] | undefined): number | undefined =>
-  finiteMetric(metric?.current);
+  getPlatformTableFiniteMetric(metric?.current);
 
 const memoryTotalFor = (host: Resource): number =>
-  finiteMetric(host.memory?.total) ?? finiteMetric(host.agent?.memory?.total) ?? 0;
+  getPlatformTableFiniteMetric(host.memory?.total) ??
+  getPlatformTableFiniteMetric(host.agent?.memory?.total) ??
+  0;
 
 const memoryUsedFor = (host: Resource): number =>
-  finiteMetric(host.memory?.used) ?? finiteMetric(host.agent?.memory?.used) ?? 0;
+  getPlatformTableFiniteMetric(host.memory?.used) ??
+  getPlatformTableFiniteMetric(host.agent?.memory?.used) ??
+  0;
 
 const memoryPercentOnlyFor = (host: Resource): number | undefined => {
   if (memoryTotalFor(host) > 0) return undefined;
-  return finiteMetric(host.memory?.current) ?? finiteMetric(host.agent?.memory?.usage);
+  return (
+    getPlatformTableFiniteMetric(host.memory?.current) ??
+    getPlatformTableFiniteMetric(host.agent?.memory?.usage)
+  );
 };
 
 const aggregateDiskFor = (host: Resource): Disk | undefined => {
   if (!host.disk) return undefined;
-  const total = finiteMetric(host.disk.total) ?? 0;
-  const used = finiteMetric(host.disk.used) ?? 0;
-  const free = finiteMetric(host.disk.free) ?? (total > 0 ? Math.max(0, total - used) : 0);
+  const total = getPlatformTableFiniteMetric(host.disk.total) ?? 0;
+  const used = getPlatformTableFiniteMetric(host.disk.used) ?? 0;
+  const free =
+    getPlatformTableFiniteMetric(host.disk.free) ?? (total > 0 ? Math.max(0, total - used) : 0);
   const usage =
-    total > 0 && used > 0 ? (used / total) * 100 : (finiteMetric(host.disk.current) ?? 0);
+    total > 0 && used > 0
+      ? (used / total) * 100
+      : (getPlatformTableFiniteMetric(host.disk.current) ?? 0);
   if (total <= 0 && usage <= 0) return undefined;
   return { total, used, free, usage };
 };
@@ -338,7 +339,7 @@ export const DockerHostsTable: Component<{
                           >
                             <Show
                               when={canRenderMetrics() && hasMemoryMetric()}
-                              fallback={metricFallback()}
+                              fallback={<PlatformTableMetricFallback />}
                             >
                               <StackedMemoryBar
                                 used={memoryUsed()}
@@ -352,7 +353,7 @@ export const DockerHostsTable: Component<{
                           >
                             <Show
                               when={canRenderMetrics() && hasDiskMetric()}
-                              fallback={metricFallback()}
+                              fallback={<PlatformTableMetricFallback />}
                             >
                               <StackedDiskBar
                                 mode={(disks()?.length ?? 0) > 1 ? 'vertical-bars' : undefined}

@@ -8,10 +8,12 @@ import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
+  PlatformTableMetricFallback,
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
   formatPlatformTableTitleCaseValue,
+  getPlatformTableFiniteMetric,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   type PlatformTableFilterOption,
@@ -37,17 +39,6 @@ const TRUENAS_APP_STATUS_OPTIONS: PlatformTableFilterOption<TrueNASAppStatusFilt
   { value: 'attention', label: 'Attention', tone: 'warning' },
   { value: 'stopped', label: 'Stopped', tone: 'danger' },
 ];
-
-const metricFallback = () => (
-  <div class="flex justify-center">
-    <span class="text-xs text-muted" aria-hidden="true">
-      -
-    </span>
-  </div>
-);
-
-const finiteMetric = (value: number | undefined): number | undefined =>
-  typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 
 const appMeta = (resource: Resource): ResourceTrueNASAppMeta | undefined => resource.truenas?.app;
 
@@ -234,11 +225,15 @@ export const TrueNASAppsTable: Component<{
                     const displayStatus = () => getTrueNASResourceDisplayStatus(resource);
                     const indicator = () => getSimpleStatusIndicator(displayStatus());
                     const metricsKey = () => buildMetricKeyForUnifiedResource(resource);
-                    const cpuPercent = () => finiteMetric(resource.cpu?.current);
-                    const memoryTotal = () => finiteMetric(resource.memory?.total) ?? 0;
-                    const memoryUsed = () => finiteMetric(resource.memory?.used) ?? 0;
+                    const cpuPercent = () => getPlatformTableFiniteMetric(resource.cpu?.current);
+                    const memoryTotal = () =>
+                      getPlatformTableFiniteMetric(resource.memory?.total) ?? 0;
+                    const memoryUsed = () =>
+                      getPlatformTableFiniteMetric(resource.memory?.used) ?? 0;
                     const memoryPercentOnly = () =>
-                      memoryTotal() > 0 ? undefined : finiteMetric(resource.memory?.current);
+                      memoryTotal() > 0
+                        ? undefined
+                        : getPlatformTableFiniteMetric(resource.memory?.current);
                     const hasMemoryMetric = () =>
                       memoryTotal() > 0 || memoryPercentOnly() !== undefined;
                     const canRenderMetrics = () => indicator().variant !== 'muted';
@@ -290,18 +285,24 @@ export const TrueNASAppsTable: Component<{
                             </span>
                           </TableCell>
                           <TableCell class={getPlatformTableCellClassForKind('metric-bar')}>
-                            <Show when={cpuPercent() !== undefined} fallback={metricFallback()}>
+                            <Show
+                              when={cpuPercent() !== undefined}
+                              fallback={<PlatformTableMetricFallback />}
+                            >
                               <ResponsiveMetricCell
                                 value={cpuPercent()!}
                                 type="cpu"
                                 resourceId={metricsKey()}
                                 isRunning={canRenderMetrics()}
-                                fallback={metricFallback()}
+                                fallback={<PlatformTableMetricFallback />}
                               />
                             </Show>
                           </TableCell>
                           <TableCell class={getPlatformTableCellClassForKind('metric-bar')}>
-                            <Show when={hasMemoryMetric()} fallback={metricFallback()}>
+                            <Show
+                              when={hasMemoryMetric()}
+                              fallback={<PlatformTableMetricFallback />}
+                            >
                               <StackedMemoryBar
                                 used={memoryUsed()}
                                 total={memoryTotal()}

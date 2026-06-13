@@ -164,6 +164,19 @@ export const formatPlatformTableUptimeValue = (
   return formatUptime(seconds, true);
 };
 
+export const getPlatformTableFiniteMetric = (value: number | undefined): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+
+export function PlatformTableMetricFallback() {
+  return (
+    <div class="flex justify-center">
+      <span class="text-xs text-muted" aria-hidden="true">
+        —
+      </span>
+    </div>
+  );
+}
+
 export function PlatformErrorState(props: {
   title: string;
   description: string;

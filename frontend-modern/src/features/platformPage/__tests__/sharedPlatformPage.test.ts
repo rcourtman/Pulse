@@ -7,6 +7,7 @@ import {
   formatPlatformTableUptimeValue,
   filterPlatformResources,
   formatPlatformTableTextValue,
+  getPlatformTableFiniteMetric,
   type PlatformResourceStatusFilter,
 } from '../sharedPlatformPage';
 
@@ -246,5 +247,15 @@ describe('formatPlatformTableUptimeValue', () => {
     expect(formatPlatformTableUptimeValue(3_600)).toBe('1h');
     expect(formatPlatformTableUptimeValue(86_400)).toBe('1d');
     expect(formatPlatformTableUptimeValue(0, 'n/a')).toBe('n/a');
+  });
+});
+
+describe('getPlatformTableFiniteMetric', () => {
+  it('normalizes platform table metrics to finite numeric values only', () => {
+    expect(getPlatformTableFiniteMetric(42)).toBe(42);
+    expect(getPlatformTableFiniteMetric(0)).toBe(0);
+    expect(getPlatformTableFiniteMetric(undefined)).toBeUndefined();
+    expect(getPlatformTableFiniteMetric(Number.NaN)).toBeUndefined();
+    expect(getPlatformTableFiniteMetric(Number.POSITIVE_INFINITY)).toBeUndefined();
   });
 });

@@ -7,12 +7,14 @@ import { asTrimmedString } from '@/utils/stringUtils';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformTableMetricFallback,
   PlatformTableEmptyState,
   PlatformTableShell,
   PlatformTableToolbar,
   createPlatformTableFilterState,
   formatPlatformTableTextValue,
   formatPlatformTableUptimeValue,
+  getPlatformTableFiniteMetric,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
 } from '@/features/platformPage/sharedPlatformPage';
@@ -43,17 +45,6 @@ import {
 // canonical bar treatment (ResponsiveMetricCell / StackedMemoryBar) so
 // the Overview stack reads as one consistent surface alongside the
 // Docker / Proxmox / vSphere host tables.
-
-const finiteMetric = (value: number | undefined): number | undefined =>
-  typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-
-const metricFallback = () => (
-  <div class="flex justify-center">
-    <span class="text-xs text-muted" aria-hidden="true">
-      —
-    </span>
-  </div>
-);
 
 const formatBytes = (bytes: number | undefined): string => {
   if (!bytes || bytes <= 0) return '—';
@@ -208,11 +199,14 @@ export const KubernetesNodesTable: Component<{
                     };
                     const indicator = () => mapKubernetesNodeStatus(node);
                     const metricsKey = () => buildMetricKeyForUnifiedResource(node);
-                    const cpuPercent = () => finiteMetric(node.cpu?.current);
-                    const memoryTotal = () => finiteMetric(node.memory?.total) ?? 0;
-                    const memoryUsed = () => finiteMetric(node.memory?.used) ?? 0;
+                    const cpuPercent = () => getPlatformTableFiniteMetric(node.cpu?.current);
+                    const memoryTotal = () =>
+                      getPlatformTableFiniteMetric(node.memory?.total) ?? 0;
+                    const memoryUsed = () => getPlatformTableFiniteMetric(node.memory?.used) ?? 0;
                     const memoryPercentOnly = () =>
-                      memoryTotal() > 0 ? undefined : finiteMetric(node.memory?.current);
+                      memoryTotal() > 0
+                        ? undefined
+                        : getPlatformTableFiniteMetric(node.memory?.current);
                     const hasMemoryMetric = () =>
                       memoryTotal() > 0 || memoryPercentOnly() !== undefined;
                     const canRenderMetrics = () => indicator().variant !== 'muted';
@@ -287,7 +281,7 @@ export const KubernetesNodesTable: Component<{
                           >
                             <Show
                               when={canRenderMetrics() && hasMemoryMetric()}
-                              fallback={metricFallback()}
+                              fallback={<PlatformTableMetricFallback />}
                             >
                               <StackedMemoryBar
                                 used={memoryUsed()}

@@ -2602,6 +2602,12 @@ canonical empty-cell marker behavior for dense platform table cells. Docker /
 Podman hosts, Kubernetes nodes, Proxmox Mail Gateway instances, and TrueNAS
 systems must compose that helper instead of declaring local `formatUptime`
 helpers for the same days/hours/minutes fallback.
+Platform table metric fallback rendering is also shared.
+`PlatformTableMetricFallback` owns the centered muted empty marker used in
+metric bar cells, and `getPlatformTableFiniteMetric` owns finite-number
+normalization for CPU and memory values. Docker / Podman, Kubernetes, TrueNAS,
+and vSphere platform tables must compose those helpers instead of declaring
+local `metricFallback` or `finiteMetric` helpers.
 Platform load-failure states are registry-backed as well.
 `PlatformErrorState` owns the repeated table-card error shell, warning icon,
 and Refresh action for platform page and table load failures; platform

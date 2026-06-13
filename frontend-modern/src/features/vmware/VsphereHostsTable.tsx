@@ -15,11 +15,13 @@ import {
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformTableMetricFallback,
   PlatformTableEmptyState,
   PlatformTableShell,
   PlatformTableToolbar,
   createPlatformTableFilterState,
   filterPlatformResources,
+  getPlatformTableFiniteMetric,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   type PlatformResourceStatusFilter,
@@ -44,17 +46,6 @@ import type { Resource } from '@/types/resource';
 // treatment so the Overview stack reads as one consistent surface.
 // Per-host VM count is computed from the page scope client-side (no
 // extra API calls).
-
-const finiteMetric = (value: number | undefined): number | undefined =>
-  typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-
-const metricFallback = () => (
-  <div class="flex justify-center">
-    <span class="text-xs text-muted" aria-hidden="true">
-      —
-    </span>
-  </div>
-);
 
 export const VsphereHostsTable: Component<{
   hosts: Resource[];
@@ -214,11 +205,14 @@ export const VsphereHostsTable: Component<{
                     const displayStatus = () => getVmwareResourceDisplayStatus(host);
                     const indicator = () => getSimpleStatusIndicator(displayStatus());
                     const metricsKey = () => buildMetricKeyForUnifiedResource(host);
-                    const cpuPercent = () => finiteMetric(host.cpu?.current);
-                    const memoryTotal = () => finiteMetric(host.memory?.total) ?? 0;
-                    const memoryUsed = () => finiteMetric(host.memory?.used) ?? 0;
+                    const cpuPercent = () => getPlatformTableFiniteMetric(host.cpu?.current);
+                    const memoryTotal = () =>
+                      getPlatformTableFiniteMetric(host.memory?.total) ?? 0;
+                    const memoryUsed = () => getPlatformTableFiniteMetric(host.memory?.used) ?? 0;
                     const memoryPercentOnly = () =>
-                      memoryTotal() > 0 ? undefined : finiteMetric(host.memory?.current);
+                      memoryTotal() > 0
+                        ? undefined
+                        : getPlatformTableFiniteMetric(host.memory?.current);
                     const hasMemoryMetric = () =>
                       memoryTotal() > 0 || memoryPercentOnly() !== undefined;
                     const canRenderMetrics = () => indicator().variant !== 'muted';
@@ -303,7 +297,7 @@ export const VsphereHostsTable: Component<{
                           >
                             <Show
                               when={canRenderMetrics() && hasMemoryMetric()}
-                              fallback={metricFallback()}
+                              fallback={<PlatformTableMetricFallback />}
                             >
                               <StackedMemoryBar
                                 used={memoryUsed()}

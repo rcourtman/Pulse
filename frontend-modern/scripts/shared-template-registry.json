@@ -1274,6 +1274,59 @@
       ]
     },
     {
+      "id": "platform-table-metric-fallback",
+      "category": "platform-table-metric",
+      "summary": "Platform tables must use shared metric fallback and finite-metric helpers instead of recreating local centered dash fallbacks and Number.isFinite wrappers.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "PlatformTableMetricFallback"
+      },
+      "requiredConsumers": [
+        { "path": "src/features/docker/DockerContainersTable.tsx" },
+        { "path": "src/features/docker/DockerHostsTable.tsx" },
+        { "path": "src/features/kubernetes/KubernetesClustersTable.tsx" },
+        { "path": "src/features/kubernetes/KubernetesNodesTable.tsx" },
+        { "path": "src/features/truenas/TrueNASAppsTable.tsx" },
+        { "path": "src/features/truenas/TrueNASSystemsTable.tsx" },
+        { "path": "src/features/vmware/VsphereHostsTable.tsx" }
+      ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/features/docker/DockerContainersTable.tsx",
+          "patterns": ["const finiteMetric", "const metricFallback"]
+        },
+        {
+          "path": "src/features/docker/DockerHostsTable.tsx",
+          "patterns": ["const finiteMetric", "const metricFallback"]
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesClustersTable.tsx",
+          "patterns": ["const finiteMetric", "const metricFallback"]
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesNodesTable.tsx",
+          "patterns": ["const finiteMetric", "const metricFallback"]
+        },
+        {
+          "path": "src/features/truenas/TrueNASAppsTable.tsx",
+          "patterns": ["const finiteMetric", "const metricFallback"]
+        },
+        {
+          "path": "src/features/truenas/TrueNASSystemsTable.tsx",
+          "patterns": ["const finiteMetric", "const metricFallback"]
+        },
+        {
+          "path": "src/features/vmware/VsphereHostsTable.tsx",
+          "patterns": ["const finiteMetric", "const metricFallback"]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "platform-error-state",
       "category": "platform-error-state",
       "summary": "Platform page and table load failures must compose PlatformErrorState instead of recreating a local EmptyState plus Refresh action.",
@@ -1732,6 +1785,31 @@
       "extensions": [".tsx"],
       "allPatterns": ["const formatUptime", "seconds / 86_400", "return `${mins}m`"],
       "legacyReason": "Retired migration debt. Platform table uptime labels must use formatPlatformTableUptimeValue for the shared one-unit uptime fallback.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-table-local-metric-fallback-helper",
+      "category": "platform-table-metric",
+      "summary": "Platform tables must not recreate local finiteMetric and metricFallback helpers for metric cells.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "PlatformTableMetricFallback"
+      },
+      "scopes": [
+        "src/features/docker",
+        "src/features/kubernetes",
+        "src/features/truenas",
+        "src/features/vmware"
+      ],
+      "extensions": [".tsx"],
+      "allPatterns": ["const finiteMetric", "const metricFallback", "Number.isFinite(value)"],
+      "legacyReason": "Retired migration debt. Platform table metric cells must use PlatformTableMetricFallback and getPlatformTableFiniteMetric instead of carrying page-local metric fallback helpers.",
       "allowedPaths": [],
       "ignoredPaths": [],
       "proof": [

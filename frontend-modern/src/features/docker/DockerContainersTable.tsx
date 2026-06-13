@@ -12,9 +12,11 @@ import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import { DOCKER_QUERY_PARAMS } from '@/routing/resourceLinks';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformTableMetricFallback,
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  getPlatformTableFiniteMetric,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   PlatformTableShell,
@@ -98,17 +100,6 @@ const containerState = (resource: Resource): string =>
 const isContainerRunning = (resource: Resource): boolean =>
   (asTrimmedString(resource.docker?.containerState || resource.status) ?? '').toLowerCase() ===
   'running';
-
-const finiteMetric = (value: number | undefined): number | undefined =>
-  typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-
-const metricFallback = () => (
-  <div class="flex justify-center">
-    <span class="text-xs text-muted" aria-hidden="true">
-      —
-    </span>
-  </div>
-);
 
 // v5 flagged crash-loopers in the restarts column; a container that restarted
 // more than this many times needs an operator's eye even while "running".
@@ -360,11 +351,15 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
                     const host = () => dockerHostName(resource);
                     const running = () => isContainerRunning(resource);
                     const metricsKey = () => buildMetricKeyForUnifiedResource(resource);
-                    const cpuPercent = () => finiteMetric(resource.cpu?.current);
-                    const memoryUsed = () => finiteMetric(resource.memory?.used) ?? 0;
-                    const memoryTotal = () => finiteMetric(resource.memory?.total) ?? 0;
+                    const cpuPercent = () => getPlatformTableFiniteMetric(resource.cpu?.current);
+                    const memoryUsed = () =>
+                      getPlatformTableFiniteMetric(resource.memory?.used) ?? 0;
+                    const memoryTotal = () =>
+                      getPlatformTableFiniteMetric(resource.memory?.total) ?? 0;
                     const memoryPercentOnly = () =>
-                      memoryTotal() > 0 ? undefined : finiteMetric(resource.memory?.current);
+                      memoryTotal() > 0
+                        ? undefined
+                        : getPlatformTableFiniteMetric(resource.memory?.current);
                     const hasMemoryMetric = () =>
                       memoryTotal() > 0 || memoryPercentOnly() !== undefined;
                     const restartCount = () => resource.docker?.restartCount ?? 0;
@@ -451,7 +446,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
                             <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
                               <Show
                                 when={running() && hasMemoryMetric()}
-                                fallback={metricFallback()}
+                                fallback={<PlatformTableMetricFallback />}
                               >
                                 <StackedMemoryBar
                                   used={memoryUsed()}

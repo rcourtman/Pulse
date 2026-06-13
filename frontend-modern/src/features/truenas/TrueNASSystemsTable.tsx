@@ -8,11 +8,13 @@ import { asTrimmedString } from '@/utils/stringUtils';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformTableMetricFallback,
   PlatformTableToolbar,
   PlatformTableEmptyState,
   createPlatformTableFilterState,
   filterPlatformResources,
   formatPlatformTableUptimeValue,
+  getPlatformTableFiniteMetric,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   type PlatformResourceStatusFilter,
@@ -66,17 +68,6 @@ const formatTemperature = (celsius: number | undefined): JSX.Element => {
   if (typeof celsius !== 'number' || celsius <= 0) return <span class="text-muted">—</span>;
   return <span class="tabular-nums">{celsius.toFixed(1)}°C</span>;
 };
-
-const finiteMetric = (value: number | undefined): number | undefined =>
-  typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-
-const metricFallback = () => (
-  <div class="flex justify-center">
-    <span class="text-xs text-muted" aria-hidden="true">
-      —
-    </span>
-  </div>
-);
 
 const EMPTY_COUNTS: TrueNASSystemChildCounts = {
   pools: 0,
@@ -240,11 +231,15 @@ export const TrueNASSystemsTable: Component<{
                         .filter(Boolean)
                         .join(' · ');
                     const metricsKey = () => buildMetricKeyForUnifiedResource(system);
-                    const cpuPercent = () => finiteMetric(system.cpu?.current);
-                    const memoryTotal = () => finiteMetric(system.memory?.total) ?? 0;
-                    const memoryUsed = () => finiteMetric(system.memory?.used) ?? 0;
+                    const cpuPercent = () => getPlatformTableFiniteMetric(system.cpu?.current);
+                    const memoryTotal = () =>
+                      getPlatformTableFiniteMetric(system.memory?.total) ?? 0;
+                    const memoryUsed = () =>
+                      getPlatformTableFiniteMetric(system.memory?.used) ?? 0;
                     const memoryPercentOnly = () =>
-                      memoryTotal() > 0 ? undefined : finiteMetric(system.memory?.current);
+                      memoryTotal() > 0
+                        ? undefined
+                        : getPlatformTableFiniteMetric(system.memory?.current);
                     const hasMemoryMetric = () =>
                       memoryTotal() > 0 || memoryPercentOnly() !== undefined;
                     const canRenderMetrics = () => indicator().variant !== 'muted';
@@ -307,7 +302,7 @@ export const TrueNASSystemsTable: Component<{
                           >
                             <Show
                               when={canRenderMetrics() && hasMemoryMetric()}
-                              fallback={metricFallback()}
+                              fallback={<PlatformTableMetricFallback />}
                             >
                               <StackedMemoryBar
                                 used={memoryUsed()}

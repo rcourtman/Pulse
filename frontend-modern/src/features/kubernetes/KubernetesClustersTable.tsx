@@ -8,10 +8,12 @@ import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformTableMetricFallback,
   PlatformTableToolbar,
   PlatformTableEmptyState,
   createPlatformTableFilterState,
   formatPlatformTableTextValue,
+  getPlatformTableFiniteMetric,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   PlatformTableShell,
@@ -41,17 +43,6 @@ import {
 // deployments. This bespoke table surfaces those alongside the canonical
 // CPU/Memory utilisation. It reuses the same shared primitives every
 // other platform-page table uses.
-
-const finiteMetric = (value: number | undefined): number | undefined =>
-  typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-
-const metricFallback = () => (
-  <div class="flex justify-center">
-    <span class="text-xs text-muted" aria-hidden="true">
-      —
-    </span>
-  </div>
-);
 
 // v5-style healthy/total fraction: the healthy share turns amber as soon as
 // any child needs attention, so a cluster with a NotReady node reads "2/3"
@@ -175,11 +166,15 @@ export const KubernetesClustersTable: Component<{
                     const context = () => formatPlatformTableTextValue(cluster.kubernetes?.context);
                     const version = () => formatPlatformTableTextValue(cluster.kubernetes?.version);
                     const metricsKey = () => buildMetricKeyForUnifiedResource(cluster);
-                    const cpuPercent = () => finiteMetric(cluster.cpu?.current);
-                    const memoryTotal = () => finiteMetric(cluster.memory?.total) ?? 0;
-                    const memoryUsed = () => finiteMetric(cluster.memory?.used) ?? 0;
+                    const cpuPercent = () => getPlatformTableFiniteMetric(cluster.cpu?.current);
+                    const memoryTotal = () =>
+                      getPlatformTableFiniteMetric(cluster.memory?.total) ?? 0;
+                    const memoryUsed = () =>
+                      getPlatformTableFiniteMetric(cluster.memory?.used) ?? 0;
                     const memoryPercentOnly = () =>
-                      memoryTotal() > 0 ? undefined : finiteMetric(cluster.memory?.current);
+                      memoryTotal() > 0
+                        ? undefined
+                        : getPlatformTableFiniteMetric(cluster.memory?.current);
                     const hasMemoryMetric = () =>
                       memoryTotal() > 0 || memoryPercentOnly() !== undefined;
                     const counts = () =>
@@ -267,7 +262,7 @@ export const KubernetesClustersTable: Component<{
                           >
                             <Show
                               when={canRenderMetrics() && hasMemoryMetric()}
-                              fallback={metricFallback()}
+                              fallback={<PlatformTableMetricFallback />}
                             >
                               <StackedMemoryBar
                                 used={memoryUsed()}

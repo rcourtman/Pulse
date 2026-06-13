@@ -148,6 +148,7 @@ import workloadsTableSource from '@/components/Workloads/WorkloadsTable.tsx?raw'
 import workloadPanelSource from '@/components/Workloads/WorkloadPanel.tsx?raw';
 import guestRowStateSource from '@/components/Workloads/useGuestRowState.ts?raw';
 import workloadSelectionStateSource from '@/components/Workloads/useWorkloadSelectionState.ts?raw';
+import dockerContainersTableSource from '@/features/docker/DockerContainersTable.tsx?raw';
 import dockerHostsTableSource from '@/features/docker/DockerHostsTable.tsx?raw';
 import kubernetesAutoscalingTableSource from '@/features/kubernetes/KubernetesAutoscalingTable.tsx?raw';
 import kubernetesClustersTableSource from '@/features/kubernetes/KubernetesClustersTable.tsx?raw';
@@ -3658,6 +3659,84 @@ describe('shared primitive guardrails', () => {
       expect(source).not.toContain('const formatUptime');
       expect(source).not.toContain('seconds / 86_400');
       expect(source).not.toContain('return `${mins}m`');
+    }
+  });
+
+  it('keeps platform table metric fallbacks on the shared helper', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+        forbiddenPatterns?: Array<{ path?: string; patterns?: string[] }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        allowedPaths?: string[];
+        ignoredPaths?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find(
+      (rule) => rule.id === 'platform-table-metric-fallback',
+    );
+    const localHelperGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-table-local-metric-fallback-helper',
+    );
+    const platformMetricConsumers: Array<[string, string]> = [
+      ['src/features/docker/DockerContainersTable.tsx', dockerContainersTableSource],
+      ['src/features/docker/DockerHostsTable.tsx', dockerHostsTableSource],
+      ['src/features/kubernetes/KubernetesClustersTable.tsx', kubernetesClustersTableSource],
+      ['src/features/kubernetes/KubernetesNodesTable.tsx', kubernetesNodesTableSource],
+      ['src/features/truenas/TrueNASAppsTable.tsx', truenasAppsTableSource],
+      ['src/features/truenas/TrueNASSystemsTable.tsx', truenasSystemsTableSource],
+      ['src/features/vmware/VsphereHostsTable.tsx', vsphereHostsTableSource],
+    ];
+    const platformMetricConsumerPaths = platformMetricConsumers.map(([path]) => path);
+
+    expect(registeredRule?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(registeredRule?.canonical?.export).toBe('PlatformTableMetricFallback');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
+      platformMetricConsumerPaths,
+    );
+    expect(registeredRule?.forbiddenPatterns).toEqual(
+      platformMetricConsumerPaths.map((path) => ({
+        path,
+        patterns: ['const finiteMetric', 'const metricFallback'],
+      })),
+    );
+    expect(localHelperGuard?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(localHelperGuard?.canonical?.export).toBe('PlatformTableMetricFallback');
+    expect(localHelperGuard?.allPatterns).toEqual([
+      'const finiteMetric',
+      'const metricFallback',
+      'Number.isFinite(value)',
+    ]);
+    expect(localHelperGuard?.scopes).toEqual([
+      'src/features/docker',
+      'src/features/kubernetes',
+      'src/features/truenas',
+      'src/features/vmware',
+    ]);
+    expect(localHelperGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(localHelperGuard?.ignoredPaths ?? []).toHaveLength(0);
+
+    expect(sharedPlatformPageSource).toContain('export function PlatformTableMetricFallback');
+    expect(sharedPlatformPageSource).toContain('export const getPlatformTableFiniteMetric');
+    expect(sharedPlatformPageSource).toContain('Number.isFinite(value)');
+
+    for (const [, source] of platformMetricConsumers) {
+      expect(source).toContain('PlatformTableMetricFallback');
+      expect(source).toContain('getPlatformTableFiniteMetric');
+      expect(source).not.toContain('const finiteMetric');
+      expect(source).not.toContain('const metricFallback');
+      expect(source).not.toContain('Number.isFinite(value)');
     }
   });
 
