@@ -11,6 +11,7 @@ import {
   formatPlatformTableTextValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
+  summarizePlatformTableValues,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
@@ -36,23 +37,14 @@ const targetRef = (resource: Resource): string =>
   );
 
 const metricSources = (resource: Resource): { label: string; title: string } => {
-  const sources = (resource.kubernetes?.metricTypes ?? [])
-    .map((source) => asTrimmedString(source))
-    .filter((source): source is string => typeof source === 'string' && source.length > 0);
-  if (sources.length === 0) return { label: 'Default CPU', title: 'Default CPU utilization' };
-  const shown = sources.slice(0, 3);
-  const suffix = sources.length > shown.length ? ` +${sources.length - shown.length}` : '';
-  return { label: `${shown.join(', ')}${suffix}`, title: sources.join(', ') };
+  const sources = summarizePlatformTableValues(resource.kubernetes?.metricTypes, { maxVisible: 3 });
+  if (sources.values.length === 0)
+    return { label: 'Default CPU', title: 'Default CPU utilization' };
+  return sources;
 };
 
 const labelSummary = (resource: Resource): { label: string; title: string } => {
-  const labels = (resource.tags ?? [])
-    .map((label) => asTrimmedString(label))
-    .filter((label): label is string => typeof label === 'string' && label.length > 0);
-  if (labels.length === 0) return { label: '—', title: '' };
-  const shown = labels.slice(0, 2);
-  const suffix = labels.length > shown.length ? ` +${labels.length - shown.length}` : '';
-  return { label: `${shown.join(', ')}${suffix}`, title: labels.join(', ') };
+  return summarizePlatformTableValues(resource.tags);
 };
 
 const numberValue = (value: number | undefined): JSX.Element =>

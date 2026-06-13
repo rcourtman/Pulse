@@ -3689,6 +3689,11 @@ describe('shared primitive guardrails', () => {
       (guard) => guard.id === 'platform-table-local-value-summary-helper',
     );
     const platformValueSummaryConsumers: Array<[string, string]> = [
+      ['src/features/kubernetes/KubernetesAutoscalingTable.tsx', kubernetesAutoscalingTableSource],
+      ['src/features/kubernetes/KubernetesConfigTable.tsx', kubernetesConfigTableSource],
+      ['src/features/kubernetes/KubernetesNetworkingTable.tsx', kubernetesNetworkingTableSource],
+      ['src/features/kubernetes/KubernetesPolicyTable.tsx', kubernetesPolicyTableSource],
+      ['src/features/kubernetes/KubernetesServicesTable.tsx', kubernetesServicesTableSource],
       ['src/features/truenas/TrueNASNetworkSharesTable.tsx', truenasNetworkSharesTableSource],
       ['src/features/vmware/VsphereDatastoresTable.tsx', vsphereDatastoresTableSource],
       ['src/features/vmware/VsphereNetworksTable.tsx', vsphereNetworksTableSource],
@@ -3713,7 +3718,11 @@ describe('shared primitive guardrails', () => {
     );
     expect(localCompactListGuard?.canonical?.export).toBe('summarizePlatformTableValues');
     expect(localCompactListGuard?.allPatterns).toEqual(['const compactList']);
-    expect(localCompactListGuard?.scopes).toEqual(['src/features/truenas', 'src/features/vmware']);
+    expect(localCompactListGuard?.scopes).toEqual([
+      'src/features/kubernetes',
+      'src/features/truenas',
+      'src/features/vmware',
+    ]);
     expect(localCompactListGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(localCompactListGuard?.ignoredPaths ?? []).toHaveLength(0);
     expect(localSummaryGuard?.canonical?.path).toBe(
@@ -3721,7 +3730,11 @@ describe('shared primitive guardrails', () => {
     );
     expect(localSummaryGuard?.canonical?.export).toBe('summarizePlatformTableValues');
     expect(localSummaryGuard?.allPatterns).toEqual(['const summarizeValues']);
-    expect(localSummaryGuard?.scopes).toEqual(['src/features/truenas', 'src/features/vmware']);
+    expect(localSummaryGuard?.scopes).toEqual([
+      'src/features/kubernetes',
+      'src/features/truenas',
+      'src/features/vmware',
+    ]);
     expect(localSummaryGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(localSummaryGuard?.ignoredPaths ?? []).toHaveLength(0);
 

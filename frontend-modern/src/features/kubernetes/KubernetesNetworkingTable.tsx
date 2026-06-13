@@ -11,6 +11,7 @@ import {
   formatPlatformTableTextValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
+  summarizePlatformTableValues,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
@@ -36,22 +37,9 @@ const networkKind = (resource: Resource): string => {
   return resource.kubernetes?.resourceKind || resource.type;
 };
 
-const summarizeValues = (
-  values: readonly (string | undefined)[] | undefined,
-  visible = 2,
-): { label: string; title: string } => {
-  const normalized = (values ?? [])
-    .map((value) => asTrimmedString(value))
-    .filter((value): value is string => typeof value === 'string' && value.length > 0);
-  if (normalized.length === 0) return { label: '—', title: '' };
-  const shown = normalized.slice(0, visible);
-  const suffix = normalized.length > shown.length ? ` +${normalized.length - shown.length}` : '';
-  return { label: `${shown.join(', ')}${suffix}`, title: normalized.join(', ') };
-};
-
 const portLabel = (resource: Resource): { label: string; title: string } => {
   if (resource.kubernetes?.endpointPorts?.length) {
-    return summarizeValues(
+    return summarizePlatformTableValues(
       resource.kubernetes.endpointPorts.map((port) => {
         if (!port.port) return undefined;
         const protocol = port.protocol ? `/${port.protocol.toLowerCase()}` : '';
@@ -68,7 +56,7 @@ const typeOrClass = (resource: Resource): string =>
 
 const addressOrHosts = (resource: Resource): { label: string; title: string } => {
   if (resource.type === 'k8s-ingress') {
-    return summarizeValues([
+    return summarizePlatformTableValues([
       ...(resource.kubernetes?.hosts ?? []),
       ...(resource.kubernetes?.addresses ?? []),
     ]);
@@ -83,13 +71,13 @@ const addressOrHosts = (resource: Resource): { label: string; title: string } =>
       title: `${readyValue}/${totalValue} ready`,
     };
   }
-  return summarizeValues(resource.kubernetes?.addresses);
+  return summarizePlatformTableValues(resource.kubernetes?.addresses);
 };
 
 const targetSummary = (resource: Resource): { label: string; title: string } => {
   if (resource.type === 'k8s-ingress') {
     const rules = resource.kubernetes?.ingressRuleCount;
-    const hosts = summarizeValues(resource.kubernetes?.hosts);
+    const hosts = summarizePlatformTableValues(resource.kubernetes?.hosts);
     const hostCount = resource.kubernetes?.hosts?.length ?? 0;
     const label =
       typeof rules === 'number'

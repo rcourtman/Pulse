@@ -1244,11 +1244,36 @@
         "export": "summarizePlatformTableValues"
       },
       "requiredConsumers": [
+        { "path": "src/features/kubernetes/KubernetesAutoscalingTable.tsx" },
+        { "path": "src/features/kubernetes/KubernetesConfigTable.tsx" },
+        { "path": "src/features/kubernetes/KubernetesNetworkingTable.tsx" },
+        { "path": "src/features/kubernetes/KubernetesPolicyTable.tsx" },
+        { "path": "src/features/kubernetes/KubernetesServicesTable.tsx" },
         { "path": "src/features/truenas/TrueNASNetworkSharesTable.tsx" },
         { "path": "src/features/vmware/VsphereDatastoresTable.tsx" },
         { "path": "src/features/vmware/VsphereNetworksTable.tsx" }
       ],
       "forbiddenPatterns": [
+        {
+          "path": "src/features/kubernetes/KubernetesAutoscalingTable.tsx",
+          "patterns": ["const compactList", "const summarizeValues"]
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesConfigTable.tsx",
+          "patterns": ["const compactList", "const summarizeValues"]
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesNetworkingTable.tsx",
+          "patterns": ["const compactList", "const summarizeValues"]
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesPolicyTable.tsx",
+          "patterns": ["const compactList", "const summarizeValues"]
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesServicesTable.tsx",
+          "patterns": ["const compactList", "const summarizeValues"]
+        },
         {
           "path": "src/features/truenas/TrueNASNetworkSharesTable.tsx",
           "patterns": ["const compactList", "const summarizeValues"]
@@ -1809,7 +1834,7 @@
         "path": "src/features/platformPage/sharedPlatformPage.tsx",
         "export": "summarizePlatformTableValues"
       },
-      "scopes": ["src/features/truenas", "src/features/vmware"],
+      "scopes": ["src/features/kubernetes", "src/features/truenas", "src/features/vmware"],
       "extensions": [".tsx"],
       "allPatterns": ["const compactList"],
       "legacyReason": "Retired migration debt. Platform table compact list normalization must use summarizePlatformTableValues for shared trimming and normalized values.",
@@ -1829,7 +1854,7 @@
         "path": "src/features/platformPage/sharedPlatformPage.tsx",
         "export": "summarizePlatformTableValues"
       },
-      "scopes": ["src/features/truenas", "src/features/vmware"],
+      "scopes": ["src/features/kubernetes", "src/features/truenas", "src/features/vmware"],
       "extensions": [".tsx"],
       "allPatterns": ["const summarizeValues"],
       "legacyReason": "Retired migration debt. Platform table compact value summaries must use summarizePlatformTableValues for shared labels, overflow counts, and title text.",

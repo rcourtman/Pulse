@@ -11,6 +11,7 @@ import {
   formatPlatformTableTextValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
+  summarizePlatformTableValues,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
@@ -48,19 +49,6 @@ const configKind = (resource: Resource): string => {
 
 const plural = (count: number, singular: string, pluralLabel = `${singular}s`): string =>
   `${count} ${count === 1 ? singular : pluralLabel}`;
-
-const summarizeValues = (
-  values: readonly (string | undefined)[] | undefined,
-  visible = 2,
-): { label: string; title: string } => {
-  const normalized = (values ?? [])
-    .map((value) => asTrimmedString(value))
-    .filter((value): value is string => typeof value === 'string' && value.length > 0);
-  if (normalized.length === 0) return { label: '—', title: '' };
-  const shown = normalized.slice(0, visible);
-  const suffix = normalized.length > shown.length ? ` +${normalized.length - shown.length}` : '';
-  return { label: `${shown.join(', ')}${suffix}`, title: normalized.join(', ') };
-};
 
 const lifecycleOrTrust = (resource: Resource): string => {
   if (resource.type === 'k8s-namespace') {
@@ -116,7 +104,7 @@ const dataShape = (resource: Resource): { label: string; title: string } => {
     if (subjectCount === 0) {
       return { label: 'No subjects', title: '' };
     }
-    const kinds = summarizeValues(resource.kubernetes?.subjectKinds);
+    const kinds = summarizePlatformTableValues(resource.kubernetes?.subjectKinds);
     const label =
       kinds.label !== '—'
         ? `${plural(subjectCount, 'subject')} · ${kinds.label}`
@@ -146,7 +134,7 @@ const dataShape = (resource: Resource): { label: string; title: string } => {
 
 const serviceAccountRefs = (resource: Resource): { label: string; title: string } => {
   if (resource.type !== 'k8s-serviceaccount') return { label: '—', title: '' };
-  const imagePullSecrets = summarizeValues(resource.kubernetes?.imagePullSecrets);
+  const imagePullSecrets = summarizePlatformTableValues(resource.kubernetes?.imagePullSecrets);
   const parts = [
     typeof resource.kubernetes?.secretCount === 'number'
       ? plural(resource.kubernetes.secretCount, 'secret')
@@ -165,7 +153,7 @@ const serviceAccountRefs = (resource: Resource): { label: string; title: string 
 };
 
 const labelSummary = (resource: Resource): { label: string; title: string } =>
-  summarizeValues(resource.tags);
+  summarizePlatformTableValues(resource.tags);
 
 export const KubernetesConfigTable: Component<{
   resources: Resource[];

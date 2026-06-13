@@ -11,6 +11,7 @@ import {
   formatPlatformTableTextValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
+  summarizePlatformTableValues,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
@@ -42,31 +43,18 @@ const policyKind = (resource: Resource): string => {
   return resource.kubernetes?.resourceKind || resource.type;
 };
 
-const summarizeValues = (
-  values: readonly (string | undefined)[] | undefined,
-  visible = 2,
-): { label: string; title: string } => {
-  const normalized = (values ?? [])
-    .map((value) => asTrimmedString(value))
-    .filter((value): value is string => typeof value === 'string' && value.length > 0);
-  if (normalized.length === 0) return { label: '—', title: '' };
-  const shown = normalized.slice(0, visible);
-  const suffix = normalized.length > shown.length ? ` +${normalized.length - shown.length}` : '';
-  return { label: `${shown.join(', ')}${suffix}`, title: normalized.join(', ') };
-};
-
 const plural = (count: number, singular: string, pluralLabel = `${singular}s`): string =>
   `${count} ${count === 1 ? singular : pluralLabel}`;
 
 const policyTypes = (resource: Resource): { label: string; title: string } => {
-  const explicit = summarizeValues(resource.kubernetes?.policyTypes);
+  const explicit = summarizePlatformTableValues(resource.kubernetes?.policyTypes);
   if (explicit.label !== '—') return explicit;
 
   const inferred = [
     typeof resource.kubernetes?.ingressRuleCount === 'number' ? 'Ingress' : undefined,
     typeof resource.kubernetes?.egressRuleCount === 'number' ? 'Egress' : undefined,
   ];
-  return summarizeValues(inferred);
+  return summarizePlatformTableValues(inferred);
 };
 
 const quotaKeys = (resource: Resource): string[] => {
@@ -81,9 +69,7 @@ const quotaUsage = (resource: Resource, visible = 2): { label: string; title: st
   const hard = resource.kubernetes?.hard ?? {};
   const used = resource.kubernetes?.used ?? {};
   const values = keys.map((key) => `${key} ${used[key] ?? '0'}/${hard[key] ?? '—'}`);
-  const shown = values.slice(0, visible);
-  const suffix = values.length > shown.length ? ` +${values.length - shown.length}` : '';
-  return { label: `${shown.join(', ')}${suffix}`, title: values.join(', ') };
+  return summarizePlatformTableValues(values, { maxVisible: visible });
 };
 
 const pdbBudget = (resource: Resource): string => {
@@ -163,7 +149,7 @@ const policySpec = (resource: Resource): { label: string; title: string } => {
     };
   }
   if (resource.type === 'k8s-limit-range') {
-    return summarizeValues(resource.kubernetes?.limitTypes, 3);
+    return summarizePlatformTableValues(resource.kubernetes?.limitTypes, { maxVisible: 3 });
   }
   return { label: '—', title: '' };
 };
@@ -186,7 +172,7 @@ const policyState = (resource: Resource): { label: string; title: string } => {
 };
 
 const labelSummary = (resource: Resource): { label: string; title: string } =>
-  summarizeValues(resource.tags);
+  summarizePlatformTableValues(resource.tags);
 
 export const KubernetesPolicyTable: Component<{
   resources: Resource[];

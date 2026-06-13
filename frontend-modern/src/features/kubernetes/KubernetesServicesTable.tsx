@@ -11,6 +11,7 @@ import {
   formatPlatformTableTextValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
+  summarizePlatformTableValues,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
@@ -34,19 +35,6 @@ import {
 const serviceName = (resource: Resource): string =>
   asTrimmedString(resource.displayName) || asTrimmedString(resource.name) || resource.id;
 
-const summarizeValues = (
-  values: readonly (string | undefined)[] | undefined,
-  visible = 2,
-): { label: string; title: string } => {
-  const normalized = (values ?? [])
-    .map((value) => asTrimmedString(value))
-    .filter((value): value is string => typeof value === 'string' && value.length > 0);
-  if (normalized.length === 0) return { label: '—', title: '' };
-  const shown = normalized.slice(0, visible);
-  const suffix = normalized.length > shown.length ? ` +${normalized.length - shown.length}` : '';
-  return { label: `${shown.join(', ')}${suffix}`, title: normalized.join(', ') };
-};
-
 const portSummary = (resource: Resource): { label: string; title: string } => {
   const ports = resource.kubernetes?.servicePorts ?? [];
   const labels = ports.map((port) => {
@@ -56,7 +44,7 @@ const portSummary = (resource: Resource): { label: string; title: string } => {
     const nodePort = port.nodePort ? ` node:${port.nodePort}` : '';
     return `${port.port}${target}${protocol}${nodePort}`;
   });
-  return summarizeValues(labels, 2);
+  return summarizePlatformTableValues(labels);
 };
 
 const selectorSummary = (resource: Resource): { label: string; title: string } => {
@@ -65,11 +53,11 @@ const selectorSummary = (resource: Resource): { label: string; title: string } =
   const pairs = Object.entries(selector)
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([key, value]) => `${key}=${value}`);
-  return summarizeValues(pairs, 2);
+  return summarizePlatformTableValues(pairs);
 };
 
 const externalIpSummary = (resource: Resource): { label: string; title: string } =>
-  summarizeValues(resource.kubernetes?.externalIps);
+  summarizePlatformTableValues(resource.kubernetes?.externalIps);
 
 export const KubernetesServicesTable: Component<{
   resources: Resource[];
