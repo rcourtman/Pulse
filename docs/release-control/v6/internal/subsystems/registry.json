@@ -74,6 +74,14 @@
       ]
     },
     {
+      "path": "frontend-modern/src/components/CommercialMigrationBanner.tsx",
+      "rationale": "the global commercial migration notice is both a cloud-paid entitlement recovery surface and a shared app-shell notice primitive consumer",
+      "subsystems": [
+        "cloud-paid",
+        "frontend-primitives"
+      ]
+    },
+    {
       "path": "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
       "rationale": "the infrastructure selector pipeline is both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary",
       "subsystems": [
@@ -1952,6 +1960,7 @@
       "owned_files": [
         "frontend-modern/src/App.tsx",
         "frontend-modern/src/AppLayout.tsx",
+        "frontend-modern/src/components/CommercialMigrationBanner.tsx",
         "frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx",
         "frontend-modern/src/components/Settings/BillingAdminPanel.tsx",
         "frontend-modern/src/components/Settings/CommercialBillingSections.tsx",
@@ -2500,6 +2509,19 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/components/Settings/__tests__/BillingAdminPanel.test.tsx"
+            ]
+          },
+          {
+            "id": "commercial-migration-banner-surface",
+            "label": "commercial migration banner surface proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/CommercialMigrationBanner.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/__tests__/CommercialMigrationBanner.test.tsx"
             ]
           },
           {
@@ -3101,6 +3123,7 @@
         "frontend-modern/scripts/settings-diagnostics-boundary-audit.mjs",
         "frontend-modern/scripts/shared-template-audit.mjs",
         "frontend-modern/scripts/shared-template-registry.json",
+        "frontend-modern/src/components/CommercialMigrationBanner.tsx",
         "frontend-modern/src/components/Login.tsx",
         "frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx",
         "frontend-modern/src/components/Settings/AIChatMaintenanceSection.tsx",
@@ -3221,6 +3244,21 @@
             "exact_files": [
               "frontend-modern/src/__tests__/App.architecture.test.ts",
               "frontend-modern/src/__tests__/AppLayout.test.tsx"
+            ]
+          },
+          {
+            "id": "global-commercial-migration-banner",
+            "label": "global commercial migration banner primitive proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/CommercialMigrationBanner.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/__tests__/CommercialMigrationBanner.test.tsx",
+              "frontend-modern/src/components/shared/InlineNotice.test.tsx",
+              "frontend-modern/src/components/shared/SharedPrimitives.guardrails.test.ts"
             ]
           },
           {

@@ -55,12 +55,15 @@ describe('InlineNotice', () => {
 
   it('owns dismissible banner notice layout and close action chrome', () => {
     const onDismiss = vi.fn();
+    const onAction = vi.fn();
 
     render(() => (
       <InlineNotice
         role="status"
         tone="info"
         layout="banner"
+        actionLabel="Open settings"
+        actionOnClick={onAction}
         onDismiss={onDismiss}
         dismissLabel="Dismiss demo banner"
         dismissTitle="Dismiss"
@@ -72,8 +75,10 @@ describe('InlineNotice', () => {
     const notice = screen.getByRole('status');
     expect(notice.className).toContain('rounded-none');
     expect(notice.className).toContain('border-x-0');
+    fireEvent.click(screen.getByRole('button', { name: 'Open settings' }));
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss demo banner' }));
 
+    expect(onAction).toHaveBeenCalledOnce();
     expect(onDismiss).toHaveBeenCalledOnce();
   });
 });

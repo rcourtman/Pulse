@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CommercialMigrationStatus } from '@/api/license';
+import commercialMigrationBannerSource from '@/components/CommercialMigrationBanner.tsx?raw';
 
 /* ------------------------------------------------------------------ */
 /*  Mocks                                                              */
@@ -61,6 +62,26 @@ describe('CommercialMigrationBanner', () => {
   });
 
   afterEach(cleanup);
+
+  it('keeps commercial migration notice chrome on shared primitives', () => {
+    expect(commercialMigrationBannerSource).toContain('InlineNotice');
+    expect(commercialMigrationBannerSource).toContain('layout="banner"');
+    expect(commercialMigrationBannerSource).toContain('lucide-solid/icons/alert-triangle');
+    expect(commercialMigrationBannerSource).toContain('actionOnClick');
+    expect(commercialMigrationBannerSource).not.toContain('<svg');
+    expect(commercialMigrationBannerSource).not.toContain('<button');
+    expect(commercialMigrationBannerSource).not.toContain('toneClasses');
+    expect(commercialMigrationBannerSource).not.toContain('buttonClasses');
+    expect(commercialMigrationBannerSource).not.toContain(
+      'bg-amber-50 dark:bg-amber-900 border-b border-amber-200',
+    );
+    expect(commercialMigrationBannerSource).not.toContain(
+      'bg-red-50 dark:bg-red-900 border-b border-red-200',
+    );
+    expect(commercialMigrationBannerSource).not.toContain(
+      'p-1 rounded transition-colors opacity-70 hover:opacity-100',
+    );
+  });
 
   /* ---------- Visibility ---------- */
 

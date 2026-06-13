@@ -13,6 +13,7 @@ interface InlineNoticeProps extends Omit<JSX.HTMLAttributes<HTMLDivElement>, 'cl
   actionLabel?: JSX.Element;
   actionIcon?: JSX.Element;
   actionAriaLabel?: string;
+  actionOnClick?: () => void;
   onDismiss?: () => void;
   dismissLabel?: string;
   dismissTitle?: string;
@@ -67,6 +68,7 @@ export function InlineNotice(props: InlineNoticeProps) {
     'actionLabel',
     'actionIcon',
     'actionAriaLabel',
+    'actionOnClick',
     'onDismiss',
     'dismissLabel',
     'dismissTitle',
@@ -88,10 +90,33 @@ export function InlineNotice(props: InlineNoticeProps) {
       </Show>
       <div class={INLINE_NOTICE_CONTENT_CLASS}>
         <div>{local.children}</div>
-        <Show when={local.actionHref}>
-          {(href) => (
-            <Show when={local.actionLabel}>
-              {(label) => (
+        <Show when={local.actionLabel}>
+          {(label) => (
+            <Show
+              when={local.actionHref}
+              fallback={
+                <Show when={local.actionOnClick}>
+                  {(onClick) => (
+                    <button
+                      type="button"
+                      aria-label={local.actionAriaLabel}
+                      class={`${INLINE_NOTICE_ACTION_BASE_CLASS} ${
+                        INLINE_NOTICE_ACTION_TONE_CLASSES[local.tone]
+                      }`}
+                      onClick={() => onClick()()}
+                    >
+                      <span>{label()}</span>
+                      <Show when={local.actionIcon}>
+                        <span class={INLINE_NOTICE_ACTION_ICON_CLASS} aria-hidden="true">
+                          {local.actionIcon}
+                        </span>
+                      </Show>
+                    </button>
+                  )}
+                </Show>
+              }
+            >
+              {(href) => (
                 <a
                   href={href()}
                   aria-label={local.actionAriaLabel}

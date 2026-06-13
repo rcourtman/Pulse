@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import calloutCardSource from '@/components/shared/CalloutCard.tsx?raw';
 import inlineNoticeSource from '@/components/shared/InlineNotice.tsx?raw';
 import demoBannerSource from '@/components/DemoBanner.tsx?raw';
+import commercialMigrationBannerSource from '@/components/CommercialMigrationBanner.tsx?raw';
 import assistantCommandHelpDialogSource from '@/components/AI/Chat/AssistantCommandHelpDialog.tsx?raw';
 import chatMessagesSource from '@/components/AI/Chat/ChatMessages.tsx?raw';
 import aiChatSource from '@/components/AI/Chat/index.tsx?raw';
@@ -3977,6 +3978,58 @@ describe('shared primitive guardrails', () => {
     );
     expect(demoBannerSource).not.toContain(
       'p-1 hover:bg-blue-100 dark:hover:bg-blue-800 rounded text-blue-600',
+    );
+  });
+
+  it('routes commercial migration notices through InlineNotice banner primitives', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+        forbiddenPatterns?: Array<{ path?: string; patterns?: string[] }>;
+      }>;
+    };
+    const registeredRule = registry.rules?.find(
+      (rule) => rule.id === 'commercial-migration-banner-notice-shell',
+    );
+
+    expect(registeredRule?.canonical?.path).toBe('src/components/shared/InlineNotice.tsx');
+    expect(registeredRule?.canonical?.export).toBe('InlineNotice');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/components/CommercialMigrationBanner.tsx',
+    ]);
+    expect(registeredRule?.forbiddenPatterns).toEqual([
+      {
+        path: 'src/components/CommercialMigrationBanner.tsx',
+        patterns: [
+          '<svg',
+          '<button',
+          'toneClasses',
+          'buttonClasses',
+          'bg-amber-50 dark:bg-amber-900 border-b border-amber-200',
+          'bg-red-50 dark:bg-red-900 border-b border-red-200',
+          'p-1 rounded transition-colors opacity-70 hover:opacity-100',
+        ],
+      },
+    ]);
+    expect(inlineNoticeSource).toContain('actionOnClick');
+    expect(commercialMigrationBannerSource).toContain('InlineNotice');
+    expect(commercialMigrationBannerSource).toContain('layout="banner"');
+    expect(commercialMigrationBannerSource).toContain('lucide-solid/icons/alert-triangle');
+    expect(commercialMigrationBannerSource).toContain('actionOnClick');
+    expect(commercialMigrationBannerSource).not.toContain('<svg');
+    expect(commercialMigrationBannerSource).not.toContain('<button');
+    expect(commercialMigrationBannerSource).not.toContain('toneClasses');
+    expect(commercialMigrationBannerSource).not.toContain('buttonClasses');
+    expect(commercialMigrationBannerSource).not.toContain(
+      'bg-amber-50 dark:bg-amber-900 border-b border-amber-200',
+    );
+    expect(commercialMigrationBannerSource).not.toContain(
+      'bg-red-50 dark:bg-red-900 border-b border-red-200',
+    );
+    expect(commercialMigrationBannerSource).not.toContain(
+      'p-1 rounded transition-colors opacity-70 hover:opacity-100',
     );
   });
 

@@ -144,6 +144,7 @@ work extends shared components instead of creating new local variants.
 114. `frontend-modern/src/components/shared/useUpgradeNavigation.ts`
 115. `frontend-modern/src/utils/upgradeNavigation.ts`
 116. `frontend-modern/src/components/DemoBanner.tsx`
+116a. `frontend-modern/src/components/CommercialMigrationBanner.tsx`
 117. `frontend-modern/src/components/Login.tsx`
 118. `frontend-modern/src/stores/sessionCapabilities.ts`
 119. `frontend-modern/src/stores/sessionPresentationPolicy.ts`
@@ -311,10 +312,11 @@ rows, so the unified-resource owner must project the cluster agent identity and
 cluster-scoped agent version onto those node rows before the shared stale-agent
 collector can decide whether the node inventory is gated by an older agent.
 Global dismissible notice bars are also part of the shared `InlineNotice`
-boundary. `frontend-modern/src/components/DemoBanner.tsx` must compose
-`InlineNotice` with the `banner` layout, the shared icon library, and the
-primitive's dismiss slot instead of carrying a local blue notice shell, raw SVG
-status icon, or page-local close button classes.
+boundary. `frontend-modern/src/components/DemoBanner.tsx` and
+`frontend-modern/src/components/CommercialMigrationBanner.tsx` must compose
+`InlineNotice` with the `banner` layout, the shared icon library, action slots,
+and the primitive's dismiss slot instead of carrying local colored notice
+shells, raw SVG status icons, or page-local action and close button classes.
 Kubernetes policy inventory follows that same primitive boundary while the
 unified-resource owner supplies NetworkPolicy policy type and rule-count
 columns, PodDisruptionBudget budget and observed health columns, ResourceQuota
@@ -363,23 +365,24 @@ default and provide local attached-container search, status grouping, and
 attention/running/other filters so large bridge or overlay networks remain
 scan-friendly without hiding any container from drilldown.
 
-1. `frontend-modern/src/components/Settings/APIAccessPanel.tsx` shared with `security-privacy`: the API Access settings intro is both a security/privacy token-management trust surface and a canonical settings-shell presentation boundary.
+1. `frontend-modern/src/components/CommercialMigrationBanner.tsx` shared with `cloud-paid`: the global commercial migration notice is both a cloud-paid entitlement recovery surface and a shared app-shell notice primitive consumer.
+2. `frontend-modern/src/components/Settings/APIAccessPanel.tsx` shared with `security-privacy`: the API Access settings intro is both a security/privacy token-management trust surface and a canonical settings-shell presentation boundary.
    The panel may own shell placement and local action layout, but
    token-specific Docker / Podman copy must come from
    `frontend-modern/src/utils/apiTokenPresentation.ts` rather than page-local
    text.
-2. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx` shared with `security-privacy`: the data-handling settings surface is both a security/privacy trust surface and a canonical settings-shell presentation boundary.
-3. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts` shared with `security-privacy`: the data-handling settings model is both a security/privacy posture projection and a canonical settings-shell presentation boundary.
-4. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx` shared with `security-privacy`: the general settings privacy panel is both a security/privacy control surface and a canonical settings-shell presentation boundary.
+3. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx` shared with `security-privacy`: the data-handling settings surface is both a security/privacy trust surface and a canonical settings-shell presentation boundary.
+4. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts` shared with `security-privacy`: the data-handling settings model is both a security/privacy posture projection and a canonical settings-shell presentation boundary.
+5. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx` shared with `security-privacy`: the general settings privacy panel is both a security/privacy control surface and a canonical settings-shell presentation boundary.
    The panel owns compact settings-shell framing for anonymous telemetry, but
    its vocabulary must stay aligned with `security-privacy`: aggregate
    self-hosted adoption counts and coarse feature flags may be named, while
    hostnames, credentials, infrastructure identifiers, prompts, chat messages,
    and personal information must stay explicitly excluded.
-5. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx` shared with `security-privacy`: the authentication settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
-6. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx` shared with `security-privacy`: the security overview settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
-7. `frontend-modern/src/routing/routePreload.ts` shared with `performance-and-scalability`: the app-shell route preload registry is both a canonical frontend shell boundary and an authenticated hot-path performance boundary.
-8. `frontend-modern/src/stores/aiChat.ts` shared with `ai-runtime`: the assistant drawer and session store is both an AI runtime control surface and a canonical app-shell presentation boundary.
+6. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx` shared with `security-privacy`: the authentication settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
+7. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx` shared with `security-privacy`: the security overview settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
+8. `frontend-modern/src/routing/routePreload.ts` shared with `performance-and-scalability`: the app-shell route preload registry is both a canonical frontend shell boundary and an authenticated hot-path performance boundary.
+9. `frontend-modern/src/stores/aiChat.ts` shared with `ai-runtime`: the assistant drawer and session store is both an AI runtime control surface and a canonical app-shell presentation boundary.
    Assistant session pickers and reloads must restore only safe
    `handoff_summary` presentation state from the session list. Loading a plain
    session or starting a new conversation must clear stale scoped handoff
@@ -436,7 +439,7 @@ scan-friendly without hiding any container from drilldown.
    routes and must render as named choices without secondary raw route IDs,
    while external provider route IDs may remain visible where they disambiguate
    catalog entries.
-9. `frontend-modern/src/utils/platformSupportManifest.generated.ts` shared with `unified-resources`: the generated platform support projection is both a canonical unified-resource platform union boundary and a shared frontend source/platform vocabulary boundary.
+10. `frontend-modern/src/utils/platformSupportManifest.generated.ts` shared with `unified-resources`: the generated platform support projection is both a canonical unified-resource platform union boundary and a shared frontend source/platform vocabulary boundary.
    It must expose the manifest `surface_kind` field so runtime lenses such as
    `docker` are not collapsed back into owning platform semantics.
    It must also preserve canonical projection lists from the governed manifest
@@ -444,7 +447,7 @@ scan-friendly without hiding any container from drilldown.
    `vm`, `network-share`, and `app-container` workloads through the same
    generated platform projection used by route helpers, badges, source
    filters, reportable-resource pickers, and type unions.
-10. `frontend-modern/src/utils/sourcePlatforms.ts` shared with `unified-resources`: the source platform normalizer is both a canonical unified-resource source adapter boundary and a shared frontend source/platform vocabulary boundary.
+11. `frontend-modern/src/utils/sourcePlatforms.ts` shared with `unified-resources`: the source platform normalizer is both a canonical unified-resource source adapter boundary and a shared frontend source/platform vocabulary boundary.
     That shared boundary must preserve `availability` as the agentless
     monitoring source for `network-endpoint` resources and settings presets,
     so source badges and platform/source type resolution do not fall back to

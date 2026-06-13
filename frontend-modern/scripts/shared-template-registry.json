@@ -545,6 +545,36 @@
       ]
     },
     {
+      "id": "commercial-migration-banner-notice-shell",
+      "category": "callout",
+      "summary": "Global commercial migration notices must compose InlineNotice banner layout, library icons, shared action slots, and shared dismiss chrome instead of copying local paid-state tone shells, raw SVGs, or page-local buttons.",
+      "canonical": {
+        "path": "src/components/shared/InlineNotice.tsx",
+        "export": "InlineNotice"
+      },
+      "requiredConsumers": [{ "path": "src/components/CommercialMigrationBanner.tsx" }],
+      "forbiddenPatterns": [
+        {
+          "path": "src/components/CommercialMigrationBanner.tsx",
+          "patterns": [
+            "<svg",
+            "<button",
+            "toneClasses",
+            "buttonClasses",
+            "bg-amber-50 dark:bg-amber-900 border-b border-amber-200",
+            "bg-red-50 dark:bg-red-900 border-b border-red-200",
+            "p-1 rounded transition-colors opacity-70 hover:opacity-100"
+          ]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/__tests__/CommercialMigrationBanner.test.tsx",
+        "src/components/shared/InlineNotice.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "status-dot-shell",
       "category": "status-indicator",
       "summary": "Resource and health indicator dots must compose StatusDot for shared size, variant, pulse, title, and aria behavior instead of recreating local rounded status spans.",

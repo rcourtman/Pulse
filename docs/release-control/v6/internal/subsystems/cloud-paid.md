@@ -97,6 +97,7 @@ Stripe-free and avoids a cloud-control-plane report data path across clients.
 35. `internal/hosted/provisioner.go`
 36. `frontend-modern/src/App.tsx`
 37. `frontend-modern/src/AppLayout.tsx`
+37a. `frontend-modern/src/components/CommercialMigrationBanner.tsx`
 38. `frontend-modern/src/useAppRuntimeState.ts`
 39. `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`
 40. `frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx`
@@ -145,10 +146,16 @@ Stripe-free and avoids a cloud-control-plane report data path across clients.
 
 ## Shared Boundaries
 
-1. `frontend-modern/src/components/Settings/MonitoredSystemImpactPreview.tsx` shared with `agent-lifecycle`: the monitored-system impact preview is both a platform-connections lifecycle surface and a canonical cloud-paid monitored-system presentation boundary.
-2. `frontend-modern/src/useAppRuntimeState.ts` shared with `performance-and-scalability`: the authenticated app runtime bootstrap is both a hosted commercial org-context boundary and a protected app-shell performance boundary.
-3. `internal/api/licensing_bridge.go` shared with `api-contracts`: commercial licensing bridge handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
-4. `internal/api/licensing_handlers.go` shared with `api-contracts`: commercial licensing handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
+1. `frontend-modern/src/components/CommercialMigrationBanner.tsx` shared with `frontend-primitives`: the global commercial migration notice is both a cloud-paid entitlement recovery surface and a shared app-shell notice primitive consumer.
+   The banner's commercial migration predicates, copy, retry polling, dismissal
+   state, and billing-plan destination remain cloud-paid owned, while the
+   visible banner shell, icon, action slot, and dismiss chrome must compose the
+   shared `InlineNotice` primitive instead of carrying local paid-state tone
+   classes, raw SVGs, or page-local buttons.
+2. `frontend-modern/src/components/Settings/MonitoredSystemImpactPreview.tsx` shared with `agent-lifecycle`: the monitored-system impact preview is both a platform-connections lifecycle surface and a canonical cloud-paid monitored-system presentation boundary.
+3. `frontend-modern/src/useAppRuntimeState.ts` shared with `performance-and-scalability`: the authenticated app runtime bootstrap is both a hosted commercial org-context boundary and a protected app-shell performance boundary.
+4. `internal/api/licensing_bridge.go` shared with `api-contracts`: commercial licensing bridge handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
+5. `internal/api/licensing_handlers.go` shared with `api-contracts`: commercial licensing handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
    That same shared licensing boundary also owns installation-version and
    runtime-build continuity for authenticated v6 installs: `internal/api/router.go`
    and `internal/api/licensing_handlers.go` must hand the canonical process
@@ -173,9 +180,9 @@ Stripe-free and avoids a cloud-control-plane report data path across clients.
    pending must self-retry in the background with backoff for the life of
    the process so a transient license-server or DNS failure at first boot
    never strands a paying upgrader on Community until a manual restart.
-5. `internal/api/licensing_legacy_retry.go` shared with `api-contracts`: the background legacy-exchange retry loop carries both API payload contract and cloud-paid entitlement boundary ownership.
-6. `internal/api/payments_webhook_handlers.go` shared with `api-contracts`: commercial payment webhook handlers carry both API payload contract and cloud-paid billing boundary ownership.
-7. `internal/api/public_signup_handlers.go` shared with `api-contracts`: hosted signup handlers carry both API payload contract and cloud-paid hosted provisioning boundary ownership.
+6. `internal/api/licensing_legacy_retry.go` shared with `api-contracts`: the background legacy-exchange retry loop carries both API payload contract and cloud-paid entitlement boundary ownership.
+7. `internal/api/payments_webhook_handlers.go` shared with `api-contracts`: commercial payment webhook handlers carry both API payload contract and cloud-paid billing boundary ownership.
+8. `internal/api/public_signup_handlers.go` shared with `api-contracts`: hosted signup handlers carry both API payload contract and cloud-paid hosted provisioning boundary ownership.
    That shared monitored-system presentation boundary also owns disabled
    provider-connection copy. Commercial entitlement surfaces must treat canonical
    zero-delta and removal-only TrueNAS or VMware previews as non-consuming or
