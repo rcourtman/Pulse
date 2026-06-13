@@ -131,7 +131,8 @@ describe('OrganizationBillingPanel', () => {
     expect(organizationBillingStateSource).toContain('normalizeOrgScope(getOrgID())');
     expect(organizationBillingStateSource).toContain("eventBus.on('org_switched'");
     expect(organizationBillingStateSource).not.toContain("getOrgID() || 'default'");
-    expect(organizationBillingLoadingStateSource).toContain('animate-pulse');
+    expect(organizationBillingLoadingStateSource).toContain('SettingsLoadingSkeleton');
+    expect(organizationBillingLoadingStateSource).not.toContain('animate-pulse');
   });
 
   it('stays unavailable in demo mode without loading organization billing data', () => {

@@ -1327,6 +1327,10 @@ not a replacement status card, CTA band, or page-local nested card.
 2. Keep top-level settings surfaces routed through the canonical settings shell
    and maintain both `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
    plus `tests/integration/tests/15-settings-shell-consistency.spec.ts`
+3. Keep Settings loading placeholders on the shared
+   `SettingsLoadingSkeleton` primitive and the
+   `settings-loading-skeleton-shell` registry rule instead of local
+   `animate-pulse` block templates.
 3. Update this contract when a new canonical UI pattern is adopted
 4. Remove local forks after the shared primitive is introduced
 5. Keep shared feature-level presenters on capability truth. When reusable
@@ -3360,6 +3364,18 @@ credential slots own the source-specific lifecycle or API meaning, while
 The `settings-connection-editor-local-*-callout-shell` pattern guards block
 future connection-editor files from reintroducing amber, red, or rose local
 notice shells.
+
+Settings loading placeholders must route through the shared
+`SettingsLoadingSkeleton` primitive instead of local `animate-pulse` blocks.
+Feature panels may choose the loading shape and row counts, but the shared
+primitive owns pulse animation, skeleton fill tokens, metric-card grids,
+progress-card rows, table header/body shells, and labelled status semantics.
+The `settings-loading-skeleton-shell` registry rule covers the current
+organization, security overview, and resource data policy loading surfaces, the
+`settings-loading-state-shared-skeleton-required` guard requires future
+Settings `*LoadingState` files to compose that primitive, and the
+`settings-local-loading-skeleton-block-shell` guard blocks local pulse skeleton
+blocks from returning inside Settings components.
 
 Settings external documentation text links must route through
 `ExternalTextLink`, while button-styled external actions route through

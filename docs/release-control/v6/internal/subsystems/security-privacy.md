@@ -206,6 +206,10 @@ controls as normal product settings.
 3. Keep shared frontend settings proof routing aligned whenever security/privacy presentation changes.
 4. Keep the checked-in telemetry adoption report aligned with the same release-identity rules used by the runtime telemetry payload.
 5. Update this contract whenever a new canonical security, token, auth, or privacy surface becomes part of the governed trust boundary.
+6. Keep Security Overview and Resource Privacy/Data Handling loading
+   placeholders on the shared `SettingsLoadingSkeleton` primitive. This
+   subsystem owns the security/privacy posture semantics; frontend-primitives
+   owns skeleton animation, fill tokens, and placeholder shell consistency.
 6. Keep the shared storage-directory and secure storage-file hardening helper aligned with the crypto manager plus control-plane magic-link key and store handling whenever runtime data-root ownership assumptions change.
 7. Keep auth-env ingestion, hosted commercial base URL validation, and shared
    fingerprint-verifier TLS defaults aligned whenever runtime auth loading,

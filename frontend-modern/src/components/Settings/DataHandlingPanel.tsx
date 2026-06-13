@@ -9,6 +9,11 @@ import ShieldCheck from 'lucide-solid/icons/shield-check';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import { Button, ButtonLink } from '@/components/shared/Button';
 import SettingsPanel from '@/components/shared/SettingsPanel';
+import {
+  SettingsLoadingSkeleton,
+  SettingsSkeletonBlock,
+  SettingsSkeletonCard,
+} from '@/components/shared/SettingsLoadingSkeleton';
 import { settingsTabPath } from './settingsNavigationModel';
 import {
   buildDataHandlingPanelModel,
@@ -183,15 +188,19 @@ export const DataHandlingPanel: Component = () => {
       <Show
         when={!resources.loading() || resources.policyPosture()}
         fallback={
-          <div class="grid gap-3 md:grid-cols-3">
-            {[1, 2, 3].map(() => (
-              <div class="min-h-28 rounded-md border border-border bg-surface-alt p-4 animate-pulse">
-                <div class="h-4 w-24 rounded bg-surface-hover" />
-                <div class="mt-4 h-8 w-16 rounded bg-surface-hover" />
-                <div class="mt-3 h-3 w-32 rounded bg-surface-hover" />
-              </div>
-            ))}
-          </div>
+          <SettingsLoadingSkeleton label="Loading resource data policy">
+            <div class="grid gap-3 md:grid-cols-3">
+              <For each={[1, 2, 3]}>
+                {() => (
+                  <SettingsSkeletonCard class="min-h-28 bg-surface-alt p-4 space-y-0">
+                    <SettingsSkeletonBlock class="h-4 w-24" />
+                    <SettingsSkeletonBlock class="mt-4 h-8 w-16" />
+                    <SettingsSkeletonBlock class="mt-3 h-3 w-32" />
+                  </SettingsSkeletonCard>
+                )}
+              </For>
+            </div>
+          </SettingsLoadingSkeleton>
         }
       >
         <PolicyScopeSummary />

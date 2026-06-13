@@ -506,6 +506,54 @@
       ]
     },
     {
+      "id": "settings-loading-skeleton-shell",
+      "category": "loading-skeleton",
+      "summary": "Settings loading skeletons must compose SettingsLoadingSkeleton for shared pulse animation, skeleton color, metric-grid, progress-card, and table-row shells instead of recreating page-local skeleton blocks.",
+      "canonical": {
+        "path": "src/components/shared/SettingsLoadingSkeleton.tsx",
+        "export": "SettingsLoadingSkeleton"
+      },
+      "requiredConsumers": [
+        { "path": "src/components/Settings/DataHandlingPanel.tsx" },
+        { "path": "src/components/Settings/OrganizationAccessLoadingState.tsx" },
+        { "path": "src/components/Settings/OrganizationBillingLoadingState.tsx" },
+        { "path": "src/components/Settings/OrganizationOverviewLoadingState.tsx" },
+        { "path": "src/components/Settings/OrganizationSharingLoadingState.tsx" },
+        { "path": "src/components/Settings/SecurityOverviewPanel.tsx" }
+      ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/components/Settings/DataHandlingPanel.tsx",
+          "patterns": ["animate-pulse"]
+        },
+        {
+          "path": "src/components/Settings/OrganizationAccessLoadingState.tsx",
+          "patterns": ["animate-pulse", "bg-surface-hover", "bg-surface-alt"]
+        },
+        {
+          "path": "src/components/Settings/OrganizationBillingLoadingState.tsx",
+          "patterns": ["animate-pulse", "bg-surface-hover", "bg-surface-alt"]
+        },
+        {
+          "path": "src/components/Settings/OrganizationOverviewLoadingState.tsx",
+          "patterns": ["animate-pulse", "bg-surface-hover", "bg-surface-alt"]
+        },
+        {
+          "path": "src/components/Settings/OrganizationSharingLoadingState.tsx",
+          "patterns": ["animate-pulse", "bg-surface-hover", "bg-surface-alt"]
+        },
+        {
+          "path": "src/components/Settings/SecurityOverviewPanel.tsx",
+          "patterns": ["animate-pulse", "bg-slate-300"]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SettingsLoadingSkeleton.test.tsx",
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "button-command-shell",
       "category": "action-button",
       "summary": "Standard command buttons and button-styled route actions must compose Button or ButtonLink for shared variants, sizes, focus, disabled, loading, and safe-link behavior instead of recreating local Tailwind button shells.",
@@ -2506,6 +2554,25 @@
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "src/components/shared/CalloutCard.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "settings-local-loading-skeleton-block-shell",
+      "category": "loading-skeleton",
+      "summary": "Settings components must not recreate local pulse skeleton blocks with surface-hover fills; compose SettingsLoadingSkeleton so loading placeholders stay canonical.",
+      "canonical": {
+        "path": "src/components/shared/SettingsLoadingSkeleton.tsx",
+        "export": "SettingsLoadingSkeleton"
+      },
+      "scopes": ["src/components/Settings"],
+      "extensions": [".tsx"],
+      "allPatterns": ["animate-pulse", "bg-surface-hover"],
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
+      "proof": [
+        "src/components/shared/SettingsLoadingSkeleton.test.tsx",
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "scripts/shared-template-audit.mjs"
       ]
     },
@@ -4728,6 +4795,27 @@
     }
   ],
   "requiredPatternGuards": [
+    {
+      "id": "settings-loading-state-shared-skeleton-required",
+      "category": "loading-skeleton",
+      "summary": "Settings LoadingState components must compose SettingsLoadingSkeleton, so new settings panels cannot introduce local loading skeleton templates.",
+      "canonical": {
+        "path": "src/components/shared/SettingsLoadingSkeleton.tsx",
+        "export": "SettingsLoadingSkeleton"
+      },
+      "scopes": ["src/components/Settings"],
+      "extensions": [".tsx"],
+      "pathIncludes": ["LoadingState"],
+      "triggerPatterns": ["LoadingState"],
+      "requiredPatterns": ["SettingsLoadingSkeleton"],
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SettingsLoadingSkeleton.test.tsx",
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
     {
       "id": "platform-row-detail-toggle-shared-state",
       "category": "row-disclosure",

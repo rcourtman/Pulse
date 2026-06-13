@@ -370,6 +370,14 @@ describe('settings architecture guardrails', () => {
     );
   });
 
+  it('keeps settings loading skeletons on the shared skeleton primitive', () => {
+    for (const source of [dataHandlingPanelSource, securityOverviewPanelSource]) {
+      expect(source).toContain('@/components/shared/SettingsLoadingSkeleton');
+      expect(source).toContain('SettingsLoadingSkeleton');
+      expect(source).not.toContain('animate-pulse');
+    }
+  });
+
   it('keeps telemetry disclosure aligned with the security privacy contract', () => {
     expect(generalSettingsPanelSource).toContain('aggregate self-hosted adoption');
     expect(generalSettingsPanelSource).toContain('counts, and coarse feature flags');

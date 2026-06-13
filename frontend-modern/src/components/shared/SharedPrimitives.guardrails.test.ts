@@ -50,6 +50,7 @@ import searchInputEnhancementsModelSource from '@/components/shared/searchInputE
 import searchInputModelSource from '@/components/shared/searchInputModel.ts?raw';
 import statusDotSource from '@/components/shared/StatusDot.tsx?raw';
 import loadingSpinnerSource from '@/components/shared/LoadingSpinner.tsx?raw';
+import settingsLoadingSkeletonSource from '@/components/shared/SettingsLoadingSkeleton.tsx?raw';
 import statusBadgeSource from '@/components/shared/StatusBadge.tsx?raw';
 import statusBadgeModelSource from '@/components/shared/statusBadgeModel.ts?raw';
 import statusIndicatorBadgeSource from '@/components/shared/StatusIndicatorBadge.tsx?raw';
@@ -233,6 +234,10 @@ import generalSettingsPanelSource from '@/components/Settings/GeneralSettingsPan
 import infrastructureInstallerSectionSource from '@/components/Settings/InfrastructureInstallerSection.tsx?raw';
 import infrastructureWorkspaceSource from '@/components/Settings/InfrastructureWorkspace.tsx?raw';
 import monitoredSystemImpactPreviewSource from '@/components/Settings/MonitoredSystemImpactPreview.tsx?raw';
+import organizationAccessLoadingStateSource from '@/components/Settings/OrganizationAccessLoadingState.tsx?raw';
+import organizationBillingLoadingStateSource from '@/components/Settings/OrganizationBillingLoadingState.tsx?raw';
+import organizationOverviewLoadingStateSource from '@/components/Settings/OrganizationOverviewLoadingState.tsx?raw';
+import organizationSharingLoadingStateSource from '@/components/Settings/OrganizationSharingLoadingState.tsx?raw';
 import organizationAccessInvitationsSectionSource from '@/components/Settings/OrganizationAccessInvitationsSection.tsx?raw';
 import organizationAccessMembersSectionSource from '@/components/Settings/OrganizationAccessMembersSection.tsx?raw';
 import organizationIncomingSharesSectionSource from '@/components/Settings/OrganizationIncomingSharesSection.tsx?raw';
@@ -2510,6 +2515,108 @@ describe('shared primitive guardrails', () => {
     ]) {
       expect(source).toContain('LoadingSpinner');
       expect(source).not.toMatch(/border(?:-\d)?[^\n]*border-t-transparent[^\n]*animate-spin/);
+    }
+  });
+
+  it('keeps organization Settings loading skeletons on the shared skeleton primitive', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+        forbiddenPatterns?: Array<{ path?: string; patterns?: string[] }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        allowedPaths?: string[];
+        ignoredPaths?: string[];
+      }>;
+      requiredPatternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        pathIncludes?: string[];
+        requiredPatterns?: string[];
+        scopes?: string[];
+        triggerPatterns?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find(
+      (rule) => rule.id === 'settings-loading-skeleton-shell',
+    );
+    const localSkeletonGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'settings-local-loading-skeleton-block-shell',
+    );
+    const requiredSkeletonGuard = registry.requiredPatternGuards?.find(
+      (guard) => guard.id === 'settings-loading-state-shared-skeleton-required',
+    );
+    const organizationLoadingStateConsumers: Array<[string, string]> = [
+      [
+        'src/components/Settings/OrganizationAccessLoadingState.tsx',
+        organizationAccessLoadingStateSource,
+      ],
+      [
+        'src/components/Settings/OrganizationBillingLoadingState.tsx',
+        organizationBillingLoadingStateSource,
+      ],
+      [
+        'src/components/Settings/OrganizationOverviewLoadingState.tsx',
+        organizationOverviewLoadingStateSource,
+      ],
+      [
+        'src/components/Settings/OrganizationSharingLoadingState.tsx',
+        organizationSharingLoadingStateSource,
+      ],
+    ];
+    const settingsLoadingSkeletonConsumers: Array<[string, string]> = [
+      ['src/components/Settings/DataHandlingPanel.tsx', dataHandlingPanelSource],
+      ...organizationLoadingStateConsumers,
+      ['src/components/Settings/SecurityOverviewPanel.tsx', securityOverviewPanelSource],
+    ];
+
+    expect(registeredRule?.canonical?.path).toBe(
+      'src/components/shared/SettingsLoadingSkeleton.tsx',
+    );
+    expect(registeredRule?.canonical?.export).toBe('SettingsLoadingSkeleton');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
+      settingsLoadingSkeletonConsumers.map(([path]) => path),
+    );
+    expect(localSkeletonGuard?.canonical?.path).toBe(
+      'src/components/shared/SettingsLoadingSkeleton.tsx',
+    );
+    expect(localSkeletonGuard?.canonical?.export).toBe('SettingsLoadingSkeleton');
+    expect(localSkeletonGuard?.allPatterns).toEqual(['animate-pulse', 'bg-surface-hover']);
+    expect(localSkeletonGuard?.scopes).toEqual(['src/components/Settings']);
+    expect(localSkeletonGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(requiredSkeletonGuard?.canonical?.path).toBe(
+      'src/components/shared/SettingsLoadingSkeleton.tsx',
+    );
+    expect(requiredSkeletonGuard?.pathIncludes).toEqual(['LoadingState']);
+    expect(requiredSkeletonGuard?.triggerPatterns).toEqual(['LoadingState']);
+    expect(requiredSkeletonGuard?.requiredPatterns).toEqual(['SettingsLoadingSkeleton']);
+
+    expect(settingsLoadingSkeletonSource).toContain('export function SettingsLoadingSkeleton');
+    expect(settingsLoadingSkeletonSource).toContain('export function SettingsSkeletonMetricGrid');
+    expect(settingsLoadingSkeletonSource).toContain('export function SettingsSkeletonTable');
+    expect(settingsLoadingSkeletonSource).toContain('animate-pulse');
+    expect(settingsLoadingSkeletonSource).toContain('bg-surface-hover');
+    expect(settingsLoadingSkeletonSource).toContain('bg-surface-alt');
+
+    for (const [path, source] of settingsLoadingSkeletonConsumers) {
+      expect(source).toContain('SettingsLoadingSkeleton');
+      expect(source).not.toContain('animate-pulse');
+      const forbiddenPatterns =
+        registeredRule?.forbiddenPatterns?.find((entry) => entry.path === path)?.patterns ?? [];
+      for (const pattern of forbiddenPatterns) {
+        expect(source).not.toContain(pattern);
+      }
+    }
+
+    for (const [, source] of organizationLoadingStateConsumers) {
+      expect(source).not.toContain('bg-surface-hover');
+      expect(source).not.toContain('bg-surface-alt');
     }
   });
 

@@ -115,6 +115,11 @@ create, review, and approve cross-organization shares.
    may describe capability availability on paid self-hosted and hosted plans,
    but must not use Pro-badge titles or local browser upgrade telemetry in
    `RBACFeatureGateSection.tsx` or `useRBACFeatureGateState.ts`.
+7. Keep organization overview, access, and sharing loading placeholders on the
+   shared `SettingsLoadingSkeleton` primitive. Organization settings owns the
+   membership, role, and sharing meaning of those loading surfaces, while
+   frontend-primitives owns the skeleton animation, fill tokens, and table/card
+   placeholder shells.
 
 ## Current State
 

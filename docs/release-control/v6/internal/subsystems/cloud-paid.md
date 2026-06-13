@@ -797,6 +797,10 @@ or other self-hosted uncapped continuity plans.
    billing records load, but `plan_limit`, `grandfathered_floor`, and related
    volume telemetry must not become runtime status, entitlement enforcement,
    customer-facing support context, or self-hosted Plans presentation.
+10. Keep organization billing loading placeholders on the shared
+   `SettingsLoadingSkeleton` primitive. Cloud-paid owns billing and usage
+   semantics; frontend-primitives owns the loading skeleton animation, fill
+   tokens, and metric/progress/card placeholder shells.
 10. Keep Stripe webhook idempotency state bounded in the control-plane
    registry: `internal/cloudcp/registry/registry.go` may retain `stripe_events`
    rows long enough to suppress duplicate deliveries and reclaim stale

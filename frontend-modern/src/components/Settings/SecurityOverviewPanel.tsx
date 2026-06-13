@@ -2,6 +2,11 @@ import { Component, Show, Accessor, For, createMemo } from 'solid-js';
 import { CalloutCard } from '@/components/shared/CalloutCard';
 import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
 import SettingsPanel from '@/components/shared/SettingsPanel';
+import {
+  SettingsLoadingSkeleton,
+  SettingsSkeletonBlock,
+  SettingsSkeletonCard,
+} from '@/components/shared/SettingsLoadingSkeleton';
 import { PROXY_AUTH_DOC_URL, SECURITY_DOC_URL } from '@/utils/docsLinks';
 import { SecurityPostureSummary } from './SecurityPostureSummary';
 import { settingsTabPath } from './settingsNavigationModel';
@@ -84,31 +89,35 @@ export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (pro
   return (
     <SettingsPanel title="Security Overview" bodyClass="space-y-6">
       <Show when={props.securityStatusLoading()}>
-        <div class="rounded-md border border-border overflow-hidden">
-          <div class="bg-surface-alt px-6 py-5 animate-pulse">
-            <div class="flex items-center gap-4">
-              <div class="w-12 h-12 bg-slate-300 rounded-md"></div>
-              <div class="flex-1 space-y-2">
-                <div class="h-5 bg-slate-300 rounded w-1/3"></div>
-                <div class="h-4 bg-slate-300 rounded w-1/2"></div>
-              </div>
-              <div class="text-right space-y-2">
-                <div class="h-8 bg-slate-300 rounded w-16 ml-auto"></div>
-                <div class="h-4 bg-slate-300 rounded w-12 ml-auto"></div>
-              </div>
-            </div>
-          </div>
-          <div class="p-6">
-            <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              {[1, 2, 3, 4].map(() => (
-                <div class="rounded-md border border-border p-4 animate-pulse">
-                  <div class="h-4 bg-surface-hover rounded w-2/3 mb-2"></div>
-                  <div class="h-3 bg-surface-hover rounded w-1/2"></div>
+        <SettingsLoadingSkeleton label="Loading security overview" gap="sm">
+          <div class="rounded-md border border-border overflow-hidden">
+            <div class="bg-surface-alt px-6 py-5">
+              <div class="flex items-center gap-4">
+                <SettingsSkeletonBlock class="h-12 w-12" />
+                <div class="flex-1 space-y-2">
+                  <SettingsSkeletonBlock class="h-5 w-1/3" />
+                  <SettingsSkeletonBlock class="h-4 w-1/2" />
                 </div>
-              ))}
+                <div class="text-right space-y-2">
+                  <SettingsSkeletonBlock class="ml-auto h-8 w-16" />
+                  <SettingsSkeletonBlock class="ml-auto h-4 w-12" />
+                </div>
+              </div>
+            </div>
+            <div class="p-6">
+              <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <For each={[1, 2, 3, 4]}>
+                  {() => (
+                    <SettingsSkeletonCard class="p-4 space-y-0">
+                      <SettingsSkeletonBlock class="mb-2 h-4 w-2/3" />
+                      <SettingsSkeletonBlock class="h-3 w-1/2" />
+                    </SettingsSkeletonCard>
+                  )}
+                </For>
+              </div>
             </div>
           </div>
-        </div>
+        </SettingsLoadingSkeleton>
       </Show>
 
       <Show when={!props.securityStatusLoading() && props.securityStatus()}>
