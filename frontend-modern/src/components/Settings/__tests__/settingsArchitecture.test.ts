@@ -66,6 +66,8 @@ import organizationAccessManagementSectionSource from '../OrganizationAccessMana
 import organizationAccessMembersSectionSource from '../OrganizationAccessMembersSection.tsx?raw';
 import organizationSharingCreateSectionSource from '../OrganizationSharingCreateSection.tsx?raw';
 import rolesEditorDialogSource from '../RolesEditorDialog.tsx?raw';
+import rolesPanelSource from '../RolesPanel.tsx?raw';
+import userAssignmentsPanelSource from '../UserAssignmentsPanel.tsx?raw';
 import diagnosticsResultsPanelSource from '../DiagnosticsResultsPanel.tsx?raw';
 import diagnosticsModelSource from '../diagnosticsModel.ts?raw';
 import agentProfilesStateSource from '../useAgentProfilesPanelState.ts?raw';
@@ -342,6 +344,26 @@ describe('settings architecture guardrails', () => {
     );
     expect(securityAuthPanelSource).not.toContain(
       'w-full sm:w-auto min-h-10 sm:min-h-10 px-4 py-2.5 text-sm font-medium border border-border',
+    );
+
+    expect(rolesPanelSource).toContain(
+      "import { ActionIconButton, Button } from '@/components/shared/Button';",
+    );
+    expect(rolesPanelSource).toContain('variant="primary"');
+    expect(rolesPanelSource).toContain('ActionIconButton');
+    expect(rolesPanelSource).not.toContain(
+      'inline-flex w-full sm:w-auto min-h-10 sm:min-h-9 items-center justify-center gap-2 rounded-md bg-blue-600',
+    );
+    expect(rolesPanelSource).not.toContain('p-1.5 rounded-md text-slate-500 hover:text-blue-600');
+    expect(rolesPanelSource).not.toContain('p-1.5 rounded-md text-slate-500 hover:text-red-600');
+
+    expect(userAssignmentsPanelSource).toContain(
+      "import { Button } from '@/components/shared/Button';",
+    );
+    expect(userAssignmentsPanelSource).toContain('variant="ghost"');
+    expect(userAssignmentsPanelSource).toContain('size="settingsAction"');
+    expect(userAssignmentsPanelSource).not.toContain(
+      'inline-flex min-h-10 sm:min-h-9 items-center gap-2 px-3 py-1.5 rounded-md',
     );
   });
 

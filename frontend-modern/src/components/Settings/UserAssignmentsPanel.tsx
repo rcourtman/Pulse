@@ -1,4 +1,5 @@
 import { Component, For, Show } from 'solid-js';
+import { Button } from '@/components/shared/Button';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { RBACFeatureGateSection } from './RBACFeatureGateSection';
 import { UserAssignmentsDialog } from './UserAssignmentsDialog';
@@ -109,14 +110,15 @@ export const UserAssignmentsPanel: Component = () => {
                 label: 'Actions',
                 align: 'right',
                 render: (assignment) => (
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
+                    size="settingsAction"
+                    class="gap-2"
                     onClick={() => state.openManageAccess(assignment)}
-                    class="inline-flex min-h-10 sm:min-h-9 items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium text-base-content hover:bg-surface-hover transition-colors"
                   >
                     <Pencil class="w-4 h-4" />
                     Manage Access
-                  </button>
+                  </Button>
                 ),
               },
             ]}

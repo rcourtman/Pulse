@@ -1,4 +1,5 @@
 import { Component, For, Show } from 'solid-js';
+import { ActionIconButton, Button } from '@/components/shared/Button';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { RBACFeatureGateSection } from './RBACFeatureGateSection';
 import { RolesEditorDialog } from './RolesEditorDialog';
@@ -19,15 +20,16 @@ export const RolesPanel: Component = () => {
       <SettingsPanel
         title="Roles"
         action={
-          <button
-            type="button"
+          <Button
+            variant="primary"
+            size="settingsAction"
+            class="w-full gap-2 sm:w-auto"
             onClick={state.openCreateRole}
             disabled={!state.featureGate.rbacEnabled()}
-            class="inline-flex w-full sm:w-auto min-h-10 sm:min-h-9 items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700"
           >
             <Plus class="w-4 h-4" />
             New Role
-          </button>
+          </Button>
         }
         noPadding
         bodyClass="divide-y divide-border"
@@ -87,22 +89,22 @@ export const RolesPanel: Component = () => {
                 render: (role) => (
                   <div class="inline-flex items-center gap-1">
                     <Show when={!role.isBuiltIn}>
-                      <button
-                        type="button"
+                      <ActionIconButton
+                        label="Edit role"
+                        tone="accent"
+                        size="sm"
                         onClick={() => state.openEditRole(role)}
-                        class="p-1.5 rounded-md text-slate-500 hover:text-blue-600 hover:bg-surface-hover dark:hover:text-blue-300"
-                        title="Edit role"
                       >
                         <Pencil class="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
+                      </ActionIconButton>
+                      <ActionIconButton
+                        label="Delete role"
+                        tone="danger"
+                        size="sm"
                         onClick={() => state.handleDeleteRole(role)}
-                        class="p-1.5 rounded-md text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900"
-                        title="Delete role"
                       >
                         <Trash2 class="w-4 h-4" />
-                      </button>
+                      </ActionIconButton>
                     </Show>
                     <Show when={role.isBuiltIn}>
                       <span class="text-xs text-slate-400 italic">Read-only</span>

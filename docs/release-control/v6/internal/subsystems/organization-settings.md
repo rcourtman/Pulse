@@ -124,6 +124,11 @@ create, review, and approve cross-organization shares.
    `LoadingSpinner` primitive. Organization settings owns RBAC loading
    semantics; frontend-primitives owns spinner size, tone, and accessible
    status behavior.
+9. Keep RBAC role creation, role edit/delete row actions, and user-access
+   management actions on the shared `Button` / `ActionIconButton` primitives.
+   Organization settings owns the role and assignment semantics, feature-gate
+   availability, and row-action behavior; frontend-primitives owns primary,
+   ghost, accent, danger, focus, disabled, and settings-action chrome.
 
 ## Current State
 

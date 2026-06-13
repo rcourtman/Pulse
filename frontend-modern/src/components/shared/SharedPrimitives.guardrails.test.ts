@@ -3097,9 +3097,11 @@ describe('shared primitive guardrails', () => {
       'src/components/Settings/ProLicensePlanSection.tsx',
       'src/components/Settings/ReportingPanel.tsx',
       'src/components/Settings/ResourcePicker.tsx',
+      'src/components/Settings/RolesPanel.tsx',
       'src/components/Settings/SelfHostedCommercialRecoverySection.tsx',
       'src/components/Settings/SecurityAuthPanel.tsx',
       'src/components/Settings/SSOProvidersPanel.tsx',
+      'src/components/Settings/UserAssignmentsPanel.tsx',
       'src/components/UpdateConfirmationModal.tsx',
       'src/components/UpdateProgressModal.tsx',
       'src/components/Workloads/GuestDrawer.tsx',
@@ -3138,6 +3140,12 @@ describe('shared primitive guardrails', () => {
           patterns: expect.arrayContaining([
             'hover:border-red-500 hover:text-red-400',
             'w-full sm:w-auto min-h-10 sm:min-h-9 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm rounded-md border border-border',
+          ]),
+        }),
+        expect.objectContaining({
+          path: 'src/components/Settings/RolesPanel.tsx',
+          patterns: expect.arrayContaining([
+            'inline-flex w-full sm:w-auto min-h-10 sm:min-h-9 items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700',
           ]),
         }),
         expect.objectContaining({
@@ -3184,6 +3192,12 @@ describe('shared primitive guardrails', () => {
             'px-3 py-2 text-sm font-medium bg-surface-hover text-base-content rounded-md hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap',
             'px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50',
             'px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-md hover:bg-red-700',
+          ]),
+        }),
+        expect.objectContaining({
+          path: 'src/components/Settings/UserAssignmentsPanel.tsx',
+          patterns: expect.arrayContaining([
+            'inline-flex min-h-10 sm:min-h-9 items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium text-base-content hover:bg-surface-hover transition-colors',
           ]),
         }),
         expect.objectContaining({
@@ -3593,6 +3607,7 @@ describe('shared primitive guardrails', () => {
       'src/components/Alerts/AlertResourceTableMobile.tsx',
       'src/components/Alerts/AlertResourceTableRow.tsx',
       'src/components/Alerts/ResourceTable.tsx',
+      'src/components/Settings/RolesPanel.tsx',
       'src/components/Settings/SSOProvidersPanel.tsx',
     ]);
     expect(actionIconRule?.forbiddenPatterns).toEqual(
@@ -3636,6 +3651,13 @@ describe('shared primitive guardrails', () => {
             'p-2 text-slate-500 hover:text-blue-600 hover:bg-surface-hover rounded-md transition-colors',
             'p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900 rounded-md transition-colors',
             'class="text-slate-400 hover:text-base-content"',
+          ]),
+        }),
+        expect.objectContaining({
+          path: 'src/components/Settings/RolesPanel.tsx',
+          patterns: expect.arrayContaining([
+            'p-1.5 rounded-md text-slate-500 hover:text-blue-600 hover:bg-surface-hover dark:hover:text-blue-300',
+            'p-1.5 rounded-md text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900',
           ]),
         }),
       ]),
@@ -3911,6 +3933,20 @@ describe('shared primitive guardrails', () => {
     expect(resourcePickerSource).not.toContain(
       'w-full sm:w-auto min-h-10 sm:min-h-9 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm rounded-md border border-border',
     );
+    expect(rolesPanelSource).toContain('@/components/shared/Button');
+    expect(rolesPanelSource).toContain('<Button');
+    expect(rolesPanelSource).toContain('ActionIconButton');
+    expect(rolesPanelSource).toContain('variant="primary"');
+    expect(rolesPanelSource).toContain('size="settingsAction"');
+    expect(rolesPanelSource).not.toContain(
+      'inline-flex w-full sm:w-auto min-h-10 sm:min-h-9 items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700',
+    );
+    expect(rolesPanelSource).not.toContain(
+      'p-1.5 rounded-md text-slate-500 hover:text-blue-600 hover:bg-surface-hover dark:hover:text-blue-300',
+    );
+    expect(rolesPanelSource).not.toContain(
+      'p-1.5 rounded-md text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900',
+    );
     expect(reportingPanelSource).toContain('@/components/shared/Button');
     expect(reportingPanelSource).toContain('<Button');
     expect(reportingPanelSource).toContain('variant="success"');
@@ -3978,6 +4014,13 @@ describe('shared primitive guardrails', () => {
     );
     expect(securityAuthPanelSource).not.toContain(
       'w-full sm:w-auto min-h-10 sm:min-h-10 px-4 py-2.5 text-sm font-medium border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors',
+    );
+    expect(userAssignmentsPanelSource).toContain('@/components/shared/Button');
+    expect(userAssignmentsPanelSource).toContain('<Button');
+    expect(userAssignmentsPanelSource).toContain('variant="ghost"');
+    expect(userAssignmentsPanelSource).toContain('size="settingsAction"');
+    expect(userAssignmentsPanelSource).not.toContain(
+      'inline-flex min-h-10 sm:min-h-9 items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium text-base-content hover:bg-surface-hover transition-colors',
     );
     expect(discoveryTabSource).toContain('@/components/shared/Button');
     expect(discoveryTabSource).toContain('@/components/shared/CopyableCodeRow');

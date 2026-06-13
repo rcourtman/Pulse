@@ -576,6 +576,11 @@ not a replacement status card, CTA band, or page-local nested card.
    security/privacy owns auth setup, password-change, credential-rotation, and
    read-only semantics, while `Button` owns the warning, primary, secondary,
    and settings-action chrome.
+   Organization RBAC settings actions follow the same boundary: organization
+   settings owns role creation, role editing/deletion, user-access assignment,
+   feature-gate, and row-action semantics, while `Button` / `ActionIconButton`
+   own primary, ghost, accent, danger, focus, disabled, and settings-action
+   chrome.
    If a new surface needs a variant that the shared primitive does not expose,
    extend the primitive and registry guard rather than adding a page-local
    class string.
