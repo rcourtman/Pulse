@@ -147,6 +147,16 @@ describe('BillingAdminPanel', () => {
     expect(billingAdminPanelStateSource).toContain('promisePool');
     expect(billingAdminOrganizationsTableSource).toContain('PulseDataGrid');
     expect(billingAdminOrganizationsTableSource).toContain('Billing state JSON');
+    expect(billingAdminOrganizationsTableSource).toContain('@/components/shared/Button');
+    expect(billingAdminOrganizationsTableSource).toContain('variant="secondary"');
+    expect(billingAdminOrganizationsTableSource).toContain('size="sm"');
+    expect(billingAdminOrganizationsTableSource).toContain('size="xs"');
+    expect(billingAdminOrganizationsTableSource).not.toContain(
+      'px-2.5 py-1.5 text-xs font-medium rounded-md border border-border bg-surface hover:bg-surface-hover disabled:opacity-50',
+    );
+    expect(billingAdminOrganizationsTableSource).not.toContain(
+      'px-2 py-1 text-xs rounded-md border border-border bg-surface hover:bg-surface-hover',
+    );
   });
 
   it('stays unavailable in demo mode without loading hosted billing admin data', () => {

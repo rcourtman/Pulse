@@ -1,4 +1,5 @@
 import type { Component } from 'solid-js';
+import { Button } from '@/components/shared/Button';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 import {
   BILLING_ADMIN_EMPTY_STATE,
@@ -54,7 +55,9 @@ export const BillingAdminOrganizationsTable: Component<BillingAdminOrganizations
               <div class="text-xs text-muted">
                 <span class="font-mono">{org.org_id}</span>
                 {getBillingAdminOrganizationBadges(org).map((badge) => (
-                  <span class={`ml-2 rounded px-1.5 py-0.5 ${badge.badgeClass}`}>{badge.label}</span>
+                  <span class={`ml-2 rounded px-1.5 py-0.5 ${badge.badgeClass}`}>
+                    {badge.label}
+                  </span>
                 ))}
               </div>
             </button>
@@ -85,7 +88,9 @@ export const BillingAdminOrganizationsTable: Component<BillingAdminOrganizations
         label: 'Trial',
         render: (org) => {
           const billing = props.billingByOrgID[(org.org_id || '').trim()];
-          return <span class="text-xs text-base-content">{getBillingAdminTrialStatus(billing)}</span>;
+          return (
+            <span class="text-xs text-base-content">{getBillingAdminTrialStatus(billing)}</span>
+          );
         },
       },
       {
@@ -111,8 +116,9 @@ export const BillingAdminOrganizationsTable: Component<BillingAdminOrganizations
           const currentSubState = (billing?.subscription_state || '').toLowerCase() || 'unknown';
           return (
             <div class="inline-flex flex-col sm:flex-row sm:items-center gap-2">
-              <button
-                type="button"
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => {
                   props.onSuspendOrganization(orgID);
                 }}
@@ -121,12 +127,12 @@ export const BillingAdminOrganizationsTable: Component<BillingAdminOrganizations
                   props.billingLoadingByOrgID[orgID] ||
                   currentSubState === 'suspended'
                 }
-                class="px-2.5 py-1.5 text-xs font-medium rounded-md border border-border bg-surface hover:bg-surface-hover disabled:opacity-50"
               >
                 Suspend Org
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => {
                   props.onActivateOrganization(orgID);
                 }}
@@ -135,10 +141,9 @@ export const BillingAdminOrganizationsTable: Component<BillingAdminOrganizations
                   props.billingLoadingByOrgID[orgID] ||
                   currentSubState === 'active'
                 }
-                class="px-2.5 py-1.5 text-xs font-medium rounded-md border border-border bg-surface hover:bg-surface-hover disabled:opacity-50"
               >
                 Activate Org
-              </button>
+              </Button>
             </div>
           );
         },
@@ -153,15 +158,15 @@ export const BillingAdminOrganizationsTable: Component<BillingAdminOrganizations
           <div class="rounded-md border border-border bg-surface-alt p-3">
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2">
               <div class="text-xs font-semibold text-muted">Billing state JSON</div>
-              <button
-                type="button"
+              <Button
+                variant="secondary"
+                size="xs"
                 onClick={() => {
                   props.onReloadOrganization(orgID);
                 }}
-                class="px-2 py-1 text-xs rounded-md border border-border bg-surface hover:bg-surface-hover"
               >
                 Reload
-              </button>
+              </Button>
             </div>
             <pre class="text-xs overflow-x-auto whitespace-pre-wrap font-mono text-base-content">
               {JSON.stringify(props.billingByOrgID[orgID] ?? { loading: true }, null, 2)}

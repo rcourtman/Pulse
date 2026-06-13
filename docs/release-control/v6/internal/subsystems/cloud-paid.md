@@ -582,6 +582,10 @@ or other self-hosted uncapped continuity plans.
     table state stay cloud-paid owned, while the refresh button chrome must
     compose the frontend-primitives `Button` family instead of carrying a
     hosted-billing-local compact action shell.
+    Hosted billing admin organization row actions follow the same ownership
+    split: cloud-paid owns Suspend, Activate, Reload, tenant billing state, and
+    mutation semantics, while frontend-primitives owns the shared `Button`
+    chrome used by those row actions.
 14. Add or change shared commercial plan/usage presentation through `frontend-modern/src/components/Settings/CommercialBillingSections.tsx` and `frontend-modern/src/utils/commercialBillingModel.ts`
 15. Add or change organization billing and usage presentation through `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`, `frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx`, and `frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts`
 16. Add or change self-hosted Pro plan, recovery, and entitlement actions through `frontend-modern/src/components/Settings/ProLicensePanel.tsx`, `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`, `frontend-modern/src/components/Settings/SelfHostedCommercialRecoverySection.tsx`, and `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
@@ -1626,6 +1630,10 @@ subscription update runtime, and
 owns the tenant grid plus expanded JSON presentation. Future hosted billing
 admin changes must extend that split instead of pulling hosted state and
 mutation flow back into the panel render shell.
+Hosted billing admin organization row actions follow the shared frontend
+primitive contract as well: cloud-paid owns Suspend, Activate, Reload, tenant
+billing state, and mutation semantics, while frontend-primitives owns the
+`Button` chrome for those row actions.
 The organization billing settings surface now follows the same rule. Changes
 to `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx` must
 carry this contract and the dedicated organization-billing proof file instead

@@ -130,6 +130,7 @@ import thresholdsTableDockerIgnoredPrefixesSectionSource from '@/components/Aler
 import webhookConfigFormSource from '@/components/Alerts/WebhookConfigForm.tsx?raw';
 import reportMergeModalSource from '@/components/Infrastructure/ReportMergeModal.tsx?raw';
 import availabilitySettingsPanelSource from '@/components/Settings/AvailabilitySettingsPanel.tsx?raw';
+import billingAdminOrganizationsTableSource from '@/components/Settings/BillingAdminOrganizationsTable.tsx?raw';
 import addressProbeStepSource from '@/components/Settings/ConnectionEditor/AddressProbeStep.tsx?raw';
 import connectionEditorSource from '@/components/Settings/ConnectionEditor/ConnectionEditor.tsx?raw';
 import availabilityTargetSlotSource from '@/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx?raw';
@@ -2906,6 +2907,12 @@ describe('shared primitive guardrails', () => {
     const settingsDialogCloseGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'button-outline-settings-dialog-close-local-shell',
     );
+    const billingAdminOrganizationRowActionGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'billing-admin-organization-row-action-local-shell',
+    );
+    const billingAdminOrganizationReloadActionGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'billing-admin-organization-reload-action-local-shell',
+    );
     const ssoProviderPrimaryActionGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'sso-provider-primary-action-local-shell',
     );
@@ -2958,6 +2965,7 @@ describe('shared primitive guardrails', () => {
       'src/components/Settings/APIAccessPanel.tsx',
       'src/components/Settings/AvailabilitySettingsPanel.tsx',
       'src/components/Settings/BillingAdminPanel.tsx',
+      'src/components/Settings/BillingAdminOrganizationsTable.tsx',
       'src/components/Settings/ConnectionEditor/AddressProbeStep.tsx',
       'src/components/Settings/ConnectionEditor/ConnectionEditor.tsx',
       'src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx',
@@ -2995,6 +3003,13 @@ describe('shared primitive guardrails', () => {
           path: 'src/components/Settings/BillingAdminPanel.tsx',
           patterns: expect.arrayContaining([
             'w-full sm:w-auto px-3 py-1.5 text-xs font-medium rounded-md border border-border bg-surface hover:bg-surface-hover disabled:opacity-50',
+          ]),
+        }),
+        expect.objectContaining({
+          path: 'src/components/Settings/BillingAdminOrganizationsTable.tsx',
+          patterns: expect.arrayContaining([
+            'px-2.5 py-1.5 text-xs font-medium rounded-md border border-border bg-surface hover:bg-surface-hover disabled:opacity-50',
+            'px-2 py-1 text-xs rounded-md border border-border bg-surface hover:bg-surface-hover',
           ]),
         }),
         expect.objectContaining({
@@ -3106,6 +3121,17 @@ describe('shared primitive guardrails', () => {
     );
     expect(updateProgressModalSource).not.toContain(
       'px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors',
+    );
+    expect(billingAdminOrganizationsTableSource).toContain('@/components/shared/Button');
+    expect(billingAdminOrganizationsTableSource).toContain('<Button');
+    expect(billingAdminOrganizationsTableSource).toContain('variant="secondary"');
+    expect(billingAdminOrganizationsTableSource).toContain('size="sm"');
+    expect(billingAdminOrganizationsTableSource).toContain('size="xs"');
+    expect(billingAdminOrganizationsTableSource).not.toContain(
+      'px-2.5 py-1.5 text-xs font-medium rounded-md border border-border bg-surface hover:bg-surface-hover disabled:opacity-50',
+    );
+    expect(billingAdminOrganizationsTableSource).not.toContain(
+      'px-2 py-1 text-xs rounded-md border border-border bg-surface hover:bg-surface-hover',
     );
     expect(registeredGuard?.canonical?.path).toBe('src/components/shared/buttonModel.ts');
     expect(registeredGuard?.canonical?.export).toBe('getButtonClass');
@@ -3315,6 +3341,34 @@ describe('shared primitive guardrails', () => {
     ]);
     expect(settingsDialogCloseGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(settingsDialogCloseGuard?.ignoredPaths).toEqual([
+      'src/components/shared/Button.test.tsx',
+    ]);
+    expect(billingAdminOrganizationRowActionGuard?.canonical?.path).toBe(
+      'src/components/shared/buttonModel.ts',
+    );
+    expect(billingAdminOrganizationRowActionGuard?.canonical?.export).toBe('getButtonClass');
+    expect(billingAdminOrganizationRowActionGuard?.allPatterns).toEqual([
+      'px-2.5 py-1.5 text-xs font-medium rounded-md border border-border bg-surface hover:bg-surface-hover disabled:opacity-50',
+    ]);
+    expect(billingAdminOrganizationRowActionGuard?.scopes).toEqual([
+      'src/components/Settings/BillingAdminOrganizationsTable.tsx',
+    ]);
+    expect(billingAdminOrganizationRowActionGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(billingAdminOrganizationRowActionGuard?.ignoredPaths).toEqual([
+      'src/components/shared/Button.test.tsx',
+    ]);
+    expect(billingAdminOrganizationReloadActionGuard?.canonical?.path).toBe(
+      'src/components/shared/buttonModel.ts',
+    );
+    expect(billingAdminOrganizationReloadActionGuard?.canonical?.export).toBe('getButtonClass');
+    expect(billingAdminOrganizationReloadActionGuard?.allPatterns).toEqual([
+      'px-2 py-1 text-xs rounded-md border border-border bg-surface hover:bg-surface-hover',
+    ]);
+    expect(billingAdminOrganizationReloadActionGuard?.scopes).toEqual([
+      'src/components/Settings/BillingAdminOrganizationsTable.tsx',
+    ]);
+    expect(billingAdminOrganizationReloadActionGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(billingAdminOrganizationReloadActionGuard?.ignoredPaths).toEqual([
       'src/components/shared/Button.test.tsx',
     ]);
     expect(ssoProviderPrimaryActionGuard?.canonical?.path).toBe(
