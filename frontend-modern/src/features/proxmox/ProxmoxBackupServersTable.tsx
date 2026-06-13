@@ -2,10 +2,11 @@ import { For, Show, type JSX } from 'solid-js';
 
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
-import { formatBytes, formatUptime } from '@/utils/format';
+import { formatBytes } from '@/utils/format';
 import {
   formatPlatformTableIntegerValue,
   formatPlatformTablePercentValue,
+  formatPlatformTableUptimeValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   PlatformTableNumberValue,
@@ -246,7 +247,7 @@ export function ProxmoxBackupServersTable(props: {
                         when={row.online && (row.uptimeSeconds ?? 0) > 0}
                         fallback={<span class="text-muted">—</span>}
                       >
-                        {formatUptime(row.uptimeSeconds ?? 0)}
+                        {formatPlatformTableUptimeValue(row.uptimeSeconds)}
                       </Show>
                     </TableCell>
                     <TableCell

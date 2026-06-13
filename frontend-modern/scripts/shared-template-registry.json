@@ -1304,6 +1304,8 @@
       "requiredConsumers": [
         { "path": "src/features/docker/DockerHostsTable.tsx" },
         { "path": "src/features/kubernetes/KubernetesNodesTable.tsx" },
+        { "path": "src/features/proxmox/ProxmoxBackupServersTable.tsx" },
+        { "path": "src/features/proxmox/ProxmoxMailGatewayDrawer.tsx" },
         { "path": "src/features/proxmox/ProxmoxMailGatewayTable.tsx" },
         { "path": "src/features/standalone/AgentsMachinesTable.tsx" },
         { "path": "src/features/truenas/TrueNASSystemsTable.tsx" }
@@ -1316,6 +1318,18 @@
         {
           "path": "src/features/kubernetes/KubernetesNodesTable.tsx",
           "patterns": ["const formatUptime"]
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxBackupServersTable.tsx",
+          "patterns": ["formatUptime(row.uptimeSeconds ?? 0)"]
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxMailGatewayDrawer.tsx",
+          "patterns": [
+            "function formatUptime",
+            "const days = Math.floor(seconds / 86_400);",
+            "return `${mins}m`"
+          ]
         },
         {
           "path": "src/features/proxmox/ProxmoxMailGatewayTable.tsx",
@@ -2258,6 +2272,36 @@
       ],
       "extensions": [".tsx"],
       "allPatterns": ["const formatUptime", "seconds / 86_400", "return `${mins}m`"],
+      "legacyReason": "Retired migration debt. Platform table uptime labels must use formatPlatformTableUptimeValue for the shared one-unit uptime fallback.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-table-local-uptime-function-helper",
+      "category": "platform-table-text-value",
+      "summary": "Platform tables and drawers must not recreate function-based one-unit formatUptime helpers for uptime label fallback.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "formatPlatformTableUptimeValue"
+      },
+      "scopes": [
+        "src/features/docker",
+        "src/features/kubernetes",
+        "src/features/proxmox",
+        "src/features/standalone",
+        "src/features/truenas"
+      ],
+      "extensions": [".tsx"],
+      "allPatterns": [
+        "function formatUptime",
+        "const days = Math.floor(seconds / 86_400);",
+        "return `${mins}m`"
+      ],
       "legacyReason": "Retired migration debt. Platform table uptime labels must use formatPlatformTableUptimeValue for the shared one-unit uptime fallback.",
       "allowedPaths": [],
       "ignoredPaths": [],

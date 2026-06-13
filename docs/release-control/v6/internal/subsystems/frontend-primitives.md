@@ -2606,9 +2606,10 @@ declaring local `compactList` or `summarizeValues` helpers.
 Platform table uptime formatting follows that rule too.
 `formatPlatformTableUptimeValue` owns the repeated one-unit uptime label plus
 canonical empty-cell marker behavior for dense platform table cells. Docker /
-Podman hosts, Kubernetes nodes, Proxmox Mail Gateway instances, Standalone
-machines, and TrueNAS systems must compose that helper instead of declaring
-local `formatUptime` helpers for the same days/hours/minutes fallback.
+Podman hosts, Kubernetes nodes, Proxmox backup server rows, Proxmox Mail
+Gateway instance and drawer node rows, Standalone machines, and TrueNAS systems
+must compose that helper instead of declaring local `formatUptime` helpers for
+the same days/hours/minutes fallback.
 Platform table byte-size formatting follows the same rule.
 `formatPlatformTableBytesValue` owns the repeated positive-byte formatting plus
 canonical empty-cell marker behavior for dense platform table cells. Docker /

@@ -3616,9 +3616,14 @@ describe('shared primitive guardrails', () => {
     const localHelperGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'platform-table-local-uptime-helper',
     );
+    const functionHelperGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-table-local-uptime-function-helper',
+    );
     const platformUptimeConsumers: Array<[string, string]> = [
       ['src/features/docker/DockerHostsTable.tsx', dockerHostsTableSource],
       ['src/features/kubernetes/KubernetesNodesTable.tsx', kubernetesNodesTableSource],
+      ['src/features/proxmox/ProxmoxBackupServersTable.tsx', proxmoxBackupServersTableSource],
+      ['src/features/proxmox/ProxmoxMailGatewayDrawer.tsx', proxmoxMailGatewayDrawerSource],
       ['src/features/proxmox/ProxmoxMailGatewayTable.tsx', proxmoxMailGatewayTableSource],
       ['src/features/standalone/AgentsMachinesTable.tsx', agentsMachinesTableSource],
       ['src/features/truenas/TrueNASSystemsTable.tsx', truenasSystemsTableSource],
@@ -3632,12 +3637,31 @@ describe('shared primitive guardrails', () => {
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
       platformUptimeConsumerPaths,
     );
-    expect(registeredRule?.forbiddenPatterns).toEqual(
-      platformUptimeConsumerPaths.map((path) => ({
-        path,
+    expect(registeredRule?.forbiddenPatterns).toEqual([
+      { path: 'src/features/docker/DockerHostsTable.tsx', patterns: ['const formatUptime'] },
+      {
+        path: 'src/features/kubernetes/KubernetesNodesTable.tsx',
         patterns: ['const formatUptime'],
-      })),
-    );
+      },
+      {
+        path: 'src/features/proxmox/ProxmoxBackupServersTable.tsx',
+        patterns: ['formatUptime(row.uptimeSeconds ?? 0)'],
+      },
+      {
+        path: 'src/features/proxmox/ProxmoxMailGatewayDrawer.tsx',
+        patterns: [
+          'function formatUptime',
+          'const days = Math.floor(seconds / 86_400);',
+          'return `${mins}m`',
+        ],
+      },
+      {
+        path: 'src/features/proxmox/ProxmoxMailGatewayTable.tsx',
+        patterns: ['const formatUptime'],
+      },
+      { path: 'src/features/standalone/AgentsMachinesTable.tsx', patterns: ['const formatUptime'] },
+      { path: 'src/features/truenas/TrueNASSystemsTable.tsx', patterns: ['const formatUptime'] },
+    ]);
     expect(localHelperGuard?.canonical?.path).toBe(
       'src/features/platformPage/sharedPlatformPage.tsx',
     );
@@ -3656,6 +3680,24 @@ describe('shared primitive guardrails', () => {
     ]);
     expect(localHelperGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(localHelperGuard?.ignoredPaths ?? []).toHaveLength(0);
+    expect(functionHelperGuard?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(functionHelperGuard?.canonical?.export).toBe('formatPlatformTableUptimeValue');
+    expect(functionHelperGuard?.allPatterns).toEqual([
+      'function formatUptime',
+      'const days = Math.floor(seconds / 86_400);',
+      'return `${mins}m`',
+    ]);
+    expect(functionHelperGuard?.scopes).toEqual([
+      'src/features/docker',
+      'src/features/kubernetes',
+      'src/features/proxmox',
+      'src/features/standalone',
+      'src/features/truenas',
+    ]);
+    expect(functionHelperGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(functionHelperGuard?.ignoredPaths ?? []).toHaveLength(0);
 
     expect(sharedPlatformPageSource).toContain('export const formatPlatformTableUptimeValue');
     expect(sharedPlatformPageSource).toContain('formatUptime(seconds, true)');
@@ -3663,7 +3705,8 @@ describe('shared primitive guardrails', () => {
     for (const [, source] of platformUptimeConsumers) {
       expect(source).toContain('formatPlatformTableUptimeValue');
       expect(source).not.toContain('const formatUptime');
-      expect(source).not.toContain('seconds / 86_400');
+      expect(source).not.toContain('function formatUptime');
+      expect(source).not.toContain('const days = Math.floor(seconds / 86_400);');
       expect(source).not.toContain('return `${mins}m`');
     }
   });

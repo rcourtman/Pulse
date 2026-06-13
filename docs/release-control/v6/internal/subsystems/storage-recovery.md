@@ -146,6 +146,10 @@ which datastore usage percentage is meaningful for backup-health risk, while
 frontend-primitives owns one-decimal percent presentation through
 `PlatformTablePercentValue` and `formatPlatformTablePercentValue` instead of
 local rounded `%` strings.
+PBS server uptime follows the same split: storage/recovery owns whether the
+server uptime belongs on the backup-health row, while frontend-primitives owns
+the one-unit uptime label through `formatPlatformTableUptimeValue` instead of
+local `formatUptime` calls.
 Those Proxmox backup workflows own recovery semantics, source-specific
 empty-state copy, and retry/filter actions, but their table empty-state frame
 must compose the frontend-primitives-owned `PlatformTableEmptyState` shell

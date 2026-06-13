@@ -16,6 +16,7 @@ import {
   PLATFORM_TABLE_HEADER_ROW_CLASS,
   formatPlatformTableIntegerValue,
   formatPlatformTablePercentValue,
+  formatPlatformTableUptimeValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   PlatformTableNumberValue,
@@ -69,16 +70,6 @@ function classifyNode(node: PMGNodeStatus): { variant: StatusIndicatorVariant; l
   if (raw === 'degraded' || raw === 'warning') return { variant: 'warning', label: 'Degraded' };
   if (raw === 'offline' || raw === 'down') return { variant: 'danger', label: 'Offline' };
   return { variant: 'muted', label: raw || '—' };
-}
-
-function formatUptime(seconds: number | undefined): string {
-  if (!seconds || seconds <= 0) return '—';
-  const days = Math.floor(seconds / 86_400);
-  if (days > 0) return `${days}d`;
-  const hours = Math.floor(seconds / 3_600);
-  if (hours > 0) return `${hours}h`;
-  const mins = Math.floor(seconds / 60);
-  return `${mins}m`;
 }
 
 function formatAge(seconds: number): string {
@@ -526,7 +517,7 @@ export const ProxmoxMailGatewayDrawer: Component<{
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                             >
-                              {formatUptime(node.uptime)}
+                              {formatPlatformTableUptimeValue(node.uptime)}
                             </TableCell>
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums text-[11px]`}

@@ -241,9 +241,10 @@ labels, full title text, and normalized value lists instead of recreating local
 `compactList` or `summarizeValues` helpers.
 One-unit platform table uptime labels follow the same boundary:
 unified-resource consumers own which uptime field is displayed, but platform
-tables, including Standalone machines, must use
-`formatPlatformTableUptimeValue` instead of recreating local days/hours/minutes
-`formatUptime` helpers for dense table cells.
+tables and platform-owned drawers, including Standalone machines, Proxmox
+backup servers, and Proxmox Mail Gateway node rows, must use
+`formatPlatformTableUptimeValue` instead of recreating local
+days/hours/minutes `formatUptime` helpers for dense table cells.
 Platform byte-size table cells follow that boundary too: unified-resource
 consumers own whether a capacity, memory, disk, or requested-size field is the
 right source-specific value, while dense platform table cells must use
