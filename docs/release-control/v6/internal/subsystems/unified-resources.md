@@ -271,6 +271,13 @@ and suffix behavior. Tables must not carry local
 `diskCountLabel`, or cell-level `tabular-nums` variants for grouped
 child/share/service/storage counts, or local ready/total template strings for
 endpoint summaries.
+Locale-formatted integer count labels keep that same split:
+unified-resource consumers own which domain count is meaningful and whether an
+absent count should read as zero, while dense platform table and drawer
+rendering must use `formatPlatformTableIntegerValue`, normally through
+`PlatformTableNumberValue`, for rounded integer formatting, locale grouping,
+and unknown empty-cell markers instead of local `formatInteger`,
+`formatLocaleCount`, `formatNumber`, or direct `toLocaleString()` helpers.
 Percent and temperature table cells follow the same split: unified-resource
 consumers own which usage percentage or temperature source is meaningful for
 the row, while dense platform table rendering must use

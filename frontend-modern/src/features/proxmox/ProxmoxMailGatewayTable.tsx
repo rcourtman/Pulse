@@ -10,6 +10,7 @@ import {
   PlatformTableToolbar,
   createPlatformTableFilterState,
   filterPlatformResources,
+  formatPlatformTableIntegerValue,
   formatPlatformTableUptimeValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
@@ -27,8 +28,6 @@ import { ProxmoxMailGatewayDrawer } from './ProxmoxMailGatewayDrawer';
 // omits the queue / spam / virus / quarantine counts that are the
 // operator columns. This bespoke table reuses canonical shared
 // primitives and surfaces those PMG-native columns.
-
-const formatLocaleCount = (value: number): string => value.toLocaleString();
 
 export const ProxmoxMailGatewayTable: Component<{
   resources: Resource[];
@@ -153,7 +152,7 @@ export const ProxmoxMailGatewayTable: Component<{
                           >
                             <PlatformTableNumberValue
                               value={pmg()?.nodeCount}
-                              format={formatLocaleCount}
+                              format={formatPlatformTableIntegerValue}
                             />
                           </TableCell>
                           <TableCell
@@ -168,7 +167,7 @@ export const ProxmoxMailGatewayTable: Component<{
                           >
                             <PlatformTableNumberValue
                               value={pmg()?.mailCountTotal}
-                              format={formatLocaleCount}
+                              format={formatPlatformTableIntegerValue}
                             />
                           </TableCell>
                           <TableCell
@@ -176,7 +175,7 @@ export const ProxmoxMailGatewayTable: Component<{
                           >
                             <PlatformTableNumberValue
                               value={pmg()?.spamIn}
-                              format={formatLocaleCount}
+                              format={formatPlatformTableIntegerValue}
                             />
                           </TableCell>
                           <TableCell
@@ -184,7 +183,7 @@ export const ProxmoxMailGatewayTable: Component<{
                           >
                             <PlatformTableNumberValue
                               value={pmg()?.virusIn}
-                              format={formatLocaleCount}
+                              format={formatPlatformTableIntegerValue}
                             />
                           </TableCell>
                           <TableCell
@@ -192,7 +191,7 @@ export const ProxmoxMailGatewayTable: Component<{
                           >
                             <PlatformTableNumberValue
                               value={pmg()?.quarantine}
-                              format={formatLocaleCount}
+                              format={formatPlatformTableIntegerValue}
                             />
                           </TableCell>
                           <TableCell
@@ -200,7 +199,7 @@ export const ProxmoxMailGatewayTable: Component<{
                           >
                             <PlatformTableNumberValue
                               value={pmg()?.queueTotal ?? pmg()?.queueActive}
-                              format={formatLocaleCount}
+                              format={formatPlatformTableIntegerValue}
                             />
                           </TableCell>
                           <TableCell
@@ -208,7 +207,7 @@ export const ProxmoxMailGatewayTable: Component<{
                           >
                             <PlatformTableNumberValue
                               value={pmg()?.queueDeferred}
-                              format={formatLocaleCount}
+                              format={formatPlatformTableIntegerValue}
                             />
                           </TableCell>
                         </TableRow>

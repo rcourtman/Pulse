@@ -266,6 +266,20 @@ export function PlatformTableDateTimeValue(props: {
   );
 }
 
+const platformTableIntegerFormatter = new Intl.NumberFormat(undefined, {
+  maximumFractionDigits: 0,
+});
+
+export const formatPlatformTableIntegerValue = (
+  value: number | null | undefined,
+  emptyText = '—',
+): string => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return emptyText;
+  }
+  return platformTableIntegerFormatter.format(Math.round(value));
+};
+
 export function PlatformTableNumberValue(props: {
   value: number | undefined;
   emptyText?: string;

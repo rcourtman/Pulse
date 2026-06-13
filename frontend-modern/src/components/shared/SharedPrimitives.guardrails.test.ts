@@ -164,7 +164,9 @@ import kubernetesPodsTableSource from '@/features/kubernetes/KubernetesPodsTable
 import kubernetesPolicyTableSource from '@/features/kubernetes/KubernetesPolicyTable.tsx?raw';
 import kubernetesServicesTableSource from '@/features/kubernetes/KubernetesServicesTable.tsx?raw';
 import kubernetesStorageTableSource from '@/features/kubernetes/KubernetesStorageTable.tsx?raw';
+import proxmoxBackupServersTableSource from '@/features/proxmox/ProxmoxBackupServersTable.tsx?raw';
 import proxmoxBackupsTableSource from '@/features/proxmox/ProxmoxBackupsTable.tsx?raw';
+import proxmoxCephClusterDrawerSource from '@/features/proxmox/ProxmoxCephClusterDrawer.tsx?raw';
 import proxmoxCephTableSource from '@/features/proxmox/ProxmoxCephTable.tsx?raw';
 import proxmoxCoverageTableSource from '@/features/proxmox/ProxmoxCoverageTable.tsx?raw';
 import proxmoxMailGatewayTableSource from '@/features/proxmox/ProxmoxMailGatewayTable.tsx?raw';
@@ -3879,6 +3881,111 @@ describe('shared primitive guardrails', () => {
     expect(vsphereActivityTableSource).toContain('minYear={2000}');
   });
 
+  it('keeps platform table integer count formatting on the shared helper', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+        forbiddenPatterns?: Array<{ path?: string; patterns?: string[] }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        allowedPaths?: string[];
+        ignoredPaths?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find(
+      (rule) => rule.id === 'platform-table-integer-value-format',
+    );
+    const localHelperGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-table-local-integer-format-helper',
+    );
+    const localToLocaleGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-table-local-integer-count-tolocalestring',
+    );
+    const platformIntegerConsumers: Array<[string, string]> = [
+      ['src/components/Kubernetes/K8sNamespacesDrawer.tsx', k8sNamespacesDrawerSource],
+      ['src/features/proxmox/ProxmoxBackupServersTable.tsx', proxmoxBackupServersTableSource],
+      ['src/features/proxmox/ProxmoxCephClusterDrawer.tsx', proxmoxCephClusterDrawerSource],
+      ['src/features/proxmox/ProxmoxMailGatewayDrawer.tsx', proxmoxMailGatewayDrawerSource],
+      ['src/features/proxmox/ProxmoxMailGatewayTable.tsx', proxmoxMailGatewayTableSource],
+    ];
+    const platformIntegerConsumerPaths = platformIntegerConsumers.map(([path]) => path);
+
+    expect(registeredRule?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(registeredRule?.canonical?.export).toBe('formatPlatformTableIntegerValue');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
+      platformIntegerConsumerPaths,
+    );
+    expect(registeredRule?.forbiddenPatterns).toEqual([
+      {
+        path: 'src/components/Kubernetes/K8sNamespacesDrawer.tsx',
+        patterns: ['const formatInteger', 'Math.round(n).toLocaleString()'],
+      },
+      {
+        path: 'src/features/proxmox/ProxmoxBackupServersTable.tsx',
+        patterns: ['row.backupCount.toLocaleString()'],
+      },
+      {
+        path: 'src/features/proxmox/ProxmoxCephClusterDrawer.tsx',
+        patterns: ['pool.objects.toLocaleString()'],
+      },
+      {
+        path: 'src/features/proxmox/ProxmoxMailGatewayDrawer.tsx',
+        patterns: ['function formatNumber', 'Math.round(value).toLocaleString()'],
+      },
+      {
+        path: 'src/features/proxmox/ProxmoxMailGatewayTable.tsx',
+        patterns: ['const formatLocaleCount', 'value.toLocaleString()'],
+      },
+    ]);
+    expect(localHelperGuard?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(localHelperGuard?.canonical?.export).toBe('formatPlatformTableIntegerValue');
+    expect(localHelperGuard?.allPatterns).toEqual(['Math.round(', '.toLocaleString()']);
+    expect(localHelperGuard?.scopes).toEqual(['src/components/Kubernetes', 'src/features/proxmox']);
+    expect(localHelperGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(localHelperGuard?.ignoredPaths ?? []).toHaveLength(0);
+    expect(localToLocaleGuard?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(localToLocaleGuard?.canonical?.export).toBe('formatPlatformTableIntegerValue');
+    expect(localToLocaleGuard?.allPatterns).toEqual(['toLocaleString()']);
+    expect(localToLocaleGuard?.scopes).toEqual([
+      'src/components/Kubernetes',
+      'src/features/proxmox',
+    ]);
+    expect(localToLocaleGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(localToLocaleGuard?.ignoredPaths ?? []).toHaveLength(0);
+
+    expect(sharedPlatformPageSource).toContain('export const formatPlatformTableIntegerValue');
+    expect(sharedPlatformPageSource).toContain('maximumFractionDigits: 0');
+
+    for (const [path, source] of platformIntegerConsumers) {
+      expect(source).toContain('formatPlatformTableIntegerValue');
+      const forbiddenPatterns =
+        registeredRule?.forbiddenPatterns?.find((entry) => entry.path === path)?.patterns ?? [];
+      for (const pattern of forbiddenPatterns) {
+        expect(source).not.toContain(pattern);
+      }
+    }
+    for (const source of [
+      proxmoxBackupServersTableSource,
+      proxmoxCephClusterDrawerSource,
+      proxmoxMailGatewayDrawerSource,
+      proxmoxMailGatewayTableSource,
+    ]) {
+      expect(source).toContain('PlatformTableNumberValue');
+    }
+  });
+
   it('keeps platform table number-value fallbacks on the shared primitive', () => {
     const registry = JSON.parse(sharedTemplateRegistrySource) as {
       rules?: Array<{
@@ -4059,7 +4166,7 @@ describe('shared primitive guardrails', () => {
         expect(source).not.toContain(pattern);
       }
     }
-    expect(proxmoxMailGatewayTableSource).toContain('format={formatLocaleCount}');
+    expect(proxmoxMailGatewayTableSource).toContain('format={formatPlatformTableIntegerValue}');
   });
 
   it('keeps platform table count ratios on the shared primitive', () => {

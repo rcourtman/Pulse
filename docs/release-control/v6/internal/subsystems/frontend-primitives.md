@@ -2636,6 +2636,14 @@ primitive instead of declaring local `numberValue`, `numericValue`,
 variants. If a scheduler, service-domain, or inventory count is intentionally
 zero-defaulted, the consuming table owns that field/default choice and still
 renders through `PlatformTableNumberValue`.
+Locale-formatted integer count labels share the same primitive boundary.
+`formatPlatformTableIntegerValue` owns rounded integer formatting, locale
+grouping, and empty-marker behavior for dense platform table and drawer count
+cells. Kubernetes namespace drawers, Proxmox Backup Server backup counts,
+Ceph pool object counts, and Proxmox Mail Gateway table/drawer counts must
+compose that helper, usually through `PlatformTableNumberValue`, instead of
+declaring local `formatInteger`, `formatLocaleCount`, `formatNumber`, or direct
+`toLocaleString()` count formatting.
 `PlatformTableCountRatioValue` owns the companion healthy/total or ready/total
 count-ratio skeleton: numerator, slash, muted denominator, tabular styling, and
 empty marker behavior. `formatPlatformTableCountRatioValue` owns the same

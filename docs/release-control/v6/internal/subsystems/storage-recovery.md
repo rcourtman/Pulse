@@ -136,7 +136,11 @@ derived from real recovery evidence and recent task outcomes, including
 explicit uncovered and failed-latest-task states, rather than from source-detail
 row counts alone. PBS server/datastore rows may display backup counts, but the
 counts must come from the PBS backup API artifact identity, not from a
-datastore-capacity approximation.
+datastore-capacity approximation. The table owns which PBS artifact count is
+meaningful for the backup-health row, while dense integer count presentation
+belongs to `frontend-primitives`: backup count cells must compose
+`PlatformTableNumberValue` with `formatPlatformTableIntegerValue` instead of
+reintroducing local `toLocaleString()` formatting.
 Those Proxmox backup workflows own recovery semantics, source-specific
 empty-state copy, and retry/filter actions, but their table empty-state frame
 must compose the frontend-primitives-owned `PlatformTableEmptyState` shell

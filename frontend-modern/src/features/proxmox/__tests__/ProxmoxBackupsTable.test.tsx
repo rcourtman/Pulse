@@ -4,6 +4,7 @@ import type { JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ProxmoxBackupsTable } from '../ProxmoxBackupsTable';
+import proxmoxBackupServersTableSource from '../ProxmoxBackupServersTable.tsx?raw';
 import proxmoxBackupsTableSource from '../ProxmoxBackupsTable.tsx?raw';
 import proxmoxPageSurfaceSource from '../ProxmoxPageSurface.tsx?raw';
 import {
@@ -285,6 +286,14 @@ describe('ProxmoxBackupsTable', () => {
     expect(proxmoxBackupsTableSource).not.toContain(
       'inline-flex min-h-10 items-center rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-surface-hover',
     );
+  });
+
+  it('keeps PBS backup count cells on the shared platform integer primitive', () => {
+    const directLocaleCountCall = 'row.backupCount.' + 'toLocale' + 'String()';
+
+    expect(proxmoxBackupServersTableSource).toContain('PlatformTableNumberValue');
+    expect(proxmoxBackupServersTableSource).toContain('formatPlatformTableIntegerValue');
+    expect(proxmoxBackupServersTableSource).not.toContain(directLocaleCountCall);
   });
 
   it('keeps backup coverage fed by Proxmox VM/LXC guests when Overview demotes app containers', () => {

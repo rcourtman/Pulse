@@ -14,8 +14,10 @@ import {
 import {
   PLATFORM_TABLE_BODY_CLASS,
   PLATFORM_TABLE_HEADER_ROW_CLASS,
+  formatPlatformTableIntegerValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
+  PlatformTableNumberValue,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import { formatBytes } from '@/utils/format';
@@ -86,11 +88,6 @@ function formatAge(seconds: number): string {
   return `${Math.floor(seconds / 86_400)}d`;
 }
 
-function formatNumber(value: number | undefined): string {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
-  return Math.round(value).toLocaleString();
-}
-
 function queueCell(queue: PMGQueueStatus | undefined): { count: number; label: string } {
   if (!queue) return { count: 0, label: '—' };
   return {
@@ -129,7 +126,7 @@ function StackedBar(props: { segments: StackedSegment[]; ariaLabel: string }) {
               <div
                 class={seg.tone}
                 style={{ width: `${(seg.value / total()) * 100}%` }}
-                title={`${seg.label}: ${formatNumber(seg.value)}`}
+                title={`${seg.label}: ${formatPlatformTableIntegerValue(seg.value)}`}
               />
             )}
           </For>
@@ -144,7 +141,7 @@ function StackedBar(props: { segments: StackedSegment[]; ariaLabel: string }) {
                 <span class={`inline-block h-2 w-2 rounded-sm ${seg.tone}`} aria-hidden="true" />
                 <span class="text-muted">{seg.label}</span>
                 <span class="text-base-content font-semibold tabular-nums">
-                  {formatNumber(seg.value)}
+                  {formatPlatformTableIntegerValue(seg.value)}
                 </span>
                 <Show when={total() > 0}>
                   <span class="text-muted tabular-nums text-[10px]">{share.toFixed(1)}%</span>
@@ -183,7 +180,7 @@ function SpamHistogram(props: { buckets: PMGSpamBucket[] }) {
               <div
                 class={`w-full rounded-sm ${tone}`}
                 style={{ height: `${Math.max(heightPct, 2)}%` }}
-                title={`Score ${bucket.score}: ${formatNumber(bucket.count)}`}
+                title={`Score ${bucket.score}: ${formatPlatformTableIntegerValue(bucket.count)}`}
               />
               <span class="text-[10px] text-muted font-mono tabular-nums">{bucket.score}</span>
             </div>
@@ -204,7 +201,7 @@ function InOutBar(props: {
   outValue: number;
   format?: (value: number) => string;
 }) {
-  const format = props.format ?? formatNumber;
+  const format = props.format ?? formatPlatformTableIntegerValue;
   const max = Math.max(props.inValue, props.outValue, 1);
   const inWidth = (props.inValue / max) * 50;
   const outWidth = (props.outValue / max) * 50;
@@ -402,7 +399,8 @@ export const ProxmoxMailGatewayDrawer: Component<{
                     <div class="flex items-baseline justify-between text-[11px]">
                       <span class="text-muted">Greylist / Junk in</span>
                       <span class="font-mono text-[10px] text-base-content font-semibold">
-                        {formatNumber(stats()!.greylistCount)} / {formatNumber(stats()!.junkIn)}
+                        {formatPlatformTableIntegerValue(stats()!.greylistCount)} /{' '}
+                        {formatPlatformTableIntegerValue(stats()!.junkIn)}
                       </span>
                     </div>
                   </div>
@@ -410,8 +408,8 @@ export const ProxmoxMailGatewayDrawer: Component<{
                     <div class="flex items-baseline justify-between text-[11px]">
                       <span class="text-muted">RBL / Pregreet rejects</span>
                       <span class="font-mono text-[10px] text-base-content font-semibold">
-                        {formatNumber(stats()!.rblRejects)} /{' '}
-                        {formatNumber(stats()!.pregreetRejects)}
+                        {formatPlatformTableIntegerValue(stats()!.rblRejects)} /{' '}
+                        {formatPlatformTableIntegerValue(stats()!.pregreetRejects)}
                       </span>
                     </div>
                   </div>
@@ -533,9 +531,14 @@ export const ProxmoxMailGatewayDrawer: Component<{
                               {asTrimmedString(node.loadAvg) || '—'}
                             </TableCell>
                             <TableCell
-                              class={`${getPlatformTableCellClassForKind('numeric-value')} tabular-nums`}
+                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                             >
-                              <span class="text-base-content font-semibold">{queue.count}</span>
+                              <span class="font-semibold">
+                                <PlatformTableNumberValue
+                                  value={queue.count}
+                                  format={formatPlatformTableIntegerValue}
+                                />
+                              </span>
                               <span
                                 class="ml-1 text-muted text-[10px] font-mono"
                                 title="active/deferred/hold/incoming"
@@ -564,7 +567,9 @@ export const ProxmoxMailGatewayDrawer: Component<{
                 <h4 class="text-xs font-semibold uppercase tracking-wide text-muted">
                   Top domains
                 </h4>
-                <span class="text-[10px] text-muted tabular-nums">top {topDomains().length}</span>
+                <span class="text-[10px] text-muted tabular-nums">
+                  top {formatPlatformTableIntegerValue(topDomains().length)}
+                </span>
               </div>
               <Show
                 when={topDomains().length > 0}
@@ -600,19 +605,28 @@ export const ProxmoxMailGatewayDrawer: Component<{
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            {formatNumber(domain.mailCount)}
+                            <PlatformTableNumberValue
+                              value={domain.mailCount}
+                              format={formatPlatformTableIntegerValue}
+                            />
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            {formatNumber(domain.spamCount)}
+                            <PlatformTableNumberValue
+                              value={domain.spamCount}
+                              format={formatPlatformTableIntegerValue}
+                            />
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            {formatNumber(domain.virusCount)}
+                            <PlatformTableNumberValue
+                              value={domain.virusCount}
+                              format={formatPlatformTableIntegerValue}
+                            />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-muted tabular-nums`}

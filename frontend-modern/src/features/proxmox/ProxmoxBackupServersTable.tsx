@@ -4,8 +4,10 @@ import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { formatBytes, formatUptime } from '@/utils/format';
 import {
+  formatPlatformTableIntegerValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
+  PlatformTableNumberValue,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { PBSBackup } from '@/types/api';
@@ -276,10 +278,13 @@ export function ProxmoxBackupServersTable(props: {
                       </Show>
                     </TableCell>
                     <TableCell
-                      class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
+                      class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                     >
                       <Show when={row.datastore} fallback={<span class="text-muted">—</span>}>
-                        {row.backupCount.toLocaleString()}
+                        <PlatformTableNumberValue
+                          value={row.backupCount}
+                          format={formatPlatformTableIntegerValue}
+                        />
                       </Show>
                     </TableCell>
                     <TableCell

@@ -14,6 +14,7 @@ import {
   formatPlatformTableBytesValue,
   formatPlatformTableCountRatioValue,
   formatPlatformTableDateTimeValue,
+  formatPlatformTableIntegerValue,
   formatPlatformTableTitleCaseValue,
   formatPlatformTableUptimeValue,
   filterPlatformResources,
@@ -359,6 +360,17 @@ describe('PlatformTableDateTimeValue', () => {
         ...dateTimeFormat,
       }),
     );
+  });
+});
+
+describe('formatPlatformTableIntegerValue', () => {
+  it('formats rounded integer labels with canonical empty markers', () => {
+    const expected = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(1235);
+
+    expect(formatPlatformTableIntegerValue(1234.6)).toBe(expected);
+    expect(formatPlatformTableIntegerValue(0)).toBe('0');
+    expect(formatPlatformTableIntegerValue(Number.NaN, '0')).toBe('0');
+    expect(formatPlatformTableIntegerValue(undefined)).toBe('—');
   });
 });
 

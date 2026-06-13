@@ -1420,6 +1420,49 @@
       ]
     },
     {
+      "id": "platform-table-integer-value-format",
+      "category": "platform-table-text-value",
+      "summary": "Platform tables and drawers must use the shared integer formatter with PlatformTableNumberValue for locale-formatted count cells instead of recreating local toLocaleString or Math.round helpers.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "formatPlatformTableIntegerValue"
+      },
+      "requiredConsumers": [
+        { "path": "src/components/Kubernetes/K8sNamespacesDrawer.tsx" },
+        { "path": "src/features/proxmox/ProxmoxBackupServersTable.tsx" },
+        { "path": "src/features/proxmox/ProxmoxCephClusterDrawer.tsx" },
+        { "path": "src/features/proxmox/ProxmoxMailGatewayDrawer.tsx" },
+        { "path": "src/features/proxmox/ProxmoxMailGatewayTable.tsx" }
+      ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/components/Kubernetes/K8sNamespacesDrawer.tsx",
+          "patterns": ["const formatInteger", "Math.round(n).toLocaleString()"]
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxBackupServersTable.tsx",
+          "patterns": ["row.backupCount.toLocaleString()"]
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxCephClusterDrawer.tsx",
+          "patterns": ["pool.objects.toLocaleString()"]
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxMailGatewayDrawer.tsx",
+          "patterns": ["function formatNumber", "Math.round(value).toLocaleString()"]
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxMailGatewayTable.tsx",
+          "patterns": ["const formatLocaleCount", "value.toLocaleString()"]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "platform-table-number-value-fallback",
       "category": "platform-table-text-value",
       "summary": "Platform tables must use the shared number-value fallback primitive for finite numeric table cells, tabular styling, and canonical empty-cell markers instead of recreating local numberValue/countCell helpers.",
@@ -2265,6 +2308,46 @@
       "extensions": [".tsx"],
       "allPatterns": ["const countCell", "value.toLocaleString() : '—'"],
       "legacyReason": "Retired migration debt. Locale-formatted count cells must compose PlatformTableNumberValue with a caller-owned format function instead of owning fallback markup locally.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-table-local-integer-format-helper",
+      "category": "platform-table-text-value",
+      "summary": "Platform tables and drawers must not recreate local integer format helpers for count labels.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "formatPlatformTableIntegerValue"
+      },
+      "scopes": ["src/components/Kubernetes", "src/features/proxmox"],
+      "extensions": [".tsx"],
+      "allPatterns": ["Math.round(", ".toLocaleString()"],
+      "legacyReason": "Retired migration debt. Dense platform integer count labels must use formatPlatformTableIntegerValue so rounding, locale formatting, and empty markers stay shared.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-table-local-integer-count-tolocalestring",
+      "category": "platform-table-text-value",
+      "summary": "Platform tables and drawers must not call toLocaleString directly for count cells.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "formatPlatformTableIntegerValue"
+      },
+      "scopes": ["src/components/Kubernetes", "src/features/proxmox"],
+      "extensions": [".tsx"],
+      "allPatterns": ["toLocaleString()"],
+      "legacyReason": "Retired migration debt. Dense platform integer count cells must use formatPlatformTableIntegerValue and PlatformTableNumberValue instead of local count formatting.",
       "allowedPaths": [],
       "ignoredPaths": [],
       "proof": [

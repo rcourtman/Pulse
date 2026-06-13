@@ -18,6 +18,7 @@ import { buildKubernetesPath } from '@/routing/resourceLinks';
 import {
   PLATFORM_TABLE_BODY_CLASS,
   PLATFORM_TABLE_HEADER_ROW_CLASS,
+  formatPlatformTableIntegerValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
 } from '@/features/platformPage/sharedPlatformPage';
@@ -39,12 +40,6 @@ type NamespaceRow = {
 type NamespacesResponse = {
   cluster: string;
   data: NamespaceRow[];
-};
-
-const formatInteger = (value?: number | null): string => {
-  const n = Number(value ?? 0);
-  if (!Number.isFinite(n)) return '0';
-  return Math.round(n).toLocaleString();
 };
 
 export const K8sNamespacesDrawer: Component<{
@@ -200,12 +195,14 @@ export const K8sNamespacesDrawer: Component<{
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
                             <span class="font-semibold tabular-nums">
-                              {formatInteger(row.pods.total)}
+                              {formatPlatformTableIntegerValue(row.pods.total ?? 0, '0')}
                             </span>
                             <span class="ml-2 text-[11px] text-muted">
-                              {row.pods.offline > 0 ? `${formatInteger(row.pods.offline)} off` : ''}
+                              {row.pods.offline > 0
+                                ? `${formatPlatformTableIntegerValue(row.pods.offline, '0')} off`
+                                : ''}
                               {row.pods.warning > 0
-                                ? `${row.pods.offline > 0 ? ' · ' : ''}${formatInteger(row.pods.warning)} warn`
+                                ? `${row.pods.offline > 0 ? ' · ' : ''}${formatPlatformTableIntegerValue(row.pods.warning, '0')} warn`
                                 : ''}
                             </span>
                           </TableCell>
@@ -213,14 +210,14 @@ export const K8sNamespacesDrawer: Component<{
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
                             <span class="font-semibold tabular-nums">
-                              {formatInteger(row.deployments.total)}
+                              {formatPlatformTableIntegerValue(row.deployments.total ?? 0, '0')}
                             </span>
                             <span class="ml-2 text-[11px] text-muted">
                               {row.deployments.warning > 0
-                                ? `${formatInteger(row.deployments.warning)} warn`
+                                ? `${formatPlatformTableIntegerValue(row.deployments.warning, '0')} warn`
                                 : ''}
                               {row.deployments.offline > 0
-                                ? `${row.deployments.warning > 0 ? ' · ' : ''}${formatInteger(row.deployments.offline)} off`
+                                ? `${row.deployments.warning > 0 ? ' · ' : ''}${formatPlatformTableIntegerValue(row.deployments.offline, '0')} off`
                                 : ''}
                             </span>
                           </TableCell>

@@ -15,8 +15,10 @@ import {
 import {
   PLATFORM_TABLE_BODY_CLASS,
   PLATFORM_TABLE_HEADER_ROW_CLASS,
+  formatPlatformTableIntegerValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
+  PlatformTableNumberValue,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import { formatBytes } from '@/utils/format';
@@ -183,9 +185,12 @@ export const ProxmoxCephClusterDrawer: Component<{
                         {pool.name || '—'}
                       </TableCell>
                       <TableCell
-                        class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
+                        class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                       >
-                        {pool.objects.toLocaleString()}
+                        <PlatformTableNumberValue
+                          value={pool.objects}
+                          format={formatPlatformTableIntegerValue}
+                        />
                       </TableCell>
                       <TableCell
                         class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
