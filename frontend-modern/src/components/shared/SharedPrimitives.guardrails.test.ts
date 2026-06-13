@@ -4127,6 +4127,97 @@ describe('shared primitive guardrails', () => {
     }
   });
 
+  it('keeps platform table durations and intervals on the shared primitive', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+        forbiddenPatterns?: Array<{ path?: string; patterns?: string[] }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        allowedPaths?: string[];
+        ignoredPaths?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find(
+      (rule) => rule.id === 'platform-table-duration-value',
+    );
+    const localDurationGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-table-local-duration-helper',
+    );
+    const localIntervalGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-table-local-interval-helper',
+    );
+    const platformDurationConsumers: Array<[string, string]> = [
+      ['src/features/proxmox/ProxmoxReplicationTable.tsx', proxmoxReplicationTableSource],
+      ['src/features/standalone/AvailabilityChecksTable.tsx', availabilityChecksTableSource],
+    ];
+    const platformDurationConsumerPaths = platformDurationConsumers.map(([path]) => path);
+
+    expect(registeredRule?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(registeredRule?.canonical?.export).toBe('PlatformTableDurationValue');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
+      platformDurationConsumerPaths,
+    );
+    expect(registeredRule?.forbiddenPatterns).toEqual([
+      {
+        path: 'src/features/proxmox/ProxmoxReplicationTable.tsx',
+        patterns: ['function formatDuration', 'seconds < 3600'],
+      },
+      {
+        path: 'src/features/standalone/AvailabilityChecksTable.tsx',
+        patterns: ['const formatInterval', 'toFixed(1)}m'],
+      },
+    ]);
+    expect(localDurationGuard?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(localDurationGuard?.canonical?.export).toBe('PlatformTableDurationValue');
+    expect(localDurationGuard?.allPatterns).toEqual([
+      'function formatDuration',
+      'seconds < 3600',
+      'return `${h}h ${m}m`',
+    ]);
+    expect(localDurationGuard?.scopes).toEqual([
+      'src/features/proxmox/ProxmoxReplicationTable.tsx',
+    ]);
+    expect(localDurationGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(localDurationGuard?.ignoredPaths ?? []).toHaveLength(0);
+    expect(localIntervalGuard?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(localIntervalGuard?.canonical?.export).toBe('PlatformTableDurationValue');
+    expect(localIntervalGuard?.allPatterns).toEqual([
+      'const formatInterval',
+      'pollIntervalSeconds',
+      'toFixed(1)}m',
+    ]);
+    expect(localIntervalGuard?.scopes).toEqual([
+      'src/features/standalone/AvailabilityChecksTable.tsx',
+    ]);
+    expect(localIntervalGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(localIntervalGuard?.ignoredPaths ?? []).toHaveLength(0);
+
+    expect(sharedPlatformPageSource).toContain('export function PlatformTableDurationValue');
+    expect(sharedPlatformPageSource).toContain('formatPlatformTableDurationValue');
+
+    for (const [path, source] of platformDurationConsumers) {
+      expect(source).toContain('PlatformTableDurationValue');
+      const forbiddenPatterns =
+        registeredRule?.forbiddenPatterns?.find((entry) => entry.path === path)?.patterns ?? [];
+      for (const pattern of forbiddenPatterns) {
+        expect(source).not.toContain(pattern);
+      }
+    }
+  });
+
   it('keeps platform table integer count formatting on the shared helper', () => {
     const registry = JSON.parse(sharedTemplateRegistrySource) as {
       rules?: Array<{

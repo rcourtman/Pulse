@@ -313,6 +313,51 @@ export function PlatformTableRelativeTimeValue(props: {
   );
 }
 
+export type PlatformTableDurationValueOptions = {
+  emptyText?: string;
+  fallbackText?: string;
+};
+
+export const formatPlatformTableDurationValue = (
+  seconds: number | undefined,
+  options: PlatformTableDurationValueOptions = {},
+): string => {
+  const explicit = options.fallbackText?.trim();
+  if (explicit) return explicit;
+  const emptyText = options.emptyText ?? '—';
+  if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds <= 0) return emptyText;
+
+  const wholeSeconds = Math.max(0, Math.round(seconds));
+  if (wholeSeconds < 60) return `${wholeSeconds}s`;
+
+  const totalMinutes = Math.floor(wholeSeconds / 60);
+  const remainingSeconds = wholeSeconds % 60;
+  if (totalMinutes < 60) {
+    return remainingSeconds > 0 ? `${totalMinutes}m ${remainingSeconds}s` : `${totalMinutes}m`;
+  }
+
+  const hours = Math.floor(totalMinutes / 60);
+  const remainingMinutes = totalMinutes % 60;
+  return `${hours}h ${remainingMinutes}m`;
+};
+
+export function PlatformTableDurationValue(props: {
+  seconds: number | undefined;
+  emptyText?: string;
+  fallbackText?: string;
+}) {
+  const options = (): PlatformTableDurationValueOptions => {
+    const resolved: PlatformTableDurationValueOptions = {};
+    if (props.emptyText !== undefined) resolved.emptyText = props.emptyText;
+    if (props.fallbackText !== undefined) resolved.fallbackText = props.fallbackText;
+    return resolved;
+  };
+
+  return (
+    <span class="tabular-nums">{formatPlatformTableDurationValue(props.seconds, options())}</span>
+  );
+}
+
 const platformTableIntegerFormatter = new Intl.NumberFormat(undefined, {
   maximumFractionDigits: 0,
 });

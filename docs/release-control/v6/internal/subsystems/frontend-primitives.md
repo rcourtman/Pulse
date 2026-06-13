@@ -2638,6 +2638,13 @@ Proxmox replication last-sync cells, Standalone machine last-seen cells, and
 Standalone availability-check checked-at cells must compose that primitive
 instead of importing `formatRelativeTime` directly or declaring local
 timestamp-age helpers in table files.
+Duration and interval cells follow the same rule.
+`PlatformTableDurationValue` and `formatPlatformTableDurationValue` own
+seconds/minutes/hours duration labels, explicit fallback text, canonical
+empty-cell markers, and tabular-number styling for dense platform table cells.
+Proxmox replication last-duration cells and Standalone availability-check poll
+interval cells must compose that primitive instead of declaring local
+seconds/minutes helpers.
 Platform table numeric fallback rendering is registry-backed too.
 `PlatformTableNumberValue` owns finite-number checking, tabular-number styling,
 custom empty-marker support, and caller-owned number formatting for dense

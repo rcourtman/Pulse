@@ -274,6 +274,10 @@ interval field is meaningful, while dense platform table rendering must use
 seconds/minutes/hours labels, fallback text, invalid/empty markers, and
 tabular styling instead of declaring local seconds/minutes helpers in table
 files.
+That boundary covers Proxmox replication last-sync duration cells and
+Standalone availability-check poll interval cells, and future duration-like
+platform table values must join the same shared primitive registry rule before
+adding table-local formatting.
 Optional numeric table cells follow the same split: unified-resource consumers
 own which count or replica field is meaningful, whether the domain should
 zero-default an absent scheduler/service/inventory count, whether a

@@ -8,6 +8,7 @@ import { apiFetch } from '@/utils/apiClient';
 import {
   PlatformTableToolbar,
   PlatformErrorState,
+  PlatformTableDurationValue,
   PlatformTableRelativeTimeValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
@@ -133,17 +134,6 @@ function nextSyncFor(job: ReplicationJob): { text: string; tone: NextSyncTone } 
   }
   if (minutes < 60) return { text: `in ${minutes}m`, tone: minutes < 5 ? 'imminent' : 'normal' };
   return { text: `in ${Math.floor(minutes / 60)}h ${minutes % 60}m`, tone: 'normal' };
-}
-
-function formatDuration(seconds: number | undefined, human: string | undefined): string {
-  const explicit = (human ?? '').trim();
-  if (explicit) return explicit;
-  if (!seconds || seconds <= 0) return '—';
-  if (seconds < 60) return `${seconds}s`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  return `${h}h ${m}m`;
 }
 
 export async function fetchReplicationJobs(): Promise<ReplicationJob[]> {
@@ -334,10 +324,10 @@ export const ProxmoxReplicationTable: Component<{
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                             >
-                              {formatDuration(
-                                job.lastSyncDurationSeconds,
-                                job.lastSyncDurationHuman,
-                              )}
+                              <PlatformTableDurationValue
+                                seconds={job.lastSyncDurationSeconds}
+                                fallbackText={job.lastSyncDurationHuman}
+                              />
                             </TableCell>
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}

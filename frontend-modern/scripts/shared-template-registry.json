@@ -1532,6 +1532,34 @@
       ]
     },
     {
+      "id": "platform-table-duration-value",
+      "category": "platform-table-text-value",
+      "summary": "Platform tables must use the shared duration value primitive for elapsed duration and polling interval cells, tabular styling, fallback labels, and canonical empty-cell markers instead of declaring local seconds/minutes helpers.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "PlatformTableDurationValue"
+      },
+      "requiredConsumers": [
+        { "path": "src/features/proxmox/ProxmoxReplicationTable.tsx" },
+        { "path": "src/features/standalone/AvailabilityChecksTable.tsx" }
+      ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/features/proxmox/ProxmoxReplicationTable.tsx",
+          "patterns": ["function formatDuration", "seconds < 3600"]
+        },
+        {
+          "path": "src/features/standalone/AvailabilityChecksTable.tsx",
+          "patterns": ["const formatInterval", "toFixed(1)}m"]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "platform-table-integer-value-format",
       "category": "platform-table-text-value",
       "summary": "Platform tables and drawers must use the shared integer formatter with PlatformTableNumberValue for locale-formatted count cells instead of recreating local toLocaleString or Math.round helpers.",
@@ -2717,6 +2745,46 @@
       "pathExcludes": ["__tests__"],
       "allPatterns": ["formatRelativeTime("],
       "legacyReason": "Retired migration debt. Platform table relative timestamp cells must compose PlatformTableRelativeTimeValue so compact labels, empty markers, and tabular styling stay shared.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-table-local-duration-helper",
+      "category": "platform-table-text-value",
+      "summary": "Platform tables must not recreate local elapsed-duration helpers for seconds/minutes duration cells.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "PlatformTableDurationValue"
+      },
+      "scopes": ["src/features/proxmox/ProxmoxReplicationTable.tsx"],
+      "extensions": [".tsx"],
+      "allPatterns": ["function formatDuration", "seconds < 3600", "return `${h}h ${m}m`"],
+      "legacyReason": "Retired migration debt. Platform duration cells must compose PlatformTableDurationValue so elapsed-duration labels, fallback text, empty markers, and tabular styling stay shared.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-table-local-interval-helper",
+      "category": "platform-table-text-value",
+      "summary": "Platform tables must not recreate local interval helpers for polling interval cells.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "PlatformTableDurationValue"
+      },
+      "scopes": ["src/features/standalone/AvailabilityChecksTable.tsx"],
+      "extensions": [".tsx"],
+      "allPatterns": ["const formatInterval", "pollIntervalSeconds", "toFixed(1)}m"],
+      "legacyReason": "Retired migration debt. Platform interval cells must compose PlatformTableDurationValue so seconds/minutes labels, empty markers, and tabular styling stay shared.",
       "allowedPaths": [],
       "ignoredPaths": [],
       "proof": [

@@ -6,6 +6,7 @@ import {
   PLATFORM_TABLE_COMPACT_DATE_TIME_FORMAT,
   PlatformTableCountRatioValue,
   PlatformTableDateTimeValue,
+  PlatformTableDurationValue,
   PlatformTableMetricFallback,
   PlatformTableNumberValue,
   PlatformTablePercentValue,
@@ -15,6 +16,7 @@ import {
   formatPlatformTableBytesValue,
   formatPlatformTableCountRatioValue,
   formatPlatformTableDateTimeValue,
+  formatPlatformTableDurationValue,
   formatPlatformTableIntegerValue,
   formatPlatformTablePercentValue,
   formatPlatformTableRelativeTimeValue,
@@ -390,6 +392,30 @@ describe('PlatformTableRelativeTimeValue', () => {
 
     expect(marker?.classList.contains('tabular-nums')).toBe(true);
     expect(marker?.textContent).toBe('5m ago');
+  });
+});
+
+describe('formatPlatformTableDurationValue', () => {
+  it('formats elapsed durations with canonical empty markers and explicit fallbacks', () => {
+    expect(formatPlatformTableDurationValue(undefined)).toBe('—');
+    expect(formatPlatformTableDurationValue(0)).toBe('—');
+    expect(formatPlatformTableDurationValue(Number.NaN)).toBe('—');
+    expect(formatPlatformTableDurationValue(undefined, { emptyText: 'Not run' })).toBe('Not run');
+    expect(formatPlatformTableDurationValue(30)).toBe('30s');
+    expect(formatPlatformTableDurationValue(60)).toBe('1m');
+    expect(formatPlatformTableDurationValue(125)).toBe('2m 5s');
+    expect(formatPlatformTableDurationValue(5_400)).toBe('1h 30m');
+    expect(formatPlatformTableDurationValue(undefined, { fallbackText: '2m 5s' })).toBe('2m 5s');
+  });
+});
+
+describe('PlatformTableDurationValue', () => {
+  it('renders durations with shared tabular styling', () => {
+    const { container } = render(() => PlatformTableDurationValue({ seconds: 125 }));
+    const marker = container.querySelector('span');
+
+    expect(marker?.classList.contains('tabular-nums')).toBe(true);
+    expect(marker?.textContent).toBe('2m 5s');
   });
 });
 

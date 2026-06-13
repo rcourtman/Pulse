@@ -6,6 +6,7 @@ import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformTableDurationValue,
   PlatformTableEmptyState,
   PlatformTableRelativeTimeValue,
   PlatformTableToolbar,
@@ -55,14 +56,6 @@ const formatFailures = (availability: ResourceAvailabilityMeta | undefined): str
     return `${failures}/${threshold}`;
   }
   return String(failures);
-};
-
-const formatInterval = (availability: ResourceAvailabilityMeta | undefined): string => {
-  const seconds = availability?.pollIntervalSeconds;
-  if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds <= 0) return '—';
-  if (seconds < 60) return `${Math.round(seconds)}s`;
-  const minutes = seconds / 60;
-  return Number.isInteger(minutes) ? `${minutes}m` : `${minutes.toFixed(1)}m`;
 };
 
 export const AvailabilityChecksTable: Component<{
@@ -240,7 +233,9 @@ export const AvailabilityChecksTable: Component<{
                         <TableCell
                           class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content lg:table-cell`}
                         >
-                          {formatInterval(availability())}
+                          <PlatformTableDurationValue
+                            seconds={availability()?.pollIntervalSeconds}
+                          />
                         </TableCell>
                       </TableRow>
                     );

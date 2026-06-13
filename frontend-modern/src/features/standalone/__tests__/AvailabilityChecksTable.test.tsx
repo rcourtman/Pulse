@@ -25,7 +25,7 @@ const availabilityResource = (overrides: Partial<Resource> = {}): Resource =>
       available: true,
       latencyMillis: 7,
       lastChecked: 1_700_000_300_000,
-      pollIntervalSeconds: 30,
+      pollIntervalSeconds: 90,
       failureThreshold: 2,
     },
     ...overrides,
@@ -64,6 +64,7 @@ describe('AvailabilityChecksTable', () => {
     expect(screen.getByText('TCP 1883')).toBeInTheDocument();
     expect(screen.getByText('power-meter-01.lab.local:1883')).toBeInTheDocument();
     expect(screen.getByText('5m ago')).toBeInTheDocument();
+    expect(screen.getByText('1m 30s')).toBeInTheDocument();
     expect(screen.getByText('7 ms')).toBeInTheDocument();
   });
 
