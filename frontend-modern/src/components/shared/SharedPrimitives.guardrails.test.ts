@@ -6097,6 +6097,62 @@ describe('shared primitive guardrails', () => {
     }
   });
 
+  it('keeps platform table model metric normalization on the shared helper', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+        forbiddenPatterns?: Array<{ path?: string; patterns?: string[] }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        extensions?: string[];
+        allowedPaths?: string[];
+        ignoredPaths?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find(
+      (rule) => rule.id === 'platform-table-finite-metric-normalization',
+    );
+    const localHelperGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-table-model-local-finite-metric-helper',
+    );
+
+    expect(registeredRule?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(registeredRule?.canonical?.export).toBe('getPlatformTableFiniteMetric');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/features/standalone/agentMachineTableModel.ts',
+    ]);
+    expect(registeredRule?.forbiddenPatterns).toEqual([
+      {
+        path: 'src/features/standalone/agentMachineTableModel.ts',
+        patterns: ['const finiteMetric'],
+      },
+    ]);
+    expect(localHelperGuard?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(localHelperGuard?.canonical?.export).toBe('getPlatformTableFiniteMetric');
+    expect(localHelperGuard?.allPatterns).toEqual(['const finiteMetric']);
+    expect(localHelperGuard?.scopes).toEqual(['src/features/standalone/agentMachineTableModel.ts']);
+    expect(localHelperGuard?.extensions).toEqual(['.ts']);
+    expect(localHelperGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(localHelperGuard?.ignoredPaths ?? []).toHaveLength(0);
+
+    expect(sharedPlatformPageSource).toContain('export const getPlatformTableFiniteMetric');
+    expect(agentMachineTableModelSource).toContain('getPlatformTableFiniteMetric');
+    expect(agentMachineTableModelSource).not.toContain('const finiteMetric');
+    expect(agentMachineTableModelSource).not.toContain(
+      "typeof value === 'number' && Number.isFinite(value) ? value : undefined",
+    );
+  });
+
   it('keeps platform section navigation on the shared tabs template', () => {
     const registry = JSON.parse(sharedTemplateRegistrySource) as {
       rules?: Array<{

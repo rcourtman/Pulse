@@ -2614,6 +2614,26 @@
       ]
     },
     {
+      "id": "platform-table-finite-metric-normalization",
+      "category": "platform-table-metric",
+      "summary": "Platform table models must use the shared finite-metric normalization helper instead of carrying model-local Number.isFinite wrappers.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "getPlatformTableFiniteMetric"
+      },
+      "requiredConsumers": [{ "path": "src/features/standalone/agentMachineTableModel.ts" }],
+      "forbiddenPatterns": [
+        {
+          "path": "src/features/standalone/agentMachineTableModel.ts",
+          "patterns": ["const finiteMetric"]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "platform-error-state",
       "category": "platform-error-state",
       "summary": "Platform page and table load failures must compose PlatformErrorState instead of recreating a local EmptyState plus Refresh action.",
@@ -3980,6 +4000,25 @@
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-table-model-local-finite-metric-helper",
+      "category": "platform-table-metric",
+      "summary": "Platform table models must not recreate local finiteMetric helpers for metric normalization.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "getPlatformTableFiniteMetric"
+      },
+      "scopes": ["src/features/standalone/agentMachineTableModel.ts"],
+      "extensions": [".ts"],
+      "allPatterns": ["const finiteMetric"],
+      "legacyReason": "Retired migration debt. Platform table model-side metric normalization must use getPlatformTableFiniteMetric so table presentation validity remains shared.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "scripts/shared-template-audit.mjs"
       ]
     },

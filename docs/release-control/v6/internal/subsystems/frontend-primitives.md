@@ -2801,9 +2801,10 @@ Platform table metric fallback rendering is also shared.
 metric bar cells plus optional caller-owned fallback label/title text, and
 `getPlatformTableFiniteMetric` owns finite-number normalization for CPU and
 memory, disk, and capacity values. Docker / Podman, Kubernetes, Proxmox,
-Standalone, TrueNAS, and vSphere platform tables must compose those helpers
-instead of declaring local `metricFallback` / `finiteMetric` helpers or
-inlining centered muted dash fallback markup in metric cells.
+Standalone, TrueNAS, and vSphere platform tables and their table-model helpers
+must compose those helpers instead of declaring local `metricFallback` /
+`finiteMetric` helpers or inlining centered muted dash fallback markup in
+metric cells.
 Platform load-failure states are registry-backed as well.
 `PlatformErrorState` owns the repeated table-card error shell, warning icon,
 and Refresh action for platform page and table load failures; platform

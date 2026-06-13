@@ -1,6 +1,7 @@
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import type { HostDiskIO, HostRAIDArray, HostRAIDDevice } from '@/types/api';
 import type { Resource } from '@/types/resource';
+import { getPlatformTableFiniteMetric } from '@/features/platformPage/sharedPlatformPage';
 import { normalizeDiskArray } from '@/utils/format';
 import { asTrimmedString } from '@/utils/stringUtils';
 
@@ -114,9 +115,6 @@ const AGENT_MACHINE_SORT_DESC_DEFAULTS = new Set<AgentMachineSortKey>([
   'lastSeen',
 ]);
 
-const finiteMetric = (value: number | undefined): number | undefined =>
-  typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-
 type TemperatureReading = {
   label: string;
   value: number;
@@ -151,7 +149,7 @@ export type AgentMachineDiskIODetail = HostDiskIO;
 export type AgentMachineRaidArrayDetail = HostRAIDArray;
 
 const positiveTemperature = (value: number | undefined): number | undefined => {
-  const metric = finiteMetric(value);
+  const metric = getPlatformTableFiniteMetric(value);
   return metric !== undefined && metric > 0 ? metric : undefined;
 };
 
@@ -163,13 +161,13 @@ const getDiskUsagePercent = (disk: {
   used?: number;
   usage?: number;
 }): number | undefined => {
-  const total = finiteMetric(disk.total);
-  const used = finiteMetric(disk.used);
+  const total = getPlatformTableFiniteMetric(disk.total);
+  const used = getPlatformTableFiniteMetric(disk.used);
   if (total && total > 0 && typeof used === 'number') {
     return (used / total) * 100;
   }
 
-  const usage = finiteMetric(disk.usage);
+  const usage = getPlatformTableFiniteMetric(disk.usage);
   if (usage === undefined) return undefined;
   return usage <= 1 ? usage * 100 : usage;
 };
@@ -267,51 +265,54 @@ const flattenTemperatureSections = (
     .join('\n');
 
 const getMetricPercent = (metric: Resource['cpu'] | undefined): number | undefined =>
-  finiteMetric(metric?.current);
+  getPlatformTableFiniteMetric(metric?.current);
 
 export const getAgentMachineCpuPercent = (machine: Resource): number | undefined =>
   getMetricPercent(machine.cpu);
 
 export const getAgentMachineMemoryPercent = (machine: Resource): number | undefined => {
-  const total = finiteMetric(machine.memory?.total);
-  const used = finiteMetric(machine.memory?.used);
+  const total = getPlatformTableFiniteMetric(machine.memory?.total);
+  const used = getPlatformTableFiniteMetric(machine.memory?.used);
   if (total && total > 0 && typeof used === 'number') {
     return (used / total) * 100;
   }
-  return finiteMetric(machine.memory?.current) ?? finiteMetric(machine.agent?.memory?.usage);
+  return (
+    getPlatformTableFiniteMetric(machine.memory?.current) ??
+    getPlatformTableFiniteMetric(machine.agent?.memory?.usage)
+  );
 };
 
 export const getAgentMachineDiskPercent = (machine: Resource): number | undefined => {
   const maxDiskPercent = getMaxOperationalDiskPercent(machine);
   if (maxDiskPercent !== undefined) return maxDiskPercent;
 
-  const total = finiteMetric(machine.disk?.total);
-  const used = finiteMetric(machine.disk?.used);
+  const total = getPlatformTableFiniteMetric(machine.disk?.total);
+  const used = getPlatformTableFiniteMetric(machine.disk?.used);
   if (total && total > 0 && typeof used === 'number') {
     return (used / total) * 100;
   }
-  return finiteMetric(machine.disk?.current);
+  return getPlatformTableFiniteMetric(machine.disk?.current);
 };
 
 export const getAgentMachineNetworkTotal = (machine: Resource): number | undefined => {
-  const rx = finiteMetric(machine.network?.rxBytes);
-  const tx = finiteMetric(machine.network?.txBytes);
+  const rx = getPlatformTableFiniteMetric(machine.network?.rxBytes);
+  const tx = getPlatformTableFiniteMetric(machine.network?.txBytes);
   if (rx === undefined && tx === undefined) return undefined;
   return (rx ?? 0) + (tx ?? 0);
 };
 
 const positiveMetric = (value: number | undefined): number | undefined => {
-  const metric = finiteMetric(value);
+  const metric = getPlatformTableFiniteMetric(value);
   return metric !== undefined && metric > 0 ? metric : undefined;
 };
 
 const nonNegativeMetric = (value: number | undefined): number => {
-  const metric = finiteMetric(value);
+  const metric = getPlatformTableFiniteMetric(value);
   return metric !== undefined && metric > 0 ? metric : 0;
 };
 
 const nonNegativeFiniteMetric = (value: number | undefined): number | undefined => {
-  const metric = finiteMetric(value);
+  const metric = getPlatformTableFiniteMetric(value);
   return metric !== undefined && metric >= 0 ? metric : undefined;
 };
 
@@ -367,8 +368,8 @@ export const getAgentMachineNetworkInterfaceDetails = (
       const name = asTrimmedString(iface.name);
       const mac = asTrimmedString(iface.mac);
       const addresses = uniqueTrimmedValues(iface.addresses);
-      const rxBytes = finiteMetric(iface.rxBytes);
-      const txBytes = finiteMetric(iface.txBytes);
+      const rxBytes = getPlatformTableFiniteMetric(iface.rxBytes);
+      const txBytes = getPlatformTableFiniteMetric(iface.txBytes);
       const speedMbps = positiveMetric(iface.speedMbps);
 
       if (
@@ -396,8 +397,8 @@ export const getAgentMachineNetworkInterfaceDetails = (
   );
 
 export const getAgentMachineDiskIOTotal = (machine: Resource): number | undefined => {
-  const read = finiteMetric(machine.diskIO?.readRate);
-  const write = finiteMetric(machine.diskIO?.writeRate);
+  const read = getPlatformTableFiniteMetric(machine.diskIO?.readRate);
+  const write = getPlatformTableFiniteMetric(machine.diskIO?.writeRate);
   if (read === undefined && write === undefined) return undefined;
   return (read ?? 0) + (write ?? 0);
 };
@@ -532,7 +533,7 @@ const getAgentMachineRaidDeviceDetails = (
   (devices ?? []).reduce<HostRAIDDevice[]>((details, device, index) => {
     const deviceName = asTrimmedString(device.device);
     const state = asTrimmedString(device.state);
-    const slot = finiteMetric(device.slot);
+    const slot = getPlatformTableFiniteMetric(device.slot);
 
     if (!deviceName && !state && slot === undefined) return details;
 
