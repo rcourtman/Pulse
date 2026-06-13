@@ -1,4 +1,5 @@
 import type { Alert } from '@/types/api';
+import type { StatusIndicator, StatusIndicatorVariant } from '@/utils/status';
 
 const ALERT_SEVERITY_COMPACT_LABELS: Record<string, string> = {
   critical: 'CRIT',
@@ -6,11 +7,53 @@ const ALERT_SEVERITY_COMPACT_LABELS: Record<string, string> = {
   info: 'INFO',
 };
 
+const normalizeAlertSeverity = (level?: Alert['level'] | string | null): string =>
+  String(level ?? '')
+    .trim()
+    .toLowerCase();
+
+export function formatAlertSeverityLabel(
+  level?: Alert['level'] | string | null,
+  fallback = 'Info',
+): string {
+  const normalized = normalizeAlertSeverity(level);
+  if (!normalized) return fallback;
+  return normalized
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+export function getAlertSeverityIndicatorVariant(
+  level?: Alert['level'] | string | null,
+): StatusIndicatorVariant {
+  switch (normalizeAlertSeverity(level)) {
+    case 'critical':
+      return 'danger';
+    case 'warning':
+      return 'warning';
+    case 'info':
+    default:
+      return 'muted';
+  }
+}
+
+export function getAlertSeverityIndicator(
+  level?: Alert['level'] | string | null,
+  bucket?: Alert['level'] | string | null,
+): StatusIndicator {
+  return {
+    variant: getAlertSeverityIndicatorVariant(bucket ?? level),
+    label: formatAlertSeverityLabel(level ?? bucket),
+  };
+}
+
 export function getAlertSeverityBadgeClass(level: Alert['level'] | string): string {
   const base =
     'inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase';
 
-  switch (level) {
+  switch (normalizeAlertSeverity(level)) {
     case 'critical':
       return `${base} bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300`;
     case 'warning':
@@ -21,7 +64,7 @@ export function getAlertSeverityBadgeClass(level: Alert['level'] | string): stri
 }
 
 export function getAlertSeverityTextClass(level: Alert['level'] | string): string {
-  switch (level) {
+  switch (normalizeAlertSeverity(level)) {
     case 'critical':
       return 'text-red-600 dark:text-red-400';
     case 'warning':
@@ -32,11 +75,12 @@ export function getAlertSeverityTextClass(level: Alert['level'] | string): strin
 }
 
 export function getAlertSeverityCompactLabel(level: Alert['level'] | string): string {
-  return ALERT_SEVERITY_COMPACT_LABELS[level] || String(level).toUpperCase();
+  const normalized = normalizeAlertSeverity(level);
+  return ALERT_SEVERITY_COMPACT_LABELS[normalized] || String(level).toUpperCase();
 }
 
 export function getAlertSeverityDotClass(level: Alert['level'] | string): string {
-  switch (level) {
+  switch (normalizeAlertSeverity(level)) {
     case 'critical':
       return 'h-2 w-2 rounded-full bg-red-500';
     case 'warning':

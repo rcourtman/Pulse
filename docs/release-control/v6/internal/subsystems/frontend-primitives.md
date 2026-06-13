@@ -2417,6 +2417,14 @@ presentation for product surfaces that display state rather than toggle it.
 Product components must compose `StatusIndicatorBadge` instead of calling
 `getStatusIndicatorBadgeToneClasses` directly; low-level status utilities may
 still expose the tone mapping for that primitive and utility-level tests.
+Platform alert severity indicators are a governed specialization of that same
+primitive family. `frontend-modern/src/components/shared/AlertSeverityBadge.tsx`
+owns the alert severity badge and dot shells, while
+`frontend-modern/src/utils/alertSeverityPresentation.ts` owns alert severity
+label formatting and severity-bucket-to-status-indicator mapping. Docker,
+Kubernetes, TrueNAS, vSphere, and future platform alert tables must compose
+`AlertSeverityBadge` and `AlertSeverityDot`; they must not recreate
+`severityVariant`, `severityTextClass`, or severity badge spans locally.
 Read-only metadata badges follow the same primitive-owned shell rule.
 `frontend-modern/src/components/shared/MetadataBadge.tsx` owns filled and
 outlined appearances, compact sizing, shape, typed tone vocabulary, fit

@@ -1,12 +1,35 @@
 import { describe, expect, it } from 'vitest';
 import {
+  formatAlertSeverityLabel,
+  getAlertSeverityIndicator,
   getAlertSeverityBadgeClass,
   getAlertSeverityCompactLabel,
   getAlertSeverityDotClass,
+  getAlertSeverityIndicatorVariant,
   getAlertSeverityTextClass,
 } from '@/utils/alertSeverityPresentation';
 
 describe('alertSeverityPresentation', () => {
+  it('formats provider severity labels predictably for platform alert rows', () => {
+    expect(formatAlertSeverityLabel('critical')).toBe('Critical');
+    expect(formatAlertSeverityLabel('restart_loop')).toBe('Restart Loop');
+    expect(formatAlertSeverityLabel('')).toBe('Info');
+  });
+
+  it('maps alert severity buckets to status indicator variants', () => {
+    expect(getAlertSeverityIndicatorVariant('critical')).toBe('danger');
+    expect(getAlertSeverityIndicatorVariant('warning')).toBe('warning');
+    expect(getAlertSeverityIndicatorVariant('info')).toBe('muted');
+    expect(getAlertSeverityIndicatorVariant('maintenance')).toBe('muted');
+  });
+
+  it('uses bucket tone and provider label for shared alert indicators', () => {
+    expect(getAlertSeverityIndicator('restart_loop', 'warning')).toEqual({
+      variant: 'warning',
+      label: 'Restart Loop',
+    });
+  });
+
   it('maps critical alerts to danger styling', () => {
     expect(getAlertSeverityBadgeClass('critical')).toContain('red-100');
   });

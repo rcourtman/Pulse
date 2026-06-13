@@ -1,6 +1,6 @@
 import { For, Show, type Component, type JSX } from 'solid-js';
+import { AlertSeverityBadge, AlertSeverityDot } from '@/components/shared/AlertSeverityBadge';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
-import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import {
   PlatformTableEmptyState,
@@ -16,7 +16,6 @@ import {
   createPlatformResourceDetailState,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
-import type { StatusIndicatorVariant } from '@/utils/status';
 import {
   filterTrueNASIncidents,
   type TrueNASIncidentRow,
@@ -32,6 +31,7 @@ import {
 } from '@/components/shared/DetailSectionTable';
 import type { Resource, ResourceType } from '@/types/resource';
 import { getAlertFilteredEmptyState } from '@/utils/alertOverviewPresentation';
+import { formatAlertSeverityLabel } from '@/utils/alertSeverityPresentation';
 
 const TRUENAS_INCIDENT_STATUS_OPTIONS: PlatformTableFilterOption<TrueNASIncidentSeverityFilter>[] =
   [
@@ -40,36 +40,6 @@ const TRUENAS_INCIDENT_STATUS_OPTIONS: PlatformTableFilterOption<TrueNASIncident
     { value: 'warning', label: 'Warning', tone: 'warning' },
     { value: 'info', label: 'Info', tone: 'success' },
   ];
-
-const severityVariant = (
-  severity: TrueNASIncidentRow['severityBucket'],
-): StatusIndicatorVariant => {
-  switch (severity) {
-    case 'critical':
-      return 'danger';
-    case 'warning':
-      return 'warning';
-    case 'info':
-      return 'muted';
-  }
-};
-
-const severityLabel = (severity: string): string => {
-  const normalized = severity.trim();
-  if (!normalized) return 'Info';
-  return normalized.charAt(0).toUpperCase() + normalized.slice(1).toLowerCase();
-};
-
-const severityTextClass = (severity: TrueNASIncidentRow['severityBucket']): string => {
-  switch (severity) {
-    case 'critical':
-      return 'text-red-700 dark:text-red-300';
-    case 'warning':
-      return 'text-amber-700 dark:text-amber-300';
-    case 'info':
-      return 'text-muted';
-  }
-};
 
 const formatResourceType = (type: ResourceType): string => {
   switch (type) {
@@ -145,7 +115,7 @@ const buildAlertDetailSections = (incident: TrueNASIncidentRow): AlertDetailSect
     {
       label: 'Alert',
       rows: compactDetailRows([
-        detailRow('Severity', severityLabel(incident.severity), {
+        detailRow('Severity', formatAlertSeverityLabel(incident.severity), {
           tone: alertTone(incident.severityBucket),
         }),
         detailRow('Summary', incident.summary),
@@ -184,7 +154,9 @@ const AlertDetailTable: Component<{ incident: TrueNASIncidentRow; onClose: () =>
     testId="truenas-alert-detail"
     detailFor={props.incident.id}
     title="Alert detail"
-    summary={`${severityLabel(props.incident.severity)} · ${formatCode(props.incident.code)}`}
+    summary={`${formatAlertSeverityLabel(props.incident.severity)} · ${formatCode(
+      props.incident.code,
+    )}`}
     sections={buildAlertDetailSections(props.incident)}
     detailAttributes={{ 'data-truenas-alert-detail-for': props.incident.id }}
     onClose={props.onClose}
@@ -299,10 +271,10 @@ export const TrueNASAlertsTable: Component<{
                                 controlsId={detailRowId()}
                                 onToggle={() => drawer.toggle(incident)}
                               />
-                              <StatusDot
+                              <AlertSeverityDot
                                 size="sm"
-                                variant={severityVariant(incident.severityBucket)}
-                                title={severityLabel(incident.severity)}
+                                severity={incident.severity}
+                                bucket={incident.severityBucket}
                               />
                               <div class="min-w-0">
                                 <div
@@ -321,13 +293,10 @@ export const TrueNASAlertsTable: Component<{
                             </div>
                           </TableCell>
                           <TableCell class={getPlatformTableCellClassForKind('badge')}>
-                            <span
-                              class={`text-[11px] font-semibold ${severityTextClass(
-                                incident.severityBucket,
-                              )}`}
-                            >
-                              {severityLabel(incident.severity)}
-                            </span>
+                            <AlertSeverityBadge
+                              severity={incident.severity}
+                              bucket={incident.severityBucket}
+                            />
                           </TableCell>
                           <TableCell class={`${getPlatformTableCellClassForKind('text')}`}>
                             <span class="block truncate text-base-content" title={incident.summary}>

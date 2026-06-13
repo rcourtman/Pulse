@@ -51,6 +51,7 @@ import loadingSpinnerSource from '@/components/shared/LoadingSpinner.tsx?raw';
 import statusBadgeSource from '@/components/shared/StatusBadge.tsx?raw';
 import statusBadgeModelSource from '@/components/shared/statusBadgeModel.ts?raw';
 import statusIndicatorBadgeSource from '@/components/shared/StatusIndicatorBadge.tsx?raw';
+import alertSeverityBadgeSource from '@/components/shared/AlertSeverityBadge.tsx?raw';
 import metadataBadgeSource from '@/components/shared/MetadataBadge.tsx?raw';
 import organizationBadgesSource from '@/components/shared/OrganizationBadges.tsx?raw';
 import discoveryReadinessBadgeSource from '@/components/shared/DiscoveryReadinessBadge.tsx?raw';
@@ -111,6 +112,7 @@ import sharedTemplateRegistrySource from '../../../scripts/shared-template-regis
 import discoveryTabSource from '@/components/Discovery/DiscoveryTab.tsx?raw';
 import emailProviderSelectSource from '@/components/Alerts/EmailProviderSelect.tsx?raw';
 import incidentTimelinePanelSource from '@/components/Alerts/IncidentTimelinePanel.tsx?raw';
+import alertSeverityPresentationSource from '@/utils/alertSeverityPresentation.ts?raw';
 import thresholdsTableDockerIgnoredPrefixesSectionSource from '@/components/Alerts/ThresholdsTableDockerIgnoredPrefixesSection.tsx?raw';
 import webhookConfigFormSource from '@/components/Alerts/WebhookConfigForm.tsx?raw';
 import reportMergeModalSource from '@/components/Infrastructure/ReportMergeModal.tsx?raw';
@@ -1668,6 +1670,103 @@ describe('shared primitive guardrails', () => {
     expect(patrolIntelligenceSummarySource).not.toContain(
       'inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]',
     );
+  });
+
+  it('keeps platform alert severity indicators on the shared severity badge primitive', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+        forbiddenPatterns?: Array<{ path?: string; patterns?: string[] }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        allowedPaths?: string[];
+        ignoredPaths?: string[];
+      }>;
+      requiredPatternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        triggerPatterns?: string[];
+        requiredPatterns?: string[];
+        scopes?: string[];
+        allowedPaths?: string[];
+        ignoredPaths?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find(
+      (rule) => rule.id === 'platform-alert-severity-indicator-shell',
+    );
+    const localHelperGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-alert-severity-local-helper',
+    );
+    const requiredGuard = registry.requiredPatternGuards?.find(
+      (guard) => guard.id === 'platform-alert-severity-indicator-required',
+    );
+    const alertTableConsumerPaths = [
+      'src/features/docker/DockerAlertsTable.tsx',
+      'src/features/kubernetes/KubernetesAlertsTable.tsx',
+      'src/features/truenas/TrueNASAlertsTable.tsx',
+      'src/features/vmware/VsphereAlertsTable.tsx',
+    ];
+
+    expect(registeredRule?.canonical?.path).toBe('src/components/shared/AlertSeverityBadge.tsx');
+    expect(registeredRule?.canonical?.export).toBe('AlertSeverityBadge');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
+      alertTableConsumerPaths,
+    );
+    expect(registeredRule?.forbiddenPatterns).toEqual(
+      alertTableConsumerPaths.map((path) => ({
+        path,
+        patterns: ['severityVariant', 'severityTextClass'],
+      })),
+    );
+    expect(localHelperGuard?.canonical?.path).toBe('src/components/shared/AlertSeverityBadge.tsx');
+    expect(localHelperGuard?.canonical?.export).toBe('AlertSeverityBadge');
+    expect(localHelperGuard?.allPatterns).toEqual(['severityVariant', 'severityTextClass']);
+    expect(localHelperGuard?.scopes).toEqual([
+      'src/features/docker',
+      'src/features/kubernetes',
+      'src/features/truenas',
+      'src/features/vmware',
+    ]);
+    expect(localHelperGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(localHelperGuard?.ignoredPaths ?? []).toHaveLength(0);
+    expect(requiredGuard?.canonical?.path).toBe('src/components/shared/AlertSeverityBadge.tsx');
+    expect(requiredGuard?.canonical?.export).toBe('AlertSeverityBadge');
+    expect(requiredGuard?.triggerPatterns).toEqual([
+      'severityBucket',
+      'IncidentRow',
+      "getPlatformTableCellClassForKind('badge')",
+    ]);
+    expect(requiredGuard?.requiredPatterns).toEqual(['AlertSeverityBadge', 'AlertSeverityDot']);
+    expect(requiredGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(requiredGuard?.ignoredPaths ?? []).toHaveLength(0);
+
+    expect(alertSeverityBadgeSource).toContain('StatusIndicatorBadge');
+    expect(alertSeverityBadgeSource).toContain('StatusDot');
+    expect(alertSeverityBadgeSource).toContain('getAlertSeverityIndicator');
+    expect(alertSeverityPresentationSource).toContain('getAlertSeverityIndicatorVariant');
+    expect(alertSeverityPresentationSource).toContain('formatAlertSeverityLabel');
+
+    for (const source of [
+      dockerAlertsTableSource,
+      kubernetesAlertsTableSource,
+      truenasAlertsTableSource,
+      vsphereAlertsTableSource,
+    ]) {
+      expect(source).toContain('AlertSeverityBadge');
+      expect(source).toContain('AlertSeverityDot');
+      expect(source).toContain('formatAlertSeverityLabel');
+      expect(source).not.toContain('severityVariant');
+      expect(source).not.toContain('severityTextClass');
+      expect(source).not.toContain('text-red-700 dark:text-red-300');
+      expect(source).not.toContain('text-amber-700 dark:text-amber-300');
+    }
   });
 
   it('keeps metadata badges on shared badge primitives', () => {

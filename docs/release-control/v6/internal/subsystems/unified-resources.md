@@ -1777,6 +1777,14 @@ ResourceDetailDrawer may own which actions are available and how they call the
 resource state, but Assistant, copy-context, close, and future drawer-header
 actions must compose the shared Button drawer-header action primitives instead
 of restoring resource-drawer-local button classes,
+and platform alert tables use the same dependency rule for severity
+presentation: Docker, Kubernetes, TrueNAS, and vSphere incident rows may own
+which incidents exist and which native detail rows are shown, but visible
+severity dots, badges, and severity label formatting must compose
+`AlertSeverityDot`, `AlertSeverityBadge`, and
+`formatAlertSeverityLabel` from the frontend-primitives-owned shared path
+instead of restoring table-local `severityVariant`, `severityTextClass`, or
+severity-label helpers,
 and local operator identity labels now split from governed detail summaries:
 infrastructure tables, selectors, links, and drawer headings must preserve the
 canonical local instance identity (`displayName`, canonical display name,

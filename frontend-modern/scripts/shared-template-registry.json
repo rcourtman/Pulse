@@ -728,6 +728,45 @@
       ]
     },
     {
+      "id": "platform-alert-severity-indicator-shell",
+      "category": "status-indicator",
+      "summary": "Platform alert tables must compose AlertSeverityBadge and AlertSeverityDot for shared severity labels, tone mapping, and status-indicator rendering instead of recreating severity helpers locally.",
+      "canonical": {
+        "path": "src/components/shared/AlertSeverityBadge.tsx",
+        "export": "AlertSeverityBadge"
+      },
+      "requiredConsumers": [
+        { "path": "src/features/docker/DockerAlertsTable.tsx" },
+        { "path": "src/features/kubernetes/KubernetesAlertsTable.tsx" },
+        { "path": "src/features/truenas/TrueNASAlertsTable.tsx" },
+        { "path": "src/features/vmware/VsphereAlertsTable.tsx" }
+      ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/features/docker/DockerAlertsTable.tsx",
+          "patterns": ["severityVariant", "severityTextClass"]
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesAlertsTable.tsx",
+          "patterns": ["severityVariant", "severityTextClass"]
+        },
+        {
+          "path": "src/features/truenas/TrueNASAlertsTable.tsx",
+          "patterns": ["severityVariant", "severityTextClass"]
+        },
+        {
+          "path": "src/features/vmware/VsphereAlertsTable.tsx",
+          "patterns": ["severityVariant", "severityTextClass"]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/AlertSeverityBadge.test.tsx",
+        "src/utils/__tests__/alertSeverityPresentation.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "metadata-badge-shell",
       "category": "metadata-badge",
       "summary": "Read-only metadata chips must compose MetadataBadge so size, shape, tone vocabulary, fit behavior, and whitespace handling stay shared instead of being copied as page-local pill spans.",
@@ -1502,6 +1541,31 @@
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "src/components/shared/StatusIndicatorBadge.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-alert-severity-local-helper",
+      "category": "status-indicator",
+      "summary": "Platform alert tables must not recreate severityVariant/severityTextClass helpers; alert severity tone and label presentation belongs to AlertSeverityBadge and alertSeverityPresentation.",
+      "canonical": {
+        "path": "src/components/shared/AlertSeverityBadge.tsx",
+        "export": "AlertSeverityBadge"
+      },
+      "scopes": [
+        "src/features/docker",
+        "src/features/kubernetes",
+        "src/features/truenas",
+        "src/features/vmware"
+      ],
+      "extensions": [".tsx"],
+      "allPatterns": ["severityVariant", "severityTextClass"],
+      "legacyReason": "Retired migration debt. Platform alert rows must compose AlertSeverityBadge and AlertSeverityDot instead of page-local severity tone helpers.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/AlertSeverityBadge.test.tsx",
         "scripts/shared-template-audit.mjs"
       ]
     },
@@ -2355,6 +2419,35 @@
       "allowedPaths": [],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-alert-severity-indicator-required",
+      "category": "status-indicator",
+      "summary": "Feature alert tables with severityBucket-driven platform rows must compose AlertSeverityBadge and AlertSeverityDot so new platform alert tables cannot invent local severity indicators.",
+      "canonical": {
+        "path": "src/components/shared/AlertSeverityBadge.tsx",
+        "export": "AlertSeverityBadge"
+      },
+      "scopes": [
+        "src/features/docker",
+        "src/features/kubernetes",
+        "src/features/truenas",
+        "src/features/vmware"
+      ],
+      "extensions": [".tsx"],
+      "triggerPatterns": [
+        "severityBucket",
+        "IncidentRow",
+        "getPlatformTableCellClassForKind('badge')"
+      ],
+      "requiredPatterns": ["AlertSeverityBadge", "AlertSeverityDot"],
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/AlertSeverityBadge.test.tsx",
         "scripts/shared-template-audit.mjs"
       ]
     },

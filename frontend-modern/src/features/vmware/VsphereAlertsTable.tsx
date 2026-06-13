@@ -7,8 +7,8 @@ import {
   type DetailSection,
   type DetailValueTone,
 } from '@/components/shared/DetailSectionTable';
+import { AlertSeverityBadge, AlertSeverityDot } from '@/components/shared/AlertSeverityBadge';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
-import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { filterChipStatusDot } from '@/components/shared/FilterBar';
 import {
@@ -26,8 +26,8 @@ import {
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { ResourceType } from '@/types/resource';
-import type { StatusIndicatorVariant } from '@/utils/status';
 import { getAlertFilteredEmptyState } from '@/utils/alertOverviewPresentation';
+import { formatAlertSeverityLabel } from '@/utils/alertSeverityPresentation';
 import {
   filterVmwareIncidents,
   type VmwareIncidentRow,
@@ -55,34 +55,6 @@ const VSPHERE_INCIDENT_STATUS_OPTIONS: PlatformTableFilterOption<VmwareIncidentS
     leading: filterChipStatusDot('bg-emerald-500'),
   },
 ];
-
-const severityVariant = (severity: VmwareIncidentRow['severityBucket']): StatusIndicatorVariant => {
-  switch (severity) {
-    case 'critical':
-      return 'danger';
-    case 'warning':
-      return 'warning';
-    case 'info':
-      return 'muted';
-  }
-};
-
-const severityTextClass = (severity: VmwareIncidentRow['severityBucket']): string => {
-  switch (severity) {
-    case 'critical':
-      return 'text-red-700 dark:text-red-300';
-    case 'warning':
-      return 'text-amber-700 dark:text-amber-300';
-    case 'info':
-      return 'text-muted';
-  }
-};
-
-const severityLabel = (severity: string): string => {
-  const normalized = severity.trim();
-  if (!normalized) return 'Info';
-  return normalized.charAt(0).toUpperCase() + normalized.slice(1).toLowerCase();
-};
 
 const formatResourceType = (type: ResourceType): string => {
   switch (type) {
@@ -159,7 +131,7 @@ const buildAlertDetailSections = (incident: VmwareIncidentRow): AlertDetailSecti
     {
       label: 'Signal',
       rows: compactDetailRows([
-        detailRow('Severity', severityLabel(incident.severity), {
+        detailRow('Severity', formatAlertSeverityLabel(incident.severity), {
           tone: alertTone(incident.severityBucket),
         }),
         detailRow('Summary', incident.summary),
@@ -199,7 +171,9 @@ const AlertDetail: Component<{ incident: VmwareIncidentRow; onClose: () => void 
     testId="vsphere-alert-detail"
     detailFor={props.incident.id}
     title="vSphere health detail"
-    summary={`${severityLabel(props.incident.severity)} · ${formatCode(props.incident.code)}`}
+    summary={`${formatAlertSeverityLabel(props.incident.severity)} · ${formatCode(
+      props.incident.code,
+    )}`}
     sections={buildAlertDetailSections(props.incident)}
     detailAttributes={{ 'data-vsphere-alert-detail-for': props.incident.id }}
     onClose={props.onClose}
@@ -314,10 +288,10 @@ export const VsphereAlertsTable: Component<{
                                 controlsId={detailRowId()}
                                 onToggle={() => drawer.toggle(incident)}
                               />
-                              <StatusDot
+                              <AlertSeverityDot
                                 size="sm"
-                                variant={severityVariant(incident.severityBucket)}
-                                title={severityLabel(incident.severity)}
+                                severity={incident.severity}
+                                bucket={incident.severityBucket}
                               />
                               <div class="min-w-0">
                                 <div
@@ -336,13 +310,10 @@ export const VsphereAlertsTable: Component<{
                             </div>
                           </TableCell>
                           <TableCell class={getPlatformTableCellClassForKind('badge')}>
-                            <span
-                              class={`text-[11px] font-semibold ${severityTextClass(
-                                incident.severityBucket,
-                              )}`}
-                            >
-                              {severityLabel(incident.severity)}
-                            </span>
+                            <AlertSeverityBadge
+                              severity={incident.severity}
+                              bucket={incident.severityBucket}
+                            />
                           </TableCell>
                           <TableCell class={getPlatformTableCellClassForKind('text')}>
                             <span class="block truncate text-base-content" title={incident.summary}>
