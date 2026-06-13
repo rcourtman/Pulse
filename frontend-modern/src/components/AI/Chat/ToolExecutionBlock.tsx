@@ -8,15 +8,14 @@ import {
   For,
   createUniqueId,
 } from 'solid-js';
-import CheckIcon from 'lucide-solid/icons/check';
 import CheckCircleIcon from 'lucide-solid/icons/check-circle';
 import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
 import ClockIcon from 'lucide-solid/icons/clock';
-import CopyIcon from 'lucide-solid/icons/copy';
 import LoaderCircleIcon from 'lucide-solid/icons/loader-circle';
 import XCircleIcon from 'lucide-solid/icons/x-circle';
 import type { ToolExecution, PendingTool, ToolCancellation } from './types';
 import { copyToClipboard } from '@/utils/clipboard';
+import { CopyValueButton } from '@/components/shared/Button';
 import { getToolCallResultTextClass } from '@/utils/patrolRunPresentation';
 import {
   getToolLabel,
@@ -186,9 +185,8 @@ const VisibleToolCommandPreview: Component<ToolCommandPreviewProps> = (props) =>
   const copyLabel = () => (copied() ? 'Copied tool command' : 'Copy tool command');
   const commandText = () => props.preview.replace(/^\$\s*/, '').trim() || props.preview.trim();
 
-  const copyCommand = async (event: MouseEvent) => {
-    event.stopPropagation();
-    const text = commandText();
+  const copyCommand = async (value: string) => {
+    const text = value.trim();
     if (!text) return;
     const ok = await copyToClipboard(text);
     if (!ok) return;
@@ -214,19 +212,18 @@ const VisibleToolCommandPreview: Component<ToolCommandPreviewProps> = (props) =>
       >
         {props.preview}
       </code>
-      <button
-        type="button"
-        class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-border-subtle bg-surface text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-        onClick={(event) => void copyCommand(event)}
+      <CopyValueButton
+        value={commandText()}
+        copied={copied()}
+        onCopyValue={copyCommand}
+        label={copyLabel()}
+        variant="neutral"
+        size="sm"
+        stopPropagation
+        class="mt-0.5"
         onMouseDown={(event) => event.stopPropagation()}
         onKeyDown={handleKeyDown}
-        title={copyLabel()}
-        aria-label={copyLabel()}
-      >
-        <Show when={copied()} fallback={<CopyIcon class="h-3 w-3" aria-hidden="true" />}>
-          <CheckIcon class="h-3 w-3 text-emerald-600" aria-hidden="true" />
-        </Show>
-      </button>
+      />
     </div>
   );
 };
@@ -303,20 +300,15 @@ const ToolDetailsPanel: Component<ToolDetailsPanelProps> = (props) => {
               <div class="text-[9px] font-semibold uppercase tracking-wide text-muted">
                 {detailTitle(detail.kind)}
               </div>
-              <button
-                type="button"
-                class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-border-subtle bg-surface text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                onClick={() => void copyDetail(detail.kind, detail.text)}
-                title={detailCopyLabel(detail.kind)}
-                aria-label={detailCopyLabel(detail.kind)}
-              >
-                <Show
-                  when={copiedDetail() === detail.kind}
-                  fallback={<CopyIcon class="h-3 w-3" aria-hidden="true" />}
-                >
-                  <CheckIcon class="h-3 w-3 text-emerald-600" aria-hidden="true" />
-                </Show>
-              </button>
+              <CopyValueButton
+                value={detail.text}
+                copied={copiedDetail() === detail.kind}
+                onCopyValue={(value) => copyDetail(detail.kind, value)}
+                label={detailCopyLabel(detail.kind)}
+                variant="neutral"
+                size="sm"
+                stopPropagation
+              />
             </div>
             <pre class={detailPreClass(detail.kind)}>{detail.text}</pre>
           </div>

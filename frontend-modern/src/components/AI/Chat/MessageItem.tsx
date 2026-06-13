@@ -9,10 +9,8 @@ import {
   createSignal,
   onCleanup,
 } from 'solid-js';
-import CheckIcon from 'lucide-solid/icons/check';
 import CircleAlertIcon from 'lucide-solid/icons/circle-alert';
 import ClockIcon from 'lucide-solid/icons/clock';
-import CopyIcon from 'lucide-solid/icons/copy';
 import CpuIcon from 'lucide-solid/icons/cpu';
 import PencilIcon from 'lucide-solid/icons/pencil';
 import RotateCcwIcon from 'lucide-solid/icons/rotate-ccw';
@@ -44,6 +42,7 @@ import type {
 } from './types';
 import { AI_CHAT_ASSISTANT_MESSAGE_LABEL } from '@/utils/aiChatPresentation';
 import { formatAIModelRouteLabel } from '@/utils/aiProviderPresentation';
+import { ActionIconButton, CopyValueButton } from '@/components/shared/Button';
 import { copyToClipboard } from '@/utils/clipboard';
 
 interface MessageItemProps {
@@ -523,9 +522,8 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
     return getAssistantAnswerText(props.message);
   };
   const canCopy = () => !props.message.isStreaming && !!copyableMessageText();
-  const copyMessage = async (event?: MouseEvent) => {
-    event?.stopPropagation();
-    const text = copyableMessageText();
+  const copyMessage = async (value: string) => {
+    const text = value.trim();
     if (!text) return;
     const ok = await copyToClipboard(text);
     if (!ok) return;
@@ -543,17 +541,15 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
       <Show when={isUser()}>
         <div class="group flex max-w-[85%] items-start justify-end gap-2">
           <Show when={canCopy()}>
-            <button
-              type="button"
-              onClick={(event) => void copyMessage(event)}
-              aria-label={copyButtonLabel()}
-              title={copyButtonLabel()}
-              class="mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-subtle bg-surface text-muted opacity-0 shadow-sm transition-opacity hover:text-base-content focus:opacity-100 group-hover:opacity-100"
-            >
-              <Show when={copied()} fallback={<CopyIcon class="h-3.5 w-3.5" aria-hidden="true" />}>
-                <CheckIcon class="h-3.5 w-3.5 text-emerald-500" aria-hidden="true" />
-              </Show>
-            </button>
+            <CopyValueButton
+              value={copyableMessageText()}
+              copied={copied()}
+              onCopyValue={copyMessage}
+              label={copyButtonLabel()}
+              size="md"
+              stopPropagation
+              class="mt-1 opacity-0 shadow-sm transition-opacity focus:opacity-100 group-hover:opacity-100"
+            />
           </Show>
           <div
             class={`min-w-0 px-4 py-2.5 rounded-md rounded-br-sm shadow-sm ${
@@ -581,26 +577,24 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                   )}
                 </Show>
                 <Show when={props.onEditQueued}>
-                  <button
-                    type="button"
+                  <ActionIconButton
                     onClick={() => props.onEditQueued?.()}
-                    aria-label="Edit queued follow-up"
-                    title="Edit queued follow-up"
-                    class="inline-flex h-5 w-5 items-center justify-center rounded text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 focus:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:text-blue-200 dark:hover:bg-blue-900/60"
+                    label="Edit queued follow-up"
+                    tone="accentGhost"
+                    size="2xs"
                   >
                     <PencilIcon class="h-3 w-3" aria-hidden="true" />
-                  </button>
+                  </ActionIconButton>
                 </Show>
                 <Show when={props.onCancelQueued}>
-                  <button
-                    type="button"
+                  <ActionIconButton
                     onClick={() => props.onCancelQueued?.()}
-                    aria-label="Remove queued follow-up"
-                    title="Remove queued follow-up"
-                    class="inline-flex h-5 w-5 items-center justify-center rounded text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 focus:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:text-blue-200 dark:hover:bg-blue-900/60"
+                    label="Remove queued follow-up"
+                    tone="accentGhost"
+                    size="2xs"
                   >
                     <XIcon class="h-3 w-3" aria-hidden="true" />
-                  </button>
+                  </ActionIconButton>
                 </Show>
               </div>
             </Show>
@@ -656,20 +650,15 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                 </span>
               </Show>
               <Show when={canCopy()}>
-                <button
-                  type="button"
-                  onClick={(event) => void copyMessage(event)}
-                  aria-label={copyButtonLabel()}
-                  title={copyButtonLabel()}
-                  class="ml-auto inline-flex h-7 w-7 items-center justify-center rounded-md border border-border-subtle bg-surface text-muted opacity-0 shadow-sm transition-opacity hover:text-base-content focus:opacity-100 group-hover:opacity-100"
-                >
-                  <Show
-                    when={copied()}
-                    fallback={<CopyIcon class="h-3.5 w-3.5" aria-hidden="true" />}
-                  >
-                    <CheckIcon class="h-3.5 w-3.5 text-emerald-500" aria-hidden="true" />
-                  </Show>
-                </button>
+                <CopyValueButton
+                  value={copyableMessageText()}
+                  copied={copied()}
+                  onCopyValue={copyMessage}
+                  label={copyButtonLabel()}
+                  size="md"
+                  stopPropagation
+                  class="ml-auto opacity-0 shadow-sm transition-opacity focus:opacity-100 group-hover:opacity-100"
+                />
               </Show>
             </div>
 

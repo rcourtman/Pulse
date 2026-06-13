@@ -51,6 +51,7 @@ export interface CopyValueButtonProps extends Omit<
   label: string;
   variant?: CopyValueButtonVariant;
   size?: CopyValueButtonSize;
+  stopPropagation?: boolean;
   class?: string;
   children?: JSX.Element;
 }
@@ -179,6 +180,7 @@ export function CopyValueButton(props: CopyValueButtonProps) {
     'label',
     'variant',
     'size',
+    'stopPropagation',
     'class',
     'children',
     'disabled',
@@ -197,7 +199,8 @@ export function CopyValueButton(props: CopyValueButtonProps) {
         class: local.class,
       })}
       disabled={local.disabled || !trimmedValue()}
-      onClick={() => {
+      onClick={(event) => {
+        if (local.stopPropagation) event.stopPropagation();
         const value = trimmedValue();
         if (!value) return;
         void local.onCopyValue(value);

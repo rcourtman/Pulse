@@ -108,7 +108,10 @@ handlers, but their visible button chrome must compose the shared
 Header utilities, session row controls, transcript fallback close/download
 controls, activity-dock queued follow-up actions, composer send, footer
 help/route actions, and compact dismiss controls must not recreate local
-h-6/h-7/h-8/h-9 icon-button class shells.
+h-5/h-6/h-7/h-8/h-9 icon-button class shells. Message and tool transcript copy
+controls own Assistant copy targets and copied-state timing, but their visible
+copied-state icon chrome must compose `CopyValueButton` from the same shared
+button primitive boundary rather than message- or tool-local copy/check shells.
 
 Assistant live workflow status follows OpenCode's current-state timeline
 model. CANONICAL (supersedes the per-row transcript-status rules elsewhere in

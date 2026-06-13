@@ -191,6 +191,7 @@ describe('Button', () => {
 
   it('renders copy-value icon and chip buttons through the shared primitive', () => {
     const onCopy = vi.fn();
+    const onParentClick = vi.fn();
 
     render(() => (
       <>
@@ -211,6 +212,14 @@ describe('Button', () => {
           <span>8443/tcp</span>
         </CopyValueButton>
         <CopyValueButton value=" " onCopyValue={onCopy} label="Copy blank" />
+        <div onClick={onParentClick}>
+          <CopyValueButton
+            value="nested"
+            onCopyValue={onCopy}
+            label="Copy nested"
+            stopPropagation
+          />
+        </div>
       </>
     ));
 
@@ -225,6 +234,10 @@ describe('Button', () => {
     expect(chipButton).toHaveClass('text-[10px]');
 
     expect(screen.getByRole('button', { name: 'Copy blank' })).toBeDisabled();
+
+    screen.getByRole('button', { name: 'Copy nested' }).click();
+    expect(onCopy).toHaveBeenCalledWith('nested');
+    expect(onParentClick).not.toHaveBeenCalled();
   });
 
   it('renders compact action icon buttons through the shared primitive', () => {
@@ -232,6 +245,9 @@ describe('Button', () => {
 
     render(() => (
       <>
+        <ActionIconButton label="Queued edit" tone="accentGhost" size="2xs">
+          <span aria-hidden="true">Q</span>
+        </ActionIconButton>
         <ActionIconButton label="Edit thresholds" tone="accent" size="xs" onClick={onClick}>
           <span aria-hidden="true">E</span>
         </ActionIconButton>
@@ -266,6 +282,7 @@ describe('Button', () => {
     expect(button).toHaveClass('w-6');
     expect(button).toHaveClass('bg-blue-50');
 
+    expect(screen.getByRole('button', { name: 'Queued edit' })).toHaveClass('h-5');
     expect(screen.getByRole('button', { name: 'Open help' })).toHaveClass('border-border');
     expect(screen.getByRole('button', { name: 'Notifications enabled' })).toHaveClass(
       'bg-surface-alt',

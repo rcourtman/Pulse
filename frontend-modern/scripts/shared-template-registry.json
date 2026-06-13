@@ -1258,6 +1258,7 @@
         { "path": "src/components/Alerts/AlertResourceTableRow.tsx" },
         { "path": "src/components/Alerts/ResourceTable.tsx" },
         { "path": "src/components/AI/Chat/index.tsx" },
+        { "path": "src/components/AI/Chat/MessageItem.tsx" },
         { "path": "src/components/Settings/RolesPanel.tsx" },
         { "path": "src/components/Settings/SSOProvidersPanel.tsx" },
         { "path": "src/features/standalone/AgentsMachinesTable.tsx" }
@@ -1308,6 +1309,12 @@
           ]
         },
         {
+          "path": "src/components/AI/Chat/MessageItem.tsx",
+          "patterns": [
+            "inline-flex h-5 w-5 items-center justify-center rounded text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 focus:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+          ]
+        },
+        {
           "path": "src/features/standalone/AgentsMachinesTable.tsx",
           "patterns": [
             "inline-flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
@@ -1345,11 +1352,30 @@
         "export": "CopyValueButton"
       },
       "requiredConsumers": [
+        { "path": "src/components/AI/Chat/MessageItem.tsx" },
+        { "path": "src/components/AI/Chat/ToolExecutionBlock.tsx" },
         { "path": "src/components/Discovery/DiscoveryTab.tsx" },
         { "path": "src/components/Settings/SSOProvidersPanel.tsx" },
         { "path": "src/components/shared/WebInterfaceUrlField.tsx" }
       ],
       "forbiddenPatterns": [
+        {
+          "path": "src/components/AI/Chat/MessageItem.tsx",
+          "patterns": [
+            "lucide-solid/icons/copy",
+            "lucide-solid/icons/check';",
+            "mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-subtle bg-surface text-muted opacity-0 shadow-sm transition-opacity hover:text-base-content",
+            "ml-auto inline-flex h-7 w-7 items-center justify-center rounded-md border border-border-subtle bg-surface text-muted opacity-0 shadow-sm transition-opacity hover:text-base-content"
+          ]
+        },
+        {
+          "path": "src/components/AI/Chat/ToolExecutionBlock.tsx",
+          "patterns": [
+            "lucide-solid/icons/copy",
+            "lucide-solid/icons/check';",
+            "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-border-subtle bg-surface text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+          ]
+        },
         {
           "path": "src/components/Discovery/DiscoveryTab.tsx",
           "patterns": [
@@ -3217,6 +3243,29 @@
       ]
     },
     {
+      "id": "ai-chat-message-queued-action-icon-local-shell",
+      "category": "action-button",
+      "summary": "AI Chat queued message edit/remove actions must not recreate local 20px blue icon-button shells; compose ActionIconButton.",
+      "canonical": {
+        "path": "src/components/shared/Button.tsx",
+        "export": "ActionIconButton"
+      },
+      "scopes": ["src/components/AI/Chat/MessageItem.tsx"],
+      "extensions": [".tsx"],
+      "allPatterns": [
+        "inline-flex h-5 w-5 items-center justify-center rounded text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 focus:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+      ],
+      "legacyReason": "Retired migration debt. AI Chat queued message icon actions belong to ActionIconButton.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/Button.test.tsx"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "src/components/AI/Chat/__tests__/MessageItem.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "ai-chat-action-icon-header-local-shell",
       "category": "action-button",
       "summary": "AI Chat header icon actions must not recreate local h-8 bordered icon-button shells; compose ActionIconButton.",
@@ -3343,6 +3392,55 @@
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "src/components/shared/Button.test.tsx",
         "src/components/AI/Chat/__tests__/AIChat.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "ai-chat-message-copy-value-local-shell",
+      "category": "copy-action",
+      "summary": "AI Chat user and assistant message copy controls must not recreate local copied-state icon shells; compose CopyValueButton.",
+      "canonical": {
+        "path": "src/components/shared/Button.tsx",
+        "export": "CopyValueButton"
+      },
+      "scopes": ["src/components/AI/Chat/MessageItem.tsx"],
+      "extensions": [".tsx"],
+      "allPatterns": [
+        "inline-flex h-7 w-7",
+        "border border-border-subtle bg-surface text-muted opacity-0 shadow-sm transition-opacity hover:text-base-content",
+        "CopyIcon class=\"h-3.5 w-3.5\""
+      ],
+      "legacyReason": "Retired migration debt. AI Chat message copy actions belong to CopyValueButton.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/Button.test.tsx"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "src/components/AI/Chat/__tests__/MessageItem.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "ai-chat-tool-copy-value-local-shell",
+      "category": "copy-action",
+      "summary": "AI Chat tool command and detail copy controls must not recreate local copied-state icon shells; compose CopyValueButton.",
+      "canonical": {
+        "path": "src/components/shared/Button.tsx",
+        "export": "CopyValueButton"
+      },
+      "scopes": ["src/components/AI/Chat/ToolExecutionBlock.tsx"],
+      "extensions": [".tsx"],
+      "allPatterns": [
+        "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-border-subtle bg-surface text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500/30",
+        "CopyIcon class=\"h-3 w-3\""
+      ],
+      "legacyReason": "Retired migration debt. AI Chat tool copy actions belong to CopyValueButton.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/Button.test.tsx"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "src/components/AI/Chat/__tests__/ToolExecutionBlock.test.tsx",
         "scripts/shared-template-audit.mjs"
       ]
     },

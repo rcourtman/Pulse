@@ -10,6 +10,8 @@ import gitHubStarBannerSource from '@/components/GitHubStarBanner.tsx?raw';
 import assistantCommandHelpDialogSource from '@/components/AI/Chat/AssistantCommandHelpDialog.tsx?raw';
 import chatMessagesSource from '@/components/AI/Chat/ChatMessages.tsx?raw';
 import aiChatSource from '@/components/AI/Chat/index.tsx?raw';
+import messageItemSource from '@/components/AI/Chat/MessageItem.tsx?raw';
+import toolExecutionBlockSource from '@/components/AI/Chat/ToolExecutionBlock.tsx?raw';
 import findingsPanelSource from '@/components/AI/FindingsPanel.tsx?raw';
 import aiModelPickerSource from '@/components/shared/AIModelPicker.tsx?raw';
 import buttonSource from '@/components/shared/Button.tsx?raw';
@@ -3000,6 +3002,15 @@ describe('shared primitive guardrails', () => {
     const aiChatActionIconFooterGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'ai-chat-action-icon-footer-local-shell',
     );
+    const aiChatMessageQueuedActionGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'ai-chat-message-queued-action-icon-local-shell',
+    );
+    const aiChatMessageCopyValueGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'ai-chat-message-copy-value-local-shell',
+    );
+    const aiChatToolCopyValueGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'ai-chat-tool-copy-value-local-shell',
+    );
     const commandCopyGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'button-command-copy-local-shell',
     );
@@ -3836,6 +3847,7 @@ describe('shared primitive guardrails', () => {
       'src/components/Alerts/AlertResourceTableRow.tsx',
       'src/components/Alerts/ResourceTable.tsx',
       'src/components/AI/Chat/index.tsx',
+      'src/components/AI/Chat/MessageItem.tsx',
       'src/components/Settings/RolesPanel.tsx',
       'src/components/Settings/SSOProvidersPanel.tsx',
       'src/features/standalone/AgentsMachinesTable.tsx',
@@ -3891,6 +3903,12 @@ describe('shared primitive guardrails', () => {
           ]),
         }),
         expect.objectContaining({
+          path: 'src/components/AI/Chat/MessageItem.tsx',
+          patterns: expect.arrayContaining([
+            'inline-flex h-5 w-5 items-center justify-center rounded text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 focus:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30',
+          ]),
+        }),
+        expect.objectContaining({
           path: 'src/features/standalone/AgentsMachinesTable.tsx',
           patterns: expect.arrayContaining([
             'inline-flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60',
@@ -3937,6 +3955,20 @@ describe('shared primitive guardrails', () => {
     expect(standaloneAgentMachineActionGuard?.ignoredPaths).toEqual([
       'src/components/shared/Button.test.tsx',
     ]);
+    expect(aiChatMessageQueuedActionGuard?.canonical?.path).toBe(
+      'src/components/shared/Button.tsx',
+    );
+    expect(aiChatMessageQueuedActionGuard?.canonical?.export).toBe('ActionIconButton');
+    expect(aiChatMessageQueuedActionGuard?.allPatterns).toEqual([
+      'inline-flex h-5 w-5 items-center justify-center rounded text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 focus:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30',
+    ]);
+    expect(aiChatMessageQueuedActionGuard?.scopes).toEqual([
+      'src/components/AI/Chat/MessageItem.tsx',
+    ]);
+    expect(aiChatMessageQueuedActionGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(aiChatMessageQueuedActionGuard?.ignoredPaths).toEqual([
+      'src/components/shared/Button.test.tsx',
+    ]);
     for (const guard of [
       aiChatActionIconHeaderGuard,
       aiChatActionIconAccentGuard,
@@ -3971,9 +4003,53 @@ describe('shared primitive guardrails', () => {
     expect(copyValueRule?.canonical?.path).toBe('src/components/shared/Button.tsx');
     expect(copyValueRule?.canonical?.export).toBe('CopyValueButton');
     expect(copyValueRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/components/AI/Chat/MessageItem.tsx',
+      'src/components/AI/Chat/ToolExecutionBlock.tsx',
       'src/components/Discovery/DiscoveryTab.tsx',
       'src/components/Settings/SSOProvidersPanel.tsx',
       'src/components/shared/WebInterfaceUrlField.tsx',
+    ]);
+    expect(copyValueRule?.forbiddenPatterns).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: 'src/components/AI/Chat/MessageItem.tsx',
+          patterns: expect.arrayContaining([
+            'lucide-solid/icons/copy',
+            "lucide-solid/icons/check';",
+            'mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-subtle bg-surface text-muted opacity-0 shadow-sm transition-opacity hover:text-base-content',
+            'ml-auto inline-flex h-7 w-7 items-center justify-center rounded-md border border-border-subtle bg-surface text-muted opacity-0 shadow-sm transition-opacity hover:text-base-content',
+          ]),
+        }),
+        expect.objectContaining({
+          path: 'src/components/AI/Chat/ToolExecutionBlock.tsx',
+          patterns: expect.arrayContaining([
+            'lucide-solid/icons/copy',
+            "lucide-solid/icons/check';",
+            'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-border-subtle bg-surface text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500/30',
+          ]),
+        }),
+      ]),
+    );
+    for (const guard of [aiChatMessageCopyValueGuard, aiChatToolCopyValueGuard]) {
+      expect(guard?.canonical?.path).toBe('src/components/shared/Button.tsx');
+      expect(guard?.canonical?.export).toBe('CopyValueButton');
+      expect(guard?.allowedPaths ?? []).toHaveLength(0);
+      expect(guard?.ignoredPaths).toEqual(['src/components/shared/Button.test.tsx']);
+    }
+    expect(aiChatMessageCopyValueGuard?.scopes).toEqual([
+      'src/components/AI/Chat/MessageItem.tsx',
+    ]);
+    expect(aiChatMessageCopyValueGuard?.allPatterns).toEqual([
+      'inline-flex h-7 w-7',
+      'border border-border-subtle bg-surface text-muted opacity-0 shadow-sm transition-opacity hover:text-base-content',
+      'CopyIcon class="h-3.5 w-3.5"',
+    ]);
+    expect(aiChatToolCopyValueGuard?.scopes).toEqual([
+      'src/components/AI/Chat/ToolExecutionBlock.tsx',
+    ]);
+    expect(aiChatToolCopyValueGuard?.allPatterns).toEqual([
+      'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-border-subtle bg-surface text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500/30',
+      'CopyIcon class="h-3 w-3"',
     ]);
     expect(copyableCodeRowRule?.canonical?.path).toBe('src/components/shared/CopyableCodeRow.tsx');
     expect(copyableCodeRowRule?.canonical?.export).toBe('CopyableCodeRow');
@@ -4055,6 +4131,7 @@ describe('shared primitive guardrails', () => {
     expect(buttonModelSource).toContain('warningGhost:');
     expect(buttonModelSource).toContain('warningOutline:');
     expect(buttonModelSource).toContain('infoGhost:');
+    expect(buttonModelSource).toContain(["'2xs'", ": 'h-5 w-5'"].join(''));
     expect(buttonModelSource).toContain(['lg', ": 'h-9 w-9'"].join(''));
     expect(buttonModelSource).toContain('dangerOutline:');
     expect(buttonModelSource).toContain('settingsAction:');
@@ -4107,6 +4184,27 @@ describe('shared primitive guardrails', () => {
     expect(agentsMachinesTableSource).toContain('ActionIconButton');
     expect(agentsMachinesTableSource).not.toContain(
       'inline-flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60',
+    );
+    expect(messageItemSource).toContain('@/components/shared/Button');
+    expect(messageItemSource).toContain('ActionIconButton');
+    expect(messageItemSource).toContain('CopyValueButton');
+    expect(messageItemSource).not.toContain("lucide-solid/icons/copy");
+    expect(messageItemSource).not.toContain("lucide-solid/icons/check';");
+    expect(messageItemSource).not.toContain(
+      'mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-subtle bg-surface text-muted opacity-0 shadow-sm transition-opacity hover:text-base-content',
+    );
+    expect(messageItemSource).not.toContain(
+      'ml-auto inline-flex h-7 w-7 items-center justify-center rounded-md border border-border-subtle bg-surface text-muted opacity-0 shadow-sm transition-opacity hover:text-base-content',
+    );
+    expect(messageItemSource).not.toContain(
+      'inline-flex h-5 w-5 items-center justify-center rounded text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 focus:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30',
+    );
+    expect(toolExecutionBlockSource).toContain('@/components/shared/Button');
+    expect(toolExecutionBlockSource).toContain('CopyValueButton');
+    expect(toolExecutionBlockSource).not.toContain("lucide-solid/icons/copy");
+    expect(toolExecutionBlockSource).not.toContain("lucide-solid/icons/check';");
+    expect(toolExecutionBlockSource).not.toContain(
+      'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-border-subtle bg-surface text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500/30',
     );
     expect(resourceDetailDrawerDebugTabSource).toContain('@/components/shared/Button');
     expect(resourceDetailDrawerDebugTabSource).not.toContain(

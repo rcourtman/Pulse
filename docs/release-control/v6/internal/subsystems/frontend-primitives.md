@@ -564,8 +564,12 @@ not a replacement status card, CTA band, or page-local nested card.
    actions, transcript fallback close/download actions, activity-dock queued
    follow-up controls, composer send, footer help/route actions, and compact
    dismiss controls: the Assistant owns chat/session behavior and copy, while
-   `ActionIconButton` owns h-6/h-7/h-8/h-9 sizing, outline, primary, accent,
+   `ActionIconButton` owns h-5/h-6/h-7/h-8/h-9 sizing, outline, primary, accent,
    warning, info, danger, disabled, title, and focus chrome.
+   AI Chat message and tool copy controls follow the copy-action boundary:
+   MessageItem and ToolExecutionBlock own the copied text and timer semantics,
+   while `CopyValueButton` owns copied-state iconography, disabled handling,
+   focus, and embedded-row propagation behavior.
    Global app-shell prompts are part of the same action boundary.
    `frontend-modern/src/components/GitHubStarBanner.tsx` may own its display
    timing, product copy, and GitHub destination, but its primary, defer, and

@@ -8,6 +8,7 @@ import {
   PendingToolsList,
   ToolExecutionsList,
 } from '../ToolExecutionBlock';
+import toolExecutionBlockSource from '../ToolExecutionBlock.tsx?raw';
 import { ASSISTANT_FAST_TOOL_COMPLETION_SETTLE_MS } from '../streamActivityTiming';
 import type { ToolExecution, PendingTool, ToolCancellation } from '../types';
 
@@ -55,6 +56,16 @@ const FAST_TOOL_SETTLE_TEST_MS = ASSISTANT_FAST_TOOL_COMPLETION_SETTLE_MS + 80;
 // ============================================================
 
 describe('ToolExecutionBlock', () => {
+  it('keeps tool copy controls on the shared CopyValueButton primitive', () => {
+    expect(toolExecutionBlockSource).toContain('@/components/shared/Button');
+    expect(toolExecutionBlockSource).toContain('CopyValueButton');
+    expect(toolExecutionBlockSource).not.toContain("lucide-solid/icons/copy");
+    expect(toolExecutionBlockSource).not.toContain("lucide-solid/icons/check';");
+    expect(toolExecutionBlockSource).not.toContain(
+      'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-border-subtle bg-surface text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500/30',
+    );
+  });
+
   // --- Tool label mapping ---
 
   it.each([
