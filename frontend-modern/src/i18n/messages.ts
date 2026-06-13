@@ -1,6 +1,21 @@
 import type { SupportedLocale } from './locales';
 
 export const EN_MESSAGES = {
+  'settings.general.appearance.title': 'Appearance',
+  'settings.general.fullWidth.description':
+    'Expand content to use all available screen width on large monitors.',
+  'settings.general.fullWidth.title': 'Full-width mode',
+  'settings.general.language.ariaLabel': 'App language',
+  'settings.general.language.description':
+    'Use this language for the app shell. Commands, resource names, and API fields stay unchanged.',
+  'settings.general.language.title': 'Language',
+  'settings.general.temperature.description': 'Display temperatures in Celsius or Fahrenheit.',
+  'settings.general.temperature.title': 'Temperature unit',
+  'settings.general.theme.description': 'Choose light, dark, or sync with your system theme.',
+  'settings.general.theme.option.dark': 'Dark',
+  'settings.general.theme.option.light': 'Light',
+  'settings.general.theme.option.system': 'System',
+  'settings.general.theme.title': 'Theme preference',
   'settings.header.api.description':
     'Generate and manage scoped Pulse tokens for agents, automation, and external integrations.',
   'settings.header.api.title': 'API Access',
@@ -133,6 +148,21 @@ export const I18N_MESSAGES: Record<SupportedLocale, Record<I18nMessageKey, strin
   en: EN_MESSAGES,
   de: {
     ...EN_MESSAGES,
+    'settings.general.appearance.title': 'Darstellung',
+    'settings.general.fullWidth.description':
+      'Nutzen Sie auf grossen Monitoren die gesamte verfuegbare Bildschirmbreite.',
+    'settings.general.fullWidth.title': 'Volle Breite',
+    'settings.general.language.ariaLabel': 'App-Sprache',
+    'settings.general.language.description':
+      'Verwenden Sie diese Sprache fuer die App-Oberflaeche. Befehle, Ressourcennamen und API-Felder bleiben unveraendert.',
+    'settings.general.language.title': 'Sprache',
+    'settings.general.temperature.description': 'Temperaturen in Celsius oder Fahrenheit anzeigen.',
+    'settings.general.temperature.title': 'Temperatureinheit',
+    'settings.general.theme.description': 'Waehlen Sie hell, dunkel oder die Systemeinstellung.',
+    'settings.general.theme.option.dark': 'Dunkel',
+    'settings.general.theme.option.light': 'Hell',
+    'settings.general.theme.option.system': 'System',
+    'settings.general.theme.title': 'Designpraeferenz',
     'settings.header.api.description':
       'Erstellen und verwalten Sie begrenzte Pulse-Tokens fuer Agents, Automatisierung und externe Integrationen.',
     'settings.header.api.title': 'API-Zugriff',
@@ -262,6 +292,22 @@ export const I18N_MESSAGES: Record<SupportedLocale, Record<I18nMessageKey, strin
   },
   es: {
     ...EN_MESSAGES,
+    'settings.general.appearance.title': 'Apariencia',
+    'settings.general.fullWidth.description':
+      'Expande el contenido para usar todo el ancho disponible en monitores grandes.',
+    'settings.general.fullWidth.title': 'Modo de ancho completo',
+    'settings.general.language.ariaLabel': 'Idioma de la app',
+    'settings.general.language.description':
+      'Usa este idioma para la interfaz de la app. Los comandos, nombres de recursos y campos API no cambian.',
+    'settings.general.language.title': 'Idioma',
+    'settings.general.temperature.description': 'Muestra temperaturas en Celsius o Fahrenheit.',
+    'settings.general.temperature.title': 'Unidad de temperatura',
+    'settings.general.theme.description':
+      'Elige claro, oscuro o sincroniza con el tema del sistema.',
+    'settings.general.theme.option.dark': 'Oscuro',
+    'settings.general.theme.option.light': 'Claro',
+    'settings.general.theme.option.system': 'Sistema',
+    'settings.general.theme.title': 'Preferencia de tema',
     'settings.header.api.description':
       'Genera y administra tokens de Pulse con alcance limitado para agentes, automatización e integraciones externas.',
     'settings.header.api.title': 'Acceso API',

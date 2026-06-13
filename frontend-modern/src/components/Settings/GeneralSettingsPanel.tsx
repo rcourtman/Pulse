@@ -8,8 +8,17 @@ import type { TelemetryPreviewResponse } from '@/api/settings';
 import { DockerRuntimeSettingsCard } from './DockerRuntimeSettingsCard';
 import Sun from 'lucide-solid/icons/sun';
 import Moon from 'lucide-solid/icons/moon';
+import Languages from 'lucide-solid/icons/languages';
 import Thermometer from 'lucide-solid/icons/thermometer';
 import Maximize2 from 'lucide-solid/icons/maximize-2';
+import {
+  activeLocale,
+  setLocalePreference,
+  SUPPORTED_LOCALE_LABELS,
+  SUPPORTED_LOCALES,
+  t,
+  type SupportedLocale,
+} from '@/i18n';
 import { temperatureStore } from '@/utils/temperature';
 import { layoutStore } from '@/utils/layout';
 import {
@@ -21,11 +30,17 @@ import { PRIVACY_DOC_URL } from '@/utils/docsLinks';
 
 import Laptop from 'lucide-solid/icons/laptop';
 
-const THEME_PREFERENCE_OPTIONS: FilterOption<'light' | 'dark' | 'system'>[] = [
-  { value: 'light', label: 'Light', icon: Sun },
-  { value: 'dark', label: 'Dark', icon: Moon },
-  { value: 'system', label: 'System', icon: Laptop },
+const getThemePreferenceOptions = (): FilterOption<'light' | 'dark' | 'system'>[] => [
+  { value: 'light', label: t('settings.general.theme.option.light'), icon: Sun },
+  { value: 'dark', label: t('settings.general.theme.option.dark'), icon: Moon },
+  { value: 'system', label: t('settings.general.theme.option.system'), icon: Laptop },
 ];
+
+const getLocalePreferenceOptions = (): FilterOption<SupportedLocale>[] =>
+  SUPPORTED_LOCALES.map((locale) => ({
+    value: locale,
+    label: SUPPORTED_LOCALE_LABELS[locale],
+  }));
 
 const TEMPERATURE_UNIT_OPTIONS: FilterOption<'celsius' | 'fahrenheit'>[] = [
   { value: 'celsius', label: 'Celsius' },
@@ -84,7 +99,11 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
   return (
     <div class="space-y-6">
       {/* Appearance Card */}
-      <SettingsPanel title="Appearance" noPadding bodyClass="divide-y divide-border">
+      <SettingsPanel
+        title={t('settings.general.appearance.title')}
+        noPadding
+        bodyClass="divide-y divide-border"
+      >
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-6">
           <div class="flex items-center gap-3 min-w-0">
             {/* Animated theme icon */}
@@ -103,18 +122,45 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
               </div>
             </div>
             <div class="text-sm text-muted min-w-0">
-              <p class="font-medium text-base-content truncate">Theme preference</p>
+              <p class="font-medium text-base-content truncate">
+                {t('settings.general.theme.title')}
+              </p>
               <p class="text-xs text-muted line-clamp-2">
-                Choose light, dark, or sync with your system theme.
+                {t('settings.general.theme.description')}
               </p>
             </div>
           </div>
           <FilterButtonGroup
             class="w-full sm:w-auto sm:shrink-0 max-w-full"
-            options={THEME_PREFERENCE_OPTIONS}
+            options={getThemePreferenceOptions()}
             value={props.themePreference()}
             onChange={props.setThemePreference}
             variant="settings"
+          />
+        </div>
+
+        {/* Language Selector */}
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-6">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="shrink-0 p-2.5 rounded-md border border-border bg-surface">
+              <Languages class="w-5 h-5 text-slate-500" strokeWidth={2} />
+            </div>
+            <div class="text-sm text-muted min-w-0">
+              <p class="font-medium text-base-content truncate">
+                {t('settings.general.language.title')}
+              </p>
+              <p class="text-xs text-muted line-clamp-2">
+                {t('settings.general.language.description')}
+              </p>
+            </div>
+          </div>
+          <FilterButtonGroup
+            class="w-full sm:w-auto sm:shrink-0 max-w-full"
+            options={getLocalePreferenceOptions()}
+            value={activeLocale()}
+            onChange={setLocalePreference}
+            variant="settings"
+            ariaLabel={t('settings.general.language.ariaLabel')}
           />
         </div>
 
@@ -125,9 +171,11 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
               <Thermometer class="w-5 h-5" strokeWidth={2} />
             </div>
             <div class="text-sm text-muted min-w-0">
-              <p class="font-medium text-base-content truncate">Temperature unit</p>
+              <p class="font-medium text-base-content truncate">
+                {t('settings.general.temperature.title')}
+              </p>
               <p class="text-xs text-muted line-clamp-2">
-                Display temperatures in Celsius or Fahrenheit
+                {t('settings.general.temperature.description')}
               </p>
             </div>
           </div>
@@ -147,9 +195,11 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
               <Maximize2 class="w-5 h-5 text-slate-500" strokeWidth={2} />
             </div>
             <div class="text-sm text-muted min-w-0">
-              <p class="font-medium text-base-content truncate">Full-width mode</p>
+              <p class="font-medium text-base-content truncate">
+                {t('settings.general.fullWidth.title')}
+              </p>
               <p class="text-xs text-muted line-clamp-2">
-                Expand content to use all available screen width on large monitors
+                {t('settings.general.fullWidth.description')}
               </p>
             </div>
           </div>

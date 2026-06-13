@@ -153,6 +153,7 @@ export const STORAGE_KEYS = {
 
   // UI preferences
   THEME_PREFERENCE: 'pulseThemePreference',
+  LOCALE_PREFERENCE: 'pulseLocalePreference',
   SIDEBAR_COLLAPSED: 'sidebarCollapsed',
   FULL_WIDTH_MODE: 'fullWidthMode',
 

@@ -5,15 +5,21 @@ import {
   I18N_MESSAGES,
   NEXT_LOCALIZATION_LOCALES,
   SUPPORTED_LOCALES,
+  detectBrowserLocale,
   getActiveLocale,
+  getInitialLocalePreference,
+  getStoredLocalePreference,
   normalizeLocale,
   setActiveLocale,
+  setLocalePreference,
   t,
   type I18nMessageKey,
 } from '@/i18n';
+import { STORAGE_KEYS } from '@/utils/localStorage';
 
 describe('i18n foundation', () => {
   afterEach(() => {
+    localStorage.removeItem(STORAGE_KEYS.LOCALE_PREFERENCE);
     setActiveLocale(DEFAULT_LOCALE);
   });
 
@@ -28,6 +34,39 @@ describe('i18n foundation', () => {
     expect(setActiveLocale('es-ES')).toBe('es');
     expect(getActiveLocale()).toBe('es');
     expect(t('settings.shell.navigationTitle')).toBe('Ajustes');
+  });
+
+  it('detects initial locale from stored preference before browser language', () => {
+    localStorage.setItem(STORAGE_KEYS.LOCALE_PREFERENCE, 'es-MX');
+
+    expect(getStoredLocalePreference(localStorage)).toBe('es');
+    expect(
+      getInitialLocalePreference({
+        storage: localStorage,
+        browserLocales: ['de-DE'],
+      }),
+    ).toBe('es');
+  });
+
+  it('uses the first supported browser locale when no preference is stored', () => {
+    localStorage.removeItem(STORAGE_KEYS.LOCALE_PREFERENCE);
+
+    expect(detectBrowserLocale(['fr-FR', 'es-ES', 'de-DE'])).toBe('es');
+    expect(
+      getInitialLocalePreference({
+        storage: localStorage,
+        browserLocales: ['fr-FR', 'de-AT'],
+      }),
+    ).toBe('de');
+  });
+
+  it('persists explicit locale preferences separately from in-memory locale changes', () => {
+    expect(setLocalePreference('de-DE', localStorage)).toBe('de');
+    expect(getActiveLocale()).toBe('de');
+    expect(localStorage.getItem(STORAGE_KEYS.LOCALE_PREFERENCE)).toBe('de');
+
+    expect(setActiveLocale('es')).toBe('es');
+    expect(localStorage.getItem(STORAGE_KEYS.LOCALE_PREFERENCE)).toBe('de');
   });
 
   it('falls back to the English catalog for unsupported locales and interpolates params', () => {

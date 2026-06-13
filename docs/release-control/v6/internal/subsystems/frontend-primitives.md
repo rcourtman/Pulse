@@ -177,12 +177,15 @@ work extends shared components instead of creating new local variants.
 
 Frontend localization is a shared primitive boundary. Locale support must flow
 through typed message catalogs with an English fallback and explicit seed
-locale coverage rather than page-local string switches. Customer-facing shell,
-navigation, settings, first-run, empty-state, and alert copy may be localized,
-but machine-facing values must remain stable: commands, environment variables,
-API fields, config keys, log lines, error codes, hostnames, resource names, and
-vendor object names stay untranslated unless the owning runtime contract
-explicitly says otherwise.
+locale coverage rather than page-local string switches. The active app locale
+is a shared user preference initialized from stored or browser language and
+exposed through Settings > General; individual surfaces must consume that
+shared preference instead of creating local language toggles. Customer-facing
+shell, navigation, settings, first-run, empty-state, and alert copy may be
+localized, but machine-facing values must remain stable: commands, environment
+variables, API fields, config keys, log lines, error codes, hostnames, resource
+names, and vendor object names stay untranslated unless the owning runtime
+contract explicitly says otherwise.
 
 Alert thresholds consume the shared FilterBar primitive and route state, while
 the alerts subsystem owns the resource data and platform-specific threshold

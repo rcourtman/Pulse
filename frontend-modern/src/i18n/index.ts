@@ -1,10 +1,84 @@
 import { createSignal } from 'solid-js';
-import { DEFAULT_LOCALE, normalizeLocale, type SupportedLocale } from './locales';
+import { STORAGE_KEYS } from '@/utils/localStorage';
+import {
+  DEFAULT_LOCALE,
+  normalizeLocale,
+  resolveSupportedLocale,
+  type SupportedLocale,
+} from './locales';
 import { EN_MESSAGES, I18N_MESSAGES, type I18nMessageKey } from './messages';
 
 type MessageParams = Record<string, string | number | boolean | null | undefined>;
+type LocalePreferenceStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
-const [activeLocaleSignal, setActiveLocaleSignal] = createSignal<SupportedLocale>(DEFAULT_LOCALE);
+function getDefaultStorage(): LocalePreferenceStorage | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+function safeGetLocalePreference(storage: LocalePreferenceStorage | null): string | null {
+  if (!storage) return null;
+  try {
+    return storage.getItem(STORAGE_KEYS.LOCALE_PREFERENCE);
+  } catch {
+    return null;
+  }
+}
+
+function safeSetLocalePreference(
+  locale: SupportedLocale,
+  storage: LocalePreferenceStorage | null,
+): void {
+  if (!storage) return;
+  try {
+    storage.setItem(STORAGE_KEYS.LOCALE_PREFERENCE, locale);
+  } catch {
+    // Locale selection remains active in-memory when storage is unavailable.
+  }
+}
+
+function getNavigatorLocaleCandidates(): string[] {
+  if (typeof navigator === 'undefined') return [];
+  const candidates = Array.isArray(navigator.languages) ? [...navigator.languages] : [];
+  if (navigator.language) {
+    candidates.push(navigator.language);
+  }
+  return candidates;
+}
+
+export function getStoredLocalePreference(
+  storage: LocalePreferenceStorage | null = getDefaultStorage(),
+): SupportedLocale | null {
+  return resolveSupportedLocale(safeGetLocalePreference(storage));
+}
+
+export function detectBrowserLocale(
+  candidates: readonly string[] = getNavigatorLocaleCandidates(),
+) {
+  for (const candidate of candidates) {
+    const locale = resolveSupportedLocale(candidate);
+    if (locale) return locale;
+  }
+  return DEFAULT_LOCALE;
+}
+
+export function getInitialLocalePreference({
+  storage = getDefaultStorage(),
+  browserLocales,
+}: {
+  storage?: LocalePreferenceStorage | null;
+  browserLocales?: readonly string[];
+} = {}): SupportedLocale {
+  return getStoredLocalePreference(storage) ?? detectBrowserLocale(browserLocales);
+}
+
+const [activeLocaleSignal, setActiveLocaleSignal] = createSignal<SupportedLocale>(
+  getInitialLocalePreference(),
+);
 
 export const activeLocale = activeLocaleSignal;
 
@@ -15,6 +89,15 @@ export function getActiveLocale(): SupportedLocale {
 export function setActiveLocale(locale: string | null | undefined): SupportedLocale {
   const normalized = normalizeLocale(locale);
   setActiveLocaleSignal(normalized);
+  return normalized;
+}
+
+export function setLocalePreference(
+  locale: string | null | undefined,
+  storage: LocalePreferenceStorage | null = getDefaultStorage(),
+): SupportedLocale {
+  const normalized = setActiveLocale(locale);
+  safeSetLocalePreference(normalized, storage);
   return normalized;
 }
 
@@ -43,5 +126,6 @@ export {
   SUPPORTED_LOCALES,
   isSupportedLocale,
   normalizeLocale,
+  resolveSupportedLocale,
   type SupportedLocale,
 } from './locales';
