@@ -52,7 +52,6 @@ leave the transcript without exposing hidden provider/tool metadata.
 4. `internal/api/ai_handler.go` shared with `api-contracts`: Pulse Assistant handlers are both an AI runtime control surface and a canonical API payload contract boundary.
 5. `internal/api/ai_handlers.go` shared with `api-contracts`: AI settings and remediation handlers are both an AI runtime control surface and a canonical API payload contract boundary.
 6. `internal/api/ai_intelligence_handlers.go` shared with `api-contracts`: AI intelligence handlers are both an AI runtime control surface and a canonical API payload contract boundary.
-
 ## Extension Points
 
 Guest-family AI runtime code paths (VMs and LXC system containers) share
@@ -103,6 +102,13 @@ activity has arrived, and keeping successful raw output behind the details
 disclosure by default once the turn completes. Pending tools, skipped/canceled
 tools, failed tools, and completed-turn tool details must remain
 visible/inspectable; failed output may render inline because it is actionable.
+AI Chat icon-only actions own Assistant/session semantics, labels, and
+handlers, but their visible button chrome must compose the shared
+`ActionIconButton` primitive from `frontend-modern/src/components/shared/Button.tsx`.
+Header utilities, session row controls, transcript fallback close/download
+controls, activity-dock queued follow-up actions, composer send, footer
+help/route actions, and compact dismiss controls must not recreate local
+h-6/h-7/h-8/h-9 icon-button class shells.
 
 Assistant live workflow status follows OpenCode's current-state timeline
 model. CANONICAL (supersedes the per-row transcript-status rules elsewhere in

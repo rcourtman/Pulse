@@ -231,9 +231,32 @@ describe('Button', () => {
     const onClick = vi.fn();
 
     render(() => (
-      <ActionIconButton label="Edit thresholds" tone="accent" size="xs" onClick={onClick}>
-        <span aria-hidden="true">E</span>
-      </ActionIconButton>
+      <>
+        <ActionIconButton label="Edit thresholds" tone="accent" size="xs" onClick={onClick}>
+          <span aria-hidden="true">E</span>
+        </ActionIconButton>
+        <ActionIconButton label="Open help" tone="outline" size="md">
+          <span aria-hidden="true">?</span>
+        </ActionIconButton>
+        <ActionIconButton label="Notifications enabled" tone="outlineSelected" size="md">
+          <span aria-hidden="true">N</span>
+        </ActionIconButton>
+        <ActionIconButton label="Send message" tone="primary" size="lg">
+          <span aria-hidden="true">S</span>
+        </ActionIconButton>
+        <ActionIconButton label="Promote queued follow-up" tone="accentGhost" size="xs">
+          <span aria-hidden="true">P</span>
+        </ActionIconButton>
+        <ActionIconButton label="Dismiss warning" tone="warningGhost" size="sm">
+          <span aria-hidden="true">W</span>
+        </ActionIconButton>
+        <ActionIconButton label="Download fallback" tone="warningOutline" size="sm">
+          <span aria-hidden="true">D</span>
+        </ActionIconButton>
+        <ActionIconButton label="Dismiss info" tone="infoGhost" size="xs">
+          <span aria-hidden="true">I</span>
+        </ActionIconButton>
+      </>
     ));
 
     const button = screen.getByRole('button', { name: 'Edit thresholds' });
@@ -242,6 +265,21 @@ describe('Button', () => {
     expect(button).toHaveClass('h-6');
     expect(button).toHaveClass('w-6');
     expect(button).toHaveClass('bg-blue-50');
+
+    expect(screen.getByRole('button', { name: 'Open help' })).toHaveClass('border-border');
+    expect(screen.getByRole('button', { name: 'Notifications enabled' })).toHaveClass(
+      'bg-surface-alt',
+    );
+    expect(screen.getByRole('button', { name: 'Send message' })).toHaveClass('h-9');
+    expect(screen.getByRole('button', { name: 'Send message' })).toHaveClass('bg-blue-600');
+    expect(screen.getByRole('button', { name: 'Promote queued follow-up' })).toHaveClass(
+      'text-blue-700',
+    );
+    expect(screen.getByRole('button', { name: 'Dismiss warning' })).toHaveClass('text-amber-700');
+    expect(screen.getByRole('button', { name: 'Download fallback' })).toHaveClass(
+      'border-amber-200',
+    );
+    expect(screen.getByRole('button', { name: 'Dismiss info' })).toHaveClass('text-cyan-500');
 
     button.click();
     expect(onClick).toHaveBeenCalledTimes(1);

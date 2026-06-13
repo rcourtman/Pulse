@@ -41,6 +41,7 @@ import {
   type ChatSession,
   type ChatSessionHandoffSummary,
 } from '@/api/aiChat';
+import { ActionIconButton } from '@/components/shared/Button';
 import { SearchField } from '@/components/shared/SearchField';
 import { notificationStore } from '@/stores/notifications';
 import { aiChatStore, type AIChatContext } from '@/stores/aiChat';
@@ -153,9 +154,7 @@ import { AssistantCommandHelpDialog } from './AssistantCommandHelpDialog';
 import { ModelSelector } from './ModelSelector';
 import { MentionAutocomplete, type MentionResource } from './MentionAutocomplete';
 import { SlashCommandAutocomplete } from './SlashCommandAutocomplete';
-import {
-  getAssistantActiveTurnStatus,
-} from './activeTurnStatus';
+import { getAssistantActiveTurnStatus } from './activeTurnStatus';
 import {
   createPacedWorkflowStatus,
   replaceLatestWorkflowStatusEventForDisplay,
@@ -1588,8 +1587,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       (firstQueued ? queuedFollowUpRowRefs.get(firstQueued.id) : undefined) ||
       document.querySelector<HTMLElement>('[data-testid="assistant-queued-follow-up-row"]');
     const queuedRow = findQueuedRow();
-    const targetQueuedId =
-      firstQueued?.id ?? queuedRow?.dataset.assistantQueuedFollowUpId ?? null;
+    const targetQueuedId = firstQueued?.id ?? queuedRow?.dataset.assistantQueuedFollowUpId ?? null;
 
     if (!firstQueued && !queuedRow) {
       markQueuedFollowUpCommandTarget(null);
@@ -2269,10 +2267,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       return true;
     }
 
-    const modelRoute = normalizeAssistantModelRouteArgument(
-      target,
-      knownAssistantModelProviders(),
-    );
+    const modelRoute = normalizeAssistantModelRouteArgument(target, knownAssistantModelProviders());
     if (!modelRoute) {
       openModelSelector(target);
       focusComposer();
@@ -2370,7 +2365,10 @@ export const AIChat: Component<AIChatProps> = (props) => {
         logger.error('[AIChat] Failed to load AI settings:', settingsResult.reason);
       }
       if (modelsResult.status === 'rejected') {
-        logger.debug('[AIChat] Model catalog unavailable during initialization:', modelsResult.reason);
+        logger.debug(
+          '[AIChat] Model catalog unavailable during initialization:',
+          modelsResult.reason,
+        );
       }
     } catch (error) {
       logger.error('[AIChat] Failed to initialize:', error);
@@ -2472,17 +2470,14 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const activeWorkflowStatusHistory = createMemo(() => {
     const message = activeAssistantMessage();
     if (!message || message.isStreaming === false) return [];
-    return message.workflowStatusHistory || (message.workflowStatus ? [message.workflowStatus] : []);
+    return (
+      message.workflowStatusHistory || (message.workflowStatus ? [message.workflowStatus] : [])
+    );
   });
   const activeWorkflowStatusPaceSequenceKey = createMemo(() => {
     const message = activeAssistantMessage();
     const first = activeWorkflowStatusHistory()[0];
-    return [
-      message?.id,
-      first?.phase,
-      first?.message,
-      first?.startedAt,
-    ]
+    return [message?.id, first?.phase, first?.message, first?.startedAt]
       .map((value) => String(value ?? ''))
       .join(':');
   });
@@ -3961,22 +3956,18 @@ export const AIChat: Component<AIChatProps> = (props) => {
               </button>
 
               <Show when={assistantNotificationsSupported()}>
-                <button
-                  type="button"
+                <ActionIconButton
                   onClick={() => {
                     void handleToggleAttentionNotifications();
                   }}
-                  class={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-border transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content ${
-                    assistantNotificationsEnabled()
-                      ? 'bg-surface-alt text-base-content'
-                      : 'bg-surface text-muted'
-                  }`}
+                  tone={assistantNotificationsEnabled() ? 'outlineSelected' : 'outline'}
+                  size="md"
+                  label="Toggle Assistant attention notifications"
                   title={
                     assistantNotificationsEnabled()
                       ? 'Notifications on: you are alerted when the Assistant finishes or needs you while this tab is in the background'
                       : 'Notify me when the Assistant finishes or needs me while this tab is in the background'
                   }
-                  aria-label="Toggle Assistant attention notifications"
                   aria-pressed={assistantNotificationsEnabled()}
                 >
                   <Show
@@ -3985,18 +3976,18 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   >
                     <BellIcon class="h-4 w-4" aria-hidden="true" />
                   </Show>
-                </button>
+                </ActionIconButton>
               </Show>
 
-              <button
-                type="button"
+              <ActionIconButton
                 onClick={() => {
                   void handleForkSession();
                 }}
                 disabled={!canForkCurrentSession()}
-                class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface disabled:hover:text-muted"
+                tone="outline"
+                size="md"
                 title={AI_CHAT_FORK_SESSION_LABEL}
-                aria-label={AI_CHAT_FORK_SESSION_LABEL}
+                label={AI_CHAT_FORK_SESSION_LABEL}
                 aria-busy={forkingSession()}
               >
                 <Show
@@ -4005,17 +3996,17 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 >
                   <LoaderCircleIcon class="h-4 w-4 animate-spin" aria-hidden="true" />
                 </Show>
-              </button>
+              </ActionIconButton>
 
-              <button
-                type="button"
+              <ActionIconButton
                 onClick={() => {
                   void handleCompactSession();
                 }}
                 disabled={!canCompactCurrentSession()}
-                class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface disabled:hover:text-muted"
+                tone="outline"
+                size="md"
                 title={AI_CHAT_COMPACT_SESSION_LABEL}
-                aria-label={AI_CHAT_COMPACT_SESSION_LABEL}
+                label={AI_CHAT_COMPACT_SESSION_LABEL}
                 aria-busy={compactingSession()}
               >
                 <Show
@@ -4024,17 +4015,17 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 >
                   <LoaderCircleIcon class="h-4 w-4 animate-spin" aria-hidden="true" />
                 </Show>
-              </button>
+              </ActionIconButton>
 
-              <button
-                type="button"
+              <ActionIconButton
                 onClick={() => {
                   void handleUndoLastTurn();
                 }}
                 disabled={!canUndoLastTurn()}
-                class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface disabled:hover:text-muted"
+                tone="outline"
+                size="md"
                 title={AI_CHAT_UNDO_LAST_TURN_LABEL}
-                aria-label={AI_CHAT_UNDO_LAST_TURN_LABEL}
+                label={AI_CHAT_UNDO_LAST_TURN_LABEL}
                 aria-busy={undoingLastTurn()}
               >
                 <Show
@@ -4043,17 +4034,17 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 >
                   <LoaderCircleIcon class="h-4 w-4 animate-spin" aria-hidden="true" />
                 </Show>
-              </button>
+              </ActionIconButton>
 
-              <button
-                type="button"
+              <ActionIconButton
                 onClick={() => {
                   void handleRedoLastTurn();
                 }}
                 disabled={!canRedoLastTurn()}
-                class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface disabled:hover:text-muted"
+                tone="outline"
+                size="md"
                 title={AI_CHAT_REDO_LAST_TURN_LABEL}
-                aria-label={AI_CHAT_REDO_LAST_TURN_LABEL}
+                label={AI_CHAT_REDO_LAST_TURN_LABEL}
                 aria-busy={redoingLastTurn()}
               >
                 <Show
@@ -4062,61 +4053,61 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 >
                   <LoaderCircleIcon class="h-4 w-4 animate-spin" aria-hidden="true" />
                 </Show>
-              </button>
+              </ActionIconButton>
 
-              <button
-                type="button"
+              <ActionIconButton
                 onClick={() => {
                   void copyLastAssistantAnswer();
                 }}
                 disabled={!hasLastAssistantAnswer()}
-                class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface disabled:hover:text-muted"
+                tone="outline"
+                size="md"
                 title={AI_CHAT_COPY_LAST_ANSWER_LABEL}
-                aria-label={AI_CHAT_COPY_LAST_ANSWER_LABEL}
+                label={AI_CHAT_COPY_LAST_ANSWER_LABEL}
               >
                 <ClipboardCopyIcon class="h-4 w-4" aria-hidden="true" />
-              </button>
+              </ActionIconButton>
 
-              <button
-                type="button"
+              <ActionIconButton
                 onClick={() => {
                   void copyAssistantTranscript();
                 }}
                 disabled={!hasCurrentTranscript()}
-                class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface disabled:hover:text-muted"
+                tone="outline"
+                size="md"
                 title={AI_CHAT_COPY_TRANSCRIPT_LABEL}
-                aria-label={AI_CHAT_COPY_TRANSCRIPT_LABEL}
+                label={AI_CHAT_COPY_TRANSCRIPT_LABEL}
               >
                 <CopyIcon class="h-4 w-4" aria-hidden="true" />
-              </button>
+              </ActionIconButton>
 
-              <button
-                type="button"
+              <ActionIconButton
                 onClick={exportAssistantTranscript}
                 disabled={!hasCurrentTranscript()}
-                class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface disabled:hover:text-muted"
+                tone="outline"
+                size="md"
                 title={AI_CHAT_EXPORT_TRANSCRIPT_LABEL}
-                aria-label={AI_CHAT_EXPORT_TRANSCRIPT_LABEL}
+                label={AI_CHAT_EXPORT_TRANSCRIPT_LABEL}
               >
                 <DownloadIcon class="h-4 w-4" aria-hidden="true" />
-              </button>
+              </ActionIconButton>
 
               {/* Session picker */}
               <div class="relative" data-dropdown>
-                <button
-                  type="button"
+                <ActionIconButton
                   ref={sessionButtonRef}
                   onClick={() => {
                     void handleToggleSessions();
                   }}
-                  class="flex-shrink-0 p-2 hover:text-base-content rounded-md hover:bg-surface-hover transition-colors"
+                  tone="muted"
+                  size="md"
                   title={AI_CHAT_SESSION_MENU_TITLE}
-                  aria-label={AI_CHAT_SESSION_MENU_TITLE}
+                  label={AI_CHAT_SESSION_MENU_TITLE}
                   aria-haspopup="dialog"
                   aria-expanded={showSessions()}
                 >
                   <ClockIcon class="h-4 w-4" aria-hidden="true" />
-                </button>
+                </ActionIconButton>
 
                 <Show when={showSessions()}>
                   <div
@@ -4286,11 +4277,12 @@ export const AIChat: Component<AIChatProps> = (props) => {
                                             aria-label={`New title for ${session.title || 'Untitled'}`}
                                             class="min-w-0 flex-1 rounded border border-blue-300 bg-surface px-2 py-1 text-sm font-medium text-base-content outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-70 dark:border-blue-800"
                                           />
-                                          <button
+                                          <ActionIconButton
                                             type="submit"
                                             disabled={sessionRenameSaving()}
-                                            class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 disabled:cursor-wait disabled:opacity-70 dark:text-blue-200 dark:hover:bg-blue-900/60"
-                                            aria-label={AI_CHAT_RENAME_SESSION_SAVE_LABEL}
+                                            tone="accentGhost"
+                                            size="sm"
+                                            label={AI_CHAT_RENAME_SESSION_SAVE_LABEL}
                                             title={AI_CHAT_RENAME_SESSION_SAVE_LABEL}
                                           >
                                             <Show
@@ -4304,60 +4296,65 @@ export const AIChat: Component<AIChatProps> = (props) => {
                                                 aria-hidden="true"
                                               />
                                             </Show>
-                                          </button>
-                                          <button
-                                            type="button"
+                                          </ActionIconButton>
+                                          <ActionIconButton
                                             disabled={sessionRenameSaving()}
                                             onClick={cancelRenamingSession}
-                                            class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-hover hover:text-base-content disabled:opacity-50"
-                                            aria-label={AI_CHAT_RENAME_SESSION_CANCEL_LABEL}
+                                            tone="muted"
+                                            size="sm"
+                                            label={AI_CHAT_RENAME_SESSION_CANCEL_LABEL}
                                             title={AI_CHAT_RENAME_SESSION_CANCEL_LABEL}
                                           >
                                             <XIcon class="h-3.5 w-3.5" aria-hidden="true" />
-                                          </button>
+                                          </ActionIconButton>
                                         </div>
                                       </form>
                                     </Show>
                                     <Show when={!isSessionRenaming(session.id)}>
                                       <div class="flex shrink-0 items-center gap-1">
-                                        <button
-                                          type="button"
-                                          class="rounded p-1 text-muted opacity-0 transition-opacity hover:bg-blue-100 hover:text-blue-600 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 dark:hover:bg-blue-900 dark:hover:text-blue-300"
+                                        <ActionIconButton
+                                          tone="muted"
+                                          size="xs"
+                                          class="opacity-0 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
                                           onClick={(event) => startRenamingSession(session, event)}
-                                          aria-label={getSessionRenameLabel(session)}
+                                          label={getSessionRenameLabel(session)}
                                           title={getSessionRenameLabel(session)}
                                         >
                                           <PencilIcon class="h-3.5 w-3.5" aria-hidden="true" />
-                                        </button>
-                                        <button
-                                          type="button"
-                                          class={`rounded p-1 transition-opacity focus:opacity-100 hover:bg-blue-100 hover:text-blue-600 dark:hover:bg-blue-900 dark:hover:text-blue-300 ${
+                                        </ActionIconButton>
+                                        <ActionIconButton
+                                          tone={
+                                            isSessionPinned(session.id) ? 'accentGhost' : 'muted'
+                                          }
+                                          size="xs"
+                                          class={`transition-opacity focus:opacity-100 ${
                                             isSessionPinned(session.id)
-                                              ? 'opacity-100 text-blue-600 dark:text-blue-300'
-                                              : 'opacity-0 text-muted group-hover:opacity-100 group-focus-within:opacity-100'
+                                              ? 'opacity-100'
+                                              : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
                                           }`}
                                           onClick={(event) =>
                                             togglePinnedSession(session.id, event)
                                           }
                                           aria-pressed={isSessionPinned(session.id)}
-                                          aria-label={getSessionPinLabel(session)}
+                                          label={getSessionPinLabel(session)}
                                           title={getSessionPinLabel(session)}
                                         >
                                           <BookmarkIcon
                                             class={`h-3.5 w-3.5 ${isSessionPinned(session.id) ? 'fill-current' : ''}`}
                                           />
-                                        </button>
-                                        <button
-                                          type="button"
-                                          class="rounded p-1 text-muted opacity-0 transition-opacity hover:bg-red-100 hover:text-red-500 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 dark:hover:bg-red-900"
+                                        </ActionIconButton>
+                                        <ActionIconButton
+                                          tone="danger"
+                                          size="xs"
+                                          class="opacity-0 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
                                           onClick={(event) =>
                                             handleDeleteSession(session.id, event)
                                           }
-                                          aria-label={getSessionDeleteLabel(session)}
+                                          label={getSessionDeleteLabel(session)}
                                           title={getSessionDeleteLabel(session)}
                                         >
                                           <Trash2Icon class="h-3.5 w-3.5" />
-                                        </button>
+                                        </ActionIconButton>
                                       </div>
                                     </Show>
                                   </div>
@@ -4374,19 +4371,20 @@ export const AIChat: Component<AIChatProps> = (props) => {
             </div>
 
             {/* Close button (Always visible as fallback) */}
-            <button
-              type="button"
+            <ActionIconButton
               onClick={(e) => {
                 e.stopPropagation();
                 props.onClose();
               }}
-              class="order-2 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md hover:text-base-content hover:bg-surface-hover transition-colors sm:order-none"
+              tone="neutral"
+              size="lg"
+              class="order-2 sm:order-none"
               title={AI_CHAT_CLOSE_LABEL}
-              aria-label={AI_CHAT_CLOSE_LABEL}
+              label={AI_CHAT_CLOSE_LABEL}
               data-testid="assistant-close-button"
             >
               <XIcon class="h-5 w-5" />
-            </button>
+            </ActionIconButton>
           </div>
 
           <Show when={transcriptCopyFallback()}>
@@ -4398,24 +4396,24 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 <div class="mb-2 flex items-center justify-between gap-2">
                   <div class="text-xs font-semibold">{AI_CHAT_TRANSCRIPT_FALLBACK_TITLE}</div>
                   <div class="flex items-center gap-1.5">
-                    <button
-                      type="button"
+                    <ActionIconButton
                       onClick={downloadFallbackTranscript}
-                      class="flex h-7 w-7 items-center justify-center rounded-md border border-amber-200 bg-surface text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200 dark:hover:bg-amber-900"
+                      tone="warningOutline"
+                      size="sm"
                       title={AI_CHAT_TRANSCRIPT_FALLBACK_DOWNLOAD_LABEL}
-                      aria-label={AI_CHAT_TRANSCRIPT_FALLBACK_DOWNLOAD_LABEL}
+                      label={AI_CHAT_TRANSCRIPT_FALLBACK_DOWNLOAD_LABEL}
                     >
                       <DownloadIcon class="h-3.5 w-3.5" aria-hidden="true" />
-                    </button>
-                    <button
-                      type="button"
+                    </ActionIconButton>
+                    <ActionIconButton
                       onClick={() => setTranscriptCopyFallback(null)}
-                      class="flex h-7 w-7 items-center justify-center rounded-md text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900 dark:text-amber-200 dark:hover:bg-amber-900"
+                      tone="warningGhost"
+                      size="sm"
                       title={AI_CHAT_TRANSCRIPT_FALLBACK_CLOSE_LABEL}
-                      aria-label={AI_CHAT_TRANSCRIPT_FALLBACK_CLOSE_LABEL}
+                      label={AI_CHAT_TRANSCRIPT_FALLBACK_CLOSE_LABEL}
                     >
                       <XIcon class="h-3.5 w-3.5" aria-hidden="true" />
-                    </button>
+                    </ActionIconButton>
                   </div>
                 </div>
                 <textarea
@@ -4551,22 +4549,15 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   {AI_CHAT_DISCOVERY_HINT_BODY}
                 </span>
               </div>
-              <button
-                type="button"
+              <ActionIconButton
                 onClick={() => setDiscoveryHintDismissed(true)}
-                class="p-1 rounded hover:bg-cyan-100 dark:hover:bg-cyan-800 text-cyan-500 dark:text-cyan-400"
+                tone="infoGhost"
+                size="xs"
                 title={AI_CHAT_DISCOVERY_HINT_DISMISS_LABEL}
-                aria-label={AI_CHAT_DISCOVERY_HINT_DISMISS_LABEL}
+                label={AI_CHAT_DISCOVERY_HINT_DISMISS_LABEL}
               >
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
+                <XIcon class="h-3.5 w-3.5" aria-hidden="true" />
+              </ActionIconButton>
             </div>
           </Show>
 
@@ -4696,19 +4687,20 @@ export const AIChat: Component<AIChatProps> = (props) => {
                         </div>
                       )}
                     </Show>
-                    <button
-                      type="button"
+                    <ActionIconButton
                       onClick={stopActiveResponse}
-                      class={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border bg-surface text-base-content shadow-sm transition-colors hover:bg-surface-hover ${
+                      tone="outline"
+                      size="sm"
+                      class={
                         interruptArmed()
                           ? 'border-blue-400 ring-2 ring-blue-500/30'
                           : 'border-border'
-                      }`}
+                      }
                       title={interruptArmed() ? 'Stop response armed' : 'Stop'}
-                      aria-label={interruptArmed() ? 'Stop response armed' : 'Stop response'}
+                      label={interruptArmed() ? 'Stop response armed' : 'Stop response'}
                     >
                       <SquareIcon class="h-3.5 w-3.5" aria-hidden="true" />
-                    </button>
+                    </ActionIconButton>
                   </div>
                 </Show>
                 <Show when={autonomousWarningVisible()}>
@@ -4735,15 +4727,15 @@ export const AIChat: Component<AIChatProps> = (props) => {
                     >
                       Switch to Approval
                     </button>
-                    <button
-                      type="button"
+                    <ActionIconButton
                       onClick={() => setAutonomousBannerDismissed(true)}
-                      class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-red-500 transition-colors hover:bg-red-50 hover:text-red-700 dark:text-red-200 dark:hover:bg-red-950/40"
+                      tone="danger"
+                      size="xs"
                       title={AI_CHAT_AUTONOMOUS_WARNING_DISMISS_LABEL}
-                      aria-label={AI_CHAT_AUTONOMOUS_WARNING_DISMISS_LABEL}
+                      label={AI_CHAT_AUTONOMOUS_WARNING_DISMISS_LABEL}
                     >
                       <XIcon class="h-3.5 w-3.5" aria-hidden="true" />
-                    </button>
+                    </ActionIconButton>
                   </div>
                 </Show>
                 <Show when={activityDockQueuedFollowUpCount() > 0}>
@@ -4766,18 +4758,18 @@ export const AIChat: Component<AIChatProps> = (props) => {
                         )}{' '}
                         {chat.queuedFollowUpsPaused() ? 'paused' : 'queued'}
                       </span>
-                      <button
-                        type="button"
+                      <ActionIconButton
                         onClick={() => {
                           chat.clearQueuedFollowUps();
                           focusComposer();
                         }}
-                        class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-900 dark:text-blue-200 dark:hover:bg-blue-900/50"
+                        tone="accentGhost"
+                        size="xs"
                         title="Clear queued follow-ups"
-                        aria-label="Clear queued follow-up messages"
+                        label="Clear queued follow-up messages"
                       >
                         <XIcon class="h-3.5 w-3.5" aria-hidden="true" />
-                      </button>
+                      </ActionIconButton>
                     </div>
                     <div class="mt-1 max-h-24 space-y-1 overflow-y-auto" role="list">
                       <For each={chat.queuedFollowUps()}>
@@ -4824,48 +4816,48 @@ export const AIChat: Component<AIChatProps> = (props) => {
                                 </Show>
                               </span>
                               <Show when={chat.queuedFollowUpCount() > 1 && index() > 0}>
-                                <button
-                                  type="button"
+                                <ActionIconButton
                                   onClick={() => sendQueuedFollowUpNext(queued.id)}
-                                  class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 dark:text-blue-200 dark:hover:bg-blue-900/60"
+                                  tone="accentGhost"
+                                  size="xs"
                                   title="Send queued follow-up next"
-                                  aria-label={`Send queued follow-up next: ${preview()}`}
+                                  label={`Send queued follow-up next: ${preview()}`}
                                 >
                                   <SendIcon class="h-3.5 w-3.5" aria-hidden="true" />
-                                </button>
+                                </ActionIconButton>
                               </Show>
                               <Show when={chat.queuedFollowUpsPaused() && index() === 0}>
-                                <button
-                                  type="button"
+                                <ActionIconButton
                                   onClick={() => sendQueuedFollowUpNext(queued.id)}
-                                  class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 dark:text-blue-200 dark:hover:bg-blue-900/60"
+                                  tone="accentGhost"
+                                  size="xs"
                                   title="Resume queued follow-up"
-                                  aria-label={`Resume queued follow-up: ${preview()}`}
+                                  label={`Resume queued follow-up: ${preview()}`}
                                 >
                                   <SendIcon class="h-3.5 w-3.5" aria-hidden="true" />
-                                </button>
+                                </ActionIconButton>
                               </Show>
-                              <button
-                                type="button"
+                              <ActionIconButton
                                 onClick={() => editQueuedFollowUp(queued.id)}
-                                class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 dark:text-blue-200 dark:hover:bg-blue-900/60"
+                                tone="accentGhost"
+                                size="xs"
                                 title="Edit queued follow-up"
-                                aria-label={`Edit queued follow-up: ${preview()}`}
+                                label={`Edit queued follow-up: ${preview()}`}
                               >
                                 <PencilIcon class="h-3.5 w-3.5" aria-hidden="true" />
-                              </button>
-                              <button
-                                type="button"
+                              </ActionIconButton>
+                              <ActionIconButton
                                 onClick={() => {
                                   chat.cancelQueuedFollowUp(queued.id);
                                   focusComposer();
                                 }}
-                                class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 dark:text-blue-200 dark:hover:bg-blue-900/60"
+                                tone="accentGhost"
+                                size="xs"
                                 title="Remove queued follow-up"
-                                aria-label={`Remove queued follow-up: ${preview()}`}
+                                label={`Remove queued follow-up: ${preview()}`}
                               >
                                 <XIcon class="h-3.5 w-3.5" aria-hidden="true" />
-                              </button>
+                              </ActionIconButton>
                             </div>
                           );
                         }}
@@ -4918,15 +4910,16 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   visible={slashCommandActive()}
                 />
                 <div class="absolute bottom-2 right-2 flex items-center gap-1.5">
-                  <button
+                  <ActionIconButton
                     type="submit"
                     disabled={!input().trim()}
-                    class="flex h-9 w-9 items-center justify-center rounded-md bg-blue-600 text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-45"
+                    tone="primary"
+                    size="lg"
                     title={chat.isLoading() ? 'Queue follow-up' : 'Send'}
-                    aria-label={chat.isLoading() ? 'Queue follow-up' : 'Send message'}
+                    label={chat.isLoading() ? 'Queue follow-up' : 'Send message'}
                   >
                     <SendIcon class="h-4 w-4" />
-                  </button>
+                  </ActionIconButton>
                 </div>
               </div>
             </form>
@@ -4972,34 +4965,34 @@ export const AIChat: Component<AIChatProps> = (props) => {
                     </div>
                   )}
                 </Show>
-                <button
-                  type="button"
+                <ActionIconButton
                   onClick={openAssistantCommandHelp}
-                  class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                  tone="outline"
+                  size="sm"
                   title={AI_CHAT_COMMAND_HELP_BUTTON_LABEL}
-                  aria-label={AI_CHAT_COMMAND_HELP_BUTTON_LABEL}
+                  label={AI_CHAT_COMMAND_HELP_BUTTON_LABEL}
                   data-testid="assistant-command-help-trigger"
                 >
                   <CircleHelpIcon class="h-3.5 w-3.5" aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
+                </ActionIconButton>
+                <ActionIconButton
                   onClick={() => cycleRecentModelRoute()}
                   disabled={!nextRecentModelRoute()}
-                  class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:text-base-content disabled:cursor-not-allowed disabled:opacity-45"
+                  tone="outline"
+                  size="sm"
                   title={
                     nextRecentModelRouteLabel()
                       ? `${AI_CHAT_CYCLE_RECENT_MODEL_LABEL}: ${nextRecentModelRouteLabel()}`
                       : AI_CHAT_CYCLE_RECENT_MODEL_LABEL
                   }
-                  aria-label={
+                  label={
                     nextRecentModelRouteLabel()
                       ? `${AI_CHAT_CYCLE_RECENT_MODEL_LABEL}: ${nextRecentModelRouteLabel()}`
                       : AI_CHAT_CYCLE_RECENT_MODEL_LABEL
                   }
                 >
                   <RotateCwIcon class="h-3.5 w-3.5" aria-hidden="true" />
-                </button>
+                </ActionIconButton>
 
                 <div class="relative" data-dropdown>
                   <button

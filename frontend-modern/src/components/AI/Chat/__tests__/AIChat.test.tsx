@@ -4,6 +4,7 @@ import { Show, createSignal } from 'solid-js';
 import type { ChatMessage, ModelInfo, ModelRouteRecoveryOption } from '../types';
 import type { QueuedFollowUp } from '../hooks/useChat';
 import { WORKFLOW_STATUS_PACE_MS } from '../workflowStatusDisplay';
+import aiChatSource from '../index.tsx?raw';
 import { logger } from '@/utils/logger';
 
 // ── Hoisted mocks (vi.mock factories reference these) ──────────────────────
@@ -548,6 +549,28 @@ describe('AIChat', () => {
   // ── Rendering ──────────────────────────────────────────────────────────
 
   describe('rendering', () => {
+    it('keeps icon-only action chrome on the shared ActionIconButton primitive', () => {
+      expect(aiChatSource).toContain(
+        "import { ActionIconButton } from '@/components/shared/Button';",
+      );
+      expect(aiChatSource).toContain('<ActionIconButton');
+      for (const retiredActionIconShell of [
+        'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface disabled:hover:text-muted',
+        'flex-shrink-0 p-2 hover:text-base-content rounded-md hover:bg-surface-hover transition-colors',
+        'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 disabled:cursor-wait disabled:opacity-70 dark:text-blue-200 dark:hover:bg-blue-900/60',
+        'rounded p-1 text-muted opacity-0 transition-opacity hover:bg-blue-100 hover:text-blue-600 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 dark:hover:bg-blue-900 dark:hover:text-blue-300',
+        'order-2 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md hover:text-base-content hover:bg-surface-hover transition-colors sm:order-none',
+        'flex h-7 w-7 items-center justify-center rounded-md border border-amber-200 bg-surface text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200 dark:hover:bg-amber-900',
+        'flex h-7 w-7 items-center justify-center rounded-md text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900 dark:text-amber-200 dark:hover:bg-amber-900',
+        'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 dark:text-blue-200 dark:hover:bg-blue-900/60',
+        'flex h-9 w-9 items-center justify-center rounded-md bg-blue-600 text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-45',
+        'flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500/30',
+        'disabled:opacity-45',
+      ]) {
+        expect(aiChatSource).not.toContain(retiredActionIconShell);
+      }
+    });
+
     it('renders the header with title when open', () => {
       renderChat();
       expect(screen.getByText('Pulse Assistant')).toBeInTheDocument();
@@ -2102,17 +2125,15 @@ describe('AIChat', () => {
     });
 
     it('searches Assistant sessions from /sessions arguments without sending a provider prompt', async () => {
-      mockAIChatAPI.listSessions
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([
-          {
-            id: 's-backup',
-            title: 'Backup Patrol Follow-up',
-            created_at: '',
-            updated_at: '',
-            message_count: 3,
-          },
-        ]);
+      mockAIChatAPI.listSessions.mockResolvedValueOnce([]).mockResolvedValueOnce([
+        {
+          id: 's-backup',
+          title: 'Backup Patrol Follow-up',
+          created_at: '',
+          updated_at: '',
+          message_count: 3,
+        },
+      ]);
 
       renderChat();
       await waitFor(() => {
@@ -2846,10 +2867,7 @@ describe('AIChat', () => {
       });
 
       await waitFor(() => expect(document.activeElement).toBe(queuedRow));
-      expect(queuedRow).toHaveAttribute(
-        'data-assistant-queue-command-target',
-        'true',
-      );
+      expect(queuedRow).toHaveAttribute('data-assistant-queue-command-target', 'true');
       expect(textarea.value).toBe('');
     });
 
@@ -5689,7 +5707,9 @@ describe('AIChat', () => {
         'Selected route connection failed before any output; retrying. · attempt 2/3 · retrying in 1.9s',
       );
       expect(
-        screen.getByTestId('assistant-activity-dock').querySelector('[data-status-kind="retrying"]'),
+        screen
+          .getByTestId('assistant-activity-dock')
+          .querySelector('[data-status-kind="retrying"]'),
       ).not.toBeNull();
     });
 

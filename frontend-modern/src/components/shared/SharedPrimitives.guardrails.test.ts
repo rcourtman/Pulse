@@ -2982,6 +2982,21 @@ describe('shared primitive guardrails', () => {
     const alertResourceActionGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'alert-resource-action-local-svg-button-shell',
     );
+    const aiChatActionIconHeaderGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'ai-chat-action-icon-header-local-shell',
+    );
+    const aiChatActionIconAccentGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'ai-chat-action-icon-accent-local-shell',
+    );
+    const aiChatActionIconPrimarySendGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'ai-chat-action-icon-primary-send-local-shell',
+    );
+    const aiChatActionIconWarningGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'ai-chat-action-icon-warning-local-shell',
+    );
+    const aiChatActionIconFooterGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'ai-chat-action-icon-footer-local-shell',
+    );
     const commandCopyGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'button-command-copy-local-shell',
     );
@@ -3817,6 +3832,7 @@ describe('shared primitive guardrails', () => {
       'src/components/Alerts/AlertResourceTableMobile.tsx',
       'src/components/Alerts/AlertResourceTableRow.tsx',
       'src/components/Alerts/ResourceTable.tsx',
+      'src/components/AI/Chat/index.tsx',
       'src/components/Settings/RolesPanel.tsx',
       'src/components/Settings/SSOProvidersPanel.tsx',
     ]);
@@ -3856,6 +3872,21 @@ describe('shared primitive guardrails', () => {
           ]),
         }),
         expect.objectContaining({
+          path: 'src/components/AI/Chat/index.tsx',
+          patterns: expect.arrayContaining([
+            'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface disabled:hover:text-muted',
+            'flex-shrink-0 p-2 hover:text-base-content rounded-md hover:bg-surface-hover transition-colors',
+            'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 disabled:cursor-wait disabled:opacity-70 dark:text-blue-200 dark:hover:bg-blue-900/60',
+            'rounded p-1 text-muted opacity-0 transition-opacity hover:bg-blue-100 hover:text-blue-600 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 dark:hover:bg-blue-900 dark:hover:text-blue-300',
+            'order-2 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md hover:text-base-content hover:bg-surface-hover transition-colors sm:order-none',
+            'flex h-7 w-7 items-center justify-center rounded-md border border-amber-200 bg-surface text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200 dark:hover:bg-amber-900',
+            'flex h-7 w-7 items-center justify-center rounded-md text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900 dark:text-amber-200 dark:hover:bg-amber-900',
+            'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 dark:text-blue-200 dark:hover:bg-blue-900/60',
+            'flex h-9 w-9 items-center justify-center rounded-md bg-blue-600 text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-45',
+            'flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500/30',
+          ]),
+        }),
+        expect.objectContaining({
           path: 'src/components/Settings/SSOProvidersPanel.tsx',
           patterns: expect.arrayContaining([
             'p-2 text-slate-500 hover:text-blue-600 hover:bg-surface-hover rounded-md transition-colors',
@@ -3881,6 +3912,37 @@ describe('shared primitive guardrails', () => {
       'src/components/Alerts/ResourceTable.test.tsx',
       'src/components/shared/Button.test.tsx',
       'src/components/shared/SharedPrimitives.guardrails.test.ts',
+    ]);
+    for (const guard of [
+      aiChatActionIconHeaderGuard,
+      aiChatActionIconAccentGuard,
+      aiChatActionIconPrimarySendGuard,
+      aiChatActionIconWarningGuard,
+      aiChatActionIconFooterGuard,
+    ]) {
+      expect(guard?.canonical?.path).toBe('src/components/shared/Button.tsx');
+      expect(guard?.canonical?.export).toBe('ActionIconButton');
+      expect(guard?.scopes).toEqual(['src/components/AI/Chat']);
+      expect(guard?.allowedPaths ?? []).toHaveLength(0);
+      expect(guard?.ignoredPaths).toEqual([
+        'src/components/AI/Chat/__tests__/AIChat.test.tsx',
+        'src/components/shared/Button.test.tsx',
+      ]);
+    }
+    expect(aiChatActionIconHeaderGuard?.allPatterns).toEqual([
+      'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content',
+    ]);
+    expect(aiChatActionIconAccentGuard?.allPatterns).toEqual([
+      'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950',
+    ]);
+    expect(aiChatActionIconPrimarySendGuard?.allPatterns).toEqual([
+      'flex h-9 w-9 items-center justify-center rounded-md bg-blue-600 text-white shadow-sm transition-colors hover:bg-blue-700',
+    ]);
+    expect(aiChatActionIconWarningGuard?.allPatterns).toEqual([
+      'flex h-7 w-7 items-center justify-center rounded-md border border-amber-200 bg-surface text-amber-700 transition-colors hover:bg-amber-100',
+    ]);
+    expect(aiChatActionIconFooterGuard?.allPatterns).toEqual([
+      'flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content',
     ]);
     expect(copyValueRule?.canonical?.path).toBe('src/components/shared/Button.tsx');
     expect(copyValueRule?.canonical?.export).toBe('CopyValueButton');
@@ -3962,6 +4024,14 @@ describe('shared primitive guardrails', () => {
     expect(buttonModelSource).toContain('COPY_VALUE_BUTTON_SIZE_CLASSES');
     expect(buttonModelSource).toContain('ACTION_ICON_BUTTON_TONE_CLASSES');
     expect(buttonModelSource).toContain('ACTION_ICON_BUTTON_SIZE_CLASSES');
+    expect(buttonModelSource).toContain('outline:');
+    expect(buttonModelSource).toContain('outlineSelected:');
+    expect(buttonModelSource).toContain('primary:');
+    expect(buttonModelSource).toContain('accentGhost:');
+    expect(buttonModelSource).toContain('warningGhost:');
+    expect(buttonModelSource).toContain('warningOutline:');
+    expect(buttonModelSource).toContain('infoGhost:');
+    expect(buttonModelSource).toContain(['lg', ": 'h-9 w-9'"].join(''));
     expect(buttonModelSource).toContain('dangerOutline:');
     expect(buttonModelSource).toContain('settingsAction:');
     expect(buttonModelSource).toContain('getCopyValueButtonClass');
@@ -3993,6 +4063,22 @@ describe('shared primitive guardrails', () => {
     expect(chatMessagesSource).not.toContain(
       'rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content',
     );
+    expect(aiChatSource).toContain('@/components/shared/Button');
+    expect(aiChatSource).toContain('ActionIconButton');
+    for (const retiredActionIconShell of [
+      'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface disabled:hover:text-muted',
+      'flex-shrink-0 p-2 hover:text-base-content rounded-md hover:bg-surface-hover transition-colors',
+      'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 disabled:cursor-wait disabled:opacity-70 dark:text-blue-200 dark:hover:bg-blue-900/60',
+      'rounded p-1 text-muted opacity-0 transition-opacity hover:bg-blue-100 hover:text-blue-600 focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 dark:hover:bg-blue-900 dark:hover:text-blue-300',
+      'order-2 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md hover:text-base-content hover:bg-surface-hover transition-colors sm:order-none',
+      'flex h-7 w-7 items-center justify-center rounded-md border border-amber-200 bg-surface text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200 dark:hover:bg-amber-900',
+      'flex h-7 w-7 items-center justify-center rounded-md text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-900 dark:text-amber-200 dark:hover:bg-amber-900',
+      'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-950 dark:text-blue-200 dark:hover:bg-blue-900/60',
+      'flex h-9 w-9 items-center justify-center rounded-md bg-blue-600 text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-45',
+      'flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted transition-colors hover:border-border hover:bg-surface-hover hover:text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500/30',
+    ]) {
+      expect(aiChatSource).not.toContain(retiredActionIconShell);
+    }
     expect(resourceDetailDrawerDebugTabSource).toContain('@/components/shared/Button');
     expect(resourceDetailDrawerDebugTabSource).not.toContain(
       'rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content',

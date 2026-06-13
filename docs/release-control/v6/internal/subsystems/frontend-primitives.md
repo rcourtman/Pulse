@@ -557,6 +557,12 @@ not a replacement status card, CTA band, or page-local nested card.
    disabled treatment, title fallback, and accessible name wiring must come
    from that shared primitive rather than page-local `<button>` plus inline SVG
    shells.
+   AI Chat follows that same boundary for drawer header controls, session row
+   actions, transcript fallback close/download actions, activity-dock queued
+   follow-up controls, composer send, footer help/route actions, and compact
+   dismiss controls: the Assistant owns chat/session behavior and copy, while
+   `ActionIconButton` owns h-6/h-7/h-8/h-9 sizing, outline, primary, accent,
+   warning, info, danger, disabled, title, and focus chrome.
    Global app-shell prompts are part of the same action boundary.
    `frontend-modern/src/components/GitHubStarBanner.tsx` may own its display
    timing, product copy, and GitHub destination, but its primary, defer, and
