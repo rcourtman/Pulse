@@ -1,5 +1,6 @@
 import { Show, createMemo } from 'solid-js';
 import { AlertTriangle, ArrowRight } from 'lucide-solid';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import type { OutdatedAgentHost } from './agentVersion';
 
 type PlatformOutdatedAgentNoticeProps = {
@@ -49,27 +50,17 @@ export function PlatformOutdatedAgentNotice(props: PlatformOutdatedAgentNoticePr
 
   return (
     <Show when={count() > 0}>
-      <div
+      <InlineNotice
         role="status"
         data-testid="platform-outdated-agent-notice"
-        class="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800/60 dark:bg-amber-900/20 dark:text-amber-200"
+        tone="warning"
+        icon={<AlertTriangle aria-hidden="true" />}
+        actionHref={props.actionHref}
+        actionLabel={actionLabel()}
+        actionIcon={<ArrowRight aria-hidden="true" />}
       >
-        <AlertTriangle class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-        <div class="min-w-0 flex-1 space-y-1">
-          <div>{message()}</div>
-          <Show when={props.actionHref}>
-            {(href) => (
-              <a
-                href={href()}
-                class="inline-flex items-center gap-1 text-xs font-semibold text-amber-900 underline-offset-2 hover:underline dark:text-amber-100"
-              >
-                <span>{actionLabel()}</span>
-                <ArrowRight class="h-3.5 w-3.5" aria-hidden="true" />
-              </a>
-            )}
-          </Show>
-        </div>
-      </div>
+        {message()}
+      </InlineNotice>
     </Show>
   );
 }

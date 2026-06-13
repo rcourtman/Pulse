@@ -3144,6 +3144,8 @@
         "frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx",
         "frontend-modern/src/components/SetupWizard/SetupWizard.tsx",
         "frontend-modern/src/components/Toast/Toast.tsx",
+        "frontend-modern/src/features/platformPage/PlatformOutdatedAgentNotice.tsx",
+        "frontend-modern/src/features/platformPage/PlatformOutdatedSensorSetupNotice.tsx",
         "frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx",
         "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx",
         "frontend-modern/src/hooks/createNonSuspendingQuery.ts",
@@ -3579,6 +3581,8 @@
             "match_files": [
               "frontend-modern/scripts/shared-template-audit.mjs",
               "frontend-modern/scripts/shared-template-registry.json",
+              "frontend-modern/src/features/platformPage/PlatformOutdatedAgentNotice.tsx",
+              "frontend-modern/src/features/platformPage/PlatformOutdatedSensorSetupNotice.tsx",
               "frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx",
               "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx"
             ],

@@ -159,6 +159,8 @@ work extends shared components instead of creating new local variants.
 130. `frontend-modern/scripts/shared-template-registry.json`
 131. `frontend-modern/src/features/platformPage/sharedPlatformPage.tsx`
 131a. `frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx`
+131b. `frontend-modern/src/features/platformPage/PlatformOutdatedAgentNotice.tsx`
+131c. `frontend-modern/src/features/platformPage/PlatformOutdatedSensorSetupNotice.tsx`
 132. `frontend-modern/src/utils/platformSupportManifest.generated.ts`
 133. `frontend-modern/src/utils/platformSupportManifest.ts`
 134. `frontend-modern/src/utils/sourcePlatformOptions.ts`
@@ -167,6 +169,8 @@ work extends shared components instead of creating new local variants.
 137. `frontend-modern/src/components/shared/Button.tsx`
 138. `frontend-modern/src/components/shared/buttonModel.ts`
 139. `frontend-modern/src/components/shared/Button.test.tsx`
+139a. `frontend-modern/src/components/shared/InlineNotice.tsx`
+139b. `frontend-modern/src/components/shared/InlineNotice.test.tsx`
 140. `frontend-modern/src/components/shared/CopyableCodeRow.tsx`
 141. `frontend-modern/src/components/shared/DetailSectionTable.tsx`
 142. `frontend-modern/src/components/shared/detailSectionModel.ts`
@@ -275,7 +279,10 @@ PersistentVolumeClaim-specific columns. Kubernetes networking inventory also
 follows that same primitive boundary while the unified-resource owner supplies
 Service, Ingress, and EndpointSlice-specific columns.
 Outdated-agent notices on platform pages are part of this same shared
-frontend/platform primitive boundary. Agent-backed and hybrid platform pages may
+frontend/platform primitive boundary and must compose
+`frontend-modern/src/components/shared/InlineNotice.tsx` for the dense notice
+shell, icon/content layout, and action-link chrome. Agent-backed and hybrid
+platform pages may
 surface a compact stale-agent cue when their row model carries Pulse agent
 identity and version evidence, but the CTA must route to the canonical
 Infrastructure settings update-command surface with scoped agent IDs instead of
@@ -3339,6 +3346,16 @@ maintaining feature-local colored bordered wrappers. The primitive owns the tone
 palette and the `scale="compact"` density used by smaller settings notices, and
 the `settings-callout-card-shell` shared-template registry rule requires current
 settings consumers to compose it instead of reintroducing local panel shells.
+
+Platform inline notices that sit inside platform pages but are not settings
+callouts must route through the shared `InlineNotice` primitive. Platform owners
+provide only the affected-resource copy, render predicate, and destination; the
+shared primitive owns the dense warning/info/danger/success tone palette,
+icon/content layout, and action-link chrome. The
+`platform-inline-notice-shell` registry rule covers current outdated-agent and
+outdated-sensor notices, and the
+`platform-inline-notice-local-amber-shell` pattern guard blocks future
+`platformPage` files from reintroducing page-local amber notice shells.
 
 Alert incident-event filter containers, labels, and chips must now route
 through the shared presentation helpers in

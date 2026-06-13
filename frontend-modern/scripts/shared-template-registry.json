@@ -338,6 +338,40 @@
       ]
     },
     {
+      "id": "platform-inline-notice-shell",
+      "category": "callout",
+      "summary": "Platform inline notices must compose InlineNotice for shared dense notice tone, icon/content layout, and action-link chrome instead of copying platform-local amber notice shells.",
+      "canonical": {
+        "path": "src/components/shared/InlineNotice.tsx",
+        "export": "InlineNotice"
+      },
+      "requiredConsumers": [
+        { "path": "src/features/platformPage/PlatformOutdatedAgentNotice.tsx" },
+        { "path": "src/features/platformPage/PlatformOutdatedSensorSetupNotice.tsx" }
+      ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/features/platformPage/PlatformOutdatedAgentNotice.tsx",
+          "patterns": [
+            "rounded-lg border border-amber-300 bg-amber-50",
+            "text-amber-900 underline-offset-2"
+          ]
+        },
+        {
+          "path": "src/features/platformPage/PlatformOutdatedSensorSetupNotice.tsx",
+          "patterns": [
+            "rounded-lg border border-amber-300 bg-amber-50",
+            "text-amber-900 underline-offset-2"
+          ]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/InlineNotice.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "status-dot-shell",
       "category": "status-indicator",
       "summary": "Resource and health indicator dots must compose StatusDot for shared size, variant, pulse, title, and aria behavior instead of recreating local rounded status spans.",
@@ -2305,6 +2339,29 @@
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "src/components/shared/Button.test.tsx",
         "src/components/Alerts/ResourceTable.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-inline-notice-local-amber-shell",
+      "category": "callout",
+      "summary": "Platform page code must not recreate the dense amber inline notice shell locally; compose InlineNotice so notice tone, spacing, icon layout, and action-link chrome stay shared.",
+      "canonical": {
+        "path": "src/components/shared/InlineNotice.tsx",
+        "export": "InlineNotice"
+      },
+      "scopes": ["src/features/platformPage"],
+      "extensions": [".tsx"],
+      "allPatterns": [
+        "rounded-lg border",
+        "border-amber-300 bg-amber-50",
+        "dark:border-amber-800/60 dark:bg-amber-900/20"
+      ],
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/InlineNotice.test.tsx",
         "scripts/shared-template-audit.mjs"
       ]
     },

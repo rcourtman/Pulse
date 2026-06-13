@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import calloutCardSource from '@/components/shared/CalloutCard.tsx?raw';
+import inlineNoticeSource from '@/components/shared/InlineNotice.tsx?raw';
 import assistantCommandHelpDialogSource from '@/components/AI/Chat/AssistantCommandHelpDialog.tsx?raw';
 import chatMessagesSource from '@/components/AI/Chat/ChatMessages.tsx?raw';
 import aiChatSource from '@/components/AI/Chat/index.tsx?raw';
@@ -137,6 +138,8 @@ import standalonePageSurfaceSource from '@/features/standalone/StandalonePageSur
 import sharedPlatformPageSource from '@/features/platformPage/sharedPlatformPage.tsx?raw';
 import platformAlertSeverityFilterOptionsSource from '@/features/platformPage/platformAlertSeverityFilterOptions.tsx?raw';
 import platformResourceDetailTableRowSource from '@/features/platformPage/PlatformResourceDetailTableRow.tsx?raw';
+import platformOutdatedAgentNoticeSource from '@/features/platformPage/PlatformOutdatedAgentNotice.tsx?raw';
+import platformOutdatedSensorSetupNoticeSource from '@/features/platformPage/PlatformOutdatedSensorSetupNotice.tsx?raw';
 import truenasPageSurfaceSource from '@/features/truenas/TrueNASPageSurface.tsx?raw';
 import truenasProtectionTableSource from '@/features/truenas/TrueNASProtectionTable.tsx?raw';
 import vmwarePageSurfaceSource from '@/features/vmware/VmwarePageSurface.tsx?raw';
@@ -3193,6 +3196,64 @@ describe('shared primitive guardrails', () => {
     expect(discoverySettingsFormSource).not.toContain(
       'rounded-md border border-amber-200 bg-amber-50/80',
     );
+  });
+
+  it('routes platform inline notices through InlineNotice', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+        forbiddenPatterns?: Array<{ path?: string; patterns?: string[] }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        scopes?: string[];
+        allPatterns?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find(
+      (rule) => rule.id === 'platform-inline-notice-shell',
+    );
+    const registeredGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-inline-notice-local-amber-shell',
+    );
+
+    expect(registeredRule?.canonical?.path).toBe('src/components/shared/InlineNotice.tsx');
+    expect(registeredRule?.canonical?.export).toBe('InlineNotice');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/features/platformPage/PlatformOutdatedAgentNotice.tsx',
+      'src/features/platformPage/PlatformOutdatedSensorSetupNotice.tsx',
+    ]);
+    expect(registeredRule?.forbiddenPatterns).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: 'src/features/platformPage/PlatformOutdatedAgentNotice.tsx',
+          patterns: expect.arrayContaining(['rounded-lg border border-amber-300 bg-amber-50']),
+        }),
+        expect.objectContaining({
+          path: 'src/features/platformPage/PlatformOutdatedSensorSetupNotice.tsx',
+          patterns: expect.arrayContaining(['rounded-lg border border-amber-300 bg-amber-50']),
+        }),
+      ]),
+    );
+    expect(registeredGuard?.canonical?.path).toBe('src/components/shared/InlineNotice.tsx');
+    expect(registeredGuard?.canonical?.export).toBe('InlineNotice');
+    expect(registeredGuard?.scopes).toEqual(['src/features/platformPage']);
+    expect(registeredGuard?.allPatterns).toEqual(
+      expect.arrayContaining(['rounded-lg border', 'border-amber-300 bg-amber-50']),
+    );
+    expect(inlineNoticeSource).toContain('INLINE_NOTICE_TONE_CLASSES');
+    expect(inlineNoticeSource).toContain('INLINE_NOTICE_ACTION_TONE_CLASSES');
+    for (const source of [
+      platformOutdatedAgentNoticeSource,
+      platformOutdatedSensorSetupNoticeSource,
+    ]) {
+      expect(source).toContain('InlineNotice');
+      expect(source).not.toContain('rounded-lg border border-amber-300 bg-amber-50');
+      expect(source).not.toContain('text-amber-900 underline-offset-2');
+    }
   });
 
   it('keeps TLS verification warnings in the shared primitive boundary', () => {
