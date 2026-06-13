@@ -3,11 +3,14 @@ import CheckIcon from 'lucide-solid/icons/check';
 import CopyIcon from 'lucide-solid/icons/copy';
 import { JSX, Show, mergeProps, splitProps } from 'solid-js';
 import {
+  getActionIconButtonClass,
   getButtonClass,
   getCopyValueButtonClass,
   getDrawerHeaderActionButtonClass,
   getDrawerHeaderActionGroupClass,
   getDrawerHeaderIconButtonClass,
+  type ActionIconButtonSize,
+  type ActionIconButtonTone,
   type ButtonSize,
   type ButtonVariant,
   type CopyValueButtonSize,
@@ -49,6 +52,17 @@ export interface CopyValueButtonProps extends Omit<
   size?: CopyValueButtonSize;
   class?: string;
   children?: JSX.Element;
+}
+
+export interface ActionIconButtonProps extends Omit<
+  JSX.ButtonHTMLAttributes<HTMLButtonElement>,
+  'children'
+> {
+  label: string;
+  tone?: ActionIconButtonTone;
+  size?: ActionIconButtonSize;
+  class?: string;
+  children: JSX.Element;
 }
 
 export interface DrawerHeaderActionGroupProps extends JSX.HTMLAttributes<HTMLDivElement> {
@@ -213,6 +227,41 @@ export function CopyValueButton(props: CopyValueButtonProps) {
       <Show when={local.copied} fallback={<CopyIcon class="h-3.5 w-3.5" aria-hidden="true" />}>
         <CheckIcon class="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
       </Show>
+    </button>
+  );
+}
+
+export function ActionIconButton(props: ActionIconButtonProps) {
+  const merged = mergeProps(
+    {
+      tone: 'neutral' as ActionIconButtonTone,
+      size: 'sm' as ActionIconButtonSize,
+      type: 'button' as const,
+    },
+    props,
+  );
+  const [local, rest] = splitProps(merged, [
+    'label',
+    'tone',
+    'size',
+    'class',
+    'children',
+    'title',
+    'aria-label',
+  ]);
+
+  return (
+    <button
+      {...rest}
+      class={getActionIconButtonClass({
+        tone: local.tone,
+        size: local.size,
+        class: local.class,
+      })}
+      title={local.title ?? local.label}
+      aria-label={local['aria-label'] ?? local.label}
+    >
+      {local.children}
     </button>
   );
 }

@@ -1453,6 +1453,12 @@ browser helper must treat `PLAYWRIGHT_BASE_URL` as the browser truth and leave
 `PULSE_BASE_URL` available for backend-oriented health checks and setup
 traffic, so split browser/backend proof can target fresh frontend code without
 rewiring the API-side contract.
+The Playwright managed-local-backend harness is part of that same canonical
+integration runtime boundary. `tests/integration/scripts/managed-local-backend.mjs`
+must seed a per-run audit signing key for local proof startup, while honoring
+explicit `PULSE_AUDIT_SIGNING_KEY` or deterministic `PULSE_E2E_AUDIT_SIGNING_KEY`
+overrides, so the runtime audit logger can remain fail-closed without breaking
+managed local backend tests.
 That same integration-README ownership includes the retired local commercial
 trial probe guidance. The snapshot-clean trial instructions for
 `tests/integration/scripts/retired-trial-acquisition-contract.sh` must describe

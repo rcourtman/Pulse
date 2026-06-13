@@ -521,6 +521,58 @@
       ]
     },
     {
+      "id": "action-icon-button-shell",
+      "category": "action-button",
+      "summary": "Compact icon-only row and inline actions must compose ActionIconButton so size, tone, focus, disabled, title, aria-label, and icon behavior stay canonical instead of recreating page-local button and SVG shells.",
+      "canonical": {
+        "path": "src/components/shared/Button.tsx",
+        "export": "ActionIconButton"
+      },
+      "requiredConsumers": [
+        { "path": "src/components/Alerts/AlertResourceTableDesktop.tsx" },
+        { "path": "src/components/Alerts/AlertResourceTableMobile.tsx" },
+        { "path": "src/components/Alerts/AlertResourceTableRow.tsx" },
+        { "path": "src/components/Alerts/ResourceTable.tsx" }
+      ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/components/Alerts/AlertResourceTableDesktop.tsx",
+          "patterns": ["<svg", "class=\"p-1 hover:text-muted", "class=\"p-1 text-red-600"]
+        },
+        {
+          "path": "src/components/Alerts/AlertResourceTableMobile.tsx",
+          "patterns": [
+            "<svg",
+            "class=\"p-1.5 bg-blue-50",
+            "class=\"p-1.5 bg-surface-hover",
+            "class=\"p-1.5 bg-green-50"
+          ]
+        },
+        {
+          "path": "src/components/Alerts/AlertResourceTableRow.tsx",
+          "patterns": [
+            "<svg",
+            "class=\"p-1 hover:text-muted",
+            "class=\"p-1 text-blue-600",
+            "class=\"p-1 hover:text-base-content"
+          ]
+        },
+        {
+          "path": "src/components/Alerts/ResourceTable.tsx",
+          "patterns": [
+            "<svg",
+            "text-slate-400 hover:text-white bg-surface hover:bg-slate-700 rounded-full p-1.5"
+          ]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "src/components/Alerts/ResourceTable.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "copy-value-action-shell",
       "category": "copy-action",
       "summary": "Copy-value icon and chip controls must compose CopyValueButton for shared copied-state iconography, disabled handling, focus, sizing, and aria behavior instead of recreating page-local copy buttons.",
@@ -2231,6 +2283,31 @@
     }
   ],
   "patternGuards": [
+    {
+      "id": "alert-resource-action-local-svg-button-shell",
+      "category": "action-button",
+      "summary": "Alert resource threshold action controls must not recreate icon-only buttons with inline SVGs locally; compose ActionIconButton and lucide icons for row, mobile, and global actions.",
+      "canonical": {
+        "path": "src/components/shared/Button.tsx",
+        "export": "ActionIconButton"
+      },
+      "scopes": ["src/components/Alerts"],
+      "extensions": [".tsx"],
+      "allPatterns": ["<button", "<svg", "Edit thresholds"],
+      "legacyReason": "Retired migration debt. Alert resource threshold action buttons compose ActionIconButton for shared size, tone, focus, and accessible label behavior.",
+      "allowedPaths": [],
+      "ignoredPaths": [
+        "src/components/Alerts/ResourceTable.test.tsx",
+        "src/components/shared/Button.test.tsx",
+        "src/components/shared/SharedPrimitives.guardrails.test.ts"
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "src/components/Alerts/ResourceTable.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
     {
       "id": "patrol-ai-local-loading-spinner-shell",
       "category": "loading-indicator",

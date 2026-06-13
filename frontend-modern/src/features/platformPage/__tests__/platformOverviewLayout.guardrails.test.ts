@@ -410,8 +410,8 @@ describe('platform overview layout guardrails', () => {
     expect(truenasSystemsTableSource).toMatch(
       /getPlatformTableHeadClassForKind\('name'\)[\s\S]{0,200}?System/,
     );
-    expect(truenasSystemsTableSource).toContain(
-      '<span class="md:hidden">{formatPercent(storagePercent())}</span>',
+    expect(truenasSystemsTableSource).toMatch(
+      /<span class="md:hidden">\s*<PlatformTablePercentValue value={storagePercent\(\)} \/>\s*<\/span>/,
     );
     expect(vsphereHostsTableSource).toMatch(
       /getPlatformTableHeadClassForKind\('name'\)[\s\S]{0,200}?Host/,

@@ -1,10 +1,12 @@
 import { Show } from 'solid-js';
+import X from 'lucide-solid/icons/x';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import type { Alert } from '@/types/api';
 import {
   ALERT_BULK_EDIT_CLEAR_LABEL,
   getAlertBulkEditOpenLabel,
 } from '@/utils/alertBulkEditPresentation';
+import { ActionIconButton } from '@/components/shared/Button';
 import { useAlertResourceTableState } from './useAlertResourceTableState';
 import type { GroupHeaderMeta, Resource } from '@/features/alerts/thresholds/tableTypes';
 import { AlertResourceTableDesktop } from './AlertResourceTableDesktop';
@@ -135,22 +137,15 @@ export function ResourceTable(props: ResourceTableProps) {
             >
               {getAlertBulkEditOpenLabel()}
             </button>
-            <button
-              type="button"
-              class="text-slate-400 hover:text-white bg-surface hover:bg-slate-700 rounded-full p-1.5 transition-colors focus:outline-none"
+            <ActionIconButton
+              class="rounded-full bg-surface text-slate-400 hover:bg-slate-700 hover:text-white focus-visible:ring-offset-0"
               onClick={clearSelectedIds}
-              aria-label={ALERT_BULK_EDIT_CLEAR_LABEL}
-              title={ALERT_BULK_EDIT_CLEAR_LABEL}
+              label={ALERT_BULK_EDIT_CLEAR_LABEL}
+              size="sm"
+              tone="neutral"
             >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
+              <X class="w-4 h-4" aria-hidden="true" />
+            </ActionIconButton>
           </div>
         </div>
       </Show>

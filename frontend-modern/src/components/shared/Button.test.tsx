@@ -2,6 +2,7 @@ import { Route, Router } from '@solidjs/router';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  ActionIconButton,
   Button,
   ButtonLink,
   CommandCopyButton,
@@ -27,6 +28,10 @@ describe('Button', () => {
     expect(buttonModelSource).toContain('export const COPY_VALUE_BUTTON_VARIANT_CLASSES');
     expect(buttonModelSource).toContain('export const COPY_VALUE_BUTTON_SIZE_CLASSES');
     expect(buttonModelSource).toContain('getCopyValueButtonClass');
+    expect(buttonModelSource).toContain('ACTION_ICON_BUTTON_TONE_CLASSES');
+    expect(buttonModelSource).toContain('ACTION_ICON_BUTTON_SIZE_CLASSES');
+    expect(buttonModelSource).toContain('getActionIconButtonClass');
+    expect(buttonSource).toContain('export function ActionIconButton');
     expect(buttonModelSource).toContain(
       "secondary: 'border border-border bg-surface text-base-content shadow-sm hover:bg-surface-hover'",
     );
@@ -192,6 +197,26 @@ describe('Button', () => {
     expect(chipButton).toHaveClass('text-[10px]');
 
     expect(screen.getByRole('button', { name: 'Copy blank' })).toBeDisabled();
+  });
+
+  it('renders compact action icon buttons through the shared primitive', () => {
+    const onClick = vi.fn();
+
+    render(() => (
+      <ActionIconButton label="Edit thresholds" tone="accent" size="xs" onClick={onClick}>
+        <span aria-hidden="true">E</span>
+      </ActionIconButton>
+    ));
+
+    const button = screen.getByRole('button', { name: 'Edit thresholds' });
+    expect(button).toHaveAttribute('type', 'button');
+    expect(button).toHaveAttribute('title', 'Edit thresholds');
+    expect(button).toHaveClass('h-6');
+    expect(button).toHaveClass('w-6');
+    expect(button).toHaveClass('bg-blue-50');
+
+    button.click();
+    expect(onClick).toHaveBeenCalledTimes(1);
   });
 
   it('renders drawer header actions through the shared button family', () => {

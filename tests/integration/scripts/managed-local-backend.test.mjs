@@ -71,12 +71,35 @@ test('buildManagedLocalBackendEnv seeds auth, bootstrap token, and billing path'
   assert.equal(env.PULSE_DEV, 'true');
   assert.equal(env.PULSE_DATA_DIR, state.dataDir);
   assert.equal(env.PULSE_E2E_BILLING_STATE_PATH, state.billingStatePath);
+  assert.match(env.PULSE_AUDIT_SIGNING_KEY, /^[0-9a-f]{64}$/);
   assert.equal(env.PULSE_E2E_BOOTSTRAP_TOKEN.length > 0, true);
   assert.equal(env.PULSE_E2E_PRIMARY_API_TOKEN.length > 0, true);
   assert.equal(env.PULSE_METRICS_PORT, '0');
   assert.equal('ALLOW_ADMIN_BYPASS' in env, false);
   assert.equal(env.PULSE_MULTI_TENANT_ENABLED, 'true');
   assert.match(env.ALLOWED_ORIGINS, /5173/);
+});
+
+test('buildManagedLocalBackendEnv preserves explicit audit signing key', () => {
+  const state = buildManagedLocalBackendState({
+    PULSE_E2E_LOCAL_BACKEND_PORT: '9002',
+  });
+  const env = buildManagedLocalBackendEnv(state, {
+    PULSE_AUDIT_SIGNING_KEY: 'explicit-audit-key',
+  });
+
+  assert.equal(env.PULSE_AUDIT_SIGNING_KEY, 'explicit-audit-key');
+});
+
+test('buildManagedLocalBackendEnv accepts deterministic e2e audit signing key', () => {
+  const state = buildManagedLocalBackendState({
+    PULSE_E2E_LOCAL_BACKEND_PORT: '9002',
+  });
+  const env = buildManagedLocalBackendEnv(state, {
+    PULSE_E2E_AUDIT_SIGNING_KEY: 'e2e-audit-key',
+  });
+
+  assert.equal(env.PULSE_AUDIT_SIGNING_KEY, 'e2e-audit-key');
 });
 
 test('buildManagedLocalBackendEnv seeds deterministic auth in hosted mode', () => {

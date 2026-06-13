@@ -3033,6 +3033,7 @@
               "tests/integration/QUICK_START.md",
               "tests/integration/README.md",
               "tests/integration/scripts/managed-dev-runtime.mjs",
+              "tests/integration/scripts/managed-local-backend.mjs",
               "tests/integration/tests/helpers.ts",
               "tests/integration/tests/runtime-defaults.ts"
             ],
@@ -3044,6 +3045,7 @@
               "scripts/tests/test-hot-dev-bg.sh",
               "scripts/tests/test-hot-dev-runtime.sh",
               "scripts/tests/test-toggle-mock.sh",
+              "tests/integration/scripts/managed-local-backend.test.mjs",
               "tests/integration/tests/16-dev-runtime-recovery.spec.ts"
             ]
           },

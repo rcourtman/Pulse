@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { test as base, expect } from "@playwright/test";
 
 import { createAuthenticatedStorageState } from "./helpers";
+import { PATROL_ROUTE } from "./routes";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -321,7 +322,7 @@ test.describe("TrueNAS patrol finding links", () => {
       });
     });
 
-    await page.goto("/ai", { waitUntil: "domcontentloaded" });
+    await page.goto(PATROL_ROUTE, { waitUntil: "domcontentloaded" });
 
     await expect(page.getByRole("button", { name: "Findings" })).toBeVisible();
 

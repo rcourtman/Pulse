@@ -201,6 +201,7 @@ import diskListSource from '@/components/Storage/DiskList.tsx?raw';
 import alertOverviewStatsCardsSource from '@/features/alerts/AlertOverviewStatsCards.tsx?raw';
 import alertHistoryTableSectionSource from '@/features/alerts/AlertHistoryTableSection.tsx?raw';
 import alertHistoryTableGroupRowSource from '@/features/alerts/AlertHistoryTableGroupRow.tsx?raw';
+import alertResourceTableSource from '@/components/Alerts/ResourceTable.tsx?raw';
 import alertResourceTableDesktopSource from '@/components/Alerts/AlertResourceTableDesktop.tsx?raw';
 import alertResourceTableMobileSource from '@/components/Alerts/AlertResourceTableMobile.tsx?raw';
 import alertResourceTableRowSource from '@/components/Alerts/AlertResourceTableRow.tsx?raw';
@@ -2440,8 +2441,12 @@ describe('shared primitive guardrails', () => {
       }>;
     };
     const registeredRule = registry.rules?.find((rule) => rule.id === 'button-command-shell');
+    const actionIconRule = registry.rules?.find((rule) => rule.id === 'action-icon-button-shell');
     const registeredGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'button-secondary-command-local-shell',
+    );
+    const alertResourceActionGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'alert-resource-action-local-svg-button-shell',
     );
     const commandCopyGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'button-command-copy-local-shell',
@@ -2792,6 +2797,61 @@ describe('shared primitive guardrails', () => {
     expect(drawerHeaderIconGuard?.scopes).toEqual(['src/components', 'src/features', 'src/pages']);
     expect(drawerHeaderIconGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(drawerHeaderIconGuard?.ignoredPaths).toEqual(['src/components/shared/Button.test.tsx']);
+    expect(actionIconRule?.canonical?.path).toBe('src/components/shared/Button.tsx');
+    expect(actionIconRule?.canonical?.export).toBe('ActionIconButton');
+    expect(actionIconRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/components/Alerts/AlertResourceTableDesktop.tsx',
+      'src/components/Alerts/AlertResourceTableMobile.tsx',
+      'src/components/Alerts/AlertResourceTableRow.tsx',
+      'src/components/Alerts/ResourceTable.tsx',
+    ]);
+    expect(actionIconRule?.forbiddenPatterns).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: 'src/components/Alerts/AlertResourceTableDesktop.tsx',
+          patterns: expect.arrayContaining([
+            '<svg',
+            'class="p-1 hover:text-muted',
+            'class="p-1 text-red-600',
+          ]),
+        }),
+        expect.objectContaining({
+          path: 'src/components/Alerts/AlertResourceTableMobile.tsx',
+          patterns: expect.arrayContaining([
+            '<svg',
+            'class="p-1.5 bg-blue-50',
+            'class="p-1.5 bg-surface-hover',
+            'class="p-1.5 bg-green-50',
+          ]),
+        }),
+        expect.objectContaining({
+          path: 'src/components/Alerts/AlertResourceTableRow.tsx',
+          patterns: expect.arrayContaining([
+            '<svg',
+            'class="p-1 hover:text-muted',
+            'class="p-1 text-blue-600',
+            'class="p-1 hover:text-base-content',
+          ]),
+        }),
+        expect.objectContaining({
+          path: 'src/components/Alerts/ResourceTable.tsx',
+          patterns: expect.arrayContaining([
+            '<svg',
+            'text-slate-400 hover:text-white bg-surface hover:bg-slate-700 rounded-full p-1.5',
+          ]),
+        }),
+      ]),
+    );
+    expect(alertResourceActionGuard?.canonical?.path).toBe('src/components/shared/Button.tsx');
+    expect(alertResourceActionGuard?.canonical?.export).toBe('ActionIconButton');
+    expect(alertResourceActionGuard?.allPatterns).toEqual(['<button', '<svg', 'Edit thresholds']);
+    expect(alertResourceActionGuard?.scopes).toEqual(['src/components/Alerts']);
+    expect(alertResourceActionGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(alertResourceActionGuard?.ignoredPaths).toEqual([
+      'src/components/Alerts/ResourceTable.test.tsx',
+      'src/components/shared/Button.test.tsx',
+      'src/components/shared/SharedPrimitives.guardrails.test.ts',
+    ]);
     expect(copyValueRule?.canonical?.path).toBe('src/components/shared/Button.tsx');
     expect(copyValueRule?.canonical?.export).toBe('CopyValueButton');
     expect(copyValueRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
@@ -2831,12 +2891,14 @@ describe('shared primitive guardrails', () => {
     expect(buttonSource).toContain('export function Button');
     expect(buttonSource).toContain('export function CommandCopyButton');
     expect(buttonSource).toContain('export function CopyValueButton');
+    expect(buttonSource).toContain('export function ActionIconButton');
     expect(buttonSource).toContain('export function DrawerHeaderActionButton');
     expect(buttonSource).toContain('export function DrawerHeaderActionGroup');
     expect(buttonSource).toContain('export function DrawerHeaderIconButton');
     expect(buttonSource).toContain('export function ButtonLink');
     expect(buttonSource).toContain('getButtonClass');
     expect(buttonSource).toContain('getCopyValueButtonClass');
+    expect(buttonSource).toContain('getActionIconButtonClass');
     expect(copyableCodeRowSource).toContain('CopyValueButton');
     expect(buttonModelSource).toContain('BUTTON_VARIANT_CLASSES');
     expect(buttonModelSource).toContain('BUTTON_SIZE_CLASSES');
@@ -2848,11 +2910,23 @@ describe('shared primitive guardrails', () => {
     expect(buttonModelSource).toContain('successGhost:');
     expect(buttonModelSource).toContain('COPY_VALUE_BUTTON_VARIANT_CLASSES');
     expect(buttonModelSource).toContain('COPY_VALUE_BUTTON_SIZE_CLASSES');
+    expect(buttonModelSource).toContain('ACTION_ICON_BUTTON_TONE_CLASSES');
+    expect(buttonModelSource).toContain('ACTION_ICON_BUTTON_SIZE_CLASSES');
     expect(buttonModelSource).toContain('dangerOutline:');
     expect(buttonModelSource).toContain('settingsAction:');
     expect(buttonModelSource).toContain('getCopyValueButtonClass');
+    expect(buttonModelSource).toContain('getActionIconButtonClass');
     expect(buttonModelSource).toContain('getDrawerHeaderActionButtonClass');
     expect(buttonModelSource).toContain('getDrawerHeaderIconButtonClass');
+    for (const source of [
+      alertResourceTableSource,
+      alertResourceTableDesktopSource,
+      alertResourceTableMobileSource,
+      alertResourceTableRowSource,
+    ]) {
+      expect(source).toContain('ActionIconButton');
+      expect(source).not.toContain(['<', 'svg'].join(''));
+    }
     for (const drawerSource of [guestDrawerSource, resourceDetailDrawerSource]) {
       expect(drawerSource).toContain('@/components/shared/Button');
       expect(drawerSource).toContain('DrawerHeaderActionGroup');

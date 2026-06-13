@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import net from 'node:net';
 
 import { withExclusiveLock } from '../../../scripts/exclusive-lock.mjs';
@@ -155,6 +156,9 @@ export function buildManagedLocalBackendEnv(state, env = process.env) {
     PULSE_PUBLIC_URL: state.baseURL,
     PULSE_DATA_DIR: state.dataDir,
     PULSE_AUDIT_DIR: state.dataDir,
+    PULSE_AUDIT_SIGNING_KEY: trim(env.PULSE_AUDIT_SIGNING_KEY)
+      || trim(env.PULSE_E2E_AUDIT_SIGNING_KEY)
+      || randomBytes(32).toString('hex'),
     PULSE_METRICS_PORT: state.metricsPort,
     PULSE_DEV: 'true',
     PULSE_E2E_BILLING_STATE_PATH: state.billingStatePath,

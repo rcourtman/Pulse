@@ -72,6 +72,8 @@ export const getButtonClass = (options: ButtonClassOptions = {}): string =>
 
 export type CopyValueButtonVariant = 'neutral' | 'ghost' | 'accent' | 'chip';
 export type CopyValueButtonSize = 'xs' | 'sm' | 'md' | 'lg' | 'chip';
+export type ActionIconButtonTone = 'neutral' | 'muted' | 'accent' | 'success' | 'danger';
+export type ActionIconButtonSize = 'xs' | 'sm' | 'md';
 
 export const COPY_VALUE_BUTTON_BASE_CLASS =
   'inline-flex shrink-0 items-center justify-center rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
@@ -103,6 +105,42 @@ export const getCopyValueButtonClass = (options: CopyValueButtonClassOptions = {
     COPY_VALUE_BUTTON_BASE_CLASS,
     COPY_VALUE_BUTTON_VARIANT_CLASSES[options.variant ?? 'neutral'],
     COPY_VALUE_BUTTON_SIZE_CLASSES[options.size ?? 'md'],
+    options.class,
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+export const ACTION_ICON_BUTTON_BASE_CLASS =
+  'inline-flex shrink-0 items-center justify-center rounded-md transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50';
+
+export const ACTION_ICON_BUTTON_TONE_CLASSES: Record<ActionIconButtonTone, string> = {
+  neutral: 'text-base-content hover:bg-surface-hover hover:text-base-content',
+  muted: 'text-muted hover:bg-surface-hover hover:text-base-content',
+  accent:
+    'bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700 dark:bg-blue-900 dark:text-blue-400 dark:hover:bg-blue-950 dark:hover:text-blue-300',
+  success:
+    'bg-green-50 text-green-600 hover:bg-green-100 hover:text-green-700 dark:bg-green-900 dark:text-green-400 dark:hover:bg-green-950 dark:hover:text-green-300',
+  danger:
+    'text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950 dark:hover:text-red-300',
+};
+
+export const ACTION_ICON_BUTTON_SIZE_CLASSES: Record<ActionIconButtonSize, string> = {
+  xs: 'h-6 w-6',
+  sm: 'h-7 w-7',
+  md: 'h-8 w-8',
+};
+
+export type ActionIconButtonClassOptions = {
+  tone?: ActionIconButtonTone;
+  size?: ActionIconButtonSize;
+  class?: string;
+};
+
+export const getActionIconButtonClass = (options: ActionIconButtonClassOptions = {}): string =>
+  [
+    ACTION_ICON_BUTTON_BASE_CLASS,
+    ACTION_ICON_BUTTON_TONE_CLASSES[options.tone ?? 'neutral'],
+    ACTION_ICON_BUTTON_SIZE_CLASSES[options.size ?? 'sm'],
     options.class,
   ]
     .filter(Boolean)

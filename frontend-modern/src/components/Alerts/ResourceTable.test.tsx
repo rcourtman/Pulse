@@ -114,6 +114,26 @@ vi.mock('lucide-solid/icons/rotate-ccw', () => ({
   default: (props: any) => <svg data-testid="rotate-ccw-icon" class={props.class} />,
 }));
 
+vi.mock('lucide-solid/icons/check', () => ({
+  default: (props: any) => <svg data-testid="check-icon" class={props.class} />,
+}));
+
+vi.mock('lucide-solid/icons/chevron-down', () => ({
+  default: (props: any) => <svg data-testid="chevron-down-icon" class={props.class} />,
+}));
+
+vi.mock('lucide-solid/icons/pencil', () => ({
+  default: (props: any) => <svg data-testid="pencil-icon" class={props.class} />,
+}));
+
+vi.mock('lucide-solid/icons/trash-2', () => ({
+  default: (props: any) => <svg data-testid="trash-2-icon" class={props.class} />,
+}));
+
+vi.mock('lucide-solid/icons/x', () => ({
+  default: (props: any) => <svg data-testid="x-icon" class={props.class} />,
+}));
+
 import { ResourceTable, type Resource } from './ResourceTable';
 
 // --- Helpers ---
@@ -276,9 +296,13 @@ describe('ResourceTable', () => {
 
   describe('table ownership model', () => {
     it('keeps table state and metric rules in dedicated owners', () => {
+      const rawSvgTag = ['<', 'svg'].join('');
+
       expect(resourceTableSource).toContain('useAlertResourceTableState');
       expect(resourceTableSource).toContain('AlertResourceTableDesktop');
       expect(resourceTableSource).toContain('AlertResourceTableMobile');
+      expect(resourceTableSource).toContain('ActionIconButton');
+      expect(resourceTableSource).not.toContain(rawSvgTag);
       expect(resourceTableSource).not.toContain('const flattenResources = (): Resource[] => {');
       expect(resourceTableSource).not.toContain(
         'const normalizeMetricKey = (column: string): string => {',
@@ -291,15 +315,21 @@ describe('ResourceTable', () => {
       );
       expect(alertResourceTableDesktopSource).toContain('AlertResourceTableRow');
       expect(alertResourceTableDesktopSource).toContain('AlertResourceGroupHeader');
+      expect(alertResourceTableDesktopSource).toContain('ActionIconButton');
+      expect(alertResourceTableDesktopSource).not.toContain(rawSvgTag);
       expect(alertResourceTableMobileSource).toContain('export function AlertResourceTableMobile');
       expect(alertResourceTableMobileSource).toContain('AlertResourceGroupHeader');
       expect(alertResourceTableMobileSource).toContain('FormTextarea');
+      expect(alertResourceTableMobileSource).toContain('ActionIconButton');
       expect(alertResourceTableMobileSource).not.toContain(['<', 'textarea'].join(''));
+      expect(alertResourceTableMobileSource).not.toContain(rawSvgTag);
       expect(alertResourceGroupHeaderSource).toContain('export function AlertResourceGroupHeader');
       expect(alertResourceTableRowSource).toContain('export function AlertResourceTableRow');
       expect(alertResourceTableRowSource).toContain('alertResourceSupportsMetric');
       expect(alertResourceTableRowSource).toContain('FormTextarea');
+      expect(alertResourceTableRowSource).toContain('ActionIconButton');
       expect(alertResourceTableRowSource).not.toContain(['<', 'textarea'].join(''));
+      expect(alertResourceTableRowSource).not.toContain(rawSvgTag);
       expect(alertResourceTableStateSource).toContain('export function useAlertResourceTableState');
       expect(alertResourceTableModelSource).toContain(
         'export function normalizeAlertResourceMetricKey',

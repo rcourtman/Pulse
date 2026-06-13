@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import appSource from '@/App.tsx?raw';
@@ -9,6 +9,20 @@ import appRuntimeStateSource from '@/useAppRuntimeState.ts?raw';
 
 const appStylesSource = readFileSync(join(process.cwd(), 'src/index.css'), 'utf8');
 const headerAuditSource = readFileSync(join(process.cwd(), 'scripts/header-audit.mjs'), 'utf8');
+const integrationTestsDir = join(process.cwd(), '..', 'tests', 'integration', 'tests');
+
+function readIntegrationTestSources(dir: string): Array<{ path: string; source: string }> {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      return readIntegrationTestSources(path);
+    }
+    if (!entry.isFile() || !path.endsWith('.ts')) {
+      return [];
+    }
+    return [{ path, source: readFileSync(path, 'utf8') }];
+  });
+}
 
 describe('App architecture', () => {
   it('keeps App as the entry shell that delegates runtime and chrome ownership', () => {
@@ -175,12 +189,29 @@ describe('App architecture', () => {
     expect(appSource).toContain("if (e.key === 'Escape' && aiChatStore.isOpen) {");
     expect(appSource).toContain('window.setTimeout(() => {');
     expect(appSource).toContain("closest('[data-ai-model-picker]')");
-    expect(appSource).toContain('if (!e.defaultPrevented && !isModelPickerEscape && aiChatStore.isOpen) {');
+    expect(appSource).toContain(
+      'if (!e.defaultPrevented && !isModelPickerEscape && aiChatStore.isOpen) {',
+    );
     expect(appSource).toContain('<AIChat onClose={() => aiChatStore.close()} />');
     expect(appSource).toContain('showOrgSwitcher={runtime.showOrgSwitcher}');
     expect(appSource).not.toContain('TrialBanner');
     expect(appSource).not.toContain('MonitoredSystemLimitWarningBanner');
     expect(appSource).not.toContain('monitoredSystemLimitWarningBanner');
+  });
+
+  it('keeps integration browser proofs off the retired AI route', () => {
+    const routesSource = readFileSync(join(integrationTestsDir, 'routes.ts'), 'utf8');
+    const retiredRouteNavigations = readIntegrationTestSources(integrationTestsDir).flatMap(
+      ({ path, source }) =>
+        source
+          .split('\n')
+          .flatMap((line, index) =>
+            /page\.goto\(\s*(['"])\/ai\1/.test(line) ? [`${path}:${index + 1}`] : [],
+          ),
+    );
+
+    expect(routesSource).toContain('export const PATROL_ROUTE = "/patrol";');
+    expect(retiredRouteNavigations).toEqual([]);
   });
 
   it('keeps authenticated chrome in AppLayout and hosted bootstrap in useAppRuntimeState', () => {

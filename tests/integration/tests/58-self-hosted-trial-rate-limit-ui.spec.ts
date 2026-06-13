@@ -86,9 +86,7 @@ test.describe.serial('Self-hosted paid prompt visibility', () => {
 
     await page.goto('/settings/security-roles');
 
-    await expect(
-      page.getByRole('heading', { name: 'Infrastructure', exact: true }),
-    ).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Roles' })).toBeVisible();
     await expect(page.getByText('Custom Roles (Pro)')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Remote Access' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Roles' })).toHaveCount(0);

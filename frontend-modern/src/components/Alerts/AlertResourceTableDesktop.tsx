@@ -1,5 +1,8 @@
 import { For, Show, createEffect } from 'solid-js';
+import ChevronDown from 'lucide-solid/icons/chevron-down';
+import Trash2 from 'lucide-solid/icons/trash-2';
 
+import { ActionIconButton } from '@/components/shared/Button';
 import { Card } from '@/components/shared/Card';
 import { TogglePrimitive } from '@/components/shared/Toggle';
 import { StatusBadge } from '@/components/shared/StatusBadge';
@@ -331,53 +334,31 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
                       typeof props.table.onMetricDelayChange === 'function'
                     }
                   >
-                    <button
-                      type="button"
+                    <ActionIconButton
                       onClick={() => props.setShowDelayRow(!props.showDelayRow())}
-                      class="p-1 hover:text-muted transition-colors"
-                      title={
+                      label={
                         props.showDelayRow()
                           ? 'Hide alert delay settings'
                           : 'Show alert delay settings'
                       }
-                      aria-label={
-                        props.showDelayRow()
-                          ? 'Hide alert delay settings'
-                          : 'Show alert delay settings'
-                      }
+                      tone="muted"
+                      size="xs"
                     >
-                      <svg
+                      <ChevronDown
                         class={`w-4 h-4 transition-transform ${props.showDelayRow() ? 'rotate-180' : ''}`}
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M19 9l-7 7-7-7"
-                        />
-                      </svg>
-                    </button>
+                        aria-hidden="true"
+                      />
+                    </ActionIconButton>
                   </Show>
                   <Show when={props.hasCustomGlobalDefaults() && props.table.onResetDefaults}>
-                    <button
-                      type="button"
+                    <ActionIconButton
                       onClick={() => props.table.onResetDefaults?.()}
-                      class="p-1 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors"
-                      title={getAlertResourceTableResetFactoryDefaultsLabel()}
-                      aria-label={getAlertResourceTableResetFactoryDefaultsLabel()}
+                      label={getAlertResourceTableResetFactoryDefaultsLabel()}
+                      tone="danger"
+                      size="xs"
                     >
-                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                        />
-                      </svg>
-                    </button>
+                      <Trash2 class="w-4 h-4" aria-hidden="true" />
+                    </ActionIconButton>
                   </Show>
                   <Show when={!props.table.showDelayColumn && !props.hasCustomGlobalDefaults()}>
                     <span class="text-sm text-slate-400" aria-hidden="true">

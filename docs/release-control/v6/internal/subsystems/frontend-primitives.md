@@ -510,6 +510,12 @@ not a replacement status card, CTA band, or page-local nested card.
    and reporting exports use the shared `success`, `successOutline`, and
    `successGhost` Button variants instead of carrying page-local emerald action
    shells.
+   Compact icon-only row, inline, and floating action controls belong to
+   `ActionIconButton`. Feature surfaces may own the icon choice, click handler,
+   label text, and layout slot, but icon-button size, tone, focus ring,
+   disabled treatment, title fallback, and accessible name wiring must come
+   from that shared primitive rather than page-local `<button>` plus inline SVG
+   shells.
    Settings selection helpers such as `ResourcePicker` must use the same
    `Button` primitive for select-all, clear, and chip remove actions instead of
    restoring footer-local action shells.

@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { apiRequest, ensureAuthenticated } from "./helpers";
+import { PATROL_ROUTE } from "./routes";
 
 /**
  * V6 License Activation E2E Test
@@ -298,7 +299,7 @@ test.describe.serial("V6 license activation flow", () => {
     ).toBeVisible();
     await expect(page.getByText(/Patrol quickstart/i)).toHaveCount(0);
 
-    await page.goto("/ai");
+    await page.goto(PATROL_ROUTE);
     await expect(
       page.getByRole("heading", { name: "Patrol" }).first(),
     ).toBeVisible();

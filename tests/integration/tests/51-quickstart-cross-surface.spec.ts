@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { ensureAuthenticated } from "./helpers";
+import { PATROL_ROUTE } from "./routes";
 
 type AISettingsPayload = {
   enabled: boolean;
@@ -379,7 +380,7 @@ test.describe("Retired quickstart browser contract", () => {
       },
     });
 
-    await page.goto("/ai", { waitUntil: "domcontentloaded" });
+    await page.goto(PATROL_ROUTE, { waitUntil: "domcontentloaded" });
 
     await expect(page.getByText("Patrol Paused").first()).toBeVisible();
     await expect(

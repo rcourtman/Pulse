@@ -170,7 +170,7 @@ test.describe("Assistant & Patrol settings provider setup", () => {
     expect(updateRequests[0]).not.toHaveProperty("model");
 
     await expect(
-      page.getByText("Assistant & Patrol Model Overrides"),
+      page.getByRole("button", { name: "Model Overrides" }),
     ).toBeVisible();
     const workloadDiscoveryToggle = page.getByRole("button", {
       name: /workload discovery/i,
@@ -179,10 +179,7 @@ test.describe("Assistant & Patrol settings provider setup", () => {
     await workloadDiscoveryToggle.click();
     await expect(page.getByText("Enable workload discovery")).toBeVisible();
     await expect(
-      page.getByText(
-        "Workload discovery gives Pulse Assistant and Patrol concrete service context, so chat responses and verification findings can reference real services and commands instead of generic advice.",
-        { exact: true },
-      ),
+      page.getByRole("button", { name: "Run discovery now" }),
     ).toBeVisible();
     await expect(
       page.getByRole("button", { name: /enable assistant and patrol/i }),

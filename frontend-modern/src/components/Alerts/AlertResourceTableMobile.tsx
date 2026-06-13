@@ -1,6 +1,10 @@
 import { For, Show } from 'solid-js';
+import Check from 'lucide-solid/icons/check';
+import Pencil from 'lucide-solid/icons/pencil';
 import RotateCcw from 'lucide-solid/icons/rotate-ccw';
+import X from 'lucide-solid/icons/x';
 
+import { ActionIconButton } from '@/components/shared/Button';
 import { Card } from '@/components/shared/Card';
 import { FormTextarea } from '@/components/shared/FormTextarea';
 import { TogglePrimitive } from '@/components/shared/Toggle';
@@ -254,68 +258,32 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
 
                       <div class="flex gap-1 shrink-0">
                         <Show when={!isEditing() && resource.type !== 'dockerHost'}>
-                          <button
-                            type="button"
+                          <ActionIconButton
                             onClick={() => startEditing(resource)}
-                            class="p-1.5 bg-blue-50 dark:bg-blue-900 text-blue-600 rounded"
-                            aria-label={`Edit thresholds for ${getAlertResourceLabel(resource)}`}
+                            label={`Edit thresholds for ${getAlertResourceLabel(resource)}`}
+                            tone="accent"
+                            size="sm"
                           >
-                            <svg
-                              class="w-4 h-4"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
-                              />
-                            </svg>
-                          </button>
+                            <Pencil class="w-4 h-4" aria-hidden="true" />
+                          </ActionIconButton>
                         </Show>
                         <Show when={isEditing()}>
-                          <button
-                            type="button"
+                          <ActionIconButton
                             onClick={cancelEditing}
-                            class="p-1.5 bg-surface-hover text-slate-600 rounded"
-                            aria-label="Cancel threshold edits"
+                            label="Cancel threshold edits"
+                            tone="muted"
+                            size="sm"
                           >
-                            <svg
-                              class="w-4 h-4"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M6 18L18 6M6 6l12 12"
-                              />
-                            </svg>
-                          </button>
-                          <button
-                            type="button"
+                            <X class="w-4 h-4" aria-hidden="true" />
+                          </ActionIconButton>
+                          <ActionIconButton
                             onClick={() => saveEditing(resource.id)}
-                            class="p-1.5 bg-green-50 dark:bg-green-900 text-green-600 rounded"
-                            aria-label={`Save threshold edits for ${getAlertResourceLabel(resource)}`}
+                            label={`Save threshold edits for ${getAlertResourceLabel(resource)}`}
+                            tone="success"
+                            size="sm"
                           >
-                            <svg
-                              class="w-4 h-4"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M5 13l4 4L19 7"
-                              />
-                            </svg>
-                          </button>
+                            <Check class="w-4 h-4" aria-hidden="true" />
+                          </ActionIconButton>
                         </Show>
                         <Show
                           when={
@@ -323,15 +291,15 @@ export function AlertResourceTableMobile(props: AlertResourceTableMobileProps) {
                             (resource.type === 'agent' && resource.disableConnectivity)
                           }
                         >
-                          <button
-                            type="button"
+                          <ActionIconButton
                             onClick={() => props.table.onRemoveOverride(resource.id)}
-                            class="p-1.5 bg-surface-alt hover:text-muted rounded transition-colors"
-                            aria-label={`Revert to defaults for ${getAlertResourceLabel(resource)}`}
+                            label={`Revert to defaults for ${getAlertResourceLabel(resource)}`}
                             title={getAlertResourceTableRevertToDefaultsLabel()}
+                            tone="neutral"
+                            size="sm"
                           >
-                            <RotateCcw class="w-4 h-4" />
-                          </button>
+                            <RotateCcw class="w-4 h-4" aria-hidden="true" />
+                          </ActionIconButton>
                         </Show>
                       </div>
                     </div>

@@ -1,6 +1,9 @@
 import { For, Show } from 'solid-js';
+import Pencil from 'lucide-solid/icons/pencil';
 import RotateCcw from 'lucide-solid/icons/rotate-ccw';
+import X from 'lucide-solid/icons/x';
 
+import { ActionIconButton } from '@/components/shared/Button';
 import { FormTextarea } from '@/components/shared/FormTextarea';
 import { TogglePrimitive } from '@/components/shared/Toggle';
 import { StatusBadge } from '@/components/shared/StatusBadge';
@@ -563,22 +566,14 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
           <Show
             when={!isEditing()}
             fallback={
-              <button
-                type="button"
+              <ActionIconButton
                 onClick={cancelEditing}
-                class="p-1 hover:text-muted"
-                title="Cancel editing"
-                aria-label="Cancel editing"
+                label="Cancel editing"
+                tone="muted"
+                size="xs"
               >
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
+                <X class="w-4 h-4" aria-hidden="true" />
+              </ActionIconButton>
             }
           >
             {(() => {
@@ -599,33 +594,26 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
                   }
                 >
                   <Show when={showEdit}>
-                    <button
-                      type="button"
+                    <ActionIconButton
                       onClick={() => startEditing()}
-                      class="p-1 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                      label={`Edit thresholds for ${resourceLabel()}`}
                       title="Edit thresholds"
-                      aria-label={`Edit thresholds for ${resourceLabel()}`}
+                      tone="accent"
+                      size="xs"
                     >
-                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                        />
-                      </svg>
-                    </button>
+                      <Pencil class="w-4 h-4" aria-hidden="true" />
+                    </ActionIconButton>
                   </Show>
                   <Show when={showRevert}>
-                    <button
-                      type="button"
+                    <ActionIconButton
                       onClick={() => props.onRemoveOverride(props.resource.id)}
-                      class="p-1 hover:text-base-content transition-colors"
+                      label={`Revert to defaults for ${resourceLabel()}`}
                       title={getAlertResourceTableRevertToDefaultsLabel()}
-                      aria-label={`Revert to defaults for ${resourceLabel()}`}
+                      tone="neutral"
+                      size="xs"
                     >
-                      <RotateCcw class="w-4 h-4" />
-                    </button>
+                      <RotateCcw class="w-4 h-4" aria-hidden="true" />
+                    </ActionIconButton>
                   </Show>
                 </Show>
               );

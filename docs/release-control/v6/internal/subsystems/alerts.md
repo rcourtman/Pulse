@@ -99,6 +99,11 @@ notification, timeline, threshold ignored-prefix, and resource threshold note
 editors must compose the shared `FormTextarea` primitive for label/id/help
 wiring and textarea chrome instead of rendering raw native `<textarea>` shells
 in alert-owned runtime components.
+Alert resource threshold action presentation is also shared with
+frontend-primitives: row, mobile-card, global-default, and bulk-selection
+icon-only actions must compose `ActionIconButton` for shared size, tone, focus,
+title, and accessible-name behavior instead of rendering local `<button>` plus
+inline SVG shells in alert-owned runtime components.
 
 ## Extension Points
 

@@ -208,7 +208,27 @@ def _staged_python_script_run(
     env["PYTHONPATH"] = (
         script_dir if not current_pythonpath else f"{script_dir}{os.pathsep}{current_pythonpath}"
     )
-    return [interpreter, "-", *run[2:]], read_repo_text(rel, staged=True), env
+    script_path = str((REPO_ROOT / rel).resolve())
+    script_content = read_repo_text(rel, staged=True)
+    wrapper = (
+        "from pathlib import Path\n"
+        "import sys\n\n"
+        f"_script_path = {script_path!r}\n"
+        f"_script_content = {script_content!r}\n"
+        "_script_dir = str(Path(_script_path).parent)\n"
+        "if _script_dir not in sys.path:\n"
+        "    sys.path.insert(0, _script_dir)\n"
+        "sys.argv = [_script_path, *sys.argv[1:]]\n"
+        "_globals = {\n"
+        "    '__name__': '__main__',\n"
+        "    '__file__': _script_path,\n"
+        "    '__package__': None,\n"
+        "    '__cached__': None,\n"
+        "    '__spec__': None,\n"
+        "}\n"
+        "exec(compile(_script_content, _script_path, 'exec'), _globals)\n"
+    )
+    return [interpreter, "-", *run[2:]], wrapper, env
 
 
 def run_selected_proof_commands(commands: list[dict[str, Any]], *, staged: bool = False) -> int:
