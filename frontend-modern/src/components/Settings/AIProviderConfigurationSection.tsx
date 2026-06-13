@@ -1,6 +1,7 @@
 import { For, Show, type Accessor, type Component, type Setter } from 'solid-js';
 import type { SetStoreFunction } from 'solid-js/store';
 import { CalloutCard } from '@/components/shared/CalloutCard';
+import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
 import { HelpIcon } from '@/components/shared/HelpIcon';
 import { controlClass } from '@/components/shared/Form';
 import { getAIProviderHealthPresentation } from '@/utils/aiProviderHealthPresentation';
@@ -223,14 +224,9 @@ export const AIProviderConfigurationSection: Component<AIProviderConfigurationSe
 
                     <div class="flex items-center justify-between">
                       <p class="text-xs text-muted">
-                        <a
-                          href={config.actionLinkHref}
-                          target="_blank"
-                          rel="noopener"
-                          class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-1 py-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                        >
+                        <ExternalTextLink href={config.actionLinkHref} variant="compact">
                           {config.actionLinkLabel}
-                        </a>
+                        </ExternalTextLink>
                         <Show when={config.actionLinkSuffix}>
                           <span class="text-slate-400">{config.actionLinkSuffix}</span>
                         </Show>

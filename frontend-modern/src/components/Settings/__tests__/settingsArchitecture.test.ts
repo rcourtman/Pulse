@@ -23,6 +23,7 @@ import apiAccessPanelSource from '../APIAccessPanel.tsx?raw';
 import apiTokenManagerSource from '../APITokenManager.tsx?raw';
 import apiTokenManagerModelSource from '../apiTokenManagerModel.ts?raw';
 import apiTokenManagerStateSource from '../useAPITokenManagerState.ts?raw';
+import agentIntegrationsPanelSource from '../AgentIntegrationsPanel.tsx?raw';
 import dataHandlingPanelSource from '../DataHandlingPanel.tsx?raw';
 import auditLogPanelSource from '../AuditLogPanel.tsx?raw';
 import auditWebhookPanelSource from '../AuditWebhookPanel.tsx?raw';
@@ -578,8 +579,16 @@ describe('settings architecture guardrails', () => {
 
   it('keeps API token Docker and Podman copy on shared presentation helpers', () => {
     expect(apiAccessPanelSource).toContain('API_TOKEN_ACCESS_PANEL_DESCRIPTION');
+    expect(apiAccessPanelSource).toContain('ButtonLink');
+    expect(apiAccessPanelSource).toContain('variant="info"');
+    expect(apiAccessPanelSource).not.toContain('rel="noreferrer"');
+    expect(apiAccessPanelSource).not.toContain(
+      'inline-flex min-h-10 sm:min-h-10 w-fit items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700',
+    );
     expect(apiTokenManagerModelSource).toContain('API_TOKEN_DOCKER_REPORT_PRESET_DESCRIPTION');
     expect(apiTokenManagerModelSource).toContain('API_TOKEN_DOCKER_MANAGE_PRESET_DESCRIPTION');
+    expect(apiTokenManagerSource).toContain('ExternalTextLink');
+    expect(apiTokenManagerSource).not.toContain('rel="noreferrer"');
     expect(apiTokenManagerSource).toContain('getAPITokenDockerPodmanUsageSummary');
     expect(apiTokenManagerSource).toContain('getAPITokenDockerPodmanUsageTitle');
     expect(apiTokenManagerStateSource).toContain('getAPITokenDockerPodmanUsageCountLabel');
@@ -937,6 +946,8 @@ describe('settings architecture guardrails', () => {
       "import AgentIntegrationsPanel from './AgentIntegrationsPanel';",
     );
     expect(apiAccessPanelSource).toContain('<AgentIntegrationsPanel />');
+    expect(agentIntegrationsPanelSource).toContain('ExternalTextLink');
+    expect(agentIntegrationsPanelSource).not.toContain('rel="noreferrer"');
   });
 
   it('keeps internal analytics off the user diagnostics boundary', () => {

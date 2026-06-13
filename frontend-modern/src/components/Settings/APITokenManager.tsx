@@ -1,6 +1,7 @@
 import { Component, For, Show, createSignal } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { Dialog } from '@/components/shared/Dialog';
+import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
@@ -551,14 +552,13 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
 
       <Card tone="muted" padding="sm" class="text-xs text-muted">
         Separate tokens per integration • Rotate regularly •{' '}
-        <a
-          class="inline-flex min-h-10 sm:min-h-10 items-center rounded-md px-2 py-1.5 text-sm font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
+        <ExternalTextLink
           href={API_TOKEN_SCOPES_DOC_URL}
-          target="_blank"
-          rel="noreferrer"
+          variant="compact"
+          class="px-2 py-1.5 font-medium"
         >
           Scope reference
-        </a>
+        </ExternalTextLink>
       </Card>
 
       {/* Revoke confirmation modal — token deletion is irreversible
@@ -574,8 +574,12 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
           <div class="w-full p-6">
             <h3 class="text-lg font-semibold text-base-content mb-2">Revoke API token?</h3>
             <p class="text-sm text-muted mb-4">
-              This permanently revokes <span class="font-medium text-base-content">{tokenToRevoke()!.name || tokenToRevoke()!.id}</span>. Any
-              agents, scripts, or integrations using it will stop authenticating until you issue and configure a replacement token.
+              This permanently revokes{' '}
+              <span class="font-medium text-base-content">
+                {tokenToRevoke()!.name || tokenToRevoke()!.id}
+              </span>
+              . Any agents, scripts, or integrations using it will stop authenticating until you
+              issue and configure a replacement token.
             </p>
             <div class="flex justify-end gap-3">
               <button

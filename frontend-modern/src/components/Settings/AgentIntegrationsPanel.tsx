@@ -1,4 +1,5 @@
 import { Component, createMemo, createResource, createSignal, For, Show } from 'solid-js';
+import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { AGENT_SUBSTRATE_DOC_URL } from '@/utils/docsLinks';
 import CopyCommandBlock from './CopyCommandBlock';
@@ -38,7 +39,8 @@ const CATEGORY_ORDER: ReadonlyArray<{ id: string; label: string; description: st
   {
     id: 'operator-state',
     label: 'Operator state',
-    description: 'Per-resource intent: intentionally-offline, never-auto-remediate, maintenance windows.',
+    description:
+      'Per-resource intent: intentionally-offline, never-auto-remediate, maintenance windows.',
   },
   {
     id: 'finding',
@@ -105,11 +107,21 @@ export const AgentIntegrationsPanel: Component = () => {
       list.push(cap);
       byCategory.set(cap.category, list);
     }
-    const sections: Array<{ id: string; label: string; description?: string; entries: AgentCapability[] }> = [];
+    const sections: Array<{
+      id: string;
+      label: string;
+      description?: string;
+      entries: AgentCapability[];
+    }> = [];
     for (const known of CATEGORY_ORDER) {
       const entries = byCategory.get(known.id);
       if (entries && entries.length > 0) {
-        sections.push({ id: known.id, label: known.label, description: known.description, entries });
+        sections.push({
+          id: known.id,
+          label: known.label,
+          description: known.description,
+          entries,
+        });
         byCategory.delete(known.id);
       }
     }
@@ -143,21 +155,30 @@ export const AgentIntegrationsPanel: Component = () => {
 
         <div class="space-y-3">
           <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <h3 class="text-sm font-semibold text-base-content">Claude Desktop / Claude Code config</h3>
+            <h3 class="text-sm font-semibold text-base-content">
+              Claude Desktop / Claude Code config
+            </h3>
             <Show when={copied() === mcpConfig}>
-              <span class="text-xs text-emerald-600 dark:text-emerald-400">Copied to clipboard</span>
+              <span class="text-xs text-emerald-600 dark:text-emerald-400">
+                Copied to clipboard
+              </span>
             </Show>
           </div>
           <p class="text-xs text-muted">
             First, install <code class="font-mono">pulse-mcp</code>. The fastest path:{' '}
-            <code class="font-mono">curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-mcp.sh | bash</code>{' '}
+            <code class="font-mono">
+              curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-mcp.sh
+              | bash
+            </code>{' '}
             (or <code class="font-mono">irm .../install-mcp.ps1 | iex</code> on Windows). Then drop
             this block into{' '}
-            <code class="font-mono">~/Library/Application Support/Claude/claude_desktop_config.json</code>{' '}
+            <code class="font-mono">
+              ~/Library/Application Support/Claude/claude_desktop_config.json
+            </code>{' '}
             (Claude Desktop) or your project's <code class="font-mono">.mcp.json</code> (Claude
             Code). Mint a token below with <code class="font-mono">monitoring:read</code> (and{' '}
-            <code class="font-mono">monitoring:write</code> for the operator-state write tools), then
-            replace <code class="font-mono">&lt;your-api-token&gt;</code>.
+            <code class="font-mono">monitoring:write</code> for the operator-state write tools),
+            then replace <code class="font-mono">&lt;your-api-token&gt;</code>.
           </p>
           <CopyCommandBlock
             command={mcpConfig}
@@ -166,13 +187,13 @@ export const AgentIntegrationsPanel: Component = () => {
           />
           <p class="text-xs text-muted">
             See{' '}
-            <a class="text-blue-600 hover:underline dark:text-blue-300" href={AGENT_SUBSTRATE_DOC_URL} target="_blank" rel="noreferrer">
+            <ExternalTextLink href={AGENT_SUBSTRATE_DOC_URL} variant="inlineSubtle">
               docs/AGENT_SUBSTRATE.md
-            </a>{' '}
-            for build instructions on <code class="font-mono">cmd/pulse-mcp</code>{' '}
-            (including the <code class="font-mono">--emit-notifications</code> flag and known
-            limitations), the companion HTTP example at <code class="font-mono">cmd/agent-probe</code>,
-            and the substrate's design notes.
+            </ExternalTextLink>{' '}
+            for build instructions on <code class="font-mono">cmd/pulse-mcp</code> (including the{' '}
+            <code class="font-mono">--emit-notifications</code> flag and known limitations), the
+            companion HTTP example at <code class="font-mono">cmd/agent-probe</code>, and the
+            substrate's design notes.
           </p>
         </div>
 
@@ -193,9 +214,7 @@ export const AgentIntegrationsPanel: Component = () => {
               <h3 class="text-sm font-semibold text-base-content">
                 Declared capabilities (manifest {manifest()?.version})
               </h3>
-              <span class="text-xs text-muted">
-                {manifest()?.capabilities.length ?? 0} total
-              </span>
+              <span class="text-xs text-muted">{manifest()?.capabilities.length ?? 0} total</span>
             </div>
             <For each={grouped()}>
               {(section) => (
@@ -231,7 +250,7 @@ export const AgentIntegrationsPanel: Component = () => {
                                 {(code, idx) => (
                                   <>
                                     <code class="font-mono">{code}</code>
-                                    {idx() < (cap.errorCodes!.length - 1) ? ', ' : ''}
+                                    {idx() < cap.errorCodes!.length - 1 ? ', ' : ''}
                                   </>
                                 )}
                               </For>

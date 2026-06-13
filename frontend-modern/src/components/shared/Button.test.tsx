@@ -107,6 +107,9 @@ describe('Button', () => {
         <Button variant="successGhost" size="settingsAction">
           Dismiss
         </Button>
+        <Button variant="info" size="settingsAction">
+          View reference
+        </Button>
         <Button variant="secondary" size="settingsActionXs">
           Preview payload
         </Button>
@@ -134,6 +137,11 @@ describe('Button', () => {
     const dismissButton = screen.getByRole('button', { name: 'Dismiss' });
     expect(dismissButton).toHaveClass('border-transparent');
     expect(dismissButton).toHaveClass('text-emerald-900');
+
+    const infoButton = screen.getByRole('button', { name: 'View reference' });
+    expect(infoButton).toHaveClass('border-blue-200');
+    expect(infoButton).toHaveClass('bg-blue-50');
+    expect(infoButton).toHaveClass('text-blue-700');
 
     const previewButton = screen.getByRole('button', { name: 'Preview payload' });
     expect(previewButton).toHaveClass('min-h-10');

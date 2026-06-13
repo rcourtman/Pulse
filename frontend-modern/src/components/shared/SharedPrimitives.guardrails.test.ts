@@ -13,6 +13,7 @@ import buttonModelSource from '@/components/shared/buttonModel.ts?raw';
 import copyableCodeRowSource from '@/components/shared/CopyableCodeRow.tsx?raw';
 import detailSectionTableSource from '@/components/shared/DetailSectionTable.tsx?raw';
 import detailSectionModelSource from '@/components/shared/detailSectionModel.ts?raw';
+import externalTextLinkSource from '@/components/shared/ExternalTextLink.tsx?raw';
 import commandPaletteModalSource from '@/components/shared/CommandPaletteModal.tsx?raw';
 import commandPaletteModelSource from '@/components/shared/commandPaletteModel.ts?raw';
 import columnPickerSource from '@/components/shared/ColumnPicker.tsx?raw';
@@ -217,6 +218,9 @@ import resourceDetailDrawerTrueNASModelSource from '@/components/Infrastructure/
 import resourceDetailDrawerVmwareModelSource from '@/components/Infrastructure/resourceDetailDrawerVmwareModel.ts?raw';
 import aiSettingsDialogsSource from '@/components/Settings/AISettingsDialogs.tsx?raw';
 import aiProviderConfigurationSectionSource from '@/components/Settings/AIProviderConfigurationSection.tsx?raw';
+import aiRuntimeControlsSectionSource from '@/components/Settings/AIRuntimeControlsSection.tsx?raw';
+import agentIntegrationsPanelSource from '@/components/Settings/AgentIntegrationsPanel.tsx?raw';
+import apiAccessPanelSource from '@/components/Settings/APIAccessPanel.tsx?raw';
 import agentProfilesPanelSource from '@/components/Settings/AgentProfilesPanel.tsx?raw';
 import apiTokenManagerSource from '@/components/Settings/APITokenManager.tsx?raw';
 import auditLogPanelSource from '@/components/Settings/AuditLogPanel.tsx?raw';
@@ -1454,6 +1458,89 @@ describe('shared primitive guardrails', () => {
     );
   });
 
+  it('routes settings external documentation text links through ExternalTextLink', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+        forbiddenPatterns?: Array<{ path?: string; patterns?: string[] }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        scopes?: string[];
+        allPatterns?: string[];
+        allowedPaths?: string[];
+        ignoredPaths?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find(
+      (rule) => rule.id === 'settings-external-text-link-shell',
+    );
+    const rawAnchorGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'settings-external-text-link-local-anchor',
+    );
+
+    expect(registeredRule?.canonical?.path).toBe('src/components/shared/ExternalTextLink.tsx');
+    expect(registeredRule?.canonical?.export).toBe('ExternalTextLink');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/components/Settings/AIProviderConfigurationSection.tsx',
+      'src/components/Settings/AIRuntimeControlsSection.tsx',
+      'src/components/Settings/AISettingsDialogs.tsx',
+      'src/components/Settings/APITokenManager.tsx',
+      'src/components/Settings/AgentIntegrationsPanel.tsx',
+      'src/components/Settings/GeneralSettingsPanel.tsx',
+      'src/components/Settings/SecurityOverviewPanel.tsx',
+      'src/components/Settings/SelfHostedCommercialRecoverySection.tsx',
+    ]);
+    expect(registeredRule?.forbiddenPatterns).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: 'src/components/Settings/AIProviderConfigurationSection.tsx',
+          patterns: expect.arrayContaining(['target="_blank"', 'rel="noopener']),
+        }),
+        expect.objectContaining({
+          path: 'src/components/Settings/APITokenManager.tsx',
+          patterns: expect.arrayContaining(['target="_blank"', 'rel="noreferrer"']),
+        }),
+        expect.objectContaining({
+          path: 'src/components/Settings/SelfHostedCommercialRecoverySection.tsx',
+          patterns: expect.arrayContaining(['target="_blank"', 'rel="noopener noreferrer"']),
+        }),
+      ]),
+    );
+    expect(rawAnchorGuard?.canonical?.path).toBe('src/components/shared/ExternalTextLink.tsx');
+    expect(rawAnchorGuard?.canonical?.export).toBe('ExternalTextLink');
+    expect(rawAnchorGuard?.scopes).toEqual(['src/components/Settings']);
+    expect(rawAnchorGuard?.allPatterns).toEqual(['<a', 'target="_blank"']);
+    expect(rawAnchorGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(rawAnchorGuard?.ignoredPaths).toEqual([
+      'src/components/Settings/__tests__/ProLicensePanel.test.tsx',
+      'src/components/Settings/__tests__/settingsArchitecture.test.ts',
+    ]);
+    expect(externalTextLinkSource).toContain('EXTERNAL_TEXT_LINK_REL');
+    expect(externalTextLinkSource).toContain('target="_blank"');
+    expect(externalTextLinkSource).toContain('rel={getExternalTextLinkRel');
+    for (const source of [
+      aiProviderConfigurationSectionSource,
+      aiRuntimeControlsSectionSource,
+      aiSettingsDialogsSource,
+      apiTokenManagerSource,
+      agentIntegrationsPanelSource,
+      generalSettingsPanelSource,
+      securityOverviewPanelSource,
+      selfHostedCommercialRecoverySectionSource,
+    ]) {
+      expect(source).toContain('ExternalTextLink');
+      expect(source).not.toContain('rel="noopener');
+      expect(source).not.toContain('rel="noreferrer"');
+    }
+    expect(apiAccessPanelSource).toContain('ButtonLink');
+    expect(apiAccessPanelSource).toContain('variant="info"');
+    expect(apiAccessPanelSource).not.toContain('<a');
+  });
+
   it('keeps column picker on shell, runtime, and model owners', () => {
     const registry = JSON.parse(sharedTemplateRegistrySource) as {
       rules?: Array<{
@@ -2466,6 +2553,9 @@ describe('shared primitive guardrails', () => {
     const settingsPrimaryActionGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'button-primary-settings-action-local-shell',
     );
+    const settingsInfoActionGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'button-info-settings-action-local-shell',
+    );
     const settingsSuccessActionGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'button-success-settings-action-local-shell',
     );
@@ -2520,6 +2610,7 @@ describe('shared primitive guardrails', () => {
       'src/components/Infrastructure/ResourceDetailDrawer.tsx',
       'src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx',
       'src/components/Settings/AgentProfilesPanel.tsx',
+      'src/components/Settings/APIAccessPanel.tsx',
       'src/components/Settings/AvailabilitySettingsPanel.tsx',
       'src/components/Settings/BillingAdminPanel.tsx',
       'src/components/Settings/ConnectionEditor/AddressProbeStep.tsx',
@@ -2553,6 +2644,12 @@ describe('shared primitive guardrails', () => {
           path: 'src/components/Settings/BillingAdminPanel.tsx',
           patterns: expect.arrayContaining([
             'w-full sm:w-auto px-3 py-1.5 text-xs font-medium rounded-md border border-border bg-surface hover:bg-surface-hover disabled:opacity-50',
+          ]),
+        }),
+        expect.objectContaining({
+          path: 'src/components/Settings/APIAccessPanel.tsx',
+          patterns: expect.arrayContaining([
+            'inline-flex min-h-10 sm:min-h-10 w-fit items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700',
           ]),
         }),
         expect.objectContaining({
@@ -2658,6 +2755,20 @@ describe('shared primitive guardrails', () => {
     ]);
     expect(settingsPrimaryActionGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(settingsPrimaryActionGuard?.ignoredPaths).toEqual([
+      'src/components/shared/Button.test.tsx',
+    ]);
+    expect(settingsInfoActionGuard?.canonical?.path).toBe('src/components/shared/buttonModel.ts');
+    expect(settingsInfoActionGuard?.canonical?.export).toBe('getButtonClass');
+    expect(settingsInfoActionGuard?.allPatterns).toEqual([
+      'rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700',
+    ]);
+    expect(settingsInfoActionGuard?.scopes).toEqual([
+      'src/components/Settings',
+      'src/features',
+      'src/pages',
+    ]);
+    expect(settingsInfoActionGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(settingsInfoActionGuard?.ignoredPaths).toEqual([
       'src/components/shared/Button.test.tsx',
     ]);
     expect(settingsSuccessActionGuard?.canonical?.path).toBe(
@@ -2907,6 +3018,7 @@ describe('shared primitive guardrails', () => {
     expect(buttonModelSource).toContain('BUTTON_SIZE_CLASSES');
     expect(buttonModelSource).toContain('primaryFlat:');
     expect(buttonModelSource).toContain('warning:');
+    expect(buttonModelSource).toContain('info:');
     expect(buttonModelSource).toContain('settingsActionXs:');
     expect(buttonModelSource).toContain('success:');
     expect(buttonModelSource).toContain('successOutline:');
@@ -2953,6 +3065,12 @@ describe('shared primitive guardrails', () => {
     expect(agentProfilesPanelSource).toContain('@/components/shared/Button');
     expect(agentProfilesPanelSource).not.toContain(
       'rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-base-content',
+    );
+    expect(apiAccessPanelSource).toContain('@/components/shared/Button');
+    expect(apiAccessPanelSource).toContain('ButtonLink');
+    expect(apiAccessPanelSource).toContain('variant="info"');
+    expect(apiAccessPanelSource).not.toContain(
+      'inline-flex min-h-10 sm:min-h-10 w-fit items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700',
     );
     expect(availabilitySettingsPanelSource).toContain('@/components/shared/Button');
     expect(availabilitySettingsPanelSource).not.toContain(

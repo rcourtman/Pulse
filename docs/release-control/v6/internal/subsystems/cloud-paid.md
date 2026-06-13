@@ -1307,7 +1307,10 @@ That same recovery boundary also owns the linked legal surface:
 `SelfHostedCommercialRecoverySection.tsx` must route its Terms-of-Service link
 through the shipped `TERMS.md` docs asset instead of sending operators to
 GitHub `main`, so the recovery trust surface stays version-matched and
-available on restricted installs.
+available on restricted installs. The anchor shell, rel policy, and compact
+link styling for that legal/docs link belong to frontend-primitives'
+`ExternalTextLink`; cloud-paid owns the commercial recovery copy and
+destination semantics.
 Already-issued legacy hosted trial leases are also part of that same
 compatibility contract. If such a lease is refreshed, it must carry the
 canonical Pro capability set while scrubbing retired monitored-system volume

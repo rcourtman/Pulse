@@ -74,18 +74,26 @@ controls as normal product settings.
 2. `frontend-modern/src/components/Settings/APIAccessPanel.tsx` shared with `frontend-primitives`: the API Access settings intro is both a security/privacy token-management trust surface and a canonical settings-shell presentation boundary.
    Its Docker / Podman token wording must come from
    `frontend-modern/src/utils/apiTokenPresentation.ts` rather than page-local
-   copy.
+   copy. The scope-reference action may compose frontend-primitives'
+   `ButtonLink` info variant for external docs-link chrome and new-tab safety;
+   security-privacy owns the scope trust copy, not the anchor shell.
 3. `frontend-modern/src/components/Settings/APITokenManager.tsx` shared with `api-contracts`: the API token settings surface is both a security/privacy control surface and a canonical API payload contract boundary.
    Token-management table rows are security-facing content, but the visual
    table frame and scroll shell belong to `frontend-primitives`
    `PulseDataGrid`; do not add token-surface-local overflow, side-border, or
-   negative-margin wrappers around the inventory grid.
+   negative-margin wrappers around the inventory grid. Scope-reference
+   documentation links compose `ExternalTextLink` for shared rel/target safety
+   and link chrome.
 4. `frontend-modern/src/components/Settings/apiTokenManagerModel.ts` shared with `api-contracts`: the pure API token settings model is both a security/privacy control surface and a canonical API payload contract boundary.
 5. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx` shared with `frontend-primitives`: the data-handling settings surface is both a security/privacy trust surface and a canonical settings-shell presentation boundary.
 6. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts` shared with `frontend-primitives`: the data-handling settings model is both a security/privacy posture projection and a canonical settings-shell presentation boundary.
 7. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx` shared with `frontend-primitives`: the general settings privacy panel is both a security/privacy control surface and a canonical settings-shell presentation boundary.
+   Privacy documentation links compose `ExternalTextLink`; security-privacy
+   owns the telemetry/privacy meaning and retention copy.
 8. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx` shared with `frontend-primitives`: the authentication settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
 9. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx` shared with `frontend-primitives`: the security overview settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
+   Security guide links compose `ExternalTextLink`; security-privacy owns the
+   hardening and proxy-auth guidance semantics.
 10. `frontend-modern/src/components/Settings/useAPITokenManagerState.ts` shared with `api-contracts`: the API token settings state hook is both a security/privacy control surface and a canonical API payload contract boundary.
 11. `frontend-modern/src/constants/apiScopes.ts` shared with `api-contracts`: the API token scope catalog is both a security/privacy token-management trust surface and a canonical API token payload boundary.
     Scope labels and descriptions are visible security controls. Docker /

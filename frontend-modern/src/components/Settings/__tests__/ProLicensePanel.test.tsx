@@ -1169,6 +1169,9 @@ describe('ProLicensePanel', () => {
     expect(proLicensePlanSectionSource).toContain('summary().actionUrl');
     expect(proLicensePlanSectionSource).toContain('ButtonLink');
     expect(proLicensePlanSectionSource).toContain('UpgradeButtonLink');
+    expect(selfHostedCommercialRecoverySectionSource).toContain('ExternalTextLink');
+    expect(selfHostedCommercialRecoverySectionSource).not.toContain('target="_blank"');
+    expect(selfHostedCommercialRecoverySectionSource).not.toContain('rel="noopener noreferrer"');
     expect(proLicensePlanSectionSource).not.toContain(
       'inline-flex items-center gap-1 mt-3 min-h-10 sm:min-h-9 rounded-md border border-current/20 px-3 py-2 text-xs font-medium hover:bg-black/5 dark:hover:bg-white/5',
     );

@@ -1,5 +1,6 @@
 import { Show, type Accessor, type Component, type Setter } from 'solid-js';
 import { Dialog } from '@/components/shared/Dialog';
+import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
 import { SelectionCardGroup } from '@/components/shared/SelectionCardGroup';
 import { getAISettingsSetupDialogPresentation } from '@/utils/aiSettingsPresentation';
 import type { AIProvider } from '@/types/ai';
@@ -64,14 +65,9 @@ export const AISettingsDialogs: Component<AISettingsDialogsProps> = (props) => {
                       class="w-full px-3 py-2 border border-border rounded-md bg-surface focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                     <p class="text-xs text-muted mt-1.5">
-                      <a
-                        href={setupProviderConfig().actionLinkHref}
-                        target="_blank"
-                        rel="noopener"
-                        class="text-blue-600 hover:underline"
-                      >
+                      <ExternalTextLink href={setupProviderConfig().actionLinkHref}>
                         Get your API key →
-                      </a>
+                      </ExternalTextLink>
                     </p>
                   </div>
                 }
@@ -87,9 +83,7 @@ export const AISettingsDialogs: Component<AISettingsDialogsProps> = (props) => {
                     placeholder="http://localhost:11434"
                     class="w-full px-3 py-2 border border-border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
-                  <p class="text-xs text-muted mt-1.5">
-                    Ollama runs locally - no API key needed
-                  </p>
+                  <p class="text-xs text-muted mt-1.5">Ollama runs locally - no API key needed</p>
                 </div>
               </Show>
             </div>

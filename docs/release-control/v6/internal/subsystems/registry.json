@@ -3079,6 +3079,7 @@
         "frontend-modern/scripts/settings-diagnostics-boundary-audit.mjs",
         "frontend-modern/scripts/shared-template-audit.mjs",
         "frontend-modern/scripts/shared-template-registry.json",
+        "frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx",
         "frontend-modern/src/components/Settings/AIChatMaintenanceSection.tsx",
         "frontend-modern/src/components/Settings/AIModelSelectionSection.tsx",
         "frontend-modern/src/components/Settings/AIProviderConfigurationSection.tsx",
@@ -3221,6 +3222,7 @@
             "label": "settings shell framing proof",
             "match_prefixes": [],
             "match_files": [
+              "frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx",
               "frontend-modern/src/components/Settings/AIChatMaintenanceSection.tsx",
               "frontend-modern/src/components/Settings/AIModelSelectionSection.tsx",
               "frontend-modern/src/components/Settings/AIProviderConfigurationSection.tsx",

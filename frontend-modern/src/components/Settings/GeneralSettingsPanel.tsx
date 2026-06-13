@@ -1,6 +1,7 @@
 import { Component, Show, Accessor, Setter } from 'solid-js';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Button } from '@/components/shared/Button';
+import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
 import { Toggle } from '@/components/shared/Toggle';
 import { EnvironmentLockBadge } from '@/components/shared/EnvironmentLockBadge';
 import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
@@ -236,14 +237,9 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
                 identifiers, prompts, chat messages, or personal information are sent. Telemetry
                 rows are retained for up to 90 days, and IP addresses are not stored in telemetry
                 rows.{' '}
-                <a
-                  href={PRIVACY_DOC_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="underline hover:text-base-content"
-                >
+                <ExternalTextLink href={PRIVACY_DOC_URL} variant="muted">
                   Full details
-                </a>
+                </ExternalTextLink>
               </p>
             </div>
             <Toggle

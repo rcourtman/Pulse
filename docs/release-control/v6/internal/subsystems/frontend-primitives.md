@@ -29,6 +29,7 @@ work extends shared components instead of creating new local variants.
 4. `frontend-modern/src/components/Settings/SettingsPageShell.tsx`
 5. `frontend-modern/src/components/Settings/settingsPanelRegistry.ts`
 6. `frontend-modern/src/components/Settings/APIAccessPanel.tsx`
+6a. `frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx`
 7. `frontend-modern/src/components/Settings/AIChatMaintenanceSection.tsx`
 8. `frontend-modern/src/components/Settings/AIModelSelectionSection.tsx`
 9. `frontend-modern/src/components/Settings/AIProviderConfigurationSection.tsx`
@@ -171,6 +172,8 @@ work extends shared components instead of creating new local variants.
 139. `frontend-modern/src/components/shared/Button.test.tsx`
 139a. `frontend-modern/src/components/shared/InlineNotice.tsx`
 139b. `frontend-modern/src/components/shared/InlineNotice.test.tsx`
+139c. `frontend-modern/src/components/shared/ExternalTextLink.tsx`
+139d. `frontend-modern/src/components/shared/ExternalTextLink.test.tsx`
 140. `frontend-modern/src/components/shared/CopyableCodeRow.tsx`
 141. `frontend-modern/src/components/shared/DetailSectionTable.tsx`
 142. `frontend-modern/src/components/shared/detailSectionModel.ts`
@@ -3346,6 +3349,15 @@ maintaining feature-local colored bordered wrappers. The primitive owns the tone
 palette and the `scale="compact"` density used by smaller settings notices, and
 the `settings-callout-card-shell` shared-template registry rule requires current
 settings consumers to compose it instead of reintroducing local panel shells.
+
+Settings external documentation text links must route through
+`ExternalTextLink`, while button-styled external actions route through
+`ButtonLink`/`UpgradeButtonLink`. Shared primitives own new-tab safety, rel
+policy, link tone, compact action density, and focus styling; settings panels
+must not hand-code raw `<a target="_blank">` anchors for documentation links.
+The `settings-external-text-link-shell` and
+`settings-external-text-link-local-anchor` registry entries enforce that split,
+and the Button registry owns the `info` variant for blue documentation CTAs.
 
 Platform inline notices that sit inside platform pages but are not settings
 callouts must route through the shared `InlineNotice` primitive. Platform owners

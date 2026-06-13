@@ -1,5 +1,6 @@
 import { Component, Show, Accessor, For, createMemo } from 'solid-js';
 import { CalloutCard } from '@/components/shared/CalloutCard';
+import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { PROXY_AUTH_DOC_URL, SECURITY_DOC_URL } from '@/utils/docsLinks';
 import { SecurityPostureSummary } from './SecurityPostureSummary';
@@ -45,9 +46,7 @@ export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (pro
   const recommendedHardeningActions = createMemo(
     () => hardeningActions().filter((action) => action.severity === 'recommended').length,
   );
-  const hardeningTone = createMemo(() =>
-    criticalHardeningActions() > 0 ? 'danger' : 'info',
-  );
+  const hardeningTone = createMemo(() => (criticalHardeningActions() > 0 ? 'danger' : 'info'));
   const hardeningTitle = createMemo(() =>
     criticalHardeningActions() > 0 ? 'Hardening priorities' : 'Recommended hardening steps',
   );
@@ -83,10 +82,7 @@ export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (pro
   };
 
   return (
-    <SettingsPanel
-      title="Security Overview"
-      bodyClass="space-y-6"
-    >
+    <SettingsPanel title="Security Overview" bodyClass="space-y-6">
       <Show when={props.securityStatusLoading()}>
         <div class="rounded-md border border-border overflow-hidden">
           <div class="bg-surface-alt px-6 py-5 animate-pulse">
@@ -192,7 +188,8 @@ export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (pro
                   Proxy Authentication Active
                 </p>
                 <p class="text-sm text-blue-700 dark:text-blue-300">
-                  Requests are validated by an upstream proxy before Pulse applies its local authorization rules.
+                  Requests are validated by an upstream proxy before Pulse applies its local
+                  authorization rules.
                 </p>
               </div>
             </div>
@@ -234,14 +231,9 @@ export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (pro
                   Proxy Logout
                 </a>
               </Show>
-              <a
-                href={PROXY_AUTH_DOC_URL}
-                target="_blank"
-                rel="noreferrer"
-                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md text-blue-600 dark:text-blue-300 hover:underline"
-              >
+              <ExternalTextLink href={PROXY_AUTH_DOC_URL} variant="inlineAction">
                 Read proxy auth guide →
-              </a>
+              </ExternalTextLink>
             </div>
           </div>
         </div>

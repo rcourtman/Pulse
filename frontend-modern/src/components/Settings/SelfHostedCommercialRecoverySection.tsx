@@ -1,5 +1,6 @@
 import { Component, Show } from 'solid-js';
 import { formField, controlClass } from '@/components/shared/Form';
+import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
 import { FormTextarea } from '@/components/shared/FormTextarea';
 import { SELF_HOSTED_RECOVERY_PRESENTATION } from '@/utils/licensePresentation';
 import { TERMS_DOC_URL } from '@/utils/docsLinks';
@@ -57,14 +58,9 @@ export const SelfHostedCommercialRecoverySection: Component<
             help={
               <>
                 {SELF_HOSTED_RECOVERY_PRESENTATION.helpTextBeforeTerms}{' '}
-                <a
-                  href={TERMS_DOC_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="inline-flex min-h-10 sm:min-h-9 items-center rounded px-1 text-blue-600 hover:underline"
-                >
+                <ExternalTextLink href={TERMS_DOC_URL} variant="compact">
                   {SELF_HOSTED_RECOVERY_PRESENTATION.termsLabel}
-                </a>
+                </ExternalTextLink>
                 {SELF_HOSTED_RECOVERY_PRESENTATION.helpTextAfterTerms}
               </>
             }
@@ -76,14 +72,13 @@ export const SelfHostedCommercialRecoverySection: Component<
             <p class="mt-1 text-xs text-amber-700 dark:text-amber-300">
               {SELF_HOSTED_RECOVERY_PRESENTATION.privateRuntimeNotice.body}
             </p>
-            <a
+            <ExternalTextLink
               href={SELF_HOSTED_RECOVERY_PRESENTATION.privateRuntimeNotice.actionUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              class="mt-2 inline-flex min-h-10 sm:min-h-9 items-center rounded px-1 text-xs font-medium text-blue-700 dark:text-blue-300 hover:underline"
+              variant="compactAction"
+              class="mt-2"
             >
               {SELF_HOSTED_RECOVERY_PRESENTATION.privateRuntimeNotice.actionLabel}
-            </a>
+            </ExternalTextLink>
           </div>
           <Show when={props.looksLikeLegacyLicenseKey}>
             <div class="mt-3 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 p-3 text-sm text-amber-800 dark:text-amber-200">

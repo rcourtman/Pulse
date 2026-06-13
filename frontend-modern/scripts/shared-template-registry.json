@@ -482,6 +482,7 @@
         { "path": "src/components/Infrastructure/ResourceDetailDrawer.tsx" },
         { "path": "src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx" },
         { "path": "src/components/Settings/AgentProfilesPanel.tsx" },
+        { "path": "src/components/Settings/APIAccessPanel.tsx" },
         { "path": "src/components/Settings/AvailabilitySettingsPanel.tsx" },
         { "path": "src/components/Settings/BillingAdminPanel.tsx" },
         { "path": "src/components/Settings/ConnectionEditor/AddressProbeStep.tsx" },
@@ -520,6 +521,12 @@
           "path": "src/components/Settings/BillingAdminPanel.tsx",
           "patterns": [
             "w-full sm:w-auto px-3 py-1.5 text-xs font-medium rounded-md border border-border bg-surface hover:bg-surface-hover disabled:opacity-50"
+          ]
+        },
+        {
+          "path": "src/components/Settings/APIAccessPanel.tsx",
+          "patterns": [
+            "inline-flex min-h-10 sm:min-h-10 w-fit items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700"
           ]
         },
         {
@@ -684,6 +691,64 @@
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "src/components/shared/__tests__/UpgradeLink.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "settings-external-text-link-shell",
+      "category": "link",
+      "summary": "Inline external documentation links in settings must compose ExternalTextLink for shared new-tab safety, text-link tone, compact action variants, and focus styling instead of hand-coding anchor rel/target and Tailwind link shells.",
+      "canonical": {
+        "path": "src/components/shared/ExternalTextLink.tsx",
+        "export": "ExternalTextLink"
+      },
+      "requiredConsumers": [
+        { "path": "src/components/Settings/AIProviderConfigurationSection.tsx" },
+        { "path": "src/components/Settings/AIRuntimeControlsSection.tsx" },
+        { "path": "src/components/Settings/AISettingsDialogs.tsx" },
+        { "path": "src/components/Settings/APITokenManager.tsx" },
+        { "path": "src/components/Settings/AgentIntegrationsPanel.tsx" },
+        { "path": "src/components/Settings/GeneralSettingsPanel.tsx" },
+        { "path": "src/components/Settings/SecurityOverviewPanel.tsx" },
+        { "path": "src/components/Settings/SelfHostedCommercialRecoverySection.tsx" }
+      ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/components/Settings/AIProviderConfigurationSection.tsx",
+          "patterns": ["target=\"_blank\"", "rel=\"noopener"]
+        },
+        {
+          "path": "src/components/Settings/AIRuntimeControlsSection.tsx",
+          "patterns": ["target=\"_blank\"", "rel=\"noopener noreferrer\""]
+        },
+        {
+          "path": "src/components/Settings/AISettingsDialogs.tsx",
+          "patterns": ["target=\"_blank\"", "rel=\"noopener"]
+        },
+        {
+          "path": "src/components/Settings/APITokenManager.tsx",
+          "patterns": ["target=\"_blank\"", "rel=\"noreferrer\""]
+        },
+        {
+          "path": "src/components/Settings/AgentIntegrationsPanel.tsx",
+          "patterns": ["target=\"_blank\"", "rel=\"noreferrer\""]
+        },
+        {
+          "path": "src/components/Settings/GeneralSettingsPanel.tsx",
+          "patterns": ["target=\"_blank\"", "rel=\"noopener noreferrer\""]
+        },
+        {
+          "path": "src/components/Settings/SecurityOverviewPanel.tsx",
+          "patterns": ["target=\"_blank\"", "rel=\"noreferrer\""]
+        },
+        {
+          "path": "src/components/Settings/SelfHostedCommercialRecoverySection.tsx",
+          "patterns": ["target=\"_blank\"", "rel=\"noopener noreferrer\""]
+        }
+      ],
+      "proof": [
+        "src/components/shared/ExternalTextLink.test.tsx",
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "scripts/shared-template-audit.mjs"
       ]
     },
@@ -2362,6 +2427,28 @@
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "src/components/shared/InlineNotice.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "settings-external-text-link-local-anchor",
+      "category": "link",
+      "summary": "Settings surfaces must not hand-code raw new-tab anchors for external documentation links; compose ExternalTextLink for inline/text links or ButtonLink for button-styled actions.",
+      "canonical": {
+        "path": "src/components/shared/ExternalTextLink.tsx",
+        "export": "ExternalTextLink"
+      },
+      "scopes": ["src/components/Settings"],
+      "extensions": [".tsx"],
+      "allPatterns": ["<a", "target=\"_blank\""],
+      "allowedPaths": [],
+      "ignoredPaths": [
+        "src/components/Settings/__tests__/ProLicensePanel.test.tsx",
+        "src/components/Settings/__tests__/settingsArchitecture.test.ts"
+      ],
+      "proof": [
+        "src/components/shared/ExternalTextLink.test.tsx",
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "scripts/shared-template-audit.mjs"
       ]
     },
@@ -4399,6 +4486,28 @@
       "extensions": [".tsx"],
       "allPatterns": ["rounded-md px-3 py-2 text-sm font-medium text-emerald-900"],
       "legacyReason": "Retired migration debt. Positive ghost settings actions belong to the shared Button primitive family.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/Button.test.tsx"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/Button.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "button-info-settings-action-local-shell",
+      "category": "action-button",
+      "summary": "Settings and infrastructure surfaces must not copy the blue documentation action-button shell; use Button or ButtonLink with the info variant and settingsAction size.",
+      "canonical": {
+        "path": "src/components/shared/buttonModel.ts",
+        "export": "getButtonClass"
+      },
+      "scopes": ["src/components/Settings", "src/features", "src/pages"],
+      "extensions": [".tsx"],
+      "allPatterns": [
+        "rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700"
+      ],
+      "legacyReason": "Retired migration debt. Blue documentation action links belong to the shared Button primitive family.",
       "allowedPaths": [],
       "ignoredPaths": ["src/components/shared/Button.test.tsx"],
       "proof": [

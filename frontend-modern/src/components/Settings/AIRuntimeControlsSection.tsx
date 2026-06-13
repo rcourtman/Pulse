@@ -2,6 +2,7 @@ import { Component, Show } from 'solid-js';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
 import type { AIControlLevel } from '@/utils/aiControlLevelPresentation';
 import type { AISettingsState } from '@/components/Settings/useAISettingsState';
+import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
 import { HelpIcon } from '@/components/shared/HelpIcon';
 import { FormSelect } from '@/components/shared/FormSelect';
 import { UpgradeLink } from '@/components/shared/UpgradeLink';
@@ -288,14 +289,9 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
           <div class="p-2 bg-amber-100 dark:bg-amber-900 rounded border border-amber-200 dark:border-amber-800 text-[10px] text-amber-800 dark:text-amber-200">
             <strong>Legal Disclaimer:</strong> Model-driven systems can hallucinate. You are
             responsible for any damage caused by autonomous actions. See{' '}
-            <a
-              href={TERMS_DOC_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              class="inline-flex min-h-10 sm:min-h-9 items-center rounded px-1 underline"
-            >
+            <ExternalTextLink href={TERMS_DOC_URL} variant="compactInherit">
               Terms of Service
-            </a>
+            </ExternalTextLink>
             .
           </div>
         </Show>
