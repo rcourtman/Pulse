@@ -6,6 +6,7 @@ import { formatDiscoveryAge } from '@/api/discovery';
 import { buildInfrastructureOnboardingPath } from '@/components/Settings/infrastructureWorkspaceModel';
 import { DiscoveryProvenanceMarker } from '@/components/shared/DiscoveryProvenanceMarker';
 import { DiscoveryReadinessBadge } from '@/components/shared/DiscoveryReadinessBadge';
+import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
 import type { DiscoveryIdentifiedSummary } from '@/utils/discoveryPresentation';
 import type { DiscoveryReadinessPresentation } from '@/utils/resourceDiscoveryReadiness';
@@ -59,7 +60,7 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
       <div class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(25%-0.75rem)] [&>*]:min-w-[200px] [&>*]:max-w-full [&>*]:overflow-hidden">
         <Show when={props.discoveryIdentifiedSummary}>
           {(summary) => (
-            <div class="rounded border border-border bg-surface p-3 shadow-sm">
+            <InfoCardFrame>
               <div class="flex items-center justify-between gap-2 mb-2">
                 <div class="flex min-w-0 items-center gap-1.5">
                   <h3 class="truncate text-[11px] font-medium uppercase tracking-wide text-base-content">
@@ -132,12 +133,12 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
                   </Show>
                 </div>
               </div>
-            </div>
+            </InfoCardFrame>
           )}
         </Show>
         <Show when={props.discoveryReadinessPresentation}>
           {(presentation) => (
-            <div class="rounded border border-border bg-surface p-3 shadow-sm">
+            <InfoCardFrame>
               <div class="flex items-center justify-between gap-2 mb-2">
                 <h3 class="truncate text-[11px] font-medium uppercase tracking-wide text-base-content">
                   AI Context
@@ -155,10 +156,10 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
                   <p class="text-[10px] leading-4 text-muted">{presentation().detail}</p>
                 </Show>
               </div>
-            </div>
+            </InfoCardFrame>
           )}
         </Show>
-        <div class="rounded border border-border bg-surface p-3 shadow-sm">
+        <InfoCardFrame>
           <h3 class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
             System
           </h3>
@@ -216,17 +217,14 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
               </div>
             </Show>
           </div>
-        </div>
+        </InfoCardFrame>
 
         <Show when={props.nestedWorkloadContext}>
           {(context) => {
             const visibleItems = () => context().items.slice(0, 4);
             const hiddenCount = () => Math.max(0, context().count - visibleItems().length);
             return (
-              <div
-                class="rounded border border-border bg-surface p-3 shadow-sm"
-                data-testid="nested-workload-context-card"
-              >
+              <InfoCardFrame data-testid="nested-workload-context-card">
                 <div class="mb-2 flex items-center justify-between gap-2">
                   <h3 class="truncate text-[11px] font-medium uppercase tracking-wide text-base-content">
                     {context().title}
@@ -261,7 +259,7 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
                     <div class="text-[10px] font-medium text-muted">+{hiddenCount()} more</div>
                   </Show>
                 </div>
-              </div>
+              </InfoCardFrame>
             );
           }}
         </Show>
@@ -279,7 +277,7 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
               props.guest.vmware?.clusterName)
           }
         >
-          <div class="rounded border border-border bg-surface p-3 shadow-sm">
+          <InfoCardFrame>
             <h3 class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
               vSphere
             </h3>
@@ -320,11 +318,11 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
                 </div>
               </Show>
             </div>
-          </div>
+          </InfoCardFrame>
         </Show>
 
         <Show when={props.hasOsInfo || props.ipAddresses.length > 0}>
-          <div class="rounded border border-border bg-surface p-3 shadow-sm">
+          <InfoCardFrame>
             <h3 class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
               Guest Info
             </h3>
@@ -362,11 +360,11 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
                 </div>
               </Show>
             </div>
-          </div>
+          </InfoCardFrame>
         </Show>
 
         <Show when={getGuestDrawerMemoryRows(props.guest).length > 0}>
-          <div class="rounded border border-border bg-surface p-3 shadow-sm">
+          <InfoCardFrame>
             <h3 class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
               Memory
             </h3>
@@ -385,11 +383,11 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
                 )}
               </For>
             </div>
-          </div>
+          </InfoCardFrame>
         </Show>
 
         <Show when={props.guest.lastBackup}>
-          <div class="rounded border border-border bg-surface p-3 shadow-sm">
+          <InfoCardFrame>
             <h3 class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
               Backup
             </h3>
@@ -408,11 +406,11 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
                 )}
               </Show>
             </div>
-          </div>
+          </InfoCardFrame>
         </Show>
 
         <Show when={props.normalizedTags.length > 0}>
-          <div class="rounded border border-border bg-surface p-3 shadow-sm">
+          <InfoCardFrame>
             <h3 class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
               Tags
             </h3>
@@ -425,13 +423,13 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
                 )}
               </For>
             </div>
-          </div>
+          </InfoCardFrame>
         </Show>
 
         <Show
           when={props.hasFilesystemDetails && props.guest.disks && props.guest.disks.length > 0}
         >
-          <div class="rounded border border-border bg-surface p-3 shadow-sm">
+          <InfoCardFrame>
             <h3 class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
               Filesystems
             </h3>
@@ -444,11 +442,11 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
                 thresholds={props.diskThresholds}
               />
             </div>
-          </div>
+          </InfoCardFrame>
         </Show>
 
         <Show when={props.hasNetworkInterfaces}>
-          <div class="rounded border border-border bg-surface p-3 shadow-sm">
+          <InfoCardFrame>
             <h3 class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
               Network
             </h3>
@@ -495,7 +493,7 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
                 }}
               </For>
             </div>
-          </div>
+          </InfoCardFrame>
         </Show>
       </div>
 

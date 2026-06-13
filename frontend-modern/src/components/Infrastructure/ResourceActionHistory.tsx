@@ -1,5 +1,6 @@
 import { For, Show } from 'solid-js';
 import type { Component } from 'solid-js';
+import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
 import type { ActionAuditRecord } from '@/types/actionAudit';
 import { formatRelativeTime } from '@/utils/format';
 import {
@@ -153,10 +154,7 @@ const ActionHistoryRow: Component<{ audit: ActionAuditRecord }> = (props) => {
 };
 
 export const ResourceActionHistory: Component<ResourceActionHistoryProps> = (props) => (
-  <div
-    data-testid="resource-action-history-section"
-    class="w-full rounded border border-border bg-surface p-3 shadow-sm"
-  >
+  <InfoCardFrame data-testid="resource-action-history-section" class="w-full">
     <div class="flex items-center justify-between gap-3">
       <div>
         <div class="text-[11px] font-medium uppercase tracking-wide text-base-content">
@@ -196,5 +194,5 @@ export const ResourceActionHistory: Component<ResourceActionHistoryProps> = (pro
         <For each={props.audits}>{(audit) => <ActionHistoryRow audit={audit} />}</For>
       </div>
     </Show>
-  </div>
+  </InfoCardFrame>
 );

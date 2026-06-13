@@ -248,6 +248,7 @@ const sharedSources = import.meta.glob(['./*.tsx', './cards/*.tsx', './responsiv
   import: 'default',
 }) as Record<string, string>;
 const frontendIndexCssSource = readFileSync(join(process.cwd(), 'src/index.css'), 'utf8');
+const readFrontendSource = (path: string) => readFileSync(join(process.cwd(), path), 'utf8');
 
 describe('shared primitive guardrails', () => {
   it('limits raw Table composition inside shared primitives to the canonical allowlist', () => {
@@ -334,7 +335,11 @@ describe('shared primitive guardrails', () => {
     expect(filterButtonGroupModelSource).toContain('getFilterButtonGroupButtonClass');
     expect(filterButtonGroupModelSource).toContain('getFilterButtonGroupCompactLabel');
     expect(generalSettingsPanelSource).toContain('FilterButtonGroup');
-    expect(generalSettingsPanelSource.match(/<FilterButtonGroup/g) ?? []).toHaveLength(3);
+    expect(generalSettingsPanelSource.match(/<FilterButtonGroup/g) ?? []).toHaveLength(4);
+    expect(generalSettingsPanelSource).toContain('getLocalePreferenceOptions');
+    expect(generalSettingsPanelSource).toContain(
+      "ariaLabel={t('settings.general.language.ariaLabel')}",
+    );
     expect(generalSettingsPanelSource).toContain('variant="prominent"');
     expect(generalSettingsPanelSource).not.toContain("props.themePreference() === 'light'");
     expect(generalSettingsPanelSource).not.toContain("temperatureStore.unit() === 'celsius'");
@@ -836,6 +841,85 @@ describe('shared primitive guardrails', () => {
       expect(source).toContain('TableCard');
       expect(source).not.toContain('overflow-hidden border-border-subtle bg-surface');
     }
+  });
+
+  it('keeps compact information card frames on the shared InfoCardFrame owner', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        extensions?: string[];
+        allowedPaths?: string[];
+        ignoredPaths?: string[];
+      }>;
+    };
+    const expectedConsumers = [
+      'src/components/Discovery/DiscoveryTab.tsx',
+      'src/components/Infrastructure/ResourceActionHistory.tsx',
+      'src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx',
+      'src/components/shared/WebInterfaceUrlField.tsx',
+      'src/components/shared/cards/DisksCard.tsx',
+      'src/components/shared/cards/HardwareCard.tsx',
+      'src/components/shared/cards/NetworkInterfacesCard.tsx',
+      'src/components/shared/cards/RaidCard.tsx',
+      'src/components/shared/cards/RootDiskCard.tsx',
+      'src/components/shared/cards/SystemInfoCard.tsx',
+      'src/components/shared/cards/TemperaturesCard.tsx',
+      'src/components/Workloads/DrawerDiskListCard.tsx',
+      'src/components/Workloads/GuestDrawerOverview.tsx',
+      'src/components/Workloads/NodeDrawerOverview.tsx',
+      'src/features/docker/DockerHostDrawerOverview.tsx',
+      'src/features/storageBackups/detailPresentation.ts',
+    ];
+    const retiredFrameClass = 'rounded border border-border bg-surface p-3 shadow-sm';
+    const registeredRule = registry.rules?.find(
+      (rule) => rule.id === 'compact-info-card-frame-shell',
+    );
+    const registeredGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'compact-info-card-frame-local-shell',
+    );
+
+    expect(registeredRule?.canonical?.path).toBe('src/components/shared/InfoCardFrame.tsx');
+    expect(registeredRule?.canonical?.export).toBe('InfoCardFrame');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
+      expectedConsumers,
+    );
+    expect(registeredGuard?.canonical?.path).toBe('src/components/shared/InfoCardFrame.tsx');
+    expect(registeredGuard?.canonical?.export).toBe('InfoCardFrame');
+    expect(registeredGuard?.allPatterns).toEqual([retiredFrameClass]);
+    expect(registeredGuard?.extensions).toEqual(['.ts', '.tsx']);
+    expect(registeredGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(registeredGuard?.ignoredPaths).toEqual([
+      'src/components/shared/SharedPrimitives.guardrails.test.ts',
+    ]);
+    expect(registeredGuard?.scopes).toEqual(
+      expect.arrayContaining(['src/components', 'src/features', 'src/pages']),
+    );
+
+    const infoCardFrameSource = readFrontendSource('src/components/shared/InfoCardFrame.tsx');
+    expect(infoCardFrameSource).toContain('INFO_CARD_FRAME_CLASS');
+    expect(infoCardFrameSource).toContain(retiredFrameClass);
+    expect(infoCardFrameSource).toContain('getInfoCardFrameClass');
+
+    for (const consumerPath of expectedConsumers) {
+      const source = readFrontendSource(consumerPath);
+      expect(source).toContain('InfoCardFrame');
+      expect(source).not.toContain(retiredFrameClass);
+    }
+
+    expect(readFrontendSource('src/components/shared/WebInterfaceUrlField.tsx')).toContain(
+      'getInfoCardFrameClass',
+    );
+    expect(readFrontendSource('src/features/storageBackups/detailPresentation.ts')).toContain(
+      'INFO_CARD_FRAME_CLASS',
+    );
   });
 
   it('keeps shared subtabs as one primitive and leaves shell styling to owning surfaces', () => {
@@ -2541,9 +2625,7 @@ describe('shared primitive guardrails', () => {
         }),
         expect.objectContaining({
           path: 'src/components/Settings/DiscoverySettingsForm.tsx',
-          patterns: expect.arrayContaining([
-            'rounded-md border border-amber-200 bg-amber-50/80',
-          ]),
+          patterns: expect.arrayContaining(['rounded-md border border-amber-200 bg-amber-50/80']),
         }),
       ]),
     );

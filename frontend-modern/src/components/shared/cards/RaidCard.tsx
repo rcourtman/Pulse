@@ -1,5 +1,6 @@
 import { Component, For, Show } from 'solid-js';
 import type { HostRAIDArray } from '@/types/api';
+import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
 import { StatusDot } from '@/components/shared/StatusDot';
 import {
   getRaidDeviceBadgeClass,
@@ -16,7 +17,7 @@ export const RaidCard: Component<RaidCardProps> = (props) => {
   if (!props.arrays || props.arrays.length === 0) return null;
 
   return (
-    <div class="rounded border border-border bg-surface p-3 shadow-sm">
+    <InfoCardFrame>
       <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
         {props.title || 'RAID'}
       </div>
@@ -93,7 +94,7 @@ export const RaidCard: Component<RaidCardProps> = (props) => {
           }}
         </For>
       </div>
-    </div>
+    </InfoCardFrame>
   );
 };
 

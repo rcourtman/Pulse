@@ -1,5 +1,6 @@
 import { Component } from 'solid-js';
 import type { Agent, Node } from '@/types/api';
+import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
 import { formatBytes } from '@/utils/format';
 
 type HardwareCardProps = { variant: 'node'; node: Node } | { variant: 'agent'; agent: Agent };
@@ -8,7 +9,7 @@ export const HardwareCard: Component<HardwareCardProps> = (props) => {
   if (props.variant === 'node') {
     const node = props.node;
     return (
-      <div class="rounded border border-border bg-surface p-3 shadow-sm">
+      <InfoCardFrame>
         <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
           Hardware
         </div>
@@ -33,13 +34,13 @@ export const HardwareCard: Component<HardwareCardProps> = (props) => {
             </span>
           </div>
         </div>
-      </div>
+      </InfoCardFrame>
     );
   }
 
   const agentInfo = props.agent;
   return (
-    <div class="rounded border border-border bg-surface p-3 shadow-sm">
+    <InfoCardFrame>
       <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
         Hardware
       </div>
@@ -59,6 +60,6 @@ export const HardwareCard: Component<HardwareCardProps> = (props) => {
           <span class="font-medium text-base-content">{agentInfo.agentVersion}</span>
         </div>
       </div>
-    </div>
+    </InfoCardFrame>
   );
 };

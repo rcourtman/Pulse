@@ -1,5 +1,6 @@
 import { Component, Show } from 'solid-js';
 import type { Agent, Node } from '@/types/api';
+import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
 import { formatUptime } from '@/utils/format';
 
 type SystemInfoCardProps = { variant: 'node'; node: Node } | { variant: 'agent'; agent: Agent };
@@ -8,7 +9,7 @@ export const SystemInfoCard: Component<SystemInfoCardProps> = (props) => {
   if (props.variant === 'node') {
     const node = props.node;
     return (
-      <div class="rounded border border-border bg-surface p-3 shadow-sm">
+      <InfoCardFrame>
         <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
           System
         </div>
@@ -38,13 +39,13 @@ export const SystemInfoCard: Component<SystemInfoCardProps> = (props) => {
             </div>
           </Show>
         </div>
-      </div>
+      </InfoCardFrame>
     );
   }
 
   const agentInfo = props.agent;
   return (
-    <div class="rounded border border-border bg-surface p-3 shadow-sm">
+    <InfoCardFrame>
       <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
         System
       </div>
@@ -92,6 +93,6 @@ export const SystemInfoCard: Component<SystemInfoCardProps> = (props) => {
           </div>
         </Show>
       </div>
-    </div>
+    </InfoCardFrame>
   );
 };

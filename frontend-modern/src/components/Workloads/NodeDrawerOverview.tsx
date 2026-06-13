@@ -1,7 +1,14 @@
 import { For, Show } from 'solid-js';
 
+import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
 import type { Disk, Node, Temperature } from '@/types/api';
-import { formatBytes, formatRelativeTime, formatSpeed, formatUptime, normalizeDiskArray } from '@/utils/format';
+import {
+  formatBytes,
+  formatRelativeTime,
+  formatSpeed,
+  formatUptime,
+  normalizeDiskArray,
+} from '@/utils/format';
 import { getNodeDisplayName } from '@/utils/nodes';
 import { formatTemperature, getCpuTemperature, getTemperatureTextClass } from '@/utils/temperature';
 
@@ -18,8 +25,6 @@ interface NodeOverviewRow {
   valueClass?: string;
   title?: string;
 }
-
-const NODE_OVERVIEW_CARD_CLASS = 'rounded border border-border bg-surface p-3 shadow-sm';
 
 const cleanText = (value: string | null | undefined): string => {
   const trimmed = (value || '').trim();
@@ -142,7 +147,7 @@ const getThermalRows = (temperature: Temperature | undefined): NodeOverviewRow[]
 
 const DetailCard = (props: { title: string; rows: NodeOverviewRow[] }) => (
   <Show when={props.rows.length > 0}>
-    <div class={NODE_OVERVIEW_CARD_CLASS}>
+    <InfoCardFrame>
       <h3 class="mb-2 text-[11px] font-medium uppercase tracking-wide text-base-content">
         {props.title}
       </h3>
@@ -161,7 +166,7 @@ const DetailCard = (props: { title: string; rows: NodeOverviewRow[] }) => (
           )}
         </For>
       </div>
-    </div>
+    </InfoCardFrame>
   </Show>
 );
 
@@ -230,9 +235,7 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
     ...(hasPositiveNumber(props.node.cpuInfo?.sockets)
       ? [{ label: 'Sockets', value: `${props.node.cpuInfo.sockets}` } satisfies NodeOverviewRow]
       : []),
-    ...(clockLabel()
-      ? [{ label: 'Clock', value: clockLabel() } satisfies NodeOverviewRow]
-      : []),
+    ...(clockLabel() ? [{ label: 'Clock', value: clockLabel() } satisfies NodeOverviewRow] : []),
     ...(loadAverageLabel() !== '-'
       ? [{ label: 'Load avg', value: loadAverageLabel() } satisfies NodeOverviewRow]
       : []),

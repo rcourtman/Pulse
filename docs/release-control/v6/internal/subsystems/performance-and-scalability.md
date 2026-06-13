@@ -1214,6 +1214,11 @@ and workload-derived navigation state live in
 `frontend-modern/src/components/Workloads/useGuestDrawerState.ts`. Future
 drawer runtime and overview-surface changes must extend through those owners
 instead of adding more mixed state and helper drift back into the shell.
+Compact drawer card frames in `GuestDrawerOverview.tsx`,
+`NodeDrawerOverview.tsx`, and shared drawer helpers are a frontend-primitives
+dependency: the Workloads hot path owns which cards render and what data they
+show, but the repeated bordered `bg-surface p-3 shadow-sm` frame must compose
+`InfoCardFrame` instead of carrying workload-local frame constants.
 That drawer state now also consumes the same shared
 `frontend-modern/src/routing/resourceLinks.ts` workload-to-infrastructure
 helper, so row and drawer navigation stay aligned without a second

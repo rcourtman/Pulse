@@ -2211,8 +2211,11 @@ runtime entry points. Platform page route shells own the path, while
 storage surface owner, and `frontend-modern/src/components/Storage/` plus
 `frontend-modern/src/features/storageBackups/` define the storage health model
 and presentation. The retired standalone storage page shell must not be
-recreated, while
-the storage page's readiness now stays route-owned as well:
+recreated. Storage/recovery empty and detail cards that use the compact
+bordered surface frame must compose the frontend-primitives `InfoCardFrame`
+contract, including `INFO_CARD_FRAME_CLASS` from storage presentation
+constants, rather than recreating the frame string in storage-local helpers.
+The storage page's readiness now stays route-owned as well:
 `frontend-modern/src/components/Storage/useStoragePageModel.ts` and
 `frontend-modern/src/features/storageBackups/storagePageStatus.ts` must derive
 loading, reconnect, and disconnect presentation from the storage unified-resource

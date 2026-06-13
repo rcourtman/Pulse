@@ -703,6 +703,13 @@ AI-only summary payloads, or page-local heuristics.
    the actual protection boundary behind a broader count phrase.
 6. Add canonical governed name-resolution or policy-aware resource lookup behavior through `internal/unifiedresources/resolve.go` and `internal/unifiedresources/resolve_context.go`
 8. Add or change discovery-support runtime under the resource drawer through `frontend-modern/src/components/Discovery/DiscoveryTab.tsx` for shell/presentation ownership and `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts` for fetch, websocket-progress, manual-run triggering, and notes-mutation ownership. Embedded drawers may expose the top-level run action through this shared Discovery tab, but they must still call the canonical discovery trigger state path instead of introducing drawer-local API mutations.
+   Resource drawer secondary sections, action history, discovery run summaries,
+   and other compact resource-detail cards may own their resource-specific
+   labels, rows, filters, and actions, but the repeated bordered compact frame
+   is a frontend-primitives boundary. `ResourceDetailDrawerOverviewTab.tsx`,
+   `ResourceActionHistory.tsx`, and `DiscoveryTab.tsx` must compose
+   `InfoCardFrame` for that shell instead of restoring local card-frame
+   classes.
 9. Keep dashboard and infrastructure freshness on the canonical unified-resource
    ownership path. `frontend-modern/src/stores/websocket.ts`,
    `frontend-modern/src/utils/resourceStateAdapters.ts`, and

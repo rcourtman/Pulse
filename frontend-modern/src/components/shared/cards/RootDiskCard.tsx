@@ -1,5 +1,6 @@
 import { Component } from 'solid-js';
 import { Node } from '@/types/api';
+import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
 import { formatBytes } from '@/utils/format';
 import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
 
@@ -20,7 +21,7 @@ export const RootDiskCard: Component<RootDiskCardProps> = (props) => {
   };
 
   return (
-    <div class="rounded border border-border bg-surface p-3 shadow-sm">
+    <InfoCardFrame>
       <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
         Root Disk
       </div>
@@ -40,6 +41,6 @@ export const RootDiskCard: Component<RootDiskCardProps> = (props) => {
           }}
         />
       </div>
-    </div>
+    </InfoCardFrame>
   );
 };

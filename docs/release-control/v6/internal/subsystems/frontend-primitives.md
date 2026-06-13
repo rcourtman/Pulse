@@ -520,6 +520,13 @@ not a replacement status card, CTA band, or page-local nested card.
    copyable command/path/value rows must use `CopyableCodeRow` instead of
    recreating local copy icons, copied-state checks, disabled empty-value
    handling, or `font-mono` code-row shells.
+   Compact information-card frames in drawer overviews, discovery summaries,
+   resource detail sections, web-interface URL editors, shared overview cards,
+   and storage backup empty states belong to `InfoCardFrame`. Feature surfaces
+   own the title, rows, actions, and sizing context, but the bordered
+   `bg-surface p-3 shadow-sm` frame must be composed through
+   `InfoCardFrame`, `getInfoCardFrameClass`, or `INFO_CARD_FRAME_CLASS` rather
+   than copied as a page-local class string.
    Read-only metadata chips belong to `MetadataBadge` and domain wrappers over
    it. Organization role and share-status chips must use
    `OrganizationRoleBadge` and `OrganizationShareStatusBadge`, so role/status

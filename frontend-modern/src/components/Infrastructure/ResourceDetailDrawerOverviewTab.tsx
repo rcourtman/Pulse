@@ -16,6 +16,7 @@ import { TemperaturesCard } from '@/components/shared/cards/TemperaturesCard';
 import { RaidCard } from '@/components/shared/cards/RaidCard';
 import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
 import { FormSelect } from '@/components/shared/FormSelect';
+import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
 import { getAllFilterOptionLabel } from '@/components/shared/filterOptionPresentation';
 import { getServiceHealthPresentation } from '@/utils/serviceHealthPresentation';
@@ -373,10 +374,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
 
       <div data-testid="resource-secondary-sections" class="space-y-3">
         <Show when={shouldRenderChangeHistorySection()}>
-          <div
-            data-testid="resource-change-history-section"
-            class="w-full rounded border border-border bg-surface p-3 shadow-sm"
-          >
+          <InfoCardFrame data-testid="resource-change-history-section" class="w-full">
             <div class="flex items-center justify-between gap-3">
               <div>
                 <div class="text-[11px] font-medium uppercase tracking-wide text-base-content">
@@ -607,7 +605,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                 </For>
               </div>
             </Show>
-          </div>
+          </InfoCardFrame>
         </Show>
 
         <Show when={drawer.hasCorrelationContext()}>

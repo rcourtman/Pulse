@@ -5,6 +5,7 @@ import {
   buildDrawerDiskListItems,
   type DrawerDiskListItem,
 } from '@/components/Workloads/DrawerDiskListCard';
+import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
 import { useResourceDetailDrawerDockerActionsState } from '@/components/Infrastructure/useResourceDetailDrawerDockerActionsState';
 import { areSystemSettingsLoaded, shouldHideDockerUpdateActions } from '@/stores/systemSettings';
 import type { Resource } from '@/types/resource';
@@ -29,8 +30,6 @@ interface DockerOverviewRow {
   valueClass?: string;
   title?: string;
 }
-
-const DOCKER_OVERVIEW_CARD_CLASS = 'rounded border border-border bg-surface p-3 shadow-sm';
 
 const cleanText = (value: string | null | undefined): string => {
   const trimmed = (value || '').trim();
@@ -63,9 +62,7 @@ const getNumericField = (value: unknown, field: string): number | undefined => {
   return typeof fieldValue === 'number' ? fieldValue : undefined;
 };
 
-const formatLastSeenRow = (
-  value: string | number | null | undefined,
-): DockerOverviewRow | null => {
+const formatLastSeenRow = (value: string | number | null | undefined): DockerOverviewRow | null => {
   if (value == null) return null;
   const parsed = typeof value === 'number' ? new Date(value) : new Date(String(value));
   if (Number.isNaN(parsed.getTime())) return null;
@@ -82,7 +79,7 @@ const titleCase = (value: string): string =>
 
 const DetailCard = (props: { title: string; rows: DockerOverviewRow[] }) => (
   <Show when={props.rows.length > 0}>
-    <div class={DOCKER_OVERVIEW_CARD_CLASS}>
+    <InfoCardFrame>
       <h3 class="mb-2 text-[11px] font-medium uppercase tracking-wide text-base-content">
         {props.title}
       </h3>
@@ -101,7 +98,7 @@ const DetailCard = (props: { title: string; rows: DockerOverviewRow[] }) => (
           )}
         </For>
       </div>
-    </div>
+    </InfoCardFrame>
   </Show>
 );
 
@@ -112,8 +109,7 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
 
   const runtimeLabel = (): string => {
     const runtime = cleanText(docker()?.runtime) || 'Docker';
-    const version =
-      cleanText(docker()?.runtimeVersion) || cleanText(docker()?.dockerVersion);
+    const version = cleanText(docker()?.runtimeVersion) || cleanText(docker()?.dockerVersion);
     if (!version) return titleCase(runtime);
     return `${titleCase(runtime)} ${version}`;
   };
@@ -237,9 +233,7 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
 
   const hostSourceId = createMemo(() => cleanText(docker()?.hostSourceId) || null);
   const updatesAvailable = createMemo(() => docker()?.updatesAvailableCount ?? 0);
-  const hostCommand = createMemo(
-    () => docker()?.command as DockerHostCommandMeta | undefined,
-  );
+  const hostCommand = createMemo(() => docker()?.command as DockerHostCommandMeta | undefined);
   const hostCommandActive = createMemo(() =>
     ['queued', 'dispatched', 'acknowledged', 'in_progress'].includes(
       cleanText(hostCommand()?.status).toLowerCase(),
@@ -311,13 +305,19 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
         valueClass: getTemperatureTextClass(temperature),
       });
     }
-    if (typeof props.host.network?.rxBytes === 'number' || typeof props.host.network?.txBytes === 'number') {
+    if (
+      typeof props.host.network?.rxBytes === 'number' ||
+      typeof props.host.network?.txBytes === 'number'
+    ) {
       rows.push({
         label: 'Network I/O',
         value: `${formatSpeed(props.host.network?.rxBytes ?? 0)} / ${formatSpeed(props.host.network?.txBytes ?? 0)}`,
       });
     }
-    if (typeof props.host.diskIO?.readRate === 'number' || typeof props.host.diskIO?.writeRate === 'number') {
+    if (
+      typeof props.host.diskIO?.readRate === 'number' ||
+      typeof props.host.diskIO?.writeRate === 'number'
+    ) {
       rows.push({
         label: 'Disk I/O',
         value: `${formatSpeed(props.host.diskIO?.readRate ?? 0)} / ${formatSpeed(props.host.diskIO?.writeRate ?? 0)}`,
@@ -336,7 +336,7 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
     <div class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(25%-0.75rem)] [&>*]:min-w-[200px] [&>*]:max-w-full [&>*]:overflow-hidden">
       <DetailCard title="System" rows={systemRows()} />
       <DetailCard title="Runtime" rows={runtimeRows()} />
-      <div class={DOCKER_OVERVIEW_CARD_CLASS} data-testid="docker-host-drawer-containers-card">
+      <InfoCardFrame data-testid="docker-host-drawer-containers-card">
         <h3 class="mb-2 text-[11px] font-medium uppercase tracking-wide text-base-content">
           Containers
         </h3>
@@ -363,9 +363,7 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
                   </span>
                   <span
                     class={`truncate text-right font-medium ${
-                      hostCommandActive()
-                        ? 'text-sky-700 dark:text-sky-300'
-                        : 'text-base-content'
+                      hostCommandActive() ? 'text-sky-700 dark:text-sky-300' : 'text-base-content'
                     }`}
                     title={hostCommand()?.failureReason || hostCommand()?.message || undefined}
                   >
@@ -418,7 +416,7 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
             </div>
           </Show>
         </div>
-      </div>
+      </InfoCardFrame>
       <DetailCard title="Memory" rows={memoryRows()} />
       <Show
         when={perDiskItems().length > 0}

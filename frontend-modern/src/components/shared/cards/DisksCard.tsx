@@ -2,6 +2,7 @@ import { Component, For, Show } from 'solid-js';
 import { Disk } from '@/types/api';
 import { formatBytes } from '@/utils/format';
 import { getMetricColorRgba, getMetricTextColorClass } from '@/utils/metricThresholds';
+import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
 import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
 
 interface DisksCardProps {
@@ -29,7 +30,7 @@ export const DisksCard: Component<DisksCardProps> = (props) => {
   };
 
   return (
-    <div class="rounded border border-border bg-surface p-3 shadow-sm">
+    <InfoCardFrame>
       <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
         Disks
       </div>
@@ -82,6 +83,6 @@ export const DisksCard: Component<DisksCardProps> = (props) => {
           }}
         </For>
       </div>
-    </div>
+    </InfoCardFrame>
   );
 };

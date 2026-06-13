@@ -204,6 +204,38 @@
       ]
     },
     {
+      "id": "compact-info-card-frame-shell",
+      "category": "info-card",
+      "summary": "Compact drawer, discovery, resource-detail, and shared overview cards must compose InfoCardFrame for the common bordered surface frame instead of recreating local card-shell classes.",
+      "canonical": {
+        "path": "src/components/shared/InfoCardFrame.tsx",
+        "export": "InfoCardFrame"
+      },
+      "requiredConsumers": [
+        { "path": "src/components/Discovery/DiscoveryTab.tsx" },
+        { "path": "src/components/Infrastructure/ResourceActionHistory.tsx" },
+        { "path": "src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx" },
+        { "path": "src/components/shared/WebInterfaceUrlField.tsx" },
+        { "path": "src/components/shared/cards/DisksCard.tsx" },
+        { "path": "src/components/shared/cards/HardwareCard.tsx" },
+        { "path": "src/components/shared/cards/NetworkInterfacesCard.tsx" },
+        { "path": "src/components/shared/cards/RaidCard.tsx" },
+        { "path": "src/components/shared/cards/RootDiskCard.tsx" },
+        { "path": "src/components/shared/cards/SystemInfoCard.tsx" },
+        { "path": "src/components/shared/cards/TemperaturesCard.tsx" },
+        { "path": "src/components/Workloads/DrawerDiskListCard.tsx" },
+        { "path": "src/components/Workloads/GuestDrawerOverview.tsx" },
+        { "path": "src/components/Workloads/NodeDrawerOverview.tsx" },
+        { "path": "src/features/docker/DockerHostDrawerOverview.tsx" },
+        { "path": "src/features/storageBackups/detailPresentation.ts" }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/InfoCardFrame.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "settings-callout-card-shell",
       "category": "callout",
       "summary": "Settings informational, warning, success, and danger callouts must compose CalloutCard for shared tone, density, icon, and copy layout instead of recreating local colored panel shells.",
@@ -213,7 +245,9 @@
       },
       "requiredConsumers": [
         { "path": "src/components/Settings/AIProviderConfigurationSection.tsx" },
-        { "path": "src/components/Settings/ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx" },
+        {
+          "path": "src/components/Settings/ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx"
+        },
         { "path": "src/components/Settings/DiagnosticsResultsPanel.tsx" },
         { "path": "src/components/Settings/DiscoverySettingsForm.tsx" },
         { "path": "src/components/Settings/MonitoredSystemImpactPreview.tsx" },
@@ -224,10 +258,7 @@
       "forbiddenPatterns": [
         {
           "path": "src/components/Settings/AIProviderConfigurationSection.tsx",
-          "patterns": [
-            "rounded border border-red-200",
-            "bg-red-50 dark:bg-red-900 px-2 py-1.5"
-          ]
+          "patterns": ["rounded border border-red-200", "bg-red-50 dark:bg-red-900 px-2 py-1.5"]
         },
         {
           "path": "src/components/Settings/DiagnosticsResultsPanel.tsx",
@@ -302,27 +333,39 @@
         },
         {
           "path": "src/components/patrol/ApprovalBanner.tsx",
-          "patterns": ["h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin"]
+          "patterns": [
+            "h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin"
+          ]
         },
         {
           "path": "src/components/patrol/ApprovalSection.tsx",
-          "patterns": ["h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin"]
+          "patterns": [
+            "h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin"
+          ]
         },
         {
           "path": "src/components/patrol/InvestigationMessages.tsx",
-          "patterns": ["h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin"]
+          "patterns": [
+            "h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin"
+          ]
         },
         {
           "path": "src/components/patrol/InvestigationSection.tsx",
-          "patterns": ["h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin"]
+          "patterns": [
+            "h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin"
+          ]
         },
         {
           "path": "src/components/patrol/RunToolCallTrace.tsx",
-          "patterns": ["h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin"]
+          "patterns": [
+            "h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin"
+          ]
         },
         {
           "path": "src/features/patrol/PatrolIntelligenceHeader.tsx",
-          "patterns": ["animate-spin w-4 h-4 border-2 border-current border-t-transparent rounded-full"]
+          "patterns": [
+            "animate-spin w-4 h-4 border-2 border-current border-t-transparent rounded-full"
+          ]
         }
       ],
       "proof": [
@@ -1234,6 +1277,26 @@
       "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "compact-info-card-frame-local-shell",
+      "category": "info-card",
+      "summary": "Compact drawer, discovery, resource-detail, and shared overview cards must not copy the bordered bg-surface p-3 shadow shell owned by InfoCardFrame.",
+      "canonical": {
+        "path": "src/components/shared/InfoCardFrame.tsx",
+        "export": "InfoCardFrame"
+      },
+      "scopes": ["src/components", "src/features", "src/pages"],
+      "extensions": [".ts", ".tsx"],
+      "allPatterns": ["rounded border border-border bg-surface p-3 shadow-sm"],
+      "legacyReason": "Retired migration debt. Repeated compact information card frames must use InfoCardFrame; local card-shell copies are not allowed.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/InfoCardFrame.test.tsx",
         "scripts/shared-template-audit.mjs"
       ]
     },

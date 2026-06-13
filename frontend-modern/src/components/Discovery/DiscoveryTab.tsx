@@ -31,6 +31,7 @@ import {
 } from '@/utils/resourceAnalysisPresentation';
 import { CopyValueButton } from '@/components/shared/Button';
 import { CopyableCodeRow } from '@/components/shared/CopyableCodeRow';
+import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
 import { useDiscoveryTabState } from './useDiscoveryTabState';
 import { orderFactsByActionability } from './factOrdering';
 import { deriveCliCommand } from './cliCommand';
@@ -211,7 +212,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
         </Show>
 
         <Show when={showManualRunAction()}>
-          <div class="rounded border border-border bg-surface p-3 shadow-sm">
+          <InfoCardFrame>
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div class="text-xs font-medium text-base-content">Discovery run</div>
@@ -249,7 +250,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                 </Show>
               </button>
             </div>
-          </div>
+          </InfoCardFrame>
         </Show>
 
         {/* "What Discovery Does" explanation - shown when no discovery exists yet */}
@@ -724,7 +725,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                 </div>
               </Show>
               {/* Service Header */}
-              <div class="rounded border border-border bg-surface p-3 shadow-sm">
+              <InfoCardFrame>
                 <div class="flex items-start justify-between">
                   <div>
                     <div class="flex flex-wrap items-center gap-1.5">
@@ -774,7 +775,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                     Available to Pulse Assistant
                   </span>
                 </div>
-              </div>
+              </InfoCardFrame>
 
               <Show when={d().suggested_url || d().suggested_url_diagnostic}>
                 <div class={getDiscoverySuggestedURLCardClass()}>
@@ -1133,7 +1134,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
               {/* Commands Run (for non-admin users who can't see full output) */}
               <Show when={!d().raw_command_output && d().scan_duration && d().scan_duration > 0}>
-                <div class="rounded border border-border bg-surface p-3 shadow-sm">
+                <InfoCardFrame>
                   <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-1">
                     Scan Info
                   </div>
@@ -1141,7 +1142,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
                     Scan completed in {(d().scan_duration! / 1000).toFixed(1)}s. Full scan details
                     are available to administrators.
                   </p>
-                </div>
+                </InfoCardFrame>
               </Show>
 
               {/* Footer with Update button */}

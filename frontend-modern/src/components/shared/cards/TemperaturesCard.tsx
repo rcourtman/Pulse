@@ -1,4 +1,5 @@
 import { Component, For } from 'solid-js';
+import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
 
 interface TemperatureRow {
   label: string;
@@ -15,7 +16,7 @@ export const TemperaturesCard: Component<TemperaturesCardProps> = (props) => {
   if (!props.rows || props.rows.length === 0) return null;
 
   return (
-    <div class="rounded border border-border bg-surface p-3 shadow-sm">
+    <InfoCardFrame>
       <div class="text-[11px] font-medium uppercase tracking-wide text-base-content mb-2">
         {props.title || 'Temperatures'}
       </div>
@@ -34,6 +35,6 @@ export const TemperaturesCard: Component<TemperaturesCardProps> = (props) => {
           )}
         </For>
       </div>
-    </div>
+    </InfoCardFrame>
   );
 };

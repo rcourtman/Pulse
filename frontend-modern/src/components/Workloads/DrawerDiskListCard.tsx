@@ -1,5 +1,6 @@
 import { For, Show } from 'solid-js';
 
+import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
 import type { Disk } from '@/types/api';
 import { formatBytes } from '@/utils/format';
 import { getMetricColorRgba, getMetricTextColorClass } from '@/utils/metricThresholds';
@@ -43,8 +44,6 @@ export const buildDrawerDiskListItems = (disks: Disk[]): DrawerDiskListItem[] =>
     };
   });
 
-const DRAWER_CARD_CLASS = 'rounded border border-border bg-surface p-3 shadow-sm';
-
 interface DrawerDiskListCardProps {
   title?: string;
   disks: DrawerDiskListItem[];
@@ -53,10 +52,7 @@ interface DrawerDiskListCardProps {
 
 export function DrawerDiskListCard(props: DrawerDiskListCardProps) {
   return (
-    <div
-      class={`${DRAWER_CARD_CLASS} basis-[calc(50%-0.75rem)] grow-[2]`}
-      data-testid={props.testId}
-    >
+    <InfoCardFrame class="basis-[calc(50%-0.75rem)] grow-[2]" data-testid={props.testId}>
       <h3 class="mb-2 text-[11px] font-medium uppercase tracking-wide text-base-content">
         {props.title ?? 'Storage'}
       </h3>
@@ -92,6 +88,6 @@ export function DrawerDiskListCard(props: DrawerDiskListCardProps) {
           )}
         </For>
       </div>
-    </div>
+    </InfoCardFrame>
   );
 }

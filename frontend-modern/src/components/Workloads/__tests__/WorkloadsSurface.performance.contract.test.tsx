@@ -1318,6 +1318,7 @@ describe('Workloads performance contract', () => {
       expect(nodeDrawerOverviewSource).toContain('Hardware');
       expect(nodeDrawerOverviewSource).toContain('Telemetry');
       expect(nodeDrawerOverviewSource).toContain('Thermals');
+      expect(nodeDrawerOverviewSource).toContain('InfoCardFrame');
       expect(nodeDrawerModelSource).toContain("id: 'thermals'");
       expect(nodeDrawerModelSource).toContain("metric: 'temperature'");
       expect(workloadPanelSource).toContain('NodeDrawer');
@@ -1348,6 +1349,13 @@ describe('Workloads performance contract', () => {
       expect(guestDrawerOverviewSource).toContain('WebInterfaceUrlField');
       expect(guestDrawerOverviewSource).toContain('DiskList');
       expect(guestDrawerOverviewSource).toContain('Filesystems');
+      expect(guestDrawerOverviewSource).toContain('InfoCardFrame');
+      expect(guestDrawerOverviewSource).not.toContain(
+        'rounded border border-border bg-surface p-3 shadow-sm',
+      );
+      expect(nodeDrawerOverviewSource).not.toContain(
+        'rounded border border-border bg-surface p-3 shadow-sm',
+      );
       expect(workloadTopologySource).toContain('export const workloadNodeScopeId');
       expect(workloadTopologySource).toContain('export const getKubernetesContextKey');
       expect(workloadTopologySource).toContain('export const getWorkloadDockerHostId');

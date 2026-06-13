@@ -1,3 +1,5 @@
+import { INFO_CARD_FRAME_CLASS } from '@/components/shared/InfoCardFrame';
+
 export const STORAGE_DETAIL_CARD_CLASS = 'rounded-md border border-border bg-surface p-3 shadow-sm';
 
 export const STORAGE_DETAIL_SECTION_TITLE_CLASS = 'text-xs font-semibold text-base-content';
@@ -57,8 +59,7 @@ export const STORAGE_DETAIL_SPACED_STACK_CLASS = 'space-y-3';
 export const STORAGE_DETAIL_FULL_WIDTH_ROW_CLASS = 'col-span-2';
 export const STORAGE_DETAIL_MUTED_TEXT_CLASS = 'text-muted';
 
-export const STORAGE_DETAIL_EMPTY_CLASS =
-  'rounded border border-border bg-surface p-3 shadow-sm text-center text-[11px] text-muted';
+export const STORAGE_DETAIL_EMPTY_CLASS = `${INFO_CARD_FRAME_CLASS} text-center text-[11px] text-muted`;
 
 export const STORAGE_DISK_DETAIL_ROOT_CLASS = 'space-y-3';
 export const STORAGE_DISK_DETAIL_HEADER_CLASS =

@@ -2,6 +2,7 @@ import { Component, Show } from 'solid-js';
 import ExternalLinkIcon from 'lucide-solid/icons/external-link';
 import { Button, CopyValueButton } from './Button';
 import { DiscoveryProvenanceMarker } from './DiscoveryProvenanceMarker';
+import { getInfoCardFrameClass } from './InfoCardFrame';
 import { useWebInterfaceUrlFieldState } from './useWebInterfaceUrlFieldState';
 import type { WebInterfaceUrlFieldProps } from './webInterfaceUrlFieldModel';
 
@@ -11,9 +12,7 @@ export const WebInterfaceUrlField: Component<WebInterfaceUrlFieldProps> = (props
   const state = useWebInterfaceUrlFieldState(props);
   const title = () => props.title?.trim() || 'Web Interface URL';
   const rootClass = () =>
-    props.embedded
-      ? (props.class ?? '')
-      : `rounded border border-border bg-surface p-3 shadow-sm ${props.class ?? ''}`.trim();
+    props.embedded ? (props.class ?? '') : getInfoCardFrameClass({ class: props.class });
 
   return (
     <Show when={state.metadataId()}>
