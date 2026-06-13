@@ -15187,6 +15187,29 @@ func TestContract_ResourceActionReadinessPayloadShape(t *testing.T) {
 	}
 }
 
+func TestContract_DockerLifecycleActionsResolveCommandAgentAndDispatchTrusted(t *testing.T) {
+	source, err := os.ReadFile("docker_container_action_executor.go")
+	if err != nil {
+		t.Fatalf("read docker_container_action_executor.go: %v", err)
+	}
+	src := string(source)
+	for _, snippet := range []string{
+		"GetAgentForHost(hostname string) (string, bool)",
+		"func (e dockerContainerActionExecutor) connectedDockerCommandAgentID(resource unified.Resource) (string, error)",
+		"resource.Docker.AgentID",
+		"e.agents.GetAgentForHost(strings.TrimSpace(resource.Docker.Hostname))",
+		"Trusted:    true",
+	} {
+		if !strings.Contains(src, snippet) {
+			t.Fatalf("docker lifecycle executor must pin command-agent/trusted dispatch snippet %q", snippet)
+		}
+	}
+	if strings.Index(src, "if agentID := strings.TrimSpace(resource.Docker.AgentID)") >
+		strings.Index(src, "e.agents.GetAgentForHost(strings.TrimSpace(resource.Docker.Hostname))") {
+		t.Fatal("docker lifecycle executor must try the Docker reporting agent id before falling back to hostname resolution")
+	}
+}
+
 // TestContract_AgentCapabilitiesManifestIsPublic pins the auth
 // contract for the discovery surface: the manifest must be in the
 // router's publicPaths list so it serves without a token. The

@@ -234,7 +234,12 @@ Docker / Podman container start, stop, and restart affordances follow that same
 boundary: lifecycle UI may consume unified-resource capabilities for enabled or
 disabled presentation, but execution must stay inside the API-owned action
 executor wired from `internal/api/router.go` and must not shell out, SSH, or call
-Docker / Podman from lifecycle-local code.
+Docker / Podman from lifecycle-local code. That API-owned executor may resolve
+the command WebSocket by Docker source ID or canonical Docker host name and may
+mark its vetted container lifecycle dispatch as a trusted agent command after
+the API action has entered execution; lifecycle surfaces still consume only the
+resource payload, action readiness, and action-audit result rather than issuing
+or approving command-agent grants themselves.
 Disconnected command-agent state is also API-owned readiness: lifecycle
 surfaces may reflect missing backend-advertised capabilities, but must not
 reconnect, substitute, or directly address an agent to make a stale container

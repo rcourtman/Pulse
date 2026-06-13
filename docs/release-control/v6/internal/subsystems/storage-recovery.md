@@ -226,7 +226,12 @@ Docker / Podman start, stop, and restart actions are adjacent runtime actions,
 not storage or recovery controls: storage/recovery consumers may render their
 redacted action history as context, but must not treat container lifecycle
 capabilities, `DockerData`, or agent command verification as backup freshness,
-restore support, or a recovery-local execution path.
+restore support, or a recovery-local execution path. When the API-owned Docker
+lifecycle executor resolves a command agent by Docker source ID or canonical
+host name and dispatches a trusted internal container command after action
+approval, storage and recovery consumers may observe only the resulting action
+audit and verification evidence; they must not reinterpret that trusted command
+path as recovery authority or a storage-owned action transport.
 Disconnected command-agent readiness for those lifecycle actions remains an
 API/runtime fail-closed condition; storage/recovery consumers may observe that
 an action is unavailable, but must not reinterpret it as recovery degradation

@@ -18,12 +18,15 @@ import (
 )
 
 type fakeDockerActionAgentCommander struct {
-	results   []*agentexec.CommandResultPayload
-	calls     []agentexec.ExecuteCommandPayload
-	connected map[string]bool
+	results     []*agentexec.CommandResultPayload
+	calls       []agentexec.ExecuteCommandPayload
+	callAgents  []string
+	connected   map[string]bool
+	agentByHost map[string]string
 }
 
-func (f *fakeDockerActionAgentCommander) ExecuteCommand(_ context.Context, _ string, cmd agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error) {
+func (f *fakeDockerActionAgentCommander) ExecuteCommand(_ context.Context, agentID string, cmd agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error) {
+	f.callAgents = append(f.callAgents, agentID)
 	f.calls = append(f.calls, cmd)
 	if len(f.results) == 0 {
 		return &agentexec.CommandResultPayload{RequestID: cmd.RequestID, Success: true, ExitCode: 0}, nil
@@ -31,6 +34,14 @@ func (f *fakeDockerActionAgentCommander) ExecuteCommand(_ context.Context, _ str
 	result := f.results[0]
 	f.results = f.results[1:]
 	return result, nil
+}
+
+func (f *fakeDockerActionAgentCommander) GetAgentForHost(hostname string) (string, bool) {
+	if f.agentByHost == nil {
+		return "", false
+	}
+	agentID, ok := f.agentByHost[strings.TrimSpace(hostname)]
+	return agentID, ok
 }
 
 func (f *fakeDockerActionAgentCommander) IsAgentConnected(agentID string) bool {
@@ -85,11 +96,65 @@ func TestDockerContainerActionExecutorDispatchesPodmanRestartAndVerification(t *
 	if got := agents.calls[0].Command; got != "podman restart 'container-123'" {
 		t.Fatalf("dispatch command = %q", got)
 	}
-	if agents.calls[0].ApprovalID != "act_container" || agents.calls[0].Trusted {
+	if agents.calls[0].ApprovalID != "act_container" || !agents.calls[0].Trusted {
 		t.Fatalf("dispatch approval/trust = %q/%v", agents.calls[0].ApprovalID, agents.calls[0].Trusted)
 	}
 	if got := agents.calls[1].Command; got != "podman inspect -f '{{.State.Status}} {{.State.Running}}' 'container-123'" {
 		t.Fatalf("verification command = %q", got)
+	}
+	if !agents.calls[1].Trusted {
+		t.Fatalf("verification command should be trusted")
+	}
+}
+
+func TestDockerContainerActionExecutorResolvesCommandAgentByDockerHostname(t *testing.T) {
+	now := time.Now().UTC()
+	resource := dockerContainerActionResource("app-container:api", "docker", "running", now)
+	resource.Docker.AgentID = "docker-source-1"
+	resource.Docker.Hostname = "tower"
+	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot:  models.StateSnapshot{LastUpdate: now},
+		resources: []unified.Resource{resource},
+	})
+	agents := &fakeDockerActionAgentCommander{
+		results: []*agentexec.CommandResultPayload{
+			{RequestID: "act_container", Success: true, ExitCode: 0, Stdout: "api restarted"},
+			{RequestID: "act_container-verify", Success: true, ExitCode: 0, Stdout: "running true"},
+		},
+		connected: map[string]bool{
+			"docker-source-1": false,
+			"command-agent-1": true,
+		},
+		agentByHost: map[string]string{"tower": "command-agent-1"},
+	}
+	executor := newDockerContainerActionExecutor(h, agents).(dockerContainerActionExecutor)
+
+	readiness := executor.CheckActionAvailable(context.Background(), unified.ActionRequest{
+		RequestID:      "req-availability",
+		ResourceID:     "app-container:api",
+		CapabilityName: "restart",
+		Reason:         "operator requested restart",
+		RequestedBy:    "operator",
+	}, resource)
+	if !readiness.Available {
+		t.Fatalf("CheckActionAvailable readiness = %#v, want available through hostname-resolved command agent", readiness)
+	}
+
+	result, err := executor.ExecuteAction(context.Background(), dockerContainerActionRecord("act_container", "app-container:api", "restart"))
+	if err != nil {
+		t.Fatalf("ExecuteAction: %v", err)
+	}
+	if result == nil || !result.Success {
+		t.Fatalf("result = %#v, want successful execution", result)
+	}
+	if len(agents.callAgents) != 2 {
+		t.Fatalf("call agents = %#v, want dispatch and verification through hostname-resolved agent", agents.callAgents)
+	}
+	for _, agentID := range agents.callAgents {
+		if agentID != "command-agent-1" {
+			t.Fatalf("called agent %q, want command-agent-1; all calls %#v", agentID, agents.callAgents)
+		}
 	}
 }
 

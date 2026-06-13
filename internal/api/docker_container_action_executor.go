@@ -15,6 +15,7 @@ const dockerContainerLifecycleHandler = "docker.container.lifecycle"
 
 type dockerActionAgentCommander interface {
 	ExecuteCommand(ctx context.Context, agentID string, cmd agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error)
+	GetAgentForHost(hostname string) (string, bool)
 	IsAgentConnected(agentID string) bool
 }
 
@@ -52,12 +53,9 @@ func (e dockerContainerActionExecutor) ExecuteAction(ctx context.Context, record
 	if containerRef == "" {
 		return nil, fmt.Errorf("docker container resource %q has no executable container id", record.Request.ResourceID)
 	}
-	agentID := strings.TrimSpace(resource.Docker.AgentID)
-	if agentID == "" {
-		return nil, fmt.Errorf("docker container resource %q is not backed by a reporting Pulse agent", record.Request.ResourceID)
-	}
-	if !e.agents.IsAgentConnected(agentID) {
-		return nil, fmt.Errorf("docker container command agent is not connected")
+	agentID, err := e.connectedDockerCommandAgentID(resource)
+	if err != nil {
+		return nil, err
 	}
 
 	command := fmt.Sprintf("%s %s %s", runtime, operation, shellQuote(containerRef))
@@ -67,6 +65,7 @@ func (e dockerContainerActionExecutor) ExecuteAction(ctx context.Context, record
 		ApprovalID: record.ID,
 		TargetType: "agent",
 		Timeout:    120,
+		Trusted:    true,
 	})
 	if err != nil {
 		return nil, err
@@ -104,8 +103,7 @@ func (e dockerContainerActionExecutor) CheckActionAvailable(ctx context.Context,
 	if _, err := e.executableDockerContainerResource(ctx, resource, operation); err != nil {
 		return unavailableDockerActionReadiness(operation, dockerActionUnavailableReasonCode(err), dockerActionUnavailableReason(err))
 	}
-	agentID := strings.TrimSpace(resource.Docker.AgentID)
-	if !e.agents.IsAgentConnected(agentID) {
+	if _, err := e.connectedDockerCommandAgentID(resource); err != nil {
 		return unavailableDockerActionReadiness(operation, "command_agent_disconnected", "Docker / Podman command agent is not connected.")
 	}
 	return readiness
@@ -146,6 +144,25 @@ func (e dockerContainerActionExecutor) executableDockerContainerResource(_ conte
 		return unified.Resource{}, fmt.Errorf("resource %q advertises %s through unsupported handler %q", resource.ID, operation, capability.InternalHandler)
 	}
 	return resource, nil
+}
+
+func (e dockerContainerActionExecutor) connectedDockerCommandAgentID(resource unified.Resource) (string, error) {
+	if e.agents == nil {
+		return "", fmt.Errorf("docker container command agent is not connected")
+	}
+	if resource.Docker == nil {
+		return "", fmt.Errorf("docker resource metadata missing")
+	}
+	if agentID := strings.TrimSpace(resource.Docker.AgentID); agentID != "" && e.agents.IsAgentConnected(agentID) {
+		return agentID, nil
+	}
+	if agentID, ok := e.agents.GetAgentForHost(strings.TrimSpace(resource.Docker.Hostname)); ok {
+		agentID = strings.TrimSpace(agentID)
+		if agentID != "" && e.agents.IsAgentConnected(agentID) {
+			return agentID, nil
+		}
+	}
+	return "", fmt.Errorf("docker container command agent is not connected")
 }
 
 func unavailableDockerActionReadiness(operation, reasonCode, reason string) unified.ResourceActionReadiness {
@@ -251,6 +268,7 @@ func (e dockerContainerActionExecutor) verifyContainerState(ctx context.Context,
 			ApprovalID: actionID,
 			TargetType: "agent",
 			Timeout:    30,
+			Trusted:    true,
 		})
 		if err != nil {
 			return &unified.ActionVerificationResult{Ran: false}

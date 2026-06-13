@@ -1013,6 +1013,14 @@ the canonical monitored-system blocked payload.
    uses that hook for command-agent connectivity and runtime posture; browser
    controls may consume advertised capabilities, but must not replace this
    check with direct shell, SSH, provider, or agent-command calls.
+   Docker / Podman lifecycle execution resolves the command WebSocket by the
+   Docker reporting agent ID first, then by canonical Docker host name when the
+   runtime source ID differs from the command-agent registration ID. Once
+   `/api/actions/{id}/execute` has entered the API-owned execution contract,
+   the executor may dispatch the vetted container lifecycle and verification
+   commands as trusted agent commands; the host-agent hard-block policy still
+   applies, and the action audit remains the approval and lifecycle source of
+   truth.
    Resource payloads may expose the same executor-owned unavailable state as
    `actionReadiness[]` entries with stable `name`, `available`, `reasonCode`,
    and `reason` fields so browser and agent clients can explain disabled
