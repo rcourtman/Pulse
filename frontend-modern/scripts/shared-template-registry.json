@@ -435,13 +435,14 @@
     {
       "id": "loading-spinner-shell",
       "category": "loading-indicator",
-      "summary": "Settings, Patrol, AI, and shared loading indicators must compose LoadingSpinner for shared size, tone, and accessibility behavior instead of recreating border-based animate-spin spans.",
+      "summary": "Login, Settings, Patrol, AI, and shared loading indicators must compose LoadingSpinner for shared size, tone, and accessibility behavior instead of recreating border-based animate-spin spans.",
       "canonical": {
         "path": "src/components/shared/LoadingSpinner.tsx",
         "export": "LoadingSpinner"
       },
       "requiredConsumers": [
         { "path": "src/components/AI/FindingsPanel.tsx" },
+        { "path": "src/components/Login.tsx" },
         { "path": "src/components/Settings/AISettings.tsx" },
         { "path": "src/components/Settings/AISettingsDialogs.tsx" },
         { "path": "src/components/Settings/APITokenManager.tsx" },
@@ -465,6 +466,13 @@
           "patterns": [
             "border border-current border-t-transparent animate-spin",
             "h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin"
+          ]
+        },
+        {
+          "path": "src/components/Login.tsx",
+          "patterns": [
+            "animate-spin h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4",
+            "class=\"animate-spin -ml-1 mr-3 h-5 w-5 text-white\""
           ]
         },
         {
@@ -566,6 +574,7 @@
         "src/components/shared/LoadingSpinner.test.tsx",
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
         "src/components/AI/__tests__/FindingsPanel.test.ts",
+        "src/components/__tests__/Login.test.tsx",
         "src/components/patrol/__tests__/ApprovalBanner.test.tsx",
         "src/components/patrol/__tests__/ApprovalSection.test.tsx",
         "src/components/patrol/__tests__/InvestigationSection.test.tsx",
@@ -2750,6 +2759,27 @@
       "proof": [
         "src/components/shared/LoadingSpinner.test.tsx",
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "login-local-border-loading-spinner-shell",
+      "category": "loading-indicator",
+      "summary": "Login and first-session auth surfaces must not recreate border-based loading spinners locally; compose LoadingSpinner so size, tone, and accessibility behavior stay shared.",
+      "canonical": {
+        "path": "src/components/shared/LoadingSpinner.tsx",
+        "export": "LoadingSpinner"
+      },
+      "scopes": ["src/components/Login.tsx"],
+      "extensions": [".tsx"],
+      "allPatterns": ["border-t-transparent", "animate-spin"],
+      "legacyReason": "Retired migration debt. Login auth checks, setup fallback, and submit-pending states compose LoadingSpinner instead of local border or SVG spinner shells.",
+      "allowedPaths": [],
+      "ignoredPaths": ["src/components/shared/SharedPrimitives.guardrails.test.ts"],
+      "proof": [
+        "src/components/shared/LoadingSpinner.test.tsx",
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/__tests__/Login.test.tsx",
         "scripts/shared-template-audit.mjs"
       ]
     },

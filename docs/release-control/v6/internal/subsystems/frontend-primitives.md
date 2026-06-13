@@ -1611,6 +1611,15 @@ not a replacement status card, CTA band, or page-local nested card.
     first-time operator setup must enter through the canonical Settings →
     Infrastructure workspace and its query-backed add flow, while provider
     evidence still owns the operational landing surface.
+    `frontend-modern/src/components/Login.tsx` is part of that same
+    pre-authenticated and first-session shell ownership: auth-check, setup
+    fallback, and submit-pending loading indicators must compose
+    `frontend-modern/src/components/shared/LoadingSpinner.tsx` through the
+    shared-template registry instead of recreating page-local spinner shells.
+    The subsystem registry must keep `Login.tsx` covered by the
+    `first-session-runtime-and-preview` proof policy so login loading
+    affordances cannot drift from the shared Settings, Patrol, AI, and
+    primitive spinner contract.
     The authenticated app shell's boot-time route preloads must be owned by
     `frontend-modern/src/routing/routePreload.ts` so top-level cold-tab
     readiness cannot drift from the route-module preloader. Workloads,

@@ -254,6 +254,7 @@ import userAssignmentsPanelSource from '@/components/Settings/UserAssignmentsPan
 import infrastructureSourcePickerSource from '@/components/Settings/InfrastructureSourcePicker.tsx?raw';
 import resourcePickerSource from '@/components/Settings/ResourcePicker.tsx?raw';
 import settingsPageShellSource from '@/components/Settings/SettingsPageShell.tsx?raw';
+import loginSource from '@/components/Login.tsx?raw';
 import patrolIntelligenceHeaderSource from '@/features/patrol/PatrolIntelligenceHeader.tsx?raw';
 import patrolIntelligenceSummarySource from '@/features/patrol/PatrolIntelligenceSummary.tsx?raw';
 import patrolIntelligenceWorkspaceSource from '@/features/patrol/PatrolIntelligenceWorkspace.tsx?raw';
@@ -2459,7 +2460,7 @@ describe('shared primitive guardrails', () => {
     }
   });
 
-  it('keeps Settings, Patrol, and AI loading spinners on the shared LoadingSpinner primitive', () => {
+  it('keeps Login, Settings, Patrol, and AI loading spinners on the shared LoadingSpinner primitive', () => {
     const registry = JSON.parse(sharedTemplateRegistrySource) as {
       rules?: Array<{
         id: string;
@@ -2486,11 +2487,15 @@ describe('shared primitive guardrails', () => {
     const settingsBorderBottomGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'settings-local-border-bottom-loading-spinner-shell',
     );
+    const loginBorderGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'login-local-border-loading-spinner-shell',
+    );
 
     expect(registeredRule?.canonical?.path).toBe('src/components/shared/LoadingSpinner.tsx');
     expect(registeredRule?.canonical?.export).toBe('LoadingSpinner');
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
       'src/components/AI/FindingsPanel.tsx',
+      'src/components/Login.tsx',
       'src/components/Settings/AISettings.tsx',
       'src/components/Settings/AISettingsDialogs.tsx',
       'src/components/Settings/APITokenManager.tsx',
@@ -2531,9 +2536,21 @@ describe('shared primitive guardrails', () => {
     expect(settingsBorderBottomGuard?.allPatterns).toEqual(['border-b-2', 'animate-spin']);
     expect(settingsBorderBottomGuard?.scopes).toEqual(['src/components/Settings']);
     expect(settingsBorderBottomGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(loginBorderGuard?.canonical?.path).toBe('src/components/shared/LoadingSpinner.tsx');
+    expect(loginBorderGuard?.canonical?.export).toBe('LoadingSpinner');
+    expect(loginBorderGuard?.allPatterns).toEqual(['border-t-transparent', 'animate-spin']);
+    expect(loginBorderGuard?.scopes).toEqual(['src/components/Login.tsx']);
+    expect(loginBorderGuard?.allowedPaths ?? []).toHaveLength(0);
 
     expect(loadingSpinnerSource).toContain('getLoadingSpinnerClass');
     expect(loadingSpinnerSource).toContain('aria-hidden={ariaHidden()}');
+    expect(loadingSpinnerSource).toContain("button: 'h-5 w-5 border-2'");
+    expect(loginSource).toContain('LoadingSpinner');
+    expect(loginSource).toContain('size="button"');
+    expect(loginSource).not.toContain(
+      'animate-spin h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4',
+    );
+    expect(loginSource).not.toContain('class="animate-spin -ml-1 mr-3 h-5 w-5 text-white"');
 
     for (const source of [
       findingsPanelSource,

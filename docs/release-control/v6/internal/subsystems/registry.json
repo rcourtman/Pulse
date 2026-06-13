@@ -3101,6 +3101,7 @@
         "frontend-modern/scripts/settings-diagnostics-boundary-audit.mjs",
         "frontend-modern/scripts/shared-template-audit.mjs",
         "frontend-modern/scripts/shared-template-registry.json",
+        "frontend-modern/src/components/Login.tsx",
         "frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx",
         "frontend-modern/src/components/Settings/AIChatMaintenanceSection.tsx",
         "frontend-modern/src/components/Settings/AIModelSelectionSection.tsx",
@@ -3569,6 +3570,7 @@
             "label": "first-session runtime and preview proof",
             "match_prefixes": [],
             "match_files": [
+              "frontend-modern/src/components/Login.tsx",
               "frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx",
               "frontend-modern/src/components/SetupWizard/SetupWizard.tsx",
               "frontend-modern/src/components/SetupWizard/steps/WelcomeStep.tsx"
@@ -3576,6 +3578,7 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "frontend-modern/src/components/__tests__/Login.test.tsx",
               "frontend-modern/src/components/SetupWizard/__tests__/SetupCompletionPreview.test.tsx",
               "frontend-modern/src/components/SetupWizard/__tests__/SetupWizard.test.tsx",
               "frontend-modern/src/components/SetupWizard/__tests__/WelcomeStep.test.tsx"

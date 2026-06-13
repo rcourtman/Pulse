@@ -3,6 +3,7 @@ import { logger } from '@/utils/logger';
 import { apiClient, apiFetchJSON } from '@/utils/apiClient';
 import Globe from 'lucide-solid/icons/globe';
 import Key from 'lucide-solid/icons/key';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 
 const SetupWizard = lazy(() => import('./SetupWizard').then((m) => ({ default: m.SetupWizard })));
 
@@ -248,7 +249,7 @@ export const Login: Component<LoginProps> = (props) => {
       fallback={
         <div class="min-h-screen flex items-center justify-center bg-base">
           <div class="text-center">
-            <div class="animate-spin h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+            <LoadingSpinner size="lg" tone="info" label="Checking authentication" class="mb-4" />
             <p class="text-muted">Checking authentication...</p>
           </div>
         </div>
@@ -284,7 +285,7 @@ export const Login: Component<LoginProps> = (props) => {
           fallback={
             <div class="min-h-screen flex items-center justify-center bg-base">
               <div class="text-center">
-                <div class="animate-spin h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+                <LoadingSpinner size="lg" tone="info" label="Loading setup" class="mb-4" />
                 <p class="text-muted">Loading setup...</p>
               </div>
             </div>
@@ -588,25 +589,7 @@ const LoginForm: Component<{
                 class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <Show when={loading()}>
-                  <svg
-                    class="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      class="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      stroke-width="4"
-                    ></circle>
-                    <path
-                      class="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    ></path>
-                  </svg>
+                  <LoadingSpinner size="button" tone="inverse" class="-ml-1 mr-3" />
                 </Show>
                 <Show when={loading()} fallback="Sign in to Pulse">
                   Authenticating...

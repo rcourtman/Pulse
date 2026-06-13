@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { Login } from '@/components/Login';
+import loginSource from '@/components/Login.tsx?raw';
 
 // Mock fetch globally
 const mockFetch = vi.fn();
@@ -170,5 +171,15 @@ describe('Login', () => {
 
     expect(await screen.findByText('Demo Mode')).toBeInTheDocument();
     expect(screen.getAllByText('demo')).toHaveLength(2);
+  });
+
+  it('routes login loading indicators through the shared LoadingSpinner primitive', () => {
+    expect(loginSource).toContain("from '@/components/shared/LoadingSpinner'");
+    expect(loginSource).toContain('<LoadingSpinner size="lg" tone="info"');
+    expect(loginSource).toContain('<LoadingSpinner size="button" tone="inverse"');
+    expect(loginSource).not.toContain(
+      'animate-spin h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4',
+    );
+    expect(loginSource).not.toContain('class="animate-spin -ml-1 mr-3 h-5 w-5 text-white"');
   });
 });

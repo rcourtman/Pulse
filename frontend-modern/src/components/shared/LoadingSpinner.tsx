@@ -1,6 +1,6 @@
 import { splitProps, type JSX } from 'solid-js';
 
-export type LoadingSpinnerSize = 'xs' | 'sm' | 'md' | 'xl' | 'lg';
+export type LoadingSpinnerSize = 'xs' | 'sm' | 'md' | 'button' | 'xl' | 'lg';
 export type LoadingSpinnerTone = 'current' | 'inverse' | 'info' | 'muted';
 
 export interface LoadingSpinnerProps extends Omit<JSX.HTMLAttributes<HTMLSpanElement>, 'class'> {
@@ -14,6 +14,7 @@ const LOADING_SPINNER_SIZE_CLASSES: Record<LoadingSpinnerSize, string> = {
   xs: 'h-2 w-2 border',
   sm: 'h-3 w-3 border-2',
   md: 'h-4 w-4 border-2',
+  button: 'h-5 w-5 border-2',
   xl: 'h-6 w-6 border-2',
   lg: 'h-12 w-12 border-4',
 };

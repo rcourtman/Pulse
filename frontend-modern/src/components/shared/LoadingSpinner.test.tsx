@@ -59,5 +59,7 @@ describe('LoadingSpinner', () => {
     );
     expect(getLoadingSpinnerClass({ size: 'xl', tone: 'info' })).toContain('h-6');
     expect(getLoadingSpinnerClass({ size: 'xl', tone: 'info' })).toContain('border-blue-500');
+    expect(getLoadingSpinnerClass({ size: 'button', tone: 'inverse' })).toContain('h-5');
+    expect(getLoadingSpinnerClass({ size: 'button', tone: 'inverse' })).toContain('border-white');
   });
 });
