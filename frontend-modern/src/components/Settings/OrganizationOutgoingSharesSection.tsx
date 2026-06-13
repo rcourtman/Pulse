@@ -1,4 +1,5 @@
 import { Component, Show } from 'solid-js';
+import { Button } from '@/components/shared/Button';
 import {
   OrganizationRoleBadge,
   OrganizationShareStatusBadge,
@@ -83,17 +84,18 @@ export const OrganizationOutgoingSharesSection: Component<
             align: 'right',
             render: (share) => (
               <Show when={props.state.canManageCurrentOrg()}>
-                <button
-                  type="button"
+                <Button
+                  variant="dangerGhost"
+                  size="xs"
+                  class="gap-1"
                   onClick={() => {
                     void props.state.deleteShare(share);
                   }}
                   disabled={props.state.saving()}
-                  class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Trash2 class="w-3.5 h-3.5" />
                   Remove
-                </button>
+                </Button>
               </Show>
             ),
           },

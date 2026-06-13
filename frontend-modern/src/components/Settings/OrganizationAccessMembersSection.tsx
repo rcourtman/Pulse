@@ -1,4 +1,5 @@
 import { Component, For, Show } from 'solid-js';
+import { Button } from '@/components/shared/Button';
 import { FormSelect } from '@/components/shared/FormSelect';
 import { OrganizationRoleBadge } from '@/components/shared/OrganizationBadges';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
@@ -83,17 +84,18 @@ export const OrganizationAccessMembersSection: Component<OrganizationAccessMembe
               const isOwner = () => member.userId === currentOrg().ownerUserId;
               return (
                 <Show when={props.state.canManageCurrentOrg() && !isOwner()}>
-                  <button
-                    type="button"
+                  <Button
+                    variant="dangerGhost"
+                    size="xs"
+                    class="gap-1"
                     onClick={() => {
                       void props.state.removeMember(member);
                     }}
                     disabled={props.state.saving()}
-                    class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <Trash2 class="w-3.5 h-3.5" />
                     Remove
-                  </button>
+                  </Button>
                 </Show>
               );
             },

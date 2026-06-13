@@ -1,4 +1,5 @@
 import { Component, Show } from 'solid-js';
+import { Button } from '@/components/shared/Button';
 import {
   OrganizationRoleBadge,
   OrganizationShareStatusBadge,
@@ -82,27 +83,27 @@ export const OrganizationIncomingSharesSection: Component<
               <Show when={props.state.canManageCurrentOrg()}>
                 <div class="flex items-center justify-end gap-2">
                   <Show when={share.status === 'pending'}>
-                    <button
-                      type="button"
+                    <Button
+                      variant="successGhost"
+                      size="xs"
                       onClick={() => {
                         void props.state.acceptIncomingShare(share);
                       }}
                       disabled={props.state.saving()}
-                      class="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       Accept
-                    </button>
+                    </Button>
                   </Show>
-                  <button
-                    type="button"
+                  <Button
+                    variant="dangerGhost"
+                    size="xs"
                     onClick={() => {
                       void props.state.declineIncomingShare(share);
                     }}
                     disabled={props.state.saving()}
-                    class="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {share.status === 'pending' ? 'Decline' : 'Remove'}
-                  </button>
+                  </Button>
                 </div>
               </Show>
             ),

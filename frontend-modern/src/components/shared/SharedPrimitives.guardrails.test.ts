@@ -250,8 +250,10 @@ import generalSettingsPanelSource from '@/components/Settings/GeneralSettingsPan
 import infrastructureInstallerSectionSource from '@/components/Settings/InfrastructureInstallerSection.tsx?raw';
 import infrastructureWorkspaceSource from '@/components/Settings/InfrastructureWorkspace.tsx?raw';
 import monitoredSystemImpactPreviewSource from '@/components/Settings/MonitoredSystemImpactPreview.tsx?raw';
+import organizationAccessManagementSectionSource from '@/components/Settings/OrganizationAccessManagementSection.tsx?raw';
 import organizationAccessLoadingStateSource from '@/components/Settings/OrganizationAccessLoadingState.tsx?raw';
 import organizationBillingLoadingStateSource from '@/components/Settings/OrganizationBillingLoadingState.tsx?raw';
+import organizationOverviewDetailsSectionSource from '@/components/Settings/OrganizationOverviewDetailsSection.tsx?raw';
 import organizationOverviewLoadingStateSource from '@/components/Settings/OrganizationOverviewLoadingState.tsx?raw';
 import organizationSharingLoadingStateSource from '@/components/Settings/OrganizationSharingLoadingState.tsx?raw';
 import organizationAccessInvitationsSectionSource from '@/components/Settings/OrganizationAccessInvitationsSection.tsx?raw';
@@ -259,6 +261,7 @@ import organizationAccessMembersSectionSource from '@/components/Settings/Organi
 import organizationIncomingSharesSectionSource from '@/components/Settings/OrganizationIncomingSharesSection.tsx?raw';
 import organizationOutgoingSharesSectionSource from '@/components/Settings/OrganizationOutgoingSharesSection.tsx?raw';
 import organizationOverviewMembersSectionSource from '@/components/Settings/OrganizationOverviewMembersSection.tsx?raw';
+import organizationSharingCreateSectionSource from '@/components/Settings/OrganizationSharingCreateSection.tsx?raw';
 import proLicensePanelSource from '@/components/Settings/ProLicensePanel.tsx?raw';
 import proLicensePlanSectionSource from '@/components/Settings/ProLicensePlanSection.tsx?raw';
 import reportingPanelSource from '@/components/Settings/ReportingPanel.tsx?raw';
@@ -3006,6 +3009,9 @@ describe('shared primitive guardrails', () => {
     const settingsSuccessGhostActionGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'button-success-ghost-settings-action-local-shell',
     );
+    const settingsSuccessGhostRowActionGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'button-success-ghost-settings-row-action-local-shell',
+    );
     const largeReportingActionGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'button-large-reporting-action-local-shell',
     );
@@ -3014,6 +3020,9 @@ describe('shared primitive guardrails', () => {
     );
     const settingsDangerOutlineActionGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'button-danger-outline-settings-action-local-shell',
+    );
+    const settingsDangerGhostRowActionGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'button-danger-ghost-settings-row-action-local-shell',
     );
     const settingsRowActionGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'button-outline-settings-row-action-local-shell',
@@ -3093,6 +3102,13 @@ describe('shared primitive guardrails', () => {
       'src/components/Settings/InfrastructureInstallerSection.tsx',
       'src/components/Settings/InfrastructureSourceManager.tsx',
       'src/components/Settings/InfrastructureWorkspace.tsx',
+      'src/components/Settings/OrganizationAccessInvitationsSection.tsx',
+      'src/components/Settings/OrganizationAccessManagementSection.tsx',
+      'src/components/Settings/OrganizationAccessMembersSection.tsx',
+      'src/components/Settings/OrganizationIncomingSharesSection.tsx',
+      'src/components/Settings/OrganizationOutgoingSharesSection.tsx',
+      'src/components/Settings/OrganizationOverviewDetailsSection.tsx',
+      'src/components/Settings/OrganizationSharingCreateSection.tsx',
       'src/components/Settings/ProLicensePanel.tsx',
       'src/components/Settings/ProLicensePlanSection.tsx',
       'src/components/Settings/ReportingPanel.tsx',
@@ -3146,6 +3162,51 @@ describe('shared primitive guardrails', () => {
           path: 'src/components/Settings/RolesPanel.tsx',
           patterns: expect.arrayContaining([
             'inline-flex w-full sm:w-auto min-h-10 sm:min-h-9 items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700',
+          ]),
+        }),
+        expect.objectContaining({
+          path: 'src/components/Settings/OrganizationAccessInvitationsSection.tsx',
+          patterns: expect.arrayContaining([
+            'inline-flex items-center justify-center rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60',
+            'inline-flex items-center justify-center rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-medium text-base-content transition-colors hover:border-red-300 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-60',
+          ]),
+        }),
+        expect.objectContaining({
+          path: 'src/components/Settings/OrganizationAccessManagementSection.tsx',
+          patterns: expect.arrayContaining([
+            'inline-flex w-full sm:w-auto items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60',
+          ]),
+        }),
+        expect.objectContaining({
+          path: 'src/components/Settings/OrganizationAccessMembersSection.tsx',
+          patterns: expect.arrayContaining([
+            'inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-60',
+          ]),
+        }),
+        expect.objectContaining({
+          path: 'src/components/Settings/OrganizationIncomingSharesSection.tsx',
+          patterns: expect.arrayContaining([
+            'inline-flex items-center rounded-md px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900 disabled:cursor-not-allowed disabled:opacity-60',
+            'inline-flex items-center rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-60',
+          ]),
+        }),
+        expect.objectContaining({
+          path: 'src/components/Settings/OrganizationOutgoingSharesSection.tsx',
+          patterns: expect.arrayContaining([
+            'inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-60',
+          ]),
+        }),
+        expect.objectContaining({
+          path: 'src/components/Settings/OrganizationOverviewDetailsSection.tsx',
+          patterns: expect.arrayContaining([
+            'inline-flex w-full sm:w-auto items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60',
+          ]),
+        }),
+        expect.objectContaining({
+          path: 'src/components/Settings/OrganizationSharingCreateSection.tsx',
+          patterns: expect.arrayContaining([
+            'text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200',
+            'inline-flex w-full sm:w-auto items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60',
           ]),
         }),
         expect.objectContaining({
@@ -3410,6 +3471,23 @@ describe('shared primitive guardrails', () => {
     expect(settingsSuccessGhostActionGuard?.ignoredPaths).toEqual([
       'src/components/shared/Button.test.tsx',
     ]);
+    expect(settingsSuccessGhostRowActionGuard?.canonical?.path).toBe(
+      'src/components/shared/buttonModel.ts',
+    );
+    expect(settingsSuccessGhostRowActionGuard?.canonical?.export).toBe('getButtonClass');
+    expect(settingsSuccessGhostRowActionGuard?.allPatterns).toEqual([
+      'rounded-md px-2 py-1 text-xs font-medium text-emerald-700',
+      'hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900',
+    ]);
+    expect(settingsSuccessGhostRowActionGuard?.scopes).toEqual([
+      'src/components/Settings',
+      'src/features',
+      'src/pages',
+    ]);
+    expect(settingsSuccessGhostRowActionGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(settingsSuccessGhostRowActionGuard?.ignoredPaths).toEqual([
+      'src/components/shared/Button.test.tsx',
+    ]);
     expect(largeReportingActionGuard?.canonical?.path).toBe('src/components/shared/buttonModel.ts');
     expect(largeReportingActionGuard?.canonical?.export).toBe('getButtonClass');
     expect(largeReportingActionGuard?.allPatterns).toEqual([
@@ -3452,6 +3530,23 @@ describe('shared primitive guardrails', () => {
     ]);
     expect(settingsDangerOutlineActionGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(settingsDangerOutlineActionGuard?.ignoredPaths).toEqual([
+      'src/components/shared/Button.test.tsx',
+    ]);
+    expect(settingsDangerGhostRowActionGuard?.canonical?.path).toBe(
+      'src/components/shared/buttonModel.ts',
+    );
+    expect(settingsDangerGhostRowActionGuard?.canonical?.export).toBe('getButtonClass');
+    expect(settingsDangerGhostRowActionGuard?.allPatterns).toEqual([
+      'rounded-md px-2 py-1 text-xs font-medium text-red-600',
+      'hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900',
+    ]);
+    expect(settingsDangerGhostRowActionGuard?.scopes).toEqual([
+      'src/components/Settings',
+      'src/features',
+      'src/pages',
+    ]);
+    expect(settingsDangerGhostRowActionGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(settingsDangerGhostRowActionGuard?.ignoredPaths).toEqual([
       'src/components/shared/Button.test.tsx',
     ]);
     expect(settingsRowActionGuard?.canonical?.path).toBe('src/components/shared/buttonModel.ts');
@@ -3747,6 +3842,7 @@ describe('shared primitive guardrails', () => {
     expect(buttonModelSource).toContain('success:');
     expect(buttonModelSource).toContain('successOutline:');
     expect(buttonModelSource).toContain('successGhost:');
+    expect(buttonModelSource).toContain('dangerGhost:');
     expect(buttonModelSource).toContain('COPY_VALUE_BUTTON_VARIANT_CLASSES');
     expect(buttonModelSource).toContain('COPY_VALUE_BUTTON_SIZE_CLASSES');
     expect(buttonModelSource).toContain('ACTION_ICON_BUTTON_TONE_CLASSES');
@@ -3947,6 +4043,58 @@ describe('shared primitive guardrails', () => {
     expect(rolesPanelSource).not.toContain(
       'p-1.5 rounded-md text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900',
     );
+    for (const organizationActionSource of [
+      organizationAccessInvitationsSectionSource,
+      organizationAccessManagementSectionSource,
+      organizationAccessMembersSectionSource,
+      organizationIncomingSharesSectionSource,
+      organizationOutgoingSharesSectionSource,
+      organizationOverviewDetailsSectionSource,
+      organizationSharingCreateSectionSource,
+    ]) {
+      expect(organizationActionSource).toContain('@/components/shared/Button');
+      expect(organizationActionSource).toContain('<Button');
+    }
+    for (const organizationPrimarySource of [
+      organizationAccessInvitationsSectionSource,
+      organizationAccessManagementSectionSource,
+      organizationOverviewDetailsSectionSource,
+      organizationSharingCreateSectionSource,
+    ]) {
+      expect(organizationPrimarySource).toContain('variant="primary"');
+    }
+    for (const organizationDangerGhostSource of [
+      organizationAccessMembersSectionSource,
+      organizationIncomingSharesSectionSource,
+      organizationOutgoingSharesSectionSource,
+    ]) {
+      expect(organizationDangerGhostSource).toContain('variant="dangerGhost"');
+      expect(organizationDangerGhostSource).toContain('size="xs"');
+    }
+    expect(organizationIncomingSharesSectionSource).toContain('variant="successGhost"');
+    expect(organizationAccessInvitationsSectionSource).toContain('variant="dangerOutline"');
+    expect(organizationSharingCreateSectionSource).toContain('variant="ghost"');
+    for (const retiredOrganizationActionPattern of [
+      'inline-flex items-center justify-center rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60',
+      'inline-flex items-center justify-center rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-medium text-base-content transition-colors hover:border-red-300 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-60',
+      'inline-flex w-full sm:w-auto items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60',
+      'inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-60',
+      'inline-flex items-center rounded-md px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900 disabled:cursor-not-allowed disabled:opacity-60',
+      'inline-flex items-center rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-60',
+      'text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200',
+    ]) {
+      for (const organizationActionSource of [
+        organizationAccessInvitationsSectionSource,
+        organizationAccessManagementSectionSource,
+        organizationAccessMembersSectionSource,
+        organizationIncomingSharesSectionSource,
+        organizationOutgoingSharesSectionSource,
+        organizationOverviewDetailsSectionSource,
+        organizationSharingCreateSectionSource,
+      ]) {
+        expect(organizationActionSource).not.toContain(retiredOrganizationActionPattern);
+      }
+    }
     expect(reportingPanelSource).toContain('@/components/shared/Button');
     expect(reportingPanelSource).toContain('<Button');
     expect(reportingPanelSource).toContain('variant="success"');

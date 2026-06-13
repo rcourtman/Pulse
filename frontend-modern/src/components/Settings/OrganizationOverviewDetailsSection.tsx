@@ -1,4 +1,5 @@
 import { Component, Show } from 'solid-js';
+import { Button } from '@/components/shared/Button';
 import { formatOrgDate } from '@/utils/orgUtils';
 import { getOrganizationOverviewManageRequiredMessage } from '@/utils/organizationSettingsPresentation';
 import type { useOrganizationOverviewPanelState } from './useOrganizationOverviewPanelState';
@@ -37,10 +38,7 @@ export const OrganizationOverviewDetailsSection: Component<
         </div>
 
         <div class="space-y-2">
-          <label
-            class="block text-sm font-medium text-base-content"
-            for="org-display-name-input"
-          >
+          <label class="block text-sm font-medium text-base-content" for="org-display-name-input">
             Display Name
           </label>
           <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -52,14 +50,15 @@ export const OrganizationOverviewDetailsSection: Component<
               disabled={!props.state.canManageCurrentOrg() || props.state.saving()}
               class="w-full rounded-md border px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 "
             />
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="settingsAction"
+              class="w-full sm:w-auto"
               onClick={props.state.saveDisplayName}
               disabled={!props.state.canManageCurrentOrg() || props.state.saving()}
-              class="inline-flex w-full sm:w-auto items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {props.state.saving() ? 'Saving...' : 'Save'}
-            </button>
+            </Button>
           </div>
           <Show when={!props.state.canManageCurrentOrg()}>
             <p class="text-xs text-muted">{getOrganizationOverviewManageRequiredMessage()}</p>

@@ -9,6 +9,7 @@ export type ButtonVariant =
   | 'secondary'
   | 'danger'
   | 'dangerOutline'
+  | 'dangerGhost'
   | 'ghost'
   | 'outline';
 export type ButtonSize =
@@ -40,6 +41,8 @@ export const BUTTON_VARIANT_CLASSES: Record<ButtonVariant, string> = {
   danger: 'border border-transparent bg-rose-600 text-white shadow-sm hover:bg-rose-700',
   dangerOutline:
     'border border-rose-300 bg-transparent text-rose-700 hover:bg-rose-50 dark:border-rose-900 dark:text-rose-300 dark:hover:bg-rose-950',
+  dangerGhost:
+    'border border-transparent bg-transparent text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-900',
   ghost: 'border border-transparent bg-transparent text-base-content hover:bg-surface-hover',
   outline: 'border border-border bg-transparent text-base-content hover:bg-surface-hover',
 };

@@ -1,4 +1,5 @@
 import { Component, For, Show } from 'solid-js';
+import { Button } from '@/components/shared/Button';
 import { FormSelect } from '@/components/shared/FormSelect';
 import { CANONICAL_RESOURCE_TYPES } from '@/utils/canonicalResourceTypes';
 import {
@@ -78,13 +79,14 @@ export const OrganizationSharingCreateSection: Component<OrganizationSharingCrea
                 <p class="text-xs text-blue-700 dark:text-blue-300">
                   Choose a discovered resource, or switch to manual entry.
                 </p>
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  class="text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
                   onClick={props.state.toggleManualEntry}
-                  class="text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
                 >
                   {props.state.manualEntryExpanded() ? 'Hide manual entry' : 'Enter manually'}
-                </button>
+                </Button>
               </div>
             </div>
           </Show>
@@ -150,14 +152,15 @@ export const OrganizationSharingCreateSection: Component<OrganizationSharingCrea
           </Show>
 
           <div class="flex justify-end">
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="settingsAction"
+              class="w-full sm:w-auto"
               onClick={props.state.createShare}
               disabled={!props.state.canCreateShare()}
-              class="inline-flex w-full sm:w-auto items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {props.state.saving() ? 'Saving...' : 'Create Share'}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

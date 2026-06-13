@@ -62,8 +62,12 @@ import nodeModalStateSource from '../useNodeModalState.ts?raw';
 import availabilityTargetSlotSource from '../ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx?raw';
 import trueNASCredentialSlotSource from '../ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx?raw';
 import vmwareCredentialSlotSource from '../ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx?raw';
+import organizationAccessInvitationsSectionSource from '../OrganizationAccessInvitationsSection.tsx?raw';
 import organizationAccessManagementSectionSource from '../OrganizationAccessManagementSection.tsx?raw';
 import organizationAccessMembersSectionSource from '../OrganizationAccessMembersSection.tsx?raw';
+import organizationIncomingSharesSectionSource from '../OrganizationIncomingSharesSection.tsx?raw';
+import organizationOutgoingSharesSectionSource from '../OrganizationOutgoingSharesSection.tsx?raw';
+import organizationOverviewDetailsSectionSource from '../OrganizationOverviewDetailsSection.tsx?raw';
 import organizationSharingCreateSectionSource from '../OrganizationSharingCreateSection.tsx?raw';
 import rolesEditorDialogSource from '../RolesEditorDialog.tsx?raw';
 import rolesPanelSource from '../RolesPanel.tsx?raw';
@@ -365,6 +369,40 @@ describe('settings architecture guardrails', () => {
     expect(userAssignmentsPanelSource).not.toContain(
       'inline-flex min-h-10 sm:min-h-9 items-center gap-2 px-3 py-1.5 rounded-md',
     );
+
+    for (const organizationActionSource of [
+      organizationAccessInvitationsSectionSource,
+      organizationAccessManagementSectionSource,
+      organizationAccessMembersSectionSource,
+      organizationIncomingSharesSectionSource,
+      organizationOutgoingSharesSectionSource,
+      organizationOverviewDetailsSectionSource,
+      organizationSharingCreateSectionSource,
+    ]) {
+      expect(organizationActionSource).toContain('@/components/shared/Button');
+      expect(organizationActionSource).toContain('<Button');
+    }
+    expect(organizationAccessInvitationsSectionSource).toContain('variant="dangerOutline"');
+    expect(organizationIncomingSharesSectionSource).toContain('variant="successGhost"');
+    expect(organizationIncomingSharesSectionSource).toContain('variant="dangerGhost"');
+    expect(organizationAccessMembersSectionSource).toContain('variant="dangerGhost"');
+    expect(organizationOutgoingSharesSectionSource).toContain('variant="dangerGhost"');
+    expect(organizationSharingCreateSectionSource).toContain('variant="ghost"');
+    for (const source of [
+      organizationAccessInvitationsSectionSource,
+      organizationAccessManagementSectionSource,
+      organizationAccessMembersSectionSource,
+      organizationIncomingSharesSectionSource,
+      organizationOutgoingSharesSectionSource,
+      organizationOverviewDetailsSectionSource,
+      organizationSharingCreateSectionSource,
+    ]) {
+      expect(source).not.toContain(
+        'inline-flex items-center justify-center rounded-md bg-blue-600',
+      );
+      expect(source).not.toContain('hover:bg-red-50 dark:text-red-300');
+      expect(source).not.toContain('hover:bg-emerald-50 dark:text-emerald-300');
+    }
   });
 
   it('keeps settings callouts on the shared CalloutCard primitive', () => {

@@ -1,5 +1,6 @@
 import type { OrganizationRole } from '@/api/orgs';
 import { Component, For, Show } from 'solid-js';
+import { Button } from '@/components/shared/Button';
 import { FormSelect } from '@/components/shared/FormSelect';
 import { ORGANIZATION_MEMBER_ROLE_OPTIONS } from '@/utils/organizationRolePresentation';
 import { getOrganizationAccessManageRequiredMessage } from '@/utils/organizationSettingsPresentation';
@@ -46,14 +47,15 @@ export const OrganizationAccessManagementSection: Component<
                   {(option) => <option value={option.value}>{option.label}</option>}
                 </For>
               </FormSelect>
-              <button
-                type="button"
+              <Button
+                variant="primary"
+                size="settingsAction"
+                class="w-full sm:w-auto"
                 onClick={props.state.inviteMember}
                 disabled={props.state.saving()}
-                class="inline-flex w-full sm:w-auto items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {props.state.saving() ? 'Saving...' : 'Invite'}
-              </button>
+              </Button>
             </div>
           </div>
         </Show>

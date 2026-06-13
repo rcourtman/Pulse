@@ -39,6 +39,7 @@ describe('Button', () => {
     expect(buttonModelSource).toContain('success:');
     expect(buttonModelSource).toContain('successOutline:');
     expect(buttonModelSource).toContain('successGhost:');
+    expect(buttonModelSource).toContain('dangerGhost:');
     expect(buttonModelSource).toContain(
       "'border border-border bg-surface text-muted hover:bg-surface-hover hover:text-base-content'",
     );
@@ -110,6 +111,9 @@ describe('Button', () => {
         <Button variant="successGhost" size="settingsAction">
           Dismiss
         </Button>
+        <Button variant="dangerGhost" size="xs">
+          Remove member
+        </Button>
         <Button variant="info" size="settingsAction">
           View reference
         </Button>
@@ -140,6 +144,11 @@ describe('Button', () => {
     const dismissButton = screen.getByRole('button', { name: 'Dismiss' });
     expect(dismissButton).toHaveClass('border-transparent');
     expect(dismissButton).toHaveClass('text-emerald-900');
+
+    const removeMemberButton = screen.getByRole('button', { name: 'Remove member' });
+    expect(removeMemberButton).toHaveClass('border-transparent');
+    expect(removeMemberButton).toHaveClass('text-red-600');
+    expect(removeMemberButton).toHaveClass('text-xs');
 
     const infoButton = screen.getByRole('button', { name: 'View reference' });
     expect(infoButton).toHaveClass('border-blue-200');

@@ -581,6 +581,10 @@ not a replacement status card, CTA band, or page-local nested card.
    feature-gate, and row-action semantics, while `Button` / `ActionIconButton`
    own primary, ghost, accent, danger, focus, disabled, and settings-action
    chrome.
+   Organization overview, access, invitation, member, and sharing actions stay
+   in that same primitive family: organization settings owns membership and
+   share semantics, while `Button` owns primary, danger-outline, success-ghost,
+   danger-ghost, disabled, focus, and row-action chrome.
    If a new surface needs a variant that the shared primitive does not expose,
    extend the primitive and registry guard rather than adding a page-local
    class string.

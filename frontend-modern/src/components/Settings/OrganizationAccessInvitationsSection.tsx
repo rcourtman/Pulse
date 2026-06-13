@@ -1,4 +1,5 @@
 import { Component, For, Show } from 'solid-js';
+import { Button } from '@/components/shared/Button';
 import { OrganizationRoleBadge } from '@/components/shared/OrganizationBadges';
 import { formatOrgDate } from '@/utils/orgUtils';
 import type { useOrganizationAccessPanelState } from './useOrganizationAccessPanelState';
@@ -34,22 +35,22 @@ export const OrganizationAccessInvitationsSection: Component<
                   <OrganizationRoleBadge role={invitation.role} />
                 </div>
                 <div class="mt-3 flex gap-2">
-                  <button
-                    type="button"
+                  <Button
+                    variant="primary"
+                    size="mdCompact"
                     onClick={() => void props.state.acceptInvitation(invitation.orgId)}
                     disabled={props.state.saving()}
-                    class="inline-flex items-center justify-center rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     Accept
-                  </button>
-                  <button
-                    type="button"
+                  </Button>
+                  <Button
+                    variant="dangerOutline"
+                    size="mdCompact"
                     onClick={() => void props.state.declineInvitation(invitation.orgId)}
                     disabled={props.state.saving()}
-                    class="inline-flex items-center justify-center rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-medium text-base-content transition-colors hover:border-red-300 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     Decline
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}
@@ -77,14 +78,14 @@ export const OrganizationAccessInvitationsSection: Component<
                 </div>
                 <div class="flex items-center gap-2">
                   <OrganizationRoleBadge role={invitation.role} />
-                  <button
-                    type="button"
+                  <Button
+                    variant="dangerOutline"
+                    size="mdCompact"
                     onClick={() => void props.state.revokeInvitation(invitation.userId)}
                     disabled={props.state.saving()}
-                    class="inline-flex items-center justify-center rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-medium text-base-content transition-colors hover:border-red-300 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     Revoke
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}
