@@ -141,6 +141,11 @@ meaningful for the backup-health row, while dense integer count presentation
 belongs to `frontend-primitives`: backup count cells must compose
 `PlatformTableNumberValue` with `formatPlatformTableIntegerValue` instead of
 reintroducing local `toLocaleString()` formatting.
+PBS server/datastore utilization follows the same split: storage/recovery owns
+which datastore usage percentage is meaningful for backup-health risk, while
+frontend-primitives owns one-decimal percent presentation through
+`PlatformTablePercentValue` and `formatPlatformTablePercentValue` instead of
+local rounded `%` strings.
 Those Proxmox backup workflows own recovery semantics, source-specific
 empty-state copy, and retry/filter actions, but their table empty-state frame
 must compose the frontend-primitives-owned `PlatformTableEmptyState` shell

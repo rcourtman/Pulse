@@ -4312,6 +4312,12 @@ describe('shared primitive guardrails', () => {
     const localPercentGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'platform-table-local-percent-value-helper',
     );
+    const localProxmoxPercentToFixedGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-table-local-proxmox-percent-tofixed-label',
+    );
+    const localProxmoxPercentLabelGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-table-local-proxmox-percent-label-helper',
+    );
     const localTemperatureGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'platform-table-local-temperature-value-helper',
     );
@@ -4319,6 +4325,11 @@ describe('shared primitive guardrails', () => {
       (guard) => guard.id === 'platform-table-local-temperature-label-helper',
     );
     const percentConsumers: Array<[string, string]> = [
+      ['src/features/proxmox/ProxmoxBackupServersTable.tsx', proxmoxBackupServersTableSource],
+      ['src/features/proxmox/ProxmoxCephClusterDrawer.tsx', proxmoxCephClusterDrawerSource],
+      ['src/features/proxmox/ProxmoxCephTable.tsx', proxmoxCephTableSource],
+      ['src/features/proxmox/ProxmoxMailGatewayDrawer.tsx', proxmoxMailGatewayDrawerSource],
+      ['src/features/proxmox/ProxmoxNodesTable.tsx', proxmoxNodesTableSource],
       ['src/features/truenas/TrueNASSystemsTable.tsx', truenasSystemsTableSource],
     ];
     const temperatureConsumers: Array<[string, string]> = [
@@ -4341,6 +4352,30 @@ describe('shared primitive guardrails', () => {
       percentConsumers.map(([path]) => path),
     );
     expect(percentRule?.forbiddenPatterns).toEqual([
+      {
+        path: 'src/features/proxmox/ProxmoxBackupServersTable.tsx',
+        patterns: [
+          'Math.round(row.cpuPercent ?? 0)}%',
+          'Math.round(row.memoryPercent ?? 0)}%',
+          'Math.round(pct() ?? 0)}%',
+        ],
+      },
+      {
+        path: 'src/features/proxmox/ProxmoxCephClusterDrawer.tsx',
+        patterns: ['clamped.toFixed(1)}%'],
+      },
+      {
+        path: 'src/features/proxmox/ProxmoxCephTable.tsx',
+        patterns: ['pct.toFixed(1)}%'],
+      },
+      {
+        path: 'src/features/proxmox/ProxmoxMailGatewayDrawer.tsx',
+        patterns: ['share.toFixed(1)}%'],
+      },
+      {
+        path: 'src/features/proxmox/ProxmoxNodesTable.tsx',
+        patterns: ['const formatPercentLabel', '`${Math.round(Math.max(0, normalized))}%`'],
+      },
       {
         path: 'src/features/truenas/TrueNASSystemsTable.tsx',
         patterns: localPercentPatterns,
@@ -4377,6 +4412,26 @@ describe('shared primitive guardrails', () => {
     expect(localPercentGuard?.scopes).toEqual(['src/features/truenas']);
     expect(localPercentGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(localPercentGuard?.ignoredPaths ?? []).toHaveLength(0);
+    expect(localProxmoxPercentToFixedGuard?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(localProxmoxPercentToFixedGuard?.canonical?.export).toBe(
+      'formatPlatformTablePercentValue',
+    );
+    expect(localProxmoxPercentToFixedGuard?.allPatterns).toEqual(['toFixed(1)}%']);
+    expect(localProxmoxPercentToFixedGuard?.scopes).toEqual(['src/features/proxmox']);
+    expect(localProxmoxPercentToFixedGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(localProxmoxPercentToFixedGuard?.ignoredPaths ?? []).toHaveLength(0);
+    expect(localProxmoxPercentLabelGuard?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(localProxmoxPercentLabelGuard?.canonical?.export).toBe(
+      'formatPlatformTablePercentValue',
+    );
+    expect(localProxmoxPercentLabelGuard?.allPatterns).toEqual(['formatPercentLabel']);
+    expect(localProxmoxPercentLabelGuard?.scopes).toEqual(['src/features/proxmox']);
+    expect(localProxmoxPercentLabelGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(localProxmoxPercentLabelGuard?.ignoredPaths ?? []).toHaveLength(0);
     expect(localTemperatureGuard?.canonical?.path).toBe(
       'src/features/platformPage/sharedPlatformPage.tsx',
     );
@@ -4398,12 +4453,12 @@ describe('shared primitive guardrails', () => {
     expect(localTemperatureLabelGuard?.ignoredPaths ?? []).toHaveLength(0);
 
     expect(sharedPlatformPageSource).toContain('export function PlatformTablePercentValue');
+    expect(sharedPlatformPageSource).toContain('export const formatPlatformTablePercentValue');
     expect(sharedPlatformPageSource).toContain('export function PlatformTableTemperatureValue');
-    expect(sharedPlatformPageSource).toContain('formatOneDecimalPercent');
     expect(sharedPlatformPageSource).toContain('formatOneDecimalCelsius');
 
     for (const [path, source] of percentConsumers) {
-      expect(source).toContain('PlatformTablePercentValue');
+      expect(source).toMatch(/PlatformTablePercentValue|formatPlatformTablePercentValue/);
       const forbiddenPatterns =
         percentRule?.forbiddenPatterns?.find((entry) => entry.path === path)?.patterns ?? [];
       for (const pattern of forbiddenPatterns) {

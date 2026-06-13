@@ -290,10 +290,18 @@ describe('ProxmoxBackupsTable', () => {
 
   it('keeps PBS backup count cells on the shared platform integer primitive', () => {
     const directLocaleCountCall = 'row.backupCount.' + 'toLocale' + 'String()';
+    const directCpuPercentRound = 'Math.round(row.cpuPercent ?? 0)}' + '%';
+    const directMemoryPercentRound = 'Math.round(row.memoryPercent ?? 0)}' + '%';
+    const directDatastorePercentRound = 'Math.round(pct() ?? 0)}' + '%';
 
     expect(proxmoxBackupServersTableSource).toContain('PlatformTableNumberValue');
     expect(proxmoxBackupServersTableSource).toContain('formatPlatformTableIntegerValue');
+    expect(proxmoxBackupServersTableSource).toContain('PlatformTablePercentValue');
+    expect(proxmoxBackupServersTableSource).toContain('formatPlatformTablePercentValue');
     expect(proxmoxBackupServersTableSource).not.toContain(directLocaleCountCall);
+    expect(proxmoxBackupServersTableSource).not.toContain(directCpuPercentRound);
+    expect(proxmoxBackupServersTableSource).not.toContain(directMemoryPercentRound);
+    expect(proxmoxBackupServersTableSource).not.toContain(directDatastorePercentRound);
   });
 
   it('keeps backup coverage fed by Proxmox VM/LXC guests when Overview demotes app containers', () => {

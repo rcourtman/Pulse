@@ -33,6 +33,7 @@ import {
   PlatformTableEmptyState,
   PlatformTableMetricFallback,
   PlatformTableShell,
+  formatPlatformTablePercentValue,
   getPlatformTableFiniteMetric,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
@@ -117,13 +118,6 @@ const projectResourceToLegacyNode = (resource: Resource): LegacyNode => {
     linkedAgentId: resource.agent?.agentId ?? undefined,
   };
   return projected as unknown as LegacyNode;
-};
-
-const formatPercentLabel = (value: number | null | undefined): string => {
-  const finiteValue = typeof value === 'number' ? getPlatformTableFiniteMetric(value) : undefined;
-  if (finiteValue === undefined) return '—';
-  const normalized = finiteValue <= 1 ? finiteValue * 100 : finiteValue;
-  return `${Math.round(Math.max(0, normalized))}%`;
 };
 
 type HostSortKey = ProxmoxHostTableColumnId;
@@ -441,7 +435,10 @@ export const ProxmoxNodesTable: Component<{
                         >
                           <MetricMiniSparkline
                             series={cpuSeries()}
-                            valueLabel={formatPercentLabel(cpuPercent())}
+                            valueLabel={formatPlatformTablePercentValue(cpuPercent(), {
+                              normalizeRatio: true,
+                              clamp: true,
+                            })}
                             title={`${name()} CPU history`}
                           />
                         </Show>
@@ -472,7 +469,10 @@ export const ProxmoxNodesTable: Component<{
                         >
                           <MetricMiniSparkline
                             series={memorySeries()}
-                            valueLabel={formatPercentLabel(memoryPercent())}
+                            valueLabel={formatPlatformTablePercentValue(memoryPercent(), {
+                              normalizeRatio: true,
+                              clamp: true,
+                            })}
                             title={`${name()} memory history`}
                           />
                         </Show>
@@ -500,7 +500,10 @@ export const ProxmoxNodesTable: Component<{
                         >
                           <MetricMiniSparkline
                             series={diskSeries()}
-                            valueLabel={formatPercentLabel(diskPercent())}
+                            valueLabel={formatPlatformTablePercentValue(diskPercent(), {
+                              normalizeRatio: true,
+                              clamp: true,
+                            })}
                             title={`${name()} disk history`}
                           />
                         </Show>

@@ -16,6 +16,7 @@ import { formatBytes } from '@/utils/format';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PlatformTableToolbar,
+  formatPlatformTablePercentValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   type PlatformTableFilterOption,
@@ -149,11 +150,12 @@ function capacityLabel(resource: Resource): JSX.Element {
   if (typeof total === 'number' && total > 0) {
     return (
       <span class="tabular-nums">
-        {pct.toFixed(1)}%<span class="text-muted text-[10px]"> of {formatBytes(total)}</span>
+        {formatPlatformTablePercentValue(pct)}
+        <span class="text-muted text-[10px]"> of {formatBytes(total)}</span>
       </span>
     );
   }
-  return <span class="tabular-nums">{pct.toFixed(1)}%</span>;
+  return <span class="tabular-nums">{formatPlatformTablePercentValue(pct)}</span>;
 }
 
 function healthMessageCell(resource: Resource): JSX.Element {

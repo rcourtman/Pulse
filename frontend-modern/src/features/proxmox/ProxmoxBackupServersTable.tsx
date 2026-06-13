@@ -5,9 +5,11 @@ import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { formatBytes, formatUptime } from '@/utils/format';
 import {
   formatPlatformTableIntegerValue,
+  formatPlatformTablePercentValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   PlatformTableNumberValue,
+  PlatformTablePercentValue,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { PBSBackup } from '@/types/api';
@@ -206,13 +208,13 @@ export function ProxmoxBackupServersTable(props: {
                       {row.version || '—'}
                     </TableCell>
                     <TableCell
-                      class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
+                      class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                     >
                       <Show
                         when={row.online && row.cpuPercent !== undefined}
                         fallback={<span class="text-muted">—</span>}
                       >
-                        {Math.round(row.cpuPercent ?? 0)}%
+                        <PlatformTablePercentValue value={row.cpuPercent} />
                       </Show>
                     </TableCell>
                     <TableCell class={getPlatformTableCellClassForKind('numeric-value')}>
@@ -221,14 +223,14 @@ export function ProxmoxBackupServersTable(props: {
                         fallback={<span class="text-muted">—</span>}
                       >
                         <span
-                          class="text-base-content tabular-nums"
+                          class="text-base-content"
                           title={
                             row.memoryTotal
                               ? `${formatBytes(row.memoryUsed ?? 0)} / ${formatBytes(row.memoryTotal)}`
                               : undefined
                           }
                         >
-                          {Math.round(row.memoryPercent ?? 0)}%
+                          <PlatformTablePercentValue value={row.memoryPercent} />
                         </span>
                         <Show when={row.memoryTotal}>
                           <span class="ml-1 text-[10px] text-muted tabular-nums">
@@ -262,13 +264,11 @@ export function ProxmoxBackupServersTable(props: {
                             <StatusDot
                               size="sm"
                               variant={usageVariant(pct())}
-                              title={`Datastore ${Math.round(pct() ?? 0)}% used`}
+                              title={`Datastore ${formatPlatformTablePercentValue(pct())} used`}
                               ariaHidden
                             />
                             <span class={`tabular-nums font-medium ${usageToneClass(pct())}`}>
-                              <Show when={pct() !== undefined} fallback="—">
-                                {Math.round(pct() ?? 0)}%
-                              </Show>
+                              <PlatformTablePercentValue value={pct()} />
                             </span>
                             <span class="text-[10px] text-muted tabular-nums">
                               {formatBytes(datastore().used)} / {formatBytes(datastore().total)}

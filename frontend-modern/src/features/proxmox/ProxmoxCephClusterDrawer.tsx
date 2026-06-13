@@ -16,6 +16,7 @@ import {
   PLATFORM_TABLE_BODY_CLASS,
   PLATFORM_TABLE_HEADER_ROW_CLASS,
   formatPlatformTableIntegerValue,
+  formatPlatformTablePercentValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   PlatformTableNumberValue,
@@ -74,7 +75,8 @@ function CapacityBar(props: { used: number; total: number; percent: number }) {
       fillClass={capacityToneFor(clamped)}
       label={
         <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-base-content leading-none tabular-nums">
-          {clamped.toFixed(1)}% · {formatBytes(props.used)} / {formatBytes(props.total)}
+          {formatPlatformTablePercentValue(clamped)} · {formatBytes(props.used)} /{' '}
+          {formatBytes(props.total)}
         </span>
       }
     />
@@ -90,7 +92,7 @@ function PoolUsageBar(props: { percent: number }) {
       fillClass={capacityToneFor(clamped)}
       label={
         <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-base-content leading-none tabular-nums">
-          {clamped.toFixed(1)}%
+          {formatPlatformTablePercentValue(clamped)}
         </span>
       }
     />

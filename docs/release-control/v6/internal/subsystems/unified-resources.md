@@ -281,10 +281,12 @@ and unknown empty-cell markers instead of local `formatInteger`,
 Percent and temperature table cells follow the same split: unified-resource
 consumers own which usage percentage or temperature source is meaningful for
 the row, while dense platform table rendering must use
-`PlatformTablePercentValue` and `PlatformTableTemperatureValue` for one-decimal
-formatting, positive Celsius validation, tabular styling, and empty markers
-instead of local `formatPercent`, `formatTemperature`, or temperature label
-helpers.
+`PlatformTablePercentValue`, `formatPlatformTablePercentValue`, and
+`PlatformTableTemperatureValue` for one-decimal percent formatting, ratio
+normalization/clamping when the source metric requires it, positive Celsius
+validation, tabular styling, and empty markers instead of local
+`formatPercent`, `formatPercentLabel`, `toFixed(1)%`, `formatTemperature`, or
+temperature label helpers.
 Metric bar fallbacks follow that split as well: unified-resource consumers own
 which CPU or memory value is selected, plus any source-specific fallback reason
 such as outdated standalone agent telemetry, while platform tables must use

@@ -2655,11 +2655,14 @@ the consuming table owns only which current/total values, suffix, and warning
 tone apply.
 One-decimal percent and positive Celsius cells are also shared platform-table
 value primitives. `PlatformTablePercentValue` owns percent formatting,
-tabular-number styling, and empty markers, while
+tabular-number styling, and empty markers; `formatPlatformTablePercentValue`
+owns the same one-decimal percent string for overlay labels, titles, and
+sparkline labels, including caller-selected ratio normalization and clamping.
 `PlatformTableTemperatureValue` owns finite positive Celsius validation,
 one-decimal `°C` formatting, tabular-number styling, and empty markers. Docker
-/ Podman host and TrueNAS system/storage-topology tables must compose those
-primitives instead of carrying local `formatPercent`, `formatTemperature`, or
+/ Podman host, Proxmox backup/Ceph/node/mail-gateway, and TrueNAS
+system/storage-topology tables or drawers must compose those primitives instead
+of carrying local `formatPercent`, `formatPercentLabel`, `toFixed(1)%`, or
 temperature label helpers.
 Platform table metric fallback rendering is also shared.
 `PlatformTableMetricFallback` owns the centered muted empty marker used in

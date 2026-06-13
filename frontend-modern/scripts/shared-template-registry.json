@@ -1600,13 +1600,44 @@
     {
       "id": "platform-table-percent-value-fallback",
       "category": "platform-table-text-value",
-      "summary": "Platform tables must use the shared percent-value primitive for one-decimal percent cells, tabular styling, and canonical empty-cell markers instead of recreating local formatPercent helpers.",
+      "summary": "Platform tables and drawers must use the shared percent-value primitive/helper for one-decimal percent cells, overlay labels, tabular styling, ratio normalization, clamping, and canonical empty-cell markers instead of recreating local formatPercent helpers.",
       "canonical": {
         "path": "src/features/platformPage/sharedPlatformPage.tsx",
         "export": "PlatformTablePercentValue"
       },
-      "requiredConsumers": [{ "path": "src/features/truenas/TrueNASSystemsTable.tsx" }],
+      "requiredConsumers": [
+        { "path": "src/features/proxmox/ProxmoxBackupServersTable.tsx" },
+        { "path": "src/features/proxmox/ProxmoxCephClusterDrawer.tsx" },
+        { "path": "src/features/proxmox/ProxmoxCephTable.tsx" },
+        { "path": "src/features/proxmox/ProxmoxMailGatewayDrawer.tsx" },
+        { "path": "src/features/proxmox/ProxmoxNodesTable.tsx" },
+        { "path": "src/features/truenas/TrueNASSystemsTable.tsx" }
+      ],
       "forbiddenPatterns": [
+        {
+          "path": "src/features/proxmox/ProxmoxBackupServersTable.tsx",
+          "patterns": [
+            "Math.round(row.cpuPercent ?? 0)}%",
+            "Math.round(row.memoryPercent ?? 0)}%",
+            "Math.round(pct() ?? 0)}%"
+          ]
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxCephClusterDrawer.tsx",
+          "patterns": ["clamped.toFixed(1)}%"]
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxCephTable.tsx",
+          "patterns": ["pct.toFixed(1)}%"]
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxMailGatewayDrawer.tsx",
+          "patterns": ["share.toFixed(1)}%"]
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxNodesTable.tsx",
+          "patterns": ["const formatPercentLabel", "`${Math.round(Math.max(0, normalized))}%`"]
+        },
         {
           "path": "src/features/truenas/TrueNASSystemsTable.tsx",
           "patterns": [
@@ -2515,6 +2546,46 @@
         "<span class=\"tabular-nums\">{percent.toFixed(1)}%</span>"
       ],
       "legacyReason": "Retired migration debt. One-decimal percent cells must compose PlatformTablePercentValue so percent formatting, tabular styling, and empty markers stay shared.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-table-local-proxmox-percent-tofixed-label",
+      "category": "platform-table-text-value",
+      "summary": "Proxmox platform tables and drawers must not recreate one-decimal percent labels with toFixed.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "formatPlatformTablePercentValue"
+      },
+      "scopes": ["src/features/proxmox"],
+      "extensions": [".tsx"],
+      "allPatterns": ["toFixed(1)}%"],
+      "legacyReason": "Retired migration debt. Proxmox platform percent labels must compose formatPlatformTablePercentValue or PlatformTablePercentValue so formatting stays shared.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-table-local-proxmox-percent-label-helper",
+      "category": "platform-table-text-value",
+      "summary": "Proxmox platform tables must not recreate local percent label helpers for metric cells.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "formatPlatformTablePercentValue"
+      },
+      "scopes": ["src/features/proxmox"],
+      "extensions": [".tsx"],
+      "allPatterns": ["formatPercentLabel"],
+      "legacyReason": "Retired migration debt. Proxmox platform percent metric labels must compose formatPlatformTablePercentValue so ratio normalization, clamping, and empty markers stay shared.",
       "allowedPaths": [],
       "ignoredPaths": [],
       "proof": [

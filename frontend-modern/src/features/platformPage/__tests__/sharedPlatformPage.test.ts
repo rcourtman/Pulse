@@ -15,6 +15,7 @@ import {
   formatPlatformTableCountRatioValue,
   formatPlatformTableDateTimeValue,
   formatPlatformTableIntegerValue,
+  formatPlatformTablePercentValue,
   formatPlatformTableTitleCaseValue,
   formatPlatformTableUptimeValue,
   filterPlatformResources,
@@ -440,6 +441,15 @@ describe('PlatformTableCountRatioValue', () => {
 });
 
 describe('PlatformTablePercentValue', () => {
+  it('formats shared percent labels with canonical empty, ratio, and clamp behavior', () => {
+    expect(formatPlatformTablePercentValue(42.345)).toBe('42.3%');
+    expect(formatPlatformTablePercentValue(undefined)).toBe('—');
+    expect(formatPlatformTablePercentValue(Number.NaN, { emptyText: '-' })).toBe('-');
+    expect(formatPlatformTablePercentValue(0.812, { normalizeRatio: true })).toBe('81.2%');
+    expect(formatPlatformTablePercentValue(120, { clamp: true })).toBe('100.0%');
+    expect(formatPlatformTablePercentValue(-3, { clamp: true })).toBe('0.0%');
+  });
+
   it('renders finite percentages with one decimal place and shared tabular styling', () => {
     const { container } = render(() => PlatformTablePercentValue({ value: 42.345 }));
     const marker = container.querySelector('span');
@@ -450,6 +460,14 @@ describe('PlatformTablePercentValue', () => {
     cleanup();
     render(() => PlatformTablePercentValue({ value: Number.NaN, emptyText: '-' }));
     expect(screen.getByText('-')).toBeInTheDocument();
+  });
+
+  it('passes ratio normalization and clamping through the shared component', () => {
+    const { container } = render(() =>
+      PlatformTablePercentValue({ value: 0.25, normalizeRatio: true, clamp: true }),
+    );
+
+    expect(container.querySelector('span')?.textContent).toBe('25.0%');
   });
 });
 

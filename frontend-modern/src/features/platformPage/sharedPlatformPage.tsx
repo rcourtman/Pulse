@@ -356,12 +356,31 @@ export function PlatformTableCountRatioValue(props: {
   );
 }
 
-const formatOneDecimalPercent = (value: number): string => `${value.toFixed(1)}%`;
+export type PlatformTablePercentValueOptions = {
+  emptyText?: string;
+  normalizeRatio?: boolean;
+  clamp?: boolean;
+};
+
+export const formatPlatformTablePercentValue = (
+  value: number | null | undefined,
+  options: PlatformTablePercentValueOptions = {},
+): string => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return options.emptyText ?? '—';
+  }
+  const normalized = options.normalizeRatio && value <= 1 ? value * 100 : value;
+  const clamped = options.clamp ? Math.max(0, Math.min(100, normalized)) : normalized;
+  return `${clamped.toFixed(1)}%`;
+};
+
 const formatOneDecimalCelsius = (value: number): string => `${value.toFixed(1)}°C`;
 
 export function PlatformTablePercentValue(props: {
   value: number | null | undefined;
   emptyText?: string;
+  normalizeRatio?: boolean;
+  clamp?: boolean;
 }) {
   const finiteValue = () =>
     typeof props.value === 'number' && Number.isFinite(props.value) ? props.value : undefined;
@@ -370,7 +389,13 @@ export function PlatformTablePercentValue(props: {
     <PlatformTableNumberValue
       value={finiteValue()}
       emptyText={props.emptyText}
-      format={formatOneDecimalPercent}
+      format={(value) =>
+        formatPlatformTablePercentValue(value, {
+          emptyText: props.emptyText,
+          normalizeRatio: props.normalizeRatio,
+          clamp: props.clamp,
+        })
+      }
     />
   );
 }

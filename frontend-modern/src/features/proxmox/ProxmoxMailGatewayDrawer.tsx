@@ -15,6 +15,7 @@ import {
   PLATFORM_TABLE_BODY_CLASS,
   PLATFORM_TABLE_HEADER_ROW_CLASS,
   formatPlatformTableIntegerValue,
+  formatPlatformTablePercentValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   PlatformTableNumberValue,
@@ -144,7 +145,9 @@ function StackedBar(props: { segments: StackedSegment[]; ariaLabel: string }) {
                   {formatPlatformTableIntegerValue(seg.value)}
                 </span>
                 <Show when={total() > 0}>
-                  <span class="text-muted tabular-nums text-[10px]">{share.toFixed(1)}%</span>
+                  <span class="text-muted tabular-nums text-[10px]">
+                    {formatPlatformTablePercentValue(share)}
+                  </span>
                 </Show>
               </div>
             );
