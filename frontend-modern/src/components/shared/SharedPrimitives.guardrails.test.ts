@@ -2459,12 +2459,13 @@ describe('shared primitive guardrails', () => {
     }
   });
 
-  it('keeps Patrol and AI loading spinners on the shared LoadingSpinner primitive', () => {
+  it('keeps Settings, Patrol, and AI loading spinners on the shared LoadingSpinner primitive', () => {
     const registry = JSON.parse(sharedTemplateRegistrySource) as {
       rules?: Array<{
         id: string;
         canonical?: { path?: string; export?: string };
         requiredConsumers?: Array<{ path?: string }>;
+        forbiddenPatterns?: Array<{ path?: string; patterns?: string[] }>;
       }>;
       patternGuards?: Array<{
         id: string;
@@ -2479,11 +2480,27 @@ describe('shared primitive guardrails', () => {
     const registeredGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'patrol-ai-local-loading-spinner-shell',
     );
+    const settingsBorderTopGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'settings-local-border-loading-spinner-shell',
+    );
+    const settingsBorderBottomGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'settings-local-border-bottom-loading-spinner-shell',
+    );
 
     expect(registeredRule?.canonical?.path).toBe('src/components/shared/LoadingSpinner.tsx');
     expect(registeredRule?.canonical?.export).toBe('LoadingSpinner');
     expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
       'src/components/AI/FindingsPanel.tsx',
+      'src/components/Settings/AISettings.tsx',
+      'src/components/Settings/AISettingsDialogs.tsx',
+      'src/components/Settings/APITokenManager.tsx',
+      'src/components/Settings/AgentProfilesPanel.tsx',
+      'src/components/Settings/RolesPanel.tsx',
+      'src/components/Settings/SSOProvidersPanel.tsx',
+      'src/components/Settings/UpdateInstallGuide.tsx',
+      'src/components/Settings/UpdatesSettingsPanel.tsx',
+      'src/components/Settings/UserAssignmentsDialog.tsx',
+      'src/components/Settings/UserAssignmentsPanel.tsx',
       'src/components/patrol/ApprovalBanner.tsx',
       'src/components/patrol/ApprovalSection.tsx',
       'src/components/patrol/InvestigationMessages.tsx',
@@ -2500,6 +2517,20 @@ describe('shared primitive guardrails', () => {
       'src/components/AI/FindingsPanel.tsx',
     ]);
     expect(registeredGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(settingsBorderTopGuard?.canonical?.path).toBe(
+      'src/components/shared/LoadingSpinner.tsx',
+    );
+    expect(settingsBorderTopGuard?.canonical?.export).toBe('LoadingSpinner');
+    expect(settingsBorderTopGuard?.allPatterns).toEqual(['border-t-transparent', 'animate-spin']);
+    expect(settingsBorderTopGuard?.scopes).toEqual(['src/components/Settings']);
+    expect(settingsBorderTopGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(settingsBorderBottomGuard?.canonical?.path).toBe(
+      'src/components/shared/LoadingSpinner.tsx',
+    );
+    expect(settingsBorderBottomGuard?.canonical?.export).toBe('LoadingSpinner');
+    expect(settingsBorderBottomGuard?.allPatterns).toEqual(['border-b-2', 'animate-spin']);
+    expect(settingsBorderBottomGuard?.scopes).toEqual(['src/components/Settings']);
+    expect(settingsBorderBottomGuard?.allowedPaths ?? []).toHaveLength(0);
 
     expect(loadingSpinnerSource).toContain('getLoadingSpinnerClass');
     expect(loadingSpinnerSource).toContain('aria-hidden={ariaHidden()}');
@@ -2515,6 +2546,32 @@ describe('shared primitive guardrails', () => {
     ]) {
       expect(source).toContain('LoadingSpinner');
       expect(source).not.toMatch(/border(?:-\d)?[^\n]*border-t-transparent[^\n]*animate-spin/);
+    }
+
+    const settingsSpinnerConsumers = [
+      'src/components/Settings/AISettings.tsx',
+      'src/components/Settings/AISettingsDialogs.tsx',
+      'src/components/Settings/APITokenManager.tsx',
+      'src/components/Settings/AgentProfilesPanel.tsx',
+      'src/components/Settings/RolesPanel.tsx',
+      'src/components/Settings/SSOProvidersPanel.tsx',
+      'src/components/Settings/UpdateInstallGuide.tsx',
+      'src/components/Settings/UpdatesSettingsPanel.tsx',
+      'src/components/Settings/UserAssignmentsDialog.tsx',
+      'src/components/Settings/UserAssignmentsPanel.tsx',
+    ];
+    const forbiddenPatternsByPath = new Map(
+      registeredRule?.forbiddenPatterns?.map((entry) => [entry.path, entry.patterns ?? []]) ?? [],
+    );
+
+    for (const path of settingsSpinnerConsumers) {
+      const source = readFrontendSource(path);
+      expect(source).toContain('LoadingSpinner');
+      for (const retiredPattern of forbiddenPatternsByPath.get(path) ?? []) {
+        expect(source).not.toContain(retiredPattern);
+      }
+      expect(source).not.toContain('border-t-transparent');
+      expect(source).not.toContain('border-b-2 border-blue-500');
     }
   });
 

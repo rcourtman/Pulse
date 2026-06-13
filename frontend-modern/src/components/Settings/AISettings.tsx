@@ -6,6 +6,7 @@ import { AIModelSelectionSection } from '@/components/Settings/AIModelSelectionS
 import { AIRuntimeControlsSection } from '@/components/Settings/AIRuntimeControlsSection';
 import { AISettingsStatusAndActions } from '@/components/Settings/AISettingsStatusAndActions';
 import { useAISettingsState } from '@/components/Settings/useAISettingsState';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
 import { PATROL_PATH } from '@/routing/resourceLinks';
@@ -48,7 +49,7 @@ export const AISettings: Component = () => {
         <form class="divide-y divide-border" onSubmit={state.handleSave}>
           <Show when={state.loading()}>
             <div class="flex items-center gap-3 text-sm text-muted p-4 sm:p-6">
-              <span class="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+              <LoadingSpinner size="md" tone="current" />
               {getAISettingsLoadingState().text}
             </div>
           </Show>

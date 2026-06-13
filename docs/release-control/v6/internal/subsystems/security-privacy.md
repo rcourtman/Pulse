@@ -210,6 +210,10 @@ controls as normal product settings.
    placeholders on the shared `SettingsLoadingSkeleton` primitive. This
    subsystem owns the security/privacy posture semantics; frontend-primitives
    owns skeleton animation, fill tokens, and placeholder shell consistency.
+6a. Keep API token refresh/loading indicators on the shared `LoadingSpinner`
+    primitive. Security/privacy owns the token-management trust copy and
+    refresh semantics; frontend-primitives owns spinner shell, tone, and
+    accessible status behavior.
 6. Keep the shared storage-directory and secure storage-file hardening helper aligned with the crypto manager plus control-plane magic-link key and store handling whenever runtime data-root ownership assumptions change.
 7. Keep auth-env ingestion, hosted commercial base URL validation, and shared
    fingerprint-verifier TLS defaults aligned whenever runtime auth loading,

@@ -3,6 +3,7 @@ import SettingsPanel from '@/components/shared/SettingsPanel';
 import { RBACFeatureGateSection } from './RBACFeatureGateSection';
 import { UserAssignmentsDialog } from './UserAssignmentsDialog';
 import { useUserAssignmentsPanelState } from './useUserAssignmentsPanelState';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import Users from 'lucide-solid/icons/users';
 import Shield from 'lucide-solid/icons/shield';
 import Pencil from 'lucide-solid/icons/pencil';
@@ -41,7 +42,7 @@ export const UserAssignmentsPanel: Component = () => {
 
         <Show when={state.loading()}>
           <div class="flex items-center justify-center py-8">
-            <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500" />
+            <LoadingSpinner size="xl" tone="info" label="Loading user access" />
           </div>
         </Show>
 

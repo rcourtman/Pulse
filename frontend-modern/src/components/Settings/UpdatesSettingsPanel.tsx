@@ -2,6 +2,7 @@ import { Component, Show, For, Accessor, Setter, createUniqueId } from 'solid-js
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { FormSelect } from '@/components/shared/FormSelect';
 import { HelpIcon } from '@/components/shared/HelpIcon';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import {
   SelectionCardGroup,
   type SelectionCardOption,
@@ -199,7 +200,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
               >
                 {props.checkingForUpdates() ? (
                   <>
-                    <div class="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+                    <LoadingSpinner size="md" tone="inverse" />
                     {getUpdateCheckActionLabel(true)}
                   </>
                 ) : (

@@ -3,6 +3,7 @@ import { Card } from '@/components/shared/Card';
 import { Dialog } from '@/components/shared/Dialog';
 import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
 import { SectionHeader } from '@/components/shared/SectionHeader';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
 import { MONITORING_READ_SCOPE } from '@/constants/apiScopes';
@@ -161,23 +162,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
           padding="sm"
           class="flex items-center gap-2 border border-blue-200 text-xs text-blue-800 dark:border-blue-800 dark:text-blue-200"
         >
-          <svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <circle
-              class="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke-width="4"
-              stroke="currentColor"
-            />
-            <path
-              class="opacity-75"
-              d="M4 12a8 8 0 018-8"
-              stroke-width="4"
-              stroke-linecap="round"
-              stroke="currentColor"
-            />
-          </svg>
+          <LoadingSpinner size="md" tone="info" />
           <span>Refreshing security status…</span>
         </Card>
       </Show>

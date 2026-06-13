@@ -11,6 +11,7 @@ import type {
   VersionInfo,
 } from '@/api/updates';
 import { CopyCommandBlock } from '@/components/Settings/CopyCommandBlock';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import {
   buildIdleDockerComposeCommand,
   buildIdleDockerUpdateCommand,
@@ -247,7 +248,7 @@ export const UpdateInstallGuide: Component<UpdateInstallGuideProps> = (props) =>
                       </Show>
                     }
                   >
-                    <div class="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    <LoadingSpinner size="md" tone="inverse" />
                     Installing...
                   </Show>
                 </button>

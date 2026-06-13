@@ -57,5 +57,7 @@ describe('LoadingSpinner', () => {
     expect(getLoadingSpinnerClass({ size: 'xs', tone: 'muted', class: 'align-middle' })).toContain(
       'align-middle',
     );
+    expect(getLoadingSpinnerClass({ size: 'xl', tone: 'info' })).toContain('h-6');
+    expect(getLoadingSpinnerClass({ size: 'xl', tone: 'info' })).toContain('border-blue-500');
   });
 });

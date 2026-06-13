@@ -1,5 +1,6 @@
 import { Component, For, Show } from 'solid-js';
 import { Dialog } from '@/components/shared/Dialog';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import type { Permission, Role, UserRoleAssignment } from '@/types/rbac';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
 import Shield from 'lucide-solid/icons/shield';
@@ -90,7 +91,7 @@ export const UserAssignmentsDialog: Component<UserAssignmentsDialogProps> = (pro
                 Effective Permissions Preview
               </h4>
               <Show when={props.loadingPermissions}>
-                <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" />
+                <LoadingSpinner size="md" tone="info" label="Loading effective permissions" />
               </Show>
             </div>
             <div class="bg-surface-hover rounded-md p-4 border border-border-subtle">

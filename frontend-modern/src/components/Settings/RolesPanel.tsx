@@ -3,6 +3,7 @@ import SettingsPanel from '@/components/shared/SettingsPanel';
 import { RBACFeatureGateSection } from './RBACFeatureGateSection';
 import { RolesEditorDialog } from './RolesEditorDialog';
 import { useRolesPanelState } from './useRolesPanelState';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { getRolesEmptyState } from '@/utils/rbacPresentation';
 import Plus from 'lucide-solid/icons/plus';
 import Pencil from 'lucide-solid/icons/pencil';
@@ -41,7 +42,7 @@ export const RolesPanel: Component = () => {
 
         <Show when={state.loading()}>
           <div class="flex items-center justify-center py-8">
-            <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500" />
+            <LoadingSpinner size="xl" tone="info" label="Loading roles" />
           </div>
         </Show>
 

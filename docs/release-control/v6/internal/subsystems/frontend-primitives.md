@@ -1331,6 +1331,10 @@ not a replacement status card, CTA band, or page-local nested card.
    `SettingsLoadingSkeleton` primitive and the
    `settings-loading-skeleton-shell` registry rule instead of local
    `animate-pulse` block templates.
+   Pure Settings loading indicators that are spinners rather than skeleton
+   placeholders must stay on `LoadingSpinner` and the `loading-spinner-shell`
+   registry rule instead of local `border-t-transparent` or `border-b-2`
+   animate-spin shells.
 3. Update this contract when a new canonical UI pattern is adopted
 4. Remove local forks after the shared primitive is introduced
 5. Keep shared feature-level presenters on capability truth. When reusable
@@ -2766,9 +2770,10 @@ green/yellow span classes in storage components or storage-backup presentation
 helpers.
 Loading indicators are registry-backed too. `LoadingSpinner` owns the shared
 border-based spinner shell, size catalog, tone catalog, decorative status, and
-accessible status label behavior. Patrol and AI finding surfaces must compose
-that primitive for loading and action-pending spinners; icon-specific refresh
-rotation remains local icon state, not a loading-spinner shell.
+accessible status label behavior. Settings, Patrol, and AI finding surfaces
+must compose that primitive for pure loading and action-pending spinners;
+icon-specific refresh rotation remains local icon state, not a loading-spinner
+shell.
 Native select controls are registry-backed too. `FormSelect` owns label/id
 wiring, helper-text description merging, value synchronization, default select
 chrome, dynamic-option value synchronization, and compact styling hooks for

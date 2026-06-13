@@ -4,6 +4,7 @@ import { Toggle } from '@/components/shared/Toggle';
 import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
 import { FormTextarea } from '@/components/shared/FormTextarea';
 import { Dialog } from '@/components/shared/Dialog';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import Plus from 'lucide-solid/icons/plus';
 import Pencil from 'lucide-solid/icons/pencil';
 import Trash2 from 'lucide-solid/icons/trash-2';
@@ -108,7 +109,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
         {/* Content */}
         <Show when={loading()}>
           <div class="flex items-center gap-3 text-sm text-muted">
-            <span class="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+            <LoadingSpinner size="md" tone="current" />
             {getSSOProvidersLoadingState().text}
           </div>
         </Show>

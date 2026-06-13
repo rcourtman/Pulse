@@ -120,6 +120,10 @@ create, review, and approve cross-organization shares.
    membership, role, and sharing meaning of those loading surfaces, while
    frontend-primitives owns the skeleton animation, fill tokens, and table/card
    placeholder shells.
+8. Keep RBAC role and user-assignment loading indicators on the shared
+   `LoadingSpinner` primitive. Organization settings owns RBAC loading
+   semantics; frontend-primitives owns spinner size, tone, and accessible
+   status behavior.
 
 ## Current State
 

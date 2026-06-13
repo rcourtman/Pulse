@@ -378,6 +378,9 @@ payload shape change when the portal presents compact client rows.
     frontend-primitives' `ExternalTextLink`; API contracts own the token scope,
     usage, preset, and revoke semantics, not new-tab anchor safety or link
     chrome.
+    Token refresh/loading state remains API contract data only while the
+    visible spinner shell routes through frontend-primitives-owned
+    `LoadingSpinner` instead of an API-token-local animate-spin SVG.
 11. `frontend-modern/src/components/Settings/apiTokenManagerModel.ts` shared with `security-privacy`: the pure API token settings model is both a security/privacy control surface and a canonical API payload contract boundary.
 12. `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx` shared with `agent-lifecycle`: the inline node credential slot is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
 13. `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx` shared with `agent-lifecycle`: the pure infrastructure operations inventory/install model is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.

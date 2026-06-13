@@ -378,6 +378,54 @@ describe('settings architecture guardrails', () => {
     }
   });
 
+  it('keeps settings loading spinners on the shared spinner primitive', () => {
+    const spinnerConsumers: Array<[string, string[]]> = [
+      [
+        '../AISettings.tsx',
+        ['h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin'],
+      ],
+      [
+        '../AISettingsDialogs.tsx',
+        ['h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin'],
+      ],
+      ['../APITokenManager.tsx', ['<svg class="h-4 w-4 animate-spin"']],
+      [
+        '../AgentProfilesPanel.tsx',
+        ['animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500'],
+      ],
+      ['../RolesPanel.tsx', ['animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500']],
+      [
+        '../SSOProvidersPanel.tsx',
+        ['h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin'],
+      ],
+      [
+        '../UpdateInstallGuide.tsx',
+        ['h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent'],
+      ],
+      [
+        '../UpdatesSettingsPanel.tsx',
+        ['animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full'],
+      ],
+      [
+        '../UserAssignmentsDialog.tsx',
+        ['animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500'],
+      ],
+      [
+        '../UserAssignmentsPanel.tsx',
+        ['animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500'],
+      ],
+    ];
+
+    for (const [path, retiredPatterns] of spinnerConsumers) {
+      const source = settingsRuntimeSources[path];
+      expect(source).toContain('@/components/shared/LoadingSpinner');
+      expect(source).toContain('LoadingSpinner');
+      for (const retiredPattern of retiredPatterns) {
+        expect(source).not.toContain(retiredPattern);
+      }
+    }
+  });
+
   it('keeps telemetry disclosure aligned with the security privacy contract', () => {
     expect(generalSettingsPanelSource).toContain('aggregate self-hosted adoption');
     expect(generalSettingsPanelSource).toContain('counts, and coarse feature flags');

@@ -5,6 +5,7 @@ import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Dialog } from '@/components/shared/Dialog';
 import { FormSelect } from '@/components/shared/FormSelect';
 import { FormTextarea } from '@/components/shared/FormTextarea';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { StatusIndicatorBadge } from '@/components/shared/StatusIndicatorBadge';
 import { UpgradeButtonLink } from '@/components/shared/UpgradeLink';
 import { SuggestProfileModal } from './SuggestProfileModal';
@@ -73,7 +74,7 @@ export const AgentProfilesPanel: Component = () => {
       fallback={
         <Card padding="lg">
           <div class="flex items-center justify-center py-8">
-            <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500" />
+            <LoadingSpinner size="xl" tone="info" />
             <span class="ml-3 text-muted">Checking license...</span>
           </div>
         </Card>
@@ -146,7 +147,11 @@ export const AgentProfilesPanel: Component = () => {
           >
             <Show when={loading()}>
               <div class="flex items-center justify-center py-8">
-                <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500" />
+                <LoadingSpinner
+                  size="xl"
+                  tone="info"
+                  label="Loading configuration profiles"
+                />
               </div>
             </Show>
 

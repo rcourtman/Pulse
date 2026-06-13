@@ -528,6 +528,11 @@ entitlement checks, upgrade destinations, and label selection, but the
 button-styled upgrade action must compose frontend-primitives'
 `UpgradeButtonLink` instead of exporting or applying a lifecycle-local CTA
 class helper.
+Agent profile loading indicators follow that same split:
+`AgentProfilesPanel.tsx` may own license-checking, profile-loading, and empty
+profile semantics, but spinner shell, size, tone, and accessible status
+behavior must compose frontend-primitives' `LoadingSpinner` instead of
+lifecycle-local `animate-spin` border classes.
 
 ## Extension Points
 

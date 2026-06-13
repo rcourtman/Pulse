@@ -1,6 +1,7 @@
 import { Show, type Accessor, type Component, type Setter } from 'solid-js';
 import { Dialog } from '@/components/shared/Dialog';
 import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { SelectionCardGroup } from '@/components/shared/SelectionCardGroup';
 import { getAISettingsSetupDialogPresentation } from '@/utils/aiSettingsPresentation';
 import type { AIProvider } from '@/types/ai';
@@ -108,7 +109,7 @@ export const AISettingsDialogs: Component<AISettingsDialogsProps> = (props) => {
                 }
               >
                 {props.setupSaving() && (
-                  <span class="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <LoadingSpinner size="md" tone="inverse" />
                 )}
                 {setupPresentation().submitLabel}
               </button>
