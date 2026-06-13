@@ -9,6 +9,7 @@ import {
   PlatformTableToolbar,
   createPlatformTableFilterState,
   filterPlatformResources,
+  formatPlatformTableUptimeValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   type PlatformResourceStatusFilter,
@@ -25,16 +26,6 @@ import { ProxmoxMailGatewayDrawer } from './ProxmoxMailGatewayDrawer';
 // omits the queue / spam / virus / quarantine counts that are the
 // operator columns. This bespoke table reuses canonical shared
 // primitives and surfaces those PMG-native columns.
-
-const formatUptime = (seconds: number | undefined): string => {
-  if (!seconds || seconds <= 0) return '—';
-  const days = Math.floor(seconds / 86_400);
-  if (days > 0) return `${days}d`;
-  const hours = Math.floor(seconds / 3_600);
-  if (hours > 0) return `${hours}h`;
-  const mins = Math.floor(seconds / 60);
-  return `${mins}m`;
-};
 
 const countCell = (value: number | undefined): JSX.Element => (
   <span class="tabular-nums">{typeof value === 'number' ? value.toLocaleString() : '—'}</span>
@@ -166,7 +157,9 @@ export const ProxmoxMailGatewayTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            {formatUptime(instance.uptime ?? pmg()?.uptimeSeconds)}
+                            {formatPlatformTableUptimeValue(
+                              instance.uptime ?? pmg()?.uptimeSeconds,
+                            )}
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}

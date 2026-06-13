@@ -16,6 +16,7 @@ import {
   PlatformTableShell,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  formatPlatformTableUptimeValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
 } from '@/features/platformPage/sharedPlatformPage';
@@ -37,16 +38,6 @@ import {
 // but omits the runtime context that distinguishes a Docker host from
 // any other agent. This bespoke table reuses canonical shared
 // primitives and surfaces the Docker-native columns.
-
-const formatUptime = (seconds: number | undefined): string => {
-  if (!seconds || seconds <= 0) return '—';
-  const days = Math.floor(seconds / 86_400);
-  if (days > 0) return `${days}d`;
-  const hours = Math.floor(seconds / 3_600);
-  if (hours > 0) return `${hours}h`;
-  const mins = Math.floor(seconds / 60);
-  return `${mins}m`;
-};
 
 const formatTemperature = (celsius: number | undefined): JSX.Element => {
   if (typeof celsius !== 'number' || celsius <= 0) return <span class="text-muted">—</span>;
@@ -373,7 +364,9 @@ export const DockerHostsTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
                           >
-                            {formatUptime(host.uptime ?? docker()?.uptimeSeconds)}
+                            {formatPlatformTableUptimeValue(
+                              host.uptime ?? docker()?.uptimeSeconds,
+                            )}
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}

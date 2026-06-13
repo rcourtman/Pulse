@@ -2596,6 +2596,12 @@ Platform table title-case fallback formatting follows the same rule.
 `Unknown` fallback behavior for state/status labels that need simple title
 case. TrueNAS platform tables must compose that helper instead of declaring
 local `titleCase` helpers.
+Platform table uptime formatting follows that rule too.
+`formatPlatformTableUptimeValue` owns the repeated one-unit uptime label plus
+canonical empty-cell marker behavior for dense platform table cells. Docker /
+Podman hosts, Kubernetes nodes, Proxmox Mail Gateway instances, and TrueNAS
+systems must compose that helper instead of declaring local `formatUptime`
+helpers for the same days/hours/minutes fallback.
 Platform load-failure states are registry-backed as well.
 `PlatformErrorState` owns the repeated table-card error shell, warning icon,
 and Refresh action for platform page and table load failures; platform

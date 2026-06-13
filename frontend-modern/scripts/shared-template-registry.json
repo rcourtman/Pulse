@@ -1236,6 +1236,44 @@
       ]
     },
     {
+      "id": "platform-table-uptime-value-fallback",
+      "category": "platform-table-text-value",
+      "summary": "Platform tables must use the shared one-unit uptime fallback helper instead of recreating local formatUptime helpers.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "formatPlatformTableUptimeValue"
+      },
+      "requiredConsumers": [
+        { "path": "src/features/docker/DockerHostsTable.tsx" },
+        { "path": "src/features/kubernetes/KubernetesNodesTable.tsx" },
+        { "path": "src/features/proxmox/ProxmoxMailGatewayTable.tsx" },
+        { "path": "src/features/truenas/TrueNASSystemsTable.tsx" }
+      ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/features/docker/DockerHostsTable.tsx",
+          "patterns": ["const formatUptime"]
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesNodesTable.tsx",
+          "patterns": ["const formatUptime"]
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxMailGatewayTable.tsx",
+          "patterns": ["const formatUptime"]
+        },
+        {
+          "path": "src/features/truenas/TrueNASSystemsTable.tsx",
+          "patterns": ["const formatUptime"]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "platform-error-state",
       "category": "platform-error-state",
       "summary": "Platform page and table load failures must compose PlatformErrorState instead of recreating a local EmptyState plus Refresh action.",
@@ -1669,6 +1707,31 @@
       "extensions": [".tsx"],
       "allPatterns": ["const titleCase", "asTrimmedString(value)", "return 'Unknown'"],
       "legacyReason": "Retired migration debt. TrueNAS platform table status/state labels must use formatPlatformTableTitleCaseValue for the shared title-case fallback.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-table-local-uptime-helper",
+      "category": "platform-table-text-value",
+      "summary": "Platform tables must not recreate local one-unit formatUptime helpers for uptime label fallback.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "formatPlatformTableUptimeValue"
+      },
+      "scopes": [
+        "src/features/docker",
+        "src/features/kubernetes",
+        "src/features/proxmox",
+        "src/features/truenas"
+      ],
+      "extensions": [".tsx"],
+      "allPatterns": ["const formatUptime", "seconds / 86_400", "return `${mins}m`"],
+      "legacyReason": "Retired migration debt. Platform table uptime labels must use formatPlatformTableUptimeValue for the shared one-unit uptime fallback.",
       "allowedPaths": [],
       "ignoredPaths": [],
       "proof": [

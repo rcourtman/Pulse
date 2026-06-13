@@ -12,6 +12,7 @@ import {
   PlatformTableEmptyState,
   createPlatformTableFilterState,
   filterPlatformResources,
+  formatPlatformTableUptimeValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   type PlatformResourceStatusFilter,
@@ -42,16 +43,6 @@ import type { Resource } from '@/types/resource';
 // FilterButtonGroup, StatusDot) and counts the per-system children
 // client-side from the same TrueNAS resource scope already fetched by
 // the page (no extra API calls).
-
-const formatUptime = (seconds: number | undefined): string => {
-  if (!seconds || seconds <= 0) return '—';
-  const days = Math.floor(seconds / 86_400);
-  if (days > 0) return `${days}d`;
-  const hours = Math.floor(seconds / 3_600);
-  if (hours > 0) return `${hours}h`;
-  const mins = Math.floor(seconds / 60);
-  return `${mins}m`;
-};
 
 const formatBytes = (bytes: number | undefined): string => {
   if (!bytes || bytes <= 0) return '—';
@@ -240,7 +231,7 @@ export const TrueNASSystemsTable: Component<{
                         ? `${formatBytes(system.disk.used)} / ${formatBytes(system.disk.total)}`
                         : formatPercent(storagePercent());
                     const c = () => countsBySystem().get(system.id) ?? EMPTY_COUNTS;
-                    const uptimeLabel = () => formatUptime(system.uptime);
+                    const uptimeLabel = () => formatPlatformTableUptimeValue(system.uptime);
                     const systemMeta = () =>
                       [
                         version() !== '—' ? version() : '',

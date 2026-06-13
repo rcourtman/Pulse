@@ -233,6 +233,10 @@ Simple title-case state/status label fallback follows that boundary too:
 unified-resource consumers own which TrueNAS state or status value is shown,
 but TrueNAS platform tables must use `formatPlatformTableTitleCaseValue`
 instead of recreating local `titleCase` helpers.
+One-unit platform table uptime labels follow the same boundary:
+unified-resource consumers own which uptime field is displayed, but platform
+tables must use `formatPlatformTableUptimeValue` instead of recreating local
+days/hours/minutes `formatUptime` helpers for dense table cells.
 Platform filter option semantics follow that split too: unified-resource
 consumers own the source-specific status buckets and labels, while the repeated
 FilterBar chip leading-dot presentation must use the frontend-primitives-owned

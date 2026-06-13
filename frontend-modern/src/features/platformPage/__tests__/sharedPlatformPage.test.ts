@@ -4,6 +4,7 @@ import type { Resource } from '@/types/resource';
 import {
   createPlatformTableFilterState,
   formatPlatformTableTitleCaseValue,
+  formatPlatformTableUptimeValue,
   filterPlatformResources,
   formatPlatformTableTextValue,
   type PlatformResourceStatusFilter,
@@ -232,5 +233,18 @@ describe('formatPlatformTableTitleCaseValue', () => {
     expect(formatPlatformTableTitleCaseValue('')).toBe('Unknown');
     expect(formatPlatformTableTitleCaseValue(undefined)).toBe('Unknown');
     expect(formatPlatformTableTitleCaseValue(' ', 'Unavailable')).toBe('Unavailable');
+  });
+});
+
+describe('formatPlatformTableUptimeValue', () => {
+  it('formats one-unit platform table uptime labels with the canonical empty marker', () => {
+    expect(formatPlatformTableUptimeValue(undefined)).toBe('—');
+    expect(formatPlatformTableUptimeValue(0)).toBe('—');
+    expect(formatPlatformTableUptimeValue(Number.NaN)).toBe('—');
+    expect(formatPlatformTableUptimeValue(30)).toBe('0m');
+    expect(formatPlatformTableUptimeValue(60)).toBe('1m');
+    expect(formatPlatformTableUptimeValue(3_600)).toBe('1h');
+    expect(formatPlatformTableUptimeValue(86_400)).toBe('1d');
+    expect(formatPlatformTableUptimeValue(0, 'n/a')).toBe('n/a');
   });
 });

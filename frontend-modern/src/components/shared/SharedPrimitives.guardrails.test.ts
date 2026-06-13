@@ -3588,6 +3588,79 @@ describe('shared primitive guardrails', () => {
     }
   });
 
+  it('keeps platform table uptime fallbacks on the shared helper', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+        forbiddenPatterns?: Array<{ path?: string; patterns?: string[] }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        allowedPaths?: string[];
+        ignoredPaths?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find(
+      (rule) => rule.id === 'platform-table-uptime-value-fallback',
+    );
+    const localHelperGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-table-local-uptime-helper',
+    );
+    const platformUptimeConsumers: Array<[string, string]> = [
+      ['src/features/docker/DockerHostsTable.tsx', dockerHostsTableSource],
+      ['src/features/kubernetes/KubernetesNodesTable.tsx', kubernetesNodesTableSource],
+      ['src/features/proxmox/ProxmoxMailGatewayTable.tsx', proxmoxMailGatewayTableSource],
+      ['src/features/truenas/TrueNASSystemsTable.tsx', truenasSystemsTableSource],
+    ];
+    const platformUptimeConsumerPaths = platformUptimeConsumers.map(([path]) => path);
+
+    expect(registeredRule?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(registeredRule?.canonical?.export).toBe('formatPlatformTableUptimeValue');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
+      platformUptimeConsumerPaths,
+    );
+    expect(registeredRule?.forbiddenPatterns).toEqual(
+      platformUptimeConsumerPaths.map((path) => ({
+        path,
+        patterns: ['const formatUptime'],
+      })),
+    );
+    expect(localHelperGuard?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(localHelperGuard?.canonical?.export).toBe('formatPlatformTableUptimeValue');
+    expect(localHelperGuard?.allPatterns).toEqual([
+      'const formatUptime',
+      'seconds / 86_400',
+      'return `${mins}m`',
+    ]);
+    expect(localHelperGuard?.scopes).toEqual([
+      'src/features/docker',
+      'src/features/kubernetes',
+      'src/features/proxmox',
+      'src/features/truenas',
+    ]);
+    expect(localHelperGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(localHelperGuard?.ignoredPaths ?? []).toHaveLength(0);
+
+    expect(sharedPlatformPageSource).toContain('export const formatPlatformTableUptimeValue');
+    expect(sharedPlatformPageSource).toContain('formatUptime(seconds, true)');
+
+    for (const [, source] of platformUptimeConsumers) {
+      expect(source).toContain('formatPlatformTableUptimeValue');
+      expect(source).not.toContain('const formatUptime');
+      expect(source).not.toContain('seconds / 86_400');
+      expect(source).not.toContain('return `${mins}m`');
+    }
+  });
+
   it('keeps platform section navigation on the shared tabs template', () => {
     const registry = JSON.parse(sharedTemplateRegistrySource) as {
       rules?: Array<{

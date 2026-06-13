@@ -12,6 +12,7 @@ import {
   PlatformTableToolbar,
   createPlatformTableFilterState,
   formatPlatformTableTextValue,
+  formatPlatformTableUptimeValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
 } from '@/features/platformPage/sharedPlatformPage';
@@ -53,16 +54,6 @@ const metricFallback = () => (
     </span>
   </div>
 );
-
-const formatUptime = (seconds: number | undefined): string => {
-  if (!seconds || seconds <= 0) return '—';
-  const days = Math.floor(seconds / 86_400);
-  if (days > 0) return `${days}d`;
-  const hours = Math.floor(seconds / 3_600);
-  if (hours > 0) return `${hours}h`;
-  const mins = Math.floor(seconds / 60);
-  return `${mins}m`;
-};
 
 const formatBytes = (bytes: number | undefined): string => {
   if (!bytes || bytes <= 0) return '—';
@@ -308,7 +299,7 @@ export const KubernetesNodesTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
                           >
-                            {formatUptime(node.uptime)}
+                            {formatPlatformTableUptimeValue(node.uptime)}
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}

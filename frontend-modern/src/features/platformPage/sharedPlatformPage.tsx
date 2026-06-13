@@ -12,6 +12,7 @@ import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
 import type { Resource } from '@/types/resource';
+import { formatUptime } from '@/utils/format';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { formatVmwareClusterServices } from '@/utils/vmwareDisplay';
 import { getPlatformColumnAlign, type PlatformTableColumnKind } from './columnAlignment';
@@ -151,6 +152,16 @@ export const formatPlatformTableTitleCaseValue = (
   const normalized = asTrimmedString(value);
   if (!normalized) return emptyText;
   return normalized.charAt(0).toUpperCase() + normalized.slice(1).toLowerCase();
+};
+
+export const formatPlatformTableUptimeValue = (
+  seconds: number | undefined,
+  emptyText = '—',
+): string => {
+  if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds <= 0) {
+    return emptyText;
+  }
+  return formatUptime(seconds, true);
 };
 
 export function PlatformErrorState(props: {
