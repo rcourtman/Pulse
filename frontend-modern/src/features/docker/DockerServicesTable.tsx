@@ -4,6 +4,7 @@ import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformTableNumberValue,
   PlatformTableToolbar,
   PlatformTableEmptyState,
   createPlatformTableFilterState,
@@ -51,10 +52,6 @@ const formatPorts = (ports: Resource['docker'] extends infer T ? T : never): str
       .join(', ') || '—'
   );
 };
-
-const replicaCount = (value: number | undefined): JSX.Element => (
-  <span class="tabular-nums">{value ?? 0}</span>
-);
 
 const formatServiceUpdate = (
   update: NonNullable<Resource['docker']>['serviceUpdate'],
@@ -233,12 +230,12 @@ export const DockerServicesTable: Component<{
                         <TableCell
                           class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
                         >
-                          {replicaCount(service.docker?.desiredTasks)}
+                          <PlatformTableNumberValue value={service.docker?.desiredTasks ?? 0} />
                         </TableCell>
                         <TableCell
                           class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                         >
-                          {replicaCount(service.docker?.runningTasks)}
+                          <PlatformTableNumberValue value={service.docker?.runningTasks ?? 0} />
                         </TableCell>
                         <TableCell
                           class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}

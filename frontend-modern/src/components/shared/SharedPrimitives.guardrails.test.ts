@@ -130,6 +130,7 @@ import selfHostedCommercialRecoverySectionSource from '@/components/Settings/Sel
 import suggestProfileModalSource from '@/components/Settings/SuggestProfileModal.tsx?raw';
 import alertAppriseDestinationsSectionSource from '@/features/alerts/AlertAppriseDestinationsSection.tsx?raw';
 import dockerPageSurfaceSource from '@/features/docker/DockerPageSurface.tsx?raw';
+import dockerServicesTableSource from '@/features/docker/DockerServicesTable.tsx?raw';
 import kubernetesPageSurfaceSource from '@/features/kubernetes/KubernetesPageSurface.tsx?raw';
 import proxmoxPageSurfaceSource from '@/features/proxmox/ProxmoxPageSurface.tsx?raw';
 import standalonePageSurfaceSource from '@/features/standalone/StandalonePageSurface.tsx?raw';
@@ -3780,10 +3781,19 @@ describe('shared primitive guardrails', () => {
     const localCountGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'platform-table-local-count-cell-helper',
     );
+    const localReplicaCountGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-table-local-replica-count-helper',
+    );
+    const localSwarmCountGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-table-local-swarm-count-spans',
+    );
     const platformNumberValueConsumers: Array<[string, string]> = [
       ['src/features/docker/DockerNativeTableShared.tsx', dockerNativeTableSharedSource],
+      ['src/features/docker/DockerServicesTable.tsx', dockerServicesTableSource],
+      ['src/components/Docker/SwarmServicesDrawer.tsx', swarmServicesDrawerSource],
       ['src/features/kubernetes/KubernetesAutoscalingTable.tsx', kubernetesAutoscalingTableSource],
       ['src/features/kubernetes/KubernetesControllersTable.tsx', kubernetesControllersTableSource],
+      ['src/features/kubernetes/KubernetesDeploymentsTable.tsx', kubernetesDeploymentsTableSource],
       ['src/features/kubernetes/KubernetesEventsTable.tsx', kubernetesEventsTableSource],
       ['src/features/kubernetes/KubernetesPodsTable.tsx', kubernetesPodsTableSource],
       ['src/features/proxmox/ProxmoxMailGatewayTable.tsx', proxmoxMailGatewayTableSource],
@@ -3805,12 +3815,27 @@ describe('shared primitive guardrails', () => {
         patterns: [optionalNumberMarkupPattern],
       },
       {
+        path: 'src/features/docker/DockerServicesTable.tsx',
+        patterns: ['const replicaCount', '<span class="tabular-nums">{value ?? 0}</span>'],
+      },
+      {
+        path: 'src/components/Docker/SwarmServicesDrawer.tsx',
+        patterns: [
+          '<span class="tabular-nums">{desired()}</span>',
+          '<span class="tabular-nums">{running()}</span>',
+        ],
+      },
+      {
         path: 'src/features/kubernetes/KubernetesAutoscalingTable.tsx',
         patterns: ['const numberValue', optionalNumberMarkupPattern],
       },
       {
         path: 'src/features/kubernetes/KubernetesControllersTable.tsx',
         patterns: ['const numberValue', optionalNumberMarkupPattern],
+      },
+      {
+        path: 'src/features/kubernetes/KubernetesDeploymentsTable.tsx',
+        patterns: ['const replicaCount', '<span class="tabular-nums">{value ?? 0}</span>'],
       },
       {
         path: 'src/features/kubernetes/KubernetesEventsTable.tsx',
@@ -3847,6 +3872,32 @@ describe('shared primitive guardrails', () => {
     expect(localCountGuard?.scopes).toEqual(['src/features/proxmox']);
     expect(localCountGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(localCountGuard?.ignoredPaths ?? []).toHaveLength(0);
+    expect(localReplicaCountGuard?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(localReplicaCountGuard?.canonical?.export).toBe('PlatformTableNumberValue');
+    expect(localReplicaCountGuard?.allPatterns).toEqual([
+      'const replicaCount',
+      '<span class="tabular-nums">{value ?? 0}</span>',
+    ]);
+    expect(localReplicaCountGuard?.scopes).toEqual([
+      'src/features/docker',
+      'src/features/kubernetes',
+    ]);
+    expect(localReplicaCountGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(localReplicaCountGuard?.ignoredPaths ?? []).toHaveLength(0);
+    expect(localSwarmCountGuard?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(localSwarmCountGuard?.canonical?.export).toBe('PlatformTableNumberValue');
+    expect(localSwarmCountGuard?.allPatterns).toEqual([
+      'desiredTasks',
+      'runningTasks',
+      'class="tabular-nums"',
+    ]);
+    expect(localSwarmCountGuard?.scopes).toEqual(['src/components/Docker']);
+    expect(localSwarmCountGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(localSwarmCountGuard?.ignoredPaths ?? []).toHaveLength(0);
 
     expect(sharedPlatformPageSource).toContain('export function PlatformTableNumberValue');
     expect(sharedPlatformPageSource).toContain('Number.isFinite(value)');

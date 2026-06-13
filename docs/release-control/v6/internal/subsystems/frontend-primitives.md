@@ -2619,9 +2619,12 @@ Platform table numeric fallback rendering is registry-backed too.
 `PlatformTableNumberValue` owns finite-number checking, tabular-number styling,
 custom empty-marker support, and caller-owned number formatting for dense
 optional numeric table cells. Docker / Podman native count helpers, Kubernetes
-optional count cells, and Proxmox Mail Gateway count columns must compose that
-primitive instead of declaring local `numberValue`, `numericValue`, or
-`countCell` helpers.
+optional count cells, Docker Swarm service desired/running counts, Kubernetes
+Deployment replica counts, and Proxmox Mail Gateway count columns must compose
+that primitive instead of declaring local `numberValue`, `numericValue`,
+`replicaCount`, or `countCell` helpers. If a scheduler or service-domain count
+is intentionally zero-defaulted, the consuming table owns that field/default
+choice and still renders through `PlatformTableNumberValue`.
 Platform table metric fallback rendering is also shared.
 `PlatformTableMetricFallback` owns the centered muted empty marker used in
 metric bar cells plus optional caller-owned fallback label/title text, and

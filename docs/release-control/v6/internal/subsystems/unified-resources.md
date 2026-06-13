@@ -251,11 +251,12 @@ right source-specific value, while dense platform table cells must use
 non-positive empty-cell markers instead of carrying table-local `formatBytes`
 wrappers.
 Optional numeric table cells follow the same split: unified-resource consumers
-own which count or replica field is meaningful and whether a domain-specific
+own which count or replica field is meaningful, whether the domain should
+zero-default an absent scheduler/service count, and whether a domain-specific
 formatter is needed, while dense platform table cells must use
 `PlatformTableNumberValue` for finite-number validation, tabular styling, and
 unknown empty-cell markers instead of carrying local `numberValue`,
-`numericValue`, or `countCell` helpers.
+`numericValue`, `replicaCount`, or `countCell` helpers.
 Metric bar fallbacks follow that split as well: unified-resource consumers own
 which CPU or memory value is selected, plus any source-specific fallback reason
 such as outdated standalone agent telemetry, while platform tables must use

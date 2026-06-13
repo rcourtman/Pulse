@@ -5,6 +5,7 @@ import { asTrimmedString } from '@/utils/stringUtils';
 import { formatRelativeTime } from '@/utils/format';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformTableNumberValue,
   PlatformTableToolbar,
   PlatformTableEmptyState,
   createPlatformTableFilterState,
@@ -38,10 +39,6 @@ import {
 // desired / updated / ready / available replicas, and metadata age.
 // observedGeneration is deliberately not a column: without the spec
 // generation beside it the raw number is unactionable.
-
-const replicaCount = (value: number | undefined): JSX.Element => (
-  <span class="tabular-nums">{value ?? 0}</span>
-);
 
 const formatAge = (createdAt: string | undefined): string =>
   formatRelativeTime(createdAt, { compact: true, emptyText: '—' }) || '—';
@@ -206,22 +203,30 @@ export const KubernetesDeploymentsTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
                           >
-                            {replicaCount(deployment.kubernetes?.desiredReplicas)}
+                            <PlatformTableNumberValue
+                              value={deployment.kubernetes?.desiredReplicas ?? 0}
+                            />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
                           >
-                            {replicaCount(deployment.kubernetes?.updatedReplicas)}
+                            <PlatformTableNumberValue
+                              value={deployment.kubernetes?.updatedReplicas ?? 0}
+                            />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            {replicaCount(deployment.kubernetes?.readyReplicas)}
+                            <PlatformTableNumberValue
+                              value={deployment.kubernetes?.readyReplicas ?? 0}
+                            />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            {replicaCount(deployment.kubernetes?.availableReplicas)}
+                            <PlatformTableNumberValue
+                              value={deployment.kubernetes?.availableReplicas ?? 0}
+                            />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}

@@ -18,6 +18,7 @@ import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_TABLE_BODY_CLASS,
   PLATFORM_TABLE_HEADER_ROW_CLASS,
+  PlatformTableNumberValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
 } from '@/features/platformPage/sharedPlatformPage';
@@ -351,12 +352,12 @@ export const SwarmServicesDrawer: Component<{ cluster: string; swarm?: SwarmInfo
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            <span class="tabular-nums">{desired()}</span>
+                            <PlatformTableNumberValue value={desired()} />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            <span class="tabular-nums">{running()}</span>
+                            <PlatformTableNumberValue value={running()} />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}

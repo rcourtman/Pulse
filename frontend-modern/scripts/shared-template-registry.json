@@ -1384,8 +1384,11 @@
       },
       "requiredConsumers": [
         { "path": "src/features/docker/DockerNativeTableShared.tsx" },
+        { "path": "src/features/docker/DockerServicesTable.tsx" },
+        { "path": "src/components/Docker/SwarmServicesDrawer.tsx" },
         { "path": "src/features/kubernetes/KubernetesAutoscalingTable.tsx" },
         { "path": "src/features/kubernetes/KubernetesControllersTable.tsx" },
+        { "path": "src/features/kubernetes/KubernetesDeploymentsTable.tsx" },
         { "path": "src/features/kubernetes/KubernetesEventsTable.tsx" },
         { "path": "src/features/kubernetes/KubernetesPodsTable.tsx" },
         { "path": "src/features/proxmox/ProxmoxMailGatewayTable.tsx" }
@@ -1395,6 +1398,17 @@
           "path": "src/features/docker/DockerNativeTableShared.tsx",
           "patterns": [
             "typeof value === 'number' ? <span class=\"tabular-nums\">{value}</span> : <span>—</span>"
+          ]
+        },
+        {
+          "path": "src/features/docker/DockerServicesTable.tsx",
+          "patterns": ["const replicaCount", "<span class=\"tabular-nums\">{value ?? 0}</span>"]
+        },
+        {
+          "path": "src/components/Docker/SwarmServicesDrawer.tsx",
+          "patterns": [
+            "<span class=\"tabular-nums\">{desired()}</span>",
+            "<span class=\"tabular-nums\">{running()}</span>"
           ]
         },
         {
@@ -1410,6 +1424,10 @@
             "const numberValue",
             "typeof value === 'number' ? <span class=\"tabular-nums\">{value}</span> : <span>—</span>"
           ]
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesDeploymentsTable.tsx",
+          "patterns": ["const replicaCount", "<span class=\"tabular-nums\">{value ?? 0}</span>"]
         },
         {
           "path": "src/features/kubernetes/KubernetesEventsTable.tsx",
@@ -2064,6 +2082,46 @@
       "extensions": [".tsx"],
       "allPatterns": ["const countCell", "value.toLocaleString() : '—'"],
       "legacyReason": "Retired migration debt. Locale-formatted count cells must compose PlatformTableNumberValue with a caller-owned format function instead of owning fallback markup locally.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-table-local-replica-count-helper",
+      "category": "platform-table-text-value",
+      "summary": "Platform tables must not recreate local replicaCount helpers for scheduler/service count columns.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "PlatformTableNumberValue"
+      },
+      "scopes": ["src/features/docker", "src/features/kubernetes"],
+      "extensions": [".tsx"],
+      "allPatterns": ["const replicaCount", "<span class=\"tabular-nums\">{value ?? 0}</span>"],
+      "legacyReason": "Retired migration debt. Scheduler and service count cells must compose PlatformTableNumberValue with caller-owned zero-default semantics instead of local tabular span helpers.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-table-local-swarm-count-spans",
+      "category": "platform-table-text-value",
+      "summary": "Docker Swarm table drawers must not render desired/running service counts with local tabular spans.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "PlatformTableNumberValue"
+      },
+      "scopes": ["src/components/Docker"],
+      "extensions": [".tsx"],
+      "allPatterns": ["desiredTasks", "runningTasks", "class=\"tabular-nums\""],
+      "legacyReason": "Retired migration debt. Swarm desired/running count cells must route through PlatformTableNumberValue so drawer tables and platform tables share numeric cell rendering.",
       "allowedPaths": [],
       "ignoredPaths": [],
       "proof": [
