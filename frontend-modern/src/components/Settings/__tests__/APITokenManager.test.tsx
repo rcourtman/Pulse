@@ -10,6 +10,7 @@ import {
   DOCKER_REPORT_SCOPE,
 } from '@/constants/apiScopes';
 import apiAccessPanelSource from '../APIAccessPanel.tsx?raw';
+import apiTokenManagerSource from '../APITokenManager.tsx?raw';
 import { APITokenManager } from '../APITokenManager';
 
 const listTokensMock = vi.fn();
@@ -147,6 +148,17 @@ describe('APITokenManager', () => {
   });
 
   it('creates scoped tokens from the canonical preset path', async () => {
+    expect(apiTokenManagerSource).toContain('@/components/shared/SelectablePillButton');
+    expect(apiTokenManagerSource.match(/<SelectablePillButton/g) ?? []).toHaveLength(3);
+    expect(apiTokenManagerSource).not.toContain(
+      'inline-flex min-h-10 sm:min-h-10 items-center rounded-full border px-3 py-2 text-sm font-semibold transition',
+    );
+    expect(apiTokenManagerSource).not.toContain(
+      'min-h-10 sm:min-h-10 rounded-full border px-3 py-2 text-sm font-semibold transition',
+    );
+    expect(apiTokenManagerSource).not.toContain('border-blue-500 bg-blue-600 text-white shadow-sm');
+    expect(apiTokenManagerSource).not.toContain('hover:border-blue-400 hover:text-blue-600');
+
     render(() => <APITokenManager onTokensChanged={vi.fn()} canManage />);
 
     await waitFor(() => {

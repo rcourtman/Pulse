@@ -5,6 +5,7 @@ import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
+import { SelectablePillButton } from '@/components/shared/SelectablePillButton';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
 import { MONITORING_READ_SCOPE } from '@/constants/apiScopes';
 import {
@@ -460,27 +461,25 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
               </div>
 
               <div class="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  class={`inline-flex min-h-10 sm:min-h-10 items-center rounded-full border px-3 py-2 text-sm font-semibold transition ${isFullAccessSelected() ? 'border-blue-500 bg-blue-600 text-white shadow-sm' : 'border-border bg-surface text-base-content hover:border-blue-400 hover:text-blue-600 dark:hover:border-blue-400 dark:hover:text-blue-200'}`}
+                <SelectablePillButton
+                  active={isFullAccessSelected()}
                   onClick={clearScopes}
                   disabled={!canManage()}
                   title="Legacy wildcard – all permissions"
                 >
                   Full access
-                </button>
+                </SelectablePillButton>
 
                 <For each={scopePresets}>
                   {(preset) => (
-                    <button
-                      type="button"
-                      class={`inline-flex min-h-10 sm:min-h-10 items-center rounded-full border px-3 py-2 text-sm font-semibold transition ${presetMatchesSelection(preset.scopes) ? 'border-blue-500 bg-blue-600 text-white shadow-sm' : 'border-border bg-surface text-base-content hover:border-blue-400 hover:text-blue-600 dark:hover:border-blue-400 dark:hover:text-blue-200'}`}
+                    <SelectablePillButton
+                      active={presetMatchesSelection(preset.scopes)}
                       onClick={() => applyScopePreset(preset.scopes)}
                       disabled={!canManage()}
                       title={preset.description}
                     >
                       {preset.label}
-                    </button>
+                    </SelectablePillButton>
                   )}
                 </For>
               </div>
@@ -502,15 +501,14 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                           {(option) => {
                             const isActive = () => selectedScopes().includes(option.value);
                             return (
-                              <button
-                                type="button"
-                                class={`min-h-10 sm:min-h-10 rounded-full border px-3 py-2 text-sm font-semibold transition ${isActive() ? 'border-blue-500 bg-blue-600 text-white shadow-sm' : 'border-border bg-surface text-base-content hover:border-blue-400 hover:text-blue-600 dark:hover:border-blue-400 dark:hover:text-blue-200'}`}
+                              <SelectablePillButton
+                                active={isActive()}
                                 onClick={() => toggleScope(option.value)}
                                 disabled={!canManage()}
                                 title={option.description}
                               >
                                 {option.label}
-                              </button>
+                              </SelectablePillButton>
                             );
                           }}
                         </For>

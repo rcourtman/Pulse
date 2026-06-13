@@ -84,6 +84,9 @@ controls as normal product settings.
    negative-margin wrappers around the inventory grid. Scope-reference
    documentation links compose `ExternalTextLink` for shared rel/target safety
    and link chrome.
+   API token scope selectors follow the same split: security/privacy owns
+   the wildcard, preset, and custom scope semantics, while frontend-primitives
+   owns the pressed selector pill chrome through `SelectablePillButton`.
 4. `frontend-modern/src/components/Settings/apiTokenManagerModel.ts` shared with `api-contracts`: the pure API token settings model is both a security/privacy control surface and a canonical API payload contract boundary.
 5. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx` shared with `frontend-primitives`: the data-handling settings surface is both a security/privacy trust surface and a canonical settings-shell presentation boundary.
 6. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts` shared with `frontend-primitives`: the data-handling settings model is both a security/privacy posture projection and a canonical settings-shell presentation boundary.
@@ -214,6 +217,10 @@ controls as normal product settings.
     primitive. Security/privacy owns the token-management trust copy and
     refresh semantics; frontend-primitives owns spinner shell, tone, and
     accessible status behavior.
+6b. Keep API token scope selector pills on the shared `SelectablePillButton`
+    primitive. Security/privacy owns scope authority, wildcard behavior, preset
+    membership, and custom scope toggles; frontend-primitives owns active and
+    inactive pill tone, focus, disabled treatment, and pressed-state wiring.
 6. Keep the shared storage-directory and secure storage-file hardening helper aligned with the crypto manager plus control-plane magic-link key and store handling whenever runtime data-root ownership assumptions change.
 7. Keep auth-env ingestion, hosted commercial base URL validation, and shared
    fingerprint-verifier TLS defaults aligned whenever runtime auth loading,

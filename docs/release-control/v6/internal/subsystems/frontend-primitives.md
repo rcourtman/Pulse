@@ -2576,6 +2576,13 @@ owns variant resolution plus disabled selection/change runtime, and
 variant class catalog, compact-label policy, and segmented button class
 selection. Future filter-button-group work should extend those owners instead
 of pushing label truncation or segmented variant policy back into the shell.
+Pressed/unpressed selector pills follow the same primitive rule.
+`frontend-modern/src/components/shared/SelectablePillButton.tsx` owns the
+pressed button shell and `aria-pressed` wiring, while
+`frontend-modern/src/components/shared/selectablePillModel.ts` owns the active
+and inactive pill class catalog. API token scope surfaces may own the security
+scope labels and click handlers, but must not recreate rounded-full selector
+pill class strings locally.
 Filter-toolbar segmented controls must delegate to this primitive rather than
 calling `segmentedButtonClass` directly, and icon+text labels must render as
 one inline-flex button label so compact bars keep the v5 single-line control
@@ -2884,6 +2891,10 @@ active-button tone, disabled-option behavior, pressed-state semantics,
 compact labels, and horizontal scroll treatment through the shared
 shell/state/model split. Settings and compact feature surfaces must compose
 that primitive instead of copying active-button selector styling locally.
+Selectable pill buttons are registry-backed too. `SelectablePillButton` owns
+rounded pressed/unpressed selector pills, including active tone, disabled
+treatment, focus ring, and `aria-pressed`; settings and security surfaces must
+compose that primitive instead of copying rounded-full active selector styling.
 `ResourcePicker` report-domain filters are part of that boundary: the picker
 owns the reportable resource categories and labels, but the type selector shell
 must come from `FilterButtonGroup`.

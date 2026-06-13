@@ -30,6 +30,8 @@ import dialogSource from '@/components/shared/Dialog.tsx?raw';
 import dialogModelSource from '@/components/shared/dialogModel.ts?raw';
 import filterButtonGroupSource from '@/components/shared/FilterButtonGroup.tsx?raw';
 import filterButtonGroupModelSource from '@/components/shared/filterButtonGroupModel.ts?raw';
+import selectablePillButtonSource from '@/components/shared/SelectablePillButton.tsx?raw';
+import selectablePillModelSource from '@/components/shared/selectablePillModel.ts?raw';
 import filterToolbarSource from '@/components/shared/FilterToolbar.tsx?raw';
 import filterOptionPresentationSource from '@/components/shared/filterOptionPresentation.ts?raw';
 import formSelectSource from '@/components/shared/FormSelect.tsx?raw';
@@ -469,6 +471,83 @@ describe('shared primitive guardrails', () => {
     expect(patrolIntelligenceHeaderSource).not.toContain(
       'flex-1 py-1.5 px-2 text-xs font-semibold rounded-md transition-all duration-200',
     );
+  });
+
+  it('routes selectable scope pill buttons through SelectablePillButton', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+        forbiddenPatterns?: Array<{ path?: string; patterns?: string[] }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        allowedPaths?: string[];
+        ignoredPaths?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find(
+      (rule) => rule.id === 'selectable-pill-button-shell',
+    );
+    const registeredGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'selectable-pill-button-local-scope-selector-styles',
+    );
+
+    expect(registeredRule?.canonical?.path).toBe('src/components/shared/SelectablePillButton.tsx');
+    expect(registeredRule?.canonical?.export).toBe('SelectablePillButton');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/components/Settings/APITokenManager.tsx',
+    ]);
+    expect(registeredRule?.forbiddenPatterns).toEqual([
+      {
+        path: 'src/components/Settings/APITokenManager.tsx',
+        patterns: [
+          'inline-flex min-h-10 sm:min-h-10 items-center rounded-full border px-3 py-2 text-sm font-semibold transition',
+          'min-h-10 sm:min-h-10 rounded-full border px-3 py-2 text-sm font-semibold transition',
+          'border-blue-500 bg-blue-600 text-white shadow-sm',
+          'hover:border-blue-400 hover:text-blue-600 dark:hover:border-blue-400 dark:hover:text-blue-200',
+        ],
+      },
+    ]);
+    expect(registeredGuard?.canonical?.path).toBe('src/components/shared/selectablePillModel.ts');
+    expect(registeredGuard?.canonical?.export).toBe('getSelectablePillButtonClass');
+    expect(registeredGuard?.allPatterns).toEqual([
+      'rounded-full border px-3 py-2 text-sm font-semibold transition',
+      'border-blue-500 bg-blue-600 text-white shadow-sm',
+      'hover:border-blue-400 hover:text-blue-600',
+    ]);
+    expect(registeredGuard?.scopes).toEqual([
+      'src/components/Settings',
+      'src/features',
+      'src/pages',
+    ]);
+    expect(registeredGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(registeredGuard?.ignoredPaths).toEqual([
+      'src/components/Settings/__tests__/APITokenManager.test.tsx',
+      'src/components/shared/SelectablePillButton.test.tsx',
+    ]);
+
+    expect(selectablePillButtonSource).toContain('getSelectablePillButtonClass');
+    expect(selectablePillButtonSource).toContain("aria-pressed={local.active ? 'true' : 'false'}");
+    expect(selectablePillButtonSource).not.toContain('border-blue-500 bg-blue-600');
+    expect(selectablePillModelSource).toContain('SELECTABLE_PILL_BUTTON_BASE_CLASS');
+    expect(selectablePillModelSource).toContain('SELECTABLE_PILL_BUTTON_ACTIVE_CLASS');
+    expect(selectablePillModelSource).toContain('SELECTABLE_PILL_BUTTON_INACTIVE_CLASS');
+    expect(selectablePillModelSource).toContain('getSelectablePillButtonClass');
+    expect(apiTokenManagerSource).toContain('SelectablePillButton');
+    expect(apiTokenManagerSource.match(/<SelectablePillButton/g) ?? []).toHaveLength(3);
+    expect(apiTokenManagerSource).not.toContain(
+      'inline-flex min-h-10 sm:min-h-10 items-center rounded-full border px-3 py-2 text-sm font-semibold transition',
+    );
+    expect(apiTokenManagerSource).not.toContain(
+      'min-h-10 sm:min-h-10 rounded-full border px-3 py-2 text-sm font-semibold transition',
+    );
+    expect(apiTokenManagerSource).not.toContain('border-blue-500 bg-blue-600 text-white shadow-sm');
+    expect(apiTokenManagerSource).not.toContain('hover:border-blue-400 hover:text-blue-600');
   });
 
   it('keeps AI model picker labels route-aware for gateway providers', () => {

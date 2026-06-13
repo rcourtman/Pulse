@@ -2942,6 +2942,32 @@
       ]
     },
     {
+      "id": "selectable-pill-button-shell",
+      "category": "selectable-pill-button",
+      "summary": "Pressed/unpressed rounded pill selectors must compose SelectablePillButton so active tone, disabled treatment, focus ring, and aria-pressed semantics stay shared instead of being recreated inside settings surfaces.",
+      "canonical": {
+        "path": "src/components/shared/SelectablePillButton.tsx",
+        "export": "SelectablePillButton"
+      },
+      "requiredConsumers": [{ "path": "src/components/Settings/APITokenManager.tsx" }],
+      "forbiddenPatterns": [
+        {
+          "path": "src/components/Settings/APITokenManager.tsx",
+          "patterns": [
+            "inline-flex min-h-10 sm:min-h-10 items-center rounded-full border px-3 py-2 text-sm font-semibold transition",
+            "min-h-10 sm:min-h-10 rounded-full border px-3 py-2 text-sm font-semibold transition",
+            "border-blue-500 bg-blue-600 text-white shadow-sm",
+            "hover:border-blue-400 hover:text-blue-600 dark:hover:border-blue-400 dark:hover:text-blue-200"
+          ]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/SelectablePillButton.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "chart-visibility-toggle-button",
       "category": "display-toggle",
       "summary": "Summary-bearing filter surfaces must compose ChartVisibilityToggleButton for chart show/hide display actions instead of recreating one-off chart toggle buttons.",
@@ -4851,6 +4877,33 @@
       "allowedPaths": [],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "selectable-pill-button-local-scope-selector-styles",
+      "category": "selectable-pill-button",
+      "summary": "Settings and feature surfaces must not copy the rounded active/inactive selector pill styling owned by SelectablePillButton.",
+      "canonical": {
+        "path": "src/components/shared/selectablePillModel.ts",
+        "export": "getSelectablePillButtonClass"
+      },
+      "scopes": ["src/components/Settings", "src/features", "src/pages"],
+      "extensions": [".tsx"],
+      "allPatterns": [
+        "rounded-full border px-3 py-2 text-sm font-semibold transition",
+        "border-blue-500 bg-blue-600 text-white shadow-sm",
+        "hover:border-blue-400 hover:text-blue-600"
+      ],
+      "legacyReason": "Retired migration debt. Pressed/unpressed pill selectors belong to SelectablePillButton.",
+      "allowedPaths": [],
+      "ignoredPaths": [
+        "src/components/Settings/__tests__/APITokenManager.test.tsx",
+        "src/components/shared/SelectablePillButton.test.tsx"
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/SelectablePillButton.test.tsx",
         "scripts/shared-template-audit.mjs"
       ]
     },
