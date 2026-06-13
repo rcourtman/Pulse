@@ -1132,12 +1132,15 @@ describe('frontend resource type boundaries', () => {
       'Failed to load organization sharing details',
     );
     expect(organizationAccessMembersSectionSource).toContain('getOrganizationAccessEmptyState');
-    expect(organizationAccessLoadingStateSource).toContain('animate-pulse');
+    expect(organizationAccessLoadingStateSource).toContain('SettingsLoadingSkeleton');
+    expect(organizationAccessLoadingStateSource).not.toContain('animate-pulse');
     expect(organizationOverviewMembersSectionSource).toContain(
       'getOrganizationOverviewMembersEmptyState',
     );
-    expect(organizationOverviewLoadingStateSource).toContain('animate-pulse');
-    expect(organizationBillingLoadingStateSource).toContain('animate-pulse');
+    expect(organizationOverviewLoadingStateSource).toContain('SettingsLoadingSkeleton');
+    expect(organizationOverviewLoadingStateSource).not.toContain('animate-pulse');
+    expect(organizationBillingLoadingStateSource).toContain('SettingsLoadingSkeleton');
+    expect(organizationBillingLoadingStateSource).not.toContain('animate-pulse');
     expect(organizationOutgoingSharesSectionSource).toContain(
       'getOrganizationOutgoingSharesEmptyState',
     );
@@ -2035,9 +2038,7 @@ describe('frontend resource type boundaries', () => {
     expect(aiFindingPresentationSource).toContain(
       'export const getInvestigationOutcomeBadgeClasses',
     );
-    expect(aiFindingPresentationSource).toContain(
-      'export const getInvestigationOutcomeBadgeTone',
-    );
+    expect(aiFindingPresentationSource).toContain('export const getInvestigationOutcomeBadgeTone');
     expect(aiFindingPresentationSource).toContain('export const getInvestigationOutcomeLabel');
     expect(aiFindingPresentationSource).toContain('export const getInvestigationStatusLabel');
     expect(aiFindingPresentationSource).toContain('export const getInvestigationOutcomeSortOrder');
@@ -2543,7 +2544,8 @@ describe('frontend resource type boundaries', () => {
     expect(guestDrawerModelSource).toContain('export const getGuestDrawerBackupPresentation');
     expect(workloadsUtilitySource).toContain('export const getDiscoveryResourceTypeForWorkload');
     expect(workloadsUtilitySource).toContain('export const getWebInterfaceTargetLabelForWorkload');
-    expect(resourceDetailDrawerSource).toContain('getDiscoveryLoadingState');
+    expect(resourceDetailDrawerSource).toContain('DiscoveryLoadingFallback');
+    expect(resourceDetailDrawerOverviewSource).toContain('DiscoveryLoadingFallback');
     expect(discoveryTabSource).not.toContain('const getURLSuggestionSourceLabel =');
     expect(discoveryPresentationSource).toContain(
       'export function getDiscoveryURLSuggestionSourceLabel',
@@ -3709,7 +3711,9 @@ describe('frontend resource type boundaries', () => {
     expect(patrolRunPresentationSource).toContain('export function getToolCallsLoadingState');
     expect(patrolRunPresentationSource).toContain('export function getToolCallsUnavailableState');
     expect(patrolRunPresentationSource).toContain('export function getToolCallResultBadgeTone');
-    expect(patrolRunPresentationSource).not.toContain('export function getToolCallResultBadgeClass');
+    expect(patrolRunPresentationSource).not.toContain(
+      'export function getToolCallResultBadgeClass',
+    );
     expect(systemLogsPanelSource).toContain('getSystemLogLineClass');
     expect(systemLogsPanelSource).toContain('getSystemLogBufferSummary');
     expect(systemLogsPanelSource).toContain('getSystemLogStreamPresentation');
