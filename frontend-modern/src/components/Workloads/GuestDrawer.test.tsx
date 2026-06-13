@@ -7,6 +7,7 @@ import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSusp
 import { aiChatStore } from '@/stores/aiChat';
 import { getCanonicalWorkloadId } from '@/utils/workloads';
 import { getDiscoveryProvenanceTitle } from '@/utils/discoveryPresentation';
+import guestDrawerSource from './GuestDrawer.tsx?raw';
 
 // ── Mocks ──────────────────────────────────────────────────────────────
 
@@ -199,6 +200,13 @@ afterEach(() => {
 // ── Tests ──────────────────────────────────────────────────────────────
 
 describe('GuestDrawer', () => {
+  it('uses the shared discovery loading fallback instead of a drawer-local spinner row', () => {
+    expect(guestDrawerSource).toContain('DiscoveryLoadingFallback');
+    expect(guestDrawerSource).not.toContain(
+      'animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full',
+    );
+  });
+
   describe('Assistant context actions', () => {
     it('opens Pulse Assistant with a canonical Proxmox LXC resource handoff', () => {
       aiChatStore.setEnabled(true);

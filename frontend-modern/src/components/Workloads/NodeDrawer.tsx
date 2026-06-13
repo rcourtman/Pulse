@@ -2,10 +2,10 @@ import { Show, Suspense, createMemo, createSignal, type Component } from 'solid-
 
 import type { HistoryTimeRange } from '@/api/charts';
 import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
+import { DiscoveryLoadingFallback } from '@/components/shared/DiscoveryLoadingFallback';
 import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
 import { Subtabs, type SubtabOption } from '@/components/shared/Subtabs';
 import type { Disk, Node } from '@/types/api';
-import { getDiscoveryLoadingState } from '@/utils/discoveryPresentation';
 import { getNodeDisplayName } from '@/utils/nodes';
 import { getSimpleStatusIndicator } from '@/utils/status';
 
@@ -91,14 +91,7 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
           class={activeTab() === 'discovery' ? '' : 'hidden'}
           style={{ 'overflow-anchor': 'none' }}
         >
-          <Suspense
-            fallback={
-              <div class="flex items-center justify-center py-8">
-                <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
-                <span class="ml-2 text-sm text-muted">{getDiscoveryLoadingState().text}</span>
-              </div>
-            }
-          >
+          <Suspense fallback={<DiscoveryLoadingFallback />}>
             <DiscoveryTab
               resourceType="agent"
               agentId={props.discoveryTarget.agentId}

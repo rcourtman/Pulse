@@ -8,6 +8,7 @@ import {
   DrawerHeaderActionGroup,
   DrawerHeaderIconButton,
 } from '@/components/shared/Button';
+import { DiscoveryLoadingFallback } from '@/components/shared/DiscoveryLoadingFallback';
 import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
 import { DiscoveryReadinessBadge } from '@/components/shared/DiscoveryReadinessBadge';
 import { Subtabs, type SubtabOption } from '@/components/shared/Subtabs';
@@ -175,14 +176,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
           class={activeTab() === 'discovery' ? '' : 'hidden'}
           style={{ 'overflow-anchor': 'none' }}
         >
-          <Suspense
-            fallback={
-              <div class="flex items-center justify-center py-8">
-                <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
-                <span class="ml-2 text-sm text-muted">{discoveryLoadingState.text}</span>
-              </div>
-            }
-          >
+          <Suspense fallback={<DiscoveryLoadingFallback text={discoveryLoadingState.text} />}>
             <DiscoveryTab
               resourceType={discoveryResourceType()!}
               agentId={discoveryAgentId()}

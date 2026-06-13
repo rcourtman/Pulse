@@ -2,6 +2,7 @@ import { Show, Suspense, createMemo, createSignal, type Component } from 'solid-
 
 import type { HistoryTimeRange } from '@/api/charts';
 import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
+import { DiscoveryLoadingFallback } from '@/components/shared/DiscoveryLoadingFallback';
 import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
 import { Subtabs, type SubtabOption } from '@/components/shared/Subtabs';
 import { getSimpleStatusIndicator } from '@/utils/status';
@@ -9,7 +10,6 @@ import { GuestDrawerHistory, GuestDrawerHistoryRangeSelect } from '@/components/
 import { GUEST_DRAWER_HISTORY_DEFAULT_RANGE } from '@/components/Workloads/guestDrawerModel';
 import { toDiscoveryConfig } from '@/components/Infrastructure/resourceDetailDiscoveryModel';
 import type { Resource } from '@/types/resource';
-import { getDiscoveryLoadingState } from '@/utils/discoveryPresentation';
 import { asTrimmedString } from '@/utils/stringUtils';
 
 import { DockerHostDrawerOverview } from './DockerHostDrawerOverview';
@@ -91,14 +91,7 @@ export const DockerHostDrawer: Component<DockerHostDrawerProps> = (props) => {
             class={activeTab() === 'discovery' ? '' : 'hidden'}
             style={{ 'overflow-anchor': 'none' }}
           >
-            <Suspense
-              fallback={
-                <div class="flex items-center justify-center py-8">
-                  <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
-                  <span class="ml-2 text-sm text-muted">{getDiscoveryLoadingState().text}</span>
-                </div>
-              }
-            >
+            <Suspense fallback={<DiscoveryLoadingFallback />}>
               <DiscoveryTab
                 resourceType={config().resourceType}
                 agentId={config().agentId}

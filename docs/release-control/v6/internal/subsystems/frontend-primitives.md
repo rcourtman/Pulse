@@ -1783,6 +1783,10 @@ primitive internals such as `Button`, `PulseDataGrid`, and
 `HistoryChartOverlay`, as well as Login, Settings, Patrol, and AI finding
 surfaces; local `animate-spin` spinner shells in those consumers are governed
 by the shared-template registry rather than page-local discretion.
+`DiscoveryLoadingFallback` owns the discovery-tab Suspense fallback row for
+resource, workload, and Docker host drawers: centered row layout, status
+semantics, discovery loading copy, and canonical `LoadingSpinner` composition
+live there rather than in drawer-local fallback markup.
 
 AI settings provider fields are a governed frontend primitive, not a
 provider-local form fork. The shared provider configuration section must render

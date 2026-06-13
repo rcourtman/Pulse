@@ -1226,6 +1226,12 @@ AI-only summary payloads, or page-local heuristics.
 
 ## Current State
 
+Resource detail drawer discovery-tab Suspense fallbacks now compose the
+frontend-primitives `DiscoveryLoadingFallback` template. `ResourceDetailDrawer`
+and `ResourceDetailDrawerOverviewTab` own when the Discovery tab is available,
+but they must not recreate the centered loading row, local border spinner, or
+discovery loading copy outside that shared primitive.
+
 The resource detail drawer's "Open in Workloads / Storage / Recovery"
 related-links injection
 (`frontend-modern/src/components/Infrastructure/resourceDetailDrawerOperationalModel.ts`'s

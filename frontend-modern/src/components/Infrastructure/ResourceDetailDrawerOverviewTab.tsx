@@ -15,6 +15,7 @@ import { DisksCard } from '@/components/shared/cards/DisksCard';
 import { TemperaturesCard } from '@/components/shared/cards/TemperaturesCard';
 import { RaidCard } from '@/components/shared/cards/RaidCard';
 import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
+import { DiscoveryLoadingFallback } from '@/components/shared/DiscoveryLoadingFallback';
 import { FormSelect } from '@/components/shared/FormSelect';
 import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
@@ -40,7 +41,6 @@ import { formatConfidenceLabel } from '@/utils/confidencePresentation';
 import { formatIdentifierLabel } from '@/utils/textPresentation';
 import { shouldShowResourcePlatformId } from '@/utils/resourceIdentity';
 import { isPulseAgentPlatformResource } from '@/utils/agentResources';
-import { getDiscoveryLoadingState } from '@/utils/discoveryPresentation';
 import { formatInteger } from './resourceDetailMappers';
 import { buildPbsJobHealthEvidenceModel } from './resourceDetailDrawerServiceModel';
 import { ResourceDetailDrawerSupportDisclosure as SupportDisclosure } from './ResourceDetailDrawerSupportDisclosure';
@@ -294,14 +294,7 @@ const AccessDisclosure: Component<{
               </div>
 
               <Show when={props.drawer.showDiscoveryContext()}>
-                <Suspense
-                  fallback={
-                    <div class="flex items-center justify-center py-8">
-                      <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
-                      <span class="ml-2 text-sm text-muted">{getDiscoveryLoadingState().text}</span>
-                    </div>
-                  }
-                >
+                <Suspense fallback={<DiscoveryLoadingFallback />}>
                   <DiscoveryTab
                     resourceType={config().resourceType}
                     agentId={config().agentId}

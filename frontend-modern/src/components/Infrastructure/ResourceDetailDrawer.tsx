@@ -9,6 +9,7 @@ import {
   DrawerHeaderActionGroup,
   DrawerHeaderIconButton,
 } from '@/components/shared/Button';
+import { DiscoveryLoadingFallback } from '@/components/shared/DiscoveryLoadingFallback';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { Subtabs } from '@/components/shared/Subtabs';
 import { ReportMergeModal } from './ReportMergeModal';
@@ -24,7 +25,6 @@ import { ResourceDetailDrawerDebugTab } from './ResourceDetailDrawerDebugTab';
 import { ResourceDetailDrawerOverviewTab } from './ResourceDetailDrawerOverviewTab';
 import { useResourceDetailDrawerState } from './useResourceDetailDrawerState';
 import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
-import { getDiscoveryLoadingState } from '@/utils/discoveryPresentation';
 import {
   DEFAULT_RESOURCE_DETAIL_DRAWER_PRESENTATION,
   type ResourceDetailDrawerPresentation,
@@ -212,14 +212,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
             fallback={<TabAvailabilityNotice message="Discovery is unavailable." />}
           >
             {(config) => (
-              <Suspense
-                fallback={
-                  <div class="flex items-center justify-center py-8">
-                    <div class="h-6 w-6 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
-                    <span class="ml-2 text-sm text-muted">{getDiscoveryLoadingState().text}</span>
-                  </div>
-                }
-              >
+              <Suspense fallback={<DiscoveryLoadingFallback />}>
                 <DiscoveryTab
                   resourceType={config().resourceType}
                   agentId={config().agentId}

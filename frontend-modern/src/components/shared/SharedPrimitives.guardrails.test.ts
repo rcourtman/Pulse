@@ -50,6 +50,7 @@ import searchInputEnhancementsModelSource from '@/components/shared/searchInputE
 import searchInputModelSource from '@/components/shared/searchInputModel.ts?raw';
 import statusDotSource from '@/components/shared/StatusDot.tsx?raw';
 import loadingSpinnerSource from '@/components/shared/LoadingSpinner.tsx?raw';
+import discoveryLoadingFallbackSource from '@/components/shared/DiscoveryLoadingFallback.tsx?raw';
 import settingsLoadingSkeletonSource from '@/components/shared/SettingsLoadingSkeleton.tsx?raw';
 import statusBadgeSource from '@/components/shared/StatusBadge.tsx?raw';
 import statusBadgeModelSource from '@/components/shared/statusBadgeModel.ts?raw';
@@ -133,6 +134,7 @@ import selfHostedCommercialRecoverySectionSource from '@/components/Settings/Sel
 import suggestProfileModalSource from '@/components/Settings/SuggestProfileModal.tsx?raw';
 import alertAppriseDestinationsSectionSource from '@/features/alerts/AlertAppriseDestinationsSection.tsx?raw';
 import dockerPageSurfaceSource from '@/features/docker/DockerPageSurface.tsx?raw';
+import dockerHostDrawerSource from '@/features/docker/DockerHostDrawer.tsx?raw';
 import dockerServicesTableSource from '@/features/docker/DockerServicesTable.tsx?raw';
 import kubernetesPageSurfaceSource from '@/features/kubernetes/KubernetesPageSurface.tsx?raw';
 import proxmoxPageSurfaceSource from '@/features/proxmox/ProxmoxPageSurface.tsx?raw';
@@ -149,6 +151,7 @@ import upgradeNavigationSource from '@/utils/upgradeNavigation.ts?raw';
 import guestRowSource from '@/components/Workloads/GuestRow.tsx?raw';
 import guestDrawerSource from '@/components/Workloads/GuestDrawer.tsx?raw';
 import guestDrawerHistorySource from '@/components/Workloads/GuestDrawerHistory.tsx?raw';
+import nodeDrawerSource from '@/components/Workloads/NodeDrawer.tsx?raw';
 import workloadsSurfaceSource from '@/components/Workloads/WorkloadsSurface.tsx?raw';
 import workloadsTableSource from '@/components/Workloads/WorkloadsTable.tsx?raw';
 import workloadPanelSource from '@/components/Workloads/WorkloadPanel.tsx?raw';
@@ -2460,7 +2463,7 @@ describe('shared primitive guardrails', () => {
     }
   });
 
-  it('keeps shared, Login, Settings, Patrol, and AI loading spinners on the shared LoadingSpinner primitive', () => {
+  it('keeps shared, discovery drawer, Login, Settings, Patrol, and AI loading spinners on shared loading primitives', () => {
     const registry = JSON.parse(sharedTemplateRegistrySource) as {
       rules?: Array<{
         id: string;
@@ -2478,6 +2481,9 @@ describe('shared primitive guardrails', () => {
       }>;
     };
     const registeredRule = registry.rules?.find((rule) => rule.id === 'loading-spinner-shell');
+    const discoveryFallbackRule = registry.rules?.find(
+      (rule) => rule.id === 'discovery-loading-fallback',
+    );
     const registeredGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'patrol-ai-local-loading-spinner-shell',
     );
@@ -2492,6 +2498,9 @@ describe('shared primitive guardrails', () => {
     );
     const sharedComponentSpinnerGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'shared-component-local-loading-spinner-shell',
+    );
+    const drawerDiscoveryFallbackGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'drawer-discovery-local-loading-fallback',
     );
 
     expect(registeredRule?.canonical?.path).toBe('src/components/shared/LoadingSpinner.tsx');
@@ -2510,6 +2519,7 @@ describe('shared primitive guardrails', () => {
       'src/components/Settings/UserAssignmentsDialog.tsx',
       'src/components/Settings/UserAssignmentsPanel.tsx',
       'src/components/shared/Button.tsx',
+      'src/components/shared/DiscoveryLoadingFallback.tsx',
       'src/components/shared/HistoryChartOverlay.tsx',
       'src/components/shared/PulseDataGrid.tsx',
       'src/components/patrol/ApprovalBanner.tsx',
@@ -2558,10 +2568,40 @@ describe('shared primitive guardrails', () => {
       'src/components/shared/PulseDataGrid.tsx',
     ]);
     expect(sharedComponentSpinnerGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(discoveryFallbackRule?.canonical?.path).toBe(
+      'src/components/shared/DiscoveryLoadingFallback.tsx',
+    );
+    expect(discoveryFallbackRule?.canonical?.export).toBe('DiscoveryLoadingFallback');
+    expect(discoveryFallbackRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/components/Infrastructure/ResourceDetailDrawer.tsx',
+      'src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx',
+      'src/components/Workloads/GuestDrawer.tsx',
+      'src/components/Workloads/NodeDrawer.tsx',
+      'src/features/docker/DockerHostDrawer.tsx',
+    ]);
+    expect(drawerDiscoveryFallbackGuard?.canonical?.path).toBe(
+      'src/components/shared/DiscoveryLoadingFallback.tsx',
+    );
+    expect(drawerDiscoveryFallbackGuard?.canonical?.export).toBe('DiscoveryLoadingFallback');
+    expect(drawerDiscoveryFallbackGuard?.allPatterns).toEqual([
+      'border-t-transparent',
+      'animate-spin',
+    ]);
+    expect(drawerDiscoveryFallbackGuard?.scopes).toEqual([
+      'src/components/Infrastructure/ResourceDetailDrawer.tsx',
+      'src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx',
+      'src/components/Workloads/GuestDrawer.tsx',
+      'src/components/Workloads/NodeDrawer.tsx',
+      'src/features/docker/DockerHostDrawer.tsx',
+    ]);
+    expect(drawerDiscoveryFallbackGuard?.allowedPaths ?? []).toHaveLength(0);
 
     expect(loadingSpinnerSource).toContain('getLoadingSpinnerClass');
     expect(loadingSpinnerSource).toContain('aria-hidden={ariaHidden()}');
     expect(loadingSpinnerSource).toContain("button: 'h-5 w-5 border-2'");
+    expect(discoveryLoadingFallbackSource).toContain('LoadingSpinner');
+    expect(discoveryLoadingFallbackSource).toContain('getDiscoveryLoadingState');
+    expect(discoveryLoadingFallbackSource).toContain('role="status"');
     expect(loginSource).toContain('LoadingSpinner');
     expect(loginSource).toContain('size="button"');
     expect(loginSource).not.toContain(
@@ -2569,9 +2609,39 @@ describe('shared primitive guardrails', () => {
     );
     expect(loginSource).not.toContain('class="animate-spin -ml-1 mr-3 h-5 w-5 text-white"');
 
-    for (const source of [buttonSource, historyChartOverlaySource, pulseDataGridSource]) {
+    for (const source of [
+      buttonSource,
+      discoveryLoadingFallbackSource,
+      historyChartOverlaySource,
+      pulseDataGridSource,
+    ]) {
       expect(source).toContain('LoadingSpinner');
       expect(source).not.toContain('animate-spin');
+    }
+
+    const discoveryFallbackConsumers: Array<[string, string]> = [
+      ['src/components/Infrastructure/ResourceDetailDrawer.tsx', resourceDetailDrawerSource],
+      [
+        'src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx',
+        resourceDetailDrawerOverviewTabSource,
+      ],
+      ['src/components/Workloads/GuestDrawer.tsx', guestDrawerSource],
+      ['src/components/Workloads/NodeDrawer.tsx', nodeDrawerSource],
+      ['src/features/docker/DockerHostDrawer.tsx', dockerHostDrawerSource],
+    ];
+    const discoveryFallbackForbiddenByPath = new Map(
+      discoveryFallbackRule?.forbiddenPatterns?.map((entry) => [
+        entry.path,
+        entry.patterns ?? [],
+      ]) ?? [],
+    );
+
+    for (const [path, source] of discoveryFallbackConsumers) {
+      expect(source).toContain('DiscoveryLoadingFallback');
+      for (const retiredPattern of discoveryFallbackForbiddenByPath.get(path) ?? []) {
+        expect(source).not.toContain(retiredPattern);
+      }
+      expect(source).not.toContain('border-t-transparent');
     }
 
     for (const source of [

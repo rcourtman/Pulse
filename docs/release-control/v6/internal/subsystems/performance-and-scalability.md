@@ -672,6 +672,12 @@ shell clickable behind another overlay.
 
 ## Current State
 
+Workload and host drawer discovery-tab Suspense fallbacks now compose the
+frontend-primitives `DiscoveryLoadingFallback` template. `GuestDrawer`,
+`NodeDrawer`, and Docker host drawer consumers own tab availability and target
+identity, but they must not recreate the centered loading row, local border
+spinner, or discovery loading copy inside hot-path drawer render code.
+
 Default-org token scoping and notification-settings fan-out on shared
 `internal/api/router.go` are likewise adjacent only: the tenant-monitor
 settings inheritance hook runs once per tenant-monitor creation and changes
