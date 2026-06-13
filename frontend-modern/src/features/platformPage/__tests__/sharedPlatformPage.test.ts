@@ -10,6 +10,7 @@ import {
   PlatformTableTemperatureValue,
   createPlatformTableFilterState,
   formatPlatformTableBytesValue,
+  formatPlatformTableCountRatioValue,
   formatPlatformTableTitleCaseValue,
   formatPlatformTableUptimeValue,
   filterPlatformResources,
@@ -335,6 +336,12 @@ describe('PlatformTableNumberValue', () => {
 });
 
 describe('PlatformTableCountRatioValue', () => {
+  it('formats count-ratio labels for string-only table summaries', () => {
+    expect(formatPlatformTableCountRatioValue(3, 5, { suffix: 'ready' })).toBe('3/5 ready');
+    expect(formatPlatformTableCountRatioValue(undefined, 4, { suffix: 'ready' })).toBe('0/4 ready');
+    expect(formatPlatformTableCountRatioValue(undefined, undefined, { emptyText: '' })).toBe('');
+  });
+
   it('renders count ratios through shared tabular number styling', () => {
     const { container } = render(() =>
       PlatformTableCountRatioValue({

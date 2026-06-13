@@ -221,6 +221,32 @@ export function PlatformTableNumberValue(props: {
   return <span class="tabular-nums">{label()}</span>;
 }
 
+const resolvePlatformTableCountRatioParts = (
+  current: number | undefined,
+  total: number | undefined,
+): { current: number; total: number } | undefined => {
+  const currentValue =
+    typeof current === 'number' && Number.isFinite(current) ? current : undefined;
+  const totalValue = typeof total === 'number' && Number.isFinite(total) ? total : undefined;
+  if (currentValue === undefined && totalValue === undefined) return undefined;
+  const resolvedCurrent = currentValue ?? 0;
+  return {
+    current: resolvedCurrent,
+    total: totalValue ?? resolvedCurrent,
+  };
+};
+
+export function formatPlatformTableCountRatioValue(
+  current: number | undefined,
+  total: number | undefined,
+  options: { emptyText?: string; suffix?: string } = {},
+): string {
+  const ratio = resolvePlatformTableCountRatioParts(current, total);
+  if (!ratio) return options.emptyText ?? '—';
+  const suffix = options.suffix ? ` ${options.suffix}` : '';
+  return `${ratio.current}/${ratio.total}${suffix}`;
+}
+
 export function PlatformTableCountRatioValue(props: {
   current: number | undefined;
   total: number | undefined;
@@ -228,30 +254,29 @@ export function PlatformTableCountRatioValue(props: {
   emptyText?: string;
   suffix?: string;
 }) {
-  const hasAnyValue = () =>
-    [props.current, props.total].some(
-      (value) => typeof value === 'number' && Number.isFinite(value),
-    );
+  const ratio = () => resolvePlatformTableCountRatioParts(props.current, props.total);
   const currentClass = () =>
     props.currentTone === 'warning' ? 'text-amber-700 dark:text-amber-300' : '';
 
   return (
     <Show
-      when={hasAnyValue()}
+      when={ratio()}
       fallback={<PlatformTableNumberValue value={undefined} emptyText={props.emptyText} />}
     >
-      <span class="inline-flex items-baseline whitespace-nowrap">
-        <span class={currentClass()}>
-          <PlatformTableNumberValue value={props.current} emptyText={props.emptyText} />
+      {(resolved) => (
+        <span class="inline-flex items-baseline whitespace-nowrap">
+          <span class={currentClass()}>
+            <PlatformTableNumberValue value={resolved().current} emptyText={props.emptyText} />
+          </span>
+          <span class="text-muted">/</span>
+          <span class="text-muted">
+            <PlatformTableNumberValue value={resolved().total} emptyText={props.emptyText} />
+          </span>
+          <Show when={props.suffix}>
+            {(suffix) => <span class="ml-1 text-muted"> {suffix()}</span>}
+          </Show>
         </span>
-        <span class="text-muted">/</span>
-        <span class="text-muted">
-          <PlatformTableNumberValue value={props.total} emptyText={props.emptyText} />
-        </span>
-        <Show when={props.suffix}>
-          {(suffix) => <span class="ml-1 text-muted"> {suffix()}</span>}
-        </Show>
-      </span>
+      )}
     </Show>
   );
 }

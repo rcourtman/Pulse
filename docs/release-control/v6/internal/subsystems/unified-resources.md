@@ -257,10 +257,13 @@ domain-specific formatter is needed, and which current/total fields belong in a
 grouped health ratio, while dense platform table cells must use
 `PlatformTableNumberValue` for scalar count validation, tabular styling, and
 unknown empty-cell markers, and `PlatformTableCountRatioValue` for
-healthy/total or ready/total count-ratio skeletons. Tables must not carry local
+healthy/total or ready/total count-ratio skeletons. String-only table summaries
+and titles use `formatPlatformTableCountRatioValue` for the same zero-default
+and suffix behavior. Tables must not carry local
 `numberValue`, `numericValue`, `replicaCount`, `countCell`, `childCountCell`,
 `diskCountLabel`, or cell-level `tabular-nums` variants for grouped
-child/share/service/storage counts.
+child/share/service/storage counts, or local ready/total template strings for
+endpoint summaries.
 Percent and temperature table cells follow the same split: unified-resource
 consumers own which usage percentage or temperature source is meaningful for
 the row, while dense platform table rendering must use

@@ -1500,6 +1500,30 @@
       ]
     },
     {
+      "id": "platform-table-count-ratio-label",
+      "category": "platform-table-text-value",
+      "summary": "Platform tables must use the shared count-ratio formatter for ready/total string labels instead of recreating local ready/total template literals.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "formatPlatformTableCountRatioValue"
+      },
+      "requiredConsumers": [{ "path": "src/features/kubernetes/KubernetesNetworkingTable.tsx" }],
+      "forbiddenPatterns": [
+        {
+          "path": "src/features/kubernetes/KubernetesNetworkingTable.tsx",
+          "patterns": [
+            "`${readyValue}/${totalValue} ready`",
+            "`${ready ?? 0}/${total ?? ready ?? 0} ready`"
+          ]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "platform-table-percent-value-fallback",
       "category": "platform-table-text-value",
       "summary": "Platform tables must use the shared percent-value primitive for one-decimal percent cells, tabular styling, and canonical empty-cell markers instead of recreating local formatPercent helpers.",
@@ -2270,6 +2294,26 @@
       "extensions": [".tsx"],
       "allPatterns": ["const childCountCell", "<span class=\"text-muted\">/{count.total}</span>"],
       "legacyReason": "Retired migration debt. Healthy/total and ready/total table count cells must compose PlatformTableCountRatioValue so ratio markup, tabular styling, muted denominator styling, and empty markers stay shared.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-table-local-ready-count-ratio-label",
+      "category": "platform-table-text-value",
+      "summary": "Kubernetes networking tables must not recreate ready/total endpoint count labels with local template strings.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "formatPlatformTableCountRatioValue"
+      },
+      "scopes": ["src/features/kubernetes/KubernetesNetworkingTable.tsx"],
+      "extensions": [".tsx"],
+      "allPatterns": ["readyEndpointCount", "/${", " ready`"],
+      "legacyReason": "Retired migration debt. Ready/total endpoint labels must compose formatPlatformTableCountRatioValue so zero-default, suffix, and empty-label behavior stay shared with count-ratio cells.",
       "allowedPaths": [],
       "ignoredPaths": [],
       "proof": [

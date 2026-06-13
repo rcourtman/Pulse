@@ -3986,13 +3986,25 @@ describe('shared primitive guardrails', () => {
     const registeredRule = registry.rules?.find(
       (rule) => rule.id === 'platform-table-count-ratio-value',
     );
+    const formatterRule = registry.rules?.find(
+      (rule) => rule.id === 'platform-table-count-ratio-label',
+    );
     const localCountRatioGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'platform-table-local-count-ratio-helper',
+    );
+    const localReadyCountRatioGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-table-local-ready-count-ratio-label',
     );
     const platformCountRatioConsumers: Array<[string, string]> = [
       ['src/features/kubernetes/KubernetesClustersTable.tsx', kubernetesClustersTableSource],
     ];
+    const platformCountRatioFormatterConsumers: Array<[string, string]> = [
+      ['src/features/kubernetes/KubernetesNetworkingTable.tsx', kubernetesNetworkingTableSource],
+    ];
     const platformCountRatioConsumerPaths = platformCountRatioConsumers.map(([path]) => path);
+    const platformCountRatioFormatterConsumerPaths = platformCountRatioFormatterConsumers.map(
+      ([path]) => path,
+    );
 
     expect(registeredRule?.canonical?.path).toBe(
       'src/features/platformPage/sharedPlatformPage.tsx',
@@ -4007,6 +4019,20 @@ describe('shared primitive guardrails', () => {
         patterns: ['const childCountCell', '<span class="text-muted">/{count.total}</span>'],
       },
     ]);
+    expect(formatterRule?.canonical?.path).toBe('src/features/platformPage/sharedPlatformPage.tsx');
+    expect(formatterRule?.canonical?.export).toBe('formatPlatformTableCountRatioValue');
+    expect(formatterRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
+      platformCountRatioFormatterConsumerPaths,
+    );
+    expect(formatterRule?.forbiddenPatterns).toEqual([
+      {
+        path: 'src/features/kubernetes/KubernetesNetworkingTable.tsx',
+        patterns: [
+          '`${readyValue}/${totalValue} ready`',
+          '`${ready ?? 0}/${total ?? ready ?? 0} ready`',
+        ],
+      },
+    ]);
     expect(localCountRatioGuard?.canonical?.path).toBe(
       'src/features/platformPage/sharedPlatformPage.tsx',
     );
@@ -4018,13 +4044,39 @@ describe('shared primitive guardrails', () => {
     expect(localCountRatioGuard?.scopes).toEqual(['src/features/kubernetes']);
     expect(localCountRatioGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(localCountRatioGuard?.ignoredPaths ?? []).toHaveLength(0);
+    expect(localReadyCountRatioGuard?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(localReadyCountRatioGuard?.canonical?.export).toBe('formatPlatformTableCountRatioValue');
+    expect(localReadyCountRatioGuard?.allPatterns).toEqual([
+      'readyEndpointCount',
+      '/${',
+      ' ready`',
+    ]);
+    expect(localReadyCountRatioGuard?.scopes).toEqual([
+      'src/features/kubernetes/KubernetesNetworkingTable.tsx',
+    ]);
+    expect(localReadyCountRatioGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(localReadyCountRatioGuard?.ignoredPaths ?? []).toHaveLength(0);
 
     expect(sharedPlatformPageSource).toContain('export function PlatformTableCountRatioValue');
+    expect(sharedPlatformPageSource).toContain(
+      'export function formatPlatformTableCountRatioValue',
+    );
 
     for (const [path, source] of platformCountRatioConsumers) {
       expect(source).toContain('PlatformTableCountRatioValue');
       const forbiddenPatterns =
         registeredRule?.forbiddenPatterns?.find((entry) => entry.path === path)?.patterns ?? [];
+      for (const pattern of forbiddenPatterns) {
+        expect(source).not.toContain(pattern);
+      }
+    }
+
+    for (const [path, source] of platformCountRatioFormatterConsumers) {
+      expect(source).toContain('formatPlatformTableCountRatioValue');
+      const forbiddenPatterns =
+        formatterRule?.forbiddenPatterns?.find((entry) => entry.path === path)?.patterns ?? [];
       for (const pattern of forbiddenPatterns) {
         expect(source).not.toContain(pattern);
       }

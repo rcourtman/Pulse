@@ -2630,9 +2630,13 @@ zero-defaulted, the consuming table owns that field/default choice and still
 renders through `PlatformTableNumberValue`.
 `PlatformTableCountRatioValue` owns the companion healthy/total or ready/total
 count-ratio skeleton: numerator, slash, muted denominator, tabular styling, and
-empty marker behavior. Kubernetes cluster child counts compose that primitive
-instead of keeping a table-local `childCountCell` renderer; the table owns only
-which current/total values and warning tone apply.
+empty marker behavior. `formatPlatformTableCountRatioValue` owns the same
+zero-default and suffix behavior for string-only table summaries and titles.
+Kubernetes cluster child counts compose the component instead of keeping a
+table-local `childCountCell` renderer, and Kubernetes networking endpoint
+summaries compose the formatter instead of hand-building `3/3 ready` strings;
+the consuming table owns only which current/total values, suffix, and warning
+tone apply.
 One-decimal percent and positive Celsius cells are also shared platform-table
 value primitives. `PlatformTablePercentValue` owns percent formatting,
 tabular-number styling, and empty markers, while

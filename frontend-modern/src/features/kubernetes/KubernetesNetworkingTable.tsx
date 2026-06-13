@@ -8,6 +8,7 @@ import {
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  formatPlatformTableCountRatioValue,
   formatPlatformTableTextValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
@@ -64,11 +65,10 @@ const addressOrHosts = (resource: Resource): { label: string; title: string } =>
   const ready = resource.kubernetes?.readyEndpointCount;
   const total = resource.kubernetes?.endpointCount;
   if (typeof ready === 'number' || typeof total === 'number') {
-    const readyValue = ready ?? 0;
-    const totalValue = total ?? readyValue;
+    const label = formatPlatformTableCountRatioValue(ready, total, { suffix: 'ready' });
     return {
-      label: `${readyValue}/${totalValue} ready`,
-      title: `${readyValue}/${totalValue} ready`,
+      label,
+      title: label,
     };
   }
   return summarizePlatformTableValues(resource.kubernetes?.addresses);
@@ -92,7 +92,7 @@ const targetSummary = (resource: Resource): { label: string; title: string } => 
   const total = resource.kubernetes?.endpointCount;
   const endpointLabel =
     typeof ready === 'number' || typeof total === 'number'
-      ? `${ready ?? 0}/${total ?? ready ?? 0} ready`
+      ? formatPlatformTableCountRatioValue(ready, total, { suffix: 'ready' })
       : '';
   return {
     label: [service, endpointLabel].filter((value) => value && value !== '—').join(' · ') || '—',
