@@ -1,4 +1,5 @@
 import { Component, Show, Accessor, Setter } from 'solid-js';
+import { Button } from '@/components/shared/Button';
 import { CalloutCard } from '@/components/shared/CalloutCard';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
@@ -75,14 +76,15 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
                 {SECURITY_AUTH_DISABLED_READ_ONLY_MESSAGE}
               </p>
             </Show>
-            <button
-              type="button"
+            <Button
+              variant="warning"
+              size="settingsActionXs"
+              class="w-full sm:w-auto"
               onClick={() => props.setShowQuickSecuritySetup(!props.showQuickSecuritySetup())}
               disabled={!props.canManage}
-              class="w-full sm:w-auto px-3 py-2 text-xs font-medium rounded-md border border-amber-300 text-amber-800 bg-amber-100 hover:bg-amber-200 transition-colors dark:border-amber-700 dark:text-amber-200 dark:bg-amber-900 dark:hover:bg-amber-800"
             >
               {SECURITY_AUTH_SETUP_LABEL}
-            </button>
+            </Button>
           </div>
 
           <Show when={props.canManage && props.showQuickSecuritySetup()}>
@@ -107,26 +109,28 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
               </div>
             </Show>
             <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-              <button
-                type="button"
+              <Button
+                variant="primary"
+                size="settingsAction"
+                class="w-full sm:w-auto"
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
                   props.setShowPasswordModal(true);
                 }}
                 disabled={!props.canManage}
-                class="w-full sm:w-auto min-h-10 sm:min-h-10 px-4 py-2.5 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
               >
                 Change password
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="secondary"
+                size="settingsAction"
+                class="w-full sm:w-auto"
                 onClick={() => props.setShowQuickSecurityWizard(!props.showQuickSecurityWizard())}
                 disabled={!props.canManage}
-                class="w-full sm:w-auto min-h-10 sm:min-h-10 px-4 py-2.5 text-sm font-medium border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors"
               >
                 Rotate credentials
-              </button>
+              </Button>
             </div>
             <div class="text-xs text-muted">
               <span class="font-medium text-base-content">User:</span>{' '}

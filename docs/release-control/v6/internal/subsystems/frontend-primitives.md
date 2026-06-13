@@ -572,6 +572,10 @@ not a replacement status card, CTA band, or page-local nested card.
    cloud-paid surfaces own Suspend, Activate, Reload, tenant state, and mutation
    semantics, while `Button` owns the row-action chrome through the secondary
    `sm` and `xs` sizes.
+   Security authentication settings actions follow the same boundary:
+   security/privacy owns auth setup, password-change, credential-rotation, and
+   read-only semantics, while `Button` owns the warning, primary, secondary,
+   and settings-action chrome.
    If a new surface needs a variant that the shared primitive does not expose,
    extend the primitive and registry guard rather than adding a page-local
    class string.

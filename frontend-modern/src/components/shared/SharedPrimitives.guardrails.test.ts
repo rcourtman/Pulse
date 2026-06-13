@@ -3098,6 +3098,7 @@ describe('shared primitive guardrails', () => {
       'src/components/Settings/ReportingPanel.tsx',
       'src/components/Settings/ResourcePicker.tsx',
       'src/components/Settings/SelfHostedCommercialRecoverySection.tsx',
+      'src/components/Settings/SecurityAuthPanel.tsx',
       'src/components/Settings/SSOProvidersPanel.tsx',
       'src/components/UpdateConfirmationModal.tsx',
       'src/components/UpdateProgressModal.tsx',
@@ -3165,6 +3166,14 @@ describe('shared primitive guardrails', () => {
           patterns: expect.arrayContaining([
             'min-h-10 sm:min-h-9 px-4 py-2.5 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed',
             'min-h-10 sm:min-h-9 px-4 py-2.5 text-sm font-medium rounded-md border border-border text-base-content hover:bg-surface-hover transition-colors disabled:opacity-60 disabled:cursor-not-allowed',
+          ]),
+        }),
+        expect.objectContaining({
+          path: 'src/components/Settings/SecurityAuthPanel.tsx',
+          patterns: expect.arrayContaining([
+            'w-full sm:w-auto px-3 py-2 text-xs font-medium rounded-md border border-amber-300 text-amber-800 bg-amber-100 hover:bg-amber-200 transition-colors dark:border-amber-700 dark:text-amber-200 dark:bg-amber-900 dark:hover:bg-amber-800',
+            'w-full sm:w-auto min-h-10 sm:min-h-10 px-4 py-2.5 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors',
+            'w-full sm:w-auto min-h-10 sm:min-h-10 px-4 py-2.5 text-sm font-medium border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors',
           ]),
         }),
         expect.objectContaining({
@@ -3954,6 +3963,21 @@ describe('shared primitive guardrails', () => {
     }
     expect(selfHostedCommercialRecoverySectionSource).not.toContain(
       'min-h-10 sm:min-h-9 px-4 py-2.5 text-sm font-medium rounded-md border border-border text-base-content hover:bg-surface-hover transition-colors disabled:opacity-60 disabled:cursor-not-allowed',
+    );
+    expect(securityAuthPanelSource).toContain('@/components/shared/Button');
+    expect(securityAuthPanelSource).toContain('<Button');
+    expect(securityAuthPanelSource).toContain('variant="warning"');
+    expect(securityAuthPanelSource).toContain('variant="primary"');
+    expect(securityAuthPanelSource).toContain('size="settingsAction"');
+    expect(securityAuthPanelSource).toContain('size="settingsActionXs"');
+    expect(securityAuthPanelSource).not.toContain(
+      'w-full sm:w-auto px-3 py-2 text-xs font-medium rounded-md border border-amber-300 text-amber-800 bg-amber-100 hover:bg-amber-200 transition-colors dark:border-amber-700 dark:text-amber-200 dark:bg-amber-900 dark:hover:bg-amber-800',
+    );
+    expect(securityAuthPanelSource).not.toContain(
+      'w-full sm:w-auto min-h-10 sm:min-h-10 px-4 py-2.5 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors',
+    );
+    expect(securityAuthPanelSource).not.toContain(
+      'w-full sm:w-auto min-h-10 sm:min-h-10 px-4 py-2.5 text-sm font-medium border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors',
     );
     expect(discoveryTabSource).toContain('@/components/shared/Button');
     expect(discoveryTabSource).toContain('@/components/shared/CopyableCodeRow');

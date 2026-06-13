@@ -221,6 +221,11 @@ controls as normal product settings.
     primitive. Security/privacy owns scope authority, wildcard behavior, preset
     membership, and custom scope toggles; frontend-primitives owns active and
     inactive pill tone, focus, disabled treatment, and pressed-state wiring.
+6c. Keep authentication setup, password-change, and credential-rotation actions
+    on the shared `Button` primitive. Security/privacy owns the auth authority,
+    setup/rotation semantics, and read-only capability state;
+    frontend-primitives owns warning, primary, secondary, focus, disabled, and
+    settings-action chrome.
 6. Keep the shared storage-directory and secure storage-file hardening helper aligned with the crypto manager plus control-plane magic-link key and store handling whenever runtime data-root ownership assumptions change.
 7. Keep auth-env ingestion, hosted commercial base URL validation, and shared
    fingerprint-verifier TLS defaults aligned whenever runtime auth loading,

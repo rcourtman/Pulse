@@ -970,6 +970,7 @@
         { "path": "src/components/Settings/ReportingPanel.tsx" },
         { "path": "src/components/Settings/ResourcePicker.tsx" },
         { "path": "src/components/Settings/SelfHostedCommercialRecoverySection.tsx" },
+        { "path": "src/components/Settings/SecurityAuthPanel.tsx" },
         { "path": "src/components/Settings/SSOProvidersPanel.tsx" },
         { "path": "src/components/UpdateConfirmationModal.tsx" },
         { "path": "src/components/UpdateProgressModal.tsx" },
@@ -1036,6 +1037,14 @@
           "patterns": [
             "min-h-10 sm:min-h-9 px-4 py-2.5 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed",
             "min-h-10 sm:min-h-9 px-4 py-2.5 text-sm font-medium rounded-md border border-border text-base-content hover:bg-surface-hover transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          ]
+        },
+        {
+          "path": "src/components/Settings/SecurityAuthPanel.tsx",
+          "patterns": [
+            "w-full sm:w-auto px-3 py-2 text-xs font-medium rounded-md border border-amber-300 text-amber-800 bg-amber-100 hover:bg-amber-200 transition-colors dark:border-amber-700 dark:text-amber-200 dark:bg-amber-900 dark:hover:bg-amber-800",
+            "w-full sm:w-auto min-h-10 sm:min-h-10 px-4 py-2.5 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors",
+            "w-full sm:w-auto min-h-10 sm:min-h-10 px-4 py-2.5 text-sm font-medium border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors"
           ]
         },
         {

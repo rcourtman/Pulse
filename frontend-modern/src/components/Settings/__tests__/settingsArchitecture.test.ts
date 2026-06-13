@@ -327,6 +327,22 @@ describe('settings architecture guardrails', () => {
     expect(ssoProvidersPanelSource).not.toContain(
       'text-blue-600 hover:underline flex items-center gap-1',
     );
+
+    expect(securityAuthPanelSource).toContain(
+      "import { Button } from '@/components/shared/Button';",
+    );
+    expect(securityAuthPanelSource).toContain('variant="warning"');
+    expect(securityAuthPanelSource).toContain('variant="primary"');
+    expect(securityAuthPanelSource).toContain('size="settingsAction"');
+    expect(securityAuthPanelSource).not.toContain(
+      'w-full sm:w-auto px-3 py-2 text-xs font-medium rounded-md border border-amber-300',
+    );
+    expect(securityAuthPanelSource).not.toContain(
+      'w-full sm:w-auto min-h-10 sm:min-h-10 px-4 py-2.5 text-sm font-medium bg-blue-600',
+    );
+    expect(securityAuthPanelSource).not.toContain(
+      'w-full sm:w-auto min-h-10 sm:min-h-10 px-4 py-2.5 text-sm font-medium border border-border',
+    );
   });
 
   it('keeps settings callouts on the shared CalloutCard primitive', () => {
