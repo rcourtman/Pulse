@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { WorkloadTypeBadge } from '@/components/shared/WorkloadTypeBadge';
+import proxmoxBackupServersTableSource from '../ProxmoxBackupServersTable.tsx?raw';
+import proxmoxCoverageTableSource from '../ProxmoxCoverageTable.tsx?raw';
+import proxmoxRecoverableTableSource from '../ProxmoxRecoverableTable.tsx?raw';
 import proxmoxBackupsTableSharedSource from '../proxmoxBackupsTableShared.tsx?raw';
 import {
   ArtifactSourceBadge,
@@ -67,6 +70,19 @@ describe('proxmoxBackupsTableShared', () => {
     expect(proxmoxBackupsTableSharedSource).not.toMatch(
       /inline-flex items-center rounded-sm px-1\.5 py-0\.5 text-\[10px\] font-semibold/,
     );
+  });
+
+  it('keeps backup byte-size cells on the shared platform table formatter', () => {
+    const sources = [
+      proxmoxBackupServersTableSource,
+      proxmoxCoverageTableSource,
+      proxmoxRecoverableTableSource,
+    ];
+
+    for (const source of sources) {
+      expect(source).toContain('formatPlatformTableBytesValue');
+      expect(source).not.toContain('formatBytes(');
+    }
   });
 });
 

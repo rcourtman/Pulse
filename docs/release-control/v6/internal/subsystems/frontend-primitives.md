@@ -2613,10 +2613,12 @@ the same days/hours/minutes fallback.
 Platform table byte-size formatting follows the same rule.
 `formatPlatformTableBytesValue` owns the repeated positive-byte formatting plus
 canonical empty-cell marker behavior for dense platform table cells. Docker /
-Podman native table helpers, Kubernetes node capacity cells, and TrueNAS
-system, VM, storage-topology, and protection byte cells must compose that
-helper instead of declaring local `formatBytes` wrappers, importing the generic
-formatter in table files, or reimplementing byte-unit precision there.
+Podman native storage cells, Docker / Podman engine storage-usage cells,
+Kubernetes node and storage capacity cells, Proxmox backup server, Ceph,
+coverage, and recoverable-artifact size cells, and TrueNAS system, VM,
+storage-topology, and protection byte cells must compose that helper instead
+of declaring local `formatBytes` wrappers, importing the generic formatter in
+table files, or reimplementing byte-unit precision there.
 Compact platform table timestamps follow the same rule.
 `PlatformTableDateTimeValue` and `formatPlatformTableDateTimeValue` own compact
 date-time parsing, invalid/empty markers, optional minimum-year filtering, Intl

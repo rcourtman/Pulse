@@ -246,11 +246,12 @@ backup servers, and Proxmox Mail Gateway node rows, must use
 `formatPlatformTableUptimeValue` instead of recreating local
 days/hours/minutes `formatUptime` helpers for dense table cells.
 Platform byte-size table cells follow that boundary too: unified-resource
-consumers own whether a capacity, memory, disk, or requested-size field is the
-right source-specific value, while dense platform table cells must use
-`formatPlatformTableBytesValue` for positive byte formatting and unknown /
-non-positive empty-cell markers instead of carrying table-local `formatBytes`
-wrappers or direct generic byte-formatter imports.
+consumers own whether a capacity, memory, disk, requested-size, datastore,
+pool, or backup-artifact size field is the right source-specific value, while
+dense Docker / Podman, Kubernetes, Proxmox, and TrueNAS platform table cells
+must use `formatPlatformTableBytesValue` for positive byte formatting and
+unknown / non-positive empty-cell markers instead of carrying table-local
+`formatBytes` wrappers or direct generic byte-formatter imports.
 Compact timestamp table cells follow the same boundary: unified-resource
 consumers own whether `completedAt`, `startedAt`, `occurredAt`, or `observedAt`
 is the right source-specific value for the row, while dense platform table

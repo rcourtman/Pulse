@@ -1,7 +1,6 @@
 import { For, Show, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
-import { formatBytes } from '@/utils/format';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
@@ -9,6 +8,7 @@ import {
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  formatPlatformTableBytesValue,
   formatPlatformTableTextValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
@@ -74,12 +74,16 @@ const capacityLabel = (resource: Resource): string => {
       typeof requested === 'number' &&
       requested > 0
     ) {
-      if (capacity !== requested) return `${formatBytes(capacity)} / ${formatBytes(requested)} req`;
-      return formatBytes(capacity);
+      if (capacity !== requested) {
+        return `${formatPlatformTableBytesValue(capacity)} / ${formatPlatformTableBytesValue(requested)} req`;
+      }
+      return formatPlatformTableBytesValue(capacity);
     }
-    if (typeof requested === 'number' && requested > 0) return `${formatBytes(requested)} req`;
+    if (typeof requested === 'number' && requested > 0) {
+      return `${formatPlatformTableBytesValue(requested)} req`;
+    }
   }
-  if (typeof capacity === 'number' && capacity > 0) return formatBytes(capacity);
+  if (typeof capacity === 'number' && capacity > 0) return formatPlatformTableBytesValue(capacity);
   return '—';
 };
 

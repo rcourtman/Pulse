@@ -1,12 +1,12 @@
 import { For, Show, type Accessor, type JSX } from 'solid-js';
 
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
-import { formatBytes } from '@/utils/format';
 import {
   getRecoveryFullDateLabel,
   recoveryDateKeyFromTimestamp,
 } from '@/utils/recoveryDatePresentation';
 import {
+  formatPlatformTableBytesValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   PlatformTableEmptyState,
@@ -115,8 +115,8 @@ export function ProxmoxRecoverableTable(props: {
                 : 0
             }
             fillClass="bg-blue-500/40 dark:bg-blue-500/40"
-            label={formatBytes(artifact.size ?? 0)}
-            tooltip={`${formatBytes(artifact.size ?? 0)} (relative to largest artifact in view)`}
+            label={formatPlatformTableBytesValue(artifact.size)}
+            tooltip={`${formatPlatformTableBytesValue(artifact.size)} (relative to largest artifact in view)`}
           />
         </Show>
       </TableCell>

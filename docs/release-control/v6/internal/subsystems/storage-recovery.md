@@ -150,6 +150,12 @@ PBS server uptime follows the same split: storage/recovery owns whether the
 server uptime belongs on the backup-health row, while frontend-primitives owns
 the one-unit uptime label through `formatPlatformTableUptimeValue` instead of
 local `formatUptime` calls.
+PBS server memory/datastore byte labels and recoverable-artifact size labels
+follow the same split: storage/recovery owns whether memory, datastore usage,
+or artifact size is meaningful backup/recovery evidence, while
+frontend-primitives owns byte-unit presentation through
+`formatPlatformTableBytesValue` instead of direct `formatBytes` imports in
+backup table files.
 Those Proxmox backup workflows own recovery semantics, source-specific
 empty-state copy, and retry/filter actions, but their table empty-state frame
 must compose the frontend-primitives-owned `PlatformTableEmptyState` shell

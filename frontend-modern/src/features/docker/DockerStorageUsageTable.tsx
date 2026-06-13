@@ -1,7 +1,6 @@
 import { For, Show, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
-import { formatBytes } from '@/utils/format';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
@@ -9,6 +8,7 @@ import {
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  formatPlatformTableBytesValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   PlatformTableShell,
@@ -29,9 +29,12 @@ const bucketValue = (bucket?: DockerStorageUsageMeta): JSX.Element => {
   const active = bucket?.activeCount ?? 0;
   return (
     <span class="inline-flex min-w-0 flex-col items-end leading-tight">
-      <span class="tabular-nums text-base-content">{formatBytes(totalSize)}</span>
+      <span class="tabular-nums text-base-content">
+        {formatPlatformTableBytesValue(totalSize, '0 B')}
+      </span>
       <span class="truncate text-[10px] text-muted">
-        {count} total, {active} active, {formatBytes(reclaimable)} reclaimable
+        {count} total, {active} active, {formatPlatformTableBytesValue(reclaimable, '0 B')}{' '}
+        reclaimable
       </span>
     </span>
   );

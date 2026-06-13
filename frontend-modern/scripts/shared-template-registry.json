@@ -1360,7 +1360,13 @@
       },
       "requiredConsumers": [
         { "path": "src/features/docker/DockerNativeTableShared.tsx" },
+        { "path": "src/features/docker/DockerStorageUsageTable.tsx" },
         { "path": "src/features/kubernetes/KubernetesNodesTable.tsx" },
+        { "path": "src/features/kubernetes/KubernetesStorageTable.tsx" },
+        { "path": "src/features/proxmox/ProxmoxBackupServersTable.tsx" },
+        { "path": "src/features/proxmox/ProxmoxCephTable.tsx" },
+        { "path": "src/features/proxmox/ProxmoxCoverageTable.tsx" },
+        { "path": "src/features/proxmox/ProxmoxRecoverableTable.tsx" },
         { "path": "src/features/truenas/TrueNASProtectionTable.tsx" },
         { "path": "src/features/truenas/TrueNASStorageTopologyTable.tsx" },
         { "path": "src/features/truenas/TrueNASSystemsTable.tsx" },
@@ -1372,8 +1378,32 @@
           "patterns": ["formatBytes(value)"]
         },
         {
+          "path": "src/features/docker/DockerStorageUsageTable.tsx",
+          "patterns": ["formatBytes("]
+        },
+        {
           "path": "src/features/kubernetes/KubernetesNodesTable.tsx",
           "patterns": ["const formatBytes", "value.toFixed(value >= 100 ? 0 : value >= 10 ? 1 : 2)"]
+        },
+        {
+          "path": "src/features/kubernetes/KubernetesStorageTable.tsx",
+          "patterns": ["formatBytes("]
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxBackupServersTable.tsx",
+          "patterns": ["formatBytes("]
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxCephTable.tsx",
+          "patterns": ["formatBytes("]
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxCoverageTable.tsx",
+          "patterns": ["formatBytes("]
+        },
+        {
+          "path": "src/features/proxmox/ProxmoxRecoverableTable.tsx",
+          "patterns": ["formatBytes("]
         },
         {
           "path": "src/features/truenas/TrueNASProtectionTable.tsx",
@@ -2362,8 +2392,14 @@
         "path": "src/features/platformPage/sharedPlatformPage.tsx",
         "export": "formatPlatformTableBytesValue"
       },
-      "scopes": ["src/features/docker", "src/features/kubernetes", "src/features/truenas"],
+      "scopes": [
+        "src/features/docker",
+        "src/features/kubernetes",
+        "src/features/proxmox",
+        "src/features/truenas"
+      ],
       "extensions": [".tsx"],
+      "pathIncludes": ["Table"],
       "allPatterns": ["const formatBytes", "value.toFixed(value >= 100 ? 0 : value >= 10 ? 1 : 2)"],
       "legacyReason": "Retired migration debt. Platform table byte-size cells must use formatPlatformTableBytesValue for shared positive-byte formatting and empty-cell markers.",
       "allowedPaths": [],
@@ -2382,8 +2418,14 @@
         "path": "src/features/platformPage/sharedPlatformPage.tsx",
         "export": "formatPlatformTableBytesValue"
       },
-      "scopes": ["src/features/truenas"],
+      "scopes": [
+        "src/features/docker",
+        "src/features/kubernetes",
+        "src/features/proxmox",
+        "src/features/truenas"
+      ],
       "extensions": [".tsx"],
+      "pathIncludes": ["Table"],
       "allPatterns": ["import { formatBytes } from '@/utils/format';", "formatBytes("],
       "legacyReason": "Retired migration debt. Dense platform table byte cells must use formatPlatformTableBytesValue so positive-byte formatting and empty markers stay shared.",
       "allowedPaths": [],

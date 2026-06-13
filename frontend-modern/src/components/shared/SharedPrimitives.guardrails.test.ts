@@ -152,6 +152,7 @@ import workloadSelectionStateSource from '@/components/Workloads/useWorkloadSele
 import dockerContainersTableSource from '@/features/docker/DockerContainersTable.tsx?raw';
 import dockerHostsTableSource from '@/features/docker/DockerHostsTable.tsx?raw';
 import dockerNativeTableSharedSource from '@/features/docker/DockerNativeTableShared.tsx?raw';
+import dockerStorageUsageTableSource from '@/features/docker/DockerStorageUsageTable.tsx?raw';
 import dockerVolumesTableSource from '@/features/docker/DockerVolumesTable.tsx?raw';
 import kubernetesAutoscalingTableSource from '@/features/kubernetes/KubernetesAutoscalingTable.tsx?raw';
 import kubernetesClustersTableSource from '@/features/kubernetes/KubernetesClustersTable.tsx?raw';
@@ -417,6 +418,7 @@ describe('shared primitive guardrails', () => {
         canonical?: { path?: string; export?: string };
         allPatterns?: string[];
         scopes?: string[];
+        pathIncludes?: string[];
         allowedPaths?: string[];
         ignoredPaths?: string[];
       }>;
@@ -520,6 +522,7 @@ describe('shared primitive guardrails', () => {
         canonical?: { path?: string; export?: string };
         allPatterns?: string[];
         scopes?: string[];
+        pathIncludes?: string[];
         allowedPaths?: string[];
         ignoredPaths?: string[];
       }>;
@@ -760,6 +763,7 @@ describe('shared primitive guardrails', () => {
         canonical?: { path?: string; export?: string };
         allPatterns?: string[];
         scopes?: string[];
+        pathIncludes?: string[];
         allowedPaths?: string[];
         ignoredPaths?: string[];
       }>;
@@ -3725,6 +3729,7 @@ describe('shared primitive guardrails', () => {
         canonical?: { path?: string; export?: string };
         allPatterns?: string[];
         scopes?: string[];
+        pathIncludes?: string[];
         allowedPaths?: string[];
         ignoredPaths?: string[];
       }>;
@@ -3740,7 +3745,13 @@ describe('shared primitive guardrails', () => {
     );
     const platformByteValueConsumers: Array<[string, string]> = [
       ['src/features/docker/DockerNativeTableShared.tsx', dockerNativeTableSharedSource],
+      ['src/features/docker/DockerStorageUsageTable.tsx', dockerStorageUsageTableSource],
       ['src/features/kubernetes/KubernetesNodesTable.tsx', kubernetesNodesTableSource],
+      ['src/features/kubernetes/KubernetesStorageTable.tsx', kubernetesStorageTableSource],
+      ['src/features/proxmox/ProxmoxBackupServersTable.tsx', proxmoxBackupServersTableSource],
+      ['src/features/proxmox/ProxmoxCephTable.tsx', proxmoxCephTableSource],
+      ['src/features/proxmox/ProxmoxCoverageTable.tsx', proxmoxCoverageTableSource],
+      ['src/features/proxmox/ProxmoxRecoverableTable.tsx', proxmoxRecoverableTableSource],
       ['src/features/truenas/TrueNASProtectionTable.tsx', truenasProtectionTableSource],
       ['src/features/truenas/TrueNASStorageTopologyTable.tsx', truenasStorageTopologyTableSource],
       ['src/features/truenas/TrueNASSystemsTable.tsx', truenasSystemsTableSource],
@@ -3765,8 +3776,32 @@ describe('shared primitive guardrails', () => {
         patterns: ['formatBytes(value)'],
       },
       {
+        path: 'src/features/docker/DockerStorageUsageTable.tsx',
+        patterns: ['formatBytes('],
+      },
+      {
         path: 'src/features/kubernetes/KubernetesNodesTable.tsx',
         patterns: localFormatBytesHelperPatterns,
+      },
+      {
+        path: 'src/features/kubernetes/KubernetesStorageTable.tsx',
+        patterns: ['formatBytes('],
+      },
+      {
+        path: 'src/features/proxmox/ProxmoxBackupServersTable.tsx',
+        patterns: ['formatBytes('],
+      },
+      {
+        path: 'src/features/proxmox/ProxmoxCephTable.tsx',
+        patterns: ['formatBytes('],
+      },
+      {
+        path: 'src/features/proxmox/ProxmoxCoverageTable.tsx',
+        patterns: ['formatBytes('],
+      },
+      {
+        path: 'src/features/proxmox/ProxmoxRecoverableTable.tsx',
+        patterns: ['formatBytes('],
       },
       {
         path: 'src/features/truenas/TrueNASProtectionTable.tsx',
@@ -3797,8 +3832,10 @@ describe('shared primitive guardrails', () => {
     expect(localHelperGuard?.scopes).toEqual([
       'src/features/docker',
       'src/features/kubernetes',
+      'src/features/proxmox',
       'src/features/truenas',
     ]);
+    expect(localHelperGuard?.pathIncludes).toEqual(['Table']);
     expect(localHelperGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(localHelperGuard?.ignoredPaths ?? []).toHaveLength(0);
     expect(localFormatBytesImportGuard?.canonical?.path).toBe(
@@ -3809,7 +3846,13 @@ describe('shared primitive guardrails', () => {
       "import { formatBytes } from '@/utils/format';",
       'formatBytes(',
     ]);
-    expect(localFormatBytesImportGuard?.scopes).toEqual(['src/features/truenas']);
+    expect(localFormatBytesImportGuard?.scopes).toEqual([
+      'src/features/docker',
+      'src/features/kubernetes',
+      'src/features/proxmox',
+      'src/features/truenas',
+    ]);
+    expect(localFormatBytesImportGuard?.pathIncludes).toEqual(['Table']);
     expect(localFormatBytesImportGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(localFormatBytesImportGuard?.ignoredPaths ?? []).toHaveLength(0);
 

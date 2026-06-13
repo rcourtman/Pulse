@@ -2,8 +2,8 @@ import { For, Show, type JSX } from 'solid-js';
 
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
-import { formatBytes } from '@/utils/format';
 import {
+  formatPlatformTableBytesValue,
   formatPlatformTableIntegerValue,
   formatPlatformTablePercentValue,
   formatPlatformTableUptimeValue,
@@ -227,7 +227,7 @@ export function ProxmoxBackupServersTable(props: {
                           class="text-base-content"
                           title={
                             row.memoryTotal
-                              ? `${formatBytes(row.memoryUsed ?? 0)} / ${formatBytes(row.memoryTotal)}`
+                              ? `${formatPlatformTableBytesValue(row.memoryUsed, '0 B')} / ${formatPlatformTableBytesValue(row.memoryTotal)}`
                               : undefined
                           }
                         >
@@ -235,7 +235,7 @@ export function ProxmoxBackupServersTable(props: {
                         </span>
                         <Show when={row.memoryTotal}>
                           <span class="ml-1 text-[10px] text-muted tabular-nums">
-                            ({formatBytes(row.memoryUsed ?? 0)}/{formatBytes(row.memoryTotal ?? 0)})
+                            {`(${formatPlatformTableBytesValue(row.memoryUsed, '0 B')}/${formatPlatformTableBytesValue(row.memoryTotal)})`}
                           </span>
                         </Show>
                       </Show>
@@ -272,7 +272,8 @@ export function ProxmoxBackupServersTable(props: {
                               <PlatformTablePercentValue value={pct()} />
                             </span>
                             <span class="text-[10px] text-muted tabular-nums">
-                              {formatBytes(datastore().used)} / {formatBytes(datastore().total)}
+                              {formatPlatformTableBytesValue(datastore().used, '0 B')} /{' '}
+                              {formatPlatformTableBytesValue(datastore().total)}
                             </span>
                           </div>
                         )}

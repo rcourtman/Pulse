@@ -71,6 +71,11 @@ const collectFiles = (scope, extensions) => {
 };
 
 const getAllowedPath = (entry) => (typeof entry === 'string' ? entry : entry?.path);
+const filterGuardFiles = (files, guard) => {
+  const pathIncludes = Array.isArray(guard.pathIncludes) ? guard.pathIncludes : [];
+  if (pathIncludes.length === 0) return files;
+  return files.filter((file) => pathIncludes.every((fragment) => file.includes(fragment)));
+};
 
 for (const rule of rules) {
   if (!rule.id) failures.push('registry rule is missing id');
@@ -126,7 +131,10 @@ for (const guard of patternGuards) {
   const allowedPaths = new Set(allowedEntries.map(getAllowedPath).filter(Boolean));
   const ignoredEntries = guard.ignoredPaths ?? [];
   const ignoredPaths = new Set(ignoredEntries.map(getAllowedPath).filter(Boolean));
-  const files = [...new Set(scopes.flatMap((scope) => collectFiles(scope, extensions)))].sort();
+  const files = filterGuardFiles(
+    [...new Set(scopes.flatMap((scope) => collectFiles(scope, extensions)))].sort(),
+    guard,
+  );
 
   for (const file of files) {
     if (file === guard.canonical.path) continue;
@@ -201,7 +209,10 @@ for (const guard of requiredPatternGuards) {
   const allowedPaths = new Set(allowedEntries.map(getAllowedPath).filter(Boolean));
   const ignoredEntries = guard.ignoredPaths ?? [];
   const ignoredPaths = new Set(ignoredEntries.map(getAllowedPath).filter(Boolean));
-  const files = [...new Set(scopes.flatMap((scope) => collectFiles(scope, extensions)))].sort();
+  const files = filterGuardFiles(
+    [...new Set(scopes.flatMap((scope) => collectFiles(scope, extensions)))].sort(),
+    guard,
+  );
 
   for (const file of files) {
     if (file === guard.canonical.path) continue;

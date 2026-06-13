@@ -12,10 +12,10 @@ import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
-import { formatBytes } from '@/utils/format';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PlatformTableToolbar,
+  formatPlatformTableBytesValue,
   formatPlatformTablePercentValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
@@ -107,7 +107,10 @@ function poolsLabel(resource: Resource): JSX.Element {
   return (
     <span class="tabular-nums">
       {pools.length}
-      <span class="text-muted text-[10px]"> · {formatBytes(stored)} stored</span>
+      <span class="text-muted text-[10px]">
+        {' · '}
+        {formatPlatformTableBytesValue(stored, '0 B')} stored
+      </span>
     </span>
   );
 }
@@ -151,7 +154,7 @@ function capacityLabel(resource: Resource): JSX.Element {
     return (
       <span class="tabular-nums">
         {formatPlatformTablePercentValue(pct)}
-        <span class="text-muted text-[10px]"> of {formatBytes(total)}</span>
+        <span class="text-muted text-[10px]"> of {formatPlatformTableBytesValue(total)}</span>
       </span>
     );
   }

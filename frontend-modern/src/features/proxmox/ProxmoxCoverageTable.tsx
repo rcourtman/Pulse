@@ -3,8 +3,8 @@ import { For, Show, type Accessor, type JSX } from 'solid-js';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableRow } from '@/components/shared/Table';
-import { formatBytes } from '@/utils/format';
 import {
+  formatPlatformTableBytesValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   PlatformTableEmptyState,
@@ -413,7 +413,7 @@ export function ProxmoxCoverageTable(props: {
                                           when={artifact.size && artifact.size > 0}
                                           fallback={<span class="text-muted">No size</span>}
                                         >
-                                          {formatBytes(artifact.size ?? 0)}
+                                          {formatPlatformTableBytesValue(artifact.size)}
                                         </Show>
                                       </td>
                                       <td class="px-2 py-1">
