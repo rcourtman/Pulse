@@ -12712,7 +12712,7 @@ func TestContract_ActionPlanJSONSnapshot(t *testing.T) {
 	}
 
 	const want = `{
-		"actionId":"act_371d0bcde73818752f83bb759e1fa523",
+		"actionId":"act_8f428171be2762cec97fd4546a291d5f",
 		"requestId":"agent-run-123",
 		"allowed":true,
 		"requiresApproval":true,
@@ -12722,9 +12722,9 @@ func TestContract_ActionPlanJSONSnapshot(t *testing.T) {
 		"message":"Plan created for restart on web-42. Execution requires admin approval and is not performed by this endpoint.",
 		"plannedAt":"2026-05-03T10:00:00Z",
 		"expiresAt":"2026-05-03T10:05:00Z",
-		"resourceVersion":"resource:sha256:3a87c71cf83bd017736bcb25",
+		"resourceVersion":"resource:sha256:54fb6f0264f42e0f2724e513",
 		"policyVersion":"policy:sha256:0bce3cd2df181ace685598eb",
-		"planHash":"sha256:38e8a016794bae597cd6129e65506556048bcac88d6a5a1b59e1337a2acc5a05",
+		"planHash":"sha256:69631faa9da67496a8b5953de2bc2dceb7b2aab5b582be3d1536e5d67683791b",
 		"preflight":{
 			"target":"vm:42",
 			"currentState":"web-42 is warning",
@@ -12739,7 +12739,7 @@ func TestContract_ActionPlanJSONSnapshot(t *testing.T) {
 			],
 			"verificationSteps":[
 				"Refresh the resource and confirm the expected state after execution.",
-				"Review /api/audit/actions/act_371d0bcde73818752f83bb759e1fa523/events for lifecycle evidence."
+				"Review /api/audit/actions/act_8f428171be2762cec97fd4546a291d5f/events for lifecycle evidence."
 			],
 			"generatedAt":"2026-05-03T10:00:00Z"
 		}
@@ -12844,13 +12844,13 @@ func TestContract_ActionPlanAuditLifecycleSnapshot(t *testing.T) {
 	}
 	const want = `{
 		"audit":{
-			"id":"act_f464b1a69ce73d27a986b445104ad708",
+			"id":"act_7eed41cdc58507f340151d2497707eca",
 			"state":"pending_approval",
 			"resourceId":"vm:42",
 			"requestId":"agent-run-123",
 			"requestedBy":"agent:oncall-helper",
 			"approvalPolicy":"admin",
-			"planHash":"sha256:e2998e7fe1b9b97c8180102bd474ece7411146db70bbb6299cdc47582de7bd1d",
+			"planHash":"sha256:f60417e39f967eb0803af0a3f2e2abd70f20d8a77a09c2e36976bdda34b6dbaf",
 			"preflightSummary":"No provider-supported dry run is advertised for this capability."
 		},
 		"events":[

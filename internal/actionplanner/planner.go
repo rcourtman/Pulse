@@ -108,7 +108,6 @@ func ResourceVersion(resource unified.Resource) string {
 		Status         unified.ResourceStatus                  `json:"status"`
 		AISafeSummary  string                                  `json:"aiSafeSummary,omitempty"`
 		Sources        []unified.DataSource                    `json:"sources,omitempty"`
-		Identity       normalizedIdentity                      `json:"identity,omitempty"`
 		ParentID       string                                  `json:"parentId,omitempty"`
 		Capabilities   []normalizedCapabilityForResourceHash   `json:"capabilities,omitempty"`
 		Relationships  []normalizedRelationship                `json:"relationships,omitempty"`
@@ -124,7 +123,6 @@ func ResourceVersion(resource unified.Resource) string {
 		Status:        resource.Status,
 		AISafeSummary: strings.TrimSpace(resource.AISafeSummary),
 		Sources:       normalizeDataSources(resource.Sources),
-		Identity:      normalizeIdentity(resource.Identity),
 		Capabilities:  normalizeCapabilitiesForResourceHash(resource.Capabilities),
 		Relationships: normalizeRelationships(unified.ResourceRelationshipsWithCanonicalParent(resource)),
 		RecentChanges: normalizeChanges(resource.RecentChanges),
@@ -605,9 +603,8 @@ type storageIncidentHashFields struct {
 }
 
 type sourceStatusHash struct {
-	Status   string    `json:"status"`
-	LastSeen time.Time `json:"lastSeen,omitempty"`
-	Error    string    `json:"error,omitempty"`
+	Status string `json:"status"`
+	Error  string `json:"error,omitempty"`
 }
 
 func normalizeDataSources(sources []unified.DataSource) []unified.DataSource {
@@ -750,9 +747,8 @@ func normalizeSourceStatus(status map[unified.DataSource]unified.SourceStatus) m
 			continue
 		}
 		out[normalizedSource] = sourceStatusHash{
-			Status:   strings.TrimSpace(sourceStatus.Status),
-			LastSeen: sourceStatus.LastSeen.UTC(),
-			Error:    strings.TrimSpace(sourceStatus.Error),
+			Status: strings.TrimSpace(sourceStatus.Status),
+			Error:  strings.TrimSpace(sourceStatus.Error),
 		}
 	}
 	return out

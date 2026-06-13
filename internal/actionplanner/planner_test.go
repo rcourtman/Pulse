@@ -175,10 +175,30 @@ func TestResourceVersionIgnoresObservationOnlyTimestamps(t *testing.T) {
 		Status:    unified.StatusOnline,
 		LastSeen:  time.Date(2026, 5, 3, 10, 0, 0, 0, time.UTC),
 		UpdatedAt: time.Date(2026, 5, 3, 10, 0, 0, 0, time.UTC),
+		Identity: unified.ResourceIdentity{
+			Hostnames:   []string{"web-42"},
+			IPAddresses: []string{"192.0.2.10"},
+		},
+		SourceStatus: map[unified.DataSource]unified.SourceStatus{
+			unified.SourceProxmox: {
+				Status:   "online",
+				LastSeen: time.Date(2026, 5, 3, 10, 0, 0, 0, time.UTC),
+			},
+		},
 	}
 	refreshed := base
 	refreshed.LastSeen = base.LastSeen.Add(time.Minute)
 	refreshed.UpdatedAt = base.UpdatedAt.Add(time.Minute)
+	refreshed.Identity = unified.ResourceIdentity{
+		Hostnames:   []string{"web-42", "web-42.local"},
+		IPAddresses: []string{"192.0.2.10", "192.0.2.11"},
+	}
+	refreshed.SourceStatus = map[unified.DataSource]unified.SourceStatus{
+		unified.SourceProxmox: {
+			Status:   "online",
+			LastSeen: base.SourceStatus[unified.SourceProxmox].LastSeen.Add(time.Minute),
+		},
+	}
 
 	if got, want := ResourceVersion(refreshed), ResourceVersion(base); got != want {
 		t.Fatalf("ResourceVersion changed for observation-only timestamp drift: got %q want %q", got, want)
