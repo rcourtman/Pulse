@@ -791,7 +791,13 @@ desktop row ownership lives in
 `frontend-modern/src/components/Alerts/AlertResourceTableRow.tsx`, and selection
 state, delay-row toggling, and inline metric-input focus live in
 `frontend-modern/src/components/Alerts/useAlertResourceTableState.ts`. Shared
-resource-table empty states, badge labels, offline-state wording, note
+web-interface launch affordances inside alert resource rows and grouped agent
+headers must compose
+`frontend-modern/src/components/shared/WebInterfaceNameLink.tsx`; alerts own
+only the alert/resource data and URL availability decision, not the external
+anchor shell, new-tab safety attributes, row-click containment, or accessible
+launch-label semantics.
+Resource-table empty states, badge labels, offline-state wording, note
 placeholders, and metric input titles now route through
 `frontend-modern/src/utils/alertResourceTablePresentation.ts` instead of
 remaining duplicated across the desktop and mobile thresholds surfaces.

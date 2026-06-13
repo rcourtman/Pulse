@@ -21,6 +21,12 @@
         },
         {
           "path": "src/features/proxmox/ProxmoxNodesTable.tsx"
+        },
+        {
+          "path": "src/components/Alerts/AlertResourceGroupHeader.tsx"
+        },
+        {
+          "path": "src/components/Alerts/AlertResourceTableRow.tsx"
         }
       ],
       "forbiddenPatterns": [
@@ -56,15 +62,25 @@
         {
           "path": "src/features/proxmox/proxmoxHostTableModel.ts",
           "patterns": ["id: 'web'", "label: 'Web'"]
+        },
+        {
+          "path": "src/components/Alerts/AlertResourceGroupHeader.tsx",
+          "patterns": ["target=\"_blank\"", "rel=\"noopener noreferrer\""]
+        },
+        {
+          "path": "src/components/Alerts/AlertResourceTableRow.tsx",
+          "patterns": ["target=\"_blank\"", "rel=\"noopener noreferrer\""]
         }
       ],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/shared/WebInterfaceNameLink.test.tsx",
         "src/components/shared/__tests__/NodeGroupHeader.test.tsx",
         "src/features/standalone/__tests__/AgentsMachinesTable.test.tsx",
         "src/components/Workloads/__tests__/GuestRow.test.tsx",
         "src/features/proxmox/__tests__/ProxmoxNodesTable.test.tsx",
-        "src/features/proxmox/__tests__/proxmoxHostTableModel.test.ts"
+        "src/features/proxmox/__tests__/proxmoxHostTableModel.test.ts",
+        "src/components/Alerts/ResourceTable.test.tsx"
       ]
     },
     {

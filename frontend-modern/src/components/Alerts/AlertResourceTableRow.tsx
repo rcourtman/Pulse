@@ -9,6 +9,7 @@ import { TogglePrimitive } from '@/components/shared/Toggle';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { ThresholdSlider } from '@/components/Workloads/ThresholdSlider';
 import { TableCell, TableRow } from '@/components/shared/Table';
+import { WebInterfaceNameLink } from '@/components/shared/WebInterfaceNameLink';
 import { getPlatformTableCellClassForKind } from '@/features/platformPage/sharedPlatformPage';
 import {
   getAlertResourceTableCustomBadgeLabel,
@@ -260,33 +261,19 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
             }
           >
             <div class="flex items-center gap-3 min-w-0" title={props.resource.status || undefined}>
-              <Show
-                when={props.resource.host}
-                fallback={
-                  <span
-                    class={`text-sm font-medium truncate flex-nowrap ${props.resource.disabled ? 'text-slate-500 ' : 'text-base-content'}`}
-                  >
-                    {resourceLabel()}
-                  </span>
-                }
-              >
-                {(host) => (
-                  <a
-                    href={host() as string}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    class={`text-sm font-medium truncate flex-nowrap transition-colors duration-150 ${
-                      props.resource.disabled
-                        ? 'text-slate-500 '
-                        : 'text-base-content hover:text-sky-600 dark:hover:text-sky-400'
-                    }`}
-                    title={`Open ${resourceLabel()} web interface`}
-                  >
-                    {resourceLabel()}
-                  </a>
-                )}
-              </Show>
+              <WebInterfaceNameLink
+                name={resourceLabel()}
+                url={props.resource.host as string | null | undefined}
+                class={`text-sm font-medium truncate flex-nowrap transition-colors duration-150 ${
+                  props.resource.disabled
+                    ? 'text-slate-500 '
+                    : 'text-base-content hover:text-sky-600 dark:hover:text-sky-400'
+                }`}
+                fallbackClass={`text-sm font-medium truncate flex-nowrap ${
+                  props.resource.disabled ? 'text-slate-500 ' : 'text-base-content'
+                }`}
+                title={`Open ${resourceLabel()} web interface`}
+              />
               <Show when={props.resource.clusterName}>
                 <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
                   {props.resource.clusterName}

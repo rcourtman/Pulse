@@ -212,6 +212,7 @@ import alertHistoryTableGroupRowSource from '@/features/alerts/AlertHistoryTable
 import alertResourceTableSource from '@/components/Alerts/ResourceTable.tsx?raw';
 import alertResourceTableDesktopSource from '@/components/Alerts/AlertResourceTableDesktop.tsx?raw';
 import alertResourceTableMobileSource from '@/components/Alerts/AlertResourceTableMobile.tsx?raw';
+import alertResourceGroupHeaderSource from '@/components/Alerts/AlertResourceGroupHeader.tsx?raw';
 import alertResourceTableRowSource from '@/components/Alerts/AlertResourceTableRow.tsx?raw';
 import aiCostDashboardSource from '@/components/AI/AICostDashboard.tsx?raw';
 import resourceDetailSummarySource from '@/components/Infrastructure/ResourceDetailSummary.tsx?raw';
@@ -3902,6 +3903,8 @@ describe('shared primitive guardrails', () => {
         'src/components/Workloads/GuestRow.tsx',
         'src/features/standalone/AgentsMachinesTable.tsx',
         'src/features/proxmox/ProxmoxNodesTable.tsx',
+        'src/components/Alerts/AlertResourceGroupHeader.tsx',
+        'src/components/Alerts/AlertResourceTableRow.tsx',
       ]),
     );
 
@@ -3909,11 +3912,17 @@ describe('shared primitive guardrails', () => {
     expect(guestRowSource).toContain('WebInterfaceNameLink');
     expect(agentsMachinesTableSource).toContain('WebInterfaceNameLink');
     expect(proxmoxNodesTableSource).toContain('WebInterfaceNameLink');
+    expect(alertResourceGroupHeaderSource).toContain('WebInterfaceNameLink');
+    expect(alertResourceTableRowSource).toContain('WebInterfaceNameLink');
     expect(nodeGroupHeaderSource).not.toContain('target="_blank"');
     expect(guestRowSource).not.toContain('target="_blank"');
     expect(agentsMachinesTableSource).not.toContain('target="_blank"');
     expect(proxmoxNodesTableSource).not.toContain('target="_blank"');
+    expect(alertResourceGroupHeaderSource).not.toContain('target="_blank"');
+    expect(alertResourceTableRowSource).not.toContain('target="_blank"');
     expect(nodeGroupHeaderSource).not.toContain('rel="noopener noreferrer"');
+    expect(alertResourceGroupHeaderSource).not.toContain('rel="noopener noreferrer"');
+    expect(alertResourceTableRowSource).not.toContain('rel="noopener noreferrer"');
     expect(agentsMachinesTableSource).not.toContain('AgentMachineWebLinkCell');
     expect(agentsMachinesTableSource).not.toContain('data-agent-machine-web-link');
     expect(proxmoxNodesTableSource).not.toContain('data-proxmox-host-web-link');

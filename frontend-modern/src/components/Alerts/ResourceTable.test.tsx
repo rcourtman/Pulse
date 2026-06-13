@@ -324,11 +324,17 @@ describe('ResourceTable', () => {
       expect(alertResourceTableMobileSource).not.toContain(['<', 'textarea'].join(''));
       expect(alertResourceTableMobileSource).not.toContain(rawSvgTag);
       expect(alertResourceGroupHeaderSource).toContain('export function AlertResourceGroupHeader');
+      expect(alertResourceGroupHeaderSource).toContain('WebInterfaceNameLink');
+      expect(alertResourceGroupHeaderSource).not.toContain('target="_blank"');
+      expect(alertResourceGroupHeaderSource).not.toContain('rel="noopener noreferrer"');
       expect(alertResourceTableRowSource).toContain('export function AlertResourceTableRow');
       expect(alertResourceTableRowSource).toContain('alertResourceSupportsMetric');
       expect(alertResourceTableRowSource).toContain('FormTextarea');
       expect(alertResourceTableRowSource).toContain('ActionIconButton');
+      expect(alertResourceTableRowSource).toContain('WebInterfaceNameLink');
       expect(alertResourceTableRowSource).not.toContain(['<', 'textarea'].join(''));
+      expect(alertResourceTableRowSource).not.toContain('target="_blank"');
+      expect(alertResourceTableRowSource).not.toContain('rel="noopener noreferrer"');
       expect(alertResourceTableRowSource).not.toContain(rawSvgTag);
       expect(alertResourceTableStateSource).toContain('export function useAlertResourceTableState');
       expect(alertResourceTableModelSource).toContain(
