@@ -249,20 +249,25 @@ consumers own whether a capacity, memory, disk, or requested-size field is the
 right source-specific value, while dense platform table cells must use
 `formatPlatformTableBytesValue` for positive byte formatting and unknown /
 non-positive empty-cell markers instead of carrying table-local `formatBytes`
-wrappers.
+wrappers or direct generic byte-formatter imports.
 Optional numeric table cells follow the same split: unified-resource consumers
 own which count or replica field is meaningful, whether the domain should
-zero-default an absent scheduler/service count, and whether a domain-specific
-formatter is needed, while dense platform table cells must use
-`PlatformTableNumberValue` for finite-number validation, tabular styling, and
-unknown empty-cell markers instead of carrying local `numberValue`,
-`numericValue`, `replicaCount`, or `countCell` helpers.
+zero-default an absent scheduler/service/inventory count, whether a
+domain-specific formatter is needed, and which current/total fields belong in a
+grouped health ratio, while dense platform table cells must use
+`PlatformTableNumberValue` for scalar count validation, tabular styling, and
+unknown empty-cell markers, and `PlatformTableCountRatioValue` for
+healthy/total or ready/total count-ratio skeletons. Tables must not carry local
+`numberValue`, `numericValue`, `replicaCount`, `countCell`, `childCountCell`,
+`diskCountLabel`, or cell-level `tabular-nums` variants for grouped
+child/share/service/storage counts.
 Percent and temperature table cells follow the same split: unified-resource
 consumers own which usage percentage or temperature source is meaningful for
 the row, while dense platform table rendering must use
 `PlatformTablePercentValue` and `PlatformTableTemperatureValue` for one-decimal
 formatting, positive Celsius validation, tabular styling, and empty markers
-instead of local `formatPercent` or `formatTemperature` helpers.
+instead of local `formatPercent`, `formatTemperature`, or temperature label
+helpers.
 Metric bar fallbacks follow that split as well: unified-resource consumers own
 which CPU or memory value is selected, plus any source-specific fallback reason
 such as outdated standalone agent telemetry, while platform tables must use

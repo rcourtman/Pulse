@@ -1347,6 +1347,8 @@
       "requiredConsumers": [
         { "path": "src/features/docker/DockerNativeTableShared.tsx" },
         { "path": "src/features/kubernetes/KubernetesNodesTable.tsx" },
+        { "path": "src/features/truenas/TrueNASProtectionTable.tsx" },
+        { "path": "src/features/truenas/TrueNASStorageTopologyTable.tsx" },
         { "path": "src/features/truenas/TrueNASSystemsTable.tsx" },
         { "path": "src/features/truenas/TrueNASVirtualMachinesTable.tsx" }
       ],
@@ -1358,6 +1360,18 @@
         {
           "path": "src/features/kubernetes/KubernetesNodesTable.tsx",
           "patterns": ["const formatBytes", "value.toFixed(value >= 100 ? 0 : value >= 10 ? 1 : 2)"]
+        },
+        {
+          "path": "src/features/truenas/TrueNASProtectionTable.tsx",
+          "patterns": ["formatBytes(point.sizeBytes)"]
+        },
+        {
+          "path": "src/features/truenas/TrueNASStorageTopologyTable.tsx",
+          "patterns": [
+            "formatBytes(size)",
+            "formatBytes(row.resource.disk.used)",
+            "formatBytes(row.resource.disk.total)"
+          ]
         },
         {
           "path": "src/features/truenas/TrueNASSystemsTable.tsx",
@@ -1391,7 +1405,9 @@
         { "path": "src/features/kubernetes/KubernetesDeploymentsTable.tsx" },
         { "path": "src/features/kubernetes/KubernetesEventsTable.tsx" },
         { "path": "src/features/kubernetes/KubernetesPodsTable.tsx" },
-        { "path": "src/features/proxmox/ProxmoxMailGatewayTable.tsx" }
+        { "path": "src/features/proxmox/ProxmoxMailGatewayTable.tsx" },
+        { "path": "src/features/truenas/TrueNASStorageTopologyTable.tsx" },
+        { "path": "src/features/truenas/TrueNASSystemsTable.tsx" }
       ],
       "forbiddenPatterns": [
         {
@@ -1446,6 +1462,35 @@
         {
           "path": "src/features/proxmox/ProxmoxMailGatewayTable.tsx",
           "patterns": ["const countCell", "value.toLocaleString() : '—'"]
+        },
+        {
+          "path": "src/features/truenas/TrueNASSystemsTable.tsx",
+          "patterns": ["hidden text-base-content tabular-nums lg:table-cell"]
+        },
+        {
+          "path": "src/features/truenas/TrueNASStorageTopologyTable.tsx",
+          "patterns": ["const diskCountLabel"]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-table-count-ratio-value",
+      "category": "platform-table-text-value",
+      "summary": "Platform tables must use the shared count-ratio primitive for healthy/total or ready/total count cells instead of recreating local numerator/slash/denominator markup.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "PlatformTableCountRatioValue"
+      },
+      "requiredConsumers": [{ "path": "src/features/kubernetes/KubernetesClustersTable.tsx" }],
+      "forbiddenPatterns": [
+        {
+          "path": "src/features/kubernetes/KubernetesClustersTable.tsx",
+          "patterns": ["const childCountCell", "<span class=\"text-muted\">/{count.total}</span>"]
         }
       ],
       "proof": [
@@ -1488,6 +1533,7 @@
       },
       "requiredConsumers": [
         { "path": "src/features/docker/DockerHostsTable.tsx" },
+        { "path": "src/features/truenas/TrueNASStorageTopologyTable.tsx" },
         { "path": "src/features/truenas/TrueNASSystemsTable.tsx" }
       ],
       "forbiddenPatterns": [
@@ -1497,6 +1543,10 @@
             "const formatTemperature",
             "<span class=\"tabular-nums\">{celsius.toFixed(1)}°C</span>"
           ]
+        },
+        {
+          "path": "src/features/truenas/TrueNASStorageTopologyTable.tsx",
+          "patterns": ["const temperatureLabel", "${Math.round(value)}C"]
         },
         {
           "path": "src/features/truenas/TrueNASSystemsTable.tsx",
@@ -2109,6 +2159,26 @@
       ]
     },
     {
+      "id": "platform-table-local-format-bytes-import",
+      "category": "platform-table-text-value",
+      "summary": "Platform feature tables must not import the generic byte formatter directly for dense table byte cells.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "formatPlatformTableBytesValue"
+      },
+      "scopes": ["src/features/truenas"],
+      "extensions": [".tsx"],
+      "allPatterns": ["import { formatBytes } from '@/utils/format';", "formatBytes("],
+      "legacyReason": "Retired migration debt. Dense platform table byte cells must use formatPlatformTableBytesValue so positive-byte formatting and empty markers stay shared.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "platform-table-local-number-value-helper",
       "category": "platform-table-text-value",
       "summary": "Platform tables must not recreate local numberValue helpers for optional numeric table cells.",
@@ -2189,6 +2259,46 @@
       ]
     },
     {
+      "id": "platform-table-local-count-ratio-helper",
+      "category": "platform-table-text-value",
+      "summary": "Platform tables must not recreate local healthy/total count-ratio helpers.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "PlatformTableCountRatioValue"
+      },
+      "scopes": ["src/features/kubernetes"],
+      "extensions": [".tsx"],
+      "allPatterns": ["const childCountCell", "<span class=\"text-muted\">/{count.total}</span>"],
+      "legacyReason": "Retired migration debt. Healthy/total and ready/total table count cells must compose PlatformTableCountRatioValue so ratio markup, tabular styling, muted denominator styling, and empty markers stay shared.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-table-local-truenas-count-cell-class",
+      "category": "platform-table-text-value",
+      "summary": "TrueNAS table scalar value cells must not put tabular-number styling on table cells instead of shared value primitives.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "PlatformTableNumberValue"
+      },
+      "scopes": ["src/features/truenas"],
+      "extensions": [".tsx"],
+      "allPatterns": ["TrueNAS", "hidden text-base-content tabular-nums lg:table-cell"],
+      "legacyReason": "Retired migration debt. TrueNAS share/service and adjacent scalar value cells must render through shared platform value primitives so finite-number checks, tabular styling, and empty markers stay shared.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "platform-table-local-percent-value-helper",
       "category": "platform-table-text-value",
       "summary": "Platform tables must not recreate local formatPercent helpers for one-decimal percent cells.",
@@ -2225,6 +2335,26 @@
         "const formatTemperature",
         "<span class=\"tabular-nums\">{celsius.toFixed(1)}°C</span>"
       ],
+      "legacyReason": "Retired migration debt. Positive Celsius table cells must compose PlatformTableTemperatureValue so validity, formatting, tabular styling, and empty markers stay shared.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-table-local-temperature-label-helper",
+      "category": "platform-table-text-value",
+      "summary": "Platform tables must not recreate local temperatureLabel helpers for positive Celsius cells.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "PlatformTableTemperatureValue"
+      },
+      "scopes": ["src/features/truenas"],
+      "extensions": [".tsx"],
+      "allPatterns": ["const temperatureLabel", "${Math.round(value)}C"],
       "legacyReason": "Retired migration debt. Positive Celsius table cells must compose PlatformTableTemperatureValue so validity, formatting, tabular styling, and empty markers stay shared.",
       "allowedPaths": [],
       "ignoredPaths": [],

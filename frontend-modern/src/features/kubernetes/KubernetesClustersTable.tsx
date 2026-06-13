@@ -8,6 +8,7 @@ import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformTableCountRatioValue,
   PlatformTableMetricFallback,
   PlatformTableToolbar,
   PlatformTableEmptyState,
@@ -30,7 +31,6 @@ import {
   buildKubernetesClusterChildCounts,
   emptyKubernetesClusterChildCounts,
   filterKubernetesResources,
-  type KubernetesClusterChildCount,
   type KubernetesResourceStatusFilter,
 } from './kubernetesPageModel';
 
@@ -43,18 +43,6 @@ import {
 // deployments. This bespoke table surfaces those alongside the canonical
 // CPU/Memory utilisation. It reuses the same shared primitives every
 // other platform-page table uses.
-
-// v5-style healthy/total fraction: the healthy share turns amber as soon as
-// any child needs attention, so a cluster with a NotReady node reads "2/3"
-// instead of a flat "3".
-const childCountCell = (count: KubernetesClusterChildCount) => (
-  <>
-    <span class={count.attention > 0 ? 'text-amber-700 dark:text-amber-300' : ''}>
-      {count.total - count.attention}
-    </span>
-    <span class="text-muted">/{count.total}</span>
-  </>
-);
 
 export const KubernetesClustersTable: Component<{
   clusters: Resource[];
@@ -231,19 +219,33 @@ export const KubernetesClustersTable: Component<{
                             </span>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            {childCountCell(counts().nodes)}
+                            <PlatformTableCountRatioValue
+                              current={counts().nodes.total - counts().nodes.attention}
+                              total={counts().nodes.total}
+                              currentTone={counts().nodes.attention > 0 ? 'warning' : undefined}
+                            />
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
                           >
-                            {childCountCell(counts().pods)}
+                            <PlatformTableCountRatioValue
+                              current={counts().pods.total - counts().pods.attention}
+                              total={counts().pods.total}
+                              currentTone={counts().pods.attention > 0 ? 'warning' : undefined}
+                            />
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
                           >
-                            {childCountCell(counts().deployments)}
+                            <PlatformTableCountRatioValue
+                              current={counts().deployments.total - counts().deployments.attention}
+                              total={counts().deployments.total}
+                              currentTone={
+                                counts().deployments.attention > 0 ? 'warning' : undefined
+                              }
+                            />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('metric-bar')} w-[20%] md:w-auto`}

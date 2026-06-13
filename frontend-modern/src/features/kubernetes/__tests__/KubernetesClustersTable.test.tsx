@@ -73,6 +73,54 @@ describe('KubernetesClustersTable', () => {
     expect(screen.queryByText('Pending uninstall')).toBeNull();
   });
 
+  it('renders child counts through the shared count-ratio primitive', () => {
+    const cluster = makeClusterResource();
+
+    const { container } = render(() => (
+      <KubernetesClustersTable
+        clusters={[cluster]}
+        scope={[
+          cluster,
+          {
+            ...makeClusterResource({
+              id: 'node-ready',
+              type: 'k8s-node',
+              name: 'node-ready',
+              status: 'online',
+              kubernetes: {
+                clusterId: 'prod-west',
+                clusterName: 'prod-west',
+                ready: true,
+              },
+            }),
+          },
+          {
+            ...makeClusterResource({
+              id: 'node-not-ready',
+              type: 'k8s-node',
+              name: 'node-not-ready',
+              status: 'offline',
+              kubernetes: {
+                clusterId: 'prod-west',
+                clusterName: 'prod-west',
+                ready: false,
+              },
+            }),
+          },
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No clusters"
+        emptyDescription="No clusters"
+        showToolbar={false}
+      />
+    ));
+
+    const row = container.querySelector('[data-kubernetes-cluster-row="cluster:prod-west"]');
+    expect(row?.textContent).toContain('1/2');
+    expect(row?.querySelector('.text-amber-700')?.textContent).toBe('1');
+    expect(row?.querySelectorAll('.tabular-nums').length).toBeGreaterThanOrEqual(2);
+  });
+
   it('badges clusters whose agent is pending uninstall', () => {
     const cluster = makeClusterResource({
       kubernetes: {

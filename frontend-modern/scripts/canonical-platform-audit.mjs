@@ -1371,9 +1371,6 @@ const HELPER_RULES = [
       // The kind-based wrappers internally delegate to the align-based
       // helpers; that's the one legitimate call site.
       'src/features/platformPage/sharedPlatformPage.tsx',
-      // KubernetesClustersTable is pending migration by another agent.
-      // Remove this entry once that work lands.
-      'src/features/kubernetes/KubernetesClustersTable.tsx',
     ]),
   },
 ];

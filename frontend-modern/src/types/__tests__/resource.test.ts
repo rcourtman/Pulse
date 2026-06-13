@@ -62,6 +62,36 @@ describe('Resource Type Guards', () => {
     ]);
   });
 
+  it('keeps Kubernetes native API sections in the governed platform projection', () => {
+    expect(SOURCE_PLATFORM_CANONICAL_PROJECTIONS.kubernetes).toEqual([
+      'k8s-cluster',
+      'k8s-node',
+      'pod',
+      'k8s-deployment',
+      'k8s-replicaset',
+      'k8s-statefulset',
+      'k8s-daemonset',
+      'k8s-service',
+      'k8s-job',
+      'k8s-cronjob',
+      'k8s-ingress',
+      'k8s-endpoint-slice',
+      'k8s-network-policy',
+      'k8s-persistent-volume',
+      'k8s-persistent-volume-claim',
+      'k8s-storage-class',
+      'k8s-namespace',
+      'k8s-configmap',
+      'k8s-secret',
+      'k8s-serviceaccount',
+      'k8s-resource-quota',
+      'k8s-limit-range',
+      'k8s-pod-disruption-budget',
+      'k8s-horizontal-pod-autoscaler',
+      'k8s-event',
+    ]);
+  });
+
   describe('isInfrastructure', () => {
     const infrastructureTypes: ResourceType[] = [
       'agent',

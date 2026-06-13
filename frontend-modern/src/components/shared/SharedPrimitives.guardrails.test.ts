@@ -3689,9 +3689,14 @@ describe('shared primitive guardrails', () => {
     const localHelperGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'platform-table-local-bytes-helper',
     );
+    const localFormatBytesImportGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-table-local-format-bytes-import',
+    );
     const platformByteValueConsumers: Array<[string, string]> = [
       ['src/features/docker/DockerNativeTableShared.tsx', dockerNativeTableSharedSource],
       ['src/features/kubernetes/KubernetesNodesTable.tsx', kubernetesNodesTableSource],
+      ['src/features/truenas/TrueNASProtectionTable.tsx', truenasProtectionTableSource],
+      ['src/features/truenas/TrueNASStorageTopologyTable.tsx', truenasStorageTopologyTableSource],
       ['src/features/truenas/TrueNASSystemsTable.tsx', truenasSystemsTableSource],
       ['src/features/truenas/TrueNASVirtualMachinesTable.tsx', truenasVirtualMachinesTableSource],
     ];
@@ -3718,6 +3723,18 @@ describe('shared primitive guardrails', () => {
         patterns: localFormatBytesHelperPatterns,
       },
       {
+        path: 'src/features/truenas/TrueNASProtectionTable.tsx',
+        patterns: ['formatBytes(point.sizeBytes)'],
+      },
+      {
+        path: 'src/features/truenas/TrueNASStorageTopologyTable.tsx',
+        patterns: [
+          'formatBytes(size)',
+          'formatBytes(row.resource.disk.used)',
+          'formatBytes(row.resource.disk.total)',
+        ],
+      },
+      {
         path: 'src/features/truenas/TrueNASSystemsTable.tsx',
         patterns: localFormatBytesHelperPatterns,
       },
@@ -3738,6 +3755,17 @@ describe('shared primitive guardrails', () => {
     ]);
     expect(localHelperGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(localHelperGuard?.ignoredPaths ?? []).toHaveLength(0);
+    expect(localFormatBytesImportGuard?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(localFormatBytesImportGuard?.canonical?.export).toBe('formatPlatformTableBytesValue');
+    expect(localFormatBytesImportGuard?.allPatterns).toEqual([
+      "import { formatBytes } from '@/utils/format';",
+      'formatBytes(',
+    ]);
+    expect(localFormatBytesImportGuard?.scopes).toEqual(['src/features/truenas']);
+    expect(localFormatBytesImportGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(localFormatBytesImportGuard?.ignoredPaths ?? []).toHaveLength(0);
 
     expect(sharedPlatformPageSource).toContain('export const formatPlatformTableBytesValue');
     expect(sharedPlatformPageSource).toContain('formatBytes(bytes)');
@@ -3787,6 +3815,9 @@ describe('shared primitive guardrails', () => {
     const localSwarmCountGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'platform-table-local-swarm-count-spans',
     );
+    const localTrueNASCountGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-table-local-truenas-count-cell-class',
+    );
     const platformNumberValueConsumers: Array<[string, string]> = [
       ['src/features/docker/DockerNativeTableShared.tsx', dockerNativeTableSharedSource],
       ['src/features/docker/DockerServicesTable.tsx', dockerServicesTableSource],
@@ -3797,6 +3828,8 @@ describe('shared primitive guardrails', () => {
       ['src/features/kubernetes/KubernetesEventsTable.tsx', kubernetesEventsTableSource],
       ['src/features/kubernetes/KubernetesPodsTable.tsx', kubernetesPodsTableSource],
       ['src/features/proxmox/ProxmoxMailGatewayTable.tsx', proxmoxMailGatewayTableSource],
+      ['src/features/truenas/TrueNASStorageTopologyTable.tsx', truenasStorageTopologyTableSource],
+      ['src/features/truenas/TrueNASSystemsTable.tsx', truenasSystemsTableSource],
     ];
     const platformNumberValueConsumerPaths = platformNumberValueConsumers.map(([path]) => path);
     const optionalNumberMarkupPattern =
@@ -3849,6 +3882,14 @@ describe('shared primitive guardrails', () => {
         path: 'src/features/proxmox/ProxmoxMailGatewayTable.tsx',
         patterns: ['const countCell', "value.toLocaleString() : '—'"],
       },
+      {
+        path: 'src/features/truenas/TrueNASSystemsTable.tsx',
+        patterns: ['hidden text-base-content tabular-nums lg:table-cell'],
+      },
+      {
+        path: 'src/features/truenas/TrueNASStorageTopologyTable.tsx',
+        patterns: ['const diskCountLabel'],
+      },
     ]);
     expect(localNumberGuard?.canonical?.path).toBe(
       'src/features/platformPage/sharedPlatformPage.tsx',
@@ -3898,6 +3939,17 @@ describe('shared primitive guardrails', () => {
     expect(localSwarmCountGuard?.scopes).toEqual(['src/components/Docker']);
     expect(localSwarmCountGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(localSwarmCountGuard?.ignoredPaths ?? []).toHaveLength(0);
+    expect(localTrueNASCountGuard?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(localTrueNASCountGuard?.canonical?.export).toBe('PlatformTableNumberValue');
+    expect(localTrueNASCountGuard?.allPatterns).toEqual([
+      'TrueNAS',
+      'hidden text-base-content tabular-nums lg:table-cell',
+    ]);
+    expect(localTrueNASCountGuard?.scopes).toEqual(['src/features/truenas']);
+    expect(localTrueNASCountGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(localTrueNASCountGuard?.ignoredPaths ?? []).toHaveLength(0);
 
     expect(sharedPlatformPageSource).toContain('export function PlatformTableNumberValue');
     expect(sharedPlatformPageSource).toContain('Number.isFinite(value)');
@@ -3912,6 +3964,71 @@ describe('shared primitive guardrails', () => {
       }
     }
     expect(proxmoxMailGatewayTableSource).toContain('format={formatLocaleCount}');
+  });
+
+  it('keeps platform table count ratios on the shared primitive', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+        forbiddenPatterns?: Array<{ path?: string; patterns?: string[] }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        allowedPaths?: string[];
+        ignoredPaths?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find(
+      (rule) => rule.id === 'platform-table-count-ratio-value',
+    );
+    const localCountRatioGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-table-local-count-ratio-helper',
+    );
+    const platformCountRatioConsumers: Array<[string, string]> = [
+      ['src/features/kubernetes/KubernetesClustersTable.tsx', kubernetesClustersTableSource],
+    ];
+    const platformCountRatioConsumerPaths = platformCountRatioConsumers.map(([path]) => path);
+
+    expect(registeredRule?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(registeredRule?.canonical?.export).toBe('PlatformTableCountRatioValue');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
+      platformCountRatioConsumerPaths,
+    );
+    expect(registeredRule?.forbiddenPatterns).toEqual([
+      {
+        path: 'src/features/kubernetes/KubernetesClustersTable.tsx',
+        patterns: ['const childCountCell', '<span class="text-muted">/{count.total}</span>'],
+      },
+    ]);
+    expect(localCountRatioGuard?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(localCountRatioGuard?.canonical?.export).toBe('PlatformTableCountRatioValue');
+    expect(localCountRatioGuard?.allPatterns).toEqual([
+      'const childCountCell',
+      '<span class="text-muted">/{count.total}</span>',
+    ]);
+    expect(localCountRatioGuard?.scopes).toEqual(['src/features/kubernetes']);
+    expect(localCountRatioGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(localCountRatioGuard?.ignoredPaths ?? []).toHaveLength(0);
+
+    expect(sharedPlatformPageSource).toContain('export function PlatformTableCountRatioValue');
+
+    for (const [path, source] of platformCountRatioConsumers) {
+      expect(source).toContain('PlatformTableCountRatioValue');
+      const forbiddenPatterns =
+        registeredRule?.forbiddenPatterns?.find((entry) => entry.path === path)?.patterns ?? [];
+      for (const pattern of forbiddenPatterns) {
+        expect(source).not.toContain(pattern);
+      }
+    }
   });
 
   it('keeps platform table scalar unit values on shared primitives', () => {
@@ -3943,11 +4060,15 @@ describe('shared primitive guardrails', () => {
     const localTemperatureGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'platform-table-local-temperature-value-helper',
     );
+    const localTemperatureLabelGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-table-local-temperature-label-helper',
+    );
     const percentConsumers: Array<[string, string]> = [
       ['src/features/truenas/TrueNASSystemsTable.tsx', truenasSystemsTableSource],
     ];
     const temperatureConsumers: Array<[string, string]> = [
       ['src/features/docker/DockerHostsTable.tsx', dockerHostsTableSource],
+      ['src/features/truenas/TrueNASStorageTopologyTable.tsx', truenasStorageTopologyTableSource],
       ['src/features/truenas/TrueNASSystemsTable.tsx', truenasSystemsTableSource],
     ];
     const localPercentPatterns = [
@@ -3984,6 +4105,10 @@ describe('shared primitive guardrails', () => {
         patterns: localTemperaturePatterns,
       },
       {
+        path: 'src/features/truenas/TrueNASStorageTopologyTable.tsx',
+        patterns: ['const temperatureLabel', '${Math.round(value)}C'],
+      },
+      {
         path: 'src/features/truenas/TrueNASSystemsTable.tsx',
         patterns: localTemperaturePatterns,
       },
@@ -4005,6 +4130,17 @@ describe('shared primitive guardrails', () => {
     expect(localTemperatureGuard?.scopes).toEqual(['src/features/docker', 'src/features/truenas']);
     expect(localTemperatureGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(localTemperatureGuard?.ignoredPaths ?? []).toHaveLength(0);
+    expect(localTemperatureLabelGuard?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(localTemperatureLabelGuard?.canonical?.export).toBe('PlatformTableTemperatureValue');
+    expect(localTemperatureLabelGuard?.allPatterns).toEqual([
+      'const temperatureLabel',
+      '${Math.round(value)}C',
+    ]);
+    expect(localTemperatureLabelGuard?.scopes).toEqual(['src/features/truenas']);
+    expect(localTemperatureLabelGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(localTemperatureLabelGuard?.ignoredPaths ?? []).toHaveLength(0);
 
     expect(sharedPlatformPageSource).toContain('export function PlatformTablePercentValue');
     expect(sharedPlatformPageSource).toContain('export function PlatformTableTemperatureValue');

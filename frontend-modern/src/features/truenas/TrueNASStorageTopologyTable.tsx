@@ -3,14 +3,16 @@ import { StatusDot } from '@/components/shared/StatusDot';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { filterChipStatusDot } from '@/components/shared/FilterBar';
-import { formatBytes } from '@/utils/format';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
   PlatformTableEmptyState,
+  PlatformTableNumberValue,
+  PlatformTableTemperatureValue,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  formatPlatformTableBytesValue,
   formatPlatformTableTitleCaseValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
@@ -88,12 +90,12 @@ const capacityPercent = (resource: Resource): number | undefined => {
 
 const diskSizeLabel = (row: TrueNASStorageTopologyRow): string => {
   const size = row.resource.physicalDisk?.sizeBytes;
-  return typeof size === 'number' && size > 0 ? formatBytes(size) : '-';
+  return formatPlatformTableBytesValue(size, '-');
 };
 
 const capacitySublabel = (row: TrueNASStorageTopologyRow): string | undefined => {
   if (typeof row.resource.disk?.used === 'number' && typeof row.resource.disk?.total === 'number') {
-    return `${formatBytes(row.resource.disk.used)} / ${formatBytes(row.resource.disk.total)}`;
+    return `${formatPlatformTableBytesValue(row.resource.disk.used, '-')} / ${formatPlatformTableBytesValue(row.resource.disk.total, '-')}`;
   }
   return undefined;
 };
@@ -159,17 +161,6 @@ const RiskPill: Component<{ row: TrueNASStorageTopologyRow }> = (props) => (
     {riskLabel(props.row)}
   </span>
 );
-
-const temperatureLabel = (row: TrueNASStorageTopologyRow): string => {
-  if (row.kind !== 'disk') return '-';
-  const value = row.resource.physicalDisk?.temperature;
-  return typeof value === 'number' && Number.isFinite(value) ? `${Math.round(value)}C` : '-';
-};
-
-const diskCountLabel = (row: TrueNASStorageTopologyRow): string => {
-  if (row.kind === 'pool') return String(row.counts.disks);
-  return '-';
-};
 
 export const getTrueNASStorageTopologyIndentClass = (depth: number): string => {
   if (depth <= 0) return '';
@@ -328,14 +319,24 @@ export const TrueNASStorageTopologyTable: Component<{
                             <CapacityCell row={row} />
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
                           >
-                            {diskCountLabel(row)}
+                            <PlatformTableNumberValue
+                              value={row.kind === 'pool' ? row.counts.disks : undefined}
+                              emptyText="-"
+                            />
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums lg:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content lg:table-cell`}
                           >
-                            {temperatureLabel(row)}
+                            <PlatformTableTemperatureValue
+                              value={
+                                row.kind === 'disk'
+                                  ? row.resource.physicalDisk?.temperature
+                                  : undefined
+                              }
+                              emptyText="-"
+                            />
                           </TableCell>
                           <TableCell class={getPlatformTableCellClassForKind('badge')}>
                             <RiskPill row={row} />

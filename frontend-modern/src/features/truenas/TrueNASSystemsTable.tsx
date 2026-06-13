@@ -9,6 +9,7 @@ import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformTableMetricFallback,
+  PlatformTableNumberValue,
   PlatformTablePercentValue,
   PlatformTableTemperatureValue,
   PlatformTableToolbar,
@@ -322,9 +323,9 @@ export const TrueNASSystemsTable: Component<{
                             </div>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums lg:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content lg:table-cell`}
                           >
-                            {c().shares}
+                            <PlatformTableNumberValue value={c().shares} />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden whitespace-normal text-base-content lg:table-cell`}
@@ -338,9 +339,9 @@ export const TrueNASSystemsTable: Component<{
                             </div>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums lg:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content lg:table-cell`}
                           >
-                            {c().services}
+                            <PlatformTableNumberValue value={c().services} />
                           </TableCell>
                         </TableRow>
                         <PlatformResourceDetailTableRow

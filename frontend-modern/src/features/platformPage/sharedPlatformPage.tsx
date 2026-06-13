@@ -221,6 +221,41 @@ export function PlatformTableNumberValue(props: {
   return <span class="tabular-nums">{label()}</span>;
 }
 
+export function PlatformTableCountRatioValue(props: {
+  current: number | undefined;
+  total: number | undefined;
+  currentTone?: 'warning';
+  emptyText?: string;
+  suffix?: string;
+}) {
+  const hasAnyValue = () =>
+    [props.current, props.total].some(
+      (value) => typeof value === 'number' && Number.isFinite(value),
+    );
+  const currentClass = () =>
+    props.currentTone === 'warning' ? 'text-amber-700 dark:text-amber-300' : '';
+
+  return (
+    <Show
+      when={hasAnyValue()}
+      fallback={<PlatformTableNumberValue value={undefined} emptyText={props.emptyText} />}
+    >
+      <span class="inline-flex items-baseline whitespace-nowrap">
+        <span class={currentClass()}>
+          <PlatformTableNumberValue value={props.current} emptyText={props.emptyText} />
+        </span>
+        <span class="text-muted">/</span>
+        <span class="text-muted">
+          <PlatformTableNumberValue value={props.total} emptyText={props.emptyText} />
+        </span>
+        <Show when={props.suffix}>
+          {(suffix) => <span class="ml-1 text-muted"> {suffix()}</span>}
+        </Show>
+      </span>
+    </Show>
+  );
+}
+
 const formatOneDecimalPercent = (value: number): string => `${value.toFixed(1)}%`;
 const formatOneDecimalCelsius = (value: number): string => `${value.toFixed(1)}°C`;
 

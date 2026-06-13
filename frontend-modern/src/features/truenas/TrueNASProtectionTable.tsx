@@ -2,7 +2,6 @@ import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
-import { formatBytes } from '@/utils/format';
 import {
   getRecoveryOutcomeBadgeClass,
   getRecoveryOutcomeLabel,
@@ -16,6 +15,7 @@ import {
   PlatformTableLoadingState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  formatPlatformTableBytesValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   type PlatformTableFilterOption,
@@ -174,7 +174,7 @@ const formatPointTime = (point: RecoveryPoint): string => {
 };
 
 const sizeLabel = (point: RecoveryPoint): string =>
-  typeof point.sizeBytes === 'number' && point.sizeBytes > 0 ? formatBytes(point.sizeBytes) : '-';
+  formatPlatformTableBytesValue(point.sizeBytes ?? undefined, '-');
 
 type ProtectionDetailTone = DetailValueTone;
 type ProtectionDetailSection = DetailSection;
@@ -483,7 +483,7 @@ export const TrueNASProtectionTable: Component<{
                                 {formatPointTime(point)}
                               </TableCell>
                               <TableCell
-                                class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums lg:table-cell`}
+                                class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content lg:table-cell`}
                               >
                                 {sizeLabel(point)}
                               </TableCell>

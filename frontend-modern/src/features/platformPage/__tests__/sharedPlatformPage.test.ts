@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createRoot, createSignal } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import {
+  PlatformTableCountRatioValue,
   PlatformTableMetricFallback,
   PlatformTableNumberValue,
   PlatformTablePercentValue,
@@ -330,6 +331,37 @@ describe('PlatformTableNumberValue', () => {
       }),
     );
     expect(screen.getByText('1,234')).toBeInTheDocument();
+  });
+});
+
+describe('PlatformTableCountRatioValue', () => {
+  it('renders count ratios through shared tabular number styling', () => {
+    const { container } = render(() =>
+      PlatformTableCountRatioValue({
+        current: 2,
+        total: 3,
+        currentTone: 'warning',
+        suffix: 'ready',
+      }),
+    );
+
+    expect(container.textContent).toBe('2/3 ready');
+    expect(container.querySelectorAll('.tabular-nums')).toHaveLength(2);
+    expect(screen.getByText('2').parentElement?.classList.contains('text-amber-700')).toBe(true);
+    expect(screen.getByText('/').classList.contains('text-muted')).toBe(true);
+    expect(screen.getByText('3').parentElement?.classList.contains('text-muted')).toBe(true);
+  });
+
+  it('uses the shared empty marker when neither side is finite', () => {
+    render(() =>
+      PlatformTableCountRatioValue({
+        current: undefined,
+        total: Number.NaN,
+        emptyText: '-',
+      }),
+    );
+
+    expect(screen.getByText('-')).toBeInTheDocument();
   });
 });
 

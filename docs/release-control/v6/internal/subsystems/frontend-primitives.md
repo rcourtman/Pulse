@@ -2613,25 +2613,34 @@ Platform table byte-size formatting follows the same rule.
 `formatPlatformTableBytesValue` owns the repeated positive-byte formatting plus
 canonical empty-cell marker behavior for dense platform table cells. Docker /
 Podman native table helpers, Kubernetes node capacity cells, and TrueNAS
-system/VM byte cells must compose that helper instead of declaring local
-`formatBytes` wrappers or reimplementing byte-unit precision in table files.
+system, VM, storage-topology, and protection byte cells must compose that
+helper instead of declaring local `formatBytes` wrappers, importing the generic
+formatter in table files, or reimplementing byte-unit precision there.
 Platform table numeric fallback rendering is registry-backed too.
 `PlatformTableNumberValue` owns finite-number checking, tabular-number styling,
 custom empty-marker support, and caller-owned number formatting for dense
 optional numeric table cells. Docker / Podman native count helpers, Kubernetes
 optional count cells, Docker Swarm service desired/running counts, Kubernetes
-Deployment replica counts, and Proxmox Mail Gateway count columns must compose
-that primitive instead of declaring local `numberValue`, `numericValue`,
-`replicaCount`, or `countCell` helpers. If a scheduler or service-domain count
-is intentionally zero-defaulted, the consuming table owns that field/default
-choice and still renders through `PlatformTableNumberValue`.
+Deployment replica counts, Proxmox Mail Gateway count columns, and TrueNAS
+system share/service and storage-topology disk count cells must compose that
+primitive instead of declaring local `numberValue`, `numericValue`,
+`replicaCount`, `countCell`, `diskCountLabel`, or cell-level `tabular-nums`
+variants. If a scheduler, service-domain, or inventory count is intentionally
+zero-defaulted, the consuming table owns that field/default choice and still
+renders through `PlatformTableNumberValue`.
+`PlatformTableCountRatioValue` owns the companion healthy/total or ready/total
+count-ratio skeleton: numerator, slash, muted denominator, tabular styling, and
+empty marker behavior. Kubernetes cluster child counts compose that primitive
+instead of keeping a table-local `childCountCell` renderer; the table owns only
+which current/total values and warning tone apply.
 One-decimal percent and positive Celsius cells are also shared platform-table
 value primitives. `PlatformTablePercentValue` owns percent formatting,
 tabular-number styling, and empty markers, while
 `PlatformTableTemperatureValue` owns finite positive Celsius validation,
 one-decimal `°C` formatting, tabular-number styling, and empty markers. Docker
-/ Podman host and TrueNAS system tables must compose those primitives instead
-of carrying local `formatPercent` or `formatTemperature` helpers.
+/ Podman host and TrueNAS system/storage-topology tables must compose those
+primitives instead of carrying local `formatPercent`, `formatTemperature`, or
+temperature label helpers.
 Platform table metric fallback rendering is also shared.
 `PlatformTableMetricFallback` owns the centered muted empty marker used in
 metric bar cells plus optional caller-owned fallback label/title text, and
