@@ -233,6 +233,12 @@ Simple title-case state/status label fallback follows that boundary too:
 unified-resource consumers own which TrueNAS state or status value is shown,
 but TrueNAS platform tables must use `formatPlatformTableTitleCaseValue`
 instead of recreating local `titleCase` helpers.
+Compact list summaries follow the same boundary: unified-resource consumers
+own which source values belong in host, VM, access, client, or security cells,
+while platform tables must use `summarizePlatformTableValues` for trimming,
+empty-marker labels, `+N` overflow labels, full title text, and normalized
+value lists instead of recreating local `compactList` or `summarizeValues`
+helpers.
 One-unit platform table uptime labels follow the same boundary:
 unified-resource consumers own which uptime field is displayed, but platform
 tables must use `formatPlatformTableUptimeValue` instead of recreating local

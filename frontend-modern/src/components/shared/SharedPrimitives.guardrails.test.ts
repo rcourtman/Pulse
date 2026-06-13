@@ -263,6 +263,8 @@ import truenasSystemsTableSource from '@/features/truenas/TrueNASSystemsTable.ts
 import truenasVirtualMachinesTableSource from '@/features/truenas/TrueNASVirtualMachinesTable.tsx?raw';
 import vsphereActivityTableSource from '@/features/vmware/VsphereActivityTable.tsx?raw';
 import vsphereAlertsTableSource from '@/features/vmware/VsphereAlertsTable.tsx?raw';
+import vsphereDatastoresTableSource from '@/features/vmware/VsphereDatastoresTable.tsx?raw';
+import vsphereNetworksTableSource from '@/features/vmware/VsphereNetworksTable.tsx?raw';
 
 const sharedSources = import.meta.glob(['./*.tsx', './cards/*.tsx', './responsive/*.tsx'], {
   query: '?raw',
@@ -1959,9 +1961,7 @@ describe('shared primitive guardrails', () => {
     expect(localEntityTypeFormatterGuard?.canonical?.path).toBe(
       'src/utils/alertDetailPresentation.ts',
     );
-    expect(localEntityTypeFormatterGuard?.canonical?.export).toBe(
-      'formatPlatformAlertEntityType',
-    );
+    expect(localEntityTypeFormatterGuard?.canonical?.export).toBe('formatPlatformAlertEntityType');
     expect(localEntityTypeFormatterGuard?.allPatterns).toEqual([
       'const formatEntityType',
       'VmwareIncidentRow',
@@ -3508,7 +3508,7 @@ describe('shared primitive guardrails', () => {
     expect(localHelperGuard?.ignoredPaths ?? []).toHaveLength(0);
 
     expect(sharedPlatformPageSource).toContain('export const formatPlatformTableTextValue');
-    expect(sharedPlatformPageSource).toContain("asTrimmedString(value) || emptyText");
+    expect(sharedPlatformPageSource).toContain('asTrimmedString(value) || emptyText');
 
     for (const [path, source] of kubernetesTextValueConsumers) {
       expect(source).toContain('formatPlatformTableTextValue');
@@ -3581,7 +3581,7 @@ describe('shared primitive guardrails', () => {
     expect(localHelperGuard?.ignoredPaths ?? []).toHaveLength(0);
 
     expect(sharedPlatformPageSource).toContain('export const formatPlatformTableTitleCaseValue');
-    expect(sharedPlatformPageSource).toContain("if (!normalized) return emptyText");
+    expect(sharedPlatformPageSource).toContain('if (!normalized) return emptyText');
 
     for (const [, source] of truenasTitleCaseConsumers) {
       expect(source).toContain('formatPlatformTableTitleCaseValue');
@@ -3659,6 +3659,79 @@ describe('shared primitive guardrails', () => {
       expect(source).not.toContain('const formatUptime');
       expect(source).not.toContain('seconds / 86_400');
       expect(source).not.toContain('return `${mins}m`');
+    }
+  });
+
+  it('keeps platform table compact value summaries on the shared helper', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+        forbiddenPatterns?: Array<{ path?: string; patterns?: string[] }>;
+      }>;
+      patternGuards?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        allPatterns?: string[];
+        scopes?: string[];
+        allowedPaths?: string[];
+        ignoredPaths?: string[];
+      }>;
+    };
+    const registeredRule = registry.rules?.find(
+      (rule) => rule.id === 'platform-table-value-summary',
+    );
+    const localCompactListGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-table-local-compact-list-helper',
+    );
+    const localSummaryGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-table-local-value-summary-helper',
+    );
+    const platformValueSummaryConsumers: Array<[string, string]> = [
+      ['src/features/truenas/TrueNASNetworkSharesTable.tsx', truenasNetworkSharesTableSource],
+      ['src/features/vmware/VsphereDatastoresTable.tsx', vsphereDatastoresTableSource],
+      ['src/features/vmware/VsphereNetworksTable.tsx', vsphereNetworksTableSource],
+    ];
+    const platformValueSummaryConsumerPaths = platformValueSummaryConsumers.map(([path]) => path);
+
+    expect(registeredRule?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(registeredRule?.canonical?.export).toBe('summarizePlatformTableValues');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual(
+      platformValueSummaryConsumerPaths,
+    );
+    expect(registeredRule?.forbiddenPatterns).toEqual(
+      platformValueSummaryConsumerPaths.map((path) => ({
+        path,
+        patterns: ['const compactList', 'const summarizeValues'],
+      })),
+    );
+    expect(localCompactListGuard?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(localCompactListGuard?.canonical?.export).toBe('summarizePlatformTableValues');
+    expect(localCompactListGuard?.allPatterns).toEqual(['const compactList']);
+    expect(localCompactListGuard?.scopes).toEqual(['src/features/truenas', 'src/features/vmware']);
+    expect(localCompactListGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(localCompactListGuard?.ignoredPaths ?? []).toHaveLength(0);
+    expect(localSummaryGuard?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(localSummaryGuard?.canonical?.export).toBe('summarizePlatformTableValues');
+    expect(localSummaryGuard?.allPatterns).toEqual(['const summarizeValues']);
+    expect(localSummaryGuard?.scopes).toEqual(['src/features/truenas', 'src/features/vmware']);
+    expect(localSummaryGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(localSummaryGuard?.ignoredPaths ?? []).toHaveLength(0);
+
+    expect(sharedPlatformPageSource).toContain('export const summarizePlatformTableValues');
+    expect(sharedPlatformPageSource).toContain('export type PlatformTableValueSummary');
+
+    for (const [, source] of platformValueSummaryConsumers) {
+      expect(source).toContain('summarizePlatformTableValues');
+      expect(source).not.toContain('const compactList');
+      expect(source).not.toContain('const summarizeValues');
     }
   });
 

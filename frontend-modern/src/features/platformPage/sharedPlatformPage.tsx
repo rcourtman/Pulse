@@ -145,6 +145,37 @@ export const getPlatformTableCellClassForKind = (kind: PlatformTableColumnKind):
 export const formatPlatformTableTextValue = (value: unknown, emptyText = '—'): string =>
   asTrimmedString(value) || emptyText;
 
+export type PlatformTableValueSummary = { label: string; title: string; values: string[] };
+
+export type PlatformTableValueSummaryOptions = {
+  emptyText?: string;
+  maxVisible?: number;
+  transform?: (value: string) => string;
+};
+
+export const summarizePlatformTableValues = (
+  values: readonly unknown[] | undefined,
+  options: PlatformTableValueSummaryOptions = {},
+): PlatformTableValueSummary => {
+  const emptyText = options.emptyText ?? '—';
+  const maxVisible = options.maxVisible ?? 2;
+  const normalized = (values ?? [])
+    .map((value) => asTrimmedString(value))
+    .filter((value): value is string => Boolean(value))
+    .map((value) => options.transform?.(value) ?? value);
+
+  if (normalized.length === 0) return { label: emptyText, title: '', values: [] };
+
+  const visible = normalized.slice(0, maxVisible);
+  const suffix =
+    normalized.length > visible.length ? ` +${normalized.length - visible.length}` : '';
+  return {
+    label: `${visible.join(', ')}${suffix}`,
+    title: normalized.join(', '),
+    values: normalized,
+  };
+};
+
 export const formatPlatformTableTitleCaseValue = (
   value: unknown,
   emptyText = 'Unknown',

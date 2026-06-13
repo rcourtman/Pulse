@@ -10,6 +10,7 @@ import {
   createPlatformTableFilterState,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
+  summarizePlatformTableValues,
   type PlatformTableFilterOption,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
@@ -65,25 +66,11 @@ const networkType = (resource: Resource): string => {
   return NETWORK_TYPE_LABELS[raw.toUpperCase()] ?? raw;
 };
 
-const compactList = (values: Array<string | undefined>): string[] =>
-  values.map((value) => asTrimmedString(value)).filter((value): value is string => Boolean(value));
-
-const summarizeValues = (
-  values: string[],
-  empty = '—',
-  visibleCount = 2,
-): { label: string; title: string } => {
-  if (values.length === 0) return { label: empty, title: '' };
-  const visible = values.slice(0, visibleCount);
-  const suffix = values.length > visible.length ? ` +${values.length - visible.length}` : '';
-  return { label: `${visible.join(', ')}${suffix}`, title: values.join(', ') };
-};
-
 const hostSummary = (resource: Resource): { label: string; title: string } =>
-  summarizeValues(compactList(resource.vmware?.networkHostNames ?? []), '—', 2);
+  summarizePlatformTableValues(resource.vmware?.networkHostNames);
 
 const vmSummary = (resource: Resource): { label: string; title: string } =>
-  summarizeValues(compactList(resource.vmware?.networkVmNames ?? []), '—', 2);
+  summarizePlatformTableValues(resource.vmware?.networkVmNames);
 
 const vmCount = (resource: Resource): number =>
   resource.vmware?.networkVmNames?.length ?? resource.vmware?.networkVmIds?.length ?? 0;

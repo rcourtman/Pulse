@@ -8,6 +8,7 @@ import {
   filterPlatformResources,
   formatPlatformTableTextValue,
   getPlatformTableFiniteMetric,
+  summarizePlatformTableValues,
   type PlatformResourceStatusFilter,
 } from '../sharedPlatformPage';
 
@@ -132,11 +133,8 @@ describe('filterPlatformResources', () => {
   });
 
   it('supports platform table status resolvers for source-aware display state', () => {
-    const filtered = filterPlatformResources(
-      resources,
-      '',
-      'degraded',
-      (resource) => (resource.id === 'host-alpha' ? 'degraded' : resource.status),
+    const filtered = filterPlatformResources(resources, '', 'degraded', (resource) =>
+      resource.id === 'host-alpha' ? 'degraded' : resource.status,
     );
     expect(filtered.map((r) => r.id).sort()).toEqual(
       ['host-alpha', 'host-charlie', 'host-foxtrot', 'host-golf'].sort(),
@@ -234,6 +232,42 @@ describe('formatPlatformTableTitleCaseValue', () => {
     expect(formatPlatformTableTitleCaseValue('')).toBe('Unknown');
     expect(formatPlatformTableTitleCaseValue(undefined)).toBe('Unknown');
     expect(formatPlatformTableTitleCaseValue(' ', 'Unavailable')).toBe('Unavailable');
+  });
+});
+
+describe('summarizePlatformTableValues', () => {
+  it('trims values and keeps empty summaries display-only', () => {
+    expect(summarizePlatformTableValues([undefined, null, '', '  '])).toEqual({
+      label: '—',
+      title: '',
+      values: [],
+    });
+    expect(summarizePlatformTableValues(undefined, { emptyText: '-' })).toEqual({
+      label: '-',
+      title: '',
+      values: [],
+    });
+  });
+
+  it('builds compact labels with full title text and normalized values', () => {
+    expect(summarizePlatformTableValues([' alpha ', 'bravo', 'charlie'])).toEqual({
+      label: 'alpha, bravo +1',
+      title: 'alpha, bravo, charlie',
+      values: ['alpha', 'bravo', 'charlie'],
+    });
+  });
+
+  it('supports caller-owned visibility and value transforms', () => {
+    expect(
+      summarizePlatformTableValues(['nfs', 'smb', 'iscsi', 'webdav'], {
+        maxVisible: 3,
+        transform: (value) => value.toUpperCase(),
+      }),
+    ).toEqual({
+      label: 'NFS, SMB, ISCSI +1',
+      title: 'NFS, SMB, ISCSI, WEBDAV',
+      values: ['NFS', 'SMB', 'ISCSI', 'WEBDAV'],
+    });
   });
 });
 

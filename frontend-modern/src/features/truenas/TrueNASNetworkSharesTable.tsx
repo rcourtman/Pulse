@@ -10,6 +10,7 @@ import {
   formatPlatformTableTitleCaseValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
+  summarizePlatformTableValues,
   type PlatformTableFilterOption,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
@@ -41,58 +42,44 @@ const shareMeta = (resource: Resource): ResourceTrueNASShareMeta | undefined =>
 const formatProtocol = (share: ResourceTrueNASShareMeta | undefined): string =>
   asTrimmedString(share?.protocol)?.toUpperCase() || '-';
 
-const compactList = (values: Array<string | undefined>): string[] =>
-  values.map((value) => asTrimmedString(value)).filter((value): value is string => Boolean(value));
-
-const summarizeValues = (
-  values: string[],
-  empty = '-',
-  visibleCount = 2,
-): { label: string; title: string } => {
-  if (values.length === 0) return { label: empty, title: '' };
-  const visible = values.slice(0, visibleCount);
-  const suffix = values.length > visible.length ? ` +${values.length - visible.length}` : '';
-  return { label: `${visible.join(', ')}${suffix}`, title: values.join(', ') };
-};
-
 const formatAccess = (
   share: ResourceTrueNASShareMeta | undefined,
 ): { label: string; title: string } => {
-  const flags = compactList([
+  const flags = [
     share?.readOnly === true ? 'Read-only' : share?.readOnly === false ? 'Read/write' : undefined,
     share?.browsable === true ? 'Browsable' : share?.browsable === false ? 'Hidden' : undefined,
     share?.accessBasedEnumeration ? 'ABE' : undefined,
     share?.auditEnabled ? 'Audit' : undefined,
     share?.exposeSnapshots ? 'Snapshots' : undefined,
-  ]);
-  return summarizeValues(flags, '-', 3);
+  ];
+  return summarizePlatformTableValues(flags, { emptyText: '-', maxVisible: 3 });
 };
 
 const formatClients = (
   share: ResourceTrueNASShareMeta | undefined,
 ): { label: string; title: string } => {
-  const networks = compactList(share?.networks ?? []);
-  const hosts = compactList(share?.hosts ?? []);
-  const aliases = compactList(share?.aliases ?? []);
+  const networks = summarizePlatformTableValues(share?.networks, { emptyText: '-' }).values;
+  const hosts = summarizePlatformTableValues(share?.hosts, { emptyText: '-' }).values;
+  const aliases = summarizePlatformTableValues(share?.aliases, { emptyText: '-' }).values;
   const values = [
     ...networks.map((network) => `net:${network}`),
     ...hosts.map((host) => `host:${host}`),
     ...aliases.map((alias) => `alias:${alias}`),
   ];
-  return summarizeValues(values);
+  return summarizePlatformTableValues(values, { emptyText: '-' });
 };
 
 const formatSecurity = (
   share: ResourceTrueNASShareMeta | undefined,
 ): { label: string; title: string } => {
   const values = [
-    ...compactList(share?.security ?? []),
-    ...compactList([
+    ...(share?.security ?? []),
+    ...[
       share?.mapRootUser ? `root:${share.mapRootUser}` : undefined,
       share?.mapAllUser ? `all:${share.mapAllUser}` : undefined,
-    ]),
+    ],
   ];
-  return summarizeValues(values);
+  return summarizePlatformTableValues(values, { emptyText: '-' });
 };
 
 const shareName = (resource: Resource, share: ResourceTrueNASShareMeta | undefined): string =>

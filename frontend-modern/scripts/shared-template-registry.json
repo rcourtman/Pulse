@@ -1236,6 +1236,39 @@
       ]
     },
     {
+      "id": "platform-table-value-summary",
+      "category": "platform-table-text-value",
+      "summary": "Platform tables must use the shared compact value summary helper for trimmed list labels and full title text instead of recreating local compactList or summarizeValues helpers.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "summarizePlatformTableValues"
+      },
+      "requiredConsumers": [
+        { "path": "src/features/truenas/TrueNASNetworkSharesTable.tsx" },
+        { "path": "src/features/vmware/VsphereDatastoresTable.tsx" },
+        { "path": "src/features/vmware/VsphereNetworksTable.tsx" }
+      ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/features/truenas/TrueNASNetworkSharesTable.tsx",
+          "patterns": ["const compactList", "const summarizeValues"]
+        },
+        {
+          "path": "src/features/vmware/VsphereDatastoresTable.tsx",
+          "patterns": ["const compactList", "const summarizeValues"]
+        },
+        {
+          "path": "src/features/vmware/VsphereNetworksTable.tsx",
+          "patterns": ["const compactList", "const summarizeValues"]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "platform-table-uptime-value-fallback",
       "category": "platform-table-text-value",
       "summary": "Platform tables must use the shared one-unit uptime fallback helper instead of recreating local formatUptime helpers.",
@@ -1760,6 +1793,46 @@
       "extensions": [".tsx"],
       "allPatterns": ["const titleCase", "asTrimmedString(value)", "return 'Unknown'"],
       "legacyReason": "Retired migration debt. TrueNAS platform table status/state labels must use formatPlatformTableTitleCaseValue for the shared title-case fallback.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-table-local-compact-list-helper",
+      "category": "platform-table-text-value",
+      "summary": "Platform tables must not recreate local compactList helpers for compact value summaries.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "summarizePlatformTableValues"
+      },
+      "scopes": ["src/features/truenas", "src/features/vmware"],
+      "extensions": [".tsx"],
+      "allPatterns": ["const compactList"],
+      "legacyReason": "Retired migration debt. Platform table compact list normalization must use summarizePlatformTableValues for shared trimming and normalized values.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-table-local-value-summary-helper",
+      "category": "platform-table-text-value",
+      "summary": "Platform tables must not recreate local summarizeValues helpers for compact value summaries.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "summarizePlatformTableValues"
+      },
+      "scopes": ["src/features/truenas", "src/features/vmware"],
+      "extensions": [".tsx"],
+      "allPatterns": ["const summarizeValues"],
+      "legacyReason": "Retired migration debt. Platform table compact value summaries must use summarizePlatformTableValues for shared labels, overflow counts, and title text.",
       "allowedPaths": [],
       "ignoredPaths": [],
       "proof": [

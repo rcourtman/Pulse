@@ -11,6 +11,7 @@ import {
   createPlatformTableFilterState,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
+  summarizePlatformTableValues,
   type PlatformTableFilterOption,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
@@ -65,26 +66,12 @@ const datastoreType = (resource: Resource): string =>
   asTrimmedString(resource.storage?.type)?.toUpperCase() ||
   '—';
 
-const compactList = (values: Array<string | undefined>): string[] =>
-  values.map((value) => asTrimmedString(value)).filter((value): value is string => Boolean(value));
-
-const summarizeValues = (
-  values: string[],
-  empty = '—',
-  visibleCount = 2,
-): { label: string; title: string } => {
-  if (values.length === 0) return { label: empty, title: '' };
-  const visible = values.slice(0, visibleCount);
-  const suffix = values.length > visible.length ? ` +${values.length - visible.length}` : '';
-  return { label: `${visible.join(', ')}${suffix}`, title: values.join(', ') };
-};
-
 const hostSummary = (resource: Resource): { label: string; title: string } =>
-  summarizeValues(compactList(resource.storage?.nodes ?? []), '—', 2);
+  summarizePlatformTableValues(resource.storage?.nodes);
 
 const consumerSummary = (resource: Resource): { label: string; title: string } => {
   const consumers = resource.storage?.topConsumers?.map((consumer) => consumer.name) ?? [];
-  return summarizeValues(compactList(consumers), '—', 2);
+  return summarizePlatformTableValues(consumers);
 };
 
 const consumerCount = (resource: Resource): number => resource.storage?.consumerCount ?? 0;
