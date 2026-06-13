@@ -1307,8 +1307,10 @@
         { "path": "src/features/proxmox/ProxmoxBackupServersTable.tsx" },
         { "path": "src/features/proxmox/ProxmoxMailGatewayDrawer.tsx" },
         { "path": "src/features/proxmox/ProxmoxMailGatewayTable.tsx" },
+        { "path": "src/features/proxmox/ProxmoxNodesTable.tsx" },
         { "path": "src/features/standalone/AgentsMachinesTable.tsx" },
-        { "path": "src/features/truenas/TrueNASSystemsTable.tsx" }
+        { "path": "src/features/truenas/TrueNASSystemsTable.tsx" },
+        { "path": "src/features/vmware/VsphereHostsTable.tsx" }
       ],
       "forbiddenPatterns": [
         {
@@ -1336,12 +1338,20 @@
           "patterns": ["const formatUptime"]
         },
         {
+          "path": "src/features/proxmox/ProxmoxNodesTable.tsx",
+          "patterns": ["formatUptime(seconds)"]
+        },
+        {
           "path": "src/features/standalone/AgentsMachinesTable.tsx",
           "patterns": ["const formatUptime"]
         },
         {
           "path": "src/features/truenas/TrueNASSystemsTable.tsx",
           "patterns": ["const formatUptime"]
+        },
+        {
+          "path": "src/features/vmware/VsphereHostsTable.tsx",
+          "patterns": ["formatUptime(host.uptime"]
         }
       ],
       "proof": [
@@ -2346,7 +2356,8 @@
         "src/features/kubernetes",
         "src/features/proxmox",
         "src/features/standalone",
-        "src/features/truenas"
+        "src/features/truenas",
+        "src/features/vmware"
       ],
       "extensions": [".tsx"],
       "allPatterns": ["const formatUptime", "seconds / 86_400", "return `${mins}m`"],
@@ -2372,7 +2383,8 @@
         "src/features/kubernetes",
         "src/features/proxmox",
         "src/features/standalone",
-        "src/features/truenas"
+        "src/features/truenas",
+        "src/features/vmware"
       ],
       "extensions": [".tsx"],
       "allPatterns": [
@@ -2435,6 +2447,35 @@
       "pathExcludes": ["__tests__"],
       "allPatterns": ["import { formatBytes } from '@/utils/format';", "formatBytes("],
       "legacyReason": "Retired migration debt. Dense platform table byte cells must use formatPlatformTableBytesValue so positive-byte formatting and empty markers stay shared.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-table-local-format-uptime-import",
+      "category": "platform-table-text-value",
+      "summary": "Platform table files must not call the generic formatUptime utility directly for uptime cells.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "formatPlatformTableUptimeValue"
+      },
+      "scopes": [
+        "src/features/docker",
+        "src/features/kubernetes",
+        "src/features/proxmox",
+        "src/features/standalone",
+        "src/features/truenas",
+        "src/features/vmware"
+      ],
+      "extensions": [".tsx"],
+      "pathIncludes": ["Table"],
+      "pathExcludes": ["__tests__"],
+      "allPatterns": ["formatUptime("],
+      "legacyReason": "Retired migration debt. Dense platform table uptime cells must compose formatPlatformTableUptimeValue so compact/full labels and empty markers stay shared.",
       "allowedPaths": [],
       "ignoredPaths": [],
       "proof": [

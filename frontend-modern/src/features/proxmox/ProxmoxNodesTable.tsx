@@ -25,7 +25,7 @@ import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { getNodeExternalUrl } from '@/utils/nodes';
 import { asTrimmedString } from '@/utils/stringUtils';
-import { formatUptime, normalizeDiskArray } from '@/utils/format';
+import { normalizeDiskArray } from '@/utils/format';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import { useWorkloadTableMetricHistory } from '@/components/Workloads/useWorkloadTableMetricHistory';
 import { getWorkloadTableLayoutMode } from '@/components/Workloads/guestRowModel';
@@ -34,6 +34,7 @@ import {
   PlatformTableMetricFallback,
   PlatformTableShell,
   formatPlatformTablePercentValue,
+  formatPlatformTableUptimeValue,
   getPlatformTableFiniteMetric,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
@@ -73,7 +74,10 @@ const formatNodeUptime = (seconds: number | undefined): { label: string; warn: b
   if (!seconds || seconds <= 0) return { label: '—', warn: false };
   // Full "26d 4h" precision matches v5 and the guest rows below; <1h keeps
   // the v5 "recently restarted" highlight.
-  return { label: formatUptime(seconds), warn: seconds < 3_600 };
+  return {
+    label: formatPlatformTableUptimeValue(seconds, { compact: false }),
+    warn: seconds < 3_600,
+  };
 };
 
 type GuestCounts = { vms: number; containers: number };

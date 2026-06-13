@@ -298,6 +298,8 @@ describe('formatPlatformTableUptimeValue', () => {
     expect(formatPlatformTableUptimeValue(3_600)).toBe('1h');
     expect(formatPlatformTableUptimeValue(86_400)).toBe('1d');
     expect(formatPlatformTableUptimeValue(0, 'n/a')).toBe('n/a');
+    expect(formatPlatformTableUptimeValue(187_200, { compact: false })).toBe('2d 4h');
+    expect(formatPlatformTableUptimeValue(0, { emptyText: 'n/a', compact: false })).toBe('n/a');
   });
 });
 

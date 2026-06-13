@@ -185,14 +185,23 @@ export const formatPlatformTableTitleCaseValue = (
   return normalized.charAt(0).toUpperCase() + normalized.slice(1).toLowerCase();
 };
 
+export type PlatformTableUptimeValueOptions = {
+  compact?: boolean;
+  emptyText?: string;
+};
+
 export const formatPlatformTableUptimeValue = (
   seconds: number | undefined,
-  emptyText = '—',
+  emptyTextOrOptions: string | PlatformTableUptimeValueOptions = '—',
 ): string => {
+  const options =
+    typeof emptyTextOrOptions === 'string'
+      ? { emptyText: emptyTextOrOptions, compact: true }
+      : { emptyText: '—', compact: true, ...emptyTextOrOptions };
   if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds <= 0) {
-    return emptyText;
+    return options.emptyText;
   }
-  return formatUptime(seconds, true);
+  return formatUptime(seconds, options.compact);
 };
 
 export const formatPlatformTableBytesValue = (

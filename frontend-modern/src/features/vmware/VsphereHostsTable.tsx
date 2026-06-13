@@ -5,7 +5,6 @@ import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
-import { formatUptime } from '@/utils/format';
 import { formatVmwareClusterServices } from '@/utils/vmwareDisplay';
 import {
   formatVmwarePowerState,
@@ -21,6 +20,7 @@ import {
   PlatformTableToolbar,
   createPlatformTableFilterState,
   filterPlatformResources,
+  formatPlatformTableUptimeValue,
   getPlatformTableFiniteMetric,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
@@ -192,11 +192,11 @@ export const VsphereHostsTable: Component<{
                     const esxiVersion = () => asTrimmedString(host.agent?.osVersion) || '—';
                     const uptimeLabel = () =>
                       typeof host.uptime === 'number' && host.uptime > 0
-                        ? formatUptime(host.uptime, true)
+                        ? formatPlatformTableUptimeValue(host.uptime)
                         : '—';
                     const uptimeFull = () =>
                       typeof host.uptime === 'number' && host.uptime > 0
-                        ? formatUptime(host.uptime)
+                        ? formatPlatformTableUptimeValue(host.uptime, { compact: false })
                         : '';
                     const datastoreCount = () =>
                       meta()?.datastoreIds?.length ?? meta()?.datastoreNames?.length ?? 0;
@@ -206,8 +206,7 @@ export const VsphereHostsTable: Component<{
                     const indicator = () => getSimpleStatusIndicator(displayStatus());
                     const metricsKey = () => buildMetricKeyForUnifiedResource(host);
                     const cpuPercent = () => getPlatformTableFiniteMetric(host.cpu?.current);
-                    const memoryTotal = () =>
-                      getPlatformTableFiniteMetric(host.memory?.total) ?? 0;
+                    const memoryTotal = () => getPlatformTableFiniteMetric(host.memory?.total) ?? 0;
                     const memoryUsed = () => getPlatformTableFiniteMetric(host.memory?.used) ?? 0;
                     const memoryPercentOnly = () =>
                       memoryTotal() > 0

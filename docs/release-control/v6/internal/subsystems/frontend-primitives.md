@@ -2604,12 +2604,13 @@ service/network/config/policy/autoscaling tables, vSphere datastore/network
 tables, and TrueNAS network-share tables must compose that helper instead of
 declaring local `compactList` or `summarizeValues` helpers.
 Platform table uptime formatting follows that rule too.
-`formatPlatformTableUptimeValue` owns the repeated one-unit uptime label plus
-canonical empty-cell marker behavior for dense platform table cells. Docker /
-Podman hosts, Kubernetes nodes, Proxmox backup server rows, Proxmox Mail
-Gateway instance and drawer node rows, Standalone machines, and TrueNAS systems
-must compose that helper instead of declaring local `formatUptime` helpers for
-the same days/hours/minutes fallback.
+`formatPlatformTableUptimeValue` owns the repeated compact/full uptime label
+selection plus canonical empty-cell marker behavior for dense platform table
+cells. Docker / Podman hosts, Kubernetes nodes, Proxmox nodes and backup
+server rows, Proxmox Mail Gateway instance and drawer node rows, Standalone
+machines, TrueNAS systems, and vSphere ESXi hosts must compose that helper
+instead of declaring local `formatUptime` helpers or importing the generic
+formatter in table files for the same days/hours/minutes fallback.
 Platform table byte-size formatting follows the same rule.
 `formatPlatformTableBytesValue` owns the repeated positive-byte formatting plus
 canonical empty-cell marker behavior for dense platform table cells. Docker /

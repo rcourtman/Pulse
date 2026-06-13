@@ -1456,6 +1456,8 @@ describe('shared primitive guardrails', () => {
         canonical?: { path?: string; export?: string };
         allPatterns?: string[];
         scopes?: string[];
+        pathIncludes?: string[];
+        pathExcludes?: string[];
         allowedPaths?: string[];
         ignoredPaths?: string[];
       }>;
@@ -1549,6 +1551,8 @@ describe('shared primitive guardrails', () => {
         canonical?: { path?: string; export?: string };
         allPatterns?: string[];
         scopes?: string[];
+        pathIncludes?: string[];
+        pathExcludes?: string[];
         allowedPaths?: string[];
         ignoredPaths?: string[];
       }>;
@@ -3618,6 +3622,8 @@ describe('shared primitive guardrails', () => {
         canonical?: { path?: string; export?: string };
         allPatterns?: string[];
         scopes?: string[];
+        pathIncludes?: string[];
+        pathExcludes?: string[];
         allowedPaths?: string[];
         ignoredPaths?: string[];
       }>;
@@ -3631,14 +3637,19 @@ describe('shared primitive guardrails', () => {
     const functionHelperGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'platform-table-local-uptime-function-helper',
     );
+    const directFormatGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-table-local-format-uptime-import',
+    );
     const platformUptimeConsumers: Array<[string, string]> = [
       ['src/features/docker/DockerHostsTable.tsx', dockerHostsTableSource],
       ['src/features/kubernetes/KubernetesNodesTable.tsx', kubernetesNodesTableSource],
       ['src/features/proxmox/ProxmoxBackupServersTable.tsx', proxmoxBackupServersTableSource],
       ['src/features/proxmox/ProxmoxMailGatewayDrawer.tsx', proxmoxMailGatewayDrawerSource],
       ['src/features/proxmox/ProxmoxMailGatewayTable.tsx', proxmoxMailGatewayTableSource],
+      ['src/features/proxmox/ProxmoxNodesTable.tsx', proxmoxNodesTableSource],
       ['src/features/standalone/AgentsMachinesTable.tsx', agentsMachinesTableSource],
       ['src/features/truenas/TrueNASSystemsTable.tsx', truenasSystemsTableSource],
+      ['src/features/vmware/VsphereHostsTable.tsx', vsphereHostsTableSource],
     ];
     const platformUptimeConsumerPaths = platformUptimeConsumers.map(([path]) => path);
 
@@ -3671,8 +3682,16 @@ describe('shared primitive guardrails', () => {
         path: 'src/features/proxmox/ProxmoxMailGatewayTable.tsx',
         patterns: ['const formatUptime'],
       },
+      {
+        path: 'src/features/proxmox/ProxmoxNodesTable.tsx',
+        patterns: ['formatUptime(seconds)'],
+      },
       { path: 'src/features/standalone/AgentsMachinesTable.tsx', patterns: ['const formatUptime'] },
       { path: 'src/features/truenas/TrueNASSystemsTable.tsx', patterns: ['const formatUptime'] },
+      {
+        path: 'src/features/vmware/VsphereHostsTable.tsx',
+        patterns: ['formatUptime(host.uptime'],
+      },
     ]);
     expect(localHelperGuard?.canonical?.path).toBe(
       'src/features/platformPage/sharedPlatformPage.tsx',
@@ -3689,6 +3708,7 @@ describe('shared primitive guardrails', () => {
       'src/features/proxmox',
       'src/features/standalone',
       'src/features/truenas',
+      'src/features/vmware',
     ]);
     expect(localHelperGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(localHelperGuard?.ignoredPaths ?? []).toHaveLength(0);
@@ -3707,17 +3727,36 @@ describe('shared primitive guardrails', () => {
       'src/features/proxmox',
       'src/features/standalone',
       'src/features/truenas',
+      'src/features/vmware',
     ]);
     expect(functionHelperGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(functionHelperGuard?.ignoredPaths ?? []).toHaveLength(0);
+    expect(directFormatGuard?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(directFormatGuard?.canonical?.export).toBe('formatPlatformTableUptimeValue');
+    expect(directFormatGuard?.allPatterns).toEqual(['formatUptime(']);
+    expect(directFormatGuard?.scopes).toEqual([
+      'src/features/docker',
+      'src/features/kubernetes',
+      'src/features/proxmox',
+      'src/features/standalone',
+      'src/features/truenas',
+      'src/features/vmware',
+    ]);
+    expect(directFormatGuard?.pathIncludes).toEqual(['Table']);
+    expect(directFormatGuard?.pathExcludes).toEqual(['__tests__']);
+    expect(directFormatGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(directFormatGuard?.ignoredPaths ?? []).toHaveLength(0);
 
     expect(sharedPlatformPageSource).toContain('export const formatPlatformTableUptimeValue');
-    expect(sharedPlatformPageSource).toContain('formatUptime(seconds, true)');
+    expect(sharedPlatformPageSource).toContain('formatUptime(seconds, options.compact)');
 
     for (const [, source] of platformUptimeConsumers) {
       expect(source).toContain('formatPlatformTableUptimeValue');
       expect(source).not.toContain('const formatUptime');
       expect(source).not.toContain('function formatUptime');
+      expect(source).not.toContain('formatUptime(');
       expect(source).not.toContain('const days = Math.floor(seconds / 86_400);');
       expect(source).not.toContain('return `${mins}m`');
     }

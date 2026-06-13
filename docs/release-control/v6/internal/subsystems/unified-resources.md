@@ -239,12 +239,13 @@ port, selector, policy type, or quota cells, while platform tables must use
 `summarizePlatformTableValues` for trimming, empty-marker labels, `+N` overflow
 labels, full title text, and normalized value lists instead of recreating local
 `compactList` or `summarizeValues` helpers.
-One-unit platform table uptime labels follow the same boundary:
-unified-resource consumers own which uptime field is displayed, but platform
-tables and platform-owned drawers, including Standalone machines, Proxmox
-backup servers, and Proxmox Mail Gateway node rows, must use
-`formatPlatformTableUptimeValue` instead of recreating local
-days/hours/minutes `formatUptime` helpers for dense table cells.
+Platform table uptime labels follow the same boundary: unified-resource
+consumers own which uptime field is displayed and whether the dense table
+needs compact or full precision, but platform tables and platform-owned
+drawers, including Standalone machines, Proxmox nodes and backup servers,
+Proxmox Mail Gateway node rows, and vSphere ESXi hosts, must use
+`formatPlatformTableUptimeValue` instead of recreating local days/hours/minutes
+`formatUptime` helpers or importing the generic formatter in table files.
 Platform byte-size table cells follow that boundary too: unified-resource
 consumers own whether a capacity, memory, disk, requested-size, datastore,
 pool, or backup-artifact size field is the right source-specific value, while
