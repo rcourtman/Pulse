@@ -116,6 +116,8 @@ import sharedTemplateRegistrySource from '../../../scripts/shared-template-regis
 import discoveryTabSource from '@/components/Discovery/DiscoveryTab.tsx?raw';
 import emailProviderSelectSource from '@/components/Alerts/EmailProviderSelect.tsx?raw';
 import errorBoundarySource from '@/components/ErrorBoundary.tsx?raw';
+import updateConfirmationModalSource from '@/components/UpdateConfirmationModal.tsx?raw';
+import updateProgressModalSource from '@/components/UpdateProgressModal.tsx?raw';
 import incidentTimelinePanelSource from '@/components/Alerts/IncidentTimelinePanel.tsx?raw';
 import alertDetailPresentationSource from '@/utils/alertDetailPresentation.ts?raw';
 import alertSeverityPresentationSource from '@/utils/alertSeverityPresentation.ts?raw';
@@ -2520,6 +2522,7 @@ describe('shared primitive guardrails', () => {
       'src/components/Settings/UpdatesSettingsPanel.tsx',
       'src/components/Settings/UserAssignmentsDialog.tsx',
       'src/components/Settings/UserAssignmentsPanel.tsx',
+      'src/components/UpdateProgressModal.tsx',
       'src/components/shared/Button.tsx',
       'src/components/shared/DiscoveryLoadingFallback.tsx',
       'src/components/shared/HistoryChartOverlay.tsx',
@@ -2616,6 +2619,7 @@ describe('shared primitive guardrails', () => {
       discoveryLoadingFallbackSource,
       historyChartOverlaySource,
       pulseDataGridSource,
+      updateProgressModalSource,
     ]) {
       expect(source).toContain('LoadingSpinner');
       expect(source).not.toContain('animate-spin');
@@ -2904,6 +2908,8 @@ describe('shared primitive guardrails', () => {
       'src/components/Settings/InfrastructureWorkspace.tsx',
       'src/components/Settings/ReportingPanel.tsx',
       'src/components/Settings/ResourcePicker.tsx',
+      'src/components/UpdateConfirmationModal.tsx',
+      'src/components/UpdateProgressModal.tsx',
       'src/components/Workloads/GuestDrawer.tsx',
       'src/features/patrol/PatrolIntelligenceWorkspace.tsx',
       'src/features/standalone/StandalonePageSurface.tsx',
@@ -2961,6 +2967,20 @@ describe('shared primitive guardrails', () => {
             'text-xs px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700',
           ]),
         }),
+        expect.objectContaining({
+          path: 'src/components/UpdateConfirmationModal.tsx',
+          patterns: expect.arrayContaining([
+            'px-4 py-2 text-sm font-medium text-base-content hover:bg-surface-hover rounded-md transition-colors',
+            'px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors',
+          ]),
+        }),
+        expect.objectContaining({
+          path: 'src/components/UpdateProgressModal.tsx',
+          patterns: expect.arrayContaining([
+            'mt-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded',
+            'px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors',
+          ]),
+        }),
       ]),
     );
     expect(errorBoundarySource).toContain('Button');
@@ -2972,6 +2992,22 @@ describe('shared primitive guardrails', () => {
     );
     expect(errorBoundarySource).not.toContain(
       'text-xs px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700',
+    );
+    expect(updateConfirmationModalSource).toContain('Button');
+    expect(updateConfirmationModalSource).toContain('ActionIconButton');
+    expect(updateConfirmationModalSource).not.toContain(
+      'px-4 py-2 text-sm font-medium text-base-content hover:bg-surface-hover rounded-md transition-colors',
+    );
+    expect(updateConfirmationModalSource).not.toContain(
+      'px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors',
+    );
+    expect(updateProgressModalSource).toContain('Button');
+    expect(updateProgressModalSource).toContain('ActionIconButton');
+    expect(updateProgressModalSource).not.toContain(
+      'mt-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded',
+    );
+    expect(updateProgressModalSource).not.toContain(
+      'px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors',
     );
     expect(registeredGuard?.canonical?.path).toBe('src/components/shared/buttonModel.ts');
     expect(registeredGuard?.canonical?.export).toBe('getButtonClass');
@@ -3732,6 +3768,74 @@ describe('shared primitive guardrails', () => {
     expect(errorBoundarySource).not.toContain('bg-red-50 dark:bg-red-900 border border-red-200');
     expect(errorBoundarySource).not.toContain(
       'p-4 bg-red-50 dark:bg-red-900 border border-red-200',
+    );
+  });
+
+  it('routes update modal callouts, actions, and status indicators through shared primitives', () => {
+    const registry = JSON.parse(sharedTemplateRegistrySource) as {
+      rules?: Array<{
+        id: string;
+        canonical?: { path?: string; export?: string };
+        requiredConsumers?: Array<{ path?: string }>;
+        forbiddenPatterns?: Array<{ path?: string; patterns?: string[] }>;
+      }>;
+    };
+    const registeredRule = registry.rules?.find(
+      (rule) => rule.id === 'update-modal-action-callout-shell',
+    );
+
+    expect(registeredRule?.canonical?.path).toBe('src/components/shared/CalloutCard.tsx');
+    expect(registeredRule?.canonical?.export).toBe('CalloutCard');
+    expect(registeredRule?.requiredConsumers?.map((consumer) => consumer.path)).toEqual([
+      'src/components/UpdateConfirmationModal.tsx',
+      'src/components/UpdateProgressModal.tsx',
+    ]);
+    expect(registeredRule?.forbiddenPatterns).toEqual([
+      {
+        path: 'src/components/UpdateConfirmationModal.tsx',
+        patterns: [
+          '<svg',
+          'bg-blue-50 dark:bg-blue-900 border border-blue-200',
+          'bg-yellow-50 dark:bg-yellow-900 border border-yellow-200',
+          'rounded-md p-4 border',
+          'px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors',
+        ],
+      },
+      {
+        path: 'src/components/UpdateProgressModal.tsx',
+        patterns: [
+          '<svg',
+          'bg-red-50 dark:bg-red-900 border border-red-200',
+          'bg-blue-50 dark:bg-blue-900 border border-blue-200',
+          'bg-yellow-50 dark:bg-yellow-900 border border-yellow-200',
+          'mt-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded',
+        ],
+      },
+    ]);
+
+    expect(updateConfirmationModalSource).toContain('CalloutCard');
+    expect(updateConfirmationModalSource).toContain('Button');
+    expect(updateConfirmationModalSource).toContain('ActionIconButton');
+    expect(updateConfirmationModalSource).toContain('lucide-solid/icons/arrow-right');
+    expect(updateProgressModalSource).toContain('CalloutCard');
+    expect(updateProgressModalSource).toContain('Button');
+    expect(updateProgressModalSource).toContain('ActionIconButton');
+    expect(updateProgressModalSource).toContain('LoadingSpinner');
+
+    for (const source of [updateConfirmationModalSource, updateProgressModalSource]) {
+      expect(source).not.toContain('<svg');
+      expect(source).not.toContain('bg-blue-50 dark:bg-blue-900 border border-blue-200');
+      expect(source).not.toContain('bg-yellow-50 dark:bg-yellow-900 border border-yellow-200');
+      expect(source).not.toContain(
+        'px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors',
+      );
+    }
+    expect(updateConfirmationModalSource).not.toContain('rounded-md p-4 border');
+    expect(updateProgressModalSource).not.toContain(
+      'bg-red-50 dark:bg-red-900 border border-red-200',
+    );
+    expect(updateProgressModalSource).not.toContain(
+      'mt-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded',
     );
   });
 

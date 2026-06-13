@@ -523,6 +523,10 @@ not a replacement status card, CTA band, or page-local nested card.
    Shared error-boundary fallback actions are also command buttons: reset,
    reload, and retry controls must compose `Button` so emergency UI does not
    become a separate local button vocabulary.
+   Update confirmation and progress modal actions are part of the same command
+   boundary: cancel, start, retry, close, history, reload-now, and close-icon
+   controls must compose `Button` or `ActionIconButton` instead of carrying
+   modal-local blue, neutral, or icon-button class strings.
    Compact icon-only row, inline, and floating action controls belong to
    `ActionIconButton`. Feature surfaces may own the icon choice, click handler,
    label text, and layout slot, but icon-button size, tone, focus ring,
@@ -1372,6 +1376,10 @@ not a replacement status card, CTA band, or page-local nested card.
    notices are part of the same settings callout boundary: the editor and
    credential slots own the source-specific lifecycle or API meaning, while
    `CalloutCard` owns the warning/success/danger shell and compact density.
+   Update confirmation and progress modal notices share that same primitive
+   boundary. The update flow owns version, prerequisite, root-access, restart,
+   and error copy; `CalloutCard` owns the info/warning/danger shell, spacing,
+   dark-mode tone, and icon layout.
 8. Keep hosted settings-shell framing imports safe for bundle initialization.
    Self-hosted billing titles, descriptions, and referral copy used by
    `settingsHeaderMeta.ts`, `settingsNavCatalog.ts`, and adjacent settings
@@ -1786,6 +1794,9 @@ primitive internals such as `Button`, `PulseDataGrid`, and
 `HistoryChartOverlay`, as well as Login, Settings, Patrol, and AI finding
 surfaces; local `animate-spin` spinner shells in those consumers are governed
 by the shared-template registry rather than page-local discretion.
+Update progress status indicators are included in that loading boundary:
+progress-stage loading must compose `LoadingSpinner` rather than local spinner
+SVGs.
 `DiscoveryLoadingFallback` owns the discovery-tab Suspense fallback row for
 resource, workload, and Docker host drawers: centered row layout, status
 semantics, discovery loading copy, and canonical `LoadingSpinner` composition
@@ -3398,6 +3409,10 @@ Shared error-boundary fallbacks use the same boundary: the fallback owns error
 copy and reset/reload handlers, while `CalloutCard` owns danger tone, spacing,
 dark-mode styling, and alert layout instead of inline red panels or raw SVG
 alert glyphs.
+Update confirmation and progress modals use the same shared boundary: the
+modal flow owns update state and copy, while `CalloutCard`, `Button`,
+`ActionIconButton`, `LoadingSpinner`, and lucide icons own the colored notice,
+command, icon-only close, and status indicator chrome.
 
 Settings loading placeholders must route through the shared
 `SettingsLoadingSkeleton` primitive instead of local `animate-pulse` blocks.

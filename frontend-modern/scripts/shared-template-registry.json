@@ -416,6 +416,48 @@
       ]
     },
     {
+      "id": "update-modal-action-callout-shell",
+      "category": "callout",
+      "summary": "Update confirmation and progress modals must compose CalloutCard, Button, ActionIconButton, LoadingSpinner, and library icons for shared status, warning, restart, and command chrome instead of recreating local colored panels, raw SVG glyphs, or modal-local button classes.",
+      "canonical": {
+        "path": "src/components/shared/CalloutCard.tsx",
+        "export": "CalloutCard"
+      },
+      "requiredConsumers": [
+        { "path": "src/components/UpdateConfirmationModal.tsx" },
+        { "path": "src/components/UpdateProgressModal.tsx" }
+      ],
+      "forbiddenPatterns": [
+        {
+          "path": "src/components/UpdateConfirmationModal.tsx",
+          "patterns": [
+            "<svg",
+            "bg-blue-50 dark:bg-blue-900 border border-blue-200",
+            "bg-yellow-50 dark:bg-yellow-900 border border-yellow-200",
+            "rounded-md p-4 border",
+            "px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
+          ]
+        },
+        {
+          "path": "src/components/UpdateProgressModal.tsx",
+          "patterns": [
+            "<svg",
+            "bg-red-50 dark:bg-red-900 border border-red-200",
+            "bg-blue-50 dark:bg-blue-900 border border-blue-200",
+            "bg-yellow-50 dark:bg-yellow-900 border border-yellow-200",
+            "mt-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded"
+          ]
+        }
+      ],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/components/__tests__/UpdateConfirmationModal.test.tsx",
+        "src/components/shared/CalloutCard.test.tsx",
+        "src/components/shared/Button.test.tsx",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
       "id": "platform-inline-notice-shell",
       "category": "callout",
       "summary": "Platform inline notices must compose InlineNotice for shared dense notice tone, icon/content layout, and action-link chrome instead of copying platform-local amber notice shells.",
@@ -495,6 +537,7 @@
         { "path": "src/components/Settings/UpdatesSettingsPanel.tsx" },
         { "path": "src/components/Settings/UserAssignmentsDialog.tsx" },
         { "path": "src/components/Settings/UserAssignmentsPanel.tsx" },
+        { "path": "src/components/UpdateProgressModal.tsx" },
         { "path": "src/components/shared/Button.tsx" },
         { "path": "src/components/shared/DiscoveryLoadingFallback.tsx" },
         { "path": "src/components/shared/HistoryChartOverlay.tsx" },
@@ -733,6 +776,13 @@
         {
           "path": "src/components/Settings/SecurityOverviewPanel.tsx",
           "patterns": ["animate-pulse", "bg-slate-300"]
+        },
+        {
+          "path": "src/components/UpdateProgressModal.tsx",
+          "patterns": [
+            "<svg class=\"w-12 h-12 text-blue-500 animate-spin\"",
+            "class=\"animate-spin h-4 w-4\""
+          ]
         }
       ],
       "proof": [
@@ -779,6 +829,8 @@
         { "path": "src/components/Settings/InfrastructureWorkspace.tsx" },
         { "path": "src/components/Settings/ReportingPanel.tsx" },
         { "path": "src/components/Settings/ResourcePicker.tsx" },
+        { "path": "src/components/UpdateConfirmationModal.tsx" },
+        { "path": "src/components/UpdateProgressModal.tsx" },
         { "path": "src/components/Workloads/GuestDrawer.tsx" },
         { "path": "src/features/patrol/PatrolIntelligenceWorkspace.tsx" },
         { "path": "src/features/standalone/StandalonePageSurface.tsx" }
@@ -833,6 +885,20 @@
             "px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700",
             "px-4 py-2 bg-slate-600 text-white rounded hover:bg-slate-700",
             "text-xs px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700"
+          ]
+        },
+        {
+          "path": "src/components/UpdateConfirmationModal.tsx",
+          "patterns": [
+            "px-4 py-2 text-sm font-medium text-base-content hover:bg-surface-hover rounded-md transition-colors",
+            "px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
+          ]
+        },
+        {
+          "path": "src/components/UpdateProgressModal.tsx",
+          "patterns": [
+            "mt-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded",
+            "px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
           ]
         }
       ],

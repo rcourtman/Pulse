@@ -1,6 +1,12 @@
 import { createSignal, Show, onCleanup, createEffect } from 'solid-js';
 import { UpdatesAPI, type UpdateStatus } from '@/api/updates';
+import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
+import CheckCircleIcon from 'lucide-solid/icons/check-circle';
+import InfoIcon from 'lucide-solid/icons/info';
 import { Dialog } from '@/components/shared/Dialog';
+import { ActionIconButton, Button } from '@/components/shared/Button';
+import { CalloutCard } from '@/components/shared/CalloutCard';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { apiFetch } from '@/utils/apiClient';
 import { logger } from '@/utils/logger';
@@ -310,48 +316,14 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
     if (!currentStatus) return null;
 
     if (hasError()) {
-      return (
-        <svg class="w-12 h-12 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-          />
-        </svg>
-      );
+      return <AlertTriangleIcon class="h-12 w-12 text-red-500" aria-hidden="true" />;
     }
 
     if (isComplete() && !hasError()) {
-      return (
-        <svg class="w-12 h-12 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-          />
-        </svg>
-      );
+      return <CheckCircleIcon class="h-12 w-12 text-emerald-500" aria-hidden="true" />;
     }
 
-    return (
-      <svg class="w-12 h-12 text-blue-500 animate-spin" fill="none" viewBox="0 0 24 24">
-        <circle
-          class="opacity-25"
-          cx="12"
-          cy="12"
-          r="10"
-          stroke="currentColor"
-          stroke-width="4"
-        ></circle>
-        <path
-          class="opacity-75"
-          fill="currentColor"
-          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-        ></path>
-      </svg>
-    );
+    return <LoadingSpinner size="lg" tone="info" label="Update in progress" />;
   };
 
   const getStatusText = () => {
@@ -391,23 +363,24 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
         <div class="px-6 py-4 border-b border-border">
           <div class="flex items-center justify-between">
             <h2 class="text-xl font-semibold text-base-content">Updating Pulse</h2>
-            <button
+            <ActionIconButton
               onClick={handleClose}
-              class="text-muted hover:text-base-content"
-              type="button"
-              aria-label={
+              label={
                 isComplete()
                   ? 'Close update progress'
                   : 'Hide update progress. The update continues server-side.'
               }
+              tone="muted"
+              size="md"
+              type="button"
               title={
                 isComplete()
                   ? 'Close update progress'
                   : 'Hide update progress. GlobalUpdateProgressWatcher keeps tracking the server-side update.'
               }
             >
-              <XIcon class="w-5 h-5" />
-            </button>
+              <XIcon class="h-5 w-5" aria-hidden="true" />
+            </ActionIconButton>
           </div>
         </div>
 
@@ -443,78 +416,65 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
 
           {/* Error Message */}
           <Show when={hasError() && status()?.error}>
-            <div class="mt-6 bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-800 rounded-md p-4">
-              <div class="text-sm text-red-800 dark:text-red-200">
-                <div class="font-medium mb-1">Error Details:</div>
-                <div class="text-red-700 dark:text-red-300">{status()!.error}</div>
-              </div>
-            </div>
+            <CalloutCard
+              tone="danger"
+              scale="compact"
+              padding="md"
+              class="mt-6"
+              icon={<AlertTriangleIcon class="h-5 w-5" aria-hidden="true" />}
+              title="Error Details"
+              description={<span class="text-sm">{status()!.error}</span>}
+            />
           </Show>
 
           {/* Warning / Info */}
           <Show when={!isComplete()}>
             <Show when={isRestarting()}>
-              <div class="mt-6 bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-800 rounded-md p-3">
-                <div class="flex items-start gap-2">
-                  <svg
-                    class="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
+              <CalloutCard
+                tone="info"
+                scale="compact"
+                padding="md"
+                class="mt-6"
+                icon={<InfoIcon class="h-5 w-5" aria-hidden="true" />}
+                description={
+                  <Show
+                    when={wsDisconnected()}
+                    fallback={
+                      <span class="text-sm">Pulse is restarting with the new version...</span>
+                    }
                   >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                  <div class="flex-1">
-                    <div class="text-sm text-blue-800 dark:text-blue-200">
-                      <Show
-                        when={wsDisconnected()}
-                        fallback={<span>Pulse is restarting with the new version...</span>}
-                      >
-                        <span>
-                          Waiting for Pulse to complete restart. This page will reload
-                          automatically.
-                        </span>
-                      </Show>
-                    </div>
-                    <Show when={wsDisconnected() && healthCheckAttempts() > 5}>
-                      <button
-                        onClick={() => window.location.reload()}
-                        class="mt-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded transition-colors"
-                        type="button"
-                      >
-                        Reload Now
-                      </button>
-                    </Show>
-                  </div>
-                </div>
-              </div>
+                    <span class="text-sm">
+                      Waiting for Pulse to complete restart. This page will reload automatically.
+                    </span>
+                  </Show>
+                }
+              >
+                <Show when={wsDisconnected() && healthCheckAttempts() > 5}>
+                  <Button
+                    onClick={() => window.location.reload()}
+                    variant="primary"
+                    size="sm"
+                    class="mt-2"
+                    type="button"
+                  >
+                    Reload Now
+                  </Button>
+                </Show>
+              </CalloutCard>
             </Show>
             <Show when={!isRestarting()}>
-              <div class="mt-6 bg-yellow-50 dark:bg-yellow-900 border border-yellow-200 dark:border-yellow-800 rounded-md p-3">
-                <div class="flex items-start gap-2">
-                  <svg
-                    class="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                    />
-                  </svg>
-                  <div class="text-sm text-yellow-800 dark:text-yellow-200">
+              <CalloutCard
+                tone="warning"
+                scale="compact"
+                padding="md"
+                class="mt-6"
+                icon={<AlertTriangleIcon class="h-5 w-5" aria-hidden="true" />}
+                description={
+                  <span class="text-sm">
                     Please do not close this window or refresh the page during the update.
-                  </div>
-                </div>
-              </div>
+                  </span>
+                }
+              />
             </Show>
           </Show>
         </div>
@@ -523,30 +483,23 @@ export function UpdateProgressModal(props: UpdateProgressModalProps) {
         <Show when={isComplete()}>
           <div class="px-6 py-4 bg-surface-alt border-t border-border flex items-center justify-end gap-3">
             <Show when={!hasError()}>
-              <button
-                onClick={props.onViewHistory}
-                class="px-4 py-2 text-sm font-medium text-base-content hover:bg-surface-hover rounded-md transition-colors"
-                type="button"
-              >
+              <Button onClick={props.onViewHistory} variant="ghost" size="md" type="button">
                 View History
-              </button>
+              </Button>
             </Show>
             <Show when={hasError()}>
-              <button
+              <Button
                 onClick={() => window.location.reload()}
-                class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
+                variant="primary"
+                size="md"
                 type="button"
               >
                 Retry
-              </button>
+              </Button>
             </Show>
-            <button
-              onClick={handleClose}
-              class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
-              type="button"
-            >
+            <Button onClick={handleClose} variant="primary" size="md" type="button">
               Close
-            </button>
+            </Button>
           </div>
         </Show>
       </div>
