@@ -3773,17 +3773,27 @@ describe('shared primitive guardrails', () => {
     const localHelperGuard = registry.patternGuards?.find(
       (guard) => guard.id === 'platform-table-local-metric-fallback-helper',
     );
+    const localMarkerGuard = registry.patternGuards?.find(
+      (guard) => guard.id === 'platform-table-local-metric-empty-marker',
+    );
     const platformMetricConsumers: Array<[string, string]> = [
       ['src/features/docker/DockerContainersTable.tsx', dockerContainersTableSource],
       ['src/features/docker/DockerHostsTable.tsx', dockerHostsTableSource],
       ['src/features/kubernetes/KubernetesClustersTable.tsx', kubernetesClustersTableSource],
       ['src/features/kubernetes/KubernetesNodesTable.tsx', kubernetesNodesTableSource],
+      ['src/features/proxmox/ProxmoxNodesTable.tsx', proxmoxNodesTableSource],
       ['src/features/standalone/AgentsMachinesTable.tsx', agentsMachinesTableSource],
       ['src/features/truenas/TrueNASAppsTable.tsx', truenasAppsTableSource],
       ['src/features/truenas/TrueNASSystemsTable.tsx', truenasSystemsTableSource],
+      ['src/features/vmware/VsphereDatastoresTable.tsx', vsphereDatastoresTableSource],
       ['src/features/vmware/VsphereHostsTable.tsx', vsphereHostsTableSource],
     ];
     const platformMetricConsumerPaths = platformMetricConsumers.map(([path]) => path);
+    const inlineMetricMarkerPatterns = [
+      'flex justify-center',
+      'text-xs text-muted',
+      'aria-hidden="true"',
+    ];
 
     expect(registeredRule?.canonical?.path).toBe(
       'src/features/platformPage/sharedPlatformPage.tsx',
@@ -3810,12 +3820,28 @@ describe('shared primitive guardrails', () => {
     expect(localHelperGuard?.scopes).toEqual([
       'src/features/docker',
       'src/features/kubernetes',
+      'src/features/proxmox',
       'src/features/standalone',
       'src/features/truenas',
       'src/features/vmware',
     ]);
     expect(localHelperGuard?.allowedPaths ?? []).toHaveLength(0);
     expect(localHelperGuard?.ignoredPaths ?? []).toHaveLength(0);
+    expect(localMarkerGuard?.canonical?.path).toBe(
+      'src/features/platformPage/sharedPlatformPage.tsx',
+    );
+    expect(localMarkerGuard?.canonical?.export).toBe('PlatformTableMetricFallback');
+    expect(localMarkerGuard?.allPatterns).toEqual(inlineMetricMarkerPatterns);
+    expect(localMarkerGuard?.scopes).toEqual([
+      'src/features/docker',
+      'src/features/kubernetes',
+      'src/features/proxmox',
+      'src/features/standalone',
+      'src/features/truenas',
+      'src/features/vmware',
+    ]);
+    expect(localMarkerGuard?.allowedPaths ?? []).toHaveLength(0);
+    expect(localMarkerGuard?.ignoredPaths ?? []).toHaveLength(0);
 
     expect(sharedPlatformPageSource).toContain('export function PlatformTableMetricFallback');
     expect(sharedPlatformPageSource).toContain('export const getPlatformTableFiniteMetric');
@@ -3827,6 +3853,7 @@ describe('shared primitive guardrails', () => {
       expect(source).not.toContain('const finiteMetric');
       expect(source).not.toContain('const metricFallback');
       expect(source).not.toContain('Number.isFinite(value)');
+      expect(inlineMetricMarkerPatterns.every((pattern) => source.includes(pattern))).toBe(false);
     }
   });
 

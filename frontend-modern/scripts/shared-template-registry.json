@@ -1349,9 +1349,11 @@
         { "path": "src/features/docker/DockerHostsTable.tsx" },
         { "path": "src/features/kubernetes/KubernetesClustersTable.tsx" },
         { "path": "src/features/kubernetes/KubernetesNodesTable.tsx" },
+        { "path": "src/features/proxmox/ProxmoxNodesTable.tsx" },
         { "path": "src/features/standalone/AgentsMachinesTable.tsx" },
         { "path": "src/features/truenas/TrueNASAppsTable.tsx" },
         { "path": "src/features/truenas/TrueNASSystemsTable.tsx" },
+        { "path": "src/features/vmware/VsphereDatastoresTable.tsx" },
         { "path": "src/features/vmware/VsphereHostsTable.tsx" }
       ],
       "forbiddenPatterns": [
@@ -1372,6 +1374,10 @@
           "patterns": ["const finiteMetric", "const metricFallback"]
         },
         {
+          "path": "src/features/proxmox/ProxmoxNodesTable.tsx",
+          "patterns": ["const finiteMetric", "const metricFallback"]
+        },
+        {
           "path": "src/features/standalone/AgentsMachinesTable.tsx",
           "patterns": ["const finiteMetric", "const metricFallback"]
         },
@@ -1381,6 +1387,10 @@
         },
         {
           "path": "src/features/truenas/TrueNASSystemsTable.tsx",
+          "patterns": ["const finiteMetric", "const metricFallback"]
+        },
+        {
+          "path": "src/features/vmware/VsphereDatastoresTable.tsx",
           "patterns": ["const finiteMetric", "const metricFallback"]
         },
         {
@@ -1913,6 +1923,7 @@
       "scopes": [
         "src/features/docker",
         "src/features/kubernetes",
+        "src/features/proxmox",
         "src/features/standalone",
         "src/features/truenas",
         "src/features/vmware"
@@ -1920,6 +1931,33 @@
       "extensions": [".tsx"],
       "allPatterns": ["const finiteMetric", "const metricFallback", "Number.isFinite(value)"],
       "legacyReason": "Retired migration debt. Platform table metric cells must use PlatformTableMetricFallback and getPlatformTableFiniteMetric instead of carrying page-local metric fallback helpers.",
+      "allowedPaths": [],
+      "ignoredPaths": [],
+      "proof": [
+        "src/components/shared/SharedPrimitives.guardrails.test.ts",
+        "src/features/platformPage/__tests__/sharedPlatformPage.test.ts",
+        "scripts/shared-template-audit.mjs"
+      ]
+    },
+    {
+      "id": "platform-table-local-metric-empty-marker",
+      "category": "platform-table-metric",
+      "summary": "Platform metric cells must not recreate centered muted dash fallback markup inline.",
+      "canonical": {
+        "path": "src/features/platformPage/sharedPlatformPage.tsx",
+        "export": "PlatformTableMetricFallback"
+      },
+      "scopes": [
+        "src/features/docker",
+        "src/features/kubernetes",
+        "src/features/proxmox",
+        "src/features/standalone",
+        "src/features/truenas",
+        "src/features/vmware"
+      ],
+      "extensions": [".tsx"],
+      "allPatterns": ["flex justify-center", "text-xs text-muted", "aria-hidden=\"true\""],
+      "legacyReason": "Retired migration debt. Platform metric cells must compose PlatformTableMetricFallback instead of carrying inline centered dash fallback markup.",
       "allowedPaths": [],
       "ignoredPaths": [],
       "proof": [

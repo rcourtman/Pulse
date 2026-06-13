@@ -247,8 +247,9 @@ tables, including Standalone machines, must use
 Metric bar fallbacks follow that split as well: unified-resource consumers own
 which CPU or memory value is selected, plus any source-specific fallback reason
 such as outdated standalone agent telemetry, while platform tables must use
-`PlatformTableMetricFallback` and `getPlatformTableFiniteMetric` instead of
-recreating local fallback markup or `Number.isFinite` wrappers.
+`PlatformTableMetricFallback` and `getPlatformTableFiniteMetric` for CPU,
+memory, disk, and capacity metric cells instead of recreating local fallback
+markup or `Number.isFinite` wrappers.
 Platform filter option semantics follow that split too: unified-resource
 consumers own the source-specific status buckets and labels, while the repeated
 FilterBar chip leading-dot presentation must use the frontend-primitives-owned

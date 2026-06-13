@@ -31,7 +31,9 @@ import { useWorkloadTableMetricHistory } from '@/components/Workloads/useWorkloa
 import { getWorkloadTableLayoutMode } from '@/components/Workloads/guestRowModel';
 import {
   PlatformTableEmptyState,
+  PlatformTableMetricFallback,
   PlatformTableShell,
+  getPlatformTableFiniteMetric,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
 } from '@/features/platformPage/sharedPlatformPage';
@@ -118,8 +120,9 @@ const projectResourceToLegacyNode = (resource: Resource): LegacyNode => {
 };
 
 const formatPercentLabel = (value: number | null | undefined): string => {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
-  const normalized = value <= 1 ? value * 100 : value;
+  const finiteValue = typeof value === 'number' ? getPlatformTableFiniteMetric(value) : undefined;
+  if (finiteValue === undefined) return '—';
+  const normalized = finiteValue <= 1 ? finiteValue * 100 : finiteValue;
   return `${Math.round(Math.max(0, normalized))}%`;
 };
 
@@ -310,29 +313,26 @@ export const ProxmoxNodesTable: Component<{
               const uptime = () => formatNodeUptime(node.uptime);
               const metricsKey = () => buildMetricKeyForUnifiedResource(node);
               const temperature = () => node.temperature;
-              const cpuPercent = () => node.cpu?.current ?? 0;
-              const memoryUsed = () => node.memory?.used ?? 0;
-              const memoryTotal = () => node.memory?.total ?? 0;
+              const cpuPercent = () => getPlatformTableFiniteMetric(node.cpu?.current) ?? 0;
+              const memoryUsed = () => getPlatformTableFiniteMetric(node.memory?.used) ?? 0;
+              const memoryTotal = () => getPlatformTableFiniteMetric(node.memory?.total) ?? 0;
               const memoryPercent = () =>
                 memoryTotal() > 0
                   ? (memoryUsed() / memoryTotal()) * 100
-                  : typeof node.memory?.current === 'number'
-                    ? node.memory.current
-                    : 0;
+                  : (getPlatformTableFiniteMetric(node.memory?.current) ?? 0);
               const memoryPercentOnly = () =>
-                !memoryTotal() && typeof node.memory?.current === 'number'
-                  ? node.memory.current
+                !memoryTotal() && getPlatformTableFiniteMetric(node.memory?.current) !== undefined
+                  ? getPlatformTableFiniteMetric(node.memory?.current)
                   : undefined;
-              const diskPercent = () => node.disk?.current ?? 0;
-              const aggregateDisk = (): Disk | undefined =>
-                node.disk
-                  ? ({
-                      total: node.disk.total ?? 0,
-                      used: node.disk.used ?? 0,
-                      free: node.disk.free ?? 0,
-                      usage: node.disk.current ?? 0,
-                    } as Disk)
-                  : undefined;
+              const diskPercent = () => getPlatformTableFiniteMetric(node.disk?.current) ?? 0;
+              const aggregateDisk = (): Disk | undefined => {
+                if (!node.disk) return undefined;
+                const total = getPlatformTableFiniteMetric(node.disk.total) ?? 0;
+                const used = getPlatformTableFiniteMetric(node.disk.used) ?? 0;
+                const free = getPlatformTableFiniteMetric(node.disk.free) ?? 0;
+                const usage = getPlatformTableFiniteMetric(node.disk.current) ?? 0;
+                return { total, used, free, usage } as Disk;
+              };
               const legacyNode = () => projectResourceToLegacyNode(node);
               const externalUrl = () => {
                 const shimmed = drawerNode();
@@ -457,13 +457,7 @@ export const ProxmoxNodesTable: Component<{
                               when={
                                 isOnline() && (memoryTotal() > 0 || memoryPercentOnly() != null)
                               }
-                              fallback={
-                                <div class="flex justify-center">
-                                  <span class="text-xs text-muted" aria-hidden="true">
-                                    —
-                                  </span>
-                                </div>
-                              }
+                              fallback={<PlatformTableMetricFallback />}
                             >
                               <StackedMemoryBar
                                 used={memoryUsed()}
@@ -492,13 +486,7 @@ export const ProxmoxNodesTable: Component<{
                           fallback={
                             <Show
                               when={isOnline() && (aggregateDisk() || node.agent?.disks?.length)}
-                              fallback={
-                                <div class="flex justify-center">
-                                  <span class="text-xs text-muted" aria-hidden="true">
-                                    —
-                                  </span>
-                                </div>
-                              }
+                              fallback={<PlatformTableMetricFallback />}
                             >
                               <StackedDiskBar
                                 mode={

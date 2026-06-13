@@ -7,8 +7,10 @@ import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PlatformTableEmptyState,
+  PlatformTableMetricFallback,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  getPlatformTableFiniteMetric,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   summarizePlatformTableValues,
@@ -77,23 +79,16 @@ const consumerSummary = (resource: Resource): { label: string; title: string } =
 const consumerCount = (resource: Resource): number => resource.storage?.consumerCount ?? 0;
 
 const capacityDisk = (resource: Resource) => {
-  const total = typeof resource.disk?.total === 'number' ? resource.disk.total : 0;
-  const used = typeof resource.disk?.used === 'number' ? resource.disk.used : 0;
-  const free =
-    typeof resource.disk?.free === 'number' ? resource.disk.free : Math.max(0, total - used);
-  const usage =
-    typeof resource.disk?.current === 'number' && Number.isFinite(resource.disk.current)
-      ? resource.disk.current
-      : total > 0
-        ? (used / total) * 100
-        : 0;
+  const total = getPlatformTableFiniteMetric(resource.disk?.total) ?? 0;
+  const used = getPlatformTableFiniteMetric(resource.disk?.used) ?? 0;
+  const free = getPlatformTableFiniteMetric(resource.disk?.free) ?? Math.max(0, total - used);
+  const current = getPlatformTableFiniteMetric(resource.disk?.current);
+  const usage = current !== undefined ? current : total > 0 ? (used / total) * 100 : 0;
   return { total, used, free, usage };
 };
 
 const hasCapacityMetric = (resource: Resource): boolean => {
-  if (typeof resource.disk?.current === 'number' && Number.isFinite(resource.disk.current)) {
-    return true;
-  }
+  if (getPlatformTableFiniteMetric(resource.disk?.current) !== undefined) return true;
   return (
     typeof resource.disk?.used === 'number' &&
     typeof resource.disk?.total === 'number' &&
@@ -249,16 +244,7 @@ export const VsphereDatastoresTable: Component<{
                             </span>
                           </TableCell>
                           <TableCell class={getPlatformTableCellClassForKind('metric-bar')}>
-                            <Show
-                              when={showCapacity()}
-                              fallback={
-                                <div class="flex justify-center">
-                                  <span class="text-xs text-muted" aria-hidden="true">
-                                    —
-                                  </span>
-                                </div>
-                              }
-                            >
+                            <Show when={showCapacity()} fallback={<PlatformTableMetricFallback />}>
                               <StackedDiskBar aggregateDisk={disk()} />
                             </Show>
                           </TableCell>
