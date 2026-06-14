@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import {
@@ -141,4 +142,19 @@ test('validateBootstrapTokenForFirstRun validates the seed token before first-ru
   assert.equal(calls[0].url, 'http://localhost:7655/api/security/status');
   assert.equal(calls[1].url, 'http://localhost:7655/api/security/validate-bootstrap-token');
   assert.equal(calls[1].options.body, JSON.stringify({ token: 'token-123' }));
+});
+
+test('docker compose bootstrap seed expands the token inside the seed container shell', () => {
+  const compose = readFileSync(new URL('../docker-compose.test.yml', import.meta.url), 'utf8');
+
+  assert.match(compose, /command:\n\s+- sh\n\s+- -c\n\s+- \|/);
+  assert.ok(
+    compose.includes(': "$${PULSE_E2E_BOOTSTRAP_TOKEN:?PULSE_E2E_BOOTSTRAP_TOKEN is required}"'),
+  );
+  assert.ok(compose.includes('token="$${PULSE_E2E_BOOTSTRAP_TOKEN}"'));
+  assert.ok(compose.includes('if [ "$${#token}" -ne 48 ]; then'));
+  assert.ok(
+    compose.includes('printf \'%s\\n\' "$${token}" > /data/.bootstrap_token'),
+  );
+  assert.doesNotMatch(compose, /"\$\$PULSE_E2E_BOOTSTRAP_TOKEN"/);
 });

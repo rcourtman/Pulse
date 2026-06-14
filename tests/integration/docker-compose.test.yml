@@ -10,13 +10,28 @@ services:
       - PGID=${PGID:-1000}
     volumes:
       - test-data:/data
-    command: >
-      sh -c "set -e;
-      umask 077;
-      printf '%s\n' \"$$PULSE_E2E_BOOTSTRAP_TOKEN\" > /data/.bootstrap_token;
-      chown \"$${PUID:-1000}:$${PGID:-1000}\" /data /data/.bootstrap_token;
-      chmod 700 /data;
-      chmod 600 /data/.bootstrap_token"
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        umask 077
+        : "$${PULSE_E2E_BOOTSTRAP_TOKEN:?PULSE_E2E_BOOTSTRAP_TOKEN is required}"
+        token="$${PULSE_E2E_BOOTSTRAP_TOKEN}"
+        if [ "$${#token}" -ne 48 ]; then
+          echo "PULSE_E2E_BOOTSTRAP_TOKEN must be a 48-character hex token" >&2
+          exit 1
+        fi
+        case "$${token}" in
+          *[!0123456789abcdefABCDEF]*)
+            echo "PULSE_E2E_BOOTSTRAP_TOKEN must be a 48-character hex token" >&2
+            exit 1
+            ;;
+        esac
+        printf '%s\n' "$${token}" > /data/.bootstrap_token
+        chown "$${PUID:-1000}:$${PGID:-1000}" /data /data/.bootstrap_token
+        chmod 700 /data
+        chmod 600 /data/.bootstrap_token
     networks:
       - test-network
 
