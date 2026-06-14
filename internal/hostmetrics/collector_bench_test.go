@@ -4,12 +4,15 @@ import (
 	"context"
 	"testing"
 
+	"github.com/rs/zerolog"
 	godisk "github.com/shirou/gopsutil/v4/disk"
 )
 
 // BenchmarkCollectDiskFiltering measures the disk filtering and deduplication
 // logic that runs on every collection cycle.
 func BenchmarkCollectDiskFiltering(b *testing.B) {
+	disableBenchmarkLogging(b)
+
 	origPartitions := diskPartitions
 	origUsage := diskUsage
 	b.Cleanup(func() {
@@ -43,6 +46,16 @@ func BenchmarkCollectDiskFiltering(b *testing.B) {
 
 // BenchmarkSummarizeZFSPools measures ZFS pool summarization with a mix of pool types.
 func BenchmarkSummarizeZFSPools(b *testing.B) {
+	disableBenchmarkLogging(b)
+
+	origQueryZpoolStats := queryZpoolStats
+	queryZpoolStats = func(context.Context, []string) (map[string]zpoolStats, error) {
+		return nil, nil
+	}
+	b.Cleanup(func() {
+		queryZpoolStats = origQueryZpoolStats
+	})
+
 	datasets := []zfsDatasetUsage{
 		{Pool: "rpool", Dataset: "rpool", Used: 100e9, Free: 400e9, Total: 500e9, Mountpoint: "/"},
 		{Pool: "rpool", Dataset: "rpool/data", Used: 50e9, Free: 400e9, Total: 450e9, Mountpoint: "/data"},
@@ -77,4 +90,13 @@ func buildSamplePartitions(n int) []godisk.PartitionStat {
 		}
 	}
 	return parts
+}
+
+func disableBenchmarkLogging(b *testing.B) {
+	b.Helper()
+	origLevel := zerolog.GlobalLevel()
+	zerolog.SetGlobalLevel(zerolog.Disabled)
+	b.Cleanup(func() {
+		zerolog.SetGlobalLevel(origLevel)
+	})
 }
