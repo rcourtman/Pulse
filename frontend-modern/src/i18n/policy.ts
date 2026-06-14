@@ -5,6 +5,7 @@ import {
   type SupportedLocale,
 } from './locales';
 import {
+  ALERTS_OVERVIEW_MIGRATED_MESSAGE_KEYS,
   FIRST_SESSION_MONITORING_MIGRATED_MESSAGE_KEYS,
   SETTINGS_GENERAL_MIGRATED_MESSAGE_KEYS,
   type I18nMessageKey,
@@ -63,11 +64,28 @@ export const FIRST_SESSION_MONITORING_NON_TRANSLATABLE_TOKENS = [
   'pct exec',
 ] as const;
 
+export const ALERTS_OVERVIEW_NON_TRANSLATABLE_TOKENS = [
+  'Pulse',
+  'Pulse Assistant',
+  'Pulse Alerts',
+  'Pro',
+  'API',
+  'alertIdentifier',
+  'alertType',
+  'resourceId',
+  'resourceName',
+  'node',
+  'systemctl',
+] as const;
+
 export const LOCALIZED_SETTINGS_GENERAL_JOURNEY_KEYS =
   SETTINGS_GENERAL_MIGRATED_MESSAGE_KEYS satisfies readonly I18nMessageKey[];
 
 export const LOCALIZED_FIRST_SESSION_MONITORING_JOURNEY_KEYS =
   FIRST_SESSION_MONITORING_MIGRATED_MESSAGE_KEYS satisfies readonly I18nMessageKey[];
+
+export const LOCALIZED_ALERTS_OVERVIEW_JOURNEY_KEYS =
+  ALERTS_OVERVIEW_MIGRATED_MESSAGE_KEYS satisfies readonly I18nMessageKey[];
 
 export const SETTINGS_GENERAL_ALLOWED_IDENTICAL_TRANSLATIONS = {
   de: ['settings.nav.group.system', 'settings.general.theme.option.system'],
@@ -77,4 +95,27 @@ export const SETTINGS_GENERAL_ALLOWED_IDENTICAL_TRANSLATIONS = {
 export const FIRST_SESSION_MONITORING_ALLOWED_IDENTICAL_TRANSLATIONS = {
   de: ['setup.completion.sourceOptions.agent.title', 'setup.security.placeholder.username'],
   es: ['setup.completion.sourceOptions.agent.title', 'setup.security.placeholder.username'],
+} as const satisfies Partial<Record<SupportedLocale, readonly I18nMessageKey[]>>;
+
+export const ALERTS_OVERVIEW_ALLOWED_IDENTICAL_TRANSLATIONS = {
+  de: [
+    'alerts.assistant.duration.hoursMinutes',
+    'alerts.assistant.level.info',
+    'alerts.assistant.sourceLabel',
+    'alerts.tabs.group.configuration',
+    'alerts.tabs.group.status',
+    'alerts.timeline.event.aiAnalysis',
+    'alerts.timeline.event.runbook',
+  ],
+  es: [
+    'alerts.assistant.duration.hoursMinutes',
+    'alerts.assistant.duration.minute',
+    'alerts.assistant.duration.minutes',
+    'alerts.assistant.sourceLabel',
+    'alerts.nav.title',
+    'alerts.page.default.title',
+    'alerts.tabs.destinations',
+    'alerts.timeline.event.aiAnalysis',
+    'alerts.timeline.event.runbook',
+  ],
 } as const satisfies Partial<Record<SupportedLocale, readonly I18nMessageKey[]>>;

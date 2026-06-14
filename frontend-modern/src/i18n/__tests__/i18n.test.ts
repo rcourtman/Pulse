@@ -1,11 +1,14 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  ALERTS_OVERVIEW_ALLOWED_IDENTICAL_TRANSLATIONS,
+  ALERTS_OVERVIEW_NON_TRANSLATABLE_TOKENS,
   DEFAULT_LOCALE,
   FIRST_SESSION_MONITORING_ALLOWED_IDENTICAL_TRANSLATIONS,
   FIRST_SESSION_MONITORING_NON_TRANSLATABLE_TOKENS,
   FIRST_LOCALIZATION_LOCALES,
   I18N_MESSAGES,
   LOCALIZATION_FOUNDATION,
+  LOCALIZED_ALERTS_OVERVIEW_JOURNEY_KEYS,
   LOCALIZED_FIRST_SESSION_MONITORING_JOURNEY_KEYS,
   LOCALIZED_SETTINGS_GENERAL_JOURNEY_KEYS,
   NEVER_TRANSLATE_COPY_RULES,
@@ -150,6 +153,21 @@ describe('i18n foundation', () => {
         'pct exec',
       ]),
     );
+    expect(ALERTS_OVERVIEW_NON_TRANSLATABLE_TOKENS).toEqual(
+      expect.arrayContaining([
+        'Pulse',
+        'Pulse Assistant',
+        'Pulse Alerts',
+        'Pro',
+        'API',
+        'alertIdentifier',
+        'alertType',
+        'resourceId',
+        'resourceName',
+        'node',
+        'systemctl',
+      ]),
+    );
   });
 
   it('requires explicit first-wave translations for the migrated settings general journey', () => {
@@ -222,6 +240,64 @@ describe('i18n foundation', () => {
         'Docker',
       );
       expect(I18N_MESSAGES[locale]['setup.security.nextScreen.itemApiToken']).toContain('API');
+    }
+  });
+
+  it('requires explicit first-wave translations for the migrated alerts overview journey', () => {
+    for (const locale of FIRST_LOCALIZATION_LOCALES) {
+      const allowedIdenticalKeys: ReadonlySet<I18nMessageKey> = new Set([
+        ...((SETTINGS_GENERAL_ALLOWED_IDENTICAL_TRANSLATIONS[locale] ??
+          []) as readonly I18nMessageKey[]),
+        ...((FIRST_SESSION_MONITORING_ALLOWED_IDENTICAL_TRANSLATIONS[locale] ??
+          []) as readonly I18nMessageKey[]),
+        ...((ALERTS_OVERVIEW_ALLOWED_IDENTICAL_TRANSLATIONS[locale] ??
+          []) as readonly I18nMessageKey[]),
+      ]);
+      for (const key of LOCALIZED_ALERTS_OVERVIEW_JOURNEY_KEYS) {
+        expect(I18N_MESSAGES[locale][key], `${locale}:${key}`).toBeTruthy();
+        if (!allowedIdenticalKeys.has(key)) {
+          expect(I18N_MESSAGES[locale][key], `${locale}:${key}`).not.toBe(I18N_MESSAGES.en[key]);
+        }
+      }
+    }
+  });
+
+  it('keeps machine-facing identifiers unchanged in alerts overview catalog copy', () => {
+    for (const locale of FIRST_LOCALIZATION_LOCALES) {
+      expect(I18N_MESSAGES[locale]['alerts.assistant.button.full']).toContain('Pulse Assistant');
+      expect(I18N_MESSAGES[locale]['alerts.assistant.sourceLabel']).toBe('Pulse Alerts');
+      expect(I18N_MESSAGES[locale]['alerts.assistant.locked.proRequired']).toContain('Pro');
+      expect(
+        t(
+          'alerts.assistant.action.investigate',
+          {
+            alertIdentifier: 'alert:vm-101:cpu',
+          },
+          locale,
+        ),
+      ).toContain('alert:vm-101:cpu');
+      expect(
+        t(
+          'alerts.assistant.subject',
+          {
+            level: 'warning',
+            alertType: 'cpu',
+            resourceName: 'db-vm-01',
+          },
+          locale,
+        ),
+      ).toContain('db-vm-01');
+      expect(
+        t(
+          'alerts.assistant.subject',
+          {
+            level: 'warning',
+            alertType: 'cpu',
+            resourceName: 'db-vm-01',
+          },
+          locale,
+        ),
+      ).toContain('cpu');
     }
   });
 });

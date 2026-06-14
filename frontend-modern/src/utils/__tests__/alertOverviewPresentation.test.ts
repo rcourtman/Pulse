@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { DEFAULT_LOCALE, setActiveLocale } from '@/i18n';
 import {
   ALERT_BUCKET_EMPTY_LABEL,
   ALERT_HISTORY_ALL_TIME_FILTER_LABEL,
@@ -30,36 +31,83 @@ import {
   ALERT_TIMELINE_UNAVAILABLE_STATE,
   ALERTS_THRESHOLD_HINT,
   getAlertOverviewAcknowledgedBadgeClass,
+  getAlertOverviewAcknowledgedBadgeLabel,
+  getAlertOverviewAcknowledgedNotification,
+  getAlertOverviewAcknowledgedToggleLabel,
+  getAlertOverviewActiveSectionTitle,
+  getAlertOverviewBulkAcknowledgeFailureNotification,
+  getAlertOverviewBulkAcknowledgeGenericFailureNotification,
+  getAlertOverviewBulkAcknowledgeLabel,
+  getAlertOverviewBulkAcknowledgedNotification,
   getAlertOverviewCardPresentation,
+  getAlertOverviewEmptyState,
+  getAlertOverviewNodeLabel,
+  getAlertOverviewPausedState,
   getAlertOverviewPrimaryActionClass,
+  getAlertOverviewPrimaryActionLabel,
+  getAlertOverviewRestoredNotification,
   getAlertOverviewSecondaryActionClass,
+  getAlertOverviewStartedAtLabel,
   getAlertOverviewStartedAtClass,
+  getAlertOverviewStatsLabels,
+  getAlertOverviewTimelineActionLabel,
   getAlertHistoryEmptyState,
   getAlertHistoryLoadingState,
   getAlertHistorySearchPlaceholder,
   getAlertBucketCountLabel,
   getAlertFilteredEmptyState,
+  getAlertTimelineAcknowledgedLabel,
+  getAlertTimelineClosedAtLabel,
   getAlertTimelineEmptyState,
+  getAlertTimelineEventTypeLabel,
   getAlertTimelineFailureState,
   getAlertTimelineFilterEmptyState,
+  getAlertTimelineFilterLabel,
+  getAlertTimelineHeading,
   getAlertTimelineLoadingState,
+  getAlertTimelineNoteLabel,
+  getAlertTimelineNotePlaceholder,
+  getAlertTimelineOpenedAtLabel,
+  getAlertTimelineQuickFilterLabel,
+  getAlertTimelineSaveNoteLabel,
   getAlertTimelineUnavailableState,
   getAlertListEmptyState,
   getAlertsPageHeaderMeta,
 } from '@/utils/alertOverviewPresentation';
 
 describe('alertOverviewPresentation', () => {
+  beforeEach(() => {
+    setActiveLocale(DEFAULT_LOCALE);
+  });
+
+  afterEach(() => {
+    setActiveLocale(DEFAULT_LOCALE);
+  });
+
   it('returns canonical alert overview empty-state copy', () => {
     expect(ALERTS_EMPTY_STATE).toBe('No active alerts');
     expect(ALERTS_THRESHOLD_HINT).toBe('Alerts will appear here when thresholds are exceeded');
     expect(getAlertListEmptyState(true)).toBe('No active alerts');
     expect(getAlertListEmptyState(false)).toBe('No unacknowledged alerts');
+    expect(getAlertOverviewEmptyState()).toEqual({
+      title: 'No active alerts',
+      description: 'Alerts will appear here when thresholds are exceeded',
+    });
+    expect(getAlertOverviewPausedState()).toEqual({
+      title: 'Alerting is paused',
+      description: 'Toggle alerts on to resume monitoring and unlock configuration tabs',
+    });
   });
 
   it('returns canonical alert overview stat labels', () => {
     expect(ALERT_OVERVIEW_ACKNOWLEDGED_LABEL).toBe('Acknowledged');
     expect(ALERT_OVERVIEW_LAST_24_HOURS_LABEL).toBe('Triggered (24h)');
     expect(ALERT_OVERVIEW_WORKLOAD_OVERRIDES_LABEL).toBe('Workload Overrides');
+    expect(getAlertOverviewStatsLabels()).toEqual({
+      last24Hours: 'Triggered (24h)',
+      acknowledged: 'Acknowledged',
+      workloadOverrides: 'Workload Overrides',
+    });
   });
 
   it('returns canonical alert history search and empty-state copy', () => {
@@ -168,6 +216,20 @@ describe('alertOverviewPresentation', () => {
       text: ALERT_TIMELINE_FAILURE_STATE,
       actionLabel: ALERT_TIMELINE_RETRY_LABEL,
     });
+    expect(getAlertTimelineHeading()).toBe('Incident');
+    expect(getAlertTimelineAcknowledgedLabel()).toBe('acknowledged');
+    expect(getAlertTimelineOpenedAtLabel('1/1/2026')).toBe('opened 1/1/2026');
+    expect(getAlertTimelineClosedAtLabel('1/2/2026')).toBe('closed 1/2/2026');
+    expect(getAlertTimelineNoteLabel()).toBe('Incident note');
+    expect(getAlertTimelineNotePlaceholder()).toBe('Add a note for this incident...');
+    expect(getAlertTimelineSaveNoteLabel(false)).toBe('Save Note');
+    expect(getAlertTimelineSaveNoteLabel(true)).toBe('Saving...');
+    expect(getAlertTimelineFilterLabel('panel')).toBe('Filter events:');
+    expect(getAlertTimelineFilterLabel('compact')).toBe('Filters');
+    expect(getAlertTimelineQuickFilterLabel('all')).toBe('All');
+    expect(getAlertTimelineQuickFilterLabel('none')).toBe('None');
+    expect(getAlertTimelineEventTypeLabel('command')).toBe('Cmd');
+    expect(getAlertTimelineEventTypeLabel('unknown_event')).toBe('unknown_event');
   });
 
   it('returns canonical active alert card presentation', () => {
@@ -196,5 +258,61 @@ describe('alertOverviewPresentation', () => {
     expect(getAlertOverviewSecondaryActionClass()).toBe(
       'px-3 py-1.5 text-xs font-medium border rounded-md transition-all bg-surface text-base-content border-border hover:bg-surface-hover',
     );
+  });
+
+  it('localizes alert overview helper copy through the active locale', () => {
+    setActiveLocale('es');
+
+    expect(getAlertsPageHeaderMeta().overview.title).toBe('Resumen de alertas');
+    expect(getAlertOverviewActiveSectionTitle()).toBe('Alertas activas');
+    expect(getAlertOverviewStatsLabels()).toEqual({
+      last24Hours: 'Activadas (24h)',
+      acknowledged: 'Reconocidas',
+      workloadOverrides: 'Excepciones de cargas',
+    });
+    expect(getAlertOverviewEmptyState()).toEqual({
+      title: 'No hay alertas activas',
+      description: 'Las alertas apareceran aqui cuando se superen los umbrales',
+    });
+    expect(getAlertOverviewPausedState().title).toBe('Las alertas estan pausadas');
+    expect(getAlertListEmptyState(false)).toBe('No hay alertas sin reconocer');
+    expect(getAlertOverviewAcknowledgedToggleLabel(true)).toBe('Ocultar reconocidas');
+    expect(getAlertOverviewBulkAcknowledgeLabel(2, false)).toBe('Reconocer todas (2)');
+    expect(getAlertOverviewBulkAcknowledgeLabel(2, true)).toBe('Reconociendo...');
+    expect(getAlertOverviewAcknowledgedBadgeLabel()).toBe('Reconocida');
+    expect(getAlertOverviewNodeLabel('pve-01')).toBe('en pve-01');
+    expect(getAlertOverviewStartedAtLabel('1/1/2026')).toBe('Inicio: 1/1/2026');
+    expect(getAlertOverviewPrimaryActionLabel({ acknowledged: false, processing: false })).toBe(
+      'Reconocer',
+    );
+    expect(getAlertOverviewPrimaryActionLabel({ acknowledged: true, processing: false })).toBe(
+      'Quitar reconocimiento',
+    );
+    expect(getAlertOverviewPrimaryActionLabel({ acknowledged: false, processing: true })).toBe(
+      'Procesando...',
+    );
+    expect(getAlertOverviewTimelineActionLabel(false)).toBe('Linea de tiempo');
+    expect(getAlertOverviewAcknowledgedNotification()).toBe('Alerta reconocida');
+    expect(getAlertOverviewRestoredNotification()).toBe('Alerta restaurada');
+    expect(getAlertOverviewBulkAcknowledgedNotification(2)).toBe('2 alertas reconocidas.');
+    expect(getAlertOverviewBulkAcknowledgeFailureNotification(1)).toBe(
+      'No se pudo reconocer 1 alerta.',
+    );
+    expect(getAlertOverviewBulkAcknowledgeGenericFailureNotification()).toBe(
+      'No se pudieron reconocer las alertas',
+    );
+    expect(getAlertTimelineFailureState()).toEqual({
+      text: 'No se pudo cargar la linea de tiempo.',
+      actionLabel: 'Reintentar',
+    });
+    expect(getAlertTimelineFilterLabel('panel')).toBe('Filtrar eventos:');
+    expect(getAlertTimelineQuickFilterLabel('none')).toBe('Ninguna');
+    expect(getAlertTimelineEventTypeLabel('command')).toBe('Comando');
+
+    setActiveLocale('de');
+
+    expect(getAlertOverviewActiveSectionTitle()).toBe('Aktive Warnmeldungen');
+    expect(getAlertTimelineHeading()).toBe('Vorfall');
+    expect(getAlertTimelineEventTypeLabel('alert_resolved')).toBe('Behoben');
   });
 });

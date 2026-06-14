@@ -7,9 +7,16 @@ import { IncidentTimelineEventCard } from '@/components/Alerts/IncidentTimelineE
 import { FormTextarea } from '@/components/shared/FormTextarea';
 import {
   getAlertTimelineEmptyState,
+  getAlertTimelineAcknowledgedLabel,
+  getAlertTimelineClosedAtLabel,
   getAlertTimelineFailureState,
   getAlertTimelineFilterEmptyState,
+  getAlertTimelineHeading,
   getAlertTimelineLoadingState,
+  getAlertTimelineNoteLabel,
+  getAlertTimelineNotePlaceholder,
+  getAlertTimelineOpenedAtLabel,
+  getAlertTimelineSaveNoteLabel,
   getAlertTimelineUnavailableState,
 } from '@/utils/alertOverviewPresentation';
 import {
@@ -19,8 +26,6 @@ import {
   getAlertIncidentNoteTextareaClass,
   getAlertIncidentTimelineHeadingClass,
   getAlertIncidentTimelineMetaRowClass,
-  getAlertResourceIncidentNotePlaceholder,
-  getAlertResourceIncidentSaveNoteLabel,
 } from '@/utils/alertIncidentPresentation';
 
 export interface IncidentTimelinePanelProps {
@@ -53,17 +58,27 @@ export function IncidentTimelinePanel(props: IncidentTimelinePanelProps) {
           <div class="space-y-3">
             <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div class={getAlertIncidentTimelineMetaRowClass()}>
-                <span class={getAlertIncidentTimelineHeadingClass()}>Incident</span>
+                <span class={getAlertIncidentTimelineHeadingClass()}>
+                  {getAlertTimelineHeading()}
+                </span>
                 <span>{loadedTimeline().status}</span>
                 <Show when={loadedTimeline().acknowledged}>
-                  <span class={getAlertIncidentAcknowledgedBadgeClass()}>acknowledged</span>
+                  <span class={getAlertIncidentAcknowledgedBadgeClass()}>
+                    {getAlertTimelineAcknowledgedLabel()}
+                  </span>
                 </Show>
                 <Show when={loadedTimeline().openedAt}>
-                  <span>opened {new Date(loadedTimeline().openedAt).toLocaleString()}</span>
+                  <span>
+                    {getAlertTimelineOpenedAtLabel(
+                      new Date(loadedTimeline().openedAt).toLocaleString(),
+                    )}
+                  </span>
                 </Show>
                 <Show when={loadedTimeline().closedAt}>
                   <span>
-                    closed {new Date(loadedTimeline().closedAt as string).toLocaleString()}
+                    {getAlertTimelineClosedAtLabel(
+                      new Date(loadedTimeline().closedAt as string).toLocaleString(),
+                    )}
                   </span>
                 </Show>
               </div>
@@ -94,12 +109,12 @@ export function IncidentTimelinePanel(props: IncidentTimelinePanelProps) {
             </Show>
             <div class="flex flex-col gap-2">
               <FormTextarea
-                label="Incident note"
+                label={getAlertTimelineNoteLabel()}
                 labelClass="sr-only"
                 fieldBaseClass="contents"
                 textareaBaseClass={getAlertIncidentNoteTextareaClass()}
                 rows={2}
-                placeholder={getAlertResourceIncidentNotePlaceholder()}
+                placeholder={getAlertTimelineNotePlaceholder()}
                 value={props.noteDraft}
                 onInput={(event) => props.onNoteDraftChange(event.currentTarget.value)}
               />
@@ -109,7 +124,7 @@ export function IncidentTimelinePanel(props: IncidentTimelinePanelProps) {
                   disabled={props.noteSaving || !props.noteDraft.trim()}
                   onClick={() => props.onSaveNote()}
                 >
-                  {getAlertResourceIncidentSaveNoteLabel(props.noteSaving)}
+                  {getAlertTimelineSaveNoteLabel(props.noteSaving)}
                 </button>
               </div>
             </div>

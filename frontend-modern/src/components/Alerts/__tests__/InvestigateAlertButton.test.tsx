@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { DEFAULT_LOCALE, setActiveLocale } from '@/i18n';
 import type { Alert } from '@/types/api';
 import { getPublicPricingUrl } from '@/utils/pricingHandoff';
 
@@ -105,9 +106,11 @@ function openedBriefing(): { statusLabel?: string; detailLines?: string[]; subje
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  setActiveLocale(DEFAULT_LOCALE);
 });
 
 beforeEach(() => {
+  setActiveLocale(DEFAULT_LOCALE);
   openMock.mockReset();
   formatAlertValueMock.mockClear();
   openUpgradeDestinationMock.mockReset();
@@ -334,6 +337,54 @@ describe('InvestigateAlertButton', () => {
       });
       expect(JSON.stringify(context)).not.toContain('Execute diagnostic commands if safe');
       expect(JSON.stringify(context.briefing)).not.toContain('systemctl');
+    });
+
+    it('localizes the visible briefing while preserving machine identifiers and source values', async () => {
+      setActiveLocale('de');
+
+      const alert = makeAlert({
+        id: 'alert:vm-101:cpu',
+        resourceName: 'db-vm-01',
+        node: 'pve1',
+        nodeDisplayName: 'PVE Node 1',
+        type: 'cpu',
+        message: 'CPU usage is high',
+      });
+      render(() => <InvestigateAlertButton alert={alert} variant="text" />);
+
+      expect(screen.getByRole('button')).toHaveTextContent('Pulse Assistant fragen');
+
+      await fireEvent.click(screen.getByRole('button'));
+
+      const context = openedContext();
+      const briefing = openedBriefing();
+
+      expect(briefing).toMatchObject({
+        sourceLabel: 'Pulse Alerts',
+        title: 'Warnungsanalyse angehaengt',
+        subject: 'Warnung cpu auf db-vm-01',
+        actionLabel: 'Warnmeldung alert:vm-101:cpu untersuchen',
+        safetyNote: 'Diagnosen und Behebungen erfordern die Freigabe durch einen Operator.',
+      });
+      expect(briefing.statusLabel).toContain('Warnung-Warnmeldung');
+      expect(briefing.detailLines).toEqual(
+        expect.arrayContaining([
+          'Aktueller Wert 82.5%; Schwellwert 80.0%',
+          'Knoten: PVE Node 1',
+          'Meldung: CPU usage is high',
+        ]),
+      );
+      expect(context.context).toMatchObject({
+        alertIdentifier: 'alert:vm-101:cpu',
+        alertType: 'cpu',
+        alertMessage: 'CPU usage is high',
+        guestName: 'db-vm-01',
+        node: 'pve1',
+      });
+      expect(context.handoffContext).toContain('Alert Identifier: alert:vm-101:cpu');
+      expect(context.handoffContext).toContain('Alert Level: Warning');
+      expect(context.handoffContext).toContain('Resource: db-vm-01');
+      expect(context.handoffContext).toContain('Message: CPU usage is high');
     });
 
     it('does not open the upgrade destination when unlocked', async () => {

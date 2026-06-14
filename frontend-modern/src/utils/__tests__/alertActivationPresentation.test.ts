@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { DEFAULT_LOCALE, setActiveLocale } from '@/i18n';
 import {
   ALERT_ACTIVATION_FAILURE,
   ALERT_ACTIVATION_SUCCESS,
@@ -12,6 +13,14 @@ import {
 } from '@/utils/alertActivationPresentation';
 
 describe('getAlertActivationPresentation', () => {
+  beforeEach(() => {
+    setActiveLocale(DEFAULT_LOCALE);
+  });
+
+  afterEach(() => {
+    setActiveLocale(DEFAULT_LOCALE);
+  });
+
   it('returns the active alerts presentation', () => {
     expect(getAlertActivationPresentation({ isActive: true })).toEqual({
       label: 'Alerts enabled',
@@ -45,5 +54,24 @@ describe('getAlertActivationPresentation', () => {
     expect(getAlertActivationFailure()).toBe(ALERT_ACTIVATION_FAILURE);
     expect(getAlertDeactivationSuccess()).toBe(ALERT_DEACTIVATION_SUCCESS);
     expect(getAlertDeactivationFailure()).toBe(ALERT_DEACTIVATION_FAILURE);
+  });
+
+  it('localizes activation labels and feedback through the active locale', () => {
+    setActiveLocale('es');
+
+    expect(getAlertActivationPresentation({ isActive: true }).label).toBe('Alertas activadas');
+    expect(getAlertActivationPresentation({ isActive: false }).label).toBe('Alertas desactivadas');
+    expect(getAlertActivationSuccess()).toBe(
+      'Alertas activadas. Ahora recibiras avisos cuando se detecten problemas.',
+    );
+    expect(getAlertActivationFailure()).toBe(
+      'No se pudieron activar las alertas. Intentalo de nuevo.',
+    );
+    expect(getAlertDeactivationSuccess()).toBe(
+      'Alertas desactivadas. No se enviara nada hasta que las vuelvas a activar.',
+    );
+    expect(getAlertDeactivationFailure()).toBe(
+      'No se pudieron desactivar las alertas. Intentalo de nuevo.',
+    );
   });
 });

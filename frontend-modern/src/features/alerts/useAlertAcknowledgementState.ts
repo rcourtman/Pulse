@@ -4,6 +4,14 @@ import type { Accessor } from 'solid-js';
 import { AlertsAPI } from '@/api/alerts';
 import { notificationStore } from '@/stores/notifications';
 import type { Alert } from '@/types/api';
+import {
+  getAlertOverviewAcknowledgedNotification,
+  getAlertOverviewAcknowledgementFailureNotification,
+  getAlertOverviewBulkAcknowledgedNotification,
+  getAlertOverviewBulkAcknowledgeFailureNotification,
+  getAlertOverviewBulkAcknowledgeGenericFailureNotification,
+  getAlertOverviewRestoredNotification,
+} from '@/utils/alertOverviewPresentation';
 import { logger } from '@/utils/logger';
 
 import { getCanonicalAlertId } from './identity';
@@ -114,7 +122,7 @@ export function useAlertAcknowledgementState(props: UseAlertAcknowledgementState
           ackTime: undefined,
           ackUser: undefined,
         });
-        notificationStore.success('Alert restored');
+        notificationStore.success(getAlertOverviewRestoredNotification());
       } else {
         await AlertsAPI.acknowledge(alertIdentifier);
         applyAlertUpdate(alertIdentifier, {
@@ -122,14 +130,11 @@ export function useAlertAcknowledgementState(props: UseAlertAcknowledgementState
           ackTime: new Date().toISOString(),
           ackUser: undefined,
         });
-        notificationStore.success('Alert acknowledged');
+        notificationStore.success(getAlertOverviewAcknowledgedNotification());
       }
     } catch (error) {
-      logger.error(
-        `Failed to ${wasAcknowledged ? 'unacknowledge' : 'acknowledge'} alert:`,
-        error,
-      );
-      notificationStore.error(`Failed to ${wasAcknowledged ? 'restore' : 'acknowledge'} alert`);
+      logger.error(`Failed to ${wasAcknowledged ? 'unacknowledge' : 'acknowledge'} alert:`, error);
+      notificationStore.error(getAlertOverviewAcknowledgementFailureNotification(wasAcknowledged));
     } finally {
       releaseAlertProcessing(alertIdentifier);
     }
@@ -163,19 +168,17 @@ export function useAlertAcknowledgementState(props: UseAlertAcknowledgementState
       });
 
       if (successes.length > 0) {
-        notificationStore.success(
-          `Acknowledged ${successes.length} ${successes.length === 1 ? 'alert' : 'alerts'}.`,
-        );
+        notificationStore.success(getAlertOverviewBulkAcknowledgedNotification(successes.length));
       }
 
       if (failures.length > 0) {
         notificationStore.error(
-          `Failed to acknowledge ${failures.length} ${failures.length === 1 ? 'alert' : 'alerts'}.`,
+          getAlertOverviewBulkAcknowledgeFailureNotification(failures.length),
         );
       }
     } catch (error) {
       logger.error('Bulk acknowledge failed', error);
-      notificationStore.error('Failed to acknowledge alerts');
+      notificationStore.error(getAlertOverviewBulkAcknowledgeGenericFailureNotification());
     } finally {
       setBulkAckProcessing(false);
     }

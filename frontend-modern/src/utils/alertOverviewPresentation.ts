@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import { getAllFilterOptionLabel } from '@/components/shared/filterOptionPresentation';
 
 export const ALERTS_EMPTY_STATE = 'No active alerts';
@@ -45,65 +46,231 @@ export interface AlertOverviewCardPresentation {
 export function getAlertsPageHeaderMeta() {
   return {
     overview: {
-      title: ALERTS_PAGE_OVERVIEW_TITLE,
-      description: ALERTS_PAGE_OVERVIEW_DESCRIPTION,
+      title: t('alerts.page.overview.title'),
+      description: t('alerts.page.overview.description'),
     },
     thresholds: {
-      title: ALERTS_PAGE_THRESHOLDS_TITLE,
-      description: ALERTS_PAGE_THRESHOLDS_DESCRIPTION,
+      title: t('alerts.page.thresholds.title'),
+      description: t('alerts.page.thresholds.description'),
     },
     destinations: {
-      title: ALERTS_PAGE_DESTINATIONS_TITLE,
-      description: ALERTS_PAGE_DESTINATIONS_DESCRIPTION,
+      title: t('alerts.page.destinations.title'),
+      description: t('alerts.page.destinations.description'),
     },
     schedule: {
-      title: ALERTS_PAGE_SCHEDULE_TITLE,
-      description: ALERTS_PAGE_SCHEDULE_DESCRIPTION,
+      title: t('alerts.page.schedule.title'),
+      description: t('alerts.page.schedule.description'),
     },
     history: {
-      title: ALERTS_PAGE_HISTORY_TITLE,
-      description: ALERTS_PAGE_HISTORY_DESCRIPTION,
+      title: t('alerts.page.history.title'),
+      description: t('alerts.page.history.description'),
     },
     default: {
-      title: ALERTS_PAGE_DEFAULT_TITLE,
-      description: ALERTS_PAGE_DEFAULT_DESCRIPTION,
+      title: t('alerts.page.default.title'),
+      description: t('alerts.page.default.description'),
     },
   } as const;
 }
 
 export function getAlertListEmptyState(showAcknowledged: boolean): string {
-  return showAcknowledged ? ALERTS_EMPTY_STATE : 'No unacknowledged alerts';
+  return showAcknowledged
+    ? t('alerts.overview.filteredEmpty.all')
+    : t('alerts.overview.filteredEmpty.unacknowledged');
+}
+
+export function getAlertOverviewEmptyState() {
+  return {
+    title: t('alerts.overview.empty.title'),
+    description: t('alerts.overview.empty.description'),
+  } as const;
+}
+
+export function getAlertOverviewPausedState() {
+  return {
+    title: t('alerts.overview.paused.title'),
+    description: t('alerts.overview.paused.description'),
+  } as const;
+}
+
+export function getAlertOverviewStatsLabels() {
+  return {
+    last24Hours: t('alerts.overview.stats.triggered24h'),
+    acknowledged: t('alerts.overview.stats.acknowledged'),
+    workloadOverrides: t('alerts.overview.stats.workloadOverrides'),
+  } as const;
+}
+
+export function getAlertOverviewActiveSectionTitle(): string {
+  return t('alerts.overview.section.activeAlerts');
+}
+
+export function getAlertOverviewAcknowledgedToggleLabel(showAcknowledged: boolean): string {
+  return showAcknowledged
+    ? t('alerts.overview.action.hideAcknowledged')
+    : t('alerts.overview.action.showAcknowledged');
+}
+
+export function getAlertOverviewBulkAcknowledgeLabel(count: number, processing: boolean): string {
+  return processing
+    ? t('alerts.overview.action.acknowledging')
+    : t('alerts.overview.action.acknowledgeAll', { count });
+}
+
+export function getAlertOverviewAcknowledgedBadgeLabel(): string {
+  return t('alerts.overview.acknowledgedBadge');
+}
+
+export function getAlertOverviewNodeLabel(node: string): string {
+  return t('alerts.overview.nodePrefix', { node });
+}
+
+export function getAlertOverviewStartedAtLabel(startedAt: string): string {
+  return t('alerts.overview.startedAt', { startedAt });
+}
+
+export function getAlertOverviewPrimaryActionLabel({
+  acknowledged,
+  processing,
+}: {
+  acknowledged: boolean;
+  processing: boolean;
+}): string {
+  if (processing) return t('alerts.overview.action.processing');
+  return acknowledged
+    ? t('alerts.overview.action.unacknowledge')
+    : t('alerts.overview.action.acknowledge');
+}
+
+export function getAlertOverviewTimelineActionLabel(isExpanded: boolean): string {
+  return isExpanded
+    ? t('alerts.overview.action.hideTimeline')
+    : t('alerts.overview.action.timeline');
+}
+
+export function getAlertOverviewRestoredNotification(): string {
+  return t('alerts.overview.notification.restored');
+}
+
+export function getAlertOverviewAcknowledgedNotification(): string {
+  return t('alerts.overview.notification.acknowledged');
+}
+
+export function getAlertOverviewAcknowledgementFailureNotification(
+  wasAcknowledged: boolean,
+): string {
+  return wasAcknowledged
+    ? t('alerts.overview.notification.restoreFailed')
+    : t('alerts.overview.notification.acknowledgeFailed');
+}
+
+export function getAlertOverviewBulkAcknowledgedNotification(count: number): string {
+  return count === 1
+    ? t('alerts.overview.notification.bulkSuccess.singular', { count })
+    : t('alerts.overview.notification.bulkSuccess.plural', { count });
+}
+
+export function getAlertOverviewBulkAcknowledgeFailureNotification(count: number): string {
+  return count === 1
+    ? t('alerts.overview.notification.bulkFailure.singular', { count })
+    : t('alerts.overview.notification.bulkFailure.plural', { count });
+}
+
+export function getAlertOverviewBulkAcknowledgeGenericFailureNotification(): string {
+  return t('alerts.overview.notification.bulkFailureGeneric');
 }
 
 export function getAlertTimelineLoadingState() {
   return {
-    text: ALERT_TIMELINE_LOADING_STATE,
+    text: t('alerts.timeline.loading'),
   } as const;
 }
 
 export function getAlertTimelineFilterEmptyState() {
   return {
-    text: ALERT_TIMELINE_FILTER_EMPTY_STATE,
+    text: t('alerts.timeline.filterEmpty'),
   } as const;
+}
+
+export function getAlertTimelineFilterLabel(variant: 'panel' | 'compact'): string {
+  return variant === 'panel'
+    ? t('alerts.timeline.filterLabel.panel')
+    : t('alerts.timeline.filterLabel.compact');
+}
+
+export function getAlertTimelineQuickFilterLabel(action: 'all' | 'none'): string {
+  return action === 'all'
+    ? t('alerts.timeline.quickFilter.all')
+    : t('alerts.timeline.quickFilter.none');
+}
+
+export function getAlertTimelineEventTypeLabel(type: string): string {
+  switch (type) {
+    case 'alert_fired':
+      return t('alerts.timeline.event.alertFired');
+    case 'alert_acknowledged':
+      return t('alerts.timeline.event.alertAcknowledged');
+    case 'alert_unacknowledged':
+      return t('alerts.timeline.event.alertUnacknowledged');
+    case 'alert_resolved':
+      return t('alerts.timeline.event.alertResolved');
+    case 'ai_analysis':
+      return t('alerts.timeline.event.aiAnalysis');
+    case 'command':
+      return t('alerts.timeline.event.command');
+    case 'runbook':
+      return t('alerts.timeline.event.runbook');
+    case 'note':
+      return t('alerts.timeline.event.note');
+    default:
+      return type;
+  }
 }
 
 export function getAlertTimelineEmptyState() {
   return {
-    text: ALERT_TIMELINE_EMPTY_STATE,
+    text: t('alerts.timeline.empty'),
   } as const;
 }
 
 export function getAlertTimelineUnavailableState() {
   return {
-    text: ALERT_TIMELINE_UNAVAILABLE_STATE,
+    text: t('alerts.timeline.unavailable'),
   } as const;
 }
 
 export function getAlertTimelineFailureState() {
   return {
-    text: ALERT_TIMELINE_FAILURE_STATE,
-    actionLabel: ALERT_TIMELINE_RETRY_LABEL,
+    text: t('alerts.timeline.failure'),
+    actionLabel: t('alerts.timeline.retry'),
   } as const;
+}
+
+export function getAlertTimelineHeading(): string {
+  return t('alerts.timeline.heading');
+}
+
+export function getAlertTimelineAcknowledgedLabel(): string {
+  return t('alerts.timeline.acknowledged');
+}
+
+export function getAlertTimelineOpenedAtLabel(openedAt: string): string {
+  return t('alerts.timeline.openedAt', { openedAt });
+}
+
+export function getAlertTimelineClosedAtLabel(closedAt: string): string {
+  return t('alerts.timeline.closedAt', { closedAt });
+}
+
+export function getAlertTimelineNoteLabel(): string {
+  return t('alerts.timeline.noteLabel');
+}
+
+export function getAlertTimelineNotePlaceholder(): string {
+  return t('alerts.timeline.notePlaceholder');
+}
+
+export function getAlertTimelineSaveNoteLabel(noteSaving: boolean): string {
+  return noteSaving ? t('alerts.timeline.savingNote') : t('alerts.timeline.saveNote');
 }
 
 export function getAlertHistorySearchPlaceholder() {

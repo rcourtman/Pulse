@@ -1,5 +1,6 @@
 import type { Alert } from '@/types/api';
 import type { AIChatContext } from '@/stores/aiChat';
+import { DEFAULT_LOCALE, t, type SupportedLocale } from '@/i18n';
 import { getCanonicalAlertId } from '@/features/alerts/identity';
 import { formatAlertValue } from '@/utils/alertFormatters';
 import { isMetricAlertType } from '@/utils/alerts';
@@ -24,6 +25,7 @@ export function buildAlertAssistantHandoff({
 }: BuildAlertAssistantHandoffInput): AlertAssistantHandoff {
   const alertIdentifier = getCanonicalAlertId(alert);
   const durationText = formatAlertDuration(alert.startTime, now);
+  const modelDurationText = formatAlertDuration(alert.startTime, now, DEFAULT_LOCALE);
   // State alerts (powered-off, unreachable, container-state, etc.) are
   // binary or enumerated conditions, not threshold crossings. Backend
   // sends value=0 and threshold=0 for those; rendering "current 0.0% /
@@ -35,6 +37,7 @@ export function buildAlertAssistantHandoff({
   const thresholdValue = hasMetricValues ? formatAlertValue(alert.threshold, alert.type) : '';
   const nodeLabel = alert.node ? alert.nodeDisplayName || alert.node : '';
   const levelLabel = formatAlertLevel(alert.level);
+  const modelLevelLabel = formatAlertLevel(alert.level, DEFAULT_LOCALE);
   const targetType = resolveAlertTargetType({
     alertType: alert.type,
     resourceType,
@@ -49,9 +52,9 @@ export function buildAlertAssistantHandoff({
     alertIdentifier,
     currentValue,
     thresholdValue,
-    durationText,
+    durationText: modelDurationText,
     nodeLabel,
-    levelLabel,
+    levelLabel: modelLevelLabel,
   });
 
   return {
@@ -69,19 +72,31 @@ export function buildAlertAssistantHandoff({
         },
       ],
       briefing: {
-        sourceLabel: 'Pulse Alerts',
-        title: 'Alert investigation attached',
-        subject: `${levelLabel} ${alert.type} on ${alert.resourceName}`,
-        statusLabel: `${levelLabel} alert · Active ${durationText}`,
+        sourceLabel: t('alerts.assistant.sourceLabel'),
+        title: t('alerts.assistant.title'),
+        subject: t('alerts.assistant.subject', {
+          level: levelLabel,
+          alertType: alert.type,
+          resourceName: alert.resourceName,
+        }),
+        statusLabel: t('alerts.assistant.statusLabel', {
+          level: levelLabel,
+          duration: durationText,
+        }),
         detailLines: [
           hasMetricValues
-            ? `Current value ${currentValue}; threshold ${thresholdValue}`
+            ? t('alerts.assistant.detail.currentMetric', {
+                currentValue,
+                thresholdValue,
+              })
             : undefined,
-          nodeLabel ? `Node: ${nodeLabel}` : undefined,
-          alert.message ? `Message: ${alert.message}` : undefined,
+          nodeLabel ? t('alerts.assistant.detail.node', { node: nodeLabel }) : undefined,
+          alert.message
+            ? t('alerts.assistant.detail.message', { message: alert.message })
+            : undefined,
         ].filter((line): line is string => Boolean(line)),
-        actionLabel: `Investigate alert ${alertIdentifier}`,
-        safetyNote: 'Diagnostics and remediation require operator approval.',
+        actionLabel: t('alerts.assistant.action.investigate', { alertIdentifier }),
+        safetyNote: t('alerts.assistant.safetyNote'),
       },
       context: {
         alertIdentifier,
@@ -139,21 +154,39 @@ function formatContextLine(label: string, value?: string | number | null): strin
   return text ? `${label}: ${text}` : undefined;
 }
 
-function formatAlertDuration(startTime: string, now: Date): string {
+function formatAlertDuration(startTime: string, now: Date, locale?: SupportedLocale): string {
   const startedAt = new Date(startTime).getTime();
   const nowMs = now.getTime();
   if (!Number.isFinite(startedAt) || !Number.isFinite(nowMs)) {
-    return 'unknown duration';
+    return t('alerts.assistant.duration.unknown', {}, locale);
   }
 
   const durationMs = Math.max(0, nowMs - startedAt);
   const durationMins = Math.floor(durationMs / 60000);
   if (durationMins < 60) {
-    return `${durationMins} min${durationMins !== 1 ? 's' : ''}`;
+    return t(
+      durationMins === 1 ? 'alerts.assistant.duration.minute' : 'alerts.assistant.duration.minutes',
+      { count: durationMins },
+      locale,
+    );
   }
-  return `${Math.floor(durationMins / 60)}h ${durationMins % 60}m`;
+  return t(
+    'alerts.assistant.duration.hoursMinutes',
+    {
+      hours: Math.floor(durationMins / 60),
+      minutes: durationMins % 60,
+    },
+    locale,
+  );
 }
 
-function formatAlertLevel(level: Alert['level']): string {
-  return level.charAt(0).toUpperCase() + level.slice(1);
+function formatAlertLevel(level: Alert['level'], locale?: SupportedLocale): string {
+  const normalizedLevel = String(level);
+  if (normalizedLevel === 'critical') {
+    return t('alerts.assistant.level.critical', {}, locale);
+  }
+  if (normalizedLevel === 'info') {
+    return t('alerts.assistant.level.info', {}, locale);
+  }
+  return t('alerts.assistant.level.warning', {}, locale);
 }

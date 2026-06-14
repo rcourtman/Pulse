@@ -1,16 +1,7 @@
 import { Card } from '@/components/shared/Card';
 import { StatusDot } from '@/components/shared/StatusDot';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableRow,
-} from '@/components/shared/Table';
-import {
-  ALERT_OVERVIEW_ACKNOWLEDGED_LABEL,
-  ALERT_OVERVIEW_LAST_24_HOURS_LABEL,
-  ALERT_OVERVIEW_WORKLOAD_OVERRIDES_LABEL,
-} from '@/utils/alertOverviewPresentation';
+import { Table, TableBody, TableCell, TableRow } from '@/components/shared/Table';
+import { getAlertOverviewStatsLabels } from '@/utils/alertOverviewPresentation';
 import type { StatusIndicatorVariant } from '@/utils/status';
 
 import type { AlertOverviewState } from './useAlertOverviewState';
@@ -28,12 +19,12 @@ const VARIANT_ACTIVE: Record<'triggered' | 'acknowledged', StatusIndicatorVarian
   acknowledged: 'success',
 };
 
-const variantForCount = (
-  count: number,
-  active: StatusIndicatorVariant,
-): StatusIndicatorVariant => (count > 0 ? active : 'muted');
+const variantForCount = (count: number, active: StatusIndicatorVariant): StatusIndicatorVariant =>
+  count > 0 ? active : 'muted';
 
 export function AlertOverviewStatsCards(props: AlertOverviewStatsCardsProps) {
+  const labels = () => getAlertOverviewStatsLabels();
+
   return (
     <Card padding="none" tone="card" class="overflow-hidden">
       <Table class="min-w-full text-xs">
@@ -49,7 +40,7 @@ export function AlertOverviewStatsCards(props: AlertOverviewStatsCardsProps) {
                 ariaHidden
               />
             </TableCell>
-            <TableCell class={labelCellClass}>{ALERT_OVERVIEW_LAST_24_HOURS_LABEL}</TableCell>
+            <TableCell class={labelCellClass}>{labels().last24Hours}</TableCell>
             <TableCell class={valueCellClass} data-testid="alert-overview-stat-value">
               {props.state.alertStats().total24h}
             </TableCell>
@@ -65,7 +56,7 @@ export function AlertOverviewStatsCards(props: AlertOverviewStatsCardsProps) {
                 ariaHidden
               />
             </TableCell>
-            <TableCell class={labelCellClass}>{ALERT_OVERVIEW_ACKNOWLEDGED_LABEL}</TableCell>
+            <TableCell class={labelCellClass}>{labels().acknowledged}</TableCell>
             <TableCell class={valueCellClass} data-testid="alert-overview-stat-value">
               {props.state.alertStats().acknowledged}
             </TableCell>
@@ -74,7 +65,7 @@ export function AlertOverviewStatsCards(props: AlertOverviewStatsCardsProps) {
             <TableCell class={dotCellClass}>
               <StatusDot variant="muted" size="sm" ariaHidden />
             </TableCell>
-            <TableCell class={labelCellClass}>{ALERT_OVERVIEW_WORKLOAD_OVERRIDES_LABEL}</TableCell>
+            <TableCell class={labelCellClass}>{labels().workloadOverrides}</TableCell>
             <TableCell class={valueCellClass} data-testid="alert-overview-stat-value">
               {props.state.alertStats().overrides}
             </TableCell>

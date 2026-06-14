@@ -205,7 +205,14 @@ including the Setup Wizard shell, welcome/security steps, setup completion
 handoff, and runtime-home loading handoff, follow the same catalog path; their
 guardrails must fail if the migrated journey returns to page-local English or
 translates commands, URLs, generated credentials, product/source identifiers, or
-reported resource names.
+reported resource names. Migrated Alerts Overview surfaces, including the page
+shell, overview stat cards, active-alert triage list, acknowledgement actions,
+incident timeline panel/filter controls, and Pulse Assistant alert handoff
+briefing, must also route user-visible copy through the catalog and
+alert-owned presentation helpers. Alert IDs, alert types, resource IDs,
+resource names, node names, source messages, event payloads, commands, command
+output, logs, and Assistant model-context labels stay machine-stable and
+untranslated.
 
 Alert thresholds consume the shared FilterBar primitive and route state, while
 the alerts subsystem owns the resource data and platform-specific threshold

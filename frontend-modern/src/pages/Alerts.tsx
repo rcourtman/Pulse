@@ -4,6 +4,7 @@ import type { JSX } from 'solid-js';
 
 import { useLocation, useNavigate } from '@solidjs/router';
 import { logger } from '@/utils/logger';
+import { t } from '@/i18n';
 import { Card } from '@/components/shared/Card';
 import { PageHeader } from '@/components/shared/PageHeader';
 
@@ -106,9 +107,9 @@ export function Alerts() {
 
   const [activeTab, setActiveTab] = createSignal<AlertTab>(tabFromPath(location.pathname));
   const [overviewOverrides, setOverviewOverrides] = createSignal<Override[]>([]);
-  const alertsPageHeaderMeta = getAlertsPageHeaderMeta();
+  const alertsPageHeaderMeta = createMemo(() => getAlertsPageHeaderMeta());
 
-  const headerMeta = () => alertsPageHeaderMeta[activeTab()] ?? alertsPageHeaderMeta.default;
+  const headerMeta = () => alertsPageHeaderMeta()[activeTab()] ?? alertsPageHeaderMeta().default;
 
   createEffect(() => {
     const currentPath = location.pathname;
@@ -228,7 +229,7 @@ export function Alerts() {
                 {alertActivationPresentation().label}
               </span>
               <label class="relative inline-flex items-center cursor-pointer">
-                <span class="sr-only">Toggle alerts</span>
+                <span class="sr-only">{t('alerts.nav.toggleAlerts')}</span>
                 <input
                   type="checkbox"
                   class="sr-only peer"
@@ -254,7 +255,7 @@ export function Alerts() {
       <Card padding="none" class="relative lg:flex overflow-hidden">
         <div
           class={`hidden lg:flex lg:flex-col ${sidebarCollapsed() ? 'w-16' : 'w-72'} ${sidebarCollapsed() ? 'lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative border-b border-border lg:border-b-0 lg:border-r lg:align-top flex-shrink-0 transition-all duration-200`}
-          aria-label="Alerts navigation"
+          aria-label={t('alerts.nav.ariaLabel')}
           aria-expanded={!sidebarCollapsed()}
         >
           <div
@@ -262,12 +263,12 @@ export function Alerts() {
           >
             <Show when={!sidebarCollapsed()}>
               <div class="flex items-center justify-between pb-2 border-b border-border">
-                <h2 class="text-sm font-semibold text-base-content">Alerts</h2>
+                <h2 class="text-sm font-semibold text-base-content">{t('alerts.nav.title')}</h2>
                 <button
                   type="button"
                   onClick={() => setSidebarCollapsed(true)}
                   class="p-1 rounded-md hover:bg-surface-hover transition-colors"
-                  aria-label="Collapse sidebar"
+                  aria-label={t('alerts.nav.collapseSidebar')}
                 >
                   <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path
@@ -285,7 +286,7 @@ export function Alerts() {
                 type="button"
                 onClick={() => setSidebarCollapsed(false)}
                 class="w-full p-2 rounded-md hover:bg-surface-hover transition-colors"
-                aria-label="Expand sidebar"
+                aria-label={t('alerts.nav.expandSidebar')}
               >
                 <svg class="w-5 h-5 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path
@@ -402,10 +403,7 @@ export function Alerts() {
             </Show>
 
             <Show when={activeTab() === 'history'}>
-              <HistoryTab
-                getResource={getResource}
-                allResources={allResources}
-              />
+              <HistoryTab getResource={getResource} allResources={allResources} />
             </Show>
           </div>
         </div>

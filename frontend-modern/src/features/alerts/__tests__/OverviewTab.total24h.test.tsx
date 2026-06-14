@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@solidjs/testing-library';
+import { DEFAULT_LOCALE, setActiveLocale } from '@/i18n';
 import type { Alert } from '@/types/api';
 
 vi.mock('@solidjs/router', () => ({
@@ -54,6 +55,7 @@ function defaultProps(overrides: Record<string, unknown> = {}) {
 
 describe('OverviewTab Last 24 Hours stat', () => {
   beforeEach(() => {
+    setActiveLocale(DEFAULT_LOCALE);
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-03-06T12:00:00Z'));
   });
@@ -61,6 +63,7 @@ describe('OverviewTab Last 24 Hours stat', () => {
   afterEach(() => {
     cleanup();
     vi.useRealTimers();
+    setActiveLocale(DEFAULT_LOCALE);
   });
 
   it('counts only alerts with startTime within the last 24 hours', () => {
@@ -76,7 +79,9 @@ describe('OverviewTab Last 24 Hours stat', () => {
     render(() => <OverviewTab {...defaultProps({ activeAlerts })} />);
 
     const label = screen.getByText('Triggered (24h)');
-    const statValue = label.closest('tr')?.querySelector('[data-testid="alert-overview-stat-value"]');
+    const statValue = label
+      .closest('tr')
+      ?.querySelector('[data-testid="alert-overview-stat-value"]');
     expect(statValue?.textContent).toBe('1');
   });
 
@@ -92,7 +97,9 @@ describe('OverviewTab Last 24 Hours stat', () => {
     render(() => <OverviewTab {...defaultProps({ activeAlerts })} />);
 
     const label = screen.getByText('Triggered (24h)');
-    const statValue = label.closest('tr')?.querySelector('[data-testid="alert-overview-stat-value"]');
+    const statValue = label
+      .closest('tr')
+      ?.querySelector('[data-testid="alert-overview-stat-value"]');
     expect(statValue?.textContent).toBe('0');
   });
 
@@ -109,7 +116,9 @@ describe('OverviewTab Last 24 Hours stat', () => {
     render(() => <OverviewTab {...defaultProps({ activeAlerts })} />);
 
     const label = screen.getByText('Triggered (24h)');
-    const statValue = label.closest('tr')?.querySelector('[data-testid="alert-overview-stat-value"]');
+    const statValue = label
+      .closest('tr')
+      ?.querySelector('[data-testid="alert-overview-stat-value"]');
     expect(statValue?.textContent).toBe('3');
   });
 
@@ -123,7 +132,9 @@ describe('OverviewTab Last 24 Hours stat', () => {
     render(() => <OverviewTab {...defaultProps({ activeAlerts })} />);
 
     const label = screen.getByText('Triggered (24h)');
-    const statValue = label.closest('tr')?.querySelector('[data-testid="alert-overview-stat-value"]');
+    const statValue = label
+      .closest('tr')
+      ?.querySelector('[data-testid="alert-overview-stat-value"]');
     expect(statValue?.textContent).toBe('0');
   });
 
@@ -138,7 +149,9 @@ describe('OverviewTab Last 24 Hours stat', () => {
     render(() => <OverviewTab {...defaultProps({ activeAlerts })} />);
 
     const label = screen.getByText('Triggered (24h)');
-    const statValue = label.closest('tr')?.querySelector('[data-testid="alert-overview-stat-value"]');
+    const statValue = label
+      .closest('tr')
+      ?.querySelector('[data-testid="alert-overview-stat-value"]');
     expect(statValue?.textContent).toBe('1');
 
     // Advance time by 2 minutes — alert is now 24h 1m old, outside the window
@@ -159,5 +172,25 @@ describe('OverviewTab Last 24 Hours stat', () => {
     expect(screen.getByText('Unacknowledge')).toBeInTheDocument();
     expect(screen.getAllByText('Acknowledged').length).toBeGreaterThan(0);
     expect(container.querySelector('#alert-acknowledged.bg-surface-alt')).toBeTruthy();
+  });
+
+  it('localizes stats and active alert card controls without translating source fields', () => {
+    setActiveLocale('es');
+    const recentTime = new Date(Date.now() - 1_800_000).toISOString();
+
+    const activeAlerts: Record<string, Alert> = {
+      recent: makeAlert('recent', recentTime),
+    };
+
+    render(() => <OverviewTab {...defaultProps({ activeAlerts })} />);
+
+    expect(screen.getByText('Activadas (24h)')).toBeInTheDocument();
+    expect(screen.getByText('Reconocidas')).toBeInTheDocument();
+    expect(screen.getByText('Alertas activas')).toBeInTheDocument();
+    expect(screen.getByText('Reconocer')).toBeInTheDocument();
+    expect(screen.getByText('Linea de tiempo')).toBeInTheDocument();
+    expect(screen.getByText('en node1')).toBeInTheDocument();
+    expect(screen.getByText('VM recent')).toBeInTheDocument();
+    expect(screen.getByText('High CPU on VM recent')).toBeInTheDocument();
   });
 });

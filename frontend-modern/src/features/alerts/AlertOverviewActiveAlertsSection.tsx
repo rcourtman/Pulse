@@ -3,8 +3,11 @@ import { For, Show } from 'solid-js';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import type { Alert } from '@/types/api';
 import {
-  ALERTS_EMPTY_STATE,
-  ALERTS_THRESHOLD_HINT,
+  getAlertOverviewAcknowledgedToggleLabel,
+  getAlertOverviewActiveSectionTitle,
+  getAlertOverviewBulkAcknowledgeLabel,
+  getAlertOverviewEmptyState,
+  getAlertOverviewPausedState,
   getAlertListEmptyState,
 } from '@/utils/alertOverviewPresentation';
 
@@ -24,7 +27,7 @@ interface AlertOverviewActiveAlertsSectionProps {
 export function AlertOverviewActiveAlertsSection(props: AlertOverviewActiveAlertsSectionProps) {
   return (
     <div>
-      <SectionHeader title="Active Alerts" size="md" class="mb-3" />
+      <SectionHeader title={getAlertOverviewActiveSectionTitle()} size="md" class="mb-3" />
       <Show
         when={Object.keys(props.activeAlerts).length > 0}
         fallback={
@@ -41,20 +44,11 @@ export function AlertOverviewActiveAlertsSection(props: AlertOverviewActiveAlert
                       viewBox="0 0 24 24"
                     >
                       <circle cx="12" cy="12" r="10" stroke-width="2" />
-                      <line
-                        x1="4"
-                        y1="4"
-                        x2="20"
-                        y2="20"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                      />
+                      <line x1="4" y1="4" x2="20" y2="20" stroke-width="2" stroke-linecap="round" />
                     </svg>
                   </div>
-                  <p class="text-sm">Alerting is paused</p>
-                  <p class="text-xs mt-1">
-                    Toggle alerts on to resume monitoring and unlock configuration tabs
-                  </p>
+                  <p class="text-sm">{getAlertOverviewPausedState().title}</p>
+                  <p class="text-xs mt-1">{getAlertOverviewPausedState().description}</p>
                 </>
               }
             >
@@ -81,20 +75,22 @@ export function AlertOverviewActiveAlertsSection(props: AlertOverviewActiveAlert
                   />
                 </svg>
               </div>
-              <p class="text-sm">{ALERTS_EMPTY_STATE}</p>
-              <p class="text-xs mt-1">{ALERTS_THRESHOLD_HINT}</p>
+              <p class="text-sm">{getAlertOverviewEmptyState().title}</p>
+              <p class="text-xs mt-1">{getAlertOverviewEmptyState().description}</p>
             </Show>
           </div>
         }
       >
-        <Show when={props.state.alertStats().acknowledged > 0 || props.state.alertStats().active > 0}>
+        <Show
+          when={props.state.alertStats().acknowledged > 0 || props.state.alertStats().active > 0}
+        >
           <div class="flex flex-wrap items-center justify-between gap-1.5 p-1.5 bg-surface-alt rounded-t-lg border border-border">
             <Show when={props.state.alertStats().acknowledged > 0}>
               <button
                 onClick={() => props.setShowAcknowledged(!props.showAcknowledged)}
                 class="text-xs text-muted hover:text-base-content transition-colors"
               >
-                {props.showAcknowledged ? 'Hide' : 'Show'} acknowledged
+                {getAlertOverviewAcknowledgedToggleLabel(props.showAcknowledged)}
               </button>
             </Show>
             <Show when={props.state.alertStats().active > 0}>
@@ -106,9 +102,10 @@ export function AlertOverviewActiveAlertsSection(props: AlertOverviewActiveAlert
                   void props.state.handleBulkAcknowledge();
                 }}
               >
-                {props.state.bulkAckProcessing()
-                  ? 'Acknowledging…'
-                  : `Acknowledge all (${props.state.alertStats().active})`}
+                {getAlertOverviewBulkAcknowledgeLabel(
+                  props.state.alertStats().active,
+                  props.state.bulkAckProcessing(),
+                )}
               </button>
             </Show>
           </div>

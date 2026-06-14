@@ -1,3 +1,4 @@
+import { t } from '@/i18n';
 import type { AlertTab } from '@/features/alerts/types';
 
 export interface AlertTabPresentationOptions {
@@ -20,38 +21,43 @@ export const ALERT_TAB_THRESHOLDS_LABEL = 'Thresholds';
 export const ALERT_TAB_DESTINATIONS_LABEL = 'Notifications';
 export const ALERT_TAB_SCHEDULE_LABEL = 'Schedule';
 
-const ALERT_TAB_GROUPS: AlertTabGroup[] = [
-  {
-    id: 'status',
-    label: ALERT_TAB_GROUP_STATUS_LABEL,
-    items: [
-      { id: 'overview', label: ALERT_TAB_OVERVIEW_LABEL },
-      { id: 'history', label: ALERT_TAB_HISTORY_LABEL },
-    ],
-  },
-  {
-    id: 'configuration',
-    label: ALERT_TAB_GROUP_CONFIGURATION_LABEL,
-    items: [
-      { id: 'thresholds', label: ALERT_TAB_THRESHOLDS_LABEL },
-      { id: 'destinations', label: ALERT_TAB_DESTINATIONS_LABEL },
-      { id: 'schedule', label: ALERT_TAB_SCHEDULE_LABEL },
-    ],
-  },
-];
+function getLocalizedAlertTabGroups(): AlertTabGroup[] {
+  return [
+    {
+      id: 'status',
+      label: t('alerts.tabs.group.status'),
+      items: [
+        { id: 'overview', label: t('alerts.tabs.overview') },
+        { id: 'history', label: t('alerts.tabs.history') },
+      ],
+    },
+    {
+      id: 'configuration',
+      label: t('alerts.tabs.group.configuration'),
+      items: [
+        { id: 'thresholds', label: t('alerts.tabs.thresholds') },
+        { id: 'destinations', label: t('alerts.tabs.destinations') },
+        { id: 'schedule', label: t('alerts.tabs.schedule') },
+      ],
+    },
+  ];
+}
 
 export function isAlertsConfigurationTab(tab: AlertTab): boolean {
   return tab === 'thresholds' || tab === 'destinations' || tab === 'schedule';
 }
 
 export function getAlertsTabGroups(options?: { readOnly?: boolean }): AlertTabGroup[] {
+  const groups = getLocalizedAlertTabGroups();
   if (options?.readOnly) {
-    return ALERT_TAB_GROUPS.filter((group) => group.id === 'status').map((group) => ({
-      ...group,
-      items: [...group.items],
-    }));
+    return groups
+      .filter((group) => group.id === 'status')
+      .map((group) => ({
+        ...group,
+        items: [...group.items],
+      }));
   }
-  return ALERT_TAB_GROUPS.map((group) => ({
+  return groups.map((group) => ({
     ...group,
     items: [...group.items],
   }));
@@ -93,7 +99,7 @@ export function getAlertsTabTitle({
   label: string;
 }): string | undefined {
   if (isDisabled) {
-    return 'Enable alerts to configure this setting';
+    return t('alerts.tabs.disabledTitle');
   }
   if (collapsed) {
     return label;

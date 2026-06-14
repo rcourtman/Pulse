@@ -5,10 +5,15 @@ import { IncidentTimelinePanel } from '@/components/Alerts/IncidentTimelinePanel
 import type { Alert } from '@/types/api';
 import {
   getAlertOverviewAcknowledgedBadgeClass,
+  getAlertOverviewAcknowledgedBadgeLabel,
   getAlertOverviewCardPresentation,
+  getAlertOverviewNodeLabel,
+  getAlertOverviewPrimaryActionLabel,
   getAlertOverviewPrimaryActionClass,
   getAlertOverviewSecondaryActionClass,
+  getAlertOverviewStartedAtLabel,
   getAlertOverviewStartedAtClass,
+  getAlertOverviewTimelineActionLabel,
 } from '@/utils/alertOverviewPresentation';
 
 import { alertTypeDisplayLabel } from './helpers';
@@ -58,20 +63,24 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
           </div>
           <div class="flex-1 min-w-0">
             <div class="flex flex-wrap items-center gap-2">
-              <span class={alertCardPresentation().resourceClassName}>{props.alert.resourceName}</span>
+              <span class={alertCardPresentation().resourceClassName}>
+                {props.alert.resourceName}
+              </span>
               <span class="text-xs text-muted">({alertTypeDisplayLabel(props.alert.type)})</span>
               <Show when={props.alert.node}>
                 <span class="text-xs text-muted">
-                  on {props.alert.nodeDisplayName || props.alert.node}
+                  {getAlertOverviewNodeLabel(props.alert.nodeDisplayName || props.alert.node)}
                 </span>
               </Show>
               <Show when={props.alert.acknowledged}>
-                <span class={getAlertOverviewAcknowledgedBadgeClass()}>Acknowledged</span>
+                <span class={getAlertOverviewAcknowledgedBadgeClass()}>
+                  {getAlertOverviewAcknowledgedBadgeLabel()}
+                </span>
               </Show>
             </div>
             <p class="text-sm text-base-content mt-1 break-words">{props.alert.message}</p>
             <p class={getAlertOverviewStartedAtClass()}>
-              Started: {new Date(props.alert.startTime).toLocaleString()}
+              {getAlertOverviewStartedAtLabel(new Date(props.alert.startTime).toLocaleString())}
             </p>
           </div>
         </div>
@@ -85,11 +94,10 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
               await props.state.handleAlertAcknowledgement(props.alert);
             }}
           >
-            {props.state.processingAlerts().has(alertKey())
-              ? 'Processing...'
-              : props.alert.acknowledged
-                ? 'Unacknowledge'
-                : 'Acknowledge'}
+            {getAlertOverviewPrimaryActionLabel({
+              acknowledged: props.alert.acknowledged,
+              processing: props.state.processingAlerts().has(alertKey()),
+            })}
           </button>
           <button
             class={getAlertOverviewSecondaryActionClass()}
@@ -97,7 +105,9 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
               void props.timelineState.toggleIncidentTimeline(alertKey(), props.alert.startTime);
             }}
           >
-            {props.timelineState.expandedIncidents().has(alertKey()) ? 'Hide Timeline' : 'Timeline'}
+            {getAlertOverviewTimelineActionLabel(
+              props.timelineState.expandedIncidents().has(alertKey()),
+            )}
           </button>
           <InvestigateAlertButton
             alert={props.alert}
@@ -122,7 +132,9 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
             filterVariant="panel"
             eventCardVariant="alt"
             noteDraft={props.timelineState.incidentNoteDrafts()[alertKey()] || ''}
-            onNoteDraftChange={(value) => props.timelineState.setIncidentNoteDraft(alertKey(), value)}
+            onNoteDraftChange={(value) =>
+              props.timelineState.setIncidentNoteDraft(alertKey(), value)
+            }
             noteSaving={props.timelineState.incidentNoteSaving().has(alertKey())}
             onSaveNote={() => {
               void props.timelineState.saveIncidentNote(alertKey(), props.alert.startTime);

@@ -506,6 +506,28 @@ timeline, filter-chip, note-editor, and resource-incident panel presentation.
 Future alert presentation work must extend those helpers through the alerts
 contract instead of leaving alert-facing wording or styling inlined in page or
 feature shells while the registry treats the helpers as unowned.
+German and Spanish localization for the Alerts Overview operator journey is
+owned by the canonical i18n layer plus the alert presentation helpers:
+`frontend-modern/src/i18n/messages.ts` and
+`frontend-modern/src/i18n/policy.ts` own the catalog and non-translation
+policy, while `frontend-modern/src/utils/alertOverviewPresentation.ts`,
+`frontend-modern/src/utils/alertActivationPresentation.ts`, and
+`frontend-modern/src/utils/alertTabsPresentation.ts` own the translated
+operator-facing alert overview, activation, tab, timeline, and acknowledgement
+copy consumed by `frontend-modern/src/pages/Alerts.tsx`,
+`frontend-modern/src/features/alerts/AlertOverviewStatsCards.tsx`,
+`frontend-modern/src/features/alerts/AlertOverviewActiveAlertsSection.tsx`,
+`frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx`,
+`frontend-modern/src/features/alerts/useAlertAcknowledgementState.ts`,
+`frontend-modern/src/components/Alerts/IncidentTimelinePanel.tsx`,
+`frontend-modern/src/components/Alerts/IncidentEventFilters.tsx`,
+`frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx`, and
+`frontend-modern/src/components/Alerts/alertAssistantHandoffModel.ts`.
+Machine-facing alert identifiers, alert types, resource IDs, resource names,
+node names, source-system messages, commands, command output, event payloads,
+log text, and the English Assistant model-context labels must remain
+untranslated; only the user-visible briefing labels and alert controls may use
+the active app locale.
 
 The remaining alert configuration and history presentation helpers now also
 have explicit alerts ownership. `frontend-modern/src/utils/alertActivationPresentation.ts`,

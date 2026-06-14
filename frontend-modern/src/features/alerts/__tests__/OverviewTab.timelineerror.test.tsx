@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, fireEvent, waitFor } from '@solidjs/testing-library';
+import { DEFAULT_LOCALE, setActiveLocale } from '@/i18n';
 import type { Alert } from '@/types/api';
 
 const mockGetIncidentTimeline = vi.fn();
@@ -61,9 +62,11 @@ describe('OverviewTab incident timeline error state', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    setActiveLocale(DEFAULT_LOCALE);
   });
 
   it('shows error message with Retry button when timeline fetch fails', async () => {
+    setActiveLocale(DEFAULT_LOCALE);
     mockGetIncidentTimeline.mockRejectedValueOnce(new Error('Network error'));
 
     render(() => <OverviewTab {...defaultProps()} />);
@@ -81,6 +84,7 @@ describe('OverviewTab incident timeline error state', () => {
   });
 
   it('retries and shows timeline on successful retry after error', async () => {
+    setActiveLocale(DEFAULT_LOCALE);
     mockGetIncidentTimeline.mockRejectedValueOnce(new Error('Network error'));
 
     render(() => <OverviewTab {...defaultProps()} />);
@@ -116,6 +120,7 @@ describe('OverviewTab incident timeline error state', () => {
   });
 
   it('shows "No incident timeline available." when fetch succeeds with null', async () => {
+    setActiveLocale(DEFAULT_LOCALE);
     mockGetIncidentTimeline.mockResolvedValueOnce(null);
 
     render(() => <OverviewTab {...defaultProps()} />);
@@ -131,6 +136,7 @@ describe('OverviewTab incident timeline error state', () => {
   });
 
   it('renders the shared incident event card when the timeline loads successfully', async () => {
+    setActiveLocale(DEFAULT_LOCALE);
     mockGetIncidentTimeline.mockResolvedValueOnce({
       id: 'inc-1',
       status: 'open',
@@ -160,6 +166,50 @@ describe('OverviewTab incident timeline error state', () => {
     await waitFor(() => {
       expect(screen.getByText('Command executed')).toBeInTheDocument();
     });
+    expect(screen.getByText('checked service health')).toBeInTheDocument();
+    expect(screen.getByText('systemctl status pulse')).toBeInTheDocument();
+    expect(screen.getByText('Active: active (running)')).toBeInTheDocument();
+  });
+
+  it('localizes timeline controls while preserving source event payloads', async () => {
+    setActiveLocale('de');
+    mockGetIncidentTimeline.mockResolvedValueOnce({
+      id: 'inc-1',
+      status: 'open',
+      acknowledged: true,
+      openedAt: '2026-01-01T00:00:00Z',
+      closedAt: null,
+      events: [
+        {
+          id: 'evt-1',
+          type: 'command',
+          timestamp: '2026-01-01T00:05:00Z',
+          summary: 'Command executed',
+          details: {
+            note: 'checked service health',
+            command: 'systemctl status pulse',
+            output_excerpt: 'Active: active (running)',
+          },
+        },
+      ],
+    });
+
+    render(() => <OverviewTab {...defaultProps()} />);
+
+    fireEvent.click(screen.getByText('Zeitleiste'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Vorfall')).toBeInTheDocument();
+    });
+    expect(screen.getByText('bestaetigt')).toBeInTheDocument();
+    expect(screen.getByText('Ereignisse filtern:')).toBeInTheDocument();
+    expect(screen.getByText('Befehl')).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText('Notiz fuer diesen Vorfall hinzufuegen...'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Notiz speichern')).toBeInTheDocument();
+
+    expect(screen.getByText('Command executed')).toBeInTheDocument();
     expect(screen.getByText('checked service health')).toBeInTheDocument();
     expect(screen.getByText('systemctl status pulse')).toBeInTheDocument();
     expect(screen.getByText('Active: active (running)')).toBeInTheDocument();

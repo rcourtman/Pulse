@@ -1,5 +1,10 @@
 import { For, type Accessor } from 'solid-js';
-import { INCIDENT_EVENT_LABELS, INCIDENT_EVENT_TYPES } from '@/features/alerts/types';
+import { INCIDENT_EVENT_TYPES } from '@/features/alerts/types';
+import {
+  getAlertTimelineEventTypeLabel,
+  getAlertTimelineFilterLabel,
+  getAlertTimelineQuickFilterLabel,
+} from '@/utils/alertOverviewPresentation';
 import {
   getAlertIncidentEventFilterActionButtonClass,
   getAlertIncidentEventFilterChipClass,
@@ -26,21 +31,26 @@ export function IncidentEventFilters(props: IncidentEventFiltersProps) {
     props.setFilters(next);
   };
 
-  const label = () => (props.variant === 'panel' ? 'Filter events:' : 'Filters');
+  const quickSelectionActions = [
+    { id: 'all', label: () => getAlertTimelineQuickFilterLabel('all') },
+    { id: 'none', label: () => getAlertTimelineQuickFilterLabel('none') },
+  ] as const;
 
   return (
     <div class={getAlertIncidentEventFilterContainerClass(props.variant)}>
-      <span class={getAlertIncidentEventFilterLabelClass(props.variant)}>{label()}</span>
-      <For each={props.showQuickSelection ? ['All', 'None'] : []}>
+      <span class={getAlertIncidentEventFilterLabelClass(props.variant)}>
+        {getAlertTimelineFilterLabel(props.variant)}
+      </span>
+      <For each={props.showQuickSelection ? quickSelectionActions : []}>
         {(action) => (
           <button
             type="button"
             class={getAlertIncidentEventFilterActionButtonClass()}
             onClick={() =>
-              props.setFilters(action === 'All' ? new Set(INCIDENT_EVENT_TYPES) : new Set())
+              props.setFilters(action.id === 'all' ? new Set(INCIDENT_EVENT_TYPES) : new Set())
             }
           >
-            {action}
+            {action.label()}
           </button>
         )}
       </For>
@@ -53,7 +63,7 @@ export function IncidentEventFilters(props: IncidentEventFiltersProps) {
               class={getAlertIncidentEventFilterChipClass(selected(), props.variant)}
               onClick={() => toggleFilter(type)}
             >
-              {INCIDENT_EVENT_LABELS[type]}
+              {getAlertTimelineEventTypeLabel(type)}
             </button>
           );
         }}

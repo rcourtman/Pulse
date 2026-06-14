@@ -1,3 +1,5 @@
+import { t } from '@/i18n';
+
 export interface AlertActivationPresentationOptions {
   isActive: boolean;
   isBusy?: boolean;
@@ -22,7 +24,7 @@ export function getAlertActivationPresentation({
   isBusy = false,
 }: AlertActivationPresentationOptions): AlertActivationPresentation {
   return {
-    label: isActive ? 'Alerts enabled' : 'Alerts disabled',
+    label: isActive ? t('alerts.activation.label.enabled') : t('alerts.activation.label.disabled'),
     labelClass: isActive ? 'text-green-600 dark:text-green-400' : 'text-muted',
     trackClass: `relative h-6 w-11 rounded-full transition ${
       isActive ? 'bg-blue-600' : 'bg-surface-hover'
@@ -34,17 +36,17 @@ export function getAlertActivationPresentation({
 }
 
 export function getAlertActivationSuccess() {
-  return ALERT_ACTIVATION_SUCCESS;
+  return t('alerts.activation.toast.activated');
 }
 
 export function getAlertActivationFailure() {
-  return ALERT_ACTIVATION_FAILURE;
+  return t('alerts.activation.toast.activateFailed');
 }
 
 export function getAlertDeactivationSuccess() {
-  return ALERT_DEACTIVATION_SUCCESS;
+  return t('alerts.activation.toast.deactivated');
 }
 
 export function getAlertDeactivationFailure() {
-  return ALERT_DEACTIVATION_FAILURE;
+  return t('alerts.activation.toast.deactivateFailed');
 }

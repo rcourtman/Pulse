@@ -6931,6 +6931,11 @@
       "evidence": [
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/localized-product-surfaces-alerts-overview-2026-06-14.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/localized-product-surfaces-first-session-monitoring-2026-06-14.md",
           "kind": "file"
         },
@@ -6946,12 +6951,42 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/alerts.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/subsystems/cloud-paid.md",
           "kind": "file"
         },
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/subsystems/frontend-primitives.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Alerts/__tests__/InvestigateAlertButton.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Alerts/alertAssistantHandoffModel.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Alerts/IncidentEventFilters.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Alerts/IncidentTimelinePanel.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx",
           "kind": "file"
         },
         {
@@ -7016,6 +7051,46 @@
         },
         {
           "repo": "pulse",
+          "path": "frontend-modern/src/features/alerts/__tests__/alertsLocalization.guardrails.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/features/alerts/__tests__/OverviewTab.emptystate.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/features/alerts/__tests__/OverviewTab.timelineerror.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/features/alerts/__tests__/OverviewTab.total24h.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/features/alerts/AlertOverviewActiveAlertsSection.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/features/alerts/AlertOverviewStatsCards.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/features/alerts/useAlertAcknowledgementState.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "frontend-modern/src/i18n/__tests__/i18n.test.ts",
           "kind": "file"
         },
@@ -7031,7 +7106,42 @@
         },
         {
           "repo": "pulse",
+          "path": "frontend-modern/src/pages/Alerts.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "frontend-modern/src/pages/RuntimeHome.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/__tests__/alertActivationPresentation.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/__tests__/alertOverviewPresentation.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/__tests__/alertTabsPresentation.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/alertActivationPresentation.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/alertOverviewPresentation.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/alertTabsPresentation.ts",
           "kind": "file"
         }
       ]

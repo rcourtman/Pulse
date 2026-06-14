@@ -1,5 +1,6 @@
 import { Show, createSignal } from 'solid-js';
 import { aiChatStore } from '@/stores/aiChat';
+import { t } from '@/i18n';
 import type { Alert } from '@/types/api';
 import { useUpgradeNavigation } from '@/components/shared/useUpgradeNavigation';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
@@ -28,10 +29,9 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
   const canShowUpgradePrompt = () => !presentationPolicyHidesUpgradePrompts();
   const lockedTitle = () =>
     canShowUpgradePrompt()
-      ? 'Pro required to investigate alerts with Pulse Assistant'
-      : 'Pulse Assistant alert investigation is not available for this alert';
-  const buttonTitle = () =>
-    isLocked() ? lockedTitle() : 'Ask Pulse Assistant to investigate this alert';
+      ? t('alerts.assistant.locked.proRequired')
+      : t('alerts.assistant.locked.unavailable');
+  const buttonTitle = () => (isLocked() ? lockedTitle() : t('alerts.assistant.unlockedTitle'));
   // Don't render if AI is not enabled
   if (aiChatStore.enabled !== true) {
     return null;
@@ -133,7 +133,7 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
             d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
           />
         </svg>
-        <span class="text-xs font-medium">Ask Pulse Assistant</span>
+        <span class="text-xs font-medium">{t('alerts.assistant.button.text')}</span>
       </button>
     );
   }
@@ -164,7 +164,7 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
           d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
         />
       </svg>
-      <span>Investigate with Pulse Assistant</span>
+      <span>{t('alerts.assistant.button.full')}</span>
       <Show when={isHovered()}>
         <span class="text-xs opacity-80">→</span>
       </Show>

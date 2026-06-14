@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { DEFAULT_LOCALE, setActiveLocale } from '@/i18n';
 import {
   ALERT_TAB_DESTINATIONS_LABEL,
   ALERT_TAB_GROUP_CONFIGURATION_LABEL,
@@ -15,6 +16,14 @@ import {
 } from '@/utils/alertTabsPresentation';
 
 describe('alertTabsPresentation', () => {
+  beforeEach(() => {
+    setActiveLocale(DEFAULT_LOCALE);
+  });
+
+  afterEach(() => {
+    setActiveLocale(DEFAULT_LOCALE);
+  });
+
   it('returns active sidebar presentation', () => {
     expect(getAlertsSidebarTabClass({ isActive: true, isDisabled: false })).toBe(
       'flex w-full items-center rounded-md text-sm font-medium transition-colors gap-2.5 px-3 py-2 bg-blue-50 text-blue-600 dark:bg-blue-900 dark:text-blue-200',
@@ -87,5 +96,32 @@ describe('alertTabsPresentation', () => {
     expect(isAlertsConfigurationTab('thresholds')).toBe(true);
     expect(isAlertsConfigurationTab('destinations')).toBe(true);
     expect(isAlertsConfigurationTab('schedule')).toBe(true);
+  });
+
+  it('localizes alerts tab groups and disabled titles through the active locale', () => {
+    setActiveLocale('de');
+
+    expect(getAlertsTabTitle({ isDisabled: true, label: 'Overview' })).toBe(
+      'Aktivieren Sie Warnmeldungen, um diese Einstellung zu konfigurieren',
+    );
+    expect(getAlertsTabGroups()).toEqual([
+      {
+        id: 'status',
+        label: 'Status',
+        items: [
+          { id: 'overview', label: 'Uebersicht' },
+          { id: 'history', label: 'Verlauf' },
+        ],
+      },
+      {
+        id: 'configuration',
+        label: 'Konfiguration',
+        items: [
+          { id: 'thresholds', label: 'Schwellwerte' },
+          { id: 'destinations', label: 'Benachrichtigungen' },
+          { id: 'schedule', label: 'Zeitplan' },
+        ],
+      },
+    ]);
   });
 });

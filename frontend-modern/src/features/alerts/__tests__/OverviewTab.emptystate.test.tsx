@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@solidjs/testing-library';
+import { DEFAULT_LOCALE, setActiveLocale } from '@/i18n';
 
 vi.mock('@solidjs/router', () => ({
   useLocation: () => ({ hash: '', pathname: '/alerts', search: '', query: {} }),
@@ -40,9 +41,11 @@ function defaultProps(overrides: Record<string, unknown> = {}) {
 describe('OverviewTab empty state', () => {
   afterEach(() => {
     cleanup();
+    setActiveLocale(DEFAULT_LOCALE);
   });
 
   it('shows "No active alerts" when alerts are enabled and none exist', () => {
+    setActiveLocale(DEFAULT_LOCALE);
     render(() => <OverviewTab {...defaultProps()} />);
 
     expect(screen.getByText('No active alerts')).toBeInTheDocument();
@@ -53,6 +56,7 @@ describe('OverviewTab empty state', () => {
   });
 
   it('shows "Alerting is paused" when alerts are disabled', () => {
+    setActiveLocale(DEFAULT_LOCALE);
     render(() => <OverviewTab {...defaultProps({ alertsDisabled: () => true })} />);
 
     expect(screen.getByText('Alerting is paused')).toBeInTheDocument();
@@ -60,5 +64,28 @@ describe('OverviewTab empty state', () => {
       screen.getByText('Toggle alerts on to resume monitoring and unlock configuration tabs'),
     ).toBeInTheDocument();
     expect(screen.queryByText('No active alerts')).not.toBeInTheDocument();
+  });
+
+  it('localizes the enabled and paused empty states through the active locale', () => {
+    setActiveLocale('es');
+    const { unmount } = render(() => <OverviewTab {...defaultProps()} />);
+
+    expect(screen.getByText('No hay alertas activas')).toBeInTheDocument();
+    expect(
+      screen.getByText('Las alertas apareceran aqui cuando se superen los umbrales'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('No active alerts')).not.toBeInTheDocument();
+
+    unmount();
+
+    render(() => <OverviewTab {...defaultProps({ alertsDisabled: () => true })} />);
+
+    expect(screen.getByText('Las alertas estan pausadas')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Activa las alertas para reanudar la monitorizacion y desbloquear las pestañas de configuracion',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Alerting is paused')).not.toBeInTheDocument();
   });
 });
