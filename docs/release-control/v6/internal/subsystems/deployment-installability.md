@@ -841,6 +841,16 @@ That same supply-chain boundary also owns the checked-in build roots
 themselves. `Dockerfile` must pin its Node, Go, and Alpine bases by immutable
 manifest-list digest so multi-arch release builds do not silently drift onto a
 different upstream filesystem just because a mutable tag was republished.
+The governed v6 release Go patch level is part of that same boundary:
+`go.mod`, `scripts/.go-version`, `scripts/install-go-toolchain.sh`,
+`scripts/build-release.sh`, the Go builder stages in `Dockerfile` and
+`deploy/provider-msp/Dockerfile.control-plane`, and the Pro release workflows
+must stay aligned on the same patched `1.25.x` floor before a release can be
+treated as shippable. When `govulncheck` reports called standard-library
+vulnerabilities in the current patch level, the canonical fix is to advance the
+governed release toolchain and immutable Go builder digest together, not to
+suppress the scanner or produce release artifacts with an older patched-over
+runtime.
 That same dev-runtime dependency-manifest boundary now also owns the maintained
 Docker engine module floor. `go.mod`, `go.sum`, and
 `internal/cloudcp/docker/manager.go` must route hosted runtime orchestration

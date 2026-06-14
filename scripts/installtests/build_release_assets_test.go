@@ -444,7 +444,7 @@ func TestDockerAndDemoBuildsUseCanonicalReleaseLdflags(t *testing.T) {
 	dockerfile := string(dockerfileBytes)
 	dockerRequired := []string{
 		`FROM --platform=linux/amd64 node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS frontend-builder`,
-		`FROM --platform=linux/amd64 golang:1.25.9-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f AS backend-builder`,
+		`FROM --platform=linux/amd64 golang:1.25.11-alpine@sha256:8d95af53d0d58e1759ddb4028285d9b1239067e4fbf4f544618cad0f60fbc354 AS backend-builder`,
 		`FROM backend-builder AS release-assets-builder`,
 		`FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc AS agent_runtime`,
 		`FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc AS pulse-runtime-base`,
@@ -486,7 +486,7 @@ func TestDockerAndDemoBuildsUseCanonicalReleaseLdflags(t *testing.T) {
 		t.Fatalf("hosted_runtime target must not depend on installer rendering or embedded agent artifacts:\n%s", hostedStage)
 	}
 	if strings.Contains(dockerfile, `FROM --platform=linux/amd64 node:20-alpine AS frontend-builder`) ||
-		strings.Contains(dockerfile, `FROM --platform=linux/amd64 golang:1.25.9-alpine AS backend-builder`) ||
+		strings.Contains(dockerfile, `FROM --platform=linux/amd64 golang:1.25.11-alpine AS backend-builder`) ||
 		strings.Contains(dockerfile, `FROM alpine:3.20 AS agent_runtime`) ||
 		strings.Contains(dockerfile, `FROM alpine:3.20 AS pulse-runtime-base`) {
 		t.Fatal("Dockerfile base images must be pinned by immutable @sha256 digests")

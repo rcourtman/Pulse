@@ -266,7 +266,7 @@ func TestProviderMSPControlPlaneDockerfileBuildsReleaseLicenseBinary(t *testing.
 	text := string(dockerfileBytes)
 	assertContainsAll(t, text,
 		"# syntax=docker/dockerfile:1.7",
-		"FROM --platform=$BUILDPLATFORM golang:1.25.9-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f AS builder",
+		"FROM --platform=$BUILDPLATFORM golang:1.25.11-alpine@sha256:8d95af53d0d58e1759ddb4028285d9b1239067e4fbf4f544618cad0f60fbc354 AS builder",
 		"FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc",
 		"ARG PULSE_LICENSE_PUBLIC_KEY_SHA256",
 		"ARG TARGETOS",

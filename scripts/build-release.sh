@@ -19,7 +19,7 @@ if [ -x /usr/local/go/bin/go ]; then
 fi
 
 # Release artifacts must be built with the vetted toolchain to match security-gate evidence.
-required_go="go1.25.9"
+required_go="go1.25.11"
 current_go="$(go env GOVERSION 2>/dev/null || true)"
 if [[ "${PULSE_SKIP_GO_VERSION_CHECK:-false}" != "true" ]]; then
     if [[ "${current_go}" != "${required_go}" ]]; then
