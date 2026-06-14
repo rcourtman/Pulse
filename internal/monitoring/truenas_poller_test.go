@@ -860,6 +860,7 @@ func TestTrueNASPollerAPITimeout(t *testing.T) {
 
 	var requestCount atomic.Int64
 	var injectDelay atomic.Bool
+	var recoverySuccesses atomic.Int64
 	injectDelay.Store(true)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -880,6 +881,9 @@ func TestTrueNASPollerAPITimeout(t *testing.T) {
 		case "/api/v2.0/disk":
 			_, _ = w.Write([]byte(`[]`))
 		case "/api/v2.0/alert/list":
+			if !injectDelay.Load() {
+				recoverySuccesses.Add(1)
+			}
 			_, _ = w.Write([]byte(`[]`))
 		default:
 			http.NotFound(w, r)
@@ -903,11 +907,10 @@ func TestTrueNASPollerAPITimeout(t *testing.T) {
 	}, "expected poller to continue retrying while API requests time out")
 
 	injectDelay.Store(false)
-	recoveryStart := requestCount.Load()
 
 	waitForCondition(t, 3*time.Second, func() bool {
-		return requestCount.Load() >= recoveryStart+5
-	}, "expected at least one successful poll cycle after timeout clears")
+		return recoverySuccesses.Load() > 0 && hasTrueNASHostForOrg(poller, "default", "timeout-host")
+	}, "expected at least one successful poll cycle to ingest TrueNAS resources after timeout clears")
 
 	poller.Stop()
 	if !hasTrueNASHostForOrg(poller, "default", "timeout-host") {
