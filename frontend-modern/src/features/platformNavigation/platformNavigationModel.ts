@@ -94,14 +94,37 @@ const collectExplicitPlatformScopeEvidence = (
   return [...ids];
 };
 
+const addDirectDockerRuntimeEvidence = (
+  ids: Set<string>,
+  resource: Resource,
+  platformData: Record<string, unknown> | null,
+): void => {
+  const resolvedPlatformType = resolveResourcePlatformType(resource);
+  if (normalizeSourcePlatformKey(resource.platformType) === 'docker') {
+    ids.add('docker');
+    return;
+  }
+  if (normalizeSourcePlatformKey(resolvedPlatformType) === 'docker') {
+    ids.add('docker');
+    return;
+  }
+  if (DOCKER_RESOURCE_TYPES.has(resource.type)) {
+    ids.add('docker');
+    return;
+  }
+  if (ids.has('agent') && (resource.docker || asRecord(platformData?.docker))) {
+    ids.add('docker');
+  }
+};
+
 export function collectResourcePlatformEvidence(resource: Resource): string[] {
   const platformData = asRecord(resource.platformData);
-  const platformScopeIds = collectExplicitPlatformScopeEvidence(resource, platformData);
-  if (platformScopeIds.length > 0) {
-    return platformScopeIds;
+  const ids = new Set<string>(collectExplicitPlatformScopeEvidence(resource, platformData));
+  if (ids.size > 0) {
+    addDirectDockerRuntimeEvidence(ids, resource, platformData);
+    return [...ids];
   }
 
-  const ids = new Set<string>();
   addManifestPlatformId(ids, resource.platformType);
   addManifestPlatformId(ids, resolveResourcePlatformType(resource));
   resource.sources?.forEach((source) => addManifestPlatformId(ids, source));

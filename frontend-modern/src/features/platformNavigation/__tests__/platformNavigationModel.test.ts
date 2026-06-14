@@ -63,4 +63,34 @@ describe('platformNavigationModel', () => {
       buildPrimaryPlatformNavigationVisibility([resource({ id: 'pmg-1', type: 'pmg' })]).proxmox,
     ).toBe(true);
   });
+
+  it('keeps Docker visible when an agent-scoped resource has direct Docker runtime evidence', () => {
+    const tower = resource({
+      id: 'tower',
+      platformType: 'agent',
+      platformScopes: ['agent'],
+      type: 'agent',
+      platformData: { docker: { runtime: 'docker' } },
+    });
+    const visibility = buildPrimaryPlatformNavigationVisibility([tower]);
+
+    expect(collectResourcePlatformEvidence(tower)).toEqual(['agent', 'docker']);
+    expect(visibility.docker).toBe(true);
+    expect(visibility.standalone).toBe(true);
+  });
+
+  it('does not infer Docker from TrueNAS-scoped app metadata', () => {
+    const truenasApp = resource({
+      id: 'truenas-app',
+      platformType: 'truenas',
+      platformScopes: ['truenas'],
+      type: 'app-container',
+      platformData: { docker: { containerId: 'abc123' } },
+    });
+    const visibility = buildPrimaryPlatformNavigationVisibility([truenasApp]);
+
+    expect(collectResourcePlatformEvidence(truenasApp)).toEqual(['truenas']);
+    expect(visibility.docker).toBe(false);
+    expect(visibility.truenas).toBe(true);
+  });
 });
