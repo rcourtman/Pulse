@@ -176,6 +176,10 @@ func TestPVESetupScriptRestrictsTemperatureMonitoringToPulseSensorWrapper(t *tes
 	required := []string{
 		`PULSE_SENSORS_WRAPPER="/usr/local/sbin/pulse-sensors"`,
 		`install_pulse_sensors_wrapper() {`,
+		`def block_device_targets():`,
+		`["lsblk", "-J", "-d", "-o", "NAME,TYPE,TRAN,MODEL,VENDOR,SUBSYSTEMS"]`,
+		`def union_smart_targets(scan_targets, block_devices):`,
+		`def smart_probe_attempts(device, device_type):`,
 		`"smart": collect_smart(),`,
 		`SSH_SENSORS_KEY_ENTRY="command=\"$PULSE_SENSORS_WRAPPER\",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty $SSH_SENSORS_PUBLIC_KEY # pulse-sensors"`,
 	}

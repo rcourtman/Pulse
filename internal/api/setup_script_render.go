@@ -884,44 +884,150 @@ def smartctl_path():
     return shutil.which("smartctl")
 
 
-def smart_targets(path):
-    result = run_command([path, "--scan-open"])
+def is_multiplexed_device_type(device_type):
+    return bool(device_type and re.search(r",\d", device_type))
+
+
+def nvme_namespace_for_controller(name):
+    if not re.fullmatch(r"nvme\d+", name or ""):
+        return ""
+    try:
+        for candidate in sorted(os.listdir("/sys/block")):
+            if candidate.startswith(name + "n"):
+                return candidate
+    except Exception:
+        return ""
+    return ""
+
+
+def canonical_block_for_device(device):
+    name = os.path.basename(str(device or "").strip())
+    if not name:
+        return ""
+    if re.fullmatch(r"nvme\d+", name):
+        return nvme_namespace_for_controller(name) or name
+    return name
+
+
+def is_physical_block_device(device):
+    name = str(device.get("name") or "").strip()
+    dtype = str(device.get("type") or "").strip().lower()
+    if not name or dtype != "disk":
+        return False
+
+    lowered_name = name.lower()
+    virtual_prefixes = (
+        "loop", "ram", "zram", "dm-", "md", "nbd", "rbd", "sr", "fd",
+        "zd", "vd", "xvd",
+    )
+    if lowered_name.startswith(virtual_prefixes):
+        return False
+
+    metadata = " ".join(
+        str(device.get(key) or "").lower()
+        for key in ("tran", "model", "vendor", "subsystems")
+    )
+    virtual_tokens = ("virtual", "virtio", "qemu", "vmware", "/virtual/")
+    return not any(token in metadata for token in virtual_tokens)
+
+
+def block_device_targets():
+    result = run_command(["lsblk", "-J", "-d", "-o", "NAME,TYPE,TRAN,MODEL,VENDOR,SUBSYSTEMS"])
     if not result or not result.stdout.strip():
         return []
+    try:
+        data = json.loads(result.stdout)
+    except Exception:
+        return []
+
+    devices = []
+    seen = set()
+    for device in data.get("blockdevices") or []:
+        if not isinstance(device, dict) or not is_physical_block_device(device):
+            continue
+        name = str(device.get("name") or "").strip()
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        devices.append("/dev/" + name)
+    return devices
+
+
+def union_smart_targets(scan_targets, block_devices):
+    targets = []
+    seen_targets = set()
+    covered_blocks = set()
+
+    for device, device_type in scan_targets:
+        key = (device, device_type)
+        if key in seen_targets:
+            continue
+        seen_targets.add(key)
+        targets.append(key)
+        if not is_multiplexed_device_type(device_type):
+            block = canonical_block_for_device(device)
+            if block:
+                covered_blocks.add(block)
+
+    for device in block_devices:
+        block = canonical_block_for_device(device)
+        if not block or block in covered_blocks:
+            continue
+        key = ("/dev/" + block, "")
+        if key in seen_targets:
+            continue
+        seen_targets.add(key)
+        targets.append(key)
+        covered_blocks.add(block)
+
+    return targets
+
+
+def smart_targets(path):
+    result = run_command([path, "--scan-open"])
 
     targets = []
     seen = set()
     typed_by_path = set()
-    for raw_line in result.stdout.splitlines():
-        line = raw_line.split("#", 1)[0].strip()
-        if not line:
-            continue
-        try:
-            fields = shlex.split(line)
-        except ValueError:
-            fields = line.split()
-        if not fields:
-            continue
+    if result and result.stdout.strip():
+        for raw_line in result.stdout.splitlines():
+            line = raw_line.split("#", 1)[0].strip()
+            if not line:
+                continue
+            try:
+                fields = shlex.split(line)
+            except ValueError:
+                fields = line.split()
+            if not fields:
+                continue
 
-        device = fields[0].strip()
-        if not device.startswith("/"):
-            continue
+            device = fields[0].strip()
+            if not device.startswith("/"):
+                continue
 
-        device_type = ""
-        for idx, field in enumerate(fields[:-1]):
-            if field == "-d":
-                device_type = fields[idx + 1].strip()
-                break
+            device_type = ""
+            for idx, field in enumerate(fields[:-1]):
+                if field == "-d":
+                    device_type = fields[idx + 1].strip()
+                    break
 
-        key = (device, device_type)
-        if key in seen:
-            continue
-        seen.add(key)
-        if device_type:
-            typed_by_path.add(device)
-        targets.append(key)
+            key = (device, device_type)
+            if key in seen:
+                continue
+            seen.add(key)
+            if device_type:
+                typed_by_path.add(device)
+            targets.append(key)
 
-    return [(device, dtype) for device, dtype in targets if dtype or device not in typed_by_path]
+    scan_targets = [(device, dtype) for device, dtype in targets if dtype or device not in typed_by_path]
+    return union_smart_targets(scan_targets, block_device_targets())
+
+
+def smart_probe_attempts(device, device_type):
+    attempts = [(device, device_type)] if device_type else [(device, "")]
+    if device_type and not is_multiplexed_device_type(device_type):
+        attempts.append((device, ""))
+    return attempts
 
 
 def disk_type(data):
@@ -1022,31 +1128,47 @@ def collect_smart():
     entries = []
     observed_at = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     for device, device_type in smart_targets(path):
-        args = [path]
-        if device_type:
-            args.extend(["-d", device_type])
-        args.extend(["-n", "standby,3", "-i", "-A", "-H", "--json=o", device])
+        best_entry = None
+        for attempt_device, attempt_type in smart_probe_attempts(device, device_type):
+            args = [path]
+            if attempt_type:
+                args.extend(["-d", attempt_type])
+            args.extend(["-n", "standby,3", "-i", "-A", "-H", "--json=o", attempt_device])
 
-        result = run_command(args)
-        if not result or not result.stdout.strip():
-            continue
-        try:
-            data = json.loads(result.stdout)
-        except Exception:
-            continue
+            result = run_command(args)
+            if not result or not result.stdout.strip():
+                continue
+            try:
+                data = json.loads(result.stdout)
+            except Exception:
+                continue
 
-        power_mode = str(data.get("power_mode") or "").lower()
-        entries.append({
-            "device": device,
-            "model": str(data.get("model_name") or data.get("model_family") or "").strip(),
-            "serial": str(data.get("serial_number") or "").strip(),
-            "wwn": format_wwn(data),
-            "type": disk_type(data),
-            "temperature": smart_temperature(data),
-            "health": smart_health(data),
-            "standbySkipped": "standby" in power_mode or "sleep" in power_mode,
-            "lastUpdated": observed_at,
-        })
+            power_mode = str(data.get("power_mode") or "").lower()
+            reported_device = attempt_device
+            if is_multiplexed_device_type(attempt_type):
+                reported_device = f"{attempt_device} [{attempt_type}]"
+            else:
+                block = canonical_block_for_device(attempt_device)
+                if block:
+                    reported_device = "/dev/" + block
+
+            entry = {
+                "device": reported_device,
+                "model": str(data.get("model_name") or data.get("model_family") or "").strip(),
+                "serial": str(data.get("serial_number") or "").strip(),
+                "wwn": format_wwn(data),
+                "type": disk_type(data),
+                "temperature": smart_temperature(data),
+                "health": smart_health(data),
+                "standbySkipped": "standby" in power_mode or "sleep" in power_mode,
+                "lastUpdated": observed_at,
+            }
+            best_entry = entry
+            if entry["temperature"] > 0 or entry["standbySkipped"] or not attempt_type:
+                break
+
+        if best_entry:
+            entries.append(best_entry)
     return entries
 
 

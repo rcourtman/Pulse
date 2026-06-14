@@ -432,6 +432,29 @@ func TestGetHostAgentTemperature(t *testing.T) {
 		assert.Equal(t, 60.0, result.CPUPackage)
 	})
 
+	t.Run("match by linked node id with SMART-only sensors", func(t *testing.T) {
+		host := models.Host{
+			ID:           "host-smart-only",
+			LinkedNodeID: "node-smart-only",
+			Sensors: models.HostSensorSummary{
+				SMART: []models.HostDiskSMART{
+					{Device: "/dev/sda", Temperature: 36, Health: "PASSED"},
+				},
+			},
+			LastSeen: time.Now(),
+		}
+		m.state.UpsertHost(host)
+
+		result := m.getHostAgentTemperatureByID("node-smart-only", "different-name")
+		assert.NotNil(t, result)
+		assert.True(t, result.Available)
+		assert.True(t, result.HasSMART)
+		if assert.Len(t, result.SMART, 1) {
+			assert.Equal(t, "/dev/sda", result.SMART[0].Device)
+			assert.Equal(t, 36, result.SMART[0].Temperature)
+		}
+	})
+
 	t.Run("match by hostname fallback", func(t *testing.T) {
 		host := models.Host{
 			ID:       "host2",

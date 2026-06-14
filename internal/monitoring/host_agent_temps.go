@@ -99,9 +99,11 @@ func (m *Monitor) getHostAgentTemperatureByID(nodeID, nodeName string) *models.T
 		return m.getClusterSensorTemperature(nodeName)
 	}
 
-	// Check if the host agent has temperature data
+	// Check if the host agent has temperature data. SMART-only reports are
+	// valid here: some PVE nodes expose no CPU sensor chip but still provide
+	// disk temperatures through the local agent.
 	sensors := matchedHost.Sensors()
-	if sensors == nil || len(sensors.TemperatureCelsius) == 0 {
+	if sensors == nil || (len(sensors.TemperatureCelsius) == 0 && len(sensors.SMART) == 0) {
 		// Host agent exists but has no temperature data — try cluster cache
 		return m.getClusterSensorTemperature(nodeName)
 	}
