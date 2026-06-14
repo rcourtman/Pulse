@@ -1,4 +1,5 @@
-import { Component, createSignal, Show } from 'solid-js';
+import { Component, createMemo, createSignal, Show } from 'solid-js';
+import { t } from '@/i18n';
 import { WelcomeStep } from './steps/WelcomeStep';
 import { SecurityStep } from './steps/SecurityStep';
 import { SetupCompletionPanel } from './SetupCompletionPanel';
@@ -59,15 +60,27 @@ export const SetupWizard: Component<SetupWizardProps> = (props) => {
     setCurrentStep('completion');
   };
 
-  const stepLabels = ['Unlock server', 'Security', 'First source'];
+  const stepLabels = createMemo(() => [
+    t('setup.step.unlockServer'),
+    t('setup.step.security'),
+    t('setup.step.firstSource'),
+  ]);
 
   return (
-    <div class="min-h-screen bg-base flex flex-col" role="main" aria-label="Pulse Setup Wizard">
+    <div
+      class="min-h-screen bg-base flex flex-col"
+      role="main"
+      aria-label={t('setup.wizard.ariaLabel')}
+    >
       {/* Background decoration */}
       <div class="fixed inset-0 overflow-hidden pointer-events-none" aria-hidden="true"></div>
 
-      <div class="relative z-10 pt-8 px-4" role="navigation" aria-label="Setup progress">
-        <StepIndicator steps={stepLabels} currentStep={currentStepIndex()} />
+      <div
+        class="relative z-10 pt-8 px-4"
+        role="navigation"
+        aria-label={t('setup.progress.ariaLabel')}
+      >
+        <StepIndicator steps={stepLabels()} currentStep={currentStepIndex()} />
       </div>
 
       {/* Main content */}

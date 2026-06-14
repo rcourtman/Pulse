@@ -924,6 +924,10 @@ acquisition destinations. The Docker / Podman runtime route remains `/docker`
 for search familiarity, but the shell may label the
 destination as Docker so it reads as the recognizable container runtime lens
 rather than an owning infrastructure platform.
+Localized runtime-home loading copy may route through the shared frontend i18n
+catalog, but this does not move route ownership or commercial posture into
+localization: authenticated `/`, hosted workspaces, public-demo suppression, and
+entitlement-read prohibitions remain governed by this cloud-paid boundary.
 
 The Proxmox platform tab in the authenticated app shell is ordinary product
 navigation. It must stay separate from hosted acquisition, monitored-system

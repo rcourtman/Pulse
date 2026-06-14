@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { DEFAULT_LOCALE, setActiveLocale } from '@/i18n';
 import { SetupWizard } from '../SetupWizard';
 
 vi.mock('../steps/WelcomeStep', () => ({
@@ -39,6 +40,7 @@ describe('SetupWizard', () => {
   });
 
   afterEach(() => {
+    setActiveLocale(DEFAULT_LOCALE);
     cleanup();
   });
 
@@ -64,5 +66,15 @@ describe('SetupWizard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Completion finish' }));
 
     expect(onComplete).toHaveBeenCalledWith('/settings/infrastructure?add=linux-host');
+  });
+
+  it('passes localized first-session step labels into the shared progress indicator', () => {
+    setActiveLocale('de');
+
+    render(() => <SetupWizard onComplete={vi.fn()} />);
+
+    expect(
+      screen.getByText('Step indicator 0:Server entsperren > Sicherheit > Erste Quelle'),
+    ).toBeInTheDocument();
   });
 });

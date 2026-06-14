@@ -6931,7 +6931,22 @@
       "evidence": [
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/localized-product-surfaces-first-session-monitoring-2026-06-14.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/localized-product-surfaces-foundation-2026-06-13.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/agent-lifecycle.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/cloud-paid.md",
           "kind": "file"
         },
         {
@@ -6961,12 +6976,62 @@
         },
         {
           "repo": "pulse",
+          "path": "frontend-modern/src/components/SetupWizard/__tests__/SetupCompletionPanel.guardrails.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/SetupWizard/__tests__/SetupWizard.localization.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/SetupWizard/setupCompletionModel.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/SetupWizard/SetupWizard.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/SetupWizard/StepIndicator.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/SetupWizard/steps/SecurityStep.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/SetupWizard/steps/WelcomeStep.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/i18n/__tests__/i18n.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "frontend-modern/src/i18n/messages.ts",
           "kind": "file"
         },
         {
           "repo": "pulse",
           "path": "frontend-modern/src/i18n/policy.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/pages/RuntimeHome.tsx",
           "kind": "file"
         }
       ]

@@ -1127,6 +1127,12 @@ instead of lifecycle-local centered icon/text shells.
    may accept a preview-provided connected-resource override, but the live
    first-session runtime path must keep `/api/state` polling as the sole
    source of connected-system truth when no override is supplied.
+   Localized setup-completion copy may route through
+   `frontend-modern/src/i18n/messages.ts`, but the lifecycle contract remains
+   unchanged: add-infrastructure and agent-install destinations, API token
+   meaning, generated credential values, install/source product identifiers,
+   and reported resource names must stay stable while only surrounding
+   operator-facing guidance translates.
    7a. Keep lifecycle-neutral shared `internal/api/` changes from altering agent
    setup, registration, install, or profile payloads by accident. AI runtime
    or entitlement work that touches shared router or handler wiring must keep

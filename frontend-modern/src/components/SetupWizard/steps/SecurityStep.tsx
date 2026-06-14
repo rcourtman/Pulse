@@ -1,4 +1,5 @@
 import { Component, createSignal, Show } from 'solid-js';
+import { t } from '@/i18n';
 import { showError } from '@/utils/toast';
 import { setApiToken as setApiClientToken, apiFetchJSON } from '@/utils/apiClient';
 import { STORAGE_KEYS } from '@/utils/localStorage';
@@ -13,8 +14,7 @@ interface SecurityStepProps {
 }
 
 const GENERATED_PASSWORD_LENGTH = 20;
-const GENERATED_PASSWORD_CHARS =
-  'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%';
+const GENERATED_PASSWORD_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%';
 
 export const SecurityStep: Component<SecurityStepProps> = (props) => {
   const [username, setUsername] = createSignal(props.state.username || 'admin');
@@ -50,15 +50,15 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
   const handleSetup = async () => {
     if (useCustomPassword()) {
       if (!password()) {
-        showError('Please enter a password');
+        showError(t('setup.security.error.passwordRequired'));
         return;
       }
       if (password().length < 12) {
-        showError('Password must be at least 12 characters');
+        showError(t('setup.security.error.passwordTooShort'));
         return;
       }
       if (password() !== confirmPassword()) {
-        showError('Passwords do not match');
+        showError(t('setup.security.error.passwordMismatch'));
         return;
       }
     }
@@ -112,7 +112,7 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
 
       props.onComplete();
     } catch (error) {
-      showError(`Setup failed: ${error}`);
+      showError(t('setup.security.error.setupFailed', { error: String(error) }));
     } finally {
       setIsSettingUp(false);
     }
@@ -122,26 +122,28 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
     <div class="max-w-lg mx-auto bg-surface border border-border overflow-hidden relative rounded-md">
       <div class="p-8 border-b border-border relative z-10 text-center">
         <h2 class="text-2xl font-bold tracking-tight text-base-content">
-          Create your admin account
+          {t('setup.security.title')}
         </h2>
-        <p class="text-sm text-muted mt-2">
-          The next step is to choose the first infrastructure source.
-        </p>
+        <p class="text-sm text-muted mt-2">{t('setup.security.description')}</p>
       </div>
       <div class="p-8 space-y-6 relative z-10">
         <div>
-          <label class="block text-sm font-medium text-base-content mb-2">Username</label>
+          <label class="block text-sm font-medium text-base-content mb-2">
+            {t('setup.security.label.username')}
+          </label>
           <input
             type="text"
             value={username()}
             onInput={(e) => setUsername(e.currentTarget.value)}
             class="w-full px-5 py-3.5 bg-surface border border-border rounded-md text-base-content placeholder-slate-400 focus:outline-none focus:ring-0 focus:border-blue-500 transition-colors font-mono"
-            placeholder="admin"
+            placeholder={t('setup.security.placeholder.username')}
           />
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-base-content mb-3">Password</label>
+          <label class="block text-sm font-medium text-base-content mb-3">
+            {t('setup.security.label.password')}
+          </label>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
             <button
               type="button"
@@ -152,7 +154,7 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
                   : 'bg-surface border-border text-muted hover:bg-surface-hover'
               }`}
             >
-              Auto-generate
+              {t('setup.security.passwordMode.autoGenerate')}
             </button>
             <button
               type="button"
@@ -163,7 +165,7 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
                   : 'bg-surface border-border text-muted hover:bg-surface-hover'
               }`}
             >
-              Custom password
+              {t('setup.security.customPassword')}
             </button>
           </div>
 
@@ -175,14 +177,16 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
                   value={password()}
                   onInput={(e) => setPassword(e.currentTarget.value)}
                   class="w-full px-5 py-3.5 pr-20 bg-surface border border-border rounded-md text-base-content placeholder-slate-400 focus:outline-none focus:ring-0 focus:border-blue-500 transition-colors font-mono"
-                  placeholder="Password (min 12 characters)"
+                  placeholder={t('setup.security.placeholder.password')}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword())}
                   class="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-muted hover:text-base-content transition-colors px-2 py-1"
                 >
-                  {showPassword() ? 'Hide' : 'Show'}
+                  {showPassword()
+                    ? t('setup.security.showPassword.hide')
+                    : t('setup.security.showPassword.show')}
                 </button>
               </div>
               <input
@@ -190,28 +194,26 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
                 value={confirmPassword()}
                 onInput={(e) => setConfirmPassword(e.currentTarget.value)}
                 class="w-full px-5 py-3.5 bg-surface border border-border rounded-md text-base-content placeholder-slate-400 focus:outline-none focus:ring-0 focus:border-blue-500 transition-colors font-mono"
-                placeholder="Confirm password"
+                placeholder={t('setup.security.label.confirmPassword')}
               />
-              <p class="text-xs text-muted">Minimum 12 characters.</p>
+              <p class="text-xs text-muted">{t('setup.security.minimumPasswordHelp')}</p>
             </div>
           </Show>
 
           <Show when={!useCustomPassword()}>
-            <p class="text-sm text-muted">
-              A secure 20-character password will be generated and shown on the next screen.
-            </p>
+            <p class="text-sm text-muted">{t('setup.security.generatedPasswordHelp')}</p>
           </Show>
         </div>
 
         <div class="bg-base rounded-md p-4 border border-border text-left">
           <div class="text-[11px] font-semibold uppercase tracking-wide text-muted mb-2">
-            On the next screen
+            {t('setup.security.nextScreen.title')}
           </div>
           <ul class="text-sm text-muted space-y-1">
-            <li>• Your username and password</li>
-            <li>• An admin API token for automation</li>
+            <li>• {t('setup.security.nextScreen.itemCredentials')}</li>
+            <li>• {t('setup.security.nextScreen.itemApiToken')}</li>
           </ul>
-          <p class="mt-2 text-xs text-muted">Save them before continuing, they are shown once.</p>
+          <p class="mt-2 text-xs text-muted">{t('setup.security.nextScreen.saveOnce')}</p>
         </div>
       </div>
       {/* Actions */}
@@ -220,7 +222,7 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
           onClick={props.onBack}
           class="px-6 py-3.5 bg-surface border border-border hover:bg-surface-hover text-base-content font-medium rounded-md transition-colors"
         >
-          ← Back
+          <span>←</span> {t('setup.security.action.back')}
         </button>
         <button
           onClick={handleSetup}
@@ -248,10 +250,12 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
                   d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                 ></path>
               </svg>
-              Setting up...
+              {t('setup.security.action.settingUp')}
             </>
           ) : (
-            'Create Account & Continue →'
+            <>
+              {t('setup.security.action.createAccount')} <span>→</span>
+            </>
           )}
         </button>
       </div>

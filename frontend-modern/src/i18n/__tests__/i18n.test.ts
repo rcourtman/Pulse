@@ -1,9 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   DEFAULT_LOCALE,
+  FIRST_SESSION_MONITORING_ALLOWED_IDENTICAL_TRANSLATIONS,
+  FIRST_SESSION_MONITORING_NON_TRANSLATABLE_TOKENS,
   FIRST_LOCALIZATION_LOCALES,
   I18N_MESSAGES,
   LOCALIZATION_FOUNDATION,
+  LOCALIZED_FIRST_SESSION_MONITORING_JOURNEY_KEYS,
   LOCALIZED_SETTINGS_GENERAL_JOURNEY_KEYS,
   NEVER_TRANSLATE_COPY_RULES,
   NEXT_LOCALIZATION_LOCALES,
@@ -128,6 +131,25 @@ describe('i18n foundation', () => {
         '"Update"',
       ]),
     );
+    expect(FIRST_SESSION_MONITORING_NON_TRANSLATABLE_TOKENS).toEqual(
+      expect.arrayContaining([
+        'Pulse',
+        'Pulse Agent',
+        'API',
+        'URL',
+        'Docker',
+        'Kubernetes',
+        'Proxmox',
+        'TrueNAS',
+        'VMware',
+        'PBS',
+        'PMG',
+        '.bootstrap_token',
+        'sudo pulse bootstrap-token',
+        'docker exec',
+        'pct exec',
+      ]),
+    );
   });
 
   it('requires explicit first-wave translations for the migrated settings general journey', () => {
@@ -160,6 +182,46 @@ describe('i18n foundation', () => {
           locale,
         ),
       ).toContain('PVE_POLLING_INTERVAL');
+    }
+  });
+
+  it('requires explicit first-wave translations for the migrated first-session monitoring journey', () => {
+    for (const locale of FIRST_LOCALIZATION_LOCALES) {
+      const allowedIdenticalKeys: ReadonlySet<I18nMessageKey> = new Set([
+        ...((SETTINGS_GENERAL_ALLOWED_IDENTICAL_TRANSLATIONS[locale] ??
+          []) as readonly I18nMessageKey[]),
+        ...((FIRST_SESSION_MONITORING_ALLOWED_IDENTICAL_TRANSLATIONS[locale] ??
+          []) as readonly I18nMessageKey[]),
+      ]);
+      for (const key of LOCALIZED_FIRST_SESSION_MONITORING_JOURNEY_KEYS) {
+        expect(I18N_MESSAGES[locale][key], `${locale}:${key}`).toBeTruthy();
+        if (!allowedIdenticalKeys.has(key)) {
+          expect(I18N_MESSAGES[locale][key], `${locale}:${key}`).not.toBe(I18N_MESSAGES.en[key]);
+        }
+      }
+    }
+  });
+
+  it('keeps machine-facing identifiers unchanged in first-session monitoring catalog copy', () => {
+    for (const locale of FIRST_LOCALIZATION_LOCALES) {
+      expect(I18N_MESSAGES[locale]['setup.welcome.deploymentHint.dockerUnnamed']).toContain(
+        '<pulse-container>',
+      );
+      expect(I18N_MESSAGES[locale]['setup.welcome.deploymentHint.lxc']).toContain('Proxmox');
+      expect(I18N_MESSAGES[locale]['setup.welcome.error.snapshotPaste']).toContain(
+        '.bootstrap_token',
+      );
+      expect(I18N_MESSAGES[locale]['setup.completion.download.content']).toContain('URL:');
+      expect(
+        I18N_MESSAGES[locale]['setup.completion.sourceOptions.platformApi.description'],
+      ).toContain('Proxmox');
+      expect(
+        I18N_MESSAGES[locale]['setup.completion.sourceOptions.platformApi.description'],
+      ).toContain('TrueNAS');
+      expect(I18N_MESSAGES[locale]['setup.completion.sourceOptions.agent.description']).toContain(
+        'Docker',
+      );
+      expect(I18N_MESSAGES[locale]['setup.security.nextScreen.itemApiToken']).toContain('API');
     }
   });
 });

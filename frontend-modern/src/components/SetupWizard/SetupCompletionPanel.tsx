@@ -1,4 +1,5 @@
 import { Component, createSignal, createEffect, createMemo, onCleanup, Show, For } from 'solid-js';
+import { t } from '@/i18n';
 import { copyToClipboard } from '@/utils/clipboard';
 import { logger } from '@/utils/logger';
 import { apiFetchJSON } from '@/utils/apiClient';
@@ -20,21 +21,6 @@ interface CompleteStepProps {
   onComplete: (nextPath?: string) => void;
   connectedResourcesOverride?: readonly Resource[];
 }
-
-const SOURCE_STRATEGY_OPTIONS = [
-  {
-    title: 'Platform API',
-    description: 'Inventory and health from Proxmox, TrueNAS, VMware, PBS, or PMG.',
-  },
-  {
-    title: 'Pulse Agent',
-    description: 'Node-local telemetry for standalone hosts, services, Docker, and Kubernetes.',
-  },
-  {
-    title: 'Use both',
-    description: 'Combine platform inventory with Agent telemetry when full coverage matters.',
-  },
-] as const;
 
 const ADD_INFRASTRUCTURE_PATH = buildInfrastructureOnboardingPath('pick');
 const AGENT_INSTALL_PATH = buildInfrastructureOnboardingPath('linux-host');
@@ -115,29 +101,14 @@ export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
   const downloadCredentials = () => {
     const baseUrl = getPulseBaseUrl();
     const infrastructureUrl = `${baseUrl.replace(/\/$/, '')}${ADD_INFRASTRUCTURE_PATH}`;
-    const content = `Pulse Credentials
-==================
-Generated: ${new Date().toISOString()}
-
-Web Login:
-----------
-URL: ${baseUrl}
-Username: ${props.state.username}
-Password: ${props.state.password}
-
-Admin API Token:
-----------------
-${props.state.apiToken}
-
-Infrastructure:
----------------
-${infrastructureUrl}
-
-Use Add infrastructure to choose a platform API, Pulse Agent, or both
-for the first system Pulse should monitor.
-
-Keep these credentials secure!
-`;
+    const content = t('setup.completion.download.content', {
+      generatedAt: new Date().toISOString(),
+      baseUrl,
+      username: props.state.username,
+      password: props.state.password,
+      apiToken: props.state.apiToken,
+      infrastructureUrl,
+    });
 
     const blob = new Blob([content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
@@ -163,6 +134,20 @@ Keep these credentials secure!
   };
 
   const completionViewModel = createMemo(() => buildSetupCompletionViewModel(connectedSystems()));
+  const sourceStrategyOptions = createMemo(() => [
+    {
+      title: t('setup.completion.sourceOptions.platformApi.title'),
+      description: t('setup.completion.sourceOptions.platformApi.description'),
+    },
+    {
+      title: t('setup.completion.sourceOptions.agent.title'),
+      description: t('setup.completion.sourceOptions.agent.description'),
+    },
+    {
+      title: t('setup.completion.sourceOptions.both.title'),
+      description: t('setup.completion.sourceOptions.both.description'),
+    },
+  ]);
 
   return (
     <div class="max-w-2xl mx-auto bg-surface border border-border overflow-hidden relative rounded-md p-6 sm:p-8 text-center text-base-content">
@@ -246,14 +231,15 @@ Keep these credentials secure!
               </div>
               <div>
                 <span class="text-base-content font-semibold text-sm flex items-center gap-2 flex-wrap">
-                  Credentials you must save now
+                  {t('setup.completion.credentials.title')}
                   <span class="text-[10px] text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-900 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded-full">
-                    Shown during setup
+                    {t('setup.completion.credentials.badge')}
                   </span>
                 </span>
                 <p class="mt-1 text-xs text-muted max-w-xl">
-                  Save the admin login and API token before leaving this screen, then continue into{' '}
-                  {completionViewModel().credentialsContinuationText}
+                  {t('setup.completion.credentials.description', {
+                    destination: completionViewModel().credentialsContinuationText,
+                  })}
                 </p>
               </div>
             </div>
@@ -276,14 +262,14 @@ Keep these credentials secure!
             <div class="px-4 pb-4 pt-0 sm:px-6 sm:pb-6 space-y-3 border-t border-border-subtle">
               <div class="bg-surface-hover dark:bg-black border rounded-md p-3 mt-4">
                 <div class="text-[11px] font-medium text-muted mb-1 uppercase tracking-wider">
-                  Username
+                  {t('setup.completion.credentials.usernameLabel')}
                 </div>
                 <div class="text-base-content font-mono text-sm">{props.state.username}</div>
               </div>
 
               <div class="bg-surface-hover dark:bg-black border rounded-md p-3">
                 <div class="text-[11px] font-medium text-muted mb-1 uppercase tracking-wider">
-                  Password
+                  {t('setup.completion.credentials.passwordLabel')}
                 </div>
                 <div class="flex items-center justify-between">
                   <code class="text-base-content font-mono text-sm break-all">
@@ -328,7 +314,7 @@ Keep these credentials secure!
 
               <div class="bg-surface-hover dark:bg-black border border-border rounded-md p-3">
                 <div class="text-[11px] font-medium text-muted mb-1 uppercase tracking-wider">
-                  Admin API Token
+                  {t('setup.completion.credentials.apiTokenLabel')}
                 </div>
                 <div class="flex items-center justify-between">
                   <code class="text-base-content font-mono text-xs break-all pr-4">
@@ -383,14 +369,14 @@ Keep these credentials secure!
                     d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                   />
                 </svg>
-                Download credentials
+                {t('setup.completion.action.downloadCredentials')}
               </button>
             </div>
           </Show>
         </div>
 
         <div
-          aria-label="Setup next step"
+          aria-label={t('setup.completion.nextStep.ariaLabel')}
           class="bg-surface rounded-md border border-border p-5 sm:p-6 text-left mb-6"
         >
           <div class="flex items-start justify-between gap-4">
@@ -413,11 +399,13 @@ Keep these credentials secure!
               </h3>
             </div>
             <div class="rounded-sm bg-blue-50 px-2 py-1 text-[10px] font-medium text-blue-700 dark:bg-blue-900 dark:text-blue-300">
-              Recommended next step
+              {t('setup.completion.nextStep.badge')}
             </div>
           </div>
           <div class="mt-4 rounded-md border border-border bg-surface-alt p-4">
-            <div class="text-[11px] font-medium uppercase tracking-wider text-muted">Next step</div>
+            <div class="text-[11px] font-medium uppercase tracking-wider text-muted">
+              {t('setup.completion.nextStep.label')}
+            </div>
             <div class="mt-2 text-sm text-base-content">
               {completionViewModel().nextStepSummary}
             </div>
@@ -432,15 +420,15 @@ Keep these credentials secure!
                 class="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
               >
                 {completionViewModel().primaryAction === 'infrastructure'
-                  ? 'Open Infrastructure'
-                  : 'Add infrastructure'}
+                  ? t('setup.completion.action.openInfrastructure')
+                  : t('setup.completion.action.addInfrastructure')}
               </button>
               <Show when={completionViewModel().showAddInfrastructureAction}>
                 <button
                   onClick={handleOpenAddInfrastructure}
                   class="inline-flex items-center justify-center gap-2 rounded-md border border-border px-4 py-3 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
                 >
-                  Add infrastructure
+                  {t('setup.completion.action.addInfrastructure')}
                 </button>
               </Show>
               <Show when={completionViewModel().showAgentInstallAction}>
@@ -448,16 +436,16 @@ Keep these credentials secure!
                   onClick={handleOpenAgentInstall}
                   class="inline-flex items-center justify-center gap-2 rounded-md border border-border px-4 py-3 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
                 >
-                  Install Pulse Agent
+                  {t('setup.completion.action.installAgent')}
                 </button>
               </Show>
             </div>
             <div class="mt-4 border-t border-border-subtle pt-3">
               <div class="text-[11px] font-medium uppercase tracking-wider text-muted">
-                Source choices
+                {t('setup.completion.sourceOptions.title')}
               </div>
               <ul class="mt-2 space-y-1.5 text-left">
-                <For each={SOURCE_STRATEGY_OPTIONS}>
+                <For each={sourceStrategyOptions()}>
                   {(option) => (
                     <li class="text-xs leading-snug">
                       <span class="font-semibold text-base-content">{option.title}</span>

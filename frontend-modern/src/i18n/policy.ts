@@ -4,7 +4,11 @@ import {
   SUPPORTED_LOCALES,
   type SupportedLocale,
 } from './locales';
-import { SETTINGS_GENERAL_MIGRATED_MESSAGE_KEYS, type I18nMessageKey } from './messages';
+import {
+  FIRST_SESSION_MONITORING_MIGRATED_MESSAGE_KEYS,
+  SETTINGS_GENERAL_MIGRATED_MESSAGE_KEYS,
+  type I18nMessageKey,
+} from './messages';
 
 export const LOCALIZATION_FOUNDATION = {
   ownerLayer: 'frontend-modern/src/i18n',
@@ -38,10 +42,39 @@ export const SETTINGS_GENERAL_NON_TRANSLATABLE_TOKENS = [
   '"Update"',
 ] as const;
 
+export const FIRST_SESSION_MONITORING_NON_TRANSLATABLE_TOKENS = [
+  'Pulse',
+  'Pulse Agent',
+  'API',
+  'URL',
+  'Docker',
+  'Kubernetes',
+  'Proxmox',
+  'TrueNAS',
+  'VMware',
+  'PBS',
+  'PMG',
+  'LXC',
+  '.bootstrap_token',
+  '<pulse-container>',
+  '<ctid>',
+  'sudo pulse bootstrap-token',
+  'docker exec',
+  'pct exec',
+] as const;
+
 export const LOCALIZED_SETTINGS_GENERAL_JOURNEY_KEYS =
   SETTINGS_GENERAL_MIGRATED_MESSAGE_KEYS satisfies readonly I18nMessageKey[];
+
+export const LOCALIZED_FIRST_SESSION_MONITORING_JOURNEY_KEYS =
+  FIRST_SESSION_MONITORING_MIGRATED_MESSAGE_KEYS satisfies readonly I18nMessageKey[];
 
 export const SETTINGS_GENERAL_ALLOWED_IDENTICAL_TRANSLATIONS = {
   de: ['settings.nav.group.system', 'settings.general.theme.option.system'],
   es: ['settings.header.systemGeneral.title', 'settings.nav.item.general'],
+} as const satisfies Partial<Record<SupportedLocale, readonly I18nMessageKey[]>>;
+
+export const FIRST_SESSION_MONITORING_ALLOWED_IDENTICAL_TRANSLATIONS = {
+  de: ['setup.completion.sourceOptions.agent.title', 'setup.security.placeholder.username'],
+  es: ['setup.completion.sourceOptions.agent.title', 'setup.security.placeholder.username'],
 } as const satisfies Partial<Record<SupportedLocale, readonly I18nMessageKey[]>>;

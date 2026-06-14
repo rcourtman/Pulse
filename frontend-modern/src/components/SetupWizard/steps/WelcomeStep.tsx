@@ -1,4 +1,5 @@
 import { Component, createMemo, createSignal, onMount, Show } from 'solid-js';
+import { t } from '@/i18n';
 import { showError, showSuccess } from '@/utils/toast';
 import { apiFetch, apiFetchJSON } from '@/utils/apiClient';
 import { logger } from '@/utils/logger';
@@ -26,9 +27,9 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
     if (copied) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-      showSuccess('Command copied to clipboard');
+      showSuccess(t('setup.welcome.success.commandCopied'));
     } else {
-      showError('Failed to copy command');
+      showError(t('setup.welcome.error.copyCommandFailed'));
     }
   };
 
@@ -76,17 +77,16 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
     }
   };
 
-  const snapshotPasteHelp =
-    'That looks like the encrypted .bootstrap_token file contents, not the raw setup token. Run the command above and paste the token string it prints.';
+  const snapshotPasteHelp = () => t('setup.welcome.error.snapshotPaste');
 
   const handleUnlock = async () => {
     const trimmedToken = props.bootstrapToken.trim();
     if (!trimmedToken) {
-      showError('Please enter the bootstrap token');
+      showError(t('setup.welcome.error.missingBootstrapToken'));
       return;
     }
     if (looksLikeBootstrapTokenSnapshot(trimmedToken)) {
-      showError(snapshotPasteHelp);
+      showError(snapshotPasteHelp());
       return;
     }
 
@@ -103,13 +103,13 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
       });
 
       if (!response.ok) {
-        throw new Error('Invalid bootstrap token');
+        throw new Error(t('setup.welcome.error.invalidBootstrapTokenResponse'));
       }
 
       props.setIsUnlocked(true);
       props.onNext();
     } catch (_error) {
-      showError('Invalid bootstrap token. Please check and try again.');
+      showError(t('setup.welcome.error.invalidBootstrapToken'));
     } finally {
       setIsValidating(false);
     }
@@ -130,37 +130,39 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
 
   const deploymentLabel = createMemo(() => {
     if (isDocker()) {
-      return 'Docker deployment';
+      return t('setup.welcome.deploymentLabel.docker');
     }
     if (inContainer() && lxcCtid()) {
-      return 'LXC container';
+      return t('setup.welcome.deploymentLabel.lxc');
     }
     if (inContainer()) {
-      return 'Containerized deployment';
+      return t('setup.welcome.deploymentLabel.containerized');
     }
-    return 'Direct host install';
+    return t('setup.welcome.deploymentLabel.direct');
   });
 
   const deploymentHint = createMemo(() => {
     if (isDocker()) {
       return dockerContainerName()
-        ? `Pulse appears to be running in Docker as container "${dockerContainerName()}". Run the command on the Docker host to print the one-time setup token from that container.`
-        : 'Pulse appears to be running in Docker. Run the command on the Docker host and replace <pulse-container> with the running Pulse container name.';
+        ? t('setup.welcome.deploymentHint.dockerNamed', {
+            containerName: dockerContainerName(),
+          })
+        : t('setup.welcome.deploymentHint.dockerUnnamed');
     }
     if (inContainer() && lxcCtid()) {
-      return `Pulse appears to be running in LXC container ${lxcCtid()}. Run the command on the Proxmox host to execute into that container and print the one-time setup token.`;
+      return t('setup.welcome.deploymentHint.lxc', { ctid: lxcCtid() });
     }
     if (inContainer()) {
-      return 'Pulse appears to be running in a containerized environment. Run the command from the host that manages the container so you can print the one-time setup token.';
+      return t('setup.welcome.deploymentHint.containerized');
     }
-    return 'Run the command directly in a shell on the Pulse server to print the one-time setup token.';
+    return t('setup.welcome.deploymentHint.direct');
   });
 
   const unlockHelp = createMemo(() => {
     if (isDocker()) {
-      return 'This one-time bootstrap token only unlocks first-run setup. Run the command above and paste the token string it prints. After verification, you will create the admin account and Pulse will generate the long-lived API token separately.';
+      return t('setup.welcome.tokenHelp.docker');
     }
-    return 'This one-time bootstrap token only unlocks first-run setup on this Pulse server. Run the command above and paste the token string it prints. It is not your admin password and it is not the API token you will use after setup.';
+    return t('setup.welcome.tokenHelp.host');
   });
 
   return (
@@ -172,22 +174,25 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
           class="w-20 h-20 rounded-md mb-6 mx-auto dark:shadow-none"
         />
         <h1 class="text-3xl sm:text-4xl font-bold tracking-tight text-base-content mb-3">
-          Welcome to Pulse
+          {t('setup.welcome.hero.title')}
         </h1>
         <p class="text-base text-muted max-w-xl mx-auto">
-          Three steps:{' '}
-          <span class="text-base-content font-medium">Unlock this Pulse server</span>,{' '}
-          <span class="text-base-content font-medium">Create the admin account</span>, then{' '}
-          <span class="text-base-content font-medium">Choose the first source</span>.
+          {t('setup.welcome.hero.stepsIntro')}{' '}
+          <span class="text-base-content font-medium">{t('setup.welcome.hero.step.unlock')}</span>,{' '}
+          <span class="text-base-content font-medium">{t('setup.welcome.hero.step.admin')}</span>,{' '}
+          {t('setup.welcome.hero.stepsThen')}{' '}
+          <span class="text-base-content font-medium">{t('setup.welcome.hero.step.source')}</span>.
         </p>
         <p class="text-sm text-muted max-w-xl mx-auto mt-2">
-          <span>Connect a platform API, install Pulse Agent, or use both for full coverage.</span>
+          <span>{t('setup.welcome.hero.coverage')}</span>
         </p>
       </div>
 
       <Show when={!props.isUnlocked}>
         <div class="p-6 sm:p-8 max-w-2xl mx-auto bg-surface border border-border rounded-md text-left">
-          <h3 class="text-lg font-semibold text-base-content mb-2 tracking-tight">Unlock setup</h3>
+          <h3 class="text-lg font-semibold text-base-content mb-2 tracking-tight">
+            {t('setup.welcome.unlockTitle')}
+          </h3>
           <p class="text-sm text-muted mb-5">{deploymentHint()}</p>
 
           <div class="mb-5">
@@ -199,7 +204,7 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
               <button
                 onClick={copyCommand}
                 class="ml-4 flex-shrink-0 p-2 rounded-md bg-surface hover:bg-slate-700 text-slate-300 hover:text-white transition-colors focus:outline-none focus:ring-0"
-                title="Copy command"
+                title={t('setup.welcome.copyCommandTitle')}
               >
                 <Show when={copied()} fallback={<Copy class="w-4 h-4" />}>
                   <Check class="w-4 h-4 text-emerald-400" />
@@ -215,76 +220,75 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
 
           <div class="mb-5 text-left">
             <div class="text-[11px] font-semibold uppercase tracking-wide text-muted">
-              What this token does
+              {t('setup.welcome.tokenHelp.title')}
             </div>
             <p class="mt-1 text-sm text-muted">{unlockHelp()}</p>
           </div>
 
           <div class="space-y-3">
-              <input
-                type="text"
-                value={props.bootstrapToken}
-                onInput={(e) => {
-                  const val = e.currentTarget.value;
-                  props.setBootstrapToken(val);
-                  // Premium UX: Auto-submit if we detect a pasted token (length heuristic)
-                  if (val.length > 20) {
-                    setTimeout(() => {
-                      if (props.bootstrapToken === val && !isValidating()) {
-                        handleUnlock();
-                      }
-                    }, 400);
-                  }
-                }}
-                onKeyDown={(e) => e.key === 'Enter' && void handleUnlock()}
-                class="w-full px-5 py-3.5 bg-surface border border-border rounded-md text-base-content placeholder-slate-400 focus:outline-none focus:ring-0 focus:border-blue-500 transition-colors font-mono"
-                placeholder="Paste your bootstrap token"
-                autofocus
-              />
+            <input
+              type="text"
+              value={props.bootstrapToken}
+              onInput={(e) => {
+                const val = e.currentTarget.value;
+                props.setBootstrapToken(val);
+                // Premium UX: Auto-submit if we detect a pasted token (length heuristic)
+                if (val.length > 20) {
+                  setTimeout(() => {
+                    if (props.bootstrapToken === val && !isValidating()) {
+                      handleUnlock();
+                    }
+                  }, 400);
+                }
+              }}
+              onKeyDown={(e) => e.key === 'Enter' && void handleUnlock()}
+              class="w-full px-5 py-3.5 bg-surface border border-border rounded-md text-base-content placeholder-slate-400 focus:outline-none focus:ring-0 focus:border-blue-500 transition-colors font-mono"
+              placeholder={t('setup.welcome.placeholder.bootstrapToken')}
+              autofocus
+            />
 
-              <p class="text-xs text-muted">
-                After Pulse verifies this token, the next step is creating the admin account for
-                this server.
+            <p class="text-xs text-muted">{t('setup.welcome.tokenHelp.afterVerify')}</p>
+            <Show when={looksLikeBootstrapTokenSnapshot(props.bootstrapToken)}>
+              <p class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+                {snapshotPasteHelp()}
               </p>
-              <Show when={looksLikeBootstrapTokenSnapshot(props.bootstrapToken)}>
-                <p class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
-                  {snapshotPasteHelp}
-                </p>
-              </Show>
+            </Show>
 
-              <button
-                onClick={handleUnlock}
-                disabled={isValidating() || !props.bootstrapToken.trim()}
-                class="w-full py-3.5 px-6 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:bg-surface-alt disabled:text-muted disabled:cursor-not-allowed text-white font-medium rounded-md transition-colors flex justify-center items-center gap-2 duration-200"
-              >
-                {isValidating() ? (
-                  <>
-                    <svg
-                      class="animate-spin -ml-1 mr-2 h-5 w-5 text-white"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        class="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        stroke-width="4"
-                      ></circle>
-                      <path
-                        class="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      ></path>
-                    </svg>
-                    Verifying bootstrap token...
-                  </>
-                ) : (
-                  'Verify bootstrap token →'
-                )}
-              </button>
-            </div>
+            <button
+              onClick={handleUnlock}
+              disabled={isValidating() || !props.bootstrapToken.trim()}
+              class="w-full py-3.5 px-6 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:bg-surface-alt disabled:text-muted disabled:cursor-not-allowed text-white font-medium rounded-md transition-colors flex justify-center items-center gap-2 duration-200"
+            >
+              {isValidating() ? (
+                <>
+                  <svg
+                    class="animate-spin -ml-1 mr-2 h-5 w-5 text-white"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      class="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      stroke-width="4"
+                    ></circle>
+                    <path
+                      class="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
+                  </svg>
+                  {t('setup.welcome.action.verifyingToken')}
+                </>
+              ) : (
+                <>
+                  {t('setup.welcome.action.verifyToken')} <span>→</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </Show>
 
@@ -294,7 +298,7 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
             onClick={props.onNext}
             class="py-4 px-10 bg-blue-600 hover:bg-blue-700 text-white text-lg font-medium rounded-md transition-colors duration-200"
           >
-            Continue to Security →
+            {t('setup.welcome.action.continueSecurity')} <span>→</span>
           </button>
         </div>
       </Show>

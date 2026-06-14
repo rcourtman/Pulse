@@ -1,6 +1,46 @@
 import { describe, expect, it } from 'vitest';
 import setupCompletionPanelSource from '../SetupCompletionPanel.tsx?raw';
 import setupCompletionModelSource from '../setupCompletionModel.ts?raw';
+import runtimeHomeSource from '@/pages/RuntimeHome.tsx?raw';
+import securityStepSource from '../steps/SecurityStep.tsx?raw';
+import setupWizardSource from '../SetupWizard.tsx?raw';
+import stepIndicatorSource from '../StepIndicator.tsx?raw';
+import welcomeStepSource from '../steps/WelcomeStep.tsx?raw';
+
+const migratedFirstSessionCopy = [
+  'Opening workspace...',
+  'Welcome to Pulse',
+  'Unlock this Pulse server',
+  'Create the admin account',
+  'Choose the first source',
+  'Unlock setup',
+  'What this token does',
+  'Paste your bootstrap token',
+  'Verify bootstrap token',
+  'Continue to Security',
+  'Create Account & Continue',
+  'On the next screen',
+  'Choose your first infrastructure source',
+  'First monitored system connected',
+  'Credentials you must save now',
+  'Shown during setup',
+  'Save the admin login and API token before leaving this screen',
+  'Recommended next step',
+  'Source choices',
+  'Inventory and health from Proxmox, TrueNAS, VMware, PBS, or PMG.',
+  'Node-local telemetry for standalone hosts, services, Docker, and Kubernetes.',
+  'Open Add infrastructure to choose a platform API, Pulse Agent, or both.',
+];
+
+const migratedSources = [
+  setupCompletionPanelSource,
+  setupCompletionModelSource,
+  runtimeHomeSource,
+  securityStepSource,
+  setupWizardSource,
+  stepIndicatorSource,
+  welcomeStepSource,
+];
 
 describe('SetupCompletionPanel guardrails', () => {
   it('keeps setup completion aligned with the canonical add-infrastructure picker', () => {
@@ -14,21 +54,17 @@ describe('SetupCompletionPanel guardrails', () => {
     expect(setupCompletionPanelSource).toContain(
       'const INFRASTRUCTURE_WORKSPACE_PATH = buildInfrastructureWorkspacePath();',
     );
-    expect(setupCompletionPanelSource).toContain('Add infrastructure');
-    expect(setupCompletionPanelSource).toContain('Install Pulse Agent');
-    expect(setupCompletionPanelSource).toContain('Credentials you must save now');
-    expect(setupCompletionPanelSource).toContain('Shown during setup');
+    expect(setupCompletionPanelSource).toContain('setup.completion.action.addInfrastructure');
+    expect(setupCompletionPanelSource).toContain('setup.completion.action.installAgent');
+    expect(setupCompletionPanelSource).toContain('setup.completion.credentials.title');
+    expect(setupCompletionPanelSource).toContain('setup.completion.credentials.badge');
     expect(setupCompletionPanelSource).toContain('props.onComplete(ADD_INFRASTRUCTURE_PATH);');
     expect(setupCompletionPanelSource).toContain('props.onComplete(AGENT_INSTALL_PATH);');
     expect(setupCompletionPanelSource).toContain(
       'props.onComplete(INFRASTRUCTURE_WORKSPACE_PATH);',
     );
-    expect(setupCompletionPanelSource).toContain(
-      'Use Add infrastructure to choose a platform API, Pulse Agent, or both',
-    );
-    expect(setupCompletionModelSource).toContain(
-      'Open Add infrastructure to choose a platform API, Pulse Agent, or both.',
-    );
+    expect(setupCompletionPanelSource).toContain('setup.completion.download.content');
+    expect(setupCompletionModelSource).toContain('setup.completion.nextStep.summary.empty');
     expect(setupCompletionPanelSource).not.toContain('Use Add connection to connect');
     expect(setupCompletionPanelSource).not.toContain("from '@/stores/licenseCommercial';");
     expect(setupCompletionPanelSource).not.toContain('runStartProTrialAction');
@@ -43,21 +79,18 @@ describe('SetupCompletionPanel guardrails', () => {
   });
 
   it('describes setup completion through one compact source-choice next-step surface', () => {
-    expect(setupCompletionPanelSource).toContain('SOURCE_STRATEGY_OPTIONS');
-    expect(setupCompletionPanelSource).toContain('Source choices');
+    expect(setupCompletionPanelSource).toContain('sourceStrategyOptions');
+    expect(setupCompletionPanelSource).toContain('setup.completion.sourceOptions.title');
     expect(setupCompletionPanelSource).toContain('<ul class="mt-2 space-y-1.5 text-left">');
-    expect(setupCompletionPanelSource).toContain("title: 'Platform API'");
-    expect(setupCompletionPanelSource).toContain("title: 'Pulse Agent'");
-    expect(setupCompletionPanelSource).toContain("title: 'Use both'");
     expect(setupCompletionPanelSource).toContain(
-      'Inventory and health from Proxmox, TrueNAS, VMware, PBS, or PMG.',
+      'setup.completion.sourceOptions.platformApi.title',
     );
+    expect(setupCompletionPanelSource).toContain('setup.completion.sourceOptions.agent.title');
+    expect(setupCompletionPanelSource).toContain('setup.completion.sourceOptions.both.title');
     expect(setupCompletionPanelSource).toContain(
-      'Node-local telemetry for standalone hosts, services, Docker, and Kubernetes.',
+      'setup.completion.sourceOptions.platformApi.description',
     );
-    expect(setupCompletionModelSource).toContain(
-      'Start with a platform API when a platform manages the estate.',
-    );
+    expect(setupCompletionModelSource).toContain('setup.completion.nextStep.detail.empty');
     expect(setupCompletionPanelSource).not.toContain("title: 'What happens next'");
     expect(setupCompletionPanelSource).not.toContain("title: 'Open Add infrastructure'");
     expect(setupCompletionPanelSource).not.toContain(
@@ -116,16 +149,12 @@ describe('SetupCompletionPanel guardrails', () => {
     expect(setupCompletionPanelSource).toContain(
       'const [showCredentials, setShowCredentials] = createSignal(true);',
     );
-    expect(setupCompletionPanelSource).toContain(
-      'Save the admin login and API token before leaving this screen',
-    );
-    expect(setupCompletionPanelSource).toContain('Recommended next step');
-    expect(setupCompletionPanelSource).toContain('aria-label="Setup next step"');
-    expect(setupCompletionPanelSource).toContain('Open Infrastructure');
-    expect(setupCompletionModelSource).toContain("heroTitle: 'First monitored system connected'");
-    expect(setupCompletionModelSource).toContain(
-      "heroTitle: 'Choose your first infrastructure source'",
-    );
+    expect(setupCompletionPanelSource).toContain('setup.completion.credentials.description');
+    expect(setupCompletionPanelSource).toContain('setup.completion.nextStep.badge');
+    expect(setupCompletionPanelSource).toContain('setup.completion.nextStep.ariaLabel');
+    expect(setupCompletionPanelSource).toContain('setup.completion.action.openInfrastructure');
+    expect(setupCompletionModelSource).toContain('setup.completion.hero.connected.title');
+    expect(setupCompletionModelSource).toContain('setup.completion.hero.empty.title');
     expect(setupCompletionPanelSource).toContain(
       "completionViewModel().primaryAction === 'infrastructure'",
     );
@@ -145,5 +174,19 @@ describe('SetupCompletionPanel guardrails', () => {
     expect(setupCompletionPanelSource).not.toContain(
       'then return to Add infrastructure when you want to connect the next API or Agent source.',
     );
+  });
+
+  it('prevents migrated first-session monitoring copy from reverting to hardcoded English', () => {
+    for (const source of migratedSources) {
+      for (const copy of migratedFirstSessionCopy) {
+        expect(source).not.toContain(copy);
+      }
+    }
+
+    expect(welcomeStepSource).toContain('setup.welcome.hero.title');
+    expect(securityStepSource).toContain('setup.security.title');
+    expect(setupWizardSource).toContain('setup.wizard.ariaLabel');
+    expect(stepIndicatorSource).toContain('setup.progress.stepAriaLabel');
+    expect(runtimeHomeSource).toContain('runtimeHome.openingWorkspace');
   });
 });

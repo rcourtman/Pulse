@@ -1,4 +1,5 @@
 import type { Resource } from '@/types/resource';
+import { t } from '@/i18n';
 import {
   getActionableAgentIdFromResource,
   getPlatformDataRecord,
@@ -46,6 +47,11 @@ const asRecord = (value: unknown): Record<string, unknown> | undefined =>
 
 const asString = (value: unknown): string | undefined =>
   typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+
+const getUnknownSetupSystemName = (): string => t('setup.completion.resource.unknownName');
+
+const isUnknownSetupSystemName = (name: string): boolean =>
+  name === 'Unknown' || name === getUnknownSetupSystemName();
 
 const isSetupCompletionInfrastructureResource = (resource: Resource): boolean =>
   resource.type === 'agent' || resource.type === 'pbs' || resource.type === 'pmg';
@@ -104,7 +110,10 @@ const toConnectedSetupSystem = (resource: Resource): ConnectedSetupSystem | null
 
   return {
     id: resource.platformId || getActionableAgentIdFromResource(resource) || resource.id,
-    name: getPreferredInfrastructureDisplayName(resource) || resource.name || 'Unknown',
+    name:
+      getPreferredInfrastructureDisplayName(resource) ||
+      resource.name ||
+      getUnknownSetupSystemName(),
     typeLabel: getConnectedSetupSystemTypeLabel(resource),
     host: getConnectedSetupSystemHost(resource),
     connectionPath,
@@ -134,7 +143,7 @@ export function buildSetupCompletionConnectedSystems(
     if (!existing.host && nextSystem.host) {
       existing.host = nextSystem.host;
     }
-    if (existing.name === 'Unknown' && nextSystem.name !== 'Unknown') {
+    if (isUnknownSetupSystemName(existing.name) && !isUnknownSetupSystemName(nextSystem.name)) {
       existing.name = nextSystem.name;
     }
   }
@@ -148,23 +157,22 @@ const buildConnectedHeroDescription = (
   hasAgentConnectedSystems: boolean,
   hasApiConnectedSystems: boolean,
 ): string => {
-  const prefix =
-    'Your admin account is ready and Pulse is already receiving telemetry. Open Infrastructure to inspect the first system';
-
   if (hasAgentConnectedSystems && hasApiConnectedSystems) {
-    return `${prefix}, then return to Add infrastructure when you want another platform API or Agent source.`;
+    return t('setup.completion.hero.connected.description.both');
   }
   if (hasApiConnectedSystems) {
-    return `${prefix}, then return to Add infrastructure when you want another platform API or Pulse Agent source.`;
+    return t('setup.completion.hero.connected.description.api');
   }
-  return `${prefix}, then return to Add infrastructure when you want another Pulse Agent or platform API source.`;
+  return t('setup.completion.hero.connected.description.agent');
 };
 
 const buildCredentialsContinuationText = (
-  _hasAgentConnectedSystems: boolean,
-  _hasApiConnectedSystems: boolean,
+  hasAgentConnectedSystems: boolean,
+  hasApiConnectedSystems: boolean,
 ): string => {
-  return 'Infrastructure or Add infrastructure.';
+  return hasAgentConnectedSystems || hasApiConnectedSystems
+    ? t('setup.completion.credentials.continuation.connected')
+    : t('setup.completion.credentials.continuation.empty');
 };
 
 const buildConnectedNextStepDetail = (
@@ -172,12 +180,12 @@ const buildConnectedNextStepDetail = (
   hasApiConnectedSystems: boolean,
 ): string => {
   if (hasAgentConnectedSystems && hasApiConnectedSystems) {
-    return 'Add infrastructure stays available any time you want to expand from this first system with another API source, Agent source, or both.';
+    return t('setup.completion.nextStep.detail.both');
   }
   if (hasApiConnectedSystems) {
-    return 'Add infrastructure stays available for more API-backed systems or Pulse Agent telemetry when a system needs node-local coverage.';
+    return t('setup.completion.nextStep.detail.api');
   }
-  return 'Add infrastructure stays available for more Pulse Agent systems or platform API inventory when a platform manages the estate.';
+  return t('setup.completion.nextStep.detail.agent');
 };
 
 export function buildSetupCompletionViewModel(
@@ -189,26 +197,26 @@ export function buildSetupCompletionViewModel(
   );
   const hasApiConnectedSystems = connectedSystems.some((system) => system.connectionPath === 'api');
 
-  const connectedSystemNoun = connectedSystems.length === 1 ? 'system' : 'systems';
   const nextStepSummary =
     connectedSystems.length === 1
-      ? 'Open Infrastructure to review your first connected system.'
-      : 'Open Infrastructure to review your connected systems.';
+      ? t('setup.completion.nextStep.summary.connected.singular')
+      : t('setup.completion.nextStep.summary.connected.plural');
 
   if (!hasConnectedSystems) {
     return {
-      connectedSummaryLabel: 'Connected (0 systems)',
-      credentialsContinuationText: 'Add infrastructure.',
+      connectedSummaryLabel: t('setup.completion.connectedSummary.plural', { count: 0 }),
+      credentialsContinuationText: buildCredentialsContinuationText(
+        hasAgentConnectedSystems,
+        hasApiConnectedSystems,
+      ),
       hasConnectedSystems,
       hasAgentConnectedSystems,
       hasApiConnectedSystems,
-      heroDescription:
-        'Your admin account is ready. Next, choose how the first system should enter the unified infrastructure model: platform API inventory, Pulse Agent telemetry, or both.',
-      heroTitle: 'Choose your first infrastructure source',
-      nextStepDetail:
-        'Start with a platform API when a platform manages the estate. Install Pulse Agent when the system itself should report node-local telemetry.',
-      nextStepSummary: 'Open Add infrastructure to choose a platform API, Pulse Agent, or both.',
-      nextStepTitle: 'Choose the first source strategy',
+      heroDescription: t('setup.completion.hero.empty.description'),
+      heroTitle: t('setup.completion.hero.empty.title'),
+      nextStepDetail: t('setup.completion.nextStep.detail.empty'),
+      nextStepSummary: t('setup.completion.nextStep.summary.empty'),
+      nextStepTitle: t('setup.completion.nextStep.title.empty'),
       primaryAction: 'sources',
       showAddInfrastructureAction: false,
       showAgentInstallAction: true,
@@ -216,7 +224,12 @@ export function buildSetupCompletionViewModel(
   }
 
   return {
-    connectedSummaryLabel: `Connected (${connectedSystems.length} ${connectedSystemNoun})`,
+    connectedSummaryLabel: t(
+      connectedSystems.length === 1
+        ? 'setup.completion.connectedSummary.singular'
+        : 'setup.completion.connectedSummary.plural',
+      { count: connectedSystems.length },
+    ),
     credentialsContinuationText: buildCredentialsContinuationText(
       hasAgentConnectedSystems,
       hasApiConnectedSystems,
@@ -228,10 +241,10 @@ export function buildSetupCompletionViewModel(
       hasAgentConnectedSystems,
       hasApiConnectedSystems,
     ),
-    heroTitle: 'First monitored system connected',
+    heroTitle: t('setup.completion.hero.connected.title'),
     nextStepDetail: buildConnectedNextStepDetail(hasAgentConnectedSystems, hasApiConnectedSystems),
     nextStepSummary,
-    nextStepTitle: 'Open Infrastructure',
+    nextStepTitle: t('setup.completion.nextStep.title.connected'),
     primaryAction: 'infrastructure',
     showAddInfrastructureAction: hasConnectedSystems,
     showAgentInstallAction: false,

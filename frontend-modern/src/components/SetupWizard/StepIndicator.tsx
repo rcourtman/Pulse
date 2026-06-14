@@ -1,4 +1,5 @@
 import { Component } from 'solid-js';
+import { t } from '@/i18n';
 
 interface StepIndicatorProps {
   steps: string[];
@@ -11,9 +12,9 @@ export const StepIndicator: Component<StepIndicatorProps> = (props) => {
       {props.steps.map((step, index) => {
         const state =
           index < props.currentStep
-            ? ', completed'
+            ? t('setup.progress.state.completed')
             : index === props.currentStep
-              ? ', current'
+              ? t('setup.progress.state.current')
               : '';
         return (
           <div class="flex items-center" role="listitem">
@@ -26,7 +27,11 @@ export const StepIndicator: Component<StepIndicatorProps> = (props) => {
                     : 'bg-surface border border-border text-muted'
               }`}
               aria-current={index === props.currentStep ? 'step' : undefined}
-              aria-label={`Step ${index + 1}: ${step}${state}`}
+              aria-label={t('setup.progress.stepAriaLabel', {
+                index: index + 1,
+                step,
+                state,
+              })}
             >
               <span
                 class={`w-5 h-5 flex items-center justify-center rounded-full text-xs ${

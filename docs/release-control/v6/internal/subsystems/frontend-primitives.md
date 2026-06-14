@@ -200,7 +200,12 @@ fields, config keys, log lines, error codes, hostnames, resource names, product
 identifiers, and vendor object names stay untranslated unless the owning
 runtime contract explicitly says otherwise. Migrated settings surfaces must
 render customer-facing copy through the catalog and shared presentation helpers
-rather than reintroducing panel-local English.
+rather than reintroducing panel-local English. Migrated first-session surfaces,
+including the Setup Wizard shell, welcome/security steps, setup completion
+handoff, and runtime-home loading handoff, follow the same catalog path; their
+guardrails must fail if the migrated journey returns to page-local English or
+translates commands, URLs, generated credentials, product/source identifiers, or
+reported resource names.
 
 Alert thresholds consume the shared FilterBar primitive and route state, while
 the alerts subsystem owns the resource data and platform-specific threshold
