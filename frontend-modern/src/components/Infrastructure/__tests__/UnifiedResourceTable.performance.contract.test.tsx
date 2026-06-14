@@ -188,6 +188,40 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(container.querySelector('[style]')).toBeNull();
     });
 
+    it('renders thermal pressure in the temperature column when Celsius is unavailable', async () => {
+      const resources = [
+        makeResource(1, {
+          type: 'agent',
+          platformType: 'agent',
+          sourceType: 'agent',
+          temperature: undefined,
+          agent: {
+            platform: 'macos',
+            sensors: {
+              thermalState: {
+                source: 'pmset',
+                pressure: 'nominal',
+              },
+            },
+          },
+        }),
+      ];
+
+      const { getByText } = render(() => (
+        <UnifiedResourceTable
+          resources={resources}
+          expandedResourceId={null}
+          onExpandedResourceChange={vi.fn()}
+          groupingMode="flat"
+        />
+      ));
+
+      await waitFor(() => {
+        expect(getByText('Nominal')).toBeInTheDocument();
+      });
+      expect(getByText('Nominal')).toHaveAttribute('title', 'Thermal pressure nominal via pmset');
+    });
+
     it('renders reported host identity instead of container runtime as the primary system badge', async () => {
       const resources = [
         makeResource(1, {

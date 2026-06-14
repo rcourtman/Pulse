@@ -58,12 +58,47 @@ import {
 } from './useUnifiedResourceTableState';
 import { shouldShowClusterGroupTypeLabel } from './unifiedResourceTableStateModel';
 import { getOutlierEmphasis, isResourceOnline } from './unifiedResourceTableModel';
-import { getCpuPercent, getDiskPercent, getMemoryPercent } from '@/types/resource';
+import { type Resource, getCpuPercent, getDiskPercent, getMemoryPercent } from '@/types/resource';
 
 interface UnifiedResourceHostTableCardProps {
   tableProps: UnifiedResourceTableProps;
   table: UnifiedResourceTableState;
 }
+
+type ThermalPressurePresentation = {
+  label: string;
+  title: string;
+  className: string;
+};
+
+const getThermalPressurePresentation = (resource: Resource): ThermalPressurePresentation | null => {
+  const thermalState = resource.agent?.sensors?.thermalState;
+  if (!thermalState) return null;
+
+  const pressure = thermalState?.pressure?.trim().toLowerCase();
+  if (!pressure) return null;
+
+  const label =
+    pressure === 'nominal' ? 'Nominal' : pressure === 'constrained' ? 'Constrained' : 'Unknown';
+  const className =
+    pressure === 'nominal'
+      ? 'text-emerald-600 dark:text-emerald-400'
+      : pressure === 'constrained'
+        ? 'text-amber-600 dark:text-amber-400'
+        : 'text-slate-500 dark:text-slate-400';
+  const limits = Object.entries(thermalState.limitsPercent ?? {})
+    .filter(([, value]) => Number.isFinite(value) && value < 100)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => `${key.replace(/_/g, ' ')} ${Math.round(value)}%`);
+  const source = thermalState.source ? ` via ${thermalState.source}` : '';
+  const limitSummary = limits.length > 0 ? `; limits: ${limits.join(', ')}` : '';
+
+  return {
+    label,
+    className,
+    title: `Thermal pressure ${label.toLowerCase()}${source}${limitSummary}`,
+  };
+};
 
 export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCardProps> = (
   props,
@@ -330,6 +365,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                 const availabilityProbe = createMemo(() =>
                   getAvailabilityProbePresentation(resource),
                 );
+                const thermalPressure = createMemo(() => getThermalPressurePresentation(resource));
                 const resourceRowInteraction = createSummaryInteractiveRowPreviewHandlers({
                   onPreview: () => tableProps.onHoverChange?.(resource.id),
                   onPreviewClear: () => tableProps.onHoverChange?.(null),
@@ -677,9 +713,23 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                           <Show
                             when={resource.temperature != null}
                             fallback={
-                              <span class="text-xs text-slate-400" aria-hidden="true">
-                                —
-                              </span>
+                              <Show
+                                when={thermalPressure()}
+                                fallback={
+                                  <span class="text-xs text-slate-400" aria-hidden="true">
+                                    —
+                                  </span>
+                                }
+                              >
+                                {(thermal) => (
+                                  <span
+                                    class={`text-[11px] whitespace-nowrap font-medium ${thermal().className}`}
+                                    title={thermal().title}
+                                  >
+                                    {thermal().label}
+                                  </span>
+                                )}
+                              </Show>
                             }
                           >
                             <span

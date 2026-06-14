@@ -314,10 +314,12 @@ normalization/clamping when the source metric requires it, positive Celsius
 validation, tabular styling, and empty markers instead of local
 `formatPercent`, `formatPercentLabel`, `toFixed(1)%`, `formatTemperature`, or
 temperature label helpers.
-Thermal pressure state is a separate host sensor facet, not a table temperature
-source. Unified-resource adapters must carry `agent.sensors.thermalState`
-alongside `temperatureCelsius`, and table consumers must continue to render an
-empty temperature marker when only pressure state is present.
+Thermal pressure state is a separate host sensor facet, not a Celsius
+temperature source. Unified-resource adapters must carry
+`agent.sensors.thermalState` alongside `temperatureCelsius`; table consumers
+may render that pressure as compact status text only when no numeric
+temperature exists, and must not convert pressure into a Celsius metric or
+history target.
 Metric bar fallbacks follow that split as well: unified-resource consumers own
 which CPU or memory value is selected, plus any source-specific fallback reason
 such as outdated standalone agent telemetry, while platform tables must use

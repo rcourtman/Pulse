@@ -758,11 +758,12 @@ only after a grouped node row is selected. Host-agent CPU temperature must be
 persisted into the same metrics-store history stream as other agent metrics,
 with current node temperature used only as drawer-local fallback while history
 is still accumulating.
-Standalone agent thermal pressure follows the same drawer-only density rule:
-`resourceDetailMappers.ts` may render compact pressure and throttling-limit rows
-inside the selected system's thermals card, but platform and Workloads table
-temperature cells must remain blank when the source has no positive Celsius
-reading.
+Standalone agent thermal pressure follows a compact table-and-drawer rule:
+platform tables may show a short pressure status such as `Nominal` or
+`Constrained` in the existing temperature cell when no positive Celsius reading
+exists, while `resourceDetailMappers.ts` owns the fuller thermals-card rows for
+pressure source and throttling limits. The table fallback must stay row-local
+and must not add history reads, polling work, or a second thermal query path.
 The Proxmox node drawer overview should follow the existing guest drawer
 compact detail-card pattern and expose node-specific context such as platform,
 kernel, hardware, raw capacity, telemetry, and thermal facts rather than
