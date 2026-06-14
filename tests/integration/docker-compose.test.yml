@@ -6,10 +6,17 @@ services:
     container_name: pulse-test-seed-bootstrap-token
     environment:
       - PULSE_E2E_BOOTSTRAP_TOKEN=${PULSE_E2E_BOOTSTRAP_TOKEN:-0123456789abcdef0123456789abcdef0123456789abcdef}
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
     volumes:
       - test-data:/data
     command: >
-      sh -c "set -e; umask 077; echo \"$$PULSE_E2E_BOOTSTRAP_TOKEN\" > /data/.bootstrap_token"
+      sh -c "set -e;
+      umask 077;
+      printf '%s\n' \"$$PULSE_E2E_BOOTSTRAP_TOKEN\" > /data/.bootstrap_token;
+      chown \"$${PUID:-1000}:$${PGID:-1000}\" /data /data/.bootstrap_token;
+      chmod 700 /data;
+      chmod 600 /data/.bootstrap_token"
     networks:
       - test-network
 
@@ -59,6 +66,8 @@ services:
       - PULSE_MULTI_TENANT_ENABLED=${PULSE_MULTI_TENANT_ENABLED:-false}
       - PULSE_ALLOW_DOCKER_UPDATES=true
       - PULSE_UPDATE_STAGE_DELAY_MS=250
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
     volumes:
       - test-data:/data
     extra_hosts:

@@ -31,6 +31,7 @@ const truthy = (value) => {
   if (!value) return false;
   return ['1', 'true', 'yes', 'on'].includes(String(value).trim().toLowerCase());
 };
+const trim = (value) => String(value ?? '').trim();
 
 const shouldSkipDocker = truthy(process.env.PULSE_E2E_SKIP_DOCKER);
 const shouldSkipPlaywrightInstall = truthy(process.env.PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL);
@@ -145,6 +146,54 @@ export const waitForHealth = async (
   throw new Error(`Timed out waiting for ${healthURL} after ${attempt} attempts`);
 };
 
+export const validateBootstrapToken = async (
+  baseURL,
+  bootstrapToken,
+  { fetchImpl = fetch } = {},
+) => {
+  const token = trim(bootstrapToken);
+  if (token === '') {
+    return;
+  }
+
+  const response = await fetchImpl(`${baseURL.replace(/\/+$/, '')}/api/security/validate-bootstrap-token`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ token }),
+  });
+
+  if (!response.ok) {
+    const detail = typeof response.text === 'function' ? await response.text() : '';
+    throw new Error(
+      `Bootstrap token validation failed: HTTP ${response.status}${detail ? ` ${detail}` : ''}`,
+    );
+  }
+};
+
+export const validateBootstrapTokenForFirstRun = async (
+  baseURL,
+  bootstrapToken,
+  { fetchImpl = fetch } = {},
+) => {
+  const token = trim(bootstrapToken);
+  if (token === '') {
+    return;
+  }
+
+  const normalizedBaseURL = baseURL.replace(/\/+$/, '');
+  const statusResponse = await fetchImpl(`${normalizedBaseURL}/api/security/status`);
+  if (statusResponse.ok && typeof statusResponse.json === 'function') {
+    const status = await statusResponse.json().catch(() => null);
+    if (status?.hasAuthentication !== false) {
+      return;
+    }
+  }
+
+  await validateBootstrapToken(normalizedBaseURL, token, { fetchImpl });
+};
+
 export const main = async () => {
   if (!shouldSkipPlaywrightInstall) {
     await run(npxCmd, ['playwright', 'install', 'chromium']);
@@ -191,6 +240,7 @@ export const main = async () => {
   try {
     await waitForHealth(`${baseURL}/api/health`);
     console.log('[pretest] Health check passed!');
+    await validateBootstrapTokenForFirstRun(baseURL, process.env.PULSE_E2E_BOOTSTRAP_TOKEN);
     await applyRequestedEntitlementProfile();
   } catch (error) {
     console.error('[pretest] Health check failed:', error.message);
