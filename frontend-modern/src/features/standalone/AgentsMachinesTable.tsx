@@ -89,6 +89,7 @@ import {
   getAgentMachineTemperatureCelsius,
   getAgentMachineTemperatureDetailSections,
   getAgentMachineTemperatureTitle,
+  getAgentMachineThermalPressurePresentation,
   getNextAgentMachineSortState,
   sortAgentMachines,
   type AgentMachineColumn,
@@ -172,10 +173,16 @@ const AgentMachineTemperatureCell: Component<{
   celsius: number | undefined;
   sections: AgentMachineTemperatureDetailSection[];
   title: string;
+  thermalPressure?: {
+    label: string;
+    title: string;
+    className: string;
+  };
 }> = (props) => {
   const hasDetails = () => props.sections.length > 0;
   const positiveTemperature = () =>
     hasPositiveTemperature(props.celsius) ? props.celsius : undefined;
+  const fallbackTitle = () => props.thermalPressure?.title ?? props.title;
 
   return (
     <AgentMachineMetricTooltip
@@ -184,10 +191,22 @@ const AgentMachineTemperatureCell: Component<{
       triggerClass="inline-flex min-w-[2.25rem] justify-end text-xs tabular-nums"
       tooltipClass="min-w-[190px] max-w-[300px] space-y-2"
       enabled={hasDetails()}
-      ariaLabel={props.title || undefined}
+      ariaLabel={fallbackTitle() || undefined}
+      title={fallbackTitle()}
       maxWidth={320}
       trigger={
-        <Show when={positiveTemperature()} fallback={<span class="text-muted">—</span>}>
+        <Show
+          when={positiveTemperature()}
+          fallback={
+            <Show when={props.thermalPressure} fallback={<span class="text-muted">—</span>}>
+              {(thermal) => (
+                <span class={`text-[11px] font-medium ${thermal().className}`}>
+                  {thermal().label}
+                </span>
+              )}
+            </Show>
+          }
+        >
           {(value) => <TemperatureGauge value={value()} />}
         </Show>
       }
@@ -1465,6 +1484,8 @@ export const AgentsMachinesTable: Component<{
                     const temperatureSections = () =>
                       getAgentMachineTemperatureDetailSections(machine);
                     const temperatureTitle = () => getAgentMachineTemperatureTitle(machine);
+                    const thermalPressure = () =>
+                      getAgentMachineThermalPressurePresentation(machine);
                     const isExpanded = () => drawer.isExpanded(machine);
                     const detailRowId = () => drawer.detailRowId(machine);
                     const agentMetadataId = () => agentMetadataIdFor(machine);
@@ -1655,6 +1676,7 @@ export const AgentsMachinesTable: Component<{
                                 celsius={temperature()}
                                 sections={temperatureSections()}
                                 title={temperatureTitle()}
+                                thermalPressure={thermalPressure()}
                               />
                             </TableCell>
                           </Show>

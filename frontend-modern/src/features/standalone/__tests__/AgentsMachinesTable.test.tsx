@@ -898,4 +898,38 @@ describe('AgentsMachinesTable', () => {
     expect(screen.getByText('standby')).toBeInTheDocument();
     expect(screen.getByText('1400 RPM')).toBeInTheDocument();
   });
+
+  it('shows thermal pressure when macOS reports no Celsius temperature', async () => {
+    render(() => (
+      <AgentsMachinesTable
+        resources={[
+          resource({
+            id: 'mac-agent',
+            name: 'RICHARD-MAC-MINI.local',
+            temperature: undefined,
+            agent: {
+              agentVersion: 'v6.0.0',
+              sensors: {
+                thermalState: {
+                  source: 'pmset',
+                  pressure: 'nominal',
+                },
+              },
+            },
+          }),
+        ]}
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+      />
+    ));
+
+    const pressure = await screen.findByText('Nominal');
+
+    expect(pressure).toBeInTheDocument();
+    expect(pressure.closest('[data-agent-machine-temperature-trigger="true"]')).toHaveAttribute(
+      'title',
+      'Thermal pressure nominal via pmset',
+    );
+  });
 });

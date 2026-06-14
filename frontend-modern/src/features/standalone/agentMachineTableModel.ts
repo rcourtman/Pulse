@@ -135,6 +135,12 @@ export type AgentMachineTemperatureDetailSection = {
   rows: AgentMachineTemperatureDetailRow[];
 };
 
+export type AgentMachineThermalPressurePresentation = {
+  label: string;
+  title: string;
+  className: string;
+};
+
 export type AgentMachineNetworkInterfaceDetail = {
   name: string;
   mac?: string;
@@ -500,6 +506,35 @@ export const getAgentMachineTemperatureDetailSections = (
 
 export const getAgentMachineTemperatureTitle = (machine: Resource): string =>
   flattenTemperatureSections(getAgentMachineTemperatureDetailSections(machine));
+
+export const getAgentMachineThermalPressurePresentation = (
+  machine: Resource,
+): AgentMachineThermalPressurePresentation | undefined => {
+  const pressure = asTrimmedString(machine.agent?.sensors?.thermalState?.pressure)?.toLowerCase();
+  if (!pressure) return undefined;
+
+  const label =
+    pressure === 'nominal' ? 'Nominal' : pressure === 'constrained' ? 'Constrained' : 'Unknown';
+  const className =
+    pressure === 'nominal'
+      ? 'text-emerald-600 dark:text-emerald-400'
+      : pressure === 'constrained'
+        ? 'text-amber-600 dark:text-amber-400'
+        : 'text-muted';
+  const source = asTrimmedString(machine.agent?.sensors?.thermalState?.source);
+  const limits = Object.entries(machine.agent?.sensors?.thermalState?.limitsPercent ?? {})
+    .filter(([, value]) => Number.isFinite(value) && value < 100)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => `${key.replace(/_/g, ' ')} ${Math.round(value)}%`);
+  const sourceSummary = source ? ` via ${source}` : '';
+  const limitSummary = limits.length > 0 ? `; limits: ${limits.join(', ')}` : '';
+
+  return {
+    label,
+    className,
+    title: `Thermal pressure ${label.toLowerCase()}${sourceSummary}${limitSummary}`,
+  };
+};
 
 export const timestampMillisFrom = (
   value: number | string | Date | undefined,
