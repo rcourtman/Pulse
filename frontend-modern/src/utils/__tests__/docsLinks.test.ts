@@ -76,10 +76,22 @@ describe('docsLinks', () => {
   it('keeps shipped docs content synced with repo docs', () => {
     const docPairs = [
       { source: path.join(repoRoot, 'docs', 'README.md'), target: 'README.md' },
-      { source: path.join(repoRoot, 'docs', 'MIGRATION_UNIFIED_NAV.md'), target: 'MIGRATION_UNIFIED_NAV.md' },
+      {
+        source: path.join(repoRoot, 'docs', 'MIGRATION_UNIFIED_NAV.md'),
+        target: 'MIGRATION_UNIFIED_NAV.md',
+      },
       { source: path.join(repoRoot, 'docs', 'PRIVACY.md'), target: 'PRIVACY.md' },
       { source: path.join(repoRoot, 'docs', 'CONFIGURATION.md'), target: 'CONFIGURATION.md' },
       { source: path.join(repoRoot, 'docs', 'PROXY_AUTH.md'), target: 'PROXY_AUTH.md' },
+      { source: path.join(repoRoot, 'docs', 'i18n', 'README.md'), target: 'i18n/README.md' },
+      {
+        source: path.join(repoRoot, 'docs', 'i18n', 'de', 'README.md'),
+        target: 'i18n/de/README.md',
+      },
+      {
+        source: path.join(repoRoot, 'docs', 'i18n', 'es', 'README.md'),
+        target: 'i18n/es/README.md',
+      },
       { source: path.join(repoRoot, 'SECURITY.md'), target: 'SECURITY.md' },
       { source: path.join(repoRoot, 'TERMS.md'), target: 'TERMS.md' },
     ];
@@ -94,7 +106,9 @@ describe('docsLinks', () => {
 
   it('routes runtime docs links through shipped local docs instead of GitHub main', () => {
     expect(apiAccessPanelSource).toContain('API_TOKEN_SCOPES_DOC_URL');
-    expect(apiAccessPanelSource).not.toContain('https://github.com/rcourtman/Pulse/blob/main/docs/');
+    expect(apiAccessPanelSource).not.toContain(
+      'https://github.com/rcourtman/Pulse/blob/main/docs/',
+    );
     expect(apiTokenManagerModelSource).toContain("from '@/utils/docsLinks'");
     expect(apiTokenManagerModelSource).toContain('SHIPPED_API_TOKEN_SCOPES_DOC_URL');
     expect(apiTokenManagerModelSource).toContain('export const API_TOKEN_SCOPES_DOC_URL =');
@@ -119,15 +133,19 @@ describe('docsLinks', () => {
     );
   });
 
-  it('keeps non-test frontend runtime files free of GitHub main doc links', () => {
-    const runtimeFiles = getRuntimeSourceFiles(path.join(frontendRoot, 'src'));
+  it(
+    'keeps non-test frontend runtime files free of GitHub main doc links',
+    () => {
+      const runtimeFiles = getRuntimeSourceFiles(path.join(frontendRoot, 'src'));
 
-    for (const filePath of runtimeFiles) {
-      const source = readFileSync(filePath, 'utf8');
-      expect(
-        source,
-        `${path.relative(frontendRoot, filePath)} should use shipped/local docs owners`,
-      ).not.toContain('https://github.com/rcourtman/Pulse/blob/main/');
-    }
-  }, runtimeDocsLinkScanTimeoutMs);
+      for (const filePath of runtimeFiles) {
+        const source = readFileSync(filePath, 'utf8');
+        expect(
+          source,
+          `${path.relative(frontendRoot, filePath)} should use shipped/local docs owners`,
+        ).not.toContain('https://github.com/rcourtman/Pulse/blob/main/');
+      }
+    },
+    runtimeDocsLinkScanTimeoutMs,
+  );
 });

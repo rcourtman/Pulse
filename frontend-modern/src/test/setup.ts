@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom';
-import { beforeEach } from 'vitest';
+import { beforeAll, beforeEach } from 'vitest';
 
 type StorageValue = string | null;
 
@@ -74,6 +74,11 @@ const ensureLocalStorage = () => {
 };
 
 ensureLocalStorage();
+beforeAll(async () => {
+  const { FIRST_LOCALIZATION_LOCALES, loadLocaleCatalog } = await import('@/i18n');
+  await Promise.all(FIRST_LOCALIZATION_LOCALES.map((locale) => loadLocaleCatalog(locale)));
+});
+
 beforeEach(() => {
   ensureLocalStorage();
 });

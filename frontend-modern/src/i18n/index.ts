@@ -7,10 +7,20 @@ import {
   resolveSupportedLocale,
   type SupportedLocale,
 } from './locales';
-import { EN_MESSAGES, I18N_MESSAGES, type I18nMessageKey } from './messages';
+import {
+  EN_MESSAGES,
+  I18N_RUNTIME_MESSAGE_LOADERS,
+  type I18nCatalog,
+  type I18nMessageKey,
+} from './messages';
 
 type MessageParams = Record<string, string | number | boolean | null | undefined>;
 type LocalePreferenceStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
+type DeferredLocale = Exclude<SupportedLocale, typeof DEFAULT_LOCALE>;
+
+const localeMessageOverrides: Partial<Record<DeferredLocale, Partial<I18nCatalog>>> = {};
+const pendingLocaleLoads = new Map<DeferredLocale, Promise<void>>();
+const [catalogVersion, setCatalogVersion] = createSignal(0);
 
 function getDefaultStorage(): LocalePreferenceStorage | null {
   if (typeof window === 'undefined') return null;
@@ -77,9 +87,60 @@ export function getInitialLocalePreference({
   return getStoredLocalePreference(storage) ?? detectBrowserLocale(browserLocales);
 }
 
-const [activeLocaleSignal, setActiveLocaleSignal] = createSignal<SupportedLocale>(
-  getInitialLocalePreference(),
-);
+function getDeferredLocale(locale: SupportedLocale): DeferredLocale | null {
+  return locale === DEFAULT_LOCALE ? null : locale;
+}
+
+function handleLocaleCatalogLoadFailure(locale: SupportedLocale, error: unknown): void {
+  if (typeof console === 'undefined') return;
+  console.warn(`Unable to load ${locale} locale catalog; falling back to English.`, error);
+}
+
+function scheduleLocaleCatalogLoad(locale: SupportedLocale): void {
+  void loadLocaleCatalog(locale).catch((error: unknown) => {
+    handleLocaleCatalogLoadFailure(locale, error);
+  });
+}
+
+function getLocaleMessage(locale: SupportedLocale, key: I18nMessageKey): string | undefined {
+  const deferredLocale = getDeferredLocale(locale);
+  if (!deferredLocale) return EN_MESSAGES[key];
+  return localeMessageOverrides[deferredLocale]?.[key];
+}
+
+export function isLocaleCatalogLoaded(locale: string | null | undefined): boolean {
+  const normalized = normalizeLocale(locale);
+  const deferredLocale = getDeferredLocale(normalized);
+  return !deferredLocale || Boolean(localeMessageOverrides[deferredLocale]);
+}
+
+export function loadLocaleCatalog(locale: string | null | undefined): Promise<SupportedLocale> {
+  const normalized = normalizeLocale(locale);
+  const deferredLocale = getDeferredLocale(normalized);
+  if (!deferredLocale || localeMessageOverrides[deferredLocale]) {
+    return Promise.resolve(normalized);
+  }
+
+  const pendingLoad = pendingLocaleLoads.get(deferredLocale);
+  if (pendingLoad) return pendingLoad.then(() => normalized);
+
+  const loadPromise = I18N_RUNTIME_MESSAGE_LOADERS[deferredLocale]()
+    .then((messageOverrides) => {
+      localeMessageOverrides[deferredLocale] = messageOverrides;
+      setCatalogVersion((version) => version + 1);
+    })
+    .finally(() => {
+      pendingLocaleLoads.delete(deferredLocale);
+    });
+
+  pendingLocaleLoads.set(deferredLocale, loadPromise);
+  return loadPromise.then(() => normalized);
+}
+
+const initialLocalePreference = getInitialLocalePreference();
+const [activeLocaleSignal, setActiveLocaleSignal] =
+  createSignal<SupportedLocale>(initialLocalePreference);
+scheduleLocaleCatalogLoad(initialLocalePreference);
 
 export const activeLocale = activeLocaleSignal;
 
@@ -90,6 +151,7 @@ export function getActiveLocale(): SupportedLocale {
 export function setActiveLocale(locale: string | null | undefined): SupportedLocale {
   const normalized = normalizeLocale(locale);
   setActiveLocaleSignal(normalized);
+  scheduleLocaleCatalogLoad(normalized);
   return normalized;
 }
 
@@ -107,10 +169,11 @@ export function translateMessage(
   params: MessageParams = {},
   locale: string | null | undefined = activeLocaleSignal(),
 ): string {
+  catalogVersion();
   const fallbackChain = getLocaleFallbackChain(locale);
   const template =
     fallbackChain.reduce<string | undefined>(
-      (message, fallbackLocale) => message ?? I18N_MESSAGES[fallbackLocale][key],
+      (message, fallbackLocale) => message ?? getLocaleMessage(fallbackLocale, key),
       undefined,
     ) ?? EN_MESSAGES[key];
   return template.replace(/\{([a-zA-Z0-9_]+)\}/g, (match, paramKey: string) => {
@@ -122,7 +185,6 @@ export function translateMessage(
 export const t = translateMessage;
 
 export type { I18nMessageKey } from './messages';
-export { I18N_MESSAGES } from './messages';
 export {
   DEFAULT_LOCALE,
   FIRST_LOCALIZATION_LOCALES,
