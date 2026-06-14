@@ -689,7 +689,20 @@ func cloneHostSensorMeta(in *HostSensorMeta) *HostSensorMeta {
 	out.TemperatureCelsius = cloneStringFloat64Map(in.TemperatureCelsius)
 	out.FanRPM = cloneStringFloat64Map(in.FanRPM)
 	out.Additional = cloneStringFloat64Map(in.Additional)
+	out.ThermalState = cloneHostThermalState(in.ThermalState)
 	out.SMART = cloneHostSMARTMetaSlice(in.SMART)
+	return &out
+}
+
+func cloneHostThermalState(in *HostThermalState) *HostThermalState {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	out.ThermalWarningLevel = cloneIntPtr(in.ThermalWarningLevel)
+	out.PerformanceWarningLevel = cloneIntPtr(in.PerformanceWarningLevel)
+	out.CPUPowerStatus = cloneIntPtr(in.CPUPowerStatus)
+	out.LimitsPercent = cloneStringIntMap(in.LimitsPercent)
 	return &out
 }
 
@@ -1054,6 +1067,17 @@ func cloneStringFloat64Map(in map[string]float64) map[string]float64 {
 	return out
 }
 
+func cloneStringIntMap(in map[string]int) map[string]int {
+	if in == nil {
+		return nil
+	}
+	out := make(map[string]int, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
+}
+
 func cloneStringSlice(in []string) []string {
 	if in == nil {
 		return nil
@@ -1073,6 +1097,14 @@ func cloneFloat64Slice(in []float64) []float64 {
 }
 
 func cloneStringPtr(in *string) *string {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	return &out
+}
+
+func cloneIntPtr(in *int) *int {
 	if in == nil {
 		return nil
 	}

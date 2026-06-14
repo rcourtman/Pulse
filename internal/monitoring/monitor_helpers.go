@@ -197,6 +197,25 @@ func cloneStringFloatMap(src map[string]float64) map[string]float64 {
 	return out
 }
 
+func cloneStringIntMap(src map[string]int) map[string]int {
+	if len(src) == 0 {
+		return nil
+	}
+	out := make(map[string]int, len(src))
+	for k, v := range src {
+		out[k] = v
+	}
+	return out
+}
+
+func cloneIntPtr(src *int) *int {
+	if src == nil {
+		return nil
+	}
+	out := *src
+	return &out
+}
+
 func cloneStringMap(src map[string]string) map[string]string {
 	if len(src) == 0 {
 		return nil
@@ -593,6 +612,20 @@ func convertAgentSMARTToModels(smart []agentshost.DiskSMART) []models.HostDiskSM
 		result = append(result, entry)
 	}
 	return result
+}
+
+func convertAgentThermalStateToModels(src *agentshost.ThermalState) *models.HostThermalState {
+	if src == nil {
+		return nil
+	}
+	return &models.HostThermalState{
+		Source:                  strings.TrimSpace(src.Source),
+		Pressure:                strings.TrimSpace(src.Pressure),
+		ThermalWarningLevel:     cloneIntPtr(src.ThermalWarningLevel),
+		PerformanceWarningLevel: cloneIntPtr(src.PerformanceWarningLevel),
+		CPUPowerStatus:          cloneIntPtr(src.CPUPowerStatus),
+		LimitsPercent:           cloneStringIntMap(src.LimitsPercent),
+	}
 }
 
 // convertAgentSMARTAttributes converts agent SMARTAttributes to models SMARTAttributes.

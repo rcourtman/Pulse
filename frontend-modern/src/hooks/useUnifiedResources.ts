@@ -95,6 +95,14 @@ type APIAgentSensorSummary = {
   temperatureCelsius?: Record<string, number>;
   fanRpm?: Record<string, number>;
   additional?: Record<string, number>;
+  thermalState?: {
+    source?: string;
+    pressure?: string;
+    thermalWarningLevel?: number;
+    performanceWarningLevel?: number;
+    cpuPowerStatus?: number;
+    limitsPercent?: Record<string, number>;
+  };
   smart?: Array<{
     device: string;
     model?: string;

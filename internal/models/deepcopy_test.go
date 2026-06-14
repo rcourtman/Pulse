@@ -284,22 +284,37 @@ func TestCloneVM_NetworkIsolation(t *testing.T) {
 // --- Host clone ---
 
 func TestCloneHost_MapIsolation(t *testing.T) {
+	thermalWarningLevel := 0
 	src := Host{
 		ID:       "host-1",
 		Hostname: "server1",
 		Tags:     []string{"env:prod"},
 		Sensors: HostSensorSummary{
 			TemperatureCelsius: map[string]float64{"cpu": 42.0},
+			ThermalState: &HostThermalState{
+				Source:              "pmset",
+				Pressure:            "nominal",
+				ThermalWarningLevel: &thermalWarningLevel,
+				LimitsPercent:       map[string]int{"cpu_speed_limit": 100},
+			},
 		},
 	}
 	dst := cloneHost(src)
 	dst.Tags = append(dst.Tags, "new:val")
 	dst.Sensors.TemperatureCelsius["gpu"] = 65.0
+	dst.Sensors.ThermalState.LimitsPercent["cpu_speed_limit"] = 80
+	*dst.Sensors.ThermalState.ThermalWarningLevel = 1
 	if len(src.Tags) != 1 {
 		t.Error("clone tags should be independent")
 	}
 	if _, ok := src.Sensors.TemperatureCelsius["gpu"]; ok {
 		t.Error("clone sensor map should be independent")
+	}
+	if src.Sensors.ThermalState.LimitsPercent["cpu_speed_limit"] != 100 {
+		t.Error("clone thermal limit map should be independent")
+	}
+	if *src.Sensors.ThermalState.ThermalWarningLevel != 0 {
+		t.Error("clone thermal warning pointer should be independent")
 	}
 }
 

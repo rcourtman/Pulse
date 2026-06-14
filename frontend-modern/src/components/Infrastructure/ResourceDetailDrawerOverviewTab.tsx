@@ -162,7 +162,7 @@ const HostDetailsDisclosure: Component<{
             <NetworkInterfacesCard interfaces={agent().networkInterfaces} />
             <DisksCard disks={agent().disks} />
             <RaidCard arrays={props.drawer.agentMeta()?.raid} />
-            <TemperaturesCard rows={props.drawer.temperatureRows()} />
+            <TemperaturesCard rows={props.drawer.temperatureRows()} title="Thermals" />
           </>
         )}
       </Show>

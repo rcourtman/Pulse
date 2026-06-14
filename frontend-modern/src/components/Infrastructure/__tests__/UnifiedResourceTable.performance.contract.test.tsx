@@ -5,7 +5,10 @@ import { render, waitFor, within } from '@solidjs/testing-library';
 import type { Resource } from '@/types/resource';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
 import { ResourceFacetSummary } from '@/components/Infrastructure/ResourceFacetSummary';
-import { formatSensorName } from '@/components/Infrastructure/resourceDetailMappers';
+import {
+  buildTemperatureRows,
+  formatSensorName,
+} from '@/components/Infrastructure/resourceDetailMappers';
 import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
 import unifiedResourceTableSource from '@/components/Infrastructure/UnifiedResourceTable.tsx?raw';
 import unifiedResourceTableStateSource from '@/components/Infrastructure/useUnifiedResourceTableState.ts?raw';
@@ -507,6 +510,19 @@ describe('UnifiedResourceTable performance contract', () => {
     it('formats sensor labels through the shared resource detail mapper helper', () => {
       expect(formatSensorName('fan1_cpu_temp')).toBe('Cpu Temp');
       expect(formatSensorName('psu_temp')).toBe('Temp');
+      expect(
+        buildTemperatureRows({
+          temperatureCelsius: {},
+          thermalState: {
+            source: 'pmset',
+            pressure: 'constrained',
+            limitsPercent: { cpu_speed_limit: 72, scheduler_limit: 100 },
+          },
+        }),
+      ).toEqual([
+        { label: 'Thermal pressure', value: 'Constrained', valueTitle: 'Constrained via pmset' },
+        { label: 'Speed Limit', value: '72%', valueTitle: 'Speed Limit 72%' },
+      ]);
       expect(resourceDetailMappersSource).toContain('titleCaseDelimitedLabel');
       expect(resourceDetailMappersSource).not.toContain('export const toDiscoveryConfig');
       expect(resourceDetailDiscoveryModelSource).toContain('export const toDiscoveryConfig');
@@ -598,7 +614,7 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(unifiedResourcePBSTableSectionSource).not.toContain('getPbsActivitySummary');
     });
 
-      it('keeps contextual resource-row emphasis on the shared active-row presentation contract', () => {
+    it('keeps contextual resource-row emphasis on the shared active-row presentation contract', () => {
       expect(frontendIndexCssSource).toContain("tr[data-summary-row-active='true'] > td");
       expect(frontendIndexCssSource).toContain('--color-summary-row-bg');
       expect(frontendIndexCssSource).toContain('--color-summary-row-accent');

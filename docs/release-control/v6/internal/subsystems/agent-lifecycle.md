@@ -738,6 +738,10 @@ instead of lifecycle-local centered icon/text shells.
    or no-data results, and partial or plain-text smartctl output must still
    preserve model, serial, health, and temperature data through the same
    host-agent runtime boundary instead of leaving monitoring to guess.
+   macOS thermal telemetry belongs in the same host-agent sensor contract, but
+   it must report Darwin `pmset` thermal and performance pressure as
+   `sensors.thermalState` instead of inventing Celsius readings from unavailable
+   Apple silicon sensor values.
    Runtime RAID collection uses `/proc/mdstat` as the canonical discovery
    baseline for Linux md arrays. `mdadm --detail` may enrich level, state,
    member, UUID, and rebuild fields when available, but missing or failing

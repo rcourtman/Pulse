@@ -522,6 +522,39 @@ func TestResourceFromHostProjectsAgentHostProfile(t *testing.T) {
 	}
 }
 
+func TestResourceFromHostProjectsPressureOnlyThermalState(t *testing.T) {
+	warningLevel := 1
+	host := models.Host{
+		ID:       "mac-host",
+		Hostname: "mac-mini",
+		Platform: "macos",
+		Status:   "online",
+		Sensors: models.HostSensorSummary{
+			ThermalState: &models.HostThermalState{
+				Source:              "pmset",
+				Pressure:            "constrained",
+				ThermalWarningLevel: &warningLevel,
+				LimitsPercent:       map[string]int{"cpu_speed_limit": 72},
+			},
+		},
+	}
+
+	resource, _ := resourceFromHost(host)
+	if resource.Agent == nil || resource.Agent.Sensors == nil || resource.Agent.Sensors.ThermalState == nil {
+		t.Fatalf("expected host thermal state on agent resource, got %+v", resource.Agent)
+	}
+	state := resource.Agent.Sensors.ThermalState
+	if state.Source != "pmset" || state.Pressure != "constrained" {
+		t.Fatalf("unexpected thermal state: %+v", state)
+	}
+	if got := state.LimitsPercent["cpu_speed_limit"]; got != 72 {
+		t.Fatalf("thermal limit = %d, want 72", got)
+	}
+	if resource.Agent.Temperature != nil || len(resource.Agent.Sensors.TemperatureCelsius) != 0 {
+		t.Fatalf("pressure-only host must not create Celsius values: agent=%+v sensors=%+v", resource.Agent.Temperature, resource.Agent.Sensors)
+	}
+}
+
 func TestResourceFromVMPreservesProxmoxPool(t *testing.T) {
 	vm := models.VM{
 		ID:       "cluster-a:pve-a:101",

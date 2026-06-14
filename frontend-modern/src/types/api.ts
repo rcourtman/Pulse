@@ -478,7 +478,17 @@ export interface HostSensorSummary {
   temperatureCelsius?: Record<string, number>;
   fanRpm?: Record<string, number>;
   additional?: Record<string, number>;
+  thermalState?: HostThermalState;
   smart?: HostDiskSMART[]; // S.M.A.R.T. disk data
+}
+
+export interface HostThermalState {
+  source?: string;
+  pressure?: 'nominal' | 'constrained' | 'unknown' | string;
+  thermalWarningLevel?: number;
+  performanceWarningLevel?: number;
+  cpuPowerStatus?: number;
+  limitsPercent?: Record<string, number>;
 }
 
 export interface HostDiskSMART {

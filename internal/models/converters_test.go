@@ -618,6 +618,17 @@ func TestHostSensorSummaryToFrontend(t *testing.T) {
 			},
 			nilCheck: false,
 		},
+		{
+			name: "with thermal state",
+			input: HostSensorSummary{
+				ThermalState: &HostThermalState{
+					Source:        "pmset",
+					Pressure:      "nominal",
+					LimitsPercent: map[string]int{"cpu_speed_limit": 100},
+				},
+			},
+			nilCheck: false,
+		},
 	}
 
 	for _, tc := range tests {
@@ -631,6 +642,15 @@ func TestHostSensorSummaryToFrontend(t *testing.T) {
 			}
 			if result == nil {
 				t.Error("hostSensorSummaryToFrontend should not return nil for non-empty sensors")
+			}
+			if tc.input.ThermalState != nil {
+				if result.ThermalState == nil || result.ThermalState.Pressure != tc.input.ThermalState.Pressure {
+					t.Fatalf("thermal state not copied to frontend: %+v", result.ThermalState)
+				}
+				result.ThermalState.LimitsPercent["cpu_speed_limit"] = 80
+				if tc.input.ThermalState.LimitsPercent["cpu_speed_limit"] != 100 {
+					t.Fatal("frontend thermal state should not share limit map with source")
+				}
 			}
 		})
 	}

@@ -555,6 +555,12 @@ metrics-store stream, while `internal/monitoring/metrics_history.go` keeps
 `temperature` alongside CPU, memory, disk, and I/O for guest and node history
 reads. Mock history must seed the same metric so Proxmox node drawer thermals
 exercise the production contract instead of relying on a frontend-only fallback.
+Host-agent thermal pressure is not part of that Celsius history stream.
+`internal/monitoring/monitor_agents.go`, `internal/monitoring/monitor.go`, and
+the shared model conversion helpers must preserve `sensors.thermalState`
+through ingest, read-state projection, and frontend conversion, while leaving
+`agent.temperature` and `metric=temperature` unset unless a real Celsius value
+exists.
 That same monitoring owner also owns canonical unified-resource publication on
 `/api/state` and the websocket `state.resources` hydrate path. Monitoring must
 publish those resources from the same canonical unified snapshot that

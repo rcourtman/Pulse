@@ -1026,6 +1026,8 @@ func (a *Agent) collectTemperatures(ctx context.Context) agentshost.Sensors {
 	switch a.collector.GOOS() {
 	case "linux":
 		// Continue below with lm-sensors path
+	case "darwin":
+		return a.collectDarwinThermalState(ctx)
 	case "freebsd":
 		return a.collectFreeBSDTemperatures(ctx)
 	default:
@@ -1126,6 +1128,174 @@ func convertTemperatureDataToSensors(tempData *sensors.TemperatureData) agentsho
 	}
 
 	return result
+}
+
+// collectDarwinThermalState reads macOS thermal pressure signals. macOS does
+// not expose Linux-style raw temperature sensors through a stable unprivileged
+// interface, so this reports OS pressure state without inventing Celsius data.
+func (a *Agent) collectDarwinThermalState(ctx context.Context) agentshost.Sensors {
+	cmdCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	output, err := a.collector.CommandCombinedOutput(cmdCtx, "pmset", "-g", "therm")
+	if err != nil {
+		a.logger.Debug().Err(err).Msg("Failed to collect macOS thermal state via pmset")
+		return agentshost.Sensors{}
+	}
+
+	state := parseDarwinPMSetThermalState(output)
+	if state == nil {
+		a.logger.Debug().Msg("No macOS thermal state available from pmset")
+		return agentshost.Sensors{}
+	}
+
+	a.logger.Debug().
+		Str("pressure", state.Pressure).
+		Int("limitCount", len(state.LimitsPercent)).
+		Msg("Collected macOS thermal state")
+
+	return agentshost.Sensors{ThermalState: state}
+}
+
+func parseDarwinPMSetThermalState(output string) *agentshost.ThermalState {
+	output = strings.TrimSpace(output)
+	if output == "" {
+		return nil
+	}
+
+	state := &agentshost.ThermalState{
+		Source:   "pmset",
+		Pressure: agentshost.ThermalPressureUnknown,
+	}
+	seen := false
+	constrained := false
+	limits := make(map[string]int)
+
+	for _, rawLine := range strings.Split(output, "\n") {
+		line := strings.TrimSpace(rawLine)
+		if line == "" {
+			continue
+		}
+		lower := strings.ToLower(line)
+
+		switch {
+		case strings.Contains(lower, "no thermal warning level"):
+			state.ThermalWarningLevel = intPtr(0)
+			seen = true
+			continue
+		case strings.Contains(lower, "no performance warning level"):
+			state.PerformanceWarningLevel = intPtr(0)
+			seen = true
+			continue
+		case strings.Contains(lower, "no cpu power status"):
+			state.CPUPowerStatus = intPtr(0)
+			seen = true
+			continue
+		}
+
+		if value, ok := parseIntegerAfterMarker(line, "thermal warning level"); ok {
+			state.ThermalWarningLevel = intPtr(value)
+			seen = true
+			if value > 0 {
+				constrained = true
+			}
+			continue
+		}
+		if value, ok := parseIntegerAfterMarker(line, "performance warning level"); ok {
+			state.PerformanceWarningLevel = intPtr(value)
+			seen = true
+			if value > 0 {
+				constrained = true
+			}
+			continue
+		}
+		if value, ok := parseIntegerAfterMarker(line, "cpu power status"); ok {
+			state.CPUPowerStatus = intPtr(value)
+			seen = true
+			if value > 0 {
+				constrained = true
+			}
+			continue
+		}
+		if key, value, ok := parsePMSetLimitPercent(line); ok {
+			limits[key] = value
+			seen = true
+			if value >= 0 && value < 100 {
+				constrained = true
+			}
+		}
+	}
+
+	if !seen {
+		return nil
+	}
+	if len(limits) > 0 {
+		state.LimitsPercent = limits
+	}
+	if constrained {
+		state.Pressure = agentshost.ThermalPressureConstrained
+	} else {
+		state.Pressure = agentshost.ThermalPressureNominal
+	}
+	return state
+}
+
+func parsePMSetLimitPercent(line string) (string, int, bool) {
+	parts := strings.SplitN(line, "=", 2)
+	if len(parts) != 2 {
+		return "", 0, false
+	}
+	key := strings.TrimSpace(parts[0])
+	if key == "" || !strings.Contains(strings.ToLower(key), "limit") {
+		return "", 0, false
+	}
+	value, ok := parseFirstInteger(parts[1])
+	if !ok {
+		return "", 0, false
+	}
+	return normalizePMSetLimitKey(key), value, true
+}
+
+func normalizePMSetLimitKey(key string) string {
+	key = strings.TrimSpace(strings.ToLower(key))
+	replacer := strings.NewReplacer(" ", "_", "-", "_")
+	key = replacer.Replace(key)
+	for strings.Contains(key, "__") {
+		key = strings.ReplaceAll(key, "__", "_")
+	}
+	return strings.Trim(key, "_")
+}
+
+func parseIntegerAfterMarker(line, marker string) (int, bool) {
+	lower := strings.ToLower(line)
+	idx := strings.Index(lower, strings.ToLower(marker))
+	if idx < 0 {
+		return 0, false
+	}
+	return parseFirstInteger(line[idx+len(marker):])
+}
+
+func parseFirstInteger(input string) (int, bool) {
+	for i := 0; i < len(input); i++ {
+		ch := input[i]
+		if (ch < '0' || ch > '9') && ch != '-' {
+			continue
+		}
+		j := i + 1
+		for j < len(input) && input[j] >= '0' && input[j] <= '9' {
+			j++
+		}
+		value, err := strconv.Atoi(input[i:j])
+		if err != nil {
+			continue
+		}
+		return value, true
+	}
+	return 0, false
+}
+
+func intPtr(value int) *int {
+	return &value
 }
 
 // collectFreeBSDTemperatures reads CPU and ACPI thermal zone temperatures

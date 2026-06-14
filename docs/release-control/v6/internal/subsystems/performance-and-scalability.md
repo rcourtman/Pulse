@@ -758,6 +758,11 @@ only after a grouped node row is selected. Host-agent CPU temperature must be
 persisted into the same metrics-store history stream as other agent metrics,
 with current node temperature used only as drawer-local fallback while history
 is still accumulating.
+Standalone agent thermal pressure follows the same drawer-only density rule:
+`resourceDetailMappers.ts` may render compact pressure and throttling-limit rows
+inside the selected system's thermals card, but platform and Workloads table
+temperature cells must remain blank when the source has no positive Celsius
+reading.
 The Proxmox node drawer overview should follow the existing guest drawer
 compact detail-card pattern and expose node-specific context such as platform,
 kernel, hardware, raw capacity, telemetry, and thermal facts rather than
@@ -1248,6 +1253,9 @@ while canonical drawer discovery-target derivation now lives in
 under `unified-resources`. Future discovery-config or target-resolution
 changes must extend through that unified-resource owner instead of
 re-accumulating discovery heuristics back into the performance hot-path mapper.
+That mapper may add simple host-agent thermals rows from already-loaded sensor
+metadata, including `thermalState`, but it must not perform additional resource
+lookups, history reads, or polling work to decorate the drawer.
 The PBS service-table hot path now follows that same split: raw job arrays may
 cross the transport boundary, but
 `frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts`

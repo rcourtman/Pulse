@@ -1654,6 +1654,10 @@ CPU temperature as `metric=temperature` for node drawers. Storage and recovery
 may consume the surrounding context, but they must not reinterpret that
 agent/node CPU temperature history as physical-disk SMART temperature, backup
 freshness, restore evidence, or a storage-owned thermal timeline.
+The same boundary applies to host-agent `thermalState`: macOS pressure and
+throttling limits may appear as host context, but storage and recovery must not
+reinterpret pressure state as disk temperature, pool risk, backup freshness, or
+a storage-owned thermal timeline.
 
 Storage and recovery still consume the shared unified-resource contract, but
 they do not own the timeline store itself. The canonical resource-change
@@ -2865,6 +2869,9 @@ SMART disk temperatures in the wrapper payload. Storage and recovery disk
 temperature surfaces may depend on that monitoring-owned SMART merge path, but
 they must not reintroduce raw `sensors -j` as the setup contract or build a
 storage-local disk-temperature collector.
+Pressure-only host-agent telemetry remains outside that storage collector
+contract: storage surfaces may read the shared host context, but may not add a
+parallel macOS thermal collector or fold `thermalState` into disk SMART state.
 That same shared discovery dependency also assumes runtime discovery state owns
 only structured errors, while adjacent API and WebSocket payloads may derive
 the deprecated string `errors` list only as a compatibility field from those

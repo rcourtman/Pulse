@@ -256,6 +256,39 @@ func TestConvertAgentSMARTToModels_FullConversion(t *testing.T) {
 	}
 }
 
+func TestConvertAgentThermalStateToModels_CopiesValues(t *testing.T) {
+	thermalWarningLevel := 0
+	performanceWarningLevel := 1
+	cpuPowerStatus := 2
+	src := &agentshost.ThermalState{
+		Source:                  " pmset ",
+		Pressure:                " constrained ",
+		ThermalWarningLevel:     &thermalWarningLevel,
+		PerformanceWarningLevel: &performanceWarningLevel,
+		CPUPowerStatus:          &cpuPowerStatus,
+		LimitsPercent:           map[string]int{"cpu_speed_limit": 80},
+	}
+
+	got := convertAgentThermalStateToModels(src)
+	if got == nil {
+		t.Fatal("expected converted thermal state")
+	}
+	if got.Source != "pmset" || got.Pressure != "constrained" {
+		t.Fatalf("unexpected source/pressure: %+v", got)
+	}
+	if got.ThermalWarningLevel == nil || *got.ThermalWarningLevel != 0 {
+		t.Fatalf("ThermalWarningLevel = %#v, want 0", got.ThermalWarningLevel)
+	}
+	got.LimitsPercent["cpu_speed_limit"] = 100
+	*got.PerformanceWarningLevel = 3
+	if src.LimitsPercent["cpu_speed_limit"] != 80 {
+		t.Fatal("converted thermal limits should not share source map")
+	}
+	if *src.PerformanceWarningLevel != 1 {
+		t.Fatal("converted thermal pointers should not share source pointers")
+	}
+}
+
 // --- convertDockerSwarmInfo ---
 
 func TestConvertDockerSwarmInfo_Nil(t *testing.T) {

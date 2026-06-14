@@ -3388,6 +3388,9 @@ func hostSensorsFromReadStateView(sensors *unifiedresources.HostSensorMeta) mode
 			out.Additional[k] = v
 		}
 	}
+	if sensors.ThermalState != nil {
+		out.ThermalState = hostThermalStateFromReadStateView(sensors.ThermalState)
+	}
 	if len(sensors.SMART) > 0 {
 		out.SMART = make([]models.HostDiskSMART, 0, len(sensors.SMART))
 		for _, smart := range sensors.SMART {
@@ -3406,6 +3409,20 @@ func hostSensorsFromReadStateView(sensors *unifiedresources.HostSensorMeta) mode
 		}
 	}
 	return out
+}
+
+func hostThermalStateFromReadStateView(in *unifiedresources.HostThermalState) *models.HostThermalState {
+	if in == nil {
+		return nil
+	}
+	return &models.HostThermalState{
+		Source:                  in.Source,
+		Pressure:                in.Pressure,
+		ThermalWarningLevel:     cloneIntPtr(in.ThermalWarningLevel),
+		PerformanceWarningLevel: cloneIntPtr(in.PerformanceWarningLevel),
+		CPUPowerStatus:          cloneIntPtr(in.CPUPowerStatus),
+		LimitsPercent:           cloneStringIntMap(in.LimitsPercent),
+	}
 }
 
 func hostRAIDFromReadStateView(raid []unifiedresources.HostRAIDMeta) []models.HostRAIDArray {

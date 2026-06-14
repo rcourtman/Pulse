@@ -249,6 +249,36 @@ func TestCloneResourceClonesDockerSecurityPosture(t *testing.T) {
 	}
 }
 
+func TestCloneResourceCopiesHostThermalState(t *testing.T) {
+	warningLevel := 1
+	resource := Resource{
+		ID:   "agent:mac-host",
+		Type: ResourceTypeAgent,
+		Agent: &AgentData{
+			Sensors: &HostSensorMeta{
+				ThermalState: &HostThermalState{
+					Source:              "pmset",
+					Pressure:            "constrained",
+					ThermalWarningLevel: &warningLevel,
+					LimitsPercent:       map[string]int{"cpu_speed_limit": 72},
+				},
+			},
+		},
+	}
+
+	clone := cloneResource(&resource)
+	clone.Agent.Sensors.ThermalState.LimitsPercent["cpu_speed_limit"] = 95
+	*clone.Agent.Sensors.ThermalState.ThermalWarningLevel = 2
+
+	originalState := resource.Agent.Sensors.ThermalState
+	if got := originalState.LimitsPercent["cpu_speed_limit"]; got != 72 {
+		t.Fatalf("original thermal limit = %d, want 72 after clone mutation", got)
+	}
+	if originalState.ThermalWarningLevel == nil || *originalState.ThermalWarningLevel != 1 {
+		t.Fatalf("original thermal warning level = %+v, want 1 after clone mutation", originalState.ThermalWarningLevel)
+	}
+}
+
 func TestProxmoxWorkloadActionTargetsStayBackendAuthored(t *testing.T) {
 	apiSource, err := os.ReadFile(filepath.Join("..", "api", "resources.go"))
 	if err != nil {

@@ -839,7 +839,7 @@ func (s DockerSwarmInfo) ToFrontend() DockerSwarmFrontend {
 }
 
 func hostSensorSummaryToFrontend(src HostSensorSummary) *HostSensorSummaryFrontend {
-	if len(src.TemperatureCelsius) == 0 && len(src.FanRPM) == 0 && len(src.Additional) == 0 && len(src.SMART) == 0 {
+	if len(src.TemperatureCelsius) == 0 && len(src.FanRPM) == 0 && len(src.Additional) == 0 && src.ThermalState == nil && len(src.SMART) == 0 {
 		return nil
 	}
 
@@ -852,6 +852,9 @@ func hostSensorSummaryToFrontend(src HostSensorSummary) *HostSensorSummaryFronte
 	}
 	if len(src.Additional) > 0 {
 		dest.Additional = copyStringFloatMap(src.Additional)
+	}
+	if src.ThermalState != nil {
+		dest.ThermalState = copyHostThermalState(src.ThermalState)
 	}
 	if len(src.SMART) > 0 {
 		dest.SMART = make([]HostDiskSMARTFrontend, len(src.SMART))
@@ -873,11 +876,34 @@ func hostSensorSummaryToFrontend(src HostSensorSummary) *HostSensorSummaryFronte
 	return &normalized
 }
 
+func copyHostThermalState(src *HostThermalState) *HostThermalState {
+	if src == nil {
+		return nil
+	}
+	dest := *src
+	dest.ThermalWarningLevel = cloneIntPtr(src.ThermalWarningLevel)
+	dest.PerformanceWarningLevel = cloneIntPtr(src.PerformanceWarningLevel)
+	dest.CPUPowerStatus = cloneIntPtr(src.CPUPowerStatus)
+	dest.LimitsPercent = copyStringIntMap(src.LimitsPercent)
+	return &dest
+}
+
 func copyStringFloatMap(src map[string]float64) map[string]float64 {
 	if len(src) == 0 {
 		return nil
 	}
 	dest := make(map[string]float64, len(src))
+	for k, v := range src {
+		dest[k] = v
+	}
+	return dest
+}
+
+func copyStringIntMap(src map[string]int) map[string]int {
+	if len(src) == 0 {
+		return nil
+	}
+	dest := make(map[string]int, len(src))
 	for k, v := range src {
 		dest[k] = v
 	}

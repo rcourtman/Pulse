@@ -67,6 +67,17 @@ func cloneStringFloat64Map(src map[string]float64) map[string]float64 {
 	return dest
 }
 
+func cloneStringIntMap(src map[string]int) map[string]int {
+	if len(src) == 0 {
+		return nil
+	}
+	dest := make(map[string]int, len(src))
+	for k, v := range src {
+		dest[k] = v
+	}
+	return dest
+}
+
 func cloneCoreTemps(src []CoreTemp) []CoreTemp {
 	return append([]CoreTemp(nil), src...)
 }
@@ -218,8 +229,21 @@ func cloneHostSensorSummary(src HostSensorSummary) HostSensorSummary {
 		TemperatureCelsius: cloneStringFloat64Map(src.TemperatureCelsius),
 		FanRPM:             cloneStringFloat64Map(src.FanRPM),
 		Additional:         cloneStringFloat64Map(src.Additional),
+		ThermalState:       cloneHostThermalState(src.ThermalState),
 		SMART:              cloneHostDiskSMART(src.SMART),
 	}.NormalizeCollections()
+}
+
+func cloneHostThermalState(src *HostThermalState) *HostThermalState {
+	if src == nil {
+		return nil
+	}
+	dest := *src
+	dest.ThermalWarningLevel = cloneIntPtr(src.ThermalWarningLevel)
+	dest.PerformanceWarningLevel = cloneIntPtr(src.PerformanceWarningLevel)
+	dest.CPUPowerStatus = cloneIntPtr(src.CPUPowerStatus)
+	dest.LimitsPercent = cloneStringIntMap(src.LimitsPercent)
+	return &dest
 }
 
 func cloneHostRAIDArrays(src []HostRAIDArray) []HostRAIDArray {

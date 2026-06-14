@@ -750,6 +750,7 @@ type HostSensorSummaryFrontend struct {
 	TemperatureCelsius map[string]float64      `json:"temperatureCelsius"`
 	FanRPM             map[string]float64      `json:"fanRpm"`
 	Additional         map[string]float64      `json:"additional"`
+	ThermalState       *HostThermalState       `json:"thermalState,omitempty"`
 	SMART              []HostDiskSMARTFrontend `json:"smart"` // S.M.A.R.T. disk data
 }
 

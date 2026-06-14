@@ -314,6 +314,10 @@ normalization/clamping when the source metric requires it, positive Celsius
 validation, tabular styling, and empty markers instead of local
 `formatPercent`, `formatPercentLabel`, `toFixed(1)%`, `formatTemperature`, or
 temperature label helpers.
+Thermal pressure state is a separate host sensor facet, not a table temperature
+source. Unified-resource adapters must carry `agent.sensors.thermalState`
+alongside `temperatureCelsius`, and table consumers must continue to render an
+empty temperature marker when only pressure state is present.
 Metric bar fallbacks follow that split as well: unified-resource consumers own
 which CPU or memory value is selected, plus any source-specific fallback reason
 such as outdated standalone agent telemetry, while platform tables must use
@@ -1776,6 +1780,11 @@ TrueNAS system records must project `cputemp` readings into the shared
 `agent.temperature` and `agent.sensors.temperatureCelsius` fields instead of
 inventing a provider-local temperature payload or leaving TrueNAS host
 temperatures unavailable without the unified agent.
+Pressure-only host telemetry follows the same canonical host-sensor route:
+agent resources may include `agent.sensors.thermalState` even when
+`agent.temperature` and `agent.sensors.temperatureCelsius` are absent, so
+platform consumers can show macOS pressure without creating provider-local
+thermal payloads or fake Celsius values.
 AI discovery and query surfaces now follow the same rule. Assistant runtime
 paths such as `pulse_query` and unified AI context must expose TrueNAS-backed
 canonical `agent`, `vm`, `app-container`, `storage`, and `physical-disk`

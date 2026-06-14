@@ -76,13 +76,80 @@ func TestAgent_collectTemperatures_BestEffortFailuresReturnEmpty(t *testing.T) {
 	}
 }
 
-func TestAgent_collectTemperatures_SkipsNonLinux(t *testing.T) {
-	mc := &mockCollector{goos: "darwin"}
+func TestAgent_collectTemperatures_SkipsUnsupportedOS(t *testing.T) {
+	mc := &mockCollector{goos: "windows"}
 	a := &Agent{logger: zerolog.Nop(), collector: mc}
 
 	got := a.collectTemperatures(context.Background())
 	if len(got.TemperatureCelsius) != 0 {
-		t.Fatalf("expected empty sensors on non-linux, got %#v", got.TemperatureCelsius)
+		t.Fatalf("expected empty sensors on unsupported OS, got %#v", got.TemperatureCelsius)
+	}
+}
+
+func TestAgent_collectTemperatures_DarwinThermalState(t *testing.T) {
+	mc := &mockCollector{
+		goos: "darwin",
+		commandCombinedOutputFn: func(_ context.Context, name string, arg ...string) (string, error) {
+			if name != "pmset" {
+				t.Fatalf("command name = %q, want pmset", name)
+			}
+			if len(arg) != 2 || arg[0] != "-g" || arg[1] != "therm" {
+				t.Fatalf("command args = %#v, want [-g therm]", arg)
+			}
+			return `Note: No thermal warning level has been recorded
+Note: No performance warning level has been recorded
+Note: No CPU power status has been recorded
+CPU_Speed_Limit = 100
+Scheduler_Limit = 100
+`, nil
+		},
+	}
+	a := &Agent{logger: zerolog.Nop(), collector: mc}
+
+	got := a.collectTemperatures(context.Background())
+	if len(got.TemperatureCelsius) != 0 {
+		t.Fatalf("expected no Celsius temperatures on macOS thermal-state collection, got %#v", got.TemperatureCelsius)
+	}
+	if got.ThermalState == nil {
+		t.Fatal("expected macOS thermal state")
+	}
+	if got.ThermalState.Source != "pmset" {
+		t.Fatalf("Source = %q, want pmset", got.ThermalState.Source)
+	}
+	if got.ThermalState.Pressure != "nominal" {
+		t.Fatalf("Pressure = %q, want nominal", got.ThermalState.Pressure)
+	}
+	if got.ThermalState.ThermalWarningLevel == nil || *got.ThermalState.ThermalWarningLevel != 0 {
+		t.Fatalf("ThermalWarningLevel = %#v, want 0", got.ThermalState.ThermalWarningLevel)
+	}
+	if got.ThermalState.LimitsPercent["cpu_speed_limit"] != 100 {
+		t.Fatalf("cpu_speed_limit = %d, want 100", got.ThermalState.LimitsPercent["cpu_speed_limit"])
+	}
+}
+
+func TestParseDarwinPMSetThermalState_Constrained(t *testing.T) {
+	got := parseDarwinPMSetThermalState(`Thermal Warning Level: 1
+Performance Warning Level: 2
+CPU Power Status: 1
+CPU_Speed_Limit = 80
+`)
+	if got == nil {
+		t.Fatal("expected thermal state")
+	}
+	if got.Pressure != "constrained" {
+		t.Fatalf("Pressure = %q, want constrained", got.Pressure)
+	}
+	if got.ThermalWarningLevel == nil || *got.ThermalWarningLevel != 1 {
+		t.Fatalf("ThermalWarningLevel = %#v, want 1", got.ThermalWarningLevel)
+	}
+	if got.PerformanceWarningLevel == nil || *got.PerformanceWarningLevel != 2 {
+		t.Fatalf("PerformanceWarningLevel = %#v, want 2", got.PerformanceWarningLevel)
+	}
+	if got.CPUPowerStatus == nil || *got.CPUPowerStatus != 1 {
+		t.Fatalf("CPUPowerStatus = %#v, want 1", got.CPUPowerStatus)
+	}
+	if got.LimitsPercent["cpu_speed_limit"] != 80 {
+		t.Fatalf("cpu_speed_limit = %d, want 80", got.LimitsPercent["cpu_speed_limit"])
 	}
 }
 

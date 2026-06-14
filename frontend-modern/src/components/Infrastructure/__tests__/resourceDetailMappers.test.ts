@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildTemperatureRows,
   formatInteger,
   formatSensorName,
   formatSourceType,
@@ -92,6 +93,34 @@ describe('resourceDetailMappers', () => {
       expect(formatSensorName('fan1_cpu_temp')).toBe('Cpu Temp');
       expect(formatSensorName('disk_0_temp')).toBe('0 Temp');
       expect(formatSensorName('')).toBe('');
+    });
+  });
+
+  describe('buildTemperatureRows', () => {
+    it('surfaces macOS thermal pressure without inventing Celsius temperatures', () => {
+      const rows = buildTemperatureRows({
+        thermalState: {
+          source: 'pmset',
+          pressure: 'constrained',
+          limitsPercent: {
+            cpu_speed_limit: 80,
+            scheduler_limit: 100,
+          },
+        },
+      });
+
+      expect(rows).toEqual([
+        {
+          label: 'Thermal pressure',
+          value: 'Constrained',
+          valueTitle: 'Constrained via pmset',
+        },
+        {
+          label: 'Speed Limit',
+          value: '80%',
+          valueTitle: 'Speed Limit 80%',
+        },
+      ]);
     });
   });
 

@@ -326,6 +326,29 @@ export const formatSensorName = (name: string) => {
 
 export const buildTemperatureRows = (sensors?: HostSensorSummary) => {
   const rows: { label: string; value: string; valueTitle?: string }[] = [];
+  const thermalState = sensors?.thermalState;
+  if (thermalState?.pressure) {
+    rows.push({
+      label: 'Thermal pressure',
+      value: titleCaseDelimitedLabel(thermalState.pressure),
+      valueTitle: thermalState.source
+        ? `${titleCaseDelimitedLabel(thermalState.pressure)} via ${thermalState.source}`
+        : titleCaseDelimitedLabel(thermalState.pressure),
+    });
+  }
+  const limits = thermalState?.limitsPercent;
+  if (limits) {
+    Object.entries(limits)
+      .filter(([, value]) => Number.isFinite(value) && value < 100)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .forEach(([name, value]) => {
+        rows.push({
+          label: formatSensorName(name),
+          value: `${Math.round(value)}%`,
+          valueTitle: `${formatSensorName(name)} ${Math.round(value)}%`,
+        });
+      });
+  }
   const temps = sensors?.temperatureCelsius;
   if (temps) {
     const entries = Object.entries(temps).sort(([a], [b]) => a.localeCompare(b));

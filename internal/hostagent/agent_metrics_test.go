@@ -390,6 +390,65 @@ rdevId.29=
 	})
 }
 
+func TestBuildReportIncludesDarwinThermalState(t *testing.T) {
+	mc := &mockCollector{
+		goos:  "darwin",
+		nowFn: func() time.Time { return time.Date(2026, 6, 14, 10, 0, 0, 0, time.UTC) },
+		hostInfoFn: func(ctx context.Context) (*gohost.InfoStat, error) {
+			return &gohost.InfoStat{
+				Hostname: "mac-mini",
+				OS:       "darwin",
+				Platform: "darwin",
+				HostID:   "mac-machine-id",
+			}, nil
+		},
+		hostUptimeFn: func(ctx context.Context) (uint64, error) {
+			return 3600, nil
+		},
+		metricsFn: func(ctx context.Context, diskExclude []string) (hostmetrics.Snapshot, error) {
+			return hostmetrics.Snapshot{}, nil
+		},
+		commandCombinedOutputFn: func(ctx context.Context, name string, arg ...string) (string, error) {
+			if name != "pmset" || len(arg) != 2 || arg[0] != "-g" || arg[1] != "therm" {
+				t.Fatalf("unexpected command %s %v", name, arg)
+			}
+			return "Thermal Warning Level: 1\nCPU_Speed_Limit = 72\n", nil
+		},
+	}
+
+	agent, err := New(Config{
+		AgentID:   "mac-agent",
+		APIToken:  "token",
+		LogLevel:  -1,
+		Collector: mc,
+	})
+	if err != nil {
+		t.Fatalf("New() failed: %v", err)
+	}
+
+	report, err := agent.buildReport(context.Background())
+	if err != nil {
+		t.Fatalf("buildReport failed: %v", err)
+	}
+
+	if report.Sensors.ThermalState == nil {
+		t.Fatalf("expected Darwin thermal state in report, got %+v", report.Sensors)
+	}
+	state := report.Sensors.ThermalState
+	if state.Source != "pmset" || state.Pressure != agentshost.ThermalPressureConstrained {
+		t.Fatalf("unexpected thermal state: %+v", state)
+	}
+	if state.ThermalWarningLevel == nil || *state.ThermalWarningLevel != 1 {
+		t.Fatalf("thermal warning level = %+v, want 1", state.ThermalWarningLevel)
+	}
+	if got := state.LimitsPercent["cpu_speed_limit"]; got != 72 {
+		t.Fatalf("cpu_speed_limit = %d, want 72", got)
+	}
+	if len(report.Sensors.TemperatureCelsius) != 0 {
+		t.Fatalf("Darwin pressure-only report must not invent Celsius readings: %+v", report.Sensors.TemperatureCelsius)
+	}
+}
+
 func TestBuildReportUsesResolvedNASOSIdentity(t *testing.T) {
 	fixedTime := time.Date(2026, time.April, 15, 12, 0, 0, 0, time.UTC)
 

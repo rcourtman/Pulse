@@ -119,8 +119,27 @@ type Sensors struct {
 	FanRPM             map[string]float64 `json:"fanRpm,omitempty"`
 	PowerWatts         map[string]float64 `json:"powerWatts,omitempty"` // Power consumption (e.g., cpu_package, dram)
 	Additional         map[string]float64 `json:"additional,omitempty"`
+	ThermalState       *ThermalState      `json:"thermalState,omitempty"`
 	SMART              []DiskSMART        `json:"smart,omitempty"` // S.M.A.R.T. disk data
 }
+
+// ThermalState captures OS-level thermal pressure that is not a direct
+// Celsius temperature reading. macOS exposes this kind of signal more
+// reliably than raw sensor temperatures.
+type ThermalState struct {
+	Source                  string         `json:"source,omitempty"`
+	Pressure                string         `json:"pressure,omitempty"` // nominal, constrained, or unknown
+	ThermalWarningLevel     *int           `json:"thermalWarningLevel,omitempty"`
+	PerformanceWarningLevel *int           `json:"performanceWarningLevel,omitempty"`
+	CPUPowerStatus          *int           `json:"cpuPowerStatus,omitempty"`
+	LimitsPercent           map[string]int `json:"limitsPercent,omitempty"`
+}
+
+const (
+	ThermalPressureNominal     = "nominal"
+	ThermalPressureConstrained = "constrained"
+	ThermalPressureUnknown     = "unknown"
+)
 
 // DiskSMART represents S.M.A.R.T. data for a single disk.
 type DiskSMART struct {

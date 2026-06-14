@@ -492,6 +492,61 @@ func TestApplyHostReportAllowsTokenReuseAcrossHosts(t *testing.T) {
 	}
 }
 
+func TestApplyHostReportPreservesThermalState(t *testing.T) {
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+		rateTracker:       NewRateTracker(),
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	warningLevel := 1
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{ID: "mac-agent", Version: "1.0.0", IntervalSeconds: 30},
+		Host: agentshost.HostInfo{
+			ID:       "mac-machine",
+			Hostname: "mac-mini",
+			Platform: "macos",
+		},
+		Timestamp: time.Now().UTC(),
+		Sensors: agentshost.Sensors{
+			ThermalState: &agentshost.ThermalState{
+				Source:              "pmset",
+				Pressure:            agentshost.ThermalPressureConstrained,
+				ThermalWarningLevel: &warningLevel,
+				LimitsPercent:       map[string]int{"cpu_speed_limit": 72},
+			},
+		},
+	}
+
+	host, err := monitor.ApplyHostReport(report, nil)
+	if err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+	if host.Sensors.ThermalState == nil {
+		t.Fatalf("expected thermal state on applied host: %+v", host.Sensors)
+	}
+	report.Sensors.ThermalState.LimitsPercent["cpu_speed_limit"] = 99
+	*report.Sensors.ThermalState.ThermalWarningLevel = 2
+
+	snapshot := monitor.state.GetSnapshot()
+	if len(snapshot.Hosts) != 1 || snapshot.Hosts[0].Sensors.ThermalState == nil {
+		t.Fatalf("expected one host with thermal state, got %+v", snapshot.Hosts)
+	}
+	state := snapshot.Hosts[0].Sensors.ThermalState
+	if state.Pressure != agentshost.ThermalPressureConstrained {
+		t.Fatalf("pressure = %q, want constrained", state.Pressure)
+	}
+	if got := state.LimitsPercent["cpu_speed_limit"]; got != 72 {
+		t.Fatalf("thermal limit = %d, want copied value 72", got)
+	}
+	if state.ThermalWarningLevel == nil || *state.ThermalWarningLevel != 1 {
+		t.Fatalf("thermal warning level = %+v, want copied value 1", state.ThermalWarningLevel)
+	}
+}
+
 func TestApplyDockerReportPreservesNativeRuntimeInventory(t *testing.T) {
 	monitor := newTestMonitor(t)
 	now := time.Date(2026, 5, 24, 8, 0, 0, 0, time.UTC)

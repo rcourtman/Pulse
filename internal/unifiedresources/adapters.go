@@ -168,7 +168,7 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 	storageAssessments := make([]storagehealth.Assessment, 0, len(host.RAID)+1)
 
 	// Populate sensors
-	if len(host.Sensors.TemperatureCelsius) > 0 || len(host.Sensors.FanRPM) > 0 || len(host.Sensors.Additional) > 0 || len(host.Sensors.SMART) > 0 {
+	if len(host.Sensors.TemperatureCelsius) > 0 || len(host.Sensors.FanRPM) > 0 || len(host.Sensors.Additional) > 0 || host.Sensors.ThermalState != nil || len(host.Sensors.SMART) > 0 {
 		sensorMeta := &HostSensorMeta{}
 		if len(host.Sensors.TemperatureCelsius) > 0 {
 			sensorMeta.TemperatureCelsius = make(map[string]float64, len(host.Sensors.TemperatureCelsius))
@@ -187,6 +187,9 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 			for k, v := range host.Sensors.Additional {
 				sensorMeta.Additional[k] = v
 			}
+		}
+		if host.Sensors.ThermalState != nil {
+			sensorMeta.ThermalState = hostThermalStateToMeta(host.Sensors.ThermalState)
 		}
 		if len(host.Sensors.SMART) > 0 {
 			sensorMeta.SMART = make([]HostSMARTMeta, len(host.Sensors.SMART))
@@ -433,6 +436,20 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 	}
 
 	return resource, identity
+}
+
+func hostThermalStateToMeta(in *models.HostThermalState) *HostThermalState {
+	if in == nil {
+		return nil
+	}
+	return &HostThermalState{
+		Source:                  in.Source,
+		Pressure:                in.Pressure,
+		ThermalWarningLevel:     cloneIntPtr(in.ThermalWarningLevel),
+		PerformanceWarningLevel: cloneIntPtr(in.PerformanceWarningLevel),
+		CPUPowerStatus:          cloneIntPtr(in.CPUPowerStatus),
+		LimitsPercent:           cloneStringIntMap(in.LimitsPercent),
+	}
 }
 
 func agentRuntimePlatformForHost(host models.Host, hostProfile string) string {

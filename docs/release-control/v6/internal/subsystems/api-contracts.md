@@ -2186,6 +2186,11 @@ history is still cold, while `resourceType=node` may serve the Proxmox node
 temperature fallback from the same `/api/metrics-store/history` response shape.
 The transport remains the existing metrics-history payload; it must not add a
 Proxmox-only chart endpoint or drawer-local temperature response contract.
+Host sensor summaries also carry optional `thermalState` for platforms such as
+macOS that expose thermal pressure but not stable Celsius sensor readings. API
+payloads must keep that state separate from `temperatureCelsius`; clients may
+display pressure and throttling limits, but must not synthesize a temperature
+metric or table value from pressure-only payloads.
 
 `aicontracts.Finding` (the shape Patrol hands the investigation
 orchestrator) carries optional `OperatorContext` and

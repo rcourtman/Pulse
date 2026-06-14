@@ -184,6 +184,7 @@ func TestNetworkInterface_Fields(t *testing.T) {
 }
 
 func TestSensors_Fields(t *testing.T) {
+	thermalWarningLevel := 0
 	sensors := Sensors{
 		TemperatureCelsius: map[string]float64{
 			"cpu_package": 45.0,
@@ -196,6 +197,12 @@ func TestSensors_Fields(t *testing.T) {
 		Additional: map[string]float64{
 			"voltage": 12.0,
 		},
+		ThermalState: &ThermalState{
+			Source:              "pmset",
+			Pressure:            "nominal",
+			ThermalWarningLevel: &thermalWarningLevel,
+			LimitsPercent:       map[string]int{"cpu_speed_limit": 100},
+		},
 	}
 
 	if len(sensors.TemperatureCelsius) != 3 {
@@ -206,6 +213,12 @@ func TestSensors_Fields(t *testing.T) {
 	}
 	if sensors.FanRPM["cpu_fan"] != 1200.0 {
 		t.Errorf("cpu_fan RPM = %f, want 1200.0", sensors.FanRPM["cpu_fan"])
+	}
+	if sensors.ThermalState == nil || sensors.ThermalState.Pressure != "nominal" {
+		t.Fatalf("ThermalState = %#v, want nominal state", sensors.ThermalState)
+	}
+	if sensors.ThermalState.LimitsPercent["cpu_speed_limit"] != 100 {
+		t.Errorf("cpu_speed_limit = %d, want 100", sensors.ThermalState.LimitsPercent["cpu_speed_limit"])
 	}
 }
 
