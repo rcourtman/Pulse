@@ -1,6 +1,6 @@
 # Pulse Makefile for development
 
-.PHONY: build run dev dev-status dev-logs dev-stop dev-restart dev-backend-restart dev-verify dev-foreground frontend backend all clean distclean dev-hot lint lint-backend lint-frontend format format-backend format-frontend build-agents control-plane handoff
+.PHONY: build run dev dev-lab dev-status dev-status-lab dev-logs dev-stop dev-restart dev-restart-lab dev-backend-restart dev-verify dev-verify-lab dev-foreground dev-foreground-lab frontend backend all clean distclean dev-hot lint lint-backend lint-frontend format format-backend format-frontend build-agents control-plane handoff
 
 FRONTEND_DIR := frontend-modern
 FRONTEND_DIST := $(FRONTEND_DIR)/dist
@@ -30,8 +30,14 @@ run: build
 dev:
 	npm run dev
 
+dev-lab:
+	npm run dev:lab
+
 dev-status:
 	npm run dev:status
+
+dev-status-lab:
+	npm run dev:status:lab
 
 dev-logs:
 	npm run dev:logs
@@ -42,14 +48,23 @@ dev-stop:
 dev-restart:
 	npm run dev:restart
 
+dev-restart-lab:
+	npm run dev:restart:lab
+
 dev-backend-restart:
 	npm run dev:backend-restart
 
 dev-verify:
 	npm run dev:verify
 
+dev-verify-lab:
+	npm run dev:verify:lab
+
 dev-foreground:
 	npm run dev:foreground
+
+dev-foreground-lab:
+	npm run dev:foreground:lab
 
 dev-hot:
 	npm run dev:foreground

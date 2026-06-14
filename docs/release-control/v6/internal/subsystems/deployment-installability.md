@@ -388,6 +388,15 @@ TLS floor in the dynamic config.
    explicit `PULSE_DEV_LAN=true` opt-in; only that mode may bind Vite/backend
    listeners to `0.0.0.0`, include LAN origins, or advertise the detected LAN
    browser entrypoint.
+   The canonical shortcut for the installed homelab-agent case is lab-agent
+   mode: `PULSE_DEV_LAB_AGENTS=true` must enable LAN exposure plus the
+   Proxmox guest Docker detection/inventory opt-ins together, and the
+   repo-root wrapper surface must expose that mode through `npm run dev:lab`,
+   `npm run dev:restart:lab`, `npm run dev:status:lab`,
+   `npm run dev:verify:lab`, and `npm run dev:foreground:lab`. The frontend
+   workspace package and Makefile must delegate their lab-agent targets through
+   those same repo-root npm wrappers rather than duplicating raw launcher
+   commands or teaching developers to paste one-off environment strings.
    The hot-dev supervisor must also recover its managed PID file from a live
    `hot-dev-bg.sh supervise` process before treating the runtime as unmanaged.
    Backend health monitoring must distinguish HTTP startup grace from a missing
@@ -1509,8 +1518,11 @@ route through the managed runtime control plane when they are operating on the
 local dev stack, instead of resurrecting lane-local `hot-dev.sh` or raw Vite
 process management through separate shell folklore. For Makefile targets, that
 means dispatching through the canonical repo-root npm wrappers (`npm run dev`,
-`npm run dev:status`, `npm run dev:restart`, `npm run dev:backend-restart`,
-`npm run dev:verify`, `npm run dev:stop`, and `npm run dev:foreground`) rather
+`npm run dev:lab`, `npm run dev:status`, `npm run dev:status:lab`,
+`npm run dev:restart`, `npm run dev:restart:lab`,
+`npm run dev:backend-restart`, `npm run dev:verify`,
+`npm run dev:verify:lab`, `npm run dev:stop`, `npm run dev:foreground`, and
+`npm run dev:foreground:lab`) rather
 than shelling directly into `scripts/hot-dev-bg.sh`.
 When `scripts/clean-mock-alerts.sh` needs to quiesce a local dev runtime, it
 must stop the managed session through `hot-dev-bg` before touching legacy

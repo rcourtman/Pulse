@@ -899,6 +899,10 @@ func TestProxmoxGuestDockerInventoryUsesCanonicalReportIngestPath(t *testing.T) 
 			"m.CollectProxmoxGuestDockerInventory(ctx, allContainers)",
 			"m.state.UpdateContainersForInstance(instanceName, allContainers)",
 		},
+		"monitor_polling_containers.go": {
+			"m.CollectProxmoxGuestDockerInventory(ctx, allContainers)",
+			"m.state.UpdateContainersForInstance(instanceName, allContainers)",
+		},
 	}
 
 	for file, snippets := range requiredSnippets {

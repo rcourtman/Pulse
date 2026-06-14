@@ -55,25 +55,26 @@ truth for live infrastructure data.
 31. `internal/monitoring/availability_poller.go`
 32. `internal/monitoring/scheduler.go`
 33. `internal/monitoring/docker_detection.go`
-34. `internal/mock/fixture_graph.go`
-35. `internal/dockeragent/docker_client.go`
-36. `pkg/agents/docker/report.go`
-37. `internal/models/models.go`
-38. `internal/models/models_frontend.go`
-39. `internal/models/converters.go`
-40. `internal/models/deepcopy.go`
-41. `internal/mock/generator.go`
-42. `internal/mock/demo_scenarios.go`
-43. `internal/kubernetesagent/agent.go`
-44. `pkg/agents/kubernetes/report.go`
-45. `internal/monitoring/temperature.go`
-46. `internal/truenas/client.go`
-47. `internal/truenas/disk_health.go`
-48. `internal/truenas/provider.go`
-49. `internal/models/ceph_cluster_identity.go`
-50. `internal/truenas/types.go`
-51. `internal/monitoring/monitor_alert_sync.go`
-52. `internal/monitoring/platform_poller_shared.go`
+34. `internal/monitoring/monitor_polling_containers.go`
+35. `internal/mock/fixture_graph.go`
+36. `internal/dockeragent/docker_client.go`
+37. `pkg/agents/docker/report.go`
+38. `internal/models/models.go`
+39. `internal/models/models_frontend.go`
+40. `internal/models/converters.go`
+41. `internal/models/deepcopy.go`
+42. `internal/mock/generator.go`
+43. `internal/mock/demo_scenarios.go`
+44. `internal/kubernetesagent/agent.go`
+45. `pkg/agents/kubernetes/report.go`
+46. `internal/monitoring/temperature.go`
+47. `internal/truenas/client.go`
+48. `internal/truenas/disk_health.go`
+49. `internal/truenas/provider.go`
+50. `internal/models/ceph_cluster_identity.go`
+51. `internal/truenas/types.go`
+52. `internal/monitoring/monitor_alert_sync.go`
+53. `internal/monitoring/platform_poller_shared.go`
 
 ## Shared Boundaries
 
@@ -162,9 +163,15 @@ truth for live infrastructure data.
    host agent remains one hybrid top-level system across rebuild ticks.
 14. Add or change Proxmox-side LXC Docker detection or inventory through
    `internal/monitoring/docker_detection.go`,
-   `internal/monitoring/monitor_pve_guest_poll.go`, and monitoring guardrails
-   together. Socket detection may only annotate LXC guests after explicit
-   server opt-in. LXC Docker inventory may only emit Docker / Podman
+   `internal/monitoring/monitor_pve_guest_poll.go`,
+   `internal/monitoring/monitor_polling_containers.go`, and monitoring
+   guardrails together. Socket detection may only annotate LXC guests after
+   explicit server opt-in. Both the efficient cluster/resources guest poll and
+   the traditional per-node container polling path must run
+   `CollectProxmoxGuestDockerInventory` after Docker presence detection and
+   before updating container state, so the Docker runtime lens does not depend
+   on which Proxmox polling path is active. LXC Docker inventory may only emit
+   Docker / Podman
    module-compatible reports into `ApplyDockerReport`, must skip guests with a
    linked online guest-local host agent, and must keep the command set to
    minimal read-only Docker summary and aggregate stats collection. The socket

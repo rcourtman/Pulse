@@ -4,11 +4,14 @@
 #
 # Usage:
 #   npm run dev                             # Canonical managed dev runtime
+#   npm run dev:lab                         # LAN-bound lab-agent runtime
 #   npm run dev:status
 #   npm run dev:logs
 #   npm run dev:restart
+#   npm run dev:restart:lab
 #   npm run dev:backend-restart
 #   npm run dev:verify
+#   npm run dev:verify:lab
 #   ./scripts/hot-dev-bg.sh <command>       # Direct troubleshooting only
 
 set -euo pipefail
@@ -568,6 +571,10 @@ start_hot_dev_child() {
   PULSE_DEV_API_PORT="${PULSE_DEV_API_PORT}" \
   PULSE_DEV_API_URL="${PULSE_DEV_API_URL}" \
   PULSE_DEV_WS_URL="${PULSE_DEV_WS_URL}" \
+  PULSE_DEV_LAN="${PULSE_DEV_LAN:-}" \
+  PULSE_DEV_LAB_AGENTS="${PULSE_DEV_LAB_AGENTS:-}" \
+  BIND_ADDRESS="${BIND_ADDRESS:-}" \
+  ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-}" \
   LOG_LEVEL="${LOG_LEVEL:-}" \
   PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION="${PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION:-}" \
   PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY="${PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY:-}" \
@@ -652,6 +659,10 @@ spawn_detached_supervisor() {
   PULSE_DEV_API_PORT="${PULSE_DEV_API_PORT}" \
   PULSE_DEV_API_URL="${PULSE_DEV_API_URL}" \
   PULSE_DEV_WS_URL="${PULSE_DEV_WS_URL}" \
+  PULSE_DEV_LAN="${PULSE_DEV_LAN:-}" \
+  PULSE_DEV_LAB_AGENTS="${PULSE_DEV_LAB_AGENTS:-}" \
+  BIND_ADDRESS="${BIND_ADDRESS:-}" \
+  ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-}" \
   LOG_LEVEL="${LOG_LEVEL:-}" \
   PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION="${PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION:-}" \
   PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY="${PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY:-}" \
@@ -1087,13 +1098,18 @@ Usage: $(basename "$0") <command>
 
 Managed entrypoints:
   npm run dev
+  npm run dev:lab
   npm run dev:status
+  npm run dev:status:lab
   npm run dev:logs
   npm run dev:stop
   npm run dev:restart
+  npm run dev:restart:lab
   npm run dev:backend-restart
   npm run dev:verify
+  npm run dev:verify:lab
   npm run dev:foreground
+  npm run dev:foreground:lab
 
 Direct troubleshooting subcommands:
   start [--takeover]

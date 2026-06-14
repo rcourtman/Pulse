@@ -132,12 +132,16 @@ on startup unless you override it with `HOT_DEV_AUTH_USER` and
 Canonical local dev commands:
 
 - `npm run dev` — start the managed runtime and reclaim the canonical dev ports if an older unmanaged session is still using them
+- `npm run dev:lab` — start the managed runtime in lab-agent mode, with the frontend/backend exposed on the LAN and Proxmox LXC Docker inventory enabled for installed lab agents
 - `npm run dev:status` — show frontend shell health, proxied API health, direct backend health, and listener ownership
+- `npm run dev:status:lab` — show status using the same LAN-bound lab-agent defaults used by `dev:lab`
 - `npm run dev:verify` — run the managed browser proof pack against the live dev runtime, including runtime recovery, the Patrol blocked-runtime page contract, and the desktop Recovery layout guard while the launcher suppresses unrelated backend rebuild churn for the duration of the proof pack
+- `npm run dev:verify:lab` — run the managed proof pack after applying lab-agent runtime defaults
 - `npm run dev:logs` — tail the managed runtime log
 - `npm run dev:backend-restart` — bounce only the managed backend through the launcher contract
 - `npm run dev:stop` — stop the managed runtime
 - `npm run dev:foreground` — run the foreground hot-reload launcher intentionally if you need an attached shell
+- `npm run dev:foreground:lab` — run the foreground hot-reload launcher with lab-agent defaults for troubleshooting
 
 If `npm run dev:verify` passes, the managed dev shell, proxy path, backend
 health endpoint, browser recovery path, Patrol blocked-runtime page behavior,

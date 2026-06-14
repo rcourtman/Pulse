@@ -60,9 +60,28 @@ hot_dev_lan_enabled() {
     hot_dev_truthy "${PULSE_DEV_LAN:-false}"
 }
 
+hot_dev_lab_agents_enabled() {
+    hot_dev_truthy "${PULSE_DEV_LAB_AGENTS:-false}"
+}
+
+hot_dev_apply_lab_agent_defaults() {
+    if ! hot_dev_lab_agents_enabled; then
+        return 0
+    fi
+
+    PULSE_DEV_LAN=true
+    PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION=true
+    PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true
+
+    export PULSE_DEV_LAB_AGENTS PULSE_DEV_LAN
+    export PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY
+}
+
 hot_dev_configure_network_defaults() {
     FRONTEND_PORT="${FRONTEND_PORT:-${PORT:-5173}}"
     PORT="${PORT:-${FRONTEND_PORT}}"
+
+    hot_dev_apply_lab_agent_defaults
 
     if [[ -z "${LAN_IP:-}" ]]; then
         LAN_IP="$(hot_dev_detect_lan_ip)"
@@ -118,6 +137,7 @@ hot_dev_configure_network_defaults() {
 
     export FRONTEND_PORT PORT
     export LAN_IP ALL_IPS
+    export PULSE_DEV_LAN PULSE_DEV_LAB_AGENTS
     export FRONTEND_DEV_HOST FRONTEND_DEV_PORT
     export PULSE_DEV_API_HOST PULSE_DEV_API_PORT PULSE_DEV_API_URL PULSE_DEV_WS_URL
     export BIND_ADDRESS ALLOWED_ORIGINS

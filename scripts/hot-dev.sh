@@ -18,6 +18,7 @@
 #   PULSE_DEV_API_PORT=7655      Backend API port (default: 7655)
 #   FRONTEND_DEV_PORT=5173       Frontend dev server port (default: 5173)
 #   PULSE_DEV_LAN=true           Expose frontend/backend on the LAN for agent/mobile testing (default: false)
+#   PULSE_DEV_LAB_AGENTS=true    Enable LAN binding and Proxmox LXC Docker inventory for installed lab agents
 #   LOG_LEVEL=debug              Opt into verbose backend logs (default: info)
 #   PULSE_DEV_DISABLE_BACKGROUND_AI=false
 #                                   Allow automatic Patrol/discovery/alert AI in dev
@@ -38,7 +39,9 @@
 #
 # Usage:
 #   npm run dev                             # Canonical managed dev runtime
+#   npm run dev:lab                         # LAN-bound lab-agent runtime
 #   ./scripts/hot-dev.sh                    # Foreground/manual runtime troubleshooting
+#   npm run dev:foreground:lab              # Foreground lab-agent troubleshooting
 #   HOT_DEV_USE_PROD_DATA=true ./scripts/hot-dev.sh  # Foreground/manual runtime with production data
 #
 set -euo pipefail
@@ -357,6 +360,7 @@ PULSE_DEV_DISABLE_BACKGROUND_AI="${PULSE_DEV_DISABLE_BACKGROUND_AI:-true}"
 PULSE_AUTH_USER="$(hot_dev_resolve_auth_user)"
 PULSE_AUTH_PASS="$(hot_dev_resolve_auth_pass)"
 export FRONTEND_PORT PULSE_DEV_API_PORT PORT PULSE_DEV ALLOW_ADMIN_BYPASS PULSE_AUTH_USER PULSE_AUTH_PASS LOG_LEVEL PULSE_DEV_DISABLE_BACKGROUND_AI
+export PULSE_DEV_LAN PULSE_DEV_LAB_AGENTS BIND_ADDRESS ALLOWED_ORIGINS
 export PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS
 
 # Data Directory Setup
@@ -495,6 +499,10 @@ start_backend_process() {
     PULSE_ENCRYPTION_KEY="${PULSE_ENCRYPTION_KEY:-}" \
     ALLOW_ADMIN_BYPASS="${ALLOW_ADMIN_BYPASS:-1}" \
     PULSE_DEV="${PULSE_DEV:-true}" \
+    PULSE_DEV_LAN="${PULSE_DEV_LAN:-}" \
+    PULSE_DEV_LAB_AGENTS="${PULSE_DEV_LAB_AGENTS:-}" \
+    BIND_ADDRESS="${BIND_ADDRESS:-}" \
+    ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-}" \
     PULSE_AUTH_USER="${PULSE_AUTH_USER:-}" \
     PULSE_AUTH_PASS="${PULSE_AUTH_PASS:-}" \
     PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION="${PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION:-}" \

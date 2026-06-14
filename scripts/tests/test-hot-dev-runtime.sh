@@ -133,7 +133,11 @@ test_hot_dev_preserves_proxmox_guest_docker_env() {
   local output
   output="$(sed -n '1,760p' "${HOT_DEV}")"
 
+  assert_contains "hot-dev exports lab-agent mode opt-in" "${output}" "export PULSE_DEV_LAN PULSE_DEV_LAB_AGENTS BIND_ADDRESS ALLOWED_ORIGINS"
   assert_contains "hot-dev exports Proxmox guest Docker detection opt-in" "${output}" "export PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS"
+  assert_contains "backend launch preserves LAN opt-in" "${output}" 'PULSE_DEV_LAN="${PULSE_DEV_LAN:-}"'
+  assert_contains "backend launch preserves lab-agent mode opt-in" "${output}" 'PULSE_DEV_LAB_AGENTS="${PULSE_DEV_LAB_AGENTS:-}"'
+  assert_contains "backend launch preserves backend bind address" "${output}" 'BIND_ADDRESS="${BIND_ADDRESS:-}"'
   assert_contains "backend launch preserves Proxmox guest Docker detection opt-in" "${output}" 'PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION="${PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION:-}"'
   assert_contains "backend launch preserves Proxmox guest Docker inventory opt-in" "${output}" 'PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY="${PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY:-}"'
   assert_contains "backend launch preserves scoped Proxmox guest Docker VMIDs" "${output}" 'PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS="${PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS:-}"'
@@ -201,6 +205,45 @@ test_hot_dev_network_defaults_are_local_first_with_explicit_lan_opt_in() {
   assert_contains "LAN opt-in allows the wildcard dev origin Electron may report" "${output}" "http://0.0.0.0:5173"
 }
 
+test_hot_dev_lab_agent_mode_enables_lan_and_guest_docker_inventory_defaults() {
+  local output
+  output="$(
+    HOT_DEV_RUNTIME_LIB="${HOT_DEV_RUNTIME_LIB}" \
+    bash -c '
+      set -euo pipefail
+      source "${HOT_DEV_RUNTIME_LIB}"
+      unset FRONTEND_PORT PORT FRONTEND_DEV_HOST FRONTEND_DEV_PORT BIND_ADDRESS
+      unset PULSE_DEV_LAN PULSE_DEV_API_HOST PULSE_DEV_API_PORT PULSE_DEV_API_URL PULSE_DEV_WS_URL
+      unset PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY
+      unset ALLOWED_ORIGINS
+      LAN_IP=192.168.50.10
+      ALL_IPS="192.168.50.10 10.10.10.5"
+      PULSE_DEV_LAB_AGENTS=true
+      hot_dev_configure_network_defaults
+      printf "lab_mode=%s\n" "${PULSE_DEV_LAB_AGENTS}"
+      printf "lab_lan=%s\n" "${PULSE_DEV_LAN}"
+      printf "lab_detection=%s\n" "${PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION}"
+      printf "lab_inventory=%s\n" "${PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY}"
+      printf "lab_frontend_host=%s\n" "${FRONTEND_DEV_HOST}"
+      printf "lab_api_host=%s\n" "${PULSE_DEV_API_HOST}"
+      printf "lab_api_url=%s\n" "${PULSE_DEV_API_URL}"
+      printf "lab_bind=%s\n" "${BIND_ADDRESS}"
+      printf "lab_origins=%s\n" "${ALLOWED_ORIGINS}"
+    '
+  )"
+
+  assert_contains "lab-agent mode remains explicitly marked" "${output}" "lab_mode=true"
+  assert_contains "lab-agent mode enables LAN runtime exposure" "${output}" "lab_lan=true"
+  assert_contains "lab-agent mode enables Proxmox guest Docker detection" "${output}" "lab_detection=true"
+  assert_contains "lab-agent mode enables Proxmox guest Docker inventory" "${output}" "lab_inventory=true"
+  assert_contains "lab-agent mode exposes the frontend on all interfaces" "${output}" "lab_frontend_host=0.0.0.0"
+  assert_contains "lab-agent mode targets the detected LAN API host" "${output}" "lab_api_host=192.168.50.10"
+  assert_contains "lab-agent mode derives the LAN API URL" "${output}" "lab_api_url=http://192.168.50.10:7655"
+  assert_contains "lab-agent mode binds the backend on all interfaces" "${output}" "lab_bind=0.0.0.0"
+  assert_contains "lab-agent mode allows detected LAN frontend origins" "${output}" "lab_origins=http://192.168.50.10"
+  assert_contains "lab-agent mode allows the wildcard dev origin Electron may report" "${output}" "http://0.0.0.0:5173"
+}
+
 test_hot_dev_browser_urls_distinguish_bind_and_browser_hosts() {
   local output
   output="$(
@@ -228,6 +271,7 @@ test_hot_dev_keeps_backend_launch_errors_in_debug_log
 test_hot_dev_preserves_proxmox_guest_docker_env
 test_hot_dev_avoids_self_killing_npm_wrapper
 test_hot_dev_network_defaults_are_local_first_with_explicit_lan_opt_in
+test_hot_dev_lab_agent_mode_enables_lan_and_guest_docker_inventory_defaults
 test_hot_dev_browser_urls_distinguish_bind_and_browser_hosts
 
 if (( failures > 0 )); then

@@ -551,26 +551,36 @@ with open(os.environ["PACKAGE_JSON_PATH"], "r", encoding="utf-8") as fh:
 
 for key in [
     "dev",
+    "dev:lab",
     "dev:status",
+    "dev:status:lab",
     "dev:logs",
     "dev:stop",
     "dev:restart",
+    "dev:restart:lab",
     "dev:backend-restart",
     "dev:verify",
+    "dev:verify:lab",
     "dev:foreground",
+    "dev:foreground:lab",
 ]:
     print(f"{key}={scripts.get(key, '')}")
 PY
   )"
 
   assert_contains "root package exposes managed dev start" "${output}" "dev=./scripts/hot-dev-bg.sh start --takeover"
+  assert_contains "root package exposes lab-agent dev start" "${output}" "dev:lab=PULSE_DEV_LAB_AGENTS=true ./scripts/hot-dev-bg.sh start --takeover"
   assert_contains "root package exposes managed dev status" "${output}" "dev:status=./scripts/hot-dev-bg.sh status"
+  assert_contains "root package exposes lab-agent dev status" "${output}" "dev:status:lab=PULSE_DEV_LAB_AGENTS=true ./scripts/hot-dev-bg.sh status"
   assert_contains "root package exposes managed dev logs" "${output}" "dev:logs=./scripts/hot-dev-bg.sh logs"
   assert_contains "root package exposes managed dev stop" "${output}" "dev:stop=./scripts/hot-dev-bg.sh stop"
   assert_contains "root package exposes managed dev restart" "${output}" "dev:restart=./scripts/hot-dev-bg.sh restart --takeover"
+  assert_contains "root package exposes lab-agent dev restart" "${output}" "dev:restart:lab=PULSE_DEV_LAB_AGENTS=true ./scripts/hot-dev-bg.sh restart --takeover"
   assert_contains "root package exposes managed backend restart" "${output}" "dev:backend-restart=./scripts/hot-dev-bg.sh backend-restart"
   assert_contains "root package exposes managed dev verify" "${output}" "dev:verify=./scripts/hot-dev-bg.sh verify --takeover"
+  assert_contains "root package exposes lab-agent dev verify" "${output}" "dev:verify:lab=PULSE_DEV_LAB_AGENTS=true ./scripts/hot-dev-bg.sh verify --takeover"
   assert_contains "root package keeps foreground escape hatch" "${output}" "dev:foreground=./scripts/hot-dev.sh"
+  assert_contains "root package exposes lab-agent foreground escape hatch" "${output}" "dev:foreground:lab=PULSE_DEV_LAB_AGENTS=true ./scripts/hot-dev.sh"
 }
 
 test_frontend_package_exposes_managed_runtime_entrypoints() {
@@ -586,13 +596,18 @@ with open(os.environ["PACKAGE_JSON_PATH"], "r", encoding="utf-8") as fh:
 
 for key in [
     "dev",
+    "dev:lab",
     "dev:logs",
     "dev:restart",
+    "dev:restart:lab",
     "dev:backend-restart",
     "dev:status",
+    "dev:status:lab",
     "dev:stop",
     "dev:verify",
+    "dev:verify:lab",
     "dev:foreground",
+    "dev:foreground:lab",
     "dev:frontend-only",
 ]:
     print(f"{key}={scripts.get(key, '')}")
@@ -600,13 +615,18 @@ PY
   )"
 
   assert_contains "frontend package delegates managed dev start to repo-root wrapper" "${output}" "dev=npm --prefix .. run dev"
+  assert_contains "frontend package delegates lab-agent dev start to repo-root wrapper" "${output}" "dev:lab=npm --prefix .. run dev:lab"
   assert_contains "frontend package delegates managed dev logs to repo-root wrapper" "${output}" "dev:logs=npm --prefix .. run dev:logs"
   assert_contains "frontend package delegates managed dev restart to repo-root wrapper" "${output}" "dev:restart=npm --prefix .. run dev:restart"
+  assert_contains "frontend package delegates lab-agent dev restart to repo-root wrapper" "${output}" "dev:restart:lab=npm --prefix .. run dev:restart:lab"
   assert_contains "frontend package delegates managed backend restart to repo-root wrapper" "${output}" "dev:backend-restart=npm --prefix .. run dev:backend-restart"
   assert_contains "frontend package delegates managed dev status to repo-root wrapper" "${output}" "dev:status=npm --prefix .. run dev:status"
+  assert_contains "frontend package delegates lab-agent dev status to repo-root wrapper" "${output}" "dev:status:lab=npm --prefix .. run dev:status:lab"
   assert_contains "frontend package delegates managed dev stop to repo-root wrapper" "${output}" "dev:stop=npm --prefix .. run dev:stop"
   assert_contains "frontend package delegates managed dev verify to repo-root wrapper" "${output}" "dev:verify=npm --prefix .. run dev:verify"
+  assert_contains "frontend package delegates lab-agent dev verify to repo-root wrapper" "${output}" "dev:verify:lab=npm --prefix .. run dev:verify:lab"
   assert_contains "frontend package delegates foreground escape hatch to repo-root wrapper" "${output}" "dev:foreground=npm --prefix .. run dev:foreground"
+  assert_contains "frontend package delegates lab-agent foreground escape hatch to repo-root wrapper" "${output}" "dev:foreground:lab=npm --prefix .. run dev:foreground:lab"
   assert_contains "frontend package keeps explicit frontend-only escape hatch" "${output}" "dev:frontend-only=vite"
 }
 
@@ -695,13 +715,18 @@ test_makefile_routes_managed_runtime_through_npm() {
   output="$(cat "${ROOT_DIR}/Makefile")"
 
   assert_contains "make dev routes through npm wrapper" "${output}" $'dev:\n\tnpm run dev'
+  assert_contains "make dev-lab routes through npm wrapper" "${output}" $'dev-lab:\n\tnpm run dev:lab'
   assert_contains "make dev-status routes through npm wrapper" "${output}" $'dev-status:\n\tnpm run dev:status'
+  assert_contains "make dev-status-lab routes through npm wrapper" "${output}" $'dev-status-lab:\n\tnpm run dev:status:lab'
   assert_contains "make dev-logs routes through npm wrapper" "${output}" $'dev-logs:\n\tnpm run dev:logs'
   assert_contains "make dev-stop routes through npm wrapper" "${output}" $'dev-stop:\n\tnpm run dev:stop'
   assert_contains "make dev-restart routes through npm wrapper" "${output}" $'dev-restart:\n\tnpm run dev:restart'
+  assert_contains "make dev-restart-lab routes through npm wrapper" "${output}" $'dev-restart-lab:\n\tnpm run dev:restart:lab'
   assert_contains "make dev-backend-restart routes through npm wrapper" "${output}" $'dev-backend-restart:\n\tnpm run dev:backend-restart'
   assert_contains "make dev-verify routes through npm wrapper" "${output}" $'dev-verify:\n\tnpm run dev:verify'
+  assert_contains "make dev-verify-lab routes through npm wrapper" "${output}" $'dev-verify-lab:\n\tnpm run dev:verify:lab'
   assert_contains "make dev-foreground routes through npm wrapper" "${output}" $'dev-foreground:\n\tnpm run dev:foreground'
+  assert_contains "make dev-foreground-lab routes through npm wrapper" "${output}" $'dev-foreground-lab:\n\tnpm run dev:foreground:lab'
   assert_contains "make dev-hot routes through foreground wrapper" "${output}" $'dev-hot:\n\tnpm run dev:foreground'
 }
 
@@ -717,7 +742,9 @@ test_hot_dev_script_advertises_foreground_escape_hatch() {
 
   assert_contains "hot-dev header identifies foreground escape hatch" "${output}" "hot-dev.sh - Foreground Pulse dev runtime escape hatch"
   assert_contains "hot-dev usage points to managed runtime first" "${output}" "npm run dev                             # Canonical managed dev runtime"
+  assert_contains "hot-dev usage advertises lab-agent managed runtime" "${output}" "npm run dev:lab                         # LAN-bound lab-agent runtime"
   assert_contains "hot-dev usage reserves direct script for manual troubleshooting" "${output}" "./scripts/hot-dev.sh                    # Foreground/manual runtime troubleshooting"
+  assert_contains "hot-dev usage advertises lab-agent foreground troubleshooting" "${output}" "npm run dev:foreground:lab              # Foreground lab-agent troubleshooting"
   assert_not_contains "hot-dev usage no longer claims standard dev mode" "${output}" "Standard dev mode"
 }
 
@@ -871,6 +898,9 @@ test_hot_dev_bg_script_advertises_managed_entrypoint() {
   output="$(cat "${ROOT_DIR}/scripts/hot-dev-bg.sh")"
 
   assert_contains "hot-dev-bg usage points to managed runtime first" "${output}" "npm run dev                             # Canonical managed dev runtime"
+  assert_contains "hot-dev-bg usage advertises lab-agent managed runtime" "${output}" "npm run dev:lab                         # LAN-bound lab-agent runtime"
+  assert_contains "hot-dev-bg usage advertises lab-agent restart" "${output}" "npm run dev:restart:lab"
+  assert_contains "hot-dev-bg usage advertises lab-agent verify" "${output}" "npm run dev:verify:lab"
   assert_contains "hot-dev-bg documents direct launcher as troubleshooting only" "${output}" "./scripts/hot-dev-bg.sh <command>       # Direct troubleshooting only"
   assert_contains "hot-dev-bg sources shared runtime helpers" "${output}" 'source "${SCRIPT_DIR}/lib/hot-dev-runtime.sh"'
   assert_contains "hot-dev-bg uses shared network defaults" "${output}" "hot_dev_configure_network_defaults"
@@ -889,6 +919,9 @@ test_hot_dev_bg_preserves_proxmox_guest_docker_env() {
   assert_contains "hot-dev-bg child preserves Proxmox guest Docker detection opt-in" "${output}" 'PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION="${PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION:-}"'
   assert_contains "hot-dev-bg child preserves Proxmox guest Docker inventory opt-in" "${output}" 'PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY="${PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY:-}"'
   assert_contains "hot-dev-bg child preserves scoped Proxmox guest Docker VMIDs" "${output}" 'PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS="${PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS:-}"'
+  assert_contains "hot-dev-bg child preserves lab-agent mode" "${output}" 'PULSE_DEV_LAB_AGENTS="${PULSE_DEV_LAB_AGENTS:-}"'
+  assert_contains "hot-dev-bg child preserves LAN opt-in" "${output}" 'PULSE_DEV_LAN="${PULSE_DEV_LAN:-}"'
+  assert_contains "hot-dev-bg child preserves backend bind address" "${output}" 'BIND_ADDRESS="${BIND_ADDRESS:-}"'
   assert_contains "hot-dev-bg child preserves debug log level" "${output}" 'LOG_LEVEL="${LOG_LEVEL:-}"'
   assert_contains "hot-dev-bg restart takeover clears launchd before env-sensitive relaunch" "${output}" 'stop_launchd_hot_dev_job'
 }
@@ -1032,7 +1065,10 @@ test_hot_dev_bg_usage_prefers_managed_wrappers() {
 
   assert_contains "hot-dev-bg usage shows managed entrypoints heading" "${output}" "Managed entrypoints:"
   assert_contains "hot-dev-bg usage advertises npm dev wrapper" "${output}" "npm run dev"
+  assert_contains "hot-dev-bg usage advertises lab-agent dev wrapper" "${output}" "npm run dev:lab"
+  assert_contains "hot-dev-bg usage advertises lab-agent status wrapper" "${output}" "npm run dev:status:lab"
   assert_contains "hot-dev-bg usage advertises npm verify wrapper" "${output}" "npm run dev:verify"
+  assert_contains "hot-dev-bg usage advertises lab-agent verify wrapper" "${output}" "npm run dev:verify:lab"
   assert_contains "hot-dev-bg usage labels raw commands as troubleshooting-only" "${output}" "Direct troubleshooting subcommands:"
   assert_contains "hot-dev-bg usage retains direct start subcommand" "${output}" "start [--takeover]"
 }
