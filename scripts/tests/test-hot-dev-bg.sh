@@ -710,6 +710,36 @@ PY
   assert_contains "go.mod drops legacy docker module" "${output}" "go.mod:uses_legacy_docker=False"
 }
 
+test_frontend_vite_dependency_optimizer_matches_build_target() {
+  local output
+  output="$(
+    FRONTEND_VITE_CONFIG_PATH="${FRONTEND_VITE_CONFIG}" python3 - <<'PY'
+import os
+import re
+from pathlib import Path
+
+source = Path(os.environ["FRONTEND_VITE_CONFIG_PATH"]).read_text(encoding="utf-8")
+build_target_esnext = "target: 'esnext'" in source
+print(f"build_target_esnext={build_target_esnext}")
+print(
+    "optimize_deps_target_esnext="
+    + str(
+        bool(
+            re.search(
+                r"optimizeDeps\s*:\s*\{\s*esbuildOptions\s*:\s*\{\s*target\s*:\s*['\"]esnext['\"]",
+                source,
+                re.S,
+            )
+        )
+    )
+)
+PY
+  )"
+
+  assert_contains "frontend build target stays modern ESM" "${output}" "build_target_esnext=True"
+  assert_contains "frontend dependency optimizer target matches build target" "${output}" "optimize_deps_target_esnext=True"
+}
+
 test_makefile_routes_managed_runtime_through_npm() {
   local output
   output="$(cat "${ROOT_DIR}/Makefile")"
@@ -1608,6 +1638,7 @@ main() {
   test_root_package_exposes_managed_runtime_entrypoints
   test_frontend_package_exposes_managed_runtime_entrypoints
   test_dev_runtime_dependency_manifests_are_governed
+  test_frontend_vite_dependency_optimizer_matches_build_target
   test_makefile_routes_managed_runtime_through_npm
   test_hot_dev_script_advertises_foreground_escape_hatch
   test_hot_dev_script_ignores_test_only_backend_churn
