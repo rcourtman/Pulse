@@ -166,6 +166,31 @@ func TestPatrolService_TriggerPatrolForAlert_RespectsAlertTriggerConfig(t *testi
 	}
 }
 
+func TestPatrolService_TriggerPatrolForAlert_RespectsRuntimeBlock(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	ps.SetEventTriggerConfig(PatrolEventTriggerConfig{
+		AlertTriggersEnabled:   true,
+		AnomalyTriggersEnabled: true,
+	})
+	ps.SetEventTriggerBlock(BackgroundAutomationEventTriggerBlock())
+
+	tm := NewTriggerManager(TriggerManagerConfig{MaxPendingTriggers: 1})
+	ps.SetTriggerManager(tm)
+
+	ps.TriggerPatrolForAlert(&alerts.Alert{ID: "a3", Type: "cpu", ResourceID: "node1"})
+	if tm.GetPendingCount() != 0 {
+		t.Fatalf("expected alert-driven patrol to be skipped when event triggers are blocked by runtime policy")
+	}
+
+	status := tm.GetStatus()
+	if !status.AlertTriggersEnabled || !status.AnomalyTriggersEnabled {
+		t.Fatal("expected runtime block not to rewrite configured trigger preferences")
+	}
+	if !status.EventTriggersBlocked {
+		t.Fatal("expected trigger manager status to expose event trigger runtime block")
+	}
+}
+
 func TestPatrolService_RunTargetedPatrol_Disabled(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	ps.config.Enabled = false

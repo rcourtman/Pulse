@@ -1922,6 +1922,11 @@ deriving an older display status from `workflowStatusHistory`.
    browser state owner and `internal/api/ai_handlers.go` must clear stale
    full-mode unlock state while clamping autonomy back to `monitor`, so paid
    remediation permission cannot survive through a free runtime save.
+   Event-triggered Patrol runtime policy is also part of this gate: when local
+   development background automation or another runtime policy pauses automatic
+   alert/anomaly-triggered checks, `internal/ai` must expose an explicit
+   event-trigger block reason/message on trigger status while preserving the
+   operator's configured alert/anomaly trigger preferences.
    Patrol update-safety observation is part of the same read-state runtime
    boundary: Docker host/container snapshots used to detect image-digest
    divergence must be sourced from canonical `ReadState.DockerHosts()` views,
@@ -3983,7 +3988,10 @@ That same runtime contract also owns scoped trigger source policy. Alert- and
 anomaly-triggered Patrol work are independent runtime gates; the canonical AI
 settings model must preserve them separately, and runtime status must expose
 which scoped sources are enabled plus whether queued scoped work or busy-mode
-acceleration is currently active.
+acceleration is currently active. Runtime policy blocks, including the local
+development background-automation guard, must be represented as an explicit
+event-trigger block on the Patrol trigger status rather than by rewriting the
+operator's alert/anomaly trigger preferences to disabled.
 That same runtime boundary also owns which Patrol work counts toward
 full-patrol cadence gates. Community-tier or other full-run limits must key
 off completed full sweeps only; recent scoped or verification activity may

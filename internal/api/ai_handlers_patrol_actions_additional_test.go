@@ -173,6 +173,49 @@ func TestHandleGetPatrolStatus_ExposesScopedTriggerStatus(t *testing.T) {
 	if !resp.TriggerStatus.AnomalyTriggersEnabled {
 		t.Fatal("expected anomaly trigger source to report enabled")
 	}
+	if resp.TriggerStatus.EventTriggersBlocked {
+		t.Fatal("expected trigger status not to report a runtime block")
+	}
+}
+
+func TestHandleGetPatrolStatus_ExposesEventTriggerRuntimeBlock(t *testing.T) {
+	handler, patrol, _, _ := setupAIHandlerWithPatrol(t)
+	patrol.SetTriggerManager(ai.NewTriggerManager(ai.DefaultTriggerManagerConfig()))
+	patrol.SetEventTriggerConfig(ai.PatrolEventTriggerConfig{
+		AlertTriggersEnabled:   true,
+		AnomalyTriggersEnabled: true,
+	})
+	patrol.SetEventTriggerBlock(ai.BackgroundAutomationEventTriggerBlock())
+
+	req := newLoopbackRequest(http.MethodGet, "/api/ai/patrol/status", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleGetPatrolStatus(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+
+	var resp PatrolStatusResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.TriggerStatus == nil {
+		t.Fatal("expected trigger_status to be populated")
+	}
+	if !resp.TriggerStatus.EventTriggersBlocked {
+		t.Fatal("expected trigger status to expose runtime block")
+	}
+	if resp.TriggerStatus.EventTriggersBlockedReason != ai.EventTriggerBlockReasonBackgroundAutomationDisabled {
+		t.Fatalf("event trigger block reason = %q", resp.TriggerStatus.EventTriggersBlockedReason)
+	}
+	if resp.TriggerStatus.EventTriggersBlockedMessage == "" {
+		t.Fatal("expected user-facing event trigger block message")
+	}
+	if !resp.TriggerStatus.AlertTriggersEnabled || !resp.TriggerStatus.AnomalyTriggersEnabled {
+		t.Fatal("expected runtime block not to rewrite configured trigger preferences")
+	}
 }
 
 func TestPatrolActionHandlers_NoAIService_ReturnStructuredServiceUnavailable(t *testing.T) {

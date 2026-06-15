@@ -455,6 +455,44 @@ func TestTriggerPatrol_RejectsDisabledAnomalyTriggerSource(t *testing.T) {
 	}
 }
 
+func TestTriggerPatrol_RejectsBlockedEventTriggerRuntime(t *testing.T) {
+	tm := NewTriggerManager(DefaultTriggerManagerConfig())
+	tm.SetEventTriggerConfig(PatrolEventTriggerConfig{
+		AlertTriggersEnabled:   true,
+		AnomalyTriggersEnabled: true,
+	})
+	tm.SetEventTriggerBlock(BackgroundAutomationEventTriggerBlock())
+
+	if accepted := tm.TriggerPatrol(PatrolScope{
+		Priority:    triggerPriorityAlertFired,
+		Reason:      TriggerReasonAlertFired,
+		ResourceIDs: []string{"res-1"},
+	}); accepted {
+		t.Fatal("expected alert-driven patrol trigger to be rejected when runtime policy blocks event triggers")
+	}
+	if accepted := tm.TriggerPatrol(PatrolScope{
+		Priority:    triggerPriorityManual,
+		Reason:      TriggerReasonManual,
+		ResourceIDs: []string{"res-1"},
+	}); !accepted {
+		t.Fatal("expected manual patrol trigger to bypass event trigger runtime block")
+	}
+
+	status := tm.GetStatus()
+	if !status.EventTriggersBlocked {
+		t.Fatal("expected trigger status to expose runtime block")
+	}
+	if status.EventTriggersBlockedReason != EventTriggerBlockReasonBackgroundAutomationDisabled {
+		t.Fatalf("event trigger block reason = %q", status.EventTriggersBlockedReason)
+	}
+	if status.EventTriggersBlockedMessage == "" {
+		t.Fatal("expected user-facing event trigger block message")
+	}
+	if !status.AlertTriggersEnabled || !status.AnomalyTriggersEnabled {
+		t.Fatal("expected runtime block not to rewrite configured trigger preferences")
+	}
+}
+
 // --- Scope factory functions ---
 
 func TestAlertTriggeredPatrolScope(t *testing.T) {

@@ -187,6 +187,9 @@ export interface PatrolTriggerStatus {
   is_busy_mode: boolean;
   alert_triggers_enabled: boolean;
   anomaly_triggers_enabled: boolean;
+  event_triggers_blocked?: boolean;
+  event_triggers_blocked_reason?: string;
+  event_triggers_blocked_message?: string;
 }
 
 export interface FindingsTrustSummary {

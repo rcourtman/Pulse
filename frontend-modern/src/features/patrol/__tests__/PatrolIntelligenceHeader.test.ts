@@ -42,6 +42,12 @@ describe('PatrolIntelligenceHeader', () => {
     ).toEqual(['patrol_autonomy_pro_required · license_required']);
   });
 
+  it('keeps trigger runtime status in the always-visible header chrome', () => {
+    expect(headerSource).toContain('getPatrolTriggerStatusSummary');
+    expect(headerSource).toContain('state.patrolStatus()?.trigger_status');
+    expect(headerSource).toContain('Trigger status:');
+  });
+
   it('keeps trust counters out of the page header chrome', () => {
     // The Patrol assessment strip owns the default status readout. The header
     // should stay focused on title, recency, and controls rather than adding

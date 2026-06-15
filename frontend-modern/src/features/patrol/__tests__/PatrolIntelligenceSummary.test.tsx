@@ -74,6 +74,35 @@ describe('PatrolIntelligenceSummary', () => {
     ).toBeInTheDocument();
   });
 
+  it('explains runtime-blocked event triggers in the compact assessment strip', () => {
+    const patrolState = {
+      ...createPatrolState(),
+      patrolStatus: () => ({
+        trigger_status: {
+          running: false,
+          pending_triggers: 0,
+          current_interval_ms: 300000,
+          recent_events: 0,
+          is_busy_mode: false,
+          alert_triggers_enabled: true,
+          anomaly_triggers_enabled: true,
+          event_triggers_blocked: true,
+          event_triggers_blocked_reason: 'background_automation_disabled',
+          event_triggers_blocked_message:
+            'Automatic Patrol checks from alerts and anomalies are paused by the local development safety guard. Manual Patrol still works.',
+        },
+      }),
+    } as unknown as PatrolIntelligenceState;
+
+    render(() => <PatrolIntelligenceSummary state={patrolState} />);
+
+    expect(
+      screen.getByText(
+        'Trigger mode: Automatic Patrol checks from alerts and anomalies are paused by the local development safety guard. Manual Patrol still works.',
+      ),
+    ).toBeInTheDocument();
+  });
+
   it('does not surface disabled run actions on the compact assessment strip', () => {
     const patrolState = {
       ...createPatrolState(),

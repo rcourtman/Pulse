@@ -1638,6 +1638,12 @@ the canonical monitored-system blocked payload.
 5. Keep `/api/resources` policy metadata aligned across backend payload tests and canonical frontend resource consumers whenever sensitivity or routing fields change
 6. Keep Patrol status payloads explicit enough that the frontend can present blocked runtime state without treating a previously healthy summary snapshot as current runtime truth, and keep Patrol recency semantics explicit in transport by reserving `last_patrol_at` for completed full patrols while exposing any Patrol activity separately through `last_activity_at`
    and the scoped-trigger status payload on that same Patrol status surface, so queued scoped work, busy-mode state, and per-source enablement (`alert` versus `anomaly`) stay transport-backed instead of being inferred by page-local heuristics
+   and the event-trigger runtime-block payload on that same scoped-trigger
+   status surface, so `event_triggers_blocked`,
+   `event_triggers_blocked_reason`, and
+   `event_triggers_blocked_message` explain effective runtime policy without
+   making the transport look like the operator turned alert or anomaly triggers
+   off
    and the split Patrol trigger settings contract, so `patrol_alert_triggers_enabled` and `patrol_anomaly_triggers_enabled` are the canonical AI settings fields while legacy `patrol_event_triggers_enabled` remains a compatibility aggregate rather than the primary control surface
    and the retired quickstart compatibility contract, so `/api/settings/ai` and
    `/api/ai/patrol/status` no longer carry `quickstart_credits_remaining`,
@@ -4751,6 +4757,13 @@ provider and runtime availability, and it must clear stale managed-credit block
 metadata once provider or local-model configuration returns, so the Patrol
 status endpoint cannot leave Patrol looking healthy or paused based on an
 out-of-date last-run artifact.
+`PatrolStatusResponse.trigger_status` also separates configured scoped trigger
+source preferences from effective runtime policy. `alert_triggers_enabled` and
+`anomaly_triggers_enabled` describe the operator-controlled source gates, while
+`event_triggers_blocked`, `event_triggers_blocked_reason`, and
+`event_triggers_blocked_message` describe a runtime policy pause such as the
+local development background-automation guard. Runtime policy must not make the
+transport look like the operator turned alert or anomaly triggers off.
 Patrol mutate endpoints that depend on the background service must also fail
 closed with `503 Service Unavailable` when AI service initialization is absent
 rather than dereferencing a nil service and crashing before a contract response

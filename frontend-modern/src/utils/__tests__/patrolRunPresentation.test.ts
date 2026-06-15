@@ -189,6 +189,26 @@ describe('patrolRunPresentation', () => {
     ).toBe('4 queued · busy mode · anomalies off');
   });
 
+  it('surfaces runtime-blocked event triggers before compact trigger details', () => {
+    expect(
+      getPatrolTriggerStatusSummary({
+        running: true,
+        pending_triggers: 4,
+        current_interval_ms: 300000,
+        recent_events: 6,
+        is_busy_mode: true,
+        alert_triggers_enabled: true,
+        anomaly_triggers_enabled: true,
+        event_triggers_blocked: true,
+        event_triggers_blocked_reason: 'background_automation_disabled',
+        event_triggers_blocked_message:
+          'Automatic Patrol checks from alerts and anomalies are paused by the local development safety guard. Manual Patrol still works.',
+      }),
+    ).toBe(
+      'Automatic Patrol checks from alerts and anomalies are paused by the local development safety guard. Manual Patrol still works.',
+    );
+  });
+
   it('expresses scoped run coverage against the effective scope', () => {
     expect(getPatrolRunCoverageSummary(scopedCoverageRun)).toBe('Checked 1 of 2 scoped resources');
     expect(getPatrolRunResourcesHeading(scopedCoverageRun)).toBe(

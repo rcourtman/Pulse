@@ -417,6 +417,66 @@ describe('PatrolStatusBar', () => {
     ).toBeInTheDocument();
   });
 
+  it('surfaces runtime-blocked event triggers in the activity bar', async () => {
+    getPatrolRunHistoryMock.mockResolvedValue([
+      {
+        id: 'run-latest',
+        started_at: '2026-03-12T10:00:00Z',
+        completed_at: '2026-03-12T10:01:00Z',
+        duration_ms: 60000,
+        type: 'patrol',
+        resources_checked: 1,
+        nodes_checked: 0,
+        guests_checked: 0,
+        docker_checked: 0,
+        storage_checked: 0,
+        hosts_checked: 0,
+        truenas_checked: 0,
+        pbs_checked: 0,
+        pmg_checked: 0,
+        kubernetes_checked: 0,
+        new_findings: 0,
+        existing_findings: 0,
+        rejected_findings: 0,
+        resolved_findings: 0,
+        auto_fix_count: 0,
+        findings_summary: 'ok',
+        finding_ids: [],
+        error_count: 0,
+        status: 'healthy',
+        triage_flags: 0,
+        tool_call_count: 0,
+      },
+    ]);
+
+    render(() => (
+      <PatrolStatusBar
+        refreshTrigger={1}
+        triggerStatus={{
+          running: true,
+          pending_triggers: 0,
+          current_interval_ms: 300000,
+          recent_events: 0,
+          is_busy_mode: false,
+          alert_triggers_enabled: true,
+          anomaly_triggers_enabled: true,
+          event_triggers_blocked: true,
+          event_triggers_blocked_reason: 'background_automation_disabled',
+          event_triggers_blocked_message:
+            'Automatic Patrol checks from alerts and anomalies are paused by the local development safety guard. Manual Patrol still works.',
+        }}
+      />
+    ));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          'Trigger mode: Automatic Patrol checks from alerts and anomalies are paused by the local development safety guard. Manual Patrol still works.',
+        ),
+      ).toBeInTheDocument();
+    });
+  });
+
   it('updates scoped trigger status when trigger data arrives after the initial render', async () => {
     getPatrolRunHistoryMock.mockResolvedValue([
       {

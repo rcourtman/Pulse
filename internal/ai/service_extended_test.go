@@ -860,6 +860,7 @@ func TestService_StartPatrolHonorsDevBackgroundAIGuard(t *testing.T) {
 
 	svc := NewService(nil, nil)
 	patrol := NewPatrolService(svc, nil)
+	patrol.SetTriggerManager(NewTriggerManager(DefaultTriggerManagerConfig()))
 	svc.patrolService = patrol
 
 	alertAnalyzer := &mockAlertAnalyzer{enabled: true}
@@ -887,6 +888,14 @@ func TestService_StartPatrolHonorsDevBackgroundAIGuard(t *testing.T) {
 	}
 	if status := patrol.GetStatus(); status.NextPatrolAt != nil {
 		t.Fatalf("expected dev background AI guard to avoid scheduling patrol, got %v", status.NextPatrolAt)
+	} else if status.TriggerStatus == nil {
+		t.Fatal("expected dev background AI guard to expose trigger status")
+	} else if !status.TriggerStatus.EventTriggersBlocked {
+		t.Fatal("expected dev background AI guard to expose event trigger runtime block")
+	} else if status.TriggerStatus.EventTriggersBlockedReason != EventTriggerBlockReasonBackgroundAutomationDisabled {
+		t.Fatalf("unexpected event trigger block reason: %q", status.TriggerStatus.EventTriggersBlockedReason)
+	} else if !status.TriggerStatus.AlertTriggersEnabled || !status.TriggerStatus.AnomalyTriggersEnabled {
+		t.Fatal("expected dev background AI guard not to rewrite configured trigger preferences")
 	}
 }
 

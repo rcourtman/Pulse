@@ -17,6 +17,7 @@ import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentat
 import { formatRelativeTime } from '@/utils/format';
 import { groupModelsByProvider } from '@/utils/patrolFormat';
 import { getPatrolPageHeaderMeta } from '@/utils/patrolPagePresentation';
+import { getPatrolTriggerStatusSummary } from '@/utils/patrolRunPresentation';
 import { buildPatrolScheduleOptions } from '@/utils/aiPatrolSchedulePresentation';
 import { getPatrolRuntimePresentation } from '@/utils/patrolRuntimePresentation';
 import { getPatrolRecencyPresentation } from '@/utils/patrolSummaryPresentation';
@@ -71,6 +72,9 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
       lastPatrolAt: state.patrolStatus()?.last_patrol_at,
       lastActivityAt: state.patrolStatus()?.last_activity_at,
     }),
+  );
+  const triggerStatusSummary = createMemo(() =>
+    getPatrolTriggerStatusSummary(state.patrolStatus()?.trigger_status),
   );
   const patrolModelStale = createMemo(() => {
     const model = state.patrolModel();
@@ -189,6 +193,12 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
           />
           <span class="text-sm font-medium text-base-content">{runtimePresentation().label}</span>
         </div>
+
+        <Show when={triggerStatusSummary()}>
+          <span class="max-w-full text-xs leading-5 text-muted">
+            Trigger status: {triggerStatusSummary()}
+          </span>
+        </Show>
 
         <div class="flex flex-wrap items-center gap-2 sm:ml-auto">
           <button

@@ -602,9 +602,14 @@ func (p *PatrolService) SetForecastProvider(provider ForecastProvider) {
 // the scheduled patrol loop.
 func (p *PatrolService) SetTriggerManager(tm *TriggerManager) {
 	p.mu.Lock()
-	defer p.mu.Unlock()
 	p.triggerManager = tm
+	eventTriggerConfig := p.eventTriggerConfig
+	eventTriggerBlock := p.eventTriggerBlock
+	p.mu.Unlock()
+
 	if tm != nil {
+		tm.SetEventTriggerConfig(eventTriggerConfig)
+		tm.SetEventTriggerBlock(eventTriggerBlock)
 		log.Info().Msg("AI Patrol: Trigger manager set for event-driven patrol")
 	}
 }
@@ -625,6 +630,19 @@ func (p *PatrolService) SetEventTriggerConfig(cfg PatrolEventTriggerConfig) {
 	p.mu.Unlock()
 	if tm != nil {
 		tm.SetEventTriggerConfig(cfg)
+	}
+}
+
+// SetEventTriggerBlock pauses event-driven scoped patrols for runtime policy
+// reasons without changing the user's configured trigger source preferences.
+func (p *PatrolService) SetEventTriggerBlock(block PatrolEventTriggerBlock) {
+	p.mu.Lock()
+	p.eventTriggerBlock = block
+	tm := p.triggerManager
+	p.mu.Unlock()
+
+	if tm != nil {
+		tm.SetEventTriggerBlock(block)
 	}
 }
 

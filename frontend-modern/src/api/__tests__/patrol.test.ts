@@ -128,6 +128,10 @@ describe('patrol api', () => {
         is_busy_mode: true,
         alert_triggers_enabled: true,
         anomaly_triggers_enabled: false,
+        event_triggers_blocked: true,
+        event_triggers_blocked_reason: 'background_automation_disabled',
+        event_triggers_blocked_message:
+          'Automatic Patrol checks from alerts and anomalies are paused by the local development safety guard. Manual Patrol still works.',
       },
     } as any);
 
@@ -140,6 +144,8 @@ describe('patrol api', () => {
         pending_triggers: 2,
         is_busy_mode: true,
         anomaly_triggers_enabled: false,
+        event_triggers_blocked: true,
+        event_triggers_blocked_reason: 'background_automation_disabled',
       },
     });
   });

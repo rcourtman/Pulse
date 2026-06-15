@@ -18,6 +18,28 @@ type PatrolEventTriggerConfig struct {
 	AnomalyTriggersEnabled bool `json:"anomaly_triggers_enabled"`
 }
 
+const EventTriggerBlockReasonBackgroundAutomationDisabled = "background_automation_disabled"
+
+const eventTriggerBlockMessageBackgroundAutomationDisabled = "Automatic Patrol checks from alerts and anomalies are paused by the local development safety guard. Manual Patrol still works."
+
+// PatrolEventTriggerBlock explains why event-driven trigger sources are paused
+// even when the user's scoped trigger preferences remain enabled.
+type PatrolEventTriggerBlock struct {
+	Reason  string
+	Message string
+}
+
+func (block PatrolEventTriggerBlock) active() bool {
+	return block.Reason != ""
+}
+
+func BackgroundAutomationEventTriggerBlock() PatrolEventTriggerBlock {
+	return PatrolEventTriggerBlock{
+		Reason:  EventTriggerBlockReasonBackgroundAutomationDisabled,
+		Message: eventTriggerBlockMessageBackgroundAutomationDisabled,
+	}
+}
+
 // Trigger priority values control which scoped patrol runs first when multiple are queued.
 const (
 	triggerPriorityManual       = 100 // User-initiated patrols run first
@@ -130,6 +152,7 @@ type TriggerManager struct {
 	// Event trigger gating - event-driven reasons are checked against the per-source
 	// scoped patrol trigger configuration.
 	eventTriggerConfig PatrolEventTriggerConfig
+	eventTriggerBlock  PatrolEventTriggerBlock
 
 	// Callback to execute patrol
 	onTrigger func(ctx context.Context, scope PatrolScope)
@@ -355,6 +378,25 @@ func (tm *TriggerManager) SetEventTriggerConfig(cfg PatrolEventTriggerConfig) {
 		Msg("patrol event trigger config updated")
 }
 
+// SetEventTriggerBlock pauses event-driven triggers without changing the user's
+// configured trigger source preferences.
+func (tm *TriggerManager) SetEventTriggerBlock(block PatrolEventTriggerBlock) {
+	tm.mu.Lock()
+	wasBlocked := tm.eventTriggerBlock.active()
+	tm.eventTriggerBlock = block
+	isBlocked := tm.eventTriggerBlock.active()
+	tm.mu.Unlock()
+
+	switch {
+	case isBlocked:
+		log.Info().
+			Str("reason", block.Reason).
+			Msg("patrol event triggers blocked by runtime policy")
+	case wasBlocked:
+		log.Info().Msg("patrol event trigger runtime block cleared")
+	}
+}
+
 // SetEventTriggersEnabled is a compatibility wrapper for the legacy aggregate toggle.
 func (tm *TriggerManager) SetEventTriggersEnabled(enabled bool) {
 	tm.SetEventTriggerConfig(PatrolEventTriggerConfig{
@@ -390,6 +432,16 @@ func (cfg PatrolEventTriggerConfig) allows(reason TriggerReason) bool {
 func (tm *TriggerManager) TriggerPatrol(scope PatrolScope) bool {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
+
+	// Runtime policy blocks event-driven triggers without rewriting the
+	// configured alert/anomaly source preferences shown to the user.
+	if isEventDrivenTrigger(scope.Reason) && tm.eventTriggerBlock.active() {
+		log.Debug().
+			Str("reason", string(scope.Reason)).
+			Str("block_reason", tm.eventTriggerBlock.Reason).
+			Msg("event-driven patrol trigger rejected by runtime policy")
+		return false
+	}
 
 	// Gate event-driven triggers according to the canonical scoped trigger config
 	if isEventDrivenTrigger(scope.Reason) && !tm.eventTriggerConfig.allows(scope.Reason) {
@@ -503,6 +555,10 @@ type TriggerStatus struct {
 	IsBusyMode             bool  `json:"is_busy_mode"`
 	AlertTriggersEnabled   bool  `json:"alert_triggers_enabled"`
 	AnomalyTriggersEnabled bool  `json:"anomaly_triggers_enabled"`
+	EventTriggersBlocked   bool  `json:"event_triggers_blocked"`
+	// EventTriggersBlockedReason is stable for clients; Message is safe to show to users.
+	EventTriggersBlockedReason  string `json:"event_triggers_blocked_reason,omitempty"`
+	EventTriggersBlockedMessage string `json:"event_triggers_blocked_message,omitempty"`
 }
 
 // GetStatus returns the current status
@@ -517,13 +573,16 @@ func (tm *TriggerManager) GetStatus() TriggerStatus {
 	tm.updateAdaptiveInterval()
 
 	return TriggerStatus{
-		Running:                tm.running,
-		PendingTriggers:        len(tm.pendingTriggers),
-		CurrentInterval:        int64(tm.currentInterval / time.Millisecond),
-		RecentEvents:           len(tm.recentEvents),
-		IsBusyMode:             len(tm.recentEvents) >= tm.busyThreshold,
-		AlertTriggersEnabled:   tm.eventTriggerConfig.AlertTriggersEnabled,
-		AnomalyTriggersEnabled: tm.eventTriggerConfig.AnomalyTriggersEnabled,
+		Running:                     tm.running,
+		PendingTriggers:             len(tm.pendingTriggers),
+		CurrentInterval:             int64(tm.currentInterval / time.Millisecond),
+		RecentEvents:                len(tm.recentEvents),
+		IsBusyMode:                  len(tm.recentEvents) >= tm.busyThreshold,
+		AlertTriggersEnabled:        tm.eventTriggerConfig.AlertTriggersEnabled,
+		AnomalyTriggersEnabled:      tm.eventTriggerConfig.AnomalyTriggersEnabled,
+		EventTriggersBlocked:        tm.eventTriggerBlock.active(),
+		EventTriggersBlockedReason:  tm.eventTriggerBlock.Reason,
+		EventTriggersBlockedMessage: tm.eventTriggerBlock.Message,
 	}
 }
 

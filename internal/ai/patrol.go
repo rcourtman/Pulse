@@ -485,6 +485,7 @@ type PatrolService struct {
 	// Event-driven patrol triggers (Phase 7)
 	triggerManager     *TriggerManager          // For event-driven patrol scheduling
 	eventTriggerConfig PatrolEventTriggerConfig // Canonical scoped patrol trigger preferences
+	eventTriggerBlock  PatrolEventTriggerBlock  // Runtime policy that pauses event triggers without changing preferences
 
 	// Unified intelligence facade - aggregates all subsystems for unified view
 	intelligence *Intelligence

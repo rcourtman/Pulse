@@ -2016,6 +2016,11 @@ scoped runs use neutral checked wording, and only successful full patrols read
 as verified. The primary Patrol assessment shell must pass the same run-history
 facts into `getPatrolAssessmentPresentation` so assessment coverage caveats do
 not contradict the header's verified full-run coverage state.
+The same header row may surface `Trigger status` when
+`getPatrolTriggerStatusSummary` returns a runtime-relevant value from the
+Patrol status payload. That text is page-owned operational metadata inside the
+existing header row, not a new shared primitive, nested status card, or
+secondary verdict band.
 
 `frontend-modern/src/utils/discoveryPresentation.ts` owns resource discovery
 command guidance targets. Discovery surfaces that need to tell operators where

@@ -8,6 +8,8 @@ const PATROL_AUTONOMY_PRO_REQUIRED =
   "Investigation and auto-fix require Pulse Pro. Community tier is limited to Monitor (findings-only) autonomy.";
 const PATROL_REASONING_ONLY_REJECTION =
   "The selected Patrol model is a reasoning-only model family that commonly does not emit tool calls. Patrol needs tool calling to inspect resources and create governed findings.";
+const PATROL_EVENT_TRIGGERS_BLOCKED =
+  "Automatic Patrol checks from alerts and anomalies are paused by the local development safety guard. Manual Patrol still works.";
 
 function todayAt(hours: number, minutes: number): string {
   const value = new Date();
@@ -228,6 +230,22 @@ const scopedTriggerPatrolStatus = {
   },
 };
 
+const blockedEventTriggerPatrolStatus = {
+  ...scopedTriggerPatrolStatus,
+  trigger_status: {
+    running: true,
+    pending_triggers: 0,
+    current_interval_ms: 900000,
+    recent_events: 0,
+    is_busy_mode: false,
+    alert_triggers_enabled: true,
+    anomaly_triggers_enabled: true,
+    event_triggers_blocked: true,
+    event_triggers_blocked_reason: "background_automation_disabled",
+    event_triggers_blocked_message: PATROL_EVENT_TRIGGERS_BLOCKED,
+  },
+};
+
 async function mockBlockedPatrolRuntimeState(
   page: Page,
   options: {
@@ -371,12 +389,16 @@ async function mockRuntimeCapabilities(
   });
 }
 
-async function mockScopedTriggerPatrolRuntimeState(page: Page): Promise<void> {
+async function mockScopedTriggerPatrolRuntimeState(
+  page: Page,
+  status: Record<string, unknown> = scopedTriggerPatrolStatus,
+  settingsOverrides: Record<string, unknown> = {},
+): Promise<void> {
   await page.route("**/api/ai/patrol/status", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify(scopedTriggerPatrolStatus),
+      body: JSON.stringify(status),
     });
   });
 
@@ -424,6 +446,7 @@ async function mockScopedTriggerPatrolRuntimeState(page: Page): Promise<void> {
         patrol_event_triggers_enabled: true,
         patrol_auto_fix: false,
         auto_fix_model: "",
+        ...settingsOverrides,
       }),
     });
   });
@@ -959,6 +982,9 @@ test.describe("Patrol runtime-state browser contract", () => {
     await expect(
       page.getByText("Trigger mode: 4 queued · busy mode · anomalies off"),
     ).toBeVisible();
+    await expect(
+      page.getByText("Trigger status: 4 queued · busy mode · anomalies off"),
+    ).toBeVisible();
 
     await page.getByRole("button", { name: "Configure Patrol" }).click();
 
@@ -996,5 +1022,45 @@ test.describe("Patrol runtime-state browser contract", () => {
     await expect(assistantContext).toContainText(
       "Selected model does not support Patrol tools",
     );
+  });
+
+  test("explains runtime-blocked event triggers without hiding enabled trigger preferences", async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name.startsWith("mobile-"),
+      "Desktop-only Patrol runtime coverage",
+    );
+
+    await ensureAuthenticated(page);
+    await mockScopedTriggerPatrolRuntimeState(
+      page,
+      blockedEventTriggerPatrolStatus,
+      {
+        patrol_anomaly_triggers_enabled: true,
+      },
+    );
+
+    await page.goto("/patrol", { waitUntil: "domcontentloaded" });
+
+    await expect(
+      page.getByText(`Trigger status: ${PATROL_EVENT_TRIGGERS_BLOCKED}`),
+    ).toBeVisible();
+    await expect(
+      page.getByText(`Trigger mode: ${PATROL_EVENT_TRIGGERS_BLOCKED}`),
+    ).toBeVisible();
+    await expect(page.getByText("alerts off")).toHaveCount(0);
+    await expect(page.getByText("anomalies off")).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Configure Patrol" }).click();
+    const configPanel = page.getByRole("dialog", {
+      name: "Patrol Configuration",
+    });
+    await expect(
+      configPanel.getByRole("button", { name: "Alert-Triggered Patrols" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    await expect(
+      configPanel.getByRole("button", { name: "Anomaly-Triggered Patrols" }),
+    ).toHaveAttribute("aria-pressed", "true");
   });
 });

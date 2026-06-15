@@ -1051,6 +1051,16 @@ func BackgroundAutomationDisabledForDev() bool {
 	return disabled
 }
 
+func patrolEventTriggerConfigFromAIConfig(cfg *config.AIConfig) PatrolEventTriggerConfig {
+	if cfg == nil {
+		return PatrolEventTriggerConfig{}
+	}
+	return PatrolEventTriggerConfig{
+		AlertTriggersEnabled:   cfg.IsPatrolAlertTriggersEnabled(),
+		AnomalyTriggersEnabled: cfg.IsPatrolAnomalyTriggersEnabled(),
+	}
+}
+
 // StartPatrol starts the background patrol service
 func (s *Service) StartPatrol(ctx context.Context) {
 	s.mu.RLock()
@@ -1079,12 +1089,10 @@ func (s *Service) StartPatrol(ctx context.Context) {
 	patrolCfg := s.patrolConfigFromAIConfig(cfg)
 	patrol.SetConfig(patrolCfg)
 	patrol.SetProactiveMode(cfg.UseProactiveThresholds)
+	patrol.SetEventTriggerConfig(patrolEventTriggerConfigFromAIConfig(cfg))
 
 	if BackgroundAutomationDisabledForDev() {
-		patrol.SetEventTriggerConfig(PatrolEventTriggerConfig{
-			AlertTriggersEnabled:   false,
-			AnomalyTriggersEnabled: false,
-		})
+		patrol.SetEventTriggerBlock(BackgroundAutomationEventTriggerBlock())
 		if alertAnalyzer != nil {
 			alertAnalyzer.SetEnabled(false)
 		}
@@ -1094,10 +1102,7 @@ func (s *Service) StartPatrol(ctx context.Context) {
 		return
 	}
 
-	patrol.SetEventTriggerConfig(PatrolEventTriggerConfig{
-		AlertTriggersEnabled:   cfg.IsPatrolAlertTriggersEnabled(),
-		AnomalyTriggersEnabled: cfg.IsPatrolAnomalyTriggersEnabled(),
-	})
+	patrol.SetEventTriggerBlock(PatrolEventTriggerBlock{})
 	patrol.Start(ctx)
 
 	// Configure alert-triggered analyzer (also Pro-only)
@@ -1194,12 +1199,10 @@ func (s *Service) ReconfigurePatrol() {
 
 	// Update proactive threshold mode
 	patrol.SetProactiveMode(cfg.UseProactiveThresholds)
+	patrol.SetEventTriggerConfig(patrolEventTriggerConfigFromAIConfig(cfg))
 
 	if BackgroundAutomationDisabledForDev() {
-		patrol.SetEventTriggerConfig(PatrolEventTriggerConfig{
-			AlertTriggersEnabled:   false,
-			AnomalyTriggersEnabled: false,
-		})
+		patrol.SetEventTriggerBlock(BackgroundAutomationEventTriggerBlock())
 		patrol.Stop()
 		if alertAnalyzer != nil {
 			alertAnalyzer.SetEnabled(false)
@@ -1210,11 +1213,7 @@ func (s *Service) ReconfigurePatrol() {
 		return
 	}
 
-	// Update event-driven patrol trigger gate
-	patrol.SetEventTriggerConfig(PatrolEventTriggerConfig{
-		AlertTriggersEnabled:   cfg.IsPatrolAlertTriggersEnabled(),
-		AnomalyTriggersEnabled: cfg.IsPatrolAnomalyTriggersEnabled(),
-	})
+	patrol.SetEventTriggerBlock(PatrolEventTriggerBlock{})
 
 	log.Info().
 		Bool("enabled", patrolCfg.Enabled).

@@ -83,7 +83,12 @@ Patrol-specific presentation helpers.
    Patrol summary presentation may show recent activity mix and trigger mode as
    compact factual context sourced from Patrol run history and
    `status.trigger_status`; it must not reintroduce status cards, suggested
-   actions, or a separate activity tab to explain the same facts.
+   actions, or a separate activity tab to explain the same facts. Effective
+   runtime blocks on event-triggered Patrol must also surface in the
+   always-visible Patrol header status line through the same
+   `status.trigger_status` presentation helper, so users can tell that
+   automatic alert/anomaly-triggered checks are paused without opening the
+   configuration popover or inspecting backend settings.
 5. Add or change Patrol header schedule and runtime presentation through `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`, `frontend-modern/src/utils/aiPatrolSchedulePresentation.ts`, and `frontend-modern/src/utils/patrolRuntimePresentation.ts`.
    Patrol must not surface retired hosted-model credit badges or trial-like activation prompts in the normal self-hosted GA app, even when legacy transport fields are still present.
 6. Keep Patrol and chat identifier-label presentation aligned through the shared `frontend-modern/src/utils/textPresentation.ts`

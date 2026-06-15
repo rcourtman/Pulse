@@ -2398,6 +2398,7 @@ func (p *PatrolService) TriggerPatrolForAlert(alert *alerts.Alert) {
 	p.mu.RLock()
 	triggerManager := p.triggerManager
 	eventTriggerConfig := p.eventTriggerConfig
+	eventTriggerBlock := p.eventTriggerBlock
 	p.mu.RUnlock()
 
 	// Gate: skip if alert-driven scoped patrols are disabled
@@ -2405,6 +2406,13 @@ func (p *PatrolService) TriggerPatrolForAlert(alert *alerts.Alert) {
 		log.Debug().
 			Str("alert_identifier", alert.ID).
 			Msg("alert-triggered patrol skipped: alert trigger source disabled")
+		return
+	}
+	if eventTriggerBlock.active() {
+		log.Debug().
+			Str("alert_identifier", alert.ID).
+			Str("block_reason", eventTriggerBlock.Reason).
+			Msg("alert-triggered patrol skipped: event triggers blocked by runtime policy")
 		return
 	}
 

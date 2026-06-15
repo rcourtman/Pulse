@@ -192,6 +192,11 @@ export function getPatrolTriggerStatusSummary(
     return undefined;
   }
 
+  if (status.event_triggers_blocked) {
+    const blockMessage = status.event_triggers_blocked_message?.trim();
+    return blockMessage || 'Automatic Patrol checks from alerts and anomalies are paused';
+  }
+
   const notes: string[] = [];
   if (status.pending_triggers > 0) notes.push(`${status.pending_triggers} queued`);
   if (status.is_busy_mode) notes.push('busy mode');
