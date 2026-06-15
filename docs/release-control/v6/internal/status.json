@@ -6501,7 +6501,7 @@
     },
     {
       "id": "paid-runtime-build-attribution-alerting",
-      "summary": "Confirm active paid licenses cannot silently run on the public community runtime: Pulse must detect non-Pro or unknown runtime identity for paid installs, surface a clear private-runtime warning in-product, preserve runtime-build telemetry for support, and expose Pro/community/unknown runtime status in admin support views.",
+      "summary": "Confirm active paid licenses cannot silently run on the public community runtime or on a stale private Pro release line: Pulse must detect non-Pro or unknown runtime identity for paid installs, surface a clear private-runtime warning in-product, preserve runtime-build telemetry for support, expose Pro/community/unknown runtime status in admin support views, and block future v6 public release success when matching private Pro R2/Docker publication or live broker promotion fails.",
       "owner": "project-owner",
       "blocking_level": "release-ready",
       "minimum_evidence_tier": "managed-runtime-exercise",
@@ -6520,6 +6520,12 @@
           "path": "docs/release-control/v6/internal/records/paid-runtime-build-attribution-alerting-2026-05-07.md",
           "kind": "file",
           "evidence_tier": "managed-runtime-exercise"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/paid-runtime-build-attribution-alerting-automatic-private-pro-release-2026-06-15.md",
+          "kind": "file",
+          "evidence_tier": "test-proof"
         }
       ]
     },

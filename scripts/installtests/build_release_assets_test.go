@@ -1002,14 +1002,15 @@ func TestBuildReleasePackagesPulseMcpForAllPlatforms(t *testing.T) {
 	}
 }
 
-// The three release-pipeline downstream workflows (install-sh-smoke,
-// promote-floating-tags, publish-helm-chart) all share the same root cause:
-// v6 rc.1 → rc.5 silently broke because GitHub's `release: published` webhook
-// doesn't fire when create-release.yml's draft → PATCH(draft=false) promotion
-// path is used, and `workflow_run` chains don't fire when their upstream
-// fails. The fix in each case is a workflow_call entry from create-release.yml
-// after validate_release_assets succeeds. The tests below pin the trigger
-// declarations and resolver logic so the regression class can't return.
+// The release-pipeline downstream workflows and private Pro publication path
+// share the same root cause: v6 rc.1 -> rc.6 silently broke because GitHub's
+// `release: published` webhook doesn't fire when create-release.yml's draft ->
+// PATCH(draft=false) promotion path is used, `workflow_run` chains don't fire
+// when their upstream fails, and the private Pro path was left as a manual
+// checklist step. The fix is explicit post-release orchestration after
+// validate_release_assets succeeds. The tests below pin the trigger
+// declarations, resolver logic, and private Pro dispatch contract so the
+// regression class can't return.
 
 func TestInstallShSmokeWorkflowPresent(t *testing.T) {
 	assertFileContainsAll(t, repoFile(".github", "workflows", "install-sh-smoke.yml"),
@@ -1070,6 +1071,47 @@ func TestPublishHelmChartReachableViaWorkflowCall(t *testing.T) {
 		`if [ -n "${INPUT_CHART_VERSION}" ]; then`,
 		`RELEASE_TAG="${RELEASE_TAG_NAME}"`,
 	)
+}
+
+func TestCreateReleasePublishesPrivateProRuntime(t *testing.T) {
+	content, err := os.ReadFile(repoFile(".github", "workflows", "create-release.yml"))
+	if err != nil {
+		t.Fatalf("read create-release.yml: %v", err)
+	}
+	workflow := string(content)
+	job := workflowJobBlock(t, workflow, "publish_private_pro_runtime")
+
+	for _, needle := range []string{
+		`needs.validate_release_assets.result == 'success'`,
+		`github.event.inputs.draft_only != 'true'`,
+		`startsWith(needs.prepare.outputs.version, '6.')`,
+		`GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}`,
+		`r2_prefix="${TAG}-pro-$(date -u '+%Y%m%d')-${GITHUB_RUN_ID}"`,
+		`gh workflow run build-pro-release.yml`,
+		`--repo rcourtman/pulse-enterprise`,
+		`-f pulse_ref="${TAG}"`,
+		`-f version="${VERSION}"`,
+		`-f upload_actions_artifact=false`,
+		`-f upload_to_r2=true`,
+		`-f publish_docker_image=true`,
+		`-f docker_image=license.pulserelay.pro/pulse-pro`,
+		`-f r2_prefix="${r2_prefix}"`,
+		`-f allow_stable_ga_publish="${allow_ga_publish}"`,
+		`wait_for_workflow rcourtman/pulse-enterprise "Build Pro Release" main "${build_started_at}" "private Pro build"`,
+		`gh workflow run promote-paid-runtime-release.yml`,
+		`--repo rcourtman/pulse-pro`,
+		`-f r2_prefix="${r2_prefix}"`,
+		`-f allow_ga_prefix="${allow_ga_publish}"`,
+		`wait_for_workflow rcourtman/pulse-pro "Promote Paid Runtime Release" main "${promote_started_at}" "private Pro live promotion"`,
+		`echo "::error::${label} failed with conclusion=${conclusion}: ${url}"`,
+	} {
+		if !strings.Contains(job, needle) {
+			t.Fatalf("publish_private_pro_runtime missing required contract: %s", needle)
+		}
+	}
+	if strings.Contains(job, "continue-on-error: true") {
+		t.Fatal("publish_private_pro_runtime must fail the release pipeline when private Pro publication or promotion fails")
+	}
 }
 
 func TestHelmAgentRuntimePointsAtRealImage(t *testing.T) {

@@ -534,14 +534,22 @@ TLS floor in the dynamic config.
    can keep the normal service setup while installing the private Pulse Pro
    runtime.
    Customer-facing private Pro RC/GA promotion is part of that same boundary:
-   after the `pulse-enterprise` Pro release workflow publishes private archives,
-   the private Docker image, and the paid-runtime proof packet, the operator must
-   run `scripts/promote_paid_runtime_release_packet.sh --release-dir <proof-packet-dir> --admin-token-file <explicit-token-file> --execute-live`
-   from `repos/pulse-pro` before sending customer instructions. That command is
-   the canonical live-broker promotion path because it validates the signed proof
-   packet, installs the exact manifest on `pulse-license`, runs the customer-path
-   live proof, and restores the previous remote manifest if the gate fails. GA
-   promotions also require `--allow-ga-prefix`.
+   for every non-draft v6 public release, `create-release.yml` must call the
+   private `rcourtman/pulse-enterprise` `Build Pro Release` workflow after
+   `validate_release_assets` succeeds, pass the exact public tag/version, set
+   `upload_to_r2=true` and `publish_docker_image=true`, wait for that workflow
+   to succeed, then call the private `rcourtman/pulse-pro`
+   `Promote Paid Runtime Release` workflow with the same version and R2 prefix.
+   The promotion workflow downloads the signed proof packet and runs
+   `scripts/promote_paid_runtime_release_packet.sh --release-dir <proof-packet-dir> --execute-live`
+   from `repos/pulse-pro`. That command is the canonical live-broker promotion
+   path because it validates the signed proof packet, installs the exact
+   manifest on `pulse-license`, runs the customer-path live proof, and restores
+   the previous remote manifest if the gate fails. GA promotions also require
+   `--allow-ga-prefix`. A failed private build or failed live promotion must
+   fail the public release workflow; future private Pro publication must not
+   depend on an operator noticing a manual checklist step after the public RC
+   has shipped.
    The repo-root VERSION file is part of the same governed boundary and must
    not drift as an
    unowned release-cut switch: changing the version string for a new RC or

@@ -70,11 +70,23 @@ Cloud, and self-hosted production users.
 4. A private Pro build from a moving branch is valid only as an internal proof
    artifact. It is not valid customer guidance and must not update the live
    paid-download manifest or private Docker customer tag.
-5. Customer-facing private Pro archive or Docker promotion must use the generated
+5. Customer-facing private Pro archive and Docker publication is part of the
+   public v6 release pipeline. After `validate-release-assets.yml` succeeds for
+   a non-draft v6 release, `create-release.yml` must dispatch
+   `rcourtman/pulse-enterprise` `Build Pro Release` against the exact public
+   tag with `upload_to_r2=true`, `publish_docker_image=true`, and an R2 prefix
+   derived by the release run, then wait for that workflow to succeed.
+6. The public v6 release pipeline must then dispatch `rcourtman/pulse-pro`
+   `Promote Paid Runtime Release` with the same version and R2 prefix, and
+   wait for the signed packet to promote the live paid-download broker. A failed
+   private build or failed live promotion fails the public release workflow;
+   private Pro RC/GA advancement must not depend on an operator noticing a
+   checklist item after the public RC has shipped.
+7. Customer-facing private Pro archive or Docker promotion must use the generated
    paid-runtime proof packet from the Pro release workflow. The canonical command
    is `scripts/promote_paid_runtime_release_packet.sh --release-dir <proof-packet-dir> --admin-token-file <explicit-token-file> --execute-live`
    from `repos/pulse-pro`; GA promotions also require `--allow-ga-prefix`.
-6. The promotion command is the release gate for the live paid-download broker:
+8. The promotion command is the release gate for the live paid-download broker:
    it validates the proof packet signatures, installs the exact manifest on
    `pulse-license`, runs the live customer-path proof, and restores the previous
    remote manifest if the gate fails. Do not send customer instructions from a
