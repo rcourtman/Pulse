@@ -6101,7 +6101,7 @@
     },
     {
       "id": "commercial-support-operations-canonical-case",
-      "summary": "Confirm commercial support operations resolve customer, invoice, subscription, Stripe, and local license records through the canonical Pulse Pro support-case system before support-side cancellation or invoice-document handling; operators must not rely on ad hoc Gmail-to-Stripe matching for data-protection-sensitive actions.",
+      "summary": "Confirm commercial support operations resolve customer, invoice, subscription, Stripe, local license, license-transfer, configuration-review, and diagnostics-review records through canonical Pulse Pro support systems before data-protection-sensitive handling; operators must not rely on ad hoc Gmail-to-Stripe or Gmail-to-license matching for those actions.",
       "owner": "project-owner",
       "blocking_level": "release-ready",
       "minimum_evidence_tier": "local-rehearsal",
@@ -6111,6 +6111,12 @@
         "L2"
       ],
       "evidence": [
+        {
+          "repo": "pulse-pro",
+          "path": "landing-page/manage.html",
+          "kind": "file",
+          "evidence_tier": "local-rehearsal"
+        },
         {
           "repo": "pulse-pro",
           "path": "license-server/admin_support.go",
@@ -6128,6 +6134,18 @@
           "path": "license-server/main.go",
           "kind": "file",
           "evidence_tier": "local-rehearsal"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "license-server/support_cases.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "license-server/support_cases_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
         }
       ]
     },
