@@ -6094,6 +6094,38 @@
       ]
     },
     {
+      "id": "commercial-support-operations-canonical-case",
+      "summary": "Confirm commercial support operations resolve customer, invoice, subscription, Stripe, and local license records through the canonical Pulse Pro support-case system before support-side cancellation or invoice-document handling; operators must not rely on ad hoc Gmail-to-Stripe matching for data-protection-sensitive actions.",
+      "owner": "project-owner",
+      "blocking_level": "release-ready",
+      "minimum_evidence_tier": "local-rehearsal",
+      "status": "passed",
+      "verification_doc": "docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+      "lane_ids": [
+        "L2"
+      ],
+      "evidence": [
+        {
+          "repo": "pulse-pro",
+          "path": "license-server/admin_support.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "license-server/admin_support_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "license-server/main.go",
+          "kind": "file",
+          "evidence_tier": "local-rehearsal"
+        }
+      ]
+    },
+    {
       "id": "documentation-currentness-and-legacy-cleanup",
       "summary": "Confirm active v6-facing guidance is current, and any legacy or historical docs are clearly archived or demoted instead of remaining current guidance.",
       "owner": "project-owner",
