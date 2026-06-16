@@ -4555,6 +4555,12 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/known-rc-issue-closure-for-ga-proxmox-cluster-snapshots-2026-06-16.md",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/subsystems/monitoring.md",
           "kind": "file"
         },
@@ -6313,6 +6319,12 @@
           "path": "docs/release-control/v6/internal/records/known-rc-issue-closure-for-ga-metrics-write-amplification-2026-05-03.md",
           "kind": "file",
           "evidence_tier": "managed-runtime-exercise"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/known-rc-issue-closure-for-ga-proxmox-cluster-snapshots-2026-06-16.md",
+          "kind": "file",
+          "evidence_tier": "test-proof"
         },
         {
           "repo": "pulse",

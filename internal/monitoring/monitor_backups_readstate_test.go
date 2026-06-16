@@ -198,6 +198,52 @@ func TestMonitorPollGuestSnapshots_UsesCanonicalReadState(t *testing.T) {
 	}
 }
 
+func TestMonitorPollGuestSnapshots_RefreshesStaleCanonicalStoreForClusterGuest(t *testing.T) {
+	now := time.Date(2026, 6, 16, 10, 0, 0, 0, time.UTC)
+	state := models.NewState()
+	state.UpdateVMsForInstance("homelab", []models.VM{{
+		ID:       "homelab-pve-a-100",
+		VMID:     100,
+		Name:     "prod-vm",
+		Node:     "pve-a",
+		Instance: "homelab",
+		Status:   "running",
+		LastSeen: now,
+	}})
+
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	m := &Monitor{
+		state:         state,
+		resourceStore: adapter,
+	}
+
+	client := &backupStorageTimeoutSnapshotClient{
+		snapshots: []pveapi.Snapshot{{
+			Name:        "cluster-snap",
+			SnapTime:    now.Unix(),
+			Description: "from fresh clustered guest state",
+		}},
+	}
+
+	m.pollGuestSnapshots(context.Background(), "homelab", client)
+
+	if client.snapshotCalls == 0 {
+		t.Fatal("expected guest snapshot polling to use fresh clustered guest state")
+	}
+
+	snapshot := state.GetSnapshot()
+	if len(snapshot.PVEBackups.GuestSnapshots) != 1 {
+		t.Fatalf("expected one guest snapshot from fresh clustered guest state, got %+v", snapshot.PVEBackups.GuestSnapshots)
+	}
+	if got := snapshot.PVEBackups.GuestSnapshots[0]; got.Name != "cluster-snap" || got.Node != "pve-a" || got.Instance != "homelab" {
+		t.Fatalf("unexpected guest snapshot: %+v", got)
+	}
+
+	if vms := adapter.VMs(); len(vms) != 1 || vms[0].Instance() != "homelab" || vms[0].Node() != "pve-a" {
+		t.Fatalf("expected canonical store to refresh from fresh clustered guest state, got %+v", vms)
+	}
+}
+
 func TestMonitorPollStorageBackupsWithNodes_UsesCanonicalReadStateForGuestNodeLookup(t *testing.T) {
 	m := &Monitor{
 		state: models.NewState(),

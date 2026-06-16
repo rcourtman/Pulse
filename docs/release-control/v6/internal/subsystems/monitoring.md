@@ -75,6 +75,7 @@ truth for live infrastructure data.
 51. `internal/truenas/types.go`
 52. `internal/monitoring/monitor_alert_sync.go`
 53. `internal/monitoring/platform_poller_shared.go`
+54. `internal/monitoring/monitor_backups.go`
 
 ## Shared Boundaries
 
@@ -149,6 +150,16 @@ truth for live infrastructure data.
    `PBSBackupsSnapshot()` so PBS size, protection, verification, file, owner,
    datastore, and namespace facts remain the live PBS poller result carried on
    `models.PBSBackup`.
+   Proxmox PVE backup and guest snapshot polling in
+   `internal/monitoring/monitor_backups.go` must consume the canonical
+   `unifiedresources.ReadState` shape for guest, storage, and recovery mapping.
+   If a store-backed read-state has not yet been refreshed for the PVE instance
+   whose current monitor state already contains guests, backup/snapshot polling
+   refreshes the canonical resource store from the current state and continues
+   through the read-state interface. It must not fall back to direct legacy
+   guest slices as the primary source of truth. Clustered PVE snapshot polling
+   must therefore see guests collected earlier in the same cycle before calling
+   the Proxmox guest snapshot APIs.
 12. Add or change agentless availability monitoring only through the
    poll-provider path. `internal/monitoring/availability_poller.go` owns ICMP,
    TCP, and HTTP probes, provider health, scheduler task construction, and

@@ -143,7 +143,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	hadPermissionError := false         // Track if any permission errors occurred this cycle
 	storagePreserveNeeded := map[string]struct{}{}
 	storageSuccess := map[string]struct{}{}
-	readState := m.GetUnifiedReadStateOrSnapshot()
+	readState := m.backupReadStateForInstance(instanceName)
 
 	// Build guest lookup map to find actual node for each VMID
 	snapshot := m.state.GetSnapshot()
@@ -425,6 +425,60 @@ func (m *Monitor) syncGuestBackupTimesAndResourceStore() {
 	m.updateResourceStore(m.state.GetSnapshot())
 }
 
+func (m *Monitor) backupReadStateForInstance(instanceName string) unifiedresources.ReadState {
+	if m == nil {
+		return nil
+	}
+	readState := m.GetUnifiedReadStateOrSnapshot()
+	if backupReadStateHasGuestForInstance(readState, instanceName) || m.state == nil {
+		return readState
+	}
+
+	snapshot := m.state.GetSnapshot()
+	if !backupSnapshotHasGuestForInstance(snapshot, instanceName) {
+		return readState
+	}
+
+	m.updateResourceStore(snapshot)
+	readState = m.GetUnifiedReadStateOrSnapshot()
+	if backupReadStateHasGuestForInstance(readState, instanceName) {
+		return readState
+	}
+
+	return monitorUnifiedStateViewFromSnapshot(snapshot).readState
+}
+
+func backupReadStateHasGuestForInstance(readState unifiedresources.ReadState, instanceName string) bool {
+	if readState == nil {
+		return false
+	}
+	for _, vm := range readState.VMs() {
+		if vm != nil && vm.Instance() == instanceName {
+			return true
+		}
+	}
+	for _, ct := range readState.Containers() {
+		if ct != nil && ct.Instance() == instanceName {
+			return true
+		}
+	}
+	return false
+}
+
+func backupSnapshotHasGuestForInstance(snapshot models.StateSnapshot, instanceName string) bool {
+	for _, vm := range snapshot.VMs {
+		if vm.Instance == instanceName {
+			return true
+		}
+	}
+	for _, ct := range snapshot.Containers {
+		if ct.Instance == instanceName {
+			return true
+		}
+	}
+	return false
+}
+
 func storageNamesForNode(readState unifiedresources.ReadState, instanceName, nodeName string) []string {
 	if readState == nil || nodeName == "" {
 		return nil
@@ -670,7 +724,7 @@ func (m *Monitor) calculateBackupOperationTimeout(instanceName string) time.Dura
 	)
 
 	timeout := minTimeout
-	readState := m.GetUnifiedReadStateOrSnapshot()
+	readState := m.backupReadStateForInstance(instanceName)
 
 	guestCount := 0
 	for _, vm := range readState.VMs() {
@@ -735,7 +789,7 @@ func (m *Monitor) pollPVEBackupsAndSnapshots(parentCtx context.Context, instance
 func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, client PVEClientInterface) {
 	log.Debug().Str("instance", instanceName).Msg("polling guest snapshots")
 
-	readState := m.GetUnifiedReadStateOrSnapshot()
+	readState := m.backupReadStateForInstance(instanceName)
 	var vms []models.VM
 	for _, vm := range readState.VMs() {
 		if vm == nil || vm.Instance() != instanceName {
@@ -1743,7 +1797,7 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 	m.state.UpdateBackupTasksForInstance(instanceName, backupTasks)
 
 	// Best-effort ingestion into recovery store (for rollups / unified backups UX).
-	guestInfo := buildProxmoxGuestInfoIndex(m.GetUnifiedReadStateOrSnapshot())
+	guestInfo := buildProxmoxGuestInfoIndex(m.backupReadStateForInstance(instanceName))
 	m.ingestRecoveryPointsAsync(proxmoxrecoverymapper.FromPVEBackupTasks(backupTasks, guestInfo))
 }
 
