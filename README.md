@@ -75,8 +75,8 @@ Power-user shortcuts:
 > **Paid Pulse Pro / Relay / legacy customers:** GitHub release assets and the
 > public `rcourtman/pulse` Docker image are community builds. Activate your
 > license key under **Settings → Plans → Existing purchases** to unlock Pro
-> features. These community builds do not include the private Pulse Pro runtime
-> hooks (Audit Log, Audit Webhooks, RBAC, governed remediation). For those, use
+> features. These community builds do not include the private Pulse Pro runtime hooks
+> (Audit Log, Audit Webhooks, RBAC, governed remediation). For those, use
 > <https://pulserelay.pro/download.html> with a **v6 activation key** (starts
 > with `ppk_live_`) to get the private Pulse Pro Docker image or Linux archive.
 > A v5 or legacy license key is not a `ppk_live_` activation key and will not
