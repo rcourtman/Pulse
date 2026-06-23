@@ -1,7 +1,7 @@
 import { createSignal } from 'solid-js';
 import { logger } from '@/utils/logger';
 import { eventBus } from '@/stores/events';
-// NOTE: AIAPI import removed - session management is handled by Pulse AI's embedded UI
+// NOTE: AIAPI import removed - session management is handled by Pulse Assistant's embedded UI
 import type { AIChatSessionSummary } from '@/types/ai';
 
 export interface AIChatContextBriefing {
@@ -74,6 +74,7 @@ export interface AIChatContext {
   handoffResources?: AIChatHandoffResource[];
   handoffActions?: AIChatHandoffAction[];
   handoffMetadata?: AIChatHandoffMetadata;
+  preferredWorkflowPromptName?: string;
   // Per-request execution mode override; false keeps scoped handoffs approval-required.
   autonomousMode?: boolean;
 }
@@ -196,9 +197,9 @@ let nextAIChatCommandRequestId = 1;
 let aiInputRef: HTMLTextAreaElement | null = null;
 
 // Sync current session to server (debounced)
-// NOTE: Session sync is disabled - Pulse AI handles session management internally
+// NOTE: Session sync is disabled - Pulse Assistant handles session management internally
 const syncToServer = async () => {
-  // Disabled: Pulse AI manages sessions through its embedded UI
+  // Disabled: Pulse Assistant manages sessions through its embedded UI
   return;
 };
 
@@ -211,9 +212,9 @@ const debouncedSync = () => {
 };
 
 // Load session from server
-// NOTE: Session sync is disabled - Pulse AI handles session management internally
+// NOTE: Session sync is disabled - Pulse Assistant handles session management internally
 const loadSessionFromServer = async (_sessionId: string): Promise<boolean> => {
-  // Disabled: Pulse AI manages sessions through its embedded UI
+  // Disabled: Pulse Assistant manages sessions through its embedded UI
   return false;
 };
 
@@ -320,9 +321,9 @@ export const aiChatStore = {
   },
 
   // Refresh session list from server
-  // NOTE: Session sync is disabled - Pulse AI handles session management internally
+  // NOTE: Session sync is disabled - Pulse Assistant handles session management internally
   async refreshSessions() {
-    // Disabled: Pulse AI manages sessions through its embedded UI
+    // Disabled: Pulse Assistant manages sessions through its embedded UI
     return;
   },
 
@@ -375,9 +376,9 @@ export const aiChatStore = {
   },
 
   // Delete a session
-  // NOTE: Session management is handled by Pulse AI's embedded UI
+  // NOTE: Session management is handled by Pulse Assistant's embedded UI
   async deleteSession(_sessionId: string) {
-    // Disabled: Pulse AI manages sessions through its embedded UI
+    // Disabled: Pulse Assistant manages sessions through its embedded UI
     return;
   },
 
@@ -512,7 +513,8 @@ export const aiChatStore = {
         !prev.handoffContext &&
         !prev.handoffResources?.length &&
         !prev.handoffActions?.length &&
-        !prev.handoffMetadata
+        !prev.handoffMetadata &&
+        !prev.preferredWorkflowPromptName
       ) {
         return prev;
       }
@@ -521,6 +523,7 @@ export const aiChatStore = {
         handoffResources: _handoffResources,
         handoffActions: _handoffActions,
         handoffMetadata: _handoffMetadata,
+        preferredWorkflowPromptName: _preferredWorkflowPromptName,
         ...rest
       } = prev;
       return rest;

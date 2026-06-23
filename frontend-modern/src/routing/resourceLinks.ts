@@ -30,6 +30,31 @@ export const VMWARE_PATH = '/vmware';
 export const VMWARE_DEFAULT_TAB = 'overview';
 export const PMG_THRESHOLDS_PATH = '/alerts/thresholds/mail-gateway';
 export const PATROL_PATH = '/patrol';
+export const PATROL_CONTROL_ANCHOR = 'patrol-control';
+export const PATROL_CONTROL_STARTER_QUERY_PARAM = 'patrolControlStarter';
+export const PATROL_CONTROL_STARTER = 'patrol_control';
+export const PATROL_CONTROL_PATH = `${PATROL_PATH}#${PATROL_CONTROL_ANCHOR}`;
+export const PATROL_OPERATIONS_LOOP_ANCHOR = 'operations-loop';
+export const PATROL_OPERATIONS_LOOP_STARTER_QUERY_PARAM = 'operationsLoopStarter';
+export const PATROL_OPERATIONS_LOOP_PATROL_CONTROL_STARTER = PATROL_CONTROL_STARTER;
+export const PATROL_OPERATIONS_LOOP_PATROL_AUTONOMY_STARTER = 'patrol_autonomy';
+export const PATROL_OPERATIONS_LOOP_PRO_ACTIVATION_STARTER = 'pulse_pro_activation';
+export const PATROL_OPERATIONS_LOOP_PATH = PATROL_CONTROL_PATH;
+export const SETTINGS_API_ACCESS_PATH = '/settings/security/api';
+export const SETTINGS_PULSE_INTELLIGENCE_PATH = '/settings/pulse-intelligence';
+export const SETTINGS_PULSE_INTELLIGENCE_ASSISTANT_PATH = `${SETTINGS_PULSE_INTELLIGENCE_PATH}/assistant`;
+export const API_TOKEN_CREATE_ANCHOR = 'api-token-create';
+export const API_TOKEN_PRESET_QUERY_PARAM = 'tokenPreset';
+export const PULSE_INTELLIGENCE_AGENT_TOKEN_PRESET = 'pulse-intelligence-agent';
+export const EXTERNAL_AGENT_SETUP_ANCHOR = 'external-agent-setup';
+export const EXTERNAL_AGENT_SETUP_PATH = `${SETTINGS_PULSE_INTELLIGENCE_ASSISTANT_PATH}#${EXTERNAL_AGENT_SETUP_ANCHOR}`;
+export const PULSE_MCP_SETUP_ANCHOR = 'pulse-mcp-setup';
+export const PULSE_MCP_LEGACY_SETUP_PATH = `${SETTINGS_API_ACCESS_PATH}#${PULSE_MCP_SETUP_ANCHOR}`;
+export const PULSE_MCP_SETUP_PATH = EXTERNAL_AGENT_SETUP_PATH;
+export const PULSE_MCP_TOKEN_SETUP_PATH = `${SETTINGS_API_ACCESS_PATH}?${API_TOKEN_PRESET_QUERY_PARAM}=${PULSE_INTELLIGENCE_AGENT_TOKEN_PRESET}#${API_TOKEN_CREATE_ANCHOR}`;
+
+export const isExternalAgentSetupHash = (hash: string | null | undefined): boolean =>
+  hash === `#${EXTERNAL_AGENT_SETUP_ANCHOR}` || hash === `#${PULSE_MCP_SETUP_ANCHOR}`;
 
 export const DOCKER_QUERY_PARAMS = {
   host: 'host',
@@ -160,6 +185,63 @@ const serializedRouteSearch = (params: URLSearchParams): string => {
   const query = params.toString();
   return query ? `?${query}` : '';
 };
+
+export type PatrolOperationsLoopStarter =
+  | typeof PATROL_OPERATIONS_LOOP_PATROL_CONTROL_STARTER
+  | typeof PATROL_OPERATIONS_LOOP_PATROL_AUTONOMY_STARTER
+  | typeof PATROL_OPERATIONS_LOOP_PRO_ACTIVATION_STARTER;
+
+export type PatrolControlStarter = PatrolOperationsLoopStarter;
+
+const isPatrolControlStarter = (starter: string): starter is PatrolControlStarter =>
+  starter === PATROL_CONTROL_STARTER ||
+  starter === PATROL_OPERATIONS_LOOP_PATROL_AUTONOMY_STARTER ||
+  starter === PATROL_OPERATIONS_LOOP_PRO_ACTIVATION_STARTER;
+
+export const buildPatrolControlPath = (
+  options: {
+    starter?: PatrolControlStarter | null;
+  } = {},
+): string => {
+  const params = new URLSearchParams();
+  const starter = normalizeQueryValue(options.starter);
+  if (isPatrolControlStarter(starter)) {
+    params.set(PATROL_CONTROL_STARTER_QUERY_PARAM, PATROL_CONTROL_STARTER);
+  }
+  return `${PATROL_PATH}${serializedRouteSearch(params)}#${PATROL_CONTROL_ANCHOR}`;
+};
+
+export const buildPatrolOperationsLoopPath = buildPatrolControlPath;
+
+export const PATROL_CONTROL_PATH_WITH_STARTER = buildPatrolControlPath({
+  starter: PATROL_CONTROL_STARTER,
+});
+
+export const PATROL_CONTROL_OPERATIONS_LOOP_PATH = PATROL_CONTROL_PATH_WITH_STARTER;
+
+export const PATROL_AUTONOMY_OPERATIONS_LOOP_PATH = buildPatrolControlPath({
+  starter: PATROL_OPERATIONS_LOOP_PATROL_AUTONOMY_STARTER,
+});
+
+export const PATROL_PRO_ACTIVATION_OPERATIONS_LOOP_PATH = buildPatrolControlPath({
+  starter: PATROL_OPERATIONS_LOOP_PRO_ACTIVATION_STARTER,
+});
+
+export const parsePatrolControlStarter = (search: string): PatrolControlStarter | '' => {
+  const params = new URLSearchParams(search);
+  const starter = normalizeQueryValue(
+    firstNonEmpty([
+      params.get(PATROL_CONTROL_STARTER_QUERY_PARAM),
+      params.get(PATROL_OPERATIONS_LOOP_STARTER_QUERY_PARAM),
+    ]),
+  ).toLowerCase();
+  if (isPatrolControlStarter(starter)) {
+    return PATROL_CONTROL_STARTER;
+  }
+  return '';
+};
+
+export const parsePatrolOperationsLoopStarter = parsePatrolControlStarter;
 
 export const buildWorkloadsRouteSearch = (options: WorkloadsLinkOptions = {}): string => {
   const params = new URLSearchParams();

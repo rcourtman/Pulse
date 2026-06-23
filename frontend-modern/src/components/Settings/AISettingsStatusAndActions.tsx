@@ -3,7 +3,11 @@ import type { AISettingsState } from '@/components/Settings/useAISettingsState';
 import { formatAIModelRouteLabel } from '@/utils/aiProviderPresentation';
 
 interface AISettingsStatusAndActionsProps {
+  resetLabel?: string;
+  saveLabel?: string;
+  savingLabel?: string;
   state: AISettingsState;
+  showConnectionControls?: boolean;
 }
 
 export const AISettingsStatusAndActions: Component<AISettingsStatusAndActionsProps> = (props) => {
@@ -19,7 +23,7 @@ export const AISettingsStatusAndActions: Component<AISettingsStatusAndActionsPro
 
   return (
     <>
-      <Show when={state.settings()}>
+      <Show when={props.showConnectionControls && state.settings()}>
         <div class="p-4 sm:p-6">
           <div
             class={`flex items-center gap-2 p-3 rounded-md ${state.settingsReadiness().containerClassName}`}
@@ -38,7 +42,7 @@ export const AISettingsStatusAndActions: Component<AISettingsStatusAndActionsPro
       </Show>
 
       <div class="sticky bottom-0 bg-surface px-4 sm:px-6 py-4 flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3">
-        <Show when={state.settings()?.configured}>
+        <Show when={props.showConnectionControls && state.settings()?.configured}>
           <button
             type="button"
             class="w-full sm:w-auto min-h-10 sm:min-h-9 px-4 py-2.5 text-sm border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -55,14 +59,16 @@ export const AISettingsStatusAndActions: Component<AISettingsStatusAndActionsPro
             onClick={() => state.resetForm(state.settings())}
             disabled={state.saving() || state.loading()}
           >
-            Reset
+            {props.resetLabel ?? 'Reset'}
           </button>
           <button
             type="submit"
             class="w-full sm:w-auto min-h-10 sm:min-h-9 px-4 py-2.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={state.saving() || state.loading()}
           >
-            {state.saving() ? 'Saving...' : 'Save changes'}
+            {state.saving()
+              ? (props.savingLabel ?? 'Saving...')
+              : (props.saveLabel ?? 'Save changes')}
           </button>
         </div>
       </div>

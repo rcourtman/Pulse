@@ -6,9 +6,15 @@ import {
 import { resolveCanonicalSelfHostedBillingHref } from '@/utils/pricingHandoff';
 import { buildInfrastructureWorkspacePath } from './infrastructureWorkspaceModel';
 import {
+  EXTERNAL_AGENT_SETUP_PATH,
+  SETTINGS_API_ACCESS_PATH,
+  isExternalAgentSetupHash,
+} from '@/routing/resourceLinks';
+import {
   DEFAULT_SETTINGS_TAB,
   deriveTabFromPath,
   deriveTabFromQuery,
+  isAISettingsOAuthCallbackQuery,
   resolveCanonicalSettingsPath,
   settingsTabPath,
   type AgentKey,
@@ -65,9 +71,13 @@ export function useSettingsNavigation({ navigate, location }: UseSettingsNavigat
           const queryTab = deriveTabFromQuery(search);
           const resolvedTab = queryTab ?? DEFAULT_SETTINGS_TAB;
           const target = resolveTabPath(resolvedTab);
+          const shouldPreserveQuery =
+            resolvedTab === 'system-ai' && isAISettingsOAuthCallbackQuery(search);
+          const targetHref = shouldPreserveQuery ? `${target}${search}${hash}` : target;
+          const currentHref = `${path}${search}${hash}`;
 
-          if (target !== path) {
-            navigate(target, { replace: true, scroll: false });
+          if (targetHref !== currentHref) {
+            navigate(targetHref, { replace: true, scroll: false });
             return;
           }
 
@@ -81,6 +91,14 @@ export function useSettingsNavigation({ navigate, location }: UseSettingsNavigat
         const canonicalBillingHref = resolveCanonicalSelfHostedBillingHref(path, search, hash);
         if (canonicalBillingHref && canonicalBillingHref !== currentHref) {
           navigate(canonicalBillingHref, {
+            replace: true,
+            scroll: false,
+          });
+          return;
+        }
+
+        if (path === SETTINGS_API_ACCESS_PATH && isExternalAgentSetupHash(hash)) {
+          navigate(EXTERNAL_AGENT_SETUP_PATH, {
             replace: true,
             scroll: false,
           });

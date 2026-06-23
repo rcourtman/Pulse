@@ -292,7 +292,7 @@ export const EN_MESSAGES = {
   'settings.general.temperature.title': 'Temperature unit',
   'settings.general.telemetry.copyJson': 'Copy JSON',
   'settings.general.telemetry.description':
-    'Help improve Pulse by sharing anonymous outbound usage data: a rotating install ID, normalized release identity, runtime platform, aggregate self-hosted adoption counts, and coarse feature flags. No hostnames, credentials, infrastructure identifiers, prompts, chat messages, or personal information are sent. Telemetry rows are retained for up to 90 days, and IP addresses are not stored in telemetry rows.',
+    'Help improve Pulse by sharing anonymous outbound usage data: a rotating install ID, normalized release identity, runtime platform, aggregate self-hosted adoption counts, coarse feature flags, and coarse Patrol, Assistant, and external-agent usage counters. No hostnames, credentials, infrastructure identifiers, prompts, chat messages, command text, action output, token values, or personal information are sent. Telemetry rows are retained for up to 90 days, and IP addresses are not stored in telemetry rows.',
   'settings.general.telemetry.disabledPreview':
     'Telemetry is currently disabled. This preview shows the payload Pulse would send if you enable it.',
   'settings.general.telemetry.fullDetails': 'Full details',
@@ -360,11 +360,19 @@ export const EN_MESSAGES = {
     'Configure real-time delivery of audit events to external systems.',
   'settings.header.securityWebhooks.title': 'Audit Webhooks',
   'settings.header.systemAi.description':
-    'Configure providers and models for Pulse Assistant and Patrol.',
-  'settings.header.systemAi.title': 'Assistant & Patrol',
-  'settings.header.systemBilling.description':
-    'Review the plan this instance is using and the optional capabilities connected to it.',
-  'settings.header.systemBilling.title': 'Self-hosted plan',
+    'Configure providers, default models, provider health, budget, and usage for Pulse Intelligence.',
+  'settings.header.systemAi.title': 'Provider & Models',
+  'settings.header.systemAiAssistant.description':
+    'Configure Assistant chat behavior, chat action permissions, and sessions.',
+  'settings.header.systemAiAssistant.title': 'Assistant',
+  'settings.header.systemAiDiscovery.description':
+    'Configure the model-backed service context Assistant and Patrol use. Infrastructure discovery and onboarding stay under Infrastructure.',
+  'settings.header.systemAiDiscovery.title': 'Service Context',
+  'settings.header.systemAiPatrol.description':
+    'Set when Patrol runs, what starts it, and which model it uses.',
+  'settings.header.systemAiPatrol.title': 'Patrol',
+  'settings.header.systemBilling.description': 'Plan, license, and Patrol mode for this instance.',
+  'settings.header.systemBilling.title': 'Plans & Billing',
   'settings.header.systemGeneral.description':
     'Manage appearance, layout, and default monitoring cadence.',
   'settings.header.systemGeneral.title': 'General',
@@ -392,6 +400,7 @@ export const EN_MESSAGES = {
   'settings.nav.group.infrastructure': 'Infrastructure',
   'settings.nav.group.monitoring': 'Monitoring',
   'settings.nav.group.organization': 'Organization',
+  'settings.nav.group.pulseIntelligence': 'Pulse Intelligence',
   'settings.nav.group.security': 'Security',
   'settings.nav.group.support': 'Support',
   'settings.nav.group.system': 'System',
@@ -404,12 +413,16 @@ export const EN_MESSAGES = {
   'settings.nav.item.billingAdmin': 'Billing Admin',
   'settings.nav.item.dataReports': 'Data & Reports',
   'settings.nav.item.diagnosticsHealth': 'Diagnostics & Health',
+  'settings.nav.item.assistant': 'Assistant',
+  'settings.nav.item.discovery': 'Service Context',
   'settings.nav.item.general': 'General',
   'settings.nav.item.infrastructure': 'Infrastructure',
   'settings.nav.item.network': 'Network',
   'settings.nav.item.organizationAccess': 'Access',
   'settings.nav.item.organizationOverview': 'Overview',
-  'settings.nav.item.plans': 'Plans',
+  'settings.nav.item.patrol': 'Patrol',
+  'settings.nav.item.plans': 'Plans & Billing',
+  'settings.nav.item.providerModels': 'Provider & Models',
   'settings.nav.item.recovery': 'Recovery',
   'settings.nav.item.remoteAccess': 'Remote Access',
   'settings.nav.item.resourcePrivacy': 'Resource Privacy',
@@ -420,7 +433,6 @@ export const EN_MESSAGES = {
   'settings.nav.item.systemLogs': 'System Logs',
   'settings.nav.item.updates': 'Updates',
   'settings.nav.item.users': 'Users',
-  'settings.nav.item.assistantPatrol': 'Assistant & Patrol',
   'settings.shell.collapseSidebarLabel': 'Collapse settings navigation',
   'settings.shell.configurationLoading': 'Loading configuration...',
   'settings.shell.discardLabel': 'Discard',

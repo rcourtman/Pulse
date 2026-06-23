@@ -34,14 +34,14 @@ export interface AgentProfileAssignment {
 }
 
 /**
- * Request for AI-assisted profile suggestion.
+ * Request for Pulse Intelligence profile suggestion.
  */
 export interface ProfileSuggestionRequest {
   prompt: string;
 }
 
 /**
- * AI-generated profile suggestion.
+ * Pulse Intelligence profile suggestion.
  */
 export interface ProfileSuggestion {
   name: string;
@@ -365,7 +365,7 @@ export class AgentProfilesAPI {
   }
 
   /**
-   * Get AI-assisted profile suggestion.
+   * Get Pulse Intelligence profile suggestion.
    * Requires AI to be enabled and running.
    */
   static async suggestProfile(request: ProfileSuggestionRequest): Promise<ProfileSuggestion> {
@@ -378,7 +378,7 @@ export class AgentProfilesAPI {
     await assertAPIResponseOKOrThrowStatus(
       response,
       503,
-      'Pulse Assistant service is not available. Please check Pulse Assistant settings.',
+      'Pulse Intelligence is not available. Please check Assistant & Patrol settings.',
       `Failed to get suggestion: ${response.status}`,
     );
 

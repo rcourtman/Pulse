@@ -1,7 +1,6 @@
 import { usePatrolIntelligenceState } from './usePatrolIntelligenceState';
 import { PatrolIntelligenceHeader } from './PatrolIntelligenceHeader';
 import { PatrolIntelligenceBanners } from './PatrolIntelligenceBanners';
-import { PatrolIntelligenceSummary } from './PatrolIntelligenceSummary';
 import { PatrolIntelligenceWorkspace } from './PatrolIntelligenceWorkspace';
 
 export function PatrolIntelligenceSurface() {
@@ -15,7 +14,6 @@ export function PatrolIntelligenceSurface() {
       <div
         class={`space-y-4 transition-opacity ${!state.patrolEnabledLocal() ? 'opacity-50 pointer-events-none' : ''}`}
       >
-        <PatrolIntelligenceSummary state={state} />
         <PatrolIntelligenceWorkspace state={state} />
       </div>
     </div>

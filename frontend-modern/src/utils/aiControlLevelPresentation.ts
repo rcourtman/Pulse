@@ -38,11 +38,11 @@ export function getAIControlLevelBadgeClass(level: AIControlLevel): string {
 export function getAIControlLevelDescription(level: AIControlLevel): string {
   switch (level) {
     case 'controlled':
-      return 'Controlled mode: Pulse Assistant can run interactive actions only after you approve each one.';
+      return 'Assistant asks before chat-only actions. Infrastructure work stays with Patrol mode.';
     case 'autonomous':
-      return 'Autonomous mode: Pulse Assistant can run eligible actions without per-command approval.';
+      return 'Assistant may take eligible chat-only actions allowed by policy. Infrastructure work stays with Patrol mode.';
     default:
-      return 'Read-only mode: Pulse Assistant can query and observe only.';
+      return 'Assistant can query and explain only. Infrastructure work stays with Patrol mode.';
   }
 }
 
@@ -52,8 +52,8 @@ export function getAIChatControlLevelPresentation(
   switch (level) {
     case 'autonomous':
       return {
-        label: 'Autonomous',
-        description: 'Executes without approval',
+        label: 'Chat actions',
+        description: 'Eligible chat-only actions',
         pillClassName:
           'border-red-200 text-red-700 bg-red-50 dark:border-red-800 dark:text-red-200 dark:bg-red-900',
         dotClassName: 'bg-red-500',
@@ -61,8 +61,8 @@ export function getAIChatControlLevelPresentation(
       };
     case 'controlled':
       return {
-        label: 'Approval',
-        description: 'Ask before running commands',
+        label: 'Ask first',
+        description: 'Asks before chat-only actions',
         pillClassName:
           'border-amber-200 text-amber-700 bg-amber-50 dark:border-amber-800 dark:text-amber-200 dark:bg-amber-900',
         dotClassName: 'bg-amber-500',
@@ -71,7 +71,7 @@ export function getAIChatControlLevelPresentation(
     default:
       return {
         label: 'Read-only',
-        description: 'No commands or control actions',
+        description: 'Observes only',
         pillClassName: 'border-border text-muted bg-surface',
         dotClassName: 'bg-slate-400',
         selectedClassName: 'bg-surface-alt',

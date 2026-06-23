@@ -10,7 +10,10 @@ const DEFAULT_MANAGED_HOSTING_REQUEST_URL =
   'mailto:support@pulserelay.pro?subject=Pulse%20Managed%20Hosting';
 export const SELF_HOSTED_PURCHASE_START_PATH = '/auth/license-purchase-start';
 
-export const SELF_HOSTED_PRO_BILLING_ROUTE = '/settings/system/billing';
+export const LEGACY_SELF_HOSTED_PRO_BILLING_ROUTE = '/settings/system/billing';
+export const LEGACY_SELF_HOSTED_PRO_BILLING_PLAN_ROUTE = `${LEGACY_SELF_HOSTED_PRO_BILLING_ROUTE}/plan`;
+export const LEGACY_SELF_HOSTED_PRO_BILLING_USAGE_ROUTE = `${LEGACY_SELF_HOSTED_PRO_BILLING_ROUTE}/usage`;
+export const SELF_HOSTED_PRO_BILLING_ROUTE = '/settings/pulse-intelligence/billing';
 export const SELF_HOSTED_PRO_BILLING_PLAN_ROUTE = `${SELF_HOSTED_PRO_BILLING_ROUTE}/plan`;
 export const SELF_HOSTED_PRO_BILLING_USAGE_ROUTE = `${SELF_HOSTED_PRO_BILLING_ROUTE}/usage`;
 export const SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID = 'pulse-pro-plan';
@@ -58,7 +61,7 @@ const IN_PRODUCT_PRICING_DESTINATIONS: Record<string, string> = {
   mobile_app: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
   push_notifications: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
   ai_alerts: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
-  ai_autofix: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
+  ai_autofix: SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF,
   relay: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
   rbac: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
   audit_logging: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
@@ -99,7 +102,11 @@ function isSelfHostedBillingPath(pathname: string): boolean {
     normalized === SELF_HOSTED_PRO_BILLING_ROUTE ||
     normalized === SELF_HOSTED_PRO_BILLING_PLAN_ROUTE ||
     normalized === SELF_HOSTED_PRO_BILLING_USAGE_ROUTE ||
-    normalized.startsWith(`${SELF_HOSTED_PRO_BILLING_ROUTE}/`)
+    normalized.startsWith(`${SELF_HOSTED_PRO_BILLING_ROUTE}/`) ||
+    normalized === LEGACY_SELF_HOSTED_PRO_BILLING_ROUTE ||
+    normalized === LEGACY_SELF_HOSTED_PRO_BILLING_PLAN_ROUTE ||
+    normalized === LEGACY_SELF_HOSTED_PRO_BILLING_USAGE_ROUTE ||
+    normalized.startsWith(`${LEGACY_SELF_HOSTED_PRO_BILLING_ROUTE}/`)
   );
 }
 
@@ -262,13 +269,22 @@ export function resolveSelfHostedBillingSection(
 ): SelfHostedBillingSection {
   const normalizedPath = normalizeSettingsLikePath(pathname);
 
-  if (normalizedPath === SELF_HOSTED_PRO_BILLING_USAGE_ROUTE) {
+  if (
+    normalizedPath === SELF_HOSTED_PRO_BILLING_USAGE_ROUTE ||
+    normalizedPath === LEGACY_SELF_HOSTED_PRO_BILLING_USAGE_ROUTE
+  ) {
     return 'usage';
   }
-  if (normalizedPath === SELF_HOSTED_PRO_BILLING_PLAN_ROUTE) {
+  if (
+    normalizedPath === SELF_HOSTED_PRO_BILLING_PLAN_ROUTE ||
+    normalizedPath === LEGACY_SELF_HOSTED_PRO_BILLING_PLAN_ROUTE
+  ) {
     return 'plan';
   }
-  if (normalizedPath !== SELF_HOSTED_PRO_BILLING_ROUTE) {
+  if (
+    normalizedPath !== SELF_HOSTED_PRO_BILLING_ROUTE &&
+    normalizedPath !== LEGACY_SELF_HOSTED_PRO_BILLING_ROUTE
+  ) {
     return 'plan';
   }
 

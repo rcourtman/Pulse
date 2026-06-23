@@ -96,6 +96,7 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
       inv.status === 'needs_attention' ||
       inv.outcome === 'cannot_fix' ||
       inv.outcome === 'timed_out' ||
+      inv.outcome === 'fix_rejected' ||
       inv.outcome === 'fix_verification_failed' ||
       inv.outcome === 'fix_verification_unknown' ||
       inv.outcome === 'fix_failed'
@@ -327,6 +328,7 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
                 (inv().status === 'failed' ||
                   inv().outcome === 'timed_out' ||
                   inv().outcome === 'fix_failed' ||
+                  inv().outcome === 'fix_rejected' ||
                   inv().outcome === 'fix_verification_failed' ||
                   inv().outcome === 'fix_verification_unknown' ||
                   inv().outcome === 'needs_attention' ||

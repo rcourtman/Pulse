@@ -7,8 +7,8 @@ import {
 describe('patrolRuntimeActions', () => {
   it('centralizes the Patrol provider settings action', () => {
     expect(PATROL_PROVIDER_SETTINGS_ACTION).toEqual({
-      label: 'Open Patrol provider settings',
-      href: '/settings/system-ai',
+      label: 'Open Provider & Models',
+      href: '/settings/pulse-intelligence/provider',
     });
 
     const action = getPatrolProviderSettingsAction();

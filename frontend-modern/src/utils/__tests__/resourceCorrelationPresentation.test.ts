@@ -48,6 +48,18 @@ describe('resourceCorrelationPresentation utils', () => {
 
   it('formats correlation patterns and summaries', () => {
     expect(formatResourceCorrelationPattern(correlation)).toBe('Disk Full → Restart');
+    expect(
+      formatResourceCorrelationPattern({
+        ...correlation,
+        event_pattern: 'ALERT -> ALERT',
+      }),
+    ).toBe('Alert → Alert');
+    expect(
+      formatResourceCorrelationPattern({
+        ...correlation,
+        event_pattern: 'ALERT → ALERT',
+      }),
+    ).toBe('Alert → Alert');
     expect(formatResourceCorrelationSummary(correlation)).toBe(
       '2 occurrences · avg delay 5s · 88% confidence',
     );

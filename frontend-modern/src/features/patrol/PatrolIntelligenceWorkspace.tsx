@@ -1,30 +1,112 @@
-import { Show } from 'solid-js';
+import { createMemo, Show } from 'solid-js';
+import HistoryIcon from 'lucide-solid/icons/history';
+import SettingsIcon from 'lucide-solid/icons/settings';
 import { FindingsPanel } from '@/components/AI/FindingsPanel';
 import { ApprovalBanner, RunHistoryPanel } from '@/components/patrol';
-import { getPatrolFindingsBadgePresentation } from '@/utils/aiFindingPresentation';
+import {
+  getFindingTitlePresentation,
+  buildPatrolFindingDisplayGroups,
+  getPatrolFindingsBadgePresentation,
+  isPatrolRuntimeFinding,
+} from '@/utils/aiFindingPresentation';
 import { formatRelativeTime } from '@/utils/format';
 import { formatTriggerReason } from '@/utils/patrolFormat';
-import { ResourcePolicySummary } from '@/components/Infrastructure/ResourcePolicySummary';
-import { ResourceCorrelationSummary } from '@/components/Infrastructure/ResourceCorrelationSummary';
-import { ResourceChangeSummary } from '@/components/Infrastructure/ResourceChangeSummary';
-import { Button } from '@/components/shared/Button';
-import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import {
-  getPatrolSupportingContextCorrelationSummary,
-  getPatrolSupportingContextToggleLabel,
-  PATROL_SUPPORTING_CONTEXT_CHANGE_SUBTITLE,
-  PATROL_SUPPORTING_CONTEXT_DESCRIPTION,
-  PATROL_SUPPORTING_CONTEXT_EVIDENCE_LABEL,
-  PATROL_SUPPORTING_CONTEXT_EVIDENCE_NOTE,
-  PATROL_SUPPORTING_CONTEXT_POLICY_SUBTITLE,
-  PATROL_SUPPORTING_CONTEXT_TITLE,
-} from './patrolSupportingContextPresentation';
+  getPatrolRunRecordSummaryPresentation,
+  getPatrolRunStatusPresentation,
+  PATROL_FINDING_RECORD_UNAVAILABLE_LABEL,
+} from '@/utils/patrolRunPresentation';
+import { Button, ButtonLink } from '@/components/shared/Button';
+import { MetadataBadge } from '@/components/shared/MetadataBadge';
+import { StatusIndicatorBadge } from '@/components/shared/StatusIndicatorBadge';
+import { getPatrolProviderSettingsAction } from '@/utils/patrolRuntimeActions';
+import {
+  getPatrolQueueBadgeLabel,
+  getPatrolQueueWorkspaceDescription,
+  getPatrolSetupIssueReason,
+  PATROL_WORKSPACE_HISTORY_DESCRIPTION,
+  PATROL_WORKSPACE_QUEUE_TITLE,
+  PATROL_WORKSPACE_RUN_RECORD_DESCRIPTION,
+  PATROL_WORKSPACE_RUN_RECORD_TITLE,
+  PATROL_WORKSPACE_SETUP_DESCRIPTION,
+  PATROL_WORKSPACE_SETUP_TITLE,
+} from './patrolControlPresentation';
 import type { PatrolIntelligenceState } from './usePatrolIntelligenceState';
 
 export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceState }) {
   const state = props.state;
   const findingsBadgePresentation = () =>
     getPatrolFindingsBadgePresentation(state.findingsTabBadgeFindings());
+  const queueDisplayGroups = createMemo(() =>
+    buildPatrolFindingDisplayGroups(state.findingsTabBadgeFindings()),
+  );
+  const queueIssueCount = createMemo(
+    () => state.findingsTabBadgeCount() ?? state.findingsTabBadgeFindings().length,
+  );
+  const queueAffectedResourceCount = createMemo(() => queueDisplayGroups().length);
+  const queueBadgeLabel = createMemo(() =>
+    getPatrolQueueBadgeLabel({
+      affectedResourceCount: queueAffectedResourceCount(),
+      findingCount: queueIssueCount(),
+    }),
+  );
+  const isHistoryOpen = () => state.activeTab() === 'history';
+  const isSetupOnly = () =>
+    !isHistoryOpen() && !state.selectedRun() && state.shouldShowPatrolSetupOnly();
+  const setupAction = getPatrolProviderSettingsAction();
+  const setupFinding = () => state.findingsTabBadgeFindings().find(isPatrolRuntimeFinding);
+  const setupReason = () => {
+    const finding = setupFinding();
+    return getPatrolSetupIssueReason({
+      setupFindingTitle: finding ? getFindingTitlePresentation(finding).label : undefined,
+      readinessSummary: state.patrolReadiness()?.summary,
+      triggerDisabledReason: state.triggerPatrolDisabledReason(),
+      blockedReason: state.blockedReason(),
+    });
+  };
+  const workspaceTitle = () =>
+    isHistoryOpen()
+      ? 'Patrol history'
+      : isSetupOnly()
+        ? PATROL_WORKSPACE_SETUP_TITLE
+        : state.selectedRun()
+          ? PATROL_WORKSPACE_RUN_RECORD_TITLE
+          : PATROL_WORKSPACE_QUEUE_TITLE;
+  const workspaceDescription = () =>
+    isHistoryOpen()
+      ? PATROL_WORKSPACE_HISTORY_DESCRIPTION
+      : isSetupOnly()
+        ? PATROL_WORKSPACE_SETUP_DESCRIPTION
+        : state.selectedRun()
+          ? PATROL_WORKSPACE_RUN_RECORD_DESCRIPTION
+          : getPatrolQueueWorkspaceDescription({
+              autonomyLevel: state.autonomyLevel(),
+              autonomyLocked: state.autoFixLocked(),
+              affectedResourceCount: queueAffectedResourceCount(),
+              findingCount: queueIssueCount(),
+            });
+  const openHistory = () => {
+    state.setActiveTab('history');
+    state.setFindingsFilterOverride(undefined);
+  };
+  const closeHistory = () => {
+    state.setActiveTab('findings');
+  };
+  const selectHistoryRun = (run: ReturnType<typeof state.selectedRun>) => {
+    state.setSelectedRun(run);
+    if (run) {
+      state.setActiveTab('findings');
+    }
+  };
+  const selectedRunStatus = () => {
+    const run = state.selectedRun();
+    if (!run) return null;
+    return getPatrolRunStatusPresentation(run.status ?? 'unknown', run.error_count ?? 0);
+  };
+  const selectedRunSummary = () => {
+    const run = state.selectedRun();
+    return run ? getPatrolRunRecordSummaryPresentation(run) : null;
+  };
 
   return (
     <>
@@ -44,80 +126,135 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
         }}
       />
 
-      <div class="flex items-center gap-1 border-b border-border">
-        <button
-          type="button"
-          onClick={() => state.setActiveTab('findings')}
-          class={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            state.activeTab() === 'findings'
-              ? 'border-blue-500 text-base-content'
-              : 'border-transparent text-muted hover:text-base-content hover:border-border'
-          }`}
-        >
-          Findings
-          <Show when={(state.findingsTabBadgeCount() ?? 0) > 0}>
-            {' '}
-            <MetadataBadge aria-hidden="true" tone={findingsBadgePresentation().tone} size="xs">
-              {state.findingsTabBadgeCount()}
-            </MetadataBadge>
-          </Show>
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            state.setActiveTab('history');
-            state.setFindingsFilterOverride(undefined);
-          }}
-          class={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            state.activeTab() === 'history'
-              ? 'border-blue-500 text-base-content'
-              : 'border-transparent text-muted hover:text-base-content hover:border-border'
-          }`}
-        >
-          Runs
-          <Show when={state.displayRunHistory().length > 0}>
-            {' '}
-            <MetadataBadge aria-hidden="true" tone="muted" size="xs">
-              {state.displayRunHistory().length}
-            </MetadataBadge>
-          </Show>
-        </button>
+      <div class="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-3">
+        <div class="min-w-0">
+          <div class="flex min-w-0 flex-wrap items-center gap-2">
+            <h2 class="text-sm font-semibold text-base-content">{workspaceTitle()}</h2>
+            <Show
+              when={
+                !isHistoryOpen() &&
+                !isSetupOnly() &&
+                !state.selectedRun() &&
+                Boolean(queueBadgeLabel())
+              }
+            >
+              <MetadataBadge aria-hidden="true" tone={findingsBadgePresentation().tone} size="xs">
+                {queueBadgeLabel()}
+              </MetadataBadge>
+            </Show>
+          </div>
+          <p class="mt-1 text-xs text-muted">{workspaceDescription()}</p>
+        </div>
+        <Show when={!isSetupOnly()}>
+          <div class="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              class="gap-1.5"
+              onClick={() => (isHistoryOpen() ? closeHistory() : openHistory())}
+            >
+              <HistoryIcon class="h-4 w-4" />
+              {isHistoryOpen() ? PATROL_WORKSPACE_QUEUE_TITLE : 'History'}
+            </Button>
+          </div>
+        </Show>
       </div>
 
       <Show when={state.activeTab() === 'findings'}>
         <Show when={state.selectedRun()}>
           {(run) => (
-            <div class="flex items-center justify-between px-3 py-2 rounded-md bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-800 text-xs text-blue-700 dark:text-blue-300">
-              <span>
-                Filtered to run {formatRelativeTime(run().started_at, { compact: true })} (
-                {formatTriggerReason(run().trigger_reason)})
-                <Show when={state.selectedRunHasFindingsSnapshot() === false}>
-                  {' · '}Findings snapshot unavailable
+            <div class="flex flex-col gap-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-3 text-blue-800 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200 sm:flex-row sm:items-start sm:justify-between">
+              <div class="min-w-0 space-y-1">
+                <div class="flex flex-wrap items-center gap-2 text-xs">
+                  <span class="font-semibold text-blue-950 dark:text-blue-100">
+                    Patrol run {formatRelativeTime(run().started_at, { compact: true })}
+                  </span>
+                  <span>{formatTriggerReason(run().trigger_reason)}</span>
+                  <Show when={selectedRunStatus()}>
+                    {(status) => (
+                      <StatusIndicatorBadge
+                        label={status().label}
+                        variant={status().variant}
+                        size="xs"
+                        shape="rounded"
+                      />
+                    )}
+                  </Show>
+                  <Show when={state.selectedRunHasFindingsSnapshot() === false}>
+                    <MetadataBadge tone="info" size="xs" shape="rounded">
+                      {PATROL_FINDING_RECORD_UNAVAILABLE_LABEL}
+                    </MetadataBadge>
+                  </Show>
+                </div>
+                <Show when={selectedRunSummary()}>
+                  {(summary) => (
+                    <p class="text-xs leading-5 text-blue-800 dark:text-blue-200">
+                      {summary().summary} {summary().outcome}
+                    </p>
+                  )}
                 </Show>
-              </span>
+                <Show when={selectedRunSummary()?.action}>
+                  {(action) => (
+                    <ButtonLink
+                      href={action().href}
+                      variant="secondary"
+                      size="sm"
+                      class="mt-1 gap-1.5"
+                    >
+                      <SettingsIcon class="h-4 w-4" aria-hidden="true" />
+                      {action().label}
+                    </ButtonLink>
+                  )}
+                </Show>
+              </div>
               <button
                 type="button"
                 onClick={() => state.setSelectedRun(null)}
-                class="font-medium hover:underline"
+                class="w-fit shrink-0 text-xs font-medium text-blue-700 hover:underline dark:text-blue-300"
               >
-                Clear filter
+                Show current work
               </button>
             </div>
           )}
         </Show>
 
-        <FindingsPanel
-          filterOverride={state.selectedRun() ? 'all' : state.findingsFilterOverride()}
-          filterFindingIds={state.selectedRunFindingIds()}
-          scopeResourceIds={state.selectedRunScopeResourceIds()}
-          scopeResourceTypes={state.selectedRun()?.scope_resource_types}
-          showScopeWarnings={Boolean(state.selectedRun())}
-          runtimeState={state.runtimeState()}
-          blockedReason={state.blockedReason()}
-          overallHealth={state.intelligenceSummary()?.overall_health}
-          findingsSource="patrol"
-          runSnapshot={state.selectedRun() ?? undefined}
-        />
+        <Show
+          when={isSetupOnly()}
+          fallback={
+            <FindingsPanel
+              filterOverride={state.selectedRun() ? 'all' : state.findingsFilterOverride()}
+              filterFindingIds={state.selectedRunFindingIds()}
+              scopeResourceIds={state.selectedRunScopeResourceIds()}
+              scopeResourceTypes={state.selectedRun()?.scope_resource_types}
+              showScopeWarnings={Boolean(state.selectedRun())}
+              runtimeState={state.runtimeState()}
+              blockedReason={state.blockedReason()}
+              overallHealth={state.intelligenceSummary()?.overall_health}
+              historicalRegressionCount={state.historicalRegressionCount()}
+              patrolRuns={state.patrolRunHistory.value() ?? []}
+              findingsSource="patrol"
+              runSnapshot={state.selectedRun() ?? undefined}
+              showControls={!state.selectedRun()}
+              onAssistantHandoff={(finding) => state.handleAssistantFindingHandoff(finding.id)}
+            />
+          }
+        >
+          <div class="rounded-md border border-border bg-surface-alt p-4">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div class="min-w-0 max-w-2xl">
+                <h3 class="text-sm font-semibold text-base-content">
+                  Provider needs attention
+                </h3>
+                <p class="mt-2 text-xs text-muted">Issue: {setupReason()}</p>
+              </div>
+              <ButtonLink href={setupAction.href} variant="primary" size="sm" class="gap-1.5">
+                <SettingsIcon class="h-4 w-4" aria-hidden="true" />
+                {setupAction.label}
+              </ButtonLink>
+            </div>
+          </div>
+        </Show>
       </Show>
 
       <Show when={state.activeTab() === 'history'}>
@@ -125,78 +262,9 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
           runs={state.displayRunHistory()}
           loading={state.patrolRunHistory.loading()}
           selectedRun={state.selectedRun()}
-          onSelectRun={state.setSelectedRun}
+          onSelectRun={selectHistoryRun}
           patrolStream={state.patrolStream}
         />
-      </Show>
-
-      <Show when={state.shouldSurfaceInvestigationContext()}>
-        <section class="rounded-md border border-border-subtle bg-surface-alt/40 p-3">
-          <div class="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
-                {PATROL_SUPPORTING_CONTEXT_TITLE}
-              </p>
-              <p class="mt-1 text-sm text-muted">{PATROL_SUPPORTING_CONTEXT_DESCRIPTION}</p>
-              <Show when={state.investigationContextSummary()}>
-                <p class="mt-1 text-xs text-base-content">{state.investigationContextSummary()}</p>
-              </Show>
-            </div>
-
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              class="px-3"
-              onClick={() => state.setShowInvestigationContext((value) => !value)}
-            >
-              {getPatrolSupportingContextToggleLabel(state.showInvestigationContext())}
-            </Button>
-          </div>
-
-          <Show when={state.showInvestigationContext()}>
-            <div class="mt-4 space-y-4">
-              <div class="rounded-md border border-border-subtle bg-base px-3 py-2">
-                <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
-                  {PATROL_SUPPORTING_CONTEXT_EVIDENCE_LABEL}
-                </p>
-                <p class="mt-1 text-xs text-muted">{PATROL_SUPPORTING_CONTEXT_EVIDENCE_NOTE}</p>
-              </div>
-
-              <div class="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-                <Show when={state.recentChangeCount() > 0}>
-                  <ResourceChangeSummary
-                    class="space-y-0"
-                    title="Recent changes"
-                    subtitle={PATROL_SUPPORTING_CONTEXT_CHANGE_SUBTITLE}
-                    changes={state.supportingRecentChanges()}
-                    maxChanges={3}
-                    compact
-                  />
-                </Show>
-
-                <div class="space-y-4">
-                  <Show when={state.correlations().length > 0}>
-                    <ResourceCorrelationSummary
-                      title="Learned correlations"
-                      correlations={state.correlations()}
-                      summaryText={getPatrolSupportingContextCorrelationSummary(
-                        state.correlationTotal(),
-                      )}
-                    />
-                  </Show>
-
-                  <ResourcePolicySummary
-                    posture={state.policyPosture()}
-                    title="Policy coverage"
-                    subtitle={PATROL_SUPPORTING_CONTEXT_POLICY_SUBTITLE}
-                    resourceCountLabel="policy-covered resources"
-                  />
-                </div>
-              </div>
-            </div>
-          </Show>
-        </section>
       </Show>
     </>
   );

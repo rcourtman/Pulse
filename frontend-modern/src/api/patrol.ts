@@ -47,7 +47,7 @@ export interface Finding {
   // quiet on re-detection until this timestamp passes, then the next
   // re-detection clears the dismissal and emits a "reminded" lifecycle event.
   remind_at?: string;
-  // Investigation fields (Patrol Autonomy)
+  // Investigation fields (Patrol mode)
   investigation_session_id?: string;
   investigation_status?: InvestigationStatus;
   investigation_outcome?: InvestigationOutcome;
@@ -78,6 +78,7 @@ export type InvestigationOutcome =
   | 'fix_queued'
   | 'fix_executed'
   | 'fix_failed'
+  | 'fix_rejected'
   | 'needs_attention'
   | 'cannot_fix'
   | 'timed_out'
@@ -403,18 +404,18 @@ export async function setFindingNote(
 }
 
 // =============================================================================
-// Patrol Autonomy APIs
+// Patrol Mode APIs
 // =============================================================================
 
 /**
- * Get current patrol autonomy settings
+ * Get current Patrol mode settings
  */
 export async function getPatrolAutonomySettings(): Promise<PatrolAutonomySettings> {
   return apiFetchJSON<PatrolAutonomySettings>('/api/ai/patrol/autonomy');
 }
 
 /**
- * Update patrol autonomy settings
+ * Update Patrol mode settings
  */
 export async function updatePatrolAutonomySettings(
   settings: PatrolAutonomySettings,
@@ -505,6 +506,7 @@ export const investigationOutcomeLabels: Record<InvestigationOutcome, string> = 
   fix_queued: 'Fix Queued',
   fix_executed: 'Fix Executed',
   fix_failed: 'Fix Failed',
+  fix_rejected: 'Fix Rejected',
   needs_attention: 'Needs Attention',
   cannot_fix: 'Cannot Remediate',
   timed_out: 'Timed Out — Will Retry',
@@ -525,6 +527,8 @@ export const investigationOutcomeColors: Record<InvestigationOutcome, string> = 
     'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-900 dark:text-green-300',
   fix_failed:
     'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900 dark:text-red-300',
+  fix_rejected:
+    'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300',
   needs_attention:
     'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300',
   cannot_fix: 'border-slate-200 bg-slate-50 text-slate-600',
@@ -544,11 +548,7 @@ export const investigationOutcomeColors: Record<InvestigationOutcome, string> = 
 
 export type PatrolRunStatus = 'healthy' | 'issues_found' | 'critical' | 'error';
 
-export type ToolCallVerificationStatus =
-  | 'unknown'
-  | 'verified'
-  | 'unverified'
-  | 'failed';
+export type ToolCallVerificationStatus = 'unknown' | 'verified' | 'unverified' | 'failed';
 
 export interface ToolCallVerification {
   status: ToolCallVerificationStatus;

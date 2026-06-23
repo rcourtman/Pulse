@@ -61,6 +61,8 @@ vi.mock('@/components/Workloads/StackedMemoryBar', () => ({
     total: number;
     percentOnly?: number;
     balloon?: number;
+    cache?: number;
+    cacheInclusiveLabel?: string;
     swapUsed?: number;
     swapTotal?: number;
     resourceId?: string;
@@ -71,6 +73,8 @@ vi.mock('@/components/Workloads/StackedMemoryBar', () => ({
       data-total={props.total}
       data-percent-only={props.percentOnly}
       data-balloon={props.balloon}
+      data-cache={props.cache}
+      data-cache-inclusive-label={props.cacheInclusiveLabel}
       data-swap-used={props.swapUsed}
       data-swap-total={props.swapTotal}
       data-resource-id={props.resourceId}
@@ -140,6 +144,11 @@ describe('AgentsMachinesTable', () => {
               osVersion: '7.2.2',
               architecture: 'x86_64',
               kernelVersion: '6.12.24',
+              memory: {
+                total: 100,
+                used: 32,
+                cache: 10,
+              },
               networkInterfaces: [
                 {
                   name: 'br0',
@@ -187,6 +196,9 @@ describe('AgentsMachinesTable', () => {
     expect(screen.getByRole('button', { name: 'Sort by IP' })).toBeInTheDocument();
     expect(screen.getAllByText('192.168.0.10').length).toBeGreaterThan(0);
     expect(screen.getByText('1 clean')).toBeInTheDocument();
+    const memoryBar = screen.getByTestId('agent-machine-memory-bar');
+    expect(memoryBar).toHaveAttribute('data-cache', '10');
+    expect(memoryBar).not.toHaveAttribute('data-cache-inclusive-label', 'Shown in Proxmox');
   });
 
   it('shows hostname and primary IP in the machine identity subtitle', () => {

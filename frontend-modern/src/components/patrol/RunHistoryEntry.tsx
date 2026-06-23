@@ -21,6 +21,7 @@ import {
   getPatrolRunCoverageSummary,
   getPatrolRunResourcesHeading,
   getPatrolRunPrimaryActionPresentation,
+  getPatrolRunOperatorRecordPresentation,
   getPatrolRunStatusPresentation,
   isPatrolRunHealthy,
 } from '@/utils/patrolRunPresentation';
@@ -71,6 +72,7 @@ interface RunHistoryEntryProps {
 
 export function RunHistoryEntry(props: RunHistoryEntryProps) {
   const [showRunAnalysis, setShowRunAnalysis] = createSignal(true);
+  const [showTechnicalDetails, setShowTechnicalDetails] = createSignal(false);
 
   // Live in-progress entry
   if (props.isLive) {
@@ -151,8 +153,6 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
 
   // Completed run entry
   const run = props.run;
-  const scopeSummary = formatScope(run);
-  const duration = formatDurationMs(run.duration_ms);
   const canonicalScopeResourceIds = getCanonicalScopeResourceIds(run);
   const runIsHealthy = isPatrolRunHealthy(run.status, run.error_count);
   const coverageSummary = getPatrolRunCoverageSummary(run);
@@ -162,6 +162,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
     run.error_count,
     hasFindingsSnapshot,
   );
+  const operatorRecord = getPatrolRunOperatorRecordPresentation(run);
   const runErrorSummary = formatPatrolRuntimeFailureDetail(run.error_summary);
   const runErrorDetail = formatPatrolRuntimeFailureDetail(run.error_detail);
   const hasRunErrorDetail = run.error_count > 0 && (runErrorSummary || runErrorDetail);
@@ -185,37 +186,20 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
         onClick={() => props.onSelect(props.selected ? null : run)}
         class={`w-full text-left px-3 py-2 rounded-md transition-colors ${!props.selected ? 'hover:bg-surface-hover' : ''}`}
       >
-        <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
-          <span class="text-base-content font-medium">
-            {formatRelativeTime(run.started_at, { compact: true })}
-          </span>
-          <StatusIndicatorBadge
-            label={runStatus.label}
-            variant={runStatus.variant}
-            size="xs"
-            shape="rounded"
-          />
-          <span>{formatTriggerReason(run.trigger_reason)}</span>
-          <Show when={scopeSummary && !coverageSummary}>
-            <span>• {scopeSummary}</span>
-          </Show>
-          <Show when={duration}>
-            <span>• {duration}</span>
-          </Show>
-          <Show when={coverageSummary}>
-            <span>• {coverageSummary}</span>
-          </Show>
-          <Show when={run.new_findings}>
-            <span>• {run.new_findings} new</span>
-          </Show>
-          <Show when={run.rejected_findings}>
-            <span class="text-muted">• {run.rejected_findings} rejected</span>
-          </Show>
-          <Show
-            when={!hasFindingsSnapshot && run.new_findings === 0 && run.existing_findings === 0}
-          >
-            <span class="text-blue-600 dark:text-blue-400">• Findings snapshot unavailable</span>
-          </Show>
+        <div class="min-w-0">
+          <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
+            <span class="text-base-content font-medium">
+              {formatRelativeTime(run.started_at, { compact: true })}
+            </span>
+            <StatusIndicatorBadge
+              label={runStatus.label}
+              variant={runStatus.variant}
+              size="xs"
+              shape="rounded"
+            />
+            <span class="font-medium text-base-content">{operatorRecord.headline}</span>
+          </div>
+          <p class="mt-1 text-xs leading-5 text-muted">{operatorRecord.detail}</p>
         </div>
       </button>
 
@@ -227,70 +211,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
             <div class="flex min-w-0 flex-1 items-start gap-2 text-sm text-base-content">
               <SparklesIcon class="w-4 h-4 text-blue-500 dark:text-blue-400 mt-0.5 flex-shrink-0" />
               <p>
-                {coverageSummary ? (
-                  <>
-                    {coverageSummary}{' '}
-                    {formatDurationMs(run.duration_ms) ? (
-                      <>
-                        in <strong>{formatDurationMs(run.duration_ms)}</strong>
-                      </>
-                    ) : (
-                      ''
-                    )}{' '}
-                    {run.tool_call_count > 0 ? (
-                      <>
-                        using <strong>{run.tool_call_count}</strong> tool call
-                        {run.tool_call_count !== 1 ? 's' : ''}
-                      </>
-                    ) : (
-                      ''
-                    )}
-                    .{' '}
-                  </>
-                ) : (
-                  <>
-                    Patrol completed
-                    {formatDurationMs(run.duration_ms) ? (
-                      <>
-                        {' '}
-                        in <strong>{formatDurationMs(run.duration_ms)}</strong>
-                      </>
-                    ) : (
-                      ''
-                    )}
-                    .{' '}
-                  </>
-                )}
-                {run.new_findings > 0 ? (
-                  <>
-                    Found <strong>{run.new_findings}</strong> new issue
-                    {run.new_findings !== 1 ? 's' : ''}
-                    {run.auto_fix_count > 0 ? (
-                      <>
-                        , remediated <strong>{run.auto_fix_count}</strong>
-                      </>
-                    ) : (
-                      ''
-                    )}
-                    .
-                  </>
-                ) : run.existing_findings > 0 ? (
-                  <>
-                    No new issues, but <strong>{run.existing_findings}</strong> existing issue
-                    {run.existing_findings !== 1 ? 's remain' : ' remains'}.
-                  </>
-                ) : !hasFindingsSnapshot ? (
-                  <span class="text-blue-600 dark:text-blue-400">
-                    This run predates findings snapshots, so run-specific findings cannot be fully
-                    verified.
-                  </span>
-                ) : runIsHealthy ? (
-                  <span class="text-green-600 dark:text-green-400">All clear — no new issues.</span>
-                ) : (
-                  <span class="text-amber-600 dark:text-amber-400">
-                    Patrol completed with issues requiring review.
-                  </span>
-                )}
+                <strong>{operatorRecord.headline}.</strong> {operatorRecord.detail}
               </p>
             </div>
             <button
@@ -432,7 +353,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
                 when={!hasFindingsSnapshot && run.new_findings === 0 && run.existing_findings === 0}
               >
                 <MetadataBadge tone="info">
-                  <ActivityIcon class="w-3 h-3" /> Snapshot unavailable
+                  <ActivityIcon class="w-3 h-3" /> Finding record unavailable
                 </MetadataBadge>
               </Show>
               <Show
@@ -450,44 +371,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
             </div>
           </div>
 
-          {/* Section 4: AI Effort Bar */}
-          <div class="mt-3 flex flex-wrap items-center gap-3 px-3 py-2 rounded-md bg-surface-alt text-xs text-muted">
-            <Show when={formatDurationMs(run.duration_ms)}>
-              <span class="inline-flex items-center gap-1">
-                <ClockIcon class="w-3.5 h-3.5" /> {formatDurationMs(run.duration_ms)}
-              </span>
-            </Show>
-            <Show when={run.tool_call_count > 0}>
-              <span class="inline-flex items-center gap-1">
-                <ZapIcon class="w-3.5 h-3.5" /> {run.tool_call_count} tool call
-                {run.tool_call_count !== 1 ? 's' : ''}
-              </span>
-            </Show>
-            <Show when={run.triage_flags > 0}>
-              <span class="inline-flex items-center gap-1">
-                <ShieldAlertIcon class="w-3.5 h-3.5" /> {run.triage_flags} triage flag
-                {run.triage_flags !== 1 ? 's' : ''}
-              </span>
-            </Show>
-            <Show when={run.triage_skipped_llm}>
-              <span class="inline-flex items-center gap-1 text-amber-700 dark:text-amber-300">
-                <BrainCircuitIcon class="w-3.5 h-3.5" /> LLM skipped
-              </span>
-            </Show>
-            <Show when={(run.input_tokens || 0) + (run.output_tokens || 0) > 0}>
-              <span class="inline-flex items-center gap-1">
-                <BrainCircuitIcon class="w-3.5 h-3.5" />{' '}
-                {((run.input_tokens || 0) + (run.output_tokens || 0)).toLocaleString()} tokens
-              </span>
-            </Show>
-            <Show when={run.type === 'scoped' && !coverageSummary}>
-              <MetadataBadge tone="info" size="xs" shape="rounded">
-                {formatScope(run) || 'Scoped'}
-              </MetadataBadge>
-            </Show>
-          </div>
-
-          {/* Section 5: Patrol Analysis */}
+          {/* Section 4: Patrol Analysis */}
           <Show when={run.ai_analysis}>
             <div class="mt-3">
               <div class="flex items-center justify-between">
@@ -515,10 +399,58 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
             </div>
           </Show>
 
-          {/* Section 6: Tool Call Trace */}
-          <RunToolCallTrace runId={run.id} toolCallCount={run.tool_call_count} />
+          {/* Technical run trace: useful for debugging, hidden from the default operator record. */}
+          <details
+            class="mt-3 rounded-md border border-border bg-surface-alt px-3 py-2 text-xs text-muted"
+            onToggle={(event) => setShowTechnicalDetails(event.currentTarget.open)}
+          >
+            <summary class="cursor-pointer font-medium text-base-content">
+              Technical details
+            </summary>
+            <div class="mt-2 flex flex-wrap items-center gap-3">
+              <Show when={formatDurationMs(run.duration_ms)}>
+                <span class="inline-flex items-center gap-1">
+                  <ClockIcon class="w-3.5 h-3.5" /> {formatDurationMs(run.duration_ms)}
+                </span>
+              </Show>
+              <Show when={run.tool_call_count > 0}>
+                <span class="inline-flex items-center gap-1">
+                  <ZapIcon class="w-3.5 h-3.5" /> {run.tool_call_count} tool call
+                  {run.tool_call_count !== 1 ? 's' : ''}
+                </span>
+              </Show>
+              <Show when={run.triage_flags > 0}>
+                <span class="inline-flex items-center gap-1">
+                  <ShieldAlertIcon class="w-3.5 h-3.5" /> {run.triage_flags} triage flag
+                  {run.triage_flags !== 1 ? 's' : ''}
+                </span>
+              </Show>
+              <Show when={run.triage_skipped_llm}>
+                <span class="inline-flex items-center gap-1 text-amber-700 dark:text-amber-300">
+                  <BrainCircuitIcon class="w-3.5 h-3.5" /> LLM skipped
+                </span>
+              </Show>
+              <Show when={(run.input_tokens || 0) + (run.output_tokens || 0) > 0}>
+                <span class="inline-flex items-center gap-1">
+                  <BrainCircuitIcon class="w-3.5 h-3.5" />{' '}
+                  {((run.input_tokens || 0) + (run.output_tokens || 0)).toLocaleString()} tokens
+                </span>
+              </Show>
+              <Show when={run.type === 'scoped' && !coverageSummary}>
+                <MetadataBadge tone="info" size="xs" shape="rounded">
+                  {formatScope(run) || 'Scoped'}
+                </MetadataBadge>
+              </Show>
+              <Show when={formatTriggerReason(run.trigger_reason)}>
+                <span>{formatTriggerReason(run.trigger_reason)}</span>
+              </Show>
+            </div>
+            <Show when={showTechnicalDetails()}>
+              <RunToolCallTrace runId={run.id} toolCallCount={run.tool_call_count} />
+            </Show>
+          </details>
 
-          {/* Section 7: Inline Findings */}
+          {/* Section 5: Inline Findings */}
           <div class="mt-3 pt-3 border-t border-blue-200 dark:border-blue-800">
             <FindingsPanel
               filterFindingIds={run.finding_ids}

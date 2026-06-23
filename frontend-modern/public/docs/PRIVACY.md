@@ -14,9 +14,9 @@ third-party analytics, support diagnostics, or ordinary Settings surfaces.
 
 ### Anonymous outbound telemetry
 
-Pulse includes anonymous outbound telemetry that is **enabled by default**. It sends a lightweight ping on startup and once every 24 hours to help me understand how many active installations exist, which releases are actually deployed, and which features are in use.
+Pulse includes anonymous outbound telemetry that is **enabled by default**. It sends a lightweight ping on startup and once every 24 hours to help me understand how many active installations exist, which releases are actually deployed, which features are in use, and whether Patrol control and governed Pulse Intelligence operations are being adopted.
 
-No hostnames, credentials, infrastructure identifiers, IP addresses, prompts, chat messages, or personally identifiable information is ever sent. See the full field list below.
+No hostnames, credentials, infrastructure identifiers, IP addresses, prompts, chat messages, command text, action output, token values, or personally identifiable information is ever sent. See the full field list below.
 
 #### How to disable
 
@@ -80,11 +80,69 @@ Every field is listed below with the reason it exists — nothing else leaves yo
 | Multi-tenant | `true`/`false` | See whether multi-tenant/runtime-org features are being used |
 | Paid license | `true`/`false` | Distinguish free from paid posture without sending the exact commercial tier |
 | Has API tokens | `true`/`false` | See whether token-based automation/integration is being used without sending token counts |
+| Pulse Intelligence configured | `true`/`false` | See whether Assistant, Patrol, governed actions, or external-agent access is configured so adoption can be measured without sending configuration details |
+| Pulse Intelligence active 30d | `true`/`false` | See whether Assistant, Patrol, external-agent, or governed-action activity occurred in the current 30-day telemetry window |
+| Pulse Intelligence governed decision 30d | `true`/`false` | See whether Patrol issue activity reached an approved or rejected governed-action decision without sending prompts, findings, resource identifiers, command text, or action output |
+| Pulse Intelligence approved action attempt 30d | `true`/`false` | See whether Patrol issue activity reached an approved governed action attempt without sending action details |
+| Pulse Intelligence resolved issue 30d | `true`/`false` | See whether Patrol issue activity reached resolution with an approved action success without sending prompts, findings, resource identifiers, command text, or action output |
+| Pulse Intelligence Patrol mode decision 30d | `true`/`false` | See whether a Patrol mode starter, Patrol issue activity, contextual Assistant or external-agent collaboration, and either a rejected governed decision or an approved governed decision with a verified outcome occurred without sending prompt text, checkout details, account links, token details, resource identifiers, command text, or action output |
+| Pulse Intelligence Patrol mode resolved issue 30d | `true`/`false` | See whether a Patrol mode starter, Patrol issue activity, contextual Assistant or external-agent collaboration, an approved governed decision, and a verified outcome occurred without sending prompt text, checkout details, account links, token details, resource identifiers, command text, or action output |
+| Pulse Intelligence paid Patrol mode decision 30d | `true`/`false` | See whether the install currently has a paid license and Patrol mode reached a governed decision without sending the exact tier, checkout details, account links, prompts, token details, resource identifiers, command text, or action output |
+| Pulse Intelligence paid Patrol mode resolved issue 30d | `true`/`false` | See whether the install currently has a paid license and Patrol mode reached a resolved issue without sending the exact tier, checkout details, account links, prompts, token details, resource identifiers, command text, or action output |
+| Pulse Intelligence historical Patrol mode decision mirror 30d | `true`/`false` | Compatibility mirror of the Patrol mode decision field for historical aggregate reporting without sending prompt text, checkout details, account links, token details, resource identifiers, command text, or action output |
+| Pulse Intelligence historical Patrol mode resolved mirror 30d | `true`/`false` | Compatibility mirror of the Patrol mode resolved field for historical aggregate reporting without sending prompt text, checkout details, account links, token details, resource identifiers, command text, or action output |
+| Pulse Intelligence paid historical Patrol mode decision mirror 30d | `true`/`false` | Compatibility mirror of the paid Patrol mode decision field for historical aggregate reporting without sending exact tier, checkout details, account links, token details, resource identifiers, command text, or action output |
+| Pulse Intelligence paid historical Patrol mode resolved mirror 30d | `true`/`false` | Compatibility mirror of the paid Patrol mode resolved field for historical aggregate reporting without sending exact tier, checkout details, account links, token details, resource identifiers, command text, or action output |
+| Pulse Intelligence governed action active 30d | `true`/`false` | See whether Patrol or Assistant reached action planning, approval, approve/reject decision, or approved-action depth in the current 30-day telemetry window without sending action details |
+| Pulse Intelligence Assistant governed decision 30d | `true`/`false` | See whether Assistant collaboration specifically reached the Patrol issue plus approved/rejected governed-action path without sending prompts, chat messages, tool details, findings, command text, or action output |
+| Pulse Intelligence Assistant approved action attempt 30d | `true`/`false` | See whether Assistant collaboration specifically reached approved governed-action execution in the 30-day window without sending prompts, chat messages, command text, actors, or action output |
+| Pulse Intelligence Assistant approved action success 30d | `true`/`false` | See whether Assistant collaboration specifically reached approved action success in the 30-day window without sending prompts, chat messages, verification details, command text, or action output |
+| Pulse Intelligence Assistant resolved issue 30d | `true`/`false` | See whether Assistant collaboration specifically reached Patrol resolution plus approved action success in the 30-day window without sending findings, prompts, chat messages, verification details, command text, or action output |
+| Pulse Intelligence external-agent governed decision 30d | `true`/`false` | See whether direct external-agent or MCP collaboration reached the Patrol issue plus approved/rejected governed-action path without sending route parameters, prompts, resource identifiers, command text, or action output |
+| Pulse Intelligence external-agent approved action attempt 30d | `true`/`false` | See whether direct external-agent or MCP collaboration reached approved governed-action execution in the 30-day window without sending route parameters, command text, actors, or action output |
+| Pulse Intelligence external-agent approved action success 30d | `true`/`false` | See whether direct external-agent or MCP collaboration reached approved action success in the 30-day window without sending route parameters, command text, verification details, or action output |
+| Pulse Intelligence external-agent resolved issue 30d | `true`/`false` | See whether direct external-agent or MCP collaboration reached Patrol resolution plus approved action success in the 30-day window without sending findings, route parameters, command text, verification details, or action output |
+| Pulse Intelligence `pulse-mcp` governed decision 30d | `true`/`false` | See whether the `pulse-mcp` adapter specifically reached the Patrol issue plus approved/rejected governed-action path without sending prompts, tool inputs, route parameters, resource identifiers, command text, or action output |
+| Pulse Intelligence `pulse-mcp` approved action attempt 30d | `true`/`false` | See whether the `pulse-mcp` adapter specifically reached approved governed-action execution in the 30-day window without sending prompts, tool inputs, command text, actors, or action output |
+| Pulse Intelligence `pulse-mcp` approved action success 30d | `true`/`false` | See whether the `pulse-mcp` adapter specifically reached approved action success in the 30-day window without sending prompts, tool inputs, verification details, command text, or action output |
+| Pulse Intelligence `pulse-mcp` resolved issue 30d | `true`/`false` | See whether the `pulse-mcp` adapter specifically reached Patrol resolution plus approved action success in the 30-day window without sending findings, prompts, tool inputs, verification details, command text, or action output |
+| Pulse Intelligence starter requests 30d | `3` | Count shared Patrol-work starter requests in the current 30-day telemetry window without sending prompt text, chat messages, tool inputs, resource IDs, or request details |
+| Pulse Intelligence Assistant starter requests 30d | `2` | Count Assistant requests for shared Patrol work in the current 30-day telemetry window without sending prompt text, chat messages, resource IDs, or request details |
+| Pulse Intelligence Patrol starter requests 30d | `1` | Count Patrol work starter requests in the current 30-day telemetry window without sending prompt text, findings, resource IDs, or request details |
+| Pulse Intelligence Patrol mode starter requests 30d | `1` | Count Patrol work, Patrol-mode, and historical entry-point requests for shared Patrol work in the current 30-day telemetry window without sending prompt text, checkout details, account links, resource IDs, or request details |
+| Pulse Intelligence historical Patrol mode starter mirror 30d | `1` | Count historical entry-point requests for Patrol mode in the current 30-day telemetry window without sending prompt text, checkout details, account links, resource IDs, or request details |
+| Pulse Intelligence `pulse-mcp` starter requests 30d | `1` | Count `pulse-mcp` requests for shared Patrol work in the current 30-day telemetry window without sending prompt text, tool inputs, resource IDs, route parameters, or request details |
+| Pulse Intelligence Assistant AI calls 30d | `18` | Count Assistant model calls in the current 30-day telemetry window without sending prompts, responses, session IDs, or chat text |
+| Pulse Intelligence Assistant context AI calls 30d | `7` | Count Assistant model calls tied to a governed resource, finding, handoff, or action context in the current 30-day telemetry window without sending prompts, responses, session IDs, resource IDs, finding IDs, or chat text |
+| Pulse Intelligence Assistant tool calls 30d | `11` | Count Assistant tool calls in the current 30-day telemetry window without sending tool names, tool inputs, tool outputs, prompts, responses, session IDs, resource IDs, finding IDs, command text, or chat text |
+| Pulse Intelligence Patrol AI calls 30d | `6` | Count Patrol model calls in the current 30-day telemetry window without sending provider-bound context or findings text |
+| Pulse Intelligence Patrol runs 30d | `12` | Count Patrol investigations in the current 30-day telemetry window |
+| Pulse Intelligence Patrol new findings 30d | `5` | Count new findings produced by Patrol in the current 30-day telemetry window without sending finding IDs or details |
+| Pulse Intelligence Patrol investigations 30d | `3` | Count findings investigated by Patrol in the current 30-day telemetry window without sending finding IDs, resource IDs, or details |
+| Pulse Intelligence Patrol resolved findings 30d | `2` | Count findings resolved or fix-verified in the current 30-day telemetry window without sending finding IDs, resource IDs, fix details, or verification detail |
+| Pulse Intelligence Patrol autofixes 30d | `1` | Count Patrol autofix records in the current 30-day telemetry window without sending target resources or fix content |
+| Pulse Intelligence external agent enabled | `true`/`false` | See whether at least one token can use the external Pulse Intelligence agent/MCP surface without sending token counts, names, scopes, or values |
+| Pulse Intelligence external agent used 30d | `true`/`false` | See whether an external-agent-capable API token reached a Pulse Intelligence agent/MCP route in the current 30-day telemetry window without sending token identity, route parameters, resource IDs, or request details |
+| Pulse Intelligence MCP adapter used 30d | `true`/`false` | See whether the `pulse-mcp` adapter reached a Pulse Intelligence agent/MCP route in the current 30-day telemetry window without sending token identity, route parameters, resource IDs, prompts, or request details |
+| Pulse Intelligence external agent context requests 30d | `8` | Count external-agent/MCP resource-context and fleet-context requests in the current 30-day telemetry window without sending resource IDs, route parameters, or request details |
+| Pulse Intelligence external agent event stream requests 30d | `3` | Count external-agent/MCP event-stream requests in the current 30-day telemetry window without sending event content, route parameters, or request details |
+| Pulse Intelligence external agent provisioning requests 30d | `2` | Count external-agent/MCP provisioning requests in the current 30-day telemetry window without sending discovered resources, credentials, route parameters, or request details |
+| Pulse Intelligence external agent operator state requests 30d | `5` | Count external-agent/MCP operator-state requests in the current 30-day telemetry window without sending state payloads, route parameters, or request details |
+| Pulse Intelligence external agent finding requests 30d | `4` | Count external-agent/MCP finding-list and finding-decision requests in the current 30-day telemetry window without sending finding IDs, finding text, route parameters, or request details |
+| Pulse Intelligence external agent action requests 30d | `1` | Count external-agent/MCP action-plan, action-decision, and action-execution requests in the current 30-day telemetry window without sending command text, action output, route parameters, or request details |
+| Pulse Intelligence action plans 30d | `4` | Count governed action plans in the current 30-day telemetry window without sending command text, resource IDs, or plan details |
+| Pulse Intelligence approval requests 30d | `2` | Count approval-gated action requests in the current 30-day telemetry window without sending approvers, reasons, command text, or targets |
+| Pulse Intelligence rejected action decisions 30d | `1` | Count rejected governed action decisions in the current 30-day telemetry window without sending approvers, reasons, command text, targets, or action IDs |
+| Pulse Intelligence approved action decisions 30d | `1` | Count approved governed action decisions in the current 30-day telemetry window without sending approvers, reasons, command text, targets, or action IDs |
+| Pulse Intelligence approved action attempts 30d | `1` | Count approved governed action attempts in the current 30-day telemetry window without sending action output, command text, or verification detail |
+| Pulse Intelligence approved action successes 30d | `1` | Count approved governed actions that completed successfully in the current 30-day telemetry window without sending action output, command text, resource IDs, actors, reasons, or verification detail |
 
 #### Server-side handling and retention
 
 - Telemetry pings are stored on the Pulse license server only for aggregate install/use analysis.
-- The license server stores only the same coarse telemetry fields listed above; it does not expand them into exact commercial tiers or exact API-token counts.
+- The license server stores only the same coarse telemetry fields listed above; it does not expand them into exact commercial tiers, exact API-token counts, prompts, chat messages, command text, action output, token values, or resource identifiers.
+- Pulse may derive aggregate Pulse Intelligence adoption reports from those same rows, including whether an install reached Patrol issue activity, Patrol resolution, Assistant, direct external-agent, or MCP collaboration, Patrol mode starter use, paid Patrol mode cohorts, governed-action activity, approved or rejected action decisions, approved action success, recent retention, and observed free-to-paid movement within the source window. Those reports do not add prompts, findings, resource identifiers, tool names, tool inputs, tool outputs, command payloads, action outputs, account links, or exact commercial tiers.
+- External-agent/MCP activity is stored only as a coarse adapter-origin flag plus capability-class counters: context, event stream, provisioning, operator state, findings, and action requests.
 - Telemetry rows older than **90 days** are purged automatically.
 - The license server uses client IP addresses transiently for abuse/rate limiting, but it does **not** store IP addresses in telemetry rows.
 
@@ -93,7 +151,7 @@ Every field is listed below with the reason it exists — nothing else leaves yo
 - No IP addresses are stored in telemetry rows
 - No hostnames, node names, VM names, or any infrastructure identifiers
 - No Proxmox credentials, API tokens, or passwords
-- No alert content, AI prompts, or chat messages
+- No alert content, AI prompts, chat messages, tool names, tool inputs, tool outputs, command text, action output, or token values
 - No personally identifiable information of any kind
 
 #### Install ID rotation

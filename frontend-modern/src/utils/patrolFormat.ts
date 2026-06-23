@@ -162,6 +162,12 @@ export function formatPatrolRuntimeFailureSummary(input: {
   const summary = formatPatrolRuntimeFailureDetail(input.errorSummary);
   const detail = formatPatrolRuntimeFailureDetail(input.errorDetail);
   if (summary && detail && summary !== detail) {
+    if (
+      summary.toLowerCase() === 'provider connection issue' &&
+      detail.toLowerCase().startsWith('provider connection failed')
+    ) {
+      return detail;
+    }
     return `${summary}: ${detail}`;
   }
   if (summary || detail) return summary || detail;

@@ -135,7 +135,7 @@ describe('CommercialMigrationBanner', () => {
 
     fireEvent.click(screen.getByText('Open license settings'));
 
-    expect(navigateMock).toHaveBeenCalledWith('/settings/system/billing/plan');
+    expect(navigateMock).toHaveBeenCalledWith('/settings/pulse-intelligence/billing/plan');
   });
 
   /* ---------- Dismiss ---------- */

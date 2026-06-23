@@ -72,4 +72,32 @@ describe('ResourceChangeSummary', () => {
     expect(screen.getByText('Latest canonical change')).toBeInTheDocument();
     expect(screen.getByText('No canonical changes were recorded.')).toBeInTheDocument();
   });
+
+  it('can suppress metadata badges for compact operator context', () => {
+    render(() => (
+      <ResourceChangeSummary
+        title="Nearby activity"
+        changes={[
+          {
+            id: 'change-1',
+            resourceId: 'storage-1',
+            kind: 'alert_resolved',
+            reason: 'Alert resolved: ZFS pool recovered',
+            observedAt: '2026-03-18T12:00:00Z',
+            sourceType: 'platform_event',
+            sourceAdapter: 'proxmox_adapter',
+            confidence: 'medium',
+          },
+        ]}
+        showMetadataBadges={false}
+      />
+    ));
+
+    expect(screen.getByText('Nearby activity')).toBeInTheDocument();
+    expect(screen.getByText('Alert resolved: ZFS pool recovered')).toBeInTheDocument();
+    expect(screen.getByText('storage-1')).toBeInTheDocument();
+    expect(screen.queryByText('Platform event')).toBeNull();
+    expect(screen.queryByText('Proxmox adapter')).toBeNull();
+    expect(screen.queryByText('Heuristic')).toBeNull();
+  });
 });

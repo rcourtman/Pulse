@@ -13,6 +13,7 @@ import {
   getAPITokenDockerPodmanUsageSummary,
   getAPITokenDockerPodmanUsageTitle,
 } from '@/utils/apiTokenPresentation';
+import { API_TOKEN_CREATE_ANCHOR } from '@/routing/resourceLinks';
 import { useAPITokenManagerState } from './useAPITokenManagerState';
 import type { APITokenRecord } from '@/types/api';
 
@@ -29,8 +30,10 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     API_SCOPE_LABELS,
     API_TOKEN_SCOPES_DOC_URL,
     agentTokenUsage,
+    applyFullAccessPreset,
     applyScopePreset,
     canManage,
+    canGenerateToken,
     clearScopes,
     copyNewMonitoringKioskLink,
     createHighlight,
@@ -41,6 +44,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     handleDelete,
     handleGenerate,
     hasWildcardTokens,
+    hasScopeSelection,
     isFullAccessSelected,
     isGenerating,
     isRevealActiveForCurrentToken,
@@ -406,6 +410,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
       </Show>
 
       <Card
+        id={API_TOKEN_CREATE_ANCHOR}
         padding="none"
         class={`border border-border transition-shadow ${
           createHighlight() ? 'ring-2 ring-blue-500 shadow-sm' : ''
@@ -422,7 +427,12 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
             />
             <button
               onClick={handleGenerate}
-              disabled={!canManage() || isGenerating()}
+              disabled={!canGenerateToken()}
+              title={
+                hasScopeSelection()
+                  ? undefined
+                  : 'Choose a scope preset or custom scope before generating a token.'
+              }
               class="inline-flex min-h-10 sm:min-h-10 items-center justify-center rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-blue-500 dark:hover:bg-blue-400"
             >
               {isGenerating() ? 'Generating…' : 'Generate'}
@@ -463,14 +473,14 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
               <div class="flex flex-wrap gap-2">
                 <SelectablePillButton
                   active={isFullAccessSelected()}
-                  onClick={clearScopes}
+                  onClick={applyFullAccessPreset}
                   disabled={!canManage()}
                   title="Legacy wildcard – all permissions"
                 >
                   Full access
                 </SelectablePillButton>
 
-                <For each={scopePresets}>
+                <For each={scopePresets()}>
                   {(preset) => (
                     <SelectablePillButton
                       active={presetMatchesSelection(preset.scopes)}
@@ -483,6 +493,11 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                   )}
                 </For>
               </div>
+              <Show when={!hasScopeSelection()}>
+                <p class="text-xs text-muted">
+                  Choose a scoped preset for least privilege, or deliberately choose Full access.
+                </p>
+              </Show>
             </div>
 
             <details class="group rounded-md border border-border bg-surface-hover p-4 text-sm transition">

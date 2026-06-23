@@ -41,6 +41,16 @@ describe('resourceChangePresentation utils', () => {
         observedAt: '2026-03-18T12:00:00Z',
       } as never),
     ).toBe('Config update: Updated canonical config');
+
+    expect(
+      formatResourceChangeHeadline({
+        id: 'change-3',
+        resourceId: 'storage:pool:data',
+        kind: 'alert_resolved',
+        reason: "Alert resolved: ZFS pool 'data' has errors",
+        observedAt: '2026-03-18T12:00:00Z',
+      } as never),
+    ).toBe("Alert resolved: ZFS pool 'data' has errors");
   });
 
   it('exposes canonical kind, source type, and adapter presentations', () => {

@@ -1,4 +1,5 @@
 import { CommandCopyButton } from '@/components/shared/Button';
+import { copyToClipboard } from '@/utils/clipboard';
 
 interface CopyCommandBlockProps {
   command: string;
@@ -14,11 +15,11 @@ const DEFAULT_CODE_CLASS =
 
 export function CopyCommandBlock(props: CopyCommandBlockProps) {
   const handleCopy = () => {
-    if (props.onCopy) {
-      void props.onCopy(props.command);
-      return;
-    }
-    void navigator.clipboard.writeText(props.command);
+    void (async () => {
+      const copied = await copyToClipboard(props.command);
+      if (!copied) return;
+      await props.onCopy?.(props.command);
+    })();
   };
 
   return (

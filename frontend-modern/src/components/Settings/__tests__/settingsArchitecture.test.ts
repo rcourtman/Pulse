@@ -3,6 +3,7 @@ import settingsSource from '../Settings.tsx?raw';
 import { EN_MESSAGES } from '@/i18n/messages';
 import settingsDialogsSource from '../SettingsDialogs.tsx?raw';
 import settingsPageShellSource from '../SettingsPageShell.tsx?raw';
+import aiSettingsSource from '../AISettings.tsx?raw';
 import aiSettingsDialogsSource from '../AISettingsDialogs.tsx?raw';
 import aiSettingsStatusAndActionsSource from '../AISettingsStatusAndActions.tsx?raw';
 import aiChatMaintenanceSectionSource from '../AIChatMaintenanceSection.tsx?raw';
@@ -25,6 +26,7 @@ import apiTokenManagerSource from '../APITokenManager.tsx?raw';
 import apiTokenManagerModelSource from '../apiTokenManagerModel.ts?raw';
 import apiTokenManagerStateSource from '../useAPITokenManagerState.ts?raw';
 import agentIntegrationsPanelSource from '../AgentIntegrationsPanel.tsx?raw';
+import agentCapabilitiesApiSource from '@/api/agentCapabilities.ts?raw';
 import dataHandlingPanelSource from '../DataHandlingPanel.tsx?raw';
 import auditLogPanelSource from '../AuditLogPanel.tsx?raw';
 import auditWebhookPanelSource from '../AuditWebhookPanel.tsx?raw';
@@ -85,6 +87,7 @@ import ssoProvidersStateSource from '../useSSOProvidersState.ts?raw';
 import infrastructureOnboardingPresentationSource from '../../../utils/infrastructureOnboardingPresentation.ts?raw';
 import selfHostedBillingPresentationSource from '../selfHostedBillingPresentation.ts?raw';
 import systemSettingsPresentationSource from '../../../utils/systemSettingsPresentation.ts?raw';
+import aiSettingsPresentationSource from '../../../utils/aiSettingsPresentation.ts?raw';
 import auditLogPresentationSource from '../../../utils/auditLogPresentation.ts?raw';
 import statusIndicatorBadgeSource from '../../shared/StatusIndicatorBadge.tsx?raw';
 
@@ -157,6 +160,34 @@ describe('settings architecture guardrails', () => {
     );
   });
 
+  it('keeps Assistant OAuth callback compatibility on the shared settings shell', () => {
+    expect(settingsNavigationModelSource).toContain(
+      'export const SETTINGS_PROVIDER_MODELS_PATH = `${SETTINGS_PULSE_INTELLIGENCE_PATH}/provider`;',
+    );
+    expect(settingsNavigationModelSource).toContain(
+      "const LEGACY_SYSTEM_AI_PREFIX = '/settings/system-ai';",
+    );
+    expect(settingsNavigationModelSource).toContain('normalizedPath === LEGACY_SYSTEM_AI_PREFIX');
+    expect(settingsNavigationModelSource).toContain(
+      "case 'system-ai':\n      return PULSE_INTELLIGENCE_PROVIDER_PREFIX;",
+    );
+    expect(settingsNavigationModelSource).toContain(
+      'export function isAISettingsOAuthCallbackQuery(search: string): boolean',
+    );
+    expect(settingsNavigationModelSource).toContain(
+      "return params.has('ai_oauth_success') || params.has('ai_oauth_error');",
+    );
+    expect(settingsNavigationModelSource).toContain(
+      "if (isAISettingsOAuthCallbackQuery(search)) return 'system-ai';",
+    );
+    expect(settingsNavigationHookSource).toContain(
+      "resolvedTab === 'system-ai' && isAISettingsOAuthCallbackQuery(search)",
+    );
+    expect(settingsNavigationHookSource).toContain(
+      'const targetHref = shouldPreserveQuery ? `${target}${search}${hash}` : target;',
+    );
+  });
+
   it('keeps retired operations paths out of the settings routing model', () => {
     expect(settingsNavigationModelSource).toContain(
       "const RETIRED_SETTINGS_OPERATIONS_PREFIX = '/settings/operations';",
@@ -184,31 +215,41 @@ describe('settings architecture guardrails', () => {
       'params.securityStatus()?.proxyAuthUsername',
     );
     expect(settingsPanelRegistryContextSource).toContain(
-      '|| params.securityStatus()?.ssoSessionUsername',
+      'params.securityStatus()?.ssoSessionUsername',
     );
-    expect(settingsPanelRegistryContextSource).toContain(
-      '|| params.securityStatus()?.authUsername;',
-    );
+    expect(settingsPanelRegistryContextSource).toContain('params.securityStatus()?.authUsername;');
     expect(settingsPanelRegistryContextSource).toContain('getOrganizationOverviewPanelProps');
     expect(settingsPanelRegistryContextSource).toContain('getOrganizationAccessPanelProps');
     expect(settingsPanelRegistryContextSource).toContain('getOrganizationSharingPanelProps');
   });
 
   it('keeps self-hosted commercial settings plan-owned under one shared presentation model', () => {
-    expect(selfHostedBillingPresentationSource).toContain("navLabel: 'Plans'");
-    expect(selfHostedBillingPresentationSource).toContain("shellTitle: 'Self-hosted plan'");
+    expect(selfHostedBillingPresentationSource).toContain("navLabel: 'Plans & Billing'");
+    expect(selfHostedBillingPresentationSource).toContain("shellTitle: 'Plans & Billing'");
     expect(selfHostedBillingPresentationSource).toContain(
-      "shellDescription:\n    'Review the plan this instance is using and the optional capabilities connected to it.'",
+      'Plan, license, and Patrol mode for this instance.',
     );
     expect(selfHostedBillingPresentationSource).toContain("planSectionTitle: 'Current plan'");
     expect(selfHostedBillingPresentationSource).toContain(
-      "recoverySectionTitle: 'Existing purchases'",
+      "recoverySectionTitle: 'License recovery'",
     );
 
     expect(settingsNavCatalogSource).toContain(
       'label: SELF_HOSTED_PRO_BILLING_PRESENTATION.navLabel',
     );
-    expect(settingsNavCatalogSource).toContain('hideFromSidebar: true');
+    const pulseIntelligenceNavBlock = settingsNavCatalogSource.match(
+      /id: 'pulse-intelligence',[\s\S]*?id: 'organization',/,
+    );
+    expect(pulseIntelligenceNavBlock?.[0]).toContain("id: 'system-billing'");
+    const systemBillingNavBlock = settingsNavCatalogSource.match(
+      /id: 'system-billing',[\s\S]*?hideWhenCommercialHidden: true,\n\s*},/,
+    );
+    expect(systemBillingNavBlock?.[0]).toContain(
+      'label: SELF_HOSTED_PRO_BILLING_PRESENTATION.navLabel',
+    );
+    expect(systemBillingNavBlock?.[0]).not.toContain('hideFromSidebar');
+    const systemNavBlock = settingsNavCatalogSource.match(/id: 'system',[\s\S]*?id: 'support',/);
+    expect(systemNavBlock?.[0]).not.toContain("id: 'system-billing'");
     expect(settingsNavCatalogSource).toContain("features: ['rbac']");
     expect(settingsNavCatalogSource).toContain("features: ['audit_logging']");
     expect(settingsNavCatalogSource).toContain("features: ['relay']");
@@ -271,11 +312,33 @@ describe('settings architecture guardrails', () => {
     expect(aiRuntimeControlsSectionSource).toContain('showAutonomousControlOption');
     expect(aiRuntimeControlsSectionSource).toContain("state.form.controlLevel === 'autonomous'");
     expect(aiRuntimeControlsSectionSource).toContain(
-      'Controlled - Pulse Assistant asks before actions',
+      'Ask first - Assistant asks before chat-only actions',
     );
     expect(aiRuntimeControlsSectionSource).toContain(
-      'Autonomous - Pulse Assistant can run eligible actions',
+      'Allow chat-only actions - Assistant may take eligible chat actions',
     );
+    expect(aiRuntimeControlsSectionSource).toContain(
+      'This controls actions started from Assistant chat only',
+    );
+    expect(aiRuntimeControlsSectionSource).toContain('Patrol handles infrastructure');
+    expect(aiRuntimeControlsSectionSource).not.toContain('Command auto-run');
+    expect(aiRuntimeControlsSectionSource).not.toContain('without per-command approval');
+    expect(aiRuntimeControlsSectionSource).not.toContain('Legal Disclaimer');
+    expect(aiRuntimeControlsSectionSource).not.toContain('Patrol uses the mode configured on');
+    expect(aiRuntimeControlsSectionSource).toContain('label="Chat action mode"');
+    expect(aiRuntimeControlsSectionSource).not.toContain('label="Command mode"');
+    expect(aiSettingsPresentationSource).toContain('Assistant chat actions');
+    expect(aiSettingsPresentationSource).not.toContain('Assistant chat command access');
+    expect(aiSettingsPresentationSource).not.toContain('Assistant command access');
+    expect(aiSettingsSource).toContain('AI_SETTINGS_PAGE_META');
+    expect(aiSettingsSource).toContain("saveLabel: 'Save provider settings'");
+    expect(aiSettingsSource).toContain("saveLabel: 'Save Patrol settings'");
+    expect(aiSettingsSource).toContain("saveLabel: 'Save Assistant settings'");
+    expect(aiSettingsSource).toContain("saveLabel: 'Save service context settings'");
+    expect(aiSettingsStatusAndActionsSource).toContain('props.saveLabel');
+    expect(aiSettingsStatusAndActionsSource).not.toContain('Save changes</button>');
+    expect(aiSettingsStateSource).toContain('options.savedLabel');
+    expect(aiSettingsStateSource).toContain('notificationStore.success(savedLabel)');
     expect(aiRuntimeControlsSectionSource).not.toContain('without approval (Pro)');
     expect(aiRuntimeControlsSectionSource).not.toContain(
       'Pulse Assistant executes without approval',
@@ -561,10 +624,13 @@ describe('settings architecture guardrails', () => {
       'aggregate self-hosted adoption',
     );
     expect(EN_MESSAGES['settings.general.telemetry.description']).toContain(
-      'counts, and coarse feature flags',
+      'counts, coarse feature flags, and coarse Patrol, Assistant, and external-agent usage counters',
+    );
+    expect(EN_MESSAGES['settings.general.telemetry.description']).not.toContain(
+      'Pulse Intelligence loop adoption',
     );
     expect(EN_MESSAGES['settings.general.telemetry.description']).toContain(
-      'identifiers, prompts, chat messages, or personal information are sent.',
+      'identifiers, prompts, chat messages, command text, action output, token values, or personal information are sent.',
     );
     expect(generalSettingsPanelSource).toContain('settings.general.telemetry.payloadAriaLabel');
     expect(generalSettingsPanelSource).toContain('settings.general.telemetry.resetId');
@@ -627,7 +693,7 @@ describe('settings architecture guardrails', () => {
   });
 
   it('keeps Patrol tool-call preflight wired through the canonical settings state', () => {
-    // The Verify Patrol button must drive the canonical
+    // The Check Patrol model button must drive the canonical
     // /api/ai/patrol/preflight endpoint via the typed runPatrolPreflight
     // client and surface the result through state, not via inline fetch
     // calls in the section component.
@@ -643,7 +709,7 @@ describe('settings architecture guardrails', () => {
     expect(aiModelSelectionSectionSource).not.toContain("fetch('/api/ai/patrol/preflight");
   });
 
-  it('keeps workload discovery manual refresh on the canonical settings state', () => {
+  it('keeps service context manual refresh on the canonical settings state', () => {
     expect(aiSettingsStateSource).toContain(
       "import { runDiscoveryRefresh } from '@/api/discovery';",
     );
@@ -651,20 +717,18 @@ describe('settings architecture guardrails', () => {
     expect(aiSettingsStateSource).toContain('const result = await runDiscoveryRefresh();');
     expect(aiSettingsStateSource).toContain('discoveryRunRunning');
     expect(aiRuntimeControlsSectionSource).toContain('state.handleRunDiscoveryRefresh()');
-    expect(aiRuntimeControlsSectionSource).toContain('Run discovery now');
+    expect(aiRuntimeControlsSectionSource).toContain('Run context scan');
     expect(aiRuntimeControlsSectionSource).toContain('Auto ${state.form.discoveryIntervalHours}h');
     expect(aiRuntimeControlsSectionSource).toContain('Manual only');
     expect(aiRuntimeControlsSectionSource).toContain(
-      'Automatic workload scans will run at this interval.',
+      'Recurring service context scans will run at this interval.',
     );
     expect(aiRuntimeControlsSectionSource).toContain(
-      'Automatic workload scans are off. Only manual refreshes will run.',
+      'Recurring service context scans are off. Only manual refreshes will run.',
     );
+    expect(aiRuntimeControlsSectionSource).toContain('Runs the same scan used by the schedule.');
     expect(aiRuntimeControlsSectionSource).toContain(
-      'Runs the pending workload sweep used by the schedule.',
-    );
-    expect(aiRuntimeControlsSectionSource).toContain(
-      'Manual-only mode: runs the pending workload sweep once without enabling recurring scans.',
+      'Manual-only mode: runs one scan without enabling recurring scans.',
     );
     expect(aiRuntimeControlsSectionSource).not.toContain("fetch('/api/discovery/run");
   });
@@ -681,8 +745,8 @@ describe('settings architecture guardrails', () => {
     expect(aiModelSelectionSectionSource).toContain('last verified');
   });
 
-  it("passes the form's pending patrolModel to runPatrolPreflight so Verify Patrol tests the unsaved selection", () => {
-    // Without this, clicking Verify Patrol after changing the model
+  it("passes the form's pending patrolModel to runPatrolPreflight so the model check tests the unsaved selection", () => {
+    // Without this, clicking Check Patrol model after changing the model
     // dropdown silently tested the previously-saved model and the
     // operator would believe their pending selection was verified.
     expect(aiSettingsStateSource).toContain('form.patrolModel');
@@ -702,7 +766,7 @@ describe('settings architecture guardrails', () => {
     expect(aiModelSelectionSectionSource).toContain('cachedResultModel');
     expect(aiModelSelectionSectionSource).toContain('Verified result is for');
     expect(aiModelSelectionSectionSource).toContain(
-      'Click Verify Patrol to test the pending selection',
+      'Click Check Patrol model to test the pending selection',
     );
   });
 
@@ -912,12 +976,25 @@ describe('settings architecture guardrails', () => {
     expect(aiModelSelectionSectionSource).not.toContain('<select');
     expect(aiModelSelectionSectionSource).not.toContain('<optgroup');
 
-    expect(aiModelSelectionSectionSource).toContain('Pulse Assistant Model');
-    expect(aiModelSelectionSectionSource).toContain('Patrol Verification Model');
-    expect(aiModelSelectionSectionSource).toContain('Discovery Model');
-    expect(aiModelSelectionSectionSource).toContain('chatModelOptions');
-    expect(aiModelSelectionSectionSource).toContain('patrolModelOptions');
-    expect(aiModelSelectionSectionSource).toContain('discoveryModelOptions');
+    expect(aiModelSelectionSectionSource).toContain('type AIModelOverrideKind');
+    expect(aiModelSelectionSectionSource).toContain("formKey: 'chatModel' | 'patrolModel'");
+    expect(aiModelSelectionSectionSource).toContain("label: 'Pulse Assistant model'");
+    expect(aiModelSelectionSectionSource).toContain(
+      'Used for chat, explanations, and review. Patrol handles infrastructure work.',
+    );
+    expect(aiModelSelectionSectionSource).not.toContain('approved fix execution');
+    expect(aiModelSelectionSectionSource).toContain("label: 'Patrol model'");
+    expect(aiModelSelectionSectionSource).toContain("label: 'Service context model'");
+    expect(aiModelSelectionSectionSource).toContain('export const AIModelOverrideField');
+    expect(aiSettingsSource).toContain(
+      '<AIModelOverrideField state={props.state} kind="assistant" />',
+    );
+    expect(aiSettingsSource).toContain(
+      '<AIModelOverrideField state={props.state} kind="patrol" includePatrolPreflight />',
+    );
+    expect(aiSettingsSource).toContain(
+      '<AIModelOverrideField state={props.state} kind="discovery" />',
+    );
     expect(aiSettingsStateSource).toContain('discoveryModel:');
     expect(aiSettingsStateSource).toContain('payload.discovery_model = form.discoveryModel');
 
@@ -930,13 +1007,25 @@ describe('settings architecture guardrails', () => {
   });
 
   it('keeps system AI save feedback tied to provider and Patrol readiness context', () => {
+    expect(aiSettingsSource).toContain('Choose a Patrol mode on the Patrol page.');
+    expect(aiSettingsSource).toContain('Open Patrol');
+    expect(aiSettingsSource).toContain("const isProviderPage = () => page() === 'provider';");
+    expect(aiSettingsSource).toContain('showConnectionControls={isProviderPage()}');
+    expect(aiSettingsStatusAndActionsSource).toContain('showConnectionControls?: boolean');
+    expect(aiSettingsStatusAndActionsSource).toContain(
+      'props.showConnectionControls && state.settings()?.configured',
+    );
+    expect(aiSettingsSource).not.toContain(
+      'Set how much Patrol can do on its own from the Patrol page',
+    );
+    expect(aiSettingsSource).not.toContain('Patrol autonomy is the operations policy');
     expect(aiSettingsStateSource).toContain(
       "import { apiErrorDetails } from '@/api/responseUtils';",
     );
     expect(aiSettingsStateSource).toContain('resolveAISettingsSaveProviderFailure');
     expect(aiSettingsStateSource).toContain('getAISettingsPatrolReadinessSaveMessage(');
     expect(aiSettingsStateSource).toContain(
-      "getAISettingsPatrolReadinessSaveMessage(\n        updated.patrol_readiness,\n        'Assistant & Patrol enabled',",
+      "getAISettingsPatrolReadinessSaveMessage(\n        updated.patrol_readiness,\n        'Pulse Intelligence enabled',",
     );
     expect(aiSettingsStateSource).toContain('notificationStore.warning(patrolReadinessMessage);');
     expect(aiSettingsStateSource).toContain('getAISettingsSaveProviderFailureMessage(');
@@ -1161,19 +1250,187 @@ describe('settings architecture guardrails', () => {
     );
   });
 
-  it('exposes the agent integrations panel under API Access without growing the settings tab inventory', () => {
-    // The agent integrations panel sits as a sibling section
-    // under the existing API Access tab rather than as its own
-    // navigation entry. This pin keeps the operator's mental
-    // model coherent (one tab for machine-driven access:
-    // tokens + what those tokens unlock) and prevents drift
-    // toward fragmenting the agent surface across tabs.
-    expect(apiAccessPanelSource).toContain(
-      "import AgentIntegrationsPanel from './AgentIntegrationsPanel';",
+  it('exposes external-agent setup from Pulse Intelligence while API Access stays token-only', () => {
+    // External agents are a Pulse Intelligence access path over the same
+    // governed Patrol policy, not a generic Security API feature. API Access
+    // remains the place to mint the scoped credential when setup needs one.
+    expect(aiSettingsSource).toContain(
+      "import AgentIntegrationsPanel from '@/components/Settings/AgentIntegrationsPanel';",
     );
-    expect(apiAccessPanelSource).toContain('<AgentIntegrationsPanel />');
+    expect(aiSettingsSource).toContain(
+      "const showExternalAgentAccess = () => page() === 'assistant';",
+    );
+    expect(aiSettingsSource).toContain('<AgentIntegrationsPanel />');
+    expect(apiAccessPanelSource).not.toContain('AgentIntegrationsPanel');
+    expect(apiAccessPanelSource).not.toContain('isExternalAgentSetupHash');
+    expect(apiAccessPanelSource).not.toContain('api-access-external-agent-section');
+    expect(apiAccessPanelSource).toContain('api-access-token-section');
     expect(agentIntegrationsPanelSource).toContain('ExternalTextLink');
     expect(agentIntegrationsPanelSource).not.toContain('rel="noreferrer"');
+    expect(agentIntegrationsPanelSource).toContain('External agents');
+    expect(agentIntegrationsPanelSource).toContain('Connect external tools');
+    expect(agentIntegrationsPanelSource).toContain('read Pulse context');
+    expect(agentIntegrationsPanelSource).toContain('request Patrol work');
+    expect(agentIntegrationsPanelSource).toContain('Patrol mode and scoped tokens control');
+    expect(agentIntegrationsPanelSource).not.toContain('Optional connector access for Claude Desktop');
+    expect(agentIntegrationsPanelSource).not.toContain('Patrol remains the operator');
+    expect(agentIntegrationsPanelSource).not.toContain('Connected tools');
+    expect(agentIntegrationsPanelSource).toContain('setupOpen');
+    expect(agentIntegrationsPanelSource).toContain('Show connector setup');
+    expect(agentIntegrationsPanelSource).toContain('Hide connector setup');
+    expect(agentIntegrationsPanelSource).toContain('<Show when={!setupOpen()}>');
+    expect(agentIntegrationsPanelSource).not.toContain(
+      [
+        'Choose',
+        'what',
+        'Patrol',
+        'may',
+        'handle',
+        'automatically',
+        'before',
+        'any',
+        'external',
+        'agent',
+        'can',
+      ].join(' '),
+    );
+    expect(agentIntegrationsPanelSource).toContain(
+      'Required before agents can request Patrol work.',
+    );
+    expect(agentIntegrationsPanelSource).not.toContain(
+      'Set the Patrol mode before connected agents can request work.',
+    );
+    expect(agentIntegrationsPanelSource).toContain('Choose Patrol mode');
+    expect(agentIntegrationsPanelSource).toContain('PATROL_CONTROL_PATH');
+    expect(agentIntegrationsPanelSource).not.toContain("settingsTabPath('system-ai')");
+    expect(agentIntegrationsPanelSource).toContain('EXTERNAL_AGENT_SETUP_ANCHOR');
+    expect(agentIntegrationsPanelSource).toContain('PULSE_MCP_SETUP_ANCHOR');
+    expect(agentIntegrationsPanelSource).toContain('focusPanelUntilLayoutSettles');
+    expect(agentIntegrationsPanelSource).toContain('findScrollableAncestor');
+    expect(agentIntegrationsPanelSource).toContain(
+      'document.getElementById(EXTERNAL_AGENT_SETUP_ANCHOR)',
+    );
+    expect(agentIntegrationsPanelSource).toContain('window.history.replaceState');
+    expect(agentIntegrationsPanelSource).not.toContain('Use Pulse MCP only');
+    expect(agentIntegrationsPanelSource).not.toContain('outside client');
+    expect(agentIntegrationsPanelSource).not.toContain('Pulse Intelligence surfaces');
+    expect(agentIntegrationsPanelSource).toContain('Connector setup');
+    expect(agentIntegrationsPanelSource).toContain('Connect the agent');
+    expect(agentIntegrationsPanelSource).toContain('Developer details');
+    expect(agentIntegrationsPanelSource).toContain('advancedClientDetailsOpen');
+    expect(agentIntegrationsPanelSource).toContain(
+      'Only open this when you are building or debugging a client',
+    );
+    expect(agentIntegrationsPanelSource).toContain('Patrol access model');
+    expect(agentIntegrationsPanelSource).toContain(
+      'Built-in Pulse views and connected clients all sit behind',
+    );
+    expect(agentIntegrationsPanelSource).toContain('Live manifest details');
+    expect(agentIntegrationsPanelSource).not.toContain('Build a custom client');
+    expect(agentIntegrationsPanelSource).not.toContain('Instance manifest details');
+    expect(agentIntegrationsPanelSource).not.toContain('MCP client config');
+    expect(agentIntegrationsPanelSource).toContain('normalizeAgentMCPAdapter');
+    expect(agentIntegrationsPanelSource).not.toContain('getAgentMCPClientExamples');
+    expect(agentIntegrationsPanelSource).toContain('getAgentWorkflowPrompts');
+    expect(agentIntegrationsPanelSource).toContain('Agent starting points');
+    expect(agentIntegrationsPanelSource).toContain('Patrol');
+    expect(agentIntegrationsPanelSource).not.toContain('Operations loop');
+    expect(agentIntegrationsPanelSource).toContain('OpenCode');
+    expect(agentIntegrationsPanelSource).toContain(
+      "import { Button, ButtonLink } from '@/components/shared/Button';",
+    );
+    expect(agentIntegrationsPanelSource).toContain(
+      "import KeyRoundIcon from 'lucide-solid/icons/key-round';",
+    );
+    expect(agentIntegrationsPanelSource).toContain('API_TOKEN_PATROL_EXTERNAL_AGENT_PRESET_LABEL');
+    expect(agentIntegrationsPanelSource).toContain('PULSE_MCP_TOKEN_SETUP_PATH');
+    expect(agentIntegrationsPanelSource).toContain('hardNavigation');
+    expect(apiTokenManagerSource).toContain('API_TOKEN_CREATE_ANCHOR');
+    expect(agentIntegrationsPanelSource).toContain('formatAgentOpenCodeMCPConfig');
+    expect(agentIntegrationsPanelSource).toContain('formatAgentMCPServersConfig');
+    expect(agentIntegrationsPanelSource).toContain('Installer commands');
+    expect(agentIntegrationsPanelSource).toContain('installerCommandsOpen');
+    expect(agentIntegrationsPanelSource).toContain('mcpInstallShellCommand');
+    expect(agentIntegrationsPanelSource).toContain('mcpInstallPowerShellCommand');
+    expect(agentIntegrationsPanelSource).toContain('Client config');
+    expect(agentIntegrationsPanelSource).toContain('clientConfigOpen');
+    expect(agentIntegrationsPanelSource).toContain('Install the connector');
+    expect(agentIntegrationsPanelSource).toContain('paste the client config');
+    expect(agentIntegrationsPanelSource).not.toContain('The installer and');
+    expect(agentIntegrationsPanelSource).not.toContain('on the machine that runs the external tool');
+    expect(agentIntegrationsPanelSource).not.toContain('Install the Pulse MCP bridge');
+    expect(agentIntegrationsPanelSource).not.toContain(
+      'Use the OpenCode or Claude-style snippet below',
+    );
+    expect(agentIntegrationsPanelSource).toContain('opencode.json');
+    expect(agentCapabilitiesApiSource).toContain("type: 'local'");
+    expect(agentCapabilitiesApiSource).toContain('environment');
+    expect(agentIntegrationsPanelSource).toContain('mcpServersConfigFamily');
+    expect(agentCapabilitiesApiSource).toContain('custom clients');
+    expect(agentIntegrationsPanelSource).toContain('requiredScopes');
+    expect(agentIntegrationsPanelSource).toContain('Manifest scopes');
+    expect(agentIntegrationsPanelSource).not.toContain('published contract');
+    expect(agentIntegrationsPanelSource).toContain('External agents expose');
+    expect(agentCapabilitiesApiSource).toContain('surfaceLabel,');
+    expect(agentIntegrationsPanelSource).toContain('capability below shows its required scope');
+    expect(agentIntegrationsPanelSource).toContain('getAgentSurfaceContractEntries');
+    expect(agentIntegrationsPanelSource).toContain('surfaceContractEntries');
+    expect(agentIntegrationsPanelSource).toContain('Built-in Pulse views');
+    expect(agentCapabilitiesApiSource).toContain('AgentSurfaceAffordanceContract');
+    expect(agentCapabilitiesApiSource).toContain('AgentSurfaceToolContract');
+    expect(agentCapabilitiesApiSource).toContain('normalizeSurfaceAffordances');
+    expect(agentCapabilitiesApiSource).toContain('surfaceAffordanceLabels');
+    expect(agentCapabilitiesApiSource).toContain('AGENT_SURFACE_ID_PULSE_MCP');
+    expect(agentCapabilitiesApiSource).toContain('getAgentManifestSurfaceToolContract');
+    expect(agentCapabilitiesApiSource).toContain('getAgentManifestSurfaceToolContracts');
+    expect(agentIntegrationsPanelSource).toContain('AGENT_SURFACE_ID_PULSE_MCP');
+    expect(agentIntegrationsPanelSource).toContain('getAgentManifestSurfaceToolContract');
+    expect(agentIntegrationsPanelSource).toContain('getAgentSurfaceToolPosturePresentation');
+    expect(agentIntegrationsPanelSource).toContain('mcpSurfaceToolPosture');
+    expect(agentIntegrationsPanelSource).toContain('data-testid="agent-mcp-tool-posture"');
+    expect(agentIntegrationsPanelSource).toContain('External agents expose {posture().label}');
+    expect(agentCapabilitiesApiSource).toContain('capability availability');
+    expect(agentCapabilitiesApiSource).toContain("if (affordances.tools) labels.push('Actions')");
+    expect(agentCapabilitiesApiSource).not.toContain('runtime tool availability');
+    expect(agentIntegrationsPanelSource).toContain('getAgentCapabilityErrorCodeSummaries');
+    expect(agentIntegrationsPanelSource).toContain('errorCodeSummaries');
+    expect(agentIntegrationsPanelSource).toContain('Failure codes');
+    expect(agentIntegrationsPanelSource).toContain('from the live manifest');
+    expect(agentIntegrationsPanelSource).toContain('groupAgentCapabilitiesByManifestCategories');
+    expect(agentIntegrationsPanelSource).toContain("from '@/api/agentCapabilities'");
+    expect(agentIntegrationsPanelSource).not.toContain("fetch('/api/agent/capabilities'");
+    expect(agentCapabilitiesApiSource).toContain(
+      "export const AGENT_CAPABILITIES_PATH = '/api/agent/capabilities'",
+    );
+    expect(agentCapabilitiesApiSource).toContain("from './generated/agentCapabilities'");
+    expect(agentCapabilitiesApiSource).toContain('skipAuth: true');
+    expect(agentCapabilitiesApiSource).toContain('manifest.categories');
+    expect(agentCapabilitiesApiSource).toContain('AgentMCPAdapterContract');
+    expect(agentCapabilitiesApiSource).toContain('manifest?.surfaceToolContracts');
+    expect(agentCapabilitiesApiSource).toContain('manifest?.mcpAdapter');
+    expect(agentCapabilitiesApiSource).toContain('getAgentMCPClientExamples');
+    expect(agentCapabilitiesApiSource).toContain('formatAgentOpenCodeMCPConfig');
+    expect(agentCapabilitiesApiSource).toContain('formatAgentMCPServersConfig');
+    expect(agentCapabilitiesApiSource).toContain('getAgentCapabilityErrorCodeSummaries');
+    expect(agentCapabilitiesApiSource).not.toContain('export interface AgentCapability {');
+    expect(agentCapabilitiesApiSource).not.toContain(
+      'export interface AgentCapabilitiesManifest {',
+    );
+    expect(agentCapabilitiesApiSource).not.toContain('getAgentMCPSurfaceToolContract');
+    expect(agentIntegrationsPanelSource).not.toContain('MCP_CLIENT_EXAMPLES');
+    expect(agentIntegrationsPanelSource).not.toContain('function formatClaudeMcpConfig');
+    expect(agentIntegrationsPanelSource).not.toContain('function formatOpenCodeMcpConfig');
+    expect(agentIntegrationsPanelSource).not.toContain('CATEGORY_ORDER');
+    expect(agentIntegrationsPanelSource).not.toContain('Claude Desktop / Claude Code config');
+    expect(agentIntegrationsPanelSource).not.toContain('any MCP client that accepts');
+    expect(agentIntegrationsPanelSource).not.toContain('getAgentMCPSurfaceToolContract');
+    expect(agentIntegrationsPanelSource).not.toContain('subscribe_events');
+    expect(agentIntegrationsPanelSource).not.toContain('capability.name');
+    expect(agentIntegrationsPanelSource).not.toContain('Interactive questions');
+    expect(agentIntegrationsPanelSource).not.toContain('Capability metadata');
+    expect(agentIntegrationsPanelSource).not.toContain(
+      'monitoring:write for the operator-state write tools',
+    );
   });
 
   it('keeps internal analytics off the user diagnostics boundary', () => {
@@ -1182,8 +1439,15 @@ describe('settings architecture guardrails', () => {
     expect(diagnosticsResultsPanelSource).not.toContain('commercialFunnel');
     expect(diagnosticsResultsPanelSource).not.toContain('infrastructureOnboarding');
     expect(diagnosticsResultsPanelSource).not.toContain("apiFetchJSON('/api/diagnostics')");
+    expect(diagnosticsResultsPanelSource).toContain('Assistant runtime');
+    expect(diagnosticsResultsPanelSource).toContain('assistantRuntimeConnected');
+    expect(diagnosticsResultsPanelSource).not.toContain('MCP Connection');
+    expect(diagnosticsResultsPanelSource).not.toContain('mcpConnected');
 
     expect(diagnosticsModelSource).toContain('stripInternalAnalyticsDiagnosticsFields');
+    expect(diagnosticsModelSource).toContain('assistantRuntimeConnected');
+    expect(diagnosticsModelSource).not.toContain('mcpConnected');
+    expect(diagnosticsModelSource).not.toContain('mcpToolCount');
     expect(diagnosticsModelSource).not.toContain('export interface CommercialFunnelDiagnostic');
     expect(diagnosticsModelSource).not.toContain('export interface CommercialFunnelSummary');
     expect(diagnosticsModelSource).not.toContain(

@@ -55,6 +55,50 @@ describe('useSettingsNavigation', () => {
     });
   });
 
+  it('preserves Assistant OAuth callback queries while routing /settings to Provider & Models', async () => {
+    renderHarness('/settings', '?ai_oauth_error=unsupported');
+
+    await waitFor(() => {
+      expect(navigateSpy).toHaveBeenCalledWith(
+        '/settings/pulse-intelligence/provider?ai_oauth_error=unsupported',
+        {
+          replace: true,
+          scroll: false,
+        },
+      );
+    });
+  });
+
+  it('routes legacy external-agent API hashes to Pulse Intelligence Assistant', async () => {
+    for (const hash of ['#external-agent-setup', '#pulse-mcp-setup']) {
+      cleanup();
+      navigateSpy.mockReset();
+      renderHarness('/settings/security/api', '', hash);
+
+      await waitFor(() => {
+        expect(navigateSpy).toHaveBeenCalledWith(
+          '/settings/pulse-intelligence/assistant#external-agent-setup',
+          {
+            replace: true,
+            scroll: false,
+          },
+        );
+      });
+    }
+  });
+
+  it('keeps token creation preset links on API Access', async () => {
+    renderHarness(
+      '/settings/security/api',
+      '?tokenPreset=pulse-intelligence-agent',
+      '#api-token-create',
+    );
+
+    await waitFor(() => {
+      expect(navigateSpy).not.toHaveBeenCalled();
+    });
+  });
+
   it('routes setup-oriented infrastructure tab clicks back to systems when the session is read-only', () => {
     presentationPolicyIsReadOnlyMock.mockReturnValue(true);
     renderHarness('/settings/system-general');

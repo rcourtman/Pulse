@@ -10,6 +10,7 @@ import {
   AI_COST_PATROL_USE_CASE_LABEL,
   AI_COST_PROVIDER_MODEL_PAIR_LABEL,
   AI_COST_RESET_HISTORY_LABEL,
+  AI_COST_TARGET_TABLE_LABEL,
   buildAICostExportFilename,
   getAICostBudgetNote,
   getAICostExportHistoryErrorMessage,
@@ -19,6 +20,7 @@ import {
   getAICostResetHistoryConfirmationMessage,
   getAICostResetHistoryErrorMessage,
   getAICostResetHistorySuccessMessage,
+  getAICostTargetPresentation,
 } from '@/utils/aiCostPresentation';
 
 describe('aiCostPresentation', () => {
@@ -38,6 +40,7 @@ describe('aiCostPresentation', () => {
     expect(AI_COST_PATROL_USE_CASE_LABEL).toBe('Patrol');
     expect(AI_COST_BUDGET_LABEL).toBe('30-day budget (USD)');
     expect(AI_COST_RESET_HISTORY_LABEL).toBe('Reset usage history');
+    expect(AI_COST_TARGET_TABLE_LABEL).toBe('Usage by task');
     expect(AI_COST_EMPTY_STATE).toBe(
       'Provider usage data will appear here once Pulse Assistant or Patrol activity is recorded.',
     );
@@ -52,7 +55,7 @@ describe('aiCostPresentation', () => {
     });
     expect(getAICostRefreshErrorMessage()).toBe('Failed to refresh provider usage summary');
     expect(getAICostBudgetNote(7)).toBe(
-      'Configured in Assistant & Patrol settings. Pro-rated for 7d:',
+      'Configured in Provider & Models settings. Pro-rated for 7d:',
     );
     expect(getAICostResetHistoryConfirmationMessage()).toBe(
       'Reset provider usage history? A backup will be created in the Pulse config directory.',
@@ -63,8 +66,40 @@ describe('aiCostPresentation', () => {
     expect(getAICostResetHistorySuccessMessage()).toBe('Provider usage history reset');
     expect(getAICostResetHistoryErrorMessage()).toBe('Failed to reset provider usage history');
     expect(getAICostExportHistoryErrorMessage()).toBe('Failed to export provider usage history');
+    expect(buildAICostExportFilename(30, 'csv', new Date('2026-03-01T12:00:00Z'))).toBe(
+      'pulse-provider-usage-2026-03-01-30d.csv',
+    );
+  });
+
+  it('presents usage targets as product concepts instead of raw internal IDs', () => {
     expect(
-      buildAICostExportFilename(30, 'csv', new Date('2026-03-01T12:00:00Z')),
-    ).toBe('pulse-provider-usage-2026-03-01-30d.csv');
+      getAICostTargetPresentation({
+        target_type: 'assistant_session_title',
+        target_id: '7f5941d9-a503-416d-b84e-5a46c9e1e11f',
+      }),
+    ).toEqual({
+      label: 'Assistant sessions',
+      rawLabel: 'assistant_session_title:7f5941d9-a503-416d-b84e-5a46c9e1e11f',
+    });
+
+    expect(
+      getAICostTargetPresentation({
+        target_type: 'patrol_run',
+        target_id: 'ed21e8612df6450fab4ebd4ae2502259',
+      }),
+    ).toEqual({
+      label: 'Patrol runs',
+      rawLabel: 'patrol_run:ed21e8612df6450fab4ebd4ae2502259',
+    });
+
+    expect(
+      getAICostTargetPresentation({
+        target_type: 'vm',
+        target_id: '100',
+      }),
+    ).toEqual({
+      label: 'VM 100',
+      rawLabel: 'vm:100',
+    });
   });
 });

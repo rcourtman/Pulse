@@ -209,6 +209,18 @@ describe('patrolFormat', () => {
       expect(summary).not.toContain('No endpoints found');
     });
 
+    it('drops generic provider connection prefixes when the detail is already actionable', () => {
+      const summary = formatPatrolRuntimeFailureSummary({
+        errorSummary: 'Provider connection issue',
+        errorDetail: 'context deadline exceeded while reaching provider',
+        errorCount: 1,
+      });
+
+      expect(summary).toBe(
+        'Provider connection failed. Check provider reachability before retrying Patrol.',
+      );
+    });
+
     it('redacts unknown provider details defensively', () => {
       const detail = formatPatrolRuntimeFailureDetail(
         'provider returned Authorization: Bearer sk-live-secret and url https://example.invalid/path?token=abc for user_abc123',

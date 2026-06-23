@@ -15,7 +15,7 @@ export type DiscoveryReadinessStatus =
   | 'ready';
 
 export interface DiscoveryReadinessInputs {
-  /** The discovery feature toggle (Settings → AI → Workload Discovery). */
+  /** The service context toggle (Settings -> Pulse Intelligence -> Service Context). */
   discoveryEnabled: boolean;
   /** Whether at least one AI provider has credentials configured. */
   aiProviderConfigured: boolean;

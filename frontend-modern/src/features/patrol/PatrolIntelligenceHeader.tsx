@@ -1,31 +1,35 @@
-import { createMemo, createUniqueId, For, Show } from 'solid-js';
-import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
+import { createMemo, Show } from 'solid-js';
+import { A } from '@solidjs/router';
 import PlayIcon from 'lucide-solid/icons/play';
-import CircleHelpIcon from 'lucide-solid/icons/circle-help';
-import MessageSquareIcon from 'lucide-solid/icons/message-square';
-import XIcon from 'lucide-solid/icons/x';
 import SettingsIcon from 'lucide-solid/icons/settings';
+import DownloadIcon from 'lucide-solid/icons/download';
+import CreditCardIcon from 'lucide-solid/icons/credit-card';
 import { PulsePatrolLogo } from '@/components/Brand/PulsePatrolLogo';
 import { PageHeader } from '@/components/shared/PageHeader';
-import { Toggle, TogglePrimitive } from '@/components/shared/Toggle';
+import { TogglePrimitive } from '@/components/shared/Toggle';
 import { CountdownTimer } from '@/components/patrol';
-import { FormSelect } from '@/components/shared/FormSelect';
 import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
-import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import { UpgradeButtonLink } from '@/components/shared/UpgradeLink';
 import type { PatrolAutonomyLevel } from '@/api/patrol';
-import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
+import { settingsTabPath } from '@/components/Settings/settingsNavigationModel';
+import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
+import {
+  presentationPolicyHidesCommercialSurfaces,
+  presentationPolicyHidesUpgradePrompts,
+} from '@/stores/sessionPresentationPolicy';
 import { formatRelativeTime } from '@/utils/format';
-import { groupModelsByProvider } from '@/utils/patrolFormat';
 import { getPatrolPageHeaderMeta } from '@/utils/patrolPagePresentation';
 import { getPatrolTriggerStatusSummary } from '@/utils/patrolRunPresentation';
-import { buildPatrolScheduleOptions } from '@/utils/aiPatrolSchedulePresentation';
 import { getPatrolRuntimePresentation } from '@/utils/patrolRuntimePresentation';
+import { getPatrolProviderSettingsAction } from '@/utils/patrolRuntimeActions';
 import { getPatrolRecencyPresentation } from '@/utils/patrolSummaryPresentation';
-import { PATROL_PROVIDER_SETTINGS_ACTION } from '@/utils/patrolRuntimeActions';
+import { PATROL_CONTROL_ANCHOR, PATROL_OPERATIONS_LOOP_ANCHOR } from '@/routing/resourceLinks';
 import type { PatrolConfigurationFailureInput } from './patrolInvestigationContextModel';
+import { getPatrolAutonomyAvailabilityPresentation } from './patrolAutonomyAvailability';
+import { PATROL_AUTONOMY_POLICY_PRESENTATION } from './patrolControlPresentation';
 import type { PatrolIntelligenceState } from './usePatrolIntelligenceState';
 
-type PatrolSelectableAutonomyLevel = Exclude<PatrolAutonomyLevel, 'full'>;
+export { PATROL_AUTONOMY_POLICY_PRESENTATION } from './patrolControlPresentation';
 
 const isNonEmptyConfigurationDetail = (value?: string | null): value is string =>
   Boolean(value?.trim());
@@ -40,7 +44,7 @@ export function getPatrolConfigurationFailureInlineDetails(
 
   return [
     codeAndCause || undefined,
-    readiness?.summary ? `Readiness: ${readiness.summary}` : undefined,
+    readiness?.summary ? `Setup: ${readiness.summary}` : undefined,
     readiness?.provider ? `Provider: ${readiness.provider}` : undefined,
     readiness?.model ? `Model: ${readiness.model}` : undefined,
   ].filter(isNonEmptyConfigurationDetail);
@@ -48,20 +52,11 @@ export function getPatrolConfigurationFailureInlineDetails(
 
 export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState }) {
   const state = props.state;
-  const fieldIdPrefix = `patrol-config-${createUniqueId()}`;
-  const fieldIds = {
-    alertTriggeredAnalysis: `${fieldIdPrefix}-alert-triggered-analysis`,
-    patrolAlertTriggers: `${fieldIdPrefix}-alert-triggered-patrols`,
-    patrolAlertTriggerMinSeverity: `${fieldIdPrefix}-alert-trigger-min-severity`,
-    patrolAnomalyTriggers: `${fieldIdPrefix}-anomaly-triggered-patrols`,
-    autonomousCriticalRemediation: `${fieldIdPrefix}-autonomous-critical-remediation`,
-  };
-  const headerMeta = getPatrolPageHeaderMeta();
-  const scheduleOptions = createMemo(() => buildPatrolScheduleOptions(state.patrolInterval()));
-  const selectedScheduleLabel = createMemo(
-    () =>
-      scheduleOptions().find((option) => option.value === state.patrolInterval())?.label ??
-      `${state.patrolInterval()} minutes`,
+  const headerMeta = createMemo(() =>
+    getPatrolPageHeaderMeta({
+      autonomyLevel: state.autonomyLevel(),
+      autonomyLocked: state.autoFixLocked(),
+    }),
   );
   const runtimePresentation = createMemo(() =>
     getPatrolRuntimePresentation(state.runtimeState(), state.blockedReason()),
@@ -74,110 +69,258 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
     }),
   );
   const triggerStatusSummary = createMemo(() =>
-    getPatrolTriggerStatusSummary(state.patrolStatus()?.trigger_status),
+    getPatrolTriggerStatusSummary(state.patrolStatus()?.trigger_status, {
+      manualRunAvailable: state.canTriggerPatrol(),
+      manualRunBlockedReason: state.triggerPatrolDisabledReason(),
+    }),
   );
-  const patrolModelStale = createMemo(() => {
-    const model = state.patrolModel();
-    const models = state.availableModels();
-    if (!model || models.length === 0) return false;
-    return !models.some((candidate) => candidate.id === model);
-  });
-  const selectedAutonomyLevel = createMemo<PatrolSelectableAutonomyLevel>(() => {
-    const level = state.autonomyLevel();
-    return level === 'full' ? 'assisted' : level;
-  });
-  const getAutonomyOptionTitle = (level: PatrolSelectableAutonomyLevel) => {
-    const isProLocked = () => state.autoFixLocked() && level !== 'monitor';
-    if (!presentationPolicyHidesUpgradePrompts() && isProLocked()) {
-      return level === 'approval'
-        ? 'Investigation is not enabled on this plan'
-        : 'Safe remediation workflows are not enabled on this plan';
-    }
-    return undefined;
-  };
-  const autonomyLevelOptions = createMemo<FilterOption<PatrolSelectableAutonomyLevel>[]>(() => [
-    { value: 'monitor', label: 'Monitor' },
-    {
-      value: 'approval',
-      label: 'Investigate',
-      disabled: state.autoFixLocked(),
-      title: getAutonomyOptionTitle('approval'),
-    },
-    {
-      value: 'assisted',
-      label: 'Remediate',
-      disabled: state.autoFixLocked(),
-      title: getAutonomyOptionTitle('assisted'),
-    },
-  ]);
+  const providerSetupAction = getPatrolProviderSettingsAction();
+  const runControlBusy = createMemo(
+    () =>
+      state.isTriggeringPatrol() || state.manualRunRequested() || state.patrolStream.isStreaming(),
+  );
+  const runBlockedByProviderSetup = createMemo(
+    () =>
+      !runControlBusy() &&
+      state.patrolEnabledLocal() &&
+      state.runtimeState() === 'active' &&
+      state.patrolReadiness()?.status === 'not_ready',
+  );
+  const runButtonDisabled = createMemo(() => runControlBusy() || !state.canTriggerPatrol());
+  const runButtonLabel = createMemo(() =>
+    state.isTriggeringPatrol()
+      ? 'Starting…'
+      : state.manualRunRequested() || state.patrolStream.isStreaming()
+        ? 'Running…'
+        : 'Run Patrol',
+  );
+  const renderRunControl = (className: string) => (
+    <Show
+      when={!runBlockedByProviderSetup()}
+      fallback={
+        <A
+          href={providerSetupAction.href}
+          aria-label={`Fix Patrol provider: ${state.triggerPatrolDisabledReason() || 'Provider needs attention'}`}
+          title={state.triggerPatrolDisabledReason() || 'Open Provider & Models'}
+          class={className}
+        >
+          <SettingsIcon class="w-4 h-4" />
+          Fix provider
+        </A>
+      }
+    >
+      <button
+        onClick={() => state.handleRunPatrol()}
+        disabled={runButtonDisabled()}
+        title={state.triggerPatrolDisabledReason()}
+        class={className}
+      >
+        <PlayIcon class={`w-4 h-4 ${runControlBusy() ? 'animate-pulse' : ''}`} />
+        {runButtonLabel()}
+      </button>
+    </Show>
+  );
+  const effectiveAutonomyLevel = createMemo<PatrolAutonomyLevel>(() =>
+    state.autoFixLocked() ? 'monitor' : state.autonomyLevel(),
+  );
+  const selectedAutonomyPolicy = createMemo(
+    () => PATROL_AUTONOMY_POLICY_PRESENTATION[effectiveAutonomyLevel()],
+  );
+  const upgradePromptsHidden = createMemo(() => presentationPolicyHidesUpgradePrompts());
+  const commercialSurfacesHidden = createMemo(() => presentationPolicyHidesCommercialSurfaces());
+  const canChooseAutonomyLevel = createMemo(() => !state.autoFixLocked());
+  const autonomyAvailability = createMemo(() =>
+    getPatrolAutonomyAvailabilityPresentation({
+      autoFixLocked: state.autoFixLocked(),
+      upgradePromptsHidden: upgradePromptsHidden(),
+      commercialSurfacesHidden: commercialSurfacesHidden(),
+      runtimeCapabilityBlock: state.autoFixCapabilityBlock(),
+      runtime: state.licenseRuntimeIdentity(),
+      planUpgradeDestination: getUpgradeActionDestination('ai_autofix'),
+    }),
+  );
+  const shouldShowAutonomyOptions = createMemo(
+    () => canChooseAutonomyLevel() || autonomyAvailability().kind === 'runtime_locked',
+  );
+  const showAutonomyUpgradeAction = createMemo(
+    () =>
+      !presentationPolicyHidesUpgradePrompts() &&
+      state.autoFixLocked() &&
+      autonomyAvailability().kind === 'runtime_locked',
+  );
+  const showAutonomyPlanBillingAction = createMemo(
+    () =>
+      state.autoFixLocked() &&
+      autonomyAvailability().kind === 'plan_locked' &&
+      Boolean(autonomyAvailability().actionLabel && autonomyAvailability().destination?.href),
+  );
+  const shouldShowAutonomyActionColumn = createMemo(
+    () => shouldShowAutonomyOptions() || showAutonomyPlanBillingAction(),
+  );
+  const showAutonomyAvailabilityPrompt = createMemo(
+    () =>
+      state.autoFixLocked() &&
+      autonomyAvailability().kind === 'runtime_locked' &&
+      Boolean(autonomyAvailability().actionLabel),
+  );
+  const showAutonomyAvailabilityNote = createMemo(
+    () =>
+      state.autoFixLocked() &&
+      autonomyAvailability().kind === 'runtime_locked' &&
+      !autonomyAvailability().actionLabel,
+  );
+  const autonomyLevelOptions = createMemo<FilterOption<PatrolAutonomyLevel>[]>(() =>
+    (['monitor', 'approval', 'assisted', 'full'] as const).map((level) => {
+      const presentation = PATROL_AUTONOMY_POLICY_PRESENTATION[level];
+      const lockedPaidMode = state.autoFixLocked() && level !== 'monitor';
+      const showProBadge = lockedPaidMode && !commercialSurfacesHidden();
+      return {
+        value: level,
+        label: presentation.label,
+        compactLabel: presentation.compactLabel,
+        ariaLabel: showProBadge ? `${presentation.label} Pro` : undefined,
+        title: lockedPaidMode
+          ? `${presentation.detail} Available with Pulse Pro.`
+          : presentation.detail,
+        disabled: lockedPaidMode,
+        visualLabel: showProBadge ? (
+          <>
+            <span>{presentation.label}</span>
+            <span class="rounded border border-blue-200 bg-blue-50 px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300">
+              Pro
+            </span>
+          </>
+        ) : undefined,
+      };
+    }),
+  );
+  const renderAutonomyPolicyControl = (options: {
+    ariaLabel: string;
+    layoutClass: string;
+    controlClass: string;
+    variant?: 'segmented' | 'prominent';
+  }) => (
+    <>
+      <div class={options.layoutClass}>
+        <div class="min-w-0">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="text-xs font-semibold uppercase tracking-wider text-muted">
+              Patrol mode
+            </span>
+            <span class="rounded border border-border-subtle bg-surface px-2 py-0.5 text-xs font-medium text-base-content">
+              {selectedAutonomyPolicy().label}
+            </span>
+          </div>
+          <p class="mt-1 text-sm leading-5 text-muted">{selectedAutonomyPolicy().detail}</p>
+        </div>
+
+        <Show when={shouldShowAutonomyActionColumn()}>
+          <div class="flex w-full flex-col gap-2 lg:w-auto">
+            <Show when={shouldShowAutonomyOptions()}>
+              <FilterButtonGroup
+                ariaLabel={options.ariaLabel}
+                class={options.controlClass}
+                disabled={!state.patrolEnabledLocal()}
+                options={autonomyLevelOptions()}
+                value={effectiveAutonomyLevel()}
+                onChange={(level) => state.handleAutonomyChange(level)}
+                variant={options.variant ?? 'segmented'}
+              />
+            </Show>
+            <Show when={showAutonomyPlanBillingAction()}>
+              <UpgradeButtonLink
+                destination={autonomyAvailability().destination!}
+                size="sm"
+                mobileFullWidth={false}
+                class="self-start lg:self-end"
+              >
+                <CreditCardIcon class="h-4 w-4" />
+                {autonomyAvailability().actionLabel}
+              </UpgradeButtonLink>
+            </Show>
+          </div>
+        </Show>
+      </div>
+
+      <Show when={showAutonomyAvailabilityNote()}>
+        <p class="mt-2 text-xs leading-5 text-muted">{autonomyAvailability().body}</p>
+      </Show>
+      <Show when={showAutonomyAvailabilityPrompt()}>
+        <div class="mt-3 flex flex-col gap-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-3 dark:border-blue-800 dark:bg-blue-950/40 sm:flex-row sm:items-center sm:justify-between">
+          <div class="min-w-0">
+            <p class="text-sm font-semibold text-blue-950 dark:text-blue-100">
+              {autonomyAvailability().title}
+            </p>
+            <p class="mt-1 text-xs leading-5 text-blue-800 dark:text-blue-200">
+              {autonomyAvailability().body}
+            </p>
+          </div>
+          <Show when={showAutonomyUpgradeAction() && autonomyAvailability().destination?.href}>
+            <UpgradeButtonLink
+              destination={autonomyAvailability().destination!}
+              size="sm"
+              mobileFullWidth={false}
+              class="shrink-0"
+            >
+              <DownloadIcon class="h-4 w-4" />
+              {autonomyAvailability().actionLabel}
+            </UpgradeButtonLink>
+          </Show>
+        </div>
+      </Show>
+      <Show when={state.isUpdatingAutonomy()}>
+        <div role="status" class="sr-only">
+          Saving Patrol mode
+        </div>
+      </Show>
+    </>
+  );
 
   return (
     <div class="space-y-4">
       <PageHeader
         id="patrol-title"
-        description={headerMeta.description}
+        description={headerMeta().description}
         title={
-          <span class="inline-flex items-center gap-3" title={headerMeta.titleTooltip}>
+          <span class="inline-flex items-center gap-3" title={headerMeta().titleTooltip}>
             <PulsePatrolLogo class="w-6 h-6 text-base-content" decorative />
-            <span>{headerMeta.title}</span>
+            <span>{headerMeta().title}</span>
           </span>
         }
         class="relative z-[200] mb-3"
         actions={
           <div class="hidden sm:flex flex-wrap items-center justify-end gap-3">
-            <Show when={recency().timestamp}>
-              <div class="flex items-center gap-3 text-xs text-muted">
-                <span>
-                  {recency().label}:{' '}
-                  {formatRelativeTime(recency().timestamp, {
-                    compact: true,
-                    emptyText: 'Never',
-                  })}
-                  <Show when={recency().resourcesCheckedLabel}>
-                    {' '}
-                    <span class="text-muted">— {recency().resourcesCheckedLabel}</span>
-                  </Show>
-                </span>
-                <Show when={state.patrolStatus()?.next_patrol_at}>
-                  <span class="text-muted">|</span>
-                  <CountdownTimer
-                    targetDate={state.patrolStatus()!.next_patrol_at!}
-                    prefix="Next run: "
-                    class="font-variant-numeric tabular-nums font-medium text-blue-600 dark:text-blue-400"
-                  />
+            <Show when={!state.shouldShowPatrolSetupOnly()}>
+              <>
+                <Show when={recency().timestamp}>
+                  <div class="flex items-center gap-3 text-xs text-muted">
+                    <span>
+                      {recency().label}:{' '}
+                      {formatRelativeTime(recency().timestamp, {
+                        compact: true,
+                        emptyText: 'Never',
+                      })}
+                      <Show when={recency().resourcesCheckedLabel}>
+                        {' '}
+                        <span class="text-muted">— {recency().resourcesCheckedLabel}</span>
+                      </Show>
+                    </span>
+                    <Show when={state.patrolStatus()?.next_patrol_at}>
+                      <span class="text-muted">|</span>
+                      <CountdownTimer
+                        targetDate={state.patrolStatus()!.next_patrol_at!}
+                        prefix="Next run: "
+                        class="font-variant-numeric tabular-nums font-medium text-blue-600 dark:text-blue-400"
+                      />
+                    </Show>
+                  </div>
                 </Show>
-              </div>
+
+                {renderRunControl(
+                  'flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-surface-alt disabled:text-muted rounded-md transition-colors',
+                )}
+              </>
             </Show>
-
-            <button
-              onClick={() => state.handleRunPatrol()}
-              disabled={
-                state.isTriggeringPatrol() ||
-                !state.canTriggerPatrol() ||
-                state.manualRunRequested() ||
-                state.patrolStream.isStreaming()
-              }
-              title={state.triggerPatrolDisabledReason()}
-              class="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-surface-alt disabled:text-muted rounded-md transition-colors"
-            >
-              <PlayIcon
-                class={`w-4 h-4 ${state.isTriggeringPatrol() || state.manualRunRequested() || state.patrolStream.isStreaming() ? 'animate-pulse' : ''}`}
-              />
-              {state.isTriggeringPatrol()
-                ? 'Starting…'
-                : state.manualRunRequested() || state.patrolStream.isStreaming()
-                  ? 'Running…'
-                  : 'Run Patrol'}
-            </button>
-
-            <button
-              onClick={() => state.loadAllData()}
-              disabled={state.isRefreshing()}
-              class="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-surface-hover disabled:opacity-50 transition-colors"
-            >
-              <RefreshCwIcon class={`w-4 h-4 ${state.isRefreshing() ? 'animate-spin' : ''}`} />
-              Refresh
-            </button>
           </div>
         }
       />
@@ -194,360 +337,39 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
           <span class="text-sm font-medium text-base-content">{runtimePresentation().label}</span>
         </div>
 
-        <Show when={triggerStatusSummary()}>
-          <span class="max-w-full text-xs leading-5 text-muted">
-            Trigger status: {triggerStatusSummary()}
-          </span>
+        <Show when={!state.shouldShowPatrolSetupOnly() && triggerStatusSummary()}>
+          <span class="max-w-full text-xs leading-5 text-muted">{triggerStatusSummary()}</span>
         </Show>
 
-        <div class="flex flex-wrap items-center gap-2 sm:ml-auto">
-          <button
-            onClick={() => state.handleRunPatrol()}
-            disabled={
-              state.isTriggeringPatrol() ||
-              !state.canTriggerPatrol() ||
-              state.manualRunRequested() ||
-              state.patrolStream.isStreaming()
-            }
-            title={state.triggerPatrolDisabledReason()}
-            class="sm:hidden flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-surface-alt disabled:text-muted rounded-md transition-colors"
-          >
-            <PlayIcon
-              class={`w-4 h-4 ${state.isTriggeringPatrol() || state.manualRunRequested() || state.patrolStream.isStreaming() ? 'animate-pulse' : ''}`}
-            />
-            {state.isTriggeringPatrol()
-              ? 'Starting…'
-              : state.manualRunRequested() || state.patrolStream.isStreaming()
-                ? 'Running…'
-                : 'Run Patrol'}
-          </button>
+        <Show when={!state.shouldShowPatrolSetupOnly()}>
+          <div class="flex flex-wrap items-center gap-2 sm:ml-auto">
+            {renderRunControl(
+              'sm:hidden flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-surface-alt disabled:text-muted rounded-md transition-colors',
+            )}
 
-          <button
-            onClick={() => state.loadAllData()}
-            disabled={state.isRefreshing()}
-            aria-label="Refresh"
-            class="sm:hidden flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-surface-hover disabled:opacity-50 transition-colors"
-          >
-            <RefreshCwIcon class={`w-4 h-4 ${state.isRefreshing() ? 'animate-spin' : ''}`} />
-            <span class="sr-only sm:not-sr-only">Refresh</span>
-          </button>
-
-          <div class="relative z-[120]" ref={state.setAdvancedSettingsRef}>
-            <button
-              onClick={() => state.setShowAdvancedSettings(!state.showAdvancedSettings())}
-              disabled={!state.patrolEnabledLocal()}
-              aria-label="Configure Patrol"
-              title="Configure Patrol"
-              class={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all shadow-sm ${state.showAdvancedSettings() ? 'bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:border-blue-800' : ' text-base-content border border-border hover:bg-surface-alt'} ${!state.patrolEnabledLocal() ? 'opacity-50 cursor-not-allowed hidden' : ''}`}
+            <A
+              href={settingsTabPath('system-ai-patrol')}
+              aria-label="Open Patrol settings"
+              title="Open Patrol settings"
+              class="flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-base-content shadow-sm transition-colors hover:bg-surface-alt"
             >
               <SettingsIcon class="w-4 h-4" />
-              <span class="sr-only sm:not-sr-only">Configure Patrol</span>
-            </button>
-
-            <Show when={state.showAdvancedSettings()}>
-              <div
-                role="dialog"
-                aria-label="Patrol Configuration"
-                class="fixed right-4 top-32 z-[9999] isolate max-h-[calc(100vh-10rem)] w-[calc(100vw-2rem)] overflow-y-auto rounded-md border border-border bg-surface p-5 shadow-sm animate-slide-up transform origin-top-right sm:right-8 sm:top-[13rem] sm:max-h-[calc(100vh-14rem)] sm:w-[340px]"
-              >
-                <div class="flex items-center justify-between mb-5 pb-3 border-b border-border-subtle">
-                  <h4 class="text-base font-semibold tracking-tight text-base-content">
-                    Patrol Configuration
-                  </h4>
-                  <button
-                    onClick={() => state.setShowAdvancedSettings(false)}
-                    aria-label="Close patrol configuration"
-                    title="Close"
-                    class="p-1 rounded-md hover:text-base-content hover:bg-surface-hover transition-colors"
-                  >
-                    <XIcon class="w-4 h-4" />
-                  </button>
-                </div>
-
-                <div class="space-y-6">
-                  <div class="grid grid-cols-2 gap-4">
-                    <FormSelect
-                      label="Provider model"
-                      labelClass="text-xs font-semibold uppercase tracking-wider text-muted"
-                      fieldClass="space-y-1.5"
-                      ref={state.setPatrolModelSelectRef}
-                      value={state.patrolModel()}
-                      onChange={(e) => state.handleModelChange(e.currentTarget.value)}
-                      disabled={state.isUpdatingSettings() || !state.patrolEnabledLocal()}
-                      selectBaseClass="w-full text-sm bg-base border border-border rounded-md py-2 pl-3 pr-8 text-base-content focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
-                    >
-                      <option value="">
-                        Default ({state.defaultModel().split(':').pop() || 'not set'})
-                      </option>
-                      <Show when={patrolModelStale()}>
-                        <option value={state.patrolModel()} disabled>
-                          {state.patrolModel().split(':').pop()} (unavailable)
-                        </option>
-                      </Show>
-                      {Array.from(groupModelsByProvider(state.availableModels()).entries()).map(
-                        ([provider, models]) => (
-                          <optgroup label={provider.charAt(0).toUpperCase() + provider.slice(1)}>
-                            {models.map((model) => (
-                              <option value={model.id}>
-                                {model.name || model.id.split(':').pop()}
-                              </option>
-                            ))}
-                          </optgroup>
-                        ),
-                      )}
-                    </FormSelect>
-
-                    <FormSelect
-                      label="Run Every"
-                      labelClass="text-xs font-semibold uppercase tracking-wider text-muted"
-                      fieldClass="space-y-1.5"
-                      value={state.patrolInterval()}
-                      onChange={(e) =>
-                        state.handleIntervalChange(parseInt(e.currentTarget.value, 10))
-                      }
-                      disabled={state.isUpdatingSettings() || !state.patrolEnabledLocal()}
-                      selectBaseClass="w-full text-sm bg-base border border-border rounded-md py-2 pl-3 pr-8 text-base-content focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
-                    >
-                      <For each={scheduleOptions()}>
-                        {(preset) => <option value={preset.value}>{preset.label}</option>}
-                      </For>
-                    </FormSelect>
-                  </div>
-
-                  <div class="space-y-2">
-                    <div class="flex items-center justify-between">
-                      <label class="text-xs font-semibold uppercase tracking-wider text-muted flex items-center gap-1.5">
-                        Operational Mode
-                        <div class="relative group">
-                          <CircleHelpIcon class="w-3.5 h-3.5 cursor-help" />
-                          <div class="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block w-64 p-3 bg-surface text-white rounded-md shadow-md text-xs z-50 pointer-events-none before:absolute before:top-full before:left-1/2 before:-translate-x-1/2 before:border-4 before:border-transparent before:border-t-slate-800">
-                            <strong>Monitor:</strong> Detect only.
-                            <br />
-                            <strong>Investigate:</strong> Detect & propose fixes.
-                            <br />
-                            <strong>Remediate:</strong> Execute approved safe actions under policy.
-                          </div>
-                        </div>
-                      </label>
-                    </div>
-
-                    <FilterButtonGroup
-                      ariaLabel="Patrol autonomy level"
-                      class="w-full"
-                      disabled={!state.patrolEnabledLocal()}
-                      options={autonomyLevelOptions()}
-                      value={selectedAutonomyLevel()}
-                      onChange={(level) => state.handleAutonomyChange(level)}
-                      variant="segmented"
-                    />
-                    <Show when={!presentationPolicyHidesUpgradePrompts() && state.autoFixLocked()}>
-                      <div class="pl-1 text-[11px] text-muted">
-                        Investigation and safe remediation workflows are not enabled on this plan.
-                      </div>
-                    </Show>
-                  </div>
-
-                  <div class="space-y-4 pt-4 border-t border-border-subtle">
-                    <div class="rounded-md border border-border-subtle bg-surface-alt/60 px-3 py-2.5">
-                      <p class="text-[11px] font-medium text-base-content">
-                        {state.patrolInterval() === 0
-                          ? 'Scheduled full patrols are off. Manual runs and alert/anomaly triggers still work.'
-                          : `Full patrols run every ${selectedScheduleLabel().toLowerCase()}.`}
-                      </p>
-                      <p class="mt-1 text-[11px] leading-tight text-muted">
-                        Alert and anomaly triggers run targeted scoped checks that update{' '}
-                        <span class="font-medium text-base-content">Last activity</span> without
-                        resetting{' '}
-                        <span class="font-medium text-base-content">Last full patrol</span>.
-                      </p>
-                    </div>
-
-                    <div class="flex items-start justify-between gap-3">
-                      <div class="flex-1">
-                        <span
-                          id={fieldIds.patrolAlertTriggers}
-                          class="text-sm font-medium text-base-content"
-                        >
-                          Alert-Triggered Patrols
-                        </span>
-                        <p class="text-[11px] text-muted mt-0.5 leading-tight">
-                          Run a focused Patrol investigation of the alert's issue when it fires or
-                          clears.
-                        </p>
-                      </div>
-                      <Toggle
-                        checked={state.patrolAlertTriggers()}
-                        onChange={(e) =>
-                          state.handlePatrolAlertTriggersChange(e.currentTarget.checked)
-                        }
-                        disabled={state.isUpdatingSettings() || !state.patrolEnabledLocal()}
-                        ariaLabelledBy={fieldIds.patrolAlertTriggers}
-                      />
-                    </div>
-
-                    <Show when={state.patrolAlertTriggers()}>
-                      <div class="pl-3 border-l-2 border-border ml-0.5">
-                        <FormSelect
-                          label="Investigate alerts at or above"
-                          labelClass="text-[11px] font-semibold uppercase tracking-wider text-muted"
-                          fieldClass="space-y-1"
-                          value={state.patrolAlertTriggerMinSeverity()}
-                          onChange={(e) =>
-                            state.handlePatrolAlertTriggerMinSeverityChange(
-                              e.currentTarget.value === 'warning' ? 'warning' : 'critical',
-                            )
-                          }
-                          disabled={state.isUpdatingSettings() || !state.patrolEnabledLocal()}
-                          id={fieldIds.patrolAlertTriggerMinSeverity}
-                          selectBaseClass="w-full text-sm bg-base border border-border rounded-md py-1.5 pl-3 pr-8 text-base-content focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
-                        >
-                          <option value="critical">Critical only</option>
-                          <option value="warning">Warning and critical</option>
-                        </FormSelect>
-                      </div>
-                    </Show>
-
-                    <div class="flex items-start justify-between gap-3">
-                      <div class="flex-1">
-                        <span
-                          id={fieldIds.patrolAnomalyTriggers}
-                          class="text-sm font-medium text-base-content"
-                        >
-                          Anomaly-Triggered Patrols
-                        </span>
-                        <p class="text-[11px] text-muted mt-0.5 leading-tight">
-                          Run scoped Patrol checks when learned baselines detect high-signal
-                          anomalies.
-                        </p>
-                      </div>
-                      <Toggle
-                        checked={state.patrolAnomalyTriggers()}
-                        onChange={(e) =>
-                          state.handlePatrolAnomalyTriggersChange(e.currentTarget.checked)
-                        }
-                        disabled={state.isUpdatingSettings() || !state.patrolEnabledLocal()}
-                        ariaLabelledBy={fieldIds.patrolAnomalyTriggers}
-                      />
-                    </div>
-
-                    <div class="flex items-start justify-between gap-3">
-                      <div class="flex-1">
-                        <span
-                          id={fieldIds.alertTriggeredAnalysis}
-                          class="text-sm font-medium text-base-content"
-                        >
-                          Container Update Risk
-                        </span>
-                        <p class="text-[11px] text-muted mt-0.5 leading-tight">
-                          Assess upgrade risk with AI when a container-update alert fires.
-                        </p>
-                      </div>
-                      <Toggle
-                        checked={state.alertTriggeredAnalysis()}
-                        onChange={(e) =>
-                          state.handleAlertTriggeredAnalysisChange(e.currentTarget.checked)
-                        }
-                        disabled={state.isUpdatingSettings() || state.alertAnalysisLocked()}
-                        ariaLabelledBy={fieldIds.alertTriggeredAnalysis}
-                      />
-                    </div>
-
-                    <Show
-                      when={!presentationPolicyHidesUpgradePrompts() && state.alertAnalysisLocked()}
-                    >
-                      <div class="-my-1 pl-1 text-[11px]">
-                        Container update risk analysis is not enabled on this plan.
-                      </div>
-                    </Show>
-
-                    <div class="flex items-start justify-between gap-3">
-                      <div class="flex-1">
-                        <span
-                          id={fieldIds.autonomousCriticalRemediation}
-                          class="text-sm font-medium text-red-600 dark:text-red-400"
-                        >
-                          Autonomous critical remediation
-                        </span>
-                        <p class="text-[11px] text-muted mt-0.5 leading-tight">
-                          Permit Patrol to execute critical remediation actions without approval.
-                        </p>
-                      </div>
-                      <Toggle
-                        checked={!state.autoFixLocked() && state.fullModeUnlocked()}
-                        onChange={(e) => state.setFullModeUnlocked(e.currentTarget.checked)}
-                        disabled={
-                          state.autoFixLocked() ||
-                          !(
-                            state.autonomyLevel() === 'assisted' || state.autonomyLevel() === 'full'
-                          )
-                        }
-                        ariaLabelledBy={fieldIds.autonomousCriticalRemediation}
-                      />
-                    </div>
-                  </div>
-
-                  <div class="pt-4 border-t border-border-subtle">
-                    <Show when={state.advancedSettingsError()}>
-                      {(failure) => (
-                        <div
-                          role="alert"
-                          data-testid="patrol-configuration-error"
-                          class="mb-3 rounded-md border border-red-300 bg-red-50 px-3 py-2.5 text-red-950 dark:border-red-800 dark:bg-red-950/30 dark:text-red-100"
-                        >
-                          <p class="text-xs font-semibold">
-                            {failure().saved
-                              ? 'Patrol configuration needs attention'
-                              : 'Patrol configuration was not saved'}
-                          </p>
-                          <p class="mt-1 text-xs leading-relaxed">{failure().message}</p>
-                          <Show
-                            when={getPatrolConfigurationFailureInlineDetails(failure()).length > 0}
-                          >
-                            <ul class="mt-1 space-y-0.5 text-[11px] leading-relaxed opacity-80">
-                              <For each={getPatrolConfigurationFailureInlineDetails(failure())}>
-                                {(detail) => <li>{detail}</li>}
-                              </For>
-                            </ul>
-                          </Show>
-                          <div class="mt-2 flex flex-wrap items-center gap-2">
-                            <button
-                              type="button"
-                              data-testid="patrol-configuration-error-assistant-button"
-                              onClick={state.openAdvancedSettingsErrorInAssistant}
-                              class="inline-flex items-center gap-1.5 rounded-md border border-red-300 bg-white/80 px-2 py-1 text-xs font-medium text-red-950 transition-colors hover:bg-white dark:border-red-700 dark:bg-red-950/40 dark:text-red-100 dark:hover:bg-red-900/50"
-                            >
-                              <MessageSquareIcon class="h-3.5 w-3.5" />
-                              Discuss with Assistant
-                            </button>
-                            <a
-                              href={PATROL_PROVIDER_SETTINGS_ACTION.href}
-                              data-testid="patrol-configuration-error-settings-link"
-                              class="inline-flex items-center gap-1.5 rounded-md border border-red-300 bg-white/80 px-2 py-1 text-xs font-medium text-red-950 transition-colors hover:bg-white dark:border-red-700 dark:bg-red-950/40 dark:text-red-100 dark:hover:bg-red-900/50"
-                            >
-                              <SettingsIcon class="h-3.5 w-3.5" />
-                              {PATROL_PROVIDER_SETTINGS_ACTION.label}
-                            </a>
-                          </div>
-                        </div>
-                      )}
-                    </Show>
-
-                    <button
-                      onClick={state.saveAdvancedSettings}
-                      disabled={state.isSavingAdvanced()}
-                      class="w-full py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md shadow-sm transition-all focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-blue-300 disabled:hover:bg-blue-300 dark:disabled:bg-blue-900 flex items-center justify-center gap-2"
-                    >
-                      <Show when={state.isSavingAdvanced()}>
-                        <LoadingSpinner size="md" />
-                      </Show>
-                      <Show when={!state.isSavingAdvanced()}>Apply Configuration</Show>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </Show>
+              <span class="sr-only sm:not-sr-only">Settings</span>
+            </A>
           </div>
-        </div>
+        </Show>
+      </div>
+
+      <div
+        id={PATROL_CONTROL_ANCHOR}
+        class="rounded-md border border-border-subtle bg-surface-alt/50 px-3 py-3"
+      >
+        <span id={PATROL_OPERATIONS_LOOP_ANCHOR} class="sr-only" aria-hidden="true" />
+        {renderAutonomyPolicyControl({
+          ariaLabel: 'Patrol mode',
+          layoutClass: 'flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between',
+          controlClass: 'w-full lg:w-[34rem]',
+        })}
       </div>
     </div>
   );

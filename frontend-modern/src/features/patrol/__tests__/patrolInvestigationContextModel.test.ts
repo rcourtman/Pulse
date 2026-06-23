@@ -229,17 +229,17 @@ describe('patrolInvestigationContextModel', () => {
         fixedValue: 2,
       },
       verification: {
-        title: 'Full patrol verified recently',
+        title: 'Recently checked',
         description: 'Latest full run completed with findings.',
         lastFullRunAt: '2026-05-06T12:00:00Z',
-        activityMixLabel: '1 full patrol · 2 scoped runs',
+        activityMixLabel: '1 full check · 2 targeted checks',
       },
       recency: {
         label: 'Last patrol',
         timestamp: '2026-05-06T12:10:00Z',
       },
       latestRun: {
-        kindLabel: 'Full patrol',
+        kindLabel: 'Patrol check',
         status: { label: 'issues found' },
         timestamp: '2026-05-06T12:10:00Z',
         coverageSummary: '12 resources checked',
@@ -396,12 +396,31 @@ describe('patrolInvestigationContextModel', () => {
     expect(JSON.stringify(handoff)).not.toContain('systemctl restart workload.service');
   });
 
+  it('uses operator-facing finding-record wording for legacy latest-run context', () => {
+    const handoff = buildPatrolAssessmentAssistantHandoff({
+      assessment: {
+        title: 'Patrol reviewed recent activity',
+      },
+      latestRun: {
+        kindLabel: 'Patrol check',
+        status: { label: 'completed' },
+        timestamp: '2026-05-06T12:10:00Z',
+        coverageSummary: '67 resources checked',
+        findingsSnapshotAvailable: false,
+      },
+      activeFindings: [],
+    });
+
+    expect(handoff.context.handoffContext).toContain('finding record unavailable');
+    expect(handoff.context.handoffContext).not.toContain('findings snapshot unavailable');
+  });
+
   it('frames coverage-incomplete assessment handoffs as evidence-only context', () => {
     const handoff = buildPatrolAssessmentAssistantHandoff({
       assessment: {
         title: 'Coverage incomplete',
         description:
-          'Patrol coverage is incomplete: recent activity was limited to scoped runs, so overall infrastructure health is not fully verified.',
+          'Recent Patrol activity only covered targeted checks. Run Patrol to check everything.',
         eyebrow: 'Patrol assessment',
       },
       overallHealth: {
@@ -420,13 +439,13 @@ describe('patrolInvestigationContextModel', () => {
         fixedValue: 0,
       },
       verification: {
-        title: 'Recently verified',
-        description: 'The most recent full patrol completed successfully.',
+        title: 'Recently checked',
+        description: 'The most recent Patrol check completed successfully.',
         lastFullRunAt: '2026-05-04T21:38:51Z',
-        activityMixLabel: '8 full, 3 alert-triggered',
+        activityMixLabel: '8 full checks, 3 alert-triggered checks',
       },
       latestRun: {
-        kindLabel: 'Scoped run',
+        kindLabel: 'Targeted check',
         status: { label: 'issues found' },
         timestamp: '2026-05-07T21:39:18Z',
         coverageSummary: 'Checked 1 of 2 scoped resources',
@@ -481,13 +500,14 @@ describe('patrolInvestigationContextModel', () => {
         factors: [{ category: 'coverage' }],
       },
       verification: {
-        title: 'Recently verified',
-        description: 'The most recent full patrol completed successfully and checked 58 resources.',
+        title: 'Recently checked',
+        description:
+          'The most recent Patrol check completed successfully and covered 58 resources.',
         lastFullRunAt: '2026-05-12T21:22:35Z',
-        activityMixLabel: '8 full, 3 alert-cleared',
+        activityMixLabel: '8 full checks, 3 alert-cleared checks',
       },
       latestRun: {
-        kindLabel: 'Full patrol',
+        kindLabel: 'Patrol check',
         status: { label: 'issues found' },
         timestamp: '2026-05-12T21:22:35Z',
         coverageSummary: 'Checked 58 resources',
@@ -668,7 +688,7 @@ describe('patrolInvestigationContextModel', () => {
     expect(handoff.context.handoffMetadata).toEqual({
       kind: 'patrol_run',
       runId: 'run-runtime-error',
-      runType: 'Scoped run',
+      runType: 'Targeted check',
       runStatus: 'error',
       runtimeFailure: true,
     });
@@ -683,7 +703,7 @@ describe('patrolInvestigationContextModel', () => {
     expect(JSON.stringify(handoff)).not.toContain('No endpoints found');
   });
 
-  it('builds a model-only Assistant handoff for a Patrol configuration failure', () => {
+  it('builds a model-only Assistant handoff for a Patrol mode save failure', () => {
     const handoff = buildPatrolConfigurationFailureHandoff({
       message: 'The selected Patrol model is a reasoning-only model family.',
       code: 'patrol_readiness_not_ready',
@@ -713,7 +733,7 @@ describe('patrolInvestigationContextModel', () => {
       kind: 'patrol_configuration_failure',
       runtimeFailure: true,
     });
-    expect(handoff.context.handoffContext).toContain('[Patrol Configuration Failure Context]');
+    expect(handoff.context.handoffContext).toContain('[Patrol Control Save Failure Context]');
     expect(handoff.context.handoffContext).toContain('Server Code: patrol_readiness_not_ready');
     expect(handoff.context.handoffContext).toContain('Provider: ollama');
     expect(handoff.context.handoffContext).toContain('Model: ollama:deepseek-r1:7b');
@@ -722,13 +742,13 @@ describe('patrolInvestigationContextModel', () => {
     );
     expect(handoff.context.briefing).toMatchObject({
       sourceLabel: 'Pulse Patrol',
-      title: 'Patrol configuration failure attached',
-      actionLabel: 'Review Patrol configuration failure',
+      title: 'Patrol mode save failure attached',
+      actionLabel: 'Review Patrol mode save failure',
     });
     expect(JSON.stringify(handoff)).not.toContain('systemctl restart pulse.service');
   });
 
-  it('labels saved Patrol configuration readiness issues separately from save failures', () => {
+  it('labels saved Patrol mode readiness issues separately from save failures', () => {
     const handoff = buildPatrolConfigurationFailureHandoff({
       saved: true,
       message: 'Patrol was saved, but the selected model cannot run Patrol tools yet.',
@@ -744,8 +764,8 @@ describe('patrolInvestigationContextModel', () => {
 
     expect(handoff).not.toHaveProperty('prompt');
     expect(handoff.context.briefing).toMatchObject({
-      title: 'Patrol configuration issue attached',
-      actionLabel: 'Review Patrol configuration issue',
+      title: 'Patrol mode issue attached',
+      actionLabel: 'Review Patrol mode issue',
     });
   });
 
@@ -1241,6 +1261,11 @@ describe('patrolInvestigationContextModel', () => {
     ).toBe(true);
     expect(
       patrolAssistantFindingHandoffRequiresApprovalMode({
+        investigationOutcome: 'fix_rejected',
+      }),
+    ).toBe(true);
+    expect(
+      patrolAssistantFindingHandoffRequiresApprovalMode({
         investigationRecord: {
           id: 'record-1',
           finding_id: 'finding-1',
@@ -1438,12 +1463,11 @@ describe('Patrol page header IA framing', () => {
     expect(headerSource).not.toContain('verified {recency().resourcesChecked}');
   });
 
-  it('keeps trust-at-a-glance state inside the primary assessment readout', () => {
-    // The default Patrol scan path has one status owner: the assessment strip.
-    // Regression trust counters may feed that compact readout, but the header
-    // and workspace tabs should not repeat another active/regressed strip.
-    const summarySource = readFileSync(
-      resolve(__dirname, '..', 'PatrolIntelligenceSummary.tsx'),
+  it('keeps trust counters out of default Patrol chrome', () => {
+    // Trust counters remain backend/state evidence. The default Patrol surface
+    // should not reintroduce a second current-work/history strip to explain them.
+    const surfaceSource = readFileSync(
+      resolve(__dirname, '..', 'PatrolIntelligenceSurface.tsx'),
       'utf-8',
     );
     const headerSource = readFileSync(
@@ -1454,28 +1478,34 @@ describe('Patrol page header IA framing', () => {
       resolve(__dirname, '..', 'PatrolIntelligenceWorkspace.tsx'),
       'utf-8',
     );
-    expect(summarySource).toContain('compactAssessmentSummary');
-    expect(summarySource).toContain('state.patrolStatus()?.trust?.regressed_at_least_once');
+    expect(surfaceSource).not.toContain('PatrolIntelligenceSummary');
+    expect(surfaceSource).not.toContain('compactAssessmentSummary');
+    expect(surfaceSource).not.toContain('state.patrolStatus()?.trust?.regressed_at_least_once');
     expect(headerSource).not.toContain('aria-label="Patrol trust summary header"');
     expect(workspaceSource).not.toContain('aria-label="Patrol trust summary"');
   });
 
-  it('names the proactive trust loop on the canonical Patrol surface', async () => {
+  it('names the proactive trust loop on the canonical Patrol surface when control is available', async () => {
     // The Patrol page header is the most visible piece of operator-facing
     // copy on the canonical Patrol surface. The IA framing must keep the
-    // product boundary clear: Pulse probes and assembles evidence, the
-    // configured model reasons over it, and action stays approval-bound.
+    // product boundary clear without turning the page header into a
+    // mini spec for the full operations loop.
     const { getPatrolPageHeaderMeta, PATROL_PAGE_DESCRIPTION, PATROL_PAGE_TITLE_TOOLTIP } =
       await import('@/utils/patrolPagePresentation');
-    expect(PATROL_PAGE_DESCRIPTION).toContain('Pulse checks your infrastructure');
-    expect(PATROL_PAGE_DESCRIPTION).toContain('configured model');
-    expect(PATROL_PAGE_DESCRIPTION).toContain('right evidence');
-    expect(PATROL_PAGE_DESCRIPTION).toContain('approval policy');
+    expect(PATROL_PAGE_DESCRIPTION).toBe(
+      'Patrol watches, investigates, acts within your chosen mode, verifies outcomes, and records what happened.',
+    );
+    expect(PATROL_PAGE_DESCRIPTION).toContain('acts within your chosen mode');
     expect(PATROL_PAGE_TITLE_TOOLTIP).toBe(PATROL_PAGE_DESCRIPTION);
     expect(getPatrolPageHeaderMeta()).toMatchObject({
       title: 'Patrol',
       description: PATROL_PAGE_DESCRIPTION,
       titleTooltip: PATROL_PAGE_DESCRIPTION,
+    });
+    expect(getPatrolPageHeaderMeta({ autonomyLocked: true })).toMatchObject({
+      title: 'Patrol',
+      description: 'Patrol watches infrastructure and shows current issues.',
+      titleTooltip: 'Patrol watches infrastructure and shows current issues.',
     });
   });
 });

@@ -107,8 +107,45 @@ describe('ApprovalSection', () => {
     );
   });
 
+  it('demotes raw commands behind technical details instead of making them the approval body', () => {
+    expect(approvalSectionSource).toContain('renderTechnicalCommandDetails');
+    expect(approvalSectionSource).toContain('Technical details');
+    expect(approvalSectionSource).toContain('{renderTechnicalCommandDetails(approval.command)}');
+    expect(approvalSectionSource).toContain('{renderTechnicalCommandDetails(fix.commands)}');
+    expect(approvalSectionSource).toContain('{renderTechnicalCommandDetails(fix().commands)}');
+    expect(approvalSectionSource).not.toContain('{approval.command}</div>');
+    expect(approvalSectionSource).not.toContain('{fix.commands![0]}</div>');
+    expect(approvalSectionSource).not.toContain('{fix().commands![0]}</div>');
+  });
+
   afterEach(() => {
     cleanup();
+  });
+
+  it('uses governed decision wording for live approvals', async () => {
+    state.hasAutoFix = true;
+    state.pendingApprovals = [
+      {
+        id: 'approval-1',
+        toolId: 'investigation_fix',
+        command: 'systemctl restart nginx',
+        targetType: 'investigation',
+        targetId: 'finding-1',
+        targetName: 'node-1',
+        context: 'Restart the workload service',
+        riskLevel: 'high',
+        status: 'pending',
+        requestedAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
+      },
+    ];
+
+    render(() => <ApprovalSection findingId="finding-1" investigationOutcome="fix_queued" />);
+
+    expect(await screen.findByRole('button', { name: /approve fix/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /reject/i })).toBeInTheDocument();
+    expect(screen.queryByText(/approve & execute/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^deny$/i)).not.toBeInTheDocument();
   });
 
   it('keeps fix approvals out of commercial trial prompts', () => {
@@ -371,8 +408,8 @@ describe('ApprovalSection', () => {
 
     render(() => <ApprovalSection findingId="finding-2" investigationOutcome="fix_queued" />);
 
-    expect(await screen.findAllByRole('button', { name: /re-approve & execute/i })).toHaveLength(1);
-    fireEvent.click(screen.getByRole('button', { name: /re-approve & execute/i }));
+    expect(await screen.findAllByRole('button', { name: /re-approve fix/i })).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: /re-approve fix/i }));
 
     await waitFor(() => {
       expect(reapproveInvestigationFixMock).toHaveBeenCalledWith('finding-2');

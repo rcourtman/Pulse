@@ -27,8 +27,18 @@ import type { Resource } from '@/types/resource';
 
 export const API_TOKEN_SCOPES_DOC_URL = SHIPPED_API_TOKEN_SCOPES_DOC_URL;
 export const API_TOKEN_WILDCARD_SCOPE = '*';
+export const API_TOKEN_KIOSK_PRESET_ID = 'kiosk_monitoring';
+export const API_TOKEN_PULSE_INTELLIGENCE_AGENT_PRESET_ID = 'pulse_intelligence_agent';
+export const API_TOKEN_PATROL_EXTERNAL_AGENT_PRESET_LABEL = 'Patrol external agent';
+export const API_TOKEN_AGENT_PRESET_ID = 'agent';
+export const API_TOKEN_DOCKER_REPORT_PRESET_ID = 'docker_podman_reporting';
+export const API_TOKEN_DOCKER_MANAGE_PRESET_ID = 'docker_podman_lifecycle';
+export const API_TOKEN_SETTINGS_READ_PRESET_ID = 'settings_read';
+export const API_TOKEN_SETTINGS_ADMIN_PRESET_ID = 'settings_admin';
+export const API_TOKEN_AUDIT_READ_PRESET_ID = 'audit_read';
 
 export interface APITokenPreset {
+  id: string;
   label: string;
   scopes: string[];
   description: string;
@@ -42,46 +52,82 @@ export interface APITokenUsageEntry {
 type ScopeGroup = (typeof API_SCOPE_OPTIONS)[number]['group'];
 type ScopeOption = (typeof API_SCOPE_OPTIONS)[number];
 
-const API_TOKEN_SCOPE_GROUP_ORDER: ScopeGroup[] = ['Monitoring', 'Agents', 'Settings', 'Security'];
-
-export const getAPITokenScopePresets = (): APITokenPreset[] => [
-  {
-    label: 'Kiosk / Monitoring',
-    scopes: [MONITORING_READ_SCOPE],
-    description:
-      'Read-only access for wall displays. Use ?token=xxx&kiosk=1 in the URL to hide navigation and filters.',
-  },
-  {
-    label: 'Agent',
-    scopes: [AGENT_REPORT_SCOPE],
-    description: 'Allow the Pulse agent to submit OS, CPU, and disk metrics.',
-  },
-  {
-    label: API_TOKEN_DOCKER_REPORT_PRESET_LABEL,
-    scopes: [DOCKER_REPORT_SCOPE],
-    description: API_TOKEN_DOCKER_REPORT_PRESET_DESCRIPTION,
-  },
-  {
-    label: API_TOKEN_DOCKER_MANAGE_PRESET_LABEL,
-    scopes: [DOCKER_REPORT_SCOPE, DOCKER_MANAGE_SCOPE],
-    description: API_TOKEN_DOCKER_MANAGE_PRESET_DESCRIPTION,
-  },
-  {
-    label: 'Settings read',
-    scopes: [SETTINGS_READ_SCOPE],
-    description: 'Read configuration snapshots and diagnostics without modifying anything.',
-  },
-  {
-    label: 'Settings admin',
-    scopes: [SETTINGS_READ_SCOPE, SETTINGS_WRITE_SCOPE],
-    description: 'Full settings read/write – equivalent to automation with admin privileges.',
-  },
-  {
-    label: 'Audit read',
-    scopes: [AUDIT_READ_SCOPE],
-    description: 'Read audit events, verification history, summaries, and export activity.',
-  },
+const API_TOKEN_SCOPE_GROUP_ORDER: ScopeGroup[] = [
+  'Monitoring',
+  'AI',
+  'Agents',
+  'Settings',
+  'Security',
 ];
+
+const normalizePresetScopes = (scopes: readonly string[] | undefined): string[] =>
+  Array.from(new Set((scopes ?? []).map((scope) => scope.trim()).filter(Boolean)));
+
+export const getAPITokenScopePresets = (
+  pulseIntelligenceRequiredScopes: readonly string[] = [],
+): APITokenPreset[] => {
+  const pulseIntelligenceScopes = normalizePresetScopes(pulseIntelligenceRequiredScopes);
+  const presets: APITokenPreset[] = [
+    {
+      id: API_TOKEN_KIOSK_PRESET_ID,
+      label: 'Kiosk / Monitoring',
+      scopes: [MONITORING_READ_SCOPE],
+      description:
+        'Read-only access for wall displays. Use ?token=xxx&kiosk=1 in the URL to hide navigation and filters.',
+    },
+  ];
+
+  if (pulseIntelligenceScopes.length > 0) {
+    presets.push({
+      id: API_TOKEN_PULSE_INTELLIGENCE_AGENT_PRESET_ID,
+      label: API_TOKEN_PATROL_EXTERNAL_AGENT_PRESET_LABEL,
+      scopes: pulseIntelligenceScopes,
+      description:
+        'Scopes for connected agents that read Pulse context and request Patrol work.',
+    });
+  }
+
+  presets.push(
+    {
+      id: API_TOKEN_AGENT_PRESET_ID,
+      label: 'Agent',
+      scopes: [AGENT_REPORT_SCOPE],
+      description: 'Allow the Pulse agent to submit OS, CPU, and disk metrics.',
+    },
+    {
+      id: API_TOKEN_DOCKER_REPORT_PRESET_ID,
+      label: API_TOKEN_DOCKER_REPORT_PRESET_LABEL,
+      scopes: [DOCKER_REPORT_SCOPE],
+      description: API_TOKEN_DOCKER_REPORT_PRESET_DESCRIPTION,
+    },
+    {
+      id: API_TOKEN_DOCKER_MANAGE_PRESET_ID,
+      label: API_TOKEN_DOCKER_MANAGE_PRESET_LABEL,
+      scopes: [DOCKER_REPORT_SCOPE, DOCKER_MANAGE_SCOPE],
+      description: API_TOKEN_DOCKER_MANAGE_PRESET_DESCRIPTION,
+    },
+    {
+      id: API_TOKEN_SETTINGS_READ_PRESET_ID,
+      label: 'Settings read',
+      scopes: [SETTINGS_READ_SCOPE],
+      description: 'Read configuration snapshots and diagnostics without modifying anything.',
+    },
+    {
+      id: API_TOKEN_SETTINGS_ADMIN_PRESET_ID,
+      label: 'Settings admin',
+      scopes: [SETTINGS_READ_SCOPE, SETTINGS_WRITE_SCOPE],
+      description: 'Full settings read/write - equivalent to automation with admin privileges.',
+    },
+    {
+      id: API_TOKEN_AUDIT_READ_PRESET_ID,
+      label: 'Audit read',
+      scopes: [AUDIT_READ_SCOPE],
+      description: 'Read audit events, verification history, summaries, and export activity.',
+    },
+  );
+
+  return presets;
+};
 
 export const hasAgentScopeResource = (resource: Resource): boolean => {
   if (resource.type === 'docker-host') return false;
@@ -203,6 +249,7 @@ export const countWildcardTokens = (tokens: APITokenRecord[]): number => {
 export const groupAPITokenScopes = (): [ScopeGroup, ScopeOption[]][] => {
   const grouped: Record<ScopeGroup, ScopeOption[]> = {
     Monitoring: [],
+    AI: [],
     Agents: [],
     Settings: [],
     Security: [],

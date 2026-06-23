@@ -11,9 +11,14 @@ import {
   shouldOpenAvailabilityTargetAddDialog,
 } from './availabilitySettingsModel';
 import {
+  LEGACY_SELF_HOSTED_PRO_BILLING_PLAN_ROUTE,
+  LEGACY_SELF_HOSTED_PRO_BILLING_ROUTE,
+  LEGACY_SELF_HOSTED_PRO_BILLING_USAGE_ROUTE,
   SELF_HOSTED_PRO_BILLING_PLAN_ROUTE,
   SELF_HOSTED_PRO_BILLING_ROUTE,
+  SELF_HOSTED_PRO_BILLING_USAGE_ROUTE,
 } from '@/utils/pricingHandoff';
+import { SETTINGS_API_ACCESS_PATH } from '@/routing/resourceLinks';
 
 export type SettingsTab =
   | 'infrastructure-systems'
@@ -23,6 +28,9 @@ export type SettingsTab =
   | 'system-updates'
   | 'system-recovery'
   | 'system-ai'
+  | 'system-ai-patrol'
+  | 'system-ai-assistant'
+  | 'system-ai-discovery'
   | 'system-relay'
   | 'system-billing'
   | 'support-diagnostics'
@@ -54,6 +62,7 @@ export type ProxmoxPlatformType = Extract<
 export type SettingsNavGroupId =
   | 'infrastructure'
   | 'monitoring'
+  | 'pulse-intelligence'
   | 'organization'
   | 'system'
   | 'support'
@@ -98,6 +107,14 @@ export const DEFAULT_SETTINGS_TAB: SettingsTab = 'infrastructure-systems';
 const INFRASTRUCTURE_SYSTEMS_PREFIX = '/settings/infrastructure';
 const MONITORING_PREFIX = '/settings/monitoring';
 const MONITORING_AVAILABILITY_PREFIX = `${MONITORING_PREFIX}/availability`;
+export const SETTINGS_PULSE_INTELLIGENCE_PATH = '/settings/pulse-intelligence';
+export const SETTINGS_PROVIDER_MODELS_PATH = `${SETTINGS_PULSE_INTELLIGENCE_PATH}/provider`;
+const PULSE_INTELLIGENCE_PREFIX = SETTINGS_PULSE_INTELLIGENCE_PATH;
+const PULSE_INTELLIGENCE_PROVIDER_PREFIX = SETTINGS_PROVIDER_MODELS_PATH;
+const PULSE_INTELLIGENCE_PATROL_PREFIX = `${PULSE_INTELLIGENCE_PREFIX}/patrol`;
+const PULSE_INTELLIGENCE_ASSISTANT_PREFIX = `${PULSE_INTELLIGENCE_PREFIX}/assistant`;
+const PULSE_INTELLIGENCE_DISCOVERY_PREFIX = `${PULSE_INTELLIGENCE_PREFIX}/discovery`;
+const LEGACY_SYSTEM_AI_PREFIX = '/settings/system-ai';
 const RETIRED_SETTINGS_WORKLOADS_PREFIX = '/settings/workloads';
 const RETIRED_SETTINGS_OPERATIONS_PREFIX = '/settings/operations';
 const RETIRED_SETTINGS_INTEGRATIONS_API_PREFIX = '/settings/integrations/api';
@@ -106,8 +123,9 @@ const SUPPORT_PREFIX = '/settings/support';
 const SUPPORT_DIAGNOSTICS_PREFIX = `${SUPPORT_PREFIX}/diagnostics`;
 const SUPPORT_REPORTING_PREFIX = `${SUPPORT_PREFIX}/reporting`;
 const SUPPORT_LOGS_PREFIX = `${SUPPORT_PREFIX}/logs`;
-const SECURITY_API_PREFIX = '/settings/security/api';
-const SYSTEM_BILLING_PREFIX = SELF_HOSTED_PRO_BILLING_ROUTE;
+const SECURITY_API_PREFIX = SETTINGS_API_ACCESS_PATH;
+const SELF_HOSTED_BILLING_PREFIX = SELF_HOSTED_PRO_BILLING_ROUTE;
+const LEGACY_SYSTEM_BILLING_PREFIX = LEGACY_SELF_HOSTED_PRO_BILLING_ROUTE;
 
 const PROXMOX_AGENT_META: Record<
   AgentKey,
@@ -171,11 +189,25 @@ export function resolveCanonicalSettingsPath(path: string): string | null {
   if (normalizedPath === MONITORING_PREFIX) {
     return MONITORING_AVAILABILITY_PREFIX;
   }
+  if (
+    normalizedPath === PULSE_INTELLIGENCE_PREFIX ||
+    normalizedPath === PULSE_INTELLIGENCE_PROVIDER_PREFIX ||
+    normalizedPath === LEGACY_SYSTEM_AI_PREFIX
+  ) {
+    return settingsTabPath('system-ai');
+  }
   if (normalizedPath === SUPPORT_PREFIX) {
     return SUPPORT_DIAGNOSTICS_PREFIX;
   }
-  if (normalizedPath === SYSTEM_BILLING_PREFIX) {
+  if (
+    normalizedPath === SELF_HOSTED_BILLING_PREFIX ||
+    normalizedPath === LEGACY_SYSTEM_BILLING_PREFIX ||
+    normalizedPath === LEGACY_SELF_HOSTED_PRO_BILLING_PLAN_ROUTE
+  ) {
     return SELF_HOSTED_PRO_BILLING_PLAN_ROUTE;
+  }
+  if (normalizedPath === LEGACY_SELF_HOSTED_PRO_BILLING_USAGE_ROUTE) {
+    return SELF_HOSTED_PRO_BILLING_USAGE_ROUTE;
   }
   return normalizedPath;
 }
@@ -190,6 +222,18 @@ export function deriveTabFromPath(path: string): SettingsTab {
   if (canonicalPath.startsWith(MONITORING_AVAILABILITY_PREFIX)) {
     return 'monitoring-availability';
   }
+  if (canonicalPath.startsWith(PULSE_INTELLIGENCE_PATROL_PREFIX)) {
+    return 'system-ai-patrol';
+  }
+  if (canonicalPath.startsWith(PULSE_INTELLIGENCE_ASSISTANT_PREFIX)) {
+    return 'system-ai-assistant';
+  }
+  if (canonicalPath.startsWith(PULSE_INTELLIGENCE_DISCOVERY_PREFIX)) {
+    return 'system-ai-discovery';
+  }
+  if (canonicalPath.startsWith(PULSE_INTELLIGENCE_PROVIDER_PREFIX)) {
+    return 'system-ai';
+  }
 
   if (canonicalPath.includes('/settings/system-general')) return 'system-general';
   if (canonicalPath.includes('/settings/system-network')) return 'system-network';
@@ -197,7 +241,7 @@ export function deriveTabFromPath(path: string): SettingsTab {
   if (canonicalPath.includes('/settings/system-recovery')) return 'system-recovery';
   if (canonicalPath.includes('/settings/system-ai')) return 'system-ai';
   if (canonicalPath.includes('/settings/system-relay')) return 'system-relay';
-  if (canonicalPath.includes(SYSTEM_BILLING_PREFIX)) return 'system-billing';
+  if (canonicalPath.includes(SELF_HOSTED_BILLING_PREFIX)) return 'system-billing';
   if (canonicalPath.startsWith(SUPPORT_LOGS_PREFIX)) return 'support-logs';
   if (canonicalPath.startsWith(SUPPORT_REPORTING_PREFIX)) return 'support-reporting';
   if (canonicalPath.startsWith(SUPPORT_DIAGNOSTICS_PREFIX) || canonicalPath === SUPPORT_PREFIX)
@@ -251,6 +295,8 @@ export function agentKeyFromPlatformType(value: string | null | undefined): Agen
 
 export function deriveTabFromQuery(search: string): SettingsTab | null {
   const params = new URLSearchParams(search);
+  if (isAISettingsOAuthCallbackQuery(search)) return 'system-ai';
+
   const tab = params.get('tab')?.trim().toLowerCase();
   if (!tab) return null;
 
@@ -269,7 +315,19 @@ export function deriveTabFromQuery(search: string): SettingsTab | null {
     case 'system-general':
       return 'system-general';
     case 'system-ai':
+    case 'pulse-intelligence':
+    case 'provider-models':
+    case 'provider':
       return 'system-ai';
+    case 'system-ai-patrol':
+    case 'patrol':
+      return 'system-ai-patrol';
+    case 'system-ai-assistant':
+    case 'assistant':
+      return 'system-ai-assistant';
+    case 'system-ai-discovery':
+    case 'discovery':
+      return 'system-ai-discovery';
     case 'system-relay':
       return 'system-relay';
     case 'system-billing':
@@ -318,6 +376,11 @@ export function deriveTabFromQuery(search: string): SettingsTab | null {
   }
 }
 
+export function isAISettingsOAuthCallbackQuery(search: string): boolean {
+  const params = new URLSearchParams(search);
+  return params.has('ai_oauth_success') || params.has('ai_oauth_error');
+}
+
 export function settingsTabPath(tab: SettingsTab): string {
   switch (tab) {
     case 'infrastructure-systems':
@@ -338,6 +401,14 @@ export function settingsTabPath(tab: SettingsTab): string {
       return '/settings/organization/billing-admin';
     case 'api':
       return SECURITY_API_PREFIX;
+    case 'system-ai':
+      return PULSE_INTELLIGENCE_PROVIDER_PREFIX;
+    case 'system-ai-patrol':
+      return PULSE_INTELLIGENCE_PATROL_PREFIX;
+    case 'system-ai-assistant':
+      return PULSE_INTELLIGENCE_ASSISTANT_PREFIX;
+    case 'system-ai-discovery':
+      return PULSE_INTELLIGENCE_DISCOVERY_PREFIX;
     case 'system-relay':
       return '/settings/system-relay';
     case 'system-billing':
@@ -361,9 +432,12 @@ const ROUTEABLE_SETTINGS_PATHS = new Set<string>([
   settingsTabPath('system-updates'),
   settingsTabPath('system-recovery'),
   settingsTabPath('system-ai'),
+  settingsTabPath('system-ai-patrol'),
+  settingsTabPath('system-ai-assistant'),
+  settingsTabPath('system-ai-discovery'),
   settingsTabPath('system-relay'),
   settingsTabPath('system-billing'),
-  `${SYSTEM_BILLING_PREFIX}/usage`,
+  SELF_HOSTED_PRO_BILLING_USAGE_ROUTE,
   settingsTabPath('support-diagnostics'),
   settingsTabPath('support-reporting'),
   settingsTabPath('support-logs'),

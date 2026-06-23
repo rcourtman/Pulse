@@ -15,7 +15,12 @@ vi.mock('@/utils/logger', () => ({
   },
 }));
 
-import { AIChatAPI, createAIChatStreamPaintCheckpointPredicate } from '@/api/aiChat';
+import {
+  AIChatAPI,
+  PULSE_OPERATIONS_LOOP_WORKFLOW_PROMPT_NAME,
+  PULSE_PATROL_CONTROL_WORKFLOW_PROMPT_SURFACE,
+  createAIChatStreamPaintCheckpointPredicate,
+} from '@/api/aiChat';
 import {
   AI_CHAT_DEV_STREAM_FIXTURE_ALIAS_NAMES,
   AI_CHAT_DEV_STREAM_FIXTURE_NAMES,
@@ -102,6 +107,86 @@ describe('AIChatAPI', () => {
 
     expect(shouldYield({ type: 'thinking' })).toBe(true);
     expect(shouldYield({ type: 'thinking' })).toBe(false);
+  });
+
+  it('renders native Assistant workflow prompts through the shared AI route', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({
+      description: 'Pulse fleet triage',
+      text: 'Use get_fleet_context...',
+    });
+
+    await expect(
+      AIChatAPI.renderWorkflowPrompt({
+        name: 'pulse_triage_fleet',
+        arguments: {},
+      }),
+    ).resolves.toEqual({
+      description: 'Pulse fleet triage',
+      text: 'Use get_fleet_context...',
+    });
+
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/workflow-prompts/render', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'pulse_triage_fleet', arguments: {} }),
+    });
+  });
+
+  it('records first-party workflow prompt activity through the shared AI route', async () => {
+    apiFetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    await expect(
+      AIChatAPI.recordWorkflowPromptActivity({
+        name: 'pulse_operations_loop',
+        surface: 'pulse_patrol',
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(apiFetchMock).toHaveBeenCalledWith('/api/ai/workflow-prompts/activity', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'pulse_operations_loop', surface: 'pulse_patrol' }),
+    });
+  });
+
+  it('records Patrol control workflow prompt activity through the shared AI route', async () => {
+    apiFetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    await expect(
+      AIChatAPI.recordWorkflowPromptActivity({
+        name: PULSE_OPERATIONS_LOOP_WORKFLOW_PROMPT_NAME,
+        surface: PULSE_PATROL_CONTROL_WORKFLOW_PROMPT_SURFACE,
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(apiFetchMock).toHaveBeenCalledWith('/api/ai/workflow-prompts/activity', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'pulse_operations_loop',
+        surface: 'patrol_control',
+      }),
+    });
+  });
+
+  it('fetches the live native Assistant surface tool contract through the shared AI route', async () => {
+    const contract = {
+      surfaceId: 'pulse_assistant',
+      surfaceLabel: 'Pulse Assistant',
+      toolSource: 'assistant_registry',
+      toolNames: ['pulse_query', 'pulse_question'],
+      registryToolNames: ['pulse_query'],
+      nativeToolNames: ['pulse_question'],
+      affordances: {
+        tools: true,
+        interactiveQuestions: true,
+      },
+    };
+    apiFetchJSONMock.mockResolvedValueOnce(contract);
+
+    await expect(AIChatAPI.getAssistantSurfaceTools()).resolves.toEqual(contract);
+
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/assistant/surface-tools');
   });
 
   it('runs the local dev stream fixture without opening a provider request', async () => {
@@ -396,12 +481,7 @@ describe('AIChatAPI', () => {
   it('runs the tool-chain dev stream fixture without opening a provider request', async () => {
     const onEvent = vi.fn();
 
-    await AIChatAPI.chat(
-      '/fixture tool-chain',
-      undefined,
-      'openrouter:qwen/qwen3.7-plus',
-      onEvent,
-    );
+    await AIChatAPI.chat('/fixture tool-chain', undefined, 'openrouter:qwen/qwen3.7-plus', onEvent);
 
     expect(apiFetchMock).not.toHaveBeenCalled();
     expect(onEvent.mock.calls.map(([event]) => event.type)).toEqual([
@@ -464,20 +544,10 @@ describe('AIChatAPI', () => {
     expect(eventTypes()).toEqual(['session']);
 
     await vi.advanceTimersByTimeAsync(75);
-    expect(eventTypes()).toEqual([
-      'session',
-      'workflow_state',
-      'workflow_state',
-      'tool_start',
-    ]);
+    expect(eventTypes()).toEqual(['session', 'workflow_state', 'workflow_state', 'tool_start']);
 
     await vi.advanceTimersByTimeAsync(1399);
-    expect(eventTypes()).toEqual([
-      'session',
-      'workflow_state',
-      'workflow_state',
-      'tool_start',
-    ]);
+    expect(eventTypes()).toEqual(['session', 'workflow_state', 'workflow_state', 'tool_start']);
 
     await vi.advanceTimersByTimeAsync(1);
     expect(eventTypes()).toEqual([
@@ -1414,9 +1484,7 @@ describe('AIChatAPI', () => {
 
   it('rejects stalled chat stream reads instead of emitting synthetic completion', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    const read = vi.fn(
-      () => new Promise<ReadableStreamReadResult<Uint8Array>>(() => undefined),
-    );
+    const read = vi.fn(() => new Promise<ReadableStreamReadResult<Uint8Array>>(() => undefined));
     const releaseLock = vi.fn();
     const onEvent = vi.fn();
 

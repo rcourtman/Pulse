@@ -12,9 +12,12 @@ const canonicalTabPaths = {
   'system-network': '/settings/system-network',
   'system-updates': '/settings/system-updates',
   'system-recovery': '/settings/system-recovery',
-  'system-ai': '/settings/system-ai',
+  'system-ai': '/settings/pulse-intelligence/provider',
+  'system-ai-patrol': '/settings/pulse-intelligence/patrol',
+  'system-ai-assistant': '/settings/pulse-intelligence/assistant',
+  'system-ai-discovery': '/settings/pulse-intelligence/discovery',
   'system-relay': '/settings/system-relay',
-  'system-billing': '/settings/system/billing/plan',
+  'system-billing': '/settings/pulse-intelligence/billing/plan',
   'support-diagnostics': '/settings/support/diagnostics',
   'support-reporting': '/settings/support/reporting',
   'support-logs': '/settings/support/logs',
@@ -111,10 +114,11 @@ describe('settingsNavigation integration scaffold', () => {
     ).toBe(true);
   });
 
-  it('keeps self-hosted billing as a direct route instead of a sidebar item', () => {
+  it('keeps self-hosted billing discoverable from Pulse Intelligence settings', () => {
+    expect(deriveTabFromPath('/settings/pulse-intelligence/billing/plan')).toBe('system-billing');
     expect(deriveTabFromPath('/settings/system/billing/plan')).toBe('system-billing');
-    expect(settingsTabPath('system-billing')).toBe('/settings/system/billing/plan');
-    expect(getSettingsNavItem('system-billing')?.hideFromSidebar).toBe(true);
+    expect(settingsTabPath('system-billing')).toBe('/settings/pulse-intelligence/billing/plan');
+    expect(getSettingsNavItem('system-billing')?.hideFromSidebar).not.toBe(true);
   });
 
   it('keeps resource privacy route-backed but out of the normal sidebar', () => {

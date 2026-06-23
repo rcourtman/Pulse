@@ -11,38 +11,120 @@ import {
   type PatrolRuntimeState,
   type PatrolStatus,
 } from '@/api/patrol';
+import {
+  AIChatAPI,
+  type AssistantWorkflowPromptActivitySurface,
+  PULSE_OPERATIONS_LOOP_WORKFLOW_PROMPT_NAME,
+  PULSE_PATROL_CONTROL_WORKFLOW_PROMPT_SURFACE,
+  PULSE_PATROL_WORKFLOW_PROMPT_SURFACE,
+} from '@/api/aiChat';
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import {
-  aiRuntimeModels,
   aiRuntimeSettings,
   loadAIRuntimeModels,
   loadAIRuntimeSettings,
   syncAIRuntimeSettings,
 } from '@/stores/aiRuntimeState';
-import { aiChatStore } from '@/stores/aiChat';
+import { aiChatStore, type AIChatContext } from '@/stores/aiChat';
 import { notificationStore } from '@/stores/notifications';
 import { usePatrolStream } from '@/hooks/usePatrolStream';
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
-import { hasFeature, loadRuntimeCapabilities } from '@/stores/license';
+import {
+  getRuntimeCapabilityBlock,
+  hasFeature,
+  loadRuntimeCapabilities,
+  runtimeCapabilities,
+} from '@/stores/license';
+import { PATROL_AUTONOMY_FEATURE_KEY } from './patrolAutonomyAvailability';
 import type { AISettings } from '@/types/ai';
+import {
+  hasFindingInvestigationHandoffPointer,
+  isPatrolRuntimeFinding,
+} from '@/utils/aiFindingPresentation';
 import { getCanonicalScopeResourceIds } from '@/utils/patrolFormat';
 import { normalizePatrolRuntimeBlockedReason } from '@/utils/patrolRuntimePresentation';
+import { logger } from '@/utils/logger';
 import {
-  buildPatrolConfigurationFailureHandoff,
-  buildPatrolInvestigationContextSummary,
-  selectPatrolSupportingRecentChanges,
+  parsePatrolControlStarter,
+  PATROL_CONTROL_STARTER,
+  PATROL_CONTROL_STARTER_QUERY_PARAM,
+  PATROL_OPERATIONS_LOOP_STARTER_QUERY_PARAM,
+} from '@/routing/resourceLinks';
+import {
+  buildPatrolAssistantApprovalBriefingInput,
+  buildPatrolAssistantFindingHandoffFromUnifiedFinding,
+  buildPatrolAssistantProposedFixBriefingInput,
+  buildPatrolAssistantProposedFixBriefingInputFromApproval,
+  patrolAssistantFindingHandoffRequiresApprovalMode,
+  type PatrolAssistantApprovalBriefingInput,
+  type PatrolAssistantFindingHandoff,
   type PatrolConfigurationFailureInput,
 } from './patrolInvestigationContextModel';
 
 type PatrolTab = 'findings' | 'history';
 
-type PatrolAPIError = Error & {
-  code?: string;
-  details?: Record<string, string>;
-  status?: number;
+const PATROL_GOVERNED_ACTION_OUTCOMES = new Set([
+  'fix_executed',
+  'fix_failed',
+  'fix_rejected',
+  'fix_verified',
+  'fix_verification_failed',
+  'fix_verification_unknown',
+]);
+const PATROL_VERIFIED_OUTCOMES = new Set(['fix_verified']);
+const PATROL_OPERATIONS_LOOP_WORKFLOW_PROMPT = PULSE_OPERATIONS_LOOP_WORKFLOW_PROMPT_NAME;
+
+const recordPatrolWorkflowStarterActivityForSurface = async (
+  surface: AssistantWorkflowPromptActivitySurface,
+  logContext: string,
+): Promise<void> => {
+  try {
+    await AIChatAPI.recordWorkflowPromptActivity({
+      name: PULSE_OPERATIONS_LOOP_WORKFLOW_PROMPT_NAME,
+      surface,
+    });
+  } catch (error) {
+    logger.debug(`[${logContext}] Failed to record Patrol workflow starter`, error);
+  }
 };
 
 export const PATROL_REFRESH_TIMEOUT_MS = 15000;
+export const PATROL_MANUAL_SYNC_TIMEOUT_MS = 5000;
+
+export function recordPatrolWorkflowStarterActivity(): void {
+  void recordPatrolWorkflowStarterActivityForSurface(
+    PULSE_PATROL_WORKFLOW_PROMPT_SURFACE,
+    'Patrol',
+  );
+}
+
+export function recordPatrolControlStarterActivity(): Promise<void> {
+  return recordPatrolWorkflowStarterActivityForSurface(
+    PULSE_PATROL_CONTROL_WORKFLOW_PROMPT_SURFACE,
+    'Patrol mode handoff',
+  );
+}
+
+interface PatrolAssistantWorkflowHandoffOptions {
+  recordStarterActivity?: () => void;
+  openAssistant?: (context: AIChatContext) => void;
+}
+
+export function openPatrolAssistantWorkflowHandoff(
+  handoff: PatrolAssistantFindingHandoff,
+  options: PatrolAssistantWorkflowHandoffOptions = {},
+): void {
+  const {
+    recordStarterActivity = recordPatrolWorkflowStarterActivity,
+    openAssistant = (context) => aiChatStore.open(context),
+  } = options;
+
+  recordStarterActivity();
+  openAssistant({
+    ...handoff.context,
+    preferredWorkflowPromptName: PATROL_OPERATIONS_LOOP_WORKFLOW_PROMPT,
+  });
+}
 
 const patrolErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error && error.message.trim() ? error.message : fallback;
@@ -66,7 +148,7 @@ export function resolvePatrolAutonomyLevelForSave(
   autoFixLocked: boolean,
 ): PatrolAutonomyLevel {
   if (autoFixLocked) return 'monitor';
-  if (level === 'assisted' || level === 'full') {
+  if (level === 'full') {
     return fullModeUnlocked ? 'full' : 'assisted';
   }
   return level;
@@ -81,12 +163,12 @@ export function resolvePatrolAutonomySettingsForSave({
   fullModeUnlocked: boolean;
   autoFixLocked: boolean;
 }): { autonomyLevel: PatrolAutonomyLevel; fullModeUnlocked: boolean } {
-  const canUseFullMode =
-    !autoFixLocked && (level === 'assisted' || level === 'full') && fullModeUnlocked;
+  const canUseFullMode = !autoFixLocked && level === 'full' && fullModeUnlocked;
+  const autonomyLevel = resolvePatrolAutonomyLevelForSave(level, canUseFullMode, autoFixLocked);
 
   return {
-    autonomyLevel: resolvePatrolAutonomyLevelForSave(level, canUseFullMode, autoFixLocked),
-    fullModeUnlocked: canUseFullMode,
+    autonomyLevel,
+    fullModeUnlocked: autonomyLevel === 'full',
   };
 }
 
@@ -141,11 +223,11 @@ export function buildPatrolSettingsReadinessFailure({
 export function usePatrolIntelligenceState() {
   const [initialSurfaceReady, setInitialSurfaceReady] = createSignal(false);
   const [activeTab, setActiveTab] = createSignal<PatrolTab>('findings');
-  const [showInvestigationContext, setShowInvestigationContext] = createSignal(false);
   const [findingsFilterOverride, setFindingsFilterOverride] = createSignal<
     'all' | 'active' | 'resolved' | 'approvals' | 'attention' | undefined
   >(undefined);
   const [isRefreshing, setIsRefreshing] = createSignal(false);
+  const [isManualRefreshRunning, setIsManualRefreshRunning] = createSignal(false);
   const [autonomyLevel, setAutonomyLevel] = createSignal<PatrolAutonomyLevel>('monitor');
   const [isUpdatingAutonomy, setIsUpdatingAutonomy] = createSignal(false);
   const [activityRefreshTrigger, setActivityRefreshTrigger] = createSignal(0);
@@ -154,43 +236,22 @@ export function usePatrolIntelligenceState() {
   const [liveRunStartedAt, setLiveRunStartedAt] = createSignal('');
   const [investigationBudget, setInvestigationBudget] = createSignal(15);
   const [investigationTimeout, setInvestigationTimeout] = createSignal(300);
-  const [showAdvancedSettings, setShowAdvancedSettings] = createSignal(false);
-  const [isSavingAdvanced, setIsSavingAdvanced] = createSignal(false);
-  const [advancedSettingsError, setAdvancedSettingsError] =
-    createSignal<PatrolConfigurationFailureInput | null>(null);
   const [fullModeUnlocked, setFullModeUnlocked] = createSignal(false);
-  const availableModels = aiRuntimeModels;
-  const [patrolModel, setPatrolModel] = createSignal<string>('');
-  const [defaultModel, setDefaultModel] = createSignal<string>('');
-  const [patrolInterval, setPatrolInterval] = createSignal<number>(360);
-  const [isUpdatingSettings, setIsUpdatingSettings] = createSignal(false);
   const [isTogglingPatrol, setIsTogglingPatrol] = createSignal(false);
   const [isTriggeringPatrol, setIsTriggeringPatrol] = createSignal(false);
-  const [alertTriggeredAnalysis, setAlertTriggeredAnalysis] = createSignal<boolean>(false);
-  const [patrolAlertTriggers, setPatrolAlertTriggers] = createSignal<boolean>(true);
-  const [patrolAlertTriggerMinSeverity, setPatrolAlertTriggerMinSeverity] = createSignal<
-    'warning' | 'critical'
-  >('critical');
-  const [patrolAnomalyTriggers, setPatrolAnomalyTriggers] = createSignal<boolean>(true);
   const [selectedRun, setSelectedRun] = createSignal<PatrolRunRecord | null>(null);
-  const [patrolModelSelectElement, setPatrolModelSelectElement] = createSignal<HTMLSelectElement>();
+  const [assistantHandoffFindingId, setAssistantHandoffFindingId] = createSignal('');
+  const [patrolLoadError, setPatrolLoadError] = createSignal('');
 
-  let advancedSettingsRef: HTMLDivElement | undefined;
   let safetyTimerRef: ReturnType<typeof setTimeout> | undefined;
   let scrollToFindingTimerRef: ReturnType<typeof setTimeout> | undefined;
   let findingScrollTimerRef: ReturnType<typeof setTimeout> | undefined;
   let refreshTimeoutRef: ReturnType<typeof setTimeout> | undefined;
+  let manualRefreshTimeoutRef: ReturnType<typeof setTimeout> | undefined;
   let refreshRequestId = 0;
+  let manualRefreshRequestId = 0;
   let refreshInterval: ReturnType<typeof setInterval>;
   let approvalPollInterval: ReturnType<typeof setInterval>;
-
-  const setAdvancedSettingsRef = (element: HTMLDivElement | undefined) => {
-    advancedSettingsRef = element;
-  };
-
-  const setPatrolModelSelectRef = (element: HTMLSelectElement | undefined) => {
-    setPatrolModelSelectElement(() => element);
-  };
 
   const clearSafetyTimer = () => {
     if (safetyTimerRef !== undefined) {
@@ -213,12 +274,32 @@ export function usePatrolIntelligenceState() {
     }
   };
 
+  const clearManualRefreshTimeout = () => {
+    if (manualRefreshTimeoutRef !== undefined) {
+      clearTimeout(manualRefreshTimeoutRef);
+      manualRefreshTimeoutRef = undefined;
+    }
+  };
+
   const finishRefresh = (requestId: number) => {
     if (requestId !== refreshRequestId) {
       return;
     }
     clearRefreshTimeout();
     setIsRefreshing(false);
+  };
+
+  const rememberPatrolLoadError = (error: unknown, fallback: string) => {
+    const message = patrolErrorMessage(error, fallback);
+    setPatrolLoadError(message);
+    logger.debug('[Patrol] Failed to refresh Patrol data', error);
+    return message;
+  };
+
+  const clearPatrolLoadError = () => {
+    if (patrolLoadError()) {
+      setPatrolLoadError('');
+    }
   };
 
   const patrolStatusState = createNonSuspendingQuery<PatrolStatus | null, string>({
@@ -235,6 +316,10 @@ export function usePatrolIntelligenceState() {
   });
   const patrolStatus = patrolStatusState.value;
   const refetchPatrolStatus = patrolStatusState.refetch;
+  const historicalRegressionCount = createMemo(() => {
+    const count = patrolStatus()?.trust?.regressed_at_least_once;
+    return typeof count === 'number' && Number.isFinite(count) ? Math.max(0, count) : 0;
+  });
 
   const patrolStream = usePatrolStream({
     running: () =>
@@ -252,48 +337,14 @@ export function usePatrolIntelligenceState() {
     },
   });
 
-  const handleClickOutside = (event: MouseEvent) => {
-    if (advancedSettingsRef && !advancedSettingsRef.contains(event.target as Node)) {
-      if (advancedSettingsError()) return;
-      setShowAdvancedSettings(false);
-    }
-  };
-
-  createEffect(() => {
-    if (showAdvancedSettings()) {
-      document.addEventListener('mousedown', handleClickOutside);
-    } else {
-      document.removeEventListener('mousedown', handleClickOutside);
-      setAdvancedSettingsError(null);
-    }
-  });
-
-  createEffect(() => {
-    const model = patrolModel();
-    const select = patrolModelSelectElement();
-    // Track model catalog changes so a valid selected model is reapplied after
-    // async options are mounted into the configuration popover.
-    availableModels();
-    if (select) {
-      select.value = model;
-    }
-  });
-
-  const alertAnalysisLocked = createMemo(() => !hasFeature('ai_alerts'));
-  const autoFixLocked = createMemo(() => !hasFeature('ai_autofix'));
+  const autoFixLocked = createMemo(() => !hasFeature(PATROL_AUTONOMY_FEATURE_KEY));
+  const autoFixCapabilityBlock = createMemo(() =>
+    getRuntimeCapabilityBlock(PATROL_AUTONOMY_FEATURE_KEY),
+  );
+  const licenseRuntimeIdentity = createMemo(() => runtimeCapabilities()?.runtime);
 
   const applyPatrolAISettings = (data: AISettings | null | undefined) => {
-    setPatrolModel(data?.patrol_model || '');
-    setDefaultModel(data?.model || '');
-    setPatrolInterval(data?.patrol_interval_minutes ?? 360);
     setPatrolEnabledLocal(data?.patrol_enabled ?? true);
-    setAlertTriggeredAnalysis(!alertAnalysisLocked() && data?.alert_triggered_analysis !== false);
-    const legacyEventTriggersEnabled = data?.patrol_event_triggers_enabled !== false;
-    setPatrolAlertTriggers(data?.patrol_alert_triggers_enabled ?? legacyEventTriggersEnabled);
-    setPatrolAlertTriggerMinSeverity(
-      data?.patrol_alert_trigger_min_severity === 'warning' ? 'warning' : 'critical',
-    );
-    setPatrolAnomalyTriggers(data?.patrol_anomaly_triggers_enabled ?? legacyEventTriggersEnabled);
   };
 
   createEffect(() => {
@@ -315,13 +366,14 @@ export function usePatrolIntelligenceState() {
       blockedReason: blockedReason(),
       blockedCause: patrolStatus()?.blocked_cause,
     });
-    setAdvancedSettingsError(failure);
+    if (failure) {
+      notificationStore.warning(failure.message);
+    }
   };
 
   async function handleTogglePatrol() {
     if (isTogglingPatrol()) return;
     setIsTogglingPatrol(true);
-    setAdvancedSettingsError(null);
     const previousValue = patrolEnabledLocal();
     const newValue = !previousValue;
     setPatrolEnabledLocal(newValue);
@@ -336,9 +388,6 @@ export function usePatrolIntelligenceState() {
         setPatrolEnabledLocal(data.patrol_enabled);
       } else {
         setPatrolEnabledLocal(newValue);
-      }
-      if (typeof data?.patrol_interval_minutes === 'number') {
-        setPatrolInterval(data.patrol_interval_minutes);
       }
       surfaceSavedPatrolReadinessIssue(
         data,
@@ -379,155 +428,19 @@ export function usePatrolIntelligenceState() {
 
     try {
       await triggerPatrolRun();
-      await loadAllData();
     } catch (err) {
       console.error('Failed to trigger patrol run:', err);
       setManualRunRequested(false);
       notificationStore.error(patrolErrorMessage(err, 'Failed to start patrol run'));
       clearSafetyTimer();
+      return;
     } finally {
       setIsTriggeringPatrol(false);
     }
-  }
 
-  async function handleModelChange(modelId: string) {
-    if (isUpdatingSettings()) return;
-    setIsUpdatingSettings(true);
-    setAdvancedSettingsError(null);
-    try {
-      const updated = await AIAPI.updateSettings({ patrol_model: modelId });
-      syncAIRuntimeSettings(updated);
-      setPatrolModel(updated.patrol_model || modelId);
-      surfaceSavedPatrolReadinessIssue(
-        updated,
-        'Patrol model was saved, but Patrol is not ready to run.',
-      );
-      await refetchPatrolStatus();
-    } catch (err) {
-      console.error('Failed to update patrol model:', err);
-      setAdvancedSettingsError(buildAdvancedSettingsFailure(err, 'Failed to update Patrol model'));
-      notificationStore.error(patrolErrorMessage(err, 'Failed to update patrol model'));
-    } finally {
-      setIsUpdatingSettings(false);
-    }
-  }
-
-  async function handleIntervalChange(minutes: number) {
-    if (isUpdatingSettings()) return;
-    setIsUpdatingSettings(true);
-    setAdvancedSettingsError(null);
-    try {
-      const updated = await AIAPI.updateSettings({ patrol_interval_minutes: minutes });
-      syncAIRuntimeSettings(updated);
-      setPatrolInterval(updated.patrol_interval_minutes ?? minutes);
-      setPatrolEnabledLocal((updated.patrol_interval_minutes ?? minutes) > 0);
-      surfaceSavedPatrolReadinessIssue(
-        updated,
-        'Patrol schedule was saved, but Patrol is not ready to run.',
-      );
-      refetchPatrolStatus();
-    } catch (err) {
-      console.error('Failed to update patrol interval:', err);
-      notificationStore.error(patrolErrorMessage(err, 'Failed to update patrol schedule'));
-    } finally {
-      setIsUpdatingSettings(false);
-    }
-  }
-
-  async function handleAlertTriggeredAnalysisChange(enabled: boolean) {
-    if (isUpdatingSettings()) return;
-    setIsUpdatingSettings(true);
-    setAdvancedSettingsError(null);
-    const previous = alertTriggeredAnalysis();
-    setAlertTriggeredAnalysis(enabled);
-    try {
-      const updated = await AIAPI.updateSettings({ alert_triggered_analysis: enabled });
-      syncAIRuntimeSettings(updated);
-      surfaceSavedPatrolReadinessIssue(
-        updated,
-        'Patrol setting was saved, but Patrol is not ready to run.',
-      );
-    } catch (err) {
-      console.error('Failed to update alert-triggered analysis:', err);
-      setAlertTriggeredAnalysis(previous);
-      notificationStore.error(patrolErrorMessage(err, 'Failed to update alert analysis setting'));
-    } finally {
-      setIsUpdatingSettings(false);
-    }
-  }
-
-  async function handlePatrolAlertTriggersChange(enabled: boolean) {
-    if (isUpdatingSettings()) return;
-    setIsUpdatingSettings(true);
-    setAdvancedSettingsError(null);
-    const previous = patrolAlertTriggers();
-    setPatrolAlertTriggers(enabled);
-    try {
-      const updated = await AIAPI.updateSettings({ patrol_alert_triggers_enabled: enabled });
-      syncAIRuntimeSettings(updated);
-      surfaceSavedPatrolReadinessIssue(
-        updated,
-        'Patrol trigger setting was saved, but Patrol is not ready to run.',
-      );
-    } catch (err) {
-      console.error('Failed to update alert-triggered patrols:', err);
-      setPatrolAlertTriggers(previous);
-      notificationStore.error(
-        patrolErrorMessage(err, 'Failed to update alert-triggered Patrol setting'),
-      );
-    } finally {
-      setIsUpdatingSettings(false);
-    }
-  }
-
-  async function handlePatrolAlertTriggerMinSeverityChange(severity: 'warning' | 'critical') {
-    if (isUpdatingSettings()) return;
-    setIsUpdatingSettings(true);
-    setAdvancedSettingsError(null);
-    const previous = patrolAlertTriggerMinSeverity();
-    setPatrolAlertTriggerMinSeverity(severity);
-    try {
-      const updated = await AIAPI.updateSettings({
-        patrol_alert_trigger_min_severity: severity,
-      });
-      syncAIRuntimeSettings(updated);
-      surfaceSavedPatrolReadinessIssue(
-        updated,
-        'Patrol trigger setting was saved, but Patrol is not ready to run.',
-      );
-    } catch (err) {
-      console.error('Failed to update alert-trigger severity threshold:', err);
-      setPatrolAlertTriggerMinSeverity(previous);
-      notificationStore.error(
-        patrolErrorMessage(err, 'Failed to update alert-trigger severity threshold'),
-      );
-    } finally {
-      setIsUpdatingSettings(false);
-    }
-  }
-
-  async function handlePatrolAnomalyTriggersChange(enabled: boolean) {
-    if (isUpdatingSettings()) return;
-    setIsUpdatingSettings(true);
-    setAdvancedSettingsError(null);
-    const previous = patrolAnomalyTriggers();
-    setPatrolAnomalyTriggers(enabled);
-    try {
-      const updated = await AIAPI.updateSettings({ patrol_anomaly_triggers_enabled: enabled });
-      syncAIRuntimeSettings(updated);
-      surfaceSavedPatrolReadinessIssue(
-        updated,
-        'Patrol trigger setting was saved, but Patrol is not ready to run.',
-      );
-    } catch (err) {
-      console.error('Failed to update anomaly-triggered patrols:', err);
-      setPatrolAnomalyTriggers(previous);
-      notificationStore.error(
-        patrolErrorMessage(err, 'Failed to update anomaly-triggered Patrol setting'),
-      );
-    } finally {
-      setIsUpdatingSettings(false);
-    }
+    void loadAllData().catch((err) => {
+      console.error('Failed to refresh Patrol after starting run:', err);
+    });
   }
 
   const patrolRunHistory = createNonSuspendingQuery<PatrolRunRecord[], number>({
@@ -608,6 +521,9 @@ export function usePatrolIntelligenceState() {
 
   const selectedRunScopeResourceIds = createMemo(() => getCanonicalScopeResourceIds(selectedRun()));
   const allPatrolFindings = createMemo(() => aiIntelligenceStore.patrolFindings);
+  const patrolPendingApprovalCount = createMemo(
+    () => aiIntelligenceStore.patrolPendingApprovals.length,
+  );
   const selectedRunPatrolFindings = createMemo(() => {
     const run = selectedRun();
     if (!run) return null;
@@ -618,29 +534,6 @@ export function usePatrolIntelligenceState() {
 
   const intelligenceSummary = createMemo(() => aiIntelligenceStore.intelligenceSummary);
   const circuitBreakerStatus = createMemo(() => aiIntelligenceStore.circuitBreakerStatus);
-  const policyPosture = createMemo(() => intelligenceSummary()?.policy_posture);
-  const supportingRecentChanges = createMemo(() =>
-    selectPatrolSupportingRecentChanges(intelligenceSummary()?.recent_changes),
-  );
-  const supportingRecentChangeCount = createMemo(() => {
-    if (Array.isArray(intelligenceSummary()?.recent_changes)) {
-      return supportingRecentChanges().length;
-    }
-    return intelligenceSummary()?.recent_changes_count;
-  });
-  const investigationContext = createMemo(() =>
-    buildPatrolInvestigationContextSummary({
-      recentChangesCount: supportingRecentChangeCount(),
-      correlations: aiIntelligenceStore.correlations,
-      policyPosture: policyPosture(),
-    }),
-  );
-  const correlationTotal = createMemo(() => investigationContext().correlationCount);
-  const correlations = createMemo(() => aiIntelligenceStore.correlations?.correlations ?? []);
-  const recentChangeCount = createMemo(() => investigationContext().recentChangeCount);
-  const hasInvestigationContext = createMemo(() => investigationContext().hasContext);
-  const investigationContextSummary = createMemo(() => investigationContext().summaryText);
-
   const liveRunRecord = createMemo<PatrolRunRecord | null>(() => {
     if (!shouldShowLiveRun()) return null;
     return {
@@ -700,15 +593,20 @@ export function usePatrolIntelligenceState() {
 
   async function handleAutonomyChange(level: PatrolAutonomyLevel) {
     if (isUpdatingAutonomy()) return;
-    if (autoFixLocked() && level !== 'monitor') return;
+    const controlLocked = autoFixLocked();
+    if (controlLocked && level !== 'monitor') return;
 
     const previousLevel = autonomyLevel();
     const previousFullModeUnlocked = fullModeUnlocked();
     const effectiveSettings = resolvePatrolAutonomySettingsForSave({
       level,
-      fullModeUnlocked: fullModeUnlocked(),
-      autoFixLocked: autoFixLocked(),
+      fullModeUnlocked: level === 'full',
+      autoFixLocked: controlLocked,
     });
+    const shouldRecordPatrolControlStarter =
+      !controlLocked &&
+      (effectiveSettings.autonomyLevel !== previousLevel ||
+        effectiveSettings.fullModeUnlocked !== previousFullModeUnlocked);
     setAutonomyLevel(effectiveSettings.autonomyLevel);
     setFullModeUnlocked(effectiveSettings.fullModeUnlocked);
     setIsUpdatingAutonomy(true);
@@ -720,102 +618,84 @@ export function usePatrolIntelligenceState() {
         investigation_budget: investigationBudget(),
         investigation_timeout_sec: investigationTimeout(),
       });
+      if (shouldRecordPatrolControlStarter) {
+        await recordPatrolControlStarterActivity();
+        await loadVisiblePatrolData();
+      }
     } catch (err) {
       console.error('Failed to update autonomy:', err);
       setAutonomyLevel(previousLevel);
       setFullModeUnlocked(previousFullModeUnlocked);
-      notificationStore.error((err as Error).message || 'Failed to update autonomy level');
+      notificationStore.error((err as Error).message || 'Failed to update Patrol mode');
     } finally {
       setIsUpdatingAutonomy(false);
     }
   }
 
-  const buildAdvancedSettingsFailure = (
-    err: unknown,
-    fallback = 'Failed to save Patrol configuration',
-  ): PatrolConfigurationFailureInput => {
-    const apiError = err as PatrolAPIError;
-    const message = patrolErrorMessage(err, fallback);
-    const readiness = patrolReadiness();
-    const apiDetails = apiError.details ?? {};
-    const hasReadinessDetails =
-      Boolean(apiDetails.status || apiDetails.provider || apiDetails.model) ||
-      apiError.code === 'patrol_readiness_not_ready';
-    const readinessSummary = apiDetails.readiness_summary ?? apiDetails.summary;
-    return {
-      message,
-      code: apiError.code,
-      status: apiError.status,
-      details: apiError.details,
-      autonomyLevel: autonomyLevel(),
-      fullModeUnlocked: fullModeUnlocked(),
-      investigationBudget: investigationBudget(),
-      investigationTimeoutSec: investigationTimeout(),
-      readiness: readiness
-        ? {
-            status: readiness.status,
-            cause: readiness.cause,
-            summary: readiness.summary,
-            provider: readiness.provider,
-            model: readiness.model,
-          }
-        : hasReadinessDetails
-          ? {
-              status: apiDetails.status,
-              cause: apiDetails.cause,
-              summary:
-                readinessSummary ||
-                (apiError.code === 'patrol_readiness_not_ready' ? message : undefined),
-              provider: apiDetails.provider,
-              model: apiDetails.model,
-            }
-          : null,
-      runtimeState: runtimeState(),
-      blockedReason: blockedReason(),
-      blockedCause: patrolStatus()?.blocked_cause,
-    };
-  };
-
-  async function saveAdvancedSettings() {
-    setIsSavingAdvanced(true);
-    setAdvancedSettingsError(null);
-    try {
-      const effectiveSettings = resolvePatrolAutonomySettingsForSave({
-        level: autonomyLevel(),
-        fullModeUnlocked: fullModeUnlocked(),
-        autoFixLocked: autoFixLocked(),
-      });
-      setAutonomyLevel(effectiveSettings.autonomyLevel);
-      setFullModeUnlocked(effectiveSettings.fullModeUnlocked);
-
-      const result = await updatePatrolAutonomySettings({
-        autonomy_level: effectiveSettings.autonomyLevel,
-        full_mode_unlocked: effectiveSettings.fullModeUnlocked,
-        investigation_budget: investigationBudget(),
-        investigation_timeout_sec: investigationTimeout(),
-      });
-      if (result.settings) {
-        setAutonomyLevel(result.settings.autonomy_level);
-        setFullModeUnlocked(result.settings.full_mode_unlocked);
-      }
-      setAdvancedSettingsError(null);
-      setShowAdvancedSettings(false);
-    } catch (err) {
-      console.error('Failed to save advanced settings:', err);
-      const failure = buildAdvancedSettingsFailure(err);
-      setAdvancedSettingsError(failure);
-      await refetchPatrolStatus();
-    } finally {
-      setIsSavingAdvanced(false);
-    }
+  function handleAssistantFindingHandoff(findingId: string) {
+    setAssistantHandoffFindingId(findingId.trim());
   }
 
-  function openAdvancedSettingsErrorInAssistant() {
-    const failure = advancedSettingsError();
-    if (!failure) return;
-    const handoff = buildPatrolConfigurationFailureHandoff(failure);
-    aiChatStore.open(handoff.context);
-    setShowAdvancedSettings(false);
+  const loadLatestInvestigationProposedFixBriefing = async (
+    finding: ReturnType<typeof allPatrolFindings>[number],
+    pendingApprovalBriefing: PatrolAssistantApprovalBriefingInput | undefined,
+  ) => {
+    if (finding.investigationRecord?.proposed_fix) {
+      return undefined;
+    }
+    const hasInvestigationPointer =
+      hasFindingInvestigationHandoffPointer(finding) || Boolean(pendingApprovalBriefing?.id);
+    if (!hasInvestigationPointer) {
+      return undefined;
+    }
+    if (
+      !patrolAssistantFindingHandoffRequiresApprovalMode({
+        investigationOutcome: finding.investigationOutcome,
+        remediationId: finding.remediationPlanId,
+        pendingApproval: pendingApprovalBriefing,
+        investigationRecord: finding.investigationRecord,
+      })
+    ) {
+      return undefined;
+    }
+
+    try {
+      const investigation = await AIAPI.getInvestigation(finding.id);
+      return buildPatrolAssistantProposedFixBriefingInput(investigation?.proposed_fix);
+    } catch {
+      return undefined;
+    }
+  };
+
+  async function openAssistantOperationsLoopForFinding(findingId: string): Promise<boolean> {
+    const normalizedFindingId = findingId.trim();
+    if (!normalizedFindingId) return false;
+
+    const finding = allPatrolFindings().find((candidate) => candidate.id === normalizedFindingId);
+    if (!finding) {
+      return false;
+    }
+
+    await aiIntelligenceStore.loadPendingApprovals();
+    const pendingApproval = aiIntelligenceStore.patrolPendingApprovals.find(
+      (approval) => approval.toolId === 'investigation_fix' && approval.targetId === finding.id,
+    );
+    const pendingApprovalBriefing = buildPatrolAssistantApprovalBriefingInput(pendingApproval);
+    const latestInvestigationProposedFix = await loadLatestInvestigationProposedFixBriefing(
+      finding,
+      pendingApprovalBriefing,
+    );
+    const proposedFix =
+      latestInvestigationProposedFix ||
+      buildPatrolAssistantProposedFixBriefingInputFromApproval(pendingApproval);
+    const handoff = buildPatrolAssistantFindingHandoffFromUnifiedFinding(finding, {
+      pendingApproval: pendingApprovalBriefing,
+      proposedFix,
+    });
+
+    openPatrolAssistantWorkflowHandoff(handoff);
+    setAssistantHandoffFindingId(finding.id);
+    return true;
   }
 
   function startPolling() {
@@ -842,13 +722,86 @@ export function usePatrolIntelligenceState() {
     }, PATROL_REFRESH_TIMEOUT_MS);
 
     try {
-      await Promise.all([aiIntelligenceStore.loadDashboardData(), refetchPatrolStatus()]);
+      await Promise.all([
+        aiIntelligenceStore.loadDashboardData(),
+        refetchPatrolStatus(),
+      ]);
       if (requestId === refreshRequestId) {
+        clearPatrolLoadError();
         setActivityRefreshTrigger((prev) => prev + 1);
+      }
+    } catch (error) {
+      if (requestId === refreshRequestId) {
+        rememberPatrolLoadError(error, 'Patrol could not refresh.');
       }
     } finally {
       finishRefresh(requestId);
     }
+  }
+
+  async function loadVisiblePatrolData() {
+    try {
+      await Promise.all([
+        refetchPatrolStatus(),
+        aiIntelligenceStore.loadPatrolFindings(),
+        aiIntelligenceStore.loadPendingApprovals(),
+        patrolRunHistory.refetch({ background: true }),
+      ]);
+      clearPatrolLoadError();
+    } catch (error) {
+      rememberPatrolLoadError(error, 'Patrol could not refresh.');
+    }
+  }
+
+  function loadSupportingPatrolDataInBackground() {
+    void Promise.allSettled([
+      aiIntelligenceStore.loadIntelligenceSummary(),
+      aiIntelligenceStore.loadFindings(),
+      aiIntelligenceStore.loadCircuitBreakerStatus(),
+      aiIntelligenceStore.loadCorrelations(),
+    ]);
+  }
+
+  async function handleRefreshPatrol() {
+    if (isManualRefreshRunning()) return;
+    const requestId = ++manualRefreshRequestId;
+    clearManualRefreshTimeout();
+    setIsManualRefreshRunning(true);
+    manualRefreshTimeoutRef = setTimeout(() => {
+      if (requestId === manualRefreshRequestId) {
+        manualRefreshTimeoutRef = undefined;
+        setIsManualRefreshRunning(false);
+      }
+    }, PATROL_MANUAL_SYNC_TIMEOUT_MS);
+
+    try {
+      await loadVisiblePatrolData();
+      loadSupportingPatrolDataInBackground();
+    } finally {
+      if (requestId === manualRefreshRequestId) {
+        clearManualRefreshTimeout();
+        setIsManualRefreshRunning(false);
+      }
+    }
+  }
+
+  async function consumeRoutePatrolControlStarterHandoff() {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const starter = parsePatrolControlStarter(window.location.search);
+    if (starter !== PATROL_CONTROL_STARTER) {
+      return;
+    }
+
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.delete(PATROL_CONTROL_STARTER_QUERY_PARAM);
+    nextUrl.searchParams.delete(PATROL_OPERATIONS_LOOP_STARTER_QUERY_PARAM);
+    const nextPath = `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`;
+
+    await recordPatrolControlStarterActivity();
+    window.history.replaceState(window.history.state, '', nextPath);
   }
 
   const summaryStats = () => {
@@ -871,26 +824,61 @@ export function usePatrolIntelligenceState() {
 
   const activePatrolFindings = () =>
     allPatrolFindings().filter((finding) => finding.status === 'active');
-  const shouldSurfaceInvestigationContext = createMemo(() => {
-    if (!hasInvestigationContext()) {
-      return false;
-    }
-
-    if (selectedRun()) {
+  const shouldShowPatrolSetupOnly = createMemo(() => {
+    const activeFindings = activePatrolFindings();
+    if (readinessBlocksPatrol() && activeFindings.length === 0) {
       return true;
     }
-
-    if (activePatrolFindings().length > 0) {
-      return true;
-    }
-
-    const overallHealth = intelligenceSummary()?.overall_health;
-    if (!overallHealth) {
-      return false;
-    }
-
-    return overallHealth.grade !== 'A' || overallHealth.factors.length > 0;
+    return activeFindings.length > 0 && activeFindings.every(isPatrolRuntimeFinding);
   });
+  const patrolWorkIssueEvidenceCount = createMemo(() => {
+    const issueFindingCount = allPatrolFindings().filter(
+      (finding) =>
+        finding.status === 'active' ||
+        finding.status === 'resolved' ||
+        Boolean(finding.investigationSessionId) ||
+        Boolean(finding.investigationStatus) ||
+        Boolean(finding.investigationOutcome) ||
+        Boolean(finding.remediationPlanId),
+    ).length;
+    const status = patrolStatus();
+    const statusFindingCount =
+      (status?.findings_count ?? 0) +
+      (status?.fixed_count ?? 0) +
+      (status?.trust?.resolved ?? 0) +
+      (status?.trust?.fix_verified ?? 0);
+    return issueFindingCount + patrolPendingApprovalCount() + statusFindingCount;
+  });
+  const patrolWorkEvidenceCount = createMemo(
+    () =>
+      (patrolRunHistory.value()?.length ?? 0) +
+      allPatrolFindings().length +
+      (patrolStatus()?.last_patrol_at || patrolStatus()?.last_activity_at ? 1 : 0),
+  );
+  const patrolGovernedActionCount = createMemo(
+    () =>
+      allPatrolFindings().filter(
+        (finding) =>
+          finding.investigationOutcome &&
+          PATROL_GOVERNED_ACTION_OUTCOMES.has(finding.investigationOutcome),
+      ).length,
+  );
+  const patrolRejectedDecisionCount = createMemo(
+    () =>
+      allPatrolFindings().filter((finding) => finding.investigationOutcome === 'fix_rejected')
+        .length,
+  );
+  const patrolApprovedDecisionCount = createMemo(() =>
+    Math.max(0, patrolGovernedActionCount() - patrolRejectedDecisionCount()),
+  );
+  const patrolVerifiedOutcomeCount = createMemo(
+    () =>
+      allPatrolFindings().filter(
+        (finding) =>
+          finding.investigationOutcome &&
+          PATROL_VERIFIED_OUTCOMES.has(finding.investigationOutcome),
+      ).length,
+  );
   const findingsTabBadgeFindings = createMemo(() => {
     const snapshotFindings = selectedRunPatrolFindings();
     if (snapshotFindings === null) {
@@ -911,13 +899,20 @@ export function usePatrolIntelligenceState() {
 
   onMount(async () => {
     try {
-      await Promise.all([
+      await consumeRoutePatrolControlStarterHandoff();
+      const initialLoads = await Promise.allSettled([
         loadRuntimeCapabilities(),
         loadAllData(),
         loadAutonomySettings(),
         loadAIRuntimeModels(),
         loadAIRuntimeSettings(),
       ]);
+      const failedLoad = initialLoads.find(
+        (result): result is PromiseRejectedResult => result.status === 'rejected',
+      );
+      if (failedLoad) {
+        rememberPatrolLoadError(failedLoad.reason, 'Patrol could not refresh.');
+      }
     } finally {
       setInitialSurfaceReady(true);
     }
@@ -939,14 +934,15 @@ export function usePatrolIntelligenceState() {
     onCleanup(() => {
       document.removeEventListener('visibilitychange', handleVisibility);
       clearRefreshTimeout();
+      clearManualRefreshTimeout();
     });
   });
 
   onCleanup(() => {
-    document.removeEventListener('mousedown', handleClickOutside);
     stopPolling();
     clearSafetyTimer();
     clearScrollToFindingTimer();
+    clearManualRefreshTimeout();
     if (findingScrollTimerRef !== undefined) {
       clearTimeout(findingScrollTimerRef);
       findingScrollTimerRef = undefined;
@@ -957,87 +953,72 @@ export function usePatrolIntelligenceState() {
     activeTab,
     activePatrolFindings,
     activityRefreshTrigger,
-    advancedSettingsError,
-    alertAnalysisLocked,
-    alertTriggeredAnalysis,
+    assistantHandoffFindingId,
     autonomyLevel,
+    autoFixCapabilityBlock,
     autoFixLocked,
-    availableModels,
     blockedAt,
     blockedReason,
     canTriggerPatrol,
     circuitBreakerStatus,
-    correlationTotal,
-    correlations,
     clearScrollToFindingTimer,
-    defaultModel,
     displayRunHistory,
     findingsTabBadgeCount,
     findingsTabBadgeFindings,
     findingsFilterOverride,
     fullModeUnlocked,
-    handleAlertTriggeredAnalysisChange,
     handleAutonomyChange,
-    handleIntervalChange,
-    handleModelChange,
-    handlePatrolAlertTriggersChange,
-    handlePatrolAlertTriggerMinSeverityChange,
-    handlePatrolAnomalyTriggersChange,
+    handleAssistantFindingHandoff,
+    handleRefreshPatrol,
     handleRunPatrol,
     handleTogglePatrol,
-    hasInvestigationContext,
+    historicalRegressionCount,
     initialSurfaceReady,
     intelligenceSummary,
-    investigationContextSummary,
+    isManualRefreshRunning,
     isRefreshing,
-    isSavingAdvanced,
     isTogglingPatrol,
     isTriggeringPatrol,
-    isUpdatingSettings,
+    isUpdatingAutonomy,
     licenseRequired,
     loadAllData,
+    licenseRuntimeIdentity,
     manualRunRequested,
-    openAdvancedSettingsErrorInAssistant,
+    openAssistantOperationsLoopForFinding,
     patrolEnabledLocal,
-    patrolAlertTriggers,
-    patrolAlertTriggerMinSeverity,
-    patrolAnomalyTriggers,
-    patrolInterval,
-    patrolModel,
+    patrolApprovedDecisionCount,
+    patrolGovernedActionCount,
     patrolPreflight,
+    patrolLoadError,
+    patrolPendingApprovalCount,
     patrolReadiness,
+    patrolRejectedDecisionCount,
     patrolRunHistory,
+    patrolVerifiedOutcomeCount,
+    patrolWorkEvidenceCount,
+    patrolWorkIssueEvidenceCount,
     runtimeState,
     patrolStatus,
     patrolStream,
-    policyPosture,
-    recentChangeCount,
-    saveAdvancedSettings,
+    recordPatrolWorkflowStarterActivity,
     selectedRun,
     selectedRunFindingIds,
     selectedRunHasFindingsSnapshot,
     selectedRunScopeResourceIds,
     setActiveTab,
-    setAdvancedSettingsRef,
     setFindingsFilterOverride,
     setFullModeUnlocked,
-    setPatrolModelSelectRef,
     setSelectedRun,
-    setShowAdvancedSettings,
-    setShowInvestigationContext,
     setFindingScrollTimer: (timer: ReturnType<typeof setTimeout> | undefined) => {
       findingScrollTimerRef = timer;
     },
     setScrollToFindingTimer: (timer: ReturnType<typeof setTimeout> | undefined) => {
       scrollToFindingTimerRef = timer;
     },
-    showAdvancedSettings,
     showBlockedBanner,
     showReadinessBanner,
-    showInvestigationContext,
-    shouldSurfaceInvestigationContext,
+    shouldShowPatrolSetupOnly,
     summaryStats,
-    supportingRecentChanges,
     triggerPatrolDisabledReason,
   };
 }

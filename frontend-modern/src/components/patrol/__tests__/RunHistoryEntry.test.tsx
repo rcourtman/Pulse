@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PatrolRunRecord } from '@/api/patrol';
+import runHistoryEntrySource from '../RunHistoryEntry.tsx?raw';
 import { RunHistoryEntry } from '../RunHistoryEntry';
 
 const { findingsPanelState, openMock } = vi.hoisted(() => ({
@@ -142,7 +143,7 @@ describe('RunHistoryEntry', () => {
       />
     ));
 
-    expect(screen.getByText('• Findings snapshot unavailable')).toBeInTheDocument();
+    expect(screen.getByText('Completed check')).toBeInTheDocument();
     expect(screen.getByText('completed')).toBeInTheDocument();
     expect(screen.getByTestId('findings-panel')).toBeInTheDocument();
     expect(findingsPanelState.latestProps).toMatchObject({
@@ -160,11 +161,13 @@ describe('RunHistoryEntry', () => {
       },
     });
     expect(
-      screen.getByText(
-        'This run predates findings snapshots, so run-specific findings cannot be fully verified.',
-      ),
-    ).toBeInTheDocument();
-    expect(screen.getByText('Snapshot unavailable')).toBeInTheDocument();
+      screen.getAllByText(
+        (_, element) =>
+          element?.tagName === 'P' &&
+          (element.textContent?.includes('This older run has no issue list.') ?? false),
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByText('Finding record unavailable')).toBeInTheDocument();
     expect(screen.queryByText('All clear — no new issues.')).not.toBeInTheDocument();
     expect(screen.queryByText(/^All clear$/)).not.toBeInTheDocument();
     expect(screen.queryByText('healthy')).not.toBeInTheDocument();
@@ -190,20 +193,25 @@ describe('RunHistoryEntry', () => {
       />
     ));
 
-    expect(screen.getByText('• Checked 1 of 2 scoped resources')).toBeInTheDocument();
+    expect(screen.getByText('Patrol needs attention')).toBeInTheDocument();
+    expect(
+      screen.getAllByText(
+        'Checked 1 of 2 scoped resources in 453ms. Runtime issue: 1 Patrol runtime error recorded.',
+      ).length,
+    ).toBeGreaterThan(0);
     expect(screen.getByText('Resources checked (1 of 2 scoped)')).toBeInTheDocument();
     expect(screen.queryByText('• 1 resources')).not.toBeInTheDocument();
     expect(screen.queryByText('Scoped to 2 resources')).not.toBeInTheDocument();
     expect(
-      screen.getByText(
+      screen.getAllByText(
         (_, element) =>
           element?.tagName === 'P' &&
           (element.textContent?.includes('Checked 1 of 2 scoped resources') ?? false) &&
           (element.textContent?.includes('453ms') ?? false) &&
-          (element.textContent?.includes('Patrol completed with issues requiring review.') ??
+          (element.textContent?.includes('Runtime issue: 1 Patrol runtime error recorded.') ??
             false),
-      ),
-    ).toBeInTheDocument();
+      ).length,
+    ).toBeGreaterThan(0);
   });
 
   it('surfaces structured Patrol runtime error details on expanded runs', () => {
@@ -226,13 +234,13 @@ describe('RunHistoryEntry', () => {
     ));
 
     expect(screen.getByText('Selected model does not support Patrol tools')).toBeInTheDocument();
-    expect(screen.getByText(/Provider rejected Patrol tool calls/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Provider rejected Patrol tool calls/).length).toBeGreaterThan(0);
     expect(screen.queryByText(/tool_choice/)).toBeNull();
     expect(screen.queryByText(/No endpoints found/)).toBeNull();
     expect(screen.getByText('error')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open Patrol provider settings' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Open Provider & Models' })).toHaveAttribute(
       'href',
-      '/settings/system-ai',
+      '/settings/pulse-intelligence/provider',
     );
   });
 
@@ -252,7 +260,7 @@ describe('RunHistoryEntry', () => {
       />
     ));
 
-    expect(screen.queryByRole('link', { name: 'Open Patrol provider settings' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Open Provider & Models' })).toBeNull();
   });
 
   it('opens Assistant with structured run history context', () => {
@@ -292,7 +300,7 @@ describe('RunHistoryEntry', () => {
       handoffMetadata: {
         kind: 'patrol_run',
         runId: 'run-runtime-error',
-        runType: 'Scoped run',
+        runType: 'Targeted check',
         runStatus: 'error',
         runtimeFailure: true,
       },
@@ -332,18 +340,23 @@ describe('RunHistoryEntry', () => {
       />
     ));
 
-    expect(screen.getByText('• Checked 0 of 2 scoped resources')).toBeInTheDocument();
+    expect(screen.getByText('Patrol needs attention')).toBeInTheDocument();
+    expect(
+      screen.getAllByText(
+        'Checked 0 of 2 scoped resources in 453ms. Runtime issue: 1 Patrol runtime error recorded.',
+      ).length,
+    ).toBeGreaterThan(0);
     expect(screen.queryByText('Scoped to 2 resources')).not.toBeInTheDocument();
     expect(
-      screen.getByText(
+      screen.getAllByText(
         (_, element) =>
           element?.tagName === 'P' &&
           (element.textContent?.includes('Checked 0 of 2 scoped resources') ?? false) &&
           (element.textContent?.includes('453ms') ?? false) &&
-          (element.textContent?.includes('Patrol completed with issues requiring review.') ??
+          (element.textContent?.includes('Runtime issue: 1 Patrol runtime error recorded.') ??
             false),
-      ),
-    ).toBeInTheDocument();
+      ).length,
+    ).toBeGreaterThan(0);
     expect(screen.queryByText(/^Patrol completed in 453ms/)).not.toBeInTheDocument();
   });
 
@@ -364,18 +377,13 @@ describe('RunHistoryEntry', () => {
       />
     ));
 
-    expect(
-      screen.getByText(
-        (_, element) =>
-          element?.tagName === 'P' &&
-          (element.textContent?.includes('No new issues, but 2 existing issues remain.') ?? false),
-      ),
-    ).toBeInTheDocument();
+    expect(screen.getByText('2 issues still open')).toBeInTheDocument();
+    expect(screen.getAllByText('Patrol ran in 1m. No new issues.').length).toBeGreaterThan(0);
     expect(screen.queryByText('All clear — no new issues.')).not.toBeInTheDocument();
     expect(screen.queryByText(/^All clear$/)).not.toBeInTheDocument();
   });
 
-  it('uses singular verb agreement when a single existing issue remains', () => {
+  it('uses singular issue wording when a single issue remains open', () => {
     render(() => (
       <RunHistoryEntry
         run={{
@@ -392,13 +400,8 @@ describe('RunHistoryEntry', () => {
       />
     ));
 
-    expect(
-      screen.getByText(
-        (_, element) =>
-          element?.tagName === 'P' &&
-          (element.textContent?.includes('No new issues, but 1 existing issue remains.') ?? false),
-      ),
-    ).toBeInTheDocument();
+    expect(screen.getByText('1 issue still open')).toBeInTheDocument();
+    expect(screen.getAllByText('Patrol ran in 1m. No new issues.').length).toBeGreaterThan(0);
     // Guard against the regression: the prior wording was "1 existing issue remain."
     expect(
       screen.queryByText(
@@ -429,6 +432,39 @@ describe('RunHistoryEntry', () => {
 
     expect(screen.getByText('3 triage flags')).toBeInTheDocument();
     expect(screen.getByText('LLM skipped')).toBeInTheDocument();
+  });
+
+  it('keeps technical run trace behind an explicit details disclosure', () => {
+    expect(runHistoryEntrySource).toContain('const [showTechnicalDetails');
+    expect(runHistoryEntrySource).toContain('Technical details');
+    expect(runHistoryEntrySource).toContain('onToggle={(event) => setShowTechnicalDetails');
+    expect(runHistoryEntrySource).toContain('<Show when={showTechnicalDetails()}>');
+
+    render(() => (
+      <RunHistoryEntry
+        run={{
+          ...run,
+          id: 'run-technical-details',
+          duration_ms: 60_000,
+          tool_call_count: 2,
+          triage_flags: 1,
+        }}
+        isLive={false}
+        patrolStream={patrolStream}
+        selected={true}
+        onSelect={vi.fn()}
+      />
+    ));
+
+    expect(screen.getByText('Technical details')).toBeInTheDocument();
+    expect(screen.queryByTestId('tool-call-trace')).not.toBeInTheDocument();
+
+    const technicalDetails = screen.getByText('Technical details').closest('details');
+    expect(technicalDetails).not.toBeNull();
+    technicalDetails!.open = true;
+    fireEvent(technicalDetails!, new Event('toggle'));
+
+    expect(screen.getByTestId('tool-call-trace')).toBeInTheDocument();
   });
 
   it('renders TrueNAS run coverage separately from agent hosts', () => {

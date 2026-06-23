@@ -74,7 +74,7 @@ export interface PatrolRecencyPresentation {
   timestamp?: string;
   // resourcesChecked is the raw coverage signal for the most recent
   // completed run. resourcesCheckedLabel is the operator-facing phrase; it
-  // says "verified" only for successful full patrols and uses "checked" for
+  // says "verified" only for successful full checks and uses "checked" for
   // limited or errored activity.
   resourcesChecked?: number;
   resourcesCheckedLabel?: string;
@@ -85,7 +85,17 @@ type PatrolAssessmentFinding = Pick<
   'resourceId' | 'resourceName' | 'title' | 'severity' | 'status'
 >;
 
-export const PATROL_NO_ISSUES_LABEL = 'No issues found';
+export interface PatrolCompactAssessmentLabelInput {
+  assessmentLabel: string;
+  overallHealth?: IntelligenceHealthScore;
+  activeFindings?: PatrolAssessmentFinding[];
+  totalActive?: number;
+  historicalRegressionCount?: number;
+  includeHealthScore?: boolean;
+}
+
+export const PATROL_NO_ISSUES_LABEL = 'No active issues';
+const PATROL_STATUS_EYEBROW = 'Status';
 
 const QUIET_ICON_CONTAINER = 'bg-surface border-border';
 const QUIET_ICON = 'text-muted';
@@ -161,10 +171,7 @@ function getHealthSummaryTone(overallHealth: IntelligenceHealthScore): SemanticT
 }
 
 function getCoverageDescription(overallHealth: IntelligenceHealthScore | undefined): string {
-  return (
-    overallHealth?.prediction?.trim() ||
-    'Patrol coverage is incomplete, so overall infrastructure health is not fully verified.'
-  );
+  return overallHealth?.prediction?.trim() || 'Patrol has not finished a current check.';
 }
 
 function formatFindingCount(count: number, severity: 'critical' | 'warning'): string {
@@ -258,6 +265,50 @@ export function getPatrolScoreChipLabel(args: {
   return 'Health';
 }
 
+function formatIssueLabel(count: number, label: string): string {
+  return `${count} ${label} issue${count === 1 ? '' : 's'}`;
+}
+
+export function getPatrolCompactAssessmentLabel(input: PatrolCompactAssessmentLabelInput): string {
+  const classified = classifyActiveFindings(input.activeFindings);
+  const parts: string[] = [];
+
+  if (classified.infrastructureCritical > 0) {
+    parts.push(formatIssueLabel(classified.infrastructureCritical, 'critical'));
+  }
+
+  if (classified.infrastructureWarning > 0) {
+    parts.push(formatIssueLabel(classified.infrastructureWarning, 'warning'));
+  }
+
+  if (classified.runtimeTotal > 0) {
+    parts.push(
+      `${classified.runtimeTotal} Patrol runtime issue${classified.runtimeTotal === 1 ? '' : 's'}`,
+    );
+  }
+
+  if (parts.length === 0 && (input.totalActive ?? 0) > 0) {
+    parts.push(formatIssueLabel(input.totalActive ?? 0, 'active'));
+  }
+
+  if (parts.length === 0) {
+    parts.push(input.assessmentLabel);
+  }
+
+  const historicalRegressionCount = input.historicalRegressionCount ?? 0;
+  if (historicalRegressionCount > 0) {
+    parts.push(
+      `${historicalRegressionCount} past regression${historicalRegressionCount === 1 ? '' : 's'}`,
+    );
+  }
+
+  if (input.includeHealthScore !== false && input.overallHealth) {
+    parts.push(`health score ${Math.round(input.overallHealth.score)}/100`);
+  }
+
+  return parts.join(' · ');
+}
+
 export function getPatrolAssessmentAction(args: {
   activeFindings?: PatrolAssessmentFinding[];
 }): PatrolAssessmentAction | undefined {
@@ -304,6 +355,9 @@ function predictionReadsAsCoverageGap(prediction: string | undefined): boolean {
     normalized.includes('limited to targeted') ||
     normalized.includes('runs encountered errors') ||
     normalized.includes('ended with errors') ||
+    normalized.includes('current issue list') ||
+    normalized.includes('current full issue list') ||
+    normalized.includes('current health may be incomplete') ||
     normalized.includes('summary may be incomplete')
   );
 }
@@ -350,7 +404,7 @@ function getFindingAssessmentDescription(args: {
         : `Patrol has an active runtime issue: ${runtimeLabel}.`;
 
     if (hasCoverageGap) {
-      return `${runtimeSummary} Recent coverage is also incomplete, so the rest of your infrastructure is not fully verified.`;
+      return `${runtimeSummary} Recent coverage is incomplete. Run Patrol to check everything.`;
     }
 
     const prediction = args.overallHealth?.prediction?.trim();
@@ -388,7 +442,7 @@ function getFindingAssessmentDescription(args: {
         : `Patrol surfaced ${formatFindingCount(warningFindings, 'warning')}.`;
 
   if (hasCoverageGap) {
-    return `${findingSummary} Recent coverage is also incomplete, so the rest of your infrastructure is not fully verified.`;
+    return `${findingSummary} Recent coverage is incomplete. Run Patrol to check everything.`;
   }
 
   const prediction = args.overallHealth?.prediction?.trim();
@@ -476,6 +530,16 @@ export function getPatrolAssessmentPresentation(args: {
   const classified = classifyActiveFindings(args.activeFindings);
   const hasVerifiedFullCoverage = hasSuccessfulFullCoverageRun(args.runs);
 
+  if (args.runtimeState === 'running') {
+    return {
+      title: 'Patrol running',
+      description: 'Patrol is checking your infrastructure now.',
+      eyebrow: PATROL_STATUS_EYEBROW,
+      compactLabel: 'Patrol is checking now',
+      tone: 'info',
+    };
+  }
+
   if (
     args.runtimeState === 'blocked' ||
     args.runtimeState === 'disabled' ||
@@ -496,7 +560,7 @@ export function getPatrolAssessmentPresentation(args: {
       return {
         title: 'Critical Patrol runtime issue',
         description: getFindingAssessmentDescription(args),
-        eyebrow: 'Patrol assessment',
+        eyebrow: PATROL_STATUS_EYEBROW,
         compactLabel: 'Patrol runtime issue',
         tone: 'error',
       };
@@ -505,7 +569,7 @@ export function getPatrolAssessmentPresentation(args: {
     return {
       title: 'Critical issues detected',
       description: getFindingAssessmentDescription(args),
-      eyebrow: 'Patrol assessment',
+      eyebrow: PATROL_STATUS_EYEBROW,
       compactLabel: 'Issues detected',
       tone: 'error',
     };
@@ -516,7 +580,7 @@ export function getPatrolAssessmentPresentation(args: {
       return {
         title: 'Patrol runtime issue',
         description: getFindingAssessmentDescription(args),
-        eyebrow: 'Patrol assessment',
+        eyebrow: PATROL_STATUS_EYEBROW,
         compactLabel: 'Patrol runtime issue',
         tone: 'warning',
       };
@@ -525,7 +589,7 @@ export function getPatrolAssessmentPresentation(args: {
     return {
       title: 'Issues detected',
       description: getFindingAssessmentDescription(args),
-      eyebrow: 'Patrol assessment',
+      eyebrow: PATROL_STATUS_EYEBROW,
       compactLabel: 'Issues detected',
       tone: 'warning',
     };
@@ -538,7 +602,7 @@ export function getPatrolAssessmentPresentation(args: {
     return {
       title: 'Coverage incomplete',
       description: getCoverageDescription(args.overallHealth),
-      eyebrow: 'Patrol assessment',
+      eyebrow: PATROL_STATUS_EYEBROW,
       compactLabel: 'Coverage incomplete',
       tone: getHealthSummaryTone(args.overallHealth),
     };
@@ -551,8 +615,8 @@ export function getPatrolAssessmentPresentation(args: {
       description:
         prediction && !(hasVerifiedFullCoverage && predictionReadsAsCoverageGap(prediction))
           ? prediction
-          : 'Patrol assessment still needs attention.',
-      eyebrow: 'Patrol assessment',
+          : 'Patrol still needs attention.',
+      eyebrow: PATROL_STATUS_EYEBROW,
       compactLabel: 'Health requires attention',
       tone: getHealthSummaryTone(args.overallHealth),
     };
@@ -563,7 +627,7 @@ export function getPatrolAssessmentPresentation(args: {
     description:
       args.overallHealth?.prediction?.trim() ||
       'Infrastructure is healthy with no significant issues detected.',
-    eyebrow: 'Patrol assessment',
+    eyebrow: PATROL_STATUS_EYEBROW,
     compactLabel: PATROL_NO_ISSUES_LABEL,
     tone: 'success',
   };
@@ -596,12 +660,12 @@ export function getPatrolVerificationPresentation(args: {
     const resourcesChecked = recentFullRun.resources_checked || 0;
     if (hasRunErrors(recentFullRun)) {
       return {
-        title: 'Full patrol needs review',
+        title: 'Patrol check needs review',
         description:
           resourcesChecked > 0
-            ? `The most recent full patrol checked ${resourcesChecked} resource${resourcesChecked === 1 ? '' : 's'} but ended with ${recentFullRun.error_count} error${recentFullRun.error_count === 1 ? '' : 's'}.`
-            : 'The most recent full patrol ended with errors, so Patrol has not fully re-verified your infrastructure.',
-        compactLabel: 'Verification limited',
+            ? `The most recent Patrol check covered ${resourcesChecked} resource${resourcesChecked === 1 ? '' : 's'} but ended with ${recentFullRun.error_count} error${recentFullRun.error_count === 1 ? '' : 's'}.`
+            : 'The most recent Patrol check ended with errors.',
+        compactLabel: 'Check needs review',
         tone: 'warning',
         lastFullRunAt: recentFullRun.completed_at,
         activityMixLabel,
@@ -609,12 +673,12 @@ export function getPatrolVerificationPresentation(args: {
     }
 
     return {
-      title: 'Recently verified',
+      title: 'Recently checked',
       description:
         resourcesChecked > 0
-          ? `The most recent full patrol completed successfully and checked ${resourcesChecked} resource${resourcesChecked === 1 ? '' : 's'}.`
-          : 'The most recent full patrol completed successfully.',
-      compactLabel: 'Recently verified',
+          ? `The most recent Patrol check completed successfully and covered ${resourcesChecked} resource${resourcesChecked === 1 ? '' : 's'}.`
+          : 'The most recent Patrol check completed successfully.',
+      compactLabel: 'Recently checked',
       tone: 'success',
       lastFullRunAt: recentFullRun.completed_at,
       activityMixLabel,
@@ -625,35 +689,35 @@ export function getPatrolVerificationPresentation(args: {
   if (recentLimitedRun) {
     const resourcesChecked = recentLimitedRun.resources_checked || 0;
     let description =
-      'Recent activity was limited to targeted Patrol checks, so Patrol has not recently re-verified your full infrastructure.';
+      'Recent activity only checked part of your infrastructure. Run Patrol to check everything.';
 
     if (isVerificationPatrolRun(recentLimitedRun)) {
       description =
         resourcesChecked > 0
-          ? `Recent activity was limited to verification checks over ${resourcesChecked} resource${resourcesChecked === 1 ? '' : 's'}, so Patrol has not recently re-verified your full infrastructure.`
-          : 'Recent activity was limited to verification checks, so Patrol has not recently re-verified your full infrastructure.';
+          ? `Recent follow-up checks covered ${resourcesChecked} resource${resourcesChecked === 1 ? '' : 's'}. Run Patrol to check everything.`
+          : 'Recent follow-up checks did not cover your full infrastructure. Run Patrol to check everything.';
     } else if (isScopedPatrolRun(recentLimitedRun)) {
       description =
         resourcesChecked > 0
-          ? `Recent activity was limited to scoped ${recentLimitedRun.trigger_reason ? String(recentLimitedRun.trigger_reason).replace(/_/g, ' ') : 'patrol'} runs over ${resourcesChecked} resource${resourcesChecked === 1 ? '' : 's'}, so Patrol has not recently re-verified your full infrastructure.`
-          : 'Recent activity was limited to scoped patrol runs, so Patrol has not recently re-verified your full infrastructure.';
+          ? `Recent targeted checks covered ${resourcesChecked} resource${resourcesChecked === 1 ? '' : 's'}. Run Patrol to check everything.`
+          : 'Recent targeted checks did not cover your full infrastructure. Run Patrol to check everything.';
     } else if (resourcesChecked > 0) {
-      description = `Recent activity was limited to targeted Patrol checks over ${resourcesChecked} resource${resourcesChecked === 1 ? '' : 's'}, so Patrol has not recently re-verified your full infrastructure.`;
+      description = `Recent targeted checks covered ${resourcesChecked} resource${resourcesChecked === 1 ? '' : 's'}. Run Patrol to check everything.`;
     }
 
     return {
-      title: 'No recent full patrol',
+      title: 'Needs full check',
       description,
-      compactLabel: 'Partial verification',
+      compactLabel: 'Partial check',
       tone: 'warning',
       activityMixLabel,
     };
   }
 
   return {
-    title: 'Verification pending',
-    description: 'Patrol has not completed a recent full verification run yet.',
-    compactLabel: 'Verification pending',
+    title: 'Run Patrol to check',
+    description: 'Patrol has not completed a check yet.',
+    compactLabel: 'Check pending',
     tone: 'info',
   };
 }
@@ -668,7 +732,7 @@ export function getPatrolRecencyPresentation(args: {
     const resourcesChecked = latestCompletedRun.resources_checked || 0;
     const resourcesCheckedLabel = formatRecencyResourcesCheckedLabel(latestCompletedRun);
     return {
-      label: isFullPatrolRun(latestCompletedRun) ? 'Last full patrol' : 'Last activity',
+      label: 'Last check',
       timestamp: latestCompletedRun.completed_at,
       resourcesChecked: resourcesChecked > 0 ? resourcesChecked : undefined,
       resourcesCheckedLabel,
@@ -683,13 +747,13 @@ export function getPatrolRecencyPresentation(args: {
     const patrolMs = Date.parse(lastPatrolAt);
     if (Number.isNaN(activityMs) && !Number.isNaN(patrolMs)) {
       return {
-        label: 'Last full patrol',
+        label: 'Last check',
         timestamp: lastPatrolAt,
       };
     }
     if (!Number.isNaN(activityMs) && !Number.isNaN(patrolMs) && patrolMs >= activityMs) {
       return {
-        label: 'Last full patrol',
+        label: 'Last check',
         timestamp: lastPatrolAt,
       };
     }
@@ -708,7 +772,7 @@ export function getPatrolRecencyPresentation(args: {
 
   if (lastPatrolAt) {
     return {
-      label: 'Last full patrol',
+      label: 'Last check',
       timestamp: lastPatrolAt,
     };
   }

@@ -6,9 +6,10 @@ import { licenseEntitlementsLoadError } from '@/stores/licenseEntitlements';
 import {
   getLicenseStatusLoadingState,
   getNoActiveSelfHostedActivationState,
+  type SelfHostedPatrolControlActionIntent,
 } from '@/utils/licensePresentation';
+import { isExternalUpgradeHref, type UpgradeDestination } from '@/utils/upgradeNavigation';
 import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from './selfHostedBillingPresentation';
-import type { UpgradeDestination } from '@/utils/upgradeNavigation';
 import { CommercialStatGrid } from './CommercialBillingSections';
 
 interface Notice {
@@ -31,16 +32,7 @@ interface ProLicensePlanSectionProps {
     highlights: string[];
     actionLabel?: string;
     actionUrl?: string;
-  } | null;
-  activationProof: {
-    title: string;
-    body: string;
-    items: Array<{
-      label: string;
-      statusLabel: string;
-      state: 'active' | 'partial' | 'missing';
-      detail: string;
-    }>;
+    actionIntent?: SelfHostedPatrolControlActionIntent;
   } | null;
   commercialMigrationNotice: Notice | null;
   commercialPlanModel: {
@@ -61,6 +53,11 @@ interface ProLicensePlanSectionProps {
     privateRuntimeAction?: {
       actionLabel: string;
       actionUrl: string;
+    };
+    patrolControlAction?: {
+      actionLabel: string;
+      actionUrl: string;
+      actionIntent: SelfHostedPatrolControlActionIntent;
     };
   };
   entitlements: {
@@ -83,6 +80,16 @@ interface ProLicensePlanSectionProps {
     } | null;
   };
   planSelectionPrompt: ActionNotice | null;
+  planStatus: {
+    title: string;
+    body: string;
+    items: Array<{
+      label: string;
+      statusLabel: string;
+      state: 'active' | 'partial' | 'missing';
+      detail: string;
+    }>;
+  } | null;
   purchaseActivationNotice: Notice | null;
   purchaseActivationAction: {
     label: string;
@@ -97,7 +104,7 @@ const formatDate = (value?: string | null) => {
   return date.toLocaleDateString();
 };
 
-const proofStateClass = (state: 'active' | 'partial' | 'missing') => {
+const statusStateClass = (state: 'active' | 'partial' | 'missing') => {
   switch (state) {
     case 'active':
       return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-200';
@@ -109,6 +116,30 @@ const proofStateClass = (state: 'active' | 'partial' | 'missing') => {
 };
 
 export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (props) => {
+  const getCurrentPlanPatrolControlAction = () => {
+    const action = props.currentPlanSummary.patrolControlAction;
+    if (!action) {
+      return null;
+    }
+    if (props.activationSuccessSummary?.actionIntent === action.actionIntent) {
+      return null;
+    }
+    return action;
+  };
+  const getPlanStatusSummary = () => {
+    const status = props.planStatus;
+    if (!status) {
+      return '';
+    }
+    const attentionCount = status.items.filter((item) => item.state !== 'active').length;
+    if (attentionCount > 0) {
+      return attentionCount === 1
+        ? '1 item needs attention'
+        : `${attentionCount} items need attention`;
+    }
+    return status.items.length === 1 ? '1 item ready' : `${status.items.length} items ready`;
+  };
+
   return (
     <>
       <Show when={props.activationSuccessSummary}>
@@ -130,7 +161,7 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
               {(action) => (
                 <ButtonLink
                   href={action().href}
-                  target="_blank"
+                  target={isExternalUpgradeHref(action().href) ? '_blank' : undefined}
                   variant="outline"
                   size="settingsActionXs"
                   class="mt-3 gap-1"
@@ -233,6 +264,19 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
             </ButtonLink>
           )}
         </Show>
+        <Show when={getCurrentPlanPatrolControlAction()}>
+          {(action) => (
+            <ButtonLink
+              href={action().actionUrl}
+              target={isExternalUpgradeHref(action().actionUrl) ? '_blank' : undefined}
+              variant="outline"
+              size="settingsActionXs"
+              class="mt-3 gap-1"
+            >
+              {action().actionLabel}
+            </ButtonLink>
+          )}
+        </Show>
         <Show when={props.currentPlanSummary.unlockedFeatures.length > 0}>
           <div class="mt-4">
             <p class="text-xs uppercase tracking-wide text-muted mb-2">
@@ -268,31 +312,36 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
           </div>
         </Show>
       </div>
-      <Show when={props.activationProof}>
-        {(proof) => (
-          <div class="mb-4 rounded-md border border-border bg-surface p-4">
-            <p class="text-sm font-medium text-base-content">{proof().title}</p>
-            <p class="mt-1 text-xs text-muted">{proof().body}</p>
-            <ul class="mt-4 grid gap-3">
-              <For each={proof().items}>
-                {(item) => (
-                  <li class="border-t border-border pt-3 first:border-t-0 first:pt-0">
-                    <div class="flex flex-wrap items-center gap-2">
-                      <p class="text-sm font-medium text-base-content">{item.label}</p>
-                      <span
-                        class={`rounded-full px-2 py-1 text-[11px] font-medium ${proofStateClass(
-                          item.state,
-                        )}`}
-                      >
-                        {item.statusLabel}
-                      </span>
-                    </div>
-                    <p class="mt-1 text-xs text-muted">{item.detail}</p>
-                  </li>
-                )}
-              </For>
-            </ul>
-          </div>
+      <Show when={props.planStatus}>
+        {(status) => (
+          <details class="mb-4 rounded-md border border-border bg-surface p-4">
+            <summary class="cursor-pointer text-sm font-medium text-base-content">
+              <span>{status().title}</span>{' '}
+              <span class="text-xs font-normal text-muted">({getPlanStatusSummary()})</span>
+            </summary>
+            <div class="mt-3">
+              <p class="text-xs text-muted">{status().body}</p>
+              <ul class="mt-4 grid gap-3">
+                <For each={status().items}>
+                  {(item) => (
+                    <li class="border-t border-border pt-3 first:border-t-0 first:pt-0">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <p class="text-sm font-medium text-base-content">{item.label}</p>
+                        <span
+                          class={`rounded-full px-2 py-1 text-[11px] font-medium ${statusStateClass(
+                            item.state,
+                          )}`}
+                        >
+                          {item.statusLabel}
+                        </span>
+                      </div>
+                      <p class="mt-1 text-xs text-muted">{item.detail}</p>
+                    </li>
+                  )}
+                </For>
+              </ul>
+            </div>
+          </details>
         )}
       </Show>
       <Show when={props.planComparisonSummary.cards.length > 0}>

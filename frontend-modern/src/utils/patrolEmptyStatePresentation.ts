@@ -5,6 +5,7 @@ import { getPatrolRuntimePresentation } from '@/utils/patrolRuntimePresentation'
 import type { SemanticTone } from '@/utils/semanticTonePresentation';
 import type { IntelligenceHealthScore } from '@/types/aiIntelligence';
 import { getPatrolRunCoverageSummary, isPatrolRunHealthy } from '@/utils/patrolRunPresentation';
+import { getPatrolVerificationPresentation } from '@/utils/patrolSummaryPresentation';
 
 export function getInvestigationMessagesState(loading: boolean, hasMessages: boolean) {
   if (loading) {
@@ -43,7 +44,7 @@ export function getInvestigationSectionState(loading: boolean, hasInvestigation:
 
   if (!hasInvestigation) {
     return {
-      text: 'No investigation data available. Enable patrol autonomy to investigate findings.',
+      text: 'No investigation yet. Patrol adds notes after it runs in a mode that investigates.',
       empty: true,
     } as const;
   }
@@ -60,45 +61,84 @@ export interface PatrolFindingsEmptyStateCopy {
   tone: SemanticTone;
 }
 
-interface PatrolRunSnapshotEmptyStateArgs
-  extends Pick<
-    PatrolRunRecord,
-    | 'resources_checked'
-    | 'scope_resource_ids'
-    | 'effective_scope_resource_ids'
-    | 'finding_ids'
-    | 'status'
-    | 'error_count'
-  > {}
+type PatrolRunSnapshotEmptyStateArgs = Pick<
+  PatrolRunRecord,
+  | 'resources_checked'
+  | 'scope_resource_ids'
+  | 'effective_scope_resource_ids'
+  | 'finding_ids'
+  | 'status'
+  | 'error_count'
+>;
 
-const HEALTHY_PATROL_EMPTY_STATE_BODY = 'Your infrastructure looks healthy!';
+const HEALTHY_PATROL_EMPTY_STATE_BODY = 'Run Patrol any time to check again.';
 const DEGRADED_COVERAGE_EMPTY_STATE_BODY =
-  'Patrol has not surfaced active findings, but coverage is incomplete, so this is not a full all-clear.';
+  'Run Patrol to check everything and update open issues.';
 const DEGRADED_HEALTH_EMPTY_STATE_BODY =
-  'Patrol has not surfaced active findings, but the overall Patrol assessment still needs attention.';
+  'No active findings are listed, but Patrol health is degraded.';
+const HISTORICAL_REGRESSION_EMPTY_STATE_BODY = 'Past issues are in History.';
+const PATROL_QUEUE_CLEAR_TITLE = 'No current issues';
+const PATROL_QUEUE_RECHECK_TITLE = 'Check needed';
+const PATROL_QUEUE_REVIEW_TITLE = 'Patrol needs review';
+const PATROL_QUEUE_RUNNING_TITLE = 'Patrol is checking now';
+const PATROL_QUEUE_RUNNING_BODY =
+  'The current run will add work here if Patrol finds issues or needs approval.';
 
 function getHealthDegradedTone(overallHealth: IntelligenceHealthScore): SemanticTone {
   return overallHealth.grade === 'D' || overallHealth.grade === 'F' ? 'error' : 'warning';
 }
 
-function shouldSuppressHealthyEmptyState(overallHealth: IntelligenceHealthScore | undefined): boolean {
-  if (!overallHealth) {
-    return false;
+function hasIncompleteCoverageEvidence(
+  overallHealth: IntelligenceHealthScore | undefined,
+  runs: PatrolRunRecord[] | undefined,
+): boolean {
+  if (overallHealth?.factors.some((factor) => factor.category === 'coverage')) {
+    return true;
   }
 
-  if (overallHealth.factors.some((factor) => factor.category === 'coverage')) {
+  const verification = getPatrolVerificationPresentation({ runs });
+  return verification.tone === 'warning';
+}
+
+function shouldSuppressHealthyEmptyState(
+  overallHealth: IntelligenceHealthScore | undefined,
+  runs: PatrolRunRecord[] | undefined,
+): boolean {
+  if (hasIncompleteCoverageEvidence(overallHealth, runs)) {
     return true;
+  }
+
+  if (!overallHealth) {
+    return false;
   }
 
   return overallHealth.grade !== 'A';
 }
 
-function getDegradedPatrolEmptyStateBody(overallHealth: IntelligenceHealthScore): string {
-  if (overallHealth.factors.some((factor) => factor.category === 'coverage')) {
+function getDegradedPatrolEmptyStateBody(
+  overallHealth: IntelligenceHealthScore | undefined,
+  runs: PatrolRunRecord[] | undefined,
+): string {
+  if (hasIncompleteCoverageEvidence(overallHealth, runs)) {
     return DEGRADED_COVERAGE_EMPTY_STATE_BODY;
   }
 
   return DEGRADED_HEALTH_EMPTY_STATE_BODY;
+}
+
+function getDegradedPatrolEmptyStateTitle(
+  overallHealth: IntelligenceHealthScore | undefined,
+  runs: PatrolRunRecord[] | undefined,
+): string {
+  if (hasIncompleteCoverageEvidence(overallHealth, runs)) {
+    return PATROL_QUEUE_RECHECK_TITLE;
+  }
+
+  return PATROL_QUEUE_REVIEW_TITLE;
+}
+
+function hasHistoricalRegressions(count: number | undefined): boolean {
+  return typeof count === 'number' && Number.isFinite(count) && count > 0;
 }
 
 function getPatrolRunSnapshotEmptyState(
@@ -110,7 +150,7 @@ function getPatrolRunSnapshotEmptyState(
   if (!isPatrolRunHealthy(run.status, run.error_count)) {
     return {
       title: 'No findings recorded for this run',
-      body: `${coveragePrefix}This run recorded no snapshot findings, but it ended with issues requiring review.`,
+      body: `${coveragePrefix}This run recorded no Patrol findings, but it ended with issues requiring review.`,
       tone: 'warning',
     };
   }
@@ -124,8 +164,8 @@ function getPatrolRunSnapshotEmptyState(
 
 function getPatrolRunSnapshotUnavailableEmptyState(): PatrolFindingsEmptyStateCopy {
   return {
-    title: 'Findings snapshot unavailable for this run',
-    body: 'This Patrol run predates findings snapshots, so run-specific findings cannot be verified.',
+    title: 'Finding record unavailable for this run',
+    body: 'This older Patrol run has no finding record, so Patrol cannot show its issue list.',
     tone: 'warning',
   };
 }
@@ -135,6 +175,8 @@ export function getPatrolFindingsEmptyState(args: {
   overallHealth?: IntelligenceHealthScore;
   runtimeState?: PatrolRuntimeState;
   blockedReason?: string;
+  historicalRegressionCount?: number;
+  runs?: PatrolRunRecord[];
   runSnapshot?: PatrolRunSnapshotEmptyStateArgs;
 }): PatrolFindingsEmptyStateCopy {
   if (
@@ -146,11 +188,7 @@ export function getPatrolFindingsEmptyState(args: {
     return getPatrolRunSnapshotEmptyState(args.runSnapshot);
   }
 
-  if (
-    args.filter === 'all' &&
-    args.runSnapshot &&
-    args.runSnapshot.finding_ids === undefined
-  ) {
+  if (args.filter === 'all' && args.runSnapshot && args.runSnapshot.finding_ids === undefined) {
     return getPatrolRunSnapshotUnavailableEmptyState();
   }
 
@@ -174,16 +212,32 @@ export function getPatrolFindingsEmptyState(args: {
     };
   }
 
-  if (shouldSuppressHealthyEmptyState(args.overallHealth)) {
+  if (args.runtimeState === 'running') {
     return {
-      title: 'No active findings',
-      body: getDegradedPatrolEmptyStateBody(args.overallHealth!),
-      tone: getHealthDegradedTone(args.overallHealth!),
+      title: PATROL_QUEUE_RUNNING_TITLE,
+      body: PATROL_QUEUE_RUNNING_BODY,
+      tone: 'info',
+    };
+  }
+
+  if (shouldSuppressHealthyEmptyState(args.overallHealth, args.runs)) {
+    return {
+      title: getDegradedPatrolEmptyStateTitle(args.overallHealth, args.runs),
+      body: getDegradedPatrolEmptyStateBody(args.overallHealth, args.runs),
+      tone: args.overallHealth ? getHealthDegradedTone(args.overallHealth) : 'warning',
+    };
+  }
+
+  if (hasHistoricalRegressions(args.historicalRegressionCount)) {
+    return {
+      title: PATROL_QUEUE_CLEAR_TITLE,
+      body: HISTORICAL_REGRESSION_EMPTY_STATE_BODY,
+      tone: 'info',
     };
   }
 
   return {
-    title: 'No active findings',
+    title: PATROL_QUEUE_CLEAR_TITLE,
     body: HEALTHY_PATROL_EMPTY_STATE_BODY,
     tone: 'success',
   };

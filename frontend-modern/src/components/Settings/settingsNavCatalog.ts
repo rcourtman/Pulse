@@ -54,6 +54,42 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
     ],
   },
   {
+    id: 'pulse-intelligence',
+    label: 'Pulse Intelligence',
+    items: [
+      {
+        id: 'system-ai',
+        label: 'Provider & Models',
+        icon: Sparkles,
+        iconProps: { strokeWidth: 2 },
+      },
+      {
+        id: 'system-ai-patrol',
+        label: 'Patrol',
+        icon: Activity,
+        iconProps: { strokeWidth: 2 },
+      },
+      {
+        id: 'system-billing',
+        label: SELF_HOSTED_PRO_BILLING_PRESENTATION.navLabel,
+        icon: PulseLogoIcon,
+        hideWhenCommercialHidden: true,
+      },
+      {
+        id: 'system-ai-assistant',
+        label: 'Assistant',
+        icon: Terminal,
+        iconProps: { strokeWidth: 2 },
+      },
+      {
+        id: 'system-ai-discovery',
+        label: 'Service Context',
+        icon: Network,
+        iconProps: { strokeWidth: 2 },
+      },
+    ],
+  },
+  {
     id: 'organization',
     label: 'Organization',
     items: [
@@ -139,19 +175,6 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         icon: Clock,
         iconProps: { strokeWidth: 2 },
         saveBehavior: 'system',
-      },
-      {
-        id: 'system-ai',
-        label: 'Assistant & Patrol',
-        icon: Sparkles,
-        iconProps: { strokeWidth: 2 },
-      },
-      {
-        id: 'system-billing',
-        label: SELF_HOSTED_PRO_BILLING_PRESENTATION.navLabel,
-        icon: PulseLogoIcon,
-        hideFromSidebar: true,
-        hideWhenCommercialHidden: true,
       },
     ],
   },
@@ -273,6 +296,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
 const SETTINGS_NAV_GROUP_LABEL_KEYS = {
   infrastructure: 'settings.nav.group.infrastructure',
   monitoring: 'settings.nav.group.monitoring',
+  'pulse-intelligence': 'settings.nav.group.pulseIntelligence',
   organization: 'settings.nav.group.organization',
   system: 'settings.nav.group.system',
   support: 'settings.nav.group.support',
@@ -286,7 +310,10 @@ const SETTINGS_NAV_ITEM_LABEL_KEYS = {
   'system-network': 'settings.nav.item.network',
   'system-updates': 'settings.nav.item.updates',
   'system-recovery': 'settings.nav.item.recovery',
-  'system-ai': 'settings.nav.item.assistantPatrol',
+  'system-ai': 'settings.nav.item.providerModels',
+  'system-ai-patrol': 'settings.nav.item.patrol',
+  'system-ai-assistant': 'settings.nav.item.assistant',
+  'system-ai-discovery': 'settings.nav.item.discovery',
   'system-relay': 'settings.nav.item.remoteAccess',
   'system-billing': 'settings.nav.item.plans',
   'support-diagnostics': 'settings.nav.item.diagnosticsHealth',

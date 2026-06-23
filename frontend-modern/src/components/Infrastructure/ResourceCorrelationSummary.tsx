@@ -121,7 +121,7 @@ export const ResourceCorrelationSummary: Component<ResourceCorrelationSummaryPro
                             {targetLabel}
                           </span>
                         )}
-                        <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-muted">
+                        <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[9px] text-muted">
                           {typeLabel}
                         </span>
                       </div>
@@ -247,7 +247,7 @@ export const ResourceCorrelationSummary: Component<ResourceCorrelationSummaryPro
                             {targetLabel}
                           </span>
                         )}
-                        <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-muted">
+                        <span class="inline-flex items-center rounded bg-surface-alt px-1.5 py-0.5 text-[9px] text-muted">
                           {patternLabel}
                         </span>
                       </div>

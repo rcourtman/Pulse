@@ -2,7 +2,12 @@ import type { Accessor, Component, Setter } from 'solid-js';
 import type { VersionInfo } from '@/api/updates';
 import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
 import { AICostDashboard } from '@/components/AI/AICostDashboard';
-import { AISettings } from './AISettings';
+import {
+  AIAssistantSettings,
+  AIDiscoverySettings,
+  AISettings,
+  AIPatrolSettings,
+} from './AISettings';
 import { ProLicensePanel } from './ProLicensePanel';
 import { SSOProvidersPanel } from './SSOProvidersPanel';
 import type { InfrastructurePlatformSettingsProps } from './proxmoxSettingsModel';
@@ -35,9 +40,9 @@ export function buildSettingsPanelRegistryContext(
 ): SettingsPanelRegistryContext {
   const settingsCapabilities = () => params.securityStatus()?.settingsCapabilities ?? null;
   const currentUser = () =>
-    params.securityStatus()?.proxyAuthUsername
-    || params.securityStatus()?.ssoSessionUsername
-    || params.securityStatus()?.authUsername;
+    params.securityStatus()?.proxyAuthUsername ||
+    params.securityStatus()?.ssoSessionUsername ||
+    params.securityStatus()?.authUsername;
 
   const systemAiPanel: Component = () => (
     <div class="space-y-6">
@@ -52,6 +57,10 @@ export function buildSettingsPanelRegistryContext(
     </div>
   );
 
+  const systemAiPatrolPanel: Component = () => <AIPatrolSettings />;
+  const systemAiAssistantPanel: Component = () => <AIAssistantSettings />;
+  const systemAiDiscoveryPanel: Component = () => <AIDiscoverySettings />;
+
   const securitySsoPanel: Component = () => (
     <div class="space-y-6">
       <SSOProvidersPanel
@@ -65,6 +74,9 @@ export function buildSettingsPanelRegistryContext(
     getInfrastructurePanelProps: params.getInfrastructurePanelProps,
     systemGeneralPanel: params.systemPanels.systemGeneralPanel,
     systemAiPanel,
+    systemAiPatrolPanel,
+    systemAiAssistantPanel,
+    systemAiDiscoveryPanel,
     systemBillingPanel,
     securitySsoPanel,
     getNetworkPanelProps: params.systemPanels.getNetworkPanelProps,

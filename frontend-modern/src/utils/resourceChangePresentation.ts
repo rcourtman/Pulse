@@ -261,7 +261,12 @@ export function formatResourceChangeHeadline(change: ResourceChange): string {
     return `${formatResourceChangeKind(change.kind)}: ${change.from} → ${change.to}`;
   }
   if (change.reason) {
-    return `${formatResourceChangeKind(change.kind)}: ${change.reason}`;
+    const kindLabel = formatResourceChangeKind(change.kind);
+    const normalizedReason = change.reason.trim();
+    if (normalizedReason.toLowerCase().startsWith(`${kindLabel.toLowerCase()}:`)) {
+      return normalizedReason;
+    }
+    return `${kindLabel}: ${normalizedReason}`;
   }
   return `${formatResourceChangeKind(change.kind)}: ${change.resourceId}`;
 }

@@ -1,8 +1,20 @@
-import { createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createResource,
+  createSignal,
+  onCleanup,
+  onMount,
+} from 'solid-js';
+import { fetchAgentCapabilitiesManifest } from '@/api/agentCapabilities';
 import type { APITokenRecord } from '@/api/security';
 import { SecurityAPI } from '@/api/security';
 import { useWebSocket } from '@/contexts/appRuntime';
 import { MONITORING_READ_SCOPE, API_SCOPE_LABELS } from '@/constants/apiScopes';
+import {
+  API_TOKEN_PRESET_QUERY_PARAM,
+  PULSE_INTELLIGENCE_AGENT_TOKEN_PRESET,
+} from '@/routing/resourceLinks';
 import { useResources } from '@/hooks/useResources';
 import { notificationStore } from '@/stores/notifications';
 import { showTokenReveal, useTokenRevealState } from '@/stores/tokenReveal';
@@ -19,6 +31,7 @@ import { logger } from '@/utils/logger';
 import { getPulseBaseUrl } from '@/utils/url';
 import {
   API_TOKEN_SCOPES_DOC_URL,
+  API_TOKEN_PULSE_INTELLIGENCE_AGENT_PRESET_ID,
   API_TOKEN_WILDCARD_SCOPE,
   agentActionIdForResource,
   buildAgentTokenUsage,
@@ -64,6 +77,7 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
   const [newTokenRecord, setNewTokenRecord] = createSignal<APITokenRecord | null>(null);
   const [nameInput, setNameInput] = createSignal('');
   const [selectedScopes, setSelectedScopes] = createSignal<string[]>([]);
+  const [agentCapabilitiesManifest] = createResource(fetchAgentCapabilitiesManifest);
   const tokenRevealState = useTokenRevealState();
   const canManage = () => props.canManage !== false;
 
@@ -73,21 +87,66 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
   const scopedTokenCount = createMemo(() => totalTokens() - wildcardCount());
   const hasWildcardTokens = createMemo(() => wildcardCount() > 0);
   const scopeGroups = createMemo(() => groupAPITokenScopes());
-  const scopePresets = getAPITokenScopePresets();
-  const isFullAccessSelected = () =>
-    selectedScopes().length === 0 || selectedScopes().includes(API_TOKEN_WILDCARD_SCOPE);
+  const scopePresets = createMemo(() =>
+    getAPITokenScopePresets(agentCapabilitiesManifest()?.requiredScopes ?? []),
+  );
+  const pulseIntelligenceAgentPreset = createMemo(() =>
+    scopePresets().find((preset) => preset.id === API_TOKEN_PULSE_INTELLIGENCE_AGENT_PRESET_ID),
+  );
+  const hasScopeSelection = () => selectedScopes().length > 0;
+  const isFullAccessSelected = () => selectedScopes().includes(API_TOKEN_WILDCARD_SCOPE);
+  const canGenerateToken = () => canManage() && hasScopeSelection() && !isGenerating();
 
   let createSectionRef: HTMLDivElement | undefined;
   const [createHighlight, setCreateHighlight] = createSignal(false);
+  const [createSectionReady, setCreateSectionReady] = createSignal(false);
+  const [requestedTokenPreset, setRequestedTokenPreset] = createSignal('');
+  const [appliedRoutePreset, setAppliedRoutePreset] = createSignal('');
+  const [focusedRoutePreset, setFocusedRoutePreset] = createSignal('');
   let highlightTimer: number | undefined;
+  let routeFocusTimer: number | undefined;
+
+  const readRequestedTokenPreset = () => {
+    if (typeof window === 'undefined') return '';
+    return (
+      new URLSearchParams(window.location.search).get(API_TOKEN_PRESET_QUERY_PARAM)?.trim() ?? ''
+    );
+  };
 
   const setCreateSectionRef = (element: HTMLDivElement) => {
     createSectionRef = element;
+    setCreateSectionReady(true);
+  };
+
+  const findScrollableAncestor = (element: HTMLElement): HTMLElement | null => {
+    let current = element.parentElement;
+    while (current) {
+      const style = window.getComputedStyle(current);
+      const canScroll =
+        (style.overflowY === 'auto' || style.overflowY === 'scroll') &&
+        current.scrollHeight > current.clientHeight;
+      if (canScroll) {
+        return current;
+      }
+      current = current.parentElement;
+    }
+    return null;
   };
 
   const focusCreateSection = () => {
     if (!createSectionRef) return;
-    createSectionRef.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (typeof createSectionRef.scrollIntoView === 'function') {
+      createSectionRef.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    const scrollParent = findScrollableAncestor(createSectionRef);
+    if (scrollParent && typeof scrollParent.scrollTo === 'function') {
+      const parentRect = scrollParent.getBoundingClientRect();
+      const sectionRect = createSectionRef.getBoundingClientRect();
+      scrollParent.scrollTo({
+        top: Math.max(0, scrollParent.scrollTop + sectionRect.top - parentRect.top - 16),
+        behavior: 'smooth',
+      });
+    }
     setCreateHighlight(true);
     window.clearTimeout(highlightTimer);
     highlightTimer = window.setTimeout(() => setCreateHighlight(false), 1600);
@@ -95,6 +154,7 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
 
   onCleanup(() => {
     if (highlightTimer) window.clearTimeout(highlightTimer);
+    if (routeFocusTimer) window.clearTimeout(routeFocusTimer);
   });
 
   const loadTokens = async () => {
@@ -113,7 +173,63 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
   };
 
   onMount(() => {
+    setRequestedTokenPreset(readRequestedTokenPreset());
+    const handleRoutePresetChange = () => {
+      setRequestedTokenPreset(readRequestedTokenPreset());
+    };
+    window.addEventListener('hashchange', handleRoutePresetChange);
+    window.addEventListener('popstate', handleRoutePresetChange);
     void loadTokens();
+    onCleanup(() => {
+      window.removeEventListener('hashchange', handleRoutePresetChange);
+      window.removeEventListener('popstate', handleRoutePresetChange);
+    });
+  });
+
+  createEffect(() => {
+    const requestedPreset = requestedTokenPreset();
+    if (
+      requestedPreset !== PULSE_INTELLIGENCE_AGENT_TOKEN_PRESET ||
+      appliedRoutePreset() === requestedPreset
+    ) {
+      return;
+    }
+
+    const preset = pulseIntelligenceAgentPreset();
+    if (!preset || preset.scopes.length === 0) {
+      return;
+    }
+
+    applyScopePreset(preset.scopes);
+    if (!nameInput().trim()) {
+      setNameInput(preset.label);
+    }
+    setAppliedRoutePreset(requestedPreset);
+  });
+
+  createEffect(() => {
+    const requestedPreset = requestedTokenPreset();
+    if (requestedPreset !== PULSE_INTELLIGENCE_AGENT_TOKEN_PRESET) {
+      setFocusedRoutePreset('');
+      return;
+    }
+    if (
+      !createSectionReady() ||
+      loading() ||
+      appliedRoutePreset() !== requestedPreset ||
+      focusedRoutePreset() === requestedPreset
+    ) {
+      return;
+    }
+
+    focusCreateSection();
+    window.clearTimeout(routeFocusTimer);
+    routeFocusTimer = window.setTimeout(() => {
+      if (requestedTokenPreset() === requestedPreset) {
+        focusCreateSection();
+      }
+    }, 0);
+    setFocusedRoutePreset(requestedPreset);
   });
 
   createEffect(() => {
@@ -163,6 +279,8 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
     setSelectedScopes(Array.from(new Set(scopes)).filter(Boolean));
   };
 
+  const applyFullAccessPreset = () => applyScopePreset([API_TOKEN_WILDCARD_SCOPE]);
+
   const clearScopes = () => setSelectedScopes([]);
 
   const toggleScope = (scope: string) => {
@@ -176,6 +294,10 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
 
   const handleGenerate = async () => {
     if (!canManage()) return;
+    if (!hasScopeSelection()) {
+      notificationStore.error('Choose a scope preset or custom scope before generating a token.');
+      return;
+    }
     setIsGenerating(true);
     try {
       const trimmedName = nameInput().trim() || undefined;
@@ -313,6 +435,7 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
     API_SCOPE_LABELS,
     API_TOKEN_SCOPES_DOC_URL,
     agentTokenUsage,
+    applyFullAccessPreset,
     applyScopePreset,
     canManage,
     clearScopes,
@@ -325,6 +448,7 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
     handleDelete,
     handleGenerate,
     hasWildcardTokens,
+    hasScopeSelection,
     isFullAccessSelected,
     isGenerating,
     isRevealActiveForCurrentToken,
@@ -347,5 +471,6 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
     wildcardCount,
     presetMatchesSelection: (presetScopes: string[]) =>
       matchesScopePreset(selectedScopes(), presetScopes),
+    canGenerateToken,
   };
 };

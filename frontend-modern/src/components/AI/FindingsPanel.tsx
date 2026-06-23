@@ -21,8 +21,9 @@ import { notificationStore } from '@/stores/notifications';
 import { aiChatStore } from '@/stores/aiChat';
 import {
   buildPatrolAssistantApprovalBriefingInput,
-  buildPatrolAssistantFindingHandoff,
+  buildPatrolAssistantFindingHandoffFromUnifiedFinding,
   buildPatrolAssistantProposedFixBriefingInput,
+  buildPatrolAssistantProposedFixBriefingInputFromApproval,
   buildPatrolRemediationPlanAssistantBriefing,
   buildPatrolRemediationPlanAssistantModelContext,
   patrolAssistantFindingHandoffRequiresApprovalMode,
@@ -30,7 +31,7 @@ import {
   type PatrolAssistantProposedFixBriefingInput,
 } from '@/features/patrol/patrolInvestigationContextModel';
 import { InvestigationSection, ApprovalSection } from '@/components/patrol';
-import { AIAPI, type ApprovalRequest, type RemediationPlan } from '@/api/ai';
+import { AIAPI, type RemediationPlan } from '@/api/ai';
 import { createSuppressionRuleFromFinding } from '@/api/patrol';
 import type { PatrolRunRecord, PatrolRuntimeState } from '@/api/patrol';
 import { formatRelativeTime } from '@/utils/format';
@@ -43,6 +44,8 @@ import { getPatrolFindingsEmptyState } from '@/utils/patrolEmptyStatePresentatio
 import CheckCircleIcon from 'lucide-solid/icons/check-circle';
 import AlertCircleIcon from 'lucide-solid/icons/alert-circle';
 import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
+import InfoIcon from 'lucide-solid/icons/info';
+import ChevronDownIcon from 'lucide-solid/icons/chevron-down';
 import {
   buildFindingFilterOptions,
   formatFindingForClipboard,
@@ -52,6 +55,9 @@ import {
   formatFindingLoopState,
   getFindingActiveRuntimeSortOrder,
   getFindingSeverityPresentation,
+  buildPatrolFindingDisplayGroups,
+  getPatrolFindingIssueCountLabel,
+  getFindingPatrolWorkflowPresentation,
   getFindingSeveritySortOrder,
   getFindingResolutionReason,
   getFindingLoopStateBadgeTone,
@@ -95,7 +101,10 @@ interface FindingsPanelProps {
   runtimeState?: PatrolRuntimeState;
   blockedReason?: string;
   overallHealth?: IntelligenceHealthScore;
+  historicalRegressionCount?: number;
+  patrolRuns?: PatrolRunRecord[];
   findingsSource?: 'unified' | 'patrol';
+  onAssistantHandoff?: (finding: UnifiedFinding) => void;
   runSnapshot?: Pick<
     PatrolRunRecord,
     | 'resources_checked'
@@ -147,6 +156,33 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
 
   const [dismissedPlanIds, setDismissedPlanIds] = createSignal<string[]>([]);
   const isPatrolFindingsSource = createMemo(() => props.findingsSource === 'patrol');
+  const hasUnknownRunSnapshot = createMemo(
+    () => props.runSnapshot !== undefined && props.filterFindingIds === undefined,
+  );
+  const hasEmptyRunSnapshot = createMemo(
+    () =>
+      props.runSnapshot !== undefined &&
+      Array.isArray(props.filterFindingIds) &&
+      props.filterFindingIds.length === 0,
+  );
+  const canRenderRunSnapshotWithoutSourceFindings = createMemo(
+    () => hasUnknownRunSnapshot() || hasEmptyRunSnapshot(),
+  );
+  const shouldShowFindingLifecycle = (finding: UnifiedFinding) =>
+    Boolean(finding.lifecycle && finding.lifecycle.length > 0) &&
+    (!isPatrolFindingsSource() ||
+      finding.status !== 'active' ||
+      props.runSnapshot !== undefined ||
+      filter() === 'all' ||
+      filter() === 'resolved');
+  const shouldShowCollapsedPrimaryAction = (finding: UnifiedFinding) =>
+    isPatrolFindingsSource() &&
+    finding.status === 'active' &&
+    props.runSnapshot === undefined &&
+    expandedId() !== finding.id &&
+    Boolean(getFindingPrimaryActionPresentation(finding));
+  const shouldShowInlineManualControls = (finding: UnifiedFinding) =>
+    finding.status === 'active' && !isPatrolFindingsSource();
   const sourceFindings = createMemo(() =>
     isPatrolFindingsSource() ? aiIntelligenceStore.patrolFindings : aiIntelligenceStore.findings,
   );
@@ -156,7 +192,12 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       ? aiIntelligenceStore.patrolFindingsLoading
       : aiIntelligenceStore.findingsLoading,
   );
-  const shouldShowLoadingState = createMemo(() => sourceFindingsLoading() && !sourceHasFindings());
+  const shouldShowLoadingState = createMemo(
+    () =>
+      sourceFindingsLoading() &&
+      !sourceHasFindings() &&
+      !canRenderRunSnapshotWithoutSourceFindings(),
+  );
   const sourceFindingsError = createMemo(() =>
     isPatrolFindingsSource()
       ? aiIntelligenceStore.patrolFindingsError
@@ -230,9 +271,6 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   });
 
   // Filter and sort findings
-  const hasUnknownRunSnapshot = createMemo(
-    () => props.runSnapshot !== undefined && props.filterFindingIds === undefined,
-  );
   const filteredFindings = createMemo(() => {
     if (hasUnknownRunSnapshot()) {
       return [];
@@ -381,6 +419,28 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       (f) => f.source !== 'threshold' && !f.isThreshold && !hasTriggeringAlert(f),
     );
   });
+  const shouldGroupPatrolFindingsByResource = createMemo(
+    () =>
+      isPatrolFindingsSource() &&
+      filter() === 'active' &&
+      props.runSnapshot === undefined &&
+      props.resourceId === undefined,
+  );
+  const patrolFindingDisplayGroups = createMemo(() => {
+    const findings = patrolFindings();
+    if (!shouldGroupPatrolFindingsByResource()) {
+      return findings.map((finding) => ({
+        id: `finding:${finding.id}`,
+        resourceKey: `finding:${finding.id}`,
+        resourceLabel: getFindingSubjectPresentation(finding).label,
+        primaryFinding: finding,
+        relatedFindings: [],
+        findings: [finding],
+      }));
+    }
+
+    return buildPatrolFindingDisplayGroups(findings);
+  });
   const filterOptions = createMemo(() => buildFindingFilterOptions(filterCounts()));
   const emptyStateCopy = createMemo(() => {
     // 'overdue' is a FindingsPanel-local extension to the shared
@@ -395,10 +455,15 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       overallHealth: props.overallHealth,
       runtimeState: props.runtimeState,
       blockedReason: props.blockedReason,
+      historicalRegressionCount: props.historicalRegressionCount,
+      runs: props.patrolRuns,
       runSnapshot: props.runSnapshot,
     });
   });
   const emptyStateTone = createMemo(() => getSemanticTonePresentation(emptyStateCopy().tone));
+  const shouldShowRichEmptyState = createMemo(
+    () => filter() === 'active' || props.runSnapshot !== undefined,
+  );
   // Auto-reset filter when the conditional filter buttons disappear
   createEffect(() => {
     if (filter() === 'attention' && filterCounts().needsAttentionCount === 0) {
@@ -563,20 +628,6 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     setEditingNoteId(null);
   };
 
-  const buildLiveApprovalProposedFixBriefing = (
-    approval: ApprovalRequest | undefined,
-  ): PatrolAssistantProposedFixBriefingInput | undefined =>
-    buildPatrolAssistantProposedFixBriefingInput(
-      approval
-        ? {
-            description: approval.context,
-            riskLevel: approval.riskLevel,
-            targetHost: approval.targetName,
-            commandCount: approval.command ? 1 : 0,
-          }
-        : null,
-    );
-
   const loadLatestInvestigationProposedFixBriefing = async (
     finding: UnifiedFinding,
     pendingApprovalBriefing: PatrolAssistantApprovalBriefingInput | undefined,
@@ -610,8 +661,6 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
 
   const openFindingInAssistant = async (finding: UnifiedFinding) => {
     await aiIntelligenceStore.loadPendingApprovals();
-    const subject = getFindingSubjectPresentation(finding).label;
-    const title = getFindingTitlePresentation(finding).label;
     const pendingApproval = aiIntelligenceStore.patrolPendingApprovals.find(
       (approval) => approval.toolId === 'investigation_fix' && approval.targetId === finding.id,
     );
@@ -621,31 +670,14 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       pendingApprovalBriefing,
     );
     const proposedFix =
-      latestInvestigationProposedFix || buildLiveApprovalProposedFixBriefing(pendingApproval);
-    const handoff = buildPatrolAssistantFindingHandoff({
-      id: finding.id,
-      title,
-      subject,
-      description: finding.description,
-      severity: finding.severity,
-      findingStatus: finding.status,
-      investigationStatus: finding.investigationStatus,
-      investigationOutcome: finding.investigationOutcome,
-      loopState: finding.loopState,
-      timesRaised: finding.timesRaised,
-      regressionCount: finding.regressionCount,
-      lastRegressionAt: finding.lastRegressionAt,
-      remediationId: finding.remediationPlanId,
-      resourceId: finding.resourceId,
-      resourceName: finding.resourceName,
-      resourceType: finding.resourceType,
-      detectedAt: finding.detectedAt,
-      lastSeenAt: finding.lastSeenAt,
+      latestInvestigationProposedFix ||
+      buildPatrolAssistantProposedFixBriefingInputFromApproval(pendingApproval);
+    const handoff = buildPatrolAssistantFindingHandoffFromUnifiedFinding(finding, {
       pendingApproval: pendingApprovalBriefing,
       proposedFix,
-      investigationRecord: finding.investigationRecord,
     });
     aiChatStore.open(handoff.context);
+    props.onAssistantHandoff?.(finding);
   };
 
   // Create rule from this is the promotion path: take the operator's
@@ -780,12 +812,46 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   };
 
   // Render a single finding item
-  const renderFindingItem = (finding: UnifiedFinding, showSourceBadge: boolean = false) => {
+  const renderFindingItem = (
+    finding: UnifiedFinding,
+    showSourceBadge: boolean = false,
+    options: { hideSubject?: boolean; relatedFindings?: readonly UnifiedFinding[] } = {},
+  ) => {
     const recency = getFindingRecencyPresentation(finding);
     const subject = getFindingSubjectPresentation(finding);
     const title = getFindingTitlePresentation(finding);
     const manualControls = getFindingManualControlsPresentation(finding);
     const severityPresentation = getFindingSeverityPresentation(finding);
+    const rowPrimaryAction = getFindingPrimaryActionPresentation(finding);
+    const patrolWorkflow = () =>
+      getFindingPatrolWorkflowPresentation(finding, aiIntelligenceStore.patrolPendingApprovals);
+    const collapsedApprovalAction = () => {
+      const workflow = patrolWorkflow();
+      return workflow?.stage === 'approval' ? workflow : undefined;
+    };
+    const shouldShowLoopStateBadge = () =>
+      !isPatrolFindingsSource() &&
+      finding.status === 'active' &&
+      finding.source !== 'ai-patrol' &&
+      Boolean(finding.loopState) &&
+      finding.loopState !== 'detected' &&
+      !finding.investigationStatus &&
+      !finding.investigationOutcome;
+    const shouldShowInvestigationStatusBadge = () =>
+      !isPatrolFindingsSource() &&
+      Boolean(finding.investigationStatus) &&
+      !(
+        finding.investigationOutcome &&
+        finding.investigationStatus !== 'running' &&
+        finding.investigationStatus !== 'pending'
+      );
+    const shouldShowInvestigationOutcomeBadge = () =>
+      !isPatrolFindingsSource() &&
+      Boolean(finding.investigationOutcome) &&
+      finding.investigationStatus !== 'running' &&
+      finding.investigationStatus !== 'pending';
+    const shouldShowInvestigationConfidenceBadge = () =>
+      !isPatrolFindingsSource() && Boolean(finding.investigationRecord?.confidence);
 
     const toggleExpanded = () => {
       if (expandedId() === finding.id) {
@@ -809,12 +875,20 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       >
         {/* Finding header */}
         <div class="flex items-start justify-between gap-2">
-          <button
-            type="button"
+          <div
+            role="button"
+            tabIndex={0}
+            aria-label={`${expandedId() === finding.id ? 'Close issue details' : 'Open issue details'} for ${title.label}`}
             aria-expanded={expandedId() === finding.id}
             aria-controls={`finding-${finding.id}-details`}
-            class="min-w-0 flex-1 cursor-pointer text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
             onClick={toggleExpanded}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggleExpanded();
+              }
+            }}
+            class="min-w-0 flex-1 cursor-pointer rounded text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
           >
             <div class="flex items-center gap-2 flex-wrap">
               {/* Status badge for non-active findings */}
@@ -862,19 +936,11 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                   Acknowledged
                 </MetadataBadge>
               </Show>
-              <Show
-                when={
-                  finding.status === 'active' &&
-                  finding.loopState &&
-                  !(finding.acknowledgedAt && finding.loopState === 'detected') &&
-                  !finding.investigationStatus &&
-                  !finding.investigationOutcome
-                }
-              >
+              <Show when={shouldShowLoopStateBadge()}>
                 <MetadataBadge
                   {...FINDING_ROW_BADGE_PROPS}
                   tone={getFindingLoopStateBadgeTone(finding.loopState!)}
-                  title={`Patrol loop: ${formatFindingLoopState(finding.loopState!)}`}
+                  title={`Patrol status: ${formatFindingLoopState(finding.loopState!)}`}
                 >
                   {formatFindingLoopState(finding.loopState!)}
                 </MetadataBadge>
@@ -888,17 +954,8 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                   Out of scope
                 </MetadataBadge>
               </Show>
-              {/* Investigation status badge — only when no outcome badge will show */}
-              <Show
-                when={
-                  finding.investigationStatus &&
-                  !(
-                    finding.investigationOutcome &&
-                    finding.investigationStatus !== 'running' &&
-                    finding.investigationStatus !== 'pending'
-                  )
-                }
-              >
+              {/* Non-Patrol investigation status badge — only when no outcome badge will show. */}
+              <Show when={shouldShowInvestigationStatusBadge()}>
                 <MetadataBadge
                   {...FINDING_ROW_BADGE_PROPS}
                   tone={getInvestigationStatusBadgeTone(finding.investigationStatus!)}
@@ -920,14 +977,8 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                   {getInvestigationStatusLabel(finding.investigationStatus!)}
                 </MetadataBadge>
               </Show>
-              {/* Investigation outcome badge — replaces status badge when outcome is known */}
-              <Show
-                when={
-                  finding.investigationOutcome &&
-                  finding.investigationStatus !== 'running' &&
-                  finding.investigationStatus !== 'pending'
-                }
-              >
+              {/* Non-Patrol investigation outcome badge — replaces status badge when known. */}
+              <Show when={shouldShowInvestigationOutcomeBadge()}>
                 <MetadataBadge
                   {...FINDING_ROW_BADGE_PROPS}
                   tone={getInvestigationOutcomeBadgeTone(finding.investigationOutcome!)}
@@ -935,13 +986,14 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                   {getInvestigationOutcomeLabel(finding.investigationOutcome!)}
                 </MetadataBadge>
               </Show>
-              {/* Investigation confidence badge — surfaces the seven-question
-                  schema's confidence answer in the collapsed row so operators
-                  can scan trust without expanding the card. */}
-              <Show when={finding.investigationRecord?.confidence}>
+              {/* Non-Patrol confidence badge. Patrol keeps investigation detail
+                  in the expanded issue so the default row stays simple. */}
+              <Show when={shouldShowInvestigationConfidenceBadge()}>
                 <MetadataBadge
                   {...FINDING_ROW_BADGE_PROPS}
-                  tone={getInvestigationConfidenceBadgeTone(finding.investigationRecord!.confidence!)}
+                  tone={getInvestigationConfidenceBadgeTone(
+                    finding.investigationRecord!.confidence!,
+                  )}
                   title={`Investigation confidence: ${finding.investigationRecord!.confidence!}`}
                 >
                   {finding.investigationRecord!.confidence!} confidence
@@ -972,7 +1024,16 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             </div>
             {/* Resource info */}
             <div class="text-xs text-muted mt-1">
-              {subject.label} - {recency.label} {formatTime(recency.timestamp)}
+              <Show
+                when={options.hideSubject}
+                fallback={
+                  <>
+                    {subject.label} - {recency.label} {formatTime(recency.timestamp)}
+                  </>
+                }
+              >
+                {recency.label} {formatTime(recency.timestamp)}
+              </Show>
               <Show when={finding.status === 'resolved' && finding.resolvedAt}>
                 <span class="ml-2 text-green-600 dark:text-green-400">
                   {' · '}
@@ -1029,10 +1090,33 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 </span>
               </Show>
             </div>
-          </button>
+          </div>
           {/* Actions */}
           <div class="flex items-center gap-1 shrink-0">
-            <Show when={finding.status === 'active'}>
+            <Show when={expandedId() !== finding.id ? collapsedApprovalAction() : undefined}>
+              {(action) => (
+                <button
+                  type="button"
+                  onClick={toggleExpanded}
+                  class="rounded bg-amber-600 px-2 py-1 text-xs font-semibold text-white transition-colors hover:bg-amber-700"
+                  title={action().detail}
+                >
+                  {action().label}
+                </button>
+              )}
+            </Show>
+            <Show when={shouldShowCollapsedPrimaryAction(finding) && rowPrimaryAction}>
+              {(action) => (
+                <a
+                  href={action().href}
+                  onClick={(e) => e.stopPropagation()}
+                  class="inline-flex items-center rounded bg-blue-600 px-2 py-1 text-xs font-semibold text-white transition-colors hover:bg-blue-700"
+                >
+                  {action().label}
+                </a>
+              )}
+            </Show>
+            <Show when={shouldShowInlineManualControls(finding)}>
               <Show when={manualControls.acknowledge && !finding.acknowledgedAt}>
                 <button
                   type="button"
@@ -1088,51 +1172,47 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 </button>
               </Show>
             </Show>
-            {/* Expand indicator */}
-            <svg
-              class={`w-4 h-4 text-slate-400 transition-transform ${expandedId() === finding.id ? 'rotate-180' : ''}`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+            <button
+              type="button"
+              aria-label={`${expandedId() === finding.id ? 'Hide' : 'View'} details for ${title.label}`}
+              aria-expanded={expandedId() === finding.id}
+              aria-controls={`finding-${finding.id}-details`}
+              onClick={toggleExpanded}
+              class="inline-flex items-center gap-1 rounded border border-border bg-surface px-2 py-1 text-xs font-medium text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              title={expandedId() === finding.id ? 'Hide details' : 'View details'}
             >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M19 9l-7 7-7-7"
+              <span>{expandedId() === finding.id ? 'Hide' : 'Details'}</span>
+              <ChevronDownIcon
+                class={`h-3.5 w-3.5 transition-transform ${expandedId() === finding.id ? 'rotate-180' : ''}`}
               />
-            </svg>
+            </button>
           </div>
         </div>
 
         {/* Expanded content */}
-        <Show when={expandedId() === finding.id}>
-          {renderExpandedContent(finding)}
-        </Show>
+        <Show when={expandedId() === finding.id}>{renderExpandedContent(finding, options)}</Show>
       </div>
     );
   };
 
   // Render expanded content for a finding
-  const renderExpandedContent = (finding: UnifiedFinding) => {
+  const renderExpandedContent = (
+    finding: UnifiedFinding,
+    options: { relatedFindings?: readonly UnifiedFinding[] } = {},
+  ) => {
     const primaryAction = getFindingPrimaryActionPresentation(finding);
     const manualControls = getFindingManualControlsPresentation(finding);
+    const relatedFindings = options.relatedFindings ?? [];
+    const shouldShowAssistantPrimaryAction = !isPatrolFindingsSource();
+    const shouldShowAssistantManageAction = isPatrolFindingsSource() && !primaryAction;
+    const shouldShowExpandedManageMenu =
+      !primaryAction ||
+      manualControls.acknowledge ||
+      manualControls.snooze ||
+      manualControls.dismiss;
 
     return (
       <div id={`finding-${finding.id}-details`} class="mt-3 pt-3 border-t border-border-subtle">
-        <Show when={primaryAction}>
-          {(action) => (
-            <div class="mb-3">
-              <a
-                href={action().href}
-                onClick={(e) => e.stopPropagation()}
-                class="inline-flex items-center rounded border border-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-base-content transition-colors hover:bg-surface-hover"
-              >
-                {action().label}
-              </a>
-            </div>
-          )}
-        </Show>
         <Show when={hasTriggeringAlert(finding)}>
           <div class="text-xs text-amber-700 dark:text-amber-300 mb-2">
             Triggered by alert{finding.alertType ? ` (${finding.alertType})` : ''} • Identifier{' '}
@@ -1163,7 +1243,37 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           </p>
         </Show>
 
-        <Show when={finding.lifecycle && finding.lifecycle.length > 0}>
+        <Show when={relatedFindings.length > 0}>
+          <div class="mt-3 rounded border border-border bg-surface-alt p-2">
+            <div class="text-xs font-medium text-base-content">Related issues</div>
+            <div class="mt-2 space-y-1">
+              <For each={relatedFindings}>
+                {(relatedFinding) => {
+                  const relatedSeverity = getFindingSeverityPresentation(relatedFinding);
+                  const relatedTitle = getFindingTitlePresentation(relatedFinding);
+                  const relatedRecency = getFindingRecencyPresentation(relatedFinding);
+                  return (
+                    <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
+                      <MetadataBadge
+                        {...FINDING_ROW_BADGE_PROPS}
+                        tone={relatedSeverity.badgeTone}
+                        uppercase={relatedSeverity.uppercase}
+                      >
+                        {relatedSeverity.label}
+                      </MetadataBadge>
+                      <span class="font-medium text-base-content">{relatedTitle.label}</span>
+                      <span>
+                        {relatedRecency.label} {formatTime(relatedRecency.timestamp)}
+                      </span>
+                    </div>
+                  );
+                }}
+              </For>
+            </div>
+          </div>
+        </Show>
+
+        <Show when={shouldShowFindingLifecycle(finding)}>
           <div class="mt-3 p-2 rounded border border-border bg-surface-alt">
             <div class="text-xs font-medium text-base-content mb-2">Lifecycle</div>
             <div class="space-y-1">
@@ -1277,139 +1387,167 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           class="mt-3 flex flex-wrap items-start gap-2 text-xs"
           onClick={(e) => e.stopPropagation()}
         >
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              void openFindingInAssistant(finding);
-            }}
-            class="inline-flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 font-semibold text-white transition-colors hover:bg-blue-700"
-            title={getPrimaryAssistantFindingAction(finding).title}
-          >
-            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
-            </svg>
-            {getPrimaryAssistantFindingAction(finding).label}
-          </button>
+          <Show when={primaryAction}>
+            {(action) => (
+              <a
+                href={action().href}
+                onClick={(e) => e.stopPropagation()}
+                class="inline-flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 font-semibold text-white transition-colors hover:bg-blue-700"
+              >
+                {action().label}
+              </a>
+            )}
+          </Show>
+          <Show when={!primaryAction && shouldShowAssistantPrimaryAction}>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                void openFindingInAssistant(finding);
+              }}
+              class="inline-flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 font-semibold text-white transition-colors hover:bg-blue-700"
+              title={getPrimaryAssistantFindingAction(finding).title}
+            >
+              <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
+              </svg>
+              {getPrimaryAssistantFindingAction(finding).label}
+            </button>
+          </Show>
 
-          <details onClick={(e) => e.stopPropagation()}>
-            <summary class="list-none cursor-pointer rounded border border-border bg-surface px-3 py-1.5 font-medium text-base-content hover:bg-surface-hover">
-              Manage
-            </summary>
-            <div class="mt-1 flex min-w-48 flex-col gap-1 rounded border border-border bg-surface p-1 shadow-sm">
-              <Show when={editingNoteId() !== finding.id && !finding.userNote}>
+          <Show when={shouldShowExpandedManageMenu}>
+            <details onClick={(e) => e.stopPropagation()}>
+              <summary class="list-none cursor-pointer rounded border border-border bg-surface px-3 py-1.5 font-medium text-base-content hover:bg-surface-hover">
+                Manage
+              </summary>
+              <div class="mt-1 flex min-w-48 flex-col gap-1 rounded border border-border bg-surface p-1 shadow-sm">
+                <Show when={shouldShowAssistantManageAction}>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void openFindingInAssistant(finding);
+                    }}
+                    class="rounded px-2 py-1 text-left hover:bg-surface-hover"
+                    title={getPrimaryAssistantFindingAction(finding).title}
+                  >
+                    {getPrimaryAssistantFindingAction(finding).label}
+                  </button>
+                </Show>
+                <Show when={editingNoteId() !== finding.id && !finding.userNote}>
+                  <button
+                    type="button"
+                    onClick={(e) => handleStartEditNote(finding, e)}
+                    class="rounded px-2 py-1 text-left hover:bg-surface-hover"
+                  >
+                    Add Note
+                  </button>
+                </Show>
                 <button
                   type="button"
-                  onClick={(e) => handleStartEditNote(finding, e)}
+                  onClick={(e) => handleCopyFindingSummary(finding, e)}
                   class="rounded px-2 py-1 text-left hover:bg-surface-hover"
                 >
-                  Add Note
+                  Copy summary
                 </button>
-              </Show>
-              <button
-                type="button"
-                onClick={(e) => handleCopyFindingSummary(finding, e)}
-                class="rounded px-2 py-1 text-left hover:bg-surface-hover"
-              >
-                Copy summary
-              </button>
-              <Show when={finding.status === 'active'}>
-                <Show when={manualControls.acknowledge && !finding.acknowledgedAt}>
-                  <button
-                    type="button"
-                    onClick={(e) => handleAcknowledge(finding, e)}
-                    class="rounded px-2 py-1 text-left hover:bg-surface-hover disabled:opacity-50"
-                    disabled={actionLoading() === finding.id}
-                  >
-                    Acknowledge
-                  </button>
+                <Show when={finding.status === 'active'}>
+                  <Show when={manualControls.acknowledge && !finding.acknowledgedAt}>
+                    <button
+                      type="button"
+                      onClick={(e) => handleAcknowledge(finding, e)}
+                      class="rounded px-2 py-1 text-left hover:bg-surface-hover disabled:opacity-50"
+                      disabled={actionLoading() === finding.id}
+                    >
+                      Acknowledge
+                    </button>
+                  </Show>
+                  <Show when={manualControls.acknowledge}>
+                    <button
+                      type="button"
+                      onClick={(e) => handleResolve(finding, e)}
+                      class="rounded px-2 py-1 text-left text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 dark:text-emerald-300 dark:hover:bg-emerald-900"
+                      disabled={actionLoading() === finding.id}
+                    >
+                      Mark resolved
+                    </button>
+                  </Show>
+                  <Show when={manualControls.snooze}>
+                    <button
+                      type="button"
+                      onClick={(e) => handleSnooze(finding, 1, e)}
+                      class="rounded px-2 py-1 text-left hover:bg-surface-hover disabled:opacity-50"
+                      disabled={actionLoading() === finding.id}
+                    >
+                      Snooze 1h
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => handleSnooze(finding, 24, e)}
+                      class="rounded px-2 py-1 text-left hover:bg-surface-hover disabled:opacity-50"
+                      disabled={actionLoading() === finding.id}
+                    >
+                      Snooze 24h
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => handleSnooze(finding, 168, e)}
+                      class="rounded px-2 py-1 text-left hover:bg-surface-hover disabled:opacity-50"
+                      disabled={actionLoading() === finding.id}
+                    >
+                      Snooze 7d
+                    </button>
+                  </Show>
+                  <Show when={manualControls.dismiss}>
+                    <button
+                      type="button"
+                      onClick={(e) => handleStartDismiss(finding, 'not_an_issue', e)}
+                      class="rounded px-2 py-1 text-left text-red-600 hover:bg-red-50 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900"
+                      disabled={actionLoading() === finding.id}
+                    >
+                      Dismiss: Not an issue
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => handleStartDismiss(finding, 'expected_behavior', e)}
+                      class="rounded px-2 py-1 text-left hover:bg-surface-hover disabled:opacity-50"
+                      disabled={actionLoading() === finding.id}
+                    >
+                      Remember as expected
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => handleStartDismiss(finding, 'will_fix_later', e)}
+                      class="rounded px-2 py-1 text-left hover:bg-surface-hover disabled:opacity-50"
+                      disabled={actionLoading() === finding.id}
+                    >
+                      Dismiss: Later
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => handleStartCreateRule(finding, e)}
+                      class="rounded px-2 py-1 text-left hover:bg-surface-hover disabled:opacity-50"
+                      disabled={
+                        actionLoading() === finding.id ||
+                        !getFindingSuppressionRuleScope(finding).canCreate
+                      }
+                      title={
+                        getFindingSuppressionRuleScope(finding).canCreate
+                          ? 'Promote this dismissal into a permanent rule for this resource and category'
+                          : 'This finding is missing the resource or category needed for a scoped rule'
+                      }
+                    >
+                      Create rule from this
+                    </button>
+                  </Show>
                 </Show>
-                <Show when={manualControls.acknowledge}>
-                  <button
-                    type="button"
-                    onClick={(e) => handleResolve(finding, e)}
-                    class="rounded px-2 py-1 text-left text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 dark:text-emerald-300 dark:hover:bg-emerald-900"
-                    disabled={actionLoading() === finding.id}
-                  >
-                    Mark resolved
-                  </button>
-                </Show>
-                <Show when={manualControls.snooze}>
-                  <button
-                    type="button"
-                    onClick={(e) => handleSnooze(finding, 1, e)}
-                    class="rounded px-2 py-1 text-left hover:bg-surface-hover disabled:opacity-50"
-                    disabled={actionLoading() === finding.id}
-                  >
-                    Snooze 1h
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => handleSnooze(finding, 24, e)}
-                    class="rounded px-2 py-1 text-left hover:bg-surface-hover disabled:opacity-50"
-                    disabled={actionLoading() === finding.id}
-                  >
-                    Snooze 24h
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => handleSnooze(finding, 168, e)}
-                    class="rounded px-2 py-1 text-left hover:bg-surface-hover disabled:opacity-50"
-                    disabled={actionLoading() === finding.id}
-                  >
-                    Snooze 7d
-                  </button>
-                </Show>
-                <Show when={manualControls.dismiss}>
-                  <button
-                    type="button"
-                    onClick={(e) => handleStartDismiss(finding, 'not_an_issue', e)}
-                    class="rounded px-2 py-1 text-left text-red-600 hover:bg-red-50 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900"
-                    disabled={actionLoading() === finding.id}
-                  >
-                    Dismiss: Not an issue
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => handleStartDismiss(finding, 'expected_behavior', e)}
-                    class="rounded px-2 py-1 text-left hover:bg-surface-hover disabled:opacity-50"
-                    disabled={actionLoading() === finding.id}
-                  >
-                    Remember as expected
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => handleStartDismiss(finding, 'will_fix_later', e)}
-                    class="rounded px-2 py-1 text-left hover:bg-surface-hover disabled:opacity-50"
-                    disabled={actionLoading() === finding.id}
-                  >
-                    Dismiss: Later
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => handleStartCreateRule(finding, e)}
-                    class="rounded px-2 py-1 text-left hover:bg-surface-hover disabled:opacity-50"
-                    disabled={
-                      actionLoading() === finding.id ||
-                      !getFindingSuppressionRuleScope(finding).canCreate
-                    }
-                    title={
-                      getFindingSuppressionRuleScope(finding).canCreate
-                        ? 'Promote this dismissal into a permanent rule for this resource and category'
-                        : 'This finding is missing the resource or category needed for a scoped rule'
-                    }
-                  >
-                    Create rule from this
-                  </button>
-                </Show>
-              </Show>
-            </div>
-          </details>
+              </div>
+            </details>
+          </Show>
         </div>
         {/* Inline create-rule confirmation. Confirms scope (resource +
             category) and requires a reason so the persisted rule has
@@ -1560,6 +1698,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             (finding.investigationOutcome === 'fix_queued' ||
               finding.investigationOutcome === 'fix_executed' ||
               finding.investigationOutcome === 'fix_failed' ||
+              finding.investigationOutcome === 'fix_rejected' ||
               finding.investigationOutcome === 'fix_verified' ||
               finding.investigationOutcome === 'fix_verification_failed' ||
               finding.investigationOutcome === 'fix_verification_unknown')
@@ -1646,7 +1785,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               </button>
             </Show>
           </div>
-          <Show when={patrolFindings().length > 1}>
+          <Show when={patrolFindingDisplayGroups().length > 1}>
             <FormSelect
               label="Sort findings"
               labelClass="sr-only"
@@ -1678,9 +1817,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
         <Card padding="none" class="overflow-hidden">
           {/* Content */}
           <div class="divide-y divide-border-subtle">
-            <Show when={patrolFindings().length === 0}>
+            <Show when={patrolFindingDisplayGroups().length === 0}>
               <div class="p-6 text-sm text-muted text-center">
-                <Show when={filter() === 'active'}>
+                <Show when={shouldShowRichEmptyState()}>
                   <div class="flex flex-col items-center gap-3">
                     <Show
                       when={emptyStateCopy().tone === 'success'}
@@ -1691,9 +1830,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                             <Show
                               when={emptyStateCopy().tone === 'warning'}
                               fallback={
-                                <AlertCircleIcon
-                                  class={`w-10 h-10 ${emptyStateTone().iconClass}`}
-                                />
+                                <InfoIcon class={`w-10 h-10 ${emptyStateTone().iconClass}`} />
                               }
                             >
                               <AlertTriangleIcon
@@ -1724,14 +1861,38 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                     filter() !== 'active' &&
                     filter() !== 'attention' &&
                     filter() !== 'approvals' &&
-                    filter() !== 'overdue'
+                    filter() !== 'overdue' &&
+                    props.runSnapshot === undefined
                   }
                 >
                   {emptyStateCopy().title}
                 </Show>
               </div>
             </Show>
-            <For each={patrolFindings()}>{(finding) => renderFindingItem(finding, false)}</For>
+            <For each={patrolFindingDisplayGroups()}>
+              {(group) => (
+                <Show
+                  when={group.findings.length > 1}
+                  fallback={renderFindingItem(group.primaryFinding, false)}
+                >
+                  <section
+                    class="divide-y divide-border-subtle"
+                    aria-label={`${group.resourceLabel}: ${getPatrolFindingIssueCountLabel(group.findings.length)}`}
+                  >
+                    <div class="flex flex-wrap items-center justify-between gap-2 bg-surface-alt/60 px-3 py-2 text-xs">
+                      <span class="font-semibold text-base-content">{group.resourceLabel}</span>
+                      <span class="text-muted">
+                        {getPatrolFindingIssueCountLabel(group.findings.length)}
+                      </span>
+                    </div>
+                    {renderFindingItem(group.primaryFinding, false, {
+                      hideSubject: true,
+                      relatedFindings: group.relatedFindings,
+                    })}
+                  </section>
+                </Show>
+              )}
+            </For>
           </div>
         </Card>
       </Show>

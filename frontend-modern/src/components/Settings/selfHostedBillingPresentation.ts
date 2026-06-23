@@ -32,22 +32,20 @@ export interface SelfHostedProBillingPresentation {
 }
 
 export const SELF_HOSTED_PRO_BILLING_PRESENTATION: SelfHostedProBillingPresentation = {
-  navLabel: 'Plans',
-  shellTitle: 'Self-hosted plan',
-  shellDescription:
-    'Review the plan this instance is using and the optional capabilities connected to it.',
-  infrastructureRouteReferral: 'Billing and self-hosted plan changes live in Plans.',
+  navLabel: 'Plans & Billing',
+  shellTitle: 'Plans & Billing',
+  shellDescription: 'Plan, license, and Patrol mode for this instance.',
+  infrastructureRouteReferral: 'Billing and self-hosted plan changes live in Plans & Billing.',
   infrastructureWorkspaceReferral:
-    'Self-hosted plan status, optional activation, and available capabilities live in Plans, not here.',
-  sectionSelectorAriaLabel: 'Self-hosted plans section',
+    'Self-hosted plan status, Patrol mode, and available capabilities live in Plans & Billing, not here.',
+  sectionSelectorAriaLabel: 'Plans and billing section',
   refreshLabel: 'Refresh',
   planTabLabel: 'Plan',
   usageTabLabel: 'Usage',
   planSectionTitle: 'Current plan',
-  planSectionDescription:
-    'See which self-hosted tier this instance is using and which capabilities are available on this install.',
-  planComparisonSectionTitle: 'Optional extras',
-  planComparisonActionLabel: 'See all plans',
+  planSectionDescription: 'Current tier and enabled capabilities.',
+  planComparisonSectionTitle: 'Available plans',
+  planComparisonActionLabel: 'View plans',
   usageSectionTitle: 'Usage',
   hiddenShellTitle: 'Demo mode',
   hiddenShellDescription: 'Commercial settings are hidden for this session.',
@@ -57,16 +55,14 @@ export const SELF_HOSTED_PRO_BILLING_PRESENTATION: SelfHostedProBillingPresentat
   policyLoadingTitle: 'Loading settings access',
   policyLoadingBody:
     'Pulse waits for the session presentation policy before showing license, billing, or usage details.',
-  planSelectionPromptTitle: 'Compare self-hosted plans',
-  planSelectionPromptBody:
-    'Community includes core monitoring at no cost. Relay is optional for secure access from anywhere, and Pulse Pro adds root-cause analysis, safe remediation workflows, and 90-day history.',
-  planSelectionPromptActionLabel: 'Compare plans',
+  planSelectionPromptTitle: 'Select a plan',
+  planSelectionPromptBody: 'Choose the plan for this install.',
+  planSelectionPromptActionLabel: 'View plans',
   purchaseActivatedPlanActionLabel: 'Review plan',
-  purchaseCancelledActionLabel: 'Compare plans',
-  purchaseExpiredActionLabel: 'Compare plans',
+  purchaseCancelledActionLabel: 'View plans',
+  purchaseExpiredActionLabel: 'View plans',
   purchaseFailedActionLabel: 'Open recovery',
   purchaseUnavailableActionLabel: 'Try again',
-  recoverySectionTitle: 'Existing purchases',
-  recoverySectionDescription:
-    'Add an activation key you already have, recover a previous self-hosted purchase, or clear a local key from this instance.',
+  recoverySectionTitle: 'License recovery',
+  recoverySectionDescription: 'Paste a license key or clear the license on this install.',
 };

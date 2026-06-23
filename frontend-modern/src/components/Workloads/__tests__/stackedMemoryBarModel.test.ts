@@ -5,7 +5,7 @@ import { buildStackedMemoryBarPresentation } from '../stackedMemoryBarModel';
 const GiB = 1024 ** 3;
 
 describe('buildStackedMemoryBarPresentation', () => {
-  it('renders the v5 used | reclaimable cache split with the Proxmox reconciliation row', () => {
+  it('renders the used | reclaimable cache split with a source-neutral reconciliation row', () => {
     const presentation = buildStackedMemoryBarPresentation(
       { used: 4 * GiB, total: 16 * GiB, cache: 6 * GiB },
       400,
@@ -23,7 +23,21 @@ describe('buildStackedMemoryBarPresentation', () => {
     expect(rows['Reclaimable cache']).toBe('6.00 GB');
     // Truly free excludes the reclaimable cache: 16 - 4 - 6.
     expect(rows['Free']).toBe('6.00 GB');
-    // Proxmox counts cache as used: (4 + 6) / 16.
+    expect(rows['Used with cache']).toBe('63%');
+  });
+
+  it('allows provider-owned surfaces to name the cache-inclusive comparison', () => {
+    const presentation = buildStackedMemoryBarPresentation(
+      {
+        used: 4 * GiB,
+        total: 16 * GiB,
+        cache: 6 * GiB,
+        cacheInclusiveLabel: 'Shown in Proxmox',
+      },
+      400,
+    );
+
+    const rows = Object.fromEntries(presentation.tooltipRows.map((row) => [row.label, row.value]));
     expect(rows['Shown in Proxmox']).toBe('63%');
   });
 

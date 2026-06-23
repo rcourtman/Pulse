@@ -33,32 +33,32 @@ export function getPatrolRuntimePresentation(
   switch (runtimeState) {
     case 'blocked':
       return {
-        label: 'Patrol Paused',
+        label: 'Patrol paused',
         title: 'Patrol paused',
         description:
           normalizedBlockedReason ||
-          'Pulse Patrol cannot start new verification until the blocking condition is cleared.',
+          'Patrol cannot check infrastructure until the blocking condition is cleared.',
         tone: 'warning',
       };
     case 'disabled':
       return {
-        label: 'Patrol Disabled',
+        label: 'Patrol disabled',
         title: 'Patrol disabled',
-        description: 'Enable Patrol to resume continuous verification.',
+        description: 'Enable Patrol to resume checks.',
         tone: 'info',
       };
     case 'running':
       return {
-        label: 'Patrol Running',
+        label: 'Patrol enabled',
         title: 'Patrol running',
-        description: 'Pulse Patrol is actively verifying your infrastructure.',
+        description: 'Patrol is checking your infrastructure now.',
         tone: 'info',
       };
     case 'unavailable':
       return {
-        label: 'Patrol Unavailable',
+        label: 'Patrol unavailable',
         title: 'Patrol unavailable',
-        description: 'Pulse Patrol is not ready yet. Check Patrol provider settings and runtime availability.',
+        description: 'Patrol is not ready yet. Check Provider & Models and runtime availability.',
         tone: 'error',
       };
     case 'active':
@@ -66,7 +66,7 @@ export function getPatrolRuntimePresentation(
       return {
         label: 'Patrol enabled',
         title: 'Patrol enabled',
-        description: 'Pulse Patrol is ready to continuously verify your infrastructure.',
+        description: 'Patrol is ready to check your infrastructure.',
         tone: 'info',
       };
   }

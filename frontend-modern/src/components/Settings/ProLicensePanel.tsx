@@ -89,7 +89,6 @@ const ProLicensePanelContent: Component = () => {
               <div class="space-y-6">
                 <ProLicensePlanSection
                   activationSuccessSummary={state.activationSuccessSummary()}
-                  activationProof={state.activationProof()}
                   commercialMigrationNotice={state.commercialMigrationNotice()}
                   commercialPlanModel={state.commercialPlanModel()}
                   currentPlanSummary={state.currentPlanSummary()}
@@ -98,8 +97,9 @@ const ProLicensePanelContent: Component = () => {
                   hasLicenseDetails={state.hasLicenseDetails()}
                   loading={state.loading()}
                   onReload={() => void state.loadPanelData()}
-                  planSelectionPrompt={state.planSelectionPrompt()}
                   planComparisonSummary={state.planComparisonSummary()}
+                  planSelectionPrompt={state.planSelectionPrompt()}
+                  planStatus={state.planStatus()}
                   purchaseActivationAction={state.purchaseActivationAction()}
                   purchaseActivationNotice={state.purchaseActivationNotice()}
                 />

@@ -683,8 +683,7 @@
         { "path": "src/components/patrol/ApprovalSection.tsx" },
         { "path": "src/components/patrol/InvestigationMessages.tsx" },
         { "path": "src/components/patrol/InvestigationSection.tsx" },
-        { "path": "src/components/patrol/RunToolCallTrace.tsx" },
-        { "path": "src/features/patrol/PatrolIntelligenceHeader.tsx" }
+        { "path": "src/components/patrol/RunToolCallTrace.tsx" }
       ],
       "forbiddenPatterns": [
         {
@@ -795,12 +794,6 @@
           "path": "src/components/patrol/RunToolCallTrace.tsx",
           "patterns": [
             "h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin"
-          ]
-        },
-        {
-          "path": "src/features/patrol/PatrolIntelligenceHeader.tsx",
-          "patterns": [
-            "animate-spin w-4 h-4 border-2 border-current border-t-transparent rounded-full"
           ]
         }
       ],
@@ -1576,8 +1569,7 @@
         { "path": "src/components/shared/FilterToolbar.tsx" },
         { "path": "src/features/alerts/AlertAppriseDestinationsSection.tsx" },
         { "path": "src/features/alerts/AlertEscalationSection.tsx" },
-        { "path": "src/features/alerts/AlertQuietHoursSection.tsx" },
-        { "path": "src/features/patrol/PatrolIntelligenceHeader.tsx" }
+        { "path": "src/features/alerts/AlertQuietHoursSection.tsx" }
       ],
       "proof": [
         "src/components/shared/SharedPrimitives.guardrails.test.ts",
@@ -1661,28 +1653,12 @@
       "requiredConsumers": [
         { "path": "src/components/Settings/AgentProfilesPanel.tsx" },
         { "path": "src/components/Settings/DiagnosticsResultsPanel.tsx" },
-        { "path": "src/components/patrol/RunHistoryEntry.tsx" },
-        { "path": "src/components/patrol/PatrolStatusBar.tsx" },
-        { "path": "src/features/patrol/PatrolIntelligenceSummary.tsx" }
+        { "path": "src/components/patrol/RunHistoryEntry.tsx" }
       ],
       "forbiddenPatterns": [
         {
           "path": "src/components/patrol/RunHistoryEntry.tsx",
           "patterns": ["runStatus.badgeClass"]
-        },
-        {
-          "path": "src/components/patrol/PatrolStatusBar.tsx",
-          "patterns": [
-            "lastRunStatus.badgeClass",
-            "rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700"
-          ]
-        },
-        {
-          "path": "src/features/patrol/PatrolIntelligenceSummary.tsx",
-          "patterns": [
-            "runtimeShellPresentation().badgeClass",
-            "inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]"
-          ]
         }
       ],
       "proof": [
@@ -1896,7 +1872,6 @@
         { "path": "src/components/patrol/InvestigationSection.tsx" },
         { "path": "src/components/patrol/RunHistoryEntry.tsx" },
         { "path": "src/components/patrol/RunToolCallTrace.tsx" },
-        { "path": "src/components/patrol/PatrolStatusBar.tsx" },
         { "path": "src/features/proxmox/proxmoxBackupsTableShared.tsx" },
         { "path": "src/features/patrol/PatrolIntelligenceWorkspace.tsx" }
       ],
@@ -1952,10 +1927,6 @@
             "px-1.5 py-0.5 rounded text-[10px] font-medium",
             "getToolCallResultBadgeClass"
           ]
-        },
-        {
-          "path": "src/components/patrol/PatrolStatusBar.tsx",
-          "patterns": ["text-blue-600 dark:text-blue-400\">Findings snapshot unavailable"]
         },
         {
           "path": "src/features/proxmox/proxmoxBackupsTableShared.tsx",

@@ -470,22 +470,24 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
                 />
               </div>
               <div class="mt-3 flex items-center justify-between border-t border-border-subtle pt-3 text-xs">
-                <span class="text-muted">MCP Connection</span>
+                <span class="text-muted">Assistant runtime</span>
                 <div class="flex items-center gap-1.5">
                   <Show
-                    when={props.diagnosticsData?.aiChat?.mcpConnected}
+                    when={props.diagnosticsData?.aiChat?.assistantRuntimeConnected}
                     fallback={<XCircle class="h-3.5 w-3.5 text-rose-400" />}
                   >
                     <CheckCircle class="h-3.5 w-3.5 text-emerald-400" />
                   </Show>
                   <span
                     class={
-                      props.diagnosticsData?.aiChat?.mcpConnected
+                      props.diagnosticsData?.aiChat?.assistantRuntimeConnected
                         ? 'text-green-700 dark:text-green-300'
                         : 'text-slate-500'
                     }
                   >
-                    {props.diagnosticsData?.aiChat?.mcpConnected ? 'Connected' : 'Disconnected'}
+                    {props.diagnosticsData?.aiChat?.assistantRuntimeConnected
+                      ? 'Connected'
+                      : 'Disconnected'}
                   </span>
                 </div>
               </div>

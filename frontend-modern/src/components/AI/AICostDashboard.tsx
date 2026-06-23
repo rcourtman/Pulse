@@ -26,6 +26,7 @@ import {
   AI_COST_PANEL_TITLE,
   AI_COST_PATROL_USE_CASE_LABEL,
   AI_COST_PROVIDER_MODEL_PAIR_LABEL,
+  AI_COST_TARGET_TABLE_LABEL,
   AI_COST_RESET_HISTORY_LABEL,
   buildAICostExportFilename,
   getAICostBudgetNote,
@@ -36,6 +37,7 @@ import {
   getAICostResetHistoryConfirmationMessage,
   getAICostResetHistoryErrorMessage,
   getAICostResetHistorySuccessMessage,
+  getAICostTargetPresentation,
 } from '@/utils/aiCostPresentation';
 
 const usdFormatter = new Intl.NumberFormat(undefined, {
@@ -548,7 +550,9 @@ export const AICostDashboard: Component = () => {
                 <Table class="min-w-full text-sm">
                   <TableHeader class="text-xs text-muted uppercase tracking-wide">
                     <TableRow class="border-b border-border">
-                      <TableHead class="text-left py-2 pr-4">Top targets</TableHead>
+                      <TableHead class="text-left py-2 pr-4">
+                        {AI_COST_TARGET_TABLE_LABEL}
+                      </TableHead>
                       <TableHead class="text-right py-2 px-2">Est. USD</TableHead>
                       <TableHead class="text-right py-2 px-2">Calls</TableHead>
                       <TableHead class="text-right py-2 px-2">Tokens</TableHead>
@@ -556,27 +560,37 @@ export const AICostDashboard: Component = () => {
                   </TableHeader>
                   <TableBody>
                     <For each={data().targets}>
-                      {(t) => (
-                        <TableRow class="border-b border-border-subtle">
-                          <TableCell class="py-2 pr-4 text-base-content font-mono text-xs">
-                            {t.target_type}:{t.target_id}
-                          </TableCell>
-                          <TableCell class="py-2 px-2 text-right text-base-content">
-                            <Show
-                              when={t.pricing_known}
-                              fallback={<span class="text-muted" aria-hidden="true">—</span>}
-                            >
-                              {formatUSD(t.estimated_usd ?? 0)}
-                            </Show>
-                          </TableCell>
-                          <TableCell class="py-2 px-2 text-right text-base-content">
-                            {formatNumber(t.calls)}
-                          </TableCell>
-                          <TableCell class="py-2 px-2 text-right text-base-content">
-                            {formatNumber(t.total_tokens)}
-                          </TableCell>
-                        </TableRow>
-                      )}
+                      {(t) => {
+                        const target = getAICostTargetPresentation(t);
+                        return (
+                          <TableRow class="border-b border-border-subtle">
+                            <TableCell class="py-2 pr-4 text-base-content">
+                              <span class="font-medium">{target.label}</span>
+                              <Show when={target.detail}>
+                                <span class="block text-xs text-muted">{target.detail}</span>
+                              </Show>
+                            </TableCell>
+                            <TableCell class="py-2 px-2 text-right text-base-content">
+                              <Show
+                                when={t.pricing_known}
+                                fallback={
+                                  <span class="text-muted" aria-hidden="true">
+                                    —
+                                  </span>
+                                }
+                              >
+                                {formatUSD(t.estimated_usd ?? 0)}
+                              </Show>
+                            </TableCell>
+                            <TableCell class="py-2 px-2 text-right text-base-content">
+                              {formatNumber(t.calls)}
+                            </TableCell>
+                            <TableCell class="py-2 px-2 text-right text-base-content">
+                              {formatNumber(t.total_tokens)}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      }}
                     </For>
                   </TableBody>
                 </Table>

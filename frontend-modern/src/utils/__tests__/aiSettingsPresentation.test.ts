@@ -25,27 +25,27 @@ import {
 } from '@/utils/aiSettingsPresentation';
 
 describe('aiSettingsPresentation', () => {
-  it('returns the canonical assistant and patrol shell framing copy', () => {
-    expect(AI_SETTINGS_PANEL_TITLE).toBe('Assistant & Patrol');
+  it('returns the canonical provider and models shell framing copy', () => {
+    expect(AI_SETTINGS_PANEL_TITLE).toBe('Provider & Models');
     expect(AI_SETTINGS_PANEL_DESCRIPTION).toBe(
-      'Configure providers and models for Pulse Assistant and Patrol.',
+      'Configure providers, default models, provider health, budget, and usage for Pulse Intelligence.',
     );
     expect(AI_SETTINGS_MODEL_OVERRIDES_TITLE).toBe('Model Overrides');
     expect(AI_SETTINGS_ASSISTANT_SESSIONS_TITLE).toBe('Pulse Assistant Sessions');
-    expect(AI_SETTINGS_ASSISTANT_PERMISSIONS_TITLE).toBe('Pulse Assistant Permissions');
+    expect(AI_SETTINGS_ASSISTANT_PERMISSIONS_TITLE).toBe('Assistant chat actions');
     expect(getAISettingsWorkloadDiscoveryHelpContent()).toEqual({
-      title: 'What is workload discovery?',
+      title: 'What is service context?',
       description:
-        'Workload discovery scans your VMs, containers, and container runtimes to identify running services, versions, and access details. Pulse stores that context so Assistant can use it in chat and Patrol can use it during verification.',
+        'Service context scans your VMs, containers, and container runtimes to identify running services, versions, and access details. Pulse stores those facts so Assistant can use them in chat and Patrol can use them during verification.',
     });
     expect(getAISettingsWorkloadDiscoverySummary()).toEqual({
-      text: 'Workload discovery stores concrete service context for Assistant chat and Patrol verification, so responses and findings can reference real services and commands instead of generic advice.',
+      text: 'Service context records service names, versions, and commands so Assistant and Patrol can use real context instead of generic advice.',
     });
     expect(getAISettingsSetupDialogPresentation()).toEqual({
-      ariaLabel: 'Set up Assistant and Patrol',
-      title: 'Set Up Assistant & Patrol',
-      description: 'Connect a provider to power Pulse Assistant and Patrol.',
-      submitLabel: 'Enable Assistant & Patrol',
+      ariaLabel: 'Set up Pulse Intelligence',
+      title: 'Set Up Pulse Intelligence',
+      description: 'Connect a provider to power Patrol, Assistant, and service context.',
+      submitLabel: 'Enable Pulse Intelligence',
     });
   });
 
@@ -93,15 +93,18 @@ describe('aiSettingsPresentation', () => {
       'Unable to complete authentication with Claude.',
     );
     expect(getAIOAuthErrorMessage('save_failed')).toBe('Unable to save OAuth credentials.');
+    expect(getAIOAuthErrorMessage('unsupported')).toBe(
+      'Anthropic subscription OAuth is not supported. Configure an Anthropic API key instead.',
+    );
     expect(getAIOAuthErrorMessage('other')).toBe('Authentication error: other');
   });
 
   it('returns canonical ai settings loading and chat-session copy', () => {
     expect(getAISettingsLoadingState()).toEqual({
-      text: 'Loading Assistant & Patrol settings...',
+      text: 'Loading Provider & Models settings...',
     });
     expect(getAISettingsLoadErrorMessage()).toBe(
-      'Unable to load Assistant & Patrol settings. Your configuration could not be retrieved.',
+      'Unable to load Provider & Models settings. Your configuration could not be retrieved.',
     );
     expect(getAISettingsRetryLabel()).toBe('Retry');
     expect(getAIChatSessionsLoadingState()).toEqual({
@@ -119,11 +122,14 @@ describe('aiSettingsPresentation', () => {
   it('returns canonical ai settings operational failure copy', () => {
     expect(getAISessionSummarizeErrorMessage()).toBe('Unable to summarize the session.');
     expect(getAISessionSummarizeErrorMessage('provider offline')).toBe('provider offline');
-    expect(getAISettingsSaveErrorMessage()).toBe('Unable to save Assistant & Patrol settings.');
+    expect(getAISettingsSaveErrorMessage()).toBe('Unable to save Provider & Models settings.');
+    expect(getAISettingsSaveErrorMessage(undefined, 'Unable to save Patrol settings.')).toBe(
+      'Unable to save Patrol settings.',
+    );
     expect(getAISettingsSaveErrorMessage('bad request')).toBe('bad request');
     expect(getAICredentialsClearErrorMessage()).toBe('Unable to clear credentials.');
     expect(getAICredentialsClearErrorMessage('permission denied')).toBe('permission denied');
-    expect(getAISettingsToggleErrorMessage()).toBe('Unable to update Assistant & Patrol settings.');
+    expect(getAISettingsToggleErrorMessage()).toBe('Unable to update Pulse Intelligence settings.');
     expect(getAISettingsToggleErrorMessage('rate limited')).toBe('rate limited');
   });
 });

@@ -177,6 +177,7 @@ const INVESTIGATION_OUTCOME_LABELS: Record<InvestigationOutcome, string> = {
   fix_queued: 'Fix queued',
   fix_executed: 'Fix applied',
   fix_failed: 'Fix failed',
+  fix_rejected: 'Fix rejected',
   needs_attention: 'Needs attention',
   cannot_fix: 'Cannot remediate',
   timed_out: 'Timed out',
@@ -194,6 +195,8 @@ const INVESTIGATION_OUTCOME_CLASSES: Record<InvestigationOutcome, string> = {
     'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900 dark:text-emerald-300',
   fix_failed:
     'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900 dark:text-red-300',
+  fix_rejected:
+    'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300',
   needs_attention:
     'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-300',
   cannot_fix: 'border-border bg-surface-alt text-muted',
@@ -211,6 +214,7 @@ const INVESTIGATION_OUTCOME_TONES: Record<InvestigationOutcome, MetadataBadgeTon
   fix_queued: 'info',
   fix_executed: 'success',
   fix_failed: 'danger',
+  fix_rejected: 'warning',
   needs_attention: 'warning',
   cannot_fix: 'muted',
   timed_out: 'neutral',
@@ -237,6 +241,7 @@ const INVESTIGATION_OUTCOME_SORT_ORDER: Record<string, number> = {
   fix_verification_failed: 0,
   fix_failed: 0,
   fix_verification_unknown: 1,
+  fix_rejected: 1,
   timed_out: 1,
   needs_attention: 1,
   cannot_fix: 1,
@@ -291,6 +296,15 @@ export interface PatrolFindingsBadgePresentation {
   tone: 'danger' | 'warning' | 'info' | 'muted';
 }
 
+export interface PatrolFindingDisplayGroup<TFinding> {
+  id: string;
+  resourceKey: string;
+  resourceLabel: string;
+  primaryFinding: TFinding;
+  relatedFindings: TFinding[];
+  findings: TFinding[];
+}
+
 export interface FindingSeverityPresentation {
   label: string;
   badgeClasses: string;
@@ -301,6 +315,21 @@ export interface FindingSeverityPresentation {
 export interface FindingCompactBadgePresentation {
   label: string;
   badgeClasses: string;
+}
+
+export type FindingPatrolWorkflowStage =
+  | 'investigating'
+  | 'approval'
+  | 'verification'
+  | 'attention'
+  | 'recorded'
+  | 'paused';
+
+export interface FindingPatrolWorkflowPresentation {
+  stage: FindingPatrolWorkflowStage;
+  label: string;
+  detail: string;
+  tone: MetadataBadgeTone;
 }
 
 export const getFindingSourceLabel = (source: UnifiedFinding['source'] | string): string =>
@@ -480,6 +509,64 @@ export const getFindingSubjectPresentation = (
   };
 };
 
+export const getPatrolFindingResourceGroupKey = (
+  finding: Pick<UnifiedFinding, 'id' | 'resourceId' | 'resourceName' | 'resourceType' | 'title'>,
+): string => {
+  const resourceName = String(finding.resourceName || '').trim();
+  const resourceType = String(finding.resourceType || '').trim();
+  if (resourceName || resourceType) {
+    return `subject:${getFindingSubjectPresentation(finding).label.toLowerCase()}`;
+  }
+
+  const resourceId = String(finding.resourceId || '').trim();
+  if (resourceId) {
+    return `id:${resourceId}`;
+  }
+
+  return `finding:${finding.id}`;
+};
+
+export function buildPatrolFindingDisplayGroups<
+  TFinding extends Pick<
+    UnifiedFinding,
+    'id' | 'resourceId' | 'resourceName' | 'resourceType' | 'title'
+  >,
+>(findings: readonly TFinding[]): PatrolFindingDisplayGroup<TFinding>[] {
+  const groups: PatrolFindingDisplayGroup<TFinding>[] = [];
+  const groupsByResourceKey = new Map<string, PatrolFindingDisplayGroup<TFinding>>();
+
+  for (const finding of findings) {
+    const resourceKey = getPatrolFindingResourceGroupKey(finding);
+    const existing = groupsByResourceKey.get(resourceKey);
+    if (existing) {
+      existing.findings.push(finding);
+      existing.relatedFindings.push(finding);
+      continue;
+    }
+
+    const group: PatrolFindingDisplayGroup<TFinding> = {
+      id: resourceKey,
+      resourceKey,
+      resourceLabel: getFindingSubjectPresentation(finding).label,
+      primaryFinding: finding,
+      relatedFindings: [],
+      findings: [finding],
+    };
+    groupsByResourceKey.set(resourceKey, group);
+    groups.push(group);
+  }
+
+  return groups;
+}
+
+export const getPatrolFindingIssueCountLabel = (count: number): string => {
+  const normalized = Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : 0;
+  if (normalized === 1) {
+    return '1 issue';
+  }
+  return `${normalized} issues`;
+};
+
 export const getFindingTitlePresentation = (
   finding: Pick<UnifiedFinding, 'resourceId' | 'resourceName' | 'title'>,
 ): FindingTitlePresentation => {
@@ -649,6 +736,7 @@ const ATTENTION_OUTCOMES = new Set([
   'fix_verification_failed',
   'fix_verification_unknown',
   'fix_failed',
+  'fix_rejected',
   'timed_out',
   'needs_attention',
   'cannot_fix',
@@ -686,6 +774,142 @@ export const doesFindingNeedAttention = (
     finding.investigationOutcome === 'fix_queued' &&
     !hasPendingInvestigationFixApproval(finding.id, approvals)
   );
+};
+
+export const getFindingPatrolWorkflowPresentation = (
+  finding: Pick<
+    UnifiedFinding,
+    | 'id'
+    | 'source'
+    | 'status'
+    | 'resourceId'
+    | 'resourceName'
+    | 'title'
+    | 'investigationStatus'
+    | 'investigationOutcome'
+    | 'loopState'
+  >,
+  approvals: Pick<ApprovalRequest, 'status' | 'toolId' | 'targetId' | 'expiresAt'>[] = [],
+  now = Date.now(),
+): FindingPatrolWorkflowPresentation | undefined => {
+  if (finding.source !== 'ai-patrol') {
+    return undefined;
+  }
+
+  if (finding.status === 'resolved') {
+    return {
+      stage: 'recorded',
+      label: 'Outcome recorded',
+      detail: 'Patrol has a verified or cleared outcome for this finding.',
+      tone: 'success',
+    };
+  }
+
+  if (finding.status === 'snoozed') {
+    return {
+      stage: 'paused',
+      label: 'Paused until reminder',
+      detail: 'Patrol will surface this again when the snooze expires.',
+      tone: 'info',
+    };
+  }
+
+  if (finding.status !== 'active') {
+    return undefined;
+  }
+
+  if (isPatrolRuntimeFinding(finding)) {
+    return {
+      stage: 'attention',
+      label: 'Fix Patrol setup',
+      detail: 'Patrol needs runtime or provider setup before it can check infrastructure reliably.',
+      tone: 'info',
+    };
+  }
+
+  const hasLiveApproval = hasPendingInvestigationFixApproval(finding.id, approvals, now);
+  if (hasLiveApproval) {
+    return {
+      stage: 'approval',
+      label: 'Approve or reject',
+      detail: 'A governed fix is waiting for an approve or reject decision.',
+      tone: 'warning',
+    };
+  }
+
+  if (
+    finding.investigationStatus === 'running' ||
+    finding.investigationStatus === 'pending' ||
+    finding.loopState === 'investigating'
+  ) {
+    return {
+      stage: 'investigating',
+      label: 'Patrol investigating',
+      detail: 'Patrol is gathering context before asking for a decision.',
+      tone: 'indigo',
+    };
+  }
+
+  switch (finding.investigationOutcome) {
+    case 'resolved':
+    case 'fix_verified':
+      return {
+        stage: 'recorded',
+        label: 'Outcome recorded',
+        detail: 'Patrol verified or cleared this finding.',
+        tone: 'success',
+      };
+    case 'fix_queued':
+      return {
+        stage: 'approval',
+        label: 'Review fix',
+        detail:
+          'A fix was queued, but no live approval is available. Expand the finding to recover it.',
+        tone: 'warning',
+      };
+    case 'fix_executed':
+      return {
+        stage: 'verification',
+        label: 'Verify outcome',
+        detail: 'Patrol executed a governed fix and is waiting for verification.',
+        tone: 'info',
+      };
+    case 'fix_failed':
+    case 'fix_verification_failed':
+      return {
+        stage: 'attention',
+        label: 'Fix failed',
+        detail:
+          'The governed action did not resolve the finding. Reopen context before trying another change.',
+        tone: 'danger',
+      };
+    case 'fix_rejected':
+      return {
+        stage: 'attention',
+        label: 'Decide follow-up',
+        detail:
+          'The last governed fix was rejected. Review the finding for another option or mark it resolved after manual work.',
+        tone: 'warning',
+      };
+    case 'fix_verification_unknown':
+      return {
+        stage: 'verification',
+        label: 'Check outcome',
+        detail: 'Patrol could not verify the fix. Inspect the resource or gather more evidence.',
+        tone: 'warning',
+      };
+    case 'needs_attention':
+    case 'cannot_fix':
+    case 'timed_out':
+      return {
+        stage: 'attention',
+        label: 'Needs input',
+        detail: 'Patrol needs operator context before continuing.',
+        tone: 'warning',
+      };
+    default:
+      return undefined;
+  }
 };
 
 export const getFindingLoopStateBadgeClasses = (loopState: string): string =>
@@ -750,6 +974,8 @@ export const getFindingResolutionReason = (
         return `Resolved by Patrol ${resolvedTime}`;
       case 'fix_failed':
         return `Resolved after fix failed ${resolvedTime}`;
+      case 'fix_rejected':
+        return `Resolved after rejected fix ${resolvedTime}`;
       case 'fix_queued':
         return `Resolved while fix was pending ${resolvedTime}`;
       case 'fix_verification_failed':

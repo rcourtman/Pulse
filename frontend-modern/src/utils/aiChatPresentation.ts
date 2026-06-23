@@ -1,3 +1,5 @@
+import { SETTINGS_PROVIDER_MODELS_PATH } from '@/components/Settings/settingsNavigationModel';
+
 export const AI_CHAT_DRAWER_TITLE = 'Pulse Assistant';
 export const AI_CHAT_DRAWER_SUBTITLE =
   'Observed context, provider-backed reasoning, and governed actions.';
@@ -40,11 +42,11 @@ export const AI_CHAT_TRANSCRIPT_FALLBACK_CLOSE_LABEL = 'Close Assistant transcri
 export const AI_CHAT_TRANSCRIPT_FALLBACK_DOWNLOAD_LABEL = 'Download Assistant transcript';
 export const AI_CHAT_TRANSCRIPT_FALLBACK_TEXTAREA_LABEL = 'Assistant transcript';
 export const AI_CHAT_TRANSCRIPT_FALLBACK_TITLE = 'Transcript ready';
-export const AI_CHAT_AUTONOMOUS_WARNING_DISMISS_LABEL = 'Dismiss autonomous control warning';
+export const AI_CHAT_AUTONOMOUS_WARNING_DISMISS_LABEL = 'Dismiss chat actions warning';
 export const AI_CHAT_DISCOVERY_HINT_DISMISS_LABEL = 'Dismiss discovery context warning';
-export const AI_CHAT_CONTROL_MODE_LABEL = 'Assistant control mode';
-export const AI_CHAT_CONTROL_MODE_MENU_LABEL = 'Assistant control mode options';
-export const AI_CHAT_SWITCH_TO_APPROVAL_LABEL = 'Switch Assistant control mode to Approval';
+export const AI_CHAT_CONTROL_MODE_LABEL = 'Assistant chat action mode';
+export const AI_CHAT_CONTROL_MODE_MENU_LABEL = 'Assistant chat action options';
+export const AI_CHAT_SWITCH_TO_APPROVAL_LABEL = 'Switch Assistant chat actions to Ask first';
 export const AI_CHAT_COMMAND_HELP_TITLE = 'Assistant commands';
 export const AI_CHAT_COMMAND_HELP_BUTTON_LABEL = 'Open Assistant commands';
 export const AI_CHAT_COMMAND_HELP_CLOSE_LABEL = 'Close Assistant commands';
@@ -59,7 +61,7 @@ export const AI_CHAT_SESSION_SEARCH_EMPTY_STATE = 'No sessions match your search
 export const AI_CHAT_SESSION_SEARCH_LOADING_STATE = 'Searching assistant sessions...';
 export const AI_CHAT_SESSION_SEARCH_ERROR_STATE = 'Failed to search assistant sessions';
 export const AI_CHAT_MODEL_SELECTOR_EMPTY_STATE = 'No matching models.';
-export const AI_CHAT_DISCOVERY_HINT_TITLE = 'Workload Discovery is off.';
+export const AI_CHAT_DISCOVERY_HINT_TITLE = 'Discovery is off.';
 export const AI_CHAT_DISCOVERY_HINT_BODY =
   'Enable it in Settings so Pulse Assistant can reference real services, versions, and commands instead of generic guidance.';
 export const AI_CHAT_INPUT_PLACEHOLDER = 'Ask about your infrastructure...';
@@ -68,7 +70,7 @@ export const AI_CHAT_QUESTION_CARD_PLACEHOLDER = 'Type your answer...';
 export const AI_CHAT_ASSISTANT_MESSAGE_LABEL = 'Pulse Assistant';
 export const AI_CHAT_CONTEXT_USED_LABEL = 'Context used';
 export const AI_CHAT_LAST_TURN_SUMMARY_LABEL = 'Last assistant turn summary';
-export const AI_CHAT_PROVIDER_READINESS_SETTINGS_HREF = '/settings/system-ai';
+export const AI_CHAT_PROVIDER_READINESS_SETTINGS_HREF = SETTINGS_PROVIDER_MODELS_PATH;
 export const AI_CHAT_PROVIDER_READINESS_SETTINGS_LABEL = 'Open settings';
 export const AI_CHAT_PROVIDER_READINESS_RETRY_LABEL = 'Retry';
 

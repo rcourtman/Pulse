@@ -18,6 +18,7 @@ interface ResourceChangeSummaryProps {
   resolveResourceLabel?: (resourceId: string) => string | null | undefined;
   maxChanges?: number;
   compact?: boolean;
+  showMetadataBadges?: boolean;
   class?: string;
 }
 
@@ -34,6 +35,7 @@ export const ResourceChangeSummary: Component<ResourceChangeSummaryProps> = (pro
   const headlineText = () => (compact() ? 'text-[11px]' : 'text-sm');
   const badgeText = () => (compact() ? 'text-[10px]' : 'text-[11px]');
   const gapSize = () => (compact() ? 'gap-2' : 'gap-3');
+  const showMetadataBadges = () => props.showMetadataBadges ?? true;
 
   const renderRelatedResource = (resourceId: string) => {
     const label = resolveResourceLabel?.(resourceId)?.trim() || resourceId;
@@ -77,6 +79,8 @@ export const ResourceChangeSummary: Component<ResourceChangeSummaryProps> = (pro
           <For each={visibleChanges()}>
             {(change) => {
               const headline = formatResourceChangeHeadline(change);
+              const reason = change.reason?.trim() ?? '';
+              const shouldShowReason = reason.length > 0 && reason !== headline;
               const resourceHref = buildResourceHref(change.resourceId);
               const relatedResources = (change.relatedResources ?? []).slice(0, 3);
               const kindPresentation = getResourceChangeKindPresentation(change.kind);
@@ -91,9 +95,7 @@ export const ResourceChangeSummary: Component<ResourceChangeSummaryProps> = (pro
                 <li class={`rounded-md border border-border-subtle bg-base ${itemPadding()}`}>
                   <div class={`flex flex-wrap items-start justify-between ${gapSize()}`}>
                     <div class="min-w-0">
-                      <p class={headlineText()}>
-                        {headline}
-                      </p>
+                      <p class={headlineText()}>{headline}</p>
                       <p class={`mt-1 ${itemText()} text-muted`}>
                         {resourceHref ? (
                           <a
@@ -115,40 +117,44 @@ export const ResourceChangeSummary: Component<ResourceChangeSummaryProps> = (pro
                       <Show when={change.actor}>
                         <p class={`mt-1 ${itemText()} text-muted`}>By {change.actor}</p>
                       </Show>
-                      <Show when={change.reason}>
-                        <p class={`mt-1 ${itemText()} text-muted`}>{change.reason}</p>
+                      <Show when={shouldShowReason}>
+                        <p class={`mt-1 ${itemText()} text-muted`}>{reason}</p>
                       </Show>
                     </div>
 
-                    <div class="flex flex-wrap items-center gap-1.5">
-                      <span
-                        class={`rounded-full border px-2 py-0.5 ${badgeText()} font-medium ${
-                          kindPresentation.className
-                        }`}
-                      >
-                        {kindPresentation.label}
-                      </span>
-                      <span
-                        class={`rounded-full border px-2 py-0.5 ${badgeText()} font-medium ${
-                          sourceTypePresentation.className
-                        }`}
-                      >
-                        {sourceTypePresentation.label}
-                      </span>
-                      <Show when={sourceAdapterPresentation}>
+                    <Show when={showMetadataBadges()}>
+                      <div class="flex flex-wrap items-center gap-1.5">
                         <span
                           class={`rounded-full border px-2 py-0.5 ${badgeText()} font-medium ${
-                            sourceAdapterPresentation!.className
+                            kindPresentation.className
                           }`}
                         >
-                          {sourceAdapterPresentation!.label}
+                          {kindPresentation.label}
                         </span>
-                      </Show>
-                    </div>
+                        <span
+                          class={`rounded-full border px-2 py-0.5 ${badgeText()} font-medium ${
+                            sourceTypePresentation.className
+                          }`}
+                        >
+                          {sourceTypePresentation.label}
+                        </span>
+                        <Show when={sourceAdapterPresentation}>
+                          <span
+                            class={`rounded-full border px-2 py-0.5 ${badgeText()} font-medium ${
+                              sourceAdapterPresentation!.className
+                            }`}
+                          >
+                            {sourceAdapterPresentation!.label}
+                          </span>
+                        </Show>
+                      </div>
+                    </Show>
                   </div>
 
                   <Show when={(change.relatedResources ?? []).length > 0}>
-                    <div class={`mt-2 flex flex-wrap items-center gap-1.5 ${itemText()} text-muted`}>
+                    <div
+                      class={`mt-2 flex flex-wrap items-center gap-1.5 ${itemText()} text-muted`}
+                    >
                       <span>Related:</span>
                       <For each={relatedResources}>{renderRelatedResource}</For>
                     </div>

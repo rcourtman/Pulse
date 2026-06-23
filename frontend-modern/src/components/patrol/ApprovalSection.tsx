@@ -7,7 +7,8 @@
 
 import CheckIcon from 'lucide-solid/icons/check';
 import MessageSquareIcon from 'lucide-solid/icons/message-square';
-import { Component, Show, createSignal, createResource, createMemo } from 'solid-js';
+import XIcon from 'lucide-solid/icons/x';
+import { Component, For, Show, createSignal, createResource, createMemo } from 'solid-js';
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import { notificationStore } from '@/stores/notifications';
 import { aiChatStore } from '@/stores/aiChat';
@@ -112,6 +113,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
     'fix_queued',
     'fix_executed',
     'fix_failed',
+    'fix_rejected',
     'fix_verified',
     'fix_verification_failed',
     'fix_verification_unknown',
@@ -164,6 +166,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
       props.investigationOutcome === 'fix_verification_failed' ||
       (executionResult() && !executionResult()!.success),
   );
+  const isRejected = createMemo(() => props.investigationOutcome === 'fix_rejected');
 
   // Show section only when there's something to display
   const shouldShow = createMemo(
@@ -173,6 +176,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
       isQueuedWithoutDetails() ||
       isExecuted() ||
       isFailed() ||
+      isRejected() ||
       executionResult(),
   );
 
@@ -203,9 +207,9 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
     setActionLoading(approval.id);
     try {
       await aiIntelligenceStore.denyInvestigationFix(approval.id);
-      notificationStore.success('Fix denied');
+      notificationStore.success('Fix rejected');
     } catch (err) {
-      notificationStore.error((err as Error).message || 'Failed to deny fix');
+      notificationStore.error((err as Error).message || 'Failed to reject fix');
     } finally {
       setActionLoading(null);
     }
@@ -234,6 +238,32 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
     }
   };
 
+  const renderTechnicalCommandDetails = (commands: readonly string[] | string | undefined) => {
+    const commandList = Array.isArray(commands)
+      ? commands.filter(Boolean)
+      : commands
+        ? [commands]
+        : [];
+    if (commandList.length === 0) {
+      return null;
+    }
+
+    return (
+      <details class="rounded border border-border bg-surface-alt px-2 py-1.5 text-xs">
+        <summary class="cursor-pointer font-medium text-muted">Technical details</summary>
+        <div class="mt-2 space-y-1">
+          <For each={commandList}>
+            {(command) => (
+              <code class="block break-all rounded bg-surface px-2 py-1 font-mono text-base-content">
+                {command}
+              </code>
+            )}
+          </For>
+        </div>
+      </details>
+    );
+  };
+
   const renderRecoveryActions = (assistantLabel: string, onAssistantClick: (e: Event) => void) => (
     <div class="flex items-center gap-2 mt-3 pt-3 border-t border-border-subtle">
       <Show when={canAutoFix()}>
@@ -251,7 +281,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
           <Show when={actionLoading() !== 'reapprove'}>
             <CheckIcon class="w-3.5 h-3.5" />
           </Show>
-          Re-approve & Execute
+          Re-approve fix
         </Button>
       </Show>
       <Show when={!canAutoFix()}>
@@ -300,9 +330,10 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                 </div>
                 <div class="space-y-2 text-sm">
                   <div class="text-muted">{approval.context}</div>
-                  <div class="bg-surface-alt rounded p-2 font-mono text-xs text-base-content break-all">
-                    {approval.command}
-                  </div>
+                  <Show when={approval.targetName}>
+                    <div class="text-xs text-muted">Target: {approval.targetName}</div>
+                  </Show>
+                  {renderTechnicalCommandDetails(approval.command)}
                 </div>
                 <div class="flex items-center gap-2 mt-3 pt-3 border-t border-border-subtle">
                   <Show when={canAutoFix()}>
@@ -320,7 +351,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                       <Show when={actionLoading() !== approval.id}>
                         <CheckIcon class="w-3.5 h-3.5" />
                       </Show>
-                      Approve & Execute
+                      Approve fix
                     </Button>
                     <Button
                       type="button"
@@ -330,7 +361,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                       disabled={actionLoading() === approval.id}
                       class="text-muted"
                     >
-                      Deny
+                      Reject
                     </Button>
                   </Show>
                   <Show when={!canAutoFix()}>
@@ -382,14 +413,10 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                 </div>
                 <div class="space-y-2 text-sm">
                   <div class="text-muted">{fix.description}</div>
-                  <Show when={fix.commands && fix.commands.length > 0}>
-                    <div class="bg-surface-alt rounded p-2 font-mono text-xs text-base-content break-all">
-                      {fix.commands![0]}
-                    </div>
-                  </Show>
                   <Show when={fix.target_host}>
                     <div class="text-xs text-muted">Target: {fix.target_host}</div>
                   </Show>
+                  {renderTechnicalCommandDetails(fix.commands)}
                 </div>
                 {renderRecoveryActions('Fix with Assistant', (e) =>
                   handleFixWithAssistant(null, fix, e),
@@ -465,20 +492,35 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
             {(fix) => (
               <div class="mt-2 space-y-1 text-sm">
                 <div class="text-muted">{fix().description}</div>
-                <Show when={fix().commands && fix().commands!.length > 0}>
-                  <div class="bg-surface-alt rounded p-2 font-mono text-xs text-base-content break-all">
-                    {fix().commands![0]}
-                  </div>
-                </Show>
                 <Show when={fix().target_host}>
                   <div class="text-xs text-muted">Target: {fix().target_host}</div>
                 </Show>
                 <Show when={fix().rationale}>
                   <div class="text-xs text-muted whitespace-pre-line mt-1">{fix().rationale}</div>
                 </Show>
+                {renderTechnicalCommandDetails(fix().commands)}
               </div>
             )}
           </Show>
+        </Show>
+
+        {/* Rejected by operator */}
+        <Show when={isRejected() && !executionResult()}>
+          <div class="flex items-center gap-2 text-amber-700 dark:text-amber-300">
+            <XIcon class="w-4 h-4" />
+            <span class="text-sm font-medium">Fix rejected before execution</span>
+          </div>
+          <Show when={investigation()?.proposed_fix}>
+            {(fix) => (
+              <div class="mt-2 space-y-1 text-sm">
+                <div class="text-muted">{fix().description}</div>
+                <Show when={fix().target_host}>
+                  <div class="text-xs text-muted">Target: {fix().target_host}</div>
+                </Show>
+              </div>
+            )}
+          </Show>
+          {renderRecoveryActions('Discuss with Assistant', handleDiscussQueuedFix)}
         </Show>
 
         {/* Failed (from backend state, no local result) */}
@@ -502,17 +544,13 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
             {(fix) => (
               <div class="mt-2 space-y-1 text-sm">
                 <div class="text-muted">{fix().description}</div>
-                <Show when={fix().commands && fix().commands!.length > 0}>
-                  <div class="bg-surface-alt rounded p-2 font-mono text-xs text-base-content break-all">
-                    {fix().commands![0]}
-                  </div>
-                </Show>
                 <Show when={fix().target_host}>
                   <div class="text-xs text-muted">Target: {fix().target_host}</div>
                 </Show>
                 <Show when={fix().rationale}>
                   <div class="text-xs text-muted whitespace-pre-line mt-1">{fix().rationale}</div>
                 </Show>
+                {renderTechnicalCommandDetails(fix().commands)}
               </div>
             )}
           </Show>

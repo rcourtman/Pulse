@@ -8,13 +8,17 @@ import {
   licenseEntitlementsLoadError,
   loadLicenseEntitlements,
 } from '@/stores/licenseEntitlements';
+import {
+  fetchAgentOperationsLoopStatus,
+  type AgentOperationsLoopStatus,
+} from '@/api/agentCapabilities';
 import { LicenseAPI } from '@/api/license';
 import {
   formatLicensePlanVersion,
   getSelfHostedActivationSuccessPresentation,
   getCommercialMigrationNotice,
   getGrandfatheredPriceContinuityNotice,
-  getSelfHostedActivationProofPresentation,
+  getSelfHostedPlanStatusPresentation,
   getSelfHostedPlanComparisonPresentation,
   getSelfHostedCurrentPlanPresentation,
   getLicenseFeatureLabel,
@@ -84,11 +88,34 @@ export function useProLicensePanelState() {
   const [activationSuccessSource, setActivationSuccessSource] = createSignal<
     'manual' | 'purchase' | null
   >(null);
+  const [agentOperationsStatus, setAgentOperationsStatus] =
+    createSignal<AgentOperationsLoopStatus | null>(null);
 
   const entitlements = createMemo(() => licenseEntitlements());
   const subscriptionState = createMemo(() => entitlements()?.subscription_state);
   const trialExpiryUnix = createMemo(() => entitlements()?.trial_expires_at);
   const trialDaysRemaining = createMemo(() => entitlements()?.trial_days_remaining);
+  const selfHostedPlanDefinition = createMemo(() =>
+    getSelfHostedPlanDefinitionForBillingTier(entitlements()?.tier),
+  );
+
+  const loadPatrolOperatorStatus = async () => {
+    try {
+      setAgentOperationsStatus(await fetchAgentOperationsLoopStatus());
+    } catch {
+      setAgentOperationsStatus(null);
+    }
+  };
+
+  const shouldLoadPatrolOperatorStatus = () => selfHostedPlanDefinition()?.tier === 'pro';
+
+  const loadPatrolOperatorStatusIfNeeded = async () => {
+    if (!shouldLoadPatrolOperatorStatus()) {
+      setAgentOperationsStatus(null);
+      return;
+    }
+    await loadPatrolOperatorStatus();
+  };
 
   const loadPanelData = async () => {
     setLoading(true);
@@ -125,18 +152,16 @@ export function useProLicensePanelState() {
     }
     if (purchaseResult) {
       const nextSearch = params.toString();
-      const nextPath = `${location.pathname}${nextSearch ? `?${nextSearch}` : ''}${location.hash ?? ''}`;
+      const nextPath = `${SELF_HOSTED_PRO_BILLING_PLAN_ROUTE}${nextSearch ? `?${nextSearch}` : ''}${location.hash ?? ''}`;
       navigate(nextPath, { replace: true, scroll: false });
     }
-    void loadPanelData();
+    void loadPanelData().then(() => {
+      void loadPatrolOperatorStatusIfNeeded();
+    });
   });
 
   const requestedSection = createMemo<SelfHostedBillingSection>(() =>
     resolveSelfHostedBillingSection(location.pathname, location.search, location.hash),
-  );
-
-  const selfHostedPlanDefinition = createMemo(() =>
-    getSelfHostedPlanDefinitionForBillingTier(entitlements()?.tier),
   );
 
   const activeSection = createMemo<SelfHostedBillingSection>(() => {
@@ -257,10 +282,34 @@ export function useProLicensePanelState() {
     }
     return getPurchaseActivationNotice(purchaseActivationResult());
   });
+  const patrolOperatorStatus = createMemo(() => {
+    const status = agentOperationsStatus();
+    if (!status) {
+      return null;
+    }
+    return {
+      nextAction: status.nextAction,
+      progressLabel: status.progressLabel,
+      patrolControlOperationsLoopStarterCount: status.patrolControlOperationsLoopStarterCount,
+      patrolControlCompletedOperationsLoopCount: status.patrolControlCompletedOperationsLoopCount,
+      patrolControlResolvedOperationsLoopCount: status.patrolControlResolvedOperationsLoopCount,
+      patrolControlValueState: status.patrolControlValueState,
+      patrolAutonomyOperationsLoopStarterCount: status.patrolAutonomyOperationsLoopStarterCount,
+      patrolAutonomyCompletedOperationsLoopCount: status.patrolAutonomyCompletedOperationsLoopCount,
+      patrolAutonomyResolvedOperationsLoopCount: status.patrolAutonomyResolvedOperationsLoopCount,
+      patrolAutonomyValueState: status.patrolAutonomyValueState,
+      proActivationOperationsLoopStarterCount: status.proActivationOperationsLoopStarterCount,
+      proActivationCompletedOperationsLoopCount: status.proActivationCompletedOperationsLoopCount,
+      proActivationResolvedOperationsLoopCount: status.proActivationResolvedOperationsLoopCount,
+      proActivationValueProofState: status.proActivationValueProofState,
+      externalAgentReady: status.externalAgentReady,
+    };
+  });
   const activationSuccessSummary = createMemo(() =>
     getSelfHostedActivationSuccessPresentation({
       entitlements: entitlements(),
       displayableCapabilities: formattedFeatures(),
+      patrolOperatorStatus: patrolOperatorStatus(),
       source: activationSuccessSource(),
     }),
   );
@@ -336,6 +385,7 @@ export function useProLicensePanelState() {
     const summary = getSelfHostedCurrentPlanPresentation({
       entitlements: entitlements(),
       displayableCapabilities: formattedFeatures(),
+      patrolOperatorStatus: patrolOperatorStatus(),
     });
     return {
       ...summary,
@@ -343,7 +393,7 @@ export function useProLicensePanelState() {
       statusLabel: status.label,
     };
   });
-  const activationProof = createMemo(() => getSelfHostedActivationProofPresentation(entitlements()));
+  const planStatus = createMemo(() => getSelfHostedPlanStatusPresentation(entitlements()));
   const planComparisonSummary = createMemo(() => {
     if (!showPlanSelectionPrompt()) {
       return { cards: [], action: null };
@@ -368,7 +418,7 @@ export function useProLicensePanelState() {
   const handleActivate = async () => {
     const trimmedKey = licenseKey().trim();
     if (!trimmedKey) {
-      notificationStore.error('A license or activation key is required');
+      notificationStore.error('A license key is required');
       return;
     }
     setActivating(true);
@@ -386,6 +436,7 @@ export function useProLicensePanelState() {
         loadCommercialPosture(true),
         loadRuntimeCapabilities(true),
       ]);
+      await loadPatrolOperatorStatusIfNeeded();
     } catch (error) {
       notificationStore.error(
         error instanceof Error ? error.message : 'Failed to activate license',
@@ -409,6 +460,7 @@ export function useProLicensePanelState() {
         loadCommercialPosture(true),
         loadRuntimeCapabilities(true),
       ]);
+      await loadPatrolOperatorStatusIfNeeded();
     } catch (error) {
       notificationStore.error(error instanceof Error ? error.message : 'Failed to clear license');
     } finally {
@@ -421,7 +473,7 @@ export function useProLicensePanelState() {
     activating,
     clearing,
     activationSuccessSummary,
-    activationProof,
+    planStatus,
     commercialMigrationNotice,
     commercialPlanModel,
     currentPlanSummary,

@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { PRIVACY_DOC_URL } from '@/utils/docsLinks';
+import { EN_MESSAGES } from '@/i18n/messages';
 import {
   areSystemSettingsLoaded,
   markSystemSettingsLoadedWithDefaults,
@@ -58,6 +59,17 @@ describe('systemSettings store', () => {
     expect(PRIVACY_DOC_URL).toBe('/docs/PRIVACY.md');
   });
 
+  it('keeps the telemetry disclosure in user-facing product language', () => {
+    const telemetryDescription = EN_MESSAGES['settings.general.telemetry.description'];
+
+    expect(telemetryDescription).toContain(
+      'coarse Patrol, Assistant, and external-agent usage counters',
+    );
+    expect(telemetryDescription).not.toContain('Pulse Intelligence loop adoption');
+    expect(telemetryDescription).not.toContain('activation loop');
+    expect(telemetryDescription).not.toContain('operations loop');
+  });
+
   it('documents telemetry retention and field-level rationale in the privacy doc', () => {
     const privacyDoc = readFileSync(path.join(repoRoot, 'docs', 'PRIVACY.md'), 'utf8');
 
@@ -71,6 +83,13 @@ describe('systemSettings store', () => {
     expect(privacyDoc).toContain('rows older than **90 days** are purged automatically');
     expect(privacyDoc).toContain('uses client IP addresses transiently for abuse/rate limiting');
     expect(privacyDoc).toContain('Reset ID');
+    expect(privacyDoc).toContain('Pulse Intelligence Patrol mode decision 30d');
+    expect(privacyDoc).toContain('Pulse Intelligence paid Patrol mode resolved issue 30d');
+    expect(privacyDoc).not.toContain('operations loop');
+    expect(privacyDoc).not.toContain('Pro activation');
+    expect(privacyDoc).not.toContain('completed-work proof');
+    expect(privacyDoc).not.toContain('resolved-work proof');
+    expect(privacyDoc).not.toContain('governed-operation proof');
   });
 
   it('keeps internal commercial compatibility switches out of public configuration docs', () => {

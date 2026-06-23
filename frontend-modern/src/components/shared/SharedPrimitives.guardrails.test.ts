@@ -278,7 +278,6 @@ import resourcePickerSource from '@/components/Settings/ResourcePicker.tsx?raw';
 import settingsPageShellSource from '@/components/Settings/SettingsPageShell.tsx?raw';
 import loginSource from '@/components/Login.tsx?raw';
 import patrolIntelligenceHeaderSource from '@/features/patrol/PatrolIntelligenceHeader.tsx?raw';
-import patrolIntelligenceSummarySource from '@/features/patrol/PatrolIntelligenceSummary.tsx?raw';
 import patrolIntelligenceWorkspaceSource from '@/features/patrol/PatrolIntelligenceWorkspace.tsx?raw';
 import approvalBannerSource from '@/components/patrol/ApprovalBanner.tsx?raw';
 import approvalSectionSource from '@/components/patrol/ApprovalSection.tsx?raw';
@@ -287,7 +286,6 @@ import investigationSectionSource from '@/components/patrol/InvestigationSection
 import runHistoryPanelSource from '@/components/patrol/RunHistoryPanel.tsx?raw';
 import runHistoryEntrySource from '@/components/patrol/RunHistoryEntry.tsx?raw';
 import runToolCallTraceSource from '@/components/patrol/RunToolCallTrace.tsx?raw';
-import patrolStatusBarSource from '@/components/patrol/PatrolStatusBar.tsx?raw';
 import filterBarSource from '@/components/shared/FilterBar/FilterBar.tsx?raw';
 import filterChipSource from '@/components/shared/FilterBar/FilterChip.tsx?raw';
 import featureGateSectionSource from '@/components/shared/FeatureGateSection.tsx?raw';
@@ -493,8 +491,9 @@ describe('shared primitive guardrails', () => {
     expect(reportingPanelSource).not.toContain('getReportingToggleButtonClass');
     expect(reportingPanelSource).not.toContain('<For each={REPORTING_RANGE_OPTIONS}>');
     expect(patrolIntelligenceHeaderSource).toContain('FilterButtonGroup');
-    expect(patrolIntelligenceHeaderSource).toContain('variant="segmented"');
-    expect(patrolIntelligenceHeaderSource).toContain('selectedAutonomyLevel');
+    expect(patrolIntelligenceHeaderSource).toContain("variant={options.variant ?? 'segmented'}");
+    expect(patrolIntelligenceHeaderSource).not.toContain("variant: 'prominent'");
+    expect(patrolIntelligenceHeaderSource).toContain('selectedAutonomyPolicy');
     expect(patrolIntelligenceHeaderSource).not.toContain(
       'flex items-center bg-base rounded-md p-1 border shadow-inner',
     );
@@ -657,7 +656,6 @@ describe('shared primitive guardrails', () => {
       'src/features/alerts/AlertAppriseDestinationsSection.tsx',
       'src/features/alerts/AlertEscalationSection.tsx',
       'src/features/alerts/AlertQuietHoursSection.tsx',
-      'src/features/patrol/PatrolIntelligenceHeader.tsx',
     ]);
     expect(registeredGuard?.canonical?.path).toBe('src/components/shared/FormSelect.tsx');
     expect(registeredGuard?.canonical?.export).toBe('FormSelect');
@@ -1954,8 +1952,6 @@ describe('shared primitive guardrails', () => {
       'src/components/Settings/AgentProfilesPanel.tsx',
       'src/components/Settings/DiagnosticsResultsPanel.tsx',
       'src/components/patrol/RunHistoryEntry.tsx',
-      'src/components/patrol/PatrolStatusBar.tsx',
-      'src/features/patrol/PatrolIntelligenceSummary.tsx',
     ]);
     expect(registeredGuard?.canonical?.path).toBe('src/components/shared/StatusIndicatorBadge.tsx');
     expect(registeredGuard?.canonical?.export).toBe('StatusIndicatorBadge');
@@ -1977,16 +1973,7 @@ describe('shared primitive guardrails', () => {
     expect(diagnosticsResultsPanelSource).not.toContain('getStatusIndicatorBadgeToneClasses');
     expect(runHistoryEntrySource).toContain('StatusIndicatorBadge');
     expect(runHistoryEntrySource).not.toContain('runStatus.badgeClass');
-    expect(patrolStatusBarSource).toContain('StatusIndicatorBadge');
-    expect(patrolStatusBarSource).not.toContain('lastRunStatus.badgeClass');
-    expect(patrolStatusBarSource).not.toContain(
-      'rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700',
-    );
-    expect(patrolIntelligenceSummarySource).toContain('StatusIndicatorBadge');
-    expect(patrolIntelligenceSummarySource).not.toContain('runtimeShellPresentation().badgeClass');
-    expect(patrolIntelligenceSummarySource).not.toContain(
-      'inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]',
-    );
+    expect(patrolIntelligenceWorkspaceSource).not.toContain('runtimeShellPresentation()');
   });
 
   it('keeps platform alert severity indicators and filters on shared alert severity primitives', () => {
@@ -2410,7 +2397,6 @@ describe('shared primitive guardrails', () => {
       'src/components/patrol/InvestigationSection.tsx',
       'src/components/patrol/RunHistoryEntry.tsx',
       'src/components/patrol/RunToolCallTrace.tsx',
-      'src/components/patrol/PatrolStatusBar.tsx',
       'src/features/proxmox/proxmoxBackupsTableShared.tsx',
       'src/features/patrol/PatrolIntelligenceWorkspace.tsx',
     ]);
@@ -2510,10 +2496,6 @@ describe('shared primitive guardrails', () => {
     );
     expect(runHistoryEntrySource).not.toContain(
       'inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50',
-    );
-    expect(patrolStatusBarSource).toContain('MetadataBadge');
-    expect(patrolStatusBarSource).not.toContain(
-      'text-blue-600 dark:text-blue-400">Findings snapshot unavailable',
     );
     expect(patrolIntelligenceWorkspaceSource).toContain('MetadataBadge');
     expect(patrolIntelligenceWorkspaceSource).toContain('findingsBadgePresentation().tone');
@@ -2699,7 +2681,6 @@ describe('shared primitive guardrails', () => {
       'src/components/patrol/InvestigationMessages.tsx',
       'src/components/patrol/InvestigationSection.tsx',
       'src/components/patrol/RunToolCallTrace.tsx',
-      'src/features/patrol/PatrolIntelligenceHeader.tsx',
     ]);
     expect(registeredGuard?.canonical?.path).toBe('src/components/shared/LoadingSpinner.tsx');
     expect(registeredGuard?.canonical?.export).toBe('LoadingSpinner');
@@ -2824,7 +2805,6 @@ describe('shared primitive guardrails', () => {
       investigationMessagesSource,
       investigationSectionSource,
       runToolCallTraceSource,
-      patrolIntelligenceHeaderSource,
     ]) {
       expect(source).toContain('LoadingSpinner');
       expect(source).not.toMatch(/border(?:-\d)?[^\n]*border-t-transparent[^\n]*animate-spin/);

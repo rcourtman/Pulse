@@ -1,11 +1,16 @@
-import { Show } from 'solid-js';
+import { createMemo, Show } from 'solid-js';
+import DownloadIcon from 'lucide-solid/icons/download';
+import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
 import ShieldAlertIcon from 'lucide-solid/icons/shield-alert';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import { AnimatedNumber } from '@/components/shared/AnimatedNumber';
+import { UpgradeButtonLink } from '@/components/shared/UpgradeLink';
+import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { formatRelativeTime } from '@/utils/format';
 import { getAIProviderDisplayName } from '@/utils/aiProviderPresentation';
 import { PATROL_PROVIDER_SETTINGS_ACTION } from '@/utils/patrolRuntimeActions';
+import { getPatrolAutonomyAvailabilityPresentation } from './patrolAutonomyAvailability';
 import type { PatrolIntelligenceState } from './usePatrolIntelligenceState';
 
 // Strip a provider prefix ("deepseek:deepseek-v4-flash" -> "deepseek-v4-flash")
@@ -19,6 +24,17 @@ function modelIdWithoutProviderPrefix(modelId: string | undefined): string {
 
 export function PatrolIntelligenceBanners(props: { state: PatrolIntelligenceState }) {
   const state = props.state;
+  const autonomyAvailability = createMemo(() =>
+    getPatrolAutonomyAvailabilityPresentation({
+      autoFixLocked: state.autoFixLocked(),
+      runtimeCapabilityBlock: state.autoFixCapabilityBlock(),
+      runtime: state.licenseRuntimeIdentity(),
+      planUpgradeDestination: getUpgradeActionDestination('ai_autofix'),
+    }),
+  );
+  const shouldShowReadinessAction = createMemo(
+    () => state.patrolReadiness()?.status !== 'not_ready',
+  );
 
   return (
     <>
@@ -50,24 +66,71 @@ export function PatrolIntelligenceBanners(props: { state: PatrolIntelligenceStat
         </div>
       </Show>
 
+      <Show when={state.patrolLoadError()}>
+        <div class="flex-shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-900">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p class="text-sm font-semibold text-amber-900 dark:text-amber-100">
+                Patrol could not refresh
+              </p>
+              <p class="text-xs text-amber-700 dark:text-amber-300">
+                Last known issues are shown if available.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void state.handleRefreshPatrol()}
+              disabled={state.isManualRefreshRunning()}
+              class="inline-flex items-center justify-center gap-2 rounded-md border border-amber-200 bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-200 disabled:cursor-wait disabled:opacity-60 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-100 dark:hover:bg-amber-900"
+            >
+              <RefreshCwIcon
+                class={`h-3.5 w-3.5 ${state.isManualRefreshRunning() ? 'animate-spin' : ''}`}
+              />
+              Retry
+            </button>
+          </div>
+        </div>
+      </Show>
+
       <Show
         when={
           !presentationPolicyHidesUpgradePrompts() &&
           state.licenseRequired() &&
+          autonomyAvailability().locked &&
+          autonomyAvailability().kind === 'runtime_locked' &&
           !state.showBlockedBanner()
         }
       >
         <div class="flex-shrink-0 bg-blue-50 dark:bg-blue-900 border-b border-blue-200 dark:border-blue-800 px-3 py-2">
           <div class="flex flex-wrap items-center justify-between gap-2">
             <p class="text-xs text-blue-700 dark:text-blue-300">
-              Safe remediation workflows and alert-triggered root-cause analysis are not enabled on
-              this plan.
+              <span class="font-semibold text-blue-900 dark:text-blue-100">
+                {autonomyAvailability().title}.
+              </span>{' '}
+              {autonomyAvailability().body}
             </p>
+            <Show when={autonomyAvailability().destination?.href}>
+              <UpgradeButtonLink
+                destination={autonomyAvailability().destination!}
+                size="xs"
+                mobileFullWidth={false}
+                class="shrink-0"
+              >
+                <DownloadIcon class="h-3.5 w-3.5" />
+                {autonomyAvailability().actionLabel}
+              </UpgradeButtonLink>
+            </Show>
           </div>
         </div>
       </Show>
 
-      <Show when={state.showReadinessBanner() && !state.showBlockedBanner()}>
+      <Show
+        when={
+          state.showReadinessBanner() &&
+          !state.showBlockedBanner() &&
+          !state.shouldShowPatrolSetupOnly()
+        }
+      >
         <div
           class={`flex-shrink-0 border-b px-4 py-3 ${
             state.patrolReadiness()?.status === 'not_ready'
@@ -101,8 +164,8 @@ export function PatrolIntelligenceBanners(props: { state: PatrolIntelligenceStat
                   }`}
                 >
                   {state.patrolReadiness()?.status === 'not_ready'
-                    ? 'Patrol readiness issue'
-                    : 'Patrol readiness warning'}
+                    ? 'Provider issue'
+                    : 'Provider warning'}
                 </p>
                 <p
                   class={`text-xs ${
@@ -113,15 +176,10 @@ export function PatrolIntelligenceBanners(props: { state: PatrolIntelligenceStat
                 >
                   {state.patrolReadiness()?.summary}
                 </p>
-                {/* Concrete diagnosis: which provider and model failed, and
-                    the preflight recommendation. Without these the banner
-                    summary alone ("Provider connection issue") leaves the
-                    operator with nothing actionable. */}
-                <Show
-                  when={
-                    state.patrolReadiness()?.provider || state.patrolReadiness()?.model
-                  }
-                >
+                {/* Keep the Patrol page at operator level: show the provider
+                    and model that need attention, while raw diagnostics stay
+                    in Provider & Models. */}
+                <Show when={state.patrolReadiness()?.provider || state.patrolReadiness()?.model}>
                   <p
                     class={`text-xs mt-1 ${
                       state.patrolReadiness()?.status === 'not_ready'
@@ -134,9 +192,7 @@ export function PatrolIntelligenceBanners(props: { state: PatrolIntelligenceStat
                       {getAIProviderDisplayName(state.patrolReadiness()!.provider!)}
                     </Show>
                     <Show
-                      when={
-                        state.patrolReadiness()?.provider && state.patrolReadiness()?.model
-                      }
+                      when={state.patrolReadiness()?.provider && state.patrolReadiness()?.model}
                     >
                       {' · '}
                     </Show>
@@ -153,11 +209,8 @@ export function PatrolIntelligenceBanners(props: { state: PatrolIntelligenceStat
                       }
                     >
                       {' · '}
-                      <span class="font-medium">Preflight:</span>{' '}
+                      <span class="font-medium">Model check:</span>{' '}
                       {(state.patrolPreflight()!.duration_ms / 1000).toFixed(1)}s
-                      <Show when={state.patrolPreflight()?.tool_call_observed === false}>
-                        , no tool call observed
-                      </Show>
                     </Show>
                   </p>
                 </Show>
@@ -174,17 +227,15 @@ export function PatrolIntelligenceBanners(props: { state: PatrolIntelligenceStat
                 </Show>
               </div>
             </div>
-            <a
-              href={PATROL_PROVIDER_SETTINGS_ACTION.href}
-              class={`inline-flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-md border transition-colors ${
-                state.patrolReadiness()?.status === 'not_ready'
-                  ? 'text-red-900 dark:text-red-100 bg-red-100 dark:bg-red-900 border-red-200 dark:border-red-700 hover:bg-red-200 dark:hover:bg-red-900'
-                  : 'text-amber-900 dark:text-amber-100 bg-amber-100 dark:bg-amber-900 border-amber-200 dark:border-amber-700 hover:bg-amber-200 dark:hover:bg-amber-900'
-              }`}
-            >
-              <SettingsIcon class="w-3.5 h-3.5" />
-              {PATROL_PROVIDER_SETTINGS_ACTION.label}
-            </a>
+            <Show when={shouldShowReadinessAction()}>
+              <a
+                href={PATROL_PROVIDER_SETTINGS_ACTION.href}
+                class="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-md border border-amber-200 bg-amber-100 text-amber-900 transition-colors hover:bg-amber-200 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-100 dark:hover:bg-amber-900"
+              >
+                <SettingsIcon class="w-3.5 h-3.5" />
+                {PATROL_PROVIDER_SETTINGS_ACTION.label}
+              </a>
+            </Show>
           </div>
         </div>
       </Show>

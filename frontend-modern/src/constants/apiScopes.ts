@@ -4,7 +4,7 @@ export interface APIScopeOption {
   value: string;
   label: string;
   description?: string;
-  group: 'Monitoring' | 'Agents' | 'Settings' | 'Security';
+  group: 'Monitoring' | 'AI' | 'Agents' | 'Settings' | 'Security';
 }
 
 export const AGENT_REPORT_SCOPE = 'agent:report';
@@ -14,6 +14,8 @@ export const DOCKER_MANAGE_SCOPE = 'docker:manage';
 export const KUBERNETES_REPORT_SCOPE = 'kubernetes:report';
 export const KUBERNETES_MANAGE_SCOPE = 'kubernetes:manage';
 export const AGENT_EXEC_SCOPE = 'agent:exec';
+export const AI_EXECUTE_SCOPE = 'ai:execute';
+export const AI_CHAT_SCOPE = 'ai:chat';
 export const MONITORING_READ_SCOPE = 'monitoring:read';
 export const MONITORING_WRITE_SCOPE = 'monitoring:write';
 export const SETTINGS_READ_SCOPE = 'settings:read';
@@ -34,6 +36,19 @@ export const API_SCOPE_OPTIONS: APIScopeOption[] = [
     label: 'Alert actions (write)',
     description: 'Acknowledge, silence, and clear alerts.',
     group: 'Monitoring',
+  },
+  {
+    value: AI_CHAT_SCOPE,
+    label: 'Pulse Assistant chat',
+    description: 'Use interactive Pulse Assistant sessions, models, and knowledge endpoints.',
+    group: 'AI',
+  },
+  {
+    value: AI_EXECUTE_SCOPE,
+    label: 'Pulse Intelligence actions',
+    description:
+      'Use governed Patrol actions for plans, approvals, policy-allowed fixes, verification, and history.',
+    group: 'AI',
   },
   {
     value: DOCKER_REPORT_SCOPE,

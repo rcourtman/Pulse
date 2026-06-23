@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import runHistoryPanelSource from '@/components/patrol/RunHistoryPanel.tsx?raw';
+import patrolEmptyStatePresentationSource from '@/utils/patrolEmptyStatePresentation.ts?raw';
+import type { PatrolRunRecord } from '@/api/patrol';
 import {
   getInvestigationMessagesState,
   getInvestigationSectionState,
@@ -34,9 +36,14 @@ describe('patrolEmptyStatePresentation', () => {
       empty: false,
     });
     expect(getInvestigationSectionState(false, false)).toEqual({
-      text: 'No investigation data available. Enable patrol autonomy to investigate findings.',
+      text: 'No investigation yet. Patrol adds notes after it runs in a mode that investigates.',
       empty: true,
     });
+  });
+
+  it('keeps the active Patrol empty queue out of all-clear wording', () => {
+    expect(patrolEmptyStatePresentationSource).not.toContain('Nothing needs attention');
+    expect(patrolEmptyStatePresentationSource).not.toContain('all clear');
   });
 
   it('suppresses the healthy findings empty state when patrol health is not fully verified', () => {
@@ -52,18 +59,42 @@ describe('patrolEmptyStatePresentation', () => {
               name: 'Patrol coverage incomplete',
               impact: -0.35,
               description:
-                'Patrol coverage is incomplete: recent activity was limited to scoped runs and ended with errors, so overall health is not fully verified.',
+                'Recent Patrol activity only covered targeted checks and ended with errors. Run Patrol to check everything.',
               category: 'coverage',
             },
           ],
           prediction:
-            'Patrol coverage is incomplete: recent activity was limited to scoped runs and ended with errors, so overall health is not fully verified.',
+            'Recent Patrol activity only covered targeted checks and ended with errors. Run Patrol to check everything.',
         },
         runtimeState: 'active',
       }),
     ).toEqual({
-      title: 'No active findings',
-      body: 'Patrol has not surfaced active findings, but coverage is incomplete, so this is not a full all-clear.',
+      title: 'Check needed',
+      body: 'Run Patrol to check everything and update open issues.',
+      tone: 'warning',
+    });
+  });
+
+  it('uses run history to keep incomplete coverage visible when health summary is unavailable', () => {
+    expect(
+      getPatrolFindingsEmptyState({
+        filter: 'active',
+        runtimeState: 'active',
+        runs: [
+          {
+            id: 'run-errored-full',
+            started_at: '2026-05-06T12:00:00Z',
+            completed_at: '2026-05-06T12:01:00Z',
+            type: 'full',
+            status: 'error',
+            error_count: 1,
+            resources_checked: 72,
+          } as PatrolRunRecord,
+        ],
+      }),
+    ).toEqual({
+      title: 'Check needed',
+      body: 'Run Patrol to check everything and update open issues.',
       tone: 'warning',
     });
   });
@@ -89,8 +120,8 @@ describe('patrolEmptyStatePresentation', () => {
         runtimeState: 'active',
       }),
     ).toEqual({
-      title: 'No active findings',
-      body: 'Patrol has not surfaced active findings, but the overall Patrol assessment still needs attention.',
+      title: 'Patrol needs review',
+      body: 'No active findings are listed, but Patrol health is degraded.',
       tone: 'error',
     });
   });
@@ -110,6 +141,26 @@ describe('patrolEmptyStatePresentation', () => {
     });
   });
 
+  it('treats a running Patrol as active work instead of an empty state', () => {
+    expect(
+      getPatrolFindingsEmptyState({
+        filter: 'active',
+        runtimeState: 'running',
+        overallHealth: {
+          score: 100,
+          grade: 'A',
+          trend: 'stable',
+          factors: [],
+          prediction: 'Infrastructure is healthy with no significant issues detected.',
+        },
+      }),
+    ).toEqual({
+      title: 'Patrol is checking now',
+      body: 'The current run will add work here if Patrol finds issues or needs approval.',
+      tone: 'info',
+    });
+  });
+
   it('keeps the healthy findings empty state when patrol health is fully healthy', () => {
     expect(
       getPatrolFindingsEmptyState({
@@ -124,9 +175,30 @@ describe('patrolEmptyStatePresentation', () => {
         runtimeState: 'active',
       }),
     ).toEqual({
-      title: 'No active findings',
-      body: 'Your infrastructure looks healthy!',
+      title: 'No current issues',
+      body: 'Run Patrol any time to check again.',
       tone: 'success',
+    });
+  });
+
+  it('keeps past regressions informational when there are no current issues', () => {
+    expect(
+      getPatrolFindingsEmptyState({
+        filter: 'active',
+        overallHealth: {
+          score: 100,
+          grade: 'A',
+          trend: 'stable',
+          factors: [],
+          prediction: 'Infrastructure is healthy with no significant issues detected.',
+        },
+        historicalRegressionCount: 1,
+        runtimeState: 'active',
+      }),
+    ).toEqual({
+      title: 'No current issues',
+      body: 'Past issues are in History.',
+      tone: 'info',
     });
   });
 
@@ -145,7 +217,7 @@ describe('patrolEmptyStatePresentation', () => {
       }),
     ).toEqual({
       title: 'No findings recorded for this run',
-      body: 'Checked 1 of 2 scoped resources. This run recorded no snapshot findings, but it ended with issues requiring review.',
+      body: 'Checked 1 of 2 scoped resources. This run recorded no Patrol findings, but it ended with issues requiring review.',
       tone: 'warning',
     });
   });
@@ -164,8 +236,8 @@ describe('patrolEmptyStatePresentation', () => {
         },
       }),
     ).toEqual({
-      title: 'Findings snapshot unavailable for this run',
-      body: 'This Patrol run predates findings snapshots, so run-specific findings cannot be verified.',
+      title: 'Finding record unavailable for this run',
+      body: 'This older Patrol run has no finding record, so Patrol cannot show its issue list.',
       tone: 'warning',
     });
   });

@@ -3,6 +3,7 @@ import {
   getPatrolAssessmentPresentation,
   getPatrolAssessmentAction,
   getPatrolAssessmentShellPresentation,
+  getPatrolCompactAssessmentLabel,
   getPatrolRecencyPresentation,
   getPatrolScoreChipLabel,
   getPatrolSummaryMetricState,
@@ -30,7 +31,7 @@ describe('getPatrolSummaryPresentation', () => {
   });
 
   it('exports canonical patrol empty-state copy', () => {
-    expect(PATROL_NO_ISSUES_LABEL).toBe('No issues found');
+    expect(PATROL_NO_ISSUES_LABEL).toBe('No active issues');
   });
 
   it('promotes coverage gaps into the primary patrol assessment state', () => {
@@ -54,7 +55,7 @@ describe('getPatrolSummaryPresentation', () => {
     ).toEqual({
       title: 'Coverage incomplete',
       description: 'Patrol coverage is incomplete.',
-      eyebrow: 'Patrol assessment',
+      eyebrow: 'Status',
       compactLabel: 'Coverage incomplete',
       tone: 'warning',
     });
@@ -75,9 +76,30 @@ describe('getPatrolSummaryPresentation', () => {
     ).toEqual({
       title: 'Issues detected',
       description: 'Warnings require review.',
-      eyebrow: 'Patrol assessment',
+      eyebrow: 'Status',
       compactLabel: 'Issues detected',
       tone: 'warning',
+    });
+  });
+
+  it('surfaces an active running Patrol instead of a stale all-clear summary', () => {
+    expect(
+      getPatrolAssessmentPresentation({
+        runtimeState: 'running',
+        overallHealth: {
+          score: 100,
+          grade: 'A',
+          trend: 'stable',
+          factors: [],
+          prediction: 'Infrastructure is healthy with no significant issues detected.',
+        },
+      }),
+    ).toEqual({
+      title: 'Patrol running',
+      description: 'Patrol is checking your infrastructure now.',
+      eyebrow: 'Status',
+      compactLabel: 'Patrol is checking now',
+      tone: 'info',
     });
   });
 
@@ -106,7 +128,7 @@ describe('getPatrolSummaryPresentation', () => {
       title: 'Issues detected',
       description:
         'Patrol surfaced 1 active warning finding in your infrastructure. Review the active findings for more detail.',
-      eyebrow: 'Patrol assessment',
+      eyebrow: 'Status',
       compactLabel: 'Issues detected',
       tone: 'warning',
     });
@@ -137,7 +159,7 @@ describe('getPatrolSummaryPresentation', () => {
       title: 'Patrol runtime issue',
       description:
         'Patrol has an active runtime issue: Provider billing or quota issue. Review the Patrol runtime issue for more detail.',
-      eyebrow: 'Patrol assessment',
+      eyebrow: 'Status',
       compactLabel: 'Patrol runtime issue',
       tone: 'warning',
     });
@@ -166,8 +188,8 @@ describe('getPatrolSummaryPresentation', () => {
     ).toEqual({
       title: 'Issues detected',
       description:
-        'Patrol surfaced 1 active warning finding. Recent coverage is also incomplete, so the rest of your infrastructure is not fully verified.',
-      eyebrow: 'Patrol assessment',
+        'Patrol surfaced 1 active warning finding. Recent coverage is incomplete. Run Patrol to check everything.',
+      eyebrow: 'Status',
       compactLabel: 'Issues detected',
       tone: 'warning',
     });
@@ -189,7 +211,7 @@ describe('getPatrolSummaryPresentation', () => {
             },
           ],
           prediction:
-            'Patrol coverage is incomplete: recent activity was limited to scoped runs and ended with errors, so overall health is not fully verified.',
+            'Recent Patrol activity only covered targeted checks and ended with errors. Run Patrol to check everything.',
         },
         warningFindings: 1,
         activeFindings: [
@@ -215,7 +237,7 @@ describe('getPatrolSummaryPresentation', () => {
       title: 'Issues detected',
       description:
         'Patrol surfaced 1 active warning finding in your infrastructure. Review the active findings for more detail.',
-      eyebrow: 'Patrol assessment',
+      eyebrow: 'Status',
       compactLabel: 'Issues detected',
       tone: 'warning',
     });
@@ -237,7 +259,7 @@ describe('getPatrolSummaryPresentation', () => {
             },
           ],
           prediction:
-            'Patrol coverage is incomplete: recent activity was limited to scoped runs and ended with errors, so overall health is not fully verified.',
+            'Recent Patrol activity only covered targeted checks and ended with errors. Run Patrol to check everything.',
         },
         warningFindings: 2,
         activeFindings: [
@@ -260,8 +282,8 @@ describe('getPatrolSummaryPresentation', () => {
     ).toEqual({
       title: 'Issues detected',
       description:
-        'Patrol surfaced 1 active warning finding in your infrastructure and 1 active Patrol runtime issue. Recent coverage is also incomplete, so the rest of your infrastructure is not fully verified.',
-      eyebrow: 'Patrol assessment',
+        'Patrol surfaced 1 active warning finding in your infrastructure and 1 active Patrol runtime issue. Recent coverage is incomplete. Run Patrol to check everything.',
+      eyebrow: 'Status',
       compactLabel: 'Issues detected',
       tone: 'warning',
     });
@@ -283,7 +305,7 @@ describe('getPatrolSummaryPresentation', () => {
             },
           ],
           prediction:
-            'Patrol coverage is incomplete: recent activity was limited to scoped runs and ended with errors, so overall health is not fully verified.',
+            'Recent Patrol activity only covered targeted checks and ended with errors. Run Patrol to check everything.',
         },
         warningFindings: 1,
         activeFindings: [
@@ -299,8 +321,8 @@ describe('getPatrolSummaryPresentation', () => {
     ).toEqual({
       title: 'Patrol runtime issue',
       description:
-        'Patrol has an active runtime issue: Provider billing or quota issue. Recent coverage is also incomplete, so the rest of your infrastructure is not fully verified.',
-      eyebrow: 'Patrol assessment',
+        'Patrol has an active runtime issue: Provider billing or quota issue. Recent coverage is incomplete. Run Patrol to check everything.',
+      eyebrow: 'Status',
       compactLabel: 'Patrol runtime issue',
       tone: 'warning',
     });
@@ -350,8 +372,8 @@ describe('getPatrolSummaryPresentation', () => {
         ] as never,
       }),
     ).toEqual({
-      label: 'Open Patrol provider settings',
-      href: '/settings/system-ai',
+      label: 'Open Provider & Models',
+      href: '/settings/pulse-intelligence/provider',
     });
   });
 
@@ -460,6 +482,70 @@ describe('getPatrolSummaryPresentation', () => {
     ).toBe('Health');
   });
 
+  it('names compact assessment evidence instead of exposing bare counters', () => {
+    expect(
+      getPatrolCompactAssessmentLabel({
+        assessmentLabel: 'No active issues',
+        overallHealth: {
+          score: 95,
+          grade: 'A',
+          trend: 'stable',
+          factors: [],
+          prediction: 'Infrastructure is healthy with no significant issues detected.',
+        },
+        activeFindings: [],
+        historicalRegressionCount: 1,
+      }),
+    ).toBe('No active issues · 1 past regression · health score 95/100');
+  });
+
+  it('uses issue nouns for compact active finding summaries', () => {
+    expect(
+      getPatrolCompactAssessmentLabel({
+        assessmentLabel: 'Issues detected',
+        overallHealth: {
+          score: 84,
+          grade: 'B',
+          trend: 'stable',
+          factors: [],
+          prediction: 'Warnings require review.',
+        },
+        activeFindings: [
+          {
+            status: 'active',
+            severity: 'critical',
+            resourceId: 'vm-100',
+            resourceName: 'web-1',
+            title: 'High CPU usage',
+          },
+          {
+            status: 'active',
+            severity: 'warning',
+            resourceId: 'ai-service',
+            resourceName: 'Pulse Patrol Service',
+            title: 'Pulse Patrol: Provider connection issue',
+          },
+        ] as never,
+      }),
+    ).toBe('1 critical issue · 1 Patrol runtime issue · health score 84/100');
+  });
+
+  it('can suppress stale health scores while Patrol is still running', () => {
+    expect(
+      getPatrolCompactAssessmentLabel({
+        assessmentLabel: 'Patrol is checking now',
+        overallHealth: {
+          score: 65,
+          grade: 'C',
+          trend: 'stable',
+          factors: [],
+          prediction: 'Previous assessment needs attention.',
+        },
+        includeHealthScore: false,
+      }),
+    ).toBe('Patrol is checking now');
+  });
+
   it('keeps no-issues copy only for fully healthy patrol states', () => {
     expect(
       getPatrolNoIssuesPresentation({
@@ -472,12 +558,12 @@ describe('getPatrolSummaryPresentation', () => {
         },
       }),
     ).toEqual({
-      label: 'No issues found',
+      label: 'No active issues',
       tone: 'success',
     });
   });
 
-  it('reports recent successful full patrol verification', () => {
+  it('reports a recent successful Patrol check', () => {
     expect(
       getPatrolVerificationPresentation({
         runs: [
@@ -512,15 +598,15 @@ describe('getPatrolSummaryPresentation', () => {
         ] as never,
       }),
     ).toEqual({
-      title: 'Recently verified',
-      description: 'The most recent full patrol completed successfully and checked 58 resources.',
-      compactLabel: 'Recently verified',
+      title: 'Recently checked',
+      description: 'The most recent Patrol check completed successfully and covered 58 resources.',
+      compactLabel: 'Recently checked',
       tone: 'success',
       lastFullRunAt: '2026-03-12T09:57:00Z',
     });
   });
 
-  it('adds an activity mix when scoped runs make recent verification look busy', () => {
+  it('adds a check mix when targeted runs make recent activity look busy', () => {
     expect(
       getPatrolVerificationPresentation({
         runs: [
@@ -613,16 +699,16 @@ describe('getPatrolSummaryPresentation', () => {
         ] as never,
       }),
     ).toEqual({
-      title: 'Recently verified',
-      description: 'The most recent full patrol completed successfully and checked 58 resources.',
-      compactLabel: 'Recently verified',
+      title: 'Recently checked',
+      description: 'The most recent Patrol check completed successfully and covered 58 resources.',
+      compactLabel: 'Recently checked',
       tone: 'success',
       lastFullRunAt: '2026-03-12T09:57:00Z',
-      activityMixLabel: '1 full, 1 alert-triggered, 1 anomaly-triggered',
+      activityMixLabel: '1 full check, 1 alert-triggered check, 1 anomaly-triggered check',
     });
   });
 
-  it('reports partial verification when only scoped runs are recent', () => {
+  it('reports a partial check when only targeted runs are recent', () => {
     expect(
       getPatrolVerificationPresentation({
         runs: [
@@ -658,15 +744,15 @@ describe('getPatrolSummaryPresentation', () => {
         ] as never,
       }),
     ).toEqual({
-      title: 'No recent full patrol',
+      title: 'Needs full check',
       description:
-        'Recent activity was limited to scoped alert fired runs over 1 resource, so Patrol has not recently re-verified your full infrastructure.',
-      compactLabel: 'Partial verification',
+        'Recent targeted checks covered 1 resource. Run Patrol to check everything.',
+      compactLabel: 'Partial check',
       tone: 'warning',
     });
   });
 
-  it('reports limited verification when only verification checks are recent', () => {
+  it('reports a partial check when only follow-up checks are recent', () => {
     expect(
       getPatrolVerificationPresentation({
         runs: [
@@ -702,15 +788,15 @@ describe('getPatrolSummaryPresentation', () => {
         ] as never,
       }),
     ).toEqual({
-      title: 'No recent full patrol',
+      title: 'Needs full check',
       description:
-        'Recent activity was limited to verification checks over 1 resource, so Patrol has not recently re-verified your full infrastructure.',
-      compactLabel: 'Partial verification',
+        'Recent follow-up checks covered 1 resource. Run Patrol to check everything.',
+      compactLabel: 'Partial check',
       tone: 'warning',
     });
   });
 
-  it('labels scoped recency as activity rather than patrol', () => {
+  it('labels targeted recency as the last check', () => {
     expect(
       getPatrolRecencyPresentation({
         runs: [
@@ -746,14 +832,14 @@ describe('getPatrolSummaryPresentation', () => {
         ] as never,
       }),
     ).toEqual({
-      label: 'Last activity',
+      label: 'Last check',
       timestamp: '2026-03-12T09:59:00Z',
       resourcesChecked: 1,
       resourcesCheckedLabel: 'checked 1 resource',
     });
   });
 
-  it('labels full patrol recency explicitly when the latest completed run is full', () => {
+  it('labels completed Patrol recency as the last check', () => {
     expect(
       getPatrolRecencyPresentation({
         runs: [
@@ -788,7 +874,7 @@ describe('getPatrolSummaryPresentation', () => {
         ] as never,
       }),
     ).toEqual({
-      label: 'Last full patrol',
+      label: 'Last check',
       timestamp: '2026-03-12T09:57:00Z',
       resourcesChecked: 58,
       resourcesCheckedLabel: 'verified 58 resources',
@@ -830,7 +916,7 @@ describe('getPatrolSummaryPresentation', () => {
         ] as never,
       }),
     ).toEqual({
-      label: 'Last full patrol',
+      label: 'Last check',
       timestamp: '2026-03-12T09:57:00Z',
       resourcesChecked: 58,
       resourcesCheckedLabel: 'checked 58 resources',
@@ -890,7 +976,7 @@ describe('getPatrolSummaryPresentation', () => {
         ] as never,
       }),
     ).toEqual({
-      label: 'Last full patrol',
+      label: 'Last check',
       timestamp: '2026-03-12T09:51:00Z',
     });
   });

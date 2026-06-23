@@ -26,7 +26,12 @@ vi.mock('@/components/shared/responsive', () => ({
 }));
 
 vi.mock('@/components/Workloads/StackedMemoryBar', () => ({
-  StackedMemoryBar: () => <div data-testid="stacked-memory-bar" />,
+  StackedMemoryBar: (props: { cacheInclusiveLabel?: string }) => (
+    <div
+      data-testid="stacked-memory-bar"
+      data-cache-inclusive-label={props.cacheInclusiveLabel}
+    />
+  ),
 }));
 
 vi.mock('@/components/Workloads/StackedDiskBar', () => ({
@@ -124,6 +129,33 @@ describe('ProxmoxNodesTable', () => {
     expect(
       screen.getByRole('link', { name: 'Open web interface for pve-node-1' }),
     ).toHaveAttribute('href', 'https://pve-node-1:8006');
+  });
+
+  it('keeps the Proxmox cache-inclusive memory comparison label on node rows', () => {
+    render(() => (
+      <ProxmoxNodesTable
+        nodes={[
+          makeNodeResource({
+            memory: {
+              total: 8_000,
+              used: 3_200,
+              free: 3_800,
+              current: 40,
+              cache: 1_000,
+            } as Resource['memory'],
+          }),
+        ]}
+        guests={[]}
+        emptyIcon={<span />}
+        emptyTitle="No Proxmox VE nodes"
+        emptyDescription="No nodes"
+      />
+    ));
+
+    expect(screen.getByTestId('stacked-memory-bar')).toHaveAttribute(
+      'data-cache-inclusive-label',
+      'Shown in Proxmox',
+    );
   });
 
   it('restores the v5 row signals: alert accent, pending updates badge, full uptime, offline dimming', () => {

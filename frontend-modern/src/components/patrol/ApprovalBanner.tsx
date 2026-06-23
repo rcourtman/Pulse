@@ -69,9 +69,9 @@ export const ApprovalBanner: Component<ApprovalBannerProps> = (props) => {
     setActionLoading(approval.id);
     try {
       await aiIntelligenceStore.denyInvestigationFix(approval.id);
-      notificationStore.success('Fix denied');
+      notificationStore.success('Fix rejected');
     } catch (err) {
-      notificationStore.error((err as Error).message || 'Failed to deny fix');
+      notificationStore.error((err as Error).message || 'Failed to reject fix');
     } finally {
       setActionLoading(null);
     }
@@ -143,7 +143,7 @@ export const ApprovalBanner: Component<ApprovalBannerProps> = (props) => {
                 <Show when={actionLoading() !== firstApproval()!.id}>
                   <CheckIcon class="w-3.5 h-3.5" />
                 </Show>
-                Approve & Execute
+                Approve fix
               </Button>
               <Button
                 type="button"
@@ -154,7 +154,7 @@ export const ApprovalBanner: Component<ApprovalBannerProps> = (props) => {
                 class="gap-1.5"
               >
                 <XIcon class="w-3.5 h-3.5" />
-                Deny
+                Reject
               </Button>
             </Show>
             <Show when={pending().length > 1}>

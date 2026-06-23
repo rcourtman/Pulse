@@ -4,6 +4,7 @@ import {
   DEFAULT_SETTINGS_TAB,
   deriveTabFromPath,
   deriveTabFromQuery,
+  isAISettingsOAuthCallbackQuery,
   isRetiredSettingsCompatibilityPath,
   isRouteableSettingsLocation,
   isRouteableSettingsPath,
@@ -23,9 +24,12 @@ const canonicalTabPaths = {
   'system-network': '/settings/system-network',
   'system-updates': '/settings/system-updates',
   'system-recovery': '/settings/system-recovery',
-  'system-ai': '/settings/system-ai',
+  'system-ai': '/settings/pulse-intelligence/provider',
+  'system-ai-patrol': '/settings/pulse-intelligence/patrol',
+  'system-ai-assistant': '/settings/pulse-intelligence/assistant',
+  'system-ai-discovery': '/settings/pulse-intelligence/discovery',
   'system-relay': '/settings/system-relay',
-  'system-billing': '/settings/system/billing/plan',
+  'system-billing': '/settings/pulse-intelligence/billing/plan',
   'support-diagnostics': '/settings/support/diagnostics',
   'support-reporting': '/settings/support/reporting',
   'support-logs': '/settings/support/logs',
@@ -82,6 +86,18 @@ describe('settingsNavigationModel', () => {
     expect(resolveCanonicalSettingsPath('/settings/monitoring/availability')).toBe(
       '/settings/monitoring/availability',
     );
+    expect(resolveCanonicalSettingsPath('/settings/pulse-intelligence')).toBe(
+      '/settings/pulse-intelligence/provider',
+    );
+    expect(resolveCanonicalSettingsPath('/settings/pulse-intelligence/provider')).toBe(
+      '/settings/pulse-intelligence/provider',
+    );
+    expect(resolveCanonicalSettingsPath('/settings/system-ai')).toBe(
+      '/settings/pulse-intelligence/provider',
+    );
+    expect(resolveCanonicalSettingsPath('/settings/pulse-intelligence/patrol')).toBe(
+      '/settings/pulse-intelligence/patrol',
+    );
     expect(resolveCanonicalSettingsPath('/settings/infrastructure/install')).toBeNull();
     expect(resolveCanonicalSettingsPath('/settings/infrastructure/platforms')).toBeNull();
     expect(resolveCanonicalSettingsPath('/settings/infrastructure/platforms/truenas')).toBeNull();
@@ -93,8 +109,17 @@ describe('settingsNavigationModel', () => {
     expect(resolveCanonicalSettingsPath('/settings/operations')).toBeNull();
     expect(resolveCanonicalSettingsPath('/settings/operations/reporting')).toBeNull();
     expect(resolveCanonicalSettingsPath('/settings/operations/logs')).toBeNull();
+    expect(resolveCanonicalSettingsPath('/settings/pulse-intelligence/billing')).toBe(
+      '/settings/pulse-intelligence/billing/plan',
+    );
     expect(resolveCanonicalSettingsPath('/settings/system/billing')).toBe(
-      '/settings/system/billing/plan',
+      '/settings/pulse-intelligence/billing/plan',
+    );
+    expect(resolveCanonicalSettingsPath('/settings/system/billing/plan')).toBe(
+      '/settings/pulse-intelligence/billing/plan',
+    );
+    expect(resolveCanonicalSettingsPath('/settings/system/billing/usage')).toBe(
+      '/settings/pulse-intelligence/billing/usage',
     );
     expect(resolveCanonicalSettingsPath('/settings/system-pro')).toBeNull();
     expect(resolveCanonicalSettingsPath('/not-settings')).toBeNull();
@@ -127,6 +152,15 @@ describe('settingsNavigationModel', () => {
     expect(isRouteableSettingsPath('/settings')).toBe(true);
     expect(isRouteableSettingsPath('/settings/infrastructure')).toBe(true);
     expect(isRouteableSettingsPath('/settings/monitoring/availability')).toBe(true);
+    expect(isRouteableSettingsPath('/settings/pulse-intelligence/provider')).toBe(true);
+    expect(isRouteableSettingsPath('/settings/system-ai')).toBe(true);
+    expect(isRouteableSettingsPath('/settings/pulse-intelligence/patrol')).toBe(true);
+    expect(isRouteableSettingsPath('/settings/pulse-intelligence/assistant')).toBe(true);
+    expect(isRouteableSettingsPath('/settings/pulse-intelligence/discovery')).toBe(true);
+    expect(isRouteableSettingsPath('/settings/pulse-intelligence/billing/plan')).toBe(true);
+    expect(isRouteableSettingsPath('/settings/pulse-intelligence/billing/usage')).toBe(true);
+    expect(isRouteableSettingsPath('/settings/system/billing/plan')).toBe(true);
+    expect(isRouteableSettingsPath('/settings/system/billing/usage')).toBe(true);
     expect(isRouteableSettingsPath('/settings/security/api')).toBe(true);
     expect(isRouteableSettingsPath('/settings/unknown')).toBe(false);
   });
@@ -157,6 +191,8 @@ describe('settingsNavigationModel', () => {
   });
 
   it('maps plan and usage billing subroutes back to the billing tab', () => {
+    expect(deriveTabFromPath('/settings/pulse-intelligence/billing/plan')).toBe('system-billing');
+    expect(deriveTabFromPath('/settings/pulse-intelligence/billing/usage')).toBe('system-billing');
     expect(deriveTabFromPath('/settings/system/billing/plan')).toBe('system-billing');
     expect(deriveTabFromPath('/settings/system/billing/usage')).toBe('system-billing');
   });
@@ -167,6 +203,11 @@ describe('settingsNavigationModel', () => {
       ['?tab=availability', 'monitoring-availability'],
       ['?tab=monitoring-availability', 'monitoring-availability'],
       ['?tab=system-ai', 'system-ai'],
+      ['?tab=patrol', 'system-ai-patrol'],
+      ['?tab=assistant', 'system-ai-assistant'],
+      ['?tab=discovery', 'system-ai-discovery'],
+      ['?ai_oauth_error=unsupported', 'system-ai'],
+      ['?ai_oauth_success=true', 'system-ai'],
       ['?tab=system-relay', 'system-relay'],
       ['?tab=system-billing', 'system-billing'],
       ['?tab=diagnostics', 'support-diagnostics'],
@@ -187,6 +228,13 @@ describe('settingsNavigationModel', () => {
     for (const [query, expectedTab] of queryCases) {
       expect(deriveTabFromQuery(query)).toBe(expectedTab);
     }
+  });
+
+  it('detects Assistant OAuth callback queries so the settings shell preserves them', () => {
+    expect(isAISettingsOAuthCallbackQuery('?ai_oauth_error=unsupported')).toBe(true);
+    expect(isAISettingsOAuthCallbackQuery('?ai_oauth_success=true')).toBe(true);
+    expect(isAISettingsOAuthCallbackQuery('?tab=system-ai')).toBe(false);
+    expect(isAISettingsOAuthCallbackQuery('')).toBe(false);
   });
 
   it('evaluates feature-lock behavior contracts', () => {

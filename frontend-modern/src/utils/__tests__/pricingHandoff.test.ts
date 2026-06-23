@@ -15,6 +15,7 @@ import {
   isExternalPricingDestination,
   isRetiredPricingFeature,
   isSelfHostedPurchaseStartDestination,
+  LEGACY_SELF_HOSTED_PRO_BILLING_ROUTE,
   resolveCanonicalSelfHostedBillingHref,
   resolveSelfHostedBillingSection,
   resolveSelfHostedPurchaseStartDestination,
@@ -52,6 +53,9 @@ describe('pricingHandoff', () => {
       SELF_HOSTED_PRO_BILLING_PLAN_HREF,
     );
     expect(getUpgradeFallbackDestination('ai_alerts')).toBe(SELF_HOSTED_PRO_BILLING_PLAN_HREF);
+    expect(getUpgradeFallbackDestination('ai_autofix')).toBe(
+      SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF,
+    );
     expect(getUpgradeFallbackDestination('rbac')).toBe(SELF_HOSTED_PRO_BILLING_PLAN_HREF);
     expect(getUpgradeFallbackDestination('advanced_reporting')).toBe(
       SELF_HOSTED_PRO_BILLING_PLAN_HREF,
@@ -79,7 +83,11 @@ describe('pricingHandoff', () => {
       'agent_profiles',
     ]);
     for (const key of paidCatalogFeatureKeys) {
-      expect(getUpgradeFallbackDestination(key)).toBe(SELF_HOSTED_PRO_BILLING_PLAN_HREF);
+      expect(getUpgradeFallbackDestination(key)).toBe(
+        key === 'ai_autofix'
+          ? SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF
+          : SELF_HOSTED_PRO_BILLING_PLAN_HREF,
+      );
     }
   });
 
@@ -108,6 +116,9 @@ describe('pricingHandoff', () => {
   });
 
   it('preserves extra query parameters when handing off the legacy pricing route', () => {
+    expect(getPricingRouteDestination('?feature=ai_autofix')).toBe(
+      SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF,
+    );
     expect(
       getPricingRouteDestination('?feature=unknown_pro_feature&utm_content=legacy-bookmark'),
     ).toBe(
@@ -148,16 +159,20 @@ describe('pricingHandoff', () => {
 
   it('canonicalizes legacy self-hosted billing aliases to route-owned states', () => {
     expect(
-      resolveCanonicalSelfHostedBillingHref(SELF_HOSTED_PRO_BILLING_ROUTE, '', '#pulse-pro-usage'),
+      resolveCanonicalSelfHostedBillingHref(
+        LEGACY_SELF_HOSTED_PRO_BILLING_ROUTE,
+        '',
+        '#pulse-pro-usage',
+      ),
     ).toBe(SELF_HOSTED_PRO_BILLING_USAGE_HREF);
     expect(
       resolveCanonicalSelfHostedBillingHref(
-        SELF_HOSTED_PRO_BILLING_ROUTE,
+        LEGACY_SELF_HOSTED_PRO_BILLING_ROUTE,
         '',
         '#pulse-pro-recovery',
       ),
     ).toBe(SELF_HOSTED_PRO_BILLING_PLAN_RECOVERY_HREF);
-    expect(resolveCanonicalSelfHostedBillingHref(SELF_HOSTED_PRO_BILLING_ROUTE)).toBe(
+    expect(resolveCanonicalSelfHostedBillingHref(LEGACY_SELF_HOSTED_PRO_BILLING_ROUTE)).toBe(
       SELF_HOSTED_PRO_BILLING_PLAN_HREF,
     );
     expect(
@@ -166,9 +181,9 @@ describe('pricingHandoff', () => {
         '?intent=max_monitored_systems',
       ),
     ).toBe(SELF_HOSTED_PRO_BILLING_PLAN_HREF);
-    expect(resolveCanonicalSelfHostedBillingHref(`${SELF_HOSTED_PRO_BILLING_ROUTE}/history`)).toBe(
-      SELF_HOSTED_PRO_BILLING_PLAN_HREF,
-    );
+    expect(
+      resolveCanonicalSelfHostedBillingHref(`${LEGACY_SELF_HOSTED_PRO_BILLING_ROUTE}/history`),
+    ).toBe(SELF_HOSTED_PRO_BILLING_PLAN_HREF);
   });
 
   it('derives billing focus and arrival intent from canonical routes', () => {

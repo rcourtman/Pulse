@@ -15,18 +15,20 @@ const AI_OAUTH_ERROR_MESSAGES: Record<string, string> = {
   invalid_state: 'The authentication session is no longer valid. Try again.',
   token_exchange_failed: 'Unable to complete authentication with Claude.',
   save_failed: 'Unable to save OAuth credentials.',
+  unsupported:
+    'Anthropic subscription OAuth is not supported. Configure an Anthropic API key instead.',
 };
 
-export const AI_SETTINGS_PANEL_TITLE = 'Assistant & Patrol';
+export const AI_SETTINGS_PANEL_TITLE = 'Provider & Models';
 export const AI_SETTINGS_PANEL_DESCRIPTION =
-  'Configure providers and models for Pulse Assistant and Patrol.';
+  'Configure providers, default models, provider health, budget, and usage for Pulse Intelligence.';
 export const AI_SETTINGS_MODEL_OVERRIDES_TITLE = 'Model Overrides';
 export const AI_SETTINGS_ASSISTANT_SESSIONS_TITLE = 'Pulse Assistant Sessions';
-export const AI_SETTINGS_ASSISTANT_PERMISSIONS_TITLE = 'Pulse Assistant Permissions';
+export const AI_SETTINGS_ASSISTANT_PERMISSIONS_TITLE = 'Assistant chat actions';
 export const AI_SETTINGS_LOAD_MODELS_ERROR = 'Unable to load models.';
 export const AI_SETTINGS_LOAD_CHAT_SESSIONS_ERROR = 'Unable to load chat sessions.';
 export const AI_SETTINGS_LOAD_FAILURE_MESSAGE =
-  'Unable to load Assistant & Patrol settings. Your configuration could not be retrieved.';
+  'Unable to load Provider & Models settings. Your configuration could not be retrieved.';
 export const AI_SETTINGS_LOAD_RETRY_LABEL = 'Retry';
 
 export interface AISettingsSetupDialogPresentation {
@@ -42,24 +44,24 @@ export function getAIProviderTestResultTextClass(success: boolean): string {
 
 export function getAISettingsWorkloadDiscoveryHelpContent() {
   return {
-    title: 'What is workload discovery?',
+    title: 'What is service context?',
     description:
-      'Workload discovery scans your VMs, containers, and container runtimes to identify running services, versions, and access details. Pulse stores that context so Assistant can use it in chat and Patrol can use it during verification.',
+      'Service context scans your VMs, containers, and container runtimes to identify running services, versions, and access details. Pulse stores those facts so Assistant can use them in chat and Patrol can use them during verification.',
   } as const;
 }
 
 export function getAISettingsWorkloadDiscoverySummary() {
   return {
-    text: 'Workload discovery stores concrete service context for Assistant chat and Patrol verification, so responses and findings can reference real services and commands instead of generic advice.',
+    text: 'Service context records service names, versions, and commands so Assistant and Patrol can use real context instead of generic advice.',
   } as const;
 }
 
 export function getAISettingsSetupDialogPresentation(): AISettingsSetupDialogPresentation {
   return {
-    ariaLabel: 'Set up Assistant and Patrol',
-    title: 'Set Up Assistant & Patrol',
-    description: 'Connect a provider to power Pulse Assistant and Patrol.',
-    submitLabel: 'Enable Assistant & Patrol',
+    ariaLabel: 'Set up Pulse Intelligence',
+    title: 'Set Up Pulse Intelligence',
+    description: 'Connect a provider to power Patrol, Assistant, and service context.',
+    submitLabel: 'Enable Pulse Intelligence',
   };
 }
 
@@ -89,7 +91,7 @@ export function getAIOAuthErrorMessage(errorCode: string): string {
 
 export function getAISettingsLoadingState() {
   return {
-    text: 'Loading Assistant & Patrol settings...',
+    text: 'Loading Provider & Models settings...',
   } as const;
 }
 
@@ -128,9 +130,12 @@ export function getAISessionSummarizeErrorMessage(message?: string | null) {
   return detail || 'Unable to summarize the session.';
 }
 
-export function getAISettingsSaveErrorMessage(message?: string | null) {
+export function getAISettingsSaveErrorMessage(
+  message?: string | null,
+  fallback = 'Unable to save Provider & Models settings.',
+) {
   const detail = (message || '').trim();
-  return detail || 'Unable to save Assistant & Patrol settings.';
+  return detail || fallback;
 }
 
 export function getAICredentialsClearErrorMessage(message?: string | null) {
@@ -140,5 +145,5 @@ export function getAICredentialsClearErrorMessage(message?: string | null) {
 
 export function getAISettingsToggleErrorMessage(message?: string | null) {
   const detail = (message || '').trim();
-  return detail || 'Unable to update Assistant & Patrol settings.';
+  return detail || 'Unable to update Pulse Intelligence settings.';
 }

@@ -65,7 +65,7 @@ describe('aiChatPresentation', () => {
     expect(AI_CHAT_DRAWER_SUBTITLE).toBe(
       'Observed context, provider-backed reasoning, and governed actions.',
     );
-    expect(AI_CHAT_DISCOVERY_HINT_TITLE).toBe('Workload Discovery is off.');
+    expect(AI_CHAT_DISCOVERY_HINT_TITLE).toBe('Discovery is off.');
     expect(AI_CHAT_DISCOVERY_HINT_BODY).toBe(
       'Enable it in Settings so Pulse Assistant can reference real services, versions, and commands instead of generic guidance.',
     );
@@ -94,11 +94,13 @@ describe('aiChatPresentation', () => {
     expect(AI_CHAT_LAUNCHER_ARIA_LABEL).toBe('Expand Pulse Assistant');
     expect(AI_CHAT_CLOSE_LABEL).toBe('Close Pulse Assistant');
     expect(AI_CHAT_SESSION_MENU_TITLE).toBe('Pulse Assistant sessions');
-    expect(AI_CHAT_AUTONOMOUS_WARNING_DISMISS_LABEL).toBe('Dismiss autonomous control warning');
+    expect(AI_CHAT_AUTONOMOUS_WARNING_DISMISS_LABEL).toBe('Dismiss chat actions warning');
     expect(AI_CHAT_DISCOVERY_HINT_DISMISS_LABEL).toBe('Dismiss discovery context warning');
-    expect(AI_CHAT_CONTROL_MODE_LABEL).toBe('Assistant control mode');
-    expect(AI_CHAT_CONTROL_MODE_MENU_LABEL).toBe('Assistant control mode options');
-    expect(AI_CHAT_SWITCH_TO_APPROVAL_LABEL).toBe('Switch Assistant control mode to Approval');
+    expect(AI_CHAT_CONTROL_MODE_LABEL).toBe('Assistant chat action mode');
+    expect(AI_CHAT_CONTROL_MODE_MENU_LABEL).toBe('Assistant chat action options');
+    expect(AI_CHAT_SWITCH_TO_APPROVAL_LABEL).toBe(
+      'Switch Assistant chat actions to Ask first',
+    );
     expect(AI_CHAT_COMMAND_HELP_TITLE).toBe('Assistant commands');
     expect(AI_CHAT_COMMAND_HELP_BUTTON_LABEL).toBe('Open Assistant commands');
     expect(AI_CHAT_COMMAND_HELP_CLOSE_LABEL).toBe('Close Assistant commands');
@@ -117,7 +119,7 @@ describe('aiChatPresentation', () => {
     expect(AI_CHAT_ASSISTANT_MESSAGE_LABEL).toBe('Pulse Assistant');
     expect(AI_CHAT_CONTEXT_USED_LABEL).toBe('Context used');
     expect(AI_CHAT_LAST_TURN_SUMMARY_LABEL).toBe('Last assistant turn summary');
-    expect(AI_CHAT_PROVIDER_READINESS_SETTINGS_HREF).toBe('/settings/system-ai');
+    expect(AI_CHAT_PROVIDER_READINESS_SETTINGS_HREF).toBe('/settings/pulse-intelligence/provider');
     expect(AI_CHAT_PROVIDER_READINESS_SETTINGS_LABEL).toBe('Open settings');
     expect(AI_CHAT_PROVIDER_READINESS_RETRY_LABEL).toBe('Retry');
   });

@@ -1,10 +1,12 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PatrolRunRecord } from '@/api/patrol';
 import { RunHistoryPanel } from '../RunHistoryPanel';
 
 vi.mock('../RunHistoryEntry', () => ({
-  RunHistoryEntry: () => <div data-testid="run-history-entry" />,
+  RunHistoryEntry: (props: { run: PatrolRunRecord }) => (
+    <div data-testid="run-history-entry">{props.run.id}</div>
+  ),
 }));
 
 describe('RunHistoryPanel', () => {
@@ -59,7 +61,7 @@ describe('RunHistoryPanel', () => {
     cleanup();
   });
 
-  it('warns that some older runs do not include findings snapshots', () => {
+  it('frames history as Patrol checks even when older runs lack finding records', () => {
     render(() => (
       <RunHistoryPanel
         runs={[baseRun, { ...baseRun, id: 'run-legacy', finding_ids: undefined }]}
@@ -70,14 +72,15 @@ describe('RunHistoryPanel', () => {
       />
     ));
 
+    expect(screen.queryByRole('heading', { name: 'History' })).not.toBeInTheDocument();
     expect(
       screen.getByText(
-        'Select a run to filter findings when available. Some older runs do not include findings snapshots.',
+        'Open a check to review what Patrol found. Older checks may not have issue lists.',
       ),
     ).toBeInTheDocument();
   });
 
-  it('explains when the selected run predates findings snapshots', () => {
+  it('explains when the selected run lacks finding records', () => {
     const legacyRun = { ...baseRun, id: 'run-legacy', finding_ids: undefined };
 
     render(() => (
@@ -92,8 +95,40 @@ describe('RunHistoryPanel', () => {
 
     expect(
       screen.getByText(
-        'Selected run predates findings snapshots; run-scoped findings cannot be fully verified.',
+        'This older check has no issue list.',
       ),
     ).toBeInTheDocument();
+  });
+
+  it('keeps older run snapshots behind an explicit expansion', () => {
+    const runs = Array.from({ length: 10 }, (_, index) => ({
+      ...baseRun,
+      id: `run-${index + 1}`,
+    }));
+
+    render(() => (
+      <RunHistoryPanel
+        runs={runs}
+        loading={false}
+        selectedRun={null}
+        onSelectRun={vi.fn()}
+        patrolStream={patrolStream}
+      />
+    ));
+
+    expect(screen.getAllByTestId('run-history-entry')).toHaveLength(8);
+    expect(screen.getByText('run-1')).toBeInTheDocument();
+    expect(screen.getByText('run-8')).toBeInTheDocument();
+    expect(screen.queryByText('run-9')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show 2 older runs' }));
+
+    expect(screen.getAllByTestId('run-history-entry')).toHaveLength(10);
+    expect(screen.getByText('run-10')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show recent 8 runs' }));
+
+    expect(screen.getAllByTestId('run-history-entry')).toHaveLength(8);
+    expect(screen.queryByText('run-10')).not.toBeInTheDocument();
   });
 });

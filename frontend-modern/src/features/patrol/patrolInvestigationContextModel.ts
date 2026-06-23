@@ -5,6 +5,7 @@ import type {
 } from '@/types/aiIntelligence';
 import type { ApprovalRequest, InvestigationRecord, RemediationPlan } from '@/api/ai';
 import type { PatrolRunRecord } from '@/api/patrol';
+import type { UnifiedFinding } from '@/stores/aiIntelligence';
 import type {
   AIChatContext,
   AIChatContextBriefing,
@@ -22,6 +23,10 @@ import {
   formatResourceCorrelationSummary,
   sortResourceCorrelations,
 } from '@/utils/resourceCorrelationPresentation';
+import {
+  getFindingSubjectPresentation,
+  getFindingTitlePresentation,
+} from '@/utils/aiFindingPresentation';
 import {
   formatDurationMs,
   formatPatrolRuntimeFailureSummary,
@@ -443,6 +448,66 @@ export function buildPatrolAssistantApprovalBriefingInput(
   };
 }
 
+export function buildPatrolAssistantProposedFixBriefingInputFromApproval(
+  approval?: ApprovalRequest | null,
+): PatrolAssistantProposedFixBriefingInput | undefined {
+  return buildPatrolAssistantProposedFixBriefingInput(
+    approval
+      ? {
+          description: approval.context,
+          riskLevel: approval.riskLevel,
+          targetHost: approval.targetName,
+          commandCount: approval.command ? 1 : 0,
+        }
+      : null,
+  );
+}
+
+export interface PatrolUnifiedFindingHandoffOptions {
+  pendingApproval?: PatrolAssistantApprovalBriefingInput | null;
+  proposedFix?: PatrolAssistantProposedFixBriefingInput | null;
+}
+
+export function buildPatrolAssistantFindingHandoffInputFromUnifiedFinding(
+  finding: UnifiedFinding,
+  options: PatrolUnifiedFindingHandoffOptions = {},
+): PatrolAssistantFindingHandoffInput {
+  const title = getFindingTitlePresentation(finding).label;
+  const subject = getFindingSubjectPresentation(finding).label;
+  return {
+    id: finding.id,
+    title,
+    subject,
+    description: finding.description,
+    severity: finding.severity,
+    findingStatus: finding.status,
+    investigationStatus: finding.investigationStatus,
+    investigationOutcome: finding.investigationOutcome,
+    loopState: finding.loopState,
+    timesRaised: finding.timesRaised,
+    regressionCount: finding.regressionCount,
+    lastRegressionAt: finding.lastRegressionAt,
+    remediationId: finding.remediationPlanId,
+    resourceId: finding.resourceId,
+    resourceName: finding.resourceName,
+    resourceType: finding.resourceType,
+    detectedAt: finding.detectedAt,
+    lastSeenAt: finding.lastSeenAt,
+    pendingApproval: options.pendingApproval,
+    proposedFix: options.proposedFix,
+    investigationRecord: finding.investigationRecord,
+  };
+}
+
+export function buildPatrolAssistantFindingHandoffFromUnifiedFinding(
+  finding: UnifiedFinding,
+  options: PatrolUnifiedFindingHandoffOptions = {},
+): PatrolAssistantFindingHandoff {
+  return buildPatrolAssistantFindingHandoff(
+    buildPatrolAssistantFindingHandoffInputFromUnifiedFinding(finding, options),
+  );
+}
+
 export function buildPatrolAssessmentAssistantHandoff(
   input: PatrolAssessmentAssistantHandoffInput,
 ): PatrolAssessmentAssistantHandoff {
@@ -570,9 +635,9 @@ export function buildPatrolRunAssistantHandoff(run: PatrolRunRecord): PatrolRunA
 export function buildPatrolConfigurationFailureHandoff(
   input: PatrolConfigurationFailureInput,
 ): PatrolConfigurationFailureHandoff {
-  const message = normalizeText(input.message) || 'Patrol configuration could not be saved.';
+  const message = normalizeText(input.message) || 'Patrol mode could not be saved.';
   const code = normalizeText(input.code);
-  const issueLabel = input.saved ? 'Patrol configuration issue' : 'Patrol configuration failure';
+  const issueLabel = input.saved ? 'Patrol mode issue' : 'Patrol mode save failure';
   const readinessSummary = normalizeText(input.readiness?.summary);
   const cause = normalizeText(input.readiness?.cause) || normalizeText(input.blockedCause);
   const provider = normalizeText(input.readiness?.provider);
@@ -607,7 +672,7 @@ export function buildPatrolConfigurationFailureHandoff(
         evidence: formatConfigurationFailureDetails(input.details).slice(0, 4),
         actionLabel: `Review ${issueLabel}`,
         safetyNote:
-          'Assistant can explain the configuration state; provider changes, retries, and remediation remain operator-controlled.',
+          'Assistant can explain the Patrol mode state; provider changes, retries, and remediation remain operator-controlled.',
       },
       context: {
         source: 'pulse-patrol-configuration-failure',
@@ -870,14 +935,14 @@ function buildPatrolConfigurationFailureModelContext(
 ): string {
   const details = formatConfigurationFailureDetails(input.details);
   return [
-    '[Patrol Configuration Failure Context]',
-    'Source: Pulse Patrol configuration surface',
+    '[Patrol Control Save Failure Context]',
+    'Source: Pulse Patrol mode surface',
     formatContextLine('Server Message', message),
     formatContextLine('Server Code', input.code),
     input.status ? `HTTP Status: ${input.status}` : undefined,
-    ...detailLines.map((line) => formatContextLine('Configuration Detail', line)),
+    ...detailLines.map((line) => formatContextLine('Control Detail', line)),
     ...details.map((line) => formatContextLine('Backend Detail', line)),
-    'Model Boundary: This Patrol configuration handoff is model-only context for explanation and review. Provider changes, retries, diagnostics, remediation, and command execution require explicit governed operator action.',
+    'Model Boundary: This Patrol mode handoff is model-only context for explanation and review. Provider changes, retries, diagnostics, remediation, and command execution require explicit governed operator action.',
   ]
     .filter(isNonEmptyString)
     .join('\n');
@@ -889,7 +954,7 @@ function formatConfigurationFailureSettings(
   const settings = [
     input.autonomyLevel ? `mode ${input.autonomyLevel}` : undefined,
     typeof input.fullModeUnlocked === 'boolean'
-      ? `autonomous critical remediation ${input.fullModeUnlocked ? 'enabled' : 'disabled'}`
+      ? `automatic critical fixes ${input.fullModeUnlocked ? 'enabled' : 'disabled'}`
       : undefined,
     typeof input.investigationBudget === 'number'
       ? `budget ${input.investigationBudget}`
@@ -1444,7 +1509,7 @@ function formatAssessmentLatestRun(
     normalizeText(latestRun.status?.label),
     normalizeText(latestRun.timestamp),
     normalizeText(latestRun.coverageSummary),
-    latestRun.findingsSnapshotAvailable === false ? 'findings snapshot unavailable' : undefined,
+    latestRun.findingsSnapshotAvailable === false ? 'finding record unavailable' : undefined,
   ]
     .filter(isNonEmptyString)
     .join('; ');
@@ -2209,6 +2274,7 @@ const GOVERNED_ACTION_OUTCOMES = new Set([
   'fix_queued',
   'fix_executed',
   'fix_failed',
+  'fix_rejected',
   'fix_verified',
   'fix_verification_failed',
   'fix_verification_unknown',

@@ -23,6 +23,20 @@ describe('ResourceCorrelationSummary', () => {
             last_seen: '2026-03-01T00:15:00Z',
             description: 'Disk pressure often precedes restarts',
           },
+          {
+            source_id: 'storage-2',
+            source_name: 'Storage 2',
+            source_type: 'storage',
+            target_id: 'host-2',
+            target_name: 'Host 2',
+            target_type: 'vm',
+            event_pattern: 'ALERT → ALERT',
+            occurrences: 1,
+            avg_delay: 125000000000,
+            confidence: 0.5,
+            last_seen: '2026-03-01T00:10:00Z',
+            description: 'Alerts often cluster together',
+          },
         ]}
         summaryText="5 total"
       />
@@ -36,6 +50,9 @@ describe('ResourceCorrelationSummary', () => {
     expect(screen.getByText('Storage 1')).toBeInTheDocument();
     expect(screen.getByText('Host 1')).toBeInTheDocument();
     expect(screen.getByText('Disk Full → Restart')).toBeInTheDocument();
+    const alertPattern = screen.getByText('Alert → Alert');
+    expect(alertPattern).toBeInTheDocument();
+    expect(alertPattern.className).not.toContain('uppercase');
     expect(screen.getByText(/2 occurrences · avg delay 2m · 88% confidence/)).toBeInTheDocument();
     expect(screen.getByText('Disk pressure often precedes restarts')).toBeInTheDocument();
     expect(screen.queryByText(/last seen/i)).toBeNull();
@@ -102,7 +119,9 @@ describe('ResourceCorrelationSummary', () => {
     expect(screen.getByText('PVE 1')).toBeInTheDocument();
     expect(screen.getAllByText('VM Child').length).toBeGreaterThan(0);
     expect(screen.getByText('Storage 1 alias')).toBeInTheDocument();
-    expect(screen.getByText('Runs On')).toBeInTheDocument();
+    const relationshipType = screen.getByText('Runs On');
+    expect(relationshipType).toBeInTheDocument();
+    expect(relationshipType.className).not.toContain('uppercase');
     expect(screen.getByText(/100% confidence · Proxmox Adapter · last seen/)).toBeInTheDocument();
     expect(screen.getAllByText(/last seen/i).length).toBeGreaterThanOrEqual(2);
   });

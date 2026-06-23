@@ -842,7 +842,7 @@ describe('getAssistantActiveTurnStatus', () => {
       ),
     ).toEqual({
       type: 'tool',
-      text: 'Preparing governed tools · command',
+      text: 'Preparing governed actions · command',
     });
   });
 
@@ -861,7 +861,7 @@ describe('getAssistantActiveTurnStatus', () => {
         message: 'Preparing governed tools',
         tool: 'pulse_exec',
       }),
-    ).toBe('Preparing governed tools · command');
+    ).toBe('Preparing governed actions · command');
   });
 
   it('lets a newer provider switch replace stale waiting progress', () => {

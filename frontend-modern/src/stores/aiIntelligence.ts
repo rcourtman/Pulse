@@ -57,6 +57,7 @@ const VALID_INVESTIGATION_OUTCOMES = new Set<string>([
   'fix_queued',
   'fix_executed',
   'fix_failed',
+  'fix_rejected',
   'needs_attention',
   'cannot_fix',
   'timed_out',
@@ -163,7 +164,7 @@ export interface UnifiedFinding {
   status: 'active' | 'resolved' | 'dismissed' | 'snoozed';
   correlatedFindingIds?: string[];
   remediationPlanId?: string;
-  // Investigation fields (Patrol Autonomy)
+  // Investigation fields (Patrol mode)
   investigationSessionId?: string;
   investigationStatus?: 'pending' | 'running' | 'completed' | 'failed' | 'needs_attention';
   investigationOutcome?:
@@ -171,6 +172,7 @@ export interface UnifiedFinding {
     | 'fix_queued'
     | 'fix_executed'
     | 'fix_failed'
+    | 'fix_rejected'
     | 'needs_attention'
     | 'cannot_fix'
     | 'timed_out'

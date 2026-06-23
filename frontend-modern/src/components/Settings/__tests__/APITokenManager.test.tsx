@@ -1,27 +1,37 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
+import { Route, Router } from '@solidjs/router';
 
 import type { APITokenRecord } from '@/api/security';
 import type { Resource } from '@/types/resource';
 import {
+  AI_EXECUTE_SCOPE,
   AGENT_REPORT_SCOPE,
   AUDIT_READ_SCOPE,
   DOCKER_MANAGE_SCOPE,
   DOCKER_REPORT_SCOPE,
+  MONITORING_READ_SCOPE,
+  MONITORING_WRITE_SCOPE,
+  SETTINGS_READ_SCOPE,
+  SETTINGS_WRITE_SCOPE,
 } from '@/constants/apiScopes';
+import { API_TOKEN_CREATE_ANCHOR, PULSE_MCP_TOKEN_SETUP_PATH } from '@/routing/resourceLinks';
 import apiAccessPanelSource from '../APIAccessPanel.tsx?raw';
 import apiTokenManagerSource from '../APITokenManager.tsx?raw';
+import { APIAccessPanel } from '../APIAccessPanel';
 import { APITokenManager } from '../APITokenManager';
 
 const listTokensMock = vi.fn();
 const createTokenMock = vi.fn();
 const deleteTokenMock = vi.fn();
+const fetchAgentCapabilitiesManifestMock = vi.fn();
 const notificationSuccessMock = vi.fn();
 const notificationErrorMock = vi.fn();
 const showTokenRevealMock = vi.fn();
 const loggerErrorMock = vi.fn();
 const markDockerRuntimesTokenRevokedMock = vi.fn();
 const markAgentsTokenRevokedMock = vi.fn();
+const scrollIntoViewMock = vi.fn();
 
 let mockResources: Resource[] = [];
 
@@ -32,6 +42,15 @@ vi.mock('@/api/security', () => ({
     deleteToken: (...args: unknown[]) => deleteTokenMock(...args),
   },
 }));
+
+vi.mock('@/api/agentCapabilities', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api/agentCapabilities')>();
+  return {
+    ...actual,
+    fetchAgentCapabilitiesManifest: (...args: unknown[]) =>
+      fetchAgentCapabilitiesManifestMock(...args),
+  };
+});
 
 vi.mock('@/stores/notifications', () => ({
   notificationStore: {
@@ -101,20 +120,27 @@ const makeResource = (overrides: Partial<Resource> = {}): Resource => ({
   ...overrides,
 });
 
+const renderAPIAccessPanel = () =>
+  render(() => (
+    <Router>
+      <Route
+        path="/*"
+        component={() => <APIAccessPanel onTokensChanged={vi.fn()} refreshing={false} canManage />}
+      />
+    </Router>
+  ));
+
 describe('APITokenManager security surface', () => {
   // The API Access tab is the canonical security surface for
-  // operator-controlled machine access. Tokens minted here are
-  // the credential the agent integrations panel directs operators
-  // to use for MCP / HTTP agent wiring. Pin that the agent
-  // integrations panel sits on this same tab so the security
-  // story stays coherent: minting a token and seeing what an
-  // agent does with it live side-by-side, not split across tabs.
-  it('hosts the agent integrations panel on the same security surface as token management', () => {
-    expect(apiAccessPanelSource).toContain(
-      "import AgentIntegrationsPanel from './AgentIntegrationsPanel';",
-    );
-    expect(apiAccessPanelSource).toContain('<AgentIntegrationsPanel />');
+  // operator-controlled machine access. Pulse Intelligence owns
+  // external-agent setup; API Access only mints and manages the
+  // scoped token that setup links to when credentials are needed.
+  it('keeps API Access separate from Pulse Intelligence external-agent setup', () => {
     expect(apiAccessPanelSource).toContain('<APITokenManager');
+    expect(apiAccessPanelSource).toContain('api-access-token-section');
+    expect(apiAccessPanelSource).not.toContain('AgentIntegrationsPanel');
+    expect(apiAccessPanelSource).not.toContain('isExternalAgentSetupHash');
+    expect(apiAccessPanelSource).not.toContain('api-access-external-agent-section');
   });
 });
 
@@ -129,9 +155,37 @@ describe('APITokenManager', () => {
     loggerErrorMock.mockReset();
     markDockerRuntimesTokenRevokedMock.mockReset();
     markAgentsTokenRevokedMock.mockReset();
+    fetchAgentCapabilitiesManifestMock.mockReset();
+    scrollIntoViewMock.mockReset();
+    Element.prototype.scrollIntoView = scrollIntoViewMock;
 
     mockResources = [];
     listTokensMock.mockResolvedValue([]);
+    fetchAgentCapabilitiesManifestMock.mockResolvedValue({
+      version: 'v1',
+      surfaceContract: {
+        core: { id: 'pulse_intelligence_core', label: 'Pulse Intelligence Core', description: '' },
+        proactiveEngine: { id: 'pulse_patrol', label: 'Pulse Patrol', description: '' },
+        operatorSurfaces: [],
+      },
+      mcpAdapter: {
+        serverName: 'pulse',
+        command: 'pulse-mcp',
+        baseUrlFlag: '--base-url',
+        defaultBaseUrl: 'http://localhost:7655',
+        tokenEnv: 'PULSE_API_TOKEN',
+        configFamilies: [],
+      },
+      requiredScopes: [
+        MONITORING_READ_SCOPE,
+        MONITORING_WRITE_SCOPE,
+        SETTINGS_READ_SCOPE,
+        SETTINGS_WRITE_SCOPE,
+        AI_EXECUTE_SCOPE,
+      ],
+      categories: [],
+      capabilities: [],
+    });
     createTokenMock.mockResolvedValue({
       token: 'pulse_secret_value',
       record: makeToken({
@@ -145,6 +199,20 @@ describe('APITokenManager', () => {
 
   afterEach(() => {
     cleanup();
+    window.history.pushState({}, '', '/');
+  });
+
+  it('keeps API Access focused on token management', async () => {
+    window.history.pushState({}, '', '/settings/security/api');
+
+    renderAPIAccessPanel();
+
+    const tokenHeading = await screen.findByRole('heading', { name: 'API tokens' });
+    const tokenSection = tokenHeading.closest('[data-testid="api-access-token-section"]');
+
+    expect(tokenSection).not.toBeNull();
+    expect(screen.queryByRole('heading', { name: 'External agents' })).not.toBeInTheDocument();
+    expect(document.querySelector('[data-testid="api-access-external-agent-section"]')).toBeNull();
   });
 
   it('creates scoped tokens from the canonical preset path', async () => {
@@ -204,6 +272,136 @@ describe('APITokenManager', () => {
     });
   });
 
+  it('requires an explicit scope selection before generating a token', async () => {
+    render(() => <APITokenManager onTokensChanged={vi.fn()} canManage />);
+
+    await waitFor(() => {
+      expect(listTokensMock).toHaveBeenCalledTimes(1);
+    });
+
+    expect(screen.getByRole('button', { name: 'Full access' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    expect(screen.getByRole('button', { name: 'Generate' })).toBeDisabled();
+    expect(
+      screen.getByText(
+        'Choose a scoped preset for least privilege, or deliberately choose Full access.',
+      ),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Kiosk / Monitoring' }));
+
+    expect(screen.getByRole('button', { name: 'Generate' })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Kiosk / Monitoring' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: 'Full access' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+  });
+
+  it('creates Patrol external agent tokens from the live manifest scopes', async () => {
+    createTokenMock.mockResolvedValueOnce({
+      token: 'pulse_agent_secret',
+      record: makeToken({
+        id: 'token-agent',
+        name: 'OpenCode Pulse',
+        scopes: [
+          AI_EXECUTE_SCOPE,
+          MONITORING_READ_SCOPE,
+          MONITORING_WRITE_SCOPE,
+          SETTINGS_READ_SCOPE,
+          SETTINGS_WRITE_SCOPE,
+        ],
+      }),
+    });
+
+    render(() => <APITokenManager onTokensChanged={vi.fn()} canManage />);
+
+    await waitFor(() => {
+      expect(fetchAgentCapabilitiesManifestMock).toHaveBeenCalledTimes(1);
+      expect(listTokensMock).toHaveBeenCalledTimes(1);
+    });
+
+    const preset = await screen.findByRole('button', { name: 'Patrol external agent' });
+    expect(preset).toHaveAttribute(
+      'title',
+      'Scopes for connected agents that read Pulse context and request Patrol work.',
+    );
+
+    fireEvent.input(screen.getByPlaceholderText('e.g. Docker / Podman automation'), {
+      target: { value: 'OpenCode Pulse' },
+    });
+    fireEvent.click(preset);
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+
+    await waitFor(() => {
+      expect(createTokenMock).toHaveBeenCalledWith('OpenCode Pulse', [
+        AI_EXECUTE_SCOPE,
+        MONITORING_READ_SCOPE,
+        MONITORING_WRITE_SCOPE,
+        SETTINGS_READ_SCOPE,
+        SETTINGS_WRITE_SCOPE,
+      ]);
+    });
+
+    expect(showTokenRevealMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        token: 'pulse_agent_secret',
+        source: 'security',
+        record: expect.objectContaining({
+          id: 'token-agent',
+          name: 'OpenCode Pulse',
+        }),
+      }),
+    );
+  });
+
+  it('preselects the Patrol external agent preset from the MCP setup route', async () => {
+    window.history.pushState({}, '', PULSE_MCP_TOKEN_SETUP_PATH);
+    createTokenMock.mockResolvedValueOnce({
+      token: 'pulse_mcp_secret',
+      record: makeToken({
+        id: 'token-mcp',
+        name: 'Patrol external agent',
+        scopes: [
+          AI_EXECUTE_SCOPE,
+          MONITORING_READ_SCOPE,
+          MONITORING_WRITE_SCOPE,
+          SETTINGS_READ_SCOPE,
+          SETTINGS_WRITE_SCOPE,
+        ],
+      }),
+    });
+
+    render(() => <APITokenManager onTokensChanged={vi.fn()} canManage />);
+
+    await waitFor(() => {
+      expect(fetchAgentCapabilitiesManifestMock).toHaveBeenCalledTimes(1);
+      expect(listTokensMock).toHaveBeenCalledTimes(1);
+    });
+    await screen.findByDisplayValue('Patrol external agent');
+    await waitFor(() => {
+      expect(scrollIntoViewMock).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
+    });
+    expect(document.getElementById(API_TOKEN_CREATE_ANCHOR)?.className).toContain('ring-2');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+
+    await waitFor(() => {
+      expect(createTokenMock).toHaveBeenCalledWith('Patrol external agent', [
+        AI_EXECUTE_SCOPE,
+        MONITORING_READ_SCOPE,
+        MONITORING_WRITE_SCOPE,
+        SETTINGS_READ_SCOPE,
+        SETTINGS_WRITE_SCOPE,
+      ]);
+    });
+  });
+
   it('surfaces the dedicated audit scope in presets and grouped custom scopes', async () => {
     createTokenMock.mockResolvedValueOnce({
       token: 'pulse_audit_secret',
@@ -223,6 +421,15 @@ describe('APITokenManager', () => {
     expect(screen.getByRole('button', { name: 'Audit read' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('Custom scopes'));
+    expect(screen.getByText('AI')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Pulse Assistant chat' })).toHaveAttribute(
+      'title',
+      'Use interactive Pulse Assistant sessions, models, and knowledge endpoints.',
+    );
+    expect(screen.getByRole('button', { name: 'Pulse Intelligence actions' })).toHaveAttribute(
+      'title',
+      'Use governed Patrol actions for plans, approvals, policy-allowed fixes, verification, and history.',
+    );
     expect(screen.getByText('Security')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Audit logs (read)' })).toBeInTheDocument();
 

@@ -22,25 +22,30 @@ describe('aiControlLevelPresentation', () => {
     expect(getAIControlLevelPanelClass('autonomous')).toContain('border-amber-200');
     expect(getAIControlLevelBadgeClass('controlled')).toContain('bg-amber-100');
     expect(getAIControlLevelBadgeClass('autonomous')).toContain('bg-red-100');
-    expect(getAIControlLevelDescription('read_only')).toContain('query and observe only');
-    expect(getAIControlLevelDescription('controlled')).toContain('after you approve');
-    expect(getAIControlLevelDescription('autonomous')).toContain('without per-command approval');
+    expect(getAIControlLevelDescription('read_only')).toContain('Assistant can query and explain');
+    expect(getAIControlLevelDescription('controlled')).toContain(
+      'asks before chat-only actions',
+    );
+    expect(getAIControlLevelDescription('autonomous')).toContain('eligible chat-only actions');
+    expect(getAIControlLevelDescription('autonomous')).toContain(
+      'Infrastructure work stays with Patrol mode',
+    );
   });
 
   it('returns canonical chat control-level presentation', () => {
     expect(getAIChatControlLevelPresentation('read_only')).toMatchObject({
       label: 'Read-only',
-      description: 'No commands or control actions',
+      description: 'Observes only',
       dotClassName: 'bg-slate-400',
     });
     expect(getAIChatControlLevelPresentation('controlled')).toMatchObject({
-      label: 'Approval',
-      description: 'Ask before running commands',
+      label: 'Ask first',
+      description: 'Asks before chat-only actions',
       dotClassName: 'bg-amber-500',
     });
     expect(getAIChatControlLevelPresentation('autonomous')).toMatchObject({
-      label: 'Autonomous',
-      description: 'Executes without approval',
+      label: 'Chat actions',
+      description: 'Eligible chat-only actions',
       dotClassName: 'bg-red-500',
     });
   });

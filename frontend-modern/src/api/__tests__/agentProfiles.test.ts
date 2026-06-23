@@ -406,16 +406,16 @@ describe('AgentProfilesAPI', () => {
       const mockResponse = { ok: false, status: 503 } as unknown as Response;
       vi.mocked(apiFetch).mockResolvedValueOnce(mockResponse);
       vi.mocked(assertAPIResponseOKOrThrowStatus).mockRejectedValueOnce(
-        new Error('Pulse Assistant service is not available. Please check Pulse Assistant settings.'),
+        new Error('Pulse Intelligence is not available. Please check Assistant & Patrol settings.'),
       );
 
       await expect(AgentProfilesAPI.suggestProfile({ prompt: 'test' })).rejects.toThrow(
-        'Pulse Assistant service is not available',
+        'Pulse Intelligence is not available',
       );
       expect(assertAPIResponseOKOrThrowStatus).toHaveBeenCalledWith(
         mockResponse,
         503,
-        'Pulse Assistant service is not available. Please check Pulse Assistant settings.',
+        'Pulse Intelligence is not available. Please check Assistant & Patrol settings.',
         'Failed to get suggestion: 503',
       );
     });
@@ -431,7 +431,7 @@ describe('AgentProfilesAPI', () => {
       expect(assertAPIResponseOKOrThrowStatus).toHaveBeenCalledWith(
         mockResponse,
         503,
-        'Pulse Assistant service is not available. Please check Pulse Assistant settings.',
+        'Pulse Intelligence is not available. Please check Assistant & Patrol settings.',
         'Failed to get suggestion: 500',
       );
     });

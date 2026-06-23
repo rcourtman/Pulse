@@ -1,7 +1,11 @@
 import type { PatrolRunRecord, PatrolRunStatus, PatrolTriggerStatus } from '@/api/patrol';
 import type { MetadataBadgeTone } from '@/components/shared/MetadataBadge';
 import { formatIdentifierLabel } from '@/utils/textPresentation';
-import { getCanonicalScopeResourceIds } from '@/utils/patrolFormat';
+import {
+  formatDurationMs,
+  formatPatrolRuntimeFailureSummary,
+  getCanonicalScopeResourceIds,
+} from '@/utils/patrolFormat';
 import {
   getPatrolProviderSettingsAction,
   type PatrolRuntimeActionPresentation,
@@ -22,6 +26,17 @@ export interface PatrolLatestRunPresentation {
   timestamp?: string;
 }
 
+export interface PatrolRunRecordSummaryPresentation {
+  action?: PatrolRunPrimaryActionPresentation;
+  outcome: string;
+  summary: string;
+}
+
+export interface PatrolRunOperatorRecordPresentation {
+  detail: string;
+  headline: string;
+}
+
 export interface PatrolActivityBreakdown {
   totalRuns: number;
   fullPatrols: number;
@@ -34,6 +49,13 @@ export interface PatrolActivityBreakdown {
 }
 
 export type PatrolRunPrimaryActionPresentation = PatrolRuntimeActionPresentation;
+
+export const PATROL_FINDING_RECORD_UNAVAILABLE_LABEL = 'Finding record unavailable';
+
+export interface PatrolTriggerStatusSummaryOptions {
+  manualRunAvailable?: boolean;
+  manualRunBlockedReason?: string;
+}
 
 function formatResourceCount(count: number, qualifier?: string): string {
   const normalized = Math.max(0, count || 0);
@@ -84,6 +106,130 @@ export function isPatrolRunHealthy(
   return getEffectivePatrolRunStatus(status, errorCount) === 'healthy';
 }
 
+function punctuateSentence(value: string): string {
+  const normalized = value.trim();
+  if (!normalized) return '';
+  return /[.!?]$/.test(normalized) ? normalized : `${normalized}.`;
+}
+
+function formatRunActionContext(
+  run: Pick<
+    PatrolRunRecord,
+    'duration_ms' | 'effective_scope_resource_ids' | 'resources_checked' | 'scope_resource_ids'
+  >,
+): string {
+  const coverageSummary = getPatrolRunCoverageSummary(run);
+  const duration = formatDurationMs(run.duration_ms);
+  if (coverageSummary && duration) {
+    return `${coverageSummary} in ${duration}`;
+  }
+  if (coverageSummary) {
+    return coverageSummary;
+  }
+  if (duration) {
+    return `Patrol ran in ${duration}`;
+  }
+  return 'Patrol ran';
+}
+
+function formatIssueCount(count: number, singular: string = 'issue'): string {
+  const normalized = Math.max(0, count || 0);
+  return `${normalized} ${singular}${normalized === 1 ? '' : 's'}`;
+}
+
+export function getPatrolRunOperatorRecordPresentation(
+  run: Pick<
+    PatrolRunRecord,
+    | 'auto_fix_count'
+    | 'duration_ms'
+    | 'effective_scope_resource_ids'
+    | 'error_count'
+    | 'error_detail'
+    | 'error_summary'
+    | 'existing_findings'
+    | 'finding_ids'
+    | 'new_findings'
+    | 'resources_checked'
+    | 'resolved_findings'
+    | 'scope_resource_ids'
+    | 'status'
+  >,
+): PatrolRunOperatorRecordPresentation {
+  const context = formatRunActionContext(run);
+  const runtimeFailure = formatPatrolRuntimeFailureSummary({
+    errorSummary: run.error_summary,
+    errorDetail: run.error_detail,
+    errorCount: run.error_count,
+  });
+
+  const runHadRuntimeIssue =
+    Math.max(0, run.error_count || 0) > 0 || normalizePatrolRunStatus(run.status) === 'error';
+
+  if (runHadRuntimeIssue) {
+    return {
+      headline: 'Patrol needs attention',
+      detail: runtimeFailure
+        ? punctuateSentence(`${context}. Runtime issue: ${runtimeFailure}`)
+        : `${context}. It ended with issues that need review.`,
+    };
+  }
+
+  if (run.finding_ids === undefined) {
+    return {
+      headline: 'Completed check',
+      detail: `${context}. This older run has no issue list.`,
+    };
+  }
+
+  const fixedCount = Math.max(0, run.auto_fix_count || 0);
+  const newFindings = Math.max(0, run.new_findings || 0);
+  const resolvedFindings = Math.max(0, run.resolved_findings || 0);
+  const existingFindings = Math.max(0, run.existing_findings || 0);
+
+  if (fixedCount > 0) {
+    return {
+      headline: `Fixed ${formatIssueCount(fixedCount)}`,
+      detail:
+        newFindings > 0
+          ? `${context}. Found ${formatIssueCount(newFindings, 'new issue')} and fixed ${formatIssueCount(fixedCount)}.`
+          : `${context}. Fixed ${formatIssueCount(fixedCount)}.`,
+    };
+  }
+
+  if (resolvedFindings > 0) {
+    return {
+      headline: `Confirmed ${formatIssueCount(resolvedFindings)} resolved`,
+      detail: `${context}. Confirmed ${formatIssueCount(resolvedFindings)} resolved.`,
+    };
+  }
+
+  if (newFindings > 0) {
+    return {
+      headline: `Found ${formatIssueCount(newFindings, 'new issue')}`,
+      detail: `${context}. Ready for review.`,
+    };
+  }
+
+  if (existingFindings > 0) {
+    return {
+      headline: `${formatIssueCount(existingFindings)} still open`,
+      detail: `${context}. No new issues.`,
+    };
+  }
+
+  if (!isPatrolRunHealthy(run.status, run.error_count)) {
+    return {
+      headline: 'Patrol needs attention',
+      detail: `${context}. It ended with issues that need review.`,
+    };
+  }
+
+  return {
+    headline: 'All clear',
+    detail: `${context}. No issues recorded.`,
+  };
+}
+
 export function getPatrolRunPrimaryActionPresentation(
   run: Pick<PatrolRunRecord, 'error_count' | 'error_summary' | 'error_detail'>,
 ): PatrolRunPrimaryActionPresentation | undefined {
@@ -98,6 +244,77 @@ export function getPatrolRunPrimaryActionPresentation(
   }
 
   return getPatrolProviderSettingsAction();
+}
+
+export function getPatrolRunRecordSummaryPresentation(
+  run: Pick<
+    PatrolRunRecord,
+    | 'auto_fix_count'
+    | 'duration_ms'
+    | 'effective_scope_resource_ids'
+    | 'error_count'
+    | 'error_detail'
+    | 'error_summary'
+    | 'existing_findings'
+    | 'finding_ids'
+    | 'new_findings'
+    | 'resources_checked'
+    | 'scope_resource_ids'
+    | 'status'
+  >,
+): PatrolRunRecordSummaryPresentation {
+  const coverageSummary = getPatrolRunCoverageSummary(run);
+  const duration = formatDurationMs(run.duration_ms);
+  const summarySubject = coverageSummary || 'Patrol ran';
+  const summary = duration ? `${summarySubject} in ${duration}.` : `${summarySubject}.`;
+  const runtimeFailure = formatPatrolRuntimeFailureSummary({
+    errorSummary: run.error_summary,
+    errorDetail: run.error_detail,
+    errorCount: run.error_count,
+  });
+  const action = getPatrolRunPrimaryActionPresentation(run);
+
+  if (!isPatrolRunHealthy(run.status, run.error_count)) {
+    return {
+      action,
+      summary,
+      outcome: runtimeFailure
+        ? punctuateSentence(`Patrol ended with a runtime issue: ${runtimeFailure}`)
+        : 'Patrol ended with issues requiring review.',
+    };
+  }
+
+  if (run.finding_ids === undefined) {
+    return {
+      summary,
+      outcome: 'This older run has no finding record, so Patrol cannot show its issue list.',
+    };
+  }
+
+  const newFindings = Math.max(0, run.new_findings || 0);
+  const existingFindings = Math.max(0, run.existing_findings || 0);
+  const fixedCount = Math.max(0, run.auto_fix_count || 0);
+
+  if (newFindings > 0) {
+    const fixedPart =
+      fixedCount > 0 ? ` Patrol fixed ${fixedCount} issue${fixedCount === 1 ? '' : 's'}.` : '';
+    return {
+      summary,
+      outcome: `Patrol found ${newFindings} new issue${newFindings === 1 ? '' : 's'}.${fixedPart}`,
+    };
+  }
+
+  if (existingFindings > 0) {
+    return {
+      summary,
+      outcome: `No new issues. ${existingFindings} existing issue${existingFindings === 1 ? ' remains' : 's remain'}.`,
+    };
+  }
+
+  return {
+    summary,
+    outcome: 'No issues recorded for this run.',
+  };
 }
 
 export function getPatrolRunStatusPresentation(
@@ -154,11 +371,11 @@ export function getToolCallResultTextClass(success: boolean): string {
 export function getPatrolRunKindLabel(type: string | undefined): string {
   switch (normalizePatrolRunType(type)) {
     case 'scoped':
-      return 'Scoped run';
+      return 'Targeted check';
     case 'verification':
-      return 'Verification check';
+      return 'Follow-up check';
     default:
-      return isFullPatrolRunType(type) ? 'Full patrol' : 'Patrol run';
+      return isFullPatrolRunType(type) ? 'Patrol check' : 'Patrol run';
   }
 }
 
@@ -185,16 +402,30 @@ export function getPatrolLatestRunPresentation(
   };
 }
 
+function isAlreadyRunningBlockedReason(reason?: string): boolean {
+  return /\balready running\b|\brun\b.*\bin progress\b/i.test(reason?.trim() || '');
+}
+
+function getManualRunBlockedTriggerSummary(reason?: string): string | undefined {
+  if (isAlreadyRunningBlockedReason(reason)) {
+    return 'A Patrol run is already in progress. New automatic and manual runs are paused until it finishes.';
+  }
+  return undefined;
+}
+
 export function getPatrolTriggerStatusSummary(
   status: PatrolTriggerStatus | undefined,
+  options: PatrolTriggerStatusSummaryOptions = {},
 ): string | undefined {
   if (!status) {
     return undefined;
   }
 
   if (status.event_triggers_blocked) {
-    const blockMessage = status.event_triggers_blocked_message?.trim();
-    return blockMessage || 'Automatic Patrol checks from alerts and anomalies are paused';
+    if (options.manualRunAvailable === false) {
+      return getManualRunBlockedTriggerSummary(options.manualRunBlockedReason);
+    }
+    return undefined;
   }
 
   const notes: string[] = [];
@@ -271,27 +502,45 @@ export function getPatrolActivityBreakdown(
   );
 }
 
-function formatCountLabel(count: number, label: string): string {
-  return `${count} ${label}`;
+function formatCountLabel(count: number, singular: string, plural?: string): string {
+  return `${count} ${count === 1 ? singular : (plural ?? `${singular}s`)}`;
 }
 
 export function formatPatrolActivityBreakdown(summary: PatrolActivityBreakdown): string {
   const segments: string[] = [];
-  if (summary.fullPatrols > 0) segments.push(formatCountLabel(summary.fullPatrols, 'full'));
+  if (summary.fullPatrols > 0) {
+    segments.push(formatCountLabel(summary.fullPatrols, 'full check', 'full checks'));
+  }
   if (summary.alertTriggeredRuns > 0) {
-    segments.push(formatCountLabel(summary.alertTriggeredRuns, 'alert-triggered'));
+    segments.push(
+      formatCountLabel(
+        summary.alertTriggeredRuns,
+        'alert-triggered check',
+        'alert-triggered checks',
+      ),
+    );
   }
   if (summary.anomalyTriggeredRuns > 0) {
-    segments.push(formatCountLabel(summary.anomalyTriggeredRuns, 'anomaly-triggered'));
+    segments.push(
+      formatCountLabel(
+        summary.anomalyTriggeredRuns,
+        'anomaly-triggered check',
+        'anomaly-triggered checks',
+      ),
+    );
   }
   if (summary.alertClearedRuns > 0) {
-    segments.push(formatCountLabel(summary.alertClearedRuns, 'alert-cleared'));
+    segments.push(
+      formatCountLabel(summary.alertClearedRuns, 'alert-cleared check', 'alert-cleared checks'),
+    );
   }
   if (summary.verificationChecks > 0) {
-    segments.push(formatCountLabel(summary.verificationChecks, 'verification'));
+    segments.push(
+      formatCountLabel(summary.verificationChecks, 'follow-up check', 'follow-up checks'),
+    );
   }
   if (summary.otherScopedRuns > 0) {
-    segments.push(formatCountLabel(summary.otherScopedRuns, 'other scoped'));
+    segments.push(formatCountLabel(summary.otherScopedRuns, 'targeted check', 'targeted checks'));
   }
   return segments.join(', ');
 }
@@ -338,7 +587,7 @@ export function getPatrolRunResourcesHeading(
 }
 
 export function getRunHistoryLoadingState(): string {
-  return 'Loading run history…';
+  return 'Loading history...';
 }
 
 export function getRunHistorySelectionHint(
@@ -346,14 +595,14 @@ export function getRunHistorySelectionHint(
   selectedRun?: Pick<PatrolRunRecord, 'finding_ids'> | null,
 ): string {
   if (selectedRun && selectedRun.finding_ids === undefined) {
-    return 'Selected run predates findings snapshots; run-scoped findings cannot be fully verified.';
+    return 'This older check has no issue list.';
   }
 
   if (runs.some((run) => run.finding_ids === undefined)) {
-    return 'Select a run to filter findings when available. Some older runs do not include findings snapshots.';
+    return 'Open a check to review what Patrol found. Older checks may not have issue lists.';
   }
 
-  return 'Select a run to filter findings to that snapshot';
+  return 'Open a check to review what Patrol found.';
 }
 
 export function getToolCallsLoadingState(): string {

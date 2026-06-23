@@ -13,6 +13,7 @@ const {
   mockChat,
   mockAIAPI,
   mockAIChatAPI,
+  mockFetchAgentCapabilitiesManifest,
   mockNotificationStore,
   mockAiChatStore,
   mockByType,
@@ -91,6 +92,18 @@ const {
 
   const mockAIChatAPI = {
     getStatus: vi.fn().mockResolvedValue({ running: true }),
+    getAssistantSurfaceTools: vi.fn().mockResolvedValue({
+      surfaceId: 'pulse_assistant',
+      surfaceLabel: 'Pulse Assistant',
+      toolSource: 'assistant_registry',
+      toolNames: ['pulse_query', 'pulse_question'],
+      registryToolNames: ['pulse_query'],
+      nativeToolNames: ['pulse_question'],
+      affordances: {
+        tools: true,
+        interactiveQuestions: true,
+      },
+    }),
     listSessions: vi.fn().mockResolvedValue([]),
     createSession: vi.fn().mockResolvedValue({
       id: 'new',
@@ -124,7 +137,24 @@ const {
     }),
     approveCommand: vi.fn().mockResolvedValue({ approved: true, message: 'ok' }),
     denyCommand: vi.fn().mockResolvedValue({ denied: true, message: 'ok' }),
+    renderWorkflowPrompt: vi.fn().mockResolvedValue({
+      description: 'Pulse fleet triage',
+      text: 'Use get_fleet_context to triage the Pulse fleet.',
+    }),
   };
+
+  const mockFetchAgentCapabilitiesManifest = vi.fn().mockResolvedValue({
+    version: 'v1',
+    workflowPrompts: [],
+    capabilities: [],
+    categories: [],
+    requiredScopes: [],
+    surfaceContract: {
+      core: { id: 'pulse_intelligence_core', label: 'Pulse Intelligence Core', description: '' },
+      proactiveEngine: { id: 'pulse_patrol', label: 'Pulse Patrol', description: '' },
+      operatorSurfaces: [],
+    },
+  });
 
   const mockNotificationStore = {
     info: vi.fn(),
@@ -144,6 +174,7 @@ const {
     handoffResources: undefined,
     handoffActions: undefined,
     handoffMetadata: undefined,
+    preferredWorkflowPromptName: undefined,
   });
 
   const mockAiChatStore = {
@@ -189,6 +220,7 @@ const {
         runStatus?: string;
         runtimeFailure?: boolean;
       };
+      preferredWorkflowPromptName?: string;
       briefing?: {
         sourceLabel: string;
         title: string;
@@ -219,6 +251,7 @@ const {
         handoffResources: _handoffResources,
         handoffActions: _handoffActions,
         handoffMetadata: _handoffMetadata,
+        preferredWorkflowPromptName: _preferredWorkflowPromptName,
         ...rest
       } = mockAiChatStore.context;
       mockAiChatStore.context = rest;
@@ -236,6 +269,7 @@ const {
     mockChat,
     mockAIAPI,
     mockAIChatAPI,
+    mockFetchAgentCapabilitiesManifest,
     mockNotificationStore,
     mockAiChatStore,
     mockByType,
@@ -398,6 +432,36 @@ vi.mock('../MentionAutocomplete', () => ({
 
 vi.mock('@/api/ai', () => ({ AIAPI: mockAIAPI }));
 vi.mock('@/api/aiChat', () => ({ AIChatAPI: mockAIChatAPI }));
+vi.mock('@/api/agentCapabilities', () => ({
+  fetchAgentCapabilitiesManifest: mockFetchAgentCapabilitiesManifest,
+  getAgentSurfaceToolPosturePresentation: (
+    contract:
+      | {
+          surfaceLabel?: string;
+          toolSource?: string;
+          toolNames?: string[];
+          registryToolNames?: string[];
+          nativeToolNames?: string[];
+        }
+      | undefined,
+  ) => {
+    if (!contract) return null;
+    const toolCount = contract.toolNames?.length ?? 0;
+    const label = toolCount === 1 ? '1 capability' : `${toolCount} capabilities`;
+    return {
+      label,
+      title: `${contract.surfaceLabel || 'Pulse Assistant'} capability availability. Source: ${
+        contract.toolSource === 'assistant_registry' ? 'Assistant registry' : contract.toolSource
+      }. ${(contract.registryToolNames?.length ?? 0).toString()} registry capabilities. ${(
+        contract.nativeToolNames?.length ?? 0
+      ).toString()} native capabilities.`,
+      tone: toolCount > 0 ? 'ready' : 'empty',
+      toolCount,
+    };
+  },
+  getAgentWorkflowPrompts: (manifest: { workflowPrompts?: unknown[] } | undefined) =>
+    manifest?.workflowPrompts ?? [],
+}));
 vi.mock('@/stores/notifications', () => ({ notificationStore: mockNotificationStore }));
 vi.mock('@/stores/aiChat', () => ({ aiChatStore: mockAiChatStore }));
 vi.mock('@/utils/logger', () => ({
@@ -511,7 +575,35 @@ beforeEach(() => {
     model: 'openai:gpt-4',
   });
   mockAIChatAPI.getStatus.mockResolvedValue({ running: true });
+  mockAIChatAPI.getAssistantSurfaceTools.mockResolvedValue({
+    surfaceId: 'pulse_assistant',
+    surfaceLabel: 'Pulse Assistant',
+    toolSource: 'assistant_registry',
+    toolNames: ['pulse_query', 'pulse_question'],
+    registryToolNames: ['pulse_query'],
+    nativeToolNames: ['pulse_question'],
+    affordances: {
+      tools: true,
+      interactiveQuestions: true,
+    },
+  });
   mockAIChatAPI.listSessions.mockResolvedValue([]);
+  mockAIChatAPI.renderWorkflowPrompt.mockResolvedValue({
+    description: 'Pulse fleet triage',
+    text: 'Use get_fleet_context to triage the Pulse fleet.',
+  });
+  mockFetchAgentCapabilitiesManifest.mockResolvedValue({
+    version: 'v1',
+    workflowPrompts: [],
+    capabilities: [],
+    categories: [],
+    requiredScopes: [],
+    surfaceContract: {
+      core: { id: 'pulse_intelligence_core', label: 'Pulse Intelligence Core', description: '' },
+      proactiveEngine: { id: 'pulse_patrol', label: 'Pulse Patrol', description: '' },
+      operatorSurfaces: [],
+    },
+  });
   mockAIChatAPI.renameSession.mockResolvedValue({
     id: 'renamed-session',
     title: 'Renamed session',
@@ -813,6 +905,151 @@ describe('AIChat', () => {
       expect(screen.getByPlaceholderText('Ask about your infrastructure...')).toBeInTheDocument();
     });
 
+    it('renders shared workflow starters and inserts rendered prompt text into the composer', async () => {
+      mockAiChatStore.context = {
+        targetType: 'vm',
+        targetId: 'vm:101',
+        findingId: undefined,
+        autonomousMode: undefined,
+        briefing: undefined,
+      };
+      mockFetchAgentCapabilitiesManifest.mockResolvedValueOnce({
+        version: 'v1',
+        workflowPrompts: [
+          {
+            name: 'pulse_triage_fleet',
+            label: 'Review fleet posture',
+            presentationKind: 'fleet',
+            description: 'Triage the Pulse fleet.',
+            arguments: [],
+          },
+          {
+            name: 'pulse_operations_loop',
+            label: 'Ask Patrol to handle an issue',
+            presentationKind: 'workflow',
+            description:
+              'Have Patrol investigate active findings, follow the configured Patrol policy, take approved actions, verify the outcome, and record what happened.',
+            arguments: [],
+          },
+          {
+            name: 'pulse_investigate_resource',
+            label: 'Inspect this resource',
+            presentationKind: 'resource',
+            description: 'Investigate one Pulse resource.',
+            arguments: [{ name: 'resourceId', required: true }],
+          },
+          {
+            name: 'pulse_review_finding',
+            presentationKind: 'finding',
+            description: 'Review one Patrol finding.',
+            arguments: [{ name: 'finding_id', required: true }],
+          },
+        ],
+        capabilities: [],
+        categories: [],
+        requiredScopes: [],
+        surfaceContract: {
+          core: {
+            id: 'pulse_intelligence_core',
+            label: 'Pulse Intelligence Core',
+            description: '',
+          },
+          proactiveEngine: { id: 'pulse_patrol', label: 'Pulse Patrol', description: '' },
+          operatorSurfaces: [],
+        },
+      });
+      mockAIChatAPI.renderWorkflowPrompt.mockResolvedValueOnce({
+        description: 'Pulse resource investigation',
+        text: 'Investigate Pulse resource "vm:101".',
+      });
+
+      renderChat();
+
+      expect(
+        await screen.findByTestId('assistant-workflow-starter-pulse_triage_fleet'),
+      ).toHaveTextContent('Review fleet posture');
+      expect(
+        await screen.findByTestId('assistant-workflow-starter-pulse_operations_loop'),
+      ).toHaveTextContent('Ask Patrol to handle an issue');
+      const resourceStarter = await screen.findByTestId(
+        'assistant-workflow-starter-pulse_investigate_resource',
+      );
+      expect(screen.queryByTestId('assistant-workflow-starter-pulse_review_finding')).toBeNull();
+
+      fireEvent.click(resourceStarter);
+
+      await waitFor(() => {
+        expect(mockAIChatAPI.renderWorkflowPrompt).toHaveBeenCalledWith({
+          name: 'pulse_investigate_resource',
+          arguments: { resourceId: 'vm:101' },
+        });
+      });
+      expect(screen.getByPlaceholderText('Ask about your infrastructure...')).toHaveValue(
+        'Investigate Pulse resource "vm:101".',
+      );
+    });
+
+    it('auto-renders a preferred operations-loop starter for scoped Patrol handoffs', async () => {
+      mockAiChatStore.context = {
+        targetType: 'vm',
+        targetId: 'vm:101',
+        findingId: 'finding-1',
+        autonomousMode: false,
+        preferredWorkflowPromptName: 'pulse_operations_loop',
+      };
+      mockFetchAgentCapabilitiesManifest.mockResolvedValueOnce({
+        version: 'v1',
+        workflowPrompts: [
+          {
+            name: 'pulse_operations_loop',
+            label: 'Ask Patrol to handle an issue',
+            presentationKind: 'workflow',
+            description:
+              'Have Patrol investigate active findings, follow the configured Patrol policy, take approved actions, verify the outcome, and record what happened.',
+            arguments: [],
+          },
+          {
+            name: 'pulse_review_finding',
+            label: 'Review selected finding',
+            presentationKind: 'finding',
+            description: 'Review one Patrol finding.',
+            arguments: [{ name: 'finding_id', required: true }],
+          },
+        ],
+        capabilities: [],
+        categories: [],
+        requiredScopes: [],
+        surfaceContract: {
+          core: {
+            id: 'pulse_intelligence_core',
+            label: 'Pulse Intelligence Core',
+            description: '',
+          },
+          proactiveEngine: { id: 'pulse_patrol', label: 'Pulse Patrol', description: '' },
+          operatorSurfaces: [],
+        },
+      });
+      mockAIChatAPI.renderWorkflowPrompt.mockResolvedValueOnce({
+        description: 'Patrol issue handling',
+        text: 'Handle this Patrol finding through explanation, governed action, verification, and history.',
+      });
+
+      renderChat();
+
+      await waitFor(() => {
+        expect(mockAIChatAPI.renderWorkflowPrompt).toHaveBeenCalledWith({
+          name: 'pulse_operations_loop',
+          arguments: {},
+        });
+      });
+      expect(screen.getByPlaceholderText('Ask about your infrastructure...')).toHaveValue(
+        'Handle this Patrol finding through explanation, governed action, verification, and history.',
+      );
+      expect(
+        await screen.findByTestId('assistant-workflow-starter-pulse_review_finding'),
+      ).toHaveTextContent('Review selected finding');
+    });
+
     it('registers and focuses the composer when opened', async () => {
       renderChat();
       const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
@@ -831,6 +1068,30 @@ describe('AIChat', () => {
     it('renders the ModelSelector child component', () => {
       renderChat();
       expect(screen.getByTestId('model-selector')).toBeInTheDocument();
+    });
+
+    it('renders native Assistant capability availability from the runtime surface contract', async () => {
+      mockAIChatAPI.getAssistantSurfaceTools.mockResolvedValueOnce({
+        surfaceId: 'pulse_assistant',
+        surfaceLabel: 'Pulse Assistant',
+        toolSource: 'assistant_registry',
+        toolNames: ['pulse_query', 'pulse_question', 'pulse_storage'],
+        registryToolNames: ['pulse_query', 'pulse_storage'],
+        nativeToolNames: ['pulse_question'],
+        affordances: {
+          tools: true,
+          interactiveQuestions: true,
+        },
+      });
+
+      renderChat();
+
+      const toolHealth = await screen.findByTestId('assistant-surface-tools-health');
+      expect(mockAIChatAPI.getAssistantSurfaceTools).toHaveBeenCalled();
+      expect(toolHealth).toHaveTextContent('3 capabilities');
+      const title = toolHealth.getAttribute('title') || '';
+      expect(title).toContain('Pulse Assistant capability availability');
+      expect(title).toContain('Assistant registry');
     });
 
     it('opens the model selector from failed-turn recovery', async () => {
@@ -1094,7 +1355,7 @@ describe('AIChat', () => {
       );
       expect(screen.getByRole('link', { name: /Open settings/ })).toHaveAttribute(
         'href',
-        '/settings/system-ai',
+        '/settings/pulse-intelligence/provider',
       );
     });
 
@@ -1507,39 +1768,39 @@ describe('AIChat', () => {
           sourceLabel: 'Pulse Patrol',
           title: 'Patrol finding attached',
           subject: 'Provider connection issue on Patrol runtime',
-          actionLabel: 'Open Patrol provider settings',
-          actionHref: '/settings/system-ai',
+          actionLabel: 'Open Provider & Models',
+          actionHref: '/settings/pulse-intelligence/provider',
         },
       };
 
       renderChat();
 
-      expect(screen.getByRole('link', { name: 'Open Patrol provider settings' })).toHaveAttribute(
+      expect(screen.getByRole('link', { name: 'Open Provider & Models' })).toHaveAttribute(
         'href',
-        '/settings/system-ai',
+        '/settings/pulse-intelligence/provider',
       );
     });
 
-    it('renders Patrol configuration handoff details without replacing the attached headline', () => {
+    it('renders Patrol mode handoff details without replacing the attached headline', () => {
       mockAiChatStore.context = {
         targetType: 'patrol-configuration',
         autonomousMode: false,
         briefing: {
           sourceLabel: 'Pulse Patrol',
-          title: 'Patrol configuration failure attached',
+          title: 'Patrol mode save failure attached',
           subject: 'patrol_autonomy_pro_required: Investigation and auto-fix require Pulse Pro.',
           statusLabel: 'HTTP 402 · model_unsupported_tools',
           detailLines: ['Provider: openrouter'],
           evidence: ['Command: sensitive or command detail withheld'],
           safetyNote:
-            'Assistant can explain the configuration state; provider changes remain operator-controlled.',
+            'Assistant can explain the Patrol mode state; provider changes remain operator-controlled.',
         },
       };
 
       renderChat();
 
       const context = screen.getByLabelText('Assistant context');
-      expect(context).toHaveTextContent('Patrol configuration failure attached');
+      expect(context).toHaveTextContent('Patrol mode save failure attached');
       expect(context).toHaveTextContent('patrol_autonomy_pro_required');
       expect(context).toHaveTextContent('Provider: openrouter');
       expect(context).toHaveTextContent('Command: sensitive or command detail withheld');
@@ -1748,7 +2009,7 @@ describe('AIChat', () => {
       const routeControls = screen.getByTestId('assistant-composer-route-controls');
       const modelSelector = screen.getByTestId('model-selector');
       const controlButton = screen.getByRole('button', {
-        name: 'Assistant control mode: Read-only',
+        name: 'Assistant chat action mode: Read-only',
       });
 
       expect(closeButton).toHaveClass('order-2');
@@ -2004,7 +2265,7 @@ describe('AIChat', () => {
       fireEvent.input(textarea, { target: { value: '/connect' } });
       fireEvent.keyDown(textarea, { key: 'Enter' });
 
-      expect(mockNavigate).toHaveBeenCalledWith('/settings/system-ai');
+      expect(mockNavigate).toHaveBeenCalledWith('/settings/pulse-intelligence/provider');
       expect(onClose).toHaveBeenCalledTimes(1);
       expect(mockChat.sendMessage).not.toHaveBeenCalled();
     });
@@ -2018,7 +2279,7 @@ describe('AIChat', () => {
 
       selectorProps.onManageProviders?.();
 
-      expect(mockNavigate).toHaveBeenCalledWith('/settings/system-ai');
+      expect(mockNavigate).toHaveBeenCalledWith('/settings/pulse-intelligence/provider');
       expect(onClose).toHaveBeenCalledTimes(1);
     });
 
@@ -3141,7 +3402,7 @@ describe('AIChat', () => {
     it('opens control menu on click and focuses the current mode', async () => {
       renderChat();
       const controlButton = screen.getByRole('button', {
-        name: 'Assistant control mode: Read-only',
+        name: 'Assistant chat action mode: Read-only',
       });
       expect(controlButton).toHaveAttribute('aria-expanded', 'false');
 
@@ -3149,20 +3410,20 @@ describe('AIChat', () => {
 
       expect(controlButton).toHaveAttribute('aria-expanded', 'true');
       expect(
-        screen.getByRole('menu', { name: 'Assistant control mode options' }),
+        screen.getByRole('menu', { name: 'Assistant chat action options' }),
       ).toBeInTheDocument();
       expect(screen.getByRole('menuitemradio', { name: /Read-only/ })).toHaveAttribute(
         'aria-checked',
         'true',
       );
-      expect(screen.getByRole('menuitemradio', { name: /Approval/ })).toHaveAttribute(
+      expect(screen.getByRole('menuitemradio', { name: /Ask first/ })).toHaveAttribute(
         'aria-checked',
         'false',
       );
       expect(screen.getByText('Default control mode')).toBeInTheDocument();
-      expect(screen.getByText('No commands or control actions')).toBeInTheDocument();
-      expect(screen.getByText('Ask before running commands')).toBeInTheDocument();
-      expect(screen.getByText('Executes without approval')).toBeInTheDocument();
+      expect(screen.getByText('Observes only')).toBeInTheDocument();
+      expect(screen.getByText('Asks before chat-only actions')).toBeInTheDocument();
+      expect(screen.getByText('Eligible chat-only actions')).toBeInTheDocument();
       await waitFor(() => {
         expect(document.activeElement).toBe(
           screen.getByRole('menuitemradio', { name: /Read-only/ }),
@@ -3173,14 +3434,14 @@ describe('AIChat', () => {
     it('opens the control menu from the keyboard', async () => {
       renderChat();
       const controlButton = screen.getByRole('button', {
-        name: 'Assistant control mode: Read-only',
+        name: 'Assistant chat action mode: Read-only',
       });
 
       fireEvent.keyDown(controlButton, { key: 'ArrowDown' });
 
       expect(controlButton).toHaveAttribute('aria-expanded', 'true');
       expect(
-        screen.getByRole('menu', { name: 'Assistant control mode options' }),
+        screen.getByRole('menu', { name: 'Assistant chat action options' }),
       ).toBeInTheDocument();
       await waitFor(() => {
         expect(document.activeElement).toBe(
@@ -3198,34 +3459,34 @@ describe('AIChat', () => {
         </div>
       ));
       const controlButton = screen.getByRole('button', {
-        name: 'Assistant control mode: Read-only',
+        name: 'Assistant chat action mode: Read-only',
       });
 
       fireEvent.click(controlButton);
       const readOnlyOption = screen.getByRole('menuitemradio', { name: /Read-only/ });
-      const approvalOption = screen.getByRole('menuitemradio', { name: /Approval/ });
-      const autonomousOption = screen.getByRole('menuitemradio', { name: /Autonomous/ });
+      const askFirstOption = screen.getByRole('menuitemradio', { name: /Ask first/ });
+      const chatActionsOption = screen.getByRole('menuitemradio', { name: /Chat actions/ });
       await waitFor(() => {
         expect(document.activeElement).toBe(readOnlyOption);
       });
 
       fireEvent.keyDown(readOnlyOption, { key: 'ArrowDown' });
-      expect(document.activeElement).toBe(approvalOption);
+      expect(document.activeElement).toBe(askFirstOption);
 
-      fireEvent.keyDown(approvalOption, { key: 'End' });
-      expect(document.activeElement).toBe(autonomousOption);
+      fireEvent.keyDown(askFirstOption, { key: 'End' });
+      expect(document.activeElement).toBe(chatActionsOption);
 
-      fireEvent.keyDown(autonomousOption, { key: 'Home' });
+      fireEvent.keyDown(chatActionsOption, { key: 'Home' });
       expect(document.activeElement).toBe(readOnlyOption);
 
       fireEvent.keyDown(readOnlyOption, { key: 'ArrowUp' });
-      expect(document.activeElement).toBe(autonomousOption);
+      expect(document.activeElement).toBe(chatActionsOption);
 
-      fireEvent.keyDown(autonomousOption, { key: 'Escape' });
+      fireEvent.keyDown(chatActionsOption, { key: 'Escape' });
 
       await waitFor(() => {
         expect(
-          screen.queryByRole('menu', { name: 'Assistant control mode options' }),
+          screen.queryByRole('menu', { name: 'Assistant chat action options' }),
         ).not.toBeInTheDocument();
         expect(document.activeElement).toBe(controlButton);
       });
@@ -4249,7 +4510,7 @@ describe('AIChat', () => {
       });
     });
 
-    it('restores Patrol configuration failure handoff state as a runtime issue', async () => {
+    it('restores Patrol mode save failure handoff state as a runtime issue', async () => {
       mockAIChatAPI.listSessions.mockResolvedValue([
         {
           id: 's-patrol-config',
@@ -4293,9 +4554,9 @@ describe('AIChat', () => {
             }),
             briefing: expect.objectContaining({
               sourceLabel: 'Pulse Patrol',
-              title: 'Patrol configuration failure',
-              subject: 'Patrol configuration',
-              actionLabel: 'Review Patrol configuration issue',
+              title: 'Patrol mode save failure',
+              subject: 'Patrol mode',
+              actionLabel: 'Review Patrol mode issue',
               statusLabel: 'runtime issue',
             }),
           }),
@@ -4405,7 +4666,7 @@ describe('AIChat', () => {
       await waitFor(() => {
         expect(screen.getByText('Pulse Patrol')).toBeInTheDocument();
         expect(screen.getByText('Context attached')).toBeInTheDocument();
-        expect(screen.queryByText('Open Patrol provider settings')).not.toBeInTheDocument();
+        expect(screen.queryByText('Open Provider & Models')).not.toBeInTheDocument();
       });
 
       fireEvent.click(screen.getByText('Context-only Patrol follow-up'));
@@ -5274,14 +5535,14 @@ describe('AIChat', () => {
       renderChat();
       await waitFor(() => {
         const warning = screen.getByRole('status', {
-          name: 'Assistant autonomous control warning',
+          name: 'Assistant chat actions warning',
         });
         expect(screen.getByTestId('assistant-activity-dock')).toContainElement(warning);
-        expect(warning).toHaveTextContent('Autonomous: commands execute without approval.');
+        expect(warning).toHaveTextContent('Chat-only actions are allowed.');
       });
     });
 
-    it('shows Switch to Approval button in autonomous warning row', async () => {
+    it('shows Switch to Ask first button in autonomous warning row', async () => {
       mockAIAPI.getSettings.mockResolvedValue({
         model: 'gpt-4',
         chat_model: '',
@@ -5292,13 +5553,13 @@ describe('AIChat', () => {
       renderChat();
       await waitFor(() => {
         expect(
-          screen.getByRole('status', { name: 'Assistant autonomous control warning' }),
+          screen.getByRole('status', { name: 'Assistant chat actions warning' }),
         ).toBeInTheDocument();
         expect(
-          screen.getByRole('button', { name: 'Switch Assistant control mode to Approval' }),
+          screen.getByRole('button', { name: 'Switch Assistant chat actions to Ask first' }),
         ).toBeInTheDocument();
         expect(
-          screen.getByRole('button', { name: 'Dismiss autonomous control warning' }),
+          screen.getByRole('button', { name: 'Dismiss chat actions warning' }),
         ).toBeInTheDocument();
       });
     });
@@ -5320,13 +5581,13 @@ describe('AIChat', () => {
       renderChat();
 
       await waitFor(() => {
-        expect(screen.getByText('Approval')).toBeInTheDocument();
+        expect(screen.getByText('Ask first')).toBeInTheDocument();
       });
       expect(
         screen.queryByText(/Approval required for this dashboard brief/),
       ).not.toBeInTheDocument();
       expect(
-        screen.queryByRole('status', { name: 'Assistant autonomous control warning' }),
+        screen.queryByRole('status', { name: 'Assistant chat actions warning' }),
       ).not.toBeInTheDocument();
 
       const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
@@ -5361,7 +5622,7 @@ describe('AIChat', () => {
       renderChat();
 
       await waitFor(() => {
-        expect(screen.getByText('Approval')).toBeInTheDocument();
+        expect(screen.getByText('Ask first')).toBeInTheDocument();
       });
       expect(screen.getByText('Approval required before any action.')).toBeInTheDocument();
       expect(
@@ -5394,7 +5655,7 @@ describe('AIChat', () => {
       renderChat();
 
       await waitFor(() => {
-        expect(screen.getByText('Approval')).toBeInTheDocument();
+        expect(screen.getByText('Ask first')).toBeInTheDocument();
       });
       expect(screen.getByText('Approval required before any action.')).toBeInTheDocument();
       expect(
@@ -5551,7 +5812,7 @@ describe('AIChat', () => {
       });
       renderChat();
       await waitFor(() => {
-        expect(screen.getByText('Workload Discovery is off.')).toBeInTheDocument();
+        expect(screen.getByText('Discovery is off.')).toBeInTheDocument();
       });
       expect(
         screen.getByText(
@@ -5565,7 +5826,7 @@ describe('AIChat', () => {
       await waitFor(() => {
         expect(mockAIAPI.getSettings).toHaveBeenCalled();
       });
-      expect(screen.queryByText('Workload Discovery is off.')).not.toBeInTheDocument();
+      expect(screen.queryByText('Discovery is off.')).not.toBeInTheDocument();
     });
   });
 
@@ -6077,7 +6338,7 @@ describe('AIChat', () => {
           screen.getByLabelText('Assistant active turn status'),
         );
         expect(activityDock).toContainElement(
-          screen.getByRole('status', { name: 'Assistant autonomous control warning' }),
+          screen.getByRole('status', { name: 'Assistant chat actions warning' }),
         );
       });
     });

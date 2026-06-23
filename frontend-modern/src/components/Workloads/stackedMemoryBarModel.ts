@@ -15,6 +15,7 @@ export interface StackedMemoryBarProps {
   percentOnly?: number;
   /** Reclaimable buff/cache (available - truly free); used + cache + free ≈ total. */
   cache?: number;
+  cacheInclusiveLabel?: string;
   swapUsed?: number;
   swapTotal?: number;
   balloon?: number;
@@ -188,12 +189,12 @@ function getTooltipRows(
       value: formatBytes(Math.max(0, ceiling - props.used - cache)),
     });
 
-    // Proxmox's UI counts reclaimable cache as used; this row explains why
-    // Pulse's percentage reads lower than the same guest in Proxmox.
+    // Some providers count reclaimable cache as used; keep the shared default
+    // source-neutral and let provider-owned surfaces name their comparison UI.
     if (cache > 0) {
       rows.push({
         borderTop: true,
-        label: 'Shown in Proxmox',
+        label: props.cacheInclusiveLabel ?? 'Used with cache',
         labelClass: 'text-slate-500 italic',
         value: formatPercent(((props.used + cache) / props.total) * 100),
       });

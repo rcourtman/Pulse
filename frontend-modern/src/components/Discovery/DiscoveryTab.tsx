@@ -146,9 +146,10 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
           <div class="flex items-start gap-2.5">
             <TriangleAlertIcon class="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600 dark:text-amber-400" />
             <div class="text-xs text-amber-800 dark:text-amber-200">
-              <p class="mb-1 font-medium">AI Discovery Disabled</p>
+              <p class="mb-1 font-medium">Service Context Disabled</p>
               <p class="text-amber-700 dark:text-amber-300">
-                Enable infrastructure discovery in Settings -&gt; AI before using this tab.
+                Enable service context in Settings -&gt; Pulse Intelligence -&gt; Service Context
+                before using this tab.
               </p>
             </div>
           </div>

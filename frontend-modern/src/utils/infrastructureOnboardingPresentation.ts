@@ -552,7 +552,7 @@ export const getInfrastructureEmptyStateSummary = (): string =>
   'Choose an infrastructure source to start monitoring your environment.';
 
 export const getInfrastructureEmptyStateDetail = (): string =>
-  'Supported source types include TrueNAS SCALE, Proxmox VE, Proxmox Backup Server, Proxmox Mail Gateway, and Pulse Agent hosts. VMware vCenter is available as a preview platform pending live support proof. Docker and Kubernetes are discovered from supported agent hosts.';
+  'Supported source types include TrueNAS SCALE, Proxmox VE, Proxmox Backup Server, Proxmox Mail Gateway, and Pulse Agent hosts. VMware vCenter is available as a preview platform while live support is validated. Docker and Kubernetes are discovered from supported agent hosts.';
 
 export const getInfrastructureCoverageCompleteActionPresentation =
   (): InfrastructureCoverageCompleteActionPresentation => ({

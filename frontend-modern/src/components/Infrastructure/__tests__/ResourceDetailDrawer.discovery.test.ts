@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import type { Resource } from '@/types/resource';
 import type { ResourceDiscovery } from '@/types/discovery';
+import discoveryTabSource from '@/components/Discovery/DiscoveryTab.tsx?raw';
+import discoveryReadinessSource from '@/components/Discovery/discoveryReadiness.ts?raw';
+import discoveryTabStateSource from '@/components/Discovery/useDiscoveryTabState.ts?raw';
 import { toDiscoveryConfig } from '@/components/Infrastructure/resourceDetailDiscoveryModel';
 import { hasMeaningfulDiscoveryContext } from '@/utils/discoveryPresentation';
 
@@ -355,6 +358,19 @@ describe('toDiscoveryConfig', () => {
 });
 
 describe('resource drawer discovery promotion', () => {
+  it('points disabled discovery readiness at Pulse Intelligence service context settings', () => {
+    expect(discoveryTabSource).toContain('Service Context Disabled');
+    expect(discoveryTabSource).toContain(
+      'Settings -&gt; Pulse Intelligence -&gt; Service Context',
+    );
+    expect(discoveryTabStateSource).toContain(
+      'Service context is disabled in Settings -> Pulse Intelligence -> Service Context.',
+    );
+    expect(discoveryReadinessSource).toContain(
+      'Settings -> Pulse Intelligence -> Service Context',
+    );
+  });
+
   it('does not treat command-only diagnostic records as meaningful resource context', () => {
     const discovery: ResourceDiscovery = {
       id: 'system-container:pve4:152',

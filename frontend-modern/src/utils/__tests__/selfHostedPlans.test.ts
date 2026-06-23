@@ -63,8 +63,7 @@ describe('selfHostedPlans', () => {
   it('keeps shared self-hosted commercial copy in the common contract', () => {
     expect(SELF_HOSTED_COMMERCIAL_PRESENTATION).toEqual({
       pageTitle: 'Pricing',
-      pageDescription:
-        'Self-hosted Pulse includes core monitoring for free. Relay adds secure remote access to the Pulse web UI, Pulse Mobile pairing, and push notifications, while Pro adds root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras.',
+      pageDescription: 'Self-hosted plans and included capabilities.',
       mostPopularBadge: 'Most Popular',
       currentPlanLabel: 'Current Plan',
       includedLabel: 'Included',
@@ -90,18 +89,18 @@ describe('selfHostedPlans', () => {
   it('keeps Community copy free-first and Pro copy focused on operational extras', () => {
     expect(SELF_HOSTED_PLAN_BY_TIER.community.subline).toBe('Core monitoring included');
     expect(SELF_HOSTED_PLAN_BY_TIER.community.billingExtrasSummary).toBe(
-      'Patrol, alerts, and SSO',
+      'Watch-only Patrol, alerts, and SSO',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.community.entitlementSummary).toContain(
       'Community is active on this instance.',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.community.comparisonSummary).toBe(
-      'Community covers self-hosted monitoring and core operations on this instance.',
+      'Community covers self-hosted monitoring and watch-only Patrol on this instance.',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.community.entitlementHighlights).toEqual([
       'Real-time monitoring',
       '7-day metric history',
-      'Pulse Patrol (BYOK)',
+      'Watch-only Patrol',
       'Update alerts',
     ]);
     expect(SELF_HOSTED_PLAN_BY_TIER.community.includedExtras).toEqual([]);
@@ -109,10 +108,10 @@ describe('selfHostedPlans', () => {
       'Remote web access, pairing, and push',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.relay.entitlementSummary).toContain(
-      'Remote web access, Pulse Mobile pairing, push notifications, and longer history are available right now.',
+      'remote web access, Pulse Mobile pairing, push notifications, and 14-day metric history.',
     );
-    expect(SELF_HOSTED_PLAN_BY_TIER.relay.comparisonSummary).toContain(
-      'Reach your Pulse web UI securely from anywhere',
+    expect(SELF_HOSTED_PLAN_BY_TIER.relay.comparisonSummary).toBe(
+      'Remote web access, Pulse Mobile pairing, push notifications, and 14-day metric history.',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.relay.entitlementHighlights).toEqual([
       'Pulse Relay (Remote Access)',
@@ -127,17 +126,18 @@ describe('selfHostedPlans', () => {
       /yourlab\.pulserelay\.pro|custom\s+(?:url|subdomain|domain)/i,
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.billingExtrasSummary).toBe(
-      'Analysis, remediation, and admin controls',
+      'Patrol modes, history, and admin controls',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.entitlementSummary).toContain(
-      'Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are available right now.',
+      'Patrol modes, 90-day metric history, RBAC, audit logs, reports, and agent profiles.',
     );
-    expect(SELF_HOSTED_PLAN_BY_TIER.pro.comparisonSummary).toContain(
-      'safe remediation workflows, 90-day history',
+    expect(SELF_HOSTED_PLAN_BY_TIER.pro.comparisonSummary).toBe(
+      'Patrol modes, 90-day metric history, RBAC, audit logs, reports, and agent profiles.',
     );
+    expect(SELF_HOSTED_PLAN_BY_TIER.pro.comparisonSummary).not.toContain('how much control');
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.entitlementHighlights).toEqual([
-      'Alert Root-Cause Analysis',
-      'Safe Remediation Workflows',
+      'Patrol Investigates Issues',
+      'Patrol Handles Safe Fixes',
       '90-day metric history',
     ]);
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.includedExtras).toEqual([
@@ -147,7 +147,7 @@ describe('selfHostedPlans', () => {
       'Centralized Agent Profiles',
     ]);
     expect(SELF_HOSTED_PLAN_BY_TIER.community.highlights).toEqual(
-      expect.arrayContaining(['Real-time monitoring', 'Pulse Patrol (BYOK)']),
+      expect.arrayContaining(['Real-time monitoring', 'Watch-only Patrol']),
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.community.highlights).not.toContain(
       'Hosted Patrol quickstart with activated entitlement: 25 runs, no API key',
@@ -172,7 +172,7 @@ describe('selfHostedPlans', () => {
       getSelfHostedPlanEntitlementSummary('pro'),
     );
     expect(getSelfHostedPlanEntitlementSummary('pro', 'Legacy Pulse Pro+')).toBe(
-      'Legacy Pulse Pro+ is active on this instance. Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are available right now.',
+      'Legacy Pulse Pro+ is active on this instance. It includes Patrol modes, 90-day metric history, RBAC, audit logs, reports, and agent profiles.',
     );
 
     expect(SELF_HOSTED_PLAN_BY_TIER.relay.entitlementHighlights).toEqual(
@@ -210,13 +210,13 @@ describe('selfHostedPlans', () => {
         extras: plan.billingExtrasSummary,
       })),
     ).toEqual([
-      { tier: 'community', historyDays: 7, extras: 'Patrol, alerts, and SSO' },
+      { tier: 'community', historyDays: 7, extras: 'Watch-only Patrol, alerts, and SSO' },
       {
         tier: 'relay',
         historyDays: 14,
         extras: 'Remote web access, pairing, and push',
       },
-      { tier: 'pro', historyDays: 90, extras: 'Analysis, remediation, and admin controls' },
+      { tier: 'pro', historyDays: 90, extras: 'Patrol modes, history, and admin controls' },
     ]);
     expect(SELF_HOSTED_FEATURE_ROWS.find((row) => row.key === 'history')).toEqual({
       key: 'history',

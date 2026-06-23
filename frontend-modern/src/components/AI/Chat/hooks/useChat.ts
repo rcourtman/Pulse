@@ -2395,7 +2395,7 @@ export function useChat(options: UseChatOptions = {}) {
     updateQuestion(messageId, questionId, { isAnswering: true });
 
     try {
-      // Send answer to Pulse AI via API
+      // Send answer to Pulse Assistant via API
       await AIChatAPI.answerQuestion(questionId, answers);
 
       // Remove the question card - it's been handled

@@ -4,7 +4,6 @@ import { ButtonLink } from '@/components/shared/Button';
 import { API_TOKEN_ACCESS_PANEL_DESCRIPTION } from '@/utils/apiTokenPresentation';
 import { API_TOKEN_SCOPES_DOC_URL } from '@/utils/docsLinks';
 import APITokenManager from './APITokenManager';
-import AgentIntegrationsPanel from './AgentIntegrationsPanel';
 
 interface APIAccessPanelProps {
   currentTokenHint?: string;
@@ -31,14 +30,14 @@ export const APIAccessPanel: Component<APIAccessPanelProps> = (props) => {
         </div>
       </SettingsPanel>
 
-      <APITokenManager
-        currentTokenHint={props.currentTokenHint}
-        onTokensChanged={props.onTokensChanged}
-        refreshing={props.refreshing}
-        canManage={props.canManage}
-      />
-
-      <AgentIntegrationsPanel />
+      <div data-testid="api-access-token-section">
+        <APITokenManager
+          currentTokenHint={props.currentTokenHint}
+          onTokensChanged={props.onTokensChanged}
+          refreshing={props.refreshing}
+          canManage={props.canManage}
+        />
+      </div>
     </div>
   );
 };

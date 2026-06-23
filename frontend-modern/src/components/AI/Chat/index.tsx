@@ -23,6 +23,8 @@ import Redo2Icon from 'lucide-solid/icons/redo-2';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
 import RotateCwIcon from 'lucide-solid/icons/rotate-cw';
 import SettingsIcon from 'lucide-solid/icons/settings';
+import ShieldAlertIcon from 'lucide-solid/icons/shield-alert';
+import SparklesIcon from 'lucide-solid/icons/sparkles';
 import Undo2Icon from 'lucide-solid/icons/undo-2';
 import XIcon from 'lucide-solid/icons/x';
 import BellIcon from 'lucide-solid/icons/bell';
@@ -34,6 +36,7 @@ import LoaderCircleIcon from 'lucide-solid/icons/loader-circle';
 import Minimize2Icon from 'lucide-solid/icons/minimize-2';
 import PlusIcon from 'lucide-solid/icons/plus';
 import Trash2Icon from 'lucide-solid/icons/trash-2';
+import WrenchIcon from 'lucide-solid/icons/wrench';
 import { AIAPI } from '@/api/ai';
 import {
   AIChatAPI,
@@ -41,6 +44,13 @@ import {
   type ChatSession,
   type ChatSessionHandoffSummary,
 } from '@/api/aiChat';
+import {
+  fetchAgentCapabilitiesManifest,
+  getAgentSurfaceToolPosturePresentation,
+  getAgentWorkflowPrompts,
+  type AgentSurfaceToolContract,
+  type AgentWorkflowPrompt,
+} from '@/api/agentCapabilities';
 import { ActionIconButton } from '@/components/shared/Button';
 import { SearchField } from '@/components/shared/SearchField';
 import { notificationStore } from '@/stores/notifications';
@@ -173,6 +183,7 @@ import {
   type AssistantSlashCommand,
   type AssistantSlashCommandAction,
 } from './assistantSlashCommands';
+import { getAssistantWorkflowStarters, type AssistantWorkflowStarter } from './workflowStarters';
 import {
   assistantNotificationsEnabled,
   assistantNotificationsSupported,
@@ -244,6 +255,22 @@ interface AssistantProviderRouteHealthPresentation {
 interface AssistantActiveRoutePresentation {
   label: string;
   title: string;
+}
+
+type AssistantSurfaceToolsStatus = 'idle' | 'loading' | 'ready' | 'unavailable';
+
+interface AssistantSurfaceToolsState {
+  status: AssistantSurfaceToolsStatus;
+  contract?: AgentSurfaceToolContract;
+  message?: string;
+}
+
+interface AssistantSurfaceToolHealthPresentation {
+  label: string;
+  title: string;
+  className: string;
+  dotClassName: string;
+  iconClassName: string;
 }
 
 interface PromptHistoryEntry {
@@ -520,7 +547,7 @@ const buildSessionHandoffContext = (session?: ChatSession): AIChatContext | unde
     : isPatrolAssessment
       ? 'Patrol assessment handoff'
       : isPatrolConfigurationFailure
-        ? 'Patrol configuration failure'
+        ? 'Patrol mode save failure'
         : isPatrolFinding
           ? resourceLabel
             ? `Patrol finding on ${resourceLabel}`
@@ -574,7 +601,7 @@ const buildSessionHandoffContext = (session?: ChatSession): AIChatContext | unde
           : isPatrolAssessment
             ? 'Current Patrol assessment'
             : isPatrolConfigurationFailure
-              ? 'Patrol configuration'
+              ? 'Patrol mode'
               : findingId
                 ? `Finding ${findingId}`
                 : undefined,
@@ -596,7 +623,7 @@ const buildSessionHandoffContext = (session?: ChatSession): AIChatContext | unde
       actionLabel: summary.requires_approval
         ? 'Approval required'
         : isPatrolConfigurationFailure
-          ? 'Review Patrol configuration issue'
+          ? 'Review Patrol mode issue'
           : isPatrolAssessment
             ? 'Review Patrol assessment'
             : isPatrolRun && summary.runtime_failure
@@ -679,6 +706,10 @@ export const AIChat: Component<AIChatProps> = (props) => {
   });
   const [providerReadinessVisible, setProviderReadinessVisible] = createSignal(false);
   const [providerReadinessRetryNonce, setProviderReadinessRetryNonce] = createSignal(0);
+  const [assistantSurfaceTools, setAssistantSurfaceTools] =
+    createSignal<AssistantSurfaceToolsState>({
+      status: 'idle',
+    });
   const [controlLevel, setControlLevel] = createSignal<AIControlLevel>('read_only');
   const [showControlMenu, setShowControlMenu] = createSignal(false);
   const [controlSaving, setControlSaving] = createSignal(false);
@@ -687,6 +718,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [discoveryEnabled, setDiscoveryEnabled] = createSignal<boolean | null>(null); // null = loading
   const [discoveryHintDismissed, setDiscoveryHintDismissed] = createSignal(false);
   const [autonomousBannerDismissed, setAutonomousBannerDismissed] = createSignal(false);
+  const [workflowPrompts, setWorkflowPrompts] = createSignal<AgentWorkflowPrompt[]>([]);
+  const [renderingWorkflowStarterId, setRenderingWorkflowStarterId] = createSignal('');
   const wsStore = getGlobalWebSocketStore();
   const allResources = createMemo<Resource[]>(() => {
     const liveResources = wsStore.state.resources ?? [];
@@ -2027,8 +2060,61 @@ export const AIChat: Component<AIChatProps> = (props) => {
     };
   });
 
+  const assistantSurfaceToolHealth = createMemo<AssistantSurfaceToolHealthPresentation | null>(
+    () => {
+      const state = assistantSurfaceTools();
+
+      if (state.status === 'loading') {
+        return {
+          label: 'Checking capabilities',
+          title: 'Checking Assistant capability availability',
+          className:
+            'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-200',
+          dotClassName: 'bg-blue-500 animate-pulse',
+          iconClassName: 'text-blue-500 dark:text-blue-300',
+        };
+      }
+
+      if (state.status === 'unavailable') {
+        return {
+          label: 'Capabilities unavailable',
+          title:
+            state.message ||
+            'Pulse could not load the Assistant capability contract for this session.',
+          className:
+            'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100',
+          dotClassName: 'bg-amber-500',
+          iconClassName: 'text-amber-500 dark:text-amber-300',
+        };
+      }
+
+      if (state.status !== 'ready') return null;
+      const posture = getAgentSurfaceToolPosturePresentation(state.contract);
+      if (!posture) return null;
+
+      const readyClassName =
+        posture.tone === 'ready'
+          ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200'
+          : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100';
+      const readyDotClassName = posture.tone === 'ready' ? 'bg-emerald-500' : 'bg-amber-500';
+      const readyIconClassName =
+        posture.tone === 'ready'
+          ? 'text-emerald-500 dark:text-emerald-300'
+          : 'text-amber-500 dark:text-amber-300';
+
+      return {
+        label: posture.label,
+        title: posture.title,
+        className: readyClassName,
+        dotClassName: readyDotClassName,
+        iconClassName: readyIconClassName,
+      };
+    },
+  );
+
   let providerReadinessRequestId = 0;
   let lastProviderReadinessKey = '';
+  let assistantSurfaceToolsRequestId = 0;
 
   const refreshSelectedProviderReadiness = async (provider: string, model: string) => {
     const requestId = ++providerReadinessRequestId;
@@ -2146,6 +2232,41 @@ export const AIChat: Component<AIChatProps> = (props) => {
     }
   };
 
+  const loadWorkflowPrompts = async () => {
+    try {
+      const manifest = await fetchAgentCapabilitiesManifest();
+      setWorkflowPrompts(getAgentWorkflowPrompts(manifest));
+    } catch (error) {
+      logger.debug('[AIChat] Workflow prompt manifest unavailable during initialization:', error);
+      setWorkflowPrompts([]);
+    }
+  };
+
+  const loadAssistantSurfaceTools = async () => {
+    const requestId = ++assistantSurfaceToolsRequestId;
+    setAssistantSurfaceTools({ status: 'loading' });
+
+    try {
+      const contract = await AIChatAPI.getAssistantSurfaceTools();
+      if (requestId !== assistantSurfaceToolsRequestId) return;
+      setAssistantSurfaceTools({ status: 'ready', contract });
+    } catch (error) {
+      if (requestId !== assistantSurfaceToolsRequestId) return;
+      logger.debug(
+        '[AIChat] Assistant surface tool contract unavailable during initialization:',
+        error,
+      );
+      setAssistantSurfaceTools({
+        status: 'unavailable',
+        message: 'Assistant capabilities could not be loaded.',
+      });
+    }
+  };
+
+  const assistantWorkflowStarters = createMemo(() =>
+    getAssistantWorkflowStarters(workflowPrompts(), aiChatStore.context),
+  );
+
   createEffect(() => {
     const settings = aiRuntimeSettings();
     const chatOverride = (settings?.chat_model || '').trim();
@@ -2170,7 +2291,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       setControlLevel(resolved);
       if (resolved === 'autonomous') setAutonomousBannerDismissed(false);
       notificationStore.success(
-        `Control mode set to ${getAIChatControlLevelPresentation(resolved).label}`,
+        `Assistant chat action mode set to ${getAIChatControlLevelPresentation(resolved).label}`,
         2000,
       );
     } catch (error) {
@@ -2351,12 +2472,23 @@ export const AIChat: Component<AIChatProps> = (props) => {
         setChatOverrideModel('');
         setDiscoveryEnabled(false);
         setControlLevel('read_only');
+        setWorkflowPrompts([]);
+        assistantSurfaceToolsRequestId += 1;
+        setAssistantSurfaceTools({ status: 'idle' });
         return;
       }
-      const [sessionsResult, settingsResult, modelsResult] = await Promise.allSettled([
+      const [
+        sessionsResult,
+        settingsResult,
+        modelsResult,
+        workflowPromptsResult,
+        assistantSurfaceToolsResult,
+      ] = await Promise.allSettled([
         refreshSessions(),
         loadAIRuntimeSettings(),
         loadAIRuntimeModels(),
+        loadWorkflowPrompts(),
+        loadAssistantSurfaceTools(),
       ]);
       if (sessionsResult.status === 'rejected') {
         logger.error('[AIChat] Failed to load sessions:', sessionsResult.reason);
@@ -2368,6 +2500,18 @@ export const AIChat: Component<AIChatProps> = (props) => {
         logger.debug(
           '[AIChat] Model catalog unavailable during initialization:',
           modelsResult.reason,
+        );
+      }
+      if (workflowPromptsResult.status === 'rejected') {
+        logger.debug(
+          '[AIChat] Workflow prompt manifest unavailable during initialization:',
+          workflowPromptsResult.reason,
+        );
+      }
+      if (assistantSurfaceToolsResult.status === 'rejected') {
+        logger.debug(
+          '[AIChat] Assistant surface tool contract unavailable during initialization:',
+          assistantSurfaceToolsResult.reason,
         );
       }
     } catch (error) {
@@ -3263,7 +3407,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
       Boolean(ctx.handoffContext?.trim()) ||
       Boolean(ctx.handoffResources?.length) ||
       Boolean(ctx.handoffActions?.length) ||
-      Boolean(ctx.handoffMetadata);
+      Boolean(ctx.handoffMetadata) ||
+      Boolean(ctx.preferredWorkflowPromptName?.trim());
     sendPromise
       .then((ok) => {
         if (!ok) {
@@ -3293,6 +3438,78 @@ export const AIChat: Component<AIChatProps> = (props) => {
     setSlashCommandQuery('');
     focusComposer();
   };
+
+  const renderWorkflowStarterIntoComposer = async (
+    starter: AssistantWorkflowStarter,
+    options: { onlyWhenComposerEmpty?: boolean } = {},
+  ) => {
+    if (renderingWorkflowStarterId()) return;
+    if (options.onlyWhenComposerEmpty && input().trim()) return;
+
+    setRenderingWorkflowStarterId(starter.id);
+    try {
+      const rendered = await AIChatAPI.renderWorkflowPrompt({
+        name: starter.name,
+        arguments: starter.arguments,
+      });
+      const starterText = rendered.text.trim();
+      if (!starterText) {
+        notificationStore.warning('Workflow starter returned an empty prompt.', 3000);
+        return;
+      }
+
+      setInput((current) => {
+        const draft = current.trim();
+        if (options.onlyWhenComposerEmpty && draft) return current;
+        return draft ? `${draft}\n\n${starterText}` : starterText;
+      });
+      setSlashCommandActive(false);
+      setSlashCommandQuery('');
+      setMentionActive(false);
+      resetPromptHistoryNavigation();
+      focusComposer();
+    } catch (error) {
+      logger.error('[AIChat] Failed to render workflow starter:', error);
+      const message =
+        error instanceof Error ? error.message : 'Failed to prepare workflow starter.';
+      notificationStore.error(message);
+    } finally {
+      setRenderingWorkflowStarterId('');
+    }
+  };
+
+  const handleWorkflowStarterSelect = async (starter: AssistantWorkflowStarter) => {
+    await renderWorkflowStarterIntoComposer(starter);
+  };
+
+  let autoRenderedWorkflowStarterKey = '';
+  createEffect(() => {
+    const context = aiChatStore.context;
+    const preferredWorkflowPromptName = (context.preferredWorkflowPromptName ?? '').trim();
+    if (!preferredWorkflowPromptName) {
+      autoRenderedWorkflowStarterKey = '';
+      return;
+    }
+
+    const starter = assistantWorkflowStarters().find(
+      (candidate) => candidate.name === preferredWorkflowPromptName,
+    );
+    if (!starter || renderingWorkflowStarterId()) return;
+
+    const starterKey = [
+      starter.name,
+      context.findingId ?? '',
+      context.targetType ?? '',
+      context.targetId ?? '',
+      JSON.stringify(starter.arguments),
+    ].join('|');
+    if (autoRenderedWorkflowStarterKey === starterKey) return;
+
+    autoRenderedWorkflowStarterKey = starterKey;
+    if (input().trim()) return;
+
+    void renderWorkflowStarterIntoComposer(starter, { onlyWhenComposerEmpty: true });
+  });
 
   const updateSlashCommandAutocomplete = (value: string, cursorPos: number) => {
     const textBeforeCursor = value.slice(0, cursorPos);
@@ -3888,6 +4105,19 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const handleSkipQuestion = (messageId: string, questionId: string) => {
     // Just remove from UI - skipping a question
     chat.updateQuestion(messageId, questionId, { removed: true });
+  };
+
+  const workflowStarterIcon = (starter: AssistantWorkflowStarter) => {
+    switch (starter.kind) {
+      case 'resource':
+        return <CpuIcon class="h-3.5 w-3.5" aria-hidden="true" />;
+      case 'finding':
+        return <ShieldAlertIcon class="h-3.5 w-3.5" aria-hidden="true" />;
+      case 'fleet':
+      case 'workflow':
+      default:
+        return <SparklesIcon class="h-3.5 w-3.5" aria-hidden="true" />;
+    }
   };
 
   return (
@@ -4709,7 +4939,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                       currentStatus() ? 'border-t border-border/70' : ''
                     }`}
                     role="status"
-                    aria-label="Assistant autonomous control warning"
+                    aria-label="Assistant chat actions warning"
                     aria-live="polite"
                   >
                     <span
@@ -4717,7 +4947,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                       aria-hidden="true"
                     />
                     <span class="min-w-0 flex-1 font-medium leading-4 sm:truncate">
-                      Autonomous: commands execute without approval.
+                      Chat-only actions are allowed.
                     </span>
                     <button
                       type="button"
@@ -4725,7 +4955,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                       class="inline-flex shrink-0 items-center rounded-md border border-red-200 bg-surface px-2 py-1 text-[10px] font-medium text-red-700 transition-colors hover:bg-red-50 hover:text-red-900 dark:border-red-800 dark:bg-surface dark:text-red-200 dark:hover:bg-red-950/40"
                       aria-label={AI_CHAT_SWITCH_TO_APPROVAL_LABEL}
                     >
-                      Switch to Approval
+                      Switch to Ask first
                     </button>
                     <ActionIconButton
                       onClick={() => setAutonomousBannerDismissed(true)}
@@ -4867,6 +5097,46 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 </Show>
               </div>
             </Show>
+            <Show when={assistantWorkflowStarters().length > 0}>
+              <div
+                class="mb-2 flex min-h-7 min-w-0 flex-wrap items-center gap-1.5"
+                aria-label="Assistant workflow starters"
+                data-testid="assistant-workflow-starters"
+              >
+                <For each={assistantWorkflowStarters()}>
+                  {(starter) => {
+                    const isRendering = () => renderingWorkflowStarterId() === starter.id;
+                    const label = () =>
+                      starter.description
+                        ? `${starter.label}: ${starter.description}`
+                        : starter.label;
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void handleWorkflowStarterSelect(starter);
+                        }}
+                        disabled={Boolean(renderingWorkflowStarterId())}
+                        class="inline-flex h-7 max-w-full items-center gap-1.5 rounded-md border border-border bg-surface-alt px-2 text-[11px] font-medium text-base-content transition-colors hover:border-blue-300 hover:bg-blue-50 disabled:cursor-wait disabled:opacity-60 dark:hover:border-blue-800 dark:hover:bg-blue-950/40"
+                        title={label()}
+                        aria-label={label()}
+                        data-testid={`assistant-workflow-starter-${starter.name}`}
+                      >
+                        <Show
+                          when={isRendering()}
+                          fallback={
+                            <span class="shrink-0 text-muted">{workflowStarterIcon(starter)}</span>
+                          }
+                        >
+                          <LoaderCircleIcon class="h-3.5 w-3.5 shrink-0 animate-spin text-blue-600 dark:text-blue-300" />
+                        </Show>
+                        <span class="min-w-0 truncate">{starter.label}</span>
+                      </button>
+                    );
+                  }}
+                </For>
+              </div>
+            </Show>
             <form
               data-assistant-composer
               onSubmit={(e) => {
@@ -4957,6 +5227,28 @@ export const AIChat: Component<AIChatProps> = (props) => {
                       class={`inline-flex h-7 max-w-[11rem] shrink-0 items-center gap-1.5 rounded-md border px-2 text-[10px] font-medium ${health().className}`}
                       data-testid="assistant-provider-route-health"
                     >
+                      <span
+                        class={`h-1.5 w-1.5 shrink-0 rounded-full ${health().dotClassName}`}
+                        aria-hidden="true"
+                      />
+                      <span class="min-w-0 truncate">{health().label}</span>
+                    </div>
+                  )}
+                </Show>
+                <Show when={assistantSurfaceToolHealth()}>
+                  {(health) => (
+                    <div
+                      role="status"
+                      aria-label="Assistant capability availability"
+                      aria-live="polite"
+                      title={health().title}
+                      class={`inline-flex h-7 max-w-[9rem] shrink-0 items-center gap-1.5 rounded-md border px-2 text-[10px] font-medium ${health().className}`}
+                      data-testid="assistant-surface-tools-health"
+                    >
+                      <WrenchIcon
+                        class={`h-3 w-3 shrink-0 ${health().iconClassName}`}
+                        aria-hidden="true"
+                      />
                       <span
                         class={`h-1.5 w-1.5 shrink-0 rounded-full ${health().dotClassName}`}
                         aria-hidden="true"

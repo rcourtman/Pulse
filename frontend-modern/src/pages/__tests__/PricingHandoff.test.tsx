@@ -3,7 +3,10 @@ import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import PricingHandoff from '@/pages/PricingHandoff';
 import pricingHandoffSource from '@/pages/PricingHandoff.tsx?raw';
-import { getSelfHostedPurchaseStartUrl } from '@/utils/pricingHandoff';
+import {
+  getSelfHostedPurchaseStartUrl,
+  SELF_HOSTED_PRO_BILLING_PLAN_ROUTE,
+} from '@/utils/pricingHandoff';
 
 const handoffToExternalPricingMock = vi.fn();
 
@@ -77,7 +80,7 @@ describe('PricingHandoff', () => {
       <Router>
         <Route path="/pricing" component={PricingHandoff} />
         <Route
-          path="/settings/system/billing/plan"
+          path={SELF_HOSTED_PRO_BILLING_PLAN_ROUTE}
           component={() => <div>Plans destination</div>}
         />
       </Router>

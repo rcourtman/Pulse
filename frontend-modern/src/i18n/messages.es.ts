@@ -298,7 +298,7 @@ export const ES_MESSAGE_OVERRIDES = {
   'settings.general.temperature.title': 'Unidad de temperatura',
   'settings.general.telemetry.copyJson': 'Copiar JSON',
   'settings.general.telemetry.description':
-    'Ayuda a mejorar Pulse compartiendo datos de uso salientes anónimos: un ID de instalación rotativo, identidad de versión normalizada, plataforma de ejecución, conteos agregados de adopción autohospedada y flags de funciones de alto nivel. No se envían hostnames, credenciales, identificadores de infraestructura, prompts, mensajes de chat ni información personal. Las filas de telemetría se conservan hasta 90 días y las direcciones IP no se guardan en filas de telemetría.',
+    'Ayuda a mejorar Pulse compartiendo datos de uso salientes anónimos: un ID de instalación rotativo, identidad de versión normalizada, plataforma de ejecución, conteos agregados de adopción autohospedada, flags de funciones de alto nivel, y contadores generales de uso de Patrol, Assistant y agentes externos. No se envían hostnames, credenciales, identificadores de infraestructura, prompts, mensajes de chat, texto de comandos, salida de acciones, valores de tokens ni información personal. Las filas de telemetría se conservan hasta 90 días y las direcciones IP no se guardan en filas de telemetría.',
   'settings.general.telemetry.disabledPreview':
     'La telemetría está desactivada. Esta vista previa muestra el payload que Pulse enviaría si la activas.',
   'settings.general.telemetry.fullDetails': 'Detalles completos',
@@ -366,11 +366,20 @@ export const ES_MESSAGE_OVERRIDES = {
     'Configura la entrega en tiempo real de eventos de auditoría a sistemas externos.',
   'settings.header.securityWebhooks.title': 'Webhooks de auditoría',
   'settings.header.systemAi.description':
-    'Configura proveedores y modelos para Pulse Assistant y Patrol.',
-  'settings.header.systemAi.title': 'Assistant y Patrol',
+    'Configura proveedores, modelos predeterminados, salud de proveedores, presupuesto y uso para Pulse Intelligence.',
+  'settings.header.systemAi.title': 'Proveedores y modelos',
+  'settings.header.systemAiAssistant.description':
+    'Configura el comportamiento del chat, los permisos de acciones y las sesiones del Assistant.',
+  'settings.header.systemAiAssistant.title': 'Assistant',
+  'settings.header.systemAiDiscovery.description':
+    'Configura el contexto de servicio asistido por IA que usan Assistant y Patrol. El descubrimiento y onboarding de infraestructura permanecen en Infraestructura.',
+  'settings.header.systemAiDiscovery.title': 'Contexto de servicio',
+  'settings.header.systemAiPatrol.description':
+    'Configura cuando se ejecuta Patrol, que lo inicia y que modelo usa.',
+  'settings.header.systemAiPatrol.title': 'Patrol',
   'settings.header.systemBilling.description':
-    'Revisa el plan que usa esta instancia y las capacidades opcionales conectadas.',
-  'settings.header.systemBilling.title': 'Plan autohospedado',
+    'Plan, licencia y modo de Patrol para esta instancia.',
+  'settings.header.systemBilling.title': 'Planes y facturacion',
   'settings.header.systemGeneral.description':
     'Administra apariencia, diseño y cadencia predeterminada de supervisión.',
   'settings.header.systemGeneral.title': 'General',
@@ -398,6 +407,7 @@ export const ES_MESSAGE_OVERRIDES = {
   'settings.nav.group.infrastructure': 'Infraestructura',
   'settings.nav.group.monitoring': 'Supervisión',
   'settings.nav.group.organization': 'Organización',
+  'settings.nav.group.pulseIntelligence': 'Pulse Intelligence',
   'settings.nav.group.security': 'Seguridad',
   'settings.nav.group.support': 'Soporte',
   'settings.nav.group.system': 'Sistema',
@@ -410,12 +420,16 @@ export const ES_MESSAGE_OVERRIDES = {
   'settings.nav.item.billingAdmin': 'Admin de facturación',
   'settings.nav.item.dataReports': 'Datos e informes',
   'settings.nav.item.diagnosticsHealth': 'Diagnóstico y salud',
+  'settings.nav.item.assistant': 'Assistant',
+  'settings.nav.item.discovery': 'Contexto de servicio',
   'settings.nav.item.general': 'General',
   'settings.nav.item.infrastructure': 'Infraestructura',
   'settings.nav.item.network': 'Red',
   'settings.nav.item.organizationAccess': 'Acceso',
   'settings.nav.item.organizationOverview': 'Resumen',
-  'settings.nav.item.plans': 'Planes',
+  'settings.nav.item.patrol': 'Patrol',
+  'settings.nav.item.plans': 'Planes y facturacion',
+  'settings.nav.item.providerModels': 'Proveedores y modelos',
   'settings.nav.item.recovery': 'Recuperación',
   'settings.nav.item.remoteAccess': 'Acceso remoto',
   'settings.nav.item.resourcePrivacy': 'Privacidad de recursos',
@@ -426,7 +440,6 @@ export const ES_MESSAGE_OVERRIDES = {
   'settings.nav.item.systemLogs': 'Logs del sistema',
   'settings.nav.item.updates': 'Actualizaciones',
   'settings.nav.item.users': 'Usuarios',
-  'settings.nav.item.assistantPatrol': 'Assistant y Patrol',
   'settings.shell.collapseSidebarLabel': 'Contraer navegación de ajustes',
   'settings.shell.configurationLoading': 'Cargando configuración...',
   'settings.shell.discardLabel': 'Descartar',

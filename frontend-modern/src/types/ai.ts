@@ -40,12 +40,12 @@ export interface AISettings {
   chat_model?: string; // Model for interactive chat (empty = use default)
   patrol_model?: string; // Model for background patrol (empty = use default)
   discovery_model?: string; // Model for infrastructure discovery (empty = use default)
-  auto_fix_model?: string; // Model for safe remediation workflows (empty = use patrol model)
+  auto_fix_model?: string; // Model for Patrol fix actions (empty = use patrol model)
   configured: boolean; // true if AI is ready to use
   custom_context: string; // user-provided infrastructure context
-  // OAuth fields for Claude Pro/Max subscription authentication
-  auth_method: AuthMethod; // "api_key" or "oauth"
-  oauth_connected: boolean; // true if OAuth tokens are configured
+  // Legacy OAuth fields are retained for cleanup/migration only.
+  auth_method: AuthMethod; // "api_key" or legacy "oauth"
+  oauth_connected: boolean; // true if legacy OAuth tokens are stored
   // Patrol settings for token efficiency
   patrol_interval_minutes?: number; // Patrol interval in minutes (0 = disabled, minimum 10)
   patrol_enabled?: boolean; // Legacy/server-authored patrol runtime toggle still surfaced by the API
@@ -57,7 +57,7 @@ export interface AISettings {
   patrol_alert_trigger_types?: string[]; // optional allowlist of alert types (empty = all types)
   patrol_auto_fix?: boolean; // true if Patrol can remediate without approval
   // Multi-provider configuration
-  anthropic_configured: boolean; // true if Anthropic API key or OAuth is set
+  anthropic_configured: boolean; // true if Anthropic API key is set
   openai_configured: boolean; // true if OpenAI API key is set
   openrouter_configured: boolean; // true if OpenRouter API key is set
   deepseek_configured: boolean; // true if DeepSeek API key is set
@@ -109,12 +109,12 @@ export interface AISettingsUpdateRequest {
   enabled?: boolean;
   model?: string;
   custom_context?: string; // user-provided infrastructure context
-  auth_method?: AuthMethod; // "api_key" or "oauth"
+  auth_method?: AuthMethod; // "api_key" or legacy "oauth"
   // Model overrides for different use cases
   chat_model?: string; // Model for interactive chat
   patrol_model?: string; // Model for background patrol
   discovery_model?: string; // Model for infrastructure discovery
-  auto_fix_model?: string; // Model for safe remediation workflows
+  auto_fix_model?: string; // Model for Patrol fix actions
   // Patrol settings for token efficiency
   patrol_interval_minutes?: number; // Custom interval in minutes (0 = disabled, minimum 10)
   patrol_enabled?: boolean; // Legacy/server-authored patrol runtime toggle still accepted by the API

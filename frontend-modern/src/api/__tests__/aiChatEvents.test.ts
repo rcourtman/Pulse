@@ -23,6 +23,7 @@ describe('AI chat stream event contract', () => {
     expect(event.data.id).toBe('sess-stream');
     expect(aiChatEventsSource).toContain('export interface SessionData');
     expect(aiChatEventsSource).toContain("type: 'session'");
+    expect(aiChatEventsSource).toContain('context_limit_tokens?: number');
   });
 
   it('does not expose automatic provider fallback metadata on workflow state events', () => {

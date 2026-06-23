@@ -1,17 +1,46 @@
 import { describe, expect, it } from 'vitest';
 import {
+  API_TOKEN_CREATE_ANCHOR,
+  API_TOKEN_PRESET_QUERY_PARAM,
   DOCKER_PATH,
   DOCKER_QUERY_PARAMS,
+  EXTERNAL_AGENT_SETUP_ANCHOR,
+  EXTERNAL_AGENT_SETUP_PATH,
   KUBERNETES_PATH,
   PMG_THRESHOLDS_PATH,
+  PATROL_AUTONOMY_OPERATIONS_LOOP_PATH,
+  PATROL_CONTROL_ANCHOR,
+  PATROL_CONTROL_PATH,
+  PATROL_CONTROL_PATH_WITH_STARTER,
+  PATROL_CONTROL_STARTER,
+  PATROL_CONTROL_STARTER_QUERY_PARAM,
+  PATROL_CONTROL_OPERATIONS_LOOP_PATH,
+  PATROL_OPERATIONS_LOOP_ANCHOR,
+  PATROL_OPERATIONS_LOOP_PATROL_AUTONOMY_STARTER,
+  PATROL_OPERATIONS_LOOP_PATROL_CONTROL_STARTER,
+  PATROL_OPERATIONS_LOOP_PRO_ACTIVATION_STARTER,
+  PATROL_OPERATIONS_LOOP_PATH,
+  PATROL_OPERATIONS_LOOP_STARTER_QUERY_PARAM,
+  PATROL_PRO_ACTIVATION_OPERATIONS_LOOP_PATH,
   PATROL_PATH,
+  PULSE_MCP_SETUP_ANCHOR,
+  PULSE_MCP_LEGACY_SETUP_PATH,
+  PULSE_MCP_SETUP_PATH,
+  PULSE_MCP_TOKEN_SETUP_PATH,
+  PULSE_INTELLIGENCE_AGENT_TOKEN_PRESET,
+  SETTINGS_PULSE_INTELLIGENCE_ASSISTANT_PATH,
+  SETTINGS_PULSE_INTELLIGENCE_PATH,
+  isExternalAgentSetupHash,
   PROXMOX_DEFAULT_TAB,
   PROXMOX_PATH,
   RECOVERY_QUERY_PARAMS,
+  SETTINGS_API_ACCESS_PATH,
   STANDALONE_DEFAULT_TAB,
   STANDALONE_PATH,
   TRUENAS_PATH,
   VMWARE_PATH,
+  buildPatrolControlPath,
+  buildPatrolOperationsLoopPath,
   buildDockerPath,
   buildDockerRouteSearch,
   buildKubernetesPath,
@@ -23,6 +52,8 @@ import {
   buildVmwarePath,
   buildWorkloadsRouteSearch,
   parseRecoveryLinkSearch,
+  parsePatrolControlStarter,
+  parsePatrolOperationsLoopStarter,
   parseStorageLinkSearch,
   parseWorkloadsLinkSearch,
   STORAGE_QUERY_PARAMS,
@@ -32,6 +63,91 @@ import {
 describe('resource link routing contract', () => {
   it('keeps Patrol links on the canonical Patrol route', () => {
     expect(PATROL_PATH).toBe('/patrol');
+    expect(PATROL_CONTROL_ANCHOR).toBe('patrol-control');
+    expect(PATROL_CONTROL_STARTER_QUERY_PARAM).toBe('patrolControlStarter');
+    expect(PATROL_CONTROL_STARTER).toBe('patrol_control');
+    expect(PATROL_CONTROL_PATH).toBe('/patrol#patrol-control');
+    expect(PATROL_CONTROL_PATH_WITH_STARTER).toBe(
+      '/patrol?patrolControlStarter=patrol_control#patrol-control',
+    );
+    expect(PATROL_OPERATIONS_LOOP_ANCHOR).toBe('operations-loop');
+    expect(PATROL_OPERATIONS_LOOP_STARTER_QUERY_PARAM).toBe('operationsLoopStarter');
+    expect(PATROL_OPERATIONS_LOOP_PATROL_CONTROL_STARTER).toBe('patrol_control');
+    expect(PATROL_OPERATIONS_LOOP_PATROL_AUTONOMY_STARTER).toBe('patrol_autonomy');
+    expect(PATROL_OPERATIONS_LOOP_PRO_ACTIVATION_STARTER).toBe('pulse_pro_activation');
+    expect(PATROL_OPERATIONS_LOOP_PATH).toBe(PATROL_CONTROL_PATH);
+    expect(PATROL_CONTROL_OPERATIONS_LOOP_PATH).toBe(PATROL_CONTROL_PATH_WITH_STARTER);
+    expect(PATROL_AUTONOMY_OPERATIONS_LOOP_PATH).toBe(
+      '/patrol?patrolControlStarter=patrol_control#patrol-control',
+    );
+    expect(PATROL_PRO_ACTIVATION_OPERATIONS_LOOP_PATH).toBe(
+      '/patrol?patrolControlStarter=patrol_control#patrol-control',
+    );
+    expect(
+      buildPatrolControlPath({
+        starter: PATROL_CONTROL_STARTER,
+      }),
+    ).toBe(PATROL_CONTROL_PATH_WITH_STARTER);
+    expect(
+      buildPatrolControlPath({
+        starter: PATROL_OPERATIONS_LOOP_PRO_ACTIVATION_STARTER,
+      }),
+    ).toBe(PATROL_CONTROL_PATH_WITH_STARTER);
+    expect(
+      buildPatrolControlPath({
+        starter: null,
+      }),
+    ).toBe(PATROL_CONTROL_PATH);
+    expect(parsePatrolControlStarter('?patrolControlStarter=patrol_control')).toBe(
+      PATROL_CONTROL_STARTER,
+    );
+    expect(
+      buildPatrolOperationsLoopPath({
+        starter: PATROL_OPERATIONS_LOOP_PATROL_CONTROL_STARTER,
+      }),
+    ).toBe(PATROL_CONTROL_OPERATIONS_LOOP_PATH);
+    expect(
+      buildPatrolOperationsLoopPath({
+        starter: PATROL_OPERATIONS_LOOP_PRO_ACTIVATION_STARTER,
+      }),
+    ).toBe(PATROL_PRO_ACTIVATION_OPERATIONS_LOOP_PATH);
+    expect(parsePatrolOperationsLoopStarter('?operationsLoopStarter=patrol_control')).toBe(
+      PATROL_OPERATIONS_LOOP_PATROL_CONTROL_STARTER,
+    );
+    expect(parsePatrolOperationsLoopStarter('?operationsLoopStarter=patrol_autonomy')).toBe(
+      PATROL_OPERATIONS_LOOP_PATROL_CONTROL_STARTER,
+    );
+    expect(parsePatrolOperationsLoopStarter('?operationsLoopStarter=pulse_pro_activation')).toBe(
+      PATROL_OPERATIONS_LOOP_PATROL_CONTROL_STARTER,
+    );
+    expect(parsePatrolOperationsLoopStarter('?patrolControlStarter=patrol_control')).toBe(
+      PATROL_OPERATIONS_LOOP_PATROL_CONTROL_STARTER,
+    );
+    expect(parsePatrolOperationsLoopStarter('?operationsLoopStarter=pulse_patrol')).toBe('');
+  });
+
+  it('keeps external agent setup in Pulse Intelligence while token creation stays in API Access', () => {
+    expect(SETTINGS_API_ACCESS_PATH).toBe('/settings/security/api');
+    expect(SETTINGS_PULSE_INTELLIGENCE_PATH).toBe('/settings/pulse-intelligence');
+    expect(SETTINGS_PULSE_INTELLIGENCE_ASSISTANT_PATH).toBe(
+      '/settings/pulse-intelligence/assistant',
+    );
+    expect(EXTERNAL_AGENT_SETUP_ANCHOR).toBe('external-agent-setup');
+    expect(EXTERNAL_AGENT_SETUP_PATH).toBe(
+      '/settings/pulse-intelligence/assistant#external-agent-setup',
+    );
+    expect(PULSE_MCP_SETUP_ANCHOR).toBe('pulse-mcp-setup');
+    expect(PULSE_MCP_SETUP_PATH).toBe(EXTERNAL_AGENT_SETUP_PATH);
+    expect(PULSE_MCP_LEGACY_SETUP_PATH).toBe('/settings/security/api#pulse-mcp-setup');
+    expect(isExternalAgentSetupHash('#external-agent-setup')).toBe(true);
+    expect(isExternalAgentSetupHash('#pulse-mcp-setup')).toBe(true);
+    expect(isExternalAgentSetupHash('#api-token-create')).toBe(false);
+    expect(API_TOKEN_CREATE_ANCHOR).toBe('api-token-create');
+    expect(API_TOKEN_PRESET_QUERY_PARAM).toBe('tokenPreset');
+    expect(PULSE_INTELLIGENCE_AGENT_TOKEN_PRESET).toBe('pulse-intelligence-agent');
+    expect(PULSE_MCP_TOKEN_SETUP_PATH).toBe(
+      '/settings/security/api?tokenPreset=pulse-intelligence-agent#api-token-create',
+    );
   });
 
   it('builds canonical Proxmox platform tab paths', () => {
@@ -56,9 +172,7 @@ describe('resource link routing contract', () => {
     expect(buildDockerRouteSearch({ host: 'frigate.mist-stork.ts.net' })).toBe(
       '?host=frigate.mist-stork.ts.net',
     );
-    expect(buildDockerRouteSearch({ host: ' host with spaces ' })).toBe(
-      '?host=host+with+spaces',
-    );
+    expect(buildDockerRouteSearch({ host: ' host with spaces ' })).toBe('?host=host+with+spaces');
     expect(buildDockerRouteSearch({ host: '' })).toBe('');
 
     expect(KUBERNETES_PATH).toBe('/kubernetes');

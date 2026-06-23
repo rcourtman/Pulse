@@ -4,6 +4,7 @@ import {
   getPatrolScheduleLabel,
   PATROL_SCHEDULE_PRESETS,
 } from '@/utils/aiPatrolSchedulePresentation';
+import { getPatrolRuntimePresentation } from '@/utils/patrolRuntimePresentation';
 
 describe('aiPatrolSchedulePresentation', () => {
   it('returns canonical patrol schedule presets', () => {
@@ -19,5 +20,13 @@ describe('aiPatrolSchedulePresentation', () => {
   it('builds canonical schedule options including custom current values', () => {
     expect(buildPatrolScheduleOptions(360)).toEqual([...PATROL_SCHEDULE_PRESETS]);
     expect(buildPatrolScheduleOptions(17)).toContainEqual({ value: 17, label: '17 min' });
+  });
+
+  it('keeps header runtime copy in check language', () => {
+    expect(getPatrolRuntimePresentation('running')).toMatchObject({
+      label: 'Patrol enabled',
+      title: 'Patrol running',
+      description: 'Patrol is checking your infrastructure now.',
+    });
   });
 });

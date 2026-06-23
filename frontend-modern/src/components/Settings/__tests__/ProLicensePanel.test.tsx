@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/te
 import { Route, Router } from '@solidjs/router';
 
 import type { LicenseEntitlements } from '@/api/license';
+import type { AgentOperationsLoopStatus } from '@/api/agentCapabilities';
 import { ProLicensePanel } from '../ProLicensePanel';
 import proLicensePanelSource from '../ProLicensePanel.tsx?raw';
 import proLicensePanelStateSource from '../useProLicensePanelState.ts?raw';
@@ -25,6 +26,8 @@ import {
   SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID,
   SELF_HOSTED_PRO_BILLING_PLAN_ROUTE,
 } from '@/utils/pricingHandoff';
+import { PATROL_CONTROL_STARTER_URL } from '@/utils/licensePresentation';
+import { PATROL_CONTROL_PATH } from '@/routing/resourceLinks';
 
 let mockEntitlements: LicenseEntitlements | null = null;
 
@@ -54,6 +57,43 @@ const useLocationMock = vi.fn(() => ({
 const navigateMock = vi.fn();
 const getUpgradeActionDestinationMock = vi.hoisted(() => vi.fn());
 const getUpgradeActionUrlOrFallbackMock = vi.hoisted(() => vi.fn());
+const fetchAgentOperationsLoopStatusMock = vi.hoisted(() => vi.fn());
+
+const buildOperationsLoopStatus = (
+  overrides: Partial<AgentOperationsLoopStatus> = {},
+): AgentOperationsLoopStatus => ({
+  nextAction: 'run_patrol',
+  progressLabel: 'No Patrol work activity yet.',
+  steps: [],
+  patrolEvidenceCount: 0,
+  patrolIssueEvidenceCount: 0,
+  activeFindingCount: 0,
+  pendingApprovalCount: 0,
+  governedActionCount: 0,
+  approvedDecisionCount: 0,
+  rejectedDecisionCount: 0,
+  verifiedOutcomeCount: 0,
+  operationsLoopStarterCount: 0,
+  assistantOperationsLoopStarterCount: 0,
+  patrolOperationsLoopStarterCount: 0,
+  patrolControlOperationsLoopStarterCount: 0,
+  patrolControlCompletedOperationsLoopCount: 0,
+  patrolControlResolvedOperationsLoopCount: 0,
+  patrolControlValueState: 'not_started',
+  patrolAutonomyOperationsLoopStarterCount: 0,
+  patrolAutonomyCompletedOperationsLoopCount: 0,
+  patrolAutonomyResolvedOperationsLoopCount: 0,
+  patrolAutonomyValueState: 'not_started',
+  proActivationOperationsLoopStarterCount: 0,
+  proActivationCompletedOperationsLoopCount: 0,
+  proActivationResolvedOperationsLoopCount: 0,
+  proActivationValueProofState: 'not_started',
+  mcpOperationsLoopStarterCount: 0,
+  externalAgentReady: false,
+  windowStart: '2026-06-21T00:00:00Z',
+  generatedAt: '2026-06-21T00:00:00Z',
+  ...overrides,
+});
 
 vi.mock('@solidjs/router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@solidjs/router')>();
@@ -93,6 +133,11 @@ vi.mock('@/api/license', () => ({
     activateLicense: (...args: unknown[]) => activateLicenseMock(...args),
     clearLicense: (...args: unknown[]) => clearLicenseMock(...args),
   },
+}));
+
+vi.mock('@/api/agentCapabilities', () => ({
+  fetchAgentOperationsLoopStatus: (...args: unknown[]) =>
+    fetchAgentOperationsLoopStatusMock(...args),
 }));
 
 vi.mock('@/stores/notifications', () => ({
@@ -136,9 +181,11 @@ describe('ProLicensePanel', () => {
     navigateMock.mockReset();
     getUpgradeActionDestinationMock.mockReset();
     getUpgradeActionUrlOrFallbackMock.mockReset();
+    fetchAgentOperationsLoopStatusMock.mockReset();
     loadRuntimeLicenseStatusMock.mockResolvedValue(undefined);
     loadCommercialPostureMock.mockResolvedValue(undefined);
     loadLicenseEntitlementsMock.mockResolvedValue(undefined);
+    fetchAgentOperationsLoopStatusMock.mockResolvedValue(buildOperationsLoopStatus());
     licenseEntitlementsLoadErrorMock.mockReturnValue(null);
     startProTrialMock.mockResolvedValue(undefined);
     activateLicenseMock.mockResolvedValue({ success: true });
@@ -189,7 +236,7 @@ describe('ProLicensePanel', () => {
     expect(loadCommercialPostureMock).not.toHaveBeenCalled();
     expect(screen.getByText('License and billing details are hidden')).toBeInTheDocument();
     expect(screen.getByText(/instead of creating a demo license/i)).toBeInTheDocument();
-    expect(screen.queryByText('Self-hosted plan')).not.toBeInTheDocument();
+    expect(screen.queryByText('Plans & Billing')).not.toBeInTheDocument();
     expect(screen.queryByText('Monitored Systems')).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: /start 14-day pro trial/i }),
@@ -203,7 +250,7 @@ describe('ProLicensePanel', () => {
       expect(loadLicenseEntitlementsMock).toHaveBeenCalled();
     });
 
-    expect(screen.getByText('Self-hosted plan')).toBeInTheDocument();
+    expect(screen.getByText('Plans & Billing')).toBeInTheDocument();
     expect(screen.getByText('Current plan: Community')).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Usage' })).not.toBeInTheDocument();
     expect(
@@ -220,11 +267,11 @@ describe('ProLicensePanel', () => {
 
     expect(screen.getByText('Current plan: Community')).toBeInTheDocument();
     expect(screen.queryByText(/^Expired$/)).not.toBeInTheDocument();
-    expect(screen.queryByText('Compare self-hosted plans')).not.toBeInTheDocument();
-    expect(screen.queryByText('Optional extras')).not.toBeInTheDocument();
-    expect(screen.queryByText('What Relay adds')).not.toBeInTheDocument();
-    expect(screen.queryByText('What Pulse Pro adds')).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Compare plans' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Select a plan')).not.toBeInTheDocument();
+    expect(screen.queryByText('Available plans')).not.toBeInTheDocument();
+    expect(screen.queryByText('Relay plan')).not.toBeInTheDocument();
+    expect(screen.queryByText('Pulse Pro plan')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'View plans' })).not.toBeInTheDocument();
   });
 
   it('opens compare-plan checkout from the explicit self-hosted billing handoff', async () => {
@@ -240,7 +287,7 @@ describe('ProLicensePanel', () => {
       expect(loadLicenseEntitlementsMock).toHaveBeenCalled();
     });
 
-    await fireEvent.click(screen.getAllByRole('link', { name: 'Compare plans' })[0]);
+    await fireEvent.click(screen.getAllByRole('link', { name: 'View plans' })[0]);
   });
 
   it('keeps explicit self-hosted plan comparison focused on optional paid extras', async () => {
@@ -256,19 +303,19 @@ describe('ProLicensePanel', () => {
       expect(loadLicenseEntitlementsMock).toHaveBeenCalled();
     });
 
-    expect(screen.getByText('Compare self-hosted plans')).toBeInTheDocument();
-    expect(screen.getByText('Optional extras')).toBeInTheDocument();
-    expect(screen.getByText('What Relay adds')).toBeInTheDocument();
-    expect(screen.getByText('What Pulse Pro adds')).toBeInTheDocument();
-    expect(screen.getByText('Pulse Relay (Remote Access)')).toBeInTheDocument();
-    expect(screen.getByText('Pulse Mobile Pairing')).toBeInTheDocument();
-    expect(screen.getByText('Push Notifications')).toBeInTheDocument();
-    expect(screen.getByText('Alert Root-Cause Analysis')).toBeInTheDocument();
-    expect(screen.getByText('Safe Remediation Workflows')).toBeInTheDocument();
+    expect(screen.getByText('Select a plan')).toBeInTheDocument();
+    expect(screen.getByText('Available plans')).toBeInTheDocument();
+    expect(screen.getByText('Relay plan')).toBeInTheDocument();
+    expect(screen.getByText('Pulse Pro plan')).toBeInTheDocument();
+    expect(screen.getByText('Remote web access via Relay')).toBeInTheDocument();
+    expect(screen.getByText('Pulse Mobile pairing')).toBeInTheDocument();
+    expect(screen.getByText('Push notifications')).toBeInTheDocument();
+    expect(screen.getByText('Choose Patrol mode')).toBeInTheDocument();
+    expect(screen.getByText('Patrol investigates issues')).toBeInTheDocument();
+    expect(screen.getByText('Patrol handles safe fixes')).toBeInTheDocument();
     expect(screen.getByText('90-day metric history')).toBeInTheDocument();
-    expect(screen.getByText('Audit Logging')).toBeInTheDocument();
-    expect(screen.getByText('PDF/CSV Reporting')).toBeInTheDocument();
-    expect(screen.getByText('Centralized Agent Profiles')).toBeInTheDocument();
+    expect(screen.getByText('RBAC and audit logging')).toBeInTheDocument();
+    expect(screen.getByText('Agent profiles · PDF/CSV reports')).toBeInTheDocument();
 
     expect(screen.queryByText(/unlimited/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/trial/i)).not.toBeInTheDocument();
@@ -295,6 +342,32 @@ describe('ProLicensePanel', () => {
     expect(screen.queryByText('Your Pro trial has ended')).not.toBeInTheDocument();
   });
 
+  it.each([
+    ['Community', 'community'],
+    ['Relay', 'relay'],
+  ])('does not load Patrol operator status for %s plans', async (planName, tier) => {
+    mockEntitlements = {
+      capabilities: [],
+      limits: [],
+      subscription_state: 'active',
+      upgrade_reasons: [],
+      tier,
+      trial_eligible: false,
+    };
+
+    renderPanel();
+
+    await waitFor(() => {
+      expect(loadLicenseEntitlementsMock).toHaveBeenCalled();
+    });
+    await waitFor(() => {
+      expect(screen.getByText(`Current plan: ${planName}`)).toBeInTheDocument();
+    });
+
+    expect(fetchAgentOperationsLoopStatusMock).not.toHaveBeenCalled();
+    expect(screen.queryByText('Patrol work')).not.toBeInTheDocument();
+  });
+
   it('renders trial countdown from entitlements payload', async () => {
     mockEntitlements = {
       capabilities: ['ai_patrol', 'ai_autofix'],
@@ -318,7 +391,262 @@ describe('ProLicensePanel', () => {
 
     expect(screen.getAllByText('Trial').length).toBeGreaterThan(0);
     expect(screen.getByText('7')).toBeInTheDocument();
-    expect(screen.getByText('Safe Remediation Workflows')).toBeInTheDocument();
+    expect(screen.getByText('Patrol Handles Safe Fixes')).toBeInTheDocument();
+  });
+
+  it('keeps the Patrol mode entry point visible for existing active Pro plans', async () => {
+    mockEntitlements = {
+      capabilities: ['relay', 'mobile_app', 'push_notifications', 'ai_autofix'],
+      limits: [],
+      subscription_state: 'active',
+      upgrade_reasons: [],
+      tier: 'pro',
+      licensed_email: 'owner@example.com',
+      trial_eligible: false,
+      runtime: PRO_RUNTIME_IDENTITY,
+    };
+
+    renderPanel();
+
+    await waitFor(() => {
+      expect(screen.getByText('Current plan: Pulse Pro')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText('Pulse Pro is now active')).not.toBeInTheDocument();
+    const patrolControlLink = screen.getByRole('link', { name: 'Choose Patrol mode' });
+    expect(patrolControlLink).toHaveAttribute('href', PATROL_CONTROL_STARTER_URL);
+    expect(patrolControlLink).not.toHaveAttribute('target');
+    patrolControlLink.addEventListener('click', (event) => event.preventDefault());
+    fireEvent.click(patrolControlLink);
+  });
+
+  it('keeps external-agent proof behind Patrol mode presentation', async () => {
+    mockEntitlements = {
+      capabilities: [
+        'relay',
+        'mobile_app',
+        'push_notifications',
+        'ai_alerts',
+        'ai_autofix',
+        'rbac',
+        'audit_logging',
+        'advanced_reporting',
+        'agent_profiles',
+      ],
+      limits: [],
+      subscription_state: 'active',
+      upgrade_reasons: [],
+      tier: 'pro',
+      licensed_email: 'owner@example.com',
+      max_history_days: 90,
+      trial_eligible: false,
+      runtime: PRO_RUNTIME_IDENTITY,
+    };
+    fetchAgentOperationsLoopStatusMock.mockResolvedValue(
+      buildOperationsLoopStatus({
+        nextAction: 'open_mcp',
+        progressLabel: 'Legacy status asked for MCP readiness after the outcome was verified.',
+        patrolControlOperationsLoopStarterCount: 1,
+        patrolControlResolvedOperationsLoopCount: 0,
+        patrolControlValueState: 'verified_needs_mcp',
+        externalAgentReady: false,
+      }),
+    );
+
+    renderPanel();
+
+    await waitFor(() => {
+      expect(screen.getByText('Current plan: Pulse Pro')).toBeInTheDocument();
+    });
+
+    await waitFor(() => {
+      expect(fetchAgentOperationsLoopStatusMock).toHaveBeenCalled();
+    });
+    expect(screen.queryByText('Patrol work')).not.toBeInTheDocument();
+    expect(screen.queryByText('Patrol autonomy loop')).not.toBeInTheDocument();
+    expect(screen.queryByText('Verified')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        'Patrol handled an infrastructure issue, verified the outcome, and recorded what happened.',
+      ),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Legacy status asked for MCP readiness after the outcome was verified.'),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/Continue through Patrol investigation/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Patrol history' })).not.toBeInTheDocument();
+    const patrolControlLink = screen.getByRole('link', { name: 'Choose Patrol mode' });
+    expect(patrolControlLink).toHaveAttribute('href', PATROL_CONTROL_STARTER_URL);
+  });
+
+  it('does not turn legacy Pro activation starter evidence into plan-page Patrol work', async () => {
+    mockEntitlements = {
+      capabilities: [
+        'relay',
+        'mobile_app',
+        'push_notifications',
+        'ai_alerts',
+        'ai_autofix',
+        'rbac',
+        'audit_logging',
+        'advanced_reporting',
+        'agent_profiles',
+      ],
+      limits: [],
+      subscription_state: 'active',
+      upgrade_reasons: [],
+      tier: 'pro',
+      licensed_email: 'owner@example.com',
+      max_history_days: 90,
+      trial_eligible: false,
+      runtime: PRO_RUNTIME_IDENTITY,
+    };
+    fetchAgentOperationsLoopStatusMock.mockResolvedValue(
+      buildOperationsLoopStatus({
+        nextAction: 'run_patrol',
+        progressLabel: 'Legacy Pro activation entry recorded.',
+        proActivationOperationsLoopStarterCount: 1,
+        proActivationCompletedOperationsLoopCount: 0,
+        proActivationResolvedOperationsLoopCount: 0,
+        proActivationValueProofState: 'in_progress',
+        externalAgentReady: false,
+      }),
+    );
+
+    renderPanel();
+
+    await waitFor(() => {
+      expect(screen.getByText('Current plan: Pulse Pro')).toBeInTheDocument();
+    });
+
+    await waitFor(() => {
+      expect(fetchAgentOperationsLoopStatusMock).toHaveBeenCalled();
+    });
+    expect(screen.queryByText('Patrol work')).not.toBeInTheDocument();
+    expect(screen.queryByText('Started')).not.toBeInTheDocument();
+    expect(screen.queryByText('Legacy Pro activation entry recorded.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Continue Patrol work' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Choose Patrol mode' })).toHaveAttribute(
+      'href',
+      PATROL_CONTROL_STARTER_URL,
+    );
+  });
+
+  it('keeps terminal Patrol decisions out of plan capability details', async () => {
+    mockEntitlements = {
+      capabilities: [
+        'relay',
+        'mobile_app',
+        'push_notifications',
+        'ai_alerts',
+        'ai_autofix',
+        'rbac',
+        'audit_logging',
+        'advanced_reporting',
+        'agent_profiles',
+      ],
+      limits: [],
+      subscription_state: 'active',
+      upgrade_reasons: [],
+      tier: 'pro',
+      licensed_email: 'owner@example.com',
+      max_history_days: 90,
+      trial_eligible: false,
+      runtime: PRO_RUNTIME_IDENTITY,
+    };
+    fetchAgentOperationsLoopStatusMock.mockResolvedValue(
+      buildOperationsLoopStatus({
+        nextAction: 'complete',
+        progressLabel:
+          'Patrol recorded a rejected change decision. Nothing was changed; approve a safer fix before marking the issue resolved.',
+        patrolControlOperationsLoopStarterCount: 1,
+        patrolControlCompletedOperationsLoopCount: 1,
+        patrolControlResolvedOperationsLoopCount: 0,
+        patrolControlValueState: 'governed_decision_recorded',
+        externalAgentReady: false,
+      }),
+    );
+
+    renderPanel();
+
+    await waitFor(() => {
+      expect(screen.getByText('Current plan: Pulse Pro')).toBeInTheDocument();
+    });
+
+    await waitFor(() => {
+      expect(fetchAgentOperationsLoopStatusMock).toHaveBeenCalled();
+    });
+    expect(screen.queryByText('Patrol work')).not.toBeInTheDocument();
+    expect(screen.queryByText('Patrol autonomy loop')).not.toBeInTheDocument();
+    expect(screen.queryByText('Decision recorded')).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Pulse Pro is active on this instance. Review the current Patrol decision.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/External-agent setup/i)).not.toBeInTheDocument();
+    const patrolControlLink = screen.getByRole('link', { name: 'Review Patrol decision' });
+    expect(patrolControlLink).toHaveAttribute('href', PATROL_CONTROL_PATH);
+    patrolControlLink.addEventListener('click', (event) => event.preventDefault());
+    fireEvent.click(patrolControlLink);
+  });
+
+  it('keeps verified Patrol history behind the Patrol mode action', async () => {
+    mockEntitlements = {
+      capabilities: [
+        'relay',
+        'mobile_app',
+        'push_notifications',
+        'ai_alerts',
+        'ai_autofix',
+        'rbac',
+        'audit_logging',
+        'advanced_reporting',
+        'agent_profiles',
+      ],
+      limits: [],
+      subscription_state: 'active',
+      upgrade_reasons: [],
+      tier: 'pro',
+      licensed_email: 'owner@example.com',
+      max_history_days: 90,
+      trial_eligible: false,
+      runtime: PRO_RUNTIME_IDENTITY,
+    };
+    fetchAgentOperationsLoopStatusMock.mockResolvedValue(
+      buildOperationsLoopStatus({
+        nextAction: 'complete',
+        progressLabel:
+          'Patrol verified the issue outcome and recorded the governed action history.',
+        patrolControlOperationsLoopStarterCount: 1,
+        patrolControlResolvedOperationsLoopCount: 1,
+        patrolControlValueState: 'verified',
+        externalAgentReady: true,
+      }),
+    );
+
+    renderPanel();
+
+    await waitFor(() => {
+      expect(screen.getByText('Current plan: Pulse Pro')).toBeInTheDocument();
+    });
+
+    await waitFor(() => {
+      expect(fetchAgentOperationsLoopStatusMock).toHaveBeenCalled();
+    });
+    expect(screen.queryByText('Patrol work')).not.toBeInTheDocument();
+    expect(screen.queryByText('Patrol autonomy loop')).not.toBeInTheDocument();
+    expect(screen.queryByText('Verified')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        'Patrol handled an infrastructure issue, verified the outcome, and recorded what happened.',
+      ),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Patrol history' })).not.toBeInTheDocument();
+    const patrolControlLink = screen.getByRole('link', { name: 'Choose Patrol mode' });
+    expect(patrolControlLink).toHaveAttribute('href', PATROL_CONTROL_STARTER_URL);
+    patrolControlLink.addEventListener('click', (event) => event.preventDefault());
+    fireEvent.click(patrolControlLink);
   });
 
   it('shows active recurring v5 plan terms as unmetered even if stale limit metadata is present', async () => {
@@ -378,9 +706,7 @@ describe('ProLicensePanel', () => {
 
     expect(screen.getByText('V5 Lifetime Grandfathered')).toBeInTheDocument();
     expect(
-      screen.getByText(
-        'See which self-hosted tier this instance is using and which capabilities are available on this install.',
-      ),
+      screen.getByText('Current tier and enabled capabilities.'),
     ).toBeInTheDocument();
     expect(screen.queryByText('Included Monitored Systems')).not.toBeInTheDocument();
     expect(screen.queryByText('Guest Capacity')).not.toBeInTheDocument();
@@ -499,27 +825,45 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Current plan: Pulse Pro')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Pulse Pro is active on this instance. Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are available right now.',
+        'Pulse Pro is active on this instance. It includes Patrol modes, 90-day metric history, RBAC, audit logs, reports, and agent profiles.',
       ),
     ).toBeInTheDocument();
     expect(screen.getByText('Primary capabilities')).toBeInTheDocument();
-    expect(screen.getByText('Alert Root-Cause Analysis')).toBeInTheDocument();
-    expect(screen.getByText('Safe Remediation Workflows')).toBeInTheDocument();
+    expect(screen.getByText('Patrol Investigates Issues')).toBeInTheDocument();
+    expect(screen.getByText('Patrol Handles Safe Fixes')).toBeInTheDocument();
     expect(screen.getByText('Included extras')).toBeInTheDocument();
-    expect(screen.getByText('Pulse Pro value proof')).toBeInTheDocument();
+    expect(screen.getByText('Capability details')).toBeInTheDocument();
+    expect(screen.getByText('(5 items ready)')).toBeInTheDocument();
+    const readinessDetails = screen
+      .getByText('Capability details')
+      .closest('details') as HTMLDetailsElement | null;
+    expect(readinessDetails).not.toBeNull();
+    expect(readinessDetails?.open).toBe(false);
     expect(
       screen.getByText(
-        "These checks come from this instance's entitlement and runtime payloads, not from public pricing copy.",
+        'Open this only when a Pro capability looks unavailable. Normal setup is choosing Patrol mode.',
       ),
     ).toBeInTheDocument();
     expect(screen.getByText('Remote access, pairing, and push')).toBeInTheDocument();
-    expect(screen.getByText('Root-cause analysis and remediation')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Relay, Pulse Mobile pairing, and push notifications are available on this instance.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Patrol investigation and remediation')).toBeInTheDocument();
     expect(screen.getByText('Team and admin controls')).toBeInTheDocument();
     expect(screen.getAllByText('Active').length).toBeGreaterThanOrEqual(4);
+    expect(
+      screen.queryByText(new RegExp(['optional', 'activation'].join(' '), 'i')),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(new RegExp(['recover', 'activation'].join(' '), 'i')),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/entitlement payload/i)).not.toBeInTheDocument();
     expect(screen.queryByText('Needs attention')).not.toBeInTheDocument();
-    expect(screen.queryByText('Optional extras')).not.toBeInTheDocument();
+    expect(screen.queryByText('Available plans')).not.toBeInTheDocument();
     expect(screen.getByText('90 days')).toBeInTheDocument();
-    expect(screen.getByText('Analysis, remediation, and admin controls')).toBeInTheDocument();
+    expect(screen.getByText('Patrol modes, history, and admin controls')).toBeInTheDocument();
     expect(screen.queryByText('Guest Capacity')).not.toBeInTheDocument();
     expect(screen.queryByText('Included Monitored Systems')).not.toBeInTheDocument();
     expect(screen.queryByText('Monitored-system policy')).not.toBeInTheDocument();
@@ -547,14 +891,14 @@ describe('ProLicensePanel', () => {
 
     expect(
       screen.getByText(
-        'Relay is active on this instance. Remote web access, Pulse Mobile pairing, push notifications, and longer history are available right now.',
+        'Relay is active on this instance. It includes remote web access, Pulse Mobile pairing, push notifications, and 14-day metric history.',
       ),
     ).toBeInTheDocument();
-    expect(screen.queryByText('Optional extras')).not.toBeInTheDocument();
-    expect(screen.queryByText('What Relay adds')).not.toBeInTheDocument();
-    expect(screen.queryByText('What Pulse Pro adds')).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'See all plans' })).not.toBeInTheDocument();
-    expect(screen.getByText('Relay value proof')).toBeInTheDocument();
+    expect(screen.queryByText('Available plans')).not.toBeInTheDocument();
+    expect(screen.queryByText('Relay plan')).not.toBeInTheDocument();
+    expect(screen.queryByText('Pulse Pro plan')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'View plans' })).not.toBeInTheDocument();
+    expect(screen.getByText('Relay status')).toBeInTheDocument();
     expect(screen.getByText('Remote access, pairing, and push')).toBeInTheDocument();
     expect(screen.getAllByText('14-day metric history').length).toBeGreaterThan(0);
     expect(screen.getByText('Pulse Relay (Remote Access)')).toBeInTheDocument();
@@ -734,8 +1078,8 @@ describe('ProLicensePanel', () => {
 
     // Verify self-hosted displayable capabilities render with their expected labels.
     expect(screen.getByText('Pulse Patrol')).toBeInTheDocument();
-    expect(screen.getByText('Alert Root-Cause Analysis')).toBeInTheDocument();
-    expect(screen.getByText('Safe Remediation Workflows')).toBeInTheDocument();
+    expect(screen.getByText('Patrol Investigates Issues')).toBeInTheDocument();
+    expect(screen.getByText('Patrol Handles Safe Fixes')).toBeInTheDocument();
     expect(screen.getByText('Update Alerts')).toBeInTheDocument();
     expect(screen.getByText('Role-Based Access Control (RBAC)')).toBeInTheDocument();
     expect(screen.getByText('Audit Logging')).toBeInTheDocument();
@@ -755,29 +1099,27 @@ describe('ProLicensePanel', () => {
   it('shows migration guidance when the pasted key looks like a legacy v5 license', async () => {
     renderPanel();
 
-    fireEvent.click(screen.getByText('Use existing key'));
+    fireEvent.click(screen.getByText('Manual key recovery'));
 
-    fireEvent.input(screen.getByLabelText(/license or activation key/i), {
+    fireEvent.input(screen.getByLabelText(/license key/i), {
       target: { value: 'header.payload.signature' },
     });
 
     expect(screen.getByText('Legacy v5 license detected')).toBeInTheDocument();
-    expect(
-      screen.getByText(/exchange this key into the v6 activation model automatically/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/migrate this key automatically/i)).toBeInTheDocument();
   });
 
   it.each([
     {
       purchase: SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED,
       title: 'Pulse Pro is now active',
-      actionLabel: null,
-      actionHref: null,
+      actionLabel: 'Choose Patrol mode',
+      actionHref: PATROL_CONTROL_STARTER_URL,
     },
     {
       purchase: SELF_HOSTED_PRO_BILLING_PURCHASE_CANCELLED,
       title: 'Checkout cancelled',
-      actionLabel: 'Compare plans',
+      actionLabel: 'View plans',
       actionHref: getSelfHostedPurchaseStartUrl(SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT),
       redirectedHref: getSelfHostedBillingHref('plan', {
         intent: SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
@@ -786,12 +1128,12 @@ describe('ProLicensePanel', () => {
     {
       purchase: SELF_HOSTED_PRO_BILLING_PURCHASE_EXPIRED,
       title: 'Upgrade return expired',
-      actionLabel: 'Compare plans',
+      actionLabel: 'View plans',
       actionHref: getSelfHostedPurchaseStartUrl(),
     },
     {
       purchase: SELF_HOSTED_PRO_BILLING_PURCHASE_FAILED,
-      title: 'Activation needs attention',
+      title: 'Plan needs attention',
       actionLabel: 'Open recovery',
       actionHref: getSelfHostedBillingHref('plan', {
         detail: SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL,
@@ -841,10 +1183,18 @@ describe('ProLicensePanel', () => {
       expect(screen.getByText(title)).toBeInTheDocument();
       if (purchase === SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED) {
         expect(
-          screen.getByText(/Checkout completed and this instance is now running Pulse Pro/i),
+          screen.getByText(
+            /Checkout completed and Pulse Pro is active\. Choose Patrol mode\./i,
+          ),
         ).toBeInTheDocument();
         expect(screen.getByText('Available now on this instance')).toBeInTheDocument();
-        expect(screen.getAllByText('Safe Remediation Workflows').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('Patrol Handles Safe Fixes').length).toBeGreaterThan(0);
+        expect(screen.getAllByRole('link', { name: 'Choose Patrol mode' })).toHaveLength(1);
+        const patrolControlLink = screen.getByRole('link', { name: 'Choose Patrol mode' });
+        expect(patrolControlLink).toHaveAttribute('href', PATROL_CONTROL_STARTER_URL);
+        expect(patrolControlLink).not.toHaveAttribute('target');
+        patrolControlLink.addEventListener('click', (event) => event.preventDefault());
+        fireEvent.click(patrolControlLink);
       }
       if (actionLabel && actionHref) {
         const actionLinks = screen.getAllByRole('link', { name: actionLabel });
@@ -858,6 +1208,49 @@ describe('ProLicensePanel', () => {
       });
     },
   );
+
+  it('keeps purchase activation success on Patrol mode when history is already verified', async () => {
+    mockEntitlements = {
+      capabilities: ['relay', 'mobile_app', 'push_notifications', 'ai_autofix'],
+      limits: [],
+      subscription_state: 'active',
+      upgrade_reasons: [],
+      tier: 'pro',
+      licensed_email: 'owner@example.com',
+      trial_eligible: false,
+      runtime: PRO_RUNTIME_IDENTITY,
+    };
+    fetchAgentOperationsLoopStatusMock.mockResolvedValue(
+      buildOperationsLoopStatus({
+        nextAction: 'complete',
+        progressLabel:
+          'Patrol verified the issue outcome and recorded the governed action history.',
+        patrolControlOperationsLoopStarterCount: 1,
+        patrolControlCompletedOperationsLoopCount: 1,
+        patrolControlResolvedOperationsLoopCount: 1,
+        patrolControlValueState: 'verified',
+        externalAgentReady: true,
+      }),
+    );
+    useLocationMock.mockReturnValue({
+      search: `?purchase=${SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED}`,
+      pathname: '/settings/system/billing/plan',
+      hash: '',
+    });
+
+    renderPanel();
+
+    expect(screen.getByText('Pulse Pro is now active')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: 'Choose Patrol mode' })).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole('link', { name: 'Patrol history' })).not.toBeInTheDocument();
+    const patrolControlLink = screen.getByRole('link', { name: 'Choose Patrol mode' });
+    expect(patrolControlLink).toHaveAttribute('href', PATROL_CONTROL_STARTER_URL);
+    patrolControlLink.addEventListener('click', (event) => event.preventDefault());
+    fireEvent.click(patrolControlLink);
+  });
 
   it('returns self-hosted plan purchases to the plan surface instead of the legacy usage tab', async () => {
     mockEntitlements = {
@@ -880,11 +1273,13 @@ describe('ProLicensePanel', () => {
 
     expect(screen.getByText('Pulse Pro is now active')).toBeInTheDocument();
     expect(
-      screen.getByText(/Checkout completed and this instance is now running Pulse Pro/i),
+      screen.getByText(
+        /Checkout completed and Pulse Pro is active\. Choose Patrol mode\./i,
+      ),
     ).toBeInTheDocument();
-    expect(screen.queryByText('Compare self-hosted plans')).not.toBeInTheDocument();
-    expect(screen.getAllByText('Safe Remediation Workflows').length).toBeGreaterThan(0);
-    expect(screen.queryByText('Optional extras')).not.toBeInTheDocument();
+    expect(screen.queryByText('Select a plan')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Patrol Handles Safe Fixes').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Available plans')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Review plan' })).not.toBeInTheDocument();
   });
 
@@ -903,10 +1298,12 @@ describe('ProLicensePanel', () => {
 
     expect(screen.queryByText('Pulse Pro is now active')).not.toBeInTheDocument();
     expect(
-      screen.queryByText(/Checkout completed and this instance is now running Pulse Pro/i),
+      screen.queryByText(
+        /Checkout completed and Pulse Pro is active\. Choose Patrol mode\./i,
+      ),
     ).not.toBeInTheDocument();
     expect(screen.getByText('Current plan: Community')).toBeInTheDocument();
-    expect(screen.queryByText('Safe Remediation Workflows')).not.toBeInTheDocument();
+    expect(screen.queryByText('Patrol Handles Safe Fixes')).not.toBeInTheDocument();
     expect(screen.queryByText('Available now on this instance')).not.toBeInTheDocument();
     expect(navigateMock).toHaveBeenCalledWith(SELF_HOSTED_PRO_BILLING_PLAN_HREF, {
       replace: true,
@@ -923,7 +1320,7 @@ describe('ProLicensePanel', () => {
 
     renderPanel();
 
-    const recoveryDisclosure = screen.getAllByText('Use existing key')[0]?.closest('details');
+    const recoveryDisclosure = screen.getAllByText('Manual key recovery')[0]?.closest('details');
     expect(recoveryDisclosure).toHaveAttribute('open');
   });
 
@@ -997,9 +1394,10 @@ describe('ProLicensePanel', () => {
 
     renderPanel();
 
-    expect(screen.getAllByText('Compare self-hosted plans').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Select a plan').length).toBeGreaterThan(0);
     expect(screen.getByText(/Community is active on this instance/i)).toBeInTheDocument();
-    const compareLinks = screen.getAllByRole('link', { name: 'Compare plans' });
+    expect(screen.getAllByText('Watch-only Patrol').length).toBeGreaterThan(0);
+    const compareLinks = screen.getAllByRole('link', { name: 'View plans' });
     expect(
       compareLinks.some(
         (link) =>
@@ -1096,7 +1494,7 @@ describe('ProLicensePanel', () => {
 
     expect(screen.getByText('v5 license migration pending')).toBeInTheDocument();
     expect(screen.getByText(/rate-limited right now/i)).toBeInTheDocument();
-    expect(screen.getByText(/retry activation from this instance/i)).toBeInTheDocument();
+    expect(screen.getByText(/retry from this instance/i)).toBeInTheDocument();
   });
 
   it('shows reason-specific guidance when the v5 key is unsupported', async () => {
@@ -1159,6 +1557,7 @@ describe('ProLicensePanel', () => {
     expect(proLicensePanelStateSource).not.toContain('getSelfHostedBillingUsageDetail');
     expect(proLicensePanelStateSource).toContain('const setActiveSection = (section: string) => {');
     expect(proLicensePanelStateSource).toContain('loadLicenseEntitlements(true)');
+    expect(proLicensePanelStateSource).toContain('fetchAgentOperationsLoopStatus');
     expect(proLicensePanelStateSource).toContain('loadCommercialPosture(true)');
     expect(proLicensePanelStateSource).toContain('loadRuntimeCapabilities(true)');
     expect(proLicensePanelStateSource).toContain('buildSelfHostedCommercialPlanModel');
@@ -1168,7 +1567,7 @@ describe('ProLicensePanel', () => {
     expect(proLicensePanelStateSource).toContain('getSelfHostedActivationSuccessPresentation({');
     expect(proLicensePanelStateSource).not.toContain('runStartProTrialAction({');
     expect(proLicensePanelStateSource).not.toContain('startProTrial()');
-    expect(proLicensePanelStateSource).toContain("'A license or activation key is required'");
+    expect(proLicensePanelStateSource).toContain("'A license key is required'");
     expect(proLicensePanelSource).toContain('@/components/shared/Button');
     expect(proLicensePanelSource).toContain('variant="outline"');
     expect(proLicensePanelSource).toContain('size="settingsAction"');
@@ -1215,9 +1614,7 @@ describe('ProLicensePanel', () => {
       "resolveSelfHostedPurchaseStartDestination('self_hosted_plan')",
     );
     expect(proLicensePlanSectionSource).not.toContain('Your Pro trial has ended');
-    expect(proLicensePlanSectionSource).not.toContain(
-      'Turn alert noise into root-cause analysis, safe remediation workflows, and 90-day history.',
-    );
+    expect(proLicensePlanSectionSource).not.toContain('Turn alert noise into');
     expect(selfHostedCommercialRecoverySectionSource).toContain(
       'SELF_HOSTED_RECOVERY_PRESENTATION',
     );

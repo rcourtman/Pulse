@@ -96,6 +96,33 @@ export function stripInternalAnalyticsDiagnosticsFields(payload) {
     expect(collectUserDiagnosticsInternalAnalyticsFindings({ root, repoRoot })).toEqual([]);
   });
 
+  it('reports legacy MCP vocabulary on native Assistant diagnostics', () => {
+    const { root, repoRoot } = makeFixture(({ root, repoRoot }) => ({
+      [path.join(repoRoot, 'internal', 'api', 'diagnostics.go')]: `
+package api
+
+type AIChatDiagnostic struct {
+  MCPConnected bool
+}
+`,
+      [path.join(root, 'src', 'components', 'Settings', 'DiagnosticsResultsPanel.tsx')]:
+        "export const label = 'MCP Connection';\n",
+      [path.join(root, 'src', 'components', 'Settings', 'diagnosticsModel.ts')]: `
+export interface AIChatDiagnostic {
+  mcpConnected: boolean;
+}
+`,
+    }));
+
+    const findings = collectUserDiagnosticsInternalAnalyticsFindings({ root, repoRoot });
+
+    expect(findings.map((finding) => finding.rule)).toEqual([
+      'canonical-settings/no-mcp-vocabulary-in-assistant-diagnostics-api',
+      'canonical-settings/no-mcp-vocabulary-in-assistant-diagnostics-ui',
+      'canonical-settings/no-mcp-vocabulary-in-assistant-diagnostics-types',
+    ]);
+  });
+
   it('reports commercial analytics routes, stores, and settings in product runtime files', () => {
     const { root, repoRoot } = makeFixture(({ root, repoRoot }) => ({
       [path.join(repoRoot, 'internal', 'api', 'router_routes_licensing.go')]: `

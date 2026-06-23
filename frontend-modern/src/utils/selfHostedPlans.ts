@@ -80,11 +80,11 @@ export function getSelfHostedPlanEntitlementSummary(
 ): string {
   switch (tier) {
     case 'community':
-      return `${planLabel} is active on this instance. It includes self-hosted monitoring, 7-day metric history, Pulse Patrol (BYOK), update alerts, and SSO.`;
+      return `${planLabel} is active on this instance. It includes self-hosted monitoring, 7-day metric history, watch-only Patrol, update alerts, and SSO.`;
     case 'relay':
-      return `${planLabel} is active on this instance. Remote web access, Pulse Mobile pairing, push notifications, and longer history are available right now.`;
+      return `${planLabel} is active on this instance. It includes remote web access, Pulse Mobile pairing, push notifications, and 14-day metric history.`;
     case 'pro':
-      return `${planLabel} is active on this instance. Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are available right now.`;
+      return `${planLabel} is active on this instance. It includes Patrol modes, 90-day metric history, RBAC, audit logs, reports, and agent profiles.`;
   }
 }
 
@@ -104,21 +104,21 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     price: 'Free forever',
     subline: 'Core monitoring included',
     metricHistoryDays: 7,
-    billingExtrasSummary: 'Patrol, alerts, and SSO',
+    billingExtrasSummary: 'Watch-only Patrol, alerts, and SSO',
     entitlementSummary: getSelfHostedPlanEntitlementSummary('community'),
     entitlementHighlights: [
       'Real-time monitoring',
       '7-day metric history',
-      'Pulse Patrol (BYOK)',
+      'Watch-only Patrol',
       'Update alerts',
     ],
     includedExtras: [],
     comparisonSummary:
-      'Community covers self-hosted monitoring and core operations on this instance.',
+      'Community covers self-hosted monitoring and watch-only Patrol on this instance.',
     highlights: [
       'Real-time monitoring',
       '7-day metric history',
-      'Pulse Patrol (BYOK)',
+      'Watch-only Patrol',
       'Update alerts',
       'SSO (OIDC/SAML)',
       'Community support',
@@ -134,8 +134,7 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     entitlementSummary: getSelfHostedPlanEntitlementSummary('relay'),
     entitlementHighlights: getTierEntitlementHighlights('relay', 14),
     includedExtras: [],
-    comparisonSummary:
-      'Reach your Pulse web UI securely from anywhere, pair supported Pulse Mobile clients for handoff and push notifications, and keep 14 days of history.',
+    comparisonSummary: 'Remote web access, Pulse Mobile pairing, push notifications, and 14-day metric history.',
     highlights: [
       'Everything in Community',
       'Remote web access via Relay',
@@ -151,16 +150,17 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     price: '$79/year',
     subline: 'or $8.99/month',
     metricHistoryDays: 90,
-    billingExtrasSummary: 'Analysis, remediation, and admin controls',
+    billingExtrasSummary: 'Patrol modes, history, and admin controls',
     entitlementSummary: getSelfHostedPlanEntitlementSummary('pro'),
     entitlementHighlights: getTierEntitlementHighlights('pro', 90),
     includedExtras: getTierIncludedExtras('pro'),
     comparisonSummary:
-      'Add operations features on top of free monitoring: root-cause analysis, safe remediation workflows, 90-day history, RBAC, audit logging, reporting, and agent profiles.',
+      'Patrol modes, 90-day metric history, RBAC, audit logs, reports, and agent profiles.',
     highlights: [
       'Everything in Relay',
-      'Alert root-cause analysis',
-      'Safe remediation workflows',
+      'Choose Patrol mode',
+      'Patrol investigates issues',
+      'Patrol handles safe fixes',
       '90-day metric history',
       'RBAC and audit logging',
       'Agent profiles · PDF/CSV reports',
@@ -195,8 +195,7 @@ export function getSelfHostedPlanDefinitionForBillingTier(
 
 export const SELF_HOSTED_COMMERCIAL_PRESENTATION: SelfHostedCommercialPresentation = {
   pageTitle: 'Pricing',
-  pageDescription:
-    'Self-hosted Pulse includes core monitoring for free. Relay adds secure remote access to the Pulse web UI, Pulse Mobile pairing, and push notifications, while Pro adds root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras.',
+  pageDescription: 'Self-hosted plans and included capabilities.',
   mostPopularBadge: 'Most Popular',
   currentPlanLabel: 'Current Plan',
   includedLabel: 'Included',

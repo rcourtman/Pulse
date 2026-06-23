@@ -2,9 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 
+import { PULSE_MCP_TOKEN_SETUP_PATH } from '@/routing/resourceLinks';
 import { resetAIRuntimeState } from '@/stores/aiRuntimeState';
 import type { AISettings as AISettingsType } from '@/types/ai';
-import { AISettings } from '../AISettings';
+import {
+  AIAssistantSettings,
+  AIDiscoverySettings,
+  AISettings,
+  AIPatrolSettings,
+} from '../AISettings';
 
 const getSettingsMock = vi.fn();
 const updateSettingsMock = vi.fn();
@@ -12,6 +18,7 @@ const getModelsMock = vi.fn();
 const testProviderMock = vi.fn();
 const testConnectionMock = vi.fn();
 const runDiscoveryRefreshMock = vi.fn();
+const fetchAgentCapabilitiesManifestMock = vi.fn();
 const listSessionsMock = vi.fn();
 const summarizeSessionMock = vi.fn();
 const notificationSuccessMock = vi.fn();
@@ -47,6 +54,15 @@ vi.mock('@/api/aiChat', () => ({
 vi.mock('@/api/discovery', () => ({
   runDiscoveryRefresh: (...args: unknown[]) => runDiscoveryRefreshMock(...args),
 }));
+
+vi.mock('@/api/agentCapabilities', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api/agentCapabilities')>();
+  return {
+    ...actual,
+    fetchAgentCapabilitiesManifest: (...args: unknown[]) =>
+      fetchAgentCapabilitiesManifestMock(...args),
+  };
+});
 
 vi.mock('@/stores/notifications', () => ({
   notificationStore: {
@@ -100,12 +116,29 @@ const baseSettings = (): AISettingsType => ({
   configured_providers: [],
 });
 
-const renderComponent = () =>
-  render(() => (
+type AISettingsTestPage = 'provider' | 'patrol' | 'assistant' | 'discovery';
+
+const getTestComponent = (page: AISettingsTestPage) => {
+  switch (page) {
+    case 'patrol':
+      return AIPatrolSettings;
+    case 'assistant':
+      return AIAssistantSettings;
+    case 'discovery':
+      return AIDiscoverySettings;
+    default:
+      return AISettings;
+  }
+};
+
+const renderComponent = (page: AISettingsTestPage = 'provider') => {
+  const Component = getTestComponent(page);
+  return render(() => (
     <Router>
-      <Route path="/" component={() => <AISettings />} />
+      <Route path="/" component={() => <Component />} />
     </Router>
   ));
+};
 
 const resetAllMocks = () => {
   getSettingsMock.mockReset();
@@ -114,6 +147,7 @@ const resetAllMocks = () => {
   testProviderMock.mockReset();
   testConnectionMock.mockReset();
   runDiscoveryRefreshMock.mockReset();
+  fetchAgentCapabilitiesManifestMock.mockReset();
   listSessionsMock.mockReset();
   summarizeSessionMock.mockReset();
   notificationSuccessMock.mockReset();
@@ -153,6 +187,7 @@ const setupDefaultMocks = () => {
     failed_count: 0,
     last_run: '2026-05-15T12:00:00Z',
   });
+  fetchAgentCapabilitiesManifestMock.mockResolvedValue(null);
   listSessionsMock.mockResolvedValue([]);
   summarizeSessionMock.mockResolvedValue(undefined);
   presentationPolicyHidesUpgradePromptsMock.mockReturnValue(false);
@@ -167,6 +202,138 @@ describe('AISettings model loading error states', () => {
 
   afterEach(() => {
     cleanup();
+  });
+
+  it('separates Patrol mode from Assistant chat actions on the settings page', async () => {
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      enabled: true,
+      configured: true,
+      patrol_interval_minutes: 180,
+      control_level: 'controlled',
+    });
+
+    renderComponent('assistant');
+
+    expect(await screen.findByText('Assistant chat actions')).toBeInTheDocument();
+    expect(
+      screen.getByText('This controls actions started from Assistant chat only', { exact: false }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText('Chat action mode')).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Ask first/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Save Assistant settings/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'External agents' })).toBeInTheDocument();
+    expect(
+      screen.getByText('Optional connector access for Claude Desktop', { exact: false }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show connector setup' })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: 'Connector setup' }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Create token' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show connector setup' }));
+
+    expect(screen.getByRole('link', { name: 'Create token' })).toHaveAttribute(
+      'href',
+      PULSE_MCP_TOKEN_SETUP_PATH,
+    );
+  });
+
+  it('keeps Provider & Models focused on provider setup and runtime cost controls', async () => {
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      enabled: true,
+      configured: true,
+    });
+
+    renderComponent();
+
+    expect(await screen.findByText('Provider Configuration')).toBeInTheDocument();
+    expect(screen.getByText('30-day Budget')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Enable Pulse Intelligence' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Test Connection/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Save provider settings/i })).toBeInTheDocument();
+    expect(screen.queryByText('Assistant chat actions')).not.toBeInTheDocument();
+    expect(screen.queryByText('External agents')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Service Context/i })).not.toBeInTheDocument();
+    expect(screen.queryByText('Patrol mode')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Open Patrol/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Set how much Patrol can do/i)).not.toBeInTheDocument();
+  });
+
+  it('shows Patrol scheduling and readiness without rendering the operator loop', async () => {
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      enabled: true,
+      configured: true,
+      patrol_interval_minutes: 180,
+      alert_triggered_analysis: true,
+      patrol_alert_triggers_enabled: true,
+      patrol_anomaly_triggers_enabled: false,
+      patrol_alert_trigger_min_severity: 'warning',
+    });
+
+    renderComponent('patrol');
+
+    expect(await screen.findByText('Patrol mode')).toBeInTheDocument();
+    expect(screen.getByLabelText('Schedule')).toHaveValue('180');
+    expect(screen.getByLabelText('Enable alert-triggered Patrols')).toBeInTheDocument();
+    expect(screen.getByLabelText('Enable anomaly-triggered Patrols')).toBeInTheDocument();
+    expect(screen.getByLabelText('Enable container update risk analysis')).toBeInTheDocument();
+    expect(screen.getByLabelText('Investigate alerts at or above')).toHaveValue('warning');
+    expect(screen.getByText('Model readiness')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Open Patrol/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Save Patrol settings/i })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Enable Pulse Intelligence' }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Test Connection/i })).not.toBeInTheDocument();
+    expect(screen.queryByText('Provider Configuration')).not.toBeInTheDocument();
+    expect(screen.queryByText('External agents')).not.toBeInTheDocument();
+  });
+
+  it('saves Patrol trigger settings from Pulse Intelligence Patrol settings', async () => {
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      enabled: true,
+      configured: true,
+      patrol_alert_triggers_enabled: true,
+      patrol_anomaly_triggers_enabled: false,
+      patrol_alert_trigger_min_severity: 'critical',
+      alert_triggered_analysis: true,
+    });
+    updateSettingsMock.mockImplementation(async (payload: Record<string, unknown>) => ({
+      ...baseSettings(),
+      enabled: true,
+      configured: true,
+      ...payload,
+    }));
+
+    renderComponent('patrol');
+
+    await screen.findByLabelText('Enable alert-triggered Patrols');
+    fireEvent.change(screen.getByLabelText('Investigate alerts at or above'), {
+      target: { value: 'warning' },
+    });
+    fireEvent.click(screen.getByLabelText('Enable alert-triggered Patrols'));
+    fireEvent.click(screen.getByLabelText('Enable anomaly-triggered Patrols'));
+    fireEvent.click(screen.getByLabelText('Enable container update risk analysis'));
+    fireEvent.click(screen.getByRole('button', { name: /Save Patrol settings/i }));
+
+    await waitFor(() => {
+      expect(updateSettingsMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          patrol_alert_triggers_enabled: false,
+          patrol_anomaly_triggers_enabled: true,
+          patrol_alert_trigger_min_severity: 'warning',
+          alert_triggered_analysis: false,
+        }),
+      );
+    });
+    await waitFor(() => {
+      expect(notificationSuccessMock).toHaveBeenCalledWith('Patrol settings saved');
+    });
   });
 
   it('shows inline warning when getModels throws a network error', async () => {
@@ -376,13 +543,13 @@ describe('AISettings model loading error states', () => {
     hasFeatureMock.mockImplementation((feature: string) => feature !== 'ai_autofix');
     presentationPolicyHidesUpgradePromptsMock.mockReturnValue(true);
 
-    renderComponent();
+    renderComponent('assistant');
 
     await waitFor(() => {
       expect(getSettingsMock).toHaveBeenCalledTimes(1);
     });
 
-    expect(screen.queryByRole('option', { name: /Autonomous/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Allow chat-only actions/i })).not.toBeInTheDocument();
   });
 
   it('keeps an existing autonomous setting visible even when upgrade prompts are hidden', async () => {
@@ -393,13 +560,13 @@ describe('AISettings model loading error states', () => {
       control_level: 'autonomous',
     });
 
-    renderComponent();
+    renderComponent('assistant');
 
     await waitFor(() => {
       expect(getSettingsMock).toHaveBeenCalledTimes(1);
     });
 
-    expect(screen.getByRole('option', { name: /Autonomous/i })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Allow chat-only actions/i })).toBeInTheDocument();
     expect(screen.queryByText('(Pro)')).not.toBeInTheDocument();
   });
 });
@@ -420,14 +587,14 @@ describe('AISettings load failure error state', () => {
     renderComponent();
 
     await waitFor(() => {
-      expect(screen.getByText(/Unable to load Assistant & Patrol settings/)).toBeInTheDocument();
+      expect(screen.getByText(/Unable to load Provider & Models settings/)).toBeInTheDocument();
     });
 
     // Retry button should be present
     expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
 
     // Save button should NOT be present (form is hidden)
-    expect(screen.queryByRole('button', { name: /save changes/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Save .* settings/i })).not.toBeInTheDocument();
   });
 
   it('clears error and shows form after successful retry', async () => {
@@ -436,7 +603,7 @@ describe('AISettings load failure error state', () => {
     renderComponent();
 
     await waitFor(() => {
-      expect(screen.getByText(/Unable to load Assistant & Patrol settings/)).toBeInTheDocument();
+      expect(screen.getByText(/Unable to load Provider & Models settings/)).toBeInTheDocument();
     });
 
     // Now mock a successful response for retry
@@ -452,20 +619,18 @@ describe('AISettings load failure error state', () => {
 
     // Wait for the form to fully render after successful retry (not just banner disappearing during loading)
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /save changes/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Save provider settings/i })).toBeInTheDocument();
     });
 
     // Error banner should be gone
-    expect(
-      screen.queryByText(/Unable to load Assistant & Patrol settings/),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/Unable to load Provider & Models settings/)).not.toBeInTheDocument();
 
     // Verify retry actually called getSettings again
     expect(getSettingsMock).toHaveBeenCalledTimes(2);
   });
 });
 
-describe('AISettings workload discovery persistence', () => {
+describe('AISettings service context persistence', () => {
   beforeEach(() => {
     resetAllMocks();
     setupDefaultMocks();
@@ -475,7 +640,7 @@ describe('AISettings workload discovery persistence', () => {
     cleanup();
   });
 
-  it('saves workload discovery enablement and scan interval as an explicit pair', async () => {
+  it('saves service context enablement and scan interval as an explicit pair', async () => {
     getSettingsMock.mockResolvedValue({
       ...baseSettings(),
       discovery_enabled: true,
@@ -487,14 +652,14 @@ describe('AISettings workload discovery persistence', () => {
       discovery_interval_hours: payload.discovery_interval_hours as number,
     }));
 
-    renderComponent();
+    renderComponent('discovery');
 
     await waitFor(() => {
       expect(
-        screen.getByRole('button', { name: /Workload Discovery Auto 24h/i }),
+        screen.getByRole('button', { name: /Service Context Auto 24h/i }),
       ).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByRole('button', { name: /Workload Discovery Auto 24h/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Service Context Auto 24h/i }));
     const intervalSelect = screen.getByLabelText('Scan Interval');
     expect(intervalSelect).toHaveValue('24');
 
@@ -503,7 +668,7 @@ describe('AISettings workload discovery persistence', () => {
     });
     expect(intervalSelect).toHaveValue('6');
 
-    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Save service context settings/i }));
 
     await waitFor(() => {
       expect(updateSettingsMock).toHaveBeenCalledWith(
@@ -515,22 +680,22 @@ describe('AISettings workload discovery persistence', () => {
     });
   });
 
-  it('runs a manual discovery refresh from workload discovery settings', async () => {
+  it('runs a manual service context refresh from settings', async () => {
     getSettingsMock.mockResolvedValue({
       ...baseSettings(),
       discovery_enabled: true,
       discovery_interval_hours: 0,
     });
 
-    renderComponent();
+    renderComponent('discovery');
 
     await waitFor(() => {
       expect(
-        screen.getByRole('button', { name: /Workload Discovery Manual only/i }),
+        screen.getByRole('button', { name: /Service Context Manual only/i }),
       ).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByRole('button', { name: /Workload Discovery Manual only/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Run discovery now/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Service Context Manual only/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Run context scan/i }));
 
     await waitFor(() => {
       expect(runDiscoveryRefreshMock).toHaveBeenCalledTimes(1);
@@ -547,19 +712,19 @@ describe('AISettings workload discovery persistence', () => {
       discovery_interval_hours: 0,
     });
 
-    renderComponent();
+    renderComponent('discovery');
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Workload Discovery Off/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Service Context Off/i })).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByRole('button', { name: /Workload Discovery Off/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Service Context Off/i }));
 
     expect(screen.queryByLabelText('Scan Interval')).not.toBeInTheDocument();
     expect(
-      screen.getByText('Runs a one-time workload discovery refresh without changing the schedule.'),
+      screen.getByText('Runs one service context scan without changing the schedule.'),
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Run discovery now/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Run context scan/i }));
 
     await waitFor(() => {
       expect(runDiscoveryRefreshMock).toHaveBeenCalledTimes(1);
@@ -586,15 +751,15 @@ describe('AISettings workload discovery persistence', () => {
       last_run: '2026-05-15T12:00:00Z',
     });
 
-    renderComponent();
+    renderComponent('discovery');
 
     await waitFor(() => {
       expect(
-        screen.getByRole('button', { name: /Workload Discovery Manual only/i }),
+        screen.getByRole('button', { name: /Service Context Manual only/i }),
       ).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByRole('button', { name: /Workload Discovery Manual only/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Run discovery now/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Service Context Manual only/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Run context scan/i }));
 
     await waitFor(() => {
       expect(notificationInfoMock).toHaveBeenCalledWith(
@@ -638,7 +803,7 @@ describe('AISettings OpenRouter flow', () => {
     fireEvent.input(await screen.findByPlaceholderText('sk-or-...'), {
       target: { value: 'sk-or-configured' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Save provider settings/i }));
 
     await waitFor(() => {
       expect(updateSettingsMock).toHaveBeenCalledWith(
@@ -703,7 +868,7 @@ describe('AISettings Ollama provider options', () => {
     fireEvent.input(await screen.findByLabelText('Ollama Keep Alive'), {
       target: { value: '24h' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Save provider settings/i }));
 
     await waitFor(() => {
       expect(updateSettingsMock).toHaveBeenCalledWith(
@@ -751,12 +916,12 @@ describe('AISettings provider save failure context', () => {
         provider === 'openrouter' ? 'Provider authentication issue' : `${provider} reachable`,
       recommendation:
         provider === 'openrouter'
-          ? 'Check the API key or provider authentication in Assistant and Patrol settings, then retry.'
+          ? 'Check the API key or provider authentication in Provider & Models settings, then retry.'
           : undefined,
       cause: provider === 'openrouter' ? 'provider_auth' : undefined,
       provider,
     }));
-    updateSettingsMock.mockRejectedValue(new Error('Unable to save Assistant & Patrol settings.'));
+    updateSettingsMock.mockRejectedValue(new Error('Unable to save Provider & Models settings.'));
 
     renderComponent();
 
@@ -764,7 +929,7 @@ describe('AISettings provider save failure context', () => {
       expect(testProviderMock).toHaveBeenCalledWith('openrouter');
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Save provider settings/i }));
 
     await waitFor(() => {
       expect(notificationErrorMock).toHaveBeenCalledWith(
@@ -775,7 +940,7 @@ describe('AISettings provider save failure context', () => {
     expect(message).toContain('model openrouter:deepseek/deepseek-r1');
     expect(message).toContain('Provider authentication issue');
     expect(message).toContain('Check the API key or provider authentication');
-    expect(message).toContain('Unable to save Assistant & Patrol settings.');
+    expect(message).toContain('Unable to save Provider & Models settings.');
   });
 
   it('warns with Patrol provider and model when settings save but Patrol is not ready', async () => {
@@ -811,21 +976,21 @@ describe('AISettings provider save failure context', () => {
     renderComponent();
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /save changes/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Save provider settings/i })).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Save provider settings/i }));
 
     await waitFor(() => {
       expect(notificationWarningMock).toHaveBeenCalledWith(
-        expect.stringContaining('Assistant & Patrol settings saved, but Patrol is not ready'),
+        expect.stringContaining('Provider & Models settings saved, but Patrol is not ready'),
       );
     });
     const message = String(notificationWarningMock.mock.calls.at(-1)?.[0] ?? '');
     expect(message).toContain('Provider: OpenRouter');
     expect(message).toContain('Model: openrouter:deepseek/deepseek-r1');
     expect(message).toContain('reasoning-only model family');
-    expect(notificationSuccessMock).not.toHaveBeenCalledWith('Assistant & Patrol settings saved');
+    expect(notificationSuccessMock).not.toHaveBeenCalledWith('Provider & Models settings saved');
   });
 
   it('does not attach provider context to specific backend validation errors', async () => {
@@ -850,7 +1015,7 @@ describe('AISettings provider save failure context', () => {
       expect(testProviderMock).toHaveBeenCalledWith('openrouter');
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Save provider settings/i }));
 
     await waitFor(() => {
       expect(notificationErrorMock).toHaveBeenCalledWith(
@@ -900,16 +1065,16 @@ describe('AISettings provider setup flow', () => {
       expect(getSettingsMock).toHaveBeenCalledTimes(1);
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /enable assistant and patrol/i }));
+    fireEvent.click(screen.getByRole('button', { name: /enable pulse intelligence/i }));
     const setupDialog = await screen.findByRole('dialog', {
-      name: 'Set up Assistant and Patrol',
+      name: 'Set up Pulse Intelligence',
     });
-    expect(within(setupDialog).getByText('Set Up Assistant & Patrol')).toBeInTheDocument();
+    expect(within(setupDialog).getByText('Set Up Pulse Intelligence')).toBeInTheDocument();
     fireEvent.click(within(setupDialog).getByRole('button', { name: /OpenRouter/i }));
     fireEvent.input(screen.getByPlaceholderText('sk-or-...'), {
       target: { value: 'sk-or-test' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Enable Assistant & Patrol' }));
+    fireEvent.click(within(setupDialog).getByRole('button', { name: 'Enable Pulse Intelligence' }));
 
     await waitFor(() => {
       expect(updateSettingsMock).toHaveBeenCalledWith({
@@ -919,7 +1084,7 @@ describe('AISettings provider setup flow', () => {
     });
     await waitFor(() => {
       expect(notificationWarningMock).toHaveBeenCalledWith(
-        expect.stringContaining('Assistant & Patrol enabled, but Patrol is not ready'),
+        expect.stringContaining('Pulse Intelligence enabled, but Patrol is not ready'),
       );
     });
     const message = String(notificationWarningMock.mock.calls.at(-1)?.[0] ?? '');
@@ -927,12 +1092,12 @@ describe('AISettings provider setup flow', () => {
     expect(message).toContain('Model: openrouter:deepseek/deepseek-r1');
     expect(message).toContain('reasoning-only model family');
     expect(notificationSuccessMock).not.toHaveBeenCalledWith(
-      'Assistant & Patrol enabled! You can customize settings below.',
+      'Pulse Intelligence enabled. You can customize settings below.',
     );
   });
 
   it('names the setup provider when provider setup save fails generically', async () => {
-    updateSettingsMock.mockRejectedValue(new Error('Unable to save Assistant & Patrol settings.'));
+    updateSettingsMock.mockRejectedValue(new Error('Unable to save Provider & Models settings.'));
 
     renderComponent();
 
@@ -940,16 +1105,16 @@ describe('AISettings provider setup flow', () => {
       expect(getSettingsMock).toHaveBeenCalledTimes(1);
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /enable assistant and patrol/i }));
+    fireEvent.click(screen.getByRole('button', { name: /enable pulse intelligence/i }));
     const setupDialog = await screen.findByRole('dialog', {
-      name: 'Set up Assistant and Patrol',
+      name: 'Set up Pulse Intelligence',
     });
-    expect(within(setupDialog).getByText('Set Up Assistant & Patrol')).toBeInTheDocument();
+    expect(within(setupDialog).getByText('Set Up Pulse Intelligence')).toBeInTheDocument();
     fireEvent.click(within(setupDialog).getByRole('button', { name: /OpenRouter/i }));
     fireEvent.input(screen.getByPlaceholderText('sk-or-...'), {
       target: { value: 'sk-or-test' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Enable Assistant & Patrol' }));
+    fireEvent.click(within(setupDialog).getByRole('button', { name: 'Enable Pulse Intelligence' }));
 
     await waitFor(() => {
       expect(notificationErrorMock).toHaveBeenCalledWith(
@@ -957,7 +1122,7 @@ describe('AISettings provider setup flow', () => {
       );
     });
     expect(String(notificationErrorMock.mock.calls.at(-1)?.[0] ?? '')).toContain(
-      'Unable to save Assistant & Patrol settings.',
+      'Unable to save Provider & Models settings.',
     );
   });
 
@@ -975,13 +1140,13 @@ describe('AISettings provider setup flow', () => {
       expect(getSettingsMock).toHaveBeenCalledTimes(1);
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /enable assistant and patrol/i }));
+    fireEvent.click(screen.getByRole('button', { name: /enable pulse intelligence/i }));
 
     expect(getModelsMock).not.toHaveBeenCalled();
     expect(updateSettingsMock).not.toHaveBeenCalled();
-    expect(await screen.findByText('Set Up Assistant & Patrol')).toBeInTheDocument();
+    expect(await screen.findByText('Set Up Pulse Intelligence')).toBeInTheDocument();
     expect(
-      screen.getByText('Connect a provider to power Pulse Assistant and Patrol.'),
+      screen.getByText('Connect a provider to power Patrol, Assistant, and service context.'),
     ).toBeInTheDocument();
     expect(
       screen.queryByText(/Patrol quickstart ready • 25\/25 runs left • no API key needed yet/i),
@@ -1001,12 +1166,12 @@ describe('AISettings provider setup flow', () => {
       expect(getSettingsMock).toHaveBeenCalledTimes(1);
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /enable assistant and patrol/i }));
+    fireEvent.click(screen.getByRole('button', { name: /enable pulse intelligence/i }));
 
     expect(updateSettingsMock).not.toHaveBeenCalled();
-    expect(await screen.findByText('Set Up Assistant & Patrol')).toBeInTheDocument();
+    expect(await screen.findByText('Set Up Pulse Intelligence')).toBeInTheDocument();
     expect(
-      screen.getByText('Connect a provider to power Pulse Assistant and Patrol.'),
+      screen.getByText('Connect a provider to power Patrol, Assistant, and service context.'),
     ).toBeInTheDocument();
     expect(
       screen.queryByText(/Hosted quickstart requires an activated entitlement/i),
@@ -1028,12 +1193,12 @@ describe('AISettings provider setup flow', () => {
       expect(getSettingsMock).toHaveBeenCalledTimes(1);
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /enable assistant and patrol/i }));
+    fireEvent.click(screen.getByRole('button', { name: /enable pulse intelligence/i }));
 
     expect(updateSettingsMock).not.toHaveBeenCalled();
-    expect(await screen.findByText('Set Up Assistant & Patrol')).toBeInTheDocument();
+    expect(await screen.findByText('Set Up Pulse Intelligence')).toBeInTheDocument();
     expect(
-      screen.getByText('Connect a provider to power Pulse Assistant and Patrol.'),
+      screen.getByText('Connect a provider to power Patrol, Assistant, and service context.'),
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /open hosted handoff/i })).not.toBeInTheDocument();
     expect(

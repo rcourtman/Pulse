@@ -8,7 +8,7 @@ import {
   getCommercialMigrationNotice,
   getFeatureMinTierLabel,
   getGrandfatheredPriceContinuityNotice,
-  getSelfHostedActivationProofPresentation,
+  getSelfHostedPlanStatusPresentation,
   getSelfHostedActivationSuccessPresentation,
   getSelfHostedPlanComparisonPresentation,
   getSelfHostedCurrentPlanPresentation,
@@ -24,12 +24,20 @@ import {
   getPurchaseActivationNotice,
   isDisplayableLicenseFeature,
   isGrandfatheredRecurringV5PlanVersion,
+  PATROL_CONTROL_STARTER_URL,
   SELF_HOSTED_RECOVERY_PRESENTATION,
 } from '@/utils/licensePresentation';
 import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from '@/components/Settings/selfHostedBillingPresentation';
 import { getSelfHostedPlanEntitlementSummary } from '@/utils/selfHostedPlans';
+import { PATROL_CONTROL_PATH } from '@/routing/resourceLinks';
 
 describe('licensePresentation', () => {
+  it('routes the Patrol mode CTA to the owned Patrol journey', () => {
+    expect(PATROL_CONTROL_STARTER_URL).toBe(
+      '/patrol?patrolControlStarter=patrol_control#patrol-control',
+    );
+  });
+
   it('returns canonical tier labels', () => {
     expect(getLicenseTierLabel('free')).toBe('Community');
     expect(getLicenseTierLabel('pro_plus')).toBe('Legacy Pro+');
@@ -49,10 +57,10 @@ describe('licensePresentation', () => {
       text: 'Community is ready to use on this instance.',
     });
     expect(SELF_HOSTED_RECOVERY_PRESENTATION).toMatchObject({
-      disclosureLabel: 'Use existing key',
-      fieldLabel: 'License or Activation Key',
-      activateIdleLabel: 'Activate Key',
-      clearIdleLabel: 'Clear Key',
+      disclosureLabel: 'Manual key recovery',
+      fieldLabel: 'License key',
+      activateIdleLabel: 'Apply key',
+      clearIdleLabel: 'Clear key',
       privateRuntimeNotice: {
         title: 'Paid Docker and Linux installs use a private runtime',
         actionLabel: 'Open Pulse Pro downloads',
@@ -63,22 +71,20 @@ describe('licensePresentation', () => {
       },
     });
     expect(SELF_HOSTED_PRO_BILLING_PRESENTATION).toEqual({
-      navLabel: 'Plans',
-      shellTitle: 'Self-hosted plan',
-      shellDescription:
-        'Review the plan this instance is using and the optional capabilities connected to it.',
-      infrastructureRouteReferral: 'Billing and self-hosted plan changes live in Plans.',
+      navLabel: 'Plans & Billing',
+      shellTitle: 'Plans & Billing',
+      shellDescription: 'Plan, license, and Patrol mode for this instance.',
+      infrastructureRouteReferral: 'Billing and self-hosted plan changes live in Plans & Billing.',
       infrastructureWorkspaceReferral:
-        'Self-hosted plan status, optional activation, and available capabilities live in Plans, not here.',
-      sectionSelectorAriaLabel: 'Self-hosted plans section',
+        'Self-hosted plan status, Patrol mode, and available capabilities live in Plans & Billing, not here.',
+      sectionSelectorAriaLabel: 'Plans and billing section',
       refreshLabel: 'Refresh',
       planTabLabel: 'Plan',
       usageTabLabel: 'Usage',
       planSectionTitle: 'Current plan',
-      planSectionDescription:
-        'See which self-hosted tier this instance is using and which capabilities are available on this install.',
-      planComparisonSectionTitle: 'Optional extras',
-      planComparisonActionLabel: 'See all plans',
+      planSectionDescription: 'Current tier and enabled capabilities.',
+      planComparisonSectionTitle: 'Available plans',
+      planComparisonActionLabel: 'View plans',
       usageSectionTitle: 'Usage',
       hiddenShellTitle: 'Demo mode',
       hiddenShellDescription: 'Commercial settings are hidden for this session.',
@@ -88,18 +94,16 @@ describe('licensePresentation', () => {
       policyLoadingTitle: 'Loading settings access',
       policyLoadingBody:
         'Pulse waits for the session presentation policy before showing license, billing, or usage details.',
-      planSelectionPromptTitle: 'Compare self-hosted plans',
-      planSelectionPromptBody:
-        'Community includes core monitoring at no cost. Relay is optional for secure access from anywhere, and Pulse Pro adds root-cause analysis, safe remediation workflows, and 90-day history.',
-      planSelectionPromptActionLabel: 'Compare plans',
+      planSelectionPromptTitle: 'Select a plan',
+      planSelectionPromptBody: 'Choose the plan for this install.',
+      planSelectionPromptActionLabel: 'View plans',
       purchaseActivatedPlanActionLabel: 'Review plan',
-      purchaseCancelledActionLabel: 'Compare plans',
-      purchaseExpiredActionLabel: 'Compare plans',
+      purchaseCancelledActionLabel: 'View plans',
+      purchaseExpiredActionLabel: 'View plans',
       purchaseFailedActionLabel: 'Open recovery',
       purchaseUnavailableActionLabel: 'Try again',
-      recoverySectionTitle: 'Existing purchases',
-      recoverySectionDescription:
-        'Add an activation key you already have, recover a previous self-hosted purchase, or clear a local key from this instance.',
+      recoverySectionTitle: 'License recovery',
+      recoverySectionDescription: 'Paste a license key or clear the license on this install.',
     });
   });
 
@@ -257,12 +261,12 @@ describe('licensePresentation', () => {
       }),
     ).toEqual({
       title: 'Current plan: Community',
-      body: 'Community is active on this instance. It includes self-hosted monitoring, 7-day metric history, Pulse Patrol (BYOK), update alerts, and SSO.',
+      body: 'Community is active on this instance. It includes self-hosted monitoring, 7-day metric history, watch-only Patrol, update alerts, and SSO.',
       unlockedFeaturesLabel: 'Included on this instance',
       unlockedFeatures: [
         'Real-time monitoring',
         '7-day metric history',
-        'Pulse Patrol (BYOK)',
+        'Watch-only Patrol',
         'Update alerts',
       ],
       includedExtras: [],
@@ -281,11 +285,11 @@ describe('licensePresentation', () => {
           upgrade_reasons: [],
           runtime: { build: 'pro', label: 'Pulse Pro runtime' },
         },
-        displayableCapabilities: ['Pulse Relay (Remote Access)', 'Safe Remediation Workflows'],
+        displayableCapabilities: ['Pulse Relay (Remote Access)', 'Patrol Handles Safe Fixes'],
       }),
     ).toMatchObject({
       title: 'Current plan: Pulse Pro',
-      body: 'Pulse Pro is active on this instance. Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are available right now.',
+      body: 'Pulse Pro is active on this instance. It includes Patrol modes, 90-day metric history, RBAC, audit logs, reports, and agent profiles.',
       supplementalBadges: [],
       supplementalSummary: '',
     });
@@ -303,16 +307,16 @@ describe('licensePresentation', () => {
         displayableCapabilities: [
           'Pulse Relay (Remote Access)',
           'Pulse Mobile Pairing',
-          'Safe Remediation Workflows',
+          'Patrol Handles Safe Fixes',
         ],
       }),
     ).toEqual({
       title: 'Current plan: Pulse Pro',
-      body: 'Pulse Pro is active on this instance. Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are available right now.',
+      body: 'Pulse Pro is active on this instance. It includes Patrol modes, 90-day metric history, RBAC, audit logs, reports, and agent profiles.',
       unlockedFeaturesLabel: 'Primary capabilities',
       unlockedFeatures: [
-        'Alert Root-Cause Analysis',
-        'Safe Remediation Workflows',
+        'Patrol Investigates Issues',
+        'Patrol Handles Safe Fixes',
         '90-day metric history',
       ],
       includedExtrasLabel: 'Included extras',
@@ -324,6 +328,245 @@ describe('licensePresentation', () => {
       ],
       supplementalBadges: [],
       supplementalSummary: '',
+      patrolControlAction: {
+        actionLabel: 'Choose Patrol mode',
+        actionUrl: PATROL_CONTROL_STARTER_URL,
+        actionIntent: 'patrol_control',
+      },
+    });
+
+    expect(
+      getSelfHostedCurrentPlanPresentation({
+        entitlements: {
+          tier: 'pro',
+          subscription_state: 'active',
+          capabilities: ['relay', 'mobile_app', 'ai_autofix'],
+          limits: [],
+          upgrade_reasons: [],
+          runtime: { build: 'pro', label: 'Pulse Pro runtime' },
+        },
+        displayableCapabilities: [
+          'Pulse Relay (Remote Access)',
+          'Pulse Mobile Pairing',
+          'Patrol Handles Safe Fixes',
+        ],
+        patrolOperatorStatus: {
+          patrolAutonomyOperationsLoopStarterCount: 1,
+          patrolAutonomyCompletedOperationsLoopCount: 0,
+          patrolAutonomyResolvedOperationsLoopCount: 0,
+          externalAgentReady: false,
+        },
+      }),
+    ).toMatchObject({
+      body: 'Pulse Pro is active on this instance. Open Patrol to continue current work.',
+      patrolControlAction: {
+        actionLabel: 'Open Patrol',
+        actionUrl: PATROL_CONTROL_STARTER_URL,
+        actionIntent: 'patrol_control',
+      },
+    });
+
+    expect(
+      getSelfHostedCurrentPlanPresentation({
+        entitlements: {
+          tier: 'pro',
+          subscription_state: 'active',
+          capabilities: ['relay', 'mobile_app', 'ai_autofix'],
+          limits: [],
+          upgrade_reasons: [],
+          runtime: { build: 'pro', label: 'Pulse Pro runtime' },
+        },
+        displayableCapabilities: [
+          'Pulse Relay (Remote Access)',
+          'Pulse Mobile Pairing',
+          'Patrol Handles Safe Fixes',
+        ],
+        patrolOperatorStatus: {
+          proActivationOperationsLoopStarterCount: 1,
+          proActivationCompletedOperationsLoopCount: 0,
+          proActivationResolvedOperationsLoopCount: 0,
+          proActivationValueProofState: 'in_progress',
+          externalAgentReady: false,
+        },
+      }).patrolControlAction,
+    ).toMatchObject({
+      actionLabel: 'Choose Patrol mode',
+      actionUrl: PATROL_CONTROL_STARTER_URL,
+      actionIntent: 'patrol_control',
+    });
+
+    expect(
+      getSelfHostedCurrentPlanPresentation({
+        entitlements: {
+          tier: 'pro',
+          subscription_state: 'active',
+          capabilities: ['relay', 'mobile_app', 'ai_autofix'],
+          limits: [],
+          upgrade_reasons: [],
+          runtime: { build: 'pro', label: 'Pulse Pro runtime' },
+        },
+        displayableCapabilities: [
+          'Pulse Relay (Remote Access)',
+          'Pulse Mobile Pairing',
+          'Patrol Handles Safe Fixes',
+        ],
+        patrolOperatorStatus: {
+          patrolControlOperationsLoopStarterCount: 1,
+          proActivationOperationsLoopStarterCount: 1,
+          externalAgentReady: false,
+        },
+      }).patrolControlAction,
+    ).toMatchObject({
+      actionLabel: 'Choose Patrol mode',
+      actionUrl: PATROL_CONTROL_STARTER_URL,
+      actionIntent: 'patrol_control',
+    });
+
+    expect(
+      getSelfHostedCurrentPlanPresentation({
+        entitlements: {
+          tier: 'pro',
+          subscription_state: 'active',
+          capabilities: ['relay', 'mobile_app', 'ai_autofix'],
+          limits: [],
+          upgrade_reasons: [],
+          runtime: { build: 'pro', label: 'Pulse Pro runtime' },
+        },
+        displayableCapabilities: [
+          'Pulse Relay (Remote Access)',
+          'Pulse Mobile Pairing',
+          'Patrol Handles Safe Fixes',
+        ],
+        patrolOperatorStatus: {
+          patrolControlOperationsLoopStarterCount: 2,
+          proActivationOperationsLoopStarterCount: 1,
+          externalAgentReady: false,
+        },
+      }).patrolControlAction,
+    ).toMatchObject({
+      actionLabel: 'Open Patrol',
+      actionUrl: PATROL_CONTROL_STARTER_URL,
+      actionIntent: 'patrol_control',
+    });
+
+    expect(
+      getSelfHostedCurrentPlanPresentation({
+        entitlements: {
+          tier: 'pro',
+          subscription_state: 'active',
+          capabilities: ['relay', 'mobile_app', 'ai_autofix'],
+          limits: [],
+          upgrade_reasons: [],
+          runtime: { build: 'pro', label: 'Pulse Pro runtime' },
+        },
+        displayableCapabilities: [
+          'Pulse Relay (Remote Access)',
+          'Pulse Mobile Pairing',
+          'Patrol Handles Safe Fixes',
+        ],
+        patrolOperatorStatus: {
+          patrolControlOperationsLoopStarterCount: 1,
+          patrolControlCompletedOperationsLoopCount: 1,
+          patrolControlResolvedOperationsLoopCount: 1,
+          patrolControlValueState: 'verified',
+          patrolAutonomyOperationsLoopStarterCount: 1,
+          patrolAutonomyCompletedOperationsLoopCount: 1,
+          patrolAutonomyResolvedOperationsLoopCount: 0,
+          patrolAutonomyValueState: 'governed_decision_recorded',
+          externalAgentReady: true,
+        },
+      }).patrolControlAction,
+    ).toMatchObject({
+      actionLabel: 'Choose Patrol mode',
+      actionUrl: PATROL_CONTROL_STARTER_URL,
+      actionIntent: 'patrol_control',
+    });
+    expect(
+      getSelfHostedCurrentPlanPresentation({
+        entitlements: {
+          tier: 'pro',
+          subscription_state: 'active',
+          capabilities: ['relay', 'mobile_app', 'ai_autofix'],
+          limits: [],
+          upgrade_reasons: [],
+          runtime: { build: 'pro', label: 'Pulse Pro runtime' },
+        },
+        displayableCapabilities: [
+          'Pulse Relay (Remote Access)',
+          'Pulse Mobile Pairing',
+          'Patrol Handles Safe Fixes',
+        ],
+        patrolOperatorStatus: {
+          patrolAutonomyOperationsLoopStarterCount: 1,
+          patrolAutonomyCompletedOperationsLoopCount: 1,
+          patrolAutonomyResolvedOperationsLoopCount: 1,
+          patrolAutonomyValueState: 'verified',
+          externalAgentReady: true,
+        },
+      }).patrolControlAction,
+    ).toMatchObject({
+      actionLabel: 'Choose Patrol mode',
+      actionUrl: PATROL_CONTROL_STARTER_URL,
+      actionIntent: 'patrol_control',
+    });
+
+    expect(
+      getSelfHostedCurrentPlanPresentation({
+        entitlements: {
+          tier: 'pro',
+          subscription_state: 'active',
+          capabilities: ['relay', 'mobile_app', 'ai_autofix'],
+          limits: [],
+          upgrade_reasons: [],
+          runtime: { build: 'pro', label: 'Pulse Pro runtime' },
+        },
+        displayableCapabilities: [
+          'Pulse Relay (Remote Access)',
+          'Pulse Mobile Pairing',
+          'Patrol Handles Safe Fixes',
+        ],
+        patrolOperatorStatus: {
+          nextAction: 'complete',
+          patrolAutonomyOperationsLoopStarterCount: 1,
+          patrolAutonomyCompletedOperationsLoopCount: 1,
+          patrolAutonomyResolvedOperationsLoopCount: 0,
+          patrolAutonomyValueState: 'governed_decision_recorded',
+          externalAgentReady: true,
+        },
+      }).patrolControlAction,
+    ).toMatchObject({
+      actionLabel: 'Review Patrol decision',
+      actionUrl: PATROL_CONTROL_PATH,
+      actionIntent: 'patrol_control',
+    });
+    expect(
+      getSelfHostedCurrentPlanPresentation({
+        entitlements: {
+          tier: 'pro',
+          subscription_state: 'active',
+          capabilities: ['relay', 'mobile_app', 'ai_autofix'],
+          limits: [],
+          upgrade_reasons: [],
+          runtime: { build: 'pro', label: 'Pulse Pro runtime' },
+        },
+        displayableCapabilities: [
+          'Pulse Relay (Remote Access)',
+          'Pulse Mobile Pairing',
+          'Patrol Handles Safe Fixes',
+        ],
+        patrolOperatorStatus: {
+          nextAction: 'open_mcp',
+          patrolAutonomyOperationsLoopStarterCount: 1,
+          patrolAutonomyCompletedOperationsLoopCount: 1,
+          patrolAutonomyResolvedOperationsLoopCount: 0,
+          patrolAutonomyValueState: 'verified_needs_mcp',
+          externalAgentReady: false,
+        },
+      }).patrolControlAction,
+    ).toMatchObject({
+      actionLabel: 'Choose Patrol mode',
+      actionUrl: PATROL_CONTROL_STARTER_URL,
+      actionIntent: 'patrol_control',
     });
 
     expect(
@@ -336,15 +579,15 @@ describe('licensePresentation', () => {
           upgrade_reasons: [],
           runtime: { build: 'pro', label: 'Pulse Pro runtime' },
         },
-        displayableCapabilities: ['Pulse Relay (Remote Access)', 'Safe Remediation Workflows'],
+        displayableCapabilities: ['Pulse Relay (Remote Access)', 'Patrol Handles Safe Fixes'],
       }),
     ).toMatchObject({
       title: 'Current plan: Legacy Pulse Pro+',
-      body: 'Legacy Pulse Pro+ is active on this instance. Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are available right now.',
+      body: 'Legacy Pulse Pro+ is active on this instance. It includes Patrol modes, 90-day metric history, RBAC, audit logs, reports, and agent profiles.',
       unlockedFeaturesLabel: 'Primary capabilities',
       unlockedFeatures: [
-        'Alert Root-Cause Analysis',
-        'Safe Remediation Workflows',
+        'Patrol Investigates Issues',
+        'Patrol Handles Safe Fixes',
         '90-day metric history',
       ],
     });
@@ -364,11 +607,11 @@ describe('licensePresentation', () => {
       }),
     ).toEqual({
       title: 'Current plan: Pulse Pro',
-      body: 'Pulse Pro is active on this instance. Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are available right now.',
+      body: 'Pulse Pro is active on this instance. It includes Patrol modes, 90-day metric history, RBAC, audit logs, reports, and agent profiles.',
       unlockedFeaturesLabel: 'Primary capabilities',
       unlockedFeatures: [
-        'Alert Root-Cause Analysis',
-        'Safe Remediation Workflows',
+        'Patrol Investigates Issues',
+        'Patrol Handles Safe Fixes',
         '90-day metric history',
       ],
       includedExtrasLabel: 'Included extras',
@@ -413,7 +656,7 @@ describe('licensePresentation', () => {
         actionUrl: 'https://pulserelay.pro/download.html',
       },
     });
-    expect(getSelfHostedActivationProofPresentation(entitlements)?.items[0]).toMatchObject({
+    expect(getSelfHostedPlanStatusPresentation(entitlements)?.items[0]).toMatchObject({
       label: 'Pulse Pro runtime',
       statusLabel: 'Needs attention',
       state: 'missing',
@@ -460,7 +703,7 @@ describe('licensePresentation', () => {
         actionUrl: 'https://pulserelay.pro/download.html',
       },
     });
-    expect(getSelfHostedActivationProofPresentation(entitlements)?.items[0]).toMatchObject({
+    expect(getSelfHostedPlanStatusPresentation(entitlements)?.items[0]).toMatchObject({
       label: 'Pulse Pro runtime',
       statusLabel: 'Needs attention',
       state: 'missing',
@@ -510,9 +753,77 @@ describe('licensePresentation', () => {
           upgrade_reasons: [],
           runtime: { build: 'pro', label: 'Pulse Pro runtime' },
         },
-        displayableCapabilities: ['Pulse Relay (Remote Access)', 'Safe Remediation Workflows'],
+        displayableCapabilities: ['Pulse Relay (Remote Access)', 'Patrol Handles Safe Fixes'],
       }).body,
     ).toBe(getSelfHostedPlanEntitlementSummary('pro', 'Legacy Pulse Pro+'));
+  });
+
+  it('keeps the Patrol mode entry point on active Pro current-plan summaries', () => {
+    const patrolControlAction = {
+      actionLabel: 'Choose Patrol mode',
+      actionUrl: PATROL_CONTROL_STARTER_URL,
+      actionIntent: 'patrol_control',
+    };
+
+    expect(
+      getSelfHostedCurrentPlanPresentation({
+        entitlements: {
+          tier: 'pro',
+          subscription_state: 'active',
+          capabilities: ['relay', 'ai_autofix'],
+          limits: [],
+          upgrade_reasons: [],
+          runtime: { build: 'pro', label: 'Pulse Pro runtime' },
+        },
+        displayableCapabilities: ['Pulse Relay (Remote Access)', 'Patrol Handles Safe Fixes'],
+      }).patrolControlAction,
+    ).toEqual(patrolControlAction);
+
+    expect(
+      getSelfHostedCurrentPlanPresentation({
+        entitlements: {
+          tier: 'pro',
+          subscription_state: 'trial',
+          capabilities: ['ai_autofix'],
+          limits: [],
+          upgrade_reasons: [],
+          runtime: { build: 'pro', label: 'Pulse Pro runtime' },
+        },
+        displayableCapabilities: ['Patrol Handles Safe Fixes'],
+      }).patrolControlAction,
+    ).toEqual(patrolControlAction);
+
+    expect(
+      getSelfHostedCurrentPlanPresentation({
+        entitlements: {
+          tier: 'pro',
+          subscription_state: 'active',
+          capabilities: ['ai_autofix'],
+          limits: [],
+          upgrade_reasons: [],
+          runtime: { build: 'community', label: 'Pulse Community runtime' },
+        },
+        displayableCapabilities: ['Patrol Handles Safe Fixes'],
+      }).patrolControlAction,
+    ).toBeUndefined();
+
+    expect(
+      getSelfHostedCurrentPlanPresentation({
+        entitlements: {
+          tier: 'relay',
+          subscription_state: 'active',
+          capabilities: ['relay', 'mobile_app', 'push_notifications', 'ai_autofix'],
+          limits: [],
+          upgrade_reasons: [],
+        },
+        displayableCapabilities: [
+          'Pulse Relay (Remote Access)',
+          'Pulse Mobile Pairing',
+          'Push Notifications',
+          'Patrol Handles Safe Fixes',
+        ],
+      }).patrolControlAction,
+    ).toBeUndefined();
   });
 
   it('builds restrained higher-tier comparison cards for Community and Relay only', () => {
@@ -529,26 +840,28 @@ describe('licensePresentation', () => {
     ).toEqual({
       cards: [
         {
-          title: 'What Relay adds',
-          body: 'Reach your Pulse web UI securely from anywhere, pair supported Pulse Mobile clients for handoff and push notifications, and keep 14 days of history.',
+          title: 'Relay plan',
+          body: 'Remote web access, Pulse Mobile pairing, push notifications, and 14-day metric history.',
           highlights: [
-            'Pulse Relay (Remote Access)',
-            'Pulse Mobile Pairing',
-            'Push Notifications',
+            'Everything in Community',
+            'Remote web access via Relay',
+            'Pulse Mobile pairing',
+            'Push notifications',
+            'No inbound ports required',
             '14-day metric history',
           ],
         },
         {
-          title: 'What Pulse Pro adds',
-          body: 'Add operations features on top of free monitoring: root-cause analysis, safe remediation workflows, 90-day history, RBAC, audit logging, reporting, and agent profiles.',
+          title: 'Pulse Pro plan',
+          body: 'Patrol modes, 90-day metric history, RBAC, audit logs, reports, and agent profiles.',
           highlights: [
-            'Alert Root-Cause Analysis',
-            'Safe Remediation Workflows',
+            'Everything in Relay',
+            'Choose Patrol mode',
+            'Patrol investigates issues',
+            'Patrol handles safe fixes',
             '90-day metric history',
-            'Role-Based Access Control (RBAC)',
-            'Audit Logging',
-            'PDF/CSV Reporting',
-            'Centralized Agent Profiles',
+            'RBAC and audit logging',
+            'Agent profiles · PDF/CSV reports',
           ],
         },
       ],
@@ -567,16 +880,16 @@ describe('licensePresentation', () => {
     ).toEqual({
       cards: [
         {
-          title: 'What Pulse Pro adds',
-          body: 'Add operations features on top of free monitoring: root-cause analysis, safe remediation workflows, 90-day history, RBAC, audit logging, reporting, and agent profiles.',
+          title: 'Pulse Pro plan',
+          body: 'Patrol modes, 90-day metric history, RBAC, audit logs, reports, and agent profiles.',
           highlights: [
-            'Alert Root-Cause Analysis',
-            'Safe Remediation Workflows',
+            'Everything in Relay',
+            'Choose Patrol mode',
+            'Patrol investigates issues',
+            'Patrol handles safe fixes',
             '90-day metric history',
-            'Role-Based Access Control (RBAC)',
-            'Audit Logging',
-            'PDF/CSV Reporting',
-            'Centralized Agent Profiles',
+            'RBAC and audit logging',
+            'Agent profiles · PDF/CSV reports',
           ],
         },
       ],
@@ -595,9 +908,9 @@ describe('licensePresentation', () => {
     ).toEqual({ cards: [] });
   });
 
-  it('builds entitlement-derived value proof for active Relay and Pro installs', () => {
+  it('builds entitlement-derived status for active Relay and Pro installs', () => {
     expect(
-      getSelfHostedActivationProofPresentation({
+      getSelfHostedPlanStatusPresentation({
         tier: 'relay',
         subscription_state: 'active',
         capabilities: ['relay', 'mobile_app', 'push_notifications', 'long_term_metrics'],
@@ -606,27 +919,27 @@ describe('licensePresentation', () => {
         max_history_days: 14,
       }),
     ).toEqual({
-      title: 'Relay value proof',
-      body: "These checks come from this instance's entitlement and runtime payloads, not from public pricing copy.",
+      title: 'Relay status',
+      body: 'These checks show the capabilities this instance can use right now, based on its entitlement and runtime payloads.',
       items: [
         {
           label: 'Remote access, pairing, and push',
           statusLabel: 'Active',
           state: 'active',
           detail:
-            'Relay, Pulse Mobile pairing, and push notification capabilities are present in this entitlement payload.',
+            'Relay, Pulse Mobile pairing, and push notifications are available on this instance.',
         },
         {
           label: '14-day metric history',
           statusLabel: 'Active',
           state: 'active',
-          detail: 'This instance reports 14 days of metric history in its entitlement payload.',
+          detail: 'This instance has 14 days of metric history available.',
         },
       ],
     });
 
     expect(
-      getSelfHostedActivationProofPresentation({
+      getSelfHostedPlanStatusPresentation({
         tier: 'pro',
         subscription_state: 'active',
         capabilities: [
@@ -648,36 +961,53 @@ describe('licensePresentation', () => {
         runtime: { build: 'pro', label: 'Pulse Pro runtime' },
       }),
     ).toMatchObject({
-      title: 'Pulse Pro value proof',
+      title: 'Capability details',
+      body: 'Open this only when a Pro capability looks unavailable. Normal setup is choosing Patrol mode.',
       items: [
         { label: 'Pulse Pro runtime', statusLabel: 'Active' },
         { label: 'Remote access, pairing, and push', statusLabel: 'Active' },
         { label: '90-day metric history', statusLabel: 'Active' },
-        { label: 'Root-cause analysis and remediation', statusLabel: 'Active' },
+        { label: 'Patrol investigation and remediation', statusLabel: 'Active' },
         { label: 'Team and admin controls', statusLabel: 'Active' },
       ],
     });
 
-    expect(
-      getSelfHostedActivationProofPresentation({
-        tier: 'pro',
-        subscription_state: 'active',
-        capabilities: ['relay', 'ai_autofix'],
-        limits: [],
-        upgrade_reasons: [],
-        max_history_days: 14,
-        runtime: { build: 'pro', label: 'Pulse Pro runtime' },
-      })?.items.map((item) => [item.label, item.statusLabel]),
-    ).toEqual([
+    const partialProStatus = getSelfHostedPlanStatusPresentation({
+      tier: 'pro',
+      subscription_state: 'active',
+      capabilities: ['relay', 'ai_autofix'],
+      limits: [],
+      upgrade_reasons: [],
+      max_history_days: 14,
+      runtime: { build: 'pro', label: 'Pulse Pro runtime' },
+    });
+    expect(partialProStatus?.items.map((item) => [item.label, item.statusLabel])).toEqual([
       ['Pulse Pro runtime', 'Active'],
       ['Remote access, pairing, and push', 'Partial'],
       ['90-day metric history', 'Partial'],
-      ['Root-cause analysis and remediation', 'Partial'],
+      ['Patrol investigation and remediation', 'Partial'],
       ['Team and admin controls', 'Needs attention'],
     ]);
+    expect(partialProStatus?.items).toContainEqual({
+      label: 'Patrol investigation and remediation',
+      state: 'partial',
+      statusLabel: 'Partial',
+      detail:
+        'Some Patrol capability is available, but investigation or remediation may not be fully enabled yet.',
+    });
+    expect(partialProStatus?.items).toContainEqual({
+      label: 'Team and admin controls',
+      state: 'missing',
+      statusLabel: 'Needs attention',
+      detail:
+        'Team/admin controls are not available yet. Refresh the plan or open recovery before relying on this Pro install.',
+    });
+    expect(partialProStatus?.items.map((item) => item.detail).join(' ')).not.toContain(
+      'admin tools',
+    );
 
     expect(
-      getSelfHostedActivationProofPresentation({
+      getSelfHostedPlanStatusPresentation({
         tier: 'free',
         subscription_state: 'expired',
         capabilities: [],
@@ -685,6 +1015,160 @@ describe('licensePresentation', () => {
         upgrade_reasons: [],
       }),
     ).toBeNull();
+  });
+
+  it('keeps Patrol work state out of plan capability details', () => {
+    const proEntitlements = {
+      tier: 'pro',
+      subscription_state: 'active',
+      capabilities: [
+        'relay',
+        'mobile_app',
+        'push_notifications',
+        'ai_alerts',
+        'ai_autofix',
+        'rbac',
+        'audit_logging',
+        'advanced_reporting',
+        'agent_profiles',
+      ],
+      limits: [],
+      upgrade_reasons: [],
+      max_history_days: 90,
+      runtime: { build: 'pro', label: 'Pulse Pro runtime' },
+    };
+
+    const expectedCapabilityItems = [
+      ['Pulse Pro runtime', 'Active'],
+      ['Remote access, pairing, and push', 'Active'],
+      ['90-day metric history', 'Active'],
+      ['Patrol investigation and remediation', 'Active'],
+      ['Team and admin controls', 'Active'],
+    ];
+    const expectOnlyCapabilityItems = (
+      status?: ReturnType<typeof getSelfHostedPlanStatusPresentation>,
+    ) => {
+      expect(status?.title).toBe('Capability details');
+      expect(status?.items.map((item) => [item.label, item.statusLabel])).toEqual(
+        expectedCapabilityItems,
+      );
+      expect(status?.items.some((item) => item.label === 'Patrol work')).toBe(false);
+    };
+
+    expect(
+      getSelfHostedPlanStatusPresentation(proEntitlements)?.items.some(
+        (item) => item.label === 'Patrol work',
+      ),
+    ).toBe(false);
+
+    expectOnlyCapabilityItems(getSelfHostedPlanStatusPresentation(proEntitlements));
+
+    expectOnlyCapabilityItems(
+      getSelfHostedPlanStatusPresentation(proEntitlements, {
+        patrolControlOperationsLoopStarterCount: 1,
+        patrolControlCompletedOperationsLoopCount: 1,
+        patrolControlResolvedOperationsLoopCount: 1,
+        patrolControlValueState: 'verified',
+        patrolAutonomyOperationsLoopStarterCount: 1,
+        patrolAutonomyCompletedOperationsLoopCount: 1,
+        patrolAutonomyResolvedOperationsLoopCount: 0,
+        patrolAutonomyValueState: 'governed_decision_recorded',
+        externalAgentReady: true,
+      }),
+    );
+
+    expectOnlyCapabilityItems(
+      getSelfHostedPlanStatusPresentation(proEntitlements, {
+        patrolAutonomyOperationsLoopStarterCount: 1,
+        patrolAutonomyCompletedOperationsLoopCount: 1,
+        patrolAutonomyResolvedOperationsLoopCount: 1,
+        patrolAutonomyValueState: 'verified',
+        externalAgentReady: true,
+      }),
+    );
+
+    expectOnlyCapabilityItems(
+      getSelfHostedPlanStatusPresentation(proEntitlements, {
+        nextAction: 'complete',
+        progressLabel:
+          'Patrol recorded a rejected change decision. Nothing was changed; approve a safer fix before marking the issue resolved.',
+        patrolAutonomyOperationsLoopStarterCount: 1,
+        patrolAutonomyCompletedOperationsLoopCount: 1,
+        patrolAutonomyResolvedOperationsLoopCount: 0,
+        patrolAutonomyValueState: 'governed_decision_recorded',
+        externalAgentReady: true,
+      }),
+    );
+
+    expectOnlyCapabilityItems(
+      getSelfHostedPlanStatusPresentation(proEntitlements, {
+        nextAction: 'complete',
+        patrolAutonomyOperationsLoopStarterCount: 1,
+        patrolAutonomyCompletedOperationsLoopCount: 1,
+        patrolAutonomyResolvedOperationsLoopCount: 0,
+        patrolAutonomyValueState: 'governed_decision_recorded',
+        externalAgentReady: false,
+      }),
+    );
+
+    expectOnlyCapabilityItems(
+      getSelfHostedPlanStatusPresentation(proEntitlements, {
+        nextAction: 'open_mcp',
+        progressLabel: 'Legacy status asked for MCP readiness after the outcome was verified.',
+        patrolAutonomyOperationsLoopStarterCount: 1,
+        patrolAutonomyCompletedOperationsLoopCount: 0,
+        patrolAutonomyResolvedOperationsLoopCount: 0,
+        patrolAutonomyValueState: 'verified_needs_mcp',
+        externalAgentReady: false,
+      }),
+    );
+
+    expectOnlyCapabilityItems(
+      getSelfHostedPlanStatusPresentation(proEntitlements, {
+        patrolAutonomyOperationsLoopStarterCount: 2,
+        patrolAutonomyCompletedOperationsLoopCount: 0,
+        patrolAutonomyResolvedOperationsLoopCount: 0,
+        progressLabel: 'Investigation ready',
+        externalAgentReady: false,
+      }),
+    );
+
+    expectOnlyCapabilityItems(
+      getSelfHostedPlanStatusPresentation(proEntitlements, {
+        proActivationOperationsLoopStarterCount: 1,
+        proActivationCompletedOperationsLoopCount: 0,
+        proActivationResolvedOperationsLoopCount: 0,
+        proActivationValueProofState: 'in_progress',
+        externalAgentReady: false,
+      }),
+    );
+
+    expectOnlyCapabilityItems(
+      getSelfHostedPlanStatusPresentation(proEntitlements, {
+        patrolControlOperationsLoopStarterCount: 1,
+        proActivationOperationsLoopStarterCount: 1,
+        progressLabel: 'Legacy activation entry recorded',
+        externalAgentReady: false,
+      }),
+    );
+
+    expectOnlyCapabilityItems(
+      getSelfHostedPlanStatusPresentation(proEntitlements, {
+        patrolControlOperationsLoopStarterCount: 2,
+        proActivationOperationsLoopStarterCount: 1,
+        progressLabel: 'Patrol mode started',
+        externalAgentReady: false,
+      }),
+    );
+
+    expectOnlyCapabilityItems(
+      getSelfHostedPlanStatusPresentation(proEntitlements, {
+        patrolAutonomyOperationsLoopStarterCount: 0,
+        patrolAutonomyCompletedOperationsLoopCount: 0,
+        patrolAutonomyResolvedOperationsLoopCount: 0,
+        externalAgentReady: false,
+      }),
+    );
   });
 
   it('builds activation-success summaries for purchase and pasted-key paths', () => {
@@ -702,24 +1186,27 @@ describe('licensePresentation', () => {
           'Pulse Relay (Remote Access)',
           'Pulse Mobile Pairing',
           'Push Notifications',
-          'Safe Remediation Workflows',
+          'Patrol Handles Safe Fixes',
         ],
         source: 'purchase',
       }),
     ).toEqual({
       tone: 'border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-900 text-green-900 dark:text-green-100',
       title: 'Pulse Pro is now active',
-      body: 'Checkout completed and this instance is now running Pulse Pro.',
+      body: 'Checkout completed and Pulse Pro is active. Choose Patrol mode.',
       highlightsLabel: 'Available now on this instance',
       highlights: [
-        'Alert Root-Cause Analysis',
-        'Safe Remediation Workflows',
+        'Patrol Investigates Issues',
+        'Patrol Handles Safe Fixes',
         '90-day metric history',
         'Role-Based Access Control (RBAC)',
         'Audit Logging',
         'PDF/CSV Reporting',
         'Centralized Agent Profiles',
       ],
+      actionLabel: 'Choose Patrol mode',
+      actionUrl: PATROL_CONTROL_STARTER_URL,
+      actionIntent: 'patrol_control',
     });
 
     expect(
@@ -741,7 +1228,7 @@ describe('licensePresentation', () => {
     ).toEqual({
       tone: 'border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-900 text-green-900 dark:text-green-100',
       title: 'Relay is now active',
-      body: 'The activation key was accepted and this instance is now running Relay.',
+      body: 'The license key was accepted and this instance is now running Relay.',
       highlightsLabel: 'Available now on this instance',
       highlights: [
         'Pulse Relay (Remote Access)',
@@ -760,7 +1247,7 @@ describe('licensePresentation', () => {
           limits: [],
           upgrade_reasons: [],
         },
-        displayableCapabilities: ['Pulse Patrol', 'Safe Remediation Workflows'],
+        displayableCapabilities: ['Pulse Patrol', 'Patrol Handles Safe Fixes'],
         source: 'purchase',
       }),
     ).toBeNull();
@@ -780,6 +1267,130 @@ describe('licensePresentation', () => {
     ).toBeNull();
   });
 
+  it('keeps activation-success actions aligned with actionable Patrol states', () => {
+    const proEntitlements = {
+      tier: 'pro',
+      subscription_state: 'active',
+      capabilities: ['relay', 'mobile_app', 'push_notifications', 'ai_autofix'],
+      limits: [],
+      upgrade_reasons: [],
+      runtime: { build: 'pro', label: 'Pulse Pro runtime' },
+    };
+
+    expect(
+      getSelfHostedActivationSuccessPresentation({
+        entitlements: proEntitlements,
+        displayableCapabilities: ['Patrol Handles Safe Fixes'],
+        patrolOperatorStatus: {
+          patrolAutonomyOperationsLoopStarterCount: 1,
+          patrolAutonomyCompletedOperationsLoopCount: 0,
+          patrolAutonomyResolvedOperationsLoopCount: 0,
+          externalAgentReady: false,
+        },
+        source: 'manual',
+      }),
+    ).toMatchObject({
+      actionLabel: 'Open Patrol',
+      actionUrl: PATROL_CONTROL_STARTER_URL,
+      actionIntent: 'patrol_control',
+    });
+
+    expect(
+      getSelfHostedActivationSuccessPresentation({
+        entitlements: proEntitlements,
+        displayableCapabilities: ['Patrol Handles Safe Fixes'],
+        patrolOperatorStatus: {
+          proActivationOperationsLoopStarterCount: 1,
+          proActivationCompletedOperationsLoopCount: 0,
+          proActivationResolvedOperationsLoopCount: 0,
+          proActivationValueProofState: 'in_progress',
+          externalAgentReady: false,
+        },
+        source: 'manual',
+      }),
+    ).toMatchObject({
+      actionLabel: 'Choose Patrol mode',
+      actionUrl: PATROL_CONTROL_STARTER_URL,
+      actionIntent: 'patrol_control',
+    });
+
+    expect(
+      getSelfHostedActivationSuccessPresentation({
+        entitlements: proEntitlements,
+        displayableCapabilities: ['Patrol Handles Safe Fixes'],
+        patrolOperatorStatus: {
+          patrolControlOperationsLoopStarterCount: 1,
+          proActivationOperationsLoopStarterCount: 1,
+          externalAgentReady: false,
+        },
+        source: 'manual',
+      }),
+    ).toMatchObject({
+      actionLabel: 'Choose Patrol mode',
+      actionUrl: PATROL_CONTROL_STARTER_URL,
+      actionIntent: 'patrol_control',
+    });
+
+    expect(
+      getSelfHostedActivationSuccessPresentation({
+        entitlements: proEntitlements,
+        displayableCapabilities: ['Patrol Handles Safe Fixes'],
+        patrolOperatorStatus: {
+          nextAction: 'open_mcp',
+          patrolAutonomyOperationsLoopStarterCount: 1,
+          patrolAutonomyCompletedOperationsLoopCount: 0,
+          patrolAutonomyResolvedOperationsLoopCount: 0,
+          patrolAutonomyValueState: 'verified_needs_mcp',
+          externalAgentReady: false,
+        },
+        source: 'manual',
+      }),
+    ).toMatchObject({
+      actionLabel: 'Choose Patrol mode',
+      actionUrl: PATROL_CONTROL_STARTER_URL,
+      actionIntent: 'patrol_control',
+    });
+
+    expect(
+      getSelfHostedActivationSuccessPresentation({
+        entitlements: proEntitlements,
+        displayableCapabilities: ['Patrol Handles Safe Fixes'],
+        patrolOperatorStatus: {
+          nextAction: 'complete',
+          patrolAutonomyOperationsLoopStarterCount: 1,
+          patrolAutonomyCompletedOperationsLoopCount: 1,
+          patrolAutonomyResolvedOperationsLoopCount: 0,
+          patrolAutonomyValueState: 'governed_decision_recorded',
+          externalAgentReady: true,
+        },
+        source: 'manual',
+      }),
+    ).toMatchObject({
+      actionLabel: 'Review Patrol decision',
+      actionUrl: PATROL_CONTROL_PATH,
+      actionIntent: 'patrol_control',
+    });
+
+    expect(
+      getSelfHostedActivationSuccessPresentation({
+        entitlements: proEntitlements,
+        displayableCapabilities: ['Patrol Handles Safe Fixes'],
+        patrolOperatorStatus: {
+          patrolAutonomyOperationsLoopStarterCount: 1,
+          patrolAutonomyCompletedOperationsLoopCount: 1,
+          patrolAutonomyResolvedOperationsLoopCount: 1,
+          patrolAutonomyValueState: 'verified',
+          externalAgentReady: true,
+        },
+        source: 'manual',
+      }),
+    ).toMatchObject({
+      actionLabel: 'Choose Patrol mode',
+      actionUrl: PATROL_CONTROL_STARTER_URL,
+      actionIntent: 'patrol_control',
+    });
+  });
+
   it('returns canonical purchase activation notices', () => {
     expect(getPurchaseActivationNotice('activated')).toMatchObject({
       title: 'Plan activated',
@@ -795,7 +1406,7 @@ describe('licensePresentation', () => {
       body: expect.stringContaining('Start the upgrade again'),
     });
     expect(getPurchaseActivationNotice('failed')).toMatchObject({
-      title: 'Activation needs attention',
+      title: 'Plan needs attention',
       body: expect.stringContaining('open recovery'),
       tone: expect.stringContaining('red'),
     });

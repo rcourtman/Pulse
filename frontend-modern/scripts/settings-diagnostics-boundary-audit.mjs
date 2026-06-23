@@ -19,6 +19,12 @@ const INTERNAL_ANALYTICS_RULES = [
         message:
           'Do not expose maintainer/admin analytics from /api/diagnostics or customer product runtime.',
       },
+      {
+        rule: 'canonical-settings/no-mcp-vocabulary-in-assistant-diagnostics-api',
+        regex: /\b(?:MCPConnected|MCPToolCount|mcpConnected|mcpToolCount)\b/g,
+        message:
+          'Do not expose native Pulse Assistant diagnostics through MCP transport fields.',
+      },
     ],
   },
   {
@@ -74,6 +80,12 @@ const INTERNAL_ANALYTICS_RULES = [
         message:
           'Do not render maintainer/admin analytics in the user-facing Settings diagnostics panel.',
       },
+      {
+        rule: 'canonical-settings/no-mcp-vocabulary-in-assistant-diagnostics-ui',
+        regex: /\b(?:mcpConnected|mcpToolCount)\b|MCP Connection/g,
+        message:
+          'Render Pulse Assistant diagnostics as native Assistant runtime availability, not MCP transport state.',
+      },
     ],
   },
   {
@@ -86,6 +98,12 @@ const INTERNAL_ANALYTICS_RULES = [
           /\bexport interface (?:CommercialFunnel|InfrastructureOnboarding)\w*\b|\b(?:commercialFunnel|infrastructureOnboarding)\?:|\b(?:CommercialFunnel|InfrastructureOnboarding)(?:Diagnostic|Summary|StageCounts|DayBreakdown|DimensionBreakdown|PathBreakdown|PlatformBreakdown)\b/g,
         message:
           'Do not add commercial funnel or infrastructure onboarding fields to the customer diagnostics payload model.',
+      },
+      {
+        rule: 'canonical-settings/no-mcp-vocabulary-in-assistant-diagnostics-types',
+        regex: /\b(?:mcpConnected|mcpToolCount)\b/g,
+        message:
+          'Model Pulse Assistant diagnostics as native Assistant runtime availability, not MCP transport state.',
       },
     ],
   },

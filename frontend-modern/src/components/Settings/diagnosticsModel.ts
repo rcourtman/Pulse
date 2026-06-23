@@ -116,8 +116,7 @@ export interface AIChatDiagnostic {
   port?: number;
   url?: string;
   model?: string;
-  mcpConnected: boolean;
-  mcpToolCount?: number;
+  assistantRuntimeConnected: boolean;
   notes?: string[];
 }
 

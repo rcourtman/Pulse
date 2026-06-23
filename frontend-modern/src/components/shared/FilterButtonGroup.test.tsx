@@ -173,7 +173,7 @@ describe('FilterButtonGroup', () => {
   it('supports equal-width segmented controls for compact feature settings', () => {
     render(() => (
       <FilterButtonGroup
-        ariaLabel="Patrol autonomy level"
+        ariaLabel="Patrol control"
         options={[
           { value: 'monitor', label: 'Monitor' },
           { value: 'approval', label: 'Investigate', disabled: true },
@@ -185,7 +185,7 @@ describe('FilterButtonGroup', () => {
       />
     ));
 
-    const group = screen.getByRole('group', { name: 'Patrol autonomy level' });
+    const group = screen.getByRole('group', { name: 'Patrol control' });
     const activeButton = within(group).getByRole('button', { name: 'Monitor' });
     const disabledButton = within(group).getByRole('button', { name: 'Investigate' });
 

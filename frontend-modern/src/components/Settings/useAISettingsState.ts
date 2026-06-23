@@ -44,6 +44,11 @@ type AISettingsSaveProviderFailure = {
   providerMessage?: string;
 };
 
+interface AISettingsStateOptions {
+  saveErrorFallback?: string;
+  savedLabel?: string;
+}
+
 const AI_SETTINGS_PROVIDER_PAYLOAD_FIELDS: Record<AIProvider, string[]> = {
   anthropic: ['anthropic_api_key'],
   openai: ['openai_api_key', 'openai_base_url'],
@@ -100,9 +105,13 @@ const isGenericAISettingsSaveFailure = (error: unknown): boolean => {
   if (!message) return true;
   return (
     message === 'failed to save assistant & patrol settings' ||
+    message === 'failed to save provider & models settings' ||
     message === 'unable to save assistant & patrol settings.' ||
     message === 'unable to save assistant & patrol settings' ||
+    message === 'unable to save provider & models settings.' ||
+    message === 'unable to save provider & models settings' ||
     message.includes('failed to save assistant & patrol settings') ||
+    message.includes('failed to save provider & models settings') ||
     message.startsWith('request failed with status')
   );
 };
@@ -110,8 +119,9 @@ const isGenericAISettingsSaveFailure = (error: unknown): boolean => {
 export function getAISettingsSaveProviderFailureMessage(
   message: string | undefined,
   failure?: AISettingsSaveProviderFailure | null,
+  fallback?: string,
 ): string {
-  const baseMessage = getAISettingsSaveErrorMessage(message);
+  const baseMessage = getAISettingsSaveErrorMessage(message, fallback);
   if (!failure?.provider) return baseMessage;
 
   const providerLabel = getAIProviderDisplayName(failure.provider);
@@ -129,7 +139,7 @@ export function getAISettingsSaveProviderFailureMessage(
 
 export function getAISettingsPatrolReadinessSaveMessage(
   readiness: AISettingsType['patrol_readiness'] | null | undefined,
-  savedLabel = 'Assistant & Patrol settings saved',
+  savedLabel = 'Provider & Models settings saved',
 ): string | null {
   if (!readiness || readiness.status === 'ready') return null;
 
@@ -209,7 +219,7 @@ export function resolveAISettingsSaveProviderFailure(input: {
   return null;
 }
 
-export const useAISettingsState = () => {
+export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
   const [settings, setSettings] = createSignal<AISettingsType | null>(null);
   const [loading, setLoading] = createSignal(false);
   const [loadError, setLoadError] = createSignal(false);
@@ -244,7 +254,7 @@ export const useAISettingsState = () => {
 
   // hydratePatrolPreflightFromSettings projects the cached preflight
   // snapshot from /api/settings/ai into the same response shape the
-  // manual Verify Patrol button writes, so the inline result panel can
+  // manual Check Patrol model button writes, so the inline result panel can
   // render the most-recent outcome on page load without forcing a
   // re-click. Returns null when preflight has never run on the
   // current Pulse instance.
@@ -288,6 +298,9 @@ export const useAISettingsState = () => {
     authMethod: 'api_key' as AuthMethod,
     patrolIntervalMinutes: 360,
     alertTriggeredAnalysis: true,
+    patrolAlertTriggers: true,
+    patrolAnomalyTriggers: true,
+    patrolAlertTriggerMinSeverity: 'critical' as 'warning' | 'critical',
     patrolAutoFix: false,
     anthropicApiKey: '',
     openaiApiKey: '',
@@ -315,6 +328,7 @@ export const useAISettingsState = () => {
     }),
   );
   const autoFixLocked = createMemo(() => !hasFeature('ai_autofix'));
+  const alertAnalysisLocked = createMemo(() => !hasFeature('ai_alerts'));
   const providerIssueCount = createMemo(
     () => AI_PROVIDERS.filter((provider) => providerHealth[provider].status === 'error').length,
   );
@@ -363,6 +377,9 @@ export const useAISettingsState = () => {
         authMethod: 'api_key',
         patrolIntervalMinutes: 360,
         alertTriggeredAnalysis: true,
+        patrolAlertTriggers: true,
+        patrolAnomalyTriggers: true,
+        patrolAlertTriggerMinSeverity: 'critical',
         patrolAutoFix: false,
         anthropicApiKey: '',
         openaiApiKey: '',
@@ -382,6 +399,9 @@ export const useAISettingsState = () => {
       return;
     }
 
+    const legacyEventTriggersEnabled =
+      data.patrol_event_triggers_enabled ?? data.alert_triggered_analysis !== false;
+
     setForm({
       enabled: data.enabled,
       model: data.model || '',
@@ -392,6 +412,10 @@ export const useAISettingsState = () => {
       authMethod: data.auth_method || 'api_key',
       patrolIntervalMinutes: data.patrol_interval_minutes ?? 360,
       alertTriggeredAnalysis: data.alert_triggered_analysis !== false,
+      patrolAlertTriggers: data.patrol_alert_triggers_enabled ?? legacyEventTriggersEnabled,
+      patrolAnomalyTriggers: data.patrol_anomaly_triggers_enabled ?? legacyEventTriggersEnabled,
+      patrolAlertTriggerMinSeverity:
+        data.patrol_alert_trigger_min_severity === 'warning' ? 'warning' : 'critical',
       patrolAutoFix: data.patrol_auto_fix || false,
       anthropicApiKey: '',
       openaiApiKey: '',
@@ -596,7 +620,7 @@ export const useAISettingsState = () => {
   // which only confirms each provider's model catalog is reachable.
   //
   // Passes the form's pending patrolModel as a model override so clicking
-  // Verify Patrol after changing the dropdown actually tests the operator's
+  // Check Patrol model after changing the dropdown actually tests the operator's
   // pending selection, not whatever was previously saved. Empty form value
   // means "use the shared default" — the backend handles the fallback.
   const runPatrolToolPreflight = async () => {
@@ -702,12 +726,12 @@ export const useAISettingsState = () => {
       handleCloseSetupModal();
       const patrolReadinessMessage = getAISettingsPatrolReadinessSaveMessage(
         updated.patrol_readiness,
-        'Assistant & Patrol enabled',
+        'Pulse Intelligence enabled',
       );
       if (patrolReadinessMessage) {
         notificationStore.warning(patrolReadinessMessage);
       } else {
-        notificationStore.success('Assistant & Patrol enabled! You can customize settings below.');
+        notificationStore.success('Pulse Intelligence enabled. You can customize settings below.');
       }
     } catch (error) {
       logger.error('[AISettings] Setup failed:', error);
@@ -806,6 +830,18 @@ export const useAISettingsState = () => {
       if (form.alertTriggeredAnalysis !== settings()?.alert_triggered_analysis) {
         payload.alert_triggered_analysis = form.alertTriggeredAnalysis;
       }
+      if (form.patrolAlertTriggers !== (settings()?.patrol_alert_triggers_enabled ?? true)) {
+        payload.patrol_alert_triggers_enabled = form.patrolAlertTriggers;
+      }
+      if (form.patrolAnomalyTriggers !== (settings()?.patrol_anomaly_triggers_enabled ?? true)) {
+        payload.patrol_anomaly_triggers_enabled = form.patrolAnomalyTriggers;
+      }
+      if (
+        form.patrolAlertTriggerMinSeverity !==
+        (settings()?.patrol_alert_trigger_min_severity ?? 'critical')
+      ) {
+        payload.patrol_alert_trigger_min_severity = form.patrolAlertTriggerMinSeverity;
+      }
       if (form.patrolAutoFix !== settings()?.patrol_auto_fix) {
         payload.patrol_auto_fix = form.patrolAutoFix;
       }
@@ -888,13 +924,15 @@ export const useAISettingsState = () => {
       syncModelCatalogForSettings(updated);
       hydratePatrolPreflightFromSettings(updated);
       void runProviderPreflight(updated);
+      const savedLabel = options.savedLabel ?? 'Provider & Models settings saved';
       const patrolReadinessMessage = getAISettingsPatrolReadinessSaveMessage(
         updated.patrol_readiness,
+        savedLabel,
       );
       if (patrolReadinessMessage) {
         notificationStore.warning(patrolReadinessMessage);
       } else {
-        notificationStore.success('Assistant & Patrol settings saved');
+        notificationStore.success(savedLabel);
       }
     } catch (error) {
       logger.error('[AISettings] Failed to save settings:', error);
@@ -914,6 +952,7 @@ export const useAISettingsState = () => {
         getAISettingsSaveProviderFailureMessage(
           error instanceof Error ? error.message : '',
           providerFailure,
+          options.saveErrorFallback,
         ),
       );
     } finally {
@@ -1051,7 +1090,7 @@ export const useAISettingsState = () => {
       syncModelCatalogForSettings(updated);
       void runProviderPreflight(updated);
       notificationStore.success(
-        newValue ? 'Assistant & Patrol enabled' : 'Assistant & Patrol disabled',
+        newValue ? 'Pulse Intelligence enabled' : 'Pulse Intelligence disabled',
       );
     } catch (error) {
       setForm('enabled', !newValue);
@@ -1095,6 +1134,7 @@ export const useAISettingsState = () => {
   });
 
   return {
+    alertAnalysisLocked,
     autoFixLocked,
     availableModels,
     chatSessions,

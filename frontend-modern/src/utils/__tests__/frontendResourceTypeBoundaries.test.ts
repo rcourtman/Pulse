@@ -189,7 +189,6 @@ import toolPresentationSource from '@/components/AI/Chat/toolPresentation.ts?raw
 import toolExecutionBlockSource from '@/components/AI/Chat/ToolExecutionBlock.tsx?raw';
 import aiChatSource from '@/components/AI/Chat/index.tsx?raw';
 import useChatSource from '@/components/AI/Chat/hooks/useChat.ts?raw';
-import patrolStatusBarSource from '@/components/patrol/PatrolStatusBar.tsx?raw';
 import patrolFormatSource from '@/utils/patrolFormat.ts?raw';
 import aiFindingPresentationSource from '@/utils/aiFindingPresentation.ts?raw';
 import chatIdentifiersSource from '@/utils/chatIdentifiers.ts?raw';
@@ -470,7 +469,6 @@ import aiIntelligenceStoreSource from '@/stores/aiIntelligence.ts?raw';
 import aiIntelligenceSummaryModelSource from '@/stores/aiIntelligenceSummaryModel.ts?raw';
 import patrolIntelligenceBannersSource from '@/features/patrol/PatrolIntelligenceBanners.tsx?raw';
 import patrolIntelligenceHeaderSource from '@/features/patrol/PatrolIntelligenceHeader.tsx?raw';
-import patrolIntelligenceSummarySource from '@/features/patrol/PatrolIntelligenceSummary.tsx?raw';
 import patrolIntelligenceSurfaceSource from '@/features/patrol/PatrolIntelligenceSurface.tsx?raw';
 import patrolInvestigationContextModelSource from '@/features/patrol/patrolInvestigationContextModel.ts?raw';
 import patrolIntelligenceStateSource from '@/features/patrol/usePatrolIntelligenceState.ts?raw';
@@ -2174,7 +2172,6 @@ describe('frontend resource type boundaries', () => {
     expect(activeTurnStatusSource).toContain('formatIdentifierLabel');
     expect(toolPresentationSource).toContain('formatIdentifierLabel');
     expect(aiChatSource).toContain('formatIdentifierLabel');
-    expect(patrolStatusBarSource).toContain('formatTriggerReason');
     expect(findingsPanelSource).toContain('formatIdentifierLabel');
     expect(patrolFormatSource).toContain('formatIdentifierLabel');
     expect(aiFindingPresentationSource).toContain('formatIdentifierLabel');
@@ -2182,7 +2179,6 @@ describe('frontend resource type boundaries', () => {
     expect(toolExecutionBlockSource).not.toContain("replace(/^pulse_/, '').replace(/_/g, ' ')");
     expect(aiChatSource).not.toContain("replace(/^pulse_/, '').replace(/_/g, ' ')");
     expect(findingsPanelSource).not.toContain("replace(/_/g, ' ')");
-    expect(patrolStatusBarSource).not.toContain("replace(/_/g, ' ') : ''");
     expect(patrolFormatSource).not.toContain("replace(/_/g, ' ') : 'Unknown'");
     expect(aiFindingPresentationSource).not.toContain("replace(/_/g, ' ')");
     expect(patrolRunPresentationSource).toContain('formatIdentifierLabel');
@@ -3483,6 +3479,9 @@ describe('frontend resource type boundaries', () => {
     expect(updateInstallGuideSource).toContain('buildUpdateInstallGuide');
     expect(copyCommandBlockSource).toContain('export function CopyCommandBlock');
     expect(copyCommandBlockSource).toContain('CommandCopyButton');
+    expect(copyCommandBlockSource).toContain('@/utils/clipboard');
+    expect(copyCommandBlockSource).toContain('copyToClipboard(props.command)');
+    expect(copyCommandBlockSource).not.toContain('navigator.clipboard.writeText');
     expect(copyCommandBlockSource).toContain('label="Copy to clipboard"');
     expect(updatesSettingsModelSource).toContain('export function getUpdateChannelCardOptions');
     expect(updatesSettingsModelSource).toContain('export function buildUpdateInstallGuide');
@@ -3562,32 +3561,27 @@ describe('frontend resource type boundaries', () => {
     expect(patrolIntelligenceSurfaceSource).toContain('./usePatrolIntelligenceState');
     expect(patrolIntelligenceSurfaceSource).toContain('./PatrolIntelligenceHeader');
     expect(patrolIntelligenceSurfaceSource).toContain('./PatrolIntelligenceBanners');
-    expect(patrolIntelligenceSurfaceSource).toContain('./PatrolIntelligenceSummary');
+    expect(patrolIntelligenceSurfaceSource).not.toContain('./PatrolIntelligenceSummary');
     expect(patrolIntelligenceSurfaceSource).toContain('./PatrolIntelligenceWorkspace');
     expect(patrolIntelligenceBannersSource).toContain('presentationPolicyHidesUpgradePrompts');
     expect(patrolIntelligenceBannersSource).toContain('!presentationPolicyHidesUpgradePrompts()');
     expect(patrolIntelligenceBannersSource).toContain('state.licenseRequired()');
     expect(patrolIntelligenceHeaderSource).toContain('presentationPolicyHidesUpgradePrompts');
-    expect(patrolIntelligenceHeaderSource).toContain(
-      '!presentationPolicyHidesUpgradePrompts() && state.autoFixLocked()',
-    );
-    expect(patrolIntelligenceHeaderSource).toContain(
-      '!presentationPolicyHidesUpgradePrompts() && state.alertAnalysisLocked()',
-    );
+    expect(patrolIntelligenceHeaderSource).toContain('presentationPolicyHidesCommercialSurfaces');
+    expect(patrolIntelligenceHeaderSource).toContain('!presentationPolicyHidesUpgradePrompts()');
+    expect(patrolIntelligenceHeaderSource).toContain('!commercialSurfacesHidden()');
     expect(patrolIntelligenceHeaderSource).toContain(
       "from '@/components/shared/FilterButtonGroup'",
     );
-    expect(patrolIntelligenceHeaderSource).toContain('variant="segmented"');
+    expect(patrolIntelligenceHeaderSource).toContain("options.variant ?? 'segmented'");
     expect(patrolIntelligenceHeaderSource).not.toContain(
       'flex items-center bg-base rounded-md p-1 border shadow-inner',
     );
     expect(patrolIntelligenceHeaderSource).not.toContain(
       'flex-1 py-1.5 px-2 text-xs font-semibold rounded-md transition-all duration-200',
     );
-    expect(patrolIntelligenceSummarySource).toContain('StatusIndicatorBadge');
-    expect(patrolIntelligenceSummarySource).toContain('runtimeShellPresentation().badgeVariant');
-    expect(patrolIntelligenceSummarySource).not.toContain('runtimeShellPresentation().badgeClass');
-    expect(patrolIntelligenceSummarySource).not.toContain(
+    expect(patrolIntelligenceSurfaceSource).not.toContain('runtimeShellPresentation()');
+    expect(patrolIntelligenceSurfaceSource).not.toContain(
       'inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]',
     );
     expect(patrolSummaryPresentationSource).toContain('badgeVariant:');
@@ -3628,7 +3622,10 @@ describe('frontend resource type boundaries', () => {
     // Verify the symbol is imported from the model without prescribing a
     // specific single- vs multi-line import shape; usePatrolIntelligenceState
     // groups several patrolInvestigationContextModel imports together.
-    expect(patrolIntelligenceStateSource).toContain('buildPatrolInvestigationContextSummary');
+    expect(patrolIntelligenceStateSource).toContain(
+      'buildPatrolAssistantFindingHandoffFromUnifiedFinding',
+    );
+    expect(patrolIntelligenceStateSource).toContain('buildPatrolSettingsReadinessFailure');
     expect(patrolIntelligenceStateSource).toContain("from './patrolInvestigationContextModel'");
     expect(patrolIntelligenceStateSource).not.toContain('recent_changes?.length');
     expect(patrolIntelligenceStateSource).not.toContain('governed resource${');
@@ -3653,13 +3650,18 @@ describe('frontend resource type boundaries', () => {
       'record.proposed_fix.commands.join',
     );
     expect(patrolInvestigationContextModelSource).toContain('policy-covered resource');
-    expect(patrolIntelligenceHeaderSource).toContain('buildPatrolScheduleOptions');
+    expect(patrolIntelligenceHeaderSource).not.toContain('buildPatrolScheduleOptions');
     expect(patrolIntelligenceHeaderSource).not.toContain('getAIQuickstartCreditsPresentation');
     expect(patrolIntelligenceHeaderSource).not.toContain('quickstart_credits');
     expect(patrolIntelligenceHeaderSource).not.toContain('using_quickstart');
-    expect(patrolIntelligenceSummarySource).toContain('getPatrolAssessmentPresentation');
+    expect(patrolIntelligenceSurfaceSource).not.toContain('getPatrolAssessmentPresentation');
     expect(patrolIntelligenceWorkspaceSource).toContain('ApprovalBanner');
     expect(patrolIntelligenceWorkspaceSource).toContain('FindingsPanel');
+    expect(patrolIntelligenceStateSource).toContain('const historicalRegressionCount = createMemo');
+    expect(patrolIntelligenceStateSource).toContain('historicalRegressionCount,');
+    expect(patrolIntelligenceWorkspaceSource).toContain(
+      'historicalRegressionCount={state.historicalRegressionCount()}',
+    );
     expect(patrolIntelligenceBannersSource).not.toContain('trackUpgradeClicked');
     expect(patrolIntelligenceSurfaceSource).not.toContain(
       "summaryStats().criticalFindings > 0\n                        ? 'bg-red-50 dark:bg-red-900 border-red-200 dark:border-red-800'",
@@ -3682,7 +3684,7 @@ describe('frontend resource type boundaries', () => {
     expect(investigationSectionSource).toContain('getInvestigationSectionState');
     expect(investigationSectionSource).not.toContain('Loading investigation...');
     expect(investigationSectionSource).not.toContain(
-      'No investigation data available. Enable patrol autonomy to investigate findings.',
+      'No investigation yet. Patrol adds notes after it runs in a mode that investigates.',
     );
     expect(runHistoryPanelSource).toContain('getRunHistoryEmptyState');
     expect(runHistoryPanelSource).toContain('getRunHistoryLoadingState');
@@ -3706,6 +3708,10 @@ describe('frontend resource type boundaries', () => {
     expect(patrolEmptyStatePresentationSource).toContain('export function getRunHistoryEmptyState');
     expect(patrolEmptyStatePresentationSource).toContain(
       'export function getPatrolFindingsEmptyState',
+    );
+    expect(patrolEmptyStatePresentationSource).toContain('historicalRegressionCount?: number');
+    expect(patrolEmptyStatePresentationSource).toContain(
+      'HISTORICAL_REGRESSION_EMPTY_STATE_BODY',
     );
     expect(patrolRunPresentationSource).toContain('export function getRunHistoryLoadingState');
     expect(patrolRunPresentationSource).toContain('export function getToolCallsLoadingState');

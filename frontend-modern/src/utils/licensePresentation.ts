@@ -9,6 +9,7 @@ import {
   getSelfHostedPlanDefinitionForBillingTier,
   getSelfHostedPlanEntitlementSummary,
 } from '@/utils/selfHostedPlans';
+import { PATROL_CONTROL_PATH, PATROL_CONTROL_PATH_WITH_STARTER } from '@/routing/resourceLinks';
 import {
   getSelfHostedFeatureCatalogEntry,
   isDisplayableSelfHostedFeatureKey,
@@ -75,6 +76,12 @@ export interface LicenseExternalActionCopy {
   actionUrl: string;
 }
 
+export type SelfHostedPatrolControlActionIntent = 'patrol_control';
+
+export interface SelfHostedPatrolControlAction extends LicenseExternalActionCopy {
+  actionIntent: SelfHostedPatrolControlActionIntent;
+}
+
 export interface SelfHostedRecoveryPresentation {
   disclosureLabel: string;
   disclosureDescription: string;
@@ -101,19 +108,53 @@ export interface SelfHostedCurrentPlanPresentation {
   supplementalBadges: string[];
   supplementalSummary?: string;
   privateRuntimeAction?: LicenseExternalActionCopy;
+  patrolControlAction?: SelfHostedPatrolControlAction;
 }
 
-export interface SelfHostedActivationProofItem {
+export interface SelfHostedPlanStatusItem {
   label: string;
   statusLabel: string;
   state: 'active' | 'partial' | 'missing';
   detail: string;
 }
 
-export interface SelfHostedActivationProofPresentation {
+export interface SelfHostedPlanStatusPresentation {
   title: string;
   body: string;
-  items: SelfHostedActivationProofItem[];
+  items: SelfHostedPlanStatusItem[];
+}
+
+export interface SelfHostedPatrolOperatorStatus {
+  nextAction?: string;
+  progressLabel?: string;
+  patrolControlOperationsLoopStarterCount?: number;
+  patrolControlCompletedOperationsLoopCount?: number;
+  patrolControlResolvedOperationsLoopCount?: number;
+  patrolControlValueState?:
+    | 'not_started'
+    | 'in_progress'
+    | 'governed_decision_recorded'
+    | 'verified_needs_mcp'
+    | 'verified';
+  patrolAutonomyOperationsLoopStarterCount?: number;
+  patrolAutonomyCompletedOperationsLoopCount?: number;
+  patrolAutonomyResolvedOperationsLoopCount?: number;
+  patrolAutonomyValueState?:
+    | 'not_started'
+    | 'in_progress'
+    | 'governed_decision_recorded'
+    | 'verified_needs_mcp'
+    | 'verified';
+  proActivationOperationsLoopStarterCount?: number;
+  proActivationCompletedOperationsLoopCount?: number;
+  proActivationResolvedOperationsLoopCount?: number;
+  proActivationValueProofState?:
+    | 'not_started'
+    | 'in_progress'
+    | 'governed_decision_recorded'
+    | 'verified_needs_mcp'
+    | 'verified';
+  externalAgentReady: boolean;
 }
 
 export interface SelfHostedActivationSuccessPresentation extends LicenseInlineNotice {
@@ -121,6 +162,7 @@ export interface SelfHostedActivationSuccessPresentation extends LicenseInlineNo
   highlights: string[];
   actionLabel?: string;
   actionUrl?: string;
+  actionIntent?: SelfHostedPatrolControlActionIntent;
 }
 
 export type SelfHostedActivationSuccessSource = 'manual' | 'purchase';
@@ -162,6 +204,134 @@ const PRO_RUNTIME_REQUIRED_TIERS = new Set([
 ]);
 
 export const PULSE_PRO_DOWNLOAD_URL = 'https://pulserelay.pro/download.html';
+export const PATROL_CONTROL_STARTER_URL = PATROL_CONTROL_PATH_WITH_STARTER;
+
+const PATROL_CONTROL_CAPABILITIES = new Set(['ai_autofix']);
+
+const hasPatrolControlCapability = (entitlements?: LicenseCommercialEntitlements | null): boolean =>
+  Boolean(
+    entitlements?.capabilities?.some((capability) =>
+      PATROL_CONTROL_CAPABILITIES.has(capability.trim().toLowerCase()),
+    ),
+  );
+
+const normalizeStatusCount = (value?: number | null): number => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return 0;
+  }
+  return Math.max(0, Math.trunc(value));
+};
+
+const getFirstPartyPatrolControlCount = (
+  patrolControlCount?: number | null,
+  patrolAutonomyCompatibilityCount?: number | null,
+  proActivationAliasCount?: number | null,
+): number => {
+  const aggregatePatrolControlCount = normalizeStatusCount(
+    patrolControlCount ?? patrolAutonomyCompatibilityCount,
+  );
+  return Math.max(0, aggregatePatrolControlCount - normalizeStatusCount(proActivationAliasCount));
+};
+
+const getPatrolControlStarterCount = (status?: SelfHostedPatrolOperatorStatus | null): number =>
+  getFirstPartyPatrolControlCount(
+    status?.patrolControlOperationsLoopStarterCount,
+    status?.patrolAutonomyOperationsLoopStarterCount,
+    status?.proActivationOperationsLoopStarterCount,
+  );
+
+const getPatrolControlCompletedCount = (status?: SelfHostedPatrolOperatorStatus | null): number =>
+  getFirstPartyPatrolControlCount(
+    status?.patrolControlCompletedOperationsLoopCount,
+    status?.patrolAutonomyCompletedOperationsLoopCount,
+    status?.proActivationCompletedOperationsLoopCount,
+  );
+
+const getPatrolControlResolvedCount = (status?: SelfHostedPatrolOperatorStatus | null): number =>
+  getFirstPartyPatrolControlCount(
+    status?.patrolControlResolvedOperationsLoopCount,
+    status?.patrolAutonomyResolvedOperationsLoopCount,
+    status?.proActivationResolvedOperationsLoopCount,
+  );
+
+const getPatrolControlValueState = (
+  status?: SelfHostedPatrolOperatorStatus | null,
+): SelfHostedPatrolOperatorStatus['patrolControlValueState'] =>
+  getPatrolControlStarterCount(status) > 0 ||
+  getPatrolControlCompletedCount(status) > 0 ||
+  getPatrolControlResolvedCount(status) > 0
+    ? (status?.patrolControlValueState ?? status?.patrolAutonomyValueState)
+    : undefined;
+
+const hasVerifiedPatrolOperatorOutcome = (
+  status?: SelfHostedPatrolOperatorStatus | null,
+): boolean => {
+  const resolvedCount = getPatrolControlResolvedCount(status);
+  const valueProofState = getPatrolControlValueState(status);
+  return (
+    valueProofState === 'verified' ||
+    valueProofState === 'verified_needs_mcp' ||
+    (!valueProofState && resolvedCount > 0)
+  );
+};
+
+const hasGovernedDecisionOnlyPatrolOperatorOutcome = (
+  status?: SelfHostedPatrolOperatorStatus | null,
+): boolean => {
+  const completedCount = getPatrolControlCompletedCount(status);
+  const resolvedCount = getPatrolControlResolvedCount(status);
+  const valueProofState = getPatrolControlValueState(status);
+  return (
+    valueProofState === 'governed_decision_recorded' ||
+    (!valueProofState && completedCount > 0 && resolvedCount === 0)
+  );
+};
+
+type PatrolControlActionStage = 'set' | 'continue' | 'decision';
+
+const getPatrolControlActionStage = (
+  status?: SelfHostedPatrolOperatorStatus | null,
+): PatrolControlActionStage => {
+  if (hasGovernedDecisionOnlyPatrolOperatorOutcome(status)) {
+    return 'decision';
+  }
+  const completedCount = getPatrolControlCompletedCount(status);
+  const resolvedCount = getPatrolControlResolvedCount(status);
+  const starterCount = getPatrolControlStarterCount(status);
+  if (
+    !hasVerifiedPatrolOperatorOutcome(status) &&
+    (starterCount > 0 || completedCount > 0 || resolvedCount > 0)
+  ) {
+    return 'continue';
+  }
+
+  return 'set';
+};
+
+const getPatrolControlActionLabel = (status?: SelfHostedPatrolOperatorStatus | null): string => {
+  switch (getPatrolControlActionStage(status)) {
+    case 'decision':
+      return 'Review Patrol decision';
+    case 'continue':
+      return 'Open Patrol';
+    case 'set':
+      return PATROL_CONTROL_ACTION.actionLabel;
+  }
+};
+
+const getPatrolControlActionUrl = (status?: SelfHostedPatrolOperatorStatus | null): string => {
+  const stage = getPatrolControlActionStage(status);
+  if (stage === 'decision') {
+    return PATROL_CONTROL_PATH;
+  }
+  return PATROL_CONTROL_STARTER_URL;
+};
+
+const PATROL_CONTROL_ACTION: SelfHostedPatrolControlAction = {
+  actionLabel: 'Choose Patrol mode',
+  actionUrl: PATROL_CONTROL_STARTER_URL,
+  actionIntent: 'patrol_control',
+};
 
 const isActivePaidRuntimeState = (subscriptionState?: string | null): boolean => {
   const normalized = (subscriptionState || '').trim().toLowerCase();
@@ -212,8 +382,39 @@ const getPulseProRuntimeMismatchDetail = (
   entitlements?: Pick<LicenseCommercialEntitlements, 'runtime'> | null,
 ): string =>
   getPulseProRuntimeBuild(entitlements) === 'community'
-    ? `This install reports the community runtime. Open ${PULSE_PRO_DOWNLOAD_URL} with your activation key and install the private Pulse Pro runtime; public GitHub releases and the public Docker image do not include Pro-only runtime hooks.`
-    : `This install is not reporting a Pulse Pro runtime identity. Open ${PULSE_PRO_DOWNLOAD_URL} with your activation key and install the private Pulse Pro runtime; public GitHub releases and the public Docker image do not include Pro-only runtime hooks.`;
+    ? `This install reports the community runtime. Open ${PULSE_PRO_DOWNLOAD_URL} with your license key and install the private Pulse Pro runtime; public GitHub releases and the public Docker image do not include Pro-only runtime hooks.`
+    : `This install is not reporting a Pulse Pro runtime identity. Open ${PULSE_PRO_DOWNLOAD_URL} with your license key and install the private Pulse Pro runtime; public GitHub releases and the public Docker image do not include Pro-only runtime hooks.`;
+
+const getPatrolControlAction = ({
+  entitlements,
+  patrolOperatorStatus,
+  planDefinition,
+  subscriptionState,
+}: {
+  entitlements?: LicenseCommercialEntitlements | null;
+  patrolOperatorStatus?: SelfHostedPatrolOperatorStatus | null;
+  planDefinition: ReturnType<typeof getSelfHostedPlanDefinitionForBillingTier>;
+  subscriptionState?: string | null;
+}): SelfHostedPatrolControlAction | undefined => {
+  const normalizedState = (subscriptionState || '').trim().toLowerCase();
+  if (normalizedState !== 'active' && normalizedState !== 'grace' && normalizedState !== 'trial') {
+    return undefined;
+  }
+  if (planDefinition?.tier !== 'pro') {
+    return undefined;
+  }
+  if (!hasPatrolControlCapability(entitlements)) {
+    return undefined;
+  }
+  if (hasPulseProRuntimeMismatch(entitlements)) {
+    return undefined;
+  }
+  return {
+    ...PATROL_CONTROL_ACTION,
+    actionLabel: getPatrolControlActionLabel(patrolOperatorStatus),
+    actionUrl: getPatrolControlActionUrl(patrolOperatorStatus),
+  };
+};
 
 export const getLicenseTierLabel = (tier?: string | null): string => {
   const normalized = (tier || '').trim().toLowerCase();
@@ -349,10 +550,7 @@ const getSelfHostedPlanComparisonHighlights = (
     return [];
   }
   const highlights: string[] = [];
-  for (const feature of [
-    ...planDefinition.entitlementHighlights,
-    ...planDefinition.includedExtras,
-  ]) {
+  for (const feature of planDefinition.highlights) {
     if (!feature || highlights.includes(feature)) {
       continue;
     }
@@ -367,11 +565,46 @@ const getSelfHostedPlanComparisonHighlights = (
 const getSelfHostedActivePlanSummary = (
   planLabel: string,
   planDefinition: ReturnType<typeof getSelfHostedPlanDefinitionForBillingTier>,
+  patrolOperatorStatus?: SelfHostedPatrolOperatorStatus | null,
 ): string | null => {
   if (!planDefinition) {
     return null;
   }
+  if (planDefinition.tier === 'pro') {
+    switch (getPatrolControlActionStage(patrolOperatorStatus)) {
+      case 'decision':
+        return `${planLabel} is active on this instance. Review the current Patrol decision.`;
+      case 'continue':
+        return `${planLabel} is active on this instance. Open Patrol to continue current work.`;
+      case 'set':
+        break;
+    }
+  }
   return getSelfHostedPlanEntitlementSummary(planDefinition.tier, planLabel);
+};
+
+const getSelfHostedActivationPatrolControlBody = ({
+  actionStage,
+  planLabel,
+  source,
+}: {
+  actionStage: PatrolControlActionStage;
+  planLabel: string;
+  source: SelfHostedActivationSuccessSource;
+}): string => {
+  const prefix =
+    source === 'purchase'
+      ? `Checkout completed and ${planLabel} is active.`
+      : `The license key was accepted and ${planLabel} is active.`;
+
+  switch (actionStage) {
+    case 'decision':
+      return `${prefix} Review the current Patrol decision.`;
+    case 'continue':
+      return `${prefix} Open Patrol to continue current work.`;
+    case 'set':
+      return `${prefix} Choose Patrol mode.`;
+  }
 };
 
 export const getSelfHostedPlanComparisonPresentation = ({
@@ -395,7 +628,7 @@ export const getSelfHostedPlanComparisonPresentation = ({
           return null;
         }
         return {
-          title: `What ${getSelfHostedPlanLabel(tier)} adds`,
+          title: `${getSelfHostedPlanLabel(tier)} plan`,
           body: definition.comparisonSummary,
           highlights: getSelfHostedPlanComparisonHighlights(definition),
         };
@@ -407,9 +640,11 @@ export const getSelfHostedPlanComparisonPresentation = ({
 export const getSelfHostedCurrentPlanPresentation = ({
   entitlements,
   displayableCapabilities,
+  patrolOperatorStatus,
 }: {
   entitlements?: LicenseCommercialEntitlements | null;
   displayableCapabilities: string[];
+  patrolOperatorStatus?: SelfHostedPatrolOperatorStatus | null;
 }): SelfHostedCurrentPlanPresentation => {
   const current = entitlements;
   if (!current) {
@@ -437,6 +672,12 @@ export const getSelfHostedCurrentPlanPresentation = ({
   const runtimeMismatch = hasPulseProRuntimeMismatch(current);
   const unlockedFeaturesLabel =
     normalizedTier === 'free' ? 'Included on this instance' : 'Primary capabilities';
+  const patrolControlAction = getPatrolControlAction({
+    entitlements: current,
+    patrolOperatorStatus,
+    planDefinition,
+    subscriptionState: current.subscription_state,
+  });
 
   const supplementalBadges: string[] = [];
   const supplementalDetails: string[] = [];
@@ -460,13 +701,13 @@ export const getSelfHostedCurrentPlanPresentation = ({
     if (runtimeMismatch) {
       supplementalBadges.push('Pro runtime missing');
       supplementalDetails.unshift(
-        'Public GitHub releases and the public Docker image are community builds. Open Pulse Pro downloads with your activation key to install the private Pulse Pro runtime and test Pro-only runtime hooks during the trial.',
+        'Public GitHub releases and the public Docker image are community builds. Open Pulse Pro downloads with your license key to install the private Pulse Pro runtime and test Pro-only runtime hooks during the trial.',
       );
     }
     return {
       title: `Current plan: ${planLabel} Trial`,
       body: runtimeMismatch
-        ? `${planLabel} trial entitlement is active, but this install is ${getPulseProRuntimeMismatchSummary(current)}. Open Pulse Pro downloads with your activation key and install the private Pulse Pro runtime to use Pro-only features.`
+        ? `${planLabel} trial entitlement is active, but this install is ${getPulseProRuntimeMismatchSummary(current)}. Open Pulse Pro downloads with your license key and install the private Pulse Pro runtime to use Pro-only features.`
         : unlockedFeatures.length > 0
           ? `${planLabel} trial capabilities are active on this instance right now.`
           : `${planLabel} trial entitlement is being confirmed for this instance.`,
@@ -476,6 +717,7 @@ export const getSelfHostedCurrentPlanPresentation = ({
       includedExtras,
       supplementalBadges,
       supplementalSummary: supplementalDetails.join(' '),
+      ...(patrolControlAction ? { patrolControlAction } : {}),
       ...(runtimeMismatch
         ? {
             privateRuntimeAction: {
@@ -492,7 +734,7 @@ export const getSelfHostedCurrentPlanPresentation = ({
       title: 'Current plan: Community',
       body:
         getSelfHostedActivePlanSummary('Community', planDefinition) ||
-        'Community is active on this instance. Self-hosted monitoring, 7-day metric history, Pulse Patrol (BYOK), and update alerts are included here.',
+        'Community is active on this instance. Self-hosted monitoring, 7-day metric history, watch-only Patrol, and update alerts are included here.',
       unlockedFeaturesLabel,
       unlockedFeatures,
       includedExtras,
@@ -509,7 +751,7 @@ export const getSelfHostedCurrentPlanPresentation = ({
       );
       return {
         title: `Current plan: ${planLabel}`,
-        body: `${planLabel} is active, but this install is ${getPulseProRuntimeMismatchSummary(current)}. Open Pulse Pro downloads with your activation key and install the private Pulse Pro runtime to use Pro-only features such as Audit Log, Audit Webhooks, RBAC, and governed remediation.`,
+        body: `${planLabel} is active, but this install is ${getPulseProRuntimeMismatchSummary(current)}. Open Pulse Pro downloads with your license key and install the private Pulse Pro runtime to use Pro-only features such as Patrol mode, Audit Log, Audit Webhooks, and RBAC.`,
         unlockedFeaturesLabel,
         unlockedFeatures,
         includedExtrasLabel: includedExtras.length > 0 ? 'Included extras' : undefined,
@@ -526,7 +768,7 @@ export const getSelfHostedCurrentPlanPresentation = ({
     return {
       title: `Current plan: ${planLabel}`,
       body:
-        getSelfHostedActivePlanSummary(planLabel, planDefinition) ||
+        getSelfHostedActivePlanSummary(planLabel, planDefinition, patrolOperatorStatus) ||
         `${planLabel} is active on this instance. These capabilities are available right now.`,
       unlockedFeaturesLabel,
       unlockedFeatures,
@@ -534,6 +776,7 @@ export const getSelfHostedCurrentPlanPresentation = ({
       includedExtras,
       supplementalBadges,
       supplementalSummary: supplementalDetails.join(' '),
+      ...(patrolControlAction ? { patrolControlAction } : {}),
     };
   }
 
@@ -548,10 +791,10 @@ export const getSelfHostedCurrentPlanPresentation = ({
   };
 };
 
-const getCapabilityProofState = (
+const getCapabilityStatusState = (
   capabilities: Set<string>,
   requiredCapabilities: readonly string[],
-): SelfHostedActivationProofItem['state'] => {
+): SelfHostedPlanStatusItem['state'] => {
   const presentCount = requiredCapabilities.filter((capability) =>
     capabilities.has(capability),
   ).length;
@@ -561,7 +804,7 @@ const getCapabilityProofState = (
   return presentCount > 0 ? 'partial' : 'missing';
 };
 
-const getProofStatusLabel = (state: SelfHostedActivationProofItem['state']): string => {
+const getStatusStateLabel = (state: SelfHostedPlanStatusItem['state']): string => {
   switch (state) {
     case 'active':
       return 'Active';
@@ -572,7 +815,7 @@ const getProofStatusLabel = (state: SelfHostedActivationProofItem['state']): str
   }
 };
 
-const buildCapabilityProofItem = ({
+const buildCapabilityStatusItem = ({
   capabilities,
   label,
   requiredCapabilities,
@@ -586,19 +829,20 @@ const buildCapabilityProofItem = ({
   activeDetail: string;
   partialDetail: string;
   missingDetail: string;
-}): SelfHostedActivationProofItem => {
-  const state = getCapabilityProofState(capabilities, requiredCapabilities);
+}): SelfHostedPlanStatusItem => {
+  const state = getCapabilityStatusState(capabilities, requiredCapabilities);
   return {
     label,
     state,
-    statusLabel: getProofStatusLabel(state),
+    statusLabel: getStatusStateLabel(state),
     detail: state === 'active' ? activeDetail : state === 'partial' ? partialDetail : missingDetail,
   };
 };
 
-export const getSelfHostedActivationProofPresentation = (
+export const getSelfHostedPlanStatusPresentation = (
   entitlements?: LicenseCommercialEntitlements | null,
-): SelfHostedActivationProofPresentation | null => {
+  _patrolOperatorStatus?: SelfHostedPatrolOperatorStatus | null,
+): SelfHostedPlanStatusPresentation | null => {
   const planDefinition = getSelfHostedPlanDefinitionForBillingTier(entitlements?.tier);
   if (!entitlements || !planDefinition || planDefinition.tier === 'community') {
     return null;
@@ -615,7 +859,8 @@ export const getSelfHostedActivationProofPresentation = (
   const capabilities = new Set(
     (entitlements.capabilities || []).map((capability) => capability.trim().toLowerCase()),
   );
-  const items: SelfHostedActivationProofItem[] = [];
+  const isProPlan = planDefinition.tier === 'pro';
+  const items: SelfHostedPlanStatusItem[] = [];
   if (requiresPulseProRuntime(entitlements)) {
     const hasProRuntime = hasPulseProRuntime(entitlements);
     items.push({
@@ -623,21 +868,21 @@ export const getSelfHostedActivationProofPresentation = (
       state: hasProRuntime ? 'active' : 'missing',
       statusLabel: hasProRuntime ? 'Active' : 'Needs attention',
       detail: hasProRuntime
-        ? 'This install reports the private Pulse Pro runtime.'
+        ? 'This install is running the private Pulse Pro runtime required for Patrol mode and Pro-only actions.'
         : getPulseProRuntimeMismatchDetail(entitlements),
     });
   }
   items.push(
-    buildCapabilityProofItem({
+    buildCapabilityStatusItem({
       capabilities,
       label: 'Remote access, pairing, and push',
       requiredCapabilities: ['relay', 'mobile_app', 'push_notifications'],
       activeDetail:
-        'Relay, Pulse Mobile pairing, and push notification capabilities are present in this entitlement payload.',
+        'Relay, Pulse Mobile pairing, and push notifications are available on this instance.',
       partialDetail:
-        'Some Relay convenience capabilities are present. Refresh or recover activation if remote access, Pulse Mobile pairing, or push stays unavailable.',
+        'Some remote-access capabilities are available. Refresh the plan or open recovery if remote access, Pulse Mobile pairing, or push stays unavailable.',
       missingDetail:
-        'Expected Relay convenience capabilities are not present. Refresh or recover activation before treating this plan as fully active.',
+        'Remote access, Pulse Mobile pairing, or push notifications are not available yet. Refresh the plan or open recovery before relying on Relay.',
     }),
   );
 
@@ -652,45 +897,50 @@ export const getSelfHostedActivationProofPresentation = (
   items.push({
     label: `${requiredHistoryDays}-day metric history`,
     state: historyState,
-    statusLabel: getProofStatusLabel(historyState),
+    statusLabel: getStatusStateLabel(historyState),
     detail:
       historyState === 'active'
-        ? `This instance reports ${actualHistoryDays} days of metric history in its entitlement payload.`
+        ? isProPlan
+          ? `Patrol has ${actualHistoryDays} days of metric history available for investigation context.`
+          : `This instance has ${actualHistoryDays} days of metric history available.`
         : historyState === 'partial'
           ? `This instance reports ${actualHistoryDays} days of metric history, below the expected ${requiredHistoryDays} days.`
-          : `This instance has not reported a metric-history entitlement yet; expected ${requiredHistoryDays} days.`,
+          : `This instance does not have metric-history access yet; expected ${requiredHistoryDays} days.`,
   });
 
   if (planDefinition.tier === 'pro') {
     items.push(
-      buildCapabilityProofItem({
+      buildCapabilityStatusItem({
         capabilities,
-        label: 'Root-cause analysis and remediation',
+        label: 'Patrol investigation and remediation',
         requiredCapabilities: ['ai_alerts', 'ai_autofix'],
         activeDetail:
-          'Alert-triggered root-cause analysis and safe remediation workflow capabilities are present.',
+          'Patrol can investigate alert-triggered issues and handle governed actions within the selected Patrol mode.',
         partialDetail:
-          'Some Pro operations capabilities are present. Refresh or recover activation if alert analysis or remediation stays unavailable.',
+          'Some Patrol capability is available, but investigation or remediation may not be fully enabled yet.',
         missingDetail:
-          'Expected Pro operations capabilities are not present. Refresh or recover activation before treating this Pro install as complete.',
+          'Patrol investigation or remediation capability is missing. Refresh the plan or open recovery before relying on Patrol to handle issues.',
       }),
-      buildCapabilityProofItem({
+      buildCapabilityStatusItem({
         capabilities,
         label: 'Team and admin controls',
         requiredCapabilities: ['rbac', 'audit_logging', 'advanced_reporting', 'agent_profiles'],
-        activeDetail: 'RBAC, audit logging, reporting, and agent-profile capabilities are present.',
+        activeDetail:
+          'RBAC, audit logging, reporting, and agent profiles are available for governed operations.',
         partialDetail:
-          'Some team/admin capabilities are present. Refresh or recover activation if any admin tools stay unavailable.',
+          'Some team/admin capabilities are available. Refresh the plan or open recovery if any admin controls stay unavailable.',
         missingDetail:
-          'Expected team/admin capabilities are not present. Refresh or recover activation before relying on this Pro install.',
+          'Team/admin controls are not available yet. Refresh the plan or open recovery before relying on this Pro install.',
       }),
     );
   }
 
   const planLabel = getSelfHostedPlanLabel(entitlements.tier);
   return {
-    title: `${planLabel} value proof`,
-    body: "These checks come from this instance's entitlement and runtime payloads, not from public pricing copy.",
+    title: isProPlan ? 'Capability details' : `${planLabel} status`,
+    body: isProPlan
+      ? 'Open this only when a Pro capability looks unavailable. Normal setup is choosing Patrol mode.'
+      : 'These checks show the capabilities this instance can use right now, based on its entitlement and runtime payloads.',
     items,
   };
 };
@@ -698,10 +948,12 @@ export const getSelfHostedActivationProofPresentation = (
 export const getSelfHostedActivationSuccessPresentation = ({
   entitlements,
   displayableCapabilities,
+  patrolOperatorStatus,
   source,
 }: {
   entitlements?: LicenseCommercialEntitlements | null;
   displayableCapabilities: string[];
+  patrolOperatorStatus?: SelfHostedPatrolOperatorStatus | null;
   source: SelfHostedActivationSuccessSource | null;
 }): SelfHostedActivationSuccessPresentation | null => {
   const current = entitlements;
@@ -725,6 +977,13 @@ export const getSelfHostedActivationSuccessPresentation = ({
     displayableCapabilities,
   });
   const runtimeMismatch = hasPulseProRuntimeMismatch(current);
+  const patrolControlAction = getPatrolControlAction({
+    entitlements: current,
+    patrolOperatorStatus,
+    planDefinition: getSelfHostedPlanDefinitionForBillingTier(current.tier),
+    subscriptionState: current.subscription_state,
+  });
+  const patrolControlActionStage = getPatrolControlActionStage(patrolOperatorStatus);
 
   return {
     tone: runtimeMismatch
@@ -734,11 +993,23 @@ export const getSelfHostedActivationSuccessPresentation = ({
     body:
       source === 'purchase'
         ? runtimeMismatch
-          ? `Checkout completed and the license is active. This install is ${getPulseProRuntimeMismatchSummary(current)}, so open Pulse Pro downloads with your activation key and install the private Pulse Pro runtime before using Pro-only features.`
-          : `Checkout completed and this instance is now running ${planLabel}.`
+          ? `Checkout completed and the license is active. This install is ${getPulseProRuntimeMismatchSummary(current)}, so open Pulse Pro downloads with your license key and install the private Pulse Pro runtime before using Pro-only features.`
+          : patrolControlAction
+            ? getSelfHostedActivationPatrolControlBody({
+                actionStage: patrolControlActionStage,
+                planLabel,
+                source,
+              })
+            : `Checkout completed and this instance is now running ${planLabel}.`
         : runtimeMismatch
-          ? `The activation key was accepted. This install is ${getPulseProRuntimeMismatchSummary(current)}, so open Pulse Pro downloads with your activation key and install the private Pulse Pro runtime before using Pro-only features.`
-          : `The activation key was accepted and this instance is now running ${planLabel}.`,
+          ? `The license key was accepted. This install is ${getPulseProRuntimeMismatchSummary(current)}, so open Pulse Pro downloads with your license key and install the private Pulse Pro runtime before using Pro-only features.`
+          : patrolControlAction
+            ? getSelfHostedActivationPatrolControlBody({
+                actionStage: patrolControlActionStage,
+                planLabel,
+                source,
+              })
+            : `The license key was accepted and this instance is now running ${planLabel}.`,
     highlightsLabel: runtimeMismatch ? 'Licensed capabilities' : 'Available now on this instance',
     highlights,
     ...(runtimeMismatch
@@ -746,22 +1017,28 @@ export const getSelfHostedActivationSuccessPresentation = ({
           actionLabel: 'Open Pulse Pro downloads',
           actionUrl: PULSE_PRO_DOWNLOAD_URL,
         }
-      : {}),
+      : patrolControlAction
+        ? {
+            actionLabel: patrolControlAction.actionLabel,
+            actionUrl: patrolControlAction.actionUrl,
+            actionIntent: patrolControlAction.actionIntent,
+          }
+        : {}),
   };
 };
 
 export const getCommercialMigrationActionText = (action?: string): string => {
   switch (action) {
     case 'retry_activation':
-      return 'Retry activation from this instance.';
+      return 'Retry from this instance.';
     case 'use_v6_activation_key':
-      return 'Use the current v6 activation key for this purchase.';
+      return 'Use the current v6 key for this purchase.';
     case 'enter_supported_v5_key':
       return 'Retry with the original v5 Pro/Lifetime key from this instance.';
     case 'free_installation_slot':
       return 'Contact support@pulserelay.pro to release an installation you no longer use or to raise the limit.';
     default:
-      return 'Review the activation state from this instance before trying again.';
+      return 'Review the plan state from this instance before trying again.';
   }
 };
 
@@ -781,7 +1058,7 @@ export const getCommercialMigrationNotice = (
         break;
       case 'exchange_conflict':
         body =
-          'Pulse detected a paid v5 license, but another v6 activation handoff is still settling.';
+          'Pulse detected a paid v5 license, but another v6 license handoff is still settling.';
         break;
       case 'exchange_unavailable':
       default:
@@ -855,8 +1132,8 @@ export const getPurchaseActivationNotice = (result?: string | null): LicenseInli
     case 'failed':
       return {
         tone: 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900 text-red-900 dark:text-red-100',
-        title: 'Activation needs attention',
-        body: 'Checkout completed, but Pulse could not finish local activation automatically. Review the plan state below, then open recovery if you already have a key from this purchase.',
+        title: 'Plan needs attention',
+        body: 'Checkout completed, but this instance could not apply the plan automatically. Review the current plan below, then open recovery if you already have a key from this purchase.',
       };
     case 'unavailable':
       return {
@@ -929,28 +1206,28 @@ export const getNoActiveSelfHostedActivationState = (): LicenseLoadingStateCopy 
 });
 
 export const SELF_HOSTED_RECOVERY_PRESENTATION: SelfHostedRecoveryPresentation = {
-  disclosureLabel: 'Use existing key',
+  disclosureLabel: 'Manual key recovery',
   disclosureDescription:
-    'Use this only if you already have an activation key or need to recover a legacy self-hosted purchase.',
-  fieldLabel: 'License or Activation Key',
-  fieldPlaceholder: 'Paste your license key or activation key',
+    'Normal checkout handles this automatically. Open this only if you already have a key or need to recover an older purchase.',
+  fieldLabel: 'License key',
+  fieldPlaceholder: 'Paste your license key',
   helpTextBeforeTerms:
-    'Paste the Pulse v6 activation key shown on the hosted checkout success page. A backup copy is also sent by email, but the hosted success page is the primary handoff. You can also paste a legacy Pulse v5 Pro/Lifetime license key and Pulse will exchange it automatically during activation when migration is available. By activating a license, you agree to the',
+    'Paste the key from the hosted checkout success page or email. Legacy Pulse v5 Pro/Lifetime keys can be migrated when supported. By applying a license, you agree to the',
   helpTextAfterTerms: '.',
   termsLabel: 'Terms of Service',
   privateRuntimeNotice: {
     title: 'Paid Docker and Linux installs use a private runtime',
-    body: 'Public GitHub releases and the public Docker image are community builds. They can accept an activation key, but Pro-only runtime hooks require the private Pulse Pro Docker image or Linux archive.',
+    body: 'Public GitHub releases and the public Docker image are community builds. Pro-only runtime hooks require the private Pulse Pro Docker image or Linux archive.',
     actionLabel: 'Open Pulse Pro downloads',
     actionUrl: PULSE_PRO_DOWNLOAD_URL,
   },
-  activateIdleLabel: 'Activate Key',
-  activatePendingLabel: 'Activating...',
-  clearIdleLabel: 'Clear Key',
+  activateIdleLabel: 'Apply key',
+  activatePendingLabel: 'Applying...',
+  clearIdleLabel: 'Clear key',
   clearPendingLabel: 'Clearing...',
   legacyNotice: {
     title: 'Legacy v5 license detected',
-    body: 'Pulse will try to exchange this key into the v6 activation model automatically. If the exchange cannot complete immediately, retry from this panel or use the self-serve retrieval flow to get the current v6 activation key.',
+    body: 'Pulse will try to migrate this key automatically. If migration is still pending, retry here or use self-serve retrieval to get the current v6 key.',
   },
 };
 

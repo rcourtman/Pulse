@@ -36,6 +36,19 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
     title: AI_SETTINGS_PANEL_TITLE,
     description: AI_SETTINGS_PANEL_DESCRIPTION,
   },
+  'system-ai-patrol': {
+    title: 'Patrol',
+    description: 'Set when Patrol runs, what starts it, and which model it uses.',
+  },
+  'system-ai-assistant': {
+    title: 'Assistant',
+    description: 'Configure Assistant chat behavior, chat action permissions, and sessions.',
+  },
+  'system-ai-discovery': {
+    title: 'Service Context',
+    description:
+      'Configure the model-backed service context Assistant and Patrol use. Infrastructure discovery and onboarding stay under Infrastructure.',
+  },
   'system-relay': {
     title: 'Remote Access',
     description: RELAY_SETTINGS_DESCRIPTION,
@@ -148,6 +161,18 @@ const SETTINGS_HEADER_META_KEYS = {
   'system-ai': {
     title: 'settings.header.systemAi.title',
     description: 'settings.header.systemAi.description',
+  },
+  'system-ai-patrol': {
+    title: 'settings.header.systemAiPatrol.title',
+    description: 'settings.header.systemAiPatrol.description',
+  },
+  'system-ai-assistant': {
+    title: 'settings.header.systemAiAssistant.title',
+    description: 'settings.header.systemAiAssistant.description',
+  },
+  'system-ai-discovery': {
+    title: 'settings.header.systemAiDiscovery.title',
+    description: 'settings.header.systemAiDiscovery.description',
   },
   'system-relay': {
     title: 'settings.header.systemRelay.title',

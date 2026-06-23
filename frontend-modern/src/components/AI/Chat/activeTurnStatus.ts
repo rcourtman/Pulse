@@ -114,6 +114,7 @@ const sanitizeWorkflowStatusMessage = (message: string, tool?: string) => {
   }
 
   return sanitized
+    .replace(/\bgoverned tools\b/gi, 'governed actions')
     .replace(/\s+\./g, '.')
     .replace(/\s{2,}/g, ' ')
     .trim();

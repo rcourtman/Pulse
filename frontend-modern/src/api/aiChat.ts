@@ -2,6 +2,7 @@ import { apiFetchJSON, apiFetch } from '@/utils/apiClient';
 import { assertAPIResponseOK } from './responseUtils';
 import { logger } from '@/utils/logger';
 import type { AIChatStreamEvent } from './generated/aiChatEvents';
+import type { AgentSurfaceToolContract } from './agentCapabilities';
 import { consumeJSONEventStream } from './streaming';
 import { maybeRunAIChatDevStreamFixture } from './aiChatDevStreamFixture';
 
@@ -197,6 +198,34 @@ export interface AIStatus {
   engine: string;
 }
 
+export interface AssistantWorkflowPromptRenderRequest {
+  name: string;
+  arguments?: Record<string, string>;
+}
+
+export const PULSE_OPERATIONS_LOOP_WORKFLOW_PROMPT_NAME = 'pulse_operations_loop';
+export const PULSE_PATROL_WORKFLOW_PROMPT_SURFACE = 'pulse_patrol';
+export const PULSE_PATROL_CONTROL_WORKFLOW_PROMPT_SURFACE = 'patrol_control';
+export const PULSE_PATROL_AUTONOMY_WORKFLOW_PROMPT_SURFACE = 'patrol_autonomy';
+export const PULSE_PRO_ACTIVATION_WORKFLOW_PROMPT_SURFACE = 'pulse_pro_activation';
+
+export type AssistantWorkflowPromptActivitySurface =
+  | 'pulse_assistant'
+  | 'pulse_patrol'
+  | 'patrol_control'
+  | 'patrol_autonomy'
+  | 'pulse_pro_activation';
+
+export interface AssistantWorkflowPromptActivityRequest {
+  name: string;
+  surface?: AssistantWorkflowPromptActivitySurface;
+}
+
+export interface AssistantWorkflowPromptRenderResponse {
+  description: string;
+  text: string;
+}
+
 // AI Agent (build, code, etc.) with specific permissions and model
 export interface Agent {
   name: string;
@@ -217,6 +246,35 @@ export class AIChatAPI {
   // Get AI status
   static async getStatus(): Promise<AIStatus> {
     return apiFetchJSON(`${this.baseUrl}/status`) as Promise<AIStatus>;
+  }
+
+  // Get the live native Assistant surface tool contract for the current runtime mode.
+  static async getAssistantSurfaceTools(): Promise<AgentSurfaceToolContract> {
+    return apiFetchJSON(
+      `${this.baseUrl}/assistant/surface-tools`,
+    ) as Promise<AgentSurfaceToolContract>;
+  }
+
+  // Render a shared Pulse Intelligence workflow prompt for the native Assistant surface.
+  static async renderWorkflowPrompt(
+    request: AssistantWorkflowPromptRenderRequest,
+  ): Promise<AssistantWorkflowPromptRenderResponse> {
+    return apiFetchJSON(`${this.baseUrl}/workflow-prompts/render`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    }) as Promise<AssistantWorkflowPromptRenderResponse>;
+  }
+
+  // Record that a first-party Pulse surface started a shared workflow prompt.
+  static async recordWorkflowPromptActivity(
+    request: AssistantWorkflowPromptActivityRequest,
+  ): Promise<void> {
+    await apiFetch(`${this.baseUrl}/workflow-prompts/activity`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
   }
 
   // List all chat sessions. Normalizes a null/non-array payload (e.g. a server
@@ -310,9 +368,7 @@ export class AIChatAPI {
   }
 
   // Summarize a session (compress context when nearing limits)
-  static async summarizeSession(
-    sessionId: string,
-  ): Promise<ChatSessionCompactionResult> {
+  static async summarizeSession(sessionId: string): Promise<ChatSessionCompactionResult> {
     return apiFetchJSON(`${this.baseUrl}/sessions/${encodeURIComponent(sessionId)}/summarize`, {
       method: 'POST',
     }) as Promise<ChatSessionCompactionResult>;

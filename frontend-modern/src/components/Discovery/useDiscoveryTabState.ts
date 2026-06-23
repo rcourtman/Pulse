@@ -198,7 +198,9 @@ export function useDiscoveryTabState(props: DiscoveryTabStateProps) {
 
   const handleTriggerDiscovery = async (force = false) => {
     if (!discoveryFeatureEnabled()) {
-      setScanError('AI discovery is disabled in Settings -> AI.');
+      setScanError(
+        'Service context is disabled in Settings -> Pulse Intelligence -> Service Context.',
+      );
       return;
     }
 

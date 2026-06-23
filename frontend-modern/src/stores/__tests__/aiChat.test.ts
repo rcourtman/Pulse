@@ -8,6 +8,11 @@ const aiChatSource = readFileSync(
   resolve(process.cwd(), 'src/components/AI/Chat/index.tsx'),
   'utf8',
 );
+const aiChatStoreSource = readFileSync(resolve(process.cwd(), 'src/stores/aiChat.ts'), 'utf8');
+const useChatSource = readFileSync(
+  resolve(process.cwd(), 'src/components/AI/Chat/hooks/useChat.ts'),
+  'utf8',
+);
 
 describe('aiChatStore', () => {
   beforeEach(() => {
@@ -62,6 +67,13 @@ describe('aiChatStore', () => {
 
     aiChatStore.requestCommand('providers');
     expect(aiChatStore.commandRequest).toMatchObject({ action: 'providers' });
+  });
+
+  it('uses native Assistant terminology for browser-owned chat shell state', () => {
+    expect(aiChatStoreSource).not.toContain('Pulse AI');
+    expect(useChatSource).not.toContain('Pulse AI');
+    expect(aiChatStoreSource).toContain('Pulse Assistant');
+    expect(useChatSource).toContain('Send answer to Pulse Assistant via API');
   });
 
   it('sets legacy context and clears it', () => {
@@ -139,8 +151,8 @@ describe('aiChatStore', () => {
       briefing: {
         sourceLabel: 'Pulse Patrol',
         title: 'Investigation record attached',
-        actionLabel: 'Open Patrol provider settings',
-        actionHref: '/settings/system-ai',
+        actionLabel: 'Open Provider & Models',
+        actionHref: '/settings/pulse-intelligence/provider',
       },
       handoffMetadata: {
         kind: 'patrol_finding',
@@ -149,8 +161,8 @@ describe('aiChatStore', () => {
     expect(aiChatStore.isOpen).toBe(true);
     expect(aiChatStore.context.targetId).toBe('vm-101');
     expect(aiChatStore.context.briefing?.title).toBe('Investigation record attached');
-    expect(aiChatStore.context.briefing?.actionLabel).toBe('Open Patrol provider settings');
-    expect(aiChatStore.context.briefing?.actionHref).toBe('/settings/system-ai');
+    expect(aiChatStore.context.briefing?.actionLabel).toBe('Open Provider & Models');
+    expect(aiChatStore.context.briefing?.actionHref).toBe('/settings/pulse-intelligence/provider');
     expect(aiChatStore.context.handoffMetadata).toMatchObject({
       kind: 'patrol_finding',
     });
@@ -208,6 +220,7 @@ describe('aiChatStore', () => {
         runStatus: 'error',
         runtimeFailure: true,
       },
+      preferredWorkflowPromptName: 'pulse_operations_loop',
     });
 
     aiChatStore.clearRequestHandoffPayload();
@@ -216,6 +229,7 @@ describe('aiChatStore', () => {
     expect(aiChatStore.context.handoffResources).toBeUndefined();
     expect(aiChatStore.context.handoffActions).toBeUndefined();
     expect(aiChatStore.context.handoffMetadata).toBeUndefined();
+    expect(aiChatStore.context.preferredWorkflowPromptName).toBeUndefined();
     expect(aiChatStore.context.targetId).toBe('storage-1');
     expect(aiChatStore.context.findingId).toBe('finding-1');
     expect(aiChatStore.context.autonomousMode).toBe(false);

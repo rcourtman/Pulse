@@ -432,8 +432,8 @@ describe('AICostDashboard', () => {
       baseSummary({
         targets: [
           {
-            target_type: 'vm',
-            target_id: '100',
+            target_type: 'assistant_session_title',
+            target_id: '7f5941d9-a503-416d-b84e-5a46c9e1e11f',
             calls: 5,
             input_tokens: 10000,
             output_tokens: 2000,
@@ -446,9 +446,11 @@ describe('AICostDashboard', () => {
     );
     renderDashboard();
     await waitFor(() => {
-      expect(screen.getByText('Top targets')).toBeInTheDocument();
+      expect(screen.getByText('Usage by task')).toBeInTheDocument();
     });
-    expect(screen.getByText('vm:100')).toBeInTheDocument();
+    expect(screen.getByText('Assistant sessions')).toBeInTheDocument();
+    expect(screen.queryByText(/assistant_session_title/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/7f5941d9/)).not.toBeInTheDocument();
     expect(screen.getByText('12,000')).toBeInTheDocument();
   });
 
@@ -457,7 +459,7 @@ describe('AICostDashboard', () => {
     await waitFor(() => {
       expect(screen.getByText('Estimated spend')).toBeInTheDocument();
     });
-    expect(screen.queryByText('Top targets')).not.toBeInTheDocument();
+    expect(screen.queryByText('Usage by task')).not.toBeInTheDocument();
   });
 
   // ---- error states ----

@@ -30,7 +30,12 @@ const parseGoDurationMs = (value: string): number | null => {
 };
 
 const humanizeCorrelationToken = (value?: string): string => {
-  return humanizeArrowDelimitedLabel(value, { fallback: 'Correlation' });
+  const normalized = value?.trim() ?? '';
+  const readable =
+    normalized && normalized === normalized.toUpperCase() && /[A-Z]/.test(normalized)
+      ? normalized.toLowerCase()
+      : normalized;
+  return humanizeArrowDelimitedLabel(readable, { fallback: 'Correlation' });
 };
 
 export function formatResourceCorrelationEndpoint(

@@ -681,6 +681,7 @@ export type InvestigationOutcome =
   | 'fix_queued'
   | 'fix_executed'
   | 'fix_failed'
+  | 'fix_rejected'
   | 'needs_attention'
   | 'cannot_fix'
   | 'timed_out'

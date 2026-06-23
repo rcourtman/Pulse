@@ -87,6 +87,10 @@ describe('patrol utilities', () => {
       expect(investigationOutcomeLabels.fix_failed).toBe('Fix Failed');
     });
 
+    it('has correct label for fix_rejected', () => {
+      expect(investigationOutcomeLabels.fix_rejected).toBe('Fix Rejected');
+    });
+
     it('has correct label for needs_attention', () => {
       expect(investigationOutcomeLabels.needs_attention).toBe('Needs Attention');
     });
@@ -123,6 +127,10 @@ describe('patrol utilities', () => {
 
     it('has red colors for fix_failed', () => {
       expect(investigationOutcomeColors.fix_failed).toContain('red');
+    });
+
+    it('has amber colors for fix_rejected', () => {
+      expect(investigationOutcomeColors.fix_rejected).toContain('amber');
     });
 
     it('has amber colors for needs_attention', () => {

@@ -353,6 +353,7 @@ export function GuestRow(props: GuestRowProps) {
                     total={props.guest.memory?.total || 0}
                     percentOnly={memoryPercentOnly()}
                     cache={props.guest.memory?.cache || 0}
+                    cacheInclusiveLabel="Shown in Proxmox"
                     balloon={props.guest.memory?.balloon || 0}
                     swapUsed={props.guest.memory?.swapUsed || 0}
                     swapTotal={props.guest.memory?.swapTotal || 0}

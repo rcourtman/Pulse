@@ -1,11 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
-import { Suspense, createSignal } from 'solid-js';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
+import { Suspense, createSignal, type JSX } from 'solid-js';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
+import {
+  PATROL_CONTROL_ANCHOR,
+  PATROL_CONTROL_STARTER,
+  PATROL_CONTROL_STARTER_QUERY_PARAM,
+  PATROL_OPERATIONS_LOOP_ANCHOR,
+} from '@/routing/resourceLinks';
 import { resetAIRuntimeState } from '@/stores/aiRuntimeState';
-import { getPublicPricingUrl } from '@/utils/pricingHandoff';
+import {
+  getPublicPricingUrl,
+  SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF,
+} from '@/utils/pricingHandoff';
 import patrolIntelligenceHeaderSource from '@/features/patrol/PatrolIntelligenceHeader.tsx?raw';
 import patrolIntelligenceStateSource from '@/features/patrol/usePatrolIntelligenceState.ts?raw';
+import { AGENT_PATROL_CONTROL_STATUS_PATH } from '@/api/agentCapabilities';
 
 import { AIIntelligence } from '../AIIntelligence';
 
@@ -104,14 +114,33 @@ const triggerPatrolRunMock = vi.fn();
 const getPatrolRunHistoryMock = vi.fn();
 const apiFetchJSONMock = vi.fn();
 const hasFeatureMock = vi.fn();
+const runtimeCapabilitiesMock = vi.fn();
+const getRuntimeCapabilityBlockMock = vi.fn();
 const licenseStatusMock = vi.fn();
 const loadLicenseStatusMock = vi.fn();
 const loadCommercialPostureMock = vi.fn();
 const getUpgradeActionDestinationMock = vi.fn();
 const getUpgradeActionUrlOrFallbackMock = vi.fn();
 const presentationPolicyHidesUpgradePromptsMock = vi.fn();
+const presentationPolicyHidesCommercialSurfacesMock = vi.fn();
+
+vi.mock('@solidjs/router', () => ({
+  A: (props: {
+    href: string;
+    class?: string;
+    children?: JSX.Element;
+    'aria-label'?: string;
+    title?: string;
+  }) => (
+    <a href={props.href} class={props.class} aria-label={props['aria-label']} title={props.title}>
+      {props.children}
+    </a>
+  ),
+  useLocation: () => ({ hash: '', pathname: '/patrol', search: '' }),
+}));
 const notificationSuccessMock = vi.fn();
 const notificationErrorMock = vi.fn();
+const recordWorkflowPromptActivityMock = vi.fn();
 
 vi.mock('@/api/patrol', () => ({
   getPatrolStatus: (...args: unknown[]) => getPatrolStatusMock(...args),
@@ -130,12 +159,23 @@ vi.mock('@/api/ai', () => ({
   },
 }));
 
+vi.mock('@/api/aiChat', () => ({
+  AIChatAPI: {
+    recordWorkflowPromptActivity: (...args: unknown[]) => recordWorkflowPromptActivityMock(...args),
+  },
+  PULSE_OPERATIONS_LOOP_WORKFLOW_PROMPT_NAME: 'pulse_operations_loop',
+  PULSE_PATROL_WORKFLOW_PROMPT_SURFACE: 'pulse_patrol',
+  PULSE_PATROL_CONTROL_WORKFLOW_PROMPT_SURFACE: 'patrol_control',
+}));
+
 vi.mock('@/utils/apiClient', () => ({
   apiFetchJSON: (...args: unknown[]) => apiFetchJSONMock(...args),
 }));
 
 vi.mock('@/stores/license', () => ({
   hasFeature: (...args: unknown[]) => hasFeatureMock(...args),
+  getRuntimeCapabilityBlock: (...args: unknown[]) => getRuntimeCapabilityBlockMock(...args),
+  runtimeCapabilities: (...args: unknown[]) => runtimeCapabilitiesMock(...args),
   loadRuntimeCapabilities: (...args: unknown[]) => loadLicenseStatusMock(...args),
 }));
 
@@ -149,6 +189,7 @@ vi.mock('@/stores/licenseCommercial', () => ({
 }));
 
 vi.mock('@/stores/sessionPresentationPolicy', () => ({
+  presentationPolicyHidesCommercialSurfaces: () => presentationPolicyHidesCommercialSurfacesMock(),
   presentationPolicyHidesUpgradePrompts: () => presentationPolicyHidesUpgradePromptsMock(),
 }));
 
@@ -162,6 +203,7 @@ vi.mock('@/stores/notifications', () => ({
 vi.mock('@/stores/aiIntelligence', () => {
   const store = {
     loadFindings: vi.fn().mockResolvedValue(undefined),
+    loadPatrolFindings: vi.fn().mockResolvedValue(undefined),
     loadIntelligenceSummary: vi.fn().mockResolvedValue(undefined),
     loadCircuitBreakerStatus: vi.fn().mockResolvedValue(undefined),
     loadPendingApprovals: vi.fn().mockResolvedValue(undefined),
@@ -239,7 +281,6 @@ vi.mock('@/components/AI/FindingsPanel', () => ({
 
 vi.mock('@/components/patrol', () => ({
   ApprovalBanner: () => <div data-testid="approval-banner" />,
-  PatrolStatusBar: () => <div data-testid="patrol-status-bar" />,
   RunHistoryPanel: (props: { onSelectRun?: (run: Record<string, unknown> | null) => void }) => (
     <div data-testid="run-history-panel">
       <button type="button" onClick={() => props.onSelectRun?.(runHistoryState.selection)}>
@@ -338,15 +379,140 @@ const defaultAISettings = {
   auto_fix_model: '',
 };
 
+const defaultAgentCapabilitiesManifest = () => ({
+  version: 'v1',
+  surfaceContract: {
+    core: {
+      id: 'pulse_intelligence_core',
+      label: 'Pulse Intelligence Core',
+      description:
+        'Canonical context, governed actions, safety gates, approval state, action audit, and verification.',
+    },
+    proactiveEngine: {
+      id: 'pulse_patrol',
+      label: 'Pulse Patrol',
+      description: 'The proactive detection and investigation engine.',
+    },
+    operatorSurfaces: [
+      {
+        id: 'pulse_mcp',
+        label: 'Pulse MCP',
+        description: 'The external-agent adapter.',
+        native: false,
+        externalAdapter: true,
+        affordances: {
+          tools: true,
+          resources: true,
+          prompts: true,
+          capabilityMetadata: true,
+        },
+      },
+    ],
+  },
+  surfaceToolContracts: [
+    {
+      surfaceId: 'pulse_mcp',
+      surfaceLabel: 'Pulse MCP',
+      toolSource: 'capability_manifest',
+      toolNames: [
+        'get_patrol_control_status',
+        'get_fleet_context',
+        'get_resource_context',
+        'list_findings',
+        'plan_action',
+        'decide_action',
+        'execute_action',
+        'resolve_finding',
+      ],
+      capabilityNames: [
+        'get_patrol_control_status',
+        'get_fleet_context',
+        'get_resource_context',
+        'list_findings',
+        'plan_action',
+        'decide_action',
+        'execute_action',
+        'resolve_finding',
+      ],
+      affordances: {
+        tools: true,
+        resources: true,
+        prompts: true,
+        capabilityMetadata: true,
+      },
+    },
+  ],
+  mcpAdapter: {
+    serverName: 'pulse',
+    command: 'pulse-mcp',
+    baseUrlFlag: '--base-url',
+    defaultBaseUrl: 'http://localhost:7655',
+    tokenEnv: 'PULSE_API_TOKEN',
+    configFamilies: [{ id: 'opencode', label: 'OpenCode', shape: 'opencode_mcp' }],
+  },
+  requiredScopes: [],
+  categories: [],
+  workflowPrompts: [{ name: 'pulse_operations_loop', label: 'Ask Patrol to handle an issue' }],
+  capabilities: [],
+});
+
+const defaultOperationsLoopStatus = (overrides: Record<string, unknown> = {}) => ({
+  nextAction: 'run_patrol',
+  progressLabel: 'Run Patrol to produce actionable issue evidence.',
+  steps: [
+    { id: 'patrol', label: 'Patrol', status: 'current', count: 0 },
+    { id: 'assistant', label: 'Assistant', status: 'pending' },
+    { id: 'governance', label: 'Governance', status: 'pending', count: 0 },
+    { id: 'verification', label: 'Verification', status: 'pending', count: 0 },
+  ],
+  patrolEvidenceCount: 0,
+  patrolIssueEvidenceCount: 0,
+  activeFindingCount: 0,
+  pendingApprovalCount: 0,
+  governedActionCount: 0,
+  approvedDecisionCount: 0,
+  rejectedDecisionCount: 0,
+  verifiedOutcomeCount: 0,
+  operationsLoopStarterCount: 0,
+  assistantOperationsLoopStarterCount: 0,
+  patrolOperationsLoopStarterCount: 0,
+  patrolControlOperationsLoopStarterCount: 0,
+  patrolControlCompletedOperationsLoopCount: 0,
+  patrolControlResolvedOperationsLoopCount: 0,
+  patrolControlValueState: 'not_started',
+  patrolAutonomyOperationsLoopStarterCount: 0,
+  patrolAutonomyCompletedOperationsLoopCount: 0,
+  patrolAutonomyResolvedOperationsLoopCount: 0,
+  patrolAutonomyValueState: 'not_started',
+  proActivationOperationsLoopStarterCount: 0,
+  proActivationCompletedOperationsLoopCount: 0,
+  proActivationResolvedOperationsLoopCount: 0,
+  proActivationValueProofState: 'not_started',
+  mcpOperationsLoopStarterCount: 0,
+  externalAgentReady: true,
+  windowStart: '2026-06-01T00:00:00Z',
+  generatedAt: '2026-06-20T00:00:00Z',
+  ...overrides,
+});
+
 describe('AIIntelligence entitlement gating', () => {
-  it('keeps Patrol page refresh affordance bounded when supporting reads stall', () => {
+  it('keeps Patrol page data sync bounded without making it a primary action', () => {
     expect(patrolIntelligenceStateSource).toContain('PATROL_REFRESH_TIMEOUT_MS');
     expect(patrolIntelligenceStateSource).toContain('finishRefresh(requestId)');
     expect(patrolIntelligenceStateSource).toContain('requestId === refreshRequestId');
+    expect(patrolIntelligenceStateSource).toContain('isManualRefreshRunning');
+    expect(patrolIntelligenceStateSource).toContain('handleRefreshPatrol');
+    expect(patrolIntelligenceStateSource).toContain('loadVisiblePatrolData');
+    expect(patrolIntelligenceStateSource).toContain('loadSupportingPatrolDataInBackground');
+    expect(patrolIntelligenceHeaderSource).not.toContain('state.handleRefreshPatrol()');
+    expect(patrolIntelligenceHeaderSource).not.toContain('Sync page data');
+    expect(patrolIntelligenceHeaderSource).not.toContain('animate-spin');
+    expect(patrolIntelligenceHeaderSource).not.toContain('Refresh Patrol');
   });
 
-  it('keeps Patrol header loading indicators on the shared LoadingSpinner primitive', () => {
-    expect(patrolIntelligenceHeaderSource).toContain('LoadingSpinner');
+  it('keeps the advanced Patrol settings drawer out of the old save-spinner path', () => {
+    expect(patrolIntelligenceHeaderSource).not.toContain('LoadingSpinner');
+    expect(patrolIntelligenceHeaderSource).not.toContain('Save Patrol mode');
   });
 
   beforeEach(() => {
@@ -359,14 +525,18 @@ describe('AIIntelligence entitlement gating', () => {
     getPatrolRunHistoryMock.mockReset();
     apiFetchJSONMock.mockReset();
     hasFeatureMock.mockReset();
+    runtimeCapabilitiesMock.mockReset();
+    getRuntimeCapabilityBlockMock.mockReset();
     licenseStatusMock.mockReset();
     loadLicenseStatusMock.mockReset();
     loadCommercialPostureMock.mockReset();
     getUpgradeActionDestinationMock.mockReset();
     getUpgradeActionUrlOrFallbackMock.mockReset();
     presentationPolicyHidesUpgradePromptsMock.mockReset();
+    presentationPolicyHidesCommercialSurfacesMock.mockReset();
     notificationSuccessMock.mockReset();
     notificationErrorMock.mockReset();
+    recordWorkflowPromptActivityMock.mockReset();
     findingsPanelState.latestProps = null;
     runHistoryState.selection = null;
     intelligenceState.findings = [];
@@ -401,22 +571,41 @@ describe('AIIntelligence entitlement gating', () => {
       if (path === '/api/settings/ai/update') {
         return defaultAISettings;
       }
+      if (path === '/api/agent/capabilities') {
+        return defaultAgentCapabilitiesManifest();
+      }
+      if (path === AGENT_PATROL_CONTROL_STATUS_PATH) {
+        return defaultOperationsLoopStatus();
+      }
       return {};
     });
     hasFeatureMock.mockImplementation(
       (feature: string) => !['ai_alerts', 'ai_autofix'].includes(feature),
     );
+    runtimeCapabilitiesMock.mockReturnValue({
+      runtime: 'community',
+      capabilities: ['ai_intelligence'],
+      blocked_capabilities: [],
+    });
+    getRuntimeCapabilityBlockMock.mockReturnValue(undefined);
     licenseStatusMock.mockReturnValue({ subscription_state: 'expired' });
     loadLicenseStatusMock.mockResolvedValue(undefined);
     loadCommercialPostureMock.mockResolvedValue(undefined);
-    getUpgradeActionDestinationMock.mockImplementation((feature?: string) => ({
-      href: getPublicPricingUrl(feature),
-      external: true,
-    }));
+    getUpgradeActionDestinationMock.mockImplementation((feature?: string) =>
+      feature === 'ai_autofix'
+        ? { href: SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF, external: false }
+        : {
+            href: getPublicPricingUrl(feature),
+            external: true,
+          },
+    );
     getUpgradeActionUrlOrFallbackMock.mockImplementation((feature?: string) =>
       getPublicPricingUrl(feature),
     );
     presentationPolicyHidesUpgradePromptsMock.mockReturnValue(false);
+    presentationPolicyHidesCommercialSurfacesMock.mockReturnValue(false);
+    recordWorkflowPromptActivityMock.mockResolvedValue(undefined);
+    window.history.replaceState({}, '', '/patrol');
     getCorrelationsMock.mockResolvedValue({
       correlations: [],
       count: 0,
@@ -436,9 +625,108 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.getByTestId('pulse-patrol-logo')).toHaveAttribute('aria-hidden', 'true');
   });
 
-  it('surfaces Patrol readiness issues before a manual run can start', async () => {
+  it('keeps the Patrol route handoff anchored without rendering idle run prompts as current work', async () => {
+    getPatrolStatusMock.mockResolvedValue(defaultPatrolStatus({ license_required: false }));
+
+    render(() => <AIIntelligence />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Patrol' })).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByText('Patrol watches infrastructure and shows current issues.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        'Patrol watches, investigates, acts within the mode you choose, verifies outcomes, and records what happened.',
+      ),
+    ).not.toBeInTheDocument();
+    const patrolControlAnchor = document.getElementById(PATROL_CONTROL_ANCHOR);
+    const operationsLoopAnchor = document.getElementById(PATROL_OPERATIONS_LOOP_ANCHOR);
+    expect(patrolControlAnchor).not.toBeNull();
+    const patrolControl = within(patrolControlAnchor!);
+    expect(patrolControl.queryByRole('group', { name: 'Patrol mode' })).not.toBeInTheDocument();
+    expect(patrolControl.getByText('Patrol mode')).toBeInTheDocument();
+    expect(patrolControl.getAllByText('Watch only').length).toBeGreaterThan(0);
+    expect(
+      patrolControl.getByText('Patrol reports issues without making changes.'),
+    ).toBeInTheDocument();
+    expect(patrolControl.queryByRole('button', { name: 'Limits' })).not.toBeInTheDocument();
+    expect(patrolControl.queryByRole('button', { name: 'Ask first' })).toBeNull();
+    expect(patrolControl.queryByRole('button', { name: 'Safe auto-fix' })).toBeNull();
+    expect(patrolControl.queryByRole('button', { name: 'Autopilot' })).toBeNull();
+    expect(patrolControl.queryByText('Patrol handles')).not.toBeInTheDocument();
+    expect(patrolControl.queryByText('May do')).not.toBeInTheDocument();
+    expect(patrolControl.queryByText('Needs Pro for')).not.toBeInTheDocument();
+    expect(patrolControl.queryByText('Will not')).not.toBeInTheDocument();
+    expect(patrolControl.queryByText('Pro')).not.toBeInTheDocument();
+    expect(patrolControl.queryByRole('button', { name: 'Ask first Pro' })).toBeNull();
+    expect(patrolControl.queryByRole('button', { name: 'Safe auto-fix Pro' })).toBeNull();
+    expect(patrolControl.queryByRole('button', { name: 'Autopilot Pro' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Plans & Billing' })).toHaveAttribute(
+      'href',
+      SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF,
+    );
+    expect(screen.queryByRole('link', { name: 'View plans' })).not.toBeInTheDocument();
+    expect(operationsLoopAnchor?.parentElement).toBe(patrolControlAnchor);
+    expect(screen.queryByTestId('patrol-current-work')).not.toBeInTheDocument();
+    expect(screen.getByText('Problems Patrol finds appear here.')).toBeInTheDocument();
+    expect(
+      screen.queryByText('Issues Patrol found. Infrastructure stays unchanged.'),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('Current Patrol work')).not.toBeInTheDocument();
+    expect(screen.queryByText('Ready to run')).not.toBeInTheDocument();
+    expect(screen.queryByText('Current issue')).not.toBeInTheDocument();
+    expect(screen.queryByText('Recorded outcome')).not.toBeInTheDocument();
+    expect(screen.queryByText('Duty trail')).not.toBeInTheDocument();
+    expect(screen.queryByText('External agents')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Pulse MCP' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Run Patrol' }).length).toBeGreaterThan(0);
+  });
+
+  it('consumes Patrol control route handoffs without loading legacy loop status', async () => {
+    window.history.replaceState(
+      {},
+      '',
+      `/patrol?${PATROL_CONTROL_STARTER_QUERY_PARAM}=${PATROL_CONTROL_STARTER}#${PATROL_CONTROL_ANCHOR}`,
+    );
+
+    render(() => <AIIntelligence />);
+
+    await waitFor(() => {
+      expect(recordWorkflowPromptActivityMock).toHaveBeenCalledWith({
+        name: 'pulse_operations_loop',
+        surface: 'patrol_control',
+      });
+    });
+
+    expect(
+      apiFetchJSONMock.mock.calls.some(([path]) => path === AGENT_PATROL_CONTROL_STATUS_PATH),
+    ).toBe(false);
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/patrol');
+      expect(window.location.search).toBe('');
+      expect(window.location.hash).toBe(`#${PATROL_CONTROL_ANCHOR}`);
+    });
+  });
+
+  it('surfaces provider issues before a manual run can start', async () => {
     getPatrolStatusMock.mockResolvedValue(
       defaultPatrolStatus({
+        trigger_status: {
+          running: false,
+          pending_triggers: 0,
+          current_interval_ms: 300000,
+          recent_events: 0,
+          is_busy_mode: false,
+          alert_triggers_enabled: true,
+          anomaly_triggers_enabled: true,
+          event_triggers_blocked: true,
+          event_triggers_blocked_reason: 'background_automation_disabled',
+          event_triggers_blocked_message:
+            'Automatic Patrol checks from alerts and anomalies are paused by the local development safety guard. Manual Patrol still works.',
+        },
         readiness: {
           status: 'not_ready',
           ready: false,
@@ -463,20 +751,43 @@ describe('AIIntelligence entitlement gating', () => {
     render(() => <AIIntelligence />);
 
     await waitFor(() => {
-      expect(screen.getByText('Patrol readiness issue')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Fix provider' })).toBeInTheDocument();
     });
     expect(
-      screen.getByText(
+      screen.getByText('Open Provider & Models, then run Patrol from this page.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Issue:\s*Selected model cannot run Patrol tools\./),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(
         'The selected Patrol model is a reasoning-only model family that commonly does not emit tool calls.',
       ),
-    ).toBeInTheDocument();
-    for (const button of screen.getAllByRole('button', { name: /Run Patrol/i })) {
-      expect(button).toBeDisabled();
-    }
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Current work' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Patrol setup issue')).not.toBeInTheDocument();
+    expect(screen.queryByText('Patrol readiness issue')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Automation:/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        'Trigger status: Automatic Patrol checks from alerts and anomalies are paused by the local development safety guard. Manual Patrol still works.',
+      ),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/Trigger status:/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/local development safety guard/)).not.toBeInTheDocument();
+    const providerSettingsLinks = screen.getAllByRole('link', {
+      name: 'Open Provider & Models',
+    });
+    expect(providerSettingsLinks.length).toBeGreaterThan(0);
+    expect(providerSettingsLinks[0]).toHaveAttribute(
+      'href',
+      '/settings/pulse-intelligence/provider',
+    );
+    expect(screen.queryByRole('button', { name: /Run Patrol/i })).not.toBeInTheDocument();
     expect(triggerPatrolRunMock).not.toHaveBeenCalled();
   });
 
-  it('surfaces Patrol readiness warnings without blocking manual runs', async () => {
+  it('surfaces provider warnings without blocking manual runs', async () => {
     getPatrolStatusMock.mockResolvedValue(
       defaultPatrolStatus({
         readiness: {
@@ -503,8 +814,9 @@ describe('AIIntelligence entitlement gating', () => {
     render(() => <AIIntelligence />);
 
     await waitFor(() => {
-      expect(screen.getByText('Patrol readiness warning')).toBeInTheDocument();
+      expect(screen.getByText('Provider warning')).toBeInTheDocument();
     });
+    expect(screen.queryByText('Patrol readiness warning')).not.toBeInTheDocument();
     const runButtons = screen.getAllByRole('button', { name: /Run Patrol/i });
     for (const button of runButtons) {
       expect(button).not.toBeDisabled();
@@ -514,6 +826,24 @@ describe('AIIntelligence entitlement gating', () => {
     await waitFor(() => {
       expect(triggerPatrolRunMock).toHaveBeenCalled();
     });
+  });
+
+  it('moves manual Patrol runs out of Starting state once the start request is accepted', async () => {
+    render(() => <AIIntelligence />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Patrol' })).toBeInTheDocument();
+    });
+
+    getCorrelationsMock.mockImplementation(() => new Promise(() => {}));
+
+    fireEvent.click(screen.getAllByRole('button', { name: /Run Patrol/i })[0]);
+
+    await waitFor(() => {
+      expect(triggerPatrolRunMock).toHaveBeenCalled();
+      expect(screen.getAllByRole('button', { name: /Running/i }).length).toBeGreaterThan(0);
+    });
+    expect(screen.queryByRole('button', { name: /Starting/i })).not.toBeInTheDocument();
   });
 
   it('surfaces backend readiness rejection when a stale manual run request reaches the server', async () => {
@@ -546,6 +876,8 @@ describe('AIIntelligence entitlement gating', () => {
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: 'Patrol' })).toBeInTheDocument();
     });
+    expect(screen.queryByText('Patrol setup issue')).not.toBeInTheDocument();
+    expect(screen.queryByText('Patrol setup warning')).not.toBeInTheDocument();
     expect(screen.queryByText('Patrol readiness issue')).not.toBeInTheDocument();
     expect(screen.queryByText('Patrol readiness warning')).not.toBeInTheDocument();
     for (const button of screen.getAllByRole('button', { name: /Run Patrol/i })) {
@@ -553,10 +885,20 @@ describe('AIIntelligence entitlement gating', () => {
     }
   });
 
-  it('renders canonical learned correlations in the summary page through the correlation card', async () => {
+  it('does not expose raw supporting context as a Patrol page details panel', async () => {
     hasFeatureMock.mockReturnValue(true);
     licenseStatusMock.mockReturnValue({ subscription_state: 'active' });
     getPatrolStatusMock.mockResolvedValue(defaultPatrolStatus({ license_required: false }));
+    intelligenceState.findings = [
+      {
+        id: 'finding-storage-context',
+        status: 'active',
+        severity: 'warning',
+        resourceId: 'storage-2',
+        resourceName: 'Storage 2',
+        title: 'Storage issue needs Patrol context',
+      },
+    ];
     intelligenceState.summary = {
       timestamp: '2026-03-01T00:00:00Z',
       overall_health: {
@@ -568,12 +910,12 @@ describe('AIIntelligence entitlement gating', () => {
             name: 'Patrol coverage incomplete',
             impact: -0.35,
             description:
-              'Patrol coverage is incomplete: recent activity was limited to scoped runs and ended with errors, so overall health is not fully verified.',
+              'Recent Patrol activity only covered targeted checks and ended with errors. Run Patrol to check everything.',
             category: 'coverage',
           },
         ],
         prediction:
-          'Patrol coverage is incomplete: recent activity was limited to scoped runs and ended with errors, so overall health is not fully verified.',
+          'Recent Patrol activity only covered targeted checks and ended with errors. Run Patrol to check everything.',
       },
       findings_count: {
         critical: 0,
@@ -636,42 +978,38 @@ describe('AIIntelligence entitlement gating', () => {
     render(() => <AIIntelligence />);
 
     await waitFor(() => {
-      expect(screen.getByText('Supporting context')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Current work' })).toBeInTheDocument();
     });
-
-    expect(screen.queryByRole('heading', { name: 'Learned correlations' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'View supporting context' }));
-    await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Learned correlations' })).toBeInTheDocument();
-    });
-
-    expect(screen.getByText('How to read this')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Details' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Hide details' })).not.toBeInTheDocument();
     expect(
-      screen.getByText(
-        'Findings and run history are Patrol verification evidence. The cards below add explanatory context and do not count as a fresh full patrol.',
+      screen.queryByText('Extra activity and policy context for the selected item.'),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Details available: related patterns, policy limits.'),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('For reference')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        'This explains what Patrol saw. It does not change the finding or start a new patrol.',
       ),
-    ).toBeInTheDocument();
-    expect(screen.getByText('2 learned patterns · explanatory context')).toBeInTheDocument();
-    expect(screen.getByText('Coverage posture for policy-covered resources.')).toBeInTheDocument();
-    expect(screen.getByText('3 policy-covered resources')).toBeInTheDocument();
-    // Cross-jump to /infrastructure?resource=... retired with the legacy
-    // surface; correlation labels render as plain text and document order is
-    // verified via the resource label spans instead of anchor tags.
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Nearby activity' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Related patterns' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Policy limits' })).not.toBeInTheDocument();
+    expect(screen.queryByText('2 related patterns Patrol can use')).not.toBeInTheDocument();
     expect(
-      screen.queryByRole('link', { name: /Open source resource .* in Infrastructure/ }),
-    ).toBeNull();
-    const storage2Label = screen.getByText('Storage 2');
-    const storage1Label = screen.getByText('Storage 1');
-    expect(
-      storage2Label.compareDocumentPosition(storage1Label) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-    expect(screen.getByText('VM 200')).toBeInTheDocument();
-    expect(screen.getByText('VM 100')).toBeInTheDocument();
-    expect(screen.getByText('Cpu High → Restart')).toBeInTheDocument();
-    expect(screen.getByText('Disk Full → Restart')).toBeInTheDocument();
-    expect(screen.getByText(/2 occurrences .* 95% confidence/)).toBeInTheDocument();
-    expect(screen.getByText(/1 occurrence .* 50% confidence/)).toBeInTheDocument();
-    expect(screen.getByText('Disk pressure often precedes restarts')).toBeInTheDocument();
+      screen.queryByText('What Patrol was allowed to inspect or act on.'),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('Storage 2')).not.toBeInTheDocument();
+    expect(screen.queryByText('VM 200')).not.toBeInTheDocument();
+    expect(screen.queryByText('Disk Full → Restart')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'History' }));
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Patrol history' })).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('button', { name: 'Details' })).not.toBeInTheDocument();
   });
 
   afterEach(() => {
@@ -692,25 +1030,39 @@ describe('AIIntelligence entitlement gating', () => {
       expect(getPatrolStatusMock).toHaveBeenCalled();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Configure Patrol' }));
-
-    await screen.findByRole('button', { name: 'Investigate' });
-
-    expect(screen.getByRole('button', { name: 'Investigate' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Remediate' })).toBeDisabled();
+    const patrolControlAnchor = document.getElementById(PATROL_CONTROL_ANCHOR);
+    expect(patrolControlAnchor).not.toBeNull();
+    const patrolControl = within(patrolControlAnchor!);
+    expect(patrolControl.queryByRole('group', { name: 'Patrol mode' })).not.toBeInTheDocument();
+    expect(patrolControl.getByText('Patrol mode')).toBeInTheDocument();
+    expect(patrolControl.getAllByText('Watch only').length).toBeGreaterThan(0);
+    expect(patrolControl.queryByRole('button', { name: 'Limits' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Ask first, requires Pulse Pro' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Safe auto-fix, requires Pulse Pro' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Autopilot, requires Pulse Pro' })).toBeNull();
+    expect(patrolControl.queryByText('Pro')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Ask first Pro' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Safe auto-fix Pro' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Autopilot Pro' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Plans & Billing' })).toHaveAttribute(
+      'href',
+      SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF,
+    );
+    expect(screen.queryByRole('link', { name: 'View plans' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Unlock Patrol mode')).not.toBeInTheDocument();
+    expect(screen.queryByText('More Patrol modes')).not.toBeInTheDocument();
     expect(
-      screen.getByText(
-        'Safe remediation workflows and alert-triggered root-cause analysis are not enabled on this plan.',
+      screen.queryByText(
+        'This plan can only watch. Pulse Pro unlocks investigation, approval-backed fixes, and automatic policy-approved fixes.',
       ),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        'Investigation and safe remediation workflows are not enabled on this plan.',
-      ),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText('Container update risk analysis is not enabled on this plan.'),
-    ).toBeInTheDocument();
+    ).not.toBeInTheDocument();
+
+    expect(screen.getByRole('link', { name: 'Open Patrol settings' })).toHaveAttribute(
+      'href',
+      '/settings/pulse-intelligence/patrol',
+    );
+    expect(screen.queryByRole('dialog', { name: 'Patrol schedule & model' })).toBeNull();
+    expect(screen.queryByText('Container update risk')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Upgrade to Pro' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Upgrade' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /start free trial/i })).not.toBeInTheDocument();
@@ -731,18 +1083,60 @@ describe('AIIntelligence entitlement gating', () => {
       expect(getPatrolStatusMock).toHaveBeenCalled();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Configure Patrol' }));
-
-    await screen.findByRole('button', { name: 'Investigate' });
-
-    expect(screen.getByRole('button', { name: 'Investigate' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Remediate' })).toBeDisabled();
+    const patrolControlAnchor = document.getElementById(PATROL_CONTROL_ANCHOR);
+    expect(patrolControlAnchor).not.toBeNull();
+    const patrolControl = within(patrolControlAnchor!);
+    expect(patrolControl.queryByRole('group', { name: 'Patrol mode' })).not.toBeInTheDocument();
+    expect(patrolControl.getByText('Patrol mode')).toBeInTheDocument();
+    expect(patrolControl.getAllByText('Watch only').length).toBeGreaterThan(0);
+    expect(patrolControl.queryByRole('button', { name: 'Limits' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Ask first, requires Pulse Pro' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Safe auto-fix, requires Pulse Pro' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Autopilot, requires Pulse Pro' })).toBeNull();
+    expect(patrolControl.queryByText('Pro')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Ask first Pro' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Safe auto-fix Pro' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Autopilot Pro' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Plans & Billing' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'View plans' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open Patrol settings' })).toHaveAttribute(
+      'href',
+      '/settings/pulse-intelligence/patrol',
+    );
+    expect(screen.queryByRole('dialog', { name: 'Patrol schedule & model' })).toBeNull();
+    expect(screen.queryByText('This install can only watch')).not.toBeInTheDocument();
+    expect(screen.queryByText('Patrol is in watch-only mode')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Upgrade to Pro' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Upgrade' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /start free trial/i })).not.toBeInTheDocument();
   });
 
-  it('keeps a saved direct-provider Patrol model selected after the catalog loads', async () => {
+  it('hides paid patrol badges when commercial surfaces are hidden', async () => {
+    presentationPolicyHidesCommercialSurfacesMock.mockReturnValue(true);
+    getPatrolStatusMock.mockResolvedValue(
+      defaultPatrolStatus({
+        license_required: true,
+      }),
+    );
+
+    render(() => <AIIntelligence />);
+
+    await waitFor(() => {
+      expect(loadLicenseStatusMock).toHaveBeenCalled();
+      expect(getPatrolStatusMock).toHaveBeenCalled();
+    });
+
+    const patrolControlAnchor = document.getElementById(PATROL_CONTROL_ANCHOR);
+    expect(patrolControlAnchor).not.toBeNull();
+    const patrolControl = within(patrolControlAnchor!);
+    expect(patrolControl.getAllByText('Watch only').length).toBeGreaterThan(0);
+    expect(patrolControl.queryByText('Pro')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'View plans' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Upgrade to Pro' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /start free trial/i })).not.toBeInTheDocument();
+  });
+
+  it('keeps the Patrol model catalog out of the operator page', async () => {
     apiFetchJSONMock.mockImplementation(async (path: string) => {
       if (path === '/api/ai/models') {
         return {
@@ -777,13 +1171,13 @@ describe('AIIntelligence entitlement gating', () => {
       expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/models');
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Configure Patrol' }));
-
-    const select = screen.getByLabelText('Provider model') as HTMLSelectElement;
-    await waitFor(() => {
-      expect(select.value).toBe('deepseek:deepseek-v4-flash');
-    });
-    expect(select.selectedOptions[0]?.textContent).toContain('DeepSeek V4 Flash');
+    expect(screen.getByRole('link', { name: 'Open Patrol settings' })).toHaveAttribute(
+      'href',
+      '/settings/pulse-intelligence/patrol',
+    );
+    expect(screen.queryByRole('dialog', { name: 'Patrol schedule & model' })).toBeNull();
+    expect(screen.queryByText('DeepSeek V4 Flash')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Change model' })).toBeNull();
   });
 
   it('unlocks paid patrol controls when the entitlement grants the features', async () => {
@@ -798,72 +1192,100 @@ describe('AIIntelligence entitlement gating', () => {
       expect(getPatrolStatusMock).toHaveBeenCalled();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Configure Patrol' }));
+    expect(screen.getByRole('button', { name: 'Ask first' })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Safe auto-fix' })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Autopilot' })).not.toBeDisabled();
+    expect(screen.getByText('Patrol reports issues without making changes.')).toBeInTheDocument();
+    expect(screen.queryByText('Patrol handles')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Limits' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Hard limits')).not.toBeInTheDocument();
 
-    await screen.findByRole('button', { name: 'Investigate' });
+    fireEvent.click(screen.getByRole('button', { name: 'Autopilot' }));
 
-    expect(screen.getByRole('button', { name: 'Investigate' })).not.toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Remediate' })).not.toBeDisabled();
-    expect(screen.getByRole('checkbox', { name: 'Container Update Risk' })).toBeInTheDocument();
-    expect(screen.getByRole('checkbox', { name: 'Alert-Triggered Patrols' })).toBeInTheDocument();
-    expect(screen.getByRole('checkbox', { name: 'Anomaly-Triggered Patrols' })).toBeInTheDocument();
-    expect(
-      screen.getByRole('checkbox', { name: 'Autonomous critical remediation' }),
-    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          'Patrol handles policy-approved issues automatically. It asks only when policy requires approval.',
+        ),
+      ).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole('link', { name: 'Open Patrol settings' })).toHaveAttribute(
+      'href',
+      '/settings/pulse-intelligence/patrol',
+    );
+    expect(screen.queryByRole('dialog', { name: 'Patrol schedule & model' })).toBeNull();
+    expect(screen.queryByRole('checkbox', { name: 'Container Update Risk' })).toBeNull();
+    expect(screen.queryByRole('checkbox', { name: 'Alert-Triggered Patrols' })).toBeNull();
+    expect(screen.queryByRole('checkbox', { name: 'Anomaly-Triggered Patrols' })).toBeNull();
     expect(screen.queryByRole('link', { name: 'Upgrade to Pro' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Upgrade' })).not.toBeInTheDocument();
   });
 
-  it('persists the alert-trigger severity floor from the Patrol configuration panel', async () => {
+  it('records direct Patrol mode changes after successful paid control saves', async () => {
     hasFeatureMock.mockReturnValue(true);
     licenseStatusMock.mockReturnValue({ subscription_state: 'active' });
     getPatrolStatusMock.mockResolvedValue(defaultPatrolStatus({ license_required: false }));
     apiFetchJSONMock.mockImplementation(async (path: string) => {
+      if (path === '/api/ai/models') {
+        return { models: [] };
+      }
       if (path === '/api/settings/ai') {
-        return {
-          ...defaultAISettings,
-          patrol_alert_triggers_enabled: true,
-          patrol_alert_trigger_min_severity: 'critical',
-        };
+        return defaultAISettings;
       }
       if (path === '/api/settings/ai/update') {
-        return {
-          ...defaultAISettings,
-          patrol_alert_triggers_enabled: true,
-          patrol_alert_trigger_min_severity: 'warning',
-        };
+        return defaultAISettings;
+      }
+      if (path === '/api/agent/capabilities') {
+        return defaultAgentCapabilitiesManifest();
+      }
+      if (path === AGENT_PATROL_CONTROL_STATUS_PATH) {
+        return defaultOperationsLoopStatus();
       }
       return {};
+    });
+    updatePatrolAutonomySettingsMock.mockResolvedValue({
+      settings: {
+        autonomy_level: 'approval',
+        full_mode_unlocked: false,
+      },
     });
 
     render(() => <AIIntelligence />);
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Patrol' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Ask first' })).not.toBeDisabled();
     });
+    const statusCallsBeforeModeChange = getPatrolStatusMock.mock.calls.length;
+    const runHistoryCallsBeforeModeChange = getPatrolRunHistoryMock.mock.calls.length;
 
-    fireEvent.click(screen.getByRole('button', { name: 'Configure Patrol' }));
-
-    const select = (await screen.findByLabelText(
-      'Investigate alerts at or above',
-    )) as HTMLSelectElement;
-    expect(select.value).toBe('critical');
-    expect(Array.from(select.options).map((option) => option.value)).toEqual([
-      'critical',
-      'warning',
-    ]);
-
-    fireEvent.change(select, { target: { value: 'warning' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Ask first' }));
 
     await waitFor(() => {
-      expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/settings/ai/update', {
-        patrol_alert_trigger_min_severity: 'warning',
+      expect(updatePatrolAutonomySettingsMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          autonomy_level: 'approval',
+          full_mode_unlocked: false,
+        }),
+      );
+    });
+    await waitFor(() => {
+      expect(recordWorkflowPromptActivityMock).toHaveBeenCalledWith({
+        name: 'pulse_operations_loop',
+        surface: 'patrol_control',
       });
     });
     await waitFor(() => {
-      expect(
-        (screen.getByLabelText('Investigate alerts at or above') as HTMLSelectElement).value,
-      ).toBe('warning');
+      expect(getPatrolStatusMock.mock.calls.length).toBeGreaterThan(statusCallsBeforeModeChange);
+      expect(getPatrolRunHistoryMock.mock.calls.length).toBeGreaterThan(
+        runHistoryCallsBeforeModeChange,
+      );
+      expect(screen.getByRole('heading', { name: 'Current work' })).toBeInTheDocument();
+      expect(screen.queryByTestId('patrol-current-work')).not.toBeInTheDocument();
+      expect(screen.queryByText('Patrol ready')).not.toBeInTheDocument();
+      expect(screen.queryByText(/Run Patrol now to look for issues/)).not.toBeInTheDocument();
+      expect(screen.queryByText('Patrol mode ready')).not.toBeInTheDocument();
+      expect(screen.queryByText(/Patrol mode is set/)).not.toBeInTheDocument();
     });
   });
 
@@ -934,20 +1356,21 @@ describe('AIIntelligence entitlement gating', () => {
 
     await waitFor(() => {
       expect(getPatrolStatusMock).toHaveBeenCalled();
-      expect(screen.getByText('Patrol assessment')).toBeInTheDocument();
-      expect(screen.getByText(/No issues found · 91\/100/)).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Patrol' })).toBeInTheDocument();
     });
 
+    expect(screen.queryByText('Patrol status')).not.toBeInTheDocument();
+    expect(screen.queryByText(/No active issues · health score 91\/100/)).not.toBeInTheDocument();
     expect(screen.queryByText('No active issues detected')).not.toBeInTheDocument();
     expect(screen.queryByText(/Health A · 91\/100/)).not.toBeInTheDocument();
     expect(screen.queryByText('Supporting context')).not.toBeInTheDocument();
     expect(
-      screen.queryByText('1 recent change · 4 policy-covered resources'),
+      screen.queryByText('1 recent change · 4 resources covered by policy'),
     ).not.toBeInTheDocument();
     expect(screen.queryByText('Policy posture')).not.toBeInTheDocument();
   });
 
-  it('renders a stable patrol summary loading shell before the first assessment payload arrives', async () => {
+  it('keeps the Patrol page visible without a separate summary loading strip', async () => {
     getPatrolStatusMock.mockImplementation(() => new Promise(() => {}));
     intelligenceState.summary = null;
 
@@ -958,11 +1381,33 @@ describe('AIIntelligence entitlement gating', () => {
     ));
 
     await waitFor(() => {
-      expect(screen.getByTestId('patrol-summary-loading')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Patrol' })).toBeInTheDocument();
+      expect(screen.getByText('Current work')).toBeInTheDocument();
     });
 
     expect(screen.queryByText('Loading view...')).not.toBeInTheDocument();
-    expect(screen.queryByText('Patrol assessment')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('patrol-summary-loading')).not.toBeInTheDocument();
+    expect(screen.queryByText('Loading Patrol')).not.toBeInTheDocument();
+  });
+
+  it('keeps the Patrol page visible when first-load refreshes fail', async () => {
+    loadLicenseStatusMock.mockRejectedValue(new TypeError('Failed to fetch'));
+
+    render(() => (
+      <Suspense fallback={<div>Loading view...</div>}>
+        <AIIntelligence />
+      </Suspense>
+    ));
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Patrol' })).toBeInTheDocument();
+      expect(screen.getByText('Patrol could not refresh')).toBeInTheDocument();
+      expect(screen.getByText('Current work')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText('Loading view...')).not.toBeInTheDocument();
+    expect(screen.queryByText('Failed to fetch')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
   });
 
   it('does not present a healthy patrol summary when a retired hosted block reason is normalized', async () => {
@@ -1009,7 +1454,7 @@ describe('AIIntelligence entitlement gating', () => {
 
     await waitFor(() => {
       expect(getPatrolStatusMock).toHaveBeenCalled();
-      expect(screen.getAllByText('Patrol Paused')).toHaveLength(2);
+      expect(screen.getAllByText('Patrol paused').length).toBeGreaterThan(0);
     });
 
     expect(screen.getAllByText('Patrol paused').length).toBeGreaterThan(0);
@@ -1066,7 +1511,8 @@ describe('AIIntelligence entitlement gating', () => {
     });
 
     expect(screen.queryByText('Patrol quickstart exhausted')).not.toBeInTheDocument();
-    expect(screen.getByText(/No issues found · 100\/100/)).toBeInTheDocument();
+    expect(screen.queryByText(/No active issues · health score 100\/100/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Patrol status')).not.toBeInTheDocument();
   });
 
   it('normalizes retired hosted availability copy on unactivated installs', async () => {
@@ -1196,12 +1642,12 @@ describe('AIIntelligence entitlement gating', () => {
             name: 'Patrol coverage incomplete',
             impact: -0.35,
             description:
-              'Patrol coverage is incomplete: recent activity was limited to scoped runs and ended with errors, so overall health is not fully verified.',
+              'Recent Patrol activity only covered targeted checks and ended with errors. Run Patrol to check everything.',
             category: 'coverage',
           },
         ],
         prediction:
-          'Patrol coverage is incomplete: recent activity was limited to scoped runs and ended with errors, so overall health is not fully verified.',
+          'Recent Patrol activity only covered targeted checks and ended with errors. Run Patrol to check everything.',
       },
       findings_count: {
         critical: 0,
@@ -1225,17 +1671,19 @@ describe('AIIntelligence entitlement gating', () => {
     render(() => <AIIntelligence />);
 
     await waitFor(() => {
-      expect(screen.getByText(/Coverage incomplete · 70\/100/)).toBeInTheDocument();
+      expect(screen.getByText('Current work')).toBeInTheDocument();
       expect(screen.queryByText('Next:')).not.toBeInTheDocument();
       expect(screen.queryByText('Verify full coverage')).not.toBeInTheDocument();
       expect(screen.queryByTestId('patrol-recommended-next-step-action')).not.toBeInTheDocument();
       expect(findingsPanelState.latestProps).not.toBeNull();
     });
 
+    expect(screen.queryByText('Coverage incomplete')).not.toBeInTheDocument();
+    expect(screen.queryByText(/health score 70\/100/)).not.toBeInTheDocument();
     expect(screen.queryByTestId('patrol-summary-details-toggle')).not.toBeInTheDocument();
     expect(screen.queryByTestId('patrol-summary-details')).not.toBeInTheDocument();
     expect(screen.queryByText('No recent full patrol')).not.toBeInTheDocument();
-    expect(screen.queryByText('No issues found')).not.toBeInTheDocument();
+    expect(screen.queryByText('No active issues')).not.toBeInTheDocument();
     expect(screen.queryByText(/Last patrol/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/^Last:/i)).not.toBeInTheDocument();
     expect(screen.queryByText('Partial verification')).not.toBeInTheDocument();
@@ -1244,7 +1692,7 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.queryByText('Critical')).not.toBeInTheDocument();
     expect(
       screen.queryByText(
-        'Patrol coverage is incomplete: recent activity was limited to scoped runs and ended with errors, so overall health is not fully verified.',
+        'Recent Patrol activity only covered targeted checks and ended with errors. Run Patrol to check everything.',
       ),
     ).not.toBeInTheDocument();
     expect(findingsPanelState.latestProps?.nextPatrolAt).toBeUndefined();
@@ -1364,12 +1812,12 @@ describe('AIIntelligence entitlement gating', () => {
             name: 'Patrol coverage incomplete',
             impact: -0.35,
             description:
-              'Patrol coverage is incomplete: recent activity was limited to scoped runs and ended with errors, so overall health is not fully verified.',
+              'Recent Patrol activity only covered targeted checks and ended with errors. Run Patrol to check everything.',
             category: 'coverage',
           },
         ],
         prediction:
-          'Patrol coverage is incomplete: recent activity was limited to scoped runs and ended with errors, so overall health is not fully verified.',
+          'Recent Patrol activity only covered targeted checks and ended with errors. Run Patrol to check everything.',
       },
       findings_count: {
         critical: 0,
@@ -1393,19 +1841,51 @@ describe('AIIntelligence entitlement gating', () => {
     render(() => <AIIntelligence />);
 
     await waitFor(() => {
-      expect(screen.getByText(/1 runtime issue · 60\/100/)).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Fix provider' })).toBeInTheDocument();
     });
 
-    expect(screen.getByText(/1 runtime issue · 60\/100/)).toBeInTheDocument();
     expect(
-      screen.queryByRole('link', { name: 'Open Patrol provider settings' }),
+      screen.queryByText(/1 Patrol runtime issue · health score 60\/100/),
     ).not.toBeInTheDocument();
-    const assessmentShell = screen.getByText('Patrol assessment').closest('section');
-    expect(assessmentShell).not.toBeNull();
-    expect(assessmentShell!.className).toContain('border-y');
-    expect(assessmentShell!.className).not.toContain('rounded-md');
-    expect(assessmentShell!.className).not.toContain('shadow-sm');
-    expect(assessmentShell!.className).not.toContain('bg-amber-50');
+    expect(
+      screen.getByText('Open Provider & Models, then run Patrol from this page.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Provider needs attention' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('Fix the provider connection, then Patrol can check infrastructure.'),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('Issue: Provider billing or quota issue')).toBeInTheDocument();
+    expect(screen.queryByText('Patrol setup issue')).not.toBeInTheDocument();
+    expect(screen.queryByText('Patrol readiness issue')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open Provider & Models' })).toHaveAttribute(
+      'href',
+      '/settings/pulse-intelligence/provider',
+    );
+    expect(screen.queryByText('Runtime issue')).not.toBeInTheDocument();
+    expect(screen.queryByText(/regressed \d+×/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Runtime issue/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Run Patrol' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Open Patrol settings' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Automation:/)).not.toBeInTheDocument();
+    const patrolControlAnchor = document.getElementById(PATROL_CONTROL_ANCHOR);
+    expect(patrolControlAnchor).not.toBeNull();
+    expect(patrolControlAnchor).toContainElement(
+      screen.getByRole('group', { name: 'Patrol mode' }),
+    );
+    const patrolControl = within(patrolControlAnchor!);
+    expect(patrolControl.getByText('Patrol mode')).toBeInTheDocument();
+    expect(patrolControl.getAllByText('Watch only').length).toBeGreaterThan(0);
+    expect(
+      patrolControl.getByText('Patrol reports issues without making changes.'),
+    ).toBeInTheDocument();
+    expect(patrolControl.getByRole('button', { name: 'Ask first' })).not.toBeDisabled();
+    expect(patrolControl.getByRole('button', { name: 'Safe auto-fix' })).not.toBeDisabled();
+    expect(patrolControl.getByRole('button', { name: 'Autopilot' })).not.toBeDisabled();
+    expect(patrolControl.queryByRole('button', { name: 'Limits' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Current mode:/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Patrol status')).not.toBeInTheDocument();
     expect(screen.queryByTestId('patrol-summary-details-toggle')).not.toBeInTheDocument();
     expect(screen.queryByTestId('patrol-summary-details')).not.toBeInTheDocument();
     expect(screen.queryByText('Infrastructure findings')).not.toBeInTheDocument();
@@ -1413,13 +1893,60 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.queryByText('Latest activity')).not.toBeInTheDocument();
     expect(screen.queryByTestId('patrol-status-bar')).not.toBeInTheDocument();
 
-    expect(screen.getByRole('button', { name: 'Findings' }).textContent).toBe('Findings 1');
+    expect(screen.queryByRole('heading', { name: 'Current work' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Active' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'All' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Resolved' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Details' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'History' })).not.toBeInTheDocument();
 
     expect(
       screen.queryByText(
-        'Patrol coverage is incomplete: recent activity was limited to scoped runs and ended with errors, so overall health is not fully verified.',
+        'Recent Patrol activity only covered targeted checks and ended with errors. Run Patrol to check everything.',
       ),
     ).not.toBeInTheDocument();
+  });
+
+  it('keeps provider-blocked open issues to one provider action', async () => {
+    hasFeatureMock.mockReturnValue(true);
+    licenseStatusMock.mockReturnValue({ subscription_state: 'active' });
+    getPatrolStatusMock.mockResolvedValue(
+      defaultPatrolStatus({
+        license_required: false,
+        readiness: {
+          status: 'not_ready',
+          ready: false,
+          summary: 'Provider billing or quota issue.',
+          provider: 'openrouter',
+          model: 'openrouter:z-ai/glm-5.2',
+        },
+      }),
+    );
+    intelligenceState.findings = [
+      {
+        id: 'finding-storage-risk',
+        source: 'ai-patrol',
+        isThreshold: false,
+        status: 'active',
+        severity: 'critical',
+        resourceId: 'storage:tower-array',
+        resourceName: 'Tower Array',
+        resourceType: 'storage',
+        title: 'Unraid array running without parity protection',
+        detectedAt: '2026-03-12T09:57:00Z',
+      },
+    ];
+
+    render(() => <AIIntelligence />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Provider issue')).toBeInTheDocument();
+    });
+    expect(screen.getByRole('heading', { name: 'Current work' })).toBeInTheDocument();
+    const providerActions = screen.getAllByRole('link', { name: /Fix Patrol provider/i });
+    expect(providerActions.length).toBeGreaterThan(0);
+    expect(providerActions[0]).toHaveAttribute('href', '/settings/pulse-intelligence/provider');
+    expect(screen.queryByRole('link', { name: 'Open Provider & Models' })).not.toBeInTheDocument();
   });
 
   it('does not repeat stale coverage caveats after a successful full patrol verified resources', async () => {
@@ -1502,7 +2029,7 @@ describe('AIIntelligence entitlement gating', () => {
             name: 'Patrol coverage incomplete',
             impact: -0.35,
             description:
-              'Patrol coverage is incomplete: recent activity was limited to scoped runs and ended with errors, so overall health is not fully verified.',
+              'Recent Patrol activity only covered targeted checks and ended with errors. Run Patrol to check everything.',
             category: 'coverage',
           },
         ],
@@ -1532,8 +2059,11 @@ describe('AIIntelligence entitlement gating', () => {
 
     await waitFor(() => {
       expect(screen.getByText(/verified 58 resources/i)).toBeInTheDocument();
-      expect(screen.getByText(/1 warning · 2 regressed · 85\/100/)).toBeInTheDocument();
     });
+    expect(
+      screen.queryByText(/1 warning issue · 2 past regressions · health score 85\/100/),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('Patrol status')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Patrol trust summary header')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Patrol trust summary')).not.toBeInTheDocument();
     expect(screen.queryByTestId('patrol-summary-details-toggle')).not.toBeInTheDocument();
@@ -1547,7 +2077,7 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.queryByText(/Recent coverage is also incomplete/i)).not.toBeInTheDocument();
   });
 
-  it('keeps recent activity mix out of the default Patrol assessment chrome', async () => {
+  it('keeps recent activity mix out of the default Patrol status chrome', async () => {
     hasFeatureMock.mockReturnValue(true);
     licenseStatusMock.mockReturnValue({ subscription_state: 'active' });
     getPatrolStatusMock.mockResolvedValue(defaultPatrolStatus({ license_required: false }));
@@ -1680,27 +2210,22 @@ describe('AIIntelligence entitlement gating', () => {
     render(() => <AIIntelligence />);
 
     await waitFor(() => {
-      expect(screen.getByText(/No issues found · 100\/100/)).toBeInTheDocument();
+      expect(getPatrolRunHistoryMock).toHaveBeenCalled();
+      expect(screen.getByRole('heading', { name: 'Patrol' })).toBeInTheDocument();
     });
 
+    expect(screen.queryByText(/No active issues · health score 100\/100/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Patrol status')).not.toBeInTheDocument();
     expect(screen.queryByTestId('patrol-summary-details-toggle')).not.toBeInTheDocument();
     expect(screen.queryByText(/Recent activity mix:/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Trigger mode:/)).not.toBeInTheDocument();
   });
 
   it('treats a selected zero-finding run as an empty snapshot and uses effective scope ids', async () => {
     hasFeatureMock.mockReturnValue(true);
     licenseStatusMock.mockReturnValue({ subscription_state: 'active' });
     getPatrolStatusMock.mockResolvedValue(defaultPatrolStatus({ license_required: false }));
-    intelligenceState.findings = [
-      {
-        id: 'finding-runtime',
-        status: 'active',
-        severity: 'warning',
-        resourceId: 'ai-service',
-        resourceName: 'Pulse Patrol Service',
-        title: 'Pulse Patrol: Provider billing or quota issue',
-      },
-    ];
+    intelligenceState.findings = [];
     runHistoryState.selection = {
       id: 'run-empty',
       started_at: '2026-03-12T10:00:00Z',
@@ -1740,16 +2265,14 @@ describe('AIIntelligence entitlement gating', () => {
       expect(findingsPanelState.latestProps).not.toBeNull();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Runs' }));
+    fireEvent.click(screen.getByRole('button', { name: 'History' }));
     fireEvent.click(screen.getByRole('button', { name: 'Select mocked run' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Findings' }));
 
     await waitFor(() => {
-      expect(screen.getByText(/Filtered to run/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/Patrol run/i).length).toBeGreaterThan(0);
     });
 
-    expect(screen.queryByText('Findings snapshot unavailable')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Findings' }).textContent).toBe('Findings');
+    expect(screen.queryByText('Finding record unavailable')).not.toBeInTheDocument();
 
     expect(findingsPanelState.latestProps).toMatchObject({
       filterOverride: 'all',
@@ -1758,6 +2281,79 @@ describe('AIIntelligence entitlement gating', () => {
       scopeResourceTypes: ['vm'],
       showScopeWarnings: true,
       runSnapshotId: 'run-empty',
+    });
+  });
+
+  it('shows the selected Patrol run outcome before the finding list', async () => {
+    hasFeatureMock.mockReturnValue(true);
+    licenseStatusMock.mockReturnValue({ subscription_state: 'active' });
+    getPatrolStatusMock.mockResolvedValue(defaultPatrolStatus({ license_required: false }));
+    intelligenceState.findings = [];
+    runHistoryState.selection = {
+      id: 'run-provider-error',
+      started_at: '2026-03-12T10:00:00Z',
+      completed_at: '2026-03-12T10:58:00Z',
+      duration_ms: 3_480_000,
+      type: 'full',
+      trigger_reason: 'manual',
+      scope_resource_ids: [],
+      effective_scope_resource_ids: [],
+      scope_resource_types: [],
+      resources_checked: 72,
+      nodes_checked: 0,
+      guests_checked: 72,
+      docker_checked: 0,
+      storage_checked: 0,
+      hosts_checked: 0,
+      truenas_checked: 0,
+      pbs_checked: 0,
+      pmg_checked: 0,
+      kubernetes_checked: 0,
+      new_findings: 0,
+      existing_findings: 0,
+      rejected_findings: 0,
+      resolved_findings: 0,
+      auto_fix_count: 0,
+      findings_summary: 'Provider failed during analysis',
+      finding_ids: ['runtime-provider'],
+      error_count: 1,
+      error_summary: 'Selected model does not support Patrol tools',
+      error_detail:
+        "agentic patrol failed: API error (404): No endpoints found that support the provided 'tool_choice' value.",
+      status: 'error',
+      tool_call_count: 0,
+    };
+
+    render(() => <AIIntelligence />);
+
+    await waitFor(() => {
+      expect(getPatrolStatusMock).toHaveBeenCalled();
+      expect(findingsPanelState.latestProps).not.toBeNull();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'History' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select mocked run' }));
+
+    await waitFor(() => {
+      expect(screen.getAllByText(/Patrol run/i).length).toBeGreaterThan(0);
+    });
+
+    expect(screen.getByText('Manual')).toBeInTheDocument();
+    expect(screen.getByText('error')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Checked 72 resources in 58m\. Patrol ended with a runtime issue: Selected model does not support Patrol tools/i,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open Provider & Models' })).toHaveAttribute(
+      'href',
+      '/settings/pulse-intelligence/provider',
+    );
+    expect(findingsPanelState.latestProps).toMatchObject({
+      filterOverride: 'all',
+      filterFindingIds: ['runtime-provider'],
+      scopeResourceIds: [],
+      runSnapshotId: 'run-provider-error',
     });
   });
 
@@ -1804,15 +2400,14 @@ describe('AIIntelligence entitlement gating', () => {
       expect(findingsPanelState.latestProps).not.toBeNull();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Runs' }));
+    fireEvent.click(screen.getByRole('button', { name: 'History' }));
     fireEvent.click(screen.getByRole('button', { name: 'Select mocked run' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Findings' }));
 
     await waitFor(() => {
-      expect(screen.getByText(/Filtered to run/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/Patrol run/i).length).toBeGreaterThan(0);
     });
 
-    expect(screen.queryByText('Findings snapshot unavailable')).not.toBeInTheDocument();
+    expect(screen.queryByText('Finding record unavailable')).not.toBeInTheDocument();
     expect(findingsPanelState.latestProps).toMatchObject({
       filterOverride: 'all',
       filterFindingIds: [],
@@ -1827,16 +2422,7 @@ describe('AIIntelligence entitlement gating', () => {
     hasFeatureMock.mockReturnValue(true);
     licenseStatusMock.mockReturnValue({ subscription_state: 'active' });
     getPatrolStatusMock.mockResolvedValue(defaultPatrolStatus({ license_required: false }));
-    intelligenceState.findings = [
-      {
-        id: 'finding-runtime',
-        status: 'active',
-        severity: 'warning',
-        resourceId: 'ai-service',
-        resourceName: 'Pulse Patrol Service',
-        title: 'Pulse Patrol: Provider billing or quota issue',
-      },
-    ];
+    intelligenceState.findings = [];
     runHistoryState.selection = {
       id: 'run-missing-snapshot',
       started_at: '2026-03-12T10:10:00Z',
@@ -1875,16 +2461,14 @@ describe('AIIntelligence entitlement gating', () => {
       expect(findingsPanelState.latestProps).not.toBeNull();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Runs' }));
+    fireEvent.click(screen.getByRole('button', { name: 'History' }));
     fireEvent.click(screen.getByRole('button', { name: 'Select mocked run' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Findings' }));
 
     await waitFor(() => {
-      expect(screen.getByText(/Filtered to run/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/Patrol run/i).length).toBeGreaterThan(0);
     });
 
-    expect(screen.getByText(/Findings snapshot unavailable/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Findings' }).textContent).toBe('Findings');
+    expect(screen.getByText(/Finding record unavailable/)).toBeInTheDocument();
 
     expect(findingsPanelState.latestProps).toMatchObject({
       filterOverride: 'all',

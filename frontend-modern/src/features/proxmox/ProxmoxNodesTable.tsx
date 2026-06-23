@@ -465,6 +465,7 @@ export const ProxmoxNodesTable: Component<{
                                 total={memoryTotal()}
                                 percentOnly={memoryPercentOnly()}
                                 cache={drawerNode()?.memory?.cache || 0}
+                                cacheInclusiveLabel="Shown in Proxmox"
                                 swapUsed={drawerNode()?.memory?.swapUsed || 0}
                                 swapTotal={drawerNode()?.memory?.swapTotal || 0}
                               />

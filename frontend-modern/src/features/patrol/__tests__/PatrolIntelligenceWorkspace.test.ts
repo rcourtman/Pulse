@@ -2,6 +2,15 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+import {
+  PATROL_WORKSPACE_HISTORY_DESCRIPTION,
+  PATROL_WORKSPACE_QUEUE_TITLE,
+  PATROL_WORKSPACE_RUN_RECORD_DESCRIPTION,
+  PATROL_WORKSPACE_RUN_RECORD_TITLE,
+  PATROL_WORKSPACE_SETUP_DESCRIPTION,
+  PATROL_WORKSPACE_SETUP_TITLE,
+} from '../patrolControlPresentation';
+
 const workspaceSource = readFileSync(
   resolve(__dirname, '..', 'PatrolIntelligenceWorkspace.tsx'),
   'utf-8',
@@ -9,9 +18,8 @@ const workspaceSource = readFileSync(
 
 describe('PatrolIntelligenceWorkspace trust strip', () => {
   it('does not render a standalone Trust strip above the workspace tabs', () => {
-    // The Patrol assessment strip owns the default active/regressed status
-    // readout. The workspace should move directly into Findings/Runs instead
-    // of repeating the same counters in a second strip.
+    // Current work and deliberate history review own operator-facing trust state.
+    // The workspace should not add another standalone counter strip.
     expect(workspaceSource).not.toContain('state.patrolStatus()?.trust');
     expect(workspaceSource).not.toContain('aria-label="Patrol trust summary"');
     expect(workspaceSource).not.toContain('trust.fix_verified');
@@ -23,5 +31,49 @@ describe('PatrolIntelligenceWorkspace trust strip', () => {
     // No mention of arbitrary keys like "patrol_score" or "health_grade".
     expect(workspaceSource).not.toMatch(/trust\.patrol_score/);
     expect(workspaceSource).not.toMatch(/trust\.health_grade/);
+  });
+
+  it('frames findings and run records as Patrol operation records', () => {
+    expect(workspaceSource).toContain('state.shouldShowPatrolSetupOnly()');
+    expect(workspaceSource).not.toContain('PATROL_SUPPORTING_CONTEXT');
+    expect(workspaceSource).not.toContain('ResourceCorrelationSummary');
+    expect(workspaceSource).not.toContain('ResourcePolicySummary');
+    expect(workspaceSource).not.toContain('ResourceChangeSummary');
+    expect(workspaceSource).not.toContain('showInvestigationContext');
+    expect(workspaceSource).not.toContain('shouldSurfaceInvestigationContext');
+    expect(workspaceSource).toContain('PATROL_WORKSPACE_SETUP_TITLE');
+    expect(workspaceSource).toContain('PATROL_WORKSPACE_SETUP_DESCRIPTION');
+    expect(workspaceSource).toContain('buildPatrolFindingDisplayGroups');
+    expect(workspaceSource).toContain('getPatrolQueueBadgeLabel');
+    expect(workspaceSource).toContain('queueIssueCount');
+    expect(workspaceSource).toContain('queueAffectedResourceCount');
+    expect(workspaceSource).toContain('affectedResourceCount: queueAffectedResourceCount()');
+    expect(workspaceSource).toContain('findingCount: queueIssueCount()');
+    expect(workspaceSource).toContain('getPatrolQueueWorkspaceDescription');
+    expect(workspaceSource).toContain('autonomyLevel: state.autonomyLevel()');
+    expect(workspaceSource).toContain('autonomyLocked: state.autoFixLocked()');
+    expect(workspaceSource).toContain('Boolean(queueBadgeLabel())');
+    expect(workspaceSource).toContain('{queueBadgeLabel()}');
+    const removedAllModeCopy =
+      'Current work Patrol can ' +
+      'watch, investigate, ask you to approve, or record under your Patrol mode.';
+    expect(workspaceSource).not.toContain(removedAllModeCopy);
+    expect(workspaceSource).toContain('Provider needs attention');
+    expect(workspaceSource).toContain('Issue:');
+    expect(workspaceSource).toContain('getPatrolProviderSettingsAction');
+    expect(workspaceSource).toContain('<Show when={!isSetupOnly()}>');
+    expect(workspaceSource).not.toContain('showControls={!state.selectedRun() && !isSetupOnly()}');
+    expect(PATROL_WORKSPACE_SETUP_TITLE).toBe('Fix provider');
+    expect(PATROL_WORKSPACE_SETUP_DESCRIPTION).toBe(
+      'Open Provider & Models, then run Patrol from this page.',
+    );
+    expect(PATROL_WORKSPACE_QUEUE_TITLE).toBe('Current work');
+    expect(workspaceSource).not.toContain('Current Patrol findings');
+    expect(workspaceSource).toContain('Show current work');
+    expect(workspaceSource).not.toContain('Show open issues');
+    expect(workspaceSource).toContain('!state.selectedRun()');
+    expect(PATROL_WORKSPACE_RUN_RECORD_TITLE).toBe('Check details');
+    expect(PATROL_WORKSPACE_RUN_RECORD_DESCRIPTION).toBe('What Patrol found during this run.');
+    expect(PATROL_WORKSPACE_HISTORY_DESCRIPTION).toBe('Past Patrol checks.');
   });
 });

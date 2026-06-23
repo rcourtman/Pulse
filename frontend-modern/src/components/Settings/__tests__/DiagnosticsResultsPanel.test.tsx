@@ -8,6 +8,45 @@ describe('DiagnosticsResultsPanel', () => {
     cleanup();
   });
 
+  it('labels Pulse Assistant diagnostics as native runtime status', () => {
+    const diagnosticsData = {
+      version: '6.0.0',
+      runtime: 'go',
+      uptime: 3600,
+      nodes: [],
+      pbs: [],
+      system: {
+        os: 'linux',
+        arch: 'amd64',
+        goVersion: 'go1.25',
+        numCPU: 8,
+        numGoroutine: 32,
+        memoryMB: 128,
+      },
+      aiChat: {
+        enabled: true,
+        running: true,
+        healthy: true,
+        model: 'ollama:llama3',
+        assistantRuntimeConnected: true,
+        notes: [],
+      },
+      errors: [],
+    } as DiagnosticsData;
+
+    render(() => (
+      <DiagnosticsResultsPanel
+        diagnosticsData={diagnosticsData}
+        loading={false}
+        onRunDiagnostics={() => {}}
+      />
+    ));
+
+    expect(screen.getByText('Pulse Assistant Service')).toBeInTheDocument();
+    expect(screen.getByText('Assistant runtime')).toBeInTheDocument();
+    expect(screen.queryByText('MCP Connection')).not.toBeInTheDocument();
+  });
+
   it('does not render internal analytics fields from diagnostics payloads', () => {
     const diagnosticsData = {
       version: '6.0.0',

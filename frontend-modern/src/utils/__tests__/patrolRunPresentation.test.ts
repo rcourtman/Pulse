@@ -4,6 +4,8 @@ import {
   formatPatrolActivityBreakdown,
   getPatrolActivityBreakdown,
   getPatrolLatestRunPresentation,
+  getPatrolRunOperatorRecordPresentation,
+  getPatrolRunRecordSummaryPresentation,
   getPatrolRunKindLabel,
   getPatrolRunCoverageSummary,
   getPatrolRunPrimaryActionPresentation,
@@ -56,7 +58,7 @@ describe('patrolRunPresentation', () => {
     expect(getPatrolRunStatusPresentation('healthy').variant).toBe('success');
   });
 
-  it('downgrades legacy healthy runs without findings snapshots to a neutral completed state', () => {
+  it('downgrades legacy healthy runs without finding records to a neutral completed state', () => {
     expect(getPatrolRunStatusPresentation('healthy', 0, false)).toEqual({
       badgeClass: 'bg-surface-alt text-base-content',
       variant: 'muted',
@@ -86,8 +88,8 @@ describe('patrolRunPresentation', () => {
         error_detail: 'Provider rejected tool_choice',
       }),
     ).toEqual({
-      label: 'Open Patrol provider settings',
-      href: '/settings/system-ai',
+      label: 'Open Provider & Models',
+      href: '/settings/pulse-intelligence/provider',
     });
     expect(
       getPatrolRunPrimaryActionPresentation({
@@ -105,6 +107,121 @@ describe('patrolRunPresentation', () => {
     ).toBeUndefined();
   });
 
+  it('summarizes selected Patrol run records without requiring users to expand history internals', () => {
+    expect(
+      getPatrolRunRecordSummaryPresentation({
+        auto_fix_count: 0,
+        duration_ms: 3_480_000,
+        effective_scope_resource_ids: [],
+        error_count: 1,
+        error_detail:
+          "agentic patrol failed: API error (404): No endpoints found that support the provided 'tool_choice' value.",
+        error_summary: 'Selected model does not support Patrol tools',
+        existing_findings: 0,
+        finding_ids: ['runtime-provider'],
+        new_findings: 0,
+        resources_checked: 72,
+        scope_resource_ids: [],
+        status: 'error',
+      }),
+    ).toEqual({
+      action: {
+        label: 'Open Provider & Models',
+        href: '/settings/pulse-intelligence/provider',
+      },
+      summary: 'Checked 72 resources in 58m.',
+      outcome:
+        'Patrol ended with a runtime issue: Selected model does not support Patrol tools: Provider rejected Patrol tool calls. Choose a Patrol model and endpoint with tool-call support.',
+    });
+
+    expect(
+      getPatrolRunRecordSummaryPresentation({
+        auto_fix_count: 0,
+        duration_ms: 60_000,
+        effective_scope_resource_ids: ['expanded-a', 'expanded-b'],
+        error_count: 0,
+        error_detail: '',
+        error_summary: '',
+        existing_findings: 0,
+        finding_ids: [],
+        new_findings: 0,
+        resources_checked: 2,
+        scope_resource_ids: ['seed-resource'],
+        status: 'healthy',
+      }),
+    ).toEqual({
+      summary: 'Checked 2 scoped resources in 1m.',
+      outcome: 'No issues recorded for this run.',
+    });
+  });
+
+  it('summarizes run history as operator actions before telemetry details', () => {
+    expect(
+      getPatrolRunOperatorRecordPresentation({
+        auto_fix_count: 1,
+        duration_ms: 60_000,
+        effective_scope_resource_ids: [],
+        error_count: 0,
+        error_detail: '',
+        error_summary: '',
+        existing_findings: 0,
+        finding_ids: ['finding-1', 'finding-2'],
+        new_findings: 2,
+        resources_checked: 72,
+        resolved_findings: 0,
+        scope_resource_ids: [],
+        status: 'healthy',
+      }),
+    ).toEqual({
+      headline: 'Fixed 1 issue',
+      detail: 'Checked 72 resources in 1m. Found 2 new issues and fixed 1 issue.',
+    });
+
+    expect(
+      getPatrolRunOperatorRecordPresentation({
+        auto_fix_count: 0,
+        duration_ms: 453,
+        effective_scope_resource_ids: ['vm-1', 'vm-2'],
+        error_count: 1,
+        error_detail:
+          "agentic patrol failed: API error (404): No endpoints found that support the provided 'tool_choice' value.",
+        error_summary: 'Selected model does not support Patrol tools',
+        existing_findings: 0,
+        finding_ids: ['runtime-provider'],
+        new_findings: 0,
+        resources_checked: 1,
+        resolved_findings: 0,
+        scope_resource_ids: ['vm-1'],
+        status: 'error',
+      }),
+    ).toEqual({
+      headline: 'Patrol needs attention',
+      detail:
+        'Checked 1 of 2 scoped resources in 453ms. Runtime issue: Selected model does not support Patrol tools: Provider rejected Patrol tool calls. Choose a Patrol model and endpoint with tool-call support.',
+    });
+
+    expect(
+      getPatrolRunOperatorRecordPresentation({
+        auto_fix_count: 0,
+        duration_ms: 60_000,
+        effective_scope_resource_ids: [],
+        error_count: 0,
+        error_detail: '',
+        error_summary: '',
+        existing_findings: 0,
+        finding_ids: [],
+        new_findings: 0,
+        resources_checked: 72,
+        resolved_findings: 0,
+        scope_resource_ids: [],
+        status: 'healthy',
+      }),
+    ).toEqual({
+      headline: 'All clear',
+      detail: 'Checked 72 resources in 1m. No issues recorded.',
+    });
+  });
+
   it('normalizes unknown status labels safely', () => {
     const presentation = getPatrolRunStatusPresentation(' Needs Review ');
     expect(presentation.label).toBe('needs review');
@@ -120,10 +237,10 @@ describe('patrolRunPresentation', () => {
   });
 
   it('returns canonical patrol run kind labels', () => {
-    expect(getPatrolRunKindLabel('scoped')).toBe('Scoped run');
-    expect(getPatrolRunKindLabel('verification')).toBe('Verification check');
-    expect(getPatrolRunKindLabel('patrol')).toBe('Full patrol');
-    expect(getPatrolRunKindLabel('')).toBe('Full patrol');
+    expect(getPatrolRunKindLabel('scoped')).toBe('Targeted check');
+    expect(getPatrolRunKindLabel('verification')).toBe('Follow-up check');
+    expect(getPatrolRunKindLabel('patrol')).toBe('Patrol check');
+    expect(getPatrolRunKindLabel('')).toBe('Patrol check');
     expect(getPatrolRunKindLabel('unexpected')).toBe('Patrol run');
   });
 
@@ -165,7 +282,7 @@ describe('patrolRunPresentation', () => {
     ).toEqual({
       coverageSummary: 'Checked 1 of 2 scoped resources',
       findingsSnapshotAvailable: false,
-      kindLabel: 'Scoped run',
+      kindLabel: 'Targeted check',
       status: {
         badgeClass: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
         variant: 'danger',
@@ -189,7 +306,7 @@ describe('patrolRunPresentation', () => {
     ).toBe('4 queued · busy mode · anomalies off');
   });
 
-  it('surfaces runtime-blocked event triggers before compact trigger details', () => {
+  it('hides non-actionable runtime-blocked event triggers unless Patrol is already running', () => {
     expect(
       getPatrolTriggerStatusSummary({
         running: true,
@@ -204,8 +321,52 @@ describe('patrolRunPresentation', () => {
         event_triggers_blocked_message:
           'Automatic Patrol checks from alerts and anomalies are paused by the local development safety guard. Manual Patrol still works.',
       }),
+    ).toBeUndefined();
+
+    expect(
+      getPatrolTriggerStatusSummary(
+        {
+          running: true,
+          pending_triggers: 4,
+          current_interval_ms: 300000,
+          recent_events: 6,
+          is_busy_mode: true,
+          alert_triggers_enabled: true,
+          anomaly_triggers_enabled: true,
+          event_triggers_blocked: true,
+          event_triggers_blocked_reason: 'background_automation_disabled',
+          event_triggers_blocked_message:
+            'Automatic Patrol checks from alerts and anomalies are paused by the local development safety guard. Manual Patrol still works.',
+        },
+        {
+          manualRunAvailable: false,
+          manualRunBlockedReason: 'Provider connection issue (last preflight 49m ago).',
+        },
+      ),
+    ).toBeUndefined();
+
+    expect(
+      getPatrolTriggerStatusSummary(
+        {
+          running: true,
+          pending_triggers: 0,
+          current_interval_ms: 300000,
+          recent_events: 0,
+          is_busy_mode: false,
+          alert_triggers_enabled: true,
+          anomaly_triggers_enabled: true,
+          event_triggers_blocked: true,
+          event_triggers_blocked_reason: 'background_automation_disabled',
+          event_triggers_blocked_message:
+            'Automatic Patrol checks from alerts and anomalies are paused by the local development safety guard. Manual Patrol still works.',
+        },
+        {
+          manualRunAvailable: false,
+          manualRunBlockedReason: 'Patrol is already running',
+        },
+      ),
     ).toBe(
-      'Automatic Patrol checks from alerts and anomalies are paused by the local development safety guard. Manual Patrol still works.',
+      'A Patrol run is already in progress. New automatic and manual runs are paused until it finishes.',
     );
   });
 
@@ -332,25 +493,25 @@ describe('patrolRunPresentation', () => {
       newFindings: 3,
     });
     expect(formatPatrolActivityBreakdown(summary)).toBe(
-      '1 full, 1 alert-triggered, 1 anomaly-triggered',
+      '1 full check, 1 alert-triggered check, 1 anomaly-triggered check',
     );
   });
 
   it('returns canonical patrol run loading and unavailable copy', () => {
-    expect(getRunHistoryLoadingState()).toBe('Loading run history…');
+    expect(getRunHistoryLoadingState()).toBe('Loading history...');
     expect(getToolCallsLoadingState()).toBe('Loading tool calls...');
     expect(getToolCallsUnavailableState()).toBe('Tool call details not available for this run.');
   });
 
-  it('warns when visible runs include legacy findings snapshots', () => {
+  it('warns when visible runs include legacy finding records', () => {
     expect(getRunHistorySelectionHint([{ finding_ids: [] }, { finding_ids: undefined }])).toBe(
-      'Select a run to filter findings when available. Some older runs do not include findings snapshots.',
+      'Open a check to review what Patrol found. Older checks may not have issue lists.',
     );
   });
 
   it('explains selected legacy runs in the run-history shell', () => {
     expect(getRunHistorySelectionHint([{ finding_ids: [] }], { finding_ids: undefined })).toBe(
-      'Selected run predates findings snapshots; run-scoped findings cannot be fully verified.',
+      'This older check has no issue list.',
     );
   });
 });

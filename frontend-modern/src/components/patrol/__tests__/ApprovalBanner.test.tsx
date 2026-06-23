@@ -66,6 +66,17 @@ describe('ApprovalBanner', () => {
     expect(approvalBannerSource).not.toContain('px-3 py-1.5 bg-amber-600 hover:bg-amber-700');
   });
 
+  it('uses governed decision wording for a single approval', () => {
+    state.pendingApprovals = [approvalRequest()];
+
+    render(() => <ApprovalBanner />);
+
+    expect(screen.getByRole('button', { name: 'Approve fix' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reject' })).toBeInTheDocument();
+    expect(screen.queryByText('Approve & Execute')).not.toBeInTheDocument();
+    expect(screen.queryByText('Deny')).not.toBeInTheDocument();
+  });
+
   it('reviews the first approval-linked finding in canonical urgency order', () => {
     state.pendingApprovals = [
       {
