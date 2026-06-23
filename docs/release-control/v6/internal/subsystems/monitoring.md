@@ -103,6 +103,18 @@ truth for live infrastructure data.
    per-guest series through the canonical `recordGuestMetric` helper in
    `internal/monitoring/monitor_pve_guest_helpers.go` instead of inline
    metric writes.
+   Discovery config and configured-host IP resolution must stay off the
+   monitor lock. `internal/monitoring/monitor_discovery_helpers.go` exposes
+   the canonical `discoveryConfigSnapshot()` that discovery providers consume,
+   and both it and `getConfiguredHostIPs()` may take a brief `m.mu.RLock` only
+   to deep-copy config before releasing it; configured Proxmox/PBS/PMG hostname
+   resolution runs through the package-local `lookupConfiguredHostIP` seam
+   outside the lock, so slow or blocked DNS cannot stall monitor writers or
+   discovery subnet probes. The discovery `IPBlocklist` is the deduplicated
+   merge of the operator-configured blocklist and the resolved configured-host
+   IPs through `mergeDiscoveryIPBlocklist`, never one silently replacing the
+   other, and `Start` / `StartDiscoveryService` must read the snapshot through
+   that single helper instead of re-inlining the lock-and-clone path.
 2. Add metrics capture or history-retention behavior through `internal/monitoring/metrics.go` and `internal/monitoring/metrics_history.go`
 3. Add typed read access through `internal/unifiedresources/views.go`
 4. Add unified supplemental ingest through `internal/monitoring/poll_providers.go`

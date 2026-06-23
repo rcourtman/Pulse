@@ -1787,16 +1787,7 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 			discoverySubnet = "auto"
 		}
 		cfgProvider := func() config.DiscoveryConfig {
-			m.mu.RLock()
-			defer m.mu.RUnlock()
-			if m.config == nil {
-				return config.DefaultDiscoveryConfig()
-			}
-			cfg := config.CloneDiscoveryConfig(m.config.Discovery)
-			// Auto-populate IPBlocklist with configured Proxmox host IPs to avoid
-			// probing hosts we already know about (reduces PBS auth failure log spam)
-			cfg.IPBlocklist = m.getConfiguredHostIPs()
-			return cfg
+			return m.discoveryConfigSnapshot()
 		}
 		m.discoveryService = discovery.NewService(wsHub, 5*time.Minute, discoverySubnet, cfgProvider)
 		if m.discoveryService != nil {
@@ -4005,12 +3996,7 @@ func (m *Monitor) StartDiscoveryService(ctx context.Context, wsHub *websocket.Hu
 	}
 
 	cfgProvider := func() config.DiscoveryConfig {
-		m.mu.RLock()
-		defer m.mu.RUnlock()
-		if m.config == nil {
-			return config.DefaultDiscoveryConfig()
-		}
-		return config.CloneDiscoveryConfig(m.config.Discovery)
+		return m.discoveryConfigSnapshot()
 	}
 
 	m.discoveryService = discovery.NewService(wsHub, 5*time.Minute, subnet, cfgProvider)

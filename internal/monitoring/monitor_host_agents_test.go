@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"net"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +15,87 @@ import (
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 )
+
+func TestMonitor_GetConfiguredHostIPs_ResolvesOutsideMonitorLock(t *testing.T) {
+	originalLookup := lookupConfiguredHostIP
+	lookupStarted := make(chan struct{})
+	releaseLookup := make(chan struct{})
+	lookupConfiguredHostIP = func(host string) ([]net.IP, error) {
+		close(lookupStarted)
+		<-releaseLookup
+		return []net.IP{net.ParseIP("192.0.2.10")}, nil
+	}
+	defer func() {
+		lookupConfiguredHostIP = originalLookup
+	}()
+
+	m := &Monitor{
+		config: &config.Config{
+			PVEInstances: []config.PVEInstance{
+				{Host: "pve.example.test"},
+			},
+		},
+	}
+
+	done := make(chan []string, 1)
+	go func() {
+		done <- m.getConfiguredHostIPs()
+	}()
+
+	select {
+	case <-lookupStarted:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for configured host lookup to start")
+	}
+
+	writerAcquired := make(chan struct{})
+	go func() {
+		m.mu.Lock()
+		close(writerAcquired)
+		m.mu.Unlock()
+	}()
+
+	select {
+	case <-writerAcquired:
+	case <-time.After(time.Second):
+		close(releaseLookup)
+		t.Fatal("configured host lookup held the monitor lock while resolving hostnames")
+	}
+
+	close(releaseLookup)
+	ips := <-done
+	if len(ips) != 1 || ips[0] != "192.0.2.10" {
+		t.Fatalf("unexpected resolved host IPs: %#v", ips)
+	}
+}
+
+func TestMonitor_DiscoveryConfigSnapshot_MergesConfiguredHostIPs(t *testing.T) {
+	m := &Monitor{
+		config: &config.Config{
+			Discovery: config.DiscoveryConfig{
+				IPBlocklist: []string{"10.0.0.8"},
+			},
+			PVEInstances: []config.PVEInstance{
+				{Host: "https://192.168.1.10:8006"},
+			},
+			PBSInstances: []config.PBSInstance{
+				{Host: "http://192.168.1.20:8007"},
+			},
+		},
+	}
+
+	cfg := m.discoveryConfigSnapshot()
+	ipMap := make(map[string]bool, len(cfg.IPBlocklist))
+	for _, ip := range cfg.IPBlocklist {
+		ipMap[ip] = true
+	}
+
+	for _, expected := range []string{"10.0.0.8", "192.168.1.10", "192.168.1.20"} {
+		if !ipMap[expected] {
+			t.Fatalf("expected discovery IP blocklist to include %s, got %#v", expected, cfg.IPBlocklist)
+		}
+	}
+}
 
 func TestFindLinkedProxmoxEntity_MatchesCanonicalReadStateViews(t *testing.T) {
 	monitor := &Monitor{

@@ -3,13 +3,28 @@ package monitoring
 import (
 	"net"
 	"strings"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
+
+var lookupConfiguredHostIP = net.LookupIP
 
 // getConfiguredHostIPs returns a list of IP addresses from all configured Proxmox hosts.
 // This is used to prevent discovery from probing hosts we already know about.
-// Caller must hold m.mu.RLock or m.mu.Lock.
 func (m *Monitor) getConfiguredHostIPs() []string {
+	m.mu.RLock()
 	if m.config == nil {
+		m.mu.RUnlock()
+		return nil
+	}
+	cfg := m.config.DeepCopy()
+	m.mu.RUnlock()
+
+	return configuredHostIPsFromConfig(cfg)
+}
+
+func configuredHostIPsFromConfig(cfg *config.Config) []string {
+	if cfg == nil {
 		return nil
 	}
 
@@ -52,7 +67,7 @@ func (m *Monitor) getConfiguredHostIPs() []string {
 			return
 		}
 		// Try to resolve hostname to IP
-		if addrs, err := net.LookupIP(host); err == nil && len(addrs) > 0 {
+		if addrs, err := lookupConfiguredHostIP(host); err == nil && len(addrs) > 0 {
 			for _, addr := range addrs {
 				// Prefer IPv4
 				if v4 := addr.To4(); v4 != nil {
@@ -68,7 +83,7 @@ func (m *Monitor) getConfiguredHostIPs() []string {
 	}
 
 	// Add PVE hosts
-	for _, pve := range m.config.PVEInstances {
+	for _, pve := range cfg.PVEInstances {
 		addHost(pve.Host)
 		// Also add cluster endpoints (include both auto-discovered IP and override if set)
 		for _, ep := range pve.ClusterEndpoints {
@@ -81,14 +96,56 @@ func (m *Monitor) getConfiguredHostIPs() []string {
 	}
 
 	// Add PBS hosts
-	for _, pbs := range m.config.PBSInstances {
+	for _, pbs := range cfg.PBSInstances {
 		addHost(pbs.Host)
 	}
 
 	// Add PMG hosts
-	for _, pmg := range m.config.PMGInstances {
+	for _, pmg := range cfg.PMGInstances {
 		addHost(pmg.Host)
 	}
 
 	return ips
+}
+
+func mergeDiscoveryIPBlocklist(existing []string, discovered []string) []string {
+	if len(existing) == 0 && len(discovered) == 0 {
+		return nil
+	}
+
+	merged := make([]string, 0, len(existing)+len(discovered))
+	seen := make(map[string]struct{}, len(existing)+len(discovered))
+	add := func(ip string) {
+		ip = strings.TrimSpace(ip)
+		if ip == "" {
+			return
+		}
+		if _, ok := seen[ip]; ok {
+			return
+		}
+		seen[ip] = struct{}{}
+		merged = append(merged, ip)
+	}
+
+	for _, ip := range existing {
+		add(ip)
+	}
+	for _, ip := range discovered {
+		add(ip)
+	}
+	return merged
+}
+
+func (m *Monitor) discoveryConfigSnapshot() config.DiscoveryConfig {
+	m.mu.RLock()
+	if m.config == nil {
+		m.mu.RUnlock()
+		return config.DefaultDiscoveryConfig()
+	}
+	cfg := m.config.DeepCopy()
+	m.mu.RUnlock()
+
+	discoveryCfg := config.CloneDiscoveryConfig(cfg.Discovery)
+	discoveryCfg.IPBlocklist = mergeDiscoveryIPBlocklist(discoveryCfg.IPBlocklist, configuredHostIPsFromConfig(cfg))
+	return discoveryCfg
 }
