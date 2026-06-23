@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -19,6 +18,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
@@ -55,6 +55,40 @@ const (
 	LicenseStateExpired     LicenseState = "expired"
 	LicenseStateGracePeriod LicenseState = "grace_period"
 )
+
+const legacyServiceToolResultModelContextChars = 8000
+
+func legacyServiceProviderToolResultContextOptions() agentcapabilities.ProviderToolResultContextOptions {
+	return agentcapabilities.ProviderToolResultContextOptions{
+		MaxModelContentChars: legacyServiceToolResultModelContextChars,
+	}
+}
+
+func newLegacyServiceProviderToolResultContextProjection(toolUseID, content string, isError bool) agentcapabilities.ProviderToolResultContextProjection {
+	projection := agentcapabilities.NewProviderToolResultContextProjection(toolUseID, content, isError, legacyServiceProviderToolResultContextOptions())
+	logLegacyServiceProviderToolResultTruncation(projection.Truncation)
+	return projection
+}
+
+func legacyAssistantCapabilityInputSchema(name string) map[string]interface{} {
+	cap, ok := agentcapabilities.FindCapability(agentcapabilities.CanonicalManifest().Capabilities, name)
+	if !ok {
+		return agentcapabilities.ProviderInputSchema(agentcapabilities.InputSchema{})
+	}
+	return agentcapabilities.ProviderInputSchemaFromRaw(agentcapabilities.ToolInputSchema(cap))
+}
+
+func logLegacyServiceProviderToolResultTruncation(truncation agentcapabilities.ProviderToolResultTruncation) {
+	if !truncation.Applied {
+		return
+	}
+
+	log.Debug().
+		Int("original_chars", truncation.OriginalChars).
+		Int("truncated_to", truncation.MaxChars).
+		Int("chars_cut", truncation.TruncatedChars).
+		Msg("Truncated large tool result")
+}
 
 // LicenseChecker provides license feature checking for Pro features
 type LicenseChecker interface {
@@ -126,30 +160,19 @@ func (m ChatMessage) NormalizeCollections() ChatMessage {
 	return m
 }
 
-// ChatToolCall represents a tool invocation in a chat message
-type ChatToolCall struct {
-	ID    string                 `json:"id"`
-	Name  string                 `json:"name"`
-	Input map[string]interface{} `json:"input"`
-}
+// ChatToolCall represents a provider-facing tool invocation in an API-facing
+// chat message. It aliases the shared Pulse Intelligence provider-call shape so
+// API chat history and provider turns do not drift on tool-call JSON.
+type ChatToolCall = agentcapabilities.ProviderToolCall
 
 func EmptyChatToolCall() ChatToolCall {
-	return ChatToolCall{}.NormalizeCollections()
+	return agentcapabilities.EmptyProviderToolCall()
 }
 
-func (t ChatToolCall) NormalizeCollections() ChatToolCall {
-	if t.Input == nil {
-		t.Input = map[string]interface{}{}
-	}
-	return t
-}
-
-// ChatToolResult represents the result of a tool invocation
-type ChatToolResult struct {
-	ToolUseID string `json:"tool_use_id"`
-	Content   string `json:"content"`
-	IsError   bool   `json:"is_error,omitempty"`
-}
+// ChatToolResult represents the result of a tool invocation. It aliases the
+// shared Pulse Intelligence provider-result shape so API-facing chat messages
+// and provider turns do not drift on tool result JSON.
+type ChatToolResult = agentcapabilities.ProviderToolResult
 
 // PatrolExecuteRequest represents a patrol execution request via the chat service
 type PatrolExecuteRequest struct {
@@ -988,7 +1011,7 @@ func (s *Service) patrolConfigFromAIConfig(cfg *config.AIConfig) PatrolConfig {
 	patrolCfg := DefaultPatrolConfig()
 	if cfg == nil {
 		patrolCfg.Enabled = false
-		patrolCfg.RuntimeBlockedReason = "Pulse Assistant settings could not be loaded from persistence."
+		patrolCfg.RuntimeBlockedReason = "Assistant & Patrol settings could not be loaded from persistence."
 		patrolCfg.RuntimeBlockedCause = PatrolFailureCauseSettingsPersistence
 		return patrolCfg
 	}
@@ -1080,7 +1103,7 @@ func (s *Service) StartPatrol(ctx context.Context) {
 		return
 	}
 
-	// Check license for safe remediation workflows (Pro only) - patrol itself is free with BYOK
+	// Check license for Patrol fix actions (Pro only) - Patrol itself is free with BYOK
 	if licenseChecker != nil && !licenseChecker.HasFeature(FeatureAIAutoFix) {
 		log.Info().Msg("Patrol safe remediation requires Pulse Pro license - fixes will require manual approval")
 	}
@@ -1419,35 +1442,26 @@ func extractVMIDFromCommand(command string) (vmID int, requiresOwnerNode bool, f
 	return 0, false, false
 }
 
-// formatApprovalNeededToolResult returns a structured tool result for commands that require approval.
-// It is encoded as a marker + JSON so the LLM can reliably detect it.
+// formatApprovalNeededToolResult returns a structured tool marker for commands
+// that require approval. The shared marker vocabulary lives in
+// agentcapabilities so Assistant and external-agent bridges cannot drift.
 func formatApprovalNeededToolResult(command, toolID, reason, approvalID string) string {
-	payload := map[string]interface{}{
-		"type":           "approval_required",
-		"command":        command,
-		"tool_id":        toolID,
-		"reason":         reason,
-		"how_to_approve": "Ask the user to click the approval button shown in the UI.",
-		"do_not_retry":   true,
-	}
-	if strings.TrimSpace(approvalID) != "" {
-		payload["approval_id"] = strings.TrimSpace(approvalID)
-	}
-	b, err := json.Marshal(payload)
-	if err != nil {
-		// Fallback to a safe plain-text marker.
-		return fmt.Sprintf("APPROVAL_REQUIRED: %s", command)
-	}
-	return "APPROVAL_REQUIRED: " + string(b)
+	return agentcapabilities.ApprovalRequiredToolMarker(
+		command,
+		toolID,
+		reason,
+		approvalID,
+		"Ask the user to click the approval button shown in the UI.",
+	)
 }
 
 func resolveRunCommandApprovalTarget(req ExecuteRequest, runOnHost bool, targetHost string) (targetType, targetID, targetName string) {
 	normalizedTargetHost := strings.ToLower(strings.TrimSpace(targetHost))
-	targetType = strings.ToLower(strings.TrimSpace(req.TargetType))
+	targetType = agentcapabilities.NormalizeActionTargetType(req.TargetType)
 	targetID = strings.TrimSpace(req.TargetID)
 
 	if runOnHost {
-		targetType = "agent"
+		targetType = agentcapabilities.ActionTargetTypeAgent
 		if normalizedTargetHost != "" {
 			targetID = normalizedTargetHost
 			targetName = normalizedTargetHost
@@ -1455,10 +1469,10 @@ func resolveRunCommandApprovalTarget(req ExecuteRequest, runOnHost bool, targetH
 	}
 
 	if targetType == "" {
-		targetType = "agent"
+		targetType = agentcapabilities.ActionTargetTypeAgent
 	}
 
-	if targetType == "agent" && targetID == "" {
+	if targetType == agentcapabilities.ActionTargetTypeAgent && targetID == "" {
 		if node, ok := req.Context["node"].(string); ok && node != "" {
 			targetID = strings.ToLower(strings.TrimSpace(node))
 		} else if node, ok := req.Context["hostname"].(string); ok && node != "" {
@@ -1503,64 +1517,27 @@ func createRunCommandApprovalRecord(orgID, command, toolID string, req ExecuteRe
 	return approvalReq.ID
 }
 
-// formatPolicyBlockedToolResult returns a structured tool result for commands blocked by policy.
+// formatPolicyBlockedToolResult returns a structured tool marker for commands
+// blocked by policy.
 func formatPolicyBlockedToolResult(command, reason string) string {
-	payload := map[string]interface{}{
-		"type":         "policy_blocked",
-		"command":      command,
-		"reason":       reason,
-		"do_not_retry": true,
-	}
-	b, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Sprintf("POLICY_BLOCKED: %s", reason)
-	}
-	return "POLICY_BLOCKED: " + string(b)
-}
-
-func parseApprovalNeededMarker(content string) (ApprovalNeededData, bool) {
-	const prefix = "APPROVAL_REQUIRED:"
-	if !strings.HasPrefix(content, prefix) {
-		return ApprovalNeededData{}, false
-	}
-	trimmed := strings.TrimSpace(strings.TrimPrefix(content, prefix))
-	if trimmed == "" {
-		return ApprovalNeededData{}, false
-	}
-
-	var payload struct {
-		Type       string `json:"type"`
-		Command    string `json:"command"`
-		ToolID     string `json:"tool_id"`
-		Reason     string `json:"reason"`
-		ApprovalID string `json:"approval_id"`
-	}
-	if err := json.Unmarshal([]byte(trimmed), &payload); err != nil {
-		return ApprovalNeededData{}, false
-	}
-	if payload.Type != "approval_required" || payload.Command == "" {
-		return ApprovalNeededData{}, false
-	}
-
-	return ApprovalNeededData{
-		Command:    payload.Command,
-		ToolID:     payload.ToolID,
-		ApprovalID: strings.TrimSpace(payload.ApprovalID),
-	}, true
+	return agentcapabilities.PolicyBlockedToolMarker(command, reason)
 }
 
 func approvalNeededFromToolCall(req ExecuteRequest, tc providers.ToolCall, result string) (ApprovalNeededData, bool) {
-	if !strings.HasPrefix(result, "APPROVAL_REQUIRED:") {
+	if !agentcapabilities.HasApprovalRequiredToolMarker(result) {
 		return ApprovalNeededData{}, false
 	}
-	if tc.Name != "run_command" {
+	if tc.Name != agentcapabilities.LegacyAssistantRunCommandToolName {
 		return ApprovalNeededData{}, false
 	}
 
-	parsed, parsedOK := parseApprovalNeededMarker(result)
-	cmd, _ := tc.Input["command"].(string)
-	runOnHost, _ := tc.Input["run_on_host"].(bool)
-	targetHost, _ := tc.Input["target_host"].(string)
+	parsed, parsedOK := agentcapabilities.ParseApprovalRequiredToolMarkerData(result)
+	if parsedOK && strings.TrimSpace(parsed.Command) == "" {
+		parsedOK = false
+	}
+	cmd, _ := tc.Input[agentcapabilities.LegacyAssistantCommandArgumentName].(string)
+	runOnHost, _ := tc.Input[agentcapabilities.LegacyAssistantRunOnHostArgumentName].(bool)
+	targetHost, _ := tc.Input[agentcapabilities.LegacyAssistantTargetHostArgumentName].(string)
 
 	if targetHost == "" {
 		if node, ok := req.Context["node"].(string); ok && node != "" {
@@ -1573,10 +1550,8 @@ func approvalNeededFromToolCall(req ExecuteRequest, tc providers.ToolCall, resul
 	}
 
 	if parsedOK {
-		if parsed.Command != "" {
-			cmd = parsed.Command
-		}
-		toolID := parsed.ToolID
+		cmd = parsed.Command
+		toolID := strings.TrimSpace(parsed.ToolID)
 		if toolID == "" {
 			toolID = tc.ID
 		}
@@ -1586,7 +1561,7 @@ func approvalNeededFromToolCall(req ExecuteRequest, tc providers.ToolCall, resul
 			ToolName:   tc.Name,
 			RunOnHost:  runOnHost,
 			TargetHost: targetHost,
-			ApprovalID: parsed.ApprovalID,
+			ApprovalID: strings.TrimSpace(parsed.ApprovalID),
 		}, true
 	}
 
@@ -1955,6 +1930,19 @@ type ExecuteRequest struct {
 	RequireCommandApproval bool                   `json:"require_command_approval,omitempty"` // Force every run_command tool call through operator approval
 }
 
+func assistantContextScopeForExecuteRequest(req ExecuteRequest) string {
+	if strings.TrimSpace(req.FindingID) != "" {
+		return "patrol_finding"
+	}
+	if strings.TrimSpace(req.TargetType) != "" || strings.TrimSpace(req.TargetID) != "" {
+		return "resource_context"
+	}
+	if len(req.Context) > 0 {
+		return "operator_context"
+	}
+	return ""
+}
+
 // ExecuteResponse represents the AI's response
 type ExecuteResponse struct {
 	Content          string               `json:"content"`
@@ -2182,6 +2170,7 @@ Always execute the commands rather than telling the user how to do it.`
 				RequestModel:  modelString,
 				ResponseModel: resp.Model,
 				UseCase:       req.UseCase,
+				ContextScope:  assistantContextScopeForExecuteRequest(req),
 				InputTokens:   resp.InputTokens,
 				OutputTokens:  resp.OutputTokens,
 				TargetType:    req.TargetType,
@@ -2220,13 +2209,10 @@ Always execute the commands rather than telling the user how to do it.`
 			}
 
 			// Add tool result to messages
+			projection := newLegacyServiceProviderToolResultContextProjection(tc.ID, result, !execution.Success)
 			messages = append(messages, providers.Message{
-				Role: "user",
-				ToolResult: &providers.ToolResult{
-					ToolUseID: tc.ID,
-					Content:   result,
-					IsError:   !execution.Success,
-				},
+				Role:       "user",
+				ToolResult: &projection.Model,
 			})
 
 		}
@@ -2421,6 +2407,7 @@ Always execute the commands rather than telling the user how to do it.`
 				RequestModel:  modelString,
 				ResponseModel: resp.Model,
 				UseCase:       req.UseCase,
+				ContextScope:  assistantContextScopeForExecuteRequest(req),
 				InputTokens:   resp.InputTokens,
 				OutputTokens:  resp.OutputTokens,
 				TargetType:    req.TargetType,
@@ -2485,10 +2472,10 @@ Always execute the commands rather than telling the user how to do it.`
 			needsApproval := false
 			approvalID := ""
 			approvalReason := "Command requires user approval"
-			if tc.Name == "run_command" {
-				cmd, _ := tc.Input["command"].(string)
-				runOnHost, _ := tc.Input["run_on_host"].(bool)
-				targetHost, _ := tc.Input["target_host"].(string)
+			if tc.Name == agentcapabilities.LegacyAssistantRunCommandToolName {
+				cmd, _ := tc.Input[agentcapabilities.LegacyAssistantCommandArgumentName].(string)
+				runOnHost, _ := tc.Input[agentcapabilities.LegacyAssistantRunOnHostArgumentName].(bool)
+				targetHost, _ := tc.Input[agentcapabilities.LegacyAssistantTargetHostArgumentName].(string)
 				s.mu.RLock()
 				approvalOrgID := s.orgID
 				s.mu.RUnlock()
@@ -2534,13 +2521,10 @@ Always execute the commands rather than telling the user how to do it.`
 						Data: ToolEndData{Name: tc.Name, Input: toolInput, Output: result, Success: false},
 					})
 
+					projection := newLegacyServiceProviderToolResultContextProjection(tc.ID, result, true)
 					messages = append(messages, providers.Message{
-						Role: "user",
-						ToolResult: &providers.ToolResult{
-							ToolUseID: tc.ID,
-							Content:   result,
-							IsError:   true,
-						},
+						Role:       "user",
+						ToolResult: &projection.Model,
 					})
 					continue
 				}
@@ -2583,7 +2567,7 @@ Always execute the commands rather than telling the user how to do it.`
 				// We'll break out of the loop after processing all tool calls
 				// Note: We don't add to toolExecutions here because the approval_needed event
 				// already tells the frontend to show the approval UI
-				cmd, _ := tc.Input["command"].(string)
+				cmd, _ := tc.Input[agentcapabilities.LegacyAssistantCommandArgumentName].(string)
 				result = formatApprovalNeededToolResult(cmd, tc.ID, approvalReason, approvalID)
 				execution = ToolExecution{
 					Name:    tc.Name,
@@ -2609,34 +2593,16 @@ Always execute the commands rather than telling the user how to do it.`
 
 				// Log to remediation log for operational memory
 				// Only log run_command since that's the main remediation action
-				if tc.Name == "run_command" {
+				if tc.Name == agentcapabilities.LegacyAssistantRunCommandToolName {
 					s.logRemediation(req, toolInput, result, execution.Success)
 				}
 			}
 
-			// Truncate large results to prevent context bloat
-			// Keep first and last parts for context
-			resultForContext := result
-			const maxResultSize = 8000 // ~8KB per tool result
-			if len(result) > maxResultSize {
-				halfSize := maxResultSize / 2
-				resultForContext = result[:halfSize] + "\n\n[... output truncated (" +
-					fmt.Sprintf("%d", len(result)-maxResultSize) + " bytes omitted) ...]\n\n" +
-					result[len(result)-halfSize:]
-				log.Debug().
-					Int("original_size", len(result)).
-					Int("truncated_size", len(resultForContext)).
-					Msg("Truncated large tool result")
-			}
-
 			// Add tool result to messages
+			projection := newLegacyServiceProviderToolResultContextProjection(tc.ID, result, !execution.Success)
 			messages = append(messages, providers.Message{
-				Role: "user",
-				ToolResult: &providers.ToolResult{
-					ToolUseID: tc.ID,
-					Content:   resultForContext,
-					IsError:   !execution.Success,
-				},
+				Role:       "user",
+				ToolResult: &projection.Model,
 			})
 		}
 
@@ -2671,18 +2637,18 @@ Always execute the commands rather than telling the user how to do it.`
 // getToolInputDisplay returns a human-readable display of tool input
 func (s *Service) getToolInputDisplay(tc providers.ToolCall) string {
 	switch tc.Name {
-	case "run_command":
-		cmd, _ := tc.Input["command"].(string)
-		if runOnHost, ok := tc.Input["run_on_host"].(bool); ok && runOnHost {
+	case agentcapabilities.LegacyAssistantRunCommandToolName:
+		cmd, _ := tc.Input[agentcapabilities.LegacyAssistantCommandArgumentName].(string)
+		if runOnHost, ok := tc.Input[agentcapabilities.LegacyAssistantRunOnHostArgumentName].(bool); ok && runOnHost {
 			return fmt.Sprintf("[host] %s", cmd)
 		}
 		return cmd
-	case "fetch_url":
-		fetchURL, _ := tc.Input["url"].(string)
+	case agentcapabilities.LegacyAssistantFetchURLToolName:
+		fetchURL, _ := tc.Input[agentcapabilities.LegacyAssistantURLArgumentName].(string)
 		return fetchURL
-	case "set_resource_url":
-		resourceType, _ := tc.Input["resource_type"].(string)
-		resourceURL, _ := tc.Input["url"].(string)
+	case agentcapabilities.LegacyAssistantSetResourceURLToolName:
+		resourceType, _ := tc.Input[agentcapabilities.LegacyAssistantResourceTypeArgumentName].(string)
+		resourceURL, _ := tc.Input[agentcapabilities.LegacyAssistantURLArgumentName].(string)
 		return fmt.Sprintf("Set %s URL: %s", resourceType, resourceURL)
 	default:
 		return fmt.Sprintf("%v", tc.Input)
@@ -2731,7 +2697,7 @@ func (s *Service) logRemediation(req ExecuteRequest, command, output string, suc
 	}
 
 	// Generate a meaningful summary from the command that describes what was achieved
-	// This is what gets displayed in the Pulse AI Impact section
+	// This is what gets displayed in the Pulse Intelligence Impact section
 	summary := generateRemediationSummary(command, req.TargetType, req.Context)
 
 	// Get resource name from context if available
@@ -2761,7 +2727,7 @@ func (s *Service) logRemediation(req ExecuteRequest, command, output string, suc
 		Outcome:      outcome,
 		Automatic:    req.UseCase == "patrol", // Patrol runs are automatic
 	}); err != nil {
-		log.Warn().Err(err).Str("resource_id", req.TargetID).Msg("Failed to log ACTION to Pulse AI Impact")
+		log.Warn().Err(err).Str("resource_id", req.TargetID).Msg("Failed to log ACTION to Pulse Intelligence Impact")
 	}
 
 	log.Info().
@@ -2770,7 +2736,7 @@ func (s *Service) logRemediation(req ExecuteRequest, command, output string, suc
 		Str("command", command).
 		Str("summary", summary).
 		Bool("success", success).
-		Msg("Logged ACTION to Pulse AI Impact")
+		Msg("Logged ACTION to Pulse Intelligence Impact")
 }
 
 // isActionableCommand returns true if the command performs an actual action
@@ -2816,7 +2782,7 @@ func isActionableCommand(cmd string) bool {
 }
 
 // generateRemediationSummary creates a human-readable summary of what a command achieved
-// This is used to display meaningful descriptions in the Pulse AI Impact section
+// This is used to display meaningful descriptions in the Pulse Intelligence Impact section
 func generateRemediationSummary(command string, _ string, context map[string]interface{}) string {
 	cmd := strings.TrimSpace(command)
 
@@ -3061,108 +3027,19 @@ func (s *Service) hasAgentForTarget(req ExecuteRequest) bool {
 
 // getTools returns the available tools for AI
 func (s *Service) getTools() []providers.Tool {
-	tools := []providers.Tool{
-		{
-			Name:        "run_command",
-			Description: "Execute a shell command. By default runs on the current target (container/VM), but set run_on_host=true for Proxmox host commands. IMPORTANT: For targets on different nodes, specify target_host to route to the correct PVE node.",
-			InputSchema: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"command": map[string]interface{}{
-						"type":        "string",
-						"description": "The shell command to execute (e.g., 'ps aux --sort=-%mem | head -20')",
-					},
-					"run_on_host": map[string]interface{}{
-						"type":        "boolean",
-						"description": "If true, run on the Proxmox/Docker host instead of inside the container/VM. Use for pct/qm commands like 'pct resize 101 rootfs +10G'. When true, you should also set target_host.",
-					},
-					"target_host": map[string]interface{}{
-						"type":        "string",
-						"description": "Optional hostname of the specific host/node to run the command on. Use this to explicitly route pct/qm/docker commands to the correct host node or Docker host. Check the 'node' or 'Host Node' field in the target's context.",
-					},
-				},
-				"required": []string{"command"},
-			},
-		},
-		{
-			Name:        "fetch_url",
-			Description: "Fetch content from a URL. Use this to check if web services are responding, read API endpoints, or fetch documentation. Works with local network URLs and public sites.",
-			InputSchema: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"url": map[string]interface{}{
-						"type":        "string",
-						"description": "The URL to fetch (e.g., 'http://192.0.2.50:8080/api/health' or 'https://example.com/docs')",
-					},
-				},
-				"required": []string{"url"},
-			},
-		},
-		{
-			Name:        "set_resource_url",
-			Description: "Set the web URL for a resource in Pulse after discovering a web service. Use this when you've found a web server running on a VM/container/host and want to save it for quick access. The URL will appear as a clickable link in the Pulse dashboard.",
-			InputSchema: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"resource_type": map[string]interface{}{
-						"type":        "string",
-						"description": "Canonical v6 resource type: 'vm', 'system-container', 'oci-container', 'app-container', 'agent', 'node', or 'docker-host'",
-						"enum":        []string{"vm", "system-container", "oci-container", "app-container", "agent", "node", "docker-host"},
-					},
-					"resource_id": map[string]interface{}{
-						"type":        "string",
-						"description": "The resource ID from context. For VMs/LXC, use the canonical resource ID shown by Pulse (for example 'homelab:pve-node:150'). For app containers, use the container resource ID (for example 'hostid:container:containerid').",
-					},
-					"url": map[string]interface{}{
-						"type":        "string",
-						"description": "The discovered URL (e.g., 'http://192.0.2.50:8096' for Jellyfin). Use an empty string to remove the URL.",
-					},
-				},
-				"required": []string{"resource_type", "resource_id"},
-			},
-		},
-		{
-			Name:        "resolve_finding",
+	tools := append([]providers.Tool{}, agentcapabilities.LegacyAssistantUtilityProviderTools()...)
+	tools = append(tools,
+		providers.Tool{
+			Name:        agentcapabilities.ResolveFindingCapabilityName,
 			Description: "Mark an AI patrol finding as resolved after successfully fixing the issue. Use the finding ID shown in your Patrol Finding Context section. Call this after verifying the fix worked - do NOT ask the user for the finding ID.",
-			InputSchema: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"finding_id": map[string]interface{}{
-						"type":        "string",
-						"description": "The finding ID from your context (shown in ## Patrol Finding Context section).",
-					},
-					"resolution_note": map[string]interface{}{
-						"type":        "string",
-						"description": "Brief description of how the issue was resolved (e.g., 'Restarted nginx service', 'Cleaned up disk space').",
-					},
-				},
-				"required": []string{"finding_id", "resolution_note"},
-			},
+			InputSchema: legacyAssistantCapabilityInputSchema(agentcapabilities.ResolveFindingCapabilityName),
 		},
-		{
-			Name:        "dismiss_finding",
-			Description: "Dismiss an AI patrol finding when it's not actually an issue or is expected behavior. Use this instead of resolve_finding when the finding is a false positive or the configuration is intentional. This creates a suppression rule to prevent similar findings from being raised again.",
-			InputSchema: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"finding_id": map[string]interface{}{
-						"type":        "string",
-						"description": "The finding ID from your context (shown in ## Patrol Finding Context section).",
-					},
-					"reason": map[string]interface{}{
-						"type":        "string",
-						"description": "Why the finding is being dismissed.",
-						"enum":        []string{"not_an_issue", "expected_behavior", "will_fix_later"},
-					},
-					"note": map[string]interface{}{
-						"type":        "string",
-						"description": "Explanation of why this is not an issue or is expected behavior (e.g., 'PBS storage restricted to specific nodes is intentional').",
-					},
-				},
-				"required": []string{"finding_id", "reason", "note"},
-			},
+		providers.Tool{
+			Name:        agentcapabilities.DismissFindingCapabilityName,
+			Description: "Dismiss an AI patrol finding when it's not actually an issue or is expected behavior. Use this instead of " + agentcapabilities.ResolveFindingCapabilityName + " when the finding is a false positive or the configuration is intentional. This creates a suppression rule to prevent similar findings from being raised again.",
+			InputSchema: legacyAssistantCapabilityInputSchema(agentcapabilities.DismissFindingCapabilityName),
 		},
-	}
+	)
 
 	// Add web search tool for Anthropic provider
 	if s.provider != nil && s.provider.Name() == "anthropic" {
@@ -3184,10 +3061,10 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 	}
 
 	switch tc.Name {
-	case "run_command":
-		command, _ := tc.Input["command"].(string)
-		runOnHost, _ := tc.Input["run_on_host"].(bool)
-		targetHost, _ := tc.Input["target_host"].(string)
+	case agentcapabilities.LegacyAssistantRunCommandToolName:
+		command, _ := tc.Input[agentcapabilities.LegacyAssistantCommandArgumentName].(string)
+		runOnHost, _ := tc.Input[agentcapabilities.LegacyAssistantRunOnHostArgumentName].(bool)
+		targetHost, _ := tc.Input[agentcapabilities.LegacyAssistantTargetHostArgumentName].(string)
 		execution.Input = command
 		if runOnHost && targetHost != "" {
 			execution.Input = fmt.Sprintf("[%s] %s", targetHost, command)
@@ -3315,8 +3192,8 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 		execution.Success = true
 		return result, execution
 
-	case "fetch_url":
-		urlStr, _ := tc.Input["url"].(string)
+	case agentcapabilities.LegacyAssistantFetchURLToolName:
+		urlStr, _ := tc.Input[agentcapabilities.LegacyAssistantURLArgumentName].(string)
 		execution.Input = urlStr
 
 		if urlStr == "" {
@@ -3335,10 +3212,10 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 		execution.Success = true
 		return result, execution
 
-	case "set_resource_url":
-		resourceType, _ := tc.Input["resource_type"].(string)
-		resourceID, _ := tc.Input["resource_id"].(string)
-		resourceURL, _ := tc.Input["url"].(string)
+	case agentcapabilities.LegacyAssistantSetResourceURLToolName:
+		resourceType, _ := tc.Input[agentcapabilities.LegacyAssistantResourceTypeArgumentName].(string)
+		resourceID, _ := tc.Input[agentcapabilities.LegacyAssistantResourceIDArgumentName].(string)
+		resourceURL, _ := tc.Input[agentcapabilities.LegacyAssistantURLArgumentName].(string)
 		execution.Input = fmt.Sprintf("%s %s -> %s", resourceType, resourceID, resourceURL)
 
 		if resourceType == "" {
@@ -3371,9 +3248,9 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 		execution.Success = true
 		return execution.Output, execution
 
-	case "resolve_finding":
-		findingID, _ := tc.Input["finding_id"].(string)
-		resolutionNote, _ := tc.Input["resolution_note"].(string)
+	case agentcapabilities.ResolveFindingCapabilityName:
+		findingID, _ := tc.Input[agentcapabilities.FindingIDArgumentName].(string)
+		resolutionNote, _ := tc.Input[agentcapabilities.ResolutionNoteArgumentName].(string)
 		execution.Input = fmt.Sprintf("finding: %s, note: %s", findingID, resolutionNote)
 
 		// If no finding ID provided by AI, check the request context
@@ -3383,11 +3260,6 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 
 		if findingID == "" {
 			execution.Output = "Error: finding_id is required. The finding ID should be provided in the request context when helping fix a patrol finding."
-			return execution.Output, execution
-		}
-
-		if resolutionNote == "" {
-			execution.Output = "Error: resolution_note is required. Please describe how the issue was resolved."
 			return execution.Output, execution
 		}
 
@@ -3408,14 +3280,17 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 			return execution.Output, execution
 		}
 
-		execution.Output = fmt.Sprintf("Finding resolved! The Patrol finding has been marked as fixed.\nID: %s\nResolution: %s", findingID, resolutionNote)
+		execution.Output = fmt.Sprintf("Finding resolved! The Patrol finding has been marked as fixed.\nID: %s", findingID)
+		if resolutionNote != "" {
+			execution.Output += fmt.Sprintf("\nResolution: %s", resolutionNote)
+		}
 		execution.Success = true
 		return execution.Output, execution
 
-	case "dismiss_finding":
-		findingID, _ := tc.Input["finding_id"].(string)
-		reason, _ := tc.Input["reason"].(string)
-		note, _ := tc.Input["note"].(string)
+	case agentcapabilities.DismissFindingCapabilityName:
+		findingID, _ := tc.Input[agentcapabilities.FindingIDArgumentName].(string)
+		reason, _ := tc.Input[agentcapabilities.ReasonArgumentName].(string)
+		note, _ := tc.Input[agentcapabilities.NoteArgumentName].(string)
 		execution.Input = fmt.Sprintf("finding: %s, reason: %s, note: %s", findingID, reason, note)
 
 		// If no finding ID provided by AI, check the request context
@@ -3432,11 +3307,6 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 		validReasons := map[string]bool{"not_an_issue": true, "expected_behavior": true, "will_fix_later": true}
 		if !validReasons[reason] {
 			execution.Output = "Error: reason must be one of: not_an_issue, expected_behavior, will_fix_later"
-			return execution.Output, execution
-		}
-
-		if note == "" {
-			execution.Output = "Error: note is required. Please explain why this finding is being dismissed."
 			return execution.Output, execution
 		}
 
@@ -3826,21 +3696,17 @@ func hasExplicitHostRoutingContext(ctx map[string]interface{}) bool {
 }
 
 func normalizeExecuteTargetType(raw, targetID string, ctx map[string]interface{}) (string, error) {
-	targetType := strings.ToLower(strings.TrimSpace(raw))
+	targetType := agentcapabilities.NormalizeActionTargetType(raw)
 	switch targetType {
-	case "agent":
-		return "agent", nil
-	case "system-container":
-		return "system-container", nil
-	case "vm":
-		return "vm", nil
+	case agentcapabilities.ActionTargetTypeAgent, agentcapabilities.ActionTargetTypeSystemContainer, agentcapabilities.ActionTargetTypeVM:
+		return targetType, nil
 	case "":
 		if strings.TrimSpace(targetID) == "" && hasExplicitHostRoutingContext(ctx) {
-			return "agent", nil
+			return agentcapabilities.ActionTargetTypeAgent, nil
 		}
 		return "", fmt.Errorf("target_type is required (agent, system-container, or vm)")
 	default:
-		return "", fmt.Errorf("unsupported target_type %q (allowed: agent, system-container, vm)", raw)
+		return "", fmt.Errorf("unsupported target_type %q (allowed: %s)", raw, agentcapabilities.ActionTargetTypeAllowedDescription())
 	}
 }
 
@@ -4017,7 +3883,7 @@ func (s *Service) RunCommand(ctx context.Context, req RunCommandRequest) (*RunCo
 
 	// If running on host, override target type
 	if req.RunOnHost {
-		execReq.TargetType = "agent"
+		execReq.TargetType = agentcapabilities.ActionTargetTypeAgent
 		// Keep the original target info for routing
 	}
 
@@ -4197,10 +4063,12 @@ Latest version: https://api.github.com/repos/rcourtman/Pulse/releases/latest`, c
 		prompt += fmt.Sprintf("\n\n## Patrol Finding Context\n"+
 			"You are helping with patrol finding **%s**.\n\n"+
 			"Lifecycle tools are available when current evidence supports them:\n"+
-			"- `resolve_finding` records that the underlying issue has actually been fixed.\n"+
-			"- `dismiss_finding` records a false positive or expected behavior.\n"+
+			"- `%s` records that the underlying issue has actually been fixed.\n"+
+			"- `%s` records a false positive or expected behavior.\n"+
 			"Only call a lifecycle tool when that is the model's conclusion from the current evidence.\n",
-			req.FindingID)
+			req.FindingID,
+			agentcapabilities.ResolveFindingCapabilityName,
+			agentcapabilities.DismissFindingCapabilityName)
 	}
 
 	// Add any provided context in a structured way

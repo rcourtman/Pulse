@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcontext"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
@@ -40,28 +41,29 @@ type AgentServer interface {
 	ExecuteCommand(ctx context.Context, agentID string, cmd agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error)
 }
 
-// MCP provider type aliases for external use
+// Assistant provider type aliases for API wiring. MCP remains the external
+// adapter surface; these seams feed the native Pulse Assistant tool registry.
 type (
-	MCPAlertProvider              = tools.AlertProvider
-	MCPFindingsProvider           = tools.FindingsProvider
-	MCPBaselineProvider           = tools.BaselineProvider
-	MCPPatternProvider            = tools.PatternProvider
-	MCPMetricsHistoryProvider     = tools.MetricsHistoryProvider
-	MCPBackupProvider             = tools.BackupProvider
-	MCPGuestConfigProvider        = tools.GuestConfigProvider
-	MCPAppContainerConfigProvider = tools.AppContainerConfigProvider
-	MCPDiskHealthProvider         = tools.DiskHealthProvider
-	MCPUpdatesProvider            = tools.UpdatesProvider
-	MCPAppContainerActionProvider = tools.AppContainerActionProvider
-	MCPAppContainerReadProvider   = tools.AppContainerReadProvider
-	AgentProfileManager           = tools.AgentProfileManager
-	FindingsManager               = tools.FindingsManager
-	MetadataUpdater               = tools.MetadataUpdater
-	IncidentRecorderProvider      = tools.IncidentRecorderProvider
-	EventCorrelatorProvider       = tools.EventCorrelatorProvider
-	KnowledgeStoreProvider        = tools.KnowledgeStoreProvider
-	MCPDiscoveryProvider          = tools.DiscoveryProvider
-	MCPUnifiedResourceProvider    = tools.UnifiedResourceProvider
+	AssistantAlertProvider              = tools.AlertProvider
+	AssistantFindingsProvider           = tools.FindingsProvider
+	AssistantBaselineProvider           = tools.BaselineProvider
+	AssistantPatternProvider            = tools.PatternProvider
+	AssistantMetricsHistoryProvider     = tools.MetricsHistoryProvider
+	AssistantBackupProvider             = tools.BackupProvider
+	AssistantGuestConfigProvider        = tools.GuestConfigProvider
+	AssistantAppContainerConfigProvider = tools.AppContainerConfigProvider
+	AssistantDiskHealthProvider         = tools.DiskHealthProvider
+	AssistantUpdatesProvider            = tools.UpdatesProvider
+	AssistantAppContainerActionProvider = tools.AppContainerActionProvider
+	AssistantAppContainerReadProvider   = tools.AppContainerReadProvider
+	AgentProfileManager                 = tools.AgentProfileManager
+	FindingsManager                     = tools.FindingsManager
+	MetadataUpdater                     = tools.MetadataUpdater
+	IncidentRecorderProvider            = tools.IncidentRecorderProvider
+	EventCorrelatorProvider             = tools.EventCorrelatorProvider
+	KnowledgeStoreProvider              = tools.KnowledgeStoreProvider
+	AssistantDiscoveryProvider          = tools.DiscoveryProvider
+	AssistantUnifiedResourceProvider    = tools.UnifiedResourceProvider
 )
 
 // Config holds service configuration
@@ -264,6 +266,38 @@ func (s *Service) unregisterActiveLoop(sessionID string, loop *AgenticLoop) {
 	}
 }
 
+func assistantContextScopeForChatTurn(
+	req ExecuteRequest,
+	handoffFindingID string,
+	handoffContext string,
+	handoffResources []HandoffResource,
+	handoffActions []HandoffAction,
+	handoffMetadata HandoffMetadata,
+	mentionsFound bool,
+) string {
+	if strings.TrimSpace(handoffFindingID) != "" || strings.TrimSpace(req.FindingID) != "" {
+		return sessionHandoffKindPatrolFinding
+	}
+	if len(normalizeHandoffActions(handoffActions)) > 0 {
+		return "governed_action"
+	}
+	metadata := NormalizeHandoffMetadata(handoffMetadata)
+	switch metadata.Kind {
+	case sessionHandoffKindPatrolAssessment,
+		sessionHandoffKindPatrolConfigurationFailure,
+		sessionHandoffKindPatrolRun,
+		sessionHandoffKindResourceContext:
+		return metadata.Kind
+	}
+	if len(normalizeHandoffResources(handoffResources)) > 0 || len(req.Mentions) > 0 || mentionsFound {
+		return sessionHandoffKindResourceContext
+	}
+	if strings.TrimSpace(handoffContext) != "" {
+		return sessionHandoffKindScopedContext
+	}
+	return ""
+}
+
 // recordChatTurnCost records a cost.UsageEvent for a completed (or
 // failed) user-chat agentic turn. Uses the totals accumulated by the
 // loop's stream callbacks so the recorded numbers match what the
@@ -271,7 +305,7 @@ func (s *Service) unregisterActiveLoop(sessionID string, loop *AgenticLoop) {
 // not configured or when the loop consumed zero tokens (an early
 // failure before the first turn completed). UseCase is "chat" — the
 // canonical taxonomy noted on cost.UsageEvent.UseCase.
-func (s *Service) recordChatTurnCost(loop *AgenticLoop, requestModel string) {
+func (s *Service) recordChatTurnCost(loop *AgenticLoop, requestModel, contextScope string) {
 	if s == nil || loop == nil {
 		return
 	}
@@ -293,12 +327,14 @@ func (s *Service) recordChatTurnCost(loop *AgenticLoop, requestModel string) {
 		}
 	}
 	store.Record(cost.UsageEvent{
-		Timestamp:    time.Now(),
-		Provider:     providerName,
-		RequestModel: requestModel,
-		UseCase:      "chat",
-		InputTokens:  inputTokens,
-		OutputTokens: outputTokens,
+		Timestamp:     time.Now(),
+		Provider:      providerName,
+		RequestModel:  requestModel,
+		UseCase:       "chat",
+		ContextScope:  strings.TrimSpace(contextScope),
+		ToolCallCount: loop.GetTotalToolCalls(),
+		InputTokens:   inputTokens,
+		OutputTokens:  outputTokens,
 	})
 }
 
@@ -427,7 +463,7 @@ func (s *Service) Start(ctx context.Context) error {
 	log.Info().
 		Str("model", s.cfg.GetChatModel()).
 		Str("data_dir", dataDir).
-		Msg("Pulse AI (direct) started")
+		Msg("Pulse Assistant service started")
 
 	return nil
 }
@@ -445,7 +481,7 @@ func (s *Service) Stop(ctx context.Context) error {
 		}
 		s.actionAuditStore = nil
 	}
-	log.Info().Msg("pulse AI (direct) stopped")
+	log.Info().Msg("Pulse Assistant service stopped")
 	return nil
 }
 
@@ -484,7 +520,7 @@ func (s *Service) Restart(ctx context.Context, newCfg *config.AIConfig) error {
 
 	log.Info().
 		Str("model", s.cfg.GetChatModel()).
-		Msg("Pulse AI restarted with new config")
+		Msg("Pulse Assistant service restarted with new config")
 
 	return nil
 }
@@ -792,6 +828,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 			}
 		}
 	}
+	contextScope := assistantContextScopeForChatTurn(req, handoffFindingID, handoffContext, handoffResources, handoffActions, handoffMetadata, mentionsFound)
 	// Run agentic loop. Tool selection is model-owned: the turn always carries
 	// the full governed manifest, and the selected model decides whether to
 	// answer directly, ask, or call tools. The only manifest-boundary
@@ -909,7 +946,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		resultMessages, err := loop.ExecuteWithTools(ctx, session.ID, messages, filteredTools, attemptCallback)
 		s.unregisterActiveLoop(session.ID, loop)
 		resultMessages = sanitizeMessagesForHandoffResourcePolicy(resultMessages, handoffResources, handoffResourceProvider)
-		s.recordChatTurnCost(loop, attempt.Model)
+		s.recordChatTurnCost(loop, attempt.Model, contextScope)
 
 		log.Debug().
 			Str("session_id", session.ID).
@@ -1037,7 +1074,7 @@ func (s *Service) assistantInventoryTopologyContextForDirectAnswer(ctx context.C
 	if err != nil || result.IsError {
 		return assistantInventoryTopologyContext{}, false
 	}
-	resultText := strings.TrimSpace(FormatToolResult(result))
+	resultText := strings.TrimSpace(agentcapabilities.ToolResultText(result))
 	if resultText == "" {
 		return assistantInventoryTopologyContext{}, false
 	}
@@ -2962,6 +2999,19 @@ func (s *Service) ListAvailableTools(ctx context.Context, prompt string) []strin
 	return names
 }
 
+// AssistantSurfaceToolContract returns the live native Assistant surface tool
+// summary for the current runtime mode. It keeps API/UI consumers on the
+// executor-owned projection instead of rebuilding tool buckets from names.
+func (s *Service) AssistantSurfaceToolContract(_ context.Context) agentcapabilities.SurfaceToolContract {
+	s.mu.RLock()
+	executor := s.executor
+	s.mu.RUnlock()
+
+	return executor.AssistantSurfaceToolContract(agentcapabilities.AssistantProviderToolOptions{
+		IncludeQuestionTool: !s.isAutonomousModeEnabled(),
+	})
+}
+
 // ListSessions returns all sessions
 // maxSessionHandoffRefreshPerList bounds how many sessions get their handoff
 // action status re-checked per list call. The list is newest-first, so this
@@ -3301,7 +3351,7 @@ func (s *Service) GetExecutor() *tools.PulseToolExecutor {
 
 // Provider setter methods
 
-func (s *Service) SetAlertProvider(provider MCPAlertProvider) {
+func (s *Service) SetAlertProvider(provider AssistantAlertProvider) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.executor != nil {
@@ -3309,7 +3359,7 @@ func (s *Service) SetAlertProvider(provider MCPAlertProvider) {
 	}
 }
 
-func (s *Service) SetFindingsProvider(provider MCPFindingsProvider) {
+func (s *Service) SetFindingsProvider(provider AssistantFindingsProvider) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.executor != nil {
@@ -3317,7 +3367,7 @@ func (s *Service) SetFindingsProvider(provider MCPFindingsProvider) {
 	}
 }
 
-func (s *Service) SetBaselineProvider(provider MCPBaselineProvider) {
+func (s *Service) SetBaselineProvider(provider AssistantBaselineProvider) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.executor != nil {
@@ -3325,7 +3375,7 @@ func (s *Service) SetBaselineProvider(provider MCPBaselineProvider) {
 	}
 }
 
-func (s *Service) SetPatternProvider(provider MCPPatternProvider) {
+func (s *Service) SetPatternProvider(provider AssistantPatternProvider) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.executor != nil {
@@ -3333,7 +3383,7 @@ func (s *Service) SetPatternProvider(provider MCPPatternProvider) {
 	}
 }
 
-func (s *Service) SetMetricsHistory(provider MCPMetricsHistoryProvider) {
+func (s *Service) SetMetricsHistory(provider AssistantMetricsHistoryProvider) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.executor != nil {
@@ -3341,7 +3391,7 @@ func (s *Service) SetMetricsHistory(provider MCPMetricsHistoryProvider) {
 	}
 }
 
-func (s *Service) SetBackupProvider(provider MCPBackupProvider) {
+func (s *Service) SetBackupProvider(provider AssistantBackupProvider) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.executor != nil {
@@ -3349,7 +3399,7 @@ func (s *Service) SetBackupProvider(provider MCPBackupProvider) {
 	}
 }
 
-func (s *Service) SetGuestConfigProvider(provider MCPGuestConfigProvider) {
+func (s *Service) SetGuestConfigProvider(provider AssistantGuestConfigProvider) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.executor != nil {
@@ -3357,7 +3407,7 @@ func (s *Service) SetGuestConfigProvider(provider MCPGuestConfigProvider) {
 	}
 }
 
-func (s *Service) SetAppContainerConfigProvider(provider MCPAppContainerConfigProvider) {
+func (s *Service) SetAppContainerConfigProvider(provider AssistantAppContainerConfigProvider) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.executor != nil {
@@ -3365,7 +3415,7 @@ func (s *Service) SetAppContainerConfigProvider(provider MCPAppContainerConfigPr
 	}
 }
 
-func (s *Service) SetDiskHealthProvider(provider MCPDiskHealthProvider) {
+func (s *Service) SetDiskHealthProvider(provider AssistantDiskHealthProvider) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.executor != nil {
@@ -3373,7 +3423,7 @@ func (s *Service) SetDiskHealthProvider(provider MCPDiskHealthProvider) {
 	}
 }
 
-func (s *Service) SetUpdatesProvider(provider MCPUpdatesProvider) {
+func (s *Service) SetUpdatesProvider(provider AssistantUpdatesProvider) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.executor != nil {
@@ -3429,7 +3479,7 @@ func (s *Service) SetKnowledgeStoreProvider(provider KnowledgeStoreProvider) {
 	}
 }
 
-func (s *Service) SetUnifiedResourceProvider(provider tools.UnifiedResourceProvider) {
+func (s *Service) SetUnifiedResourceProvider(provider AssistantUnifiedResourceProvider) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.unifiedResourceProvider = provider
@@ -3449,7 +3499,7 @@ func (s *Service) SetReadState(readState unifiedresources.ReadState) {
 	}
 }
 
-func (s *Service) SetAppContainerActionProvider(provider MCPAppContainerActionProvider) {
+func (s *Service) SetAppContainerActionProvider(provider AssistantAppContainerActionProvider) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.executor != nil {
@@ -3457,7 +3507,7 @@ func (s *Service) SetAppContainerActionProvider(provider MCPAppContainerActionPr
 	}
 }
 
-func (s *Service) SetAppContainerReadProvider(provider MCPAppContainerReadProvider) {
+func (s *Service) SetAppContainerReadProvider(provider AssistantAppContainerReadProvider) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.executor != nil {
@@ -3465,7 +3515,7 @@ func (s *Service) SetAppContainerReadProvider(provider MCPAppContainerReadProvid
 	}
 }
 
-func (s *Service) SetDiscoveryProvider(provider MCPDiscoveryProvider) {
+func (s *Service) SetDiscoveryProvider(provider AssistantDiscoveryProvider) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.discoveryProvider = provider
@@ -3522,15 +3572,7 @@ func (s *Service) SetAutonomousMode(enabled bool) {
 // ExecuteCommand executes a command directly via the tool executor (bypasses LLM)
 // This is used for auto-executing fixes in full autonomy mode
 func (s *Service) ExecuteCommand(ctx context.Context, command, targetHost string) (output string, exitCode int, err error) {
-	s.mu.RLock()
-	executor := s.executor
-	s.mu.RUnlock()
-
-	if executor == nil {
-		return "", -1, fmt.Errorf("executor not available")
-	}
-
-	// Build args for pulse_run_command
+	// Build args for the shared command registry tool.
 	args := map[string]interface{}{
 		"command":     command,
 		"run_on_host": true,
@@ -3539,31 +3581,17 @@ func (s *Service) ExecuteCommand(ctx context.Context, command, targetHost string
 		args["target_host"] = targetHost
 	}
 
-	// Execute the command
-	result, toolErr := executor.ExecuteTool(ctx, "pulse_run_command", args)
-	if toolErr != nil {
-		return "", -1, toolErr
-	}
-
-	// Extract text from result content
-	var resultText string
-	for _, content := range result.Content {
-		if content.Type == "text" {
-			resultText += content.Text
+	outcome, executionErr := s.executeAssistantRegistryToolDirect(ctx, agentcapabilities.PulseRunCommandToolName, args, agentcapabilities.DirectToolExecutionOptions{
+		FailurePrefix:           "command execution failed",
+		ApprovalRequiredMessage: "command requires approval (unexpected in autonomous mode)",
+		PolicyBlockedMessage:    "command blocked by security policy",
+	})
+	resultText := outcome.OutputText
+	if executionErr != nil {
+		if outcome.Interpretation.IsError {
+			return resultText, 1, executionErr
 		}
-	}
-
-	// Parse the result
-	if result.IsError {
-		return resultText, 1, fmt.Errorf("command execution failed: %s", resultText)
-	}
-
-	// Check if approval was required (this shouldn't happen in autonomous mode, but just in case)
-	if strings.HasPrefix(resultText, "APPROVAL_REQUIRED:") {
-		return "", -1, fmt.Errorf("command requires approval (unexpected in autonomous mode)")
-	}
-	if strings.HasPrefix(resultText, "POLICY_BLOCKED:") {
-		return "", -1, fmt.Errorf("command blocked by security policy")
+		return resultText, -1, executionErr
 	}
 
 	// Check for exit code in result
@@ -3635,7 +3663,7 @@ func (s *Service) applyChatContextSettings() {
 	StatelessContext = DefaultStatelessContext
 }
 
-// buildSystemPrompt builds the base system prompt for the AI.
+// buildSystemPrompt builds the base system prompt for Pulse Assistant.
 // Mode-specific context (autonomous vs controlled) is added dynamically by the AgenticLoop.
 //
 // Philosophy: This prompt provides identity, context, and tool policy. Tool
@@ -3650,9 +3678,11 @@ func (s *Service) buildSystemPromptForOfferedTools(offeredTools []providers.Tool
 }
 
 func (s *Service) buildSystemPromptWithToolGovernance(toolGovernance string) string {
-	return `You are Pulse AI, a knowledgeable infrastructure assistant. You pair-program with the user on their homelab and infrastructure tasks.
+	return `You are Pulse Assistant, the first-party in-app Pulse Intelligence surface for governed infrastructure operations. You work with the user on their homelab and infrastructure tasks.
 
 ` + toolGovernance + `
+
+` + agentcapabilities.BuildPulseAssistantOperatingInstructions() + `
 
 ## INFRASTRUCTURE TOPOLOGY
 - Resources are organized hierarchically: nodes → VMs/containers → Docker containers
@@ -3709,146 +3739,53 @@ func (s *Service) buildToolGovernancePromptSection() string {
 }
 
 func (s *Service) buildToolGovernancePromptSectionForOfferedTools(offeredTools []providers.Tool) string {
-	offeredNames := make(map[string]bool, len(offeredTools))
-	orderedOfferedNames := make([]string, 0, len(offeredTools))
-	for _, tool := range offeredTools {
-		name := strings.TrimSpace(tool.Name)
-		if name == "" || offeredNames[name] {
-			continue
-		}
-		offeredNames[name] = true
-		orderedOfferedNames = append(orderedOfferedNames, name)
+	orderedOfferedNames := agentcapabilities.ProviderToolNames(offeredTools)
+	if manifest, ok := agentcapabilities.ProviderToolGovernanceDescriptors(offeredTools); ok {
+		return agentcapabilities.BuildAssistantToolGovernancePromptSection(manifest, orderedOfferedNames)
 	}
 	return s.buildToolGovernancePromptSectionForOfferedToolNames(orderedOfferedNames)
 }
 
 func (s *Service) buildToolGovernancePromptSectionForOfferedToolNames(orderedOfferedNames []string) string {
-	offeredFilter := map[string]bool(nil)
-	if orderedOfferedNames != nil {
-		offeredFilter = make(map[string]bool, len(orderedOfferedNames))
-		for _, name := range orderedOfferedNames {
-			if trimmed := strings.TrimSpace(name); trimmed != "" {
-				offeredFilter[trimmed] = true
-			}
-		}
-	}
-
-	if offeredFilter != nil && len(offeredFilter) == 0 {
-		return strings.Join([]string{
-			"## AVAILABLE TOOL GOVERNANCE",
-			"No Pulse tools are offered for this turn. Answer directly from the user's message and safe conversation context.",
-			"Do not claim to inspect infrastructure, run commands, or use Pulse data unless that evidence is already present in the conversation.",
-		}, "\n")
-	}
-
 	manifest := []tools.ToolGovernanceDescriptor(nil)
 	if s != nil && s.executor != nil {
 		manifest = s.executor.ListToolGovernance()
 	}
 	if len(manifest) == 0 {
 		manifest = fallbackAssistantToolGovernance()
+		if orderedOfferedNames == nil {
+			orderedOfferedNames = fallbackAssistantToolGovernanceOfferedNames(manifest)
+		}
 	}
 
-	var b strings.Builder
-	b.WriteString("## AVAILABLE TOOL GOVERNANCE\n")
-	b.WriteString("This manifest is generated from Pulse's governed tool registry. Use only tools that are actually offered by the provider for the current turn.\n")
-	emitted := make(map[string]bool, len(manifest))
-	for _, tool := range manifest {
-		if offeredFilter != nil && !offeredFilter[tool.Name] {
-			continue
-		}
-		mode := tool.ActionMode
-		if mode == "" {
-			mode = tools.ToolActionRead
-		}
-		policy := strings.TrimSpace(tool.ApprovalPolicy)
-		if policy == "" {
-			policy = "no approval required"
-		}
-		summary := strings.TrimSpace(tool.Summary)
-		if summary == "" {
-			summary = firstPromptLine(tool.Description)
-		}
-		if summary != "" {
-			b.WriteString(fmt.Sprintf("- %s: mode=%s; approval=%s; %s\n", tool.Name, mode, policy, summary))
-		} else {
-			b.WriteString(fmt.Sprintf("- %s: mode=%s; approval=%s\n", tool.Name, mode, policy))
-		}
-		emitted[tool.Name] = true
-	}
-
-	if offeredFilter == nil || offeredFilter[pulseQuestionToolName] {
-		b.WriteString("- pulse_question: mode=interactive; approval=user answer required; asks the user for missing information using a structured prompt in interactive chat only.\n")
-		emitted[pulseQuestionToolName] = true
-	}
-	if offeredFilter != nil {
-		for _, name := range orderedOfferedNames {
-			if emitted[name] {
-				continue
-			}
-			b.WriteString(fmt.Sprintf("- %s: mode=read; approval=no approval required; Offered by Pulse for this turn.\n", name))
-			emitted[name] = true
-		}
-	}
-	return strings.TrimRight(b.String(), "\n")
+	return agentcapabilities.BuildAssistantToolGovernancePromptSection(manifest, orderedOfferedNames)
 }
 
 func fallbackAssistantToolGovernance() []tools.ToolGovernanceDescriptor {
-	return []tools.ToolGovernanceDescriptor{
-		{
-			Name:           "pulse_query",
-			ActionMode:     tools.ToolActionRead,
-			ApprovalPolicy: "no approval required",
-			Summary:        "Resolves canonical infrastructure identity, topology, config, and health without changing state.",
-		},
-		{
-			Name:           "pulse_read",
-			ActionMode:     tools.ToolActionRead,
-			ApprovalPolicy: "no approval required; write-like commands are rejected",
-			Summary:        "Runs read-only infrastructure inspection such as logs, file reads, tails, and safe exec.",
-		},
-		{
-			Name:           "pulse_discovery",
-			ActionMode:     tools.ToolActionMixed,
-			ApprovalPolicy: "no approval required; run uses read-only evidence collection and updates the discovery cache",
-			Summary:        "Reads or refreshes discovered service paths, ports, and bind mounts for known resources.",
-		},
-		{
-			Name:           "pulse_control",
-			ActionMode:     tools.ToolActionWrite,
-			ApprovalPolicy: "hidden in read-only mode; approval required in controlled mode",
-			Summary:        "Runs shared Pulse control actions and can control only resources that explicitly support shared Pulse actions.",
-		},
-		{
-			Name:           "pulse_file_edit",
-			ActionMode:     tools.ToolActionWrite,
-			ApprovalPolicy: "hidden in read-only mode; approval required in controlled mode",
-			Summary:        "Changes files through the governed file-edit path.",
-		},
-		{
-			Name:           "pulse_docker",
-			ActionMode:     tools.ToolActionMixed,
-			ApprovalPolicy: "read/list actions are safe; control and update subactions require approval in controlled mode",
-			Summary:        "Lists Docker state and performs governed Docker control/update subactions.",
-		},
-		{
-			Name:           "pulse_kubernetes",
-			ActionMode:     tools.ToolActionMixed,
-			ApprovalPolicy: "read/list/log actions are safe; scale, restart, delete, and exec subactions require approval in controlled mode",
-			Summary:        "Reads Kubernetes topology and runs governed workload-control subactions.",
-		},
-	}
+	return tools.CanonicalToolGovernanceForManifestSurface(
+		tools.ControlLevelControlled,
+		agentcapabilities.CanonicalManifest(),
+		agentcapabilities.SurfaceIDPulseAssistant,
+	)
 }
 
-func firstPromptLine(description string) string {
-	description = strings.TrimSpace(description)
-	if description == "" {
-		return ""
+func fallbackAssistantToolGovernanceOfferedNames(governance []tools.ToolGovernanceDescriptor) []string {
+	affordances, _ := agentcapabilities.ManifestSurfaceAffordances(
+		agentcapabilities.CanonicalManifest(),
+		agentcapabilities.SurfaceIDPulseAssistant,
+	)
+	names := make([]string, 0, len(governance)+1)
+	if affordances.Tools {
+		for _, descriptor := range governance {
+			if name := strings.TrimSpace(descriptor.Name); name != "" {
+				names = append(names, name)
+			}
+		}
 	}
-	if idx := strings.Index(description, "\n"); idx >= 0 {
-		description = strings.TrimSpace(description[:idx])
+	if affordances.InteractiveQuestions {
+		names = append(names, agentcapabilities.PulseQuestionToolName)
 	}
-	return strings.Join(strings.Fields(description), " ")
+	return names
 }
 
 func (s *Service) injectRecentSessionContext(sessionID string, messages []Message, sessions *SessionStore) {
@@ -4002,8 +3939,10 @@ func firstNonEmptyRecentString(values ...string) string {
 }
 
 func (s *Service) toolsForExecutionMode(autonomousMode bool, patrolMode bool) []providers.Tool {
-	mcpTools := s.executor.ListTools()
-	providerTools := ConvertMCPToolsToProvider(mcpTools)
+	includeQuestionTool := !autonomousMode && !patrolMode
+	providerTools := s.executor.AssistantProviderTools(agentcapabilities.AssistantProviderToolOptions{
+		IncludeQuestionTool: includeQuestionTool,
+	})
 
 	// Patrol may be scoped by explicit product configuration, but never by
 	// prompt keyword inference. The selected Patrol model owns tool choice.
@@ -4018,10 +3957,6 @@ func (s *Service) toolsForExecutionMode(autonomousMode bool, patrolMode bool) []
 	}
 
 	filtered := append([]providers.Tool{}, providerTools...)
-	// pulse_question is interactive; exclude it for autonomous runs (Pulse Patrol).
-	if !autonomousMode {
-		filtered = append(filtered, userQuestionTool())
-	}
 	log.Debug().
 		Int("total_tools", len(providerTools)).
 		Int("tool_manifest_count", len(filtered)).
@@ -4327,19 +4262,19 @@ func (s *Service) filterToolsForPatrol(providerTools []providers.Tool) []provide
 	filtered := make([]providers.Tool, 0, len(providerTools))
 	for _, tool := range providerTools {
 		switch tool.Name {
-		case "pulse_docker":
+		case agentcapabilities.PulseDockerToolName:
 			if !includeDocker {
 				continue
 			}
-		case "pulse_storage":
+		case agentcapabilities.PulseStorageToolName:
 			if !includeStorage {
 				continue
 			}
-		case "pulse_kubernetes":
+		case agentcapabilities.PulseKubernetesToolName:
 			if !includeK8s {
 				continue
 			}
-		case "pulse_pmg":
+		case agentcapabilities.PulsePMGToolName:
 			if !includePMG {
 				continue
 			}
@@ -4359,50 +4294,42 @@ func (s *Service) isAutonomousModeEnabled() bool {
 	return s.cfg != nil && s.cfg.IsAutonomous()
 }
 
-// ExecuteMCPTool executes an MCP tool directly by name with arguments
-// This is used for executing investigation fixes that are MCP tool calls
-func (s *Service) ExecuteMCPTool(ctx context.Context, toolName string, args map[string]interface{}) (string, error) {
+// ExecuteAssistantTool executes a native Assistant registry tool directly by
+// name with arguments. This is used for replaying approved investigation fixes
+// through the same shared tool-result interpretation as model-selected calls.
+func (s *Service) ExecuteAssistantTool(ctx context.Context, toolName string, args map[string]interface{}) (string, error) {
+	outcome, executionErr := s.executeAssistantRegistryToolDirect(ctx, toolName, args, agentcapabilities.DirectToolExecutionOptions{
+		FailurePrefix:           "tool execution failed",
+		ApprovalRequiredMessage: "tool requires approval (unexpected in fix execution)",
+		PolicyBlockedMessage:    "tool blocked by security policy",
+	})
+	if executionErr != nil {
+		return outcome.OutputText, executionErr
+	}
+
+	return outcome.OutputText, nil
+}
+
+func (s *Service) executeAssistantRegistryToolDirect(ctx context.Context, toolName string, args map[string]interface{}, opts agentcapabilities.DirectToolExecutionOptions) (agentcapabilities.DirectToolExecutionOutcome, error) {
 	s.mu.RLock()
 	executor := s.executor
 	s.mu.RUnlock()
 
 	if executor == nil {
-		return "", fmt.Errorf("executor not available")
+		return agentcapabilities.DirectToolExecutionOutcome{}, fmt.Errorf("executor not available")
 	}
 
 	log.Debug().
 		Str("tool", toolName).
 		Interface("args", args).
-		Msg("Executing MCP tool directly")
+		Msg("Executing Assistant registry tool directly")
 
-	// Execute the tool
 	result, toolErr := executor.ExecuteTool(ctx, toolName, args)
 	if toolErr != nil {
-		return "", toolErr
+		return agentcapabilities.DirectToolExecutionOutcome{}, toolErr
 	}
 
-	// Extract text from result content
-	var resultText string
-	for _, content := range result.Content {
-		if content.Type == "text" {
-			resultText += content.Text
-		}
-	}
-
-	// Check for error
-	if result.IsError {
-		return resultText, fmt.Errorf("tool execution failed: %s", resultText)
-	}
-
-	// Check if approval was required
-	if strings.HasPrefix(resultText, "APPROVAL_REQUIRED:") {
-		return "", fmt.Errorf("tool requires approval (unexpected in fix execution)")
-	}
-	if strings.HasPrefix(resultText, "POLICY_BLOCKED:") {
-		return "", fmt.Errorf("tool blocked by security policy")
-	}
-
-	return resultText, nil
+	return agentcapabilities.InterpretDirectToolExecution(result, opts)
 }
 
 // Execute provides non-streaming execution (for compatibility)

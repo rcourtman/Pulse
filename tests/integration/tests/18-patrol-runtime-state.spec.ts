@@ -956,7 +956,7 @@ test.describe("Patrol runtime-state browser contract", () => {
     await expect(page.getByText("Failed to start patrol run")).toHaveCount(0);
   });
 
-  test("surfaces scoped trigger context inside the summary and split trigger controls on the Patrol page", async ({
+  test("keeps scoped trigger context out of the default Patrol status strip", async ({
     page,
   }, testInfo) => {
     test.skip(
@@ -978,15 +978,18 @@ test.describe("Patrol runtime-state browser contract", () => {
       page.getByText(
         "Recent activity mix: 1 full, 1 alert-triggered, 1 anomaly-triggered",
       ),
-    ).toBeVisible();
+    ).toHaveCount(0);
     await expect(
       page.getByText("Trigger mode: 4 queued · busy mode · anomalies off"),
-    ).toBeVisible();
+    ).toHaveCount(0);
     await expect(
-      page.getByText("Trigger status: 4 queued · busy mode · anomalies off"),
+      page.getByText("Automation: 4 queued · busy mode · anomalies off"),
     ).toBeVisible();
 
-    await page.getByRole("button", { name: "Configure Patrol" }).click();
+    await expect(
+      page.getByRole("link", { name: "Open Patrol settings" }),
+    ).toHaveAttribute("href", "/settings/pulse-intelligence/patrol");
+    await page.getByRole("link", { name: "Open Patrol settings" }).click();
 
     await expect(page.getByText("Alert-Triggered Patrols")).toBeVisible();
     await expect(page.getByText("Anomaly-Triggered Patrols")).toBeVisible();
@@ -995,9 +998,9 @@ test.describe("Patrol runtime-state browser contract", () => {
         "Alert and anomaly triggers run targeted scoped checks that update",
       ),
     ).toBeVisible();
-    await expect(page.getByText("Last full patrol")).toBeVisible();
 
-    await page.getByRole("button", { name: "Runs" }).click();
+    await page.goto("/patrol", { waitUntil: "domcontentloaded" });
+    await page.getByRole("button", { name: "History" }).click();
     await page.getByRole("button", { name: /Alert fired/i }).click();
     await expect(
       page.getByText("Selected model does not support Patrol tools"),
@@ -1009,7 +1012,7 @@ test.describe("Patrol runtime-state browser contract", () => {
     await expect(page.getByText(/No endpoints found/)).toHaveCount(0);
     await expect(
       page.getByRole("link", { name: "Open Patrol provider settings" }),
-    ).toHaveAttribute("href", "/settings/system-ai");
+    ).toHaveAttribute("href", "/settings/pulse-intelligence/provider");
 
     await page.getByTestId("patrol-run-assistant-button").click();
     const assistantContext = page.getByLabel("Assistant context");
@@ -1044,18 +1047,16 @@ test.describe("Patrol runtime-state browser contract", () => {
     await page.goto("/patrol", { waitUntil: "domcontentloaded" });
 
     await expect(
-      page.getByText(`Trigger status: ${PATROL_EVENT_TRIGGERS_BLOCKED}`),
+      page.getByText(`Automation: ${PATROL_EVENT_TRIGGERS_BLOCKED}`),
     ).toBeVisible();
     await expect(
       page.getByText(`Trigger mode: ${PATROL_EVENT_TRIGGERS_BLOCKED}`),
-    ).toBeVisible();
+    ).toHaveCount(0);
     await expect(page.getByText("alerts off")).toHaveCount(0);
     await expect(page.getByText("anomalies off")).toHaveCount(0);
 
-    await page.getByRole("button", { name: "Configure Patrol" }).click();
-    const configPanel = page.getByRole("dialog", {
-      name: "Patrol Configuration",
-    });
+    await page.getByRole("link", { name: "Open Patrol settings" }).click();
+    const configPanel = page.getByRole("main");
     await expect(
       configPanel.getByRole("button", { name: "Alert-Triggered Patrols" }),
     ).toHaveAttribute("aria-pressed", "true");

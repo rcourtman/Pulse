@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
@@ -93,6 +95,15 @@ func toolNameSet(list []providers.Tool) map[string]bool {
 		set[tool.Name] = true
 	}
 	return set
+}
+
+func stringSliceContains(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 func TestToolsForExecutionMode_InteractiveExposesGovernedTools(t *testing.T) {
@@ -221,6 +232,49 @@ func TestAssistantPromptQualifiesForLocalInventoryCount(t *testing.T) {
 	}
 }
 
+func TestAssistantSurfaceToolContractUsesRuntimeAssistantProjection(t *testing.T) {
+	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{
+		StateProvider: fakeStateProvider{},
+		AgentServer:   fakeAgentServer{},
+		ReadState:     &fakeCanonicalReadState{},
+		ControlLevel:  tools.ControlLevelControlled,
+	})
+	svc := &Service{
+		executor: exec,
+		cfg:      &config.AIConfig{ControlLevel: config.ControlLevelControlled},
+	}
+
+	interactive := svc.AssistantSurfaceToolContract(context.Background())
+	if interactive.SurfaceID != agentcapabilities.SurfaceIDPulseAssistant {
+		t.Fatalf("surface id = %q", interactive.SurfaceID)
+	}
+	if interactive.ToolSource != agentcapabilities.SurfaceToolSourceAssistantRegistry {
+		t.Fatalf("tool source = %q", interactive.ToolSource)
+	}
+	if !stringSliceContains(interactive.ToolNames, agentcapabilities.PulseQueryToolName) {
+		t.Fatalf("interactive surface missing registry query tool: %#v", interactive.ToolNames)
+	}
+	if !stringSliceContains(interactive.RegistryToolNames, agentcapabilities.PulseQueryToolName) {
+		t.Fatalf("interactive surface missing registry bucket: %#v", interactive.RegistryToolNames)
+	}
+	if !stringSliceContains(interactive.NativeToolNames, agentcapabilities.PulseQuestionToolName) {
+		t.Fatalf("interactive surface missing native question bucket: %#v", interactive.NativeToolNames)
+	}
+	if len(interactive.CapabilityNames) != 0 {
+		t.Fatalf("Assistant surface must not expose MCP capability names: %#v", interactive.CapabilityNames)
+	}
+
+	svc.SetAutonomousMode(true)
+	autonomous := svc.AssistantSurfaceToolContract(context.Background())
+	if stringSliceContains(autonomous.NativeToolNames, agentcapabilities.PulseQuestionToolName) ||
+		stringSliceContains(autonomous.ToolNames, agentcapabilities.PulseQuestionToolName) {
+		t.Fatalf("autonomous Assistant surface must not expose interactive question tool: %+v", autonomous)
+	}
+	if !stringSliceContains(autonomous.RegistryToolNames, agentcapabilities.PulseQueryToolName) {
+		t.Fatalf("autonomous surface should retain registry tools: %#v", autonomous.RegistryToolNames)
+	}
+}
+
 func TestToolsForExecutionMode_AutonomousNonPatrolExposesGovernedTools(t *testing.T) {
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{
 		StateProvider: fakeStateProvider{},
@@ -247,6 +301,12 @@ func TestBuildSystemPrompt_DoesNotClaimGenericVMControl(t *testing.T) {
 
 	prompt := svc.buildSystemPrompt()
 
+	if !strings.Contains(prompt, "You are Pulse Assistant, the first-party in-app Pulse Intelligence surface") {
+		t.Fatalf("expected system prompt to name the native Assistant surface, got %q", prompt)
+	}
+	if strings.Contains(prompt, "You are Pulse AI") {
+		t.Fatalf("system prompt must not use legacy Pulse AI surface identity, got %q", prompt)
+	}
 	if strings.Contains(prompt, "Run commands on hosts, containers, and VMs") {
 		t.Fatalf("expected system prompt to avoid blanket VM control claim, got %q", prompt)
 	}
@@ -309,6 +369,20 @@ func TestBuildSystemPrompt_CurrentResourceRequiresResourceHandoff(t *testing.T) 
 	}
 }
 
+func TestBuildSystemPrompt_IncludesSharedPulseIntelligenceOperatingInstructions(t *testing.T) {
+	svc := &Service{}
+
+	prompt := svc.buildSystemPrompt()
+	shared := agentcapabilities.BuildPulseAssistantOperatingInstructions()
+
+	if !strings.Contains(prompt, shared) {
+		t.Fatalf("expected Assistant system prompt to include shared Pulse Intelligence operating instructions")
+	}
+	if strings.Contains(prompt, "resources, prompts") || strings.Contains(prompt, "capability metadata as the source of truth") {
+		t.Fatalf("Assistant system prompt must not advertise MCP-only operating affordances, got %q", prompt)
+	}
+}
+
 func TestBuildToolGovernancePromptSection_FallbackDiscoveryMatchesRunContract(t *testing.T) {
 	svc := &Service{}
 
@@ -319,6 +393,120 @@ func TestBuildToolGovernancePromptSection_FallbackDiscoveryMatchesRunContract(t 
 	}
 	if !strings.Contains(prompt, "run uses read-only evidence collection and updates the discovery cache") {
 		t.Fatalf("expected fallback governance to describe discovery refresh behavior, got %q", prompt)
+	}
+}
+
+func TestBuildToolGovernancePromptSection_FallbackUsesCanonicalRegistry(t *testing.T) {
+	fallback := fallbackAssistantToolGovernance()
+	canonical := tools.CanonicalToolGovernanceForManifestSurface(
+		tools.ControlLevelControlled,
+		agentcapabilities.CanonicalManifest(),
+		agentcapabilities.SurfaceIDPulseAssistant,
+	)
+
+	if len(fallback) != len(canonical) {
+		t.Fatalf("fallback governance length = %d, want canonical registry length %d", len(fallback), len(canonical))
+	}
+	for i := range canonical {
+		if fallback[i] != canonical[i] {
+			t.Fatalf("fallback governance[%d] = %#v, want canonical registry descriptor %#v", i, fallback[i], canonical[i])
+		}
+	}
+
+	prompt := (&Service{}).buildToolGovernancePromptSection()
+	for _, tool := range canonical {
+		if !strings.Contains(prompt, tool.Name+": mode="+string(tool.ActionMode)) {
+			t.Fatalf("expected fallback prompt to include canonical governance for %s, got %q", tool.Name, prompt)
+		}
+	}
+	if strings.Contains(prompt, "patrol_report_finding") ||
+		strings.Contains(prompt, "patrol_resolve_finding") ||
+		strings.Contains(prompt, "patrol_get_findings") {
+		t.Fatalf("expected Assistant fallback prompt to exclude Patrol-only tools, got %q", prompt)
+	}
+}
+
+func TestBuildToolGovernancePromptSection_FallbackOfferedNamesUseAssistantAffordances(t *testing.T) {
+	fallback := fallbackAssistantToolGovernance()
+	names := fallbackAssistantToolGovernanceOfferedNames(fallback)
+
+	if len(names) != len(fallback)+1 {
+		t.Fatalf("fallback offered names length = %d, want governance names plus question tool", len(names))
+	}
+	for i, tool := range fallback {
+		if names[i] != tool.Name {
+			t.Fatalf("fallback offered names[%d] = %q, want %q", i, names[i], tool.Name)
+		}
+	}
+	if names[len(names)-1] != agentcapabilities.PulseQuestionToolName {
+		t.Fatalf("fallback offered names must include manifest-enabled question tool last, got %#v", names)
+	}
+}
+
+func TestBuildToolGovernancePromptSection_OfferedToolsUseCanonicalFallback(t *testing.T) {
+	svc := &Service{}
+
+	prompt := svc.buildToolGovernancePromptSectionForOfferedTools([]providers.Tool{{Name: "pulse_discovery"}})
+
+	if !strings.Contains(prompt, "pulse_discovery: mode=mixed; approval=scope_only (no approval required; run uses read-only evidence collection and updates the discovery cache)") {
+		t.Fatalf("expected offered fallback prompt to use canonical discovery governance, got %q", prompt)
+	}
+	if strings.Contains(prompt, "pulse_control:") {
+		t.Fatalf("expected offered fallback prompt to exclude non-offered control tools, got %q", prompt)
+	}
+}
+
+func TestBuildToolGovernancePromptSection_OfferedToolsUseProviderMetadata(t *testing.T) {
+	svc := &Service{}
+
+	prompt := svc.buildToolGovernancePromptSectionForOfferedTools([]providers.Tool{
+		{
+			Name: "pulse_discovery",
+			PulseGovernance: &agentcapabilities.ToolGovernanceDescriptor{
+				Name:            "pulse_discovery",
+				Description:     "Discover infrastructure.",
+				ActionMode:      agentcapabilities.ActionModeMixed,
+				ApprovalPolicy:  agentcapabilities.ApprovalPolicyScopeOnly,
+				ApprovalSummary: "metadata-owned approval summary",
+				Summary:         "metadata-owned discovery summary",
+			},
+		},
+	})
+
+	if !strings.Contains(prompt, "pulse_discovery: mode=mixed; approval=scope_only (metadata-owned approval summary); metadata-owned discovery summary") {
+		t.Fatalf("expected offered tool metadata to drive governance prompt, got %q", prompt)
+	}
+	if strings.Contains(prompt, "run uses read-only evidence collection and updates the discovery cache") {
+		t.Fatalf("expected offered metadata to avoid executor fallback governance, got %q", prompt)
+	}
+}
+
+func TestBuildToolGovernancePromptSection_OfferedQuestionToolStaysInteractive(t *testing.T) {
+	svc := &Service{}
+
+	prompt := svc.buildToolGovernancePromptSectionForOfferedTools([]providers.Tool{{Name: pulseQuestionToolName}})
+
+	if !strings.Contains(prompt, agentcapabilities.PulseQuestionToolGovernancePromptLine()) {
+		t.Fatalf("expected Assistant question tool to keep interactive governance, got %q", prompt)
+	}
+	if strings.Contains(prompt, "pulse_question: mode=read") {
+		t.Fatalf("expected Assistant question tool not to use generic fallback governance, got %q", prompt)
+	}
+	if strings.Contains(prompt, "No Pulse tools are offered") {
+		t.Fatalf("expected question-only manifest to be described as an offered interactive tool, got %q", prompt)
+	}
+}
+
+func TestBuildToolGovernancePromptSection_NoOfferedToolsUsesSharedNoToolsGuidance(t *testing.T) {
+	svc := &Service{}
+
+	prompt := svc.buildToolGovernancePromptSectionForOfferedTools([]providers.Tool{})
+
+	if !strings.Contains(prompt, "No Pulse tools are offered for this turn") {
+		t.Fatalf("expected no-tools guidance, got %q", prompt)
+	}
+	if strings.Contains(prompt, "pulse_question:") {
+		t.Fatalf("expected no Assistant question tool when no tools are offered, got %q", prompt)
 	}
 }
 
@@ -374,7 +562,7 @@ func TestToolsForExecutionMode_PatrolScopeUsesConfigNotPrompt(t *testing.T) {
 func TestExecuteCommand_SuccessAndExitCode(t *testing.T) {
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
 	exec.RegisterTool(tools.RegisteredTool{
-		Definition: tools.Tool{Name: "pulse_run_command"},
+		Definition: tools.Tool{Name: agentcapabilities.PulseRunCommandToolName},
 		Handler: func(ctx context.Context, exec *tools.PulseToolExecutor, args map[string]interface{}) (tools.CallToolResult, error) {
 			return tools.NewTextResult("Command failed (exit code 7): boom"), nil
 		},
@@ -397,7 +585,7 @@ func TestExecuteCommand_SuccessAndExitCode(t *testing.T) {
 func TestExecuteCommand_ErrorAndApprovalPaths(t *testing.T) {
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
 	exec.RegisterTool(tools.RegisteredTool{
-		Definition: tools.Tool{Name: "pulse_run_command"},
+		Definition: tools.Tool{Name: agentcapabilities.PulseRunCommandToolName},
 		Handler: func(ctx context.Context, exec *tools.PulseToolExecutor, args map[string]interface{}) (tools.CallToolResult, error) {
 			return tools.NewErrorResult(context.Canceled), nil
 		},
@@ -411,7 +599,7 @@ func TestExecuteCommand_ErrorAndApprovalPaths(t *testing.T) {
 	}
 
 	exec.RegisterTool(tools.RegisteredTool{
-		Definition: tools.Tool{Name: "pulse_run_command"},
+		Definition: tools.Tool{Name: agentcapabilities.PulseRunCommandToolName},
 		Handler: func(ctx context.Context, exec *tools.PulseToolExecutor, args map[string]interface{}) (tools.CallToolResult, error) {
 			return tools.NewTextResult("APPROVAL_REQUIRED: requires approval"), nil
 		},
@@ -423,7 +611,36 @@ func TestExecuteCommand_ErrorAndApprovalPaths(t *testing.T) {
 	}
 }
 
-func TestExecuteMCPTool_ErrorsAndSuccess(t *testing.T) {
+func TestExecuteCommandUsesSharedResultTextProjection(t *testing.T) {
+	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	exec.RegisterTool(tools.RegisteredTool{
+		Definition: tools.Tool{Name: agentcapabilities.PulseRunCommandToolName},
+		Handler: func(ctx context.Context, exec *tools.PulseToolExecutor, args map[string]interface{}) (tools.CallToolResult, error) {
+			return tools.CallToolResult{
+				Content: []tools.Content{
+					{Type: "text", Text: "stdout"},
+					{Type: "resource", URI: "file://ignored"},
+					{Type: "text"},
+					{Type: "text", Text: "stderr"},
+				},
+			}, nil
+		},
+	})
+
+	svc := &Service{executor: exec}
+	output, code, err := svc.ExecuteCommand(context.Background(), "uptime", "")
+	if err != nil {
+		t.Fatalf("ExecuteCommand: %v", err)
+	}
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+	if output != "stdout\nstderr" {
+		t.Fatalf("output = %q, want shared result text projection", output)
+	}
+}
+
+func TestExecuteAssistantTool_ErrorsAndSuccess(t *testing.T) {
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
 	exec.RegisterTool(tools.RegisteredTool{
 		Definition: tools.Tool{Name: "test_tool"},
@@ -434,7 +651,7 @@ func TestExecuteMCPTool_ErrorsAndSuccess(t *testing.T) {
 
 	svc := &Service{executor: exec}
 
-	_, err := svc.ExecuteMCPTool(context.Background(), "test_tool", map[string]interface{}{})
+	_, err := svc.ExecuteAssistantTool(context.Background(), "test_tool", map[string]interface{}{})
 	if err == nil {
 		t.Fatalf("expected tool error")
 	}
@@ -445,7 +662,7 @@ func TestExecuteMCPTool_ErrorsAndSuccess(t *testing.T) {
 			return tools.NewTextResult("POLICY_BLOCKED: nope"), nil
 		},
 	})
-	_, err = svc.ExecuteMCPTool(context.Background(), "test_tool", map[string]interface{}{})
+	_, err = svc.ExecuteAssistantTool(context.Background(), "test_tool", map[string]interface{}{})
 	if err == nil {
 		t.Fatalf("expected policy blocked error")
 	}
@@ -456,13 +673,189 @@ func TestExecuteMCPTool_ErrorsAndSuccess(t *testing.T) {
 			return tools.NewTextResult("ok"), nil
 		},
 	})
-	output, err := svc.ExecuteMCPTool(context.Background(), "test_tool", map[string]interface{}{})
+	output, err := svc.ExecuteAssistantTool(context.Background(), "test_tool", map[string]interface{}{})
 	if err != nil || output != "ok" {
 		t.Fatalf("expected success, got output=%q err=%v", output, err)
 	}
 }
 
-func TestExecuteMCPTool_PulseStorageSnapshotsToleratesMalformedRecoveryMetadata(t *testing.T) {
+func TestExecuteAssistantToolUsesSharedResultTextProjection(t *testing.T) {
+	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	exec.RegisterTool(tools.RegisteredTool{
+		Definition: tools.Tool{Name: "test_tool"},
+		Handler: func(ctx context.Context, exec *tools.PulseToolExecutor, args map[string]interface{}) (tools.CallToolResult, error) {
+			return tools.CallToolResult{
+				Content: []tools.Content{
+					{Type: "text", Text: "first"},
+					{Type: "resource", URI: "file://ignored"},
+					{Type: "text"},
+					{Type: "text", Text: "second"},
+				},
+			}, nil
+		},
+	})
+
+	svc := &Service{executor: exec}
+	output, err := svc.ExecuteAssistantTool(context.Background(), "test_tool", map[string]interface{}{})
+	if err != nil {
+		t.Fatalf("ExecuteAssistantTool: %v", err)
+	}
+	if output != "first\nsecond" {
+		t.Fatalf("output = %q, want shared result text projection", output)
+	}
+}
+
+func TestDirectToolExecutionUsesSharedResultExecutionMapping(t *testing.T) {
+	src, err := os.ReadFile("service.go")
+	if err != nil {
+		t.Fatalf("read service.go: %v", err)
+	}
+	text := string(src)
+
+	if !strings.Contains(text, "agentcapabilities.InterpretDirectToolExecution(result") {
+		t.Fatalf("direct tool execution must use shared result execution mapping")
+	}
+	for _, fragment := range []string{
+		"func (s *Service) executeAssistantRegistryToolDirect(",
+		`outcome, executionErr := s.executeAssistantRegistryToolDirect(ctx, agentcapabilities.PulseRunCommandToolName, args, agentcapabilities.DirectToolExecutionOptions{`,
+		`outcome, executionErr := s.executeAssistantRegistryToolDirect(ctx, toolName, args, agentcapabilities.DirectToolExecutionOptions{`,
+		`result, toolErr := executor.ExecuteTool(ctx, toolName, args)`,
+	} {
+		if !strings.Contains(text, fragment) {
+			t.Fatalf("direct Assistant registry execution must use shared service helper; missing %s", fragment)
+		}
+	}
+	if !strings.Contains(text, "strings.TrimSpace(agentcapabilities.ToolResultText(result))") {
+		t.Fatalf("direct topology context must use shared result text projection")
+	}
+	for _, fragment := range []string{
+		"agentcapabilities.HasApprovalRequiredToolMarker(resultText)",
+		"agentcapabilities.HasPolicyBlockedToolMarker(resultText)",
+		"interpreted := agentcapabilities.InterpretToolResult(result)",
+		"interpreted := agentcapabilities.InterpretMCPToolResult(result)",
+		"if interpreted.IsError",
+		"if interpreted.ApprovalRequired",
+		"if interpreted.PolicyBlocked",
+		"FormatToolResult(result)",
+		"agentcapabilities.DirectMCPToolExecutionOptions",
+		"agentcapabilities.InterpretDirectMCPToolExecution(result",
+		"agentcapabilities.MCPToolResultText(result)",
+	} {
+		if strings.Contains(text, fragment) {
+			t.Fatalf("direct tool execution must not duplicate shared result execution mapping; found %s", fragment)
+		}
+	}
+}
+
+func TestAgenticLoopUsesSharedProviderToolResultConstruction(t *testing.T) {
+	src, err := os.ReadFile("agentic.go")
+	if err != nil {
+		t.Fatalf("read agentic.go: %v", err)
+	}
+	text := string(src)
+
+	for _, fragment := range []string{
+		"agentcapabilities.ParseApprovalRequiredToolMarkerData(resultText)",
+		"inputWithApproval = agentcapabilities.WithApprovalArgument(inputWithApproval, approvalData.ApprovalID)",
+		"agentcapabilities.NewProviderToolResultFromToolResult(tc.ID, result)",
+		"projection := newProviderToolResultContextProjection(tc.ID, resultText, isError)",
+		"ToolResult: &projection.Transcript",
+		"ToolResult: &projection.Model",
+	} {
+		if !strings.Contains(text, fragment) {
+			t.Fatalf("agentic loop must use shared provider tool-result construction; missing %s", fragment)
+		}
+	}
+	if strings.Contains(text, "resultText = FormatToolResult(result)") {
+		t.Fatalf("agentic loop must not flatten tool results into provider context locally")
+	}
+	if !strings.Contains(text, "toolCalls = agentcapabilities.NormalizeProviderToolCallsForExecution(data.ToolCalls)") {
+		t.Fatalf("agentic loop must normalize provider-emitted tool calls through the shared tools/call projection before execution")
+	}
+	if strings.Contains(text, "toolCalls = data.ToolCalls") {
+		t.Fatalf("agentic loop must not execute raw provider tool-call names or inputs")
+	}
+	for _, forbidden := range []string{
+		"agentcapabilities.ApprovalRequiredToolMarkerPayloadJSON(resultText)",
+		"var approvalData struct",
+		"\n\t\t\t\t\t\t\tagentcapabilities.WithApprovalArgument(inputWithApproval, approvalData.ApprovalID)",
+	} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("agentic loop must use shared approval marker/replay helpers correctly; found %s", forbidden)
+		}
+	}
+	for _, forbidden := range []string{
+		"ToolResult: &providers.ToolResult{",
+		"ToolResult: &ToolResult{",
+		"agentcapabilities.NewProviderToolResultFromMCP(tc.ID, result)",
+		"modelResultText := truncateToolResultForModel(resultText)",
+	} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("agentic loop must not assemble provider tool-result structs locally; found %s", forbidden)
+		}
+	}
+}
+
+func TestAgenticLoopUsesSharedVerificationEvidenceParser(t *testing.T) {
+	agenticSrc, err := os.ReadFile("agentic.go")
+	if err != nil {
+		t.Fatalf("read agentic.go: %v", err)
+	}
+	if !strings.Contains(string(agenticSrc), "agentcapabilities.ToolResultHasVerificationOK(resultText)") {
+		t.Fatalf("agentic loop must use the shared tool-result verification parser for write self-verification")
+	}
+
+	verificationSrc, err := os.ReadFile("agentic_verification.go")
+	if err != nil {
+		t.Fatalf("read agentic_verification.go: %v", err)
+	}
+	if strings.Contains(string(verificationSrc), "func toolResultHasVerificationOK(") {
+		t.Fatalf("chat must not preserve a local verification evidence parser")
+	}
+}
+
+func TestAgenticLoopUsesSharedToolResultErrorCodeParser(t *testing.T) {
+	src, err := os.ReadFile("agentic.go")
+	if err != nil {
+		t.Fatalf("read agentic.go: %v", err)
+	}
+	text := string(src)
+	if !strings.Contains(text, "agentcapabilities.ToolResultHasErrorCode(resultText, agentcapabilities.ErrCodeStrictResolution)") {
+		t.Fatalf("agentic loop must use the shared tool-result error-code parser for strict-resolution recovery")
+	}
+	if strings.Contains(text, `strings.Contains(resultText, "STRICT_RESOLUTION")`) {
+		t.Fatalf("agentic loop must not branch on local strict-resolution string matching")
+	}
+}
+
+func TestProviderMessageConversionUsesSharedProviderToolResultConstruction(t *testing.T) {
+	src, err := os.ReadFile("agentic_context.go")
+	if err != nil {
+		t.Fatalf("read agentic_context.go: %v", err)
+	}
+	text := string(src)
+
+	for _, fragment := range []string{
+		"projection := newProviderToolResultContextProjection(m.ToolResult.ToolUseID, m.ToolResult.Content, m.ToolResult.IsError)",
+		"pm.ToolResult = &projection.Model",
+		"agentcapabilities.NewProviderToolErrorResult(",
+	} {
+		if !strings.Contains(text, fragment) {
+			t.Fatalf("provider message conversion must use shared provider tool-result construction; missing %s", fragment)
+		}
+	}
+	for _, forbidden := range []string{
+		"func newProviderToolResult(",
+		"func newProviderToolErrorResult(",
+		"ToolResult: &providers.ToolResult{",
+	} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("provider message conversion must not preserve Assistant-local provider-result wrappers or structs; found %s", forbidden)
+		}
+	}
+}
+
+func TestExecuteAssistantTool_PulseStorageSnapshotsToleratesMalformedRecoveryMetadata(t *testing.T) {
 	completedAt := time.Date(2026, 2, 24, 10, 30, 0, 0, time.UTC)
 	svc := &Service{
 		executor: tools.NewPulseToolExecutor(tools.ExecutorConfig{
@@ -496,13 +889,13 @@ func TestExecuteMCPTool_PulseStorageSnapshotsToleratesMalformedRecoveryMetadata(
 		}),
 	}
 
-	output, err := svc.ExecuteMCPTool(context.Background(), "pulse_storage", map[string]interface{}{
+	output, err := svc.ExecuteAssistantTool(context.Background(), "pulse_storage", map[string]interface{}{
 		"type":     "snapshots",
 		"guest_id": "100",
 		"instance": "pve1",
 	})
 	if err != nil {
-		t.Fatalf("ExecuteMCPTool(pulse_storage snapshots): %v", err)
+		t.Fatalf("ExecuteAssistantTool(pulse_storage snapshots): %v", err)
 	}
 
 	var resp tools.SnapshotsResponse
@@ -520,7 +913,7 @@ func TestExecuteMCPTool_PulseStorageSnapshotsToleratesMalformedRecoveryMetadata(
 	}
 }
 
-func TestExecuteMCPTool_PulseStorageBackupTasksToleratesMalformedRecoveryMetadata(t *testing.T) {
+func TestExecuteAssistantTool_PulseStorageBackupTasksToleratesMalformedRecoveryMetadata(t *testing.T) {
 	startedAt := time.Date(2026, 2, 24, 11, 0, 0, 0, time.UTC)
 	completedAt := time.Date(2026, 2, 24, 11, 15, 0, 0, time.UTC)
 	svc := &Service{
@@ -556,14 +949,14 @@ func TestExecuteMCPTool_PulseStorageBackupTasksToleratesMalformedRecoveryMetadat
 		}),
 	}
 
-	output, err := svc.ExecuteMCPTool(context.Background(), "pulse_storage", map[string]interface{}{
+	output, err := svc.ExecuteAssistantTool(context.Background(), "pulse_storage", map[string]interface{}{
 		"type":     "backup_tasks",
 		"guest_id": "101",
 		"instance": "pve1",
 		"status":   "OK",
 	})
 	if err != nil {
-		t.Fatalf("ExecuteMCPTool(pulse_storage backup_tasks): %v", err)
+		t.Fatalf("ExecuteAssistantTool(pulse_storage backup_tasks): %v", err)
 	}
 
 	var resp tools.BackupTasksListResponse

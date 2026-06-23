@@ -120,6 +120,14 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
                 "platform": "binary",
                 "received_at": (now - timedelta(hours=2)).strftime("%Y-%m-%d %H:%M:%S"),
                 "event": "heartbeat",
+                "paid_license": 1,
+                "pulse_intelligence_loop_configured": 1,
+                "pulse_intelligence_loop_active_30d": 1,
+                "pulse_intelligence_assistant_ai_calls_30d": 9,
+                "pulse_intelligence_assistant_context_ai_calls_30d": 4,
+                "pulse_intelligence_external_agent_enabled": 1,
+                "pulse_intelligence_external_agent_used_30d": 1,
+                "pulse_intelligence_mcp_adapter_used_30d": 1,
             },
             {
                 "install_id": "install-b",
@@ -130,6 +138,15 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
                 "received_at": (now - timedelta(hours=5)).strftime("%Y-%m-%d %H:%M:%S"),
                 "event": "heartbeat",
                 "agent_hosts": 3,
+                "paid_license": 0,
+                "pulse_intelligence_loop_configured": 1,
+                "pulse_intelligence_loop_active_30d": 1,
+                "pulse_intelligence_governed_action_active_30d": 1,
+                "pulse_intelligence_patrol_runs_30d": 2,
+                "pulse_intelligence_action_plans_30d": 2,
+                "pulse_intelligence_approval_requests_30d": 1,
+                "pulse_intelligence_approved_action_attempts_30d": 1,
+                "pulse_intelligence_approved_action_successes_30d": 1,
             },
             {
                 "install_id": "install-b",
@@ -145,15 +162,36 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
                 "received_at": (now - timedelta(days=2, hours=1)).strftime("%Y-%m-%d %H:%M:%S"),
                 "event": "heartbeat",
                 "agent_hosts": 2,
+                "paid_license": 1,
                 "patrol_enabled": 1,
+                "pulse_intelligence_loop_configured": 1,
+            },
+            {
+                "install_id": "install-d",
+                "version": "v6.0.0-rc.1",
+                "version_channel": "rc",
+                "version_is_published_release": 1,
+                "platform": "binary",
+                "received_at": (now - timedelta(days=20)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 0,
+                "pulse_intelligence_loop_configured": 1,
+                "pulse_intelligence_loop_active_30d": 1,
+                "pulse_intelligence_complete_operations_loop_30d": 1,
+                "pulse_intelligence_approved_execution_loop_30d": 1,
+                "pulse_intelligence_external_agent_used_30d": 1,
+                "pulse_intelligence_patrol_runs_30d": 1,
+                "pulse_intelligence_action_plans_30d": 1,
+                "pulse_intelligence_approved_action_attempts_30d": 1,
+                "pulse_intelligence_approved_action_successes_30d": 1,
             },
         ]
 
         summary = report.summarize_rows(
             {
                 "latest_ping": rows[0]["received_at"],
-                "total_rows": 4,
-                "total_distinct_installs": 3,
+                "total_rows": 5,
+                "total_distinct_installs": 4,
             },
             rows,
             published_versions={"6.0.0-rc.1"},
@@ -233,6 +271,984 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
         self.assertEqual(signals["agent_hosts"]["total"], 3)
         self.assertEqual(signals["agent_hosts"]["group"], "deep")
         self.assertEqual(signals["pve_nodes"]["group"], "core")
+        pulse_loop = summary["pulse_intelligence_value_loop_7d"]
+        self.assertEqual(pulse_loop["active_installs"], 3)
+        self.assertEqual(pulse_loop["paid_installs"], 2)
+        self.assertEqual(pulse_loop["free_installs"], 1)
+        loop_flags = {entry["field"]: entry for entry in pulse_loop["boolean_signals"]}
+        self.assertEqual(loop_flags["pulse_intelligence_loop_configured"]["installs"], 3)
+        self.assertEqual(loop_flags["pulse_intelligence_loop_configured"]["paid_installs"], 2)
+        self.assertEqual(loop_flags["pulse_intelligence_loop_active_30d"]["installs"], 2)
+        self.assertEqual(loop_flags["pulse_intelligence_governed_action_active_30d"]["free_installs"], 1)
+        loop_counts = {entry["field"]: entry for entry in pulse_loop["count_signals"]}
+        self.assertEqual(loop_counts["pulse_intelligence_assistant_ai_calls_30d"]["total"], 9)
+        self.assertEqual(loop_counts["pulse_intelligence_assistant_ai_calls_30d"]["paid_total"], 9)
+        self.assertEqual(loop_counts["pulse_intelligence_assistant_context_ai_calls_30d"]["total"], 4)
+        self.assertEqual(loop_counts["pulse_intelligence_assistant_context_ai_calls_30d"]["paid_total"], 4)
+        self.assertEqual(loop_counts["pulse_intelligence_action_plans_30d"]["free_total"], 2)
+        self.assertEqual(loop_counts["pulse_intelligence_approved_action_successes_30d"]["free_total"], 1)
+        cohorts = {
+            entry["key"]: entry
+            for entry in summary["pulse_intelligence_outcome_cohorts"]["cohorts"]
+        }
+        self.assertEqual(cohorts["loop_configured"]["installs"], 4)
+        self.assertEqual(cohorts["loop_configured"]["retained_7d"], 3)
+        self.assertEqual(cohorts["loop_configured"]["retained_7d_rate_pct"], 75)
+        self.assertEqual(cohorts["loop_configured"]["paid_latest"], 2)
+        self.assertEqual(cohorts["loop_configured"]["paid_latest_rate_pct"], 50)
+        self.assertEqual(cohorts["loop_configured"]["free_latest"], 2)
+        self.assertEqual(cohorts["loop_active_30d"]["installs"], 3)
+        self.assertEqual(cohorts["loop_active_30d"]["retained_7d"], 2)
+        self.assertEqual(cohorts["loop_active_30d"]["retained_7d_rate_pct"], 66.67)
+        self.assertEqual(cohorts["complete_operations_loop_30d"]["installs"], 1)
+        self.assertEqual(cohorts["complete_operations_loop_30d"]["free_latest"], 1)
+        self.assertEqual(cohorts["complete_operations_loop_30d"]["retained_7d"], 0)
+        self.assertEqual(cohorts["complete_operations_loop_30d"]["retained_7d_rate_pct"], 0)
+        self.assertEqual(cohorts["approved_execution_loop_30d"]["installs"], 1)
+        self.assertEqual(cohorts["approved_execution_loop_30d"]["free_latest"], 1)
+        self.assertEqual(cohorts["assistant_activity"]["installs"], 1)
+        self.assertEqual(cohorts["assistant_context_activity"]["installs"], 1)
+        self.assertEqual(cohorts["patrol_activity"]["installs"], 2)
+        self.assertEqual(cohorts["patrol_activity"]["retained_7d"], 1)
+        self.assertEqual(cohorts["external_agent_used_30d"]["installs"], 2)
+        self.assertEqual(cohorts["external_agent_used_30d"]["retained_7d"], 1)
+        self.assertEqual(cohorts["mcp_adapter_used_30d"]["installs"], 1)
+        self.assertEqual(cohorts["mcp_adapter_used_30d"]["retained_7d"], 1)
+        self.assertEqual(cohorts["governed_action_active_30d"]["installs"], 2)
+        self.assertEqual(cohorts["governed_action_active_30d"]["retained_7d"], 1)
+        self.assertEqual(cohorts["approved_action_execution_30d"]["installs"], 2)
+        self.assertEqual(cohorts["approved_action_execution_30d"]["retained_7d"], 1)
+        self.assertEqual(cohorts["approved_action_success_30d"]["installs"], 2)
+        self.assertEqual(cohorts["approved_action_success_30d"]["retained_7d"], 1)
+        funnel = {
+            entry["key"]: entry
+            for entry in summary["pulse_intelligence_operations_loop_funnel"]["stages"]
+        }
+        self.assertEqual(funnel["configured"]["installs"], 4)
+        self.assertEqual(funnel["configured"]["retained_7d"], 3)
+        self.assertEqual(funnel["configured"]["retained_7d_rate_pct"], 75)
+        self.assertEqual(funnel["patrol_activity"]["installs"], 2)
+        self.assertEqual(funnel["patrol_activity"]["retained_7d"], 1)
+        self.assertEqual(funnel["patrol_activity"]["retained_7d_rate_pct"], 50)
+        self.assertEqual(funnel["assistant_mcp_collaboration"]["installs"], 2)
+        self.assertEqual(funnel["assistant_mcp_collaboration"]["retained_7d"], 1)
+        self.assertEqual(funnel["governed_action"]["installs"], 2)
+        self.assertEqual(funnel["governed_action"]["retained_7d"], 1)
+        self.assertEqual(funnel["approved_action_execution"]["installs"], 2)
+        self.assertEqual(funnel["approved_action_execution"]["retained_7d"], 1)
+        self.assertEqual(funnel["approved_action_success"]["installs"], 2)
+        self.assertEqual(funnel["approved_action_success"]["retained_7d"], 1)
+        self.assertEqual(funnel["complete_operations_loop"]["installs"], 1)
+        self.assertEqual(funnel["complete_operations_loop"]["retained_7d"], 0)
+        self.assertEqual(funnel["complete_operations_loop"]["free_latest"], 1)
+        self.assertEqual(funnel["approved_execution_loop"]["installs"], 1)
+        self.assertEqual(funnel["approved_execution_loop"]["retained_7d"], 0)
+        self.assertEqual(funnel["approved_execution_loop"]["free_latest"], 1)
+
+    def test_pulse_intelligence_outcome_cohorts_record_observed_conversion(self) -> None:
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        rows = [
+            {
+                "install_id": "converted",
+                "version": "v6.0.0-rc.1",
+                "platform": "binary",
+                "received_at": (now - timedelta(days=2)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 0,
+                "pulse_intelligence_loop_configured": 1,
+                "pulse_intelligence_assistant_ai_calls_30d": 1,
+                "pulse_intelligence_assistant_context_ai_calls_30d": 1,
+                "pulse_intelligence_mcp_adapter_used_30d": 1,
+            },
+            {
+                "install_id": "converted",
+                "version": "v6.0.0-rc.1",
+                "platform": "binary",
+                "received_at": (now - timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 1,
+                "pulse_intelligence_loop_active_30d": 1,
+                "pulse_intelligence_assistant_ai_calls_30d": 3,
+                "pulse_intelligence_assistant_context_ai_calls_30d": 3,
+                "pulse_intelligence_mcp_adapter_used_30d": 1,
+            },
+            {
+                "install_id": "still-free",
+                "version": "v6.0.0-rc.1",
+                "platform": "docker",
+                "received_at": (now - timedelta(hours=2)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 0,
+                "pulse_intelligence_loop_configured": 1,
+                "pulse_intelligence_patrol_runs_30d": 1,
+            },
+            {
+                "install_id": "paid-first",
+                "version": "v6.0.0-rc.1",
+                "platform": "docker",
+                "received_at": (now - timedelta(hours=3)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 1,
+                "pulse_intelligence_loop_active_30d": 1,
+            },
+            {
+                "install_id": "unknown-first",
+                "version": "v6.0.0-rc.1",
+                "platform": "binary",
+                "received_at": (now - timedelta(hours=4)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "pulse_intelligence_loop_configured": 1,
+            },
+        ]
+
+        summary = report.summarize_rows(
+            {
+                "latest_ping": rows[1]["received_at"],
+                "total_rows": len(rows),
+                "total_distinct_installs": 4,
+            },
+            rows,
+            published_versions={"6.0.0-rc.1"},
+        )
+
+        cohorts = {
+            entry["key"]: entry
+            for entry in summary["pulse_intelligence_outcome_cohorts"]["cohorts"]
+        }
+        self.assertEqual(cohorts["loop_configured"]["installs"], 3)
+        self.assertEqual(cohorts["loop_configured"]["paid_latest"], 1)
+        self.assertEqual(cohorts["loop_configured"]["free_latest"], 2)
+        self.assertEqual(cohorts["loop_configured"]["observed_free_starts"], 2)
+        self.assertEqual(cohorts["loop_configured"]["observed_free_to_paid"], 1)
+        self.assertEqual(cohorts["loop_configured"]["observed_free_to_paid_rate_pct"], 50)
+        self.assertEqual(cohorts["loop_configured"]["observed_signal_free_starts"], 2)
+        self.assertEqual(cohorts["loop_configured"]["observed_signal_free_to_paid"], 1)
+        self.assertEqual(cohorts["loop_configured"]["observed_signal_free_to_paid_rate_pct"], 50)
+        self.assertEqual(cohorts["loop_active_30d"]["installs"], 3)
+        self.assertEqual(cohorts["loop_active_30d"]["observed_free_starts"], 2)
+        self.assertEqual(cohorts["loop_active_30d"]["observed_free_to_paid"], 1)
+        self.assertEqual(cohorts["loop_active_30d"]["observed_free_to_paid_rate_pct"], 50)
+        self.assertEqual(cohorts["loop_active_30d"]["observed_signal_free_starts"], 2)
+        self.assertEqual(cohorts["loop_active_30d"]["observed_signal_free_to_paid"], 1)
+        self.assertEqual(cohorts["loop_active_30d"]["observed_signal_free_to_paid_rate_pct"], 50)
+        self.assertEqual(cohorts["assistant_activity"]["installs"], 1)
+        self.assertEqual(cohorts["assistant_activity"]["observed_free_starts"], 1)
+        self.assertEqual(cohorts["assistant_activity"]["observed_free_to_paid"], 1)
+        self.assertEqual(cohorts["assistant_activity"]["observed_free_to_paid_rate_pct"], 100)
+        self.assertEqual(cohorts["assistant_activity"]["observed_signal_free_starts"], 1)
+        self.assertEqual(cohorts["assistant_activity"]["observed_signal_free_to_paid"], 1)
+        self.assertEqual(cohorts["assistant_activity"]["observed_signal_free_to_paid_rate_pct"], 100)
+        self.assertEqual(cohorts["assistant_context_activity"]["installs"], 1)
+        self.assertEqual(cohorts["assistant_context_activity"]["observed_free_starts"], 1)
+        self.assertEqual(cohorts["assistant_context_activity"]["observed_free_to_paid"], 1)
+        self.assertEqual(cohorts["assistant_context_activity"]["observed_signal_free_starts"], 1)
+        self.assertEqual(cohorts["assistant_context_activity"]["observed_signal_free_to_paid"], 1)
+        self.assertEqual(cohorts["mcp_adapter_used_30d"]["installs"], 1)
+        self.assertEqual(cohorts["mcp_adapter_used_30d"]["observed_free_starts"], 1)
+        self.assertEqual(cohorts["mcp_adapter_used_30d"]["observed_free_to_paid"], 1)
+        self.assertEqual(cohorts["mcp_adapter_used_30d"]["observed_signal_free_starts"], 1)
+        self.assertEqual(cohorts["mcp_adapter_used_30d"]["observed_signal_free_to_paid"], 1)
+        self.assertEqual(cohorts["patrol_activity"]["installs"], 1)
+        self.assertEqual(cohorts["patrol_activity"]["observed_free_starts"], 1)
+        self.assertEqual(cohorts["patrol_activity"]["observed_free_to_paid"], 0)
+        self.assertEqual(cohorts["patrol_activity"]["observed_signal_free_starts"], 1)
+        self.assertEqual(cohorts["patrol_activity"]["observed_signal_free_to_paid"], 0)
+
+    def test_pulse_intelligence_mcp_adapter_counts_as_external_agent_outcome(self) -> None:
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        rows = [
+            {
+                "install_id": "adapter-only",
+                "version": "v6.0.0-rc.1",
+                "platform": "docker",
+                "received_at": (now - timedelta(days=2)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 0,
+                "pulse_intelligence_mcp_adapter_used_30d": 1,
+            },
+            {
+                "install_id": "adapter-only",
+                "version": "v6.0.0-rc.1",
+                "platform": "docker",
+                "received_at": (now - timedelta(hours=2)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 1,
+            },
+        ]
+
+        summary = report.summarize_rows(
+            {
+                "latest_ping": rows[1]["received_at"],
+                "total_rows": len(rows),
+                "total_distinct_installs": 1,
+            },
+            rows,
+            published_versions={"6.0.0-rc.1"},
+        )
+
+        cohorts = {
+            entry["key"]: entry
+            for entry in summary["pulse_intelligence_outcome_cohorts"]["cohorts"]
+        }
+        self.assertEqual(cohorts["external_agent_used_30d"]["label"], "External agent/MCP used 30d")
+        self.assertEqual(cohorts["external_agent_used_30d"]["installs"], 1)
+        self.assertEqual(cohorts["external_agent_used_30d"]["paid_latest"], 1)
+        self.assertEqual(cohorts["external_agent_used_30d"]["observed_signal_free_starts"], 1)
+        self.assertEqual(cohorts["external_agent_used_30d"]["observed_signal_free_to_paid"], 1)
+        self.assertEqual(cohorts["mcp_adapter_used_30d"]["installs"], 1)
+
+        stages = {
+            entry["key"]: entry
+            for entry in summary["pulse_intelligence_operations_loop_funnel"]["stages"]
+        }
+        self.assertEqual(stages["assistant_mcp_collaboration"]["installs"], 1)
+        self.assertEqual(stages["assistant_mcp_collaboration"]["observed_signal_free_to_paid"], 1)
+
+    def test_pulse_intelligence_operations_funnel_requires_all_loop_parts(self) -> None:
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        rows = [
+            {
+                "install_id": "full-loop-before-paid",
+                "version": "v6.0.0-rc.1",
+                "platform": "binary",
+                "received_at": (now - timedelta(days=3)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 0,
+                "pulse_intelligence_loop_configured": 1,
+                "pulse_intelligence_patrol_runs_30d": 1,
+                "pulse_intelligence_patrol_new_findings_30d": 1,
+                "pulse_intelligence_external_agent_used_30d": 1,
+                "pulse_intelligence_governed_action_active_30d": 1,
+                "pulse_intelligence_approved_action_attempts_30d": 1,
+                "pulse_intelligence_approved_action_successes_30d": 1,
+            },
+            {
+                "install_id": "full-loop-before-paid",
+                "version": "v6.0.0-rc.1",
+                "platform": "binary",
+                "received_at": (now - timedelta(hours=6)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 1,
+            },
+            {
+                "install_id": "paid-first-full-loop",
+                "version": "v6.0.0-rc.1",
+                "platform": "binary",
+                "received_at": (now - timedelta(hours=7)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 1,
+                "pulse_intelligence_loop_configured": 1,
+                "pulse_intelligence_patrol_runs_30d": 1,
+                "pulse_intelligence_patrol_new_findings_30d": 1,
+                "pulse_intelligence_external_agent_used_30d": 1,
+                "pulse_intelligence_governed_action_active_30d": 1,
+                "pulse_intelligence_approved_action_attempts_30d": 1,
+                "pulse_intelligence_approved_action_successes_30d": 1,
+            },
+            {
+                "install_id": "full-loop",
+                "version": "v6.0.0-rc.1",
+                "platform": "binary",
+                "received_at": (now - timedelta(days=2)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 0,
+                "pulse_intelligence_loop_configured": 1,
+                "pulse_intelligence_patrol_runs_30d": 1,
+                "pulse_intelligence_patrol_new_findings_30d": 1,
+            },
+            {
+                "install_id": "full-loop",
+                "version": "v6.0.0-rc.1",
+                "platform": "binary",
+                "received_at": (now - timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 1,
+                "pulse_intelligence_external_agent_used_30d": 1,
+                "pulse_intelligence_assistant_ai_calls_30d": 2,
+                "pulse_intelligence_governed_action_active_30d": 1,
+                "pulse_intelligence_action_plans_30d": 1,
+                "pulse_intelligence_approved_action_attempts_30d": 1,
+                "pulse_intelligence_approved_action_successes_30d": 1,
+            },
+            {
+                "install_id": "patrol-only",
+                "version": "v6.0.0-rc.1",
+                "platform": "docker",
+                "received_at": (now - timedelta(hours=2)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 0,
+                "pulse_intelligence_loop_configured": 1,
+                "pulse_intelligence_patrol_new_findings_30d": 1,
+            },
+            {
+                "install_id": "collaboration-action",
+                "version": "v6.0.0-rc.1",
+                "platform": "binary",
+                "received_at": (now - timedelta(hours=3)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 1,
+                "pulse_intelligence_loop_configured": 1,
+                "pulse_intelligence_assistant_ai_calls_30d": 4,
+                "pulse_intelligence_assistant_context_ai_calls_30d": 4,
+                "pulse_intelligence_action_plans_30d": 1,
+            },
+            {
+                "install_id": "patrol-collaboration",
+                "version": "v6.0.0-rc.1",
+                "platform": "docker",
+                "received_at": (now - timedelta(hours=4)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 0,
+                "pulse_intelligence_loop_configured": 1,
+                "pulse_intelligence_patrol_runs_30d": 2,
+                "pulse_intelligence_external_agent_used_30d": 1,
+            },
+            {
+                "install_id": "generic-chat-action",
+                "version": "v6.0.0-rc.1",
+                "platform": "binary",
+                "received_at": (now - timedelta(hours=5)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 1,
+                "pulse_intelligence_loop_configured": 1,
+                "pulse_intelligence_assistant_ai_calls_30d": 5,
+                "pulse_intelligence_action_plans_30d": 1,
+            },
+        ]
+
+        summary = report.summarize_rows(
+            {
+                "latest_ping": rows[1]["received_at"],
+                "total_rows": len(rows),
+                "total_distinct_installs": 7,
+            },
+            rows,
+            published_versions={"6.0.0-rc.1"},
+        )
+
+        stages = {
+            entry["key"]: entry
+            for entry in summary["pulse_intelligence_operations_loop_funnel"]["stages"]
+        }
+        self.assertEqual(stages["configured"]["installs"], 7)
+        self.assertEqual(stages["patrol_activity"]["installs"], 5)
+        self.assertEqual(stages["assistant_mcp_collaboration"]["installs"], 5)
+        self.assertEqual(stages["governed_action"]["installs"], 5)
+        self.assertEqual(stages["approved_action_execution"]["installs"], 3)
+        self.assertEqual(stages["approved_action_success"]["installs"], 3)
+        self.assertEqual(stages["approved_action_success"]["observed_signal_free_starts"], 1)
+        self.assertEqual(stages["approved_action_success"]["observed_signal_free_to_paid"], 1)
+        self.assertEqual(stages["complete_operations_loop"]["installs"], 3)
+        self.assertEqual(stages["complete_operations_loop"]["paid_latest"], 3)
+        self.assertEqual(stages["complete_operations_loop"]["retained_7d"], 3)
+        self.assertEqual(stages["complete_operations_loop"]["observed_free_starts"], 2)
+        self.assertEqual(stages["complete_operations_loop"]["observed_free_to_paid"], 2)
+        self.assertEqual(stages["complete_operations_loop"]["observed_signal_free_starts"], 1)
+        self.assertEqual(stages["complete_operations_loop"]["observed_signal_free_to_paid"], 1)
+        self.assertEqual(stages["approved_execution_loop"]["installs"], 3)
+        self.assertEqual(stages["approved_execution_loop"]["paid_latest"], 3)
+        self.assertEqual(stages["approved_execution_loop"]["observed_signal_free_starts"], 1)
+        self.assertEqual(stages["approved_execution_loop"]["observed_signal_free_to_paid"], 1)
+
+    def test_pulse_intelligence_operations_funnel_reports_mcp_adapter_loop_value(self) -> None:
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        rows = [
+            {
+                "install_id": "adapter-loop-before-paid",
+                "version": "v6.0.0-rc.1",
+                "platform": "binary",
+                "received_at": (now - timedelta(days=3)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 0,
+                "pulse_intelligence_patrol_runs_30d": 1,
+                "pulse_intelligence_patrol_new_findings_30d": 1,
+                "pulse_intelligence_mcp_adapter_used_30d": 1,
+                "pulse_intelligence_governed_action_active_30d": 1,
+                "pulse_intelligence_action_plans_30d": 1,
+                "pulse_intelligence_approved_action_attempts_30d": 1,
+                "pulse_intelligence_approved_action_successes_30d": 1,
+            },
+            {
+                "install_id": "adapter-loop-before-paid",
+                "version": "v6.0.0-rc.1",
+                "platform": "binary",
+                "received_at": (now - timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 1,
+            },
+            {
+                "install_id": "direct-agent-loop",
+                "version": "v6.0.0-rc.1",
+                "platform": "docker",
+                "received_at": (now - timedelta(hours=2)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 1,
+                "pulse_intelligence_patrol_runs_30d": 1,
+                "pulse_intelligence_patrol_new_findings_30d": 1,
+                "pulse_intelligence_external_agent_used_30d": 1,
+                "pulse_intelligence_governed_action_active_30d": 1,
+                "pulse_intelligence_approved_action_attempts_30d": 1,
+                "pulse_intelligence_approved_action_successes_30d": 1,
+            },
+            {
+                "install_id": "adapter-without-patrol",
+                "version": "v6.0.0-rc.1",
+                "platform": "docker",
+                "received_at": (now - timedelta(hours=3)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 0,
+                "pulse_intelligence_mcp_adapter_used_30d": 1,
+                "pulse_intelligence_governed_action_active_30d": 1,
+                "pulse_intelligence_action_plans_30d": 1,
+            },
+            {
+                "install_id": "adapter-without-action",
+                "version": "v6.0.0-rc.1",
+                "platform": "binary",
+                "received_at": (now - timedelta(hours=4)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 1,
+                "pulse_intelligence_patrol_runs_30d": 1,
+                "pulse_intelligence_mcp_adapter_used_30d": 1,
+            },
+        ]
+
+        summary = report.summarize_rows(
+            {
+                "latest_ping": rows[1]["received_at"],
+                "total_rows": len(rows),
+                "total_distinct_installs": 4,
+            },
+            rows,
+            published_versions={"6.0.0-rc.1"},
+        )
+
+        stages = {
+            entry["key"]: entry
+            for entry in summary["pulse_intelligence_operations_loop_funnel"]["stages"]
+        }
+        self.assertEqual(stages["complete_operations_loop"]["installs"], 2)
+        self.assertEqual(stages["approved_execution_loop"]["installs"], 2)
+        self.assertEqual(stages["approved_action_success"]["installs"], 2)
+
+        adapter_loop = stages["mcp_adapter_operations_loop"]
+        self.assertEqual(adapter_loop["label"], "Pulse MCP adapter operations loop")
+        self.assertEqual(
+            adapter_loop["required_signal_groups"],
+            ["mcp_adapter_operations_loop"],
+        )
+        self.assertEqual(adapter_loop["installs"], 1)
+        self.assertEqual(adapter_loop["retained_7d"], 1)
+        self.assertEqual(adapter_loop["retained_7d_rate_pct"], 100)
+        self.assertEqual(adapter_loop["paid_latest"], 1)
+        self.assertEqual(adapter_loop["paid_latest_rate_pct"], 100)
+        self.assertEqual(adapter_loop["observed_free_starts"], 1)
+        self.assertEqual(adapter_loop["observed_free_to_paid"], 1)
+        self.assertEqual(adapter_loop["observed_free_to_paid_rate_pct"], 100)
+        self.assertEqual(adapter_loop["observed_signal_free_starts"], 1)
+        self.assertEqual(adapter_loop["observed_signal_free_to_paid"], 1)
+        self.assertEqual(adapter_loop["observed_signal_free_to_paid_rate_pct"], 100)
+
+        adapter_approved = stages["mcp_adapter_approved_execution_loop"]
+        self.assertEqual(
+            adapter_approved["required_signal_groups"],
+            ["mcp_adapter_approved_execution_loop"],
+        )
+        self.assertEqual(adapter_approved["installs"], 1)
+        self.assertEqual(adapter_approved["retained_7d_rate_pct"], 100)
+        self.assertEqual(adapter_approved["paid_latest_rate_pct"], 100)
+        self.assertEqual(adapter_approved["observed_signal_free_to_paid_rate_pct"], 100)
+
+        adapter_success = stages["mcp_adapter_approved_success_loop"]
+        self.assertEqual(
+            adapter_success["required_signal_groups"],
+            ["mcp_adapter_approved_success_loop"],
+        )
+        self.assertEqual(adapter_success["installs"], 1)
+        self.assertEqual(adapter_success["retained_7d_rate_pct"], 100)
+        self.assertEqual(adapter_success["paid_latest_rate_pct"], 100)
+        self.assertEqual(adapter_success["observed_signal_free_to_paid_rate_pct"], 100)
+
+    def test_pulse_intelligence_reports_source_specific_loop_value(self) -> None:
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        rows = [
+            {
+                "install_id": "assistant-before-paid",
+                "version": "v6.0.0-rc.1",
+                "platform": "binary",
+                "received_at": (now - timedelta(days=3)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 0,
+                "pulse_intelligence_operations_loop_starter_requests_30d": 2,
+                "pulse_intelligence_assistant_operations_loop_starter_requests_30d": 2,
+                "pulse_intelligence_assistant_operations_loop_30d": 1,
+                "pulse_intelligence_assistant_approved_execution_loop_30d": 1,
+                "pulse_intelligence_assistant_approved_action_success_loop_30d": 1,
+                "pulse_intelligence_assistant_resolved_operations_loop_30d": 1,
+                "pulse_intelligence_rejected_action_decisions_30d": 1,
+            },
+            {
+                "install_id": "assistant-before-paid",
+                "version": "v6.0.0-rc.1",
+                "platform": "binary",
+                "received_at": (now - timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 1,
+                "pulse_intelligence_operations_loop_starter_requests_30d": 2,
+                "pulse_intelligence_assistant_operations_loop_starter_requests_30d": 2,
+                "pulse_intelligence_assistant_operations_loop_30d": 1,
+                "pulse_intelligence_assistant_approved_execution_loop_30d": 1,
+                "pulse_intelligence_assistant_approved_action_success_loop_30d": 1,
+                "pulse_intelligence_assistant_resolved_operations_loop_30d": 1,
+                "pulse_intelligence_rejected_action_decisions_30d": 1,
+            },
+            {
+                "install_id": "direct-agent-loop",
+                "version": "v6.0.0-rc.1",
+                "platform": "docker",
+                "received_at": (now - timedelta(hours=2)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 1,
+                "pulse_intelligence_external_agent_operations_loop_30d": 1,
+                "pulse_intelligence_external_agent_approved_execution_loop_30d": 1,
+                "pulse_intelligence_external_agent_approved_action_success_loop_30d": 1,
+                "pulse_intelligence_external_agent_resolved_operations_loop_30d": 1,
+            },
+            {
+                "install_id": "patrol-before-paid",
+                "version": "v6.0.0-rc.1",
+                "platform": "binary",
+                "received_at": (now - timedelta(days=4)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 0,
+                "pulse_intelligence_operations_loop_starter_requests_30d": 1,
+                "pulse_intelligence_patrol_operations_loop_starter_requests_30d": 1,
+            },
+            {
+                "install_id": "patrol-before-paid",
+                "version": "v6.0.0-rc.1",
+                "platform": "binary",
+                "received_at": (now - timedelta(minutes=40)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 1,
+                "pulse_intelligence_operations_loop_starter_requests_30d": 1,
+                "pulse_intelligence_patrol_operations_loop_starter_requests_30d": 1,
+            },
+            {
+                "install_id": "legacy-pro-entry-before-paid",
+                "version": "v6.0.0-rc.1",
+                "platform": "binary",
+                "received_at": (now - timedelta(days=5)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 0,
+                "pulse_intelligence_operations_loop_starter_requests_30d": 1,
+                "pulse_intelligence_patrol_control_operations_loop_starter_requests_30d": 1,
+                "pulse_intelligence_pro_activation_operations_loop_starter_requests_30d": 1,
+            },
+            {
+                "install_id": "legacy-pro-entry-before-paid",
+                "version": "v6.0.0-rc.1",
+                "platform": "binary",
+                "received_at": (now - timedelta(minutes=20)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 1,
+                "pulse_intelligence_operations_loop_starter_requests_30d": 1,
+                "pulse_intelligence_patrol_control_operations_loop_starter_requests_30d": 1,
+                "pulse_intelligence_pro_activation_operations_loop_starter_requests_30d": 1,
+            },
+            {
+                "install_id": "mcp-before-paid",
+                "version": "v6.0.0-rc.1",
+                "platform": "binary",
+                "received_at": (now - timedelta(days=2)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 0,
+                "pulse_intelligence_external_agent_operations_loop_30d": 1,
+                "pulse_intelligence_external_agent_approved_execution_loop_30d": 1,
+                "pulse_intelligence_external_agent_approved_action_success_loop_30d": 1,
+                "pulse_intelligence_external_agent_resolved_operations_loop_30d": 1,
+                "pulse_intelligence_mcp_adapter_operations_loop_30d": 1,
+                "pulse_intelligence_mcp_adapter_approved_execution_loop_30d": 1,
+                "pulse_intelligence_mcp_adapter_approved_action_success_loop_30d": 1,
+                "pulse_intelligence_mcp_adapter_resolved_operations_loop_30d": 1,
+                "pulse_intelligence_operations_loop_starter_requests_30d": 1,
+                "pulse_intelligence_mcp_operations_loop_starter_requests_30d": 1,
+            },
+            {
+                "install_id": "mcp-before-paid",
+                "version": "v6.0.0-rc.1",
+                "platform": "binary",
+                "received_at": (now - timedelta(minutes=30)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 1,
+                "pulse_intelligence_external_agent_operations_loop_30d": 1,
+                "pulse_intelligence_external_agent_approved_execution_loop_30d": 1,
+                "pulse_intelligence_external_agent_approved_action_success_loop_30d": 1,
+                "pulse_intelligence_external_agent_resolved_operations_loop_30d": 1,
+                "pulse_intelligence_mcp_adapter_operations_loop_30d": 1,
+                "pulse_intelligence_mcp_adapter_approved_execution_loop_30d": 1,
+                "pulse_intelligence_mcp_adapter_approved_action_success_loop_30d": 1,
+                "pulse_intelligence_mcp_adapter_resolved_operations_loop_30d": 1,
+                "pulse_intelligence_operations_loop_starter_requests_30d": 1,
+                "pulse_intelligence_mcp_operations_loop_starter_requests_30d": 1,
+            },
+        ]
+
+        summary = report.summarize_rows(
+            {
+                "latest_ping": (now - timedelta(minutes=20)).strftime("%Y-%m-%d %H:%M:%S"),
+                "total_rows": len(rows),
+                "total_distinct_installs": 5,
+            },
+            rows,
+            published_versions={"6.0.0-rc.1"},
+        )
+
+        loop_flags = {
+            entry["field"]: entry
+            for entry in summary["pulse_intelligence_value_loop_7d"]["boolean_signals"]
+        }
+        self.assertEqual(loop_flags["pulse_intelligence_assistant_operations_loop_30d"]["installs"], 1)
+        self.assertEqual(loop_flags["pulse_intelligence_external_agent_operations_loop_30d"]["installs"], 2)
+        self.assertEqual(loop_flags["pulse_intelligence_mcp_adapter_operations_loop_30d"]["installs"], 1)
+        self.assertEqual(
+            loop_flags["pulse_intelligence_mcp_adapter_resolved_operations_loop_30d"]["paid_installs"],
+            1,
+        )
+
+        loop_counts = {
+            entry["field"]: entry
+            for entry in summary["pulse_intelligence_value_loop_7d"]["count_signals"]
+        }
+        self.assertEqual(loop_counts["pulse_intelligence_operations_loop_starter_requests_30d"]["total"], 5)
+        self.assertEqual(
+            loop_counts["pulse_intelligence_assistant_operations_loop_starter_requests_30d"]["total"],
+            2,
+        )
+        self.assertEqual(
+            loop_counts["pulse_intelligence_patrol_operations_loop_starter_requests_30d"]["total"],
+            1,
+        )
+        self.assertEqual(
+            loop_counts["pulse_intelligence_patrol_control_operations_loop_starter_requests_30d"]["total"],
+            1,
+        )
+        self.assertEqual(
+            loop_counts["pulse_intelligence_pro_activation_operations_loop_starter_requests_30d"]["total"],
+            1,
+        )
+        self.assertEqual(
+            loop_counts["pulse_intelligence_mcp_operations_loop_starter_requests_30d"]["total"],
+            1,
+        )
+        self.assertEqual(loop_counts["pulse_intelligence_rejected_action_decisions_30d"]["total"], 1)
+
+        cohorts = {
+            entry["key"]: entry
+            for entry in summary["pulse_intelligence_outcome_cohorts"]["cohorts"]
+        }
+        self.assertEqual(cohorts["assistant_operations_loop_30d"]["installs"], 1)
+        self.assertEqual(cohorts["assistant_operations_loop_30d"]["observed_signal_free_to_paid"], 1)
+        self.assertEqual(cohorts["assistant_resolved_operations_loop_30d"]["installs"], 1)
+        self.assertEqual(cohorts["external_agent_operations_loop_30d"]["installs"], 2)
+        self.assertEqual(cohorts["external_agent_operations_loop_30d"]["paid_latest"], 2)
+        self.assertEqual(cohorts["external_agent_resolved_operations_loop_30d"]["observed_signal_free_to_paid"], 1)
+        self.assertEqual(cohorts["mcp_adapter_operations_loop_30d"]["installs"], 1)
+        self.assertEqual(cohorts["mcp_adapter_resolved_operations_loop_30d"]["observed_signal_free_to_paid"], 1)
+        self.assertEqual(cohorts["operations_loop_starter_requests"]["installs"], 4)
+        self.assertEqual(cohorts["patrol_operations_loop_starter_requests"]["observed_signal_free_to_paid"], 1)
+        self.assertEqual(
+            cohorts["patrol_control_operations_loop_starter_requests"]["observed_signal_free_to_paid"],
+            2,
+        )
+        self.assertEqual(
+            cohorts["pro_activation_operations_loop_starter_requests"]["observed_signal_free_to_paid"],
+            1,
+        )
+        self.assertEqual(cohorts["mcp_operations_loop_starter_requests"]["observed_signal_free_to_paid"], 1)
+
+        stages = {
+            entry["key"]: entry
+            for entry in summary["pulse_intelligence_operations_loop_funnel"]["stages"]
+        }
+        self.assertEqual(stages["complete_operations_loop"]["installs"], 3)
+        self.assertEqual(stages["approved_execution_loop"]["installs"], 3)
+        self.assertEqual(stages["resolved_operations_loop"]["installs"], 3)
+        self.assertEqual(stages["assistant_operations_loop"]["installs"], 1)
+        self.assertEqual(stages["assistant_operations_loop"]["observed_signal_free_to_paid"], 1)
+        self.assertEqual(stages["assistant_approved_success_loop"]["observed_signal_free_to_paid"], 1)
+        self.assertEqual(stages["assistant_resolved_operations_loop"]["observed_signal_free_to_paid"], 1)
+        self.assertEqual(stages["external_agent_operations_loop"]["installs"], 2)
+        self.assertEqual(stages["external_agent_resolved_operations_loop"]["observed_signal_free_to_paid"], 1)
+        self.assertEqual(stages["mcp_adapter_operations_loop"]["installs"], 1)
+        self.assertEqual(stages["mcp_adapter_resolved_operations_loop"]["observed_signal_free_to_paid"], 1)
+
+    def test_pulse_intelligence_reports_patrol_control_resolved_loop_as_first_class_signal(self) -> None:
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        rows = [
+            {
+                "install_id": "legacy-pro-completed-loop",
+                "version": "v6.0.0-rc.1",
+                "platform": "binary",
+                "received_at": (now - timedelta(days=4)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 0,
+                "pulse_intelligence_pro_activation_operations_loop_starter_requests_30d": 1,
+                "pulse_intelligence_pro_activation_completed_operations_loop_30d": 1,
+            },
+            {
+                "install_id": "legacy-pro-completed-loop",
+                "version": "v6.0.0-rc.1",
+                "platform": "binary",
+                "received_at": (now - timedelta(hours=2)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 1,
+                "pulse_intelligence_pro_activation_operations_loop_starter_requests_30d": 1,
+                "pulse_intelligence_pro_activation_completed_operations_loop_30d": 1,
+                "pulse_intelligence_pro_activation_paid_completed_operations_loop_30d": 1,
+            },
+            {
+                "install_id": "explicit-patrol-control-completed-loop",
+                "version": "v6.0.0-rc.1",
+                "platform": "binary",
+                "received_at": (now - timedelta(days=2)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 0,
+                "pulse_intelligence_patrol_control_operations_loop_starter_requests_30d": 1,
+                "pulse_intelligence_patrol_control_completed_operations_loop_30d": 1,
+            },
+            {
+                "install_id": "explicit-patrol-control-completed-loop",
+                "version": "v6.0.0-rc.1",
+                "platform": "binary",
+                "received_at": (now - timedelta(minutes=90)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 1,
+                "pulse_intelligence_patrol_control_operations_loop_starter_requests_30d": 1,
+                "pulse_intelligence_patrol_control_completed_operations_loop_30d": 1,
+                "pulse_intelligence_patrol_control_paid_completed_operations_loop_30d": 1,
+            },
+            {
+                "install_id": "explicit-patrol-control-resolved-loop",
+                "version": "v6.0.0-rc.1",
+                "platform": "binary",
+                "received_at": (now - timedelta(days=3)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 0,
+                "pulse_intelligence_patrol_control_operations_loop_starter_requests_30d": 1,
+                "pulse_intelligence_patrol_control_resolved_operations_loop_30d": 1,
+            },
+            {
+                "install_id": "explicit-patrol-control-resolved-loop",
+                "version": "v6.0.0-rc.1",
+                "platform": "binary",
+                "received_at": (now - timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 1,
+                "pulse_intelligence_patrol_control_operations_loop_starter_requests_30d": 1,
+                "pulse_intelligence_patrol_control_resolved_operations_loop_30d": 1,
+                "pulse_intelligence_patrol_control_paid_resolved_operations_loop_30d": 1,
+            },
+            {
+                "install_id": "legacy-pro-resolved-loop",
+                "version": "v6.0.0-rc.1",
+                "platform": "binary",
+                "received_at": (now - timedelta(days=3)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 0,
+                "pulse_intelligence_pro_activation_operations_loop_starter_requests_30d": 1,
+                "pulse_intelligence_pro_activation_resolved_operations_loop_30d": 1,
+            },
+            {
+                "install_id": "legacy-pro-resolved-loop",
+                "version": "v6.0.0-rc.1",
+                "platform": "binary",
+                "received_at": (now - timedelta(minutes=45)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 1,
+                "pulse_intelligence_pro_activation_operations_loop_starter_requests_30d": 1,
+                "pulse_intelligence_pro_activation_resolved_operations_loop_30d": 1,
+                "pulse_intelligence_pro_activation_paid_resolved_operations_loop_30d": 1,
+            },
+        ]
+
+        summary = report.summarize_rows(
+            {
+                "latest_ping": rows[-1]["received_at"],
+                "total_rows": len(rows),
+                "total_distinct_installs": 4,
+            },
+            rows,
+            published_versions={"6.0.0-rc.1"},
+        )
+
+        loop_flags = {
+            entry["field"]: entry
+            for entry in summary["pulse_intelligence_value_loop_7d"]["boolean_signals"]
+        }
+        patrol_control_completed = loop_flags[
+            "pulse_intelligence_patrol_control_completed_operations_loop_30d"
+        ]
+        self.assertEqual(patrol_control_completed["installs"], 1)
+        self.assertEqual(patrol_control_completed["paid_installs"], 1)
+        patrol_control_resolved = loop_flags[
+            "pulse_intelligence_patrol_control_resolved_operations_loop_30d"
+        ]
+        self.assertEqual(patrol_control_resolved["installs"], 1)
+        self.assertEqual(patrol_control_resolved["paid_installs"], 1)
+        legacy_completed = loop_flags["pulse_intelligence_pro_activation_completed_operations_loop_30d"]
+        self.assertEqual(legacy_completed["installs"], 1)
+        self.assertEqual(legacy_completed["paid_installs"], 1)
+        legacy_resolved = loop_flags["pulse_intelligence_pro_activation_resolved_operations_loop_30d"]
+        self.assertEqual(legacy_resolved["installs"], 1)
+        self.assertEqual(legacy_resolved["paid_installs"], 1)
+
+        cohorts = {
+            entry["key"]: entry
+            for entry in summary["pulse_intelligence_outcome_cohorts"]["cohorts"]
+        }
+        self.assertEqual(cohorts["patrol_control_operations_loop_starter_requests"]["installs"], 4)
+        self.assertEqual(cohorts["pro_activation_operations_loop_starter_requests"]["installs"], 2)
+        self.assertEqual(cohorts["patrol_control_completed_operations_loop_30d"]["installs"], 2)
+        self.assertEqual(
+            cohorts["patrol_control_completed_operations_loop_30d"]["observed_signal_free_to_paid"],
+            2,
+        )
+        self.assertEqual(cohorts["patrol_control_resolved_operations_loop_30d"]["installs"], 2)
+        self.assertEqual(
+            cohorts["patrol_control_resolved_operations_loop_30d"]["observed_signal_free_to_paid"],
+            2,
+        )
+        self.assertEqual(cohorts["patrol_control_paid_completed_operations_loop_30d"]["paid_latest"], 2)
+        self.assertEqual(cohorts["patrol_control_paid_resolved_operations_loop_30d"]["paid_latest"], 2)
+
+        stages = {
+            entry["key"]: entry
+            for entry in summary["pulse_intelligence_operations_loop_funnel"]["stages"]
+        }
+        self.assertNotIn("pro_activation_completed_operations_loop", stages)
+        self.assertNotIn("pro_activation_resolved_operations_loop", stages)
+        self.assertEqual(stages["complete_operations_loop"]["installs"], 2)
+        self.assertEqual(stages["resolved_operations_loop"]["installs"], 2)
+        self.assertEqual(stages["patrol_control_completed_operations_loop"]["installs"], 2)
+        self.assertEqual(
+            stages["patrol_control_completed_operations_loop"]["observed_signal_free_to_paid"],
+            2,
+        )
+        self.assertEqual(stages["patrol_control_resolved_operations_loop"]["installs"], 2)
+        self.assertEqual(
+            stages["patrol_control_resolved_operations_loop"]["observed_signal_free_to_paid"],
+            2,
+        )
+
+    def test_pulse_intelligence_reports_external_agent_capability_activity(self) -> None:
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        rows = [
+            {
+                "install_id": "capability-loop-before-paid",
+                "version": "v6.0.0-rc.1",
+                "platform": "binary",
+                "received_at": (now - timedelta(days=2)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 0,
+                "pulse_intelligence_loop_configured": 1,
+                "pulse_intelligence_patrol_runs_30d": 1,
+                "pulse_intelligence_patrol_new_findings_30d": 1,
+                "pulse_intelligence_external_agent_context_requests_30d": 2,
+                "pulse_intelligence_external_agent_action_requests_30d": 1,
+                "pulse_intelligence_governed_action_active_30d": 1,
+                "pulse_intelligence_approved_action_attempts_30d": 1,
+                "pulse_intelligence_approved_action_successes_30d": 1,
+            },
+            {
+                "install_id": "capability-loop-before-paid",
+                "version": "v6.0.0-rc.1",
+                "platform": "binary",
+                "received_at": (now - timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 1,
+                "pulse_intelligence_loop_configured": 1,
+                "pulse_intelligence_patrol_runs_30d": 1,
+                "pulse_intelligence_patrol_new_findings_30d": 1,
+                "pulse_intelligence_external_agent_context_requests_30d": 3,
+                "pulse_intelligence_external_agent_action_requests_30d": 2,
+                "pulse_intelligence_governed_action_active_30d": 1,
+                "pulse_intelligence_approved_action_attempts_30d": 1,
+                "pulse_intelligence_approved_action_successes_30d": 1,
+            },
+            {
+                "install_id": "assistant-only",
+                "version": "v6.0.0-rc.1",
+                "platform": "docker",
+                "received_at": (now - timedelta(hours=2)).strftime("%Y-%m-%d %H:%M:%S"),
+                "event": "heartbeat",
+                "paid_license": 0,
+                "pulse_intelligence_assistant_ai_calls_30d": 4,
+            },
+        ]
+
+        summary = report.summarize_rows(
+            {
+                "latest_ping": rows[1]["received_at"],
+                "total_rows": len(rows),
+                "total_distinct_installs": 2,
+            },
+            rows,
+            published_versions={"6.0.0-rc.1"},
+        )
+
+        loop_counts = {
+            entry["field"]: entry
+            for entry in summary["pulse_intelligence_value_loop_7d"]["count_signals"]
+        }
+        self.assertEqual(
+            loop_counts["pulse_intelligence_external_agent_context_requests_30d"]["installs"],
+            1,
+        )
+        self.assertEqual(
+            loop_counts["pulse_intelligence_external_agent_context_requests_30d"]["total"],
+            3,
+        )
+        self.assertEqual(
+            loop_counts["pulse_intelligence_external_agent_context_requests_30d"]["paid_total"],
+            3,
+        )
+        self.assertEqual(loop_counts["pulse_intelligence_approved_action_successes_30d"]["installs"], 1)
+
+        cohorts = {
+            entry["key"]: entry
+            for entry in summary["pulse_intelligence_outcome_cohorts"]["cohorts"]
+        }
+        self.assertEqual(cohorts["external_agent_used_30d"]["installs"], 1)
+        self.assertEqual(cohorts["external_agent_used_30d"]["paid_latest"], 1)
+        self.assertEqual(cohorts["external_agent_used_30d"]["observed_signal_free_starts"], 1)
+        self.assertEqual(cohorts["external_agent_used_30d"]["observed_signal_free_to_paid"], 1)
+        self.assertEqual(cohorts["external_agent_context_requests"]["installs"], 1)
+        self.assertEqual(cohorts["external_agent_context_requests"]["paid_latest"], 1)
+        self.assertEqual(cohorts["external_agent_context_requests"]["observed_signal_free_to_paid"], 1)
+        self.assertEqual(cohorts["external_agent_action_requests"]["installs"], 1)
+        self.assertEqual(cohorts["external_agent_action_requests"]["paid_latest"], 1)
+        self.assertEqual(cohorts["approved_action_success_30d"]["installs"], 1)
+        self.assertEqual(cohorts["approved_action_success_30d"]["paid_latest"], 1)
+
+        stages = {
+            entry["key"]: entry
+            for entry in summary["pulse_intelligence_operations_loop_funnel"]["stages"]
+        }
+        self.assertEqual(stages["assistant_mcp_collaboration"]["installs"], 1)
+        self.assertEqual(stages["assistant_mcp_collaboration"]["paid_latest"], 1)
+        self.assertEqual(stages["complete_operations_loop"]["installs"], 1)
+        self.assertEqual(stages["complete_operations_loop"]["paid_latest"], 1)
+        self.assertEqual(stages["complete_operations_loop"]["observed_signal_free_starts"], 1)
+        self.assertEqual(stages["complete_operations_loop"]["observed_signal_free_to_paid"], 1)
+        self.assertEqual(stages["approved_execution_loop"]["installs"], 1)
+        self.assertEqual(stages["approved_execution_loop"]["paid_latest"], 1)
+        self.assertEqual(stages["approved_execution_loop"]["observed_signal_free_starts"], 1)
+        self.assertEqual(stages["approved_execution_loop"]["observed_signal_free_to_paid"], 1)
+        self.assertEqual(stages["approved_action_success"]["installs"], 1)
+        self.assertEqual(stages["approved_action_success"]["paid_latest"], 1)
+        self.assertEqual(stages["approved_action_success"]["observed_signal_free_starts"], 1)
+        self.assertEqual(stages["approved_action_success"]["observed_signal_free_to_paid"], 1)
 
     def test_format_text_includes_latest_install_windows(self) -> None:
         summary = {
@@ -289,6 +1305,109 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
                     ],
                 },
             ],
+            "pulse_intelligence_value_loop_7d": {
+                "active_installs": 157,
+                "paid_installs": 42,
+                "free_installs": 115,
+                "boolean_signals": [
+                    {
+                        "field": "pulse_intelligence_loop_configured",
+                        "label": "Loop configured",
+                        "installs": 31,
+                        "paid_installs": 18,
+                        "free_installs": 13,
+                    },
+                    {
+                        "field": "pulse_intelligence_governed_action_active_30d",
+                        "label": "Governed action active 30d",
+                        "installs": 6,
+                        "paid_installs": 5,
+                        "free_installs": 1,
+                    },
+                ],
+                "count_signals": [
+                    {
+                        "field": "pulse_intelligence_assistant_ai_calls_30d",
+                        "label": "Assistant AI calls 30d",
+                        "installs": 21,
+                        "paid_installs": 12,
+                        "free_installs": 9,
+                        "total": 88,
+                        "paid_total": 61,
+                        "free_total": 27,
+                    },
+                    {
+                        "field": "pulse_intelligence_action_plans_30d",
+                        "label": "Action plans 30d",
+                        "installs": 4,
+                        "paid_installs": 4,
+                        "free_installs": 0,
+                        "total": 9,
+                        "paid_total": 9,
+                        "free_total": 0,
+                    },
+                ],
+            },
+            "pulse_intelligence_outcome_cohorts": {
+                "retention_window": "7d",
+                "cohorts": [
+                    {
+                        "key": "loop_configured",
+                        "label": "Loop configured",
+                        "installs": 51,
+                        "retained_7d": 31,
+                        "paid_latest": 24,
+                        "free_latest": 27,
+                        "observed_free_starts": 19,
+                        "observed_free_to_paid": 6,
+                        "observed_signal_free_starts": 12,
+                        "observed_signal_free_to_paid": 5,
+                    },
+                    {
+                        "key": "assistant_activity",
+                        "label": "Assistant activity",
+                        "installs": 21,
+                        "retained_7d": 18,
+                        "paid_latest": 12,
+                        "free_latest": 9,
+                        "observed_free_starts": 8,
+                        "observed_free_to_paid": 3,
+                        "observed_signal_free_starts": 6,
+                        "observed_signal_free_to_paid": 3,
+                    },
+                ],
+            },
+            "pulse_intelligence_operations_loop_funnel": {
+                "retention_window": "7d",
+                "stages": [
+                    {
+                        "key": "patrol_activity",
+                        "label": "Patrol detection/investigation",
+                        "required_signal_groups": ["patrol"],
+                        "installs": 17,
+                        "retained_7d": 14,
+                        "paid_latest": 11,
+                        "free_latest": 6,
+                        "observed_free_starts": 7,
+                        "observed_free_to_paid": 2,
+                        "observed_signal_free_starts": 5,
+                        "observed_signal_free_to_paid": 2,
+                    },
+                    {
+                        "key": "complete_operations_loop",
+                        "label": "Complete operations loop",
+                        "required_signal_groups": ["patrol_issue", "collaboration", "governed_decision"],
+                        "installs": 9,
+                        "retained_7d": 8,
+                        "paid_latest": 7,
+                        "free_latest": 2,
+                        "observed_free_starts": 4,
+                        "observed_free_to_paid": 2,
+                        "observed_signal_free_starts": 3,
+                        "observed_signal_free_to_paid": 1,
+                    },
+                ],
+            },
             "target_release_coverage_7d": {
                 "version": "6.0.0-rc.6",
                 "active_installs": 74,
@@ -344,6 +1463,42 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
         self.assertIn("  - PVE nodes: 55 installs, total 131", rendered)
         self.assertIn("  - AI enabled: 19 installs", rendered)
         self.assertIn("  - Agent hosts, Patrol enabled", rendered)
+        self.assertIn("Pulse Intelligence value loop (7d):", rendered)
+        self.assertIn("- paid posture: paid 42, free/community 115", rendered)
+        self.assertIn("  - Loop configured: 31 installs (paid 18, free/community 13)", rendered)
+        self.assertIn("  - Action plans 30d: 4 installs, total 9 (paid 4 / 9; free/community 0 / 0)", rendered)
+        self.assertIn("Pulse Intelligence activation and retention:", rendered)
+        self.assertIn("- source window: last 7 day(s)", rendered)
+        self.assertIn("- retention definition: latest ping within 7d", rendered)
+        self.assertIn(
+            "  - Loop configured: 51 installs, retained 7d 31 (60.8%), latest paid 24, latest free/community 27",
+            rendered,
+        )
+        self.assertIn(
+            "observed free/community starts 19, free-to-paid 6 (31.6%), signal while free/community 12, signal-to-paid 5 (41.7%)",
+            rendered,
+        )
+        self.assertIn(
+            "  - Assistant activity: 21 installs, retained 7d 18 (85.7%), latest paid 12, latest free/community 9",
+            rendered,
+        )
+        self.assertIn(
+            "observed free/community starts 8, free-to-paid 3 (37.5%), signal while free/community 6, signal-to-paid 3 (50.0%)",
+            rendered,
+        )
+        self.assertIn("Pulse Intelligence operations loop funnel:", rendered)
+        self.assertIn(
+            "  - Patrol detection/investigation: 17 installs, retained 7d 14 (82.4%), latest paid 11, latest free/community 6",
+            rendered,
+        )
+        self.assertIn(
+            "  - Complete operations loop: 9 installs, retained 7d 8 (88.9%), latest paid 7, latest free/community 2",
+            rendered,
+        )
+        self.assertIn(
+            "observed free/community starts 4, free-to-paid 2 (50.0%), signal while free/community 3, signal-to-paid 1 (33.3%)",
+            rendered,
+        )
 
     def test_privacy_docs_keep_relay_mobile_handoff_copy_aligned(self) -> None:
         repo_root = Path(__file__).resolve().parents[2]
@@ -357,6 +1512,38 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
         self.assertIn(expected, bundled)
         self.assertNotIn("mobile app pairing", canonical)
         self.assertNotIn("mobile app pairing", bundled)
+
+    def test_privacy_docs_disclose_derived_pulse_intelligence_reports(self) -> None:
+        repo_root = Path(__file__).resolve().parents[2]
+        privacy_docs = (
+            repo_root / "docs" / "PRIVACY.md",
+            repo_root / "frontend-modern" / "public" / "docs" / "PRIVACY.md",
+        )
+
+        for path in privacy_docs:
+            with self.subTest(path=path.relative_to(repo_root)):
+                content = path.read_text(encoding="utf-8")
+                self.assertIn("aggregate Pulse Intelligence adoption reports", content)
+                self.assertIn("Assistant, direct external-agent, or MCP collaboration", content)
+                self.assertIn("Pulse Intelligence Assistant operations loop 30d", content)
+                self.assertIn("Pulse Intelligence external agent operations loop 30d", content)
+                self.assertIn("Pulse Intelligence Patrol control completed operations loop 30d", content)
+                self.assertIn("Pulse Intelligence MCP operations loop starter requests 30d", content)
+                self.assertIn("Pulse Intelligence Assistant context AI calls 30d", content)
+                self.assertIn("approved action success", content)
+                self.assertIn("rejected action decisions", content)
+                self.assertIn("Patrol-control completed-work proof", content)
+                self.assertIn("observed free-to-paid movement", content)
+                self.assertIn(
+                    "Pulse Intelligence agent/MCP route in the current 30-day telemetry window",
+                    content,
+                )
+                self.assertIn("Pulse Intelligence MCP adapter used 30d", content)
+                self.assertIn("Compatibility mirror of the Patrol control completed field", content)
+                self.assertNotIn("Pro activation completed-loop proof", content)
+                self.assertIn("route parameters, resource IDs", content)
+                self.assertIn("Those reports do not add prompts, findings", content)
+                self.assertIn("account links, or exact commercial tiers", content)
 
 
 if __name__ == "__main__":

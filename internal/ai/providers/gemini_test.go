@@ -632,6 +632,52 @@ func TestGeminiClient_Chat_ToolResultsAndAssistantToolCalls(t *testing.T) {
 	}
 }
 
+func TestGeminiClient_Chat_ResolvesAndGroupsToolResults(t *testing.T) {
+	var got geminiRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		_ = json.NewEncoder(w).Encode(geminiResponse{
+			Candidates: []geminiCandidate{{Content: geminiContent{Parts: []geminiPart{{Text: "Ok"}}}, FinishReason: "STOP"}},
+		})
+	}))
+	defer server.Close()
+
+	client := NewGeminiClient("test-key", "gemini-pro", server.URL, 0)
+	_, err := client.Chat(context.Background(), ChatRequest{
+		Messages: []Message{
+			{
+				Role: "assistant",
+				ToolCalls: []ToolCall{
+					{ID: "call-time", Name: "get_time", Input: map[string]any{"tz": "UTC"}},
+					{ID: "call-weather", Name: "get_weather", Input: map[string]any{"location": "NYC"}},
+				},
+			},
+			{Role: "user", ToolResult: &ToolResult{ToolUseID: "call-time", Content: "{\"time\":\"00:00\"}"}},
+			{Role: "user", ToolResult: &ToolResult{ToolUseID: "call-weather", Content: "{\"temp\":72}"}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+
+	if len(got.Contents) != 2 {
+		t.Fatalf("contents length = %d, want grouped assistant call plus tool result response", len(got.Contents))
+	}
+	if got.Contents[0].Role != "model" || len(got.Contents[0].Parts) != 2 {
+		t.Fatalf("expected model content with two function calls, got %+v", got.Contents[0])
+	}
+	resultParts := got.Contents[1].Parts
+	if got.Contents[1].Role != "user" || len(resultParts) != 2 {
+		t.Fatalf("expected one grouped user content with two function responses, got %+v", got.Contents[1])
+	}
+	if resultParts[0].FunctionResponse == nil || resultParts[0].FunctionResponse.Name != "get_time" {
+		t.Fatalf("first function response = %+v, want get_time", resultParts[0].FunctionResponse)
+	}
+	if resultParts[1].FunctionResponse == nil || resultParts[1].FunctionResponse.Name != "get_weather" {
+		t.Fatalf("second function response = %+v, want get_weather", resultParts[1].FunctionResponse)
+	}
+}
+
 func TestGeminiClient_Chat_Retry(t *testing.T) {
 	var count int
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

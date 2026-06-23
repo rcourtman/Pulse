@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -217,7 +218,7 @@ func TestHandleAgentEvents_StreamsConnectedAndPublishedEvents(t *testing.T) {
 
 	select {
 	case payload := <-got:
-		if !strings.Contains(payload, "stream.connected") {
+		if !strings.Contains(payload, string(agentcapabilities.EventKindStreamConnected)) {
 			t.Error("expected stream.connected event before any published events")
 		}
 		if !strings.Contains(payload, "f-stream") {
@@ -391,9 +392,9 @@ func TestAgentEventApprovalPendingKindIsStable(t *testing.T) {
 	// Pin the wire-stable kind string. Renaming it breaks every agent
 	// that branches on the event type; the constant is part of the
 	// contract, not an implementation detail.
-	if AgentEventApprovalPending != "approval.pending" {
+	if AgentEventApprovalPending != AgentEventKind(agentcapabilities.EventKindApprovalPending) {
 		t.Fatalf("AgentEventApprovalPending changed: got %q want %q",
-			AgentEventApprovalPending, "approval.pending")
+			AgentEventApprovalPending, agentcapabilities.EventKindApprovalPending)
 	}
 }
 
@@ -563,9 +564,9 @@ func TestAgentEventBroadcaster_PublishActionCompletedPreservesRefusalToken(t *te
 func TestAgentEventActionCompletedKindIsStable(t *testing.T) {
 	// Pin the wire-stable kind string. Renaming it breaks every
 	// agent that branches on the event type.
-	if AgentEventActionCompleted != "action.completed" {
+	if AgentEventActionCompleted != AgentEventKind(agentcapabilities.EventKindActionCompleted) {
 		t.Fatalf("AgentEventActionCompleted changed: got %q want %q",
-			AgentEventActionCompleted, "action.completed")
+			AgentEventActionCompleted, agentcapabilities.EventKindActionCompleted)
 	}
 }
 

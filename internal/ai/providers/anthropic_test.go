@@ -528,6 +528,73 @@ func TestAnthropicClient_ChatStream_ToolUse(t *testing.T) {
 	}
 }
 
+func TestAnthropicClient_ChatStream_UsesSharedToolResultProjection(t *testing.T) {
+	var got map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+
+		stream := []string{
+			`{"type":"message_start","message":{"usage":{"input_tokens":2}}}`,
+			`{"type":"content_block_delta","delta":{"type":"text_delta","text":"done"}}`,
+			`{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":1}}`,
+			`{"type":"message_stop"}`,
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		for _, event := range stream {
+			_, _ = w.Write([]byte("data: " + event + "\n\n"))
+			w.(http.Flusher).Flush()
+		}
+	}))
+	defer server.Close()
+
+	client := NewAnthropicClientWithBaseURL("test-key", "claude-3-5-sonnet", server.URL, 0)
+	err := client.ChatStream(context.Background(), ChatRequest{
+		Messages: []Message{
+			{Role: "system", Content: "hidden"},
+			{
+				Role: "user",
+				ToolResult: &ToolResult{
+					ToolUseID: "tool_1",
+					Content:   `{"ok":true}`,
+					IsError:   true,
+				},
+			},
+		},
+	}, func(StreamEvent) {})
+	if err != nil {
+		t.Fatalf("ChatStream: %v", err)
+	}
+
+	msgs, ok := got["messages"].([]any)
+	if !ok || len(msgs) != 1 {
+		t.Fatalf("unexpected messages: %+v", got["messages"])
+	}
+	first, ok := msgs[0].(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected message type: %T", msgs[0])
+	}
+	if first["role"] != "user" {
+		t.Fatalf("role = %v, want user", first["role"])
+	}
+	contentArr, ok := first["content"].([]any)
+	if !ok || len(contentArr) != 1 {
+		t.Fatalf("unexpected content: %+v", first["content"])
+	}
+	block, ok := contentArr[0].(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected content block type: %T", contentArr[0])
+	}
+	if block["type"] != "tool_result" || block["tool_use_id"] != "tool_1" || block["is_error"] != true {
+		t.Fatalf("unexpected tool_result block: %+v", block)
+	}
+	if _, ok := block["content"].(string); !ok {
+		t.Fatalf("expected tool_result content to be a string, got: %+v", block["content"])
+	}
+}
+
 func TestAnthropicClient_ChatStream_ToolChoiceNone_DropsTools(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var got map[string]any

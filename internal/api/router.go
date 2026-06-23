@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/adapters"
@@ -484,6 +485,37 @@ func (r *Router) setupRoutes() {
 		r.maintenanceSentinel.Start(r.lifecycleCtx)
 	}
 	r.agentContextHandler = NewAgentContextHandler(r.resourceHandlers)
+	r.agentContextHandler.SetWorkflowPromptActivityProvider(agentWorkflowPromptActivityProviderFunc(func(ctx context.Context) (*config.WorkflowPromptActivityHistoryData, error) {
+		persistence := r.persistenceForOrg(ctx)
+		if persistence == nil {
+			return nil, nil
+		}
+		return persistence.LoadWorkflowPromptActivityHistory()
+	}))
+	r.agentContextHandler.SetAIUsageProvider(agentAIUsageProviderFunc(func(ctx context.Context) (*config.AIUsageHistoryData, error) {
+		persistence := r.persistenceForOrg(ctx)
+		if persistence == nil {
+			return nil, nil
+		}
+		return persistence.LoadAIUsageHistory()
+	}))
+	r.agentContextHandler.SetExternalAgentActivityProvider(agentExternalAgentActivityProviderFunc(func(ctx context.Context) (*config.ExternalAgentActivityHistoryData, error) {
+		persistence := r.persistenceForOrg(ctx)
+		if persistence == nil {
+			return nil, nil
+		}
+		return persistence.LoadExternalAgentActivityHistory()
+	}))
+	r.agentContextHandler.SetExternalAgentReadinessProvider(agentExternalAgentReadinessProviderFunc(func(_ context.Context, manifest agentcapabilities.Manifest, now time.Time) bool {
+		if r.config == nil {
+			return false
+		}
+		config.Mu.Lock()
+		tokens := make([]config.APITokenRecord, len(r.config.APITokens))
+		copy(tokens, r.config.APITokens)
+		config.Mu.Unlock()
+		return agentOperationsLoopExternalAgentTokenReady(manifest, tokens, now)
+	}))
 	// Wire pending-approvals into the bundle. The provider resolves
 	// the approval store at request time so multi-tenant rebuilds
 	// (which install a new global store via approval.SetStore) stay
@@ -725,7 +757,7 @@ func (r *Router) setupRoutes() {
 	r.aiSettingsHandler.SetOnModelChange(func() {
 		r.RestartAIChat(context.Background())
 	})
-	// Wire control settings change callback to update MCP tool visibility
+	// Wire control settings change callback to update Assistant tool visibility.
 	r.aiSettingsHandler.SetOnControlSettingsChange(func() {
 		if r.aiHandler != nil {
 			ctx := context.Background()
@@ -953,6 +985,7 @@ func (r *Router) routeAIPatrolFindings(w http.ResponseWriter, req *http.Request)
 		if !ensureRelayMobileRuntimeRoute(w, req, relayMobileRoutePatrolFindingsList) {
 			return
 		}
+		r.recordExternalAgentCapabilityActivity(req, agentcapabilities.ListFindingsCapabilityName)
 		r.aiSettingsHandler.HandleGetPatrolFindings(w, req)
 	case http.MethodDelete:
 		if !ensureScope(w, req, config.ScopeAIExecute) {
@@ -1959,44 +1992,56 @@ func (r *Router) startPatrolForContext(ctx context.Context, orgID string) bool {
 			// picture without any internal type leakage.
 			if r.agentContextHandler != nil {
 				r.agentContextHandler.SetFindingsProvider(
-					agentFindingsProviderFunc(func(resourceID string) []AgentResourceFindingSnapshot {
-						if patrol == nil {
-							return nil
-						}
-						findings := patrol.GetFindings()
-						if findings == nil {
-							return nil
-						}
-						active := findings.GetByResource(resourceID)
-						if len(active) == 0 {
-							return []AgentResourceFindingSnapshot{}
-						}
-						out := make([]AgentResourceFindingSnapshot, 0, len(active))
-						for _, f := range active {
-							snapshot := AgentResourceFindingSnapshot{
-								ID:                         f.ID,
-								Title:                      f.Title,
-								Severity:                   string(f.Severity),
-								Category:                   string(f.Category),
-								Description:                f.Description,
-								Impact:                     f.Impact,
-								Recommendation:             f.Recommendation,
-								RegressionCount:            f.RegressionCount,
-								PreviousResolvedFixSummary: f.PreviousResolvedFixSummary,
+					agentFindingsProvider{
+						activeForResource: func(resourceID string) []AgentResourceFindingSnapshot {
+							if patrol == nil {
+								return nil
 							}
-							if !f.DetectedAt.IsZero() {
-								snapshot.DetectedAt = f.DetectedAt.Format(time.RFC3339)
+							findings := patrol.GetFindings()
+							if findings == nil {
+								return nil
 							}
-							if !f.LastSeenAt.IsZero() {
-								snapshot.LastSeenAt = f.LastSeenAt.Format(time.RFC3339)
+							active := findings.GetByResource(resourceID)
+							if len(active) == 0 {
+								return []AgentResourceFindingSnapshot{}
 							}
-							if f.InvestigationRecord != nil && f.InvestigationRecord.Confidence != "" {
-								snapshot.Confidence = string(f.InvestigationRecord.Confidence)
+							out := make([]AgentResourceFindingSnapshot, 0, len(active))
+							for _, f := range active {
+								snapshot := AgentResourceFindingSnapshot{
+									ID:                         f.ID,
+									Title:                      f.Title,
+									Severity:                   string(f.Severity),
+									Category:                   string(f.Category),
+									Description:                f.Description,
+									Impact:                     f.Impact,
+									Recommendation:             f.Recommendation,
+									RegressionCount:            f.RegressionCount,
+									PreviousResolvedFixSummary: f.PreviousResolvedFixSummary,
+								}
+								if !f.DetectedAt.IsZero() {
+									snapshot.DetectedAt = f.DetectedAt.Format(time.RFC3339)
+								}
+								if !f.LastSeenAt.IsZero() {
+									snapshot.LastSeenAt = f.LastSeenAt.Format(time.RFC3339)
+								}
+								if f.InvestigationRecord != nil && f.InvestigationRecord.Confidence != "" {
+									snapshot.Confidence = string(f.InvestigationRecord.Confidence)
+								}
+								out = append(out, snapshot)
 							}
-							out = append(out, snapshot)
-						}
-						return out
-					}),
+							return out
+						},
+						activeCount: func() int {
+							if patrol == nil {
+								return 0
+							}
+							findings := patrol.GetFindings()
+							if findings == nil {
+								return 0
+							}
+							return len(findings.GetActive(ai.FindingSeverityWarning))
+						},
+					},
 				)
 			}
 			// Wire per-resource operator-state into the findings runtime so
@@ -2597,7 +2642,7 @@ func (r *Router) persistenceForOrg(ctx context.Context) *config.ConfigPersistenc
 	return nil
 }
 
-// wireAIChatDependenciesForService wires org-scoped MCP tool providers and chat-service
+// wireAIChatDependenciesForService wires org-scoped Assistant tool providers and chat-service
 // integration for a specific chat service instance.
 func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service AIService) {
 	if r == nil || service == nil {
@@ -2661,7 +2706,7 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 	// Wire alert provider
 	if monitor != nil {
 		if alertManager := monitor.GetAlertManager(); alertManager != nil {
-			alertAdapter := tools.NewAlertManagerMCPAdapter(alertManager)
+			alertAdapter := tools.NewAlertManagerToolAdapter(alertManager)
 			if alertAdapter != nil {
 				service.SetAlertProvider(alertAdapter)
 				log.Debug().Msg("AI chat: Alert provider wired")
@@ -2678,7 +2723,7 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 				}
 			}
 			if findingsStore := patrolSvc.GetFindings(); findingsStore != nil {
-				findingsAdapter := ai.NewFindingsMCPAdapter(findingsStore)
+				findingsAdapter := ai.NewFindingsToolAdapter(findingsStore)
 				if findingsAdapter != nil {
 					service.SetFindingsProvider(findingsAdapter)
 					log.Debug().Msg("AI chat: Findings provider wired")
@@ -2692,14 +2737,14 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 		if r.licenseHandlers != nil {
 			licenseSvc = r.licenseHandlers.Service(ctx)
 		}
-		manager := NewMCPAgentProfileManager(persistence, licenseSvc)
+		manager := NewAssistantAgentProfileManager(persistence, licenseSvc)
 		service.SetAgentProfileManager(manager)
 		log.Debug().Msg("AI chat: Agent profile manager wired")
 	}
 
 	// Wire guest config provider (storage provider wiring removed)
 	if monitor != nil {
-		guestConfigAdapter := tools.NewGuestConfigMCPAdapter(monitor)
+		guestConfigAdapter := tools.NewGuestConfigToolAdapter(monitor)
 		if guestConfigAdapter != nil {
 			service.SetGuestConfigProvider(guestConfigAdapter)
 			log.Debug().Msg("AI chat: Guest config provider wired")
@@ -2709,7 +2754,7 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 	// Wire backup provider
 	if monitor != nil {
 		m := monitor
-		backupAdapter := tools.NewBackupMCPAdapter(
+		backupAdapter := tools.NewBackupToolAdapter(
 			func() models.Backups { return m.BackupsSnapshot() },
 			func() []models.PBSInstance { return m.PBSInstancesSnapshot() },
 		)
@@ -2721,7 +2766,7 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 
 	// Wire disk health provider
 	if monitor != nil {
-		diskHealthAdapter := tools.NewDiskHealthMCPAdapter(monitor.GetUnifiedReadState())
+		diskHealthAdapter := tools.NewDiskHealthToolAdapter(monitor.GetUnifiedReadState())
 		if diskHealthAdapter != nil {
 			service.SetDiskHealthProvider(diskHealthAdapter)
 			log.Debug().Msg("AI chat: Disk health provider wired")
@@ -2734,7 +2779,7 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 		if monitorCfg := monitor.GetConfig(); monitorCfg != nil {
 			cfg = monitorCfg
 		}
-		updatesAdapter := tools.NewUpdatesMCPAdapter(
+		updatesAdapter := tools.NewUpdatesToolAdapter(
 			monitor.GetUnifiedReadState(),
 			monitor,
 			&updatesConfigWrapper{cfg: cfg},
@@ -2748,7 +2793,7 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 	// Wire metrics history provider
 	if monitor != nil {
 		if metricsHistory := monitor.GetMetricsHistory(); metricsHistory != nil {
-			metricsAdapter := tools.NewMetricsHistoryMCPAdapter(
+			metricsAdapter := tools.NewMetricsHistoryToolAdapter(
 				&metricsSourceWrapper{history: metricsHistory},
 				monitor.GetUnifiedReadState(),
 			)
@@ -2763,7 +2808,7 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 	if aiService != nil {
 		if patrolSvc := aiService.GetPatrolService(); patrolSvc != nil {
 			if baselineStore := patrolSvc.GetBaselineStore(); baselineStore != nil {
-				baselineAdapter := tools.NewBaselineMCPAdapter(&baselineSourceWrapper{store: baselineStore})
+				baselineAdapter := tools.NewBaselineToolAdapter(&baselineSourceWrapper{store: baselineStore})
 				if baselineAdapter != nil {
 					service.SetBaselineProvider(baselineAdapter)
 					log.Debug().Msg("AI chat: Baseline provider wired")
@@ -2776,7 +2821,7 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 	if aiService != nil {
 		if patrolSvc := aiService.GetPatrolService(); patrolSvc != nil {
 			if patternDetector := patrolSvc.GetPatternDetector(); patternDetector != nil {
-				patternAdapter := tools.NewPatternMCPAdapter(
+				patternAdapter := tools.NewPatternToolAdapter(
 					&patternSourceWrapper{detector: patternDetector},
 					monitor.GetUnifiedReadState(),
 				)
@@ -2791,7 +2836,7 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 	// Wire findings manager.
 	if aiService != nil {
 		if patrolSvc := aiService.GetPatrolService(); patrolSvc != nil {
-			findingsManagerAdapter := tools.NewFindingsManagerMCPAdapter(patrolSvc)
+			findingsManagerAdapter := tools.NewFindingsManagerToolAdapter(patrolSvc)
 			if findingsManagerAdapter != nil {
 				service.SetFindingsManager(findingsManagerAdapter)
 				log.Debug().Msg("AI chat: Findings manager wired")
@@ -2801,14 +2846,14 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 
 	// Wire metadata updater.
 	if aiService != nil {
-		metadataAdapter := tools.NewMetadataUpdaterMCPAdapter(aiService)
+		metadataAdapter := tools.NewMetadataUpdaterToolAdapter(aiService)
 		if metadataAdapter != nil {
 			service.SetMetadataUpdater(metadataAdapter)
 			log.Debug().Msg("AI chat: Metadata updater wired")
 		}
 	}
 
-	// Wire intelligence providers for MCP tools
+	// Wire intelligence providers for Assistant tools.
 	// - IncidentRecorderProvider: high-frequency incident data (pulse_get_incident_window)
 	// - EventCorrelatorProvider: Proxmox events (pulse_correlate_events)
 	// - KnowledgeStoreProvider: notes (pulse_remember, pulse_recall)
@@ -2844,7 +2889,7 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 		if discoverySvc := aiService.GetDiscoveryService(); discoverySvc != nil {
 			adapter := servicediscovery.NewToolsAdapter(discoverySvc)
 			if adapter != nil {
-				service.SetDiscoveryProvider(tools.NewDiscoveryMCPAdapter(adapter))
+				service.SetDiscoveryProvider(tools.NewDiscoveryToolAdapter(adapter))
 				log.Debug().Msg("AI chat: Discovery provider wired")
 			}
 		}
@@ -2875,7 +2920,7 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 		log.Debug().Msg("AI chat: App-container config provider wired")
 	}
 
-	log.Info().Str("org_id", orgID).Msg("AI chat MCP tool providers wired")
+	log.Info().Str("org_id", orgID).Msg("AI chat Assistant tool providers wired")
 }
 
 // forecastResourceIterator wraps ReadState to implement forecast.ResourceIterator.

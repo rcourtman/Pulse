@@ -762,6 +762,87 @@ func TestAgenticLoop_DoesNotAutoRecoverStructuredToolCall(t *testing.T) {
 	}
 }
 
+func TestAgenticLoop_NormalizesProviderToolCallsThroughSharedProjection(t *testing.T) {
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	var capturedArgs map[string]interface{}
+	executor.RegisterTool(tools.RegisteredTool{
+		Definition: tools.Tool{
+			Name: "test_tool",
+			InputSchema: tools.InputSchema{
+				Type: "object",
+				Properties: map[string]tools.PropertySchema{
+					"value": {Type: "string"},
+				},
+			},
+		},
+		Handler: func(ctx context.Context, exec *tools.PulseToolExecutor, args map[string]interface{}) (tools.CallToolResult, error) {
+			capturedArgs = args
+			return tools.NewTextResult("normalized"), nil
+		},
+	})
+
+	provider := &stubStreamingProvider{}
+	loop := NewAgenticLoop(provider, executor, "prompt")
+	callCount := 0
+	sourceInput := map[string]interface{}{"value": "ok"}
+	provider.chatStream = func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+		callCount++
+		switch callCount {
+		case 1:
+			callback(providers.StreamEvent{
+				Type: "done",
+				Data: providers.DoneEvent{
+					ToolCalls: []providers.ToolCall{{
+						ID:    "call-normalize",
+						Name:  " test_tool ",
+						Input: sourceInput,
+					}},
+				},
+			})
+		case 2:
+			if len(req.Messages) != 3 {
+				t.Fatalf("expected user, normalized assistant call, and tool result, got %d messages", len(req.Messages))
+			}
+			call := req.Messages[1].ToolCalls[0]
+			if call.Name != "test_tool" {
+				t.Fatalf("provider continuation must receive normalized tool name, got %+v", call)
+			}
+			if req.Messages[2].ToolResult == nil || req.Messages[2].ToolResult.Content != "normalized" {
+				t.Fatalf("expected normalized tool result, got %+v", req.Messages[2].ToolResult)
+			}
+			callback(providers.StreamEvent{
+				Type: "content",
+				Data: providers.ContentEvent{Text: "Done."},
+			})
+			callback(providers.StreamEvent{
+				Type: "done",
+				Data: providers.DoneEvent{},
+			})
+		default:
+			t.Fatalf("unexpected provider call %d", callCount)
+		}
+		return nil
+	}
+
+	results, err := loop.Execute(context.Background(), "provider-call-normalize", []Message{{Role: "user", Content: "run it"}}, func(event StreamEvent) {})
+	if err != nil {
+		t.Fatalf("expected normalized provider tool call to execute, got %v", err)
+	}
+	if capturedArgs == nil || capturedArgs["value"] != "ok" {
+		t.Fatalf("expected normalized args to reach handler, got %#v", capturedArgs)
+	}
+	capturedArgs["value"] = "changed"
+	if sourceInput["value"] != "ok" {
+		t.Fatalf("handler args must not alias provider input: source=%#v captured=%#v", sourceInput, capturedArgs)
+	}
+	if len(results) != 3 {
+		t.Fatalf("expected assistant tool call, tool result, and final response, got %+v", results)
+	}
+	if len(results[0].ToolCalls) != 1 || results[0].ToolCalls[0].Name != "test_tool" {
+		t.Fatalf("session-visible assistant call must be normalized, got %+v", results[0].ToolCalls)
+	}
+}
+
 func TestAgenticLoop_CancelsUnavailableCurrentResourcePendingToolCall(t *testing.T) {
 	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
 	provider := &stubStreamingProvider{}

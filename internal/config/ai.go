@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 )
 
 // AuthMethod represents how Anthropic authentication is performed
@@ -14,7 +16,7 @@ type AuthMethod string
 const (
 	// AuthMethodAPIKey uses a traditional API key (pay-per-use billing)
 	AuthMethodAPIKey AuthMethod = "api_key"
-	// AuthMethodOAuth uses OAuth tokens (subscription-based, Pro/Max plans)
+	// AuthMethodOAuth is a legacy stored value retained only so old tokens can be cleared.
 	AuthMethodOAuth AuthMethod = "oauth"
 )
 
@@ -46,11 +48,11 @@ type AIConfig struct {
 	OllamaKeepAlive  string `json:"ollama_keep_alive"`            // Ollama keep_alive value; empty uses the server default
 	OpenAIBaseURL    string `json:"openai_base_url,omitempty"`    // Custom OpenAI-compatible base URL (optional)
 
-	// OAuth fields for Claude Pro/Max subscription authentication
-	AuthMethod        AuthMethod `json:"auth_method,omitempty"`         // "api_key" or "oauth" (for anthropic only)
-	OAuthAccessToken  string     `json:"oauth_access_token,omitempty"`  // OAuth access token (encrypted at rest)
-	OAuthRefreshToken string     `json:"oauth_refresh_token,omitempty"` // OAuth refresh token (encrypted at rest)
-	OAuthExpiresAt    time.Time  `json:"oauth_expires_at,omitempty"`    // Token expiration time
+	// Legacy Anthropic OAuth fields are retained only for cleanup/migration.
+	AuthMethod        AuthMethod `json:"auth_method,omitempty"`         // "api_key" or legacy "oauth"
+	OAuthAccessToken  string     `json:"oauth_access_token,omitempty"`  // legacy OAuth access token (encrypted at rest)
+	OAuthRefreshToken string     `json:"oauth_refresh_token,omitempty"` // legacy OAuth refresh token (encrypted at rest)
+	OAuthExpiresAt    time.Time  `json:"oauth_expires_at,omitempty"`    // legacy token expiration time
 
 	// Patrol settings for background AI monitoring
 	PatrolEnabled          bool   `json:"patrol_enabled"`                     // Enable background AI health patrol
@@ -120,11 +122,11 @@ const (
 // AI Control Level constants
 const (
 	// ControlLevelReadOnly - AI can only query infrastructure, no control tools available
-	ControlLevelReadOnly = "read_only"
+	ControlLevelReadOnly = string(agentcapabilities.ControlLevelReadOnly)
 	// ControlLevelControlled - AI can execute with per-command approval
-	ControlLevelControlled = "controlled"
+	ControlLevelControlled = string(agentcapabilities.ControlLevelControlled)
 	// ControlLevelAutonomous - AI executes without approval (requires Pro license)
-	ControlLevelAutonomous = "autonomous"
+	ControlLevelAutonomous = string(agentcapabilities.ControlLevelAutonomous)
 )
 
 // Patrol Autonomy Level constants
@@ -345,10 +347,6 @@ func (c *AIConfig) IsConfigured() bool {
 func (c *AIConfig) HasProvider(provider string) bool {
 	switch provider {
 	case AIProviderAnthropic:
-		// Anthropic can use API key OR OAuth
-		if c.AuthMethod == AuthMethodOAuth && c.OAuthAccessToken != "" {
-			return true
-		}
 		return c.AnthropicAPIKey != ""
 	case AIProviderOpenAI:
 		return c.OpenAIAPIKey != ""
@@ -440,9 +438,10 @@ func (c *AIConfig) GetBaseURLForProvider(provider string) string {
 	return ""
 }
 
-// IsUsingOAuth returns true if OAuth authentication is configured for Anthropic
+// IsUsingOAuth is retained for legacy config introspection. OAuth is not a
+// supported runtime authentication method for Anthropic provider execution.
 func (c *AIConfig) IsUsingOAuth() bool {
-	return c.AuthMethod == AuthMethodOAuth && c.OAuthAccessToken != ""
+	return false
 }
 
 // ParseModelString parses a model string in "provider:model-name" format
@@ -612,14 +611,14 @@ func (c *AIConfig) GetAutoFixModel() string {
 	return c.GetPatrolModel()
 }
 
-// ClearOAuthTokens clears OAuth tokens (used when switching back to API key auth)
+// ClearOAuthTokens clears legacy OAuth tokens.
 func (c *AIConfig) ClearOAuthTokens() {
 	c.OAuthAccessToken = ""
 	c.OAuthRefreshToken = ""
 	c.OAuthExpiresAt = time.Time{}
 }
 
-// ClearAPIKey clears the Anthropic API key (used when switching to OAuth auth)
+// ClearAPIKey clears the Anthropic API key.
 func (c *AIConfig) ClearAPIKey() {
 	c.AnthropicAPIKey = ""
 }
@@ -766,12 +765,7 @@ func (c *AIConfig) GetControlLevel() string {
 	if c.ControlLevel == "" {
 		return ControlLevelReadOnly
 	}
-	switch c.ControlLevel {
-	case ControlLevelReadOnly, ControlLevelControlled, ControlLevelAutonomous:
-		return c.ControlLevel
-	default:
-		return ControlLevelReadOnly
-	}
+	return string(agentcapabilities.NormalizeControlLevel(c.ControlLevel))
 }
 
 // EffectiveControlLevelForEntitlement returns the control level that may be
@@ -798,8 +792,7 @@ func (c *AIConfig) GetEffectiveControlLevel(autonomousAllowed bool) string {
 
 // IsControlEnabled returns true if AI has any control capability beyond read-only
 func (c *AIConfig) IsControlEnabled() bool {
-	level := c.GetControlLevel()
-	return level != ControlLevelReadOnly
+	return agentcapabilities.ControlLevelAllowsControlTools(agentcapabilities.ControlLevel(c.GetControlLevel()))
 }
 
 // IsAutonomous returns true if AI is configured for autonomous operation (no approval needed)
@@ -809,12 +802,7 @@ func (c *AIConfig) IsAutonomous() bool {
 
 // IsValidControlLevel checks if a control level string is valid
 func IsValidControlLevel(level string) bool {
-	switch level {
-	case ControlLevelReadOnly, ControlLevelControlled, ControlLevelAutonomous:
-		return true
-	default:
-		return false
-	}
+	return agentcapabilities.IsValidControlLevel(level)
 }
 
 // GetProtectedGuests returns the list of protected guests (VMIDs or names)

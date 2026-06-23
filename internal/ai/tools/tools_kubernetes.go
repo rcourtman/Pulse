@@ -2,10 +2,10 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -25,7 +25,7 @@ type kubernetesClusterTarget struct {
 func (e *PulseToolExecutor) registerKubernetesTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
-			Name:        "pulse_kubernetes",
+			Name:        agentcapabilities.PulseKubernetesToolName,
 			Description: `Query and control Kubernetes clusters, nodes, pods, and deployments. Query: clusters, nodes, pods, deployments. Control: scale, restart, delete_pod, exec, logs.`,
 			InputSchema: InputSchema{
 				Type: "object",
@@ -87,9 +87,10 @@ func (e *PulseToolExecutor) registerKubernetesTools() {
 			return exec.executeKubernetes(ctx, args)
 		},
 		Governance: ToolGovernance{
-			ActionMode:     ToolActionMixed,
-			ApprovalPolicy: "read/list/log actions are safe; scale, restart, delete, and exec subactions require approval in controlled mode",
-			Summary:        "Reads Kubernetes topology and runs governed workload-control subactions.",
+			ActionMode:      ToolActionMixed,
+			ApprovalPolicy:  ToolApprovalActionPlan,
+			ApprovalSummary: "read/list/log actions are safe; scale, restart, delete, and exec subactions require approval in controlled mode",
+			Summary:         "Reads Kubernetes topology and runs governed workload-control subactions.",
 		},
 	})
 }
@@ -510,8 +511,7 @@ func (e *PulseToolExecutor) executeKubernetesScale(ctx context.Context, args map
 	namespace, _ := args["namespace"].(string)
 	deployment, _ := args["deployment"].(string)
 	replicas := intArg(args, "replicas", -1)
-	approvalID, _ := args["_approval_id"].(string)
-	approvalID = strings.TrimSpace(approvalID)
+	approvalID := agentcapabilities.ApprovalArgument(args)
 
 	if clusterArg == "" {
 		return NewErrorResult(fmt.Errorf("cluster is required")), nil
@@ -653,8 +653,7 @@ func (e *PulseToolExecutor) executeKubernetesResourceAction(ctx context.Context,
 	clusterArg, _ := args["cluster"].(string)
 	namespace, _ := args["namespace"].(string)
 	name, _ := args[spec.argKey].(string)
-	approvalID, _ := args["_approval_id"].(string)
-	approvalID = strings.TrimSpace(approvalID)
+	approvalID := agentcapabilities.ApprovalArgument(args)
 
 	if clusterArg == "" {
 		return NewErrorResult(fmt.Errorf("cluster is required")), nil
@@ -745,8 +744,7 @@ func (e *PulseToolExecutor) executeKubernetesExec(ctx context.Context, args map[
 	pod, _ := args["pod"].(string)
 	container, _ := args["container"].(string)
 	command, _ := args["command"].(string)
-	approvalID, _ := args["_approval_id"].(string)
-	approvalID = strings.TrimSpace(approvalID)
+	approvalID := agentcapabilities.ApprovalArgument(args)
 
 	if clusterArg == "" {
 		return NewErrorResult(fmt.Errorf("cluster is required")), nil
@@ -921,7 +919,6 @@ func (e *PulseToolExecutor) executeKubernetesLogs(ctx context.Context, args map[
 // formatKubernetesApprovalNeeded formats an approval-required response for Kubernetes operations
 func formatKubernetesApprovalNeeded(action, resource, namespace, cluster, command, approvalID string) string {
 	payload := map[string]interface{}{
-		"type":           "approval_required",
 		"approval_id":    approvalID,
 		"action":         action,
 		"resource":       resource,
@@ -929,9 +926,7 @@ func formatKubernetesApprovalNeeded(action, resource, namespace, cluster, comman
 		"cluster":        cluster,
 		"command":        command,
 		"how_to_approve": "Click the approval button in the chat to execute this action.",
-		"do_not_retry":   true,
 	}
 	payload = enrichApprovalRequiredPayload(payload, approvalID)
-	b, _ := json.Marshal(payload)
-	return "APPROVAL_REQUIRED: " + string(b)
+	return agentcapabilities.FormatApprovalRequiredToolMarker(payload)
 }

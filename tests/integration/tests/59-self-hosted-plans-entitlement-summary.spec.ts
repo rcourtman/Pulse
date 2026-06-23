@@ -220,7 +220,7 @@ test.describe('Self-hosted plans entitlement summary', () => {
     await expect(currentPlanCard.getByText('Current plan: Pulse Pro')).toBeVisible();
     await expect(
       currentPlanCard.getByText(
-        'Pulse Pro is active on this instance. Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are available right now.',
+        'Pulse Pro is active on this instance. Patrol control, alert investigation, verified fixes, 90-day history, and admin/reporting extras are available right now.',
       ),
     ).toBeVisible();
     await expect(currentPlanCard.getByText('Grandfathered price')).toBeVisible();
@@ -248,10 +248,10 @@ test.describe('Self-hosted plans entitlement summary', () => {
     await expect(currentPlanCard.getByText('Primary capabilities')).toBeVisible();
     await expect(currentPlanCard.getByText('Included extras')).toBeVisible();
     await expect(
-      currentPlanCard.getByText('Safe Remediation Workflows', { exact: true }),
+      currentPlanCard.getByText('Patrol Fixes Safe Issues', { exact: true }),
     ).toBeVisible();
     await expect(
-      currentPlanCard.getByText('Alert Root-Cause Analysis', { exact: true }),
+      currentPlanCard.getByText('Patrol Investigates Alerts', { exact: true }),
     ).toBeVisible();
     await expect(currentPlanCard.getByText('PDF/CSV Reporting', { exact: true })).toBeVisible();
     await expect(

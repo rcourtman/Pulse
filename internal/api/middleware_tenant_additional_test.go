@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
@@ -51,11 +52,11 @@ func TestWriteJSONError(t *testing.T) {
 		t.Fatalf("expected 400, got %d", rec.Code)
 	}
 
-	var payload map[string]string
+	var payload agentcapabilities.ErrorEnvelope
 	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if payload["error"] != "bad" || payload["message"] != "message" {
+	if payload.Error != "bad" || payload.Message != "message" {
 		t.Fatalf("unexpected payload: %+v", payload)
 	}
 }

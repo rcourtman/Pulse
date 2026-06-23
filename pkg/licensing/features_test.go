@@ -127,6 +127,21 @@ func TestDeriveCapabilitiesFromTier_Sorted(t *testing.T) {
 	}
 }
 
+func TestPatrolGovernedFixesStayProFeature(t *testing.T) {
+	if !TierHasFeature(TierFree, FeatureAIPatrol) {
+		t.Fatal("community tier must include watch-only Patrol with BYOK")
+	}
+	if TierHasFeature(TierFree, FeatureAIAutoFix) {
+		t.Fatal("community tier must not include governed Patrol fixes")
+	}
+	if TierHasFeature(TierRelay, FeatureAIAutoFix) {
+		t.Fatal("relay tier must not include governed Patrol fixes")
+	}
+	if !TierHasFeature(TierPro, FeatureAIAutoFix) {
+		t.Fatal("pro tier must include governed Patrol fixes")
+	}
+}
+
 func TestWhiteLabelBrandingRemainsExplicitEnterpriseEntitlement(t *testing.T) {
 	if TierHasFeature(TierFree, FeatureWhiteLabel) {
 		t.Fatal("community tier must not include white_label report branding")
@@ -356,8 +371,8 @@ func TestGetFeatureDisplayName(t *testing.T) {
 		want    string
 	}{
 		{FeatureAIPatrol, "Pulse Patrol (Background Health Checks)"},
-		{FeatureAIAlerts, "Alert Analysis"},
-		{FeatureAIAutoFix, "Safe Remediation Workflows"},
+		{FeatureAIAlerts, "Patrol Investigates Issues"},
+		{FeatureAIAutoFix, "Patrol Handles Safe Fixes"},
 		{FeatureKubernetesAI, "Kubernetes AI Analysis (Compatibility)"},
 		{FeatureUpdateAlerts, "Update Alerts (Container/Package Updates)"},
 		{FeatureRBAC, "Role-Based Access Control (RBAC)"},

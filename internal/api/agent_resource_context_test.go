@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -19,7 +20,8 @@ import (
 // — keyed by resource id so each test can stage the snapshot it
 // expects to see in the bundle.
 type staticFindingsProvider struct {
-	byResource map[string][]AgentResourceFindingSnapshot
+	byResource  map[string][]AgentResourceFindingSnapshot
+	activeCount *int
 }
 
 func (s staticFindingsProvider) ActiveFindingsForResource(resourceID string) []AgentResourceFindingSnapshot {
@@ -29,12 +31,50 @@ func (s staticFindingsProvider) ActiveFindingsForResource(resourceID string) []A
 	return s.byResource[resourceID]
 }
 
+func (s staticFindingsProvider) ActiveFindingCount() int {
+	if s.activeCount != nil {
+		return *s.activeCount
+	}
+	total := 0
+	for _, findings := range s.byResource {
+		total += len(findings)
+	}
+	return total
+}
+
 // staticApprovalsProvider is a tiny test double for
 // AgentApprovalsProvider — keyed by (resource id, org id) so each
 // test can stage the pending approvals it expects to see in the
 // bundle without setting up a global approval store.
 type staticApprovalsProvider struct {
 	byResource map[string][]AgentResourceApprovalSummary
+}
+
+type staticWorkflowPromptActivityProvider struct {
+	history *config.WorkflowPromptActivityHistoryData
+	err     error
+}
+
+func (s staticWorkflowPromptActivityProvider) WorkflowPromptActivityHistory(_ context.Context) (*config.WorkflowPromptActivityHistoryData, error) {
+	return s.history, s.err
+}
+
+type staticAIUsageProvider struct {
+	history *config.AIUsageHistoryData
+	err     error
+}
+
+func (s staticAIUsageProvider) AIUsageHistory(_ context.Context) (*config.AIUsageHistoryData, error) {
+	return s.history, s.err
+}
+
+type staticExternalAgentActivityProvider struct {
+	history *config.ExternalAgentActivityHistoryData
+	err     error
+}
+
+func (s staticExternalAgentActivityProvider) ExternalAgentActivityHistory(_ context.Context) (*config.ExternalAgentActivityHistoryData, error) {
+	return s.history, s.err
 }
 
 func (s staticApprovalsProvider) PendingApprovalsForResource(resourceID, _ string) []AgentResourceApprovalSummary {
@@ -1014,6 +1054,9 @@ func fleetFixtureHandlers(t *testing.T, resources []unified.Resource) (*AgentCon
 	h := NewAgentContextHandler(rh)
 	h.SetFindingsProvider(findings)
 	h.SetApprovalsProvider(approvals)
+	h.SetExternalAgentReadinessProvider(agentExternalAgentReadinessProviderFunc(func(context.Context, agentcapabilities.Manifest, time.Time) bool {
+		return true
+	}))
 	return h, findings, approvals
 }
 
@@ -1200,6 +1243,1180 @@ func TestHandleAgentFleetContext_RejectsNonGet(t *testing.T) {
 	h.HandleFleetContext(rec, req)
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("status: got %d, want 405", rec.Code)
+	}
+}
+
+func TestHandleAgentOperationsLoopStatus_StartsAtPatrolWithoutIssueEvidence(t *testing.T) {
+	h, _, _ := fleetFixtureHandlers(t, []unified.Resource{
+		{ID: "vm:101", Type: "vm", Name: "db-01"},
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/operations-loop/status", nil)
+	h.HandleOperationsLoopStatus(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d, body=%s", rec.Code, rec.Body.String())
+	}
+	var status AgentOperationsLoopStatus
+	if err := json.NewDecoder(rec.Body).Decode(&status); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	assertPatrolControlCompatibilityAliases(t, status)
+	if status.NextAction != "run_patrol" {
+		t.Fatalf("NextAction = %q; want run_patrol", status.NextAction)
+	}
+	if status.PatrolIssueEvidenceCount != 0 || status.ActiveFindingCount != 0 || status.PendingApprovalCount != 0 {
+		t.Fatalf("empty loop should have zero issue counts: %+v", status)
+	}
+	if status.ProActivationValueProofState != "not_started" {
+		t.Fatalf("ProActivationValueProofState = %q; want not_started", status.ProActivationValueProofState)
+	}
+	steps := agentOperationsLoopStepsByID(status.Steps)
+	if got := steps["patrol"].Status; got != AgentOperationsLoopStepCurrent {
+		t.Fatalf("patrol step status = %q; want current", got)
+	}
+	if got := steps["assistant"].Status; got != AgentOperationsLoopStepPending {
+		t.Fatalf("assistant step status = %q; want pending", got)
+	}
+}
+
+func TestAgentOperationsLoopExternalAgentTokenReadyUsesPulseMCPSurfaceScopes(t *testing.T) {
+	now := time.Now().UTC()
+	expiredAt := now.Add(-time.Minute)
+	manifest := agentcapabilities.CanonicalManifest()
+	operationLoopScopes := agentcapabilities.RequiredCapabilityScopes(
+		agentcapabilities.ManifestSurfaceToolCapabilities(manifest, agentcapabilities.SurfaceIDPulseMCP),
+	)
+	if len(operationLoopScopes) < 2 {
+		t.Fatalf("Pulse MCP operations loop must require multiple scope classes for this readiness test, got %v", operationLoopScopes)
+	}
+
+	if agentOperationsLoopExternalAgentTokenReady(manifest, nil, now) {
+		t.Fatal("missing token must not satisfy external-agent readiness")
+	}
+	if agentOperationsLoopExternalAgentTokenReady(manifest, []config.APITokenRecord{
+		{Scopes: []string{config.ScopeAIChat}, CreatedAt: now.Add(-time.Hour)},
+	}, now) {
+		t.Fatal("generic AI chat token must not satisfy external-agent readiness")
+	}
+	if agentOperationsLoopExternalAgentTokenReady(manifest, []config.APITokenRecord{
+		{Scopes: []string{config.ScopeMonitoringRead}, ExpiresAt: &expiredAt, CreatedAt: now.Add(-time.Hour)},
+	}, now) {
+		t.Fatal("expired MCP-capable token must not satisfy external-agent readiness")
+	}
+	if agentOperationsLoopExternalAgentTokenReady(manifest, []config.APITokenRecord{
+		{Scopes: []string{config.ScopeMonitoringRead}, CreatedAt: now.Add(-time.Hour)},
+	}, now) {
+		t.Fatal("read-only Pulse MCP token must not satisfy full operations-loop readiness")
+	}
+	if agentOperationsLoopExternalAgentTokenReady(manifest, []config.APITokenRecord{
+		{Scopes: []string{config.ScopeAIExecute}, CreatedAt: now.Add(-time.Hour)},
+	}, now) {
+		t.Fatal("AI-execute-only Pulse MCP token must not satisfy full operations-loop readiness")
+	}
+	if agentOperationsLoopExternalAgentTokenReady(manifest, []config.APITokenRecord{
+		{Scopes: []string{config.ScopeMonitoringRead}, CreatedAt: now.Add(-time.Hour)},
+		{Scopes: []string{config.ScopeAIExecute}, CreatedAt: now.Add(-time.Hour)},
+	}, now) {
+		t.Fatal("split partial tokens must not satisfy single-token operations-loop readiness")
+	}
+	if !agentOperationsLoopExternalAgentTokenReady(manifest, []config.APITokenRecord{
+		{Scopes: operationLoopScopes, CreatedAt: now.Add(-time.Hour)},
+	}, now) {
+		t.Fatalf("one token covering all Pulse MCP operations-loop scopes should satisfy external-agent readiness; scopes=%v", operationLoopScopes)
+	}
+}
+
+func TestHandleAgentOperationsLoopStatus_AggregatesContentSafeLoopCounts(t *testing.T) {
+	h, findings, approvals := fleetFixtureHandlers(t, []unified.Resource{
+		{ID: "vm:101", Type: "vm", Name: "db-01"},
+	})
+	findings.byResource["vm:101"] = []AgentResourceFindingSnapshot{
+		{ID: "finding-cpu", Title: "CPU pressure", Severity: "warning"},
+		{ID: "finding-disk", Title: "Disk pressure", Severity: "critical"},
+	}
+	approvals.byResource["vm:101"] = []AgentResourceApprovalSummary{{ID: "approval-1"}}
+
+	store, err := h.resources.getStore("default")
+	if err != nil {
+		t.Fatalf("getStore: %v", err)
+	}
+	now := time.Now().UTC()
+	h.SetAIUsageProvider(staticAIUsageProvider{
+		history: &config.AIUsageHistoryData{
+			Events: []config.AIUsageEventRecord{{
+				Timestamp:    now.Add(-7 * time.Minute),
+				UseCase:      "chat",
+				ContextScope: "patrol_finding",
+				FindingID:    "finding-cpu",
+			}},
+		},
+	})
+	if err := store.RecordActionAudit(unified.ActionAuditRecord{
+		ID:        "act-verified",
+		CreatedAt: now.Add(-5 * time.Minute),
+		UpdatedAt: now,
+		State:     unified.ActionStateCompleted,
+		Request: unified.ActionRequest{
+			RequestID:      "req-verified",
+			ResourceID:     "vm:101",
+			CapabilityName: "restart_service",
+			Params:         map[string]any{"command": "systemctl restart nginx"},
+			RequestedBy:    "pulse_patrol",
+		},
+		Plan: unified.ActionPlan{
+			ActionID:  "act-verified",
+			RequestID: "req-verified",
+			PlannedAt: now.Add(-6 * time.Minute),
+			ExpiresAt: now.Add(time.Hour),
+		},
+		Approvals: []unified.ActionApprovalRecord{{
+			Actor:     "operator@example.com",
+			Method:    unified.MethodUI,
+			Timestamp: now.Add(-4 * time.Minute),
+			Outcome:   unified.OutcomeApproved,
+		}},
+		Result: &unified.ExecutionResult{
+			Success: true,
+			Output:  "service restarted",
+		},
+		VerificationOutcome: unified.VerificationOutcome{Status: unified.VerificationVerified},
+	}); err != nil {
+		t.Fatalf("RecordActionAudit: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/operations-loop/status", nil)
+	h.HandleOperationsLoopStatus(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d, body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, forbidden := range []string{
+		"finding-cpu",
+		"finding-disk",
+		"act-verified",
+		"approval-1",
+		"vm:101",
+		"db-01",
+		"systemctl",
+		"service restarted",
+		"operator@example.com",
+	} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("operations-loop status leaked %q: %s", forbidden, body)
+		}
+	}
+
+	var status AgentOperationsLoopStatus
+	if err := json.Unmarshal([]byte(body), &status); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	assertPatrolControlCompatibilityAliases(t, status)
+	if status.NextAction != "review_approvals" {
+		t.Fatalf("NextAction = %q; want review_approvals; status=%+v", status.NextAction, status)
+	}
+	if !status.ExternalAgentReady {
+		t.Fatal("canonical manifest should make external-agent readiness true")
+	}
+	if status.ActiveFindingCount != 2 ||
+		status.PendingApprovalCount != 1 ||
+		status.GovernedActionCount != 1 ||
+		status.ApprovedDecisionCount != 1 ||
+		status.RejectedDecisionCount != 0 ||
+		status.VerifiedOutcomeCount != 1 {
+		t.Fatalf("loop counts wrong: %+v", status)
+	}
+	if status.PatrolEvidenceCount != 4 || status.PatrolIssueEvidenceCount != 5 {
+		t.Fatalf("evidence counts wrong: patrol=%d issue=%d", status.PatrolEvidenceCount, status.PatrolIssueEvidenceCount)
+	}
+	steps := agentOperationsLoopStepsByID(status.Steps)
+	if got := steps["governance"].Count; got != 1 {
+		t.Fatalf("governance step count = %d; want approved decision count", got)
+	}
+	if got := steps["assistant"].Count; got != 1 {
+		t.Fatalf("assistant step count = %d; want contextual collaboration count", got)
+	}
+	if got := steps["verification"].Count; got != 1 {
+		t.Fatalf("verification step count = %d; want verified outcome count", got)
+	}
+	if got := steps["patrol"].Status; got != AgentOperationsLoopStepComplete {
+		t.Fatalf("patrol step status = %q; want complete; steps=%+v", got, status.Steps)
+	}
+	if got := steps["assistant"].Status; got != AgentOperationsLoopStepComplete {
+		t.Fatalf("assistant step status = %q; want complete; steps=%+v", got, status.Steps)
+	}
+	if got := steps["governance"].Status; got != AgentOperationsLoopStepCurrent {
+		t.Fatalf("governance step status = %q; want current; steps=%+v", got, status.Steps)
+	}
+	if got := steps["verification"].Status; got != AgentOperationsLoopStepPending {
+		t.Fatalf("verification step status = %q; want pending; steps=%+v", got, status.Steps)
+	}
+}
+
+func TestHandleAgentOperationsLoopStatus_ActiveAggregateFindingOutranksHistoricalCompletion(t *testing.T) {
+	h, findings, _ := fleetFixtureHandlers(t, []unified.Resource{
+		{ID: "vm:101", Type: "vm", Name: "db-01"},
+	})
+	activeCount := 1
+	findings.activeCount = &activeCount
+	now := time.Now().UTC()
+	h.SetWorkflowPromptActivityProvider(staticWorkflowPromptActivityProvider{
+		history: &config.WorkflowPromptActivityHistoryData{
+			Events: []config.WorkflowPromptActivityRecord{{
+				Timestamp:  now.Add(-10 * time.Minute),
+				Surface:    config.WorkflowPromptActivitySurfacePulsePatrol,
+				PromptName: agentcapabilities.PulseWorkflowPromptOperationsLoop,
+			}},
+		},
+	})
+	h.SetAIUsageProvider(staticAIUsageProvider{
+		history: &config.AIUsageHistoryData{
+			Events: []config.AIUsageEventRecord{{
+				Timestamp:    now.Add(-7 * time.Minute),
+				UseCase:      "chat",
+				ContextScope: "patrol_finding",
+			}},
+		},
+	})
+	store, err := h.resources.getStore("default")
+	if err != nil {
+		t.Fatalf("getStore: %v", err)
+	}
+	if err := store.RecordActionAudit(unified.ActionAuditRecord{
+		ID:        "act-old-verified",
+		CreatedAt: now.Add(-5 * time.Minute),
+		UpdatedAt: now,
+		State:     unified.ActionStateCompleted,
+		Request: unified.ActionRequest{
+			RequestID:      "req-old-verified",
+			ResourceID:     "vm:101",
+			CapabilityName: "restart_service",
+			RequestedBy:    "pulse_patrol",
+		},
+		Plan: unified.ActionPlan{
+			ActionID:  "act-old-verified",
+			RequestID: "req-old-verified",
+			PlannedAt: now.Add(-6 * time.Minute),
+			ExpiresAt: now.Add(time.Hour),
+		},
+		Approvals: []unified.ActionApprovalRecord{{
+			Method:    unified.MethodUI,
+			Timestamp: now.Add(-4 * time.Minute),
+			Outcome:   unified.OutcomeApproved,
+		}},
+		Result:              &unified.ExecutionResult{Success: true},
+		VerificationOutcome: unified.VerificationOutcome{Status: unified.VerificationVerified},
+	}); err != nil {
+		t.Fatalf("RecordActionAudit: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/operations-loop/status", nil)
+	h.HandleOperationsLoopStatus(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d, body=%s", rec.Code, rec.Body.String())
+	}
+	var status AgentOperationsLoopStatus
+	if err := json.NewDecoder(rec.Body).Decode(&status); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	assertPatrolControlCompatibilityAliases(t, status)
+	if status.ActiveFindingCount != 1 {
+		t.Fatalf("ActiveFindingCount = %d; want aggregate active finding", status.ActiveFindingCount)
+	}
+	if status.PatrolEvidenceCount != 2 || status.PatrolIssueEvidenceCount != 3 {
+		t.Fatalf("evidence counts wrong: patrol=%d issue=%d status=%+v", status.PatrolEvidenceCount, status.PatrolIssueEvidenceCount, status)
+	}
+	if status.PatrolControlResolvedLoopCount != 1 || status.PatrolControlValueState != "verified" {
+		t.Fatalf("historical resolved proof should remain recorded: %+v", status)
+	}
+	if status.NextAction != "open_assistant" {
+		t.Fatalf("NextAction = %q; want open_assistant for the current active finding; status=%+v", status.NextAction, status)
+	}
+	if status.ProgressLabel != "Open Assistant on the active Patrol finding before treating previous verified work as current." {
+		t.Fatalf("ProgressLabel = %q", status.ProgressLabel)
+	}
+	steps := agentOperationsLoopStepsByID(status.Steps)
+	if steps["patrol"].Status != AgentOperationsLoopStepComplete ||
+		steps["assistant"].Status != AgentOperationsLoopStepCurrent ||
+		steps["verification"].Status != AgentOperationsLoopStepPending {
+		t.Fatalf("steps should point back to the current active finding: %+v", status.Steps)
+	}
+}
+
+func TestHandleAgentOperationsLoopStatus_AggregatesWorkflowStarterCounts(t *testing.T) {
+	h, _, _ := fleetFixtureHandlers(t, []unified.Resource{
+		{ID: "vm:101", Type: "vm", Name: "db-01"},
+	})
+	now := time.Now().UTC()
+	h.SetWorkflowPromptActivityProvider(staticWorkflowPromptActivityProvider{
+		history: &config.WorkflowPromptActivityHistoryData{
+			Events: []config.WorkflowPromptActivityRecord{
+				{
+					Timestamp:  now.Add(-10 * time.Minute),
+					Surface:    config.WorkflowPromptActivitySurfacePulseAssistant,
+					PromptName: agentcapabilities.PulseWorkflowPromptOperationsLoop,
+				},
+				{
+					Timestamp:  now.Add(-9 * time.Minute),
+					Surface:    config.WorkflowPromptActivitySurfacePulseAssistant,
+					PromptName: agentcapabilities.PulseWorkflowPromptOperationsLoop,
+				},
+				{
+					Timestamp:  now.Add(-8 * time.Minute),
+					Surface:    config.WorkflowPromptActivitySurfacePulsePatrol,
+					PromptName: agentcapabilities.PulseWorkflowPromptOperationsLoop,
+				},
+				{
+					Timestamp:  now.Add(-7 * time.Minute),
+					Surface:    config.WorkflowPromptActivitySurfacePatrolControl,
+					PromptName: agentcapabilities.PulseWorkflowPromptOperationsLoop,
+				},
+				{
+					Timestamp:  now.Add(-6 * time.Minute),
+					Surface:    config.WorkflowPromptActivitySurfacePatrolAutonomy,
+					PromptName: agentcapabilities.PulseWorkflowPromptOperationsLoop,
+				},
+				{
+					Timestamp:  now.Add(-5 * time.Minute),
+					Surface:    config.WorkflowPromptActivitySurfaceProActivation,
+					PromptName: agentcapabilities.PulseWorkflowPromptOperationsLoop,
+				},
+				{
+					Timestamp:  now.Add(-4 * time.Minute),
+					Surface:    config.WorkflowPromptActivitySurfacePulseMCP,
+					PromptName: agentcapabilities.PulseWorkflowPromptOperationsLoop,
+				},
+				{
+					Timestamp:  now.Add(-3 * time.Minute),
+					Surface:    config.WorkflowPromptActivitySurfaceAgentAPI,
+					PromptName: agentcapabilities.PulseWorkflowPromptOperationsLoop,
+				},
+				{
+					Timestamp:  now.Add(-2 * time.Minute),
+					Surface:    config.WorkflowPromptActivitySurfacePulseAssistant,
+					PromptName: agentcapabilities.PulseWorkflowPromptTriageFleet,
+				},
+				{
+					Timestamp:  now.Add(-agentOperationsLoopActionWindow - time.Hour),
+					Surface:    config.WorkflowPromptActivitySurfacePulseMCP,
+					PromptName: agentcapabilities.PulseWorkflowPromptOperationsLoop,
+				},
+			},
+		},
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/operations-loop/status", nil)
+	h.HandleOperationsLoopStatus(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d, body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, forbidden := range []string{
+		agentcapabilities.PulseWorkflowPromptOperationsLoop,
+		agentcapabilities.PulseWorkflowPromptTriageFleet,
+		config.WorkflowPromptActivitySurfacePulseAssistant,
+		config.WorkflowPromptActivitySurfacePulsePatrol,
+		config.WorkflowPromptActivitySurfacePatrolControl,
+		config.WorkflowPromptActivitySurfacePatrolAutonomy,
+		config.WorkflowPromptActivitySurfaceProActivation,
+		config.WorkflowPromptActivitySurfacePulseMCP,
+		config.WorkflowPromptActivitySurfaceAgentAPI,
+	} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("operations-loop status leaked workflow activity detail %q: %s", forbidden, body)
+		}
+	}
+
+	var status AgentOperationsLoopStatus
+	if err := json.Unmarshal([]byte(body), &status); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	assertPatrolControlCompatibilityAliases(t, status)
+	if status.OperationsLoopStarterCount != 8 ||
+		status.AssistantOperationsLoopStarterCount != 2 ||
+		status.PatrolOperationsLoopStarterCount != 1 ||
+		status.PatrolControlLoopStarterCount != 4 ||
+		status.PatrolControlResolvedLoopCount != 0 ||
+		status.ProActivationLoopStarterCount != 1 ||
+		status.ProActivationResolvedLoopCount != 0 ||
+		status.MCPOperationsLoopStarterCount != 1 {
+		t.Fatalf("workflow starter counts wrong: %+v", status)
+	}
+	if status.PatrolControlValueState != "in_progress" {
+		t.Fatalf("PatrolControlValueState = %q; want in_progress", status.PatrolControlValueState)
+	}
+	if status.ProActivationValueProofState != "in_progress" {
+		t.Fatalf("ProActivationValueProofState = %q; want in_progress", status.ProActivationValueProofState)
+	}
+	if status.NextAction != "run_patrol" ||
+		status.ProgressLabel != "Patrol is ready to check the fleet and investigate the next real infrastructure issue." {
+		t.Fatalf("workflow starter progress wrong: %+v", status)
+	}
+}
+
+func TestHandleAgentOperationsLoopStatus_CountsPulsePatrolStarterAsPatrolControl(t *testing.T) {
+	h, _, _ := fleetFixtureHandlers(t, []unified.Resource{
+		{ID: "vm:101", Type: "vm", Name: "db-01"},
+	})
+	now := time.Now().UTC()
+	h.SetWorkflowPromptActivityProvider(staticWorkflowPromptActivityProvider{
+		history: &config.WorkflowPromptActivityHistoryData{
+			Events: []config.WorkflowPromptActivityRecord{{
+				Timestamp:  now.Add(-10 * time.Minute),
+				Surface:    config.WorkflowPromptActivitySurfacePulsePatrol,
+				PromptName: agentcapabilities.PulseWorkflowPromptOperationsLoop,
+			}},
+		},
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/operations-loop/status", nil)
+	h.HandleOperationsLoopStatus(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var status AgentOperationsLoopStatus
+	if err := json.NewDecoder(rec.Body).Decode(&status); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	assertPatrolControlCompatibilityAliases(t, status)
+	if status.PatrolOperationsLoopStarterCount != 1 ||
+		status.PatrolControlLoopStarterCount != 1 ||
+		status.ProActivationLoopStarterCount != 0 {
+		t.Fatalf("native Patrol starter counts wrong: %+v", status)
+	}
+	if status.PatrolControlValueState != "in_progress" ||
+		status.ProActivationValueProofState != "in_progress" {
+		t.Fatalf("native Patrol starter value state wrong: %+v", status)
+	}
+	if status.NextAction != "run_patrol" ||
+		status.ProgressLabel != "Patrol is ready to check the fleet and investigate the next real infrastructure issue." {
+		t.Fatalf("native Patrol starter progress wrong: %+v", status)
+	}
+}
+
+func TestHandleAgentOperationsLoopStatus_CountsPatrolControlStarterWithoutLegacyProActivation(t *testing.T) {
+	h, _, _ := fleetFixtureHandlers(t, []unified.Resource{
+		{ID: "vm:101", Type: "vm", Name: "db-01"},
+	})
+	now := time.Now().UTC()
+	h.SetWorkflowPromptActivityProvider(staticWorkflowPromptActivityProvider{
+		history: &config.WorkflowPromptActivityHistoryData{
+			Events: []config.WorkflowPromptActivityRecord{{
+				Timestamp:  now.Add(-10 * time.Minute),
+				Surface:    config.WorkflowPromptActivitySurfacePatrolControl,
+				PromptName: agentcapabilities.PulseWorkflowPromptOperationsLoop,
+			}},
+		},
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/operations-loop/status", nil)
+	h.HandleOperationsLoopStatus(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var status AgentOperationsLoopStatus
+	if err := json.NewDecoder(rec.Body).Decode(&status); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	assertPatrolControlCompatibilityAliases(t, status)
+	if status.PatrolOperationsLoopStarterCount != 0 ||
+		status.PatrolControlLoopStarterCount != 1 ||
+		status.ProActivationLoopStarterCount != 0 {
+		t.Fatalf("Patrol control starter counts wrong: %+v", status)
+	}
+	if status.PatrolControlValueState != "in_progress" ||
+		status.ProActivationValueProofState != "in_progress" {
+		t.Fatalf("Patrol control starter value state wrong: %+v", status)
+	}
+	if status.NextAction != "run_patrol" ||
+		status.ProgressLabel != "Patrol is ready to check the fleet and investigate the next real infrastructure issue." {
+		t.Fatalf("Patrol control starter progress wrong: %+v", status)
+	}
+}
+
+func TestHandleAgentOperationsLoopStatus_ProjectsPatrolControlResolvedLoop(t *testing.T) {
+	h, _, _ := fleetFixtureHandlers(t, []unified.Resource{
+		{ID: "vm:101", Type: "vm", Name: "db-01"},
+	})
+	now := time.Now().UTC()
+	h.SetAIUsageProvider(staticAIUsageProvider{
+		history: &config.AIUsageHistoryData{
+			Events: []config.AIUsageEventRecord{{
+				Timestamp:    now.Add(-9 * time.Minute),
+				UseCase:      "chat",
+				ContextScope: "patrol_finding",
+				FindingID:    "finding-pro",
+			}},
+		},
+	})
+	h.SetWorkflowPromptActivityProvider(staticWorkflowPromptActivityProvider{
+		history: &config.WorkflowPromptActivityHistoryData{
+			Events: []config.WorkflowPromptActivityRecord{
+				{
+					Timestamp:  now.Add(-10 * time.Minute),
+					Surface:    config.WorkflowPromptActivitySurfacePulsePatrol,
+					PromptName: agentcapabilities.PulseWorkflowPromptOperationsLoop,
+				},
+			},
+		},
+	})
+
+	store, err := h.resources.getStore("default")
+	if err != nil {
+		t.Fatalf("getStore: %v", err)
+	}
+	if err := store.RecordActionAudit(unified.ActionAuditRecord{
+		ID:        "act-pro-verified",
+		CreatedAt: now.Add(-5 * time.Minute),
+		UpdatedAt: now,
+		State:     unified.ActionStateCompleted,
+		Request: unified.ActionRequest{
+			RequestID:      "req-pro-verified",
+			ResourceID:     "vm:101",
+			CapabilityName: "restart_service",
+			Params:         map[string]any{"command": "systemctl restart nginx"},
+			RequestedBy:    "pulse_patrol",
+		},
+		Plan: unified.ActionPlan{
+			ActionID:  "act-pro-verified",
+			RequestID: "req-pro-verified",
+			PlannedAt: now.Add(-6 * time.Minute),
+			ExpiresAt: now.Add(time.Hour),
+		},
+		Approvals: []unified.ActionApprovalRecord{{
+			Actor:     "operator@example.com",
+			Method:    unified.MethodUI,
+			Timestamp: now.Add(-4 * time.Minute),
+			Outcome:   unified.OutcomeApproved,
+		}},
+		Result: &unified.ExecutionResult{
+			Success: true,
+			Output:  "service restarted",
+		},
+		VerificationOutcome: unified.VerificationOutcome{Status: unified.VerificationVerified},
+	}); err != nil {
+		t.Fatalf("RecordActionAudit: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/operations-loop/status", nil)
+	h.HandleOperationsLoopStatus(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d, body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, forbidden := range []string{
+		agentcapabilities.PulseWorkflowPromptOperationsLoop,
+		config.WorkflowPromptActivitySurfacePulsePatrol,
+		config.WorkflowPromptActivitySurfacePatrolAutonomy,
+		config.WorkflowPromptActivitySurfaceProActivation,
+		"act-pro-verified",
+		"req-pro-verified",
+		"vm:101",
+		"db-01",
+		"systemctl",
+		"service restarted",
+		"operator@example.com",
+	} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("operations-loop status leaked %q: %s", forbidden, body)
+		}
+	}
+
+	var status AgentOperationsLoopStatus
+	if err := json.Unmarshal([]byte(body), &status); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	assertPatrolControlCompatibilityAliases(t, status)
+	if status.PatrolControlLoopStarterCount != 1 ||
+		status.PatrolControlCompletedLoopCount != 1 ||
+		status.PatrolControlResolvedLoopCount != 1 ||
+		status.ProActivationLoopStarterCount != 0 ||
+		status.ProActivationCompletedLoopCount != 1 ||
+		status.ProActivationResolvedLoopCount != 1 ||
+		status.VerifiedOutcomeCount != 1 ||
+		status.ApprovedDecisionCount != 1 {
+		t.Fatalf("Patrol control resolved-loop counts wrong: %+v", status)
+	}
+	if status.PatrolControlValueState != "verified" {
+		t.Fatalf("PatrolControlValueState = %q; want verified", status.PatrolControlValueState)
+	}
+	if status.ProActivationValueProofState != "verified" {
+		t.Fatalf("ProActivationValueProofState = %q; want verified", status.ProActivationValueProofState)
+	}
+	if status.NextAction != "complete" ||
+		status.ProgressLabel != "Patrol handled an infrastructure issue, verified the outcome, and recorded what happened." {
+		t.Fatalf("Patrol control resolved-loop progress wrong: %+v", status)
+	}
+	steps := agentOperationsLoopStepsByID(status.Steps)
+	if got := steps["assistant"].Count; got != 1 {
+		t.Fatalf("assistant step count = %d; want contextual collaboration count", got)
+	}
+	for _, step := range status.Steps {
+		if step.Status != AgentOperationsLoopStepComplete {
+			t.Fatalf("step %s status = %q; want complete; steps=%+v", step.ID, step.Status, status.Steps)
+		}
+	}
+}
+
+func TestHandleAgentOperationsLoopStatus_ResolvesPatrolControlWithoutExternalAgentReadiness(t *testing.T) {
+	h, _, _ := fleetFixtureHandlers(t, []unified.Resource{
+		{ID: "vm:101", Type: "vm", Name: "db-01"},
+	})
+	h.SetExternalAgentReadinessProvider(nil)
+	now := time.Now().UTC()
+	h.SetAIUsageProvider(staticAIUsageProvider{
+		history: &config.AIUsageHistoryData{
+			Events: []config.AIUsageEventRecord{{
+				Timestamp:    now.Add(-9 * time.Minute),
+				UseCase:      "chat",
+				ContextScope: "patrol_finding",
+				FindingID:    "finding-pro",
+			}},
+		},
+	})
+	h.SetWorkflowPromptActivityProvider(staticWorkflowPromptActivityProvider{
+		history: &config.WorkflowPromptActivityHistoryData{
+			Events: []config.WorkflowPromptActivityRecord{{
+				Timestamp:  now.Add(-10 * time.Minute),
+				Surface:    config.WorkflowPromptActivitySurfaceProActivation,
+				PromptName: agentcapabilities.PulseWorkflowPromptOperationsLoop,
+			}},
+		},
+	})
+
+	store, err := h.resources.getStore("default")
+	if err != nil {
+		t.Fatalf("getStore: %v", err)
+	}
+	if err := store.RecordActionAudit(unified.ActionAuditRecord{
+		ID:        "act-pro-verified",
+		CreatedAt: now.Add(-5 * time.Minute),
+		UpdatedAt: now,
+		State:     unified.ActionStateCompleted,
+		Request: unified.ActionRequest{
+			RequestID:      "req-pro-verified",
+			ResourceID:     "vm:101",
+			CapabilityName: "restart_service",
+			Params:         map[string]any{"command": "systemctl restart nginx"},
+			RequestedBy:    "pulse_patrol",
+		},
+		Plan: unified.ActionPlan{
+			ActionID:  "act-pro-verified",
+			RequestID: "req-pro-verified",
+			PlannedAt: now.Add(-6 * time.Minute),
+			ExpiresAt: now.Add(time.Hour),
+		},
+		Approvals: []unified.ActionApprovalRecord{{
+			Actor:     "operator@example.com",
+			Method:    unified.MethodUI,
+			Timestamp: now.Add(-4 * time.Minute),
+			Outcome:   unified.OutcomeApproved,
+		}},
+		Result: &unified.ExecutionResult{
+			Success: true,
+			Output:  "service restarted",
+		},
+		VerificationOutcome: unified.VerificationOutcome{Status: unified.VerificationVerified},
+	}); err != nil {
+		t.Fatalf("RecordActionAudit: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/operations-loop/status", nil)
+	h.HandleOperationsLoopStatus(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var status AgentOperationsLoopStatus
+	if err := json.Unmarshal(rec.Body.Bytes(), &status); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	assertPatrolControlCompatibilityAliases(t, status)
+	if status.ExternalAgentReady ||
+		status.PatrolControlCompletedLoopCount != 1 ||
+		status.PatrolControlResolvedLoopCount != 1 ||
+		status.ProActivationCompletedLoopCount != 1 ||
+		status.ProActivationResolvedLoopCount != 1 ||
+		status.VerifiedOutcomeCount != 1 ||
+		status.ApprovedDecisionCount != 1 {
+		t.Fatalf("Patrol control should resolve independently from optional external-agent readiness: %+v", status)
+	}
+	if status.PatrolControlValueState != "verified" {
+		t.Fatalf("PatrolControlValueState = %q; want verified", status.PatrolControlValueState)
+	}
+	if status.ProActivationValueProofState != "verified" {
+		t.Fatalf("ProActivationValueProofState = %q; want verified", status.ProActivationValueProofState)
+	}
+	if status.NextAction != "complete" ||
+		status.ProgressLabel != "Patrol handled an infrastructure issue, verified the outcome, and recorded what happened." {
+		t.Fatalf("Patrol control without external-agent readiness progress wrong: %+v", status)
+	}
+	steps := agentOperationsLoopStepsByID(status.Steps)
+	if _, ok := steps["external_agents"]; ok {
+		t.Fatalf("external-agent readiness must not render as an operator step: %+v", status.Steps)
+	}
+	for _, stepID := range []string{"patrol", "assistant", "governance", "verification"} {
+		if got := steps[stepID].Status; got != AgentOperationsLoopStepComplete {
+			t.Fatalf("%s step status = %q; want complete; steps=%+v", stepID, got, status.Steps)
+		}
+	}
+}
+
+func TestHandleAgentOperationsLoopStatus_DoesNotResolvePatrolControlWithoutContextualCollaboration(t *testing.T) {
+	h, _, _ := fleetFixtureHandlers(t, []unified.Resource{
+		{ID: "vm:101", Type: "vm", Name: "db-01"},
+	})
+	now := time.Now().UTC()
+	h.SetWorkflowPromptActivityProvider(staticWorkflowPromptActivityProvider{
+		history: &config.WorkflowPromptActivityHistoryData{
+			Events: []config.WorkflowPromptActivityRecord{
+				{
+					Timestamp:  now.Add(-10 * time.Minute),
+					Surface:    config.WorkflowPromptActivitySurfacePulsePatrol,
+					PromptName: agentcapabilities.PulseWorkflowPromptOperationsLoop,
+				},
+			},
+		},
+	})
+
+	store, err := h.resources.getStore("default")
+	if err != nil {
+		t.Fatalf("getStore: %v", err)
+	}
+	if err := store.RecordActionAudit(unified.ActionAuditRecord{
+		ID:        "act-pro-verified-no-context",
+		CreatedAt: now.Add(-5 * time.Minute),
+		UpdatedAt: now,
+		State:     unified.ActionStateCompleted,
+		Request: unified.ActionRequest{
+			RequestID:      "req-pro-verified-no-context",
+			ResourceID:     "vm:101",
+			CapabilityName: "restart_service",
+			RequestedBy:    "pulse_patrol",
+		},
+		Plan: unified.ActionPlan{
+			ActionID:  "act-pro-verified-no-context",
+			RequestID: "req-pro-verified-no-context",
+			PlannedAt: now.Add(-6 * time.Minute),
+			ExpiresAt: now.Add(time.Hour),
+		},
+		Approvals: []unified.ActionApprovalRecord{{
+			Actor:     "operator@example.com",
+			Method:    unified.MethodUI,
+			Timestamp: now.Add(-4 * time.Minute),
+			Outcome:   unified.OutcomeApproved,
+		}},
+		Result:              &unified.ExecutionResult{Success: true},
+		VerificationOutcome: unified.VerificationOutcome{Status: unified.VerificationVerified},
+	}); err != nil {
+		t.Fatalf("RecordActionAudit: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/operations-loop/status", nil)
+	h.HandleOperationsLoopStatus(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var status AgentOperationsLoopStatus
+	if err := json.Unmarshal(rec.Body.Bytes(), &status); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	assertPatrolControlCompatibilityAliases(t, status)
+	if status.ProActivationLoopStarterCount != 0 ||
+		status.PatrolControlLoopStarterCount != 1 ||
+		status.PatrolControlResolvedLoopCount != 0 ||
+		status.ProActivationResolvedLoopCount != 0 ||
+		status.ApprovedDecisionCount != 1 ||
+		status.VerifiedOutcomeCount != 1 {
+		t.Fatalf("Patrol control weak-evidence counts wrong: %+v", status)
+	}
+	if status.NextAction != "open_assistant" ||
+		status.ProgressLabel != "Open Assistant to explain the Patrol issue and safest next step." {
+		t.Fatalf("weak Patrol control progress wrong: %+v", status)
+	}
+	steps := agentOperationsLoopStepsByID(status.Steps)
+	if got := steps["assistant"].Status; got != AgentOperationsLoopStepCurrent {
+		t.Fatalf("assistant step status = %q; want current; steps=%+v", got, status.Steps)
+	}
+	if got := steps["verification"].Status; got != AgentOperationsLoopStepPending {
+		t.Fatalf("verification step status = %q; want pending until context proof; steps=%+v", got, status.Steps)
+	}
+}
+
+func TestHandleAgentOperationsLoopStatus_DoesNotTreatUnapprovedExecutionAsGovernedDecision(t *testing.T) {
+	h, findings, _ := fleetFixtureHandlers(t, []unified.Resource{
+		{ID: "vm:101", Type: "vm", Name: "db-01"},
+	})
+	findings.byResource["vm:101"] = []AgentResourceFindingSnapshot{
+		{ID: "finding-cpu", Title: "CPU pressure", Severity: "warning"},
+	}
+
+	store, err := h.resources.getStore("default")
+	if err != nil {
+		t.Fatalf("getStore: %v", err)
+	}
+	now := time.Now().UTC()
+	if err := store.RecordActionAudit(unified.ActionAuditRecord{
+		ID:        "act-unapproved",
+		CreatedAt: now.Add(-5 * time.Minute),
+		UpdatedAt: now,
+		State:     unified.ActionStateCompleted,
+		Request: unified.ActionRequest{
+			RequestID:      "req-unapproved",
+			ResourceID:     "vm:101",
+			CapabilityName: "restart_service",
+			Params:         map[string]any{"command": "systemctl restart nginx"},
+			RequestedBy:    "pulse_patrol",
+		},
+		Plan: unified.ActionPlan{
+			ActionID:         "act-unapproved",
+			RequestID:        "req-unapproved",
+			PlannedAt:        now.Add(-6 * time.Minute),
+			ExpiresAt:        now.Add(time.Hour),
+			RequiresApproval: false,
+		},
+		Result: &unified.ExecutionResult{
+			Success: true,
+			Output:  "service restarted",
+		},
+		VerificationOutcome: unified.VerificationOutcome{Status: unified.VerificationVerified},
+	}); err != nil {
+		t.Fatalf("RecordActionAudit: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/operations-loop/status", nil)
+	h.HandleOperationsLoopStatus(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d, body=%s", rec.Code, rec.Body.String())
+	}
+	var status AgentOperationsLoopStatus
+	if err := json.NewDecoder(rec.Body).Decode(&status); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	assertPatrolControlCompatibilityAliases(t, status)
+	if status.NextAction != "open_assistant" {
+		t.Fatalf("NextAction = %q; want open_assistant; status=%+v", status.NextAction, status)
+	}
+	if status.GovernedActionCount != 0 ||
+		status.ApprovedDecisionCount != 0 ||
+		status.RejectedDecisionCount != 0 ||
+		status.VerifiedOutcomeCount != 0 {
+		t.Fatalf("unapproved execution must not satisfy governance or verification: %+v", status)
+	}
+	steps := agentOperationsLoopStepsByID(status.Steps)
+	if got := steps["governance"].Status; got != AgentOperationsLoopStepPending {
+		t.Fatalf("governance status = %q; want pending; steps=%+v", got, status.Steps)
+	}
+	if got := steps["verification"].Status; got != AgentOperationsLoopStepPending {
+		t.Fatalf("verification status = %q; want pending; steps=%+v", got, status.Steps)
+	}
+}
+
+func TestHandleAgentOperationsLoopStatus_UsesDecisionLifecycleEvidenceForOlderPlans(t *testing.T) {
+	h, _, _ := fleetFixtureHandlers(t, []unified.Resource{
+		{ID: "vm:101", Type: "vm", Name: "db-01"},
+	})
+
+	store, err := h.resources.getStore("default")
+	if err != nil {
+		t.Fatalf("getStore: %v", err)
+	}
+	now := time.Now().UTC()
+	h.SetAIUsageProvider(staticAIUsageProvider{
+		history: &config.AIUsageHistoryData{
+			Events: []config.AIUsageEventRecord{{
+				Timestamp:    now.Add(-10 * time.Minute),
+				UseCase:      "chat",
+				ContextScope: "patrol_finding",
+			}},
+		},
+	})
+	h.SetWorkflowPromptActivityProvider(staticWorkflowPromptActivityProvider{
+		history: &config.WorkflowPromptActivityHistoryData{
+			Events: []config.WorkflowPromptActivityRecord{{
+				PromptName: agentcapabilities.PulseWorkflowPromptOperationsLoop,
+				Surface:    config.WorkflowPromptActivitySurfaceProActivation,
+				Timestamp:  now.Add(-9 * time.Minute),
+			}},
+		},
+	})
+	old := now.Add(-agentOperationsLoopActionWindow - time.Hour)
+	record := unified.ActionAuditRecord{
+		ID:        "act-rejected",
+		CreatedAt: old,
+		UpdatedAt: old,
+		State:     unified.ActionStatePending,
+		Request: unified.ActionRequest{
+			RequestID:      "req-rejected",
+			ResourceID:     "vm:101",
+			CapabilityName: "restart_service",
+			Params:         map[string]any{"command": "systemctl restart nginx"},
+			RequestedBy:    "pulse_patrol",
+		},
+		Plan: unified.ActionPlan{
+			ActionID:         "act-rejected",
+			RequestID:        "req-rejected",
+			PlannedAt:        old,
+			ExpiresAt:        now.Add(time.Hour),
+			RequiresApproval: true,
+		},
+	}
+	if err := store.RecordActionAudit(record); err != nil {
+		t.Fatalf("RecordActionAudit: %v", err)
+	}
+	rejected, event, err := unified.ApplyActionDecision(record, unified.ActionApprovalRecord{
+		Actor:   "operator@example.com",
+		Method:  unified.MethodUI,
+		Outcome: unified.OutcomeRejected,
+	}, now)
+	if err != nil {
+		t.Fatalf("ApplyActionDecision: %v", err)
+	}
+	if err := store.RecordActionDecision(rejected, event); err != nil {
+		t.Fatalf("RecordActionDecision: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/operations-loop/status", nil)
+	h.HandleOperationsLoopStatus(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d, body=%s", rec.Code, rec.Body.String())
+	}
+	var status AgentOperationsLoopStatus
+	if err := json.NewDecoder(rec.Body).Decode(&status); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	assertPatrolControlCompatibilityAliases(t, status)
+	if status.GovernedActionCount != 1 || status.RejectedDecisionCount != 1 || status.ApprovedDecisionCount != 0 {
+		t.Fatalf("decision counts wrong for rejected action: %+v", status)
+	}
+	if status.VerifiedOutcomeCount != 0 {
+		t.Fatalf("VerifiedOutcomeCount = %d; want 0 for rejected decision", status.VerifiedOutcomeCount)
+	}
+	if status.PatrolControlCompletedLoopCount != 1 ||
+		status.PatrolControlResolvedLoopCount != 0 ||
+		status.ProActivationCompletedLoopCount != 1 ||
+		status.ProActivationResolvedLoopCount != 0 {
+		t.Fatalf("Patrol control terminal counts wrong for rejected action: %+v", status)
+	}
+	if status.PatrolControlValueState != "governed_decision_recorded" {
+		t.Fatalf("PatrolControlValueState = %q; want governed_decision_recorded", status.PatrolControlValueState)
+	}
+	if status.ProActivationValueProofState != "governed_decision_recorded" {
+		t.Fatalf("ProActivationValueProofState = %q; want governed_decision_recorded", status.ProActivationValueProofState)
+	}
+	if status.NextAction != "complete" {
+		t.Fatalf("NextAction = %q; want complete; status=%+v", status.NextAction, status)
+	}
+	steps := agentOperationsLoopStepsByID(status.Steps)
+	if got := steps["governance"].Status; got != AgentOperationsLoopStepComplete {
+		t.Fatalf("governance status = %q; want complete; steps=%+v", got, status.Steps)
+	}
+	if got := steps["governance"].Count; got != 1 {
+		t.Fatalf("governance step count = %d; want rejected decision count", got)
+	}
+	if got := steps["verification"].Status; got != AgentOperationsLoopStepComplete {
+		t.Fatalf("verification status = %q; want complete for rejected terminal decision; steps=%+v", got, status.Steps)
+	}
+	if got := steps["verification"].Count; got != 1 {
+		t.Fatalf("verification step count = %d; want terminal rejection count", got)
+	}
+	if status.ProgressLabel != "Patrol recorded a rejected change decision. Nothing was changed; approve a safer fix before marking the issue resolved." {
+		t.Fatalf("ProgressLabel = %q; want Patrol control governed rejection summary", status.ProgressLabel)
+	}
+}
+
+func TestHandleAgentOperationsLoopStatus_ApprovedDecisionStillNeedsVerifiedOutcome(t *testing.T) {
+	h, _, _ := fleetFixtureHandlers(t, []unified.Resource{
+		{ID: "vm:101", Type: "vm", Name: "db-01"},
+	})
+
+	store, err := h.resources.getStore("default")
+	if err != nil {
+		t.Fatalf("getStore: %v", err)
+	}
+	now := time.Now().UTC()
+	h.SetAIUsageProvider(staticAIUsageProvider{
+		history: &config.AIUsageHistoryData{
+			Events: []config.AIUsageEventRecord{{
+				Timestamp:    now.Add(-10 * time.Minute),
+				UseCase:      "chat",
+				ContextScope: "patrol_finding",
+			}},
+		},
+	})
+	record := unified.ActionAuditRecord{
+		ID:        "act-approved",
+		CreatedAt: now.Add(-10 * time.Minute),
+		UpdatedAt: now.Add(-10 * time.Minute),
+		State:     unified.ActionStatePending,
+		Request: unified.ActionRequest{
+			RequestID:      "req-approved",
+			ResourceID:     "vm:101",
+			CapabilityName: "restart_service",
+			Params:         map[string]any{"command": "systemctl restart nginx"},
+			RequestedBy:    "pulse_patrol",
+		},
+		Plan: unified.ActionPlan{
+			ActionID:         "act-approved",
+			RequestID:        "req-approved",
+			PlannedAt:        now.Add(-10 * time.Minute),
+			ExpiresAt:        now.Add(time.Hour),
+			RequiresApproval: true,
+		},
+	}
+	if err := store.RecordActionAudit(record); err != nil {
+		t.Fatalf("RecordActionAudit: %v", err)
+	}
+	approved, event, err := unified.ApplyActionDecision(record, unified.ActionApprovalRecord{
+		Actor:   "operator@example.com",
+		Method:  unified.MethodUI,
+		Outcome: unified.OutcomeApproved,
+	}, now)
+	if err != nil {
+		t.Fatalf("ApplyActionDecision: %v", err)
+	}
+	if err := store.RecordActionDecision(approved, event); err != nil {
+		t.Fatalf("RecordActionDecision: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/operations-loop/status", nil)
+	h.HandleOperationsLoopStatus(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d, body=%s", rec.Code, rec.Body.String())
+	}
+	var status AgentOperationsLoopStatus
+	if err := json.NewDecoder(rec.Body).Decode(&status); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	assertPatrolControlCompatibilityAliases(t, status)
+	if status.GovernedActionCount != 1 || status.ApprovedDecisionCount != 1 || status.RejectedDecisionCount != 0 {
+		t.Fatalf("decision counts wrong for approved action: %+v", status)
+	}
+	if status.VerifiedOutcomeCount != 0 {
+		t.Fatalf("VerifiedOutcomeCount = %d; want 0 before verification", status.VerifiedOutcomeCount)
+	}
+	if status.NextAction != "review_findings" {
+		t.Fatalf("NextAction = %q; want review_findings; status=%+v", status.NextAction, status)
+	}
+	steps := agentOperationsLoopStepsByID(status.Steps)
+	if got := steps["governance"].Status; got != AgentOperationsLoopStepComplete {
+		t.Fatalf("governance status = %q; want complete; steps=%+v", got, status.Steps)
+	}
+	if got := steps["governance"].Count; got != 1 {
+		t.Fatalf("governance step count = %d; want approved decision count", got)
+	}
+	if got := steps["verification"].Status; got != AgentOperationsLoopStepCurrent {
+		t.Fatalf("verification status = %q; want current; steps=%+v", got, status.Steps)
+	}
+	if got := steps["verification"].Count; got != 0 {
+		t.Fatalf("verification step count = %d; want zero before verified outcome", got)
+	}
+}
+
+func TestHandleAgentOperationsLoopStatus_ReviewApprovalsWhenApprovalPending(t *testing.T) {
+	h, findings, approvals := fleetFixtureHandlers(t, []unified.Resource{
+		{ID: "vm:101", Type: "vm", Name: "db-01"},
+	})
+	findings.byResource["vm:101"] = []AgentResourceFindingSnapshot{{ID: "finding-cpu", Severity: "warning"}}
+	approvals.byResource["vm:101"] = []AgentResourceApprovalSummary{{ID: "approval-1"}}
+	now := time.Now().UTC()
+	h.SetAIUsageProvider(staticAIUsageProvider{
+		history: &config.AIUsageHistoryData{
+			Events: []config.AIUsageEventRecord{{
+				Timestamp:    now.Add(-10 * time.Minute),
+				UseCase:      "chat",
+				ContextScope: "patrol_finding",
+			}},
+		},
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/operations-loop/status", nil)
+	h.HandleOperationsLoopStatus(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d, body=%s", rec.Code, rec.Body.String())
+	}
+	var status AgentOperationsLoopStatus
+	if err := json.NewDecoder(rec.Body).Decode(&status); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	assertPatrolControlCompatibilityAliases(t, status)
+	if status.NextAction != "review_approvals" {
+		t.Fatalf("NextAction = %q; want review_approvals", status.NextAction)
+	}
+	steps := agentOperationsLoopStepsByID(status.Steps)
+	if got := steps["governance"].Status; got != AgentOperationsLoopStepCurrent {
+		t.Fatalf("governance status = %q; want current; steps=%+v", got, status.Steps)
+	}
+	if got := steps["governance"].Count; got != 1 {
+		t.Fatalf("governance step count = %d; want pending approval count", got)
+	}
+	if got := steps["verification"].Status; got != AgentOperationsLoopStepPending {
+		t.Fatalf("verification status = %q; want pending; steps=%+v", got, status.Steps)
+	}
+}
+
+func TestHandleAgentOperationsLoopStatus_RejectsNonGet(t *testing.T) {
+	h, _, _ := fleetFixtureHandlers(t, []unified.Resource{})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/agent/operations-loop/status", nil)
+	h.HandleOperationsLoopStatus(rec, req)
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status: got %d, want 405", rec.Code)
+	}
+}
+
+func agentOperationsLoopStepsByID(steps []AgentOperationsLoopStep) map[string]AgentOperationsLoopStep {
+	byID := map[string]AgentOperationsLoopStep{}
+	for _, step := range steps {
+		byID[step.ID] = step
+	}
+	return byID
+}
+
+func assertPatrolControlCompatibilityAliases(t *testing.T, status AgentOperationsLoopStatus) {
+	t.Helper()
+	if status.PatrolAutonomyLoopStarterCount != status.PatrolControlLoopStarterCount {
+		t.Fatalf("legacy Patrol autonomy starter alias drifted from Patrol control: control=%d legacy=%d",
+			status.PatrolControlLoopStarterCount, status.PatrolAutonomyLoopStarterCount)
+	}
+	if status.PatrolAutonomyCompletedLoopCount != status.PatrolControlCompletedLoopCount ||
+		status.PatrolAutonomyResolvedLoopCount != status.PatrolControlResolvedLoopCount ||
+		status.PatrolAutonomyValueState != status.PatrolControlValueState {
+		t.Fatalf("legacy Patrol autonomy aliases drifted from Patrol control: control=%d/%d/%q legacy=%d/%d/%q",
+			status.PatrolControlCompletedLoopCount,
+			status.PatrolControlResolvedLoopCount,
+			status.PatrolControlValueState,
+			status.PatrolAutonomyCompletedLoopCount,
+			status.PatrolAutonomyResolvedLoopCount,
+			status.PatrolAutonomyValueState,
+		)
+	}
+	if status.ProActivationCompletedLoopCount != status.PatrolControlCompletedLoopCount ||
+		status.ProActivationResolvedLoopCount != status.PatrolControlResolvedLoopCount ||
+		status.ProActivationValueProofState != status.PatrolControlValueState {
+		t.Fatalf("legacy Pro activation aliases drifted from Patrol control: control=%d/%d/%q legacy=%d/%d/%q",
+			status.PatrolControlCompletedLoopCount,
+			status.PatrolControlResolvedLoopCount,
+			status.PatrolControlValueState,
+			status.ProActivationCompletedLoopCount,
+			status.ProActivationResolvedLoopCount,
+			status.ProActivationValueProofState,
+		)
 	}
 }
 

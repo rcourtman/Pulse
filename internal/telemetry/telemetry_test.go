@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -143,6 +145,181 @@ func TestIsEnabled(t *testing.T) {
 	}
 }
 
+func TestClassifyPulseIntelligenceProActivationProof(t *testing.T) {
+	tests := []struct {
+		name  string
+		input PulseIntelligenceProActivationProofInput
+		want  PulseIntelligenceProActivationProof
+	}{
+		{
+			name: "not started",
+			want: PulseIntelligenceProActivationProof{
+				ValueProofState: PulseIntelligenceProActivationValueProofNotStarted,
+			},
+		},
+		{
+			name: "starter only stays in progress",
+			input: PulseIntelligenceProActivationProofInput{
+				ProActivationStarterCount: 1,
+			},
+			want: PulseIntelligenceProActivationProof{
+				ValueProofState: PulseIntelligenceProActivationValueProofInProgress,
+			},
+		},
+		{
+			name: "approved verified outcome resolves without external agent readiness",
+			input: PulseIntelligenceProActivationProofInput{
+				ProActivationStarterCount:    1,
+				PatrolIssueEvidenceCount:     1,
+				ContextualCollaborationCount: 1,
+				ApprovedDecisionCount:        1,
+				VerifiedOutcomeCount:         1,
+			},
+			want: PulseIntelligenceProActivationProof{
+				Completed:       true,
+				Resolved:        true,
+				ValueProofState: PulseIntelligenceProActivationValueProofVerified,
+			},
+		},
+		{
+			name: "rejected governed decision records proof state before full completion",
+			input: PulseIntelligenceProActivationProofInput{
+				ProActivationStarterCount: 1,
+				RejectedDecisionCount:     1,
+			},
+			want: PulseIntelligenceProActivationProof{
+				ValueProofState: PulseIntelligenceProActivationValueProofGovernedDecisionRecorded,
+			},
+		},
+		{
+			name: "rejected governed decision completes without resolving",
+			input: PulseIntelligenceProActivationProofInput{
+				ProActivationStarterCount:    1,
+				PatrolIssueEvidenceCount:     1,
+				ContextualCollaborationCount: 1,
+				RejectedDecisionCount:        1,
+			},
+			want: PulseIntelligenceProActivationProof{
+				Completed:       true,
+				ValueProofState: PulseIntelligenceProActivationValueProofGovernedDecisionRecorded,
+			},
+		},
+		{
+			name: "approved verified outcome resolves",
+			input: PulseIntelligenceProActivationProofInput{
+				ProActivationStarterCount:    1,
+				PatrolIssueEvidenceCount:     1,
+				ContextualCollaborationCount: 1,
+				ApprovedDecisionCount:        1,
+				VerifiedOutcomeCount:         1,
+				ExternalAgentReady:           true,
+			},
+			want: PulseIntelligenceProActivationProof{
+				Completed:       true,
+				Resolved:        true,
+				ValueProofState: PulseIntelligenceProActivationValueProofVerified,
+			},
+		},
+		{
+			name: "approved decision without verified outcome stays in progress",
+			input: PulseIntelligenceProActivationProofInput{
+				ProActivationStarterCount:    1,
+				PatrolIssueEvidenceCount:     1,
+				ContextualCollaborationCount: 1,
+				ApprovedDecisionCount:        1,
+				ExternalAgentReady:           true,
+			},
+			want: PulseIntelligenceProActivationProof{
+				ValueProofState: PulseIntelligenceProActivationValueProofInProgress,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ClassifyPulseIntelligenceProActivationProof(tt.input); got != tt.want {
+				t.Fatalf("ClassifyPulseIntelligenceProActivationProof() = %#v, want %#v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestClassifyPulseIntelligencePatrolControlProof(t *testing.T) {
+	tests := []struct {
+		name  string
+		input PulseIntelligencePatrolControlProofInput
+		want  PulseIntelligencePatrolControlProof
+	}{
+		{
+			name: "not started",
+			want: PulseIntelligencePatrolControlProof{
+				ValueProofState: PulseIntelligenceProActivationValueProofNotStarted,
+			},
+		},
+		{
+			name: "starter only stays in progress",
+			input: PulseIntelligencePatrolControlProofInput{
+				PatrolControlStarterCount: 1,
+			},
+			want: PulseIntelligencePatrolControlProof{
+				ValueProofState: PulseIntelligenceProActivationValueProofInProgress,
+			},
+		},
+		{
+			name: "rejected governed decision completes without resolving",
+			input: PulseIntelligencePatrolControlProofInput{
+				PatrolControlStarterCount:    1,
+				PatrolIssueEvidenceCount:     1,
+				ContextualCollaborationCount: 1,
+				RejectedDecisionCount:        1,
+			},
+			want: PulseIntelligencePatrolControlProof{
+				Completed:       true,
+				ValueProofState: PulseIntelligenceProActivationValueProofGovernedDecisionRecorded,
+			},
+		},
+		{
+			name: "approved verified outcome resolves",
+			input: PulseIntelligencePatrolControlProofInput{
+				PatrolControlStarterCount:    1,
+				PatrolIssueEvidenceCount:     1,
+				ContextualCollaborationCount: 1,
+				ApprovedDecisionCount:        1,
+				VerifiedOutcomeCount:         1,
+				ExternalAgentReady:           true,
+			},
+			want: PulseIntelligencePatrolControlProof{
+				Completed:       true,
+				Resolved:        true,
+				ValueProofState: PulseIntelligenceProActivationValueProofVerified,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ClassifyPulseIntelligencePatrolControlProof(tt.input); got != tt.want {
+				t.Fatalf("ClassifyPulseIntelligencePatrolControlProof() = %#v, want %#v", got, tt.want)
+			}
+		})
+	}
+
+	legacy := ClassifyPulseIntelligencePatrolAutonomyProof(PulseIntelligencePatrolAutonomyProofInput{
+		PatrolAutonomyStarterCount:   1,
+		PatrolIssueEvidenceCount:     1,
+		ContextualCollaborationCount: 1,
+		ApprovedDecisionCount:        1,
+		VerifiedOutcomeCount:         1,
+	})
+	if legacy != (PulseIntelligencePatrolAutonomyProof{
+		Completed:       true,
+		Resolved:        true,
+		ValueProofState: PulseIntelligenceProActivationValueProofVerified,
+	}) {
+		t.Fatalf("legacy Patrol autonomy classifier alias drifted: %#v", legacy)
+	}
+}
+
 func TestApplySnapshot(t *testing.T) {
 	base := Ping{
 		InstallID: "test-id",
@@ -154,26 +331,82 @@ func TestApplySnapshot(t *testing.T) {
 
 	snap := func() Snapshot {
 		return Snapshot{
-			PVENodes:             3,
-			VMs:                  10,
-			Containers:           5,
-			AgentHosts:           2,
-			DockerContainers:     12,
-			KubernetesPods:       18,
-			StoragePools:         4,
-			PhysicalDisks:        9,
-			TrueNASSystems:       1,
-			TrueNASApps:          3,
-			VMwareHosts:          2,
-			AvailabilityTargets:  6,
-			AIEnabled:            true,
-			PatrolEnabled:        true,
-			DiscoveryEnabled:     true,
-			NotificationsEnabled: true,
-			AIActionsEnabled:     true,
-			ActiveAlerts:         2,
-			PaidLicense:          true,
-			HasAPITokens:         true,
+			PVENodes:                        3,
+			VMs:                             10,
+			Containers:                      5,
+			AgentHosts:                      2,
+			DockerContainers:                12,
+			KubernetesPods:                  18,
+			StoragePools:                    4,
+			PhysicalDisks:                   9,
+			TrueNASSystems:                  1,
+			TrueNASApps:                     3,
+			VMwareHosts:                     2,
+			AvailabilityTargets:             6,
+			AIEnabled:                       true,
+			PatrolEnabled:                   true,
+			DiscoveryEnabled:                true,
+			NotificationsEnabled:            true,
+			AIActionsEnabled:                true,
+			ActiveAlerts:                    2,
+			PaidLicense:                     true,
+			HasAPITokens:                    true,
+			PulseIntelligenceLoopConfigured: true,
+			PulseIntelligenceLoopActive30d:  true,
+			PulseIntelligenceCompleteOperationsLoop30d:                     true,
+			PulseIntelligenceApprovedExecutionLoop30d:                      true,
+			PulseIntelligenceResolvedOperationsLoop30d:                     true,
+			PulseIntelligencePatrolControlCompletedOperationsLoop30d:       true,
+			PulseIntelligencePatrolControlResolvedOperationsLoop30d:        true,
+			PulseIntelligencePatrolControlPaidCompletedOperationsLoop30d:   true,
+			PulseIntelligencePatrolControlPaidResolvedOperationsLoop30d:    true,
+			PulseIntelligenceProActivationCompletedOperationsLoop30d:       true,
+			PulseIntelligenceProActivationResolvedOperationsLoop30d:        true,
+			PulseIntelligenceProActivationPaidCompletedOperationsLoop30d:   true,
+			PulseIntelligenceProActivationPaidResolvedOperationsLoop30d:    true,
+			PulseIntelligenceGovernedActionActive30d:                       true,
+			PulseIntelligenceAssistantOperationsLoop30d:                    true,
+			PulseIntelligenceAssistantApprovedExecutionLoop30d:             true,
+			PulseIntelligenceAssistantApprovedActionSuccessLoop30d:         true,
+			PulseIntelligenceAssistantResolvedOperationsLoop30d:            true,
+			PulseIntelligenceExternalAgentOperationsLoop30d:                true,
+			PulseIntelligenceExternalAgentApprovedExecutionLoop30d:         true,
+			PulseIntelligenceExternalAgentApprovedActionSuccessLoop30d:     true,
+			PulseIntelligenceExternalAgentResolvedOperationsLoop30d:        true,
+			PulseIntelligenceMCPAdapterOperationsLoop30d:                   true,
+			PulseIntelligenceMCPAdapterApprovedExecutionLoop30d:            true,
+			PulseIntelligenceMCPAdapterApprovedActionSuccessLoop30d:        true,
+			PulseIntelligenceMCPAdapterResolvedOperationsLoop30d:           true,
+			PulseIntelligenceOperationsLoopStarterRequests30d:              5,
+			PulseIntelligenceAssistantOperationsLoopStarterRequests30d:     2,
+			PulseIntelligencePatrolOperationsLoopStarterRequests30d:        1,
+			PulseIntelligencePatrolControlOperationsLoopStarterRequests30d: 3,
+			PulseIntelligenceProActivationOperationsLoopStarterRequests30d: 1,
+			PulseIntelligenceMCPOperationsLoopStarterRequests30d:           1,
+			PulseIntelligenceAssistantAICalls30d:                           7,
+			PulseIntelligenceAssistantContextAICalls30d:                    4,
+			PulseIntelligenceAssistantToolCalls30d:                         9,
+			PulseIntelligencePatrolAICalls30d:                              3,
+			PulseIntelligencePatrolRuns30d:                                 4,
+			PulseIntelligencePatrolNewFindings30d:                          5,
+			PulseIntelligencePatrolInvestigations30d:                       6,
+			PulseIntelligencePatrolResolvedFindings30d:                     3,
+			PulseIntelligencePatrolAutofixes30d:                            2,
+			PulseIntelligenceExternalAgentEnabled:                          true,
+			PulseIntelligenceExternalAgentUsed30d:                          true,
+			PulseIntelligenceMCPAdapterUsed30d:                             true,
+			PulseIntelligenceExternalAgentContextRequests30d:               8,
+			PulseIntelligenceExternalAgentEventStreamRequests30d:           2,
+			PulseIntelligenceExternalAgentProvisioningRequests30d:          1,
+			PulseIntelligenceExternalAgentOperatorStateRequests30d:         3,
+			PulseIntelligenceExternalAgentFindingRequests30d:               5,
+			PulseIntelligenceExternalAgentActionRequests30d:                4,
+			PulseIntelligenceActionPlans30d:                                6,
+			PulseIntelligenceApprovalRequests30d:                           2,
+			PulseIntelligenceRejectedActionDecisions30d:                    1,
+			PulseIntelligenceApprovedActionDecisions30d:                    1,
+			PulseIntelligenceApprovedActionAttempts30d:                     1,
+			PulseIntelligenceApprovedActionSuccesses30d:                    1,
 		}
 	}
 
@@ -209,6 +442,135 @@ func TestApplySnapshot(t *testing.T) {
 	if !ping.HasAPITokens {
 		t.Fatal("HasAPITokens should be true")
 	}
+	if !ping.PulseIntelligenceLoopConfigured || !ping.PulseIntelligenceLoopActive30d ||
+		!ping.PulseIntelligenceCompleteOperationsLoop30d ||
+		!ping.PulseIntelligenceApprovedExecutionLoop30d ||
+		!ping.PulseIntelligenceResolvedOperationsLoop30d ||
+		!ping.PulseIntelligencePatrolControlCompletedOperationsLoop30d ||
+		!ping.PulseIntelligencePatrolControlResolvedOperationsLoop30d ||
+		!ping.PulseIntelligencePatrolControlPaidCompletedOperationsLoop30d ||
+		!ping.PulseIntelligencePatrolControlPaidResolvedOperationsLoop30d ||
+		!ping.PulseIntelligenceProActivationCompletedOperationsLoop30d ||
+		!ping.PulseIntelligenceProActivationResolvedOperationsLoop30d ||
+		!ping.PulseIntelligenceProActivationPaidCompletedOperationsLoop30d ||
+		!ping.PulseIntelligenceProActivationPaidResolvedOperationsLoop30d ||
+		!ping.PulseIntelligenceGovernedActionActive30d ||
+		!ping.PulseIntelligenceAssistantOperationsLoop30d ||
+		!ping.PulseIntelligenceAssistantApprovedExecutionLoop30d ||
+		!ping.PulseIntelligenceAssistantApprovedActionSuccessLoop30d ||
+		!ping.PulseIntelligenceAssistantResolvedOperationsLoop30d ||
+		!ping.PulseIntelligenceExternalAgentOperationsLoop30d ||
+		!ping.PulseIntelligenceExternalAgentApprovedExecutionLoop30d ||
+		!ping.PulseIntelligenceExternalAgentApprovedActionSuccessLoop30d ||
+		!ping.PulseIntelligenceExternalAgentResolvedOperationsLoop30d ||
+		!ping.PulseIntelligenceMCPAdapterOperationsLoop30d ||
+		!ping.PulseIntelligenceMCPAdapterApprovedExecutionLoop30d ||
+		!ping.PulseIntelligenceMCPAdapterApprovedActionSuccessLoop30d ||
+		!ping.PulseIntelligenceMCPAdapterResolvedOperationsLoop30d {
+		t.Fatalf("Pulse Intelligence adoption state not applied: %#v", ping)
+	}
+	if ping.PulseIntelligenceAssistantAICalls30d != 7 ||
+		ping.PulseIntelligenceOperationsLoopStarterRequests30d != 5 ||
+		ping.PulseIntelligenceAssistantOperationsLoopStarterRequests30d != 2 ||
+		ping.PulseIntelligencePatrolOperationsLoopStarterRequests30d != 1 ||
+		ping.PulseIntelligencePatrolControlOperationsLoopStarterRequests30d != 3 ||
+		ping.PulseIntelligenceProActivationOperationsLoopStarterRequests30d != 1 ||
+		ping.PulseIntelligenceMCPOperationsLoopStarterRequests30d != 1 ||
+		ping.PulseIntelligenceAssistantContextAICalls30d != 4 ||
+		ping.PulseIntelligenceAssistantToolCalls30d != 9 ||
+		ping.PulseIntelligencePatrolAICalls30d != 3 ||
+		ping.PulseIntelligencePatrolRuns30d != 4 ||
+		ping.PulseIntelligencePatrolNewFindings30d != 5 ||
+		ping.PulseIntelligencePatrolInvestigations30d != 6 ||
+		ping.PulseIntelligencePatrolResolvedFindings30d != 3 ||
+		ping.PulseIntelligencePatrolAutofixes30d != 2 ||
+		ping.PulseIntelligenceActionPlans30d != 6 ||
+		ping.PulseIntelligenceApprovalRequests30d != 2 ||
+		ping.PulseIntelligenceRejectedActionDecisions30d != 1 ||
+		ping.PulseIntelligenceApprovedActionDecisions30d != 1 ||
+		ping.PulseIntelligenceApprovedActionAttempts30d != 1 ||
+		ping.PulseIntelligenceApprovedActionSuccesses30d != 1 {
+		t.Fatalf("Pulse Intelligence counters not applied: %#v", ping)
+	}
+	if !ping.PulseIntelligenceExternalAgentEnabled || !ping.PulseIntelligenceExternalAgentUsed30d ||
+		!ping.PulseIntelligenceMCPAdapterUsed30d {
+		t.Fatalf("Pulse Intelligence external-agent booleans not applied: %#v", ping)
+	}
+	if ping.PulseIntelligenceExternalAgentContextRequests30d != 8 ||
+		ping.PulseIntelligenceExternalAgentEventStreamRequests30d != 2 ||
+		ping.PulseIntelligenceExternalAgentProvisioningRequests30d != 1 ||
+		ping.PulseIntelligenceExternalAgentOperatorStateRequests30d != 3 ||
+		ping.PulseIntelligenceExternalAgentFindingRequests30d != 5 ||
+		ping.PulseIntelligenceExternalAgentActionRequests30d != 4 {
+		t.Fatalf("Pulse Intelligence external-agent class counters not applied: %#v", ping)
+	}
+}
+
+func TestPulseIntelligenceTelemetryFieldsAreDisclosed(t *testing.T) {
+	pingType := reflect.TypeOf(Ping{})
+	fieldLabels := make([]string, 0)
+	for i := 0; i < pingType.NumField(); i++ {
+		jsonName := strings.Split(pingType.Field(i).Tag.Get("json"), ",")[0]
+		if !strings.HasPrefix(jsonName, "pulse_intelligence_") {
+			continue
+		}
+		fieldLabels = append(fieldLabels, normalizedTelemetryDisclosureLabel(jsonName))
+	}
+	if len(fieldLabels) == 0 {
+		t.Fatal("expected Pulse Intelligence telemetry fields on Ping")
+	}
+
+	for _, relativePath := range []string{
+		filepath.Join("..", "..", "docs", "PRIVACY.md"),
+		filepath.Join("..", "..", "frontend-modern", "public", "docs", "PRIVACY.md"),
+	} {
+		raw, err := os.ReadFile(relativePath)
+		if err != nil {
+			t.Fatalf("read %s: %v", relativePath, err)
+		}
+		doc := normalizedTelemetryDisclosureTableText(string(raw))
+		for _, label := range fieldLabels {
+			if !strings.Contains(doc, label) {
+				t.Errorf("%s must disclose Pulse Intelligence telemetry field %q", relativePath, label)
+			}
+		}
+	}
+}
+
+func normalizedTelemetryDisclosureTableText(value string) string {
+	tableLines := make([]string, 0)
+	for _, line := range strings.Split(value, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "|") {
+			tableLines = append(tableLines, line)
+		}
+	}
+	return normalizedTelemetryDisclosureText(strings.Join(tableLines, "\n"))
+}
+
+func normalizedTelemetryDisclosureLabel(jsonName string) string {
+	label := strings.TrimPrefix(jsonName, "pulse_intelligence_")
+	return normalizedTelemetryDisclosureText("Pulse Intelligence " + strings.ReplaceAll(label, "_", " "))
+}
+
+func normalizedTelemetryDisclosureText(value string) string {
+	value = strings.ToLower(value)
+	replacer := strings.NewReplacer(
+		"`", " ",
+		"|", " ",
+		"_", " ",
+		"-", " ",
+		"/", " ",
+		",", " ",
+		".", " ",
+		":", " ",
+		";", " ",
+		"(", " ",
+		")", " ",
+		"[", " ",
+		"]", " ",
+	)
+	value = replacer.Replace(value)
+	return strings.Join(strings.Fields(value), " ")
 }
 
 func TestApplySnapshot_NilFunc(t *testing.T) {

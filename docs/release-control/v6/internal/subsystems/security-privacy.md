@@ -54,19 +54,20 @@ controls as normal product settings.
 26. `internal/config/config.go`
 27. `internal/config/watcher.go`
 28. `internal/telemetry/telemetry.go`
-29. `internal/api/router_routes_auth_security.go`
-30. `internal/crypto/crypto.go`
-31. `internal/securityutil/secure_storage_dir.go`
-32. `internal/cloudcp/auth/magiclink.go`
-33. `internal/cloudcp/auth/magiclink_store.go`
-34. `pkg/tlsutil/fingerprint.go`
-35. `pkg/audit/audit.go`
-36. `pkg/audit/async_logger.go`
-37. `pkg/audit/sqlite_logger.go`
-38. `scripts/telemetry_adoption_report.py`
-39. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx`
-40. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts`
-41. `internal/api/agent_exec_token_binding.go`
+29. `pkg/server/telemetry_pulse_intelligence.go`
+30. `internal/api/router_routes_auth_security.go`
+31. `internal/crypto/crypto.go`
+32. `internal/securityutil/secure_storage_dir.go`
+33. `internal/cloudcp/auth/magiclink.go`
+34. `internal/cloudcp/auth/magiclink_store.go`
+35. `pkg/tlsutil/fingerprint.go`
+36. `pkg/audit/audit.go`
+37. `pkg/audit/async_logger.go`
+38. `pkg/audit/sqlite_logger.go`
+39. `scripts/telemetry_adoption_report.py`
+40. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx`
+41. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts`
+42. `internal/api/agent_exec_token_binding.go`
 
 ## Shared Boundaries
 
@@ -87,6 +88,12 @@ controls as normal product settings.
    API token scope selectors follow the same split: security/privacy owns
    the wildcard, preset, and custom scope semantics, while frontend-primitives
    owns the pressed selector pill chrome through `SelectablePillButton`.
+   Full access is a deliberate wildcard choice, not the default empty
+   selection. The token creation form must require an explicit scoped preset,
+   custom scope, or Full access selection before a credential can be minted.
+   Stable in-page anchors for sibling API Access onboarding panels are allowed
+   only as navigation into the token creation section; those sibling panels do
+   not own token scope derivation or preset contents.
 4. `frontend-modern/src/components/Settings/apiTokenManagerModel.ts` shared with `api-contracts`: the pure API token settings model is both a security/privacy control surface and a canonical API payload contract boundary.
 5. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx` shared with `frontend-primitives`: the data-handling settings surface is both a security/privacy trust surface and a canonical settings-shell presentation boundary.
 6. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts` shared with `frontend-primitives`: the data-handling settings model is both a security/privacy posture projection and a canonical settings-shell presentation boundary.
@@ -107,6 +114,10 @@ controls as normal product settings.
     Scope labels and descriptions are visible security controls. Docker /
     Podman scopes must use the shared source-platform label rather than
     generic `container` copy.
+    The `ai:execute` scope must stay labeled and described as Pulse
+    Intelligence actions for governed Patrol actions: plans, approvals,
+    policy-allowed fixes, verification, and history. Security-facing token
+    setup must not present it as generic operations workflow access.
 12. `frontend-modern/src/utils/apiTokenPresentation.ts` shared with `api-contracts`: the API token presentation helper is both a security/privacy control surface and a canonical API token management boundary.
     It owns Docker / Podman token copy for API Access, token presets, usage
     summaries, and revoke warnings so security-facing copy does not drift into
@@ -139,7 +150,74 @@ controls as normal product settings.
 17. `internal/cloudcp/auth/magiclink_store.go` shared with `cloud-paid`: control-plane magic-link persistence is both a Pulse Cloud account-access boundary and a security/privacy storage-hardening boundary.
 ## Extension Points
 
-1. Change privacy disclosures, usage-data vocabulary, or outbound-data guarantees through `docs/PRIVACY.md` and `internal/telemetry/telemetry.go` together.
+1. Change privacy disclosures, usage-data vocabulary, or outbound-data guarantees through `docs/PRIVACY.md`, `frontend-modern/public/docs/PRIVACY.md`, `internal/telemetry/telemetry.go`, and `pkg/server/telemetry_pulse_intelligence.go` together.
+   Pulse Intelligence external-agent/MCP telemetry may expose only content-free
+   adapter-origin usage and capability-class counters for context, event
+   stream, provisioning, operator state, finding, and action requests. It must
+   not expose token identity, route parameters, resource IDs, finding text,
+   command text, action output, prompts, responses, or request bodies.
+   External-agent activity markers may be recorded for narrow tokens that
+   satisfy the called manifest capability's own scope, such as
+   `monitoring:read` for context reads, but that does not widen token
+   permissions or export token identity. The emitted telemetry remains only the
+   coarse activity class.
+   External-agent/MCP readiness for the operations loop may likewise be true
+   only when a single non-expired API token satisfies every scope required by
+   the published Pulse MCP operations-loop capability set; readiness must not
+   require the full manifest scope set and must not export token identity,
+   token name, token counts, or matched scopes.
+   The broad external-agent configured signal may remain true for a narrower
+   read-only MCP token, but Patrol autonomy completed/resolved loop telemetry no
+   longer uses MCP readiness as a value gate; readiness remains optional
+   external-agent setup telemetry and settings handoff context.
+   Pulse Intelligence guided operations-loop starter telemetry may expose only
+   content-free 30-day request counts for the total starter flow and the
+   coarse Assistant, Pulse Patrol, Patrol control, legacy Patrol autonomy
+   compatibility, legacy Pro activation
+   entry-point, and Pulse MCP source surfaces. It must not expose prompt text,
+   prompt arguments, resource
+   IDs, finding IDs, session IDs, token identity, checkout/account identity,
+   request bodies, model output, remediation command text, or
+   infrastructure-specific details.
+   Pulse Intelligence Patrol control completed-loop telemetry may expose only a
+   content-free boolean derived from the Patrol control starter or legacy Patrol
+   autonomy/Pro activation entry-point aliases, Patrol issue evidence,
+   contextual Assistant or external-agent collaboration, and either a rejected
+   governed decision or an approved governed decision with verified outcome
+   proof. Pulse Intelligence Patrol control resolved-loop telemetry remains
+   stricter: it may expose only a content-free boolean derived from the same
+   evidence plus an approved governed decision and verified outcome proof. Paid
+   Patrol control completed/resolved loop cohorts may expose only whether the
+   current coarse paid-license posture coexists with those same primary Patrol
+   control completed/resolved booleans. Legacy Pro activation completed,
+   resolved, and paid cohort fields may remain as mirrors for longitudinal
+   commercial analysis, but they must not add exact tier, checkout, account,
+   license, token, or customer identity. None of these fields may expose prompt text,
+   prompt arguments, checkout/account identity, token details, resource IDs,
+   finding IDs, session IDs, request bodies, remediation command text, action
+   output, or infrastructure-specific details.
+   The shared count-only classifier in
+   `internal/telemetry.ClassifyPulseIntelligencePatrolControlProof` is the
+   privacy boundary for those Patrol control booleans and the native
+   `patrolControlValueState` string. The legacy
+   `ClassifyPulseIntelligencePatrolAutonomyProof` and
+   `ClassifyPulseIntelligenceProActivationProof` wrappers plus
+   `patrolAutonomyValueState` and `proActivationValueProofState` aliases may
+   remain for metric/storage continuity, but callers may pass aggregate
+   evidence counts only, never external-agent readiness, prompt text, request
+   bodies, resource/finding identifiers, token metadata, actors, commands, or
+   outputs.
+   The agent operations-loop status endpoint may mirror that same starter
+   evidence and contextual Assistant/external-agent collaboration evidence only
+   as aggregate count fields in its content-safe payload; it must not expose the
+   underlying workflow-prompt event records, AI prompt or response content,
+   Assistant session IDs, external-agent route parameters, surfaces beyond the
+   approved coarse categories, token metadata, prompt names, or request context.
+   The same endpoint may expose aggregate active Patrol finding counts and let
+   active findings or pending approvals outrank historical completed/resolved
+   proof in `nextAction`, but that precedence must remain count-only and must
+   not expose finding IDs, resource IDs, commands, prompt text, actors, token
+   metadata, or remediation output.
 2. Change security policy, hardening guidance, or supported auth boundaries through `SECURITY.md`.
 3. Change telemetry/privacy settings state handling through `frontend-modern/src/components/Settings/useSystemSettingsState.ts`.
 4. Change security/auth/token transport behavior through the shared `frontend-modern/src/api/security.ts`, `frontend-modern/src/components/Settings/APITokenManager.tsx`, `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`, `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`, `internal/api/security.go`, `internal/api/security_tokens.go`, and `internal/api/system_settings.go` boundary.
@@ -163,7 +241,15 @@ controls as normal product settings.
    email can support display, delivery, or migration, but request access must
    match the authenticated principal against stored `OwnerUserID` or member
    `UserID`.
-5. Change security/privacy settings presentation through the shared `frontend-modern/src/components/Settings/APIAccessPanel.tsx`, `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`, `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`, `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`, `frontend-modern/src/components/Settings/QuickSecuritySetup.tsx`, `frontend-modern/src/components/Settings/SecurityPostureSummary.tsx`, `frontend-modern/src/components/Settings/SSOProviderTypeIcon.tsx`, `frontend-modern/src/constants/apiScopes.ts`, `frontend-modern/src/utils/apiTokenPresentation.ts`, `frontend-modern/src/utils/securityAuthPresentation.ts`, `frontend-modern/src/utils/securityScorePresentation.ts`, `frontend-modern/src/utils/auditLogPresentation.ts`, `frontend-modern/src/utils/auditWebhookPresentation.ts`, and the localized catalog/policy boundary in `frontend-modern/src/i18n/`.
+5. Change security/privacy settings presentation through the shared `frontend-modern/src/components/Settings/APIAccessPanel.tsx`, `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`, `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`, `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`, `frontend-modern/src/components/Settings/QuickSecuritySetup.tsx`, `frontend-modern/src/components/Settings/SecurityPostureSummary.tsx`, `frontend-modern/src/components/Settings/SSOProviderTypeIcon.tsx`, `frontend-modern/src/constants/apiScopes.ts`, `frontend-modern/src/utils/apiTokenPresentation.ts`, `frontend-modern/src/utils/securityAuthPresentation.ts`, `frontend-modern/src/utils/securityScorePresentation.ts`, `frontend-modern/src/utils/auditLogPresentation.ts`, `frontend-modern/src/utils/auditWebhookPresentation.ts`, and the localized catalog/policy boundary in `frontend-modern/src/i18n/`. Locale-catalog edits owned by another product surface may share this boundary only if they preserve API token names, token preset ids, privacy disclosures, and non-translatable security terms exactly; changing those security/privacy strings requires the security/privacy owner and tests.
+   Pulse Intelligence Provider & Models, Patrol, Assistant, and Service Context
+   settings labels may use the same localized catalog boundary, but those edits
+   must stay product-settings copy only and must not change token scope names,
+   preset ids, privacy disclosures, or security control terminology. Self-hosted
+   Plans & Billing header and navigation localization may share that same catalog
+   boundary when it frames Pro setup as choosing Patrol autonomy; it must not
+   alter API Access, authentication, privacy, or token-management terminology in
+   the same edit.
 6. Change operator-facing telemetry/adoption reporting through `scripts/telemetry_adoption_report.py` together with the privacy disclosure whenever release-identity interpretation changes.
 7. Change data-at-rest encryption-key or control-plane magic-link HMAC key and storage-root hardening semantics through `internal/crypto/crypto.go`, `internal/cloudcp/auth/magiclink.go`, `internal/cloudcp/auth/magiclink_store.go`, and `internal/securityutil/secure_storage_dir.go` together so writable-but-not-owned runtime storage mounts stay supported without weakening file-level secrecy.
 8. Change auth-env password normalization, hosted commercial base URL
@@ -199,7 +285,7 @@ controls as normal product settings.
 	    prompt text, removed/restored message counts, and `can_redo`; they must
 	    not expose redo-stack internals, provider reasoning, raw tool output,
 	    model-only handoff text, approval payload internals, environment data, or
-	    command-bearing remediation details.
+	    command-bearing fix details.
 
 ## Forbidden Paths
 
@@ -243,6 +329,14 @@ controls as normal product settings.
    HTTP(S) URLs, with plain HTTP limited to loopback development origins.
 8. Keep the Resource Privacy/Data Handling settings surface neutral and non-commercial: it may show resource policy posture, local-only counts, and redaction coverage, but it must not advertise trials, upgrades, paid plans, or monitoring limits, and it must remain route-backed rather than promoted in the normal Settings sidebar while it is informational only.
 9. Keep operator-facing Resource Privacy/Data Handling posture aligned with runtime AI/context enforcement: `local-only` resource details must not be sent to external model prompts, and sensitive free-form alert, tool-result, investigation, handoff context, and any retained legacy managed-model compatibility text must use the shared resource-policy redaction helper before leaving the local trust boundary. Assistant handoffs may surface canonical policy handling guidance and current resource-state summaries for product-originated resources, but that guidance and state are model-only context and must not become disclosure authority. Product-originated Assistant handoff text must also be policy-cleaned before prompt injection, including operator briefings and finding/action context, so raw governed resource identity cannot leak through local-model briefing prose while non-local transport still receives the final provider-bound sanitizer. All provider-bound AI requests to non-local models must use the shared resource-policy sanitizer immediately before transport so later agentic turns cannot bypass the advertised handling posture.
+   Native Pulse Assistant provider seams and native tool-adapter names in the
+   shared AI/API route wiring are part of that same trust boundary. `MCP`
+   remains an external protocol, manifest, and wire-schema term; the in-app
+   Assistant `ToolAdapter` family must stay governed by the same sanitizer,
+   approval, auth, and action-audit checks as the rest of AI/runtime. Security
+   and privacy code must not treat MCP-named native seams as a separate trust
+   boundary, and must not bypass provider-bound redaction or approval controls
+   because a tool call is replayed through Assistant route wiring.
 10. Keep the canonical and frontend-served privacy disclosures aligned with
     the actual AI transport boundary: self-managed installs must describe local
     providers as staying on the operator network, non-local providers as direct
@@ -291,11 +385,45 @@ vocabulary for anonymous outbound telemetry. Local commercial activation and
 license-recovery runtime records must stay out of ordinary Settings, support
 diagnostics, outbound telemetry disclosure copy, and public configuration
 reference tables.
+Customer-facing telemetry disclosures and telemetry-enabled log copy must
+describe the governed AI counters as coarse Patrol, Assistant, and
+external-agent usage counters, not as Pulse Intelligence loop-adoption,
+activation-loop, operations-loop, or value-proof internals.
 That same operator-reporting boundary now also owns reusable latest-install
 adoption baselines. `scripts/telemetry_adoption_report.py` must emit
 windowed 24h, 72h, and 7d latest-install snapshots that split published
 versions from unpublished or development builds, so RC adoption reads stop
 depending on ad hoc SQL or one-off local helper scripts.
+Pulse Intelligence derived governed-operation booleans must treat content-free MCP /
+external-agent capability-class counters as external-agent collaboration
+activity, not only the legacy `pulse_intelligence_external_agent_used_30d`
+boolean. The `pulse_intelligence_mcp_adapter_used_30d` bit is an adapter-origin
+marker for the `pulse-mcp` surface, while the aggregate external-agent
+recent-use bit still represents direct HTTP and MCP adapter use together. The
+runtime telemetry snapshot, checked-in adoption report, and commercial value
+report must agree on that interpretation so class-only MCP usage and
+adapter-specific MCP usage still contribute to governed-operation activity,
+completed/resolved compatibility metrics, retention, and signal-to-paid proof
+without adding prompts,
+request bodies, command output, resource IDs, finding IDs, token identity, or
+route parameters. Source-specific Pulse Intelligence loop booleans for native
+Assistant, external-agent, and `pulse-mcp` adapter operations-loop,
+approved-execution, approved-action-success, and resolved-loop stages are
+allowed only as content-free 30-day adoption evidence over those same
+privacy-safe counters; they must not introduce separate prompt, request,
+approval, resource, finding, action-output, or token-identifying payloads.
+The checked-in Pulse Intelligence adoption report must expose machine-readable
+rate fields beside the privacy-safe counts for cohort and operations-funnel
+outcomes: retention, latest-paid posture, observed free-to-paid conversion, and
+signal-to-paid conversion. Text output may format those rates for humans, but
+JSON consumers must not need to parse prose or recompute denominators to tell
+whether Patrol, Assistant, MCP, and governed action usage drives activation,
+retention, and paid conversion.
+That same report must treat Patrol control as the primary paid value cohort and
+operations-funnel stage. Legacy Pro activation telemetry may contribute to
+Patrol-control cohorts as a compatibility source and may remain visible as a
+legacy entry-point count, but report keys and funnel stages must not present
+Pro activation as the first-class product loop.
 That same storage hardening boundary now also owns secure regular-file
 handling for secret-bearing local trust material and the control-plane
 magic-link storage root. `internal/crypto/crypto.go`,
@@ -422,11 +550,16 @@ deployment's own origin so an operator wiring Claude Desktop or
 Claude Code sees the right base URL automatically. The section
 does NOT introduce a new token-mint flow or auth path: tokens
 still flow through the API Token Manager, and the snippet
-documents the `monitoring:read` / `monitoring:write` scopes the
-agent surface requires. Keeping token minting and agent-surface
-disclosure on the same tab means an operator gets a single
-"machine-driven access" mental model rather than two surfaces
-to reconcile.
+documents the manifest-derived scopes the agent surface requires.
+Pulse Intelligence owns the agent-surface disclosure so the operator sees MCP as
+an access path over governed Patrol actions, while API Access owns the scoped
+credential minted for that access path. Normal API Access visits keep the token
+manager first; `/settings/security/api?tokenPreset=pulse-intelligence-agent#api-token-create`
+may open token creation for the external-agent preset, but
+`/settings/security/api#external-agent-setup` and legacy
+`/settings/security/api#pulse-mcp-setup` links must redirect to the canonical
+Pulse Intelligence Assistant setup route instead of placing Agent Integrations
+inside the API Access trust surface.
 
 That same token-management boundary also reserves token-owner identity for the
 server-authenticated principal. Token-minting helpers must derive
@@ -470,7 +603,127 @@ workloads, storage resources, physical disks, Ceph clusters, network shares,
 TrueNAS and VMware resource categories, availability targets, and active
 alerts. Those counts may describe scale and feature adoption, but they must not
 include hostnames, resource IDs, infrastructure identifiers, credentials,
-prompts, chat messages, or personal information.
+prompts, chat messages, command text, action output, token values, or personal
+information.
+That same anonymous telemetry floor now also permits only content-free Pulse
+Patrol control and governed Pulse Intelligence operations adoption flags and
+counters inside the same rotating 30-day telemetry window:
+configured/active/completed/resolved governed-operation and approved-execution
+adoption booleans, primary Patrol-control completed/resolved and paid-cohort
+adoption booleans, legacy Pro activation mirrors where needed for cohort continuity,
+source-specific native
+Assistant, external-agent, and `pulse-mcp` adapter operations-loop,
+approved-execution, approved-action-success, and resolved-loop adoption
+booleans, governed-operation workflow starter request counts for the canonical
+`pulse_operations_loop` prompt split by total, native Assistant, first-party
+Patrol, primary Patrol-control, legacy Pro entry-point, and Pulse MCP surfaces, Assistant AI call
+counts, Assistant governed-context AI call counts, Assistant governed-tool call counts, Patrol AI call counts, Patrol run/
+new-finding/investigation/resolved-finding/autofix counts, external-agent/MCP
+readiness and recent-use booleans including the adapter-origin `pulse-mcp`
+recent-use boolean, action-plan counts, approval-request counts,
+rejected-action-decision counts, approved-action-decision counts,
+approved-action-attempt counts, and approved-action-success counts. Those fields may measure whether Patrol,
+Assistant, external agents, approvals, and governed actions form an adopted
+governed operation, whether an operator entered the guided Patrol-control
+starter, which source carried the stage, whether the Patrol control journey
+reached a terminal approve/reject decision or the stricter
+approved-and-verified resolved outcome, whether that path reached approved
+action-execution depth, and
+whether approved governed actions completed successfully, were rejected before
+execution, or coincided with content-free Patrol resolution,
+but they must not include tool names, tool inputs, tool outputs, prompts,
+responses, chat messages, command text, action output, approval actors,
+approval reasons, token values, token counts, resource IDs, finding IDs, or
+other local identifiers.
+Governed-operation workflow starter telemetry is entry-point evidence only: a
+successful starter render may make the coarse active-loop boolean true, but it
+must not by itself count as contextual collaboration, approved execution,
+verification, resolved finding evidence, or a completed governed operation.
+Completed governed-operation telemetry is approve/reject evidence, not a pending
+request shortcut: `pulse_intelligence_complete_operations_loop_30d` and the
+source-specific operations-loop booleans may be true only when the same
+content-free telemetry window contains Patrol issue evidence, contextual
+Assistant/MCP/external-agent collaboration, and either a rejected action
+decision, an approved action decision, or approved execution evidence. Generic
+Patrol runs, Patrol AI calls, action plans, and approval requests may contribute
+to activity or governed-action reach, but they must not complete the loop
+without issue-backed Patrol evidence and a real decision/outcome signal.
+The public privacy disclosure table is the operator-facing inventory for that
+same payload. `docs/PRIVACY.md` and
+`frontend-modern/public/docs/PRIVACY.md` must name every
+`pulse_intelligence_*` field exported by `internal/telemetry.Ping` using Patrol
+control and governed-operation vocabulary, including source-specific Assistant,
+direct external-agent, and `pulse-mcp` governed-operation booleans, workflow
+starter counts including primary Patrol control and legacy Pro entry-point counts,
+Patrol-control completed/resolved booleans, paid Patrol-control cohort booleans,
+legacy Pro activation mirrors, rejected decisions, and
+approved-action outcome counts, so runtime telemetry can never grow a Patrol
+control or legacy activation signal that is invisible to operators inspecting
+outbound usage data.
+External-agent/MCP recent-use is derived from content-free authenticated
+agent-surface capability activity by a manifest-capable API token, not from
+broad API token last-use metadata. The activity class may identify only the
+coarse manifest category being used, never resource IDs, finding IDs, node IDs,
+request bodies, outputs, token identity, or prompt/chat content.
+The `pulse-mcp` adapter may additionally mark requests with a content-free
+surface-origin header so telemetry can distinguish adapter use from direct
+HTTP agent use without recording the client identity, prompt, request payload,
+route parameters, or local resource identifiers.
+External-agent/MCP readiness is derived from a non-expired API token that
+covers every scope required by the published Pulse MCP operations-loop
+capability set. This keeps OpenCode, Claude Code, Claude Desktop, `pulse-mcp`,
+and direct HTTP agent setups measurable only when they can run the same
+governed loop, without treating generic `ai:chat` tokens as external-agent
+readiness and without requiring the operator to grant every manifest scope.
+The operations-loop status endpoint may expose only the resulting boolean; it
+must not expose token identity, token names, token counts, token last-use
+metadata, or the specific matching scopes.
+The Pulse Pro license-server telemetry ingest may persist those same
+content-free Pulse Intelligence fields only alongside the canonical coarse
+`paid_license` posture and received timestamp, so
+`scripts/telemetry_adoption_report.py` can summarize Patrol-control and governed-operation adoption,
+7-day retention windows, latest paid/free posture, source-window
+entry-to-retention cohorts, paid Patrol-control completed/resolved
+cohorts, and observed free-to-paid conversion counts without linking telemetry
+to customer accounts or storing exact commercial tiers. The report may also
+derive or persist a completed governed-operation signal from those same anonymous
+fields, but completion may only mean observed Patrol
+issue evidence plus Assistant governed-context or MCP collaboration activity
+plus approved/rejected governed-action decision evidence inside the source window;
+approved action success may only mean a content-free successful completion
+counter derived from approved action audit state. Neither signal may imply that
+Pulse stored prompts, findings, resource identifiers, command payloads,
+verification detail, or action outputs to prove that linkage.
+The stricter approved-execution loop signal may only mean that the same Patrol
+issue evidence and Assistant governed-context or MCP collaboration
+signals also coincided with at least one approved governed-action attempt in
+the source window. It may not encode action targets, command text, execution
+output, verification detail, approver identity, or approval rationale.
+The resolved governed-operation signal is stricter again: it may only mean that
+Patrol resolved or fix-verified at least one finding in the source window, the
+same window had Assistant governed-context/tool or MCP/external-agent
+collaboration, and at least one approved governed action completed
+successfully. It may not encode finding IDs, resource IDs, fix details,
+verification detail, command text, action output, approver identity, or a
+causal claim that the approved action directly resolved the finding.
+The Patrol control completed-loop status count follows that same anonymous
+evidence contract: it may only mean the same content-free window also had
+Patrol issue evidence, contextual collaboration, and either a rejected governed
+decision or an approved governed decision with verified outcome proof. Legacy
+Patrol autonomy and Pro activation completed-loop fields may mirror that value
+for compatibility, but must not add checkout/account identity, prompt content,
+action identity, resource identity, finding identity, token identity, or a
+causality claim.
+The Patrol control resolved-loop status count follows that same anonymous
+evidence contract: it may only mean the same content-free window also had
+Patrol issue evidence, contextual collaboration, an approved governed decision,
+and verified outcome proof. It must not require MCP readiness, treat rejected
+decisions as resolved proof, or add checkout/account identity, prompt content,
+action identity, resource identity, finding identity, or token identity. Both
+the status projection and outbound telemetry must derive these Patrol control
+completed/resolved values through the shared `internal/telemetry` proof
+classifier so privacy-sensitive reporting cannot drift into a richer runtime
+event join in one caller.
 That same anonymous telemetry contract also treats `install_id` as a rotating
 pseudonymous identifier, not a lifetime install handle. The runtime may keep a
 local rotating UUID so startup and heartbeat pings can still represent an
@@ -804,6 +1057,13 @@ canonical scope constants. `apiTokenManagerModel.ts` may expose a
 `getAPITokenScopePresets()` factory, but it must not freeze preset scope data
 at module-load time in a way that can break security settings initialization in
 production chunks.
+The manifest-derived full-surface preset may keep the internal
+`pulse_intelligence_agent` id for route compatibility, but its visible label and
+default token name must be `Patrol external agent` so API Access presents the
+token as connected-agent access to Patrol work rather than an internal
+Pulse Intelligence proof surface. Its description must frame the preset as
+scopes for connected agents that use Pulse MCP or HTTP to read context and
+request Patrol work, not as generic external-client access.
 That same revoke/usage surface must also preserve canonical local operator
 identity for the runtimes currently bound to a token. When token usage is
 attributed to Docker hosts, agents, PBS, PMG, or similar monitored systems,

@@ -136,6 +136,31 @@ func TestHandleDiagnostics_CacheHit(t *testing.T) {
 	}
 }
 
+func TestAIChatDiagnosticUsesNativeAssistantRuntimeField(t *testing.T) {
+	payload := DiagnosticsInfo{
+		AIChat: &AIChatDiagnostic{
+			Enabled:                   true,
+			Running:                   true,
+			Healthy:                   true,
+			AssistantRuntimeConnected: true,
+		},
+	}.NormalizeCollections()
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal diagnostics: %v", err)
+	}
+	text := string(body)
+	if !strings.Contains(text, `"assistantRuntimeConnected":true`) {
+		t.Fatalf("diagnostics payload must expose native Assistant runtime connectivity: %s", text)
+	}
+	for _, forbidden := range []string{"mcpConnected", "mcpToolCount"} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("diagnostics payload must not expose legacy MCP field %q: %s", forbidden, text)
+		}
+	}
+}
+
 func TestHandleDiagnostics_CacheIsScopedByOrg(t *testing.T) {
 	cfg := &config.Config{DataPath: t.TempDir()}
 	monitor := newMonitorForDiagnostics(t, cfg)

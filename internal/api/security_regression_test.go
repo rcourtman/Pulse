@@ -1573,6 +1573,9 @@ func TestRelayMobileAccessScopeDeniesAdjacentAIRoutes(t *testing.T) {
 	}{
 		{method: http.MethodGet, path: "/api/ai/models", body: "", want: config.ScopeAIChat},
 		{method: http.MethodGet, path: "/api/ai/status", body: "", want: config.ScopeAIChat},
+		{method: http.MethodGet, path: "/api/ai/assistant/surface-tools", body: "", want: config.ScopeAIChat},
+		{method: http.MethodPost, path: "/api/ai/workflow-prompts/render", body: `{}`, want: config.ScopeAIChat},
+		{method: http.MethodPost, path: "/api/ai/workflow-prompts/activity", body: `{}`, want: config.ScopeAIChat},
 		{method: http.MethodGet, path: "/api/ai/agents", body: "", want: config.ScopeAIExecute},
 		{method: http.MethodGet, path: "/api/ai/approvals/approval-1", body: "", want: config.ScopeAIExecute},
 		{method: http.MethodDelete, path: "/api/ai/patrol/findings", body: "", want: config.ScopeAIExecute},
@@ -3214,6 +3217,9 @@ func TestAIChatEndpointsRequireAIChatScope(t *testing.T) {
 		body   string
 	}{
 		{method: http.MethodGet, path: "/api/ai/models", body: ""},
+		{method: http.MethodGet, path: "/api/ai/assistant/surface-tools", body: ""},
+		{method: http.MethodPost, path: "/api/ai/workflow-prompts/render", body: `{}`},
+		{method: http.MethodPost, path: "/api/ai/workflow-prompts/activity", body: `{}`},
 		{method: http.MethodPost, path: "/api/ai/chat", body: `{}`},
 		{method: http.MethodGet, path: "/api/ai/sessions", body: ""},
 		{method: http.MethodGet, path: "/api/ai/sessions/session-1", body: ""},

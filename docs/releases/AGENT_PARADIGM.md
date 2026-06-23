@@ -9,8 +9,8 @@ Trim or expand as the cut requires; this file is the source draft._
 ## Headline
 
 Pulse v6 ships an agent-paradigm substrate so external agents
-(Claude Desktop, Claude Code, custom MCP clients, plain HTTP
-consumers) can drive Pulse with the same context an in-process
+(Claude Desktop, Claude Code, OpenCode, other MCP clients, plain
+HTTP consumers) can drive Pulse with the same context an in-process
 Patrol or Assistant has.
 
 ## What an operator gets
@@ -20,20 +20,23 @@ Patrol or Assistant has.
   running instance declares, grouped by category (Context,
   Operator state, Patrol findings, Action governance), with
   scope, method, path, and the stable error codes each emits.
-  The section also generates a Claude Desktop / Claude Code
-  config snippet pre-filled with the deployment's own URL, so
-  wiring an agent is copy, paste, and add a token.
+  The section also generates client-ready MCP config snippets
+  pre-filled with the deployment's own URL: OpenCode's native
+  `opencode.json` / `mcp` shape plus the common `mcpServers` shape
+  for Claude-style clients. Wiring an agent is copy, paste, and add a
+  token.
 
-- **Drivable from Claude in one command.** A new `pulse-mcp`
+- **Drivable from MCP clients in one command.** A new `pulse-mcp`
   server adapter ships in the Pulse repo (`cmd/pulse-mcp/`)
   with a published distribution path. Install from the Pulse
   GitHub Release using the one-line installer:
   `curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install-mcp.sh | bash`
   (or the matching `install-mcp.ps1` PowerShell installer on
-  Windows). Wire it into Claude Desktop or Claude Code per
-  [`cmd/pulse-mcp/README.md`](../../cmd/pulse-mcp/README.md) and
-  Pulse's tools appear natively. Each MCP tool is one entry in
-  the canonical capabilities manifest; adding a capability on
+  Windows). Wire it into any MCP-speaking client per
+  [`cmd/pulse-mcp/README.md`](../../cmd/pulse-mcp/README.md);
+  the README carries the OpenCode-native `mcp` block plus the common
+  `mcpServers` block for Claude-style clients. Each MCP tool is one entry
+  in the canonical capabilities manifest; adding a capability on
   the backend extends the MCP surface automatically. An optional
   `--emit-notifications` flag translates Pulse's SSE event
   stream (`finding.created`, `approval.pending`,
@@ -55,7 +58,7 @@ Patrol or Assistant has.
 
 ## Four axes
 
-- **Discovery.** `/api/agent/capabilities` is a hand-authored,
+- **Discovery.** `/api/agent/capabilities` is a canonical,
   unauthenticated manifest agents fetch at startup to learn
   what's available.
 - **Read.** `/api/agent/resource-context/{id}` returns the
@@ -84,11 +87,12 @@ Patrol or Assistant has.
   Reads as a worked example for anyone building a custom
   integration in any language.
 - **MCP server:** [`cmd/pulse-mcp`](../../cmd/pulse-mcp/). Stdio
-  JSON-RPC adapter for Claude Desktop and Claude Code. Mint a
-  Pulse API token with `monitoring:read` (and
-  `monitoring:write` for operator-state writes), set
-  `PULSE_API_TOKEN` in the client's env block, and Pulse's
-  capabilities appear as MCP tools.
+  JSON-RPC adapter for MCP-speaking clients. For the full current
+  surface, mint a Pulse API token with the manifest `requiredScopes`
+  list shown in Settings → API Access and the README. Narrower
+  read-only tokens such as `monitoring:read` remain valid for the
+  read-only subset; set `PULSE_API_TOKEN` in the client's env block,
+  and Pulse's capabilities appear as MCP tools.
 - **Contract reference:**
   [`docs/AGENT_SUBSTRATE.md`](../AGENT_SUBSTRATE.md) is the
   in-repo session marker. The full subsystem contract lives in

@@ -2,8 +2,12 @@ package api
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/stretchr/testify/assert"
@@ -93,6 +97,64 @@ func TestChatServiceAdapter_GetMessages(t *testing.T) {
 	// Try delete
 	err = adapter.DeleteSession(context.Background(), session.ID)
 	require.NoError(t, err)
+}
+
+func TestAdaptChatMessageUsesSharedProviderToolCallShape(t *testing.T) {
+	success := true
+	msg := adaptChatMessage(chat.Message{
+		ID:        "msg-1",
+		Role:      "assistant",
+		Content:   "checking",
+		Timestamp: time.Unix(100, 0),
+		ToolCalls: []chat.ToolCall{{
+			ID:               "call-1",
+			Name:             "diagnose",
+			Output:           "in-app only",
+			Success:          &success,
+			ThoughtSignature: json.RawMessage(`{"provider":"gemini"}`),
+		}},
+		ToolResult: &chat.ToolResult{
+			ToolUseID: "call-1",
+			Content:   "done",
+			IsError:   true,
+		},
+	})
+
+	require.Len(t, msg.ToolCalls, 1)
+	var shared agentcapabilities.ProviderToolCall = msg.ToolCalls[0]
+	assert.Equal(t, "call-1", shared.ID)
+	assert.Equal(t, "diagnose", shared.Name)
+	assert.NotNil(t, shared.Input)
+
+	payload, err := json.Marshal(msg.ToolCalls[0])
+	require.NoError(t, err)
+	text := string(payload)
+	assert.Contains(t, text, `"input":{}`)
+	assert.Contains(t, text, `"thought_signature":{"provider":"gemini"}`)
+	assert.False(t, strings.Contains(text, `"output"`), text)
+	assert.False(t, strings.Contains(text, `"success"`), text)
+
+	require.NotNil(t, msg.ToolResult)
+	var sharedResult agentcapabilities.ProviderToolResult = *msg.ToolResult
+	assert.Equal(t, "call-1", sharedResult.ToolUseID)
+	assert.True(t, sharedResult.IsError)
+}
+
+func TestAdaptChatMessageDoesNotAliasToolCallInput(t *testing.T) {
+	input := map[string]interface{}{"resource_id": "vm/100"}
+	msg := adaptChatMessage(chat.Message{
+		ID:   "msg-1",
+		Role: "assistant",
+		ToolCalls: []chat.ToolCall{{
+			ID:    "call-1",
+			Name:  "diagnose",
+			Input: input,
+		}},
+	})
+
+	require.Len(t, msg.ToolCalls, 1)
+	msg.ToolCalls[0].Input["resource_id"] = "vm/101"
+	assert.Equal(t, "vm/100", input["resource_id"])
 }
 
 func TestChatServiceAdapter_ReloadConfig(t *testing.T) {

@@ -4,13 +4,15 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 )
 
 // registerAlertsTools registers the pulse_alerts tool
 func (e *PulseToolExecutor) registerAlertsTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
-			Name: "pulse_alerts",
+			Name: agentcapabilities.PulseAlertsToolName,
 			Description: `Manage alerts and AI patrol findings.
 
 Actions:
@@ -47,19 +49,19 @@ Examples:
 						Type:        "string",
 						Description: "Filter by resource ID (for findings)",
 					},
-					"finding_id": {
+					agentcapabilities.FindingIDArgumentName: {
 						Type:        "string",
 						Description: "Finding ID (for resolve, dismiss)",
 					},
-					"resolution_note": {
+					agentcapabilities.ResolutionNoteArgumentName: {
 						Type:        "string",
-						Description: "Resolution note (for resolve action)",
+						Description: "Optional resolution note (for resolve action)",
 					},
-					"note": {
+					agentcapabilities.NoteArgumentName: {
 						Type:        "string",
-						Description: "Explanation note (for dismiss action)",
+						Description: "Optional explanation note (for dismiss action)",
 					},
-					"reason": {
+					agentcapabilities.ReasonArgumentName: {
 						Type:        "string",
 						Description: "Dismissal reason: not_an_issue, expected_behavior, will_fix_later",
 						Enum:        []string{"not_an_issue", "expected_behavior", "will_fix_later"},
@@ -92,9 +94,10 @@ Examples:
 			return exec.executeAlerts(ctx, args)
 		},
 		Governance: ToolGovernance{
-			ActionMode:     ToolActionMixed,
-			ApprovalPolicy: "read/list actions are safe; finding resolution and dismissal require the alerts governance path",
-			Summary:        "Reviews alert and finding state and records governed finding decisions.",
+			ActionMode:      ToolActionMixed,
+			ApprovalPolicy:  ToolApprovalActionPlan,
+			ApprovalSummary: "read/list actions are safe; finding resolution and dismissal require the alerts governance path",
+			Summary:         "Reviews alert and finding state and records governed finding decisions.",
 		},
 	})
 }
@@ -285,14 +288,11 @@ func canonicalAlertFindingResourceType(raw string) string {
 }
 
 func (e *PulseToolExecutor) executeResolveFinding(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
-	findingID, _ := args["finding_id"].(string)
-	resolutionNote, _ := args["resolution_note"].(string)
+	findingID, _ := args[agentcapabilities.FindingIDArgumentName].(string)
+	resolutionNote, _ := args[agentcapabilities.ResolutionNoteArgumentName].(string)
 
 	if findingID == "" {
-		return NewErrorResult(fmt.Errorf("finding_id is required")), nil
-	}
-	if resolutionNote == "" {
-		return NewErrorResult(fmt.Errorf("resolution_note is required")), nil
+		return NewErrorResult(fmt.Errorf("%s is required", agentcapabilities.FindingIDArgumentName)), nil
 	}
 
 	if e.findingsManager == nil {
@@ -304,27 +304,24 @@ func (e *PulseToolExecutor) executeResolveFinding(_ context.Context, args map[st
 	}
 
 	return NewJSONResult(map[string]interface{}{
-		"success":         true,
-		"finding_id":      findingID,
-		"action":          "resolved",
-		"resolution_note": resolutionNote,
-		"verification":    map[string]interface{}{"ok": true, "method": "store"},
+		"success":                               true,
+		agentcapabilities.FindingIDArgumentName: findingID,
+		"action":                                "resolved",
+		agentcapabilities.ResolutionNoteArgumentName: resolutionNote,
+		"verification": map[string]interface{}{"ok": true, "method": "store"},
 	}), nil
 }
 
 func (e *PulseToolExecutor) executeDismissFinding(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
-	findingID, _ := args["finding_id"].(string)
-	reason, _ := args["reason"].(string)
-	note, _ := args["note"].(string)
+	findingID, _ := args[agentcapabilities.FindingIDArgumentName].(string)
+	reason, _ := args[agentcapabilities.ReasonArgumentName].(string)
+	note, _ := args[agentcapabilities.NoteArgumentName].(string)
 
 	if findingID == "" {
-		return NewErrorResult(fmt.Errorf("finding_id is required")), nil
+		return NewErrorResult(fmt.Errorf("%s is required", agentcapabilities.FindingIDArgumentName)), nil
 	}
 	if reason == "" {
-		return NewErrorResult(fmt.Errorf("reason is required")), nil
-	}
-	if note == "" {
-		return NewErrorResult(fmt.Errorf("note is required")), nil
+		return NewErrorResult(fmt.Errorf("%s is required", agentcapabilities.ReasonArgumentName)), nil
 	}
 
 	if e.findingsManager == nil {
@@ -336,12 +333,12 @@ func (e *PulseToolExecutor) executeDismissFinding(_ context.Context, args map[st
 	}
 
 	return NewJSONResult(map[string]interface{}{
-		"success":      true,
-		"finding_id":   findingID,
-		"action":       "dismissed",
-		"reason":       reason,
-		"note":         note,
-		"verification": map[string]interface{}{"ok": true, "method": "store"},
+		"success":                               true,
+		agentcapabilities.FindingIDArgumentName: findingID,
+		"action":                                "dismissed",
+		agentcapabilities.ReasonArgumentName:    reason,
+		agentcapabilities.NoteArgumentName:      note,
+		"verification":                          map[string]interface{}{"ok": true, "method": "store"},
 	}), nil
 }
 

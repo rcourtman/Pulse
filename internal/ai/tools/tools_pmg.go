@@ -3,13 +3,15 @@ package tools
 import (
 	"context"
 	"fmt"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 )
 
 // registerPMGTools registers the pulse_pmg tool
 func (e *PulseToolExecutor) registerPMGTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
-			Name:        "pulse_pmg",
+			Name:        agentcapabilities.PulsePMGToolName,
 			Description: `Query Proxmox Mail Gateway status and statistics. Types: status, mail_stats, queues, spam.`,
 			InputSchema: InputSchema{
 				Type: "object",
@@ -31,9 +33,10 @@ func (e *PulseToolExecutor) registerPMGTools() {
 			return exec.executePMG(ctx, args)
 		},
 		Governance: ToolGovernance{
-			ActionMode:     ToolActionRead,
-			ApprovalPolicy: "no approval required",
-			Summary:        "Reads Proxmox Mail Gateway status, queue, spam, and mail statistics.",
+			ActionMode:      ToolActionRead,
+			ApprovalPolicy:  ToolApprovalScopeOnly,
+			ApprovalSummary: "no approval required",
+			Summary:         "Reads Proxmox Mail Gateway status, queue, spam, and mail statistics.",
 		},
 	})
 }

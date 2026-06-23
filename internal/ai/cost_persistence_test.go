@@ -35,6 +35,8 @@ func TestCostPersistenceAdapter_SaveAndLoad(t *testing.T) {
 			RequestModel:  "gpt-4",
 			ResponseModel: "gpt-4",
 			UseCase:       "patrol",
+			ContextScope:  "patrol_run",
+			ToolCallCount: 4,
 			InputTokens:   100,
 			OutputTokens:  50,
 			TargetType:    "vm",
@@ -47,6 +49,7 @@ func TestCostPersistenceAdapter_SaveAndLoad(t *testing.T) {
 			RequestModel:  "claude-3-sonnet",
 			ResponseModel: "claude-3-sonnet",
 			UseCase:       "chat",
+			ContextScope:  "resource_context",
 			InputTokens:   200,
 			OutputTokens:  100,
 			TargetType:    "container",
@@ -80,6 +83,12 @@ func TestCostPersistenceAdapter_SaveAndLoad(t *testing.T) {
 	}
 	if loaded[0].UseCase != events[0].UseCase {
 		t.Errorf("expected use case %q, got %q", events[0].UseCase, loaded[0].UseCase)
+	}
+	if loaded[0].ContextScope != events[0].ContextScope {
+		t.Errorf("expected context scope %q, got %q", events[0].ContextScope, loaded[0].ContextScope)
+	}
+	if loaded[0].ToolCallCount != events[0].ToolCallCount {
+		t.Errorf("expected tool call count %d, got %d", events[0].ToolCallCount, loaded[0].ToolCallCount)
 	}
 }
 

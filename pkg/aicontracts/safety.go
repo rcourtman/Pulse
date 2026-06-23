@@ -104,6 +104,83 @@ func IsDestructiveCommand(command string) bool {
 	return IsBlockedCommand(command)
 }
 
+// ClassifyAutomationRisk classifies a command for governed autonomous execution.
+// It is intentionally stricter than approval-list risk display: unknown write
+// commands are high risk until Pulse can prove they are safe enough to run
+// without an operator decision.
+func ClassifyAutomationRisk(command string) RiskLevel {
+	cmd := strings.TrimSpace(command)
+	if cmd == "" {
+		return RiskHigh
+	}
+	if IsBlockedCommand(cmd) {
+		return RiskCritical
+	}
+	if containsStdoutRedirection(cmd) || containsAutomationRiskPattern(cmd, highAutomationRiskPatterns) {
+		return RiskHigh
+	}
+	if IsReadOnlyCommand(cmd) {
+		return RiskLow
+	}
+	if containsAutomationRiskPattern(cmd, mediumAutomationRiskPatterns) {
+		return RiskMedium
+	}
+	return RiskHigh
+}
+
+var highAutomationRiskPatterns = []string{
+	"rm ", "rm\t", "rmdir",
+	"shutdown", "reboot", "poweroff", "halt",
+	"systemctl restart", "systemctl stop", "systemctl start",
+	"systemctl enable", "systemctl disable",
+	"service ",
+	"apt ", "apt-get ", "yum ", "dnf ", "pacman ", "apk ", "brew ",
+	"pip install", "pip uninstall", "npm install", "npm uninstall", "cargo install",
+	"docker rm", "docker stop", "docker kill", "docker restart", "docker exec",
+	"kubectl exec",
+	"kill ", "killall ", "pkill ",
+	"dd ", "mkfs", "fdisk", "parted", "mkswap",
+	"iptables", "firewall-cmd", "ufw ",
+	"truncate",
+	"chmod ", "chown ", "chgrp ",
+	"useradd", "userdel", "usermod", "passwd", "chpasswd",
+	"crontab -", "visudo", "vipw",
+	"mount ", "umount ", "modprobe", "rmmod", "insmod", "sysctl -w",
+	"sudo",
+	"| tee ",
+}
+
+var mediumAutomationRiskPatterns = []string{
+	"mv ", "cp ",
+	"sed -i", "awk -i",
+	"touch ", "mkdir ",
+	"wget -o", "wget --output",
+	"tar -x", "tar x", "unzip ", "gunzip ",
+}
+
+func containsAutomationRiskPattern(command string, patterns []string) bool {
+	cmdLower := strings.ToLower(command)
+	for _, pattern := range patterns {
+		if strings.Contains(cmdLower, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
+func containsStdoutRedirection(command string) bool {
+	for i := 0; i < len(command); i++ {
+		if command[i] != '>' {
+			continue
+		}
+		if i > 0 && command[i-1] == '2' {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
 // ReadOnlyPatterns defines commands that are safe to execute without approval.
 var ReadOnlyPatterns = []string{
 	// File/system inspection

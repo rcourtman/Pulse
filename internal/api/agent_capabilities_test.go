@@ -6,6 +6,9 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
 func TestHandleAgentCapabilitiesManifest_ReturnsStableShape(t *testing.T) {
@@ -33,8 +36,109 @@ func TestHandleAgentCapabilitiesManifest_ReturnsStableShape(t *testing.T) {
 	if manifest.Version != "v1" {
 		t.Errorf("version pin: got %q want v1", manifest.Version)
 	}
+	if manifest.SurfaceContract.Core.Label != "Pulse Intelligence Core" {
+		t.Fatalf("manifest must expose Pulse Intelligence Core surface contract, got %+v", manifest.SurfaceContract)
+	}
+	if len(manifest.SurfaceContract.OperatorSurfaces) != 2 {
+		t.Fatalf("manifest access path count = %d, want Assistant and MCP", len(manifest.SurfaceContract.OperatorSurfaces))
+	}
+	surfaceIDs := map[string]bool{}
+	for _, surface := range manifest.SurfaceContract.OperatorSurfaces {
+		surfaceIDs[surface.ID] = true
+	}
+	if !surfaceIDs["pulse_assistant"] || !surfaceIDs["pulse_mcp"] || surfaceIDs["pulse_patrol"] {
+		t.Fatalf("manifest compatibility access paths must be Assistant and MCP; Patrol is the primary built-in operator component, got %+v", manifest.SurfaceContract.OperatorSurfaces)
+	}
+	if len(manifest.SurfaceToolContracts) != 1 {
+		t.Fatalf("manifest surfaceToolContracts = %+v, want static Pulse MCP tool posture", manifest.SurfaceToolContracts)
+	}
+	mcpSurfaceTools := manifest.SurfaceToolContracts[0]
+	if mcpSurfaceTools.SurfaceID != agentcapabilities.SurfaceIDPulseMCP || mcpSurfaceTools.ToolSource != agentcapabilities.SurfaceToolSourceCapabilityManifest {
+		t.Fatalf("manifest MCP surface tool contract = %+v", mcpSurfaceTools)
+	}
+	for _, name := range mcpSurfaceTools.ToolNames {
+		if name == agentcapabilities.EventSubscriptionCapabilityName || name == agentcapabilities.PulseQuestionToolName {
+			t.Fatalf("manifest MCP surface tool names must exclude streaming/native tools, got %#v", mcpSurfaceTools.ToolNames)
+		}
+	}
 	if len(manifest.Capabilities) == 0 {
 		t.Fatal("manifest must declare at least one capability")
+	}
+	if len(manifest.Categories) == 0 {
+		t.Fatal("manifest must declare category presentation metadata")
+	}
+	wantPrompts := agentcapabilities.ProjectPulseWorkflowPrompts(manifest.Capabilities)
+	if len(manifest.WorkflowPrompts) == 0 {
+		t.Fatal("manifest must declare shared workflow prompts")
+	}
+	if len(manifest.WorkflowPrompts) != len(wantPrompts) {
+		t.Fatalf("manifest workflowPrompts length = %d, want %d", len(manifest.WorkflowPrompts), len(wantPrompts))
+	}
+	for i := range manifest.WorkflowPrompts {
+		if manifest.WorkflowPrompts[i].Name != wantPrompts[i].Name {
+			t.Fatalf("manifest workflowPrompts[%d].name = %q, want %q", i, manifest.WorkflowPrompts[i].Name, wantPrompts[i].Name)
+		}
+	}
+	wantScopes := agentcapabilities.RequiredCapabilityScopes(manifest.Capabilities)
+	if strings.Join(manifest.RequiredScopes, "\n") != strings.Join(wantScopes, "\n") {
+		t.Fatalf("manifest requiredScopes = %v, want %v", manifest.RequiredScopes, wantScopes)
+	}
+	knownCategories := map[string]bool{}
+	for _, category := range manifest.Categories {
+		if category.ID == "" || category.Label == "" {
+			t.Fatalf("manifest category metadata must declare id and label, got %+v", category)
+		}
+		knownCategories[category.ID] = true
+	}
+
+	foundPlanAction := false
+	foundFleetContextOutputSchema := false
+	foundListNodesOutputSchema := false
+	missingOutputSchemas := []string{}
+	for _, cap := range manifest.Capabilities {
+		if !knownCategories[cap.Category] {
+			t.Errorf("capability %q category %q missing from manifest category metadata", cap.Name, cap.Category)
+		}
+		if agentcapabilities.IsRequestResponseCapability(cap) && strings.TrimSpace(cap.ResponseShape) != "" && len(cap.OutputSchema) == 0 {
+			missingOutputSchemas = append(missingOutputSchemas, cap.Name)
+		}
+		if len(cap.OutputSchema) > 0 {
+			var schema map[string]any
+			if err := json.Unmarshal(cap.OutputSchema, &schema); err != nil {
+				t.Errorf("capability %q outputSchema must be valid JSON Schema: %v", cap.Name, err)
+			}
+			if schema["type"] != "object" {
+				t.Errorf("capability %q outputSchema type = %v, want object for MCP structuredContent", cap.Name, schema["type"])
+			}
+		}
+		if cap.Name == agentcapabilities.FleetContextCapabilityName && strings.Contains(string(cap.OutputSchema), `"resources"`) {
+			foundFleetContextOutputSchema = true
+		}
+		if cap.Name == "list_nodes" && strings.Contains(string(cap.OutputSchema), `"items"`) && strings.Contains(string(cap.OutputSchema), `"count"`) {
+			foundListNodesOutputSchema = true
+		}
+		if cap.Name != agentcapabilities.PlanActionCapabilityName {
+			continue
+		}
+		foundPlanAction = true
+		if cap.ActionMode != agentcapabilities.ActionModeWrite {
+			t.Errorf("plan_action actionMode: got %q want %q", cap.ActionMode, agentcapabilities.ActionModeWrite)
+		}
+		if cap.ApprovalPolicy != agentcapabilities.ApprovalPolicyActionPlan {
+			t.Errorf("plan_action approvalPolicy: got %q want %q", cap.ApprovalPolicy, agentcapabilities.ApprovalPolicyActionPlan)
+		}
+	}
+	if !foundPlanAction {
+		t.Fatalf("manifest must expose %s capability", agentcapabilities.PlanActionCapabilityName)
+	}
+	if !foundFleetContextOutputSchema {
+		t.Fatalf("manifest must expose %s outputSchema so structured MCP results are typed", agentcapabilities.FleetContextCapabilityName)
+	}
+	if len(missingOutputSchemas) > 0 {
+		t.Fatalf("manifest request/response capabilities with responseShape must expose outputSchema: %v", missingOutputSchemas)
+	}
+	if !foundListNodesOutputSchema {
+		t.Fatal("manifest must expose list_nodes outputSchema for array structuredContent wrapper")
 	}
 }
 
@@ -53,7 +157,8 @@ func TestAgentCapabilitiesManifest_NamesAreUniqueAndSnakeCase(t *testing.T) {
 	// non-snake_case would break the convention agents use for tool
 	// names. Pin both invariants.
 	seen := map[string]bool{}
-	for _, cap := range agentCapabilitiesManifest.Capabilities {
+	manifest := agentcapabilities.CanonicalManifest()
+	for _, cap := range manifest.Capabilities {
 		if seen[cap.Name] {
 			t.Errorf("duplicate capability name %q — names are agent-stable identifiers", cap.Name)
 		}
@@ -75,7 +180,8 @@ func TestAgentCapabilitiesManifest_NamesAreUniqueAndSnakeCase(t *testing.T) {
 func TestAgentCapabilitiesManifest_EveryCapabilityDeclaresMethodPathScope(t *testing.T) {
 	// Without method/path/scope, an agent can't actually call the
 	// capability. These three are the minimum viable contract.
-	for _, cap := range agentCapabilitiesManifest.Capabilities {
+	manifest := agentcapabilities.CanonicalManifest()
+	for _, cap := range manifest.Capabilities {
 		if cap.Method == "" {
 			t.Errorf("capability %q missing method", cap.Name)
 		}
@@ -94,19 +200,147 @@ func TestAgentCapabilitiesManifest_EveryCapabilityDeclaresMethodPathScope(t *tes
 	}
 }
 
+func TestAgentCapabilitiesManifest_ScopesMatchAPIAuthConstants(t *testing.T) {
+	expected := map[string]string{
+		agentcapabilities.ResourceContextCapabilityName:      config.ScopeMonitoringRead,
+		agentcapabilities.FleetContextCapabilityName:         config.ScopeMonitoringRead,
+		agentcapabilities.OperationsLoopStatusCapabilityName: config.ScopeMonitoringRead,
+		"list_nodes":                      config.ScopeSettingsRead,
+		"add_node":                        config.ScopeSettingsWrite,
+		"update_node":                     config.ScopeSettingsWrite,
+		"remove_node":                     config.ScopeSettingsWrite,
+		"test_node_credentials":           config.ScopeSettingsWrite,
+		"test_node_connection":            config.ScopeSettingsWrite,
+		"refresh_node_cluster_membership": config.ScopeSettingsWrite,
+		"discover_lan":                    config.ScopeSettingsWrite,
+		agentcapabilities.GetOperatorStateCapabilityName:   config.ScopeMonitoringRead,
+		agentcapabilities.SetOperatorStateCapabilityName:   config.ScopeMonitoringWrite,
+		agentcapabilities.ClearOperatorStateCapabilityName: config.ScopeMonitoringWrite,
+		agentcapabilities.EventSubscriptionCapabilityName:  config.ScopeMonitoringRead,
+		agentcapabilities.ListFindingsCapabilityName:       config.ScopeAIExecute,
+		agentcapabilities.AcknowledgeFindingCapabilityName: config.ScopeAIExecute,
+		agentcapabilities.SnoozeFindingCapabilityName:      config.ScopeAIExecute,
+		agentcapabilities.DismissFindingCapabilityName:     config.ScopeAIExecute,
+		agentcapabilities.ResolveFindingCapabilityName:     config.ScopeAIExecute,
+		agentcapabilities.PlanActionCapabilityName:         config.ScopeAIExecute,
+		agentcapabilities.DecideActionCapabilityName:       config.ScopeAIExecute,
+		agentcapabilities.ExecuteActionCapabilityName:      config.ScopeAIExecute,
+	}
+
+	manifest := agentcapabilities.CanonicalManifest()
+	if len(manifest.Capabilities) != len(expected) {
+		t.Fatalf("expected scope map for every manifest capability: manifest=%d expected=%d", len(manifest.Capabilities), len(expected))
+	}
+
+	for _, cap := range manifest.Capabilities {
+		want, ok := expected[cap.Name]
+		if !ok {
+			t.Errorf("capability %q missing from expected API scope map", cap.Name)
+			continue
+		}
+		if cap.Scope != want {
+			t.Errorf("capability %q scope = %q, want API auth scope %q", cap.Name, cap.Scope, want)
+		}
+	}
+}
+
+func TestAgentCapabilitiesManifest_PatrolFindingScopesMatchAPIRoutes(t *testing.T) {
+	manifest := agentcapabilities.CanonicalManifest()
+	byName := map[string]agentcapabilities.Capability{}
+	for _, cap := range manifest.Capabilities {
+		byName[cap.Name] = cap
+	}
+
+	expected := map[string]relayMobileRuntimeRouteID{
+		agentcapabilities.ListFindingsCapabilityName:       relayMobileRoutePatrolFindingsList,
+		agentcapabilities.AcknowledgeFindingCapabilityName: relayMobileRoutePatrolAcknowledge,
+		agentcapabilities.SnoozeFindingCapabilityName:      relayMobileRoutePatrolSnooze,
+		agentcapabilities.DismissFindingCapabilityName:     relayMobileRoutePatrolDismiss,
+	}
+	for capabilityName, routeID := range expected {
+		capability, ok := byName[capabilityName]
+		if !ok {
+			t.Fatalf("manifest missing Patrol finding capability %q", capabilityName)
+		}
+		route := relayMobileRuntimeRouteSpecFor(routeID)
+		if capability.Method != route.method || capability.Path != route.path || capability.Scope != route.requiredScope {
+			t.Fatalf("%s manifest route/scope = %s %s => %s, want API route %s %s => %s",
+				capabilityName, capability.Method, capability.Path, capability.Scope, route.method, route.path, route.requiredScope)
+		}
+	}
+
+	resolve, ok := byName[agentcapabilities.ResolveFindingCapabilityName]
+	if !ok {
+		t.Fatalf("manifest missing Patrol finding capability %q", agentcapabilities.ResolveFindingCapabilityName)
+	}
+	if resolve.Method != http.MethodPost || resolve.Path != "/api/ai/patrol/resolve" || resolve.Scope != config.ScopeAIExecute {
+		t.Fatalf("%s manifest route/scope = %s %s => %s, want API route POST /api/ai/patrol/resolve => %s",
+			agentcapabilities.ResolveFindingCapabilityName, resolve.Method, resolve.Path, resolve.Scope, config.ScopeAIExecute)
+	}
+}
+
+func TestAgentCapabilitiesManifest_EveryCapabilityDeclaresGovernance(t *testing.T) {
+	// External agents need to know whether a capability is only a
+	// read, a non-persistent check/scan, or a write before choosing
+	// a tool. Keep that posture on the manifest instead of letting
+	// adapters infer it from HTTP method alone.
+	allowedActionModes := map[agentcapabilities.ActionMode]bool{
+		agentcapabilities.ActionModeRead:  true,
+		agentcapabilities.ActionModeMixed: true,
+		agentcapabilities.ActionModeWrite: true,
+	}
+	allowedApprovalPolicies := map[agentcapabilities.ApprovalPolicy]bool{
+		agentcapabilities.ApprovalPolicyScopeOnly:  true,
+		agentcapabilities.ApprovalPolicyActionPlan: true,
+	}
+
+	manifest := agentcapabilities.CanonicalManifest()
+	for _, cap := range manifest.Capabilities {
+		if !allowedActionModes[cap.ActionMode] {
+			t.Errorf("capability %q has unknown actionMode %q", cap.Name, cap.ActionMode)
+		}
+		if !allowedApprovalPolicies[cap.ApprovalPolicy] {
+			t.Errorf("capability %q has unknown approvalPolicy %q", cap.Name, cap.ApprovalPolicy)
+		}
+		if cap.Method == http.MethodGet && cap.ActionMode != agentcapabilities.ActionModeRead {
+			t.Errorf("GET capability %q actionMode = %q, want read", cap.Name, cap.ActionMode)
+		}
+		if cap.Category == "action" && cap.ApprovalPolicy != agentcapabilities.ApprovalPolicyActionPlan {
+			t.Errorf("action capability %q approvalPolicy = %q, want action_plan", cap.Name, cap.ApprovalPolicy)
+		}
+		if cap.Category != "action" && cap.ApprovalPolicy == agentcapabilities.ApprovalPolicyActionPlan {
+			t.Errorf("non-action capability %q must not claim action_plan approval policy", cap.Name)
+		}
+	}
+}
+
 func TestAgentCapabilitiesManifest_CategoriesAreClosed(t *testing.T) {
 	// Agents filter the manifest by category. Keep the set closed
 	// so a typo in a future capability doesn't fragment the surface
 	// (e.g. "operator-state" vs "operator_state" would split into
 	// two categories an agent might miss).
-	allowed := map[string]bool{
-		"context":        true,
-		"provisioning":   true,
-		"operator-state": true,
-		"finding":        true,
-		"action":         true,
+	expectedOrder := []string{
+		"context",
+		"operator-state",
+		"finding",
+		"action",
+		"provisioning",
 	}
-	for _, cap := range agentCapabilitiesManifest.Capabilities {
+	manifest := agentcapabilities.CanonicalManifest()
+	if len(manifest.Categories) != len(expectedOrder) {
+		t.Fatalf("manifest categories = %v, want %v", manifest.Categories, expectedOrder)
+	}
+	allowed := map[string]bool{}
+	for i, category := range manifest.Categories {
+		if category.ID != expectedOrder[i] {
+			t.Fatalf("manifest category order[%d] = %q, want %q", i, category.ID, expectedOrder[i])
+		}
+		if category.Label == "" || category.Description == "" {
+			t.Fatalf("manifest category %q must include presentation label and description", category.ID)
+		}
+		allowed[category.ID] = true
+	}
+	for _, cap := range manifest.Capabilities {
 		if !allowed[cap.Category] {
 			t.Errorf("capability %q has unknown category %q — extend the allowlist deliberately", cap.Name, cap.Category)
 		}
@@ -115,7 +349,8 @@ func TestAgentCapabilitiesManifest_CategoriesAreClosed(t *testing.T) {
 
 func TestAgentCapabilitiesManifest_DeclaresNodeProvisioningSurface(t *testing.T) {
 	byName := map[string]AgentCapability{}
-	for _, cap := range agentCapabilitiesManifest.Capabilities {
+	manifest := agentcapabilities.CanonicalManifest()
+	for _, cap := range manifest.Capabilities {
 		byName[cap.Name] = cap
 	}
 
@@ -185,18 +420,121 @@ func TestAgentCapabilitiesManifest_DeclaresNodeProvisioningSurface(t *testing.T)
 	}
 }
 
+func TestAgentCapabilitiesManifest_DeclaresTypedFindingAndActionSchemas(t *testing.T) {
+	byName := map[string]AgentCapability{}
+	manifest := agentcapabilities.CanonicalManifest()
+	for _, cap := range manifest.Capabilities {
+		byName[cap.Name] = cap
+	}
+
+	assertInputSchemaFragments(t, byName, agentcapabilities.SetOperatorStateCapabilityName, []string{
+		requiredSchemaFragment(agentcapabilities.ResourceIDArgumentName, "intentionallyOffline", "neverAutoRemediate"),
+		`"dependencies":{"maintenanceEndAt":["maintenanceStartAt"],"maintenanceStartAt":["maintenanceEndAt"]}`,
+		`"enum":["high","medium","low",""]`,
+	})
+	assertInputSchemaFragments(t, byName, agentcapabilities.AcknowledgeFindingCapabilityName, []string{
+		requiredSchemaFragment(agentcapabilities.FindingIDArgumentName),
+		`"additionalProperties":false`,
+	})
+	assertInputSchemaFragments(t, byName, agentcapabilities.SnoozeFindingCapabilityName, []string{
+		requiredSchemaFragment(agentcapabilities.FindingIDArgumentName, "duration_hours"),
+		`"minimum":1`,
+		`"maximum":168`,
+	})
+	assertInputSchemaFragments(t, byName, agentcapabilities.DismissFindingCapabilityName, []string{
+		requiredSchemaFragment(agentcapabilities.FindingIDArgumentName, agentcapabilities.ReasonArgumentName),
+		`"enum":["not_an_issue","expected_behavior","will_fix_later"]`,
+		`"` + agentcapabilities.NoteArgumentName + `"`,
+	})
+	assertInputSchemaFragments(t, byName, agentcapabilities.ResolveFindingCapabilityName, []string{
+		requiredSchemaFragment(agentcapabilities.FindingIDArgumentName),
+		`"` + agentcapabilities.ResolutionNoteArgumentName + `"`,
+	})
+	assertInputSchemaFragments(t, byName, agentcapabilities.PlanActionCapabilityName, []string{
+		requiredSchemaFragment(
+			agentcapabilities.RequestIDArgumentName,
+			agentcapabilities.ResourceIDArgumentName,
+			agentcapabilities.CapabilityNameArgumentName,
+			agentcapabilities.ReasonArgumentName,
+			agentcapabilities.RequestedByArgumentName,
+		),
+		`"params"`,
+		`"additionalProperties":true`,
+	})
+	assertInputSchemaFragments(t, byName, agentcapabilities.DecideActionCapabilityName, []string{
+		requiredSchemaFragment(agentcapabilities.ActionIDArgumentName, agentcapabilities.OutcomeArgumentName),
+		`"enum":["approved","rejected"]`,
+		`"pattern":"^[a-zA-Z0-9_-]+$"`,
+	})
+	assertInputSchemaFragments(t, byName, agentcapabilities.ExecuteActionCapabilityName, []string{
+		requiredSchemaFragment(agentcapabilities.ActionIDArgumentName),
+		`"maxLength":128`,
+	})
+}
+
+func requiredSchemaFragment(fields ...string) string {
+	raw, _ := json.Marshal(fields)
+	return `"required":` + string(raw)
+}
+
+func assertInputSchemaFragments(t *testing.T, byName map[string]AgentCapability, name string, fragments []string) {
+	t.Helper()
+	cap, ok := byName[name]
+	if !ok {
+		t.Fatalf("manifest missing capability %q", name)
+	}
+	if cap.InputSchema == nil {
+		t.Fatalf("%s must publish an inputSchema", name)
+	}
+	raw, err := json.Marshal(cap.InputSchema)
+	if err != nil {
+		t.Fatalf("%s inputSchema marshal: %v", name, err)
+	}
+	text := string(raw)
+	for _, fragment := range fragments {
+		if !strings.Contains(text, fragment) {
+			t.Errorf("%s inputSchema missing %s: %s", name, fragment, text)
+		}
+	}
+}
+
 func TestAgentCapabilitiesManifest_CarriesStableErrorCodes(t *testing.T) {
 	// The error-code surface is the agent-branching contract. The
 	// codes I've shipped this session must appear on the
 	// corresponding capability so agents can branch on them. Pin a
 	// few of the most consequential codes.
 	wantErrorCodes := map[string][]string{
-		"get_resource_context": {"resource_not_found"},
-		"get_operator_state":   {"operator_state_not_set"},
-		"set_operator_state":   {"operator_state_invalid"},
+		agentcapabilities.ResourceContextCapabilityName:  {agentcapabilities.AgentErrCodeResourceNotFound},
+		agentcapabilities.GetOperatorStateCapabilityName: {agentcapabilities.AgentErrCodeOperatorStateNotSet},
+		agentcapabilities.SetOperatorStateCapabilityName: {agentcapabilities.AgentErrCodeOperatorStateInvalid},
+		agentcapabilities.AcknowledgeFindingCapabilityName: {
+			agentcapabilities.AgentErrCodeInvalidFindingRequest,
+			agentcapabilities.AgentErrCodeFindingNotFound,
+			agentcapabilities.AgentErrCodeFindingActionNotAllowed,
+			agentcapabilities.AgentErrCodePatrolUnavailable,
+		},
+		agentcapabilities.SnoozeFindingCapabilityName: {
+			agentcapabilities.AgentErrCodeInvalidFindingRequest,
+			agentcapabilities.AgentErrCodeFindingNotFound,
+			agentcapabilities.AgentErrCodeFindingActionNotAllowed,
+			agentcapabilities.AgentErrCodePatrolUnavailable,
+		},
+		agentcapabilities.DismissFindingCapabilityName: {
+			agentcapabilities.AgentErrCodeInvalidFindingRequest,
+			agentcapabilities.AgentErrCodeFindingNotFound,
+			agentcapabilities.AgentErrCodeFindingActionNotAllowed,
+			agentcapabilities.AgentErrCodePatrolUnavailable,
+		},
+		agentcapabilities.ResolveFindingCapabilityName: {
+			agentcapabilities.AgentErrCodeInvalidFindingRequest,
+			agentcapabilities.AgentErrCodeFindingNotFound,
+			agentcapabilities.AgentErrCodeFindingActionNotAllowed,
+			agentcapabilities.AgentErrCodePatrolUnavailable,
+		},
 	}
 	byName := map[string]AgentCapability{}
-	for _, cap := range agentCapabilitiesManifest.Capabilities {
+	manifest := agentcapabilities.CanonicalManifest()
+	for _, cap := range manifest.Capabilities {
 		byName[cap.Name] = cap
 	}
 	for name, expected := range wantErrorCodes {

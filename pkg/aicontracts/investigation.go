@@ -39,6 +39,7 @@ const (
 	OutcomeFixQueued              InvestigationOutcome = "fix_queued"
 	OutcomeFixExecuted            InvestigationOutcome = "fix_executed"
 	OutcomeFixFailed              InvestigationOutcome = "fix_failed"
+	OutcomeFixRejected            InvestigationOutcome = "fix_rejected"
 	OutcomeFixVerified            InvestigationOutcome = "fix_verified"
 	OutcomeFixVerificationFailed  InvestigationOutcome = "fix_verification_failed"
 	OutcomeFixVerificationUnknown InvestigationOutcome = "fix_verification_unknown"

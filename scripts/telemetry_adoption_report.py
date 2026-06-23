@@ -66,6 +66,760 @@ FEATURE_BOOL_FIELDS = (
     ("paid_license", "Paid license"),
     ("has_api_tokens", "Has API tokens"),
 )
+PULSE_INTELLIGENCE_ASSISTANT_LOOP_BOOL_FIELDS = (
+    "pulse_intelligence_assistant_operations_loop_30d",
+    "pulse_intelligence_assistant_approved_execution_loop_30d",
+    "pulse_intelligence_assistant_approved_action_success_loop_30d",
+    "pulse_intelligence_assistant_resolved_operations_loop_30d",
+)
+PULSE_INTELLIGENCE_EXTERNAL_AGENT_LOOP_BOOL_FIELDS = (
+    "pulse_intelligence_external_agent_operations_loop_30d",
+    "pulse_intelligence_external_agent_approved_execution_loop_30d",
+    "pulse_intelligence_external_agent_approved_action_success_loop_30d",
+    "pulse_intelligence_external_agent_resolved_operations_loop_30d",
+)
+PULSE_INTELLIGENCE_MCP_ADAPTER_LOOP_BOOL_FIELDS = (
+    "pulse_intelligence_mcp_adapter_operations_loop_30d",
+    "pulse_intelligence_mcp_adapter_approved_execution_loop_30d",
+    "pulse_intelligence_mcp_adapter_approved_action_success_loop_30d",
+    "pulse_intelligence_mcp_adapter_resolved_operations_loop_30d",
+)
+PULSE_INTELLIGENCE_PATROL_CONTROL_COMPLETED_BOOL_FIELDS = (
+    "pulse_intelligence_patrol_control_completed_operations_loop_30d",
+    "pulse_intelligence_pro_activation_completed_operations_loop_30d",
+)
+PULSE_INTELLIGENCE_PATROL_CONTROL_RESOLVED_BOOL_FIELDS = (
+    "pulse_intelligence_patrol_control_resolved_operations_loop_30d",
+    "pulse_intelligence_pro_activation_resolved_operations_loop_30d",
+)
+PULSE_INTELLIGENCE_PATROL_CONTROL_PAID_COMPLETED_BOOL_FIELDS = (
+    "pulse_intelligence_patrol_control_paid_completed_operations_loop_30d",
+    "pulse_intelligence_pro_activation_paid_completed_operations_loop_30d",
+)
+PULSE_INTELLIGENCE_PATROL_CONTROL_PAID_RESOLVED_BOOL_FIELDS = (
+    "pulse_intelligence_patrol_control_paid_resolved_operations_loop_30d",
+    "pulse_intelligence_pro_activation_paid_resolved_operations_loop_30d",
+)
+PULSE_INTELLIGENCE_PATROL_CONTROL_STARTER_COUNT_FIELDS = (
+    "pulse_intelligence_patrol_control_operations_loop_starter_requests_30d",
+    "pulse_intelligence_patrol_operations_loop_starter_requests_30d",
+    "pulse_intelligence_pro_activation_operations_loop_starter_requests_30d",
+)
+PULSE_INTELLIGENCE_BOOL_FIELDS = (
+    ("pulse_intelligence_loop_configured", "Loop configured"),
+    ("pulse_intelligence_loop_active_30d", "Loop active 30d"),
+    ("pulse_intelligence_complete_operations_loop_30d", "Complete operations loop 30d"),
+    ("pulse_intelligence_approved_execution_loop_30d", "Approved execution loop 30d"),
+    ("pulse_intelligence_resolved_operations_loop_30d", "Resolved operations loop 30d"),
+    (
+        "pulse_intelligence_patrol_control_completed_operations_loop_30d",
+        "Patrol control completed operations loop 30d",
+    ),
+    (
+        "pulse_intelligence_patrol_control_resolved_operations_loop_30d",
+        "Patrol control resolved operations loop 30d",
+    ),
+    (
+        "pulse_intelligence_patrol_control_paid_completed_operations_loop_30d",
+        "Patrol control paid completed operations loop 30d",
+    ),
+    (
+        "pulse_intelligence_patrol_control_paid_resolved_operations_loop_30d",
+        "Patrol control paid resolved operations loop 30d",
+    ),
+    (
+        "pulse_intelligence_pro_activation_completed_operations_loop_30d",
+        "Legacy Pro activation completed operations loop 30d",
+    ),
+    (
+        "pulse_intelligence_pro_activation_resolved_operations_loop_30d",
+        "Legacy Pro activation resolved operations loop 30d",
+    ),
+    (
+        "pulse_intelligence_pro_activation_paid_completed_operations_loop_30d",
+        "Legacy Pro activation paid completed operations loop 30d",
+    ),
+    (
+        "pulse_intelligence_pro_activation_paid_resolved_operations_loop_30d",
+        "Legacy Pro activation paid resolved operations loop 30d",
+    ),
+    ("pulse_intelligence_governed_action_active_30d", "Governed action active 30d"),
+    ("pulse_intelligence_assistant_operations_loop_30d", "Assistant operations loop 30d"),
+    (
+        "pulse_intelligence_assistant_approved_execution_loop_30d",
+        "Assistant approved execution loop 30d",
+    ),
+    (
+        "pulse_intelligence_assistant_approved_action_success_loop_30d",
+        "Assistant approved action success loop 30d",
+    ),
+    (
+        "pulse_intelligence_assistant_resolved_operations_loop_30d",
+        "Assistant resolved operations loop 30d",
+    ),
+    ("pulse_intelligence_external_agent_operations_loop_30d", "External-agent operations loop 30d"),
+    (
+        "pulse_intelligence_external_agent_approved_execution_loop_30d",
+        "External-agent approved execution loop 30d",
+    ),
+    (
+        "pulse_intelligence_external_agent_approved_action_success_loop_30d",
+        "External-agent approved action success loop 30d",
+    ),
+    (
+        "pulse_intelligence_external_agent_resolved_operations_loop_30d",
+        "External-agent resolved operations loop 30d",
+    ),
+    ("pulse_intelligence_mcp_adapter_operations_loop_30d", "Pulse MCP adapter operations loop 30d"),
+    (
+        "pulse_intelligence_mcp_adapter_approved_execution_loop_30d",
+        "Pulse MCP adapter approved execution loop 30d",
+    ),
+    (
+        "pulse_intelligence_mcp_adapter_approved_action_success_loop_30d",
+        "Pulse MCP adapter approved action success loop 30d",
+    ),
+    (
+        "pulse_intelligence_mcp_adapter_resolved_operations_loop_30d",
+        "Pulse MCP adapter resolved operations loop 30d",
+    ),
+    ("pulse_intelligence_external_agent_enabled", "External agent enabled"),
+    ("pulse_intelligence_external_agent_used_30d", "External agent used 30d"),
+    ("pulse_intelligence_mcp_adapter_used_30d", "Pulse MCP adapter used 30d"),
+)
+PULSE_INTELLIGENCE_EXTERNAL_AGENT_CAPABILITY_COUNT_FIELDS = (
+    (
+        "pulse_intelligence_external_agent_context_requests_30d",
+        "External agent context requests 30d",
+    ),
+    (
+        "pulse_intelligence_external_agent_event_stream_requests_30d",
+        "External agent event-stream requests 30d",
+    ),
+    (
+        "pulse_intelligence_external_agent_provisioning_requests_30d",
+        "External agent provisioning requests 30d",
+    ),
+    (
+        "pulse_intelligence_external_agent_operator_state_requests_30d",
+        "External agent operator-state requests 30d",
+    ),
+    (
+        "pulse_intelligence_external_agent_finding_requests_30d",
+        "External agent finding requests 30d",
+    ),
+    (
+        "pulse_intelligence_external_agent_action_requests_30d",
+        "External agent action requests 30d",
+    ),
+)
+PULSE_INTELLIGENCE_EXTERNAL_AGENT_CAPABILITY_COUNT_FIELD_NAMES = tuple(
+    field for field, _ in PULSE_INTELLIGENCE_EXTERNAL_AGENT_CAPABILITY_COUNT_FIELDS
+)
+PULSE_INTELLIGENCE_EXTERNAL_AGENT_ACTIVITY_BOOL_FIELD_NAMES = (
+    "pulse_intelligence_external_agent_used_30d",
+    "pulse_intelligence_mcp_adapter_used_30d",
+)
+PULSE_INTELLIGENCE_COUNT_FIELDS = (
+    (
+        "pulse_intelligence_operations_loop_starter_requests_30d",
+        "Operations-loop starter requests 30d",
+    ),
+    (
+        "pulse_intelligence_assistant_operations_loop_starter_requests_30d",
+        "Assistant operations-loop starter requests 30d",
+    ),
+    (
+        "pulse_intelligence_patrol_operations_loop_starter_requests_30d",
+        "Patrol operations-loop starter requests 30d",
+    ),
+    (
+        "pulse_intelligence_patrol_control_operations_loop_starter_requests_30d",
+        "Patrol control operations-loop starter requests 30d",
+    ),
+    (
+        "pulse_intelligence_pro_activation_operations_loop_starter_requests_30d",
+        "Legacy Pro activation operations-loop starter requests 30d",
+    ),
+    (
+        "pulse_intelligence_mcp_operations_loop_starter_requests_30d",
+        "Pulse MCP operations-loop starter requests 30d",
+    ),
+    ("pulse_intelligence_assistant_ai_calls_30d", "Assistant AI calls 30d"),
+    ("pulse_intelligence_assistant_context_ai_calls_30d", "Assistant governed-context AI calls 30d"),
+    ("pulse_intelligence_assistant_tool_calls_30d", "Assistant governed-tool calls 30d"),
+    ("pulse_intelligence_patrol_ai_calls_30d", "Patrol AI calls 30d"),
+    ("pulse_intelligence_patrol_runs_30d", "Patrol runs 30d"),
+    ("pulse_intelligence_patrol_new_findings_30d", "Patrol new findings 30d"),
+    ("pulse_intelligence_patrol_investigations_30d", "Patrol investigations 30d"),
+    ("pulse_intelligence_patrol_resolved_findings_30d", "Patrol resolved findings 30d"),
+    ("pulse_intelligence_patrol_autofixes_30d", "Patrol autofixes 30d"),
+    *PULSE_INTELLIGENCE_EXTERNAL_AGENT_CAPABILITY_COUNT_FIELDS,
+    ("pulse_intelligence_action_plans_30d", "Action plans 30d"),
+    ("pulse_intelligence_approval_requests_30d", "Approval requests 30d"),
+    ("pulse_intelligence_rejected_action_decisions_30d", "Rejected action decisions 30d"),
+    ("pulse_intelligence_approved_action_decisions_30d", "Approved action decisions 30d"),
+    ("pulse_intelligence_approved_action_attempts_30d", "Approved action attempts 30d"),
+    ("pulse_intelligence_approved_action_successes_30d", "Approved action successes 30d"),
+)
+PULSE_INTELLIGENCE_OUTCOME_COHORTS = (
+    (
+        "loop_configured",
+        "Loop configured",
+        ("pulse_intelligence_loop_configured",),
+        (),
+    ),
+    (
+        "loop_active_30d",
+        "Loop active 30d",
+        ("pulse_intelligence_loop_active_30d",),
+        tuple(field for field, _ in PULSE_INTELLIGENCE_COUNT_FIELDS),
+    ),
+    (
+        "complete_operations_loop_30d",
+        "Complete operations loop 30d",
+        ("pulse_intelligence_complete_operations_loop_30d",),
+        (),
+    ),
+    (
+        "approved_execution_loop_30d",
+        "Approved execution loop 30d",
+        ("pulse_intelligence_approved_execution_loop_30d",),
+        (),
+    ),
+    (
+        "resolved_operations_loop_30d",
+        "Resolved operations loop 30d",
+        ("pulse_intelligence_resolved_operations_loop_30d",),
+        (),
+    ),
+    (
+        "patrol_control_completed_operations_loop_30d",
+        "Patrol control completed operations loop 30d",
+        PULSE_INTELLIGENCE_PATROL_CONTROL_COMPLETED_BOOL_FIELDS,
+        (),
+    ),
+    (
+        "patrol_control_resolved_operations_loop_30d",
+        "Patrol control resolved operations loop 30d",
+        PULSE_INTELLIGENCE_PATROL_CONTROL_RESOLVED_BOOL_FIELDS,
+        (),
+    ),
+    (
+        "patrol_control_paid_completed_operations_loop_30d",
+        "Paid Patrol control completed operations loop 30d",
+        PULSE_INTELLIGENCE_PATROL_CONTROL_PAID_COMPLETED_BOOL_FIELDS,
+        (),
+    ),
+    (
+        "patrol_control_paid_resolved_operations_loop_30d",
+        "Paid Patrol control resolved operations loop 30d",
+        PULSE_INTELLIGENCE_PATROL_CONTROL_PAID_RESOLVED_BOOL_FIELDS,
+        (),
+    ),
+    (
+        "assistant_operations_loop_30d",
+        "Assistant operations loop 30d",
+        ("pulse_intelligence_assistant_operations_loop_30d",),
+        (),
+    ),
+    (
+        "assistant_approved_execution_loop_30d",
+        "Assistant approved execution loop 30d",
+        ("pulse_intelligence_assistant_approved_execution_loop_30d",),
+        (),
+    ),
+    (
+        "assistant_approved_action_success_loop_30d",
+        "Assistant approved action success loop 30d",
+        ("pulse_intelligence_assistant_approved_action_success_loop_30d",),
+        (),
+    ),
+    (
+        "assistant_resolved_operations_loop_30d",
+        "Assistant resolved operations loop 30d",
+        ("pulse_intelligence_assistant_resolved_operations_loop_30d",),
+        (),
+    ),
+    (
+        "external_agent_operations_loop_30d",
+        "External-agent operations loop 30d",
+        (
+            "pulse_intelligence_external_agent_operations_loop_30d",
+            "pulse_intelligence_mcp_adapter_operations_loop_30d",
+        ),
+        (),
+    ),
+    (
+        "external_agent_approved_execution_loop_30d",
+        "External-agent approved execution loop 30d",
+        (
+            "pulse_intelligence_external_agent_approved_execution_loop_30d",
+            "pulse_intelligence_mcp_adapter_approved_execution_loop_30d",
+        ),
+        (),
+    ),
+    (
+        "external_agent_approved_action_success_loop_30d",
+        "External-agent approved action success loop 30d",
+        (
+            "pulse_intelligence_external_agent_approved_action_success_loop_30d",
+            "pulse_intelligence_mcp_adapter_approved_action_success_loop_30d",
+        ),
+        (),
+    ),
+    (
+        "external_agent_resolved_operations_loop_30d",
+        "External-agent resolved operations loop 30d",
+        (
+            "pulse_intelligence_external_agent_resolved_operations_loop_30d",
+            "pulse_intelligence_mcp_adapter_resolved_operations_loop_30d",
+        ),
+        (),
+    ),
+    (
+        "mcp_adapter_operations_loop_30d",
+        "Pulse MCP adapter operations loop 30d",
+        ("pulse_intelligence_mcp_adapter_operations_loop_30d",),
+        (),
+    ),
+    (
+        "mcp_adapter_approved_execution_loop_30d",
+        "Pulse MCP adapter approved execution loop 30d",
+        ("pulse_intelligence_mcp_adapter_approved_execution_loop_30d",),
+        (),
+    ),
+    (
+        "mcp_adapter_approved_action_success_loop_30d",
+        "Pulse MCP adapter approved action success loop 30d",
+        ("pulse_intelligence_mcp_adapter_approved_action_success_loop_30d",),
+        (),
+    ),
+    (
+        "mcp_adapter_resolved_operations_loop_30d",
+        "Pulse MCP adapter resolved operations loop 30d",
+        ("pulse_intelligence_mcp_adapter_resolved_operations_loop_30d",),
+        (),
+    ),
+    (
+        "operations_loop_starter_requests",
+        "Operations-loop starter requests",
+        (),
+        ("pulse_intelligence_operations_loop_starter_requests_30d",),
+    ),
+    (
+        "assistant_operations_loop_starter_requests",
+        "Assistant operations-loop starter requests",
+        (),
+        ("pulse_intelligence_assistant_operations_loop_starter_requests_30d",),
+    ),
+    (
+        "patrol_operations_loop_starter_requests",
+        "Patrol operations-loop starter requests",
+        (),
+        ("pulse_intelligence_patrol_operations_loop_starter_requests_30d",),
+    ),
+    (
+        "patrol_control_operations_loop_starter_requests",
+        "Patrol control operations-loop starter requests",
+        (),
+        PULSE_INTELLIGENCE_PATROL_CONTROL_STARTER_COUNT_FIELDS,
+    ),
+    (
+        "pro_activation_operations_loop_starter_requests",
+        "Legacy Pro activation operations-loop starter requests",
+        (),
+        ("pulse_intelligence_pro_activation_operations_loop_starter_requests_30d",),
+    ),
+    (
+        "mcp_operations_loop_starter_requests",
+        "Pulse MCP operations-loop starter requests",
+        (),
+        ("pulse_intelligence_mcp_operations_loop_starter_requests_30d",),
+    ),
+    (
+        "assistant_activity",
+        "Assistant activity",
+        (),
+        ("pulse_intelligence_assistant_ai_calls_30d",),
+    ),
+    (
+        "assistant_context_activity",
+        "Assistant governed-context activity",
+        (),
+        ("pulse_intelligence_assistant_context_ai_calls_30d",),
+    ),
+    (
+        "assistant_tool_activity",
+        "Assistant governed-tool activity",
+        (),
+        ("pulse_intelligence_assistant_tool_calls_30d",),
+    ),
+    (
+        "patrol_activity",
+        "Patrol activity",
+        (),
+        (
+            "pulse_intelligence_patrol_ai_calls_30d",
+            "pulse_intelligence_patrol_runs_30d",
+            "pulse_intelligence_patrol_new_findings_30d",
+            "pulse_intelligence_patrol_investigations_30d",
+            "pulse_intelligence_patrol_resolved_findings_30d",
+            "pulse_intelligence_patrol_autofixes_30d",
+        ),
+    ),
+    (
+        "patrol_resolution_30d",
+        "Patrol resolution 30d",
+        (),
+        ("pulse_intelligence_patrol_resolved_findings_30d",),
+    ),
+    (
+        "external_agent_used_30d",
+        "External agent/MCP used 30d",
+        PULSE_INTELLIGENCE_EXTERNAL_AGENT_ACTIVITY_BOOL_FIELD_NAMES,
+        PULSE_INTELLIGENCE_EXTERNAL_AGENT_CAPABILITY_COUNT_FIELD_NAMES,
+    ),
+    (
+        "mcp_adapter_used_30d",
+        "Pulse MCP adapter used 30d",
+        ("pulse_intelligence_mcp_adapter_used_30d",),
+        (),
+    ),
+    *(
+        (
+            field.removeprefix("pulse_intelligence_").removesuffix("_30d"),
+            label,
+            (),
+            (field,),
+        )
+        for field, label in PULSE_INTELLIGENCE_EXTERNAL_AGENT_CAPABILITY_COUNT_FIELDS
+    ),
+    (
+        "governed_action_active_30d",
+        "Governed action active 30d",
+        ("pulse_intelligence_governed_action_active_30d",),
+        (
+            "pulse_intelligence_action_plans_30d",
+            "pulse_intelligence_approval_requests_30d",
+            "pulse_intelligence_rejected_action_decisions_30d",
+            "pulse_intelligence_approved_action_decisions_30d",
+            "pulse_intelligence_approved_action_attempts_30d",
+            "pulse_intelligence_approved_action_successes_30d",
+        ),
+    ),
+    (
+        "approved_action_decision_30d",
+        "Approved action decision 30d",
+        (),
+        ("pulse_intelligence_approved_action_decisions_30d",),
+    ),
+    (
+        "approved_action_execution_30d",
+        "Approved action execution 30d",
+        (),
+        ("pulse_intelligence_approved_action_attempts_30d",),
+    ),
+    (
+        "approved_action_success_30d",
+        "Approved action success 30d",
+        (),
+        ("pulse_intelligence_approved_action_successes_30d",),
+    ),
+)
+PULSE_INTELLIGENCE_OPERATION_SIGNAL_GROUPS = {
+    "configured": (
+        ("pulse_intelligence_loop_configured",),
+        (),
+    ),
+    "patrol": (
+        (),
+        (
+            "pulse_intelligence_patrol_ai_calls_30d",
+            "pulse_intelligence_patrol_runs_30d",
+            "pulse_intelligence_patrol_new_findings_30d",
+            "pulse_intelligence_patrol_investigations_30d",
+            "pulse_intelligence_patrol_resolved_findings_30d",
+            "pulse_intelligence_patrol_autofixes_30d",
+        ),
+    ),
+    "patrol_resolution": (
+        (),
+        ("pulse_intelligence_patrol_resolved_findings_30d",),
+    ),
+    "patrol_issue": (
+        (),
+        (
+            "pulse_intelligence_patrol_new_findings_30d",
+            "pulse_intelligence_patrol_investigations_30d",
+            "pulse_intelligence_patrol_resolved_findings_30d",
+            "pulse_intelligence_patrol_autofixes_30d",
+        ),
+    ),
+    "collaboration": (
+        (
+            *PULSE_INTELLIGENCE_ASSISTANT_LOOP_BOOL_FIELDS,
+            *PULSE_INTELLIGENCE_EXTERNAL_AGENT_LOOP_BOOL_FIELDS,
+            *PULSE_INTELLIGENCE_MCP_ADAPTER_LOOP_BOOL_FIELDS,
+            *PULSE_INTELLIGENCE_EXTERNAL_AGENT_ACTIVITY_BOOL_FIELD_NAMES,
+        ),
+        (
+            "pulse_intelligence_assistant_context_ai_calls_30d",
+            "pulse_intelligence_assistant_tool_calls_30d",
+            *PULSE_INTELLIGENCE_EXTERNAL_AGENT_CAPABILITY_COUNT_FIELD_NAMES,
+        ),
+    ),
+    "assistant_collaboration": (
+        PULSE_INTELLIGENCE_ASSISTANT_LOOP_BOOL_FIELDS,
+        (
+            "pulse_intelligence_assistant_context_ai_calls_30d",
+            "pulse_intelligence_assistant_tool_calls_30d",
+        ),
+    ),
+    "external_agent_collaboration": (
+        (
+            *PULSE_INTELLIGENCE_EXTERNAL_AGENT_LOOP_BOOL_FIELDS,
+            *PULSE_INTELLIGENCE_EXTERNAL_AGENT_ACTIVITY_BOOL_FIELD_NAMES,
+        ),
+        PULSE_INTELLIGENCE_EXTERNAL_AGENT_CAPABILITY_COUNT_FIELD_NAMES,
+    ),
+    "mcp_adapter": (
+        (
+            *PULSE_INTELLIGENCE_MCP_ADAPTER_LOOP_BOOL_FIELDS,
+            "pulse_intelligence_mcp_adapter_used_30d",
+        ),
+        (),
+    ),
+    "governed_action": (
+        ("pulse_intelligence_governed_action_active_30d",),
+        (
+            "pulse_intelligence_action_plans_30d",
+            "pulse_intelligence_approval_requests_30d",
+            "pulse_intelligence_rejected_action_decisions_30d",
+            "pulse_intelligence_approved_action_decisions_30d",
+            "pulse_intelligence_approved_action_attempts_30d",
+            "pulse_intelligence_approved_action_successes_30d",
+        ),
+    ),
+    "governed_decision": (
+        (),
+        (
+            "pulse_intelligence_rejected_action_decisions_30d",
+            "pulse_intelligence_approved_action_decisions_30d",
+            "pulse_intelligence_approved_action_attempts_30d",
+        ),
+    ),
+    "approved_execution": (
+        (
+            "pulse_intelligence_approved_execution_loop_30d",
+            "pulse_intelligence_assistant_approved_execution_loop_30d",
+            "pulse_intelligence_external_agent_approved_execution_loop_30d",
+            "pulse_intelligence_mcp_adapter_approved_execution_loop_30d",
+        ),
+        ("pulse_intelligence_approved_action_attempts_30d",),
+    ),
+    "approved_success": (
+        (
+            "pulse_intelligence_assistant_approved_action_success_loop_30d",
+            "pulse_intelligence_external_agent_approved_action_success_loop_30d",
+            "pulse_intelligence_mcp_adapter_approved_action_success_loop_30d",
+        ),
+        ("pulse_intelligence_approved_action_successes_30d",),
+    ),
+    "complete_operations_loop": (
+        (
+            "pulse_intelligence_complete_operations_loop_30d",
+            *PULSE_INTELLIGENCE_PATROL_CONTROL_COMPLETED_BOOL_FIELDS,
+            "pulse_intelligence_assistant_operations_loop_30d",
+            "pulse_intelligence_external_agent_operations_loop_30d",
+            "pulse_intelligence_mcp_adapter_operations_loop_30d",
+        ),
+        (),
+    ),
+    "approved_execution_loop": (
+        (
+            "pulse_intelligence_approved_execution_loop_30d",
+            "pulse_intelligence_assistant_approved_execution_loop_30d",
+            "pulse_intelligence_external_agent_approved_execution_loop_30d",
+            "pulse_intelligence_mcp_adapter_approved_execution_loop_30d",
+        ),
+        (),
+    ),
+    "resolved_operations_loop": (
+        (
+            "pulse_intelligence_resolved_operations_loop_30d",
+            *PULSE_INTELLIGENCE_PATROL_CONTROL_RESOLVED_BOOL_FIELDS,
+            "pulse_intelligence_assistant_resolved_operations_loop_30d",
+            "pulse_intelligence_external_agent_resolved_operations_loop_30d",
+            "pulse_intelligence_mcp_adapter_resolved_operations_loop_30d",
+        ),
+        (),
+    ),
+    "patrol_control_completed_operations_loop": (
+        PULSE_INTELLIGENCE_PATROL_CONTROL_COMPLETED_BOOL_FIELDS,
+        (),
+    ),
+    "patrol_control_resolved_operations_loop": (
+        PULSE_INTELLIGENCE_PATROL_CONTROL_RESOLVED_BOOL_FIELDS,
+        (),
+    ),
+    "assistant_operations_loop": (
+        ("pulse_intelligence_assistant_operations_loop_30d",),
+        (),
+    ),
+    "assistant_approved_execution_loop": (
+        ("pulse_intelligence_assistant_approved_execution_loop_30d",),
+        (),
+    ),
+    "assistant_approved_success_loop": (
+        ("pulse_intelligence_assistant_approved_action_success_loop_30d",),
+        (),
+    ),
+    "assistant_resolved_operations_loop": (
+        ("pulse_intelligence_assistant_resolved_operations_loop_30d",),
+        (),
+    ),
+    "external_agent_operations_loop": (
+        (
+            "pulse_intelligence_external_agent_operations_loop_30d",
+            "pulse_intelligence_mcp_adapter_operations_loop_30d",
+        ),
+        (),
+    ),
+    "external_agent_approved_execution_loop": (
+        (
+            "pulse_intelligence_external_agent_approved_execution_loop_30d",
+            "pulse_intelligence_mcp_adapter_approved_execution_loop_30d",
+        ),
+        (),
+    ),
+    "external_agent_approved_success_loop": (
+        (
+            "pulse_intelligence_external_agent_approved_action_success_loop_30d",
+            "pulse_intelligence_mcp_adapter_approved_action_success_loop_30d",
+        ),
+        (),
+    ),
+    "external_agent_resolved_operations_loop": (
+        (
+            "pulse_intelligence_external_agent_resolved_operations_loop_30d",
+            "pulse_intelligence_mcp_adapter_resolved_operations_loop_30d",
+        ),
+        (),
+    ),
+    "mcp_adapter_operations_loop": (
+        ("pulse_intelligence_mcp_adapter_operations_loop_30d",),
+        (),
+    ),
+    "mcp_adapter_approved_execution_loop": (
+        ("pulse_intelligence_mcp_adapter_approved_execution_loop_30d",),
+        (),
+    ),
+    "mcp_adapter_approved_success_loop": (
+        ("pulse_intelligence_mcp_adapter_approved_action_success_loop_30d",),
+        (),
+    ),
+    "mcp_adapter_resolved_operations_loop": (
+        ("pulse_intelligence_mcp_adapter_resolved_operations_loop_30d",),
+        (),
+    ),
+}
+PULSE_INTELLIGENCE_OPERATIONS_FUNNEL_STAGES = (
+    ("configured", "Configured", ("configured",)),
+    ("patrol_activity", "Patrol detection/investigation", ("patrol",)),
+    ("patrol_issue_evidence", "Patrol issue evidence", ("patrol_issue",)),
+    ("assistant_mcp_collaboration", "Assistant/MCP collaboration", ("collaboration",)),
+    ("governed_action", "Governed action activity", ("governed_action",)),
+    ("governed_decision", "Approve/reject decision", ("governed_decision",)),
+    ("approved_action_execution", "Approved action execution", ("approved_execution",)),
+    ("approved_action_success", "Approved action success", ("approved_success",)),
+    ("patrol_resolution", "Patrol resolution", ("patrol_resolution",)),
+    (
+        "complete_operations_loop",
+        "Complete operations loop",
+        ("complete_operations_loop",),
+    ),
+    (
+        "approved_execution_loop",
+        "Approved execution loop",
+        ("approved_execution_loop",),
+    ),
+    (
+        "resolved_operations_loop",
+        "Resolved operations loop",
+        ("resolved_operations_loop",),
+    ),
+    (
+        "patrol_control_completed_operations_loop",
+        "Patrol control completed operations loop",
+        ("patrol_control_completed_operations_loop",),
+    ),
+    (
+        "patrol_control_resolved_operations_loop",
+        "Patrol control resolved operations loop",
+        ("patrol_control_resolved_operations_loop",),
+    ),
+    (
+        "assistant_operations_loop",
+        "Assistant operations loop",
+        ("assistant_operations_loop",),
+    ),
+    (
+        "assistant_approved_execution_loop",
+        "Assistant approved execution loop",
+        ("assistant_approved_execution_loop",),
+    ),
+    (
+        "assistant_approved_success_loop",
+        "Assistant approved action success loop",
+        ("assistant_approved_success_loop",),
+    ),
+    (
+        "assistant_resolved_operations_loop",
+        "Assistant resolved operations loop",
+        ("assistant_resolved_operations_loop",),
+    ),
+    (
+        "external_agent_operations_loop",
+        "External-agent operations loop",
+        ("external_agent_operations_loop",),
+    ),
+    (
+        "external_agent_approved_execution_loop",
+        "External-agent approved execution loop",
+        ("external_agent_approved_execution_loop",),
+    ),
+    (
+        "external_agent_approved_success_loop",
+        "External-agent approved action success loop",
+        ("external_agent_approved_success_loop",),
+    ),
+    (
+        "external_agent_resolved_operations_loop",
+        "External-agent resolved operations loop",
+        ("external_agent_resolved_operations_loop",),
+    ),
+    (
+        "mcp_adapter_operations_loop",
+        "Pulse MCP adapter operations loop",
+        ("mcp_adapter_operations_loop",),
+    ),
+    (
+        "mcp_adapter_approved_execution_loop",
+        "Pulse MCP adapter approved execution loop",
+        ("mcp_adapter_approved_execution_loop",),
+    ),
+    (
+        "mcp_adapter_approved_success_loop",
+        "Pulse MCP adapter approved success loop",
+        ("mcp_adapter_approved_success_loop",),
+    ),
+    (
+        "mcp_adapter_resolved_operations_loop",
+        "Pulse MCP adapter resolved operations loop",
+        ("mcp_adapter_resolved_operations_loop",),
+    ),
+)
 DEEP_SIGNAL_FIELDS = (
     ("agent_hosts", "Agent hosts", "count"),
     ("docker_containers", "Docker containers", "count"),
@@ -87,6 +841,14 @@ DEEP_SIGNAL_FIELDS = (
     ("discovery_enabled", "Discovery enabled", "bool"),
     ("notifications_enabled", "Notifications enabled", "bool"),
     ("ai_actions_enabled", "AI actions enabled", "bool"),
+    *(
+        (field, label, "bool")
+        for field, label in PULSE_INTELLIGENCE_BOOL_FIELDS
+    ),
+    *(
+        (field, label, "count")
+        for field, label in PULSE_INTELLIGENCE_COUNT_FIELDS
+    ),
 )
 GIT_DESCRIBE_RE = re.compile(
     r"^(?P<base>\d+\.\d+\.\d+(?:-[0-9A-Za-z\.-]+)?)-(?P<count>\d+)-g(?P<sha>[0-9a-fA-F]+)(?P<dirty>-dirty)?$"
@@ -512,6 +1274,429 @@ def summarize_deep_signal_sources(
     return result
 
 
+def summarize_pulse_intelligence_value_loop(
+    latest_by_install: dict[str, dict[str, Any]],
+    *,
+    now: datetime | None = None,
+    window: timedelta = timedelta(days=7),
+) -> dict[str, Any]:
+    current_time = now or datetime.now(timezone.utc)
+    active_installs = 0
+    paid_installs = 0
+    free_installs = 0
+
+    bool_signals = {
+        field: {
+            "field": field,
+            "label": label,
+            "installs": 0,
+            "paid_installs": 0,
+            "free_installs": 0,
+        }
+        for field, label in PULSE_INTELLIGENCE_BOOL_FIELDS
+    }
+    count_signals = {
+        field: {
+            "field": field,
+            "label": label,
+            "installs": 0,
+            "paid_installs": 0,
+            "free_installs": 0,
+            "total": 0,
+            "paid_total": 0,
+            "free_total": 0,
+        }
+        for field, label in PULSE_INTELLIGENCE_COUNT_FIELDS
+    }
+
+    for row in latest_by_install.values():
+        received_at = parse_received_at(str(row["received_at"]))
+        if current_time - received_at > window:
+            continue
+
+        active_installs += 1
+        paid = parse_optional_bool(row.get("paid_license")) is True
+        if paid:
+            paid_installs += 1
+        else:
+            free_installs += 1
+
+        for field, _ in PULSE_INTELLIGENCE_BOOL_FIELDS:
+            if not parse_optional_bool(row.get(field)):
+                continue
+            signal = bool_signals[field]
+            signal["installs"] += 1
+            if paid:
+                signal["paid_installs"] += 1
+            else:
+                signal["free_installs"] += 1
+
+        for field, _ in PULSE_INTELLIGENCE_COUNT_FIELDS:
+            value = parse_optional_nonnegative_int(row.get(field))
+            if value <= 0:
+                continue
+            signal = count_signals[field]
+            signal["installs"] += 1
+            signal["total"] += value
+            if paid:
+                signal["paid_installs"] += 1
+                signal["paid_total"] += value
+            else:
+                signal["free_installs"] += 1
+                signal["free_total"] += value
+
+    return {
+        "window": "7d",
+        "active_installs": active_installs,
+        "paid_installs": paid_installs,
+        "free_installs": free_installs,
+        "boolean_signals": list(bool_signals.values()),
+        "count_signals": list(count_signals.values()),
+    }
+
+
+def pulse_intelligence_row_matches_cohort(
+    row: dict[str, Any],
+    bool_fields: tuple[str, ...],
+    count_fields: tuple[str, ...],
+) -> bool:
+    return any(parse_optional_bool(row.get(field)) for field in bool_fields) or any(
+        parse_optional_nonnegative_int(row.get(field)) > 0 for field in count_fields
+    )
+
+
+def pulse_intelligence_timed_rows(
+    install_rows: Iterable[dict[str, Any]],
+) -> list[tuple[datetime, dict[str, Any], bool | None]]:
+    timed_rows = [
+        (
+            parse_received_at(str(row["received_at"])),
+            row,
+            parse_optional_bool(row.get("paid_license")),
+        )
+        for row in install_rows
+    ]
+    timed_rows.sort(key=lambda entry: entry[0])
+    return timed_rows
+
+
+def pulse_intelligence_first_paid_at(
+    timed_rows: Iterable[tuple[datetime, dict[str, Any], bool | None]],
+) -> datetime | None:
+    paid_times = [received_at for received_at, _, posture in timed_rows if posture is True]
+    return min(paid_times) if paid_times else None
+
+
+def pulse_intelligence_observed_conversion(
+    install_rows: Iterable[dict[str, Any]],
+) -> tuple[bool, bool]:
+    explicit_postures: list[tuple[datetime, bool]] = []
+    for received_at, _, posture in pulse_intelligence_timed_rows(install_rows):
+        if posture is not None:
+            explicit_postures.append((received_at, posture))
+    if not explicit_postures:
+        return False, False
+    first_free_at = next(
+        (received_at for received_at, posture in explicit_postures if posture is False),
+        None,
+    )
+    first_paid_at = next(
+        (received_at for received_at, posture in explicit_postures if posture is True),
+        None,
+    )
+    observed_free_start = first_free_at is not None and (
+        first_paid_at is None or first_free_at < first_paid_at
+    )
+    observed_free_to_paid = (
+        observed_free_start
+        and first_paid_at is not None
+        and first_free_at is not None
+        and first_free_at < first_paid_at
+    )
+    return observed_free_start, observed_free_to_paid
+
+
+def pulse_intelligence_signal_observed_conversion(
+    install_rows: Iterable[dict[str, Any]],
+    bool_fields: tuple[str, ...],
+    count_fields: tuple[str, ...],
+) -> tuple[bool, bool]:
+    timed_rows = pulse_intelligence_timed_rows(install_rows)
+    first_paid_at = pulse_intelligence_first_paid_at(timed_rows)
+    first_free_signal_at: datetime | None = None
+    for received_at, row, posture in timed_rows:
+        if posture is not False:
+            continue
+        if first_paid_at is not None and received_at >= first_paid_at:
+            continue
+        if pulse_intelligence_row_matches_cohort(row, bool_fields, count_fields):
+            first_free_signal_at = received_at
+            break
+
+    observed_free_signal = first_free_signal_at is not None
+    observed_signal_to_paid = observed_free_signal and first_paid_at is not None
+    return observed_free_signal, observed_signal_to_paid
+
+
+def pulse_intelligence_row_signal_groups(row: dict[str, Any]) -> set[str]:
+    groups: set[str] = set()
+    for group, (bool_fields, count_fields) in PULSE_INTELLIGENCE_OPERATION_SIGNAL_GROUPS.items():
+        if pulse_intelligence_row_matches_cohort(row, bool_fields, count_fields):
+            groups.add(group)
+    return pulse_intelligence_derive_signal_groups(groups)
+
+
+def pulse_intelligence_derive_signal_groups(groups: set[str]) -> set[str]:
+    if {"patrol_issue", "collaboration", "governed_decision"}.issubset(groups):
+        groups.add("complete_operations_loop")
+    if {"patrol_issue", "collaboration", "approved_execution"}.issubset(groups):
+        groups.add("approved_execution_loop")
+    if {"patrol_resolution", "collaboration", "approved_success"}.issubset(groups):
+        groups.add("resolved_operations_loop")
+    if {"patrol_issue", "assistant_collaboration", "governed_decision"}.issubset(groups):
+        groups.add("assistant_operations_loop")
+    if {"patrol_issue", "assistant_collaboration", "approved_execution"}.issubset(groups):
+        groups.add("assistant_approved_execution_loop")
+    if {"patrol_issue", "assistant_collaboration", "approved_success"}.issubset(groups):
+        groups.add("assistant_approved_success_loop")
+    if {"patrol_resolution", "assistant_collaboration", "approved_success"}.issubset(groups):
+        groups.add("assistant_resolved_operations_loop")
+    if {"patrol_issue", "external_agent_collaboration", "governed_decision"}.issubset(groups):
+        groups.add("external_agent_operations_loop")
+    if {"patrol_issue", "external_agent_collaboration", "approved_execution"}.issubset(groups):
+        groups.add("external_agent_approved_execution_loop")
+    if {"patrol_issue", "external_agent_collaboration", "approved_success"}.issubset(groups):
+        groups.add("external_agent_approved_success_loop")
+    if {"patrol_resolution", "external_agent_collaboration", "approved_success"}.issubset(groups):
+        groups.add("external_agent_resolved_operations_loop")
+    if {"patrol_issue", "mcp_adapter", "governed_decision"}.issubset(groups):
+        groups.add("mcp_adapter_operations_loop")
+    if {"patrol_issue", "mcp_adapter", "approved_execution"}.issubset(groups):
+        groups.add("mcp_adapter_approved_execution_loop")
+    if {"patrol_issue", "mcp_adapter", "approved_success"}.issubset(groups):
+        groups.add("mcp_adapter_approved_success_loop")
+    if {"patrol_resolution", "mcp_adapter", "approved_success"}.issubset(groups):
+        groups.add("mcp_adapter_resolved_operations_loop")
+    return groups
+
+
+def pulse_intelligence_stage_signal_observed_conversion(
+    install_rows: Iterable[dict[str, Any]],
+    required_groups: tuple[str, ...],
+) -> tuple[bool, bool]:
+    timed_rows = pulse_intelligence_timed_rows(install_rows)
+    first_paid_at = pulse_intelligence_first_paid_at(timed_rows)
+    groups_seen_while_free: set[str] = set()
+    for received_at, row, posture in timed_rows:
+        if posture is not False:
+            continue
+        if first_paid_at is not None and received_at >= first_paid_at:
+            continue
+        groups_seen_while_free.update(pulse_intelligence_row_signal_groups(row))
+    pulse_intelligence_derive_signal_groups(groups_seen_while_free)
+
+    observed_free_signal = all(group in groups_seen_while_free for group in required_groups)
+    observed_signal_to_paid = observed_free_signal and first_paid_at is not None
+    return observed_free_signal, observed_signal_to_paid
+
+
+def pulse_intelligence_rate_pct(part: int, total: int) -> float:
+    if total <= 0 or part <= 0:
+        return 0.0
+    return round((part / total) * 100, 2)
+
+
+def summarize_pulse_intelligence_install_outcomes(
+    install_ids: Iterable[str],
+    latest_by_install: dict[str, dict[str, Any]],
+    rows_by_install: dict[str, list[dict[str, Any]]],
+    current_time: datetime,
+    retention_window: timedelta,
+    signal_outcomes_by_install: dict[str, tuple[bool, bool]] | None = None,
+) -> dict[str, int]:
+    install_id_list = list(install_ids)
+    retained_installs = 0
+    paid_latest = 0
+    free_latest = 0
+    observed_free_starts = 0
+    observed_free_to_paid = 0
+    observed_signal_free_starts = 0
+    observed_signal_free_to_paid = 0
+
+    for install_id in install_id_list:
+        latest = latest_by_install.get(install_id)
+        if latest is None:
+            continue
+        latest_received_at = parse_received_at(str(latest["received_at"]))
+        if current_time - latest_received_at <= retention_window:
+            retained_installs += 1
+        if parse_optional_bool(latest.get("paid_license")) is True:
+            paid_latest += 1
+        else:
+            free_latest += 1
+        free_start, converted = pulse_intelligence_observed_conversion(
+            rows_by_install.get(install_id, [])
+        )
+        if free_start:
+            observed_free_starts += 1
+        if converted:
+            observed_free_to_paid += 1
+        if signal_outcomes_by_install is not None:
+            signal_free_start, signal_converted = signal_outcomes_by_install.get(
+                install_id,
+                (False, False),
+            )
+            if signal_free_start:
+                observed_signal_free_starts += 1
+            if signal_converted:
+                observed_signal_free_to_paid += 1
+
+    return {
+        "installs": len(install_id_list),
+        "retained_7d": retained_installs,
+        "retained_7d_rate_pct": pulse_intelligence_rate_pct(
+            retained_installs,
+            len(install_id_list),
+        ),
+        "paid_latest": paid_latest,
+        "paid_latest_rate_pct": pulse_intelligence_rate_pct(
+            paid_latest,
+            len(install_id_list),
+        ),
+        "free_latest": free_latest,
+        "observed_free_starts": observed_free_starts,
+        "observed_free_to_paid": observed_free_to_paid,
+        "observed_free_to_paid_rate_pct": pulse_intelligence_rate_pct(
+            observed_free_to_paid,
+            observed_free_starts,
+        ),
+        "observed_signal_free_starts": observed_signal_free_starts,
+        "observed_signal_free_to_paid": observed_signal_free_to_paid,
+        "observed_signal_free_to_paid_rate_pct": pulse_intelligence_rate_pct(
+            observed_signal_free_to_paid,
+            observed_signal_free_starts,
+        ),
+    }
+
+
+def group_pulse_intelligence_rows_by_install(
+    rows: Iterable[dict[str, Any]],
+) -> dict[str, list[dict[str, Any]]]:
+    rows_by_install: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        install_id = str(row.get("install_id") or "").strip()
+        if install_id:
+            rows_by_install.setdefault(install_id, []).append(row)
+    return rows_by_install
+
+
+def summarize_pulse_intelligence_outcome_cohorts(
+    rows: Iterable[dict[str, Any]],
+    latest_by_install: dict[str, dict[str, Any]],
+    *,
+    now: datetime | None = None,
+    retention_window: timedelta = timedelta(days=7),
+) -> dict[str, Any]:
+    current_time = now or datetime.now(timezone.utc)
+    cohort_install_ids: dict[str, set[str]] = {
+        key: set() for key, _, _, _ in PULSE_INTELLIGENCE_OUTCOME_COHORTS
+    }
+    rows_by_install = group_pulse_intelligence_rows_by_install(rows)
+
+    for install_id, install_rows in rows_by_install.items():
+        for row in install_rows:
+            for key, _, bool_fields, count_fields in PULSE_INTELLIGENCE_OUTCOME_COHORTS:
+                if pulse_intelligence_row_matches_cohort(row, bool_fields, count_fields):
+                    cohort_install_ids[key].add(install_id)
+
+    cohorts: list[dict[str, Any]] = []
+    for key, label, bool_fields, count_fields in PULSE_INTELLIGENCE_OUTCOME_COHORTS:
+        install_ids = cohort_install_ids[key]
+        signal_outcomes_by_install = {
+            install_id: pulse_intelligence_signal_observed_conversion(
+                install_rows,
+                bool_fields,
+                count_fields,
+            )
+            for install_id, install_rows in rows_by_install.items()
+        }
+        cohorts.append(
+            {
+                "key": key,
+                "label": label,
+                **summarize_pulse_intelligence_install_outcomes(
+                    install_ids,
+                    latest_by_install,
+                    rows_by_install,
+                    current_time,
+                    retention_window,
+                    signal_outcomes_by_install,
+                ),
+            }
+        )
+
+    return {
+        "retention_window": "7d",
+        "cohorts": cohorts,
+    }
+
+
+def summarize_pulse_intelligence_operations_funnel(
+    rows: Iterable[dict[str, Any]],
+    latest_by_install: dict[str, dict[str, Any]],
+    *,
+    now: datetime | None = None,
+    retention_window: timedelta = timedelta(days=7),
+) -> dict[str, Any]:
+    current_time = now or datetime.now(timezone.utc)
+    rows_by_install = group_pulse_intelligence_rows_by_install(rows)
+    signal_groups_by_install: dict[str, set[str]] = {
+        install_id: set() for install_id in rows_by_install
+    }
+
+    for install_id, install_rows in rows_by_install.items():
+        for row in install_rows:
+            signal_groups_by_install[install_id].update(
+                pulse_intelligence_row_signal_groups(row)
+            )
+        pulse_intelligence_derive_signal_groups(signal_groups_by_install[install_id])
+
+    stages: list[dict[str, Any]] = []
+    for key, label, required_groups in PULSE_INTELLIGENCE_OPERATIONS_FUNNEL_STAGES:
+        install_ids = [
+            install_id
+            for install_id, groups in signal_groups_by_install.items()
+            if all(group in groups for group in required_groups)
+        ]
+        signal_outcomes_by_install = {
+            install_id: pulse_intelligence_stage_signal_observed_conversion(
+                install_rows,
+                required_groups,
+            )
+            for install_id, install_rows in rows_by_install.items()
+        }
+        stages.append(
+            {
+                "key": key,
+                "label": label,
+                "required_signal_groups": list(required_groups),
+                **summarize_pulse_intelligence_install_outcomes(
+                    install_ids,
+                    latest_by_install,
+                    rows_by_install,
+                    current_time,
+                    retention_window,
+                    signal_outcomes_by_install,
+                ),
+            }
+        )
+
+    return {
+        "retention_window": "7d",
+        "stages": stages,
+    }
+
+
 def telemetry_signal_specs() -> list[dict[str, str]]:
     deep_fields = {key for key, _, _ in DEEP_SIGNAL_FIELDS}
     specs: list[dict[str, str]] = []
@@ -590,8 +1775,9 @@ def summarize_rows(
     published_versions: set[str],
     target_version: str | None = None,
 ) -> dict[str, Any]:
+    row_list = list(rows)
     latest_by_install: dict[str, dict[str, Any]] = {}
-    for row in rows:
+    for row in row_list:
         install_id = str(row["install_id"])
         existing = latest_by_install.get(install_id)
         if existing is None or str(row["received_at"]) > str(existing["received_at"]):
@@ -612,6 +1798,20 @@ def summarize_rows(
         "deep_signal_sources_7d": summarize_deep_signal_sources(
             latest_by_install,
             published_versions,
+            now=current_time,
+        ),
+        "pulse_intelligence_value_loop_7d": summarize_pulse_intelligence_value_loop(
+            latest_by_install,
+            now=current_time,
+        ),
+        "pulse_intelligence_outcome_cohorts": summarize_pulse_intelligence_outcome_cohorts(
+            row_list,
+            latest_by_install,
+            now=current_time,
+        ),
+        "pulse_intelligence_operations_loop_funnel": summarize_pulse_intelligence_operations_funnel(
+            row_list,
+            latest_by_install,
             now=current_time,
         ),
         "target_release_coverage_7d": summarize_target_version_coverage(
@@ -640,6 +1840,44 @@ def format_target_signal(signal: dict[str, Any]) -> str:
     if signal["type"] == "count":
         text += f", total {signal['total']}"
     return text
+
+
+def format_paid_install_split(installs: int, paid_installs: int, free_installs: int) -> str:
+    install_word = "install" if installs == 1 else "installs"
+    return f"{installs} {install_word} (paid {paid_installs}, free/community {free_installs})"
+
+
+def format_paid_count_split(signal: dict[str, Any]) -> str:
+    install_word = "install" if signal["installs"] == 1 else "installs"
+    return (
+        f"{signal['installs']} {install_word}, total {signal['total']} "
+        f"(paid {signal['paid_installs']} / {signal['paid_total']}; "
+        f"free/community {signal['free_installs']} / {signal['free_total']})"
+    )
+
+
+def format_rate(part: int, total: int) -> str:
+    if total <= 0:
+        return "0.0%"
+    return f"{(part / total) * 100:.1f}%"
+
+
+def format_pulse_intelligence_cohort(entry: dict[str, Any]) -> str:
+    install_word = "install" if entry["installs"] == 1 else "installs"
+    observed_free_starts = int(entry.get("observed_free_starts", 0))
+    observed_free_to_paid = int(entry.get("observed_free_to_paid", 0))
+    observed_signal_free_starts = int(entry.get("observed_signal_free_starts", 0))
+    observed_signal_free_to_paid = int(entry.get("observed_signal_free_to_paid", 0))
+    return (
+        f"{entry['label']}: {entry['installs']} {install_word}, "
+        f"retained 7d {entry['retained_7d']} ({format_rate(entry['retained_7d'], entry['installs'])}), "
+        f"latest paid {entry['paid_latest']}, latest free/community {entry['free_latest']}, "
+        f"observed free/community starts {observed_free_starts}, "
+        f"free-to-paid {observed_free_to_paid} ({format_rate(observed_free_to_paid, observed_free_starts)}), "
+        f"signal while free/community {observed_signal_free_starts}, "
+        f"signal-to-paid {observed_signal_free_to_paid} "
+        f"({format_rate(observed_signal_free_to_paid, observed_signal_free_starts)})"
+    )
 
 
 def format_text(summary: dict[str, Any], repo: str, since_days: int) -> str:
@@ -688,6 +1926,68 @@ def format_text(summary: dict[str, Any], repo: str, since_days: int) -> str:
         feature_counts = [entry for entry in window_summary.get("feature_enabled_installs", []) if entry["installs"] > 0]
         if feature_counts:
             lines.extend(f"  - {entry['label']}: {entry['installs']}" for entry in feature_counts)
+        else:
+            lines.append("  - none")
+
+    pulse_loop = summary.get("pulse_intelligence_value_loop_7d")
+    if pulse_loop:
+        lines.extend(
+            [
+                "",
+                "Pulse Intelligence value loop (7d):",
+                f"- active installs: {pulse_loop['active_installs']}",
+                f"- paid posture: paid {pulse_loop['paid_installs']}, free/community {pulse_loop['free_installs']}",
+                "- adoption flags:",
+            ]
+        )
+        bool_signals = [entry for entry in pulse_loop.get("boolean_signals", []) if entry["installs"] > 0]
+        if bool_signals:
+            lines.extend(
+                f"  - {entry['label']}: "
+                + format_paid_install_split(entry["installs"], entry["paid_installs"], entry["free_installs"])
+                for entry in bool_signals
+            )
+        else:
+            lines.append("  - none")
+
+        lines.append("- activity counters:")
+        count_signals = [entry for entry in pulse_loop.get("count_signals", []) if entry["total"] > 0]
+        if count_signals:
+            lines.extend(f"  - {entry['label']}: {format_paid_count_split(entry)}" for entry in count_signals)
+        else:
+            lines.append("  - none")
+
+    pulse_cohorts = summary.get("pulse_intelligence_outcome_cohorts")
+    if pulse_cohorts:
+        lines.extend(
+            [
+                "",
+                "Pulse Intelligence activation and retention:",
+                f"- source window: last {since_days} day(s)",
+                f"- retention definition: latest ping within {pulse_cohorts.get('retention_window', '7d')}",
+                "- cohorts:",
+            ]
+        )
+        cohorts = [entry for entry in pulse_cohorts.get("cohorts", []) if entry["installs"] > 0]
+        if cohorts:
+            lines.extend(f"  - {format_pulse_intelligence_cohort(entry)}" for entry in cohorts)
+        else:
+            lines.append("  - none")
+
+    pulse_funnel = summary.get("pulse_intelligence_operations_loop_funnel")
+    if pulse_funnel:
+        lines.extend(
+            [
+                "",
+                "Pulse Intelligence operations loop funnel:",
+                f"- source window: last {since_days} day(s)",
+                f"- retention definition: latest ping within {pulse_funnel.get('retention_window', '7d')}",
+                "- stages:",
+            ]
+        )
+        stages = [entry for entry in pulse_funnel.get("stages", []) if entry["installs"] > 0]
+        if stages:
+            lines.extend(f"  - {format_pulse_intelligence_cohort(entry)}" for entry in stages)
         else:
             lines.append("  - none")
 

@@ -50,14 +50,14 @@ func (m *MockDiscoverySource) TriggerDiscovery(ctx context.Context, resourceType
 	return args.Get(0).(DiscoverySourceData), args.Error(1)
 }
 
-func TestNewDiscoveryMCPAdapter(t *testing.T) {
-	assert.Nil(t, NewDiscoveryMCPAdapter(nil))
-	assert.NotNil(t, NewDiscoveryMCPAdapter(&MockDiscoverySource{}))
+func TestNewDiscoveryToolAdapter(t *testing.T) {
+	assert.Nil(t, NewDiscoveryToolAdapter(nil))
+	assert.NotNil(t, NewDiscoveryToolAdapter(&MockDiscoverySource{}))
 }
 
-func TestDiscoveryMCPAdapter_GetDiscovery(t *testing.T) {
+func TestDiscoveryToolAdapter_GetDiscovery(t *testing.T) {
 	mockSource := &MockDiscoverySource{}
-	adapter := NewDiscoveryMCPAdapter(mockSource)
+	adapter := NewDiscoveryToolAdapter(mockSource)
 
 	expectedData := DiscoverySourceData{
 		ID:           "test-id",
@@ -85,9 +85,9 @@ func TestDiscoveryMCPAdapter_GetDiscovery(t *testing.T) {
 	mockSource.AssertExpectations(t)
 }
 
-func TestDiscoveryMCPAdapter_GetDiscovery_Error(t *testing.T) {
+func TestDiscoveryToolAdapter_GetDiscovery_Error(t *testing.T) {
 	mockSource := &MockDiscoverySource{}
-	adapter := NewDiscoveryMCPAdapter(mockSource)
+	adapter := NewDiscoveryToolAdapter(mockSource)
 
 	mockSource.On("GetDiscovery", "invalid").Return(DiscoverySourceData{}, errors.New("not found"))
 
@@ -98,9 +98,9 @@ func TestDiscoveryMCPAdapter_GetDiscovery_Error(t *testing.T) {
 	mockSource.AssertExpectations(t)
 }
 
-func TestDiscoveryMCPAdapter_GetDiscoveryByResource(t *testing.T) {
+func TestDiscoveryToolAdapter_GetDiscoveryByResource(t *testing.T) {
 	mockSource := &MockDiscoverySource{}
-	adapter := NewDiscoveryMCPAdapter(mockSource)
+	adapter := NewDiscoveryToolAdapter(mockSource)
 
 	expectedData := DiscoverySourceData{
 		ID:         "res-id",
@@ -117,9 +117,9 @@ func TestDiscoveryMCPAdapter_GetDiscoveryByResource(t *testing.T) {
 	mockSource.AssertExpectations(t)
 }
 
-func TestDiscoveryMCPAdapter_GetDiscovery_UsesTargetID(t *testing.T) {
+func TestDiscoveryToolAdapter_GetDiscovery_UsesTargetID(t *testing.T) {
 	mockSource := &MockDiscoverySource{}
-	adapter := NewDiscoveryMCPAdapter(mockSource)
+	adapter := NewDiscoveryToolAdapter(mockSource)
 
 	expectedData := DiscoverySourceData{
 		ID:           "legacy-id",
@@ -137,9 +137,9 @@ func TestDiscoveryMCPAdapter_GetDiscovery_UsesTargetID(t *testing.T) {
 	mockSource.AssertExpectations(t)
 }
 
-func TestDiscoveryMCPAdapter_ListDiscoveries(t *testing.T) {
+func TestDiscoveryToolAdapter_ListDiscoveries(t *testing.T) {
 	mockSource := &MockDiscoverySource{}
-	adapter := NewDiscoveryMCPAdapter(mockSource)
+	adapter := NewDiscoveryToolAdapter(mockSource)
 
 	list := []DiscoverySourceData{
 		{ID: "d1", ServiceName: "s1"},
@@ -157,9 +157,9 @@ func TestDiscoveryMCPAdapter_ListDiscoveries(t *testing.T) {
 	mockSource.AssertExpectations(t)
 }
 
-func TestDiscoveryMCPAdapter_ListDiscoveriesByType(t *testing.T) {
+func TestDiscoveryToolAdapter_ListDiscoveriesByType(t *testing.T) {
 	mockSource := &MockDiscoverySource{}
-	adapter := NewDiscoveryMCPAdapter(mockSource)
+	adapter := NewDiscoveryToolAdapter(mockSource)
 
 	list := []DiscoverySourceData{{ID: "d1", ResourceType: "vm"}}
 	mockSource.On("ListDiscoveriesByType", "vm").Return(list, nil)
@@ -171,9 +171,9 @@ func TestDiscoveryMCPAdapter_ListDiscoveriesByType(t *testing.T) {
 	mockSource.AssertExpectations(t)
 }
 
-func TestDiscoveryMCPAdapter_ListDiscoveriesByTarget(t *testing.T) {
+func TestDiscoveryToolAdapter_ListDiscoveriesByTarget(t *testing.T) {
 	mockSource := &MockDiscoverySource{}
-	adapter := NewDiscoveryMCPAdapter(mockSource)
+	adapter := NewDiscoveryToolAdapter(mockSource)
 
 	list := []DiscoverySourceData{{ID: "d1", TargetID: "h1"}}
 	mockSource.On("ListDiscoveriesByTarget", "h1").Return(list, nil)
@@ -185,9 +185,9 @@ func TestDiscoveryMCPAdapter_ListDiscoveriesByTarget(t *testing.T) {
 	mockSource.AssertExpectations(t)
 }
 
-func TestDiscoveryMCPAdapter_TriggerDiscovery(t *testing.T) {
+func TestDiscoveryToolAdapter_TriggerDiscovery(t *testing.T) {
 	mockSource := &MockDiscoverySource{}
-	adapter := NewDiscoveryMCPAdapter(mockSource)
+	adapter := NewDiscoveryToolAdapter(mockSource)
 	ctx := context.Background()
 
 	expectedData := DiscoverySourceData{ID: "new1"}
@@ -200,9 +200,9 @@ func TestDiscoveryMCPAdapter_TriggerDiscovery(t *testing.T) {
 	mockSource.AssertExpectations(t)
 }
 
-func TestDiscoveryMCPAdapter_FormatForAIContext(t *testing.T) {
+func TestDiscoveryToolAdapter_FormatForAIContext(t *testing.T) {
 	mockSource := &MockDiscoverySource{}
-	adapter := NewDiscoveryMCPAdapter(mockSource)
+	adapter := NewDiscoveryToolAdapter(mockSource)
 
 	inputs := []*ResourceDiscoveryInfo{
 		{

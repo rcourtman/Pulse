@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 )
 
 // maxLabelLen is the maximum length for a metric label value
@@ -219,7 +220,7 @@ func (c *AIMetricsTelemetryCallback) RecordStrictResolutionBlock(tool, action st
 	if c.metrics != nil {
 		c.metrics.RecordStrictResolutionBlock(tool, action)
 		// Strict resolution returns policy facts; the model owns any follow-up.
-		c.metrics.RecordAutoRecoveryAttempt("STRICT_RESOLUTION", tool)
+		c.metrics.RecordAutoRecoveryAttempt(agentcapabilities.ErrCodeStrictResolution, tool)
 	}
 }
 
@@ -242,6 +243,6 @@ func (c *AIMetricsTelemetryCallback) RecordRoutingMismatchBlock(tool, targetKind
 	if c.metrics != nil {
 		c.metrics.RecordRoutingMismatchBlock(tool, targetKind, childKind)
 		// Routing mismatch returns policy facts; the model owns any follow-up.
-		c.metrics.RecordAutoRecoveryAttempt("ROUTING_MISMATCH", tool)
+		c.metrics.RecordAutoRecoveryAttempt(agentcapabilities.ErrCodeRoutingMismatch, tool)
 	}
 }

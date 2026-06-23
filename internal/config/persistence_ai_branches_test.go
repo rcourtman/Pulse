@@ -221,6 +221,132 @@ func TestLoadAIUsageHistory_MigratesPlaintextFile(t *testing.T) {
 	}
 }
 
+func TestLoadExternalAgentActivityHistory_Branches(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := NewConfigPersistence(tempDir)
+	activityFile := filepath.Join(tempDir, "external_agent_activity.json")
+
+	// 1. Not Exists
+	os.Remove(activityFile)
+	data, err := cp.LoadExternalAgentActivityHistory()
+	assert.NoError(t, err)
+	assert.NotNil(t, data)
+	assert.Empty(t, data.Events)
+
+	// 2. Unmarshal Error
+	_ = os.WriteFile(activityFile, []byte("not json"), 0600)
+	data, err = cp.LoadExternalAgentActivityHistory()
+	assert.NoError(t, err)
+	assert.Empty(t, data.Events)
+
+	// 3. Read Error
+	mfs := &mockFSError{FileSystem: defaultFileSystem{}, readError: errors.New("read error")}
+	cp.SetFileSystem(mfs)
+	_, err = cp.LoadExternalAgentActivityHistory()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "read error")
+}
+
+func TestLoadExternalAgentActivityHistory_MigratesPlaintextFile(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := NewConfigPersistence(tempDir)
+	activityFile := filepath.Join(tempDir, "external_agent_activity.json")
+
+	plaintext := ExternalAgentActivityHistoryData{
+		Version: 1,
+		Events: []ExternalAgentActivityRecord{{
+			Timestamp: time.Now().UTC(),
+			Surface:   ExternalAgentActivitySurfaceAgentAPI,
+			Activity:  ExternalAgentActivityFleetContext,
+		}},
+		LastSaved: time.Now().UTC(),
+	}
+	raw, err := json.Marshal(plaintext)
+	if err != nil {
+		t.Fatalf("marshal plaintext external agent activity history: %v", err)
+	}
+	if err := os.WriteFile(activityFile, raw, 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	data, err := cp.LoadExternalAgentActivityHistory()
+	if err != nil {
+		t.Fatalf("LoadExternalAgentActivityHistory: %v", err)
+	}
+	assert.NotNil(t, data)
+
+	rewritten, err := os.ReadFile(activityFile)
+	if err != nil {
+		t.Fatalf("ReadFile rewritten external agent activity history: %v", err)
+	}
+	if bytes.Equal(rewritten, raw) {
+		t.Fatalf("expected plaintext external agent activity history file to be rewritten encrypted")
+	}
+}
+
+func TestLoadWorkflowPromptActivityHistory_Branches(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := NewConfigPersistence(tempDir)
+	activityFile := filepath.Join(tempDir, "workflow_prompt_activity.json")
+
+	// 1. Not Exists
+	os.Remove(activityFile)
+	data, err := cp.LoadWorkflowPromptActivityHistory()
+	assert.NoError(t, err)
+	assert.NotNil(t, data)
+	assert.Empty(t, data.Events)
+
+	// 2. Unmarshal Error
+	_ = os.WriteFile(activityFile, []byte("not json"), 0600)
+	data, err = cp.LoadWorkflowPromptActivityHistory()
+	assert.NoError(t, err)
+	assert.Empty(t, data.Events)
+
+	// 3. Read Error
+	mfs := &mockFSError{FileSystem: defaultFileSystem{}, readError: errors.New("read error")}
+	cp.SetFileSystem(mfs)
+	_, err = cp.LoadWorkflowPromptActivityHistory()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "read error")
+}
+
+func TestLoadWorkflowPromptActivityHistory_MigratesPlaintextFile(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := NewConfigPersistence(tempDir)
+	activityFile := filepath.Join(tempDir, "workflow_prompt_activity.json")
+
+	plaintext := WorkflowPromptActivityHistoryData{
+		Version: 1,
+		Events: []WorkflowPromptActivityRecord{{
+			Timestamp:  time.Now().UTC(),
+			Surface:    WorkflowPromptActivitySurfacePulseAssistant,
+			PromptName: "pulse_operations_loop",
+		}},
+		LastSaved: time.Now().UTC(),
+	}
+	raw, err := json.Marshal(plaintext)
+	if err != nil {
+		t.Fatalf("marshal plaintext workflow prompt activity history: %v", err)
+	}
+	if err := os.WriteFile(activityFile, raw, 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	data, err := cp.LoadWorkflowPromptActivityHistory()
+	if err != nil {
+		t.Fatalf("LoadWorkflowPromptActivityHistory: %v", err)
+	}
+	assert.NotNil(t, data)
+
+	rewritten, err := os.ReadFile(activityFile)
+	if err != nil {
+		t.Fatalf("ReadFile rewritten workflow prompt activity history: %v", err)
+	}
+	if bytes.Equal(rewritten, raw) {
+		t.Fatalf("expected plaintext workflow prompt activity history file to be rewritten encrypted")
+	}
+}
+
 func TestLoadPatrolRunHistory_Branches(t *testing.T) {
 	tempDir := t.TempDir()
 	cp := NewConfigPersistence(tempDir)

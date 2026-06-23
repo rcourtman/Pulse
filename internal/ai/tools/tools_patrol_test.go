@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -127,8 +128,10 @@ func TestHandlePatrolReportFinding_ValidInput(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(text), &parsed))
 
 	assert.Equal(t, true, parsed["ok"])
-	assert.Equal(t, "finding-123", parsed["finding_id"])
+	assert.Equal(t, "finding-123", parsed[agentcapabilities.FindingIDArgumentName])
 	assert.Equal(t, true, parsed["is_new"])
+	assert.Equal(t, true, result.StructuredContent["ok"])
+	assert.Equal(t, "finding-123", result.StructuredContent[agentcapabilities.FindingIDArgumentName])
 
 	// Verify the creator was called with correct input
 	require.Len(t, creator.createCalls, 1)
@@ -400,8 +403,9 @@ func TestHandlePatrolReportFinding_DuplicateFinding(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(text), &parsed))
 
 	assert.Equal(t, true, parsed["ok"])
-	assert.Equal(t, "finding-existing", parsed["finding_id"])
+	assert.Equal(t, "finding-existing", parsed[agentcapabilities.FindingIDArgumentName])
 	assert.Equal(t, false, parsed["is_new"])
+	assert.Equal(t, "finding-existing", result.StructuredContent[agentcapabilities.FindingIDArgumentName])
 }
 
 func TestHandlePatrolReportFinding_CreatorError(t *testing.T) {
@@ -446,8 +450,8 @@ func TestHandlePatrolResolveFinding_NilCreator(t *testing.T) {
 	exec := NewPulseToolExecutor(ExecutorConfig{})
 
 	result, err := handlePatrolResolveFinding(context.Background(), exec, map[string]interface{}{
-		"finding_id": "f-123",
-		"reason":     "CPU recovered",
+		agentcapabilities.FindingIDArgumentName: "f-123",
+		agentcapabilities.ReasonArgumentName:    "CPU recovered",
 	})
 	require.NoError(t, err)
 
@@ -460,8 +464,8 @@ func TestHandlePatrolResolveFinding_RequiresGetFindings(t *testing.T) {
 	exec := newPatrolTestExecutor(creator)
 
 	result, err := handlePatrolResolveFinding(context.Background(), exec, map[string]interface{}{
-		"finding_id": "f-123",
-		"reason":     "CPU recovered",
+		agentcapabilities.FindingIDArgumentName: "f-123",
+		agentcapabilities.ReasonArgumentName:    "CPU recovered",
 	})
 	require.NoError(t, err)
 
@@ -474,8 +478,8 @@ func TestHandlePatrolResolveFinding_ValidInput(t *testing.T) {
 	exec := newPatrolTestExecutor(creator)
 
 	result, err := handlePatrolResolveFinding(context.Background(), exec, map[string]interface{}{
-		"finding_id": "f-123",
-		"reason":     "CPU has returned to 35%",
+		agentcapabilities.FindingIDArgumentName: "f-123",
+		agentcapabilities.ReasonArgumentName:    "CPU has returned to 35%",
 	})
 	require.NoError(t, err)
 
@@ -485,6 +489,8 @@ func TestHandlePatrolResolveFinding_ValidInput(t *testing.T) {
 
 	assert.Equal(t, true, parsed["ok"])
 	assert.Equal(t, true, parsed["resolved"])
+	assert.Equal(t, true, result.StructuredContent["ok"])
+	assert.Equal(t, true, result.StructuredContent["resolved"])
 
 	require.Len(t, creator.resolveCalls, 1)
 	assert.Equal(t, "f-123", creator.resolveCalls[0].FindingID)
@@ -496,7 +502,7 @@ func TestHandlePatrolResolveFinding_MissingFindingID(t *testing.T) {
 	exec := newPatrolTestExecutor(creator)
 
 	result, err := handlePatrolResolveFinding(context.Background(), exec, map[string]interface{}{
-		"reason": "CPU recovered",
+		agentcapabilities.ReasonArgumentName: "CPU recovered",
 	})
 	require.NoError(t, err)
 
@@ -509,7 +515,7 @@ func TestHandlePatrolResolveFinding_MissingReason(t *testing.T) {
 	exec := newPatrolTestExecutor(creator)
 
 	result, err := handlePatrolResolveFinding(context.Background(), exec, map[string]interface{}{
-		"finding_id": "f-123",
+		agentcapabilities.FindingIDArgumentName: "f-123",
 	})
 	require.NoError(t, err)
 
@@ -527,8 +533,8 @@ func TestHandlePatrolResolveFinding_ResolveError(t *testing.T) {
 	exec := newPatrolTestExecutor(creator)
 
 	result, err := handlePatrolResolveFinding(context.Background(), exec, map[string]interface{}{
-		"finding_id": "f-nonexistent",
-		"reason":     "CPU recovered",
+		agentcapabilities.FindingIDArgumentName: "f-nonexistent",
+		agentcapabilities.ReasonArgumentName:    "CPU recovered",
 	})
 	require.NoError(t, err)
 
@@ -562,6 +568,8 @@ func TestHandlePatrolGetFindings_EmptyResult(t *testing.T) {
 
 	assert.Equal(t, true, parsed["ok"])
 	assert.Equal(t, float64(0), parsed["count"])
+	assert.Equal(t, true, result.StructuredContent["ok"])
+	assert.Equal(t, "0", fmt.Sprint(result.StructuredContent["count"]))
 }
 
 func TestHandlePatrolGetFindings_WithFindings(t *testing.T) {
@@ -604,6 +612,8 @@ func TestHandlePatrolGetFindings_WithFindings(t *testing.T) {
 
 	assert.Equal(t, true, parsed["ok"])
 	assert.Equal(t, float64(2), parsed["count"])
+	assert.Equal(t, true, result.StructuredContent["ok"])
+	assert.Equal(t, "2", fmt.Sprint(result.StructuredContent["count"]))
 
 	findings := parsed["findings"].([]interface{})
 	require.Len(t, findings, 2)
@@ -676,15 +686,24 @@ func TestPatrolToolsRegistered(t *testing.T) {
 	// Patrol tools should be registered but availability depends on patrolFindingCreator
 	tools := exec.registry.ListTools(ControlLevelReadOnly)
 	found := map[string]bool{}
+	var resolveTool Tool
 	for _, tool := range tools {
 		if tool.Name == "patrol_report_finding" || tool.Name == "patrol_resolve_finding" || tool.Name == "patrol_get_findings" {
 			found[tool.Name] = true
+		}
+		if tool.Name == "patrol_resolve_finding" {
+			resolveTool = tool
 		}
 	}
 
 	assert.True(t, found["patrol_report_finding"], "patrol_report_finding should be registered")
 	assert.True(t, found["patrol_resolve_finding"], "patrol_resolve_finding should be registered")
 	assert.True(t, found["patrol_get_findings"], "patrol_get_findings should be registered")
+	require.NotEmpty(t, resolveTool.Name)
+	assert.Contains(t, resolveTool.InputSchema.Required, agentcapabilities.FindingIDArgumentName)
+	assert.Contains(t, resolveTool.InputSchema.Required, agentcapabilities.ReasonArgumentName)
+	assert.Contains(t, resolveTool.InputSchema.Properties, agentcapabilities.FindingIDArgumentName)
+	assert.Contains(t, resolveTool.InputSchema.Properties, agentcapabilities.ReasonArgumentName)
 }
 
 func TestPatrolToolsAvailability(t *testing.T) {

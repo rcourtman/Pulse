@@ -182,7 +182,7 @@ Self-hosted tiers:
 |---|---:|---|---:|---|
 | Community | Free | Included | 7 days | Full self-hosted monitoring |
 | Relay | $39/yr or $4.99/mo | Included | 14 days | Remote web access, mobile app pairing, and push notifications |
-| Pro | $79/yr or $8.99/mo | Included | 90 days | Root-cause analysis, safe remediation workflows, and operations tooling |
+| Pro | $79/yr or $8.99/mo | Included | 90 days | Hands-on Patrol modes, issue investigation, verified fixes, and operations tooling |
 
 Pulse still counts top-level monitored systems once no matter how they are
 collected. VMs, containers, pods, disks, backups, and other child resources
@@ -198,8 +198,8 @@ Runtime-aligned capability summary:
 |---|:---:|:---:|:---:|:---:|
 | Pulse Patrol (Background Health Checks) | ✅ | ✅ | ✅ | ✅ |
 | Remote Access / Mobile / Push | — | ✅ | ✅ | ✅ |
-| Alert-Triggered Root-Cause Analysis | — | — | ✅ | ✅ |
-| Safe Remediation Workflows | — | — | ✅ | ✅ |
+| Patrol Investigates Issues | — | — | ✅ | ✅ |
+| Patrol Handles Safe Fixes | — | — | ✅ | ✅ |
 | Centralized Agent Profiles | — | — | ✅ | ✅ |
 | Update Alerts (Container/Package Updates) | ✅ | ✅ | ✅ | ✅ |
 | SSO (OIDC/SAML/Multi-Provider) | ✅ | ✅ | ✅ | ✅ |

@@ -7,24 +7,182 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 )
 
-// TestBuildInputSchema_PathPlaceholdersBecomeRequiredStringProps
+type httpDoerFunc func(*http.Request) (*http.Response, error)
+
+func (f httpDoerFunc) Do(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+func TestAgentCapabilityUsesSharedWireContract(t *testing.T) {
+	rawSchema := json.RawMessage(`{"type":"object","additionalProperties":false}`)
+	rawOutputSchema := json.RawMessage(`{"type":"object","properties":{"resources":{"type":"array"}}}`)
+	capability := agentCapability{
+		Name:         "get_fleet_context",
+		Method:       http.MethodGet,
+		Path:         "/api/agent/fleet-context",
+		ActionMode:   agentcapabilities.ActionModeRead,
+		InputSchema:  rawSchema,
+		OutputSchema: rawOutputSchema,
+	}
+	manifest := agentCapabilitiesManifest{
+		Version:      "v1",
+		Capabilities: []agentcapabilities.Capability{capability},
+	}
+	var shared agentCapability = manifest.Capabilities[0]
+
+	if shared.Name != capability.Name {
+		t.Fatalf("shared manifest capability name = %q, want %q", shared.Name, capability.Name)
+	}
+	if shared.ActionMode != agentcapabilities.ActionModeRead {
+		t.Fatalf("shared manifest action mode = %q, want %q", shared.ActionMode, agentcapabilities.ActionModeRead)
+	}
+	if string(shared.InputSchema) != string(rawSchema) {
+		t.Fatalf("shared manifest input schema = %s, want %s", shared.InputSchema, rawSchema)
+	}
+	if string(shared.OutputSchema) != string(rawOutputSchema) {
+		t.Fatalf("shared manifest output schema = %s, want %s", shared.OutputSchema, rawOutputSchema)
+	}
+}
+
+func TestMissingAPITokenMessageUsesManifestScopeSummary(t *testing.T) {
+	msg := missingAPITokenMessage("PULSE_API_TOKEN", &agentCapabilitiesManifest{
+		RequiredScopes: []string{
+			"settings:write",
+			"monitoring:read",
+			"ai:execute",
+			"monitoring:read",
+		},
+		Capabilities: []agentCapability{
+			{Name: "legacy_extra", Scope: "monitoring:write"},
+		},
+	})
+
+	for _, want := range []string{
+		"env var PULSE_API_TOKEN is empty",
+		"current manifest scopes: monitoring:read, settings:write, ai:execute",
+	} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("missing token message missing %q in %q", want, msg)
+		}
+	}
+	if strings.Count(msg, "monitoring:read") != 1 {
+		t.Fatalf("missing token message must deduplicate scopes; got %q", msg)
+	}
+}
+
+func TestMissingAPITokenMessageFallsBackForLegacyManifest(t *testing.T) {
+	msg := missingAPITokenMessage("PULSE_API_TOKEN", &agentCapabilitiesManifest{
+		Capabilities: []agentCapability{
+			{Name: "write_settings", Scope: "settings:write"},
+			{Name: "read_monitoring", Scope: "monitoring:read"},
+		},
+	})
+
+	if !strings.Contains(msg, "current manifest scopes: monitoring:read, settings:write") {
+		t.Fatalf("missing token message should fall back to capability scopes for legacy manifests; got %q", msg)
+	}
+}
+
+func TestMainTokenGuidanceUsesSharedManifestScopeSummary(t *testing.T) {
+	source, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatalf("read main.go: %v", err)
+	}
+	text := string(source)
+	if !strings.Contains(text, "agentcapabilities.ManifestRequiredScopeList(manifest)") {
+		t.Fatal("pulse-mcp token guidance must consume the manifest-owned requiredScopes summary")
+	}
+	if strings.Contains(text, "RequiredCapabilityScopeList(capabilities)") {
+		t.Fatal("pulse-mcp token guidance must not recompute current manifest scopes from capability rows")
+	}
+	if strings.Contains(text, "monitoring:read scope (and monitoring:write") {
+		t.Fatal("pulse-mcp must not hardcode partial token-scope guidance in startup errors")
+	}
+}
+
+func TestMainUsesSharedMCPAdapterRuntimeDefaults(t *testing.T) {
+	source, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatalf("read main.go: %v", err)
+	}
+	text := string(source)
+	for _, want := range []string{
+		`flag.String("base-url", agentcapabilities.DefaultMCPAdapterDefaultBaseURL`,
+		`flag.String("token-env", agentcapabilities.DefaultMCPAdapterTokenEnv`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("pulse-mcp runtime defaults must come from the shared MCP adapter contract; missing %s", want)
+		}
+	}
+}
+
+func TestReadmePresentsSharedMCPClientConfig(t *testing.T) {
+	source, err := os.ReadFile("README.md")
+	if err != nil {
+		t.Fatalf("read README.md: %v", err)
+	}
+	text := string(source)
+	for _, want := range []string{
+		agentcapabilities.MCPReadmeClientConfigStartMarker,
+		agentcapabilities.MCPReadmeClientConfigEndMarker,
+		"Most MCP clients need the same manifest-owned runtime facts",
+		"server name `pulse`, command `pulse-mcp`, base URL flag `--base-url`",
+		"currently declared config families: `OpenCode`, `Claude-style clients`, and `custom MCP clients`",
+		"Uses OpenCode's top-level mcp object.",
+		`"type": "local"`,
+		`"command": ["pulse-mcp", "--base-url", "http://localhost:7655"]`,
+		`"environment": {`,
+		"Uses the common mcpServers object supported by Claude Desktop and Claude Code.",
+		"Use command `pulse-mcp`, pass `--base-url http://localhost:7655`",
+		"Restart your client after saving the config.",
+		"Claude Desktop",
+		"Claude Code",
+		"OpenCode",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("README.md must include shared MCP client setup copy %q", want)
+		}
+	}
+	if strings.Contains(text, "Restart Claude Desktop. The Pulse tools appear") {
+		t.Fatal("README.md must not present Pulse MCP setup as Claude Desktop-only")
+	}
+	if strings.Contains(text, "The examples below use the common\n`mcpServers` shape") {
+		t.Fatal("README.md must not present OpenCode as a generic mcpServers wrapper")
+	}
+}
+
+func testPulseMCPSurfaceToolContracts(toolNames ...string) []agentcapabilities.SurfaceToolContract {
+	return []agentcapabilities.SurfaceToolContract{
+		{
+			SurfaceID:   agentcapabilities.SurfaceIDPulseMCP,
+			ToolSource:  agentcapabilities.SurfaceToolSourceCapabilityManifest,
+			ToolNames:   append([]string(nil), toolNames...),
+			Affordances: agentcapabilities.DefaultSurfaceAffordancesForID(agentcapabilities.SurfaceIDPulseMCP),
+		},
+	}
+}
+
+// TestToolInputSchema_PathPlaceholdersBecomeRequiredStringProps
 // pins the rule that turns capability paths into MCP tool input
 // schemas: every {name} segment in the path becomes a required
 // string property the agent must supply, with a description that
 // hints at the canonical shape ("vm:101", "container:web-1") so
 // the LLM forms the right id without back-and-forth.
-func TestBuildInputSchema_PathPlaceholdersBecomeRequiredStringProps(t *testing.T) {
+func TestToolInputSchema_PathPlaceholdersBecomeRequiredStringProps(t *testing.T) {
 	cap := agentCapability{
 		Name:   "get_resource_context",
 		Path:   "/api/agent/resource-context/{resourceId}",
 		Method: http.MethodGet,
 	}
-	raw := buildInputSchema(cap)
+	raw := agentcapabilities.ToolInputSchema(cap)
 	var schema map[string]any
 	if err := json.Unmarshal(raw, &schema); err != nil {
 		t.Fatalf("unmarshal schema: %v", err)
@@ -48,13 +206,13 @@ func TestBuildInputSchema_PathPlaceholdersBecomeRequiredStringProps(t *testing.T
 	}
 }
 
-// TestBuildInputSchema_NonGetCapabilitiesAcceptBody pins that
+// TestToolInputSchema_NonGetCapabilitiesAcceptBody pins that
 // non-GET/DELETE tools expose a `body` property the agent fills
 // with the request payload. GET tools must NOT advertise a body
 // property so the agent doesn't try to send one (which would be
 // dropped by net/http anyway, but advertising it would be
 // misleading).
-func TestBuildInputSchema_NonGetCapabilitiesAcceptBody(t *testing.T) {
+func TestToolInputSchema_NonGetCapabilitiesAcceptBody(t *testing.T) {
 	get := agentCapability{Path: "/api/foo", Method: http.MethodGet}
 	post := agentCapability{
 		Path:             "/api/foo",
@@ -74,7 +232,7 @@ func TestBuildInputSchema_NonGetCapabilitiesAcceptBody(t *testing.T) {
 		"DELETE": {del, false},
 	} {
 		t.Run(name, func(t *testing.T) {
-			raw := buildInputSchema(tc.cap)
+			raw := agentcapabilities.ToolInputSchema(tc.cap)
 			var schema map[string]any
 			if err := json.Unmarshal(raw, &schema); err != nil {
 				t.Fatalf("unmarshal schema: %v", err)
@@ -88,7 +246,28 @@ func TestBuildInputSchema_NonGetCapabilitiesAcceptBody(t *testing.T) {
 	}
 }
 
-func TestBuildInputSchema_UsesManifestProvidedSchema(t *testing.T) {
+func TestToolInputSchema_FallbackUsesSharedPermissiveEnvelope(t *testing.T) {
+	raw := agentcapabilities.ToolInputSchema(agentCapability{
+		Path:   "/api/resources/{id}/operator-state",
+		Method: http.MethodPut,
+	})
+	var schema map[string]any
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		t.Fatalf("unmarshal schema: %v", err)
+	}
+	if schema["additionalProperties"] != true {
+		t.Fatalf("fallback schema additionalProperties = %v, want true", schema["additionalProperties"])
+	}
+	props, _ := schema["properties"].(map[string]any)
+	if _, hasID := props["id"]; !hasID {
+		t.Fatalf("fallback schema must include path argument id: %v", props)
+	}
+	if _, hasBody := props["body"]; !hasBody {
+		t.Fatalf("fallback schema must include body property for non-GET methods: %v", props)
+	}
+}
+
+func TestToolInputSchema_UsesManifestProvidedSchema(t *testing.T) {
 	rawSchema := json.RawMessage(`{
 		"type": "object",
 		"properties": {
@@ -105,7 +284,7 @@ func TestBuildInputSchema_UsesManifestProvidedSchema(t *testing.T) {
 		InputSchema: rawSchema,
 	}
 
-	got := buildInputSchema(cap)
+	got := agentcapabilities.ToolInputSchema(cap)
 	var schema map[string]any
 	if err := json.Unmarshal(got, &schema); err != nil {
 		t.Fatalf("unmarshal schema: %v", err)
@@ -118,25 +297,99 @@ func TestBuildInputSchema_UsesManifestProvidedSchema(t *testing.T) {
 	}
 }
 
-func TestSubstitutePathParams_FillsAllPlaceholders(t *testing.T) {
-	got, err := substitutePathParams(
+func TestToolInputSchema_PreservesManifestActionArgumentSchema(t *testing.T) {
+	rawSchema := json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"actionId": { "type": "string", "pattern": "^[a-zA-Z0-9_-]+$" },
+			"outcome": { "type": "string", "enum": ["approved", "rejected"] },
+			"reason": { "type": "string" }
+		},
+		"required": ["actionId", "outcome"],
+		"additionalProperties": false
+	}`)
+	cap := agentCapability{
+		Name:        "decide_action",
+		Path:        "/api/actions/{actionId}/decision",
+		Method:      http.MethodPost,
+		InputSchema: rawSchema,
+	}
+
+	got := agentcapabilities.ToolInputSchema(cap)
+	var schema map[string]any
+	if err := json.Unmarshal(got, &schema); err != nil {
+		t.Fatalf("unmarshal schema: %v", err)
+	}
+	props, _ := schema["properties"].(map[string]any)
+	if _, hasActionID := props["actionId"]; !hasActionID {
+		t.Fatalf("manifest-provided action schema must preserve path argument actionId: %s", string(got))
+	}
+	if _, hasBody := props["body"]; hasBody {
+		t.Fatalf("manifest-provided action schema must not be replaced by generic body wrapper: %s", string(got))
+	}
+
+	operatorStateSchema := json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"resourceId": { "type": "string" },
+			"intentionallyOffline": { "type": "boolean" },
+			"neverAutoRemediate": { "type": "boolean" }
+		},
+		"required": ["resourceId", "intentionallyOffline", "neverAutoRemediate"],
+		"additionalProperties": false
+	}`)
+	operatorCap := agentCapability{
+		Name:        agentcapabilities.SetOperatorStateCapabilityName,
+		Path:        agentcapabilities.OperatorStateCapabilityPath,
+		Method:      http.MethodPut,
+		InputSchema: operatorStateSchema,
+	}
+
+	got = agentcapabilities.ToolInputSchema(operatorCap)
+	if err := json.Unmarshal(got, &schema); err != nil {
+		t.Fatalf("unmarshal operator-state schema: %v", err)
+	}
+	props, _ = schema["properties"].(map[string]any)
+	if _, hasResourceID := props["resourceId"]; !hasResourceID {
+		t.Fatalf("manifest-provided operator-state schema must preserve resourceId path argument: %s", string(got))
+	}
+	if _, hasBody := props["body"]; hasBody {
+		t.Fatalf("manifest-provided operator-state schema must not be replaced by generic body wrapper: %s", string(got))
+	}
+}
+
+func TestSubstitutePathParameters_FillsAllPlaceholders(t *testing.T) {
+	got, err := agentcapabilities.SubstitutePathParameters(
 		"/api/agent/resource-context/{resourceId}",
 		map[string]any{"resourceId": "vm:101"},
 	)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got != "/api/agent/resource-context/vm:101" {
-		t.Errorf("got %q, want /api/agent/resource-context/vm:101", got)
+	if got != "/api/agent/resource-context/vm%3A101" {
+		t.Errorf("got %q, want /api/agent/resource-context/vm%%3A101", got)
 	}
 }
 
-func TestSubstitutePathParams_MissingPlaceholderIsAStableError(t *testing.T) {
+func TestSubstitutePathParameters_EscapesReservedCharacters(t *testing.T) {
+	got, err := agentcapabilities.SubstitutePathParameters(
+		"/api/config/nodes/{nodeId}/test",
+		map[string]any{"nodeId": "pve/lab node"},
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "/api/config/nodes/pve%2Flab%20node/test" {
+		t.Errorf("got %q, want escaped node id in a single path segment", got)
+	}
+}
+
+func TestSubstitutePathParameters_MissingPlaceholderIsAStableError(t *testing.T) {
 	// The agent must get a clear error when it forgets a path
 	// argument — better to fail with "missing path argument
 	// resourceId" than to send a literal `{resourceId}` URL to
 	// Pulse and get a confusing 404.
-	_, err := substitutePathParams(
+	_, err := agentcapabilities.SubstitutePathParameters(
 		"/api/agent/resource-context/{resourceId}",
 		map[string]any{},
 	)
@@ -148,8 +401,8 @@ func TestSubstitutePathParams_MissingPlaceholderIsAStableError(t *testing.T) {
 	}
 }
 
-func TestSubstitutePathParams_NonStringIsAnError(t *testing.T) {
-	_, err := substitutePathParams(
+func TestSubstitutePathParameters_NonStringIsAnError(t *testing.T) {
+	_, err := agentcapabilities.SubstitutePathParameters(
 		"/api/resources/{id}/operator-state",
 		map[string]any{"id": 12345},
 	)
@@ -164,7 +417,8 @@ func TestSubstitutePathParams_NonStringIsAnError(t *testing.T) {
 // `tools` is present. The server must advertise tools so Claude
 // (Desktop / Code) bothers to enumerate the surface.
 func TestServer_DispatchInitializeReturnsToolsCapability(t *testing.T) {
-	s := &mcpServer{manifest: &agentCapabilitiesManifest{Version: "v1"}}
+	manifest := agentcapabilities.CanonicalManifest()
+	s := &mcpServer{manifest: &manifest}
 	resp := s.dispatch(context.Background(), &jsonRPCRequest{
 		JSONRPC: "2.0",
 		ID:      json.RawMessage(`1`),
@@ -173,31 +427,355 @@ func TestServer_DispatchInitializeReturnsToolsCapability(t *testing.T) {
 	if resp.Error != nil {
 		t.Fatalf("initialize: error = %+v", resp.Error)
 	}
-	result, _ := resp.Result.(map[string]any)
-	caps, _ := result["capabilities"].(map[string]any)
-	if _, ok := caps["tools"]; !ok {
+	result, _ := resp.Result.(agentcapabilities.MCPInitializeResult)
+	if result.Capabilities.Tools == nil {
 		t.Fatal("initialize must advertise tools capability so MCP clients enumerate the tool surface")
 	}
-	info, _ := result["serverInfo"].(map[string]any)
-	if info["name"] != "pulse-mcp" {
-		t.Errorf("serverInfo.name = %v, want pulse-mcp", info["name"])
+	if !strings.Contains(result.Instructions, "governed infrastructure-operations surface") {
+		t.Fatalf("initialize must include shared Pulse Intelligence operating instructions, got %q", result.Instructions)
+	}
+	if result.ServerInfo.Name != "pulse-mcp" {
+		t.Errorf("serverInfo.name = %v, want pulse-mcp", result.ServerInfo.Name)
+	}
+	expected := agentcapabilities.NewMCPToolServerInitializeResult(pulseMCPServerName, pulseMCPServerVersion, false)
+	if result.ProtocolVersion != expected.ProtocolVersion || result.ServerInfo != expected.ServerInfo {
+		t.Fatalf("initialize result must use shared MCP constructor; got %+v want %+v", result, expected)
 	}
 }
 
-// TestServer_ToolsListProjectsManifestSkippingSubscribeEvents
-// pins the auto-generation rule: tools/list must surface every
-// manifest capability except subscribe_events (which is a stream,
-// not a tool). Adding a capability to the manifest must
-// automatically make it visible to MCP clients without changes
-// here.
-func TestServer_ToolsListProjectsManifestSkippingSubscribeEvents(t *testing.T) {
+func TestServer_ResourcesListAndReadProjectContextCapabilities(t *testing.T) {
+	type captured struct {
+		paths []string
+		token string
+	}
+	var got captured
+	mu := sync.Mutex{}
+	pulse := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		got.paths = append(got.paths, r.URL.EscapedPath())
+		got.token = r.Header.Get(agentcapabilities.AgentAPITokenHeader)
+
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.EscapedPath() {
+		case "/api/agent/fleet-context":
+			_, _ = w.Write([]byte(`{
+				"resources": [
+					{
+						"canonicalId": "vm:101",
+						"resourceType": "virtual-machine",
+						"resourceName": "Database VM",
+						"technology": "proxmox",
+						"pendingApprovalCount": 1,
+						"findings": { "total": 2, "critical": 1, "warning": 1, "info": 0 }
+					}
+				]
+			}`))
+		case "/api/agent/resource-context/vm%3A101":
+			_, _ = w.Write([]byte(`{"canonicalId":"vm:101","resourceName":"Database VM"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer pulse.Close()
+
+	s := &mcpServer{
+		baseURL: pulse.URL,
+		token:   "resource-test-token",
+		manifest: &agentCapabilitiesManifest{
+			Version: "v1",
+			Capabilities: []agentCapability{
+				{Name: agentcapabilities.FleetContextCapabilityName, Path: "/api/agent/fleet-context", Method: http.MethodGet, Description: "triage"},
+				{Name: agentcapabilities.ResourceContextCapabilityName, Path: "/api/agent/resource-context/{resourceId}", Method: http.MethodGet, Description: "depth"},
+			},
+		},
+		http: pulse.Client(),
+	}
+
+	init := s.dispatch(context.Background(), &jsonRPCRequest{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  agentcapabilities.MCPMethodInitialize,
+	})
+	if init.Error != nil {
+		t.Fatalf("initialize: error = %+v", init.Error)
+	}
+	initResult, ok := init.Result.(agentcapabilities.MCPInitializeResult)
+	if !ok {
+		t.Fatalf("initialize result type = %T, want shared MCPInitializeResult", init.Result)
+	}
+	if initResult.Capabilities.Resources == nil {
+		t.Fatalf("initialize must advertise resources when both context capabilities exist: %+v", initResult.Capabilities)
+	}
+
+	list := s.dispatch(context.Background(), &jsonRPCRequest{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`2`),
+		Method:  agentcapabilities.MCPMethodResourcesList,
+	})
+	if list.Error != nil {
+		t.Fatalf("resources/list: error = %+v", list.Error)
+	}
+	listResult, ok := list.Result.(agentcapabilities.MCPListResourcesResult)
+	if !ok {
+		t.Fatalf("resources/list result type = %T, want shared MCPListResourcesResult", list.Result)
+	}
+	if len(listResult.Resources) != 1 {
+		t.Fatalf("resources/list returned %+v, want one resource", listResult.Resources)
+	}
+	resource := listResult.Resources[0]
+	if resource.URI != agentcapabilities.MCPResourceURI("vm:101") || resource.Name != "Database VM" || resource.MimeType != agentcapabilities.MCPResourceContextMIMEType {
+		t.Fatalf("projected MCP resource = %+v", resource)
+	}
+	if !strings.Contains(resource.Description, "virtual-machine") || !strings.Contains(resource.Description, "pending approvals: 1") {
+		t.Fatalf("projected resource description must carry fleet context summary; got %q", resource.Description)
+	}
+
+	params, _ := json.Marshal(agentcapabilities.MCPReadResourceParams{URI: resource.URI})
+	read := s.dispatch(context.Background(), &jsonRPCRequest{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`3`),
+		Method:  agentcapabilities.MCPMethodResourcesRead,
+		Params:  params,
+	})
+	if read.Error != nil {
+		t.Fatalf("resources/read: error = %+v", read.Error)
+	}
+	readResult, ok := read.Result.(agentcapabilities.MCPReadResourceResult)
+	if !ok {
+		t.Fatalf("resources/read result type = %T, want shared MCPReadResourceResult", read.Result)
+	}
+	if len(readResult.Contents) != 1 {
+		t.Fatalf("resources/read contents = %+v, want one JSON content block", readResult.Contents)
+	}
+	content := readResult.Contents[0]
+	if content.URI != resource.URI || content.MimeType != agentcapabilities.MCPResourceContextMIMEType {
+		t.Fatalf("resources/read content = %+v", content)
+	}
+	if content.Text != `{"canonicalId":"vm:101","resourceName":"Database VM"}` {
+		t.Fatalf("resources/read content text = %q", content.Text)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if got.token != "resource-test-token" {
+		t.Fatalf("upstream token = %q, want resource-test-token", got.token)
+	}
+	if strings.Join(got.paths, ",") != "/api/agent/fleet-context,/api/agent/resource-context/vm%3A101" {
+		t.Fatalf("upstream paths = %+v", got.paths)
+	}
+}
+
+func TestServer_PromptsListAndGetProjectManifestWorkflowPrompts(t *testing.T) {
+	s := &mcpServer{
+		manifest: &agentCapabilitiesManifest{
+			Version: "v1",
+			Capabilities: []agentCapability{
+				{Name: agentcapabilities.FleetContextCapabilityName, Path: "/api/agent/fleet-context", Method: http.MethodGet, Description: "triage"},
+				{Name: agentcapabilities.ResourceContextCapabilityName, Path: "/api/agent/resource-context/{resourceId}", Method: http.MethodGet, Description: "depth"},
+				{Name: "list_findings", Path: "/api/ai/patrol/findings", Method: http.MethodGet, Description: "findings"},
+			},
+		},
+	}
+
+	init := s.dispatch(context.Background(), &jsonRPCRequest{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  agentcapabilities.MCPMethodInitialize,
+	})
+	if init.Error != nil {
+		t.Fatalf("initialize: error = %+v", init.Error)
+	}
+	initResult, ok := init.Result.(agentcapabilities.MCPInitializeResult)
+	if !ok {
+		t.Fatalf("initialize result type = %T, want shared MCPInitializeResult", init.Result)
+	}
+	if initResult.Capabilities.Prompts == nil {
+		t.Fatalf("initialize must advertise prompts when workflow capabilities exist: %+v", initResult.Capabilities)
+	}
+
+	list := s.dispatch(context.Background(), &jsonRPCRequest{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`2`),
+		Method:  agentcapabilities.MCPMethodPromptsList,
+	})
+	if list.Error != nil {
+		t.Fatalf("prompts/list: error = %+v", list.Error)
+	}
+	listResult, ok := list.Result.(agentcapabilities.MCPListPromptsResult)
+	if !ok {
+		t.Fatalf("prompts/list result type = %T, want shared MCPListPromptsResult", list.Result)
+	}
+	if len(listResult.Prompts) != 3 {
+		t.Fatalf("prompts/list returned %+v, want three prompts", listResult.Prompts)
+	}
+
+	params, _ := json.Marshal(agentcapabilities.MCPGetPromptParams{
+		Name:      agentcapabilities.MCPPromptReviewFinding,
+		Arguments: map[string]string{"finding_id": "finding-1"},
+	})
+	get := s.dispatch(context.Background(), &jsonRPCRequest{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`3`),
+		Method:  agentcapabilities.MCPMethodPromptsGet,
+		Params:  params,
+	})
+	if get.Error != nil {
+		t.Fatalf("prompts/get: error = %+v", get.Error)
+	}
+	getResult, ok := get.Result.(agentcapabilities.MCPGetPromptResult)
+	if !ok {
+		t.Fatalf("prompts/get result type = %T, want shared MCPGetPromptResult", get.Result)
+	}
+	if len(getResult.Messages) != 1 || getResult.Messages[0].Role != "user" {
+		t.Fatalf("prompts/get messages = %+v", getResult.Messages)
+	}
+	if !strings.Contains(getResult.Messages[0].Content.Text, `"finding-1"`) || !strings.Contains(getResult.Messages[0].Content.Text, "list_findings") {
+		t.Fatalf("finding prompt text = %q", getResult.Messages[0].Content.Text)
+	}
+}
+
+func TestServer_PromptsGetRecordsWorkflowPromptActivity(t *testing.T) {
+	var got struct {
+		path    string
+		token   string
+		surface string
+		name    string
+	}
+	client := httpDoerFunc(func(r *http.Request) (*http.Response, error) {
+		got.path = r.URL.Path
+		got.token = r.Header.Get(agentcapabilities.AgentAPITokenHeader)
+		got.surface = r.Header.Get(agentcapabilities.AgentSurfaceHeader)
+		var payload map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode activity payload: %v", err)
+		}
+		got.name = payload["name"]
+		return &http.Response{
+			StatusCode: http.StatusNoContent,
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader("")),
+			Request:    r,
+		}, nil
+	})
+
+	s := &mcpServer{
+		baseURL: "http://pulse.local",
+		token:   "test-token",
+		http:    client,
+		manifest: &agentCapabilitiesManifest{
+			Version: "v1",
+			WorkflowPrompts: []agentcapabilities.PulseWorkflowPrompt{{
+				Name:        agentcapabilities.PulseWorkflowPromptOperationsLoop,
+				Label:       "Ask Patrol to handle an issue",
+				Description: "Have Patrol investigate, follow policy, take approved actions, verify, and record the result.",
+			}},
+		},
+	}
+	params, _ := json.Marshal(agentcapabilities.MCPGetPromptParams{Name: agentcapabilities.MCPPromptOperationsLoop})
+	resp := s.dispatch(context.Background(), &jsonRPCRequest{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  agentcapabilities.MCPMethodPromptsGet,
+		Params:  params,
+	})
+	if resp.Error != nil {
+		t.Fatalf("prompts/get: error = %+v", resp.Error)
+	}
+
+	if got.path != agentcapabilities.AgentWorkflowPromptActivityPath {
+		t.Fatalf("activity path = %q, want %q", got.path, agentcapabilities.AgentWorkflowPromptActivityPath)
+	}
+	if got.token != "test-token" {
+		t.Fatalf("%s = %q, want test-token", agentcapabilities.AgentAPITokenHeader, got.token)
+	}
+	if got.surface != agentcapabilities.AgentSurfacePulseMCP {
+		t.Fatalf("%s = %q, want %s", agentcapabilities.AgentSurfaceHeader, got.surface, agentcapabilities.AgentSurfacePulseMCP)
+	}
+	if got.name != agentcapabilities.PulseWorkflowPromptOperationsLoop {
+		t.Fatalf("activity prompt name = %q, want %s", got.name, agentcapabilities.PulseWorkflowPromptOperationsLoop)
+	}
+}
+
+func TestServerDispatchUsesSharedMCPDispatcher(t *testing.T) {
+	src, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatalf("read main.go: %v", err)
+	}
+	text := string(src)
+
+	if !strings.Contains(text, "agentcapabilities.DispatchMCPToolServerRequest(") {
+		t.Fatal("pulse-mcp dispatch must delegate MCP method semantics to agentcapabilities")
+	}
+	for _, required := range []string{
+		"s.manifestToolServer().Handlers(func()",
+		"agentcapabilities.MCPManifestToolServer{",
+		"ServerName:                   pulseMCPServerName",
+		"SurfaceID:                    agentcapabilities.SurfaceIDPulseMCP",
+		"Manifest:                     manifest",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("pulse-mcp must project manifest-backed tool semantics through agentcapabilities; missing %s", required)
+		}
+	}
+	for _, required := range []string{
+		"agentcapabilities.ServeJSONRPCLines(",
+		"agentcapabilities.WriteJSONRPCMessage(out, v)",
+		"agentcapabilities.StreamMCPEventNotifications(",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("pulse-mcp must delegate JSON-RPC request handling to agentcapabilities; missing %s", required)
+		}
+	}
+	for _, forbidden := range []string{
+		"bufio.NewScanner(in)",
+		"scanner.Scan()",
+		"agentcapabilities.DecodeJSONRPCRequest(",
+		"agentcapabilities.NewJSONRPCParseErrorResponse(",
+		"agentcapabilities.JSONRPCRequestExpectsResponse(",
+		"agentcapabilities.StreamAgentSSERecords(",
+		"agentcapabilities.NewMCPEventNotification(",
+		"func (s *mcpServer) maybeEmitNotification(",
+		"json.Unmarshal([]byte(line)",
+		"agentcapabilities.NewJSONRPCErrorResponse(\n\t\t\t\tnil",
+		"agentcapabilities.JSONRPCErrorParse",
+		"len(req.ID) == 0",
+		"string(req.ID) == \"null\"",
+		"switch req.Method",
+		"type jsonRPCError = agentcapabilities.JSONRPCError",
+		"agentcapabilities.MCPToolServerHandlers{",
+		"agentcapabilities.NewJSONRPCResponse(req.ID, nil)",
+		"agentcapabilities.JSONRPCErrorInternal",
+		"agentcapabilities.JSONRPCErrorMethodNotFound",
+		"func (s *mcpServer) handleInitialize(",
+		"func (s *mcpServer) handleToolsList(",
+		"func (s *mcpServer) handleToolsCall(",
+		"agentcapabilities.NewMCPToolServerInitializeResult(pulseMCPServerName",
+		"agentcapabilities.ProjectTools(s.manifest.Capabilities)",
+		"agentcapabilities.ExecuteMCPToolHTTP(",
+		"agentcapabilities.ExecuteMCPManifestSurfaceToolHTTP(ctx, s.http, s.baseURL, s.token, s.manifest",
+	} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("pulse-mcp must not own MCP method dispatch or error mapping; found %s", forbidden)
+		}
+	}
+}
+
+// TestServer_ToolsListProjectsPulseMCPSurfaceContract pins the auto-generation
+// rule: tools/list must surface the manifest-owned Pulse MCP tool contract,
+// not every raw manifest capability. Streaming capabilities and capabilities
+// omitted from the Pulse MCP contract stay out of the request/response tool
+// surface.
+func TestServer_ToolsListProjectsPulseMCPSurfaceContract(t *testing.T) {
 	s := &mcpServer{manifest: &agentCapabilitiesManifest{
-		Version: "v1",
+		Version:              "v1",
+		SurfaceContract:      agentcapabilities.CanonicalManifest().SurfaceContract,
+		SurfaceToolContracts: testPulseMCPSurfaceToolContracts(agentcapabilities.ResourceContextCapabilityName, agentcapabilities.SetOperatorStateCapabilityName),
 		Capabilities: []agentCapability{
-			{Name: "get_resource_context", Path: "/api/agent/resource-context/{resourceId}", Method: http.MethodGet, Description: "depth"},
-			{Name: "get_fleet_context", Path: "/api/agent/fleet-context", Method: http.MethodGet, Description: "triage"},
-			{Name: "subscribe_events", Path: "/api/agent/events", Method: http.MethodGet, Description: "stream"},
-			{Name: "set_operator_state", Path: "/api/resources/{resourceId}/operator-state", Method: http.MethodPut, Description: "write intent"},
+			{Name: "get_resource_context", Title: "Inspect resource", Path: "/api/agent/resource-context/{resourceId}", Method: http.MethodGet, Description: "depth", ActionMode: agentcapabilities.ActionModeRead, OutputSchema: json.RawMessage(`{"type":"object","properties":{"canonicalId":{"type":"string"}}}`)},
+			{Name: "get_fleet_context", Title: "Triage fleet", Path: "/api/agent/fleet-context", Method: http.MethodGet, Description: "triage", ActionMode: agentcapabilities.ActionModeRead},
+			{Name: "subscribe_events", Title: "Subscribe events", Path: "/api/agent/events", Method: http.MethodGet, Description: "stream", ActionMode: agentcapabilities.ActionModeRead},
+			{Name: agentcapabilities.SetOperatorStateCapabilityName, Title: "Set operator state", Path: agentcapabilities.OperatorStateCapabilityPath, Method: http.MethodPut, Scope: "monitoring:write", Description: "write intent", ActionMode: agentcapabilities.ActionModeWrite},
 		},
 	}}
 	resp := s.dispatch(context.Background(), &jsonRPCRequest{
@@ -208,19 +786,177 @@ func TestServer_ToolsListProjectsManifestSkippingSubscribeEvents(t *testing.T) {
 	if resp.Error != nil {
 		t.Fatalf("tools/list: error = %+v", resp.Error)
 	}
-	result, _ := resp.Result.(map[string]any)
-	tools, _ := result["tools"].([]mcpTool)
+	result, _ := resp.Result.(agentcapabilities.MCPProjectedToolsResult)
+	tools := result.Tools
+	if len(tools) != 2 {
+		t.Fatalf("tools/list len = %d, want 2 Pulse MCP surface tools", len(tools))
+	}
 	names := map[string]bool{}
+	titles := map[string]string{}
+	descriptions := map[string]string{}
+	outputSchemas := map[string]json.RawMessage{}
+	annotations := map[string]*agentcapabilities.MCPToolAnnotations{}
+	metadata := map[string]map[string]any{}
 	for _, tool := range tools {
 		names[tool.Name] = true
+		titles[tool.Name] = tool.Title
+		descriptions[tool.Name] = tool.Description
+		outputSchemas[tool.Name] = tool.OutputSchema
+		annotations[tool.Name] = tool.Annotations
+		if meta, ok := tool.Meta[agentcapabilities.ToolMetaPulseCapabilityKey].(map[string]any); ok {
+			metadata[tool.Name] = meta
+		}
 	}
-	for _, want := range []string{"get_resource_context", "get_fleet_context", "set_operator_state"} {
+	for _, want := range []string{agentcapabilities.ResourceContextCapabilityName, agentcapabilities.SetOperatorStateCapabilityName} {
 		if !names[want] {
 			t.Errorf("tools/list missing %q", want)
 		}
 	}
+	if names[agentcapabilities.FleetContextCapabilityName] {
+		t.Errorf("%s must not be exposed when omitted from the Pulse MCP surface contract", agentcapabilities.FleetContextCapabilityName)
+	}
+	if !strings.Contains(descriptions[agentcapabilities.SetOperatorStateCapabilityName], "write intent") {
+		t.Errorf("tools/list must preserve manifest description; got %q", descriptions[agentcapabilities.SetOperatorStateCapabilityName])
+	}
+	if titles[agentcapabilities.ResourceContextCapabilityName] != "Inspect resource" {
+		t.Errorf("tools/list must project manifest title; got %q", titles[agentcapabilities.ResourceContextCapabilityName])
+	}
+	if !strings.Contains(string(outputSchemas[agentcapabilities.ResourceContextCapabilityName]), `"canonicalId"`) {
+		t.Errorf("tools/list must project manifest outputSchema; got %s", string(outputSchemas[agentcapabilities.ResourceContextCapabilityName]))
+	}
+	if !strings.Contains(descriptions[agentcapabilities.SetOperatorStateCapabilityName], "required scope: ") {
+		t.Errorf("tools/list must project manifest capability metadata; got %q", descriptions[agentcapabilities.SetOperatorStateCapabilityName])
+	}
+	setOperatorMeta := metadata[agentcapabilities.SetOperatorStateCapabilityName]
+	if setOperatorMeta["scope"] != "monitoring:write" {
+		t.Errorf("tools/list must project structured Pulse scope metadata; got %#v", setOperatorMeta)
+	}
+	route, _ := setOperatorMeta["route"].(map[string]any)
+	if route["method"] != http.MethodPut || route["path"] != agentcapabilities.OperatorStateCapabilityPath {
+		t.Errorf("tools/list must project structured Pulse route metadata; got %#v", route)
+	}
+	governance, _ := setOperatorMeta["governance"].(map[string]any)
+	if governance["actionMode"] != string(agentcapabilities.ActionModeWrite) {
+		t.Errorf("tools/list must project structured Pulse governance metadata; got %#v", governance)
+	}
+	assertMCPToolAnnotations(t, annotations[agentcapabilities.ResourceContextCapabilityName], true, false, true, true)
+	assertMCPToolAnnotations(t, annotations[agentcapabilities.SetOperatorStateCapabilityName], false, true, false, true)
 	if names["subscribe_events"] {
-		t.Error("subscribe_events must NOT be exposed as an MCP tool — SSE streams don't fit the request/response shape; future slices can layer notifications")
+		t.Error("subscribe_events must NOT be exposed as an MCP tool — SSE streams don't fit the request/response shape")
+	}
+}
+
+func assertMCPToolAnnotations(t *testing.T, annotations *agentcapabilities.MCPToolAnnotations, readOnly, destructive, idempotent, openWorld bool) {
+	t.Helper()
+	if annotations == nil {
+		t.Fatal("tool annotations are nil")
+	}
+	assertMCPBoolRef(t, "readOnlyHint", annotations.ReadOnlyHint, readOnly)
+	assertMCPBoolRef(t, "destructiveHint", annotations.DestructiveHint, destructive)
+	assertMCPBoolRef(t, "idempotentHint", annotations.IdempotentHint, idempotent)
+	assertMCPBoolRef(t, "openWorldHint", annotations.OpenWorldHint, openWorld)
+}
+
+func assertMCPBoolRef(t *testing.T, name string, got *bool, want bool) {
+	t.Helper()
+	if got == nil {
+		t.Fatalf("%s is nil, want %v", name, want)
+	}
+	if *got != want {
+		t.Fatalf("%s = %v, want %v", name, *got, want)
+	}
+}
+
+func TestFormatToolDescriptionProjectsCapabilityMetadata(t *testing.T) {
+	desc := agentcapabilities.ToolDescription(agentCapability{
+		Name:             "plan_action",
+		Description:      "Plan an action against a resource.",
+		Category:         "action",
+		Method:           http.MethodPost,
+		Path:             "/api/actions/plan",
+		Scope:            "ai:execute",
+		ActionMode:       "write",
+		ApprovalPolicy:   "action_plan",
+		RequestBodyShape: "ActionRequest",
+		ResponseShape:    "ActionPlan",
+		ErrorCodes:       []string{"invalid_action_request", "resource_not_found"},
+	})
+
+	for _, want := range []string{
+		"Plan an action against a resource.",
+		"Pulse capability metadata:",
+		"category: action",
+		"route: POST /api/actions/plan",
+		"required scope: ai:execute",
+		"action mode: write",
+		"approval policy: action_plan",
+		"request body: ActionRequest",
+		"response: ActionPlan",
+		"stable error codes: invalid_action_request, resource_not_found",
+	} {
+		if !strings.Contains(desc, want) {
+			t.Fatalf("ToolDescription missing %q in %q", want, desc)
+		}
+	}
+}
+
+func TestServer_ToolsCallRejectsUnknownManifestCapability(t *testing.T) {
+	s := &mcpServer{manifest: &agentCapabilitiesManifest{
+		Version: "v1",
+		Capabilities: []agentCapability{
+			{Name: "get_fleet_context", Path: "/api/agent/fleet-context", Method: http.MethodGet},
+		},
+	}}
+
+	params, _ := json.Marshal(map[string]any{
+		"name":      "missing_capability",
+		"arguments": map[string]any{},
+	})
+	resp := s.dispatch(context.Background(), &jsonRPCRequest{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  "tools/call",
+		Params:  params,
+	})
+
+	if resp.Error == nil {
+		t.Fatal("unknown manifest capability must produce a JSON-RPC error")
+	}
+	if !strings.Contains(resp.Error.Message, "unknown tool: missing_capability") {
+		t.Fatalf("unknown capability error = %q, want stable unknown tool message", resp.Error.Message)
+	}
+}
+
+func TestServer_ToolsCallRejectsMalformedParamsWithSharedDecodeMessage(t *testing.T) {
+	s := &mcpServer{manifest: &agentCapabilitiesManifest{Version: "v1"}}
+	resp := s.dispatch(context.Background(), &jsonRPCRequest{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`1`),
+		Method:  "tools/call",
+		Params:  json.RawMessage(`{"name":`),
+	})
+
+	if resp.Error == nil {
+		t.Fatal("malformed tools/call params must produce a JSON-RPC error")
+	}
+	if resp.Error.Code != agentcapabilities.JSONRPCErrorInternal {
+		t.Fatalf("error code = %d, want JSONRPCErrorInternal", resp.Error.Code)
+	}
+	if !strings.Contains(resp.Error.Message, "decode tools/call params") {
+		t.Fatalf("decode error = %q, want shared decode message", resp.Error.Message)
+	}
+
+	resp = s.dispatch(context.Background(), &jsonRPCRequest{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage(`2`),
+		Method:  "tools/call",
+		Params:  json.RawMessage(`{"name":"  ","arguments":{}}`),
+	})
+	if resp.Error == nil {
+		t.Fatal("invalid tools/call params must produce a JSON-RPC error")
+	}
+	if !strings.Contains(resp.Error.Message, "decode tools/call params: tool name is required") {
+		t.Fatalf("invalid params error = %q, want shared validation message", resp.Error.Message)
 	}
 }
 
@@ -232,34 +968,41 @@ func TestServer_ToolsListProjectsManifestSkippingSubscribeEvents(t *testing.T) {
 // would on the wire.
 func TestServer_ToolsCallProxiesToPulseAndPreservesErrorEnvelope(t *testing.T) {
 	type captured struct {
-		method string
-		path   string
-		token  string
-		body   string
+		method  string
+		path    string
+		token   string
+		surface string
+		body    string
 	}
 	var got captured
 	mu := sync.Mutex{}
-	pulse := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	const errorBody = `{"error":"resource_not_found","message":"No resource is registered with this canonical id."}`
+	client := httpDoerFunc(func(r *http.Request) (*http.Response, error) {
 		mu.Lock()
 		defer mu.Unlock()
 		got.method = r.Method
 		got.path = r.URL.Path
 		got.token = r.Header.Get("X-API-Token")
+		got.surface = r.Header.Get(agentcapabilities.AgentSurfaceHeader)
 		if r.Body != nil {
 			b, _ := io.ReadAll(r.Body)
 			got.body = string(b)
 		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte(`{"error":"resource_not_found","message":"No resource is registered with this canonical id."}`))
-	}))
-	defer pulse.Close()
+		return &http.Response{
+			StatusCode: http.StatusNotFound,
+			Header:     http.Header{"Content-Type": []string{"application/json"}},
+			Body:       io.NopCloser(strings.NewReader(errorBody)),
+			Request:    r,
+		}, nil
+	})
 
 	s := &mcpServer{
-		baseURL: pulse.URL,
+		baseURL: "http://pulse.test",
 		token:   "test-token",
 		manifest: &agentCapabilitiesManifest{
-			Version: "v1",
+			Version:              "v1",
+			SurfaceContract:      agentcapabilities.CanonicalManifest().SurfaceContract,
+			SurfaceToolContracts: testPulseMCPSurfaceToolContracts(agentcapabilities.ResourceContextCapabilityName),
 			Capabilities: []agentCapability{
 				{
 					Name:   "get_resource_context",
@@ -269,7 +1012,7 @@ func TestServer_ToolsCallProxiesToPulseAndPreservesErrorEnvelope(t *testing.T) {
 				},
 			},
 		},
-		http: pulse.Client(),
+		http: client,
 	}
 
 	params, _ := json.Marshal(map[string]any{
@@ -295,17 +1038,34 @@ func TestServer_ToolsCallProxiesToPulseAndPreservesErrorEnvelope(t *testing.T) {
 	if got.token != "test-token" {
 		t.Errorf("upstream token header = %q, want test-token", got.token)
 	}
+	if got.surface != agentcapabilities.AgentSurfacePulseMCP {
+		t.Errorf("upstream agent surface header = %q, want %q", got.surface, agentcapabilities.AgentSurfacePulseMCP)
+	}
 
-	result, _ := resp.Result.(map[string]any)
-	if result["isError"] != true {
-		t.Errorf("non-2xx upstream must surface as MCP isError=true; got %v", result["isError"])
+	result, ok := resp.Result.(agentcapabilities.MCPToolResult)
+	if !ok {
+		t.Fatalf("tools/call result type = %T, want shared MCPToolResult", resp.Result)
 	}
-	content, _ := result["content"].([]map[string]any)
-	if len(content) != 1 {
-		t.Fatalf("content len = %d, want 1", len(content))
+	if !result.IsError {
+		t.Errorf("non-2xx upstream must surface as MCP isError=true; got %v", result.IsError)
 	}
-	if !strings.Contains(content[0]["text"].(string), `"error":"resource_not_found"`) {
-		t.Errorf("MCP content must preserve substrate error envelope verbatim; got %v", content[0]["text"])
+	if len(result.Content) != 1 {
+		t.Fatalf("content len = %d, want 1", len(result.Content))
+	}
+	expected := agentcapabilities.NewCapabilityHTTPToolResult(agentcapabilities.HTTPCallResponse{
+		Method:     http.MethodGet,
+		Path:       "/api/agent/resource-context/vm:does-not-exist",
+		StatusCode: http.StatusNotFound,
+		Body:       []byte(errorBody),
+	})
+	if result.IsError != expected.IsError || result.Content[0].Text != expected.Content[0].Text {
+		t.Fatalf("tools/call result must use shared HTTP-to-MCP result semantics; got %+v want %+v", result, expected)
+	}
+	if result.StructuredContent["error"] != "resource_not_found" {
+		t.Fatalf("tools/call structuredContent = %+v, want resource_not_found error", result.StructuredContent)
+	}
+	if !strings.Contains(result.Content[0].Text, `"error":"resource_not_found"`) {
+		t.Errorf("MCP content must preserve substrate error envelope verbatim; got %v", result.Content[0].Text)
 	}
 }
 
@@ -349,30 +1109,31 @@ func TestServer_NotificationGetsNoResponse(t *testing.T) {
 func TestServer_InitializeAdvertisesNotificationsCapabilityWhenEnabled(t *testing.T) {
 	t.Run("disabled by default", func(t *testing.T) {
 		s := &mcpServer{manifest: &agentCapabilitiesManifest{}}
-		result := s.handleInitialize().(map[string]any)
-		caps := result["capabilities"].(map[string]any)
-		if _, ok := caps["experimental"]; ok {
+		result := s.manifestToolServer().Initialize()
+		if len(result.Capabilities.Experimental) > 0 {
 			t.Error("initialize must NOT advertise pulseNotifications when --emit-notifications is off")
 		}
 	})
 
 	t.Run("advertised when enabled", func(t *testing.T) {
 		s := &mcpServer{manifest: &agentCapabilitiesManifest{}, emitNotifications: true}
-		result := s.handleInitialize().(map[string]any)
-		caps := result["capabilities"].(map[string]any)
-		exp, ok := caps["experimental"].(map[string]any)
-		if !ok {
+		result := s.manifestToolServer().Initialize()
+		exp := result.Capabilities.Experimental
+		if len(exp) == 0 {
 			t.Fatal("initialize must advertise experimental block when --emit-notifications is on")
 		}
-		pn, ok := exp["pulseNotifications"].(map[string]any)
+		pn, ok := exp[agentcapabilities.MCPPulseNotificationsExperimentalKey].(agentcapabilities.MCPPulseNotificationsCapability)
 		if !ok {
 			t.Fatal("experimental block must contain pulseNotifications descriptor")
 		}
-		kinds, ok := pn["kinds"].([]string)
-		if !ok || len(kinds) == 0 {
-			t.Fatalf("pulseNotifications.kinds must list the SSE event kinds; got %v", pn["kinds"])
+		kinds := pn.Kinds
+		if len(kinds) == 0 {
+			t.Fatalf("pulseNotifications.kinds must list the SSE event kinds; got %v", pn.Kinds)
 		}
-		want := map[string]bool{"finding.created": false, "approval.pending": false, "action.completed": false}
+		want := map[string]bool{}
+		for _, kind := range agentcapabilities.AgentActionableEventKinds() {
+			want[kind] = false
+		}
 		for _, k := range kinds {
 			if _, exists := want[k]; exists {
 				want[k] = true
@@ -386,58 +1147,6 @@ func TestServer_InitializeAdvertisesNotificationsCapabilityWhenEnabled(t *testin
 	})
 }
 
-// TestServer_MaybeEmitNotificationFiltersTransportEvents pins that
-// the bridge skips events that are pure transport plumbing
-// (stream.connected, heartbeat). Forwarding those would surface
-// noise an agent has no useful action on, and would teach
-// downstream code to filter them client-side instead of trusting
-// the substrate's "doorbell, not transport" intent.
-func TestServer_MaybeEmitNotificationFiltersTransportEvents(t *testing.T) {
-	cases := []struct {
-		name         string
-		event, data  string
-		shouldEmit   bool
-		methodPrefix string
-	}{
-		{"finding.created passes through", "finding.created", `{"findingId":"f1"}`, true, "notifications/finding.created"},
-		{"approval.pending passes through", "approval.pending", `{"approvalId":"a1"}`, true, "notifications/approval.pending"},
-		{"action.completed passes through", "action.completed", `{"actionId":"x1"}`, true, "notifications/action.completed"},
-		{"stream.connected is filtered", "stream.connected", `{}`, false, ""},
-		{"heartbeat is filtered", "heartbeat", "", false, ""},
-		{"empty event is filtered", "", `{"x":1}`, false, ""},
-		{"empty data is filtered", "finding.created", "", false, ""},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			out := &bytes.Buffer{}
-			s := &mcpServer{out: out}
-			s.maybeEmitNotification(tc.event, tc.data)
-			if tc.shouldEmit {
-				if out.Len() == 0 {
-					t.Fatalf("expected notification on stdout for %q; got nothing", tc.event)
-				}
-				body := out.String()
-				if !strings.Contains(body, `"method":"`+tc.methodPrefix+`"`) {
-					t.Errorf("expected method %q; got %s", tc.methodPrefix, body)
-				}
-				if !strings.Contains(body, `"jsonrpc":"2.0"`) {
-					t.Errorf("notification must be JSON-RPC 2.0; got %s", body)
-				}
-				// Notifications must NOT carry an id field per
-				// JSON-RPC 2.0 spec — clients that see an id treat
-				// the message as a request and may try to respond.
-				if strings.Contains(body, `"id":`) {
-					t.Errorf("notification must omit the id field; got %s", body)
-				}
-			} else {
-				if out.Len() != 0 {
-					t.Errorf("expected silence for %q event; got %s", tc.event, out.String())
-				}
-			}
-		})
-	}
-}
-
 // TestServer_StreamSSEOnceTranslatesEventsToNotifications is the
 // integration test for the bridge: spin up a fake SSE server
 // emitting the substrate's wire format, point the consumer at it,
@@ -445,23 +1154,30 @@ func TestServer_MaybeEmitNotificationFiltersTransportEvents(t *testing.T) {
 // notification on the configured out writer.
 func TestServer_StreamSSEOnceTranslatesEventsToNotifications(t *testing.T) {
 	sseBody := strings.Join([]string{
-		"event: stream.connected",
+		": sync comment uses standard SSE comment framing",
+		"event: " + string(agentcapabilities.EventKindStreamConnected),
 		"data: {}",
 		"",
-		"event: finding.created",
+		"event: " + string(agentcapabilities.EventKindFindingCreated),
 		"data: {\"findingId\":\"f1\",\"severity\":\"critical\"}",
 		"",
-		"event: heartbeat",
+		"event: " + string(agentcapabilities.EventKindHeartbeat),
 		"",
-		"event: action.completed",
+		"event: " + string(agentcapabilities.EventKindActionCompleted),
 		"data: {\"actionId\":\"x1\",\"success\":true,\"verification\":{\"ran\":true,\"success\":true,\"commandRedacted\":true}}",
 		"",
-	}, "\n") + "\n"
+	}, "\r\n") + "\r\n"
 
 	pulse := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("X-API-Token") != "test-token" {
+		if r.Header.Get(agentcapabilities.AgentAPITokenHeader) != "test-token" {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
+		}
+		if r.Header.Get("Accept") != agentcapabilities.AgentSSEAccept {
+			t.Errorf("Accept header = %q, want %q", r.Header.Get("Accept"), agentcapabilities.AgentSSEAccept)
+		}
+		if r.Header.Get(agentcapabilities.AgentSurfaceHeader) != agentcapabilities.AgentSurfacePulseMCP {
+			t.Errorf("%s header = %q, want %q", agentcapabilities.AgentSurfaceHeader, r.Header.Get(agentcapabilities.AgentSurfaceHeader), agentcapabilities.AgentSurfacePulseMCP)
 		}
 		w.Header().Set("Content-Type", "text/event-stream")
 		_, _ = w.Write([]byte(sseBody))
@@ -475,7 +1191,7 @@ func TestServer_StreamSSEOnceTranslatesEventsToNotifications(t *testing.T) {
 		http:    pulse.Client(),
 		out:     out,
 	}
-	if err := s.streamSSEOnce(context.Background(), pulse.URL+"/api/agent/events"); err != nil {
+	if err := s.streamSSEOnce(context.Background(), agentcapabilities.AgentEventsPath); err != nil {
 		t.Fatalf("streamSSEOnce: %v", err)
 	}
 
@@ -489,7 +1205,7 @@ func TestServer_StreamSSEOnceTranslatesEventsToNotifications(t *testing.T) {
 	if !strings.Contains(body, `"verification":{"ran":true,"success":true,"commandRedacted":true}`) {
 		t.Errorf("action.completed verification must round-trip through MCP notification params; got %s", body)
 	}
-	if strings.Contains(body, "stream.connected") {
+	if strings.Contains(body, string(agentcapabilities.EventKindStreamConnected)) {
 		t.Errorf("stream.connected must be filtered out as transport plumbing; got %s", body)
 	}
 	if strings.Contains(body, `"method":"notifications/heartbeat"`) {
@@ -546,11 +1262,13 @@ func TestServer_ToolsCallSendsPutBodyForWriteCapabilities(t *testing.T) {
 		baseURL: pulse.URL,
 		token:   "write-test-token",
 		manifest: &agentCapabilitiesManifest{
-			Version: "v1",
+			Version:              "v1",
+			SurfaceContract:      agentcapabilities.CanonicalManifest().SurfaceContract,
+			SurfaceToolContracts: testPulseMCPSurfaceToolContracts(agentcapabilities.SetOperatorStateCapabilityName),
 			Capabilities: []agentCapability{
 				{
-					Name:             "set_operator_state",
-					Path:             "/api/resources/{resourceId}/operator-state",
+					Name:             agentcapabilities.SetOperatorStateCapabilityName,
+					Path:             agentcapabilities.OperatorStateCapabilityPath,
 					Method:           http.MethodPut,
 					Scope:            "monitoring:write",
 					RequestBodyShape: "ResourceOperatorStateInput",
@@ -562,7 +1280,7 @@ func TestServer_ToolsCallSendsPutBodyForWriteCapabilities(t *testing.T) {
 	}
 
 	params, _ := json.Marshal(map[string]any{
-		"name": "set_operator_state",
+		"name": agentcapabilities.SetOperatorStateCapabilityName,
 		"arguments": map[string]any{
 			"resourceId": "vm:101",
 			"body": map[string]any{
@@ -610,19 +1328,25 @@ func TestServer_ToolsCallSendsPutBodyForWriteCapabilities(t *testing.T) {
 		t.Errorf("upstream body must round-trip note verbatim; got %v", sentBody["note"])
 	}
 
-	// MCP result shape: 2xx upstream becomes isError=false with
-	// the upstream body in a text content block.
-	result, _ := resp.Result.(map[string]any)
-	if result["isError"] != false {
-		t.Errorf("2xx upstream must surface as isError=false; got %v", result["isError"])
+	// MCP result shape: 2xx upstream becomes isError=false with the upstream
+	// body in a text content block plus shared structuredContent for clients
+	// that can branch on machine-readable tool output.
+	result, ok := resp.Result.(agentcapabilities.MCPToolResult)
+	if !ok {
+		t.Fatalf("tools/call result type = %T, want shared MCPToolResult", resp.Result)
 	}
-	content, _ := result["content"].([]map[string]any)
-	if len(content) != 1 {
-		t.Fatalf("content len = %d, want 1", len(content))
+	if result.IsError {
+		t.Errorf("2xx upstream must surface as isError=false; got %v", result.IsError)
 	}
-	text, _ := content[0]["text"].(string)
+	if len(result.Content) != 1 {
+		t.Fatalf("content len = %d, want 1", len(result.Content))
+	}
+	text := result.Content[0].Text
 	if !strings.Contains(text, `"canonicalId":"vm:101"`) {
 		t.Errorf("MCP content must carry upstream response body; got %q", text)
+	}
+	if result.StructuredContent["canonicalId"] != "vm:101" {
+		t.Fatalf("MCP structuredContent = %+v, want canonicalId vm:101", result.StructuredContent)
 	}
 	// Server-populated attribution must reach the agent so it
 	// can see WHO the substrate recorded the write under (not the
@@ -654,9 +1378,11 @@ func TestServer_ToolsCallTopLevelArgsMakeUpRequestBody(t *testing.T) {
 		baseURL: pulse.URL,
 		token:   "test",
 		manifest: &agentCapabilitiesManifest{
+			SurfaceContract:      agentcapabilities.CanonicalManifest().SurfaceContract,
+			SurfaceToolContracts: testPulseMCPSurfaceToolContracts(agentcapabilities.AcknowledgeFindingCapabilityName),
 			Capabilities: []agentCapability{
 				{
-					Name:   "acknowledge_finding",
+					Name:   agentcapabilities.AcknowledgeFindingCapabilityName,
 					Path:   "/api/ai/patrol/acknowledge",
 					Method: http.MethodPost,
 				},
@@ -702,12 +1428,14 @@ func TestServer_ToolsCallTopLevelArgsMakeUpRequestBody(t *testing.T) {
 // canonicalId duplication.
 func TestServer_ToolsCallTopLevelArgsExcludesPathPlaceholders(t *testing.T) {
 	type captured struct {
-		path string
-		body string
+		path       string
+		requestURI string
+		body       string
 	}
 	var got captured
 	pulse := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got.path = r.URL.Path
+		got.requestURI = r.RequestURI
 		b, _ := io.ReadAll(r.Body)
 		got.body = string(b)
 		w.WriteHeader(http.StatusOK)
@@ -719,10 +1447,12 @@ func TestServer_ToolsCallTopLevelArgsExcludesPathPlaceholders(t *testing.T) {
 		baseURL: pulse.URL,
 		token:   "test",
 		manifest: &agentCapabilitiesManifest{
+			SurfaceContract:      agentcapabilities.CanonicalManifest().SurfaceContract,
+			SurfaceToolContracts: testPulseMCPSurfaceToolContracts(agentcapabilities.SetOperatorStateCapabilityName),
 			Capabilities: []agentCapability{
 				{
-					Name:   "set_operator_state",
-					Path:   "/api/resources/{resourceId}/operator-state",
+					Name:   agentcapabilities.SetOperatorStateCapabilityName,
+					Path:   agentcapabilities.OperatorStateCapabilityPath,
 					Method: http.MethodPut,
 				},
 			},
@@ -731,9 +1461,9 @@ func TestServer_ToolsCallTopLevelArgsExcludesPathPlaceholders(t *testing.T) {
 	}
 
 	params, _ := json.Marshal(map[string]any{
-		"name": "set_operator_state",
+		"name": agentcapabilities.SetOperatorStateCapabilityName,
 		"arguments": map[string]any{
-			"resourceId":           "vm:101",
+			"resourceId":           "vm/special 101",
 			"intentionallyOffline": true,
 		},
 	})
@@ -747,8 +1477,8 @@ func TestServer_ToolsCallTopLevelArgsExcludesPathPlaceholders(t *testing.T) {
 		t.Fatalf("tools/call: rpc error = %+v", resp.Error)
 	}
 
-	if got.path != "/api/resources/vm:101/operator-state" {
-		t.Errorf("path-placeholder substitution failed; got %q", got.path)
+	if got.requestURI != "/api/resources/vm%2Fspecial%20101/operator-state" {
+		t.Errorf("path-placeholder substitution failed; got request URI %q", got.requestURI)
 	}
 	var sent map[string]any
 	if err := json.Unmarshal([]byte(got.body), &sent); err != nil {

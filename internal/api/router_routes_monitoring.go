@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
@@ -52,9 +53,15 @@ func (r *Router) registerMonitoringResourceRoutes(
 			if !ensureScope(w, req, config.ScopeMonitoringRead) {
 				return
 			}
+			r.recordExternalAgentCapabilityActivity(req, agentcapabilities.GetOperatorStateCapabilityName)
 		case http.MethodPut, http.MethodDelete:
 			if !ensureScope(w, req, config.ScopeMonitoringWrite) {
 				return
+			}
+			if req.Method == http.MethodPut {
+				r.recordExternalAgentCapabilityActivity(req, agentcapabilities.SetOperatorStateCapabilityName)
+			} else {
+				r.recordExternalAgentCapabilityActivity(req, agentcapabilities.ClearOperatorStateCapabilityName)
 			}
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -78,28 +85,60 @@ func (r *Router) registerMonitoringResourceRoutes(
 	// (in-process Patrol/Assistant or external) that needs the full
 	// situated picture of a resource in one read instead of chaining
 	// resource + operator-state + findings + audit calls.
-	r.mux.HandleFunc("/api/agent/resource-context/{id}", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.agentContextHandler.HandleResourceContext)))
+	r.mux.HandleFunc("/api/agent/resource-context/{id}", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.withExternalAgentCapabilityActivity(
+		agentcapabilities.ResourceContextCapabilityName,
+		r.agentContextHandler.HandleResourceContext,
+	))))
 	// Agent-consumable fleet triage view — thin per-resource rollups
 	// across the org so an agent can pick a focus in one read instead
 	// of walking every resource id and bundling each. Companion to the
 	// per-resource context endpoint: this is "where do I look?", that
 	// is "tell me everything about this one."
-	r.mux.HandleFunc("/api/agent/fleet-context", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.agentContextHandler.HandleFleetContext)))
+	r.mux.HandleFunc("/api/agent/fleet-context", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.withExternalAgentCapabilityActivity(
+		agentcapabilities.FleetContextCapabilityName,
+		r.agentContextHandler.HandleFleetContext,
+	))))
+	// Content-safe Patrol control status: the shared Patrol, Assistant,
+	// governed action, verification, Patrol control proof, and optional MCP
+	// readiness projection for native UI and external agents.
+	r.mux.HandleFunc(agentcapabilities.PatrolControlStatusCapabilityPath, RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.withExternalAgentCapabilityActivity(
+		agentcapabilities.PatrolControlStatusCapabilityName,
+		r.agentContextHandler.HandleOperationsLoopStatus,
+	))))
+	// Legacy operations-loop route kept for older external-agent clients. New
+	// clients should discover the Patrol control route from the manifest.
+	r.mux.HandleFunc(agentcapabilities.OperationsLoopStatusCompatibilityPath, RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.withExternalAgentCapabilityActivity(
+		agentcapabilities.OperationsLoopStatusCapabilityName,
+		r.agentContextHandler.HandleOperationsLoopStatus,
+	))))
 	// Agent capabilities manifest — discovery document. Unauthenticated
 	// because it only describes the agent surface; the capabilities
 	// themselves keep their own auth scopes. Agents fetch this once at
 	// startup to learn what's available.
 	r.mux.HandleFunc("/api/agent/capabilities", HandleAgentCapabilitiesManifest)
+	r.mux.HandleFunc("POST /api/agent/workflow-prompt-activity", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.HandleAgentWorkflowPromptActivity)))
 	// Agent SSE event stream — agents subscribe once and receive
 	// real-time notifications instead of polling. Auth at
 	// monitoring:read because the stream surfaces the same
 	// information already available via the read endpoints.
 	if r.agentEventBroadcaster != nil {
-		r.mux.HandleFunc("/api/agent/events", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.agentEventBroadcaster.HandleAgentEvents)))
+		r.mux.HandleFunc("/api/agent/events", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.withExternalAgentCapabilityActivity(
+			agentcapabilities.EventSubscriptionCapabilityName,
+			r.agentEventBroadcaster.HandleAgentEvents,
+		))))
 	}
-	r.mux.HandleFunc("POST /api/actions/plan", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.resourceHandlers.HandlePlanAction)))
-	r.mux.HandleFunc("POST /api/actions/{id}/decision", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.resourceHandlers.HandleDecideAction)))
-	r.mux.HandleFunc("POST /api/actions/{id}/execute", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.resourceHandlers.HandleExecuteAction)))
+	r.mux.HandleFunc("POST /api/actions/plan", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.withExternalAgentCapabilityActivity(
+		agentcapabilities.PlanActionCapabilityName,
+		r.resourceHandlers.HandlePlanAction,
+	))))
+	r.mux.HandleFunc("POST /api/actions/{id}/decision", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.withExternalAgentCapabilityActivity(
+		agentcapabilities.DecideActionCapabilityName,
+		r.resourceHandlers.HandleDecideAction,
+	))))
+	r.mux.HandleFunc("POST /api/actions/{id}/execute", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.withExternalAgentCapabilityActivity(
+		agentcapabilities.ExecuteActionCapabilityName,
+		r.resourceHandlers.HandleExecuteAction,
+	))))
 	// Guest metadata routes
 	r.mux.HandleFunc("/api/guests/metadata", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, guestMetadataHandler.HandleGetMetadata)))
 	r.mux.HandleFunc("/api/guests/metadata/", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
@@ -222,7 +261,10 @@ func (r *Router) registerMonitoringResourceRoutes(
 		}
 		infraUpdateHandlers.HandleGetInfraUpdateForResource(w, req, resourceID)
 	})))
-	r.mux.HandleFunc("/api/discover", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleDiscoverServers)))
+	r.mux.HandleFunc("/api/discover", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.withExternalAgentCapabilityActivity(
+		agentcapabilities.DiscoverLANCapabilityName,
+		r.configHandlers.HandleDiscoverServers,
+	))))
 	// Alert routes enforce read/write scopes inside HandleAlerts per endpoint method.
 	r.mux.HandleFunc("/api/alerts/", RequireAuth(r.config, r.alertHandlers.HandleAlerts))
 

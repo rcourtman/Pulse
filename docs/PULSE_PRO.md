@@ -91,8 +91,8 @@ capability key is a primary v6 product pillar.
 
 These are the current self-hosted Pro pillars that Pulse should keep
 investing in, surfacing, and marketing:
-- Alert-triggered root-cause analysis.
-- Safe remediation workflows through Patrol fix execution and autonomy controls.
+- Patrol investigates issues.
+- Patrol handles safe fixes through approval-backed execution and Patrol mode.
 - 90-day history.
 - Included team/admin extras: RBAC, audit logging, reporting, and agent
   profiles. SSO is included with Community and higher tiers.
@@ -110,7 +110,7 @@ be elevated into headline Pro marketing or generic upgrade prompts:
 These should not appear as current v6 Pro promises unless they are rebuilt
 into first-class product surfaces:
 - `incident memory` as a standalone feature name
-- `scheduled remediations`
+- `scheduled automated fixes`
 - `execution audit trail`
 
 ## Paid Feature Proof Map
@@ -124,7 +124,7 @@ surface upgrade prompts unless the user deliberately enters a commercial path.
 |---|---|---|
 | Self-hosted monitoring is not sold by monitored-system or child-resource volume. | `pkg/licensing/features.go` and `pkg/licensing/entitlement_payload.go` normalize self-hosted limits to the current no-volume-gate policy. | `pkg/licensing/grant_claims_contract_test.go`, `pkg/licensing/activation_types_test.go`, and `internal/api/licensing_handlers_auto_migrate_test.go` prove self-hosted paid/legacy continuity does not surface finite monitored-system allowances. |
 | Relay includes secure remote web access, Pulse Mobile pairing for handoff, push notifications, and 14-day history. | `pkg/licensing/features.go` grants `relay`, `mobile_app`, `push_notifications`, and `long_term_metrics` to Relay with `TierHistoryDays[relay] == 14`; relay onboarding/settings routes are gated behind Relay. | `pkg/licensing/features_test.go`, `pkg/licensing/entitlement_payload_test.go`, `internal/api/relay_sso_license_gating_test.go`, and `frontend-modern/src/components/Settings/__tests__/RelaySettingsPanel.runtime.test.tsx`. |
-| Pro includes alert-triggered root-cause analysis and safe remediation workflows. | `internal/api/ai_handlers.go` gates alert-triggered analysis behind `ai_alerts` and remediation/autonomy behind `ai_autofix`; `internal/ai/service.go` enforces the same capabilities in service-level paths. | `pkg/licensing/features_test.go`, `internal/api/router_routes_ai_execute_stream_test.go`, `internal/api/ai_intelligence_handlers_remediation_more_test.go`, and `frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx`. |
+| Pro includes Patrol issue investigation and verified fix actions. | `internal/api/ai_handlers.go` gates alert-triggered analysis behind `ai_alerts` and fix/autonomy behavior behind `ai_autofix`; `internal/ai/service.go` enforces the same capabilities in service-level paths. | `pkg/licensing/features_test.go`, `internal/api/router_routes_ai_execute_stream_test.go`, `internal/api/ai_intelligence_handlers_remediation_more_test.go`, and `frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx`. |
 | Pro includes 90-day history. | `pkg/licensing/features.go` sets `TierHistoryDays[pro] == 90`; `pkg/licensing/entitlement_payload.go` emits `max_history_days`; `frontend-modern/src/stores/license.ts` and `frontend-modern/src/components/shared/useHistoryChartState.ts` lock ranges above the entitlement. | `pkg/licensing/features_test.go`, `pkg/licensing/entitlement_payload_test.go`, and `frontend-modern/src/stores/__tests__/license.test.ts`. |
 | Pro includes business/admin extras: RBAC, audit logging, reporting, and agent profiles. | Router and settings gates use `rbac`, `audit_logging`, `advanced_reporting`, and `agent_profiles`; audit capture is SQLite-backed in `pkg/server/server.go` and `pkg/audit/sqlite_factory.go`, while query/export remains license-gated. | `internal/api/security_regression_test.go`, `internal/api/rbac_lifecycle_test.go`, `pkg/reporting/catalog_test.go`, and `frontend-modern/src/components/Settings/__tests__/settingsNavigation.integration.test.tsx`. |
 
@@ -140,8 +140,8 @@ This matrix is derived from the canonical table in `docs/architecture/ENTITLEMEN
 |---|---|---|:---:|:---:|:---:|:---:|---|
 | `FeatureAIPatrol` | `ai_patrol` | Pulse Patrol (Background Health Checks) | Y | Y | Y | Y | Patrol itself is available on Community with your own provider or local model. Higher-autonomy outcomes and fix execution are separately gated. |
 | `FeatureRelay` | `relay` | Remote Access (Mobile Relay) | N | Y | Y | Y | API route gating via `RequireLicenseFeature(..., relay, ...)` for relay settings and onboarding endpoints. |
-| `FeatureAIAlerts` | `ai_alerts` | Alert-Triggered Root-Cause Analysis | N | N | Y | Y | API route gating via `RequireLicenseFeature(..., ai_alerts, ...)`. |
-| `FeatureAIAutoFix` | `ai_autofix` | Safe Remediation Workflows | N | N | Y | Y | Required for governed fix execution and autonomous remediation actions. |
+| `FeatureAIAlerts` | `ai_alerts` | Patrol Investigates Issues | N | N | Y | Y | API route gating via `RequireLicenseFeature(..., ai_alerts, ...)`. |
+| `FeatureAIAutoFix` | `ai_autofix` | Patrol Handles Safe Fixes | N | N | Y | Y | Required for governed fix execution and automatic Patrol actions. |
 | `FeatureKubernetesAI` | `kubernetes_ai` | Kubernetes AI Analysis (Compatibility) | N | N | Y | Y | Legacy compatibility gate for `/api/ai/kubernetes/analyze`; not a primary marketed v6 Pro plan pillar. |
 | `FeatureAgentProfiles` | `agent_profiles` | Centralized Agent Profiles | N | N | Y | Y | API route gating via `RequireLicenseFeature(..., agent_profiles, ...)`. |
 | `FeatureUpdateAlerts` | `update_alerts` | Update Alerts (Container/Package Updates) | Y | Y | Y | Y | Included in Community tier per `TierFeatures[TierFree]`. |
@@ -156,16 +156,16 @@ This matrix is derived from the canonical table in `docs/architecture/ENTITLEMEN
 | `FeatureUnlimited` | `unlimited` | Hosted Capacity Policy | N | N | N | Y | Hosted/enterprise capacity policy only; not a self-hosted core monitoring gate. |
 | `FeatureWhiteLabel` | `white_label` | White-Label Report Branding | N | N | N | Y* | Gates custom report branding. Provider defaults and per-client overrides render only when this entitlement is active. |
 
-## Autonomy Levels (AI Safety)
+## Patrol Modes
 
-Patrol and the Assistant support tiered autonomy:
+Patrol mode decides how far Pulse can go after Patrol finds something that needs attention. Assistant chat command access is configured separately.
 
 | Mode | Behavior | Plan |
 |---|---|---|
-| **Monitor** | Detect issues only. No investigation or remediation execution. | Community / Relay |
-| **Investigate** | Investigates findings and proposes fixes. All remediation actions require approval. | Pro / hosted Cloud |
-| **Remediate** | Runs approved safe remediation actions and verifies the outcome. Critical findings require approval by default. | Pro / hosted Cloud |
-| **Full autonomy** | Allows critical remediation actions without approval when explicitly enabled. | Pro / hosted Cloud |
+| **Watch only** | Detect issues only. No investigation or fix execution. | Community / Relay |
+| **Ask before changes** | Investigates findings and proposes fixes. All fixes require approval before execution. | Pro / hosted Cloud |
+| **Auto-fix safe issues** | Runs approved safe fixes and verifies the outcome. Critical findings require approval by default. | Pro / hosted Cloud |
+| **Policy autopilot** | Runs eligible policy-approved fixes without approval when explicitly enabled. | Pro / hosted Cloud |
 
 ## What You Get (By Plan)
 
@@ -183,8 +183,8 @@ Patrol and the Assistant support tiered autonomy:
 
 ### Pro
 - Everything in Relay, plus:
-- Alert-triggered root-cause analysis.
-- Safe remediation workflows and autonomy controls.
+- Patrol investigates issues.
+- Patrol handles safe fixes through Patrol mode.
 - Centralized agent profiles.
 - RBAC, audit logging, and advanced reporting.
 - 90-day history.
@@ -223,4 +223,4 @@ This returns a feature map including keys like `relay`, `ai_alerts`, `ai_autofix
 
 - [Pulse Patrol Deep Dive](architecture/pulse-patrol-deep-dive.md)
 - [Pulse Assistant Deep Dive](architecture/pulse-assistant-deep-dive.md)
-- [Pulse AI overview](AI.md)
+- [Pulse Intelligence overview](AI.md)

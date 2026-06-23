@@ -25,31 +25,33 @@ import (
 
 // ConfigPersistence handles saving and loading configuration
 type ConfigPersistence struct {
-	mu                   sync.RWMutex
-	tx                   *importTransaction
-	configDir            string
-	alertFile            string
-	emailFile            string
-	webhookFile          string
-	appriseFile          string
-	nodesFile            string
-	trueNASFile          string
-	vmwareFile           string
-	availabilityFile     string
-	systemFile           string
-	ssoFile              string
-	apiTokensFile        string
-	aiFile               string
-	aiFindingsFile       string
-	aiPatrolRunsFile     string
-	aiUsageHistoryFile   string
-	agentProfilesFile    string
-	agentAssignmentsFile string
-	aiChatSessionsFile   string
-	orgFile              string
-	relayFile            string
-	crypto               *crypto.CryptoManager
-	fs                   FileSystem
+	mu                         sync.RWMutex
+	tx                         *importTransaction
+	configDir                  string
+	alertFile                  string
+	emailFile                  string
+	webhookFile                string
+	appriseFile                string
+	nodesFile                  string
+	trueNASFile                string
+	vmwareFile                 string
+	availabilityFile           string
+	systemFile                 string
+	ssoFile                    string
+	apiTokensFile              string
+	aiFile                     string
+	aiFindingsFile             string
+	aiPatrolRunsFile           string
+	aiUsageHistoryFile         string
+	externalAgentActivityFile  string
+	workflowPromptActivityFile string
+	agentProfilesFile          string
+	agentAssignmentsFile       string
+	aiChatSessionsFile         string
+	orgFile                    string
+	relayFile                  string
+	crypto                     *crypto.CryptoManager
+	fs                         FileSystem
 
 	// Lazy loaded metadata stores
 	guestMetadataStore  *GuestMetadataStore
@@ -102,26 +104,28 @@ type alertScheduleGroupingPresence struct {
 }
 
 type resolvedConfigPersistencePaths struct {
-	alertFile            string
-	emailFile            string
-	webhookFile          string
-	appriseFile          string
-	nodesFile            string
-	trueNASFile          string
-	vmwareFile           string
-	availabilityFile     string
-	systemFile           string
-	ssoFile              string
-	apiTokensFile        string
-	aiFile               string
-	aiFindingsFile       string
-	aiPatrolRunsFile     string
-	aiUsageHistoryFile   string
-	agentProfilesFile    string
-	agentAssignmentsFile string
-	aiChatSessionsFile   string
-	orgFile              string
-	relayFile            string
+	alertFile                  string
+	emailFile                  string
+	webhookFile                string
+	appriseFile                string
+	nodesFile                  string
+	trueNASFile                string
+	vmwareFile                 string
+	availabilityFile           string
+	systemFile                 string
+	ssoFile                    string
+	apiTokensFile              string
+	aiFile                     string
+	aiFindingsFile             string
+	aiPatrolRunsFile           string
+	aiUsageHistoryFile         string
+	externalAgentActivityFile  string
+	workflowPromptActivityFile string
+	agentProfilesFile          string
+	agentAssignmentsFile       string
+	aiChatSessionsFile         string
+	orgFile                    string
+	relayFile                  string
 }
 
 func resolveConfigPersistencePaths(configDir string) (string, resolvedConfigPersistencePaths, error) {
@@ -194,6 +198,14 @@ func resolveConfigPersistencePaths(configDir string) (string, resolvedConfigPers
 	if err != nil {
 		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve ai_usage_history.json: %w", err)
 	}
+	externalAgentActivityFile, err := resolveLeaf("external_agent_activity.json")
+	if err != nil {
+		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve external_agent_activity.json: %w", err)
+	}
+	workflowPromptActivityFile, err := resolveLeaf("workflow_prompt_activity.json")
+	if err != nil {
+		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve workflow_prompt_activity.json: %w", err)
+	}
 	agentProfilesFile, err := resolveLeaf("agent_profiles.json")
 	if err != nil {
 		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve agent_profiles.json: %w", err)
@@ -216,26 +228,28 @@ func resolveConfigPersistencePaths(configDir string) (string, resolvedConfigPers
 	}
 
 	return normalizedConfigDir, resolvedConfigPersistencePaths{
-		alertFile:            alertFile,
-		emailFile:            emailFile,
-		webhookFile:          webhookFile,
-		appriseFile:          appriseFile,
-		nodesFile:            nodesFile,
-		trueNASFile:          trueNASFile,
-		vmwareFile:           vmwareFile,
-		availabilityFile:     availabilityFile,
-		systemFile:           systemFile,
-		ssoFile:              ssoFile,
-		apiTokensFile:        apiTokensFile,
-		aiFile:               aiFile,
-		aiFindingsFile:       aiFindingsFile,
-		aiPatrolRunsFile:     aiPatrolRunsFile,
-		aiUsageHistoryFile:   aiUsageHistoryFile,
-		agentProfilesFile:    agentProfilesFile,
-		agentAssignmentsFile: agentAssignmentsFile,
-		aiChatSessionsFile:   aiChatSessionsFile,
-		orgFile:              orgFile,
-		relayFile:            relayFile,
+		alertFile:                  alertFile,
+		emailFile:                  emailFile,
+		webhookFile:                webhookFile,
+		appriseFile:                appriseFile,
+		nodesFile:                  nodesFile,
+		trueNASFile:                trueNASFile,
+		vmwareFile:                 vmwareFile,
+		availabilityFile:           availabilityFile,
+		systemFile:                 systemFile,
+		ssoFile:                    ssoFile,
+		apiTokensFile:              apiTokensFile,
+		aiFile:                     aiFile,
+		aiFindingsFile:             aiFindingsFile,
+		aiPatrolRunsFile:           aiPatrolRunsFile,
+		aiUsageHistoryFile:         aiUsageHistoryFile,
+		externalAgentActivityFile:  externalAgentActivityFile,
+		workflowPromptActivityFile: workflowPromptActivityFile,
+		agentProfilesFile:          agentProfilesFile,
+		agentAssignmentsFile:       agentAssignmentsFile,
+		aiChatSessionsFile:         aiChatSessionsFile,
+		orgFile:                    orgFile,
+		relayFile:                  relayFile,
 	}, nil
 }
 
@@ -266,29 +280,31 @@ func newConfigPersistence(configDir string) (*ConfigPersistence, error) {
 	}
 
 	cp := &ConfigPersistence{
-		configDir:            resolvedConfigDir,
-		alertFile:            resolvedPaths.alertFile,
-		emailFile:            resolvedPaths.emailFile,
-		webhookFile:          resolvedPaths.webhookFile,
-		appriseFile:          resolvedPaths.appriseFile,
-		nodesFile:            resolvedPaths.nodesFile,
-		trueNASFile:          resolvedPaths.trueNASFile,
-		vmwareFile:           resolvedPaths.vmwareFile,
-		availabilityFile:     resolvedPaths.availabilityFile,
-		systemFile:           resolvedPaths.systemFile,
-		ssoFile:              resolvedPaths.ssoFile,
-		apiTokensFile:        resolvedPaths.apiTokensFile,
-		aiFile:               resolvedPaths.aiFile,
-		aiFindingsFile:       resolvedPaths.aiFindingsFile,
-		aiPatrolRunsFile:     resolvedPaths.aiPatrolRunsFile,
-		aiUsageHistoryFile:   resolvedPaths.aiUsageHistoryFile,
-		agentProfilesFile:    resolvedPaths.agentProfilesFile,
-		agentAssignmentsFile: resolvedPaths.agentAssignmentsFile,
-		aiChatSessionsFile:   resolvedPaths.aiChatSessionsFile,
-		orgFile:              resolvedPaths.orgFile,
-		relayFile:            resolvedPaths.relayFile,
-		crypto:               cryptoMgr,
-		fs:                   defaultFileSystem{},
+		configDir:                  resolvedConfigDir,
+		alertFile:                  resolvedPaths.alertFile,
+		emailFile:                  resolvedPaths.emailFile,
+		webhookFile:                resolvedPaths.webhookFile,
+		appriseFile:                resolvedPaths.appriseFile,
+		nodesFile:                  resolvedPaths.nodesFile,
+		trueNASFile:                resolvedPaths.trueNASFile,
+		vmwareFile:                 resolvedPaths.vmwareFile,
+		availabilityFile:           resolvedPaths.availabilityFile,
+		systemFile:                 resolvedPaths.systemFile,
+		ssoFile:                    resolvedPaths.ssoFile,
+		apiTokensFile:              resolvedPaths.apiTokensFile,
+		aiFile:                     resolvedPaths.aiFile,
+		aiFindingsFile:             resolvedPaths.aiFindingsFile,
+		aiPatrolRunsFile:           resolvedPaths.aiPatrolRunsFile,
+		aiUsageHistoryFile:         resolvedPaths.aiUsageHistoryFile,
+		externalAgentActivityFile:  resolvedPaths.externalAgentActivityFile,
+		workflowPromptActivityFile: resolvedPaths.workflowPromptActivityFile,
+		agentProfilesFile:          resolvedPaths.agentProfilesFile,
+		agentAssignmentsFile:       resolvedPaths.agentAssignmentsFile,
+		aiChatSessionsFile:         resolvedPaths.aiChatSessionsFile,
+		orgFile:                    resolvedPaths.orgFile,
+		relayFile:                  resolvedPaths.relayFile,
+		crypto:                     cryptoMgr,
+		fs:                         defaultFileSystem{},
 	}
 
 	log.Debug().
@@ -2795,11 +2811,178 @@ type AIUsageEventRecord struct {
 	RequestModel  string    `json:"request_model"`
 	ResponseModel string    `json:"response_model,omitempty"`
 	UseCase       string    `json:"use_case,omitempty"` // "chat" or "patrol"
+	ContextScope  string    `json:"context_scope,omitempty"`
+	ToolCallCount int       `json:"tool_call_count,omitempty"`
 	InputTokens   int       `json:"input_tokens,omitempty"`
 	OutputTokens  int       `json:"output_tokens,omitempty"`
 	TargetType    string    `json:"target_type,omitempty"`
 	TargetID      string    `json:"target_id,omitempty"`
 	FindingID     string    `json:"finding_id,omitempty"`
+}
+
+const (
+	ExternalAgentActivitySurfaceAgentAPI = "agent_api"
+	ExternalAgentActivitySurfacePulseMCP = "pulse_mcp"
+
+	ExternalAgentActivityResourceContext = "resource_context"
+	ExternalAgentActivityFleetContext    = "fleet_context"
+	ExternalAgentActivityEventStream     = "event_stream"
+	ExternalAgentActivityProvisioning    = "provisioning"
+	ExternalAgentActivityOperatorState   = "operator_state"
+	ExternalAgentActivityFindingList     = "finding_list"
+	ExternalAgentActivityFindingDecision = "finding_decision"
+	ExternalAgentActivityActionPlan      = "action_plan"
+	ExternalAgentActivityActionDecision  = "action_decision"
+	ExternalAgentActivityActionExecute   = "action_execute"
+
+	maxExternalAgentActivityHistoryRecords = 500
+	externalAgentActivityHistoryRetention  = 90 * 24 * time.Hour
+
+	WorkflowPromptActivitySurfacePulseAssistant = "pulse_assistant"
+	WorkflowPromptActivitySurfacePulsePatrol    = "pulse_patrol"
+	WorkflowPromptActivitySurfacePatrolControl  = "patrol_control"
+	WorkflowPromptActivitySurfacePatrolAutonomy = "patrol_autonomy"
+	WorkflowPromptActivitySurfaceProActivation  = "pulse_pro_activation"
+	WorkflowPromptActivitySurfaceAgentAPI       = "agent_api"
+	WorkflowPromptActivitySurfacePulseMCP       = "pulse_mcp"
+
+	maxWorkflowPromptActivityHistoryRecords = 500
+	workflowPromptActivityHistoryRetention  = 90 * 24 * time.Hour
+)
+
+// ExternalAgentActivityHistoryData represents persisted external-agent surface
+// activity with metadata. Events intentionally carry only coarse activity
+// classes; token identity, route parameters, resource IDs, prompts, findings,
+// command payloads, and outputs do not belong in this telemetry source.
+type ExternalAgentActivityHistoryData struct {
+	Version   int                           `json:"version"`
+	LastSaved time.Time                     `json:"last_saved"`
+	Events    []ExternalAgentActivityRecord `json:"events"`
+}
+
+// ExternalAgentActivityRecord is a content-free marker that an authenticated
+// external-agent-capable caller reached one of the manifest-backed agent
+// surfaces.
+type ExternalAgentActivityRecord struct {
+	Timestamp time.Time `json:"timestamp"`
+	Surface   string    `json:"surface"`
+	Activity  string    `json:"activity"`
+}
+
+// WorkflowPromptActivityHistoryData represents persisted workflow-starter
+// activity with metadata. Events intentionally carry only the manifest prompt
+// name and coarse surface; prompt arguments, rendered text, resource IDs,
+// finding IDs, user text, model output, and token identity do not belong here.
+type WorkflowPromptActivityHistoryData struct {
+	Version   int                            `json:"version"`
+	LastSaved time.Time                      `json:"last_saved"`
+	Events    []WorkflowPromptActivityRecord `json:"events"`
+}
+
+// WorkflowPromptActivityRecord is a content-free marker that a Pulse workflow
+// starter was rendered on a first-party or external-agent surface.
+type WorkflowPromptActivityRecord struct {
+	Timestamp  time.Time `json:"timestamp"`
+	Surface    string    `json:"surface"`
+	PromptName string    `json:"prompt_name"`
+}
+
+func normalizeExternalAgentActivityRecord(record ExternalAgentActivityRecord) (ExternalAgentActivityRecord, bool) {
+	if record.Timestamp.IsZero() {
+		return ExternalAgentActivityRecord{}, false
+	}
+	record.Timestamp = record.Timestamp.UTC()
+	record.Surface = strings.TrimSpace(record.Surface)
+	if record.Surface == "" {
+		record.Surface = ExternalAgentActivitySurfaceAgentAPI
+	}
+	record.Activity = strings.TrimSpace(record.Activity)
+	if record.Activity == "" {
+		return ExternalAgentActivityRecord{}, false
+	}
+	return record, true
+}
+
+func normalizeExternalAgentActivityRecords(records []ExternalAgentActivityRecord) []ExternalAgentActivityRecord {
+	if records == nil {
+		return make([]ExternalAgentActivityRecord, 0)
+	}
+	normalized := make([]ExternalAgentActivityRecord, 0, len(records))
+	for _, record := range records {
+		record, ok := normalizeExternalAgentActivityRecord(record)
+		if !ok {
+			continue
+		}
+		normalized = append(normalized, record)
+	}
+	return normalized
+}
+
+func pruneExternalAgentActivityRecords(records []ExternalAgentActivityRecord, cutoff time.Time, maxRecords int) []ExternalAgentActivityRecord {
+	normalized := normalizeExternalAgentActivityRecords(records)
+	if !cutoff.IsZero() {
+		kept := normalized[:0]
+		for _, record := range normalized {
+			if record.Timestamp.Before(cutoff) {
+				continue
+			}
+			kept = append(kept, record)
+		}
+		normalized = kept
+	}
+	if maxRecords > 0 && len(normalized) > maxRecords {
+		normalized = normalized[len(normalized)-maxRecords:]
+	}
+	return normalized
+}
+
+func normalizeWorkflowPromptActivityRecord(record WorkflowPromptActivityRecord) (WorkflowPromptActivityRecord, bool) {
+	if record.Timestamp.IsZero() {
+		return WorkflowPromptActivityRecord{}, false
+	}
+	record.Timestamp = record.Timestamp.UTC()
+	record.Surface = strings.TrimSpace(record.Surface)
+	if record.Surface == "" {
+		record.Surface = WorkflowPromptActivitySurfacePulseAssistant
+	}
+	record.PromptName = strings.TrimSpace(record.PromptName)
+	if record.PromptName == "" {
+		return WorkflowPromptActivityRecord{}, false
+	}
+	return record, true
+}
+
+func normalizeWorkflowPromptActivityRecords(records []WorkflowPromptActivityRecord) []WorkflowPromptActivityRecord {
+	if records == nil {
+		return make([]WorkflowPromptActivityRecord, 0)
+	}
+	normalized := make([]WorkflowPromptActivityRecord, 0, len(records))
+	for _, record := range records {
+		record, ok := normalizeWorkflowPromptActivityRecord(record)
+		if !ok {
+			continue
+		}
+		normalized = append(normalized, record)
+	}
+	return normalized
+}
+
+func pruneWorkflowPromptActivityRecords(records []WorkflowPromptActivityRecord, cutoff time.Time, maxRecords int) []WorkflowPromptActivityRecord {
+	normalized := normalizeWorkflowPromptActivityRecords(records)
+	if !cutoff.IsZero() {
+		kept := normalized[:0]
+		for _, record := range normalized {
+			if record.Timestamp.Before(cutoff) {
+				continue
+			}
+			kept = append(kept, record)
+		}
+		normalized = kept
+	}
+	if maxRecords > 0 && len(normalized) > maxRecords {
+		normalized = normalized[len(normalized)-maxRecords:]
+	}
+	return normalized
 }
 
 // saveHistoryData is the save-side counterpart of loadHistoryData: it
@@ -2853,6 +3036,179 @@ func newEmptyAIUsageHistoryData() *AIUsageHistoryData {
 		Version: 1,
 		Events:  make([]AIUsageEventRecord, 0),
 	}
+}
+
+// SaveExternalAgentActivityHistory persists external-agent activity markers to
+// disk.
+func (c *ConfigPersistence) SaveExternalAgentActivityHistory(events []ExternalAgentActivityRecord) error {
+	normalized := normalizeExternalAgentActivityRecords(events)
+	data := ExternalAgentActivityHistoryData{
+		Version:   1,
+		LastSaved: time.Now(),
+		Events:    normalized,
+	}
+	return saveHistoryData(c, c.externalAgentActivityFile, data, len(normalized), "external agent activity history", "External agent activity history")
+}
+
+func newEmptyExternalAgentActivityHistoryData() *ExternalAgentActivityHistoryData {
+	return &ExternalAgentActivityHistoryData{
+		Version: 1,
+		Events:  make([]ExternalAgentActivityRecord, 0),
+	}
+}
+
+// SaveWorkflowPromptActivityHistory persists content-free workflow prompt
+// activity markers to disk.
+func (c *ConfigPersistence) SaveWorkflowPromptActivityHistory(events []WorkflowPromptActivityRecord) error {
+	normalized := normalizeWorkflowPromptActivityRecords(events)
+	data := WorkflowPromptActivityHistoryData{
+		Version:   1,
+		LastSaved: time.Now(),
+		Events:    normalized,
+	}
+	return saveHistoryData(c, c.workflowPromptActivityFile, data, len(normalized), "workflow prompt activity history", "Workflow prompt activity history")
+}
+
+func newEmptyWorkflowPromptActivityHistoryData() *WorkflowPromptActivityHistoryData {
+	return &WorkflowPromptActivityHistoryData{
+		Version: 1,
+		Events:  make([]WorkflowPromptActivityRecord, 0),
+	}
+}
+
+// RecordExternalAgentActivity appends one content-free external-agent activity
+// marker and prunes old records while holding the persistence lock, avoiding
+// load-append-save races between concurrent agent requests.
+func (c *ConfigPersistence) RecordExternalAgentActivity(record ExternalAgentActivityRecord) error {
+	if c == nil {
+		return nil
+	}
+	now := time.Now().UTC()
+	if record.Timestamp.IsZero() {
+		record.Timestamp = now
+	}
+	record, ok := normalizeExternalAgentActivityRecord(record)
+	if !ok {
+		return nil
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if err := c.EnsureConfigDir(); err != nil {
+		return fmt.Errorf("prepare config directory for external agent activity history: %w", err)
+	}
+
+	history := newEmptyExternalAgentActivityHistoryData()
+	data, err := c.fs.ReadFile(c.externalAgentActivityFile)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("read external agent activity history: %w", err)
+		}
+	} else {
+		if c.crypto != nil {
+			if decrypted, decErr := c.crypto.Decrypt(data); decErr == nil {
+				data = decrypted
+			}
+		}
+		if unmarshalErr := json.Unmarshal(data, history); unmarshalErr != nil {
+			log.Debug().Err(unmarshalErr).Str("file", c.externalAgentActivityFile).Msg("Resetting unreadable external agent activity history")
+			history = newEmptyExternalAgentActivityHistoryData()
+		}
+	}
+
+	history.Events = append(history.Events, record)
+	history.Events = pruneExternalAgentActivityRecords(
+		history.Events,
+		record.Timestamp.Add(-externalAgentActivityHistoryRetention),
+		maxExternalAgentActivityHistoryRecords,
+	)
+	history.Version = 1
+	history.LastSaved = now
+
+	jsonData, err := json.Marshal(history)
+	if err != nil {
+		return fmt.Errorf("marshal external agent activity history: %w", err)
+	}
+	if c.crypto != nil {
+		encrypted, encErr := c.crypto.Encrypt(jsonData)
+		if encErr != nil {
+			return fmt.Errorf("encrypt external agent activity history: %w", encErr)
+		}
+		jsonData = encrypted
+	}
+	if err := c.writeConfigFileLocked(c.externalAgentActivityFile, jsonData, 0600); err != nil {
+		return fmt.Errorf("persist external agent activity history: %w", err)
+	}
+	return nil
+}
+
+// RecordWorkflowPromptActivity appends one content-free workflow prompt
+// activity marker and prunes old records while holding the persistence lock,
+// avoiding load-append-save races between concurrent Assistant and MCP
+// requests.
+func (c *ConfigPersistence) RecordWorkflowPromptActivity(record WorkflowPromptActivityRecord) error {
+	if c == nil {
+		return nil
+	}
+	now := time.Now().UTC()
+	if record.Timestamp.IsZero() {
+		record.Timestamp = now
+	}
+	record, ok := normalizeWorkflowPromptActivityRecord(record)
+	if !ok {
+		return nil
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if err := c.EnsureConfigDir(); err != nil {
+		return fmt.Errorf("prepare config directory for workflow prompt activity history: %w", err)
+	}
+
+	history := newEmptyWorkflowPromptActivityHistoryData()
+	data, err := c.fs.ReadFile(c.workflowPromptActivityFile)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("read workflow prompt activity history: %w", err)
+		}
+	} else {
+		if c.crypto != nil {
+			if decrypted, decErr := c.crypto.Decrypt(data); decErr == nil {
+				data = decrypted
+			}
+		}
+		if unmarshalErr := json.Unmarshal(data, history); unmarshalErr != nil {
+			log.Debug().Err(unmarshalErr).Str("file", c.workflowPromptActivityFile).Msg("Resetting unreadable workflow prompt activity history")
+			history = newEmptyWorkflowPromptActivityHistoryData()
+		}
+	}
+
+	history.Events = append(history.Events, record)
+	history.Events = pruneWorkflowPromptActivityRecords(
+		history.Events,
+		record.Timestamp.Add(-workflowPromptActivityHistoryRetention),
+		maxWorkflowPromptActivityHistoryRecords,
+	)
+	history.Version = 1
+	history.LastSaved = now
+
+	jsonData, err := json.Marshal(history)
+	if err != nil {
+		return fmt.Errorf("marshal workflow prompt activity history: %w", err)
+	}
+	if c.crypto != nil {
+		encrypted, encErr := c.crypto.Encrypt(jsonData)
+		if encErr != nil {
+			return fmt.Errorf("encrypt workflow prompt activity history: %w", encErr)
+		}
+		jsonData = encrypted
+	}
+	if err := c.writeConfigFileLocked(c.workflowPromptActivityFile, jsonData, 0600); err != nil {
+		return fmt.Errorf("persist workflow prompt activity history: %w", err)
+	}
+	return nil
 }
 
 // loadHistoryData generic helper for loading history data from disk.
@@ -2941,6 +3297,64 @@ func (c *ConfigPersistence) LoadAIUsageHistory() (*AIUsageHistoryData, error) {
 			return data.LastSaved
 		},
 		"AI usage history",
+	)
+}
+
+// LoadExternalAgentActivityHistory loads external-agent activity markers from
+// disk.
+func (c *ConfigPersistence) LoadExternalAgentActivityHistory() (*ExternalAgentActivityHistoryData, error) {
+	return loadHistoryData(
+		c.fs,
+		&c.mu,
+		c.externalAgentActivityFile,
+		c.crypto,
+		newEmptyExternalAgentActivityHistoryData,
+		func(data *ExternalAgentActivityHistoryData) {
+			data.Events = normalizeExternalAgentActivityRecords(data.Events)
+		},
+		func(data *ExternalAgentActivityHistoryData) error {
+			jsonData, err := json.Marshal(data)
+			if err != nil {
+				return fmt.Errorf("marshal external agent activity history migration rewrite: %w", err)
+			}
+			return rewriteEncryptedJSONLocked(c, c.externalAgentActivityFile, jsonData, "external agent activity history migration rewrite")
+		},
+		func(data *ExternalAgentActivityHistoryData) int {
+			return len(data.Events)
+		},
+		func(data *ExternalAgentActivityHistoryData) time.Time {
+			return data.LastSaved
+		},
+		"External agent activity history",
+	)
+}
+
+// LoadWorkflowPromptActivityHistory loads content-free workflow prompt activity
+// markers from disk.
+func (c *ConfigPersistence) LoadWorkflowPromptActivityHistory() (*WorkflowPromptActivityHistoryData, error) {
+	return loadHistoryData(
+		c.fs,
+		&c.mu,
+		c.workflowPromptActivityFile,
+		c.crypto,
+		newEmptyWorkflowPromptActivityHistoryData,
+		func(data *WorkflowPromptActivityHistoryData) {
+			data.Events = normalizeWorkflowPromptActivityRecords(data.Events)
+		},
+		func(data *WorkflowPromptActivityHistoryData) error {
+			jsonData, err := json.Marshal(data)
+			if err != nil {
+				return fmt.Errorf("marshal workflow prompt activity history migration rewrite: %w", err)
+			}
+			return rewriteEncryptedJSONLocked(c, c.workflowPromptActivityFile, jsonData, "workflow prompt activity history migration rewrite")
+		},
+		func(data *WorkflowPromptActivityHistoryData) int {
+			return len(data.Events)
+		},
+		func(data *WorkflowPromptActivityHistoryData) time.Time {
+			return data.LastSaved
+		},
+		"Workflow prompt activity history",
 	)
 }
 

@@ -6,26 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
-
-func TestFormatToolResult(t *testing.T) {
-	result := tools.CallToolResult{
-		Content: []tools.Content{
-			{Type: "text", Text: "first"},
-			{Type: "resource", URI: "file://ignored"},
-			{Type: "text", Text: "second"},
-		},
-	}
-	if got := formatToolResult(result); got != "first\nsecond" {
-		t.Fatalf("formatToolResult returned %q", got)
-	}
-
-	if got := formatToolResult(tools.CallToolResult{}); got != "" {
-		t.Fatalf("expected empty result for no content, got %q", got)
-	}
-}
 
 func TestEvalPromptBuilders(t *testing.T) {
 	systemPrompt := buildEvalSystemPrompt()

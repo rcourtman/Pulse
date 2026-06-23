@@ -147,8 +147,8 @@ var featureMetadataCatalog = map[string]FeatureMetadata{
 	},
 	FeatureAIAlerts: {
 		Key:                   FeatureAIAlerts,
-		DisplayName:           "Alert Analysis",
-		ComparisonName:        "Alert Root-Cause Analysis",
+		DisplayName:           "Patrol Investigates Issues",
+		ComparisonName:        "Patrol Investigates Issues",
 		ShowInComparisonTable: true,
 		DisplayableInPlanUI:   true,
 		SelfHostedRoles: SelfHostedFeatureRoles{
@@ -156,13 +156,13 @@ var featureMetadataCatalog = map[string]FeatureMetadata{
 			Relay:     SelfHostedFeatureRoleHidden,
 			Pro:       SelfHostedFeatureRolePrimaryPillar,
 		},
-		UpgradeReason:   "Upgrade to Pro so alerts arrive with root-cause analysis instead of a stack of symptoms.",
+		UpgradeReason:   "Upgrade to Pro so Patrol can investigate issues instead of handing you a stack of symptoms.",
 		UpgradePriority: 4,
 	},
 	FeatureAIAutoFix: {
 		Key:                   FeatureAIAutoFix,
-		DisplayName:           "Safe Remediation Workflows",
-		ComparisonName:        "Safe Remediation Workflows",
+		DisplayName:           "Patrol Handles Safe Fixes",
+		ComparisonName:        "Patrol Handles Safe Fixes",
 		ShowInComparisonTable: true,
 		DisplayableInPlanUI:   true,
 		SelfHostedRoles: SelfHostedFeatureRoles{
@@ -170,7 +170,7 @@ var featureMetadataCatalog = map[string]FeatureMetadata{
 			Relay:     SelfHostedFeatureRoleHidden,
 			Pro:       SelfHostedFeatureRolePrimaryPillar,
 		},
-		UpgradeReason:   "Upgrade to Pro so Pulse can move from finding issues to governed remediation with your approval or autonomy policy.",
+		UpgradeReason:   "Upgrade to Pro so Patrol can investigate issues, handle safe fixes within Patrol mode, and verify the outcome.",
 		UpgradePriority: 3,
 	},
 	FeatureKubernetesAI: {

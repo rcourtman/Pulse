@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 )
 
-const currentResourceHandle = "current_resource"
+const currentResourceHandle = agentcapabilities.CurrentResourceHandle
 
 const currentResourceSelectionWindow = 365 * 24 * time.Hour
 
@@ -14,20 +16,11 @@ type sortedExplicitResourceProvider interface {
 	GetRecentlyAccessedResourcesSorted(window time.Duration, max int) []string
 }
 
-func isCurrentResourceReference(value string) bool {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case currentResourceHandle, "attached_resource", "selected_resource", "this_resource", "redacted by policy":
-		return true
-	default:
-		return false
-	}
-}
-
 // IsCurrentResourceReference reports whether a tool argument is one of the
 // session-scoped placeholders that must resolve through attached resource
 // context before execution.
 func IsCurrentResourceReference(value string) bool {
-	return isCurrentResourceReference(value)
+	return agentcapabilities.IsCurrentResourceReference(value)
 }
 
 // ValidateCurrentResourceAvailable checks whether the session currently has a
@@ -169,7 +162,7 @@ func (e *PulseToolExecutor) commandTargetForResolvedResource(resource ResolvedRe
 }
 
 func (e *PulseToolExecutor) resolveCurrentResourceCommandTarget(value string) (string, error) {
-	if !isCurrentResourceReference(value) {
+	if !IsCurrentResourceReference(value) {
 		return strings.TrimSpace(value), nil
 	}
 	resource, err := e.resolveCurrentResource()

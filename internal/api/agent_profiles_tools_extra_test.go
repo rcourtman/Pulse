@@ -41,7 +41,7 @@ func TestBuildScopeProfileName(t *testing.T) {
 	}
 }
 
-func TestMCPAgentProfileManager_ValidateSettings(t *testing.T) {
+func TestAssistantAgentProfileManager_ValidateSettings(t *testing.T) {
 	manager := newTestProfileManager(t)
 	if err := manager.validateSettings(map[string]interface{}{"unknown_key": true}); err == nil {
 		t.Fatalf("expected validation error for warnings")
@@ -51,10 +51,10 @@ func TestMCPAgentProfileManager_ValidateSettings(t *testing.T) {
 	}
 }
 
-func TestMCPAgentProfileManager_RequireLicense(t *testing.T) {
+func TestAssistantAgentProfileManager_RequireLicense(t *testing.T) {
 	persistence := config.NewConfigPersistence(t.TempDir())
 	licenseService := license.NewService()
-	manager := NewMCPAgentProfileManager(persistence, licenseService)
+	manager := NewAssistantAgentProfileManager(persistence, licenseService)
 
 	_, _, _, err := manager.ApplyAgentScope(context.Background(), "agent-1", "Alpha", map[string]interface{}{"enable_host": true})
 	if err == nil {
@@ -62,7 +62,7 @@ func TestMCPAgentProfileManager_RequireLicense(t *testing.T) {
 	}
 }
 
-func TestMCPAgentProfileManager_SaveVersion(t *testing.T) {
+func TestAssistantAgentProfileManager_SaveVersion(t *testing.T) {
 	manager := newTestProfileManager(t)
 	profile := models.AgentProfile{
 		ID:      "profile-1",
@@ -84,14 +84,14 @@ func TestMCPAgentProfileManager_SaveVersion(t *testing.T) {
 	}
 }
 
-func TestMCPAgentProfileManager_AssignProfile_NotFound(t *testing.T) {
+func TestAssistantAgentProfileManager_AssignProfile_NotFound(t *testing.T) {
 	manager := newTestProfileManager(t)
 	if _, err := manager.AssignProfile(context.Background(), "agent-1", "missing"); err == nil {
 		t.Fatalf("expected error for missing profile")
 	}
 }
 
-func TestMCPAgentProfileManager_GetScope_EmptyAgent(t *testing.T) {
+func TestAssistantAgentProfileManager_GetScope_EmptyAgent(t *testing.T) {
 	manager := newTestProfileManager(t)
 	if _, err := manager.GetAgentScope(context.Background(), ""); err == nil {
 		t.Fatalf("expected error for empty agent ID")

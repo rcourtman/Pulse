@@ -88,7 +88,6 @@ TLS floor in the dynamic config.
 51. `scripts/install.sh`
 52. `scripts/install-mcp.sh`
 53. `scripts/install-mcp.ps1`
-54. `cmd/pulse-mcp/`
 55. `scripts/pulse-auto-update.sh`
 56. `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`
 57. `scripts/release_control/record_rc_to_ga_rehearsal.py`
@@ -288,6 +287,11 @@ TLS floor in the dynamic config.
 
 1. Add or change deployment-type detection, update planning, or apply behavior through `internal/updates/`
 2. Add or change release-build metadata injection, Docker build-context allowlists, release artifact assembly, governed promotion metadata resolution, the canonical version file, operator-facing release packet content, prerelease feedback intake wording, historical published-release integrity backfill, release asset validation status publication, download endpoint checksum/signature header proof, end-to-end install.sh smoke against the published release, or the canonical in-repo v6 upgrade guide through `scripts/build-release.sh`, `scripts/release_asset_common.sh`, `scripts/backfill-release-assets.sh`, `scripts/release_ldflags.sh`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/release_control/render_release_body.py`, `scripts/release_control/resolve_release_promotion.py`, `scripts/release_control/record_rc_to_ga_rehearsal.py`, `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`, `scripts/release_control/release_promotion_policy_support.py`, `.dockerignore`, `Dockerfile`, `.github/ISSUE_TEMPLATE/v6_rc_feedback.yml`, `docs/RELEASE_NOTES.md`, `docs/releases/`, `docs/UPGRADE_v6.md`, `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`, `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`, `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`, `scripts/validate-release.sh`, `scripts/validate-published-release.sh`, the operator dispatch helpers `scripts/trigger-release.sh` and `scripts/trigger-release-dry-run.sh`, and the governed release workflows `.github/workflows/backfill-release-assets.yml`, `.github/workflows/create-release.yml`, `.github/workflows/deploy-demo-server.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/install-sh-smoke.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/update-demo-server.yml`, and `.github/workflows/validate-release-assets.yml`
+   Release-facing agent-paradigm blurbs under `docs/releases/` must describe
+   `pulse-mcp` as a generic MCP adapter for MCP-speaking clients, not a
+   client-specific release artifact, and full-surface token guidance must come
+   from the manifest-owned `requiredScopes` list so release notes cannot drift
+   away from the shipped adapter.
    The `install-sh-smoke.yml` workflow runs end-to-end against the
    published release in a privileged systemd container: it downloads
    `install.sh` and `install.sh.sshsig` from the GitHub Release URL,
@@ -397,6 +401,13 @@ TLS floor in the dynamic config.
    workspace package and Makefile must delegate their lab-agent targets through
    those same repo-root npm wrappers rather than duplicating raw launcher
    commands or teaching developers to paste one-off environment strings.
+   After a developer explicitly starts lab-agent mode, the managed and
+   foreground hot-dev launchers may remember that local workspace opt-in in
+   ignored `tmp/` state so ordinary managed restarts do not silently strand
+   already-installed LAN agents or lose the Proxmox guest Docker inventory
+   flags. Clean checkouts must still default to loopback-only development, and
+   an explicit `PULSE_DEV_LAB_AGENTS=false` / `PULSE_DEV_LAN=false` launch must
+   clear the remembered opt-in and return the workspace to local-only binding.
    The hot-dev supervisor must also recover its managed PID file from a live
    `hot-dev-bg.sh supervise` process before treating the runtime as unmanaged.
    Backend health monitoring must distinguish HTTP startup grace from a missing
@@ -1149,8 +1160,9 @@ shell and Windows installers also sit on the shared agent-lifecycle boundary.
 `scripts/install-mcp.sh` and `scripts/install-mcp.ps1` extend the
 installer family with a fourth entry point: a stdio MCP server
 adapter (`cmd/pulse-mcp/`) that integrators run on their own
-machine to drive Pulse from Claude Desktop, Claude Code, or other
-MCP-speaking clients. The installers fetch a published
+machine to expose the same Pulse Intelligence capability manifest
+used by Pulse Assistant to OpenCode, Claude Desktop, Claude Code, or
+other MCP-speaking clients. The installers fetch a published
 `pulse-mcp-<os>-<arch>` binary from the latest GitHub Release,
 verify SHA256 against the same `checksums.txt` the rest of the
 release uses, and place the binary at `~/.local/bin/pulse-mcp`
@@ -1169,6 +1181,98 @@ installers consume. macOS notarization is intentionally skipped
 for v1: the README documents the Gatekeeper bypass and the
 install-script flow downloads the same unsigned binary, with the
 audit trail of SHA256 verification preserved.
+The adapter's complete request/response tool-list projection, manifest
+projection, capability and governance metadata formatting, request/response
+tool filtering, typed input-schema projection, and API route/body call
+projection semantics remain owned by `ai-runtime` and `api-contracts`;
+deployment-installability owns building, publishing, installing, and launching
+the same binary. README guidance may describe the manifest-provided typed
+`inputSchema` arguments that MCP clients receive, including operator-state,
+finding, and action tools, but those schemas remain an API/AI contract rather
+than an installer or release-asset behavior.
+README and startup guidance may describe API-token setup for the installed
+adapter, but the set and order of advertised token scopes must be derived from
+the manifest-owned `internal/agentcapabilities.RequiredCapabilityScopeList`
+helper or the README generator's Markdown projection over that helper, not from
+a deployment-local hardcoded scope list. Packaging may ship that guidance, but
+it must not become a second owner of which scopes the current Pulse
+Intelligence surface requires.
+README guidance may also describe client setup for the installed adapter, but
+server name, command, base URL flag/default, token environment variable, and
+supported config families must be derived from
+`internal/agentcapabilities.MCPClientConfigMarkdown` over
+`Manifest.MCPAdapter`, not from deployment-local OpenCode, Claude, or
+`pulse-mcp` setup snippets. Packaging may ship the generated prose and
+installers, but it must not become a second owner of MCP client configuration.
+Patrol finding tool scopes follow the same boundary: release assets may ship
+the generated guidance, but the `ai:execute` requirement for Patrol finding
+review and lifecycle calls comes from the manifest/API authorization contract,
+not deployment-local monitoring-scope wording.
+README guidance may also describe MCP workflow prompts, but the prompt
+inventory must be derived from the shared `internal/agentcapabilities`
+`ProjectPulseWorkflowPrompts` / `MCPPromptInventoryMarkdown` path. Packaging
+may ship the generated prose, but it must not carry a deployment-local prompt
+catalog.
+README guidance may also describe capability-specific stable error codes, but
+the error-code inventory must be derived from the shared
+`internal/agentcapabilities` manifest through `MCPErrorCodeInventoryMarkdown`.
+Packaging may ship the generated prose, but it must not carry a
+deployment-local error-code catalog.
+The shared manifest declaration and wire type in `internal/agentcapabilities/`
+follow the same split: deployment-installability may package `cmd/pulse-mcp`,
+but it must not fork or reinterpret the capability schema, shared
+`ProjectedTool`/`ProjectTools` projection, shared `FindCapability` /
+`ResolveCapability` lookup contract, shared named capability HTTP execution,
+shared structured tool schema, provider-projection helpers, schema-envelope
+helper, typed action-mode, approval-policy, or stable error-code contract
+locally.
+The shared event vocabulary follows that same split. Deployment-installability
+may document and package MCP notification support, but event names advertised
+by `cmd/pulse-mcp`, the `subscribe_events` manifest description, and
+transport-event filtering, SSE record parsing, SSE-to-MCP notification
+bridging, and MCP notification method projection remain owned by
+`internal/agentcapabilities` plus the API/AI
+contracts; release/install artifacts must not carry a separate event registry
+or stream parser. The same boundary owns the event-stream HTTP subscription
+primitive, including the `Accept: text/event-stream` request convention and
+subscribe status handling; packaging may launch `cmd/pulse-mcp` but must not
+fork that transport or notification-bridge behavior into install scripts or
+release artifacts.
+The shared MCP JSON-RPC, request decoding, line-delimited stdio request
+serving, notification response policy, stable JSON-RPC encoding,
+manifest-backed tool-server semantics, tool-server method dispatch,
+initialize instruction/tool-call/resource/prompt payloads, `tools/call` params decode, tool-call
+parameter normalization/validation, tool-server initialize result construction,
+capability lookup translation, named HTTP invocation, MCP resource URI
+projection, context-backed `resources/list` / `resources/read` projection,
+manifest-backed `prompts/list` / `prompts/get` workflow prompt projection, and
+result envelopes follow the same boundary. Deployment-installability may
+document, package, and launch
+`cmd/pulse-mcp`, but protocol versions, JSON-RPC error codes,
+event-notification projection, method payload JSON, initialize
+operating-instruction projection, MCP content/result JSON,
+request decoding, line-framing loops, JSON-RPC response serialization,
+notification response policy, SSE-to-MCP notification bridging,
+manifest-backed tool handlers, method dispatch, initialize response
+construction, the MCP tools/call raw bridge, neutral capability tool HTTP
+execution, resource URI construction, context-capability resource projection,
+prompt catalog and rendering, prompt-argument validation, `HTTPCallResponse` to
+shared tool-result wrapping, text/marker interpretation, and the shared rule
+that trims/requires tool names while cloning/initializing argument maps must
+remain owned by `internal/agentcapabilities` so the installed adapter cannot
+drift from Assistant method, tool-call parameter, resource, prompt, or
+tool-result execution.
+The same split applies to governed Assistant tool markers: packaging may
+document approval-required and policy-blocked outcomes, but marker prefixes,
+payload `type` values, formatting, and parsing remain owned by
+`internal/agentcapabilities`.
+The shared agent HTTP substrate follows the same boundary:
+deployment-installability may describe how to pass a token and base URL to the
+installed adapter, but manifest fetch paths, API-token header spelling, request
+content-type behavior, capability HTTP execution, request/response body-return
+helpers, status-derived MCP `isError` behavior, and stable non-2xx
+error-envelope formatting remain owned by
+`internal/agentcapabilities`.
 That same installer boundary now owns instance identity for side-by-side server
 installs too: the root `install.sh`, generated update helper, and
 `scripts/pulse-auto-update.sh` must preserve an explicitly selected service

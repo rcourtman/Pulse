@@ -57,6 +57,8 @@ source "${SCRIPT_DIR}/lib/hot-dev-auth.sh"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/hot-dev-runtime.sh"
 
+HOT_DEV_LAB_MODE_FILE="${HOT_DEV_LAB_MODE_FILE:-${ROOT_DIR}/tmp/hot-dev.lab-agents-mode}"
+
 # --- Helper Functions ---
 
 log_info() { printf "\033[0;34m[hot-dev]\033[0m %s\n" "$1"; }
@@ -362,6 +364,7 @@ PULSE_AUTH_PASS="$(hot_dev_resolve_auth_pass)"
 export FRONTEND_PORT PULSE_DEV_API_PORT PORT PULSE_DEV ALLOW_ADMIN_BYPASS PULSE_AUTH_USER PULSE_AUTH_PASS LOG_LEVEL PULSE_DEV_DISABLE_BACKGROUND_AI
 export PULSE_DEV_LAN PULSE_DEV_LAB_AGENTS BIND_ADDRESS ALLOWED_ORIGINS
 export PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS
+export HOT_DEV_LAB_MODE_FILE
 
 # Data Directory Setup
 # Mock and real mode use SEPARATE data directories so switching between them

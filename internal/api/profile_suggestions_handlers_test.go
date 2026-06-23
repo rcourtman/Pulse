@@ -46,6 +46,9 @@ func TestProfileSuggestionHandler_ServiceUnavailable(t *testing.T) {
 	if rr.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, rr.Code)
 	}
+	if rr.Body.String() != "Pulse Intelligence is not available\n" {
+		t.Fatalf("unexpected service-unavailable body: %q", rr.Body.String())
+	}
 }
 
 func TestProfileSuggestionHandler_InvalidRequest(t *testing.T) {

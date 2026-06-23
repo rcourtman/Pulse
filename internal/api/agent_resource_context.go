@@ -1,14 +1,18 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"reflect"
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcontext"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/telemetry"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -134,6 +138,72 @@ type AgentFleetContext struct {
 	GeneratedAt time.Time                   `json:"generatedAt"`
 }
 
+type AgentOperationsLoopStepStatus string
+
+const (
+	agentOperationsLoopActionWindow = 30 * 24 * time.Hour
+
+	AgentOperationsLoopStepComplete AgentOperationsLoopStepStatus = "complete"
+	AgentOperationsLoopStepCurrent  AgentOperationsLoopStepStatus = "current"
+	AgentOperationsLoopStepPending  AgentOperationsLoopStepStatus = "pending"
+)
+
+// AgentOperationsLoopStep is a content-safe step rollup for the Patrol
+// control loop: Patrol issue evidence, Assistant/context explanation,
+// governed approve/reject decision, and verified outcome. Counts are aggregate
+// only and never carry finding ids, action ids, resource names, commands,
+// prompts, or output. External-agent readiness is a separate capability signal,
+// not a Patrol operator step.
+type AgentOperationsLoopStep struct {
+	ID     string                        `json:"id"`
+	Label  string                        `json:"label"`
+	Status AgentOperationsLoopStepStatus `json:"status"`
+	Count  int                           `json:"count,omitempty"`
+}
+
+// AgentOperationsLoopStatus is the agent-consumable status projection for the
+// same Pulse Intelligence loop shown in the native Patrol control journey. It
+// exists so external MCP agents can orient on the operator stage without
+// reverse-engineering it from fleet context, finding lists, approvals, and
+// action audits. The payload is intentionally count-only. MCP readiness stays
+// separate from steps so optional external access does not look like a required
+// user journey stage.
+type AgentOperationsLoopStatus struct {
+	NextAction                          string                    `json:"nextAction"`
+	ProgressLabel                       string                    `json:"progressLabel"`
+	Steps                               []AgentOperationsLoopStep `json:"steps"`
+	PatrolEvidenceCount                 int                       `json:"patrolEvidenceCount"`
+	PatrolIssueEvidenceCount            int                       `json:"patrolIssueEvidenceCount"`
+	ActiveFindingCount                  int                       `json:"activeFindingCount"`
+	PendingApprovalCount                int                       `json:"pendingApprovalCount"`
+	GovernedActionCount                 int                       `json:"governedActionCount"`
+	ApprovedDecisionCount               int                       `json:"approvedDecisionCount"`
+	RejectedDecisionCount               int                       `json:"rejectedDecisionCount"`
+	VerifiedOutcomeCount                int                       `json:"verifiedOutcomeCount"`
+	OperationsLoopStarterCount          int                       `json:"operationsLoopStarterCount"`
+	AssistantOperationsLoopStarterCount int                       `json:"assistantOperationsLoopStarterCount"`
+	PatrolOperationsLoopStarterCount    int                       `json:"patrolOperationsLoopStarterCount"`
+	PatrolControlLoopStarterCount       int                       `json:"patrolControlOperationsLoopStarterCount"`
+	PatrolControlCompletedLoopCount     int                       `json:"patrolControlCompletedOperationsLoopCount"`
+	PatrolControlResolvedLoopCount      int                       `json:"patrolControlResolvedOperationsLoopCount"`
+	PatrolControlValueState             string                    `json:"patrolControlValueState"`
+	PatrolAutonomyLoopStarterCount      int                       `json:"patrolAutonomyOperationsLoopStarterCount"`
+	PatrolAutonomyCompletedLoopCount    int                       `json:"patrolAutonomyCompletedOperationsLoopCount"`
+	PatrolAutonomyResolvedLoopCount     int                       `json:"patrolAutonomyResolvedOperationsLoopCount"`
+	PatrolAutonomyValueState            string                    `json:"patrolAutonomyValueState"`
+	ProActivationLoopStarterCount       int                       `json:"proActivationOperationsLoopStarterCount"`
+	ProActivationCompletedLoopCount     int                       `json:"proActivationCompletedOperationsLoopCount"`
+	ProActivationResolvedLoopCount      int                       `json:"proActivationResolvedOperationsLoopCount"`
+	ProActivationValueProofState        string                    `json:"proActivationValueProofState"`
+	MCPOperationsLoopStarterCount       int                       `json:"mcpOperationsLoopStarterCount"`
+	ExternalAgentReady                  bool                      `json:"externalAgentReady"`
+	WindowStart                         time.Time                 `json:"windowStart"`
+	GeneratedAt                         time.Time                 `json:"generatedAt"`
+
+	assistantContextCount           int
+	externalAgentCollaborationCount int
+}
+
 // AgentResourceOperatorState mirrors the canonical
 // `unified.ResourceOperatorState` but with the same JSON shape the
 // `/api/resources/{id}/operator-state` endpoint already returns. Kept
@@ -205,12 +275,35 @@ type AgentResourceContext struct {
 	GeneratedAt        time.Time                        `json:"generatedAt"`
 }
 
-// AgentFindingsProvider returns the active findings for a resource as
-// agent-stable snapshots. The implementation lives outside this
-// package (the patrol service holds the canonical findings store);
-// this interface keeps the api layer free of an `internal/ai` import.
+// AgentFindingsProvider returns active findings as agent-stable snapshots and
+// count-only aggregate evidence. The implementation lives outside this package
+// (the patrol service holds the canonical findings store); this interface keeps
+// the api layer free of an `internal/ai` import.
 type AgentFindingsProvider interface {
 	ActiveFindingsForResource(resourceID string) []AgentResourceFindingSnapshot
+}
+
+type AgentAggregateFindingsProvider interface {
+	ActiveFindingCount() int
+}
+
+type agentFindingsProvider struct {
+	activeForResource func(resourceID string) []AgentResourceFindingSnapshot
+	activeCount       func() int
+}
+
+func (p agentFindingsProvider) ActiveFindingsForResource(resourceID string) []AgentResourceFindingSnapshot {
+	if p.activeForResource == nil {
+		return nil
+	}
+	return p.activeForResource(resourceID)
+}
+
+func (p agentFindingsProvider) ActiveFindingCount() int {
+	if p.activeCount == nil {
+		return 0
+	}
+	return p.activeCount()
 }
 
 // agentFindingsProviderFunc is a function adapter so wire-up code can
@@ -261,9 +354,64 @@ func (agentApprovalStoreProvider) PendingApprovalCountsByResource(orgID string) 
 // access (those are the canonical accessors); the
 // agent-findings adapter is held here.
 type AgentContextHandler struct {
-	resources         *ResourceHandlers
-	findingsProvider  AgentFindingsProvider
-	approvalsProvider AgentApprovalsProvider
+	resources                      *ResourceHandlers
+	findingsProvider               AgentFindingsProvider
+	approvalsProvider              AgentApprovalsProvider
+	workflowPromptActivityProvider AgentWorkflowPromptActivityProvider
+	aiUsageProvider                AgentAIUsageProvider
+	externalAgentActivityProvider  AgentExternalAgentActivityProvider
+	externalAgentReadinessProvider AgentExternalAgentReadinessProvider
+}
+
+// AgentWorkflowPromptActivityProvider loads content-free workflow prompt
+// starter activity for the current request context. Implementations are
+// responsible for tenant resolution so the agent status projection can stay
+// scoped to the authenticated org.
+type AgentWorkflowPromptActivityProvider interface {
+	WorkflowPromptActivityHistory(ctx context.Context) (*config.WorkflowPromptActivityHistoryData, error)
+}
+
+type agentWorkflowPromptActivityProviderFunc func(context.Context) (*config.WorkflowPromptActivityHistoryData, error)
+
+func (fn agentWorkflowPromptActivityProviderFunc) WorkflowPromptActivityHistory(ctx context.Context) (*config.WorkflowPromptActivityHistoryData, error) {
+	return fn(ctx)
+}
+
+// AgentAIUsageProvider loads content-free AI usage evidence for the operations
+// loop status projection.
+type AgentAIUsageProvider interface {
+	AIUsageHistory(ctx context.Context) (*config.AIUsageHistoryData, error)
+}
+
+type agentAIUsageProviderFunc func(context.Context) (*config.AIUsageHistoryData, error)
+
+func (fn agentAIUsageProviderFunc) AIUsageHistory(ctx context.Context) (*config.AIUsageHistoryData, error) {
+	return fn(ctx)
+}
+
+// AgentExternalAgentActivityProvider loads content-free external-agent
+// capability activity for the operations loop status projection.
+type AgentExternalAgentActivityProvider interface {
+	ExternalAgentActivityHistory(ctx context.Context) (*config.ExternalAgentActivityHistoryData, error)
+}
+
+type agentExternalAgentActivityProviderFunc func(context.Context) (*config.ExternalAgentActivityHistoryData, error)
+
+func (fn agentExternalAgentActivityProviderFunc) ExternalAgentActivityHistory(ctx context.Context) (*config.ExternalAgentActivityHistoryData, error) {
+	return fn(ctx)
+}
+
+// AgentExternalAgentReadinessProvider reports whether the current org has one
+// non-expired token that can use the full Pulse MCP operations-loop tool set.
+// The status payload exposes only the boolean, never token identity or counts.
+type AgentExternalAgentReadinessProvider interface {
+	ExternalAgentReady(ctx context.Context, manifest agentcapabilities.Manifest, now time.Time) bool
+}
+
+type agentExternalAgentReadinessProviderFunc func(context.Context, agentcapabilities.Manifest, time.Time) bool
+
+func (fn agentExternalAgentReadinessProviderFunc) ExternalAgentReady(ctx context.Context, manifest agentcapabilities.Manifest, now time.Time) bool {
+	return fn(ctx, manifest, now)
 }
 
 // NewAgentContextHandler creates a new agent context handler. The
@@ -285,6 +433,32 @@ func (h *AgentContextHandler) SetFindingsProvider(p AgentFindingsProvider) {
 // so agents can iterate without nil-checking).
 func (h *AgentContextHandler) SetApprovalsProvider(p AgentApprovalsProvider) {
 	h.approvalsProvider = p
+}
+
+// SetWorkflowPromptActivityProvider wires the content-free workflow starter
+// activity source used by the operations-loop status projection. Pass nil to
+// omit starter counts without affecting Patrol, governance, or verification
+// evidence.
+func (h *AgentContextHandler) SetWorkflowPromptActivityProvider(p AgentWorkflowPromptActivityProvider) {
+	h.workflowPromptActivityProvider = p
+}
+
+// SetAIUsageProvider wires content-free Assistant usage evidence into the
+// operations-loop status projection.
+func (h *AgentContextHandler) SetAIUsageProvider(p AgentAIUsageProvider) {
+	h.aiUsageProvider = p
+}
+
+// SetExternalAgentActivityProvider wires content-free external-agent activity
+// evidence into the operations-loop status projection.
+func (h *AgentContextHandler) SetExternalAgentActivityProvider(p AgentExternalAgentActivityProvider) {
+	h.externalAgentActivityProvider = p
+}
+
+// SetExternalAgentReadinessProvider wires the token-backed external-agent
+// setup signal used by the operations-loop status projection.
+func (h *AgentContextHandler) SetExternalAgentReadinessProvider(p AgentExternalAgentReadinessProvider) {
+	h.externalAgentReadinessProvider = p
 }
 
 // HandleResourceContext serves
@@ -316,7 +490,7 @@ func (h *AgentContextHandler) HandleResourceContext(w http.ResponseWriter, r *ht
 	}
 	resource, resourceID, ok := presentationResourceByReference(registry, resourceID)
 	if !ok {
-		writeJSONError(w, http.StatusNotFound, "resource_not_found",
+		writeJSONError(w, http.StatusNotFound, agentcapabilities.AgentErrCodeResourceNotFound,
 			"No resource is registered with this canonical id.")
 		return
 	}
@@ -513,6 +687,118 @@ func (h *AgentContextHandler) HandleFleetContext(w http.ResponseWriter, r *http.
 	_ = json.NewEncoder(w).Encode(out)
 }
 
+// HandleOperationsLoopStatus serves the content-safe status read for the shared
+// Pulse Intelligence Patrol control loop. The canonical route is
+// `GET /api/agent/patrol-control/status`; `GET /api/agent/operations-loop/status`
+// remains as a compatibility alias. It deliberately summarizes counts and
+// stage state instead of exposing finding ids, action ids, commands, prompts,
+// output, or resource names.
+func (h *AgentContextHandler) HandleOperationsLoopStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if h.resources == nil {
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	orgID := GetOrgID(r.Context())
+	registry, err := h.resources.buildRegistry(orgID)
+	if err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		return
+	}
+	store, err := h.resources.getStore(orgID)
+	if err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		return
+	}
+
+	now := time.Now().UTC()
+	windowStart := now.Add(-agentOperationsLoopActionWindow)
+	manifest := agentcapabilities.CanonicalManifest()
+	status := AgentOperationsLoopStatus{
+		Steps:              []AgentOperationsLoopStep{},
+		ExternalAgentReady: h.agentOperationsLoopExternalAgentReady(r.Context(), manifest, now),
+		WindowStart:        windowStart,
+		GeneratedAt:        now,
+	}
+
+	pendingByResource := map[string]int{}
+	if h.approvalsProvider != nil {
+		if counts := h.approvalsProvider.PendingApprovalCountsByResource(orgID); counts != nil {
+			pendingByResource = counts
+		}
+	}
+
+	for _, resource := range registry.List() {
+		canonical := unified.CanonicalResourceID(resource.ID)
+		if h.findingsProvider != nil {
+			status.ActiveFindingCount += len(h.findingsProvider.ActiveFindingsForResource(canonical))
+		}
+		if pending := pendingByResource[canonical]; pending > 0 {
+			status.PendingApprovalCount += pending
+		}
+	}
+	if aggregateProvider, ok := h.findingsProvider.(AgentAggregateFindingsProvider); ok {
+		if aggregateActive := aggregateProvider.ActiveFindingCount(); aggregateActive > status.ActiveFindingCount {
+			status.ActiveFindingCount = aggregateActive
+		}
+	}
+
+	if h.workflowPromptActivityProvider != nil {
+		if history, err := h.workflowPromptActivityProvider.WorkflowPromptActivityHistory(r.Context()); err == nil {
+			starterCounts := agentOperationsLoopWorkflowStarterEvidenceCounts(history, windowStart)
+			status.OperationsLoopStarterCount = starterCounts.total
+			status.AssistantOperationsLoopStarterCount = starterCounts.assistant
+			status.PatrolOperationsLoopStarterCount = starterCounts.patrol
+			status.ProActivationLoopStarterCount = starterCounts.proActivation
+			status.PatrolControlLoopStarterCount = starterCounts.patrolControl
+			status.PatrolAutonomyLoopStarterCount = status.PatrolControlLoopStarterCount
+			status.MCPOperationsLoopStarterCount = starterCounts.mcp
+		}
+	}
+	if h.aiUsageProvider != nil {
+		if history, err := h.aiUsageProvider.AIUsageHistory(r.Context()); err == nil {
+			aiEvidence := telemetry.PulseIntelligenceAIUsageEvidenceFromHistory(history, windowStart)
+			status.assistantContextCount = aiEvidence.AssistantContextAICalls + aiEvidence.AssistantToolCalls
+		}
+	}
+	if h.externalAgentActivityProvider != nil {
+		if history, err := h.externalAgentActivityProvider.ExternalAgentActivityHistory(r.Context()); err == nil {
+			externalEvidence := telemetry.PulseIntelligenceExternalAgentEvidenceFromHistory(history, windowStart)
+			status.externalAgentCollaborationCount = externalEvidence.CollaborationCount()
+		}
+	}
+
+	actionCounts := agentOperationsLoopActionEvidenceCounts(store, windowStart)
+	status.GovernedActionCount = actionCounts.governed
+	status.ApprovedDecisionCount = actionCounts.approved
+	status.RejectedDecisionCount = actionCounts.rejected
+	status.VerifiedOutcomeCount = actionCounts.verified
+	status.PatrolEvidenceCount = status.ActiveFindingCount + status.PendingApprovalCount + actionCounts.recent
+	status.PatrolIssueEvidenceCount = status.ActiveFindingCount + status.PendingApprovalCount + status.GovernedActionCount + status.VerifiedOutcomeCount
+	patrolControlProof := agentOperationsLoopPatrolControlProof(status)
+	if patrolControlProof.Completed {
+		status.PatrolControlCompletedLoopCount = 1
+	}
+	if patrolControlProof.Resolved {
+		status.PatrolControlResolvedLoopCount = 1
+	}
+	status.PatrolControlValueState = patrolControlProof.ValueProofState
+	status.PatrolAutonomyCompletedLoopCount = status.PatrolControlCompletedLoopCount
+	status.PatrolAutonomyResolvedLoopCount = status.PatrolControlResolvedLoopCount
+	status.PatrolAutonomyValueState = status.PatrolControlValueState
+	status.ProActivationCompletedLoopCount = status.PatrolControlCompletedLoopCount
+	status.ProActivationResolvedLoopCount = status.PatrolControlResolvedLoopCount
+	status.ProActivationValueProofState = status.PatrolControlValueState
+	status.NextAction, status.ProgressLabel, status.Steps = agentOperationsLoopProgress(status)
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(status)
+}
+
 // countFleetFindingsBySeverity tallies the per-severity counts an
 // agent uses to triage. Severity strings outside the canonical set
 // (`critical`, `warning`, `info`) are counted in `Total` but not in
@@ -532,6 +818,342 @@ func countFleetFindingsBySeverity(findings []AgentResourceFindingSnapshot) Agent
 		}
 	}
 	return counts
+}
+
+type agentOperationsLoopActionCounts struct {
+	recent   int
+	governed int
+	approved int
+	rejected int
+	verified int
+}
+
+type agentOperationsLoopWorkflowStarterCounts struct {
+	total         int
+	assistant     int
+	patrol        int
+	patrolControl int
+	proActivation int
+	mcp           int
+}
+
+func agentOperationsLoopWorkflowStarterEvidenceCounts(history *config.WorkflowPromptActivityHistoryData, since time.Time) agentOperationsLoopWorkflowStarterCounts {
+	var counts agentOperationsLoopWorkflowStarterCounts
+	if history == nil {
+		return counts
+	}
+	for _, event := range history.Events {
+		if strings.TrimSpace(event.PromptName) != agentcapabilities.PulseWorkflowPromptOperationsLoop {
+			continue
+		}
+		if event.Timestamp.Before(since) {
+			continue
+		}
+		counts.total++
+		switch strings.TrimSpace(event.Surface) {
+		case config.WorkflowPromptActivitySurfacePulseAssistant:
+			counts.assistant++
+		case config.WorkflowPromptActivitySurfacePulsePatrol:
+			counts.patrol++
+			counts.patrolControl++
+		case config.WorkflowPromptActivitySurfacePatrolControl:
+			counts.patrolControl++
+		case config.WorkflowPromptActivitySurfacePatrolAutonomy:
+			counts.patrolControl++
+		case config.WorkflowPromptActivitySurfaceProActivation:
+			counts.proActivation++
+			counts.patrolControl++
+		case config.WorkflowPromptActivitySurfacePulseMCP:
+			counts.mcp++
+		}
+	}
+	return counts
+}
+
+func agentOperationsLoopActionEvidenceCounts(store unified.ResourceStore, since time.Time) agentOperationsLoopActionCounts {
+	var counts agentOperationsLoopActionCounts
+	if store == nil {
+		return counts
+	}
+	recentIDs := map[string]struct{}{}
+	governedIDs := map[string]struct{}{}
+	approvedIDs := map[string]struct{}{}
+	rejectedIDs := map[string]struct{}{}
+	verifiedIDs := map[string]struct{}{}
+	auditsByID := map[string]unified.ActionAuditRecord{}
+	cacheAudit := func(audit unified.ActionAuditRecord) {
+		actionID := strings.TrimSpace(audit.ID)
+		if actionID == "" {
+			return
+		}
+		auditsByID[actionID] = audit
+	}
+	addAuditEvidence := func(audit unified.ActionAuditRecord) {
+		actionID := strings.TrimSpace(audit.ID)
+		if actionID == "" {
+			return
+		}
+		recentIDs[actionID] = struct{}{}
+		if pulseIntelligenceActionWasApproved(audit) {
+			approvedIDs[actionID] = struct{}{}
+		}
+		if pulseIntelligenceActionWasRejected(audit) {
+			rejectedIDs[actionID] = struct{}{}
+		}
+		if agentOperationsLoopGovernedAction(audit) {
+			governedIDs[actionID] = struct{}{}
+		}
+		if agentOperationsLoopVerifiedAction(audit) {
+			verifiedIDs[actionID] = struct{}{}
+		}
+	}
+	auditForID := func(actionID string) (unified.ActionAuditRecord, bool) {
+		actionID = strings.TrimSpace(actionID)
+		if actionID == "" {
+			return unified.ActionAuditRecord{}, false
+		}
+		if audit, ok := auditsByID[actionID]; ok {
+			return audit, true
+		}
+		audit, ok, err := store.GetActionAudit(actionID)
+		if err != nil || !ok {
+			return unified.ActionAuditRecord{}, false
+		}
+		cacheAudit(audit)
+		return audit, true
+	}
+
+	if audits, err := store.GetActionAudits("", since, 0); err == nil {
+		for _, audit := range audits {
+			cacheAudit(audit)
+			addAuditEvidence(audit)
+		}
+	}
+	if events, err := store.GetActionLifecycleEvents("", since, 0); err == nil {
+		for _, event := range events {
+			actionID := strings.TrimSpace(event.ActionID)
+			if actionID == "" {
+				continue
+			}
+			recentIDs[actionID] = struct{}{}
+			audit, ok := auditForID(actionID)
+			if !ok {
+				continue
+			}
+			if pulseIntelligenceActionWasApproved(audit) {
+				approvedIDs[actionID] = struct{}{}
+			}
+			if pulseIntelligenceActionWasRejected(audit) {
+				rejectedIDs[actionID] = struct{}{}
+			}
+			if agentOperationsLoopGovernedAction(audit) {
+				governedIDs[actionID] = struct{}{}
+			}
+			if agentOperationsLoopVerifiedAction(audit) {
+				verifiedIDs[actionID] = struct{}{}
+			}
+		}
+	}
+	counts.recent = len(recentIDs)
+	counts.governed = len(governedIDs)
+	counts.approved = len(approvedIDs)
+	counts.rejected = len(rejectedIDs)
+	counts.verified = len(verifiedIDs)
+	return counts
+}
+
+func agentOperationsLoopGovernedAction(record unified.ActionAuditRecord) bool {
+	return pulseIntelligenceActionWasApproved(record) || pulseIntelligenceActionWasRejected(record)
+}
+
+func agentOperationsLoopVerifiedAction(record unified.ActionAuditRecord) bool {
+	return pulseIntelligenceActionVerifiedOutcome(record)
+}
+
+func agentOperationsLoopContextualCollaborationCount(status AgentOperationsLoopStatus) int {
+	return status.assistantContextCount + status.externalAgentCollaborationCount
+}
+
+func agentOperationsLoopPatrolControlProof(status AgentOperationsLoopStatus) telemetry.PulseIntelligencePatrolControlProof {
+	return telemetry.ClassifyPulseIntelligencePatrolControlProof(telemetry.PulseIntelligencePatrolControlProofInput{
+		PatrolControlStarterCount:    status.PatrolControlLoopStarterCount,
+		PatrolIssueEvidenceCount:     status.PatrolIssueEvidenceCount,
+		ContextualCollaborationCount: agentOperationsLoopContextualCollaborationCount(status),
+		ApprovedDecisionCount:        status.ApprovedDecisionCount,
+		RejectedDecisionCount:        status.RejectedDecisionCount,
+		VerifiedOutcomeCount:         status.VerifiedOutcomeCount,
+	})
+}
+
+func agentOperationsLoopProgress(status AgentOperationsLoopStatus) (string, string, []AgentOperationsLoopStep) {
+	hasIssueEvidence := status.PatrolIssueEvidenceCount > 0
+	contextualCollaborationCount := agentOperationsLoopContextualCollaborationCount(status)
+	hasContextualCollaboration := contextualCollaborationCount > 0
+	hasApprovedDecision := status.ApprovedDecisionCount > 0 || status.VerifiedOutcomeCount > 0
+	hasRejectedDecision := status.RejectedDecisionCount > 0
+	hasGovernedDecision := hasApprovedDecision || hasRejectedDecision || status.GovernedActionCount > 0
+	hasGovernedWork := status.PendingApprovalCount > 0 || hasGovernedDecision
+	hasVerifiedOutcome := status.VerifiedOutcomeCount > 0
+	hasRejectedTerminalDecision := hasRejectedDecision && !hasApprovedDecision
+	hasPatrolControlCompletedLoop := status.PatrolControlCompletedLoopCount > 0
+	hasPatrolControlResolvedLoop := status.PatrolControlResolvedLoopCount > 0
+	governanceStepCount := status.PendingApprovalCount
+	if decisionCount := status.ApprovedDecisionCount + status.RejectedDecisionCount; decisionCount > 0 {
+		governanceStepCount = decisionCount
+	} else if status.GovernedActionCount > 0 {
+		governanceStepCount = status.GovernedActionCount
+	}
+	verificationStepCount := status.VerifiedOutcomeCount
+	if verificationStepCount == 0 && hasRejectedTerminalDecision {
+		verificationStepCount = status.RejectedDecisionCount
+	}
+
+	steps := []AgentOperationsLoopStep{
+		{ID: "patrol", Label: "Patrol", Status: AgentOperationsLoopStepPending, Count: status.PatrolIssueEvidenceCount},
+		{ID: "assistant", Label: "Assistant", Status: AgentOperationsLoopStepPending, Count: contextualCollaborationCount},
+		{ID: "governance", Label: "Governance", Status: AgentOperationsLoopStepPending, Count: governanceStepCount},
+		{ID: "verification", Label: "Verification", Status: AgentOperationsLoopStepPending, Count: verificationStepCount},
+	}
+
+	switch {
+	case !hasIssueEvidence:
+		steps[0].Status = AgentOperationsLoopStepCurrent
+		if status.PatrolControlLoopStarterCount > 0 {
+			return "run_patrol", "Patrol is ready to check the fleet and investigate the next real infrastructure issue.", steps
+		}
+		return "run_patrol", "Run Patrol to check for actionable infrastructure issues.", steps
+	case !hasContextualCollaboration:
+		steps[0].Status = AgentOperationsLoopStepComplete
+		steps[1].Status = AgentOperationsLoopStepCurrent
+		return "open_assistant", "Open Assistant to explain the Patrol issue and safest next step.", steps
+	case !hasGovernedWork:
+		steps[0].Status = AgentOperationsLoopStepComplete
+		steps[1].Status = AgentOperationsLoopStepCurrent
+		return "open_assistant", "Open Assistant to explain the Patrol issue and safest next step.", steps
+	case status.PendingApprovalCount > 0 && !hasGovernedDecision:
+		steps[0].Status = AgentOperationsLoopStepComplete
+		steps[1].Status = AgentOperationsLoopStepComplete
+		steps[2].Status = AgentOperationsLoopStepCurrent
+		return "review_approvals", "Review the pending governed action approval.", steps
+	case status.PendingApprovalCount > 0:
+		steps[0].Status = AgentOperationsLoopStepComplete
+		steps[1].Status = AgentOperationsLoopStepComplete
+		steps[2].Status = AgentOperationsLoopStepCurrent
+		return "review_approvals", "Review pending Patrol approvals before treating previous verified work as current.", steps
+	case status.ActiveFindingCount > 0 && hasVerifiedOutcome:
+		steps[0].Status = AgentOperationsLoopStepComplete
+		steps[1].Status = AgentOperationsLoopStepCurrent
+		if status.ActiveFindingCount == 1 {
+			return "open_assistant", "Open Assistant on the active Patrol finding before treating previous verified work as current.", steps
+		}
+		return "review_findings", "Review active Patrol findings before treating previous verified work as current.", steps
+	case hasRejectedTerminalDecision:
+		for i := 0; i < 4; i++ {
+			steps[i].Status = AgentOperationsLoopStepComplete
+		}
+		if hasPatrolControlCompletedLoop {
+			return "complete", "Patrol recorded a rejected change decision. Nothing was changed; approve a safer fix before marking the issue resolved.", steps
+		}
+		return "complete", "Patrol recorded a governed rejection. Nothing was changed.", steps
+	case !hasVerifiedOutcome:
+		steps[0].Status = AgentOperationsLoopStepComplete
+		steps[1].Status = AgentOperationsLoopStepComplete
+		steps[2].Status = AgentOperationsLoopStepComplete
+		steps[3].Status = AgentOperationsLoopStepCurrent
+		if status.PatrolControlLoopStarterCount > 0 {
+			return "review_findings", "Verify whether the approved Patrol action fixed the issue.", steps
+		}
+		return "review_findings", "Verify whether the governed action fixed the issue.", steps
+	default:
+		for i := 0; i < 4; i++ {
+			steps[i].Status = AgentOperationsLoopStepComplete
+		}
+		if hasPatrolControlResolvedLoop {
+			return "complete", "Patrol handled an infrastructure issue, verified the outcome, and recorded what happened.", steps
+		}
+		return "complete", "Patrol handled an infrastructure issue, verified the outcome, and recorded what happened.", steps
+	}
+}
+
+func (h *AgentContextHandler) agentOperationsLoopExternalAgentReady(ctx context.Context, manifest agentcapabilities.Manifest, now time.Time) bool {
+	if !agentOperationsLoopExternalAgentManifestReady(manifest) {
+		return false
+	}
+	return h != nil &&
+		h.externalAgentReadinessProvider != nil &&
+		h.externalAgentReadinessProvider.ExternalAgentReady(ctx, manifest, now)
+}
+
+func agentOperationsLoopExternalAgentManifestReady(manifest agentcapabilities.Manifest) bool {
+	adapter := agentcapabilities.NormalizeMCPAdapterContract(manifest.MCPAdapter)
+	if strings.TrimSpace(adapter.Command) == "" ||
+		strings.TrimSpace(adapter.ServerName) == "" ||
+		strings.TrimSpace(adapter.TokenEnv) == "" ||
+		len(adapter.ConfigFamilies) == 0 {
+		return false
+	}
+	if !agentcapabilities.MCPManifestSurfacePromptProjectionSupported(manifest, agentcapabilities.SurfaceIDPulseMCP) {
+		return false
+	}
+	hasOperationsLoopPrompt := false
+	for _, prompt := range agentcapabilities.ManifestPulseWorkflowPrompts(manifest) {
+		if strings.TrimSpace(prompt.Name) == agentcapabilities.PulseWorkflowPromptOperationsLoop {
+			hasOperationsLoopPrompt = true
+			break
+		}
+	}
+	if !hasOperationsLoopPrompt {
+		return false
+	}
+	contract, ok := agentcapabilities.ProjectManifestSurfaceToolContract(manifest, agentcapabilities.SurfaceIDPulseMCP)
+	if !ok {
+		return false
+	}
+	toolNames := map[string]struct{}{}
+	for _, name := range contract.ToolNames {
+		name = strings.TrimSpace(name)
+		if name != "" {
+			toolNames[name] = struct{}{}
+		}
+	}
+	for _, name := range agentcapabilities.OperationsLoopCapabilityNames() {
+		if _, ok := toolNames[name]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func agentOperationsLoopExternalAgentTokenReady(manifest agentcapabilities.Manifest, tokens []config.APITokenRecord, now time.Time) bool {
+	if !agentOperationsLoopExternalAgentManifestReady(manifest) {
+		return false
+	}
+	surfaceScopes := agentcapabilities.RequiredCapabilityScopes(
+		agentcapabilities.ManifestSurfaceToolCapabilities(manifest, agentcapabilities.SurfaceIDPulseMCP),
+	)
+	if len(surfaceScopes) == 0 {
+		return false
+	}
+	for _, token := range tokens {
+		if token.ExpiresAt != nil && now.After(token.ExpiresAt.UTC()) {
+			continue
+		}
+		token = token.Clone()
+		coversLoop := true
+		for _, scope := range surfaceScopes {
+			if strings.TrimSpace(scope) == "" {
+				continue
+			}
+			if !token.HasScope(scope) {
+				coversLoop = false
+				break
+			}
+		}
+		if coversLoop {
+			return true
+		}
+	}
+	return false
 }
 
 // projectAgentResourceOperatorState converts the canonical store

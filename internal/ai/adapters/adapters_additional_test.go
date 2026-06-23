@@ -106,8 +106,8 @@ func TestMetricsAdapter_GetMonitoredResourceIDs(t *testing.T) {
 	}
 }
 
-func TestIncidentRecorderMCPAdapter(t *testing.T) {
-	adapter := NewIncidentRecorderMCPAdapter(nil)
+func TestIncidentRecorderToolAdapter(t *testing.T) {
+	adapter := NewIncidentRecorderToolAdapter(nil)
 	if adapter.GetWindowsForResource("res", 1) != nil {
 		t.Fatalf("expected nil windows for nil recorder")
 	}
@@ -119,7 +119,7 @@ func TestIncidentRecorderMCPAdapter(t *testing.T) {
 		windows: []*IncidentWindowData{{ID: "w1"}},
 		window:  &IncidentWindowData{ID: "w1"},
 	}
-	adapter = NewIncidentRecorderMCPAdapter(recorder)
+	adapter = NewIncidentRecorderToolAdapter(recorder)
 	if len(adapter.GetWindowsForResource("res", 1)) != 1 {
 		t.Fatalf("expected windows from recorder")
 	}
@@ -128,8 +128,8 @@ func TestIncidentRecorderMCPAdapter(t *testing.T) {
 	}
 }
 
-func TestEventCorrelatorMCPAdapter(t *testing.T) {
-	adapter := NewEventCorrelatorMCPAdapter(nil)
+func TestEventCorrelatorToolAdapter(t *testing.T) {
+	adapter := NewEventCorrelatorToolAdapter(nil)
 	if adapter.GetCorrelationsForResource("res", time.Minute) != nil {
 		t.Fatalf("expected nil correlations for nil correlator")
 	}
@@ -137,7 +137,7 @@ func TestEventCorrelatorMCPAdapter(t *testing.T) {
 	correlator := &stubEventCorrelator{
 		correlations: []EventCorrelationData{{ID: "c1"}},
 	}
-	adapter = NewEventCorrelatorMCPAdapter(correlator)
+	adapter = NewEventCorrelatorToolAdapter(correlator)
 	if len(adapter.GetCorrelationsForResource("res", time.Minute)) != 1 {
 		t.Fatalf("expected correlations from correlator")
 	}

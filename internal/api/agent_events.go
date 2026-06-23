@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
@@ -23,7 +24,7 @@ const (
 	// against any resource. Payload carries the finding's canonical
 	// id, resource id, severity, title, and category — enough for an
 	// agent to decide whether to fetch the full situated context.
-	AgentEventFindingCreated AgentEventKind = "finding.created"
+	AgentEventFindingCreated AgentEventKind = AgentEventKind(agentcapabilities.EventKindFindingCreated)
 
 	// AgentEventApprovalPending fires when a remediation request enters
 	// StatusPending and is waiting on an operator (or operator-acting
@@ -33,7 +34,7 @@ const (
 	// action-capable API tokens; monitoring-read subscribers receive
 	// a redacted doorbell and can fetch governed detail through the
 	// approval/action surfaces when authorized.
-	AgentEventApprovalPending AgentEventKind = "approval.pending"
+	AgentEventApprovalPending AgentEventKind = AgentEventKind(agentcapabilities.EventKindApprovalPending)
 
 	// AgentEventActionCompleted fires when an action audit reaches a
 	// terminal state — Completed (executed and verified) or Failed
@@ -44,13 +45,17 @@ const (
 	// error message), who acted, and the completion timestamp —
 	// enough for an agent to close the dispatch loop without polling
 	// the audit endpoint.
-	AgentEventActionCompleted AgentEventKind = "action.completed"
+	AgentEventActionCompleted AgentEventKind = AgentEventKind(agentcapabilities.EventKindActionCompleted)
+
+	// AgentEventStreamConnected is emitted once when an SSE subscriber connects
+	// so clients can distinguish a healthy stream from an idle one.
+	AgentEventStreamConnected AgentEventKind = AgentEventKind(agentcapabilities.EventKindStreamConnected)
 
 	// AgentEventHeartbeat is a keepalive that fires at a fixed
 	// interval. Agents that hold an open SSE connection use it to
 	// confirm the stream is healthy without waiting for a real
 	// event.
-	AgentEventHeartbeat AgentEventKind = "heartbeat"
+	AgentEventHeartbeat AgentEventKind = AgentEventKind(agentcapabilities.EventKindHeartbeat)
 )
 
 // AgentEvent is the agent-stable event envelope. Carries the kind, a
@@ -267,7 +272,7 @@ func (b *AgentEventBroadcaster) HandleAgentEvents(w http.ResponseWriter, r *http
 	// distinct from heartbeat: the connected event fires once at
 	// subscribe time, the heartbeat fires periodically.
 	writeAgentSSEEvent(w, AgentEvent{
-		Kind: "stream.connected",
+		Kind: AgentEventStreamConnected,
 		At:   time.Now().UTC(),
 	})
 	flusher.Flush()

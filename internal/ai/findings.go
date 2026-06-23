@@ -129,6 +129,7 @@ const (
 	InvestigationOutcomeFixQueued              InvestigationOutcome = "fix_queued"               // Fix identified, awaiting approval
 	InvestigationOutcomeFixExecuted            InvestigationOutcome = "fix_executed"             // Fix command executed
 	InvestigationOutcomeFixFailed              InvestigationOutcome = "fix_failed"               // Fix command failed
+	InvestigationOutcomeFixRejected            InvestigationOutcome = "fix_rejected"             // Operator rejected the queued fix
 	InvestigationOutcomeFixVerified            InvestigationOutcome = "fix_verified"             // Fix command verified successful
 	InvestigationOutcomeFixVerificationFailed  InvestigationOutcome = "fix_verification_failed"  // Fix ran but issue persists
 	InvestigationOutcomeFixVerificationUnknown InvestigationOutcome = "fix_verification_unknown" // Fix ran but verification was inconclusive
@@ -210,7 +211,7 @@ type Finding struct {
 	// Investigation fields - tracks autonomous AI investigation of findings
 	InvestigationSessionID string                           `json:"investigation_session_id,omitempty"` // Chat session ID if being investigated
 	InvestigationStatus    string                           `json:"investigation_status,omitempty"`     // pending, running, completed, failed, needs_attention
-	InvestigationOutcome   string                           `json:"investigation_outcome,omitempty"`    // resolved, fix_queued, fix_executed, fix_failed, fix_verified, fix_verification_failed, needs_attention, cannot_fix
+	InvestigationOutcome   string                           `json:"investigation_outcome,omitempty"`    // resolved, fix_queued, fix_executed, fix_failed, fix_rejected, fix_verified, fix_verification_failed, needs_attention, cannot_fix
 	LastInvestigatedAt     *time.Time                       `json:"last_investigated_at,omitempty"`     // When last investigation completed
 	InvestigationAttempts  int                              `json:"investigation_attempts"`             // Number of investigation attempts
 	InvestigationRecord    *aicontracts.InvestigationRecord `json:"investigation_record,omitempty"`     // Durable contextual summary for Assistant/unified intelligence
@@ -427,7 +428,7 @@ func deriveLoopState(f *Finding) FindingLoopState {
 		return FindingLoopStateRemediating
 	case InvestigationOutcomeFixFailed, InvestigationOutcomeFixVerificationFailed:
 		return FindingLoopStateRemediationFailed
-	case InvestigationOutcomeFixVerificationUnknown, InvestigationOutcomeNeedsAttention, InvestigationOutcomeCannotFix:
+	case InvestigationOutcomeFixRejected, InvestigationOutcomeFixVerificationUnknown, InvestigationOutcomeNeedsAttention, InvestigationOutcomeCannotFix:
 		return FindingLoopStateNeedsAttention
 	case InvestigationOutcomeTimedOut:
 		return FindingLoopStateTimedOut
@@ -475,6 +476,7 @@ func (f *Finding) ShouldInvestigate(autonomyLevel string) bool {
 	// Don't auto-reinvestigate fully terminal outcomes.
 	if InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeFixVerified ||
 		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeResolved ||
+		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeFixRejected ||
 		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeCannotFix ||
 		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeNeedsAttention ||
 		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeFixVerificationUnknown {
@@ -609,6 +611,7 @@ func (f *Finding) CanRetryInvestigation() bool {
 	if InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeFixQueued ||
 		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeFixVerified ||
 		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeResolved ||
+		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeFixRejected ||
 		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeCannotFix ||
 		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeNeedsAttention ||
 		InvestigationOutcome(f.InvestigationOutcome) == InvestigationOutcomeFixVerificationUnknown {
@@ -1308,6 +1311,303 @@ func normalizeLoadedFinding(f *Finding) bool {
 	return false
 }
 
+func findingSeverityRank(severity FindingSeverity) int {
+	switch severity {
+	case FindingSeverityCritical:
+		return 3
+	case FindingSeverityWarning:
+		return 2
+	case FindingSeverityWatch:
+		return 1
+	case FindingSeverityInfo:
+		return 0
+	default:
+		return 0
+	}
+}
+
+func sameFindingResource(a, b *Finding) bool {
+	if a == nil || b == nil {
+		return false
+	}
+	candidatesA := []string{
+		strings.TrimSpace(a.ResourceID),
+		strings.TrimSpace(a.ResourceName),
+	}
+	candidatesB := []string{
+		strings.TrimSpace(b.ResourceID),
+		strings.TrimSpace(b.ResourceName),
+	}
+	for _, left := range candidatesA {
+		if left == "" {
+			continue
+		}
+		for _, right := range candidatesB {
+			if right != "" && left == right {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func normalizedStorageFindingIdentity(value string) string {
+	value = strings.TrimSpace(strings.ToLower(value))
+	if value == "" {
+		return ""
+	}
+	var b strings.Builder
+	word := ""
+	flush := func() {
+		if word == "" {
+			return
+		}
+		switch word {
+		case "storage", "pool", "array":
+			word = ""
+			return
+		}
+		if b.Len() > 0 {
+			b.WriteByte(' ')
+		}
+		b.WriteString(word)
+		word = ""
+	}
+	for _, r := range value {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			word += string(r)
+			continue
+		}
+		flush()
+	}
+	flush()
+	return b.String()
+}
+
+func storageFindingIdentityCandidates(f *Finding) []string {
+	if f == nil {
+		return nil
+	}
+	seen := make(map[string]bool)
+	raw := []string{f.ResourceID, f.ResourceName}
+	candidates := make([]string, 0, len(raw))
+	for _, value := range raw {
+		normalized := normalizedStorageFindingIdentity(value)
+		if normalized == "" || seen[normalized] {
+			continue
+		}
+		seen[normalized] = true
+		candidates = append(candidates, normalized)
+	}
+	return candidates
+}
+
+func sameStorageFindingIdentity(a, b *Finding) bool {
+	if sameFindingResource(a, b) {
+		return true
+	}
+	aCandidates := storageFindingIdentityCandidates(a)
+	bCandidates := storageFindingIdentityCandidates(b)
+	for _, left := range aCandidates {
+		for _, right := range bCandidates {
+			if left == right {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func findingTextContainsAny(f *Finding, needles ...string) bool {
+	if f == nil {
+		return false
+	}
+	text := strings.ToLower(strings.Join([]string{
+		f.Key,
+		f.ResourceID,
+		f.ResourceName,
+		f.ResourceType,
+		string(f.Category),
+		f.Title,
+		f.Description,
+		f.Impact,
+		f.Recommendation,
+		f.Evidence,
+	}, " "))
+	for _, needle := range needles {
+		if strings.Contains(text, needle) {
+			return true
+		}
+	}
+	return false
+}
+
+func storageFindingLooksLikeStorageRisk(f *Finding) bool {
+	if f == nil {
+		return false
+	}
+	if canonicalFindingResourceType(f.ResourceType) == "storage" {
+		return true
+	}
+	return findingTextContainsAny(f, "storage", "pool", "array", "unraid", "zfs", "ceph")
+}
+
+func storageFindingHasCapacitySignal(f *Finding) bool {
+	if f == nil {
+		return false
+	}
+	if f.Category == FindingCategoryCapacity {
+		return true
+	}
+	return findingTextContainsAny(f, "capacity", "usage", "used", "free", "full", "disk", "%", "tb")
+}
+
+func equivalentStorageCapacityFinding(existing, incoming *Finding) bool {
+	if !sameStorageFindingIdentity(existing, incoming) {
+		return false
+	}
+	if !storageFindingLooksLikeStorageRisk(existing) || !storageFindingLooksLikeStorageRisk(incoming) {
+		return false
+	}
+	if !storageFindingHasCapacitySignal(existing) || !storageFindingHasCapacitySignal(incoming) {
+		return false
+	}
+	return existing.Category == FindingCategoryCapacity || incoming.Category == FindingCategoryCapacity
+}
+
+func normalizedFindingTitle(title string) string {
+	return normalizeFindingKey(title)
+}
+
+func equivalentActiveFinding(existing, incoming *Finding) bool {
+	if existing == nil || incoming == nil || existing.ID == incoming.ID {
+		return false
+	}
+	sameResource := sameFindingResource(existing, incoming)
+	sameStorageIdentity := !sameResource && sameStorageFindingIdentity(existing, incoming)
+	if !existing.IsActive() || (!sameResource && !sameStorageIdentity) {
+		return false
+	}
+
+	existingTitle := normalizedFindingTitle(existing.Title)
+	incomingTitle := normalizedFindingTitle(incoming.Title)
+	if existingTitle != "" && existingTitle == incomingTitle {
+		return true
+	}
+
+	if equivalentStorageCapacityFinding(existing, incoming) {
+		return true
+	}
+
+	if existing.Category != "" && incoming.Category != "" && existing.Category != incoming.Category {
+		return false
+	}
+
+	return SemanticSimilarity(existing, incoming) >= 0.78
+}
+
+func (s *FindingsStore) findEquivalentActiveFindingLocked(incoming *Finding) *Finding {
+	if incoming == nil {
+		return nil
+	}
+	var best *Finding
+	bestScore := 0.0
+	for _, existing := range s.findings {
+		if !equivalentActiveFinding(existing, incoming) {
+			continue
+		}
+		score := SemanticSimilarity(existing, incoming)
+		if best == nil || score > bestScore {
+			best = existing
+			bestScore = score
+		}
+	}
+	return best
+}
+
+func findingHasDuplicateMergeEvent(f *Finding, duplicateID string) bool {
+	if f == nil || duplicateID == "" {
+		return false
+	}
+	for _, event := range f.Lifecycle {
+		if event.Type != "duplicate_merged" {
+			continue
+		}
+		if event.Metadata != nil && event.Metadata["duplicate_id"] == duplicateID {
+			return true
+		}
+	}
+	return false
+}
+
+func appendFindingResourceIndexUnique(index map[string][]string, resourceID, findingID string) {
+	resourceID = strings.TrimSpace(resourceID)
+	findingID = strings.TrimSpace(findingID)
+	if resourceID == "" || findingID == "" {
+		return
+	}
+	for _, existingID := range index[resourceID] {
+		if existingID == findingID {
+			return
+		}
+	}
+	index[resourceID] = append(index[resourceID], findingID)
+}
+
+func (s *FindingsStore) mergeEquivalentFindingLocked(existing, incoming *Finding) {
+	now := time.Now()
+	previousSeverity := existing.Severity
+	incomingSeverityRank := findingSeverityRank(incoming.Severity)
+	existingSeverityRank := findingSeverityRank(existing.Severity)
+
+	existing.LastSeenAt = now
+	existing.TimesRaised++
+	if incomingSeverityRank >= existingSeverityRank {
+		existing.Severity = incoming.Severity
+		if incoming.Title != "" {
+			existing.Title = incoming.Title
+		}
+		if incoming.Description != "" {
+			existing.Description = incoming.Description
+		}
+		if incoming.Impact != "" {
+			existing.Impact = incoming.Impact
+		}
+		if incoming.Recommendation != "" {
+			existing.Recommendation = incoming.Recommendation
+		}
+		if incoming.Evidence != "" {
+			existing.Evidence = incoming.Evidence
+		}
+	}
+	if existing.Key == "" && incoming.Key != "" {
+		existing.Key = incoming.Key
+	}
+	if existing.AlertIdentifier == "" && incoming.AlertIdentifier != "" {
+		existing.AlertIdentifier = incoming.AlertIdentifier
+	}
+	if existing.Node == "" && incoming.Node != "" {
+		existing.Node = incoming.Node
+	}
+	s.syncLoopStateLocked(existing)
+	if incoming.ResourceID != "" && incoming.ResourceID != existing.ResourceID {
+		appendFindingResourceIndexUnique(s.byResource, incoming.ResourceID, existing.ID)
+	}
+	if !findingHasDuplicateMergeEvent(existing, incoming.ID) {
+		s.appendLifecycleLocked(existing, "duplicate_merged", "Merged an equivalent active Patrol finding into this issue", existing.LoopState, existing.LoopState, map[string]string{
+			"duplicate_id":       incoming.ID,
+			"duplicate_key":      incoming.Key,
+			"duplicate_severity": string(incoming.Severity),
+		})
+	}
+	if previousSeverity != existing.Severity && existing.IsActive() {
+		if s.activeCounts[previousSeverity] > 0 {
+			s.activeCounts[previousSeverity]--
+		}
+		s.activeCounts[existing.Severity]++
+	}
+}
+
 // findOperatorStateDismissCause returns the most recent
 // `operator_state_cause` metadata value from the finding's lifecycle, or
 // "" if the finding has not been auto-dismissed by operator-state
@@ -1571,6 +1871,17 @@ func (s *FindingsStore) Add(f *Finding) bool {
 	// New finding - check if resource+category is suppressed
 	if s.isSuppressedInternal(f.ResourceID, f.Category) {
 		s.mu.Unlock()
+		return false
+	}
+
+	if equivalent := s.findEquivalentActiveFindingLocked(f); equivalent != nil {
+		s.mergeEquivalentFindingLocked(equivalent, f)
+		severity := equivalent.Severity
+		s.mu.Unlock()
+		s.scheduleSave()
+		if severity == FindingSeverityWarning || severity == FindingSeverityCritical {
+			_ = s.ForceSave()
+		}
 		return false
 	}
 

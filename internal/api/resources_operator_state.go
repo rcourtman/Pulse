@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -84,7 +85,7 @@ func (h *ResourceHandlers) HandleResourceOperatorState(w http.ResponseWriter, r 
 			return
 		}
 		if !found {
-			writeJSONError(w, http.StatusNotFound, "operator_state_not_set",
+			writeJSONError(w, http.StatusNotFound, agentcapabilities.AgentErrCodeOperatorStateNotSet,
 				"No operator-set state recorded for this resource.")
 			return
 		}
@@ -115,7 +116,7 @@ func (h *ResourceHandlers) HandleResourceOperatorState(w http.ResponseWriter, r 
 		persisted, err := unified.SetResourceOperatorStateWithMaintenanceLifecycle(store, state)
 		if err != nil {
 			if errors.Is(err, unified.ErrResourceOperatorStateInvalid) {
-				writeJSONError(w, http.StatusBadRequest, "operator_state_invalid", err.Error())
+				writeJSONError(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeOperatorStateInvalid, err.Error())
 				return
 			}
 			http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)

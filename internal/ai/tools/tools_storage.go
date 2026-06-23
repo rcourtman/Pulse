@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	proxmoxrecoverymapper "github.com/rcourtman/pulse-go-rewrite/internal/recovery/mapper/proxmox"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -17,7 +18,7 @@ import (
 func (e *PulseToolExecutor) registerStorageTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
-			Name:        "pulse_storage",
+			Name:        agentcapabilities.PulseStorageToolName,
 			Description: `Query storage pools, backups, snapshots, Ceph, replication, RAID, and disk health. Use the "type" parameter to select what to query.`,
 			InputSchema: InputSchema{
 				Type: "object",
@@ -96,9 +97,10 @@ func (e *PulseToolExecutor) registerStorageTools() {
 			return exec.executeStorage(ctx, args)
 		},
 		Governance: ToolGovernance{
-			ActionMode:     ToolActionRead,
-			ApprovalPolicy: "no approval required",
-			Summary:        "Reads storage, backup, recovery, Ceph, RAID, and disk-health state without changing infrastructure.",
+			ActionMode:      ToolActionRead,
+			ApprovalPolicy:  ToolApprovalScopeOnly,
+			ApprovalSummary: "no approval required",
+			Summary:         "Reads storage, backup, recovery, Ceph, RAID, and disk-health state without changing infrastructure.",
 		},
 	})
 }

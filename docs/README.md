@@ -65,7 +65,7 @@ All other documents are supporting references unless explicitly required for evi
 
 ## 📖 Advanced Topics (Relay / Pro / legacy Pro+ / Cloud)
 
-- **[AI Autonomy & Safety](AI_AUTONOMY.md)** – Configure patrol autonomy levels, assistant control levels, investigation tuning, and safety guardrails.
+- **[AI Modes & Safety](AI_AUTONOMY.md)** – Configure Patrol mode, assistant control levels, investigation tuning, and safety guardrails.
 - **[Role-Based Access Control (RBAC)](RBAC.md)** – Define custom roles, assign permissions, and integrate with OIDC group mapping.
 - **[Audit Logging](AUDIT_LOGGING.md)** – Tamper-evident event logging for compliance, with query, export, and signature verification.
 
@@ -77,7 +77,7 @@ All other documents are supporting references unless explicitly required for evi
 - **[Relay / Pulse Mobile Handoff](RELAY.md)** – End-to-end encrypted relay for supported Pulse Mobile clients (Relay and above).
 - **[Recovery Central](RECOVERY.md)** – Unified backup, snapshot, and replication view across all providers.
 - **[Pulse Cloud (Hosted)](CLOUD.md)** – Fully managed hosting with automatic updates and backups.
-- **[Pulse AI](AI.md)** – Chat assistant, patrol findings, alert analysis, intelligence, and forecasts.
+- **[Pulse Intelligence](AI.md)** – Pulse Assistant, Patrol findings, alert analysis, governed actions, and forecasts.
 - **[Metrics History](METRICS_HISTORY.md)** – Persistent metrics storage with configurable retention.
 - **[Mail Gateway](MAIL_GATEWAY.md)** – Proxmox Mail Gateway (PMG) monitoring.
 - **[Auto Updates](AUTO_UPDATE.md)** – One-click updates for supported deployments.
@@ -91,7 +91,7 @@ Pulse is available in three self-hosted tiers plus hosted Cloud:
 
 - **Community**: Free self-hosted monitoring with core monitoring included and 7-day history.
 - **Relay**: Adds secure remote access to the Pulse web UI, Pulse Mobile pairing for handoff, push notifications, and 14-day history.
-- **Pro**: Adds alert-triggered root-cause analysis, safe remediation workflows, operations tooling, governance features, and 90-day history.
+- **Pro**: Adds hands-on Patrol modes, issue investigation, governed fixes, verified outcomes, operations tooling, governance features, and 90-day history.
 - **Cloud**: Hosted Pulse with Pro-level capabilities; hosted pricing is unchanged by the self-hosted model lock.
 
 - **[Learn more at pulserelay.pro](https://pulserelay.pro)**

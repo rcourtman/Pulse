@@ -71,8 +71,14 @@ func (a *AgenticLoop) GetTotalOutputTokens() int {
 	return a.totalOutputTokens
 }
 
+// GetTotalToolCalls returns the accepted model-selected tool call count across all turns.
+func (a *AgenticLoop) GetTotalToolCalls() int {
+	return a.totalToolCalls
+}
+
 // ResetTokenCounts resets the accumulated token counts (for reuse across executions).
 func (a *AgenticLoop) ResetTokenCounts() {
 	a.totalInputTokens = 0
 	a.totalOutputTokens = 0
+	a.totalToolCalls = 0
 }

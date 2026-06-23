@@ -88,9 +88,10 @@ type ApprovalStoreAccessor interface {
 	AssessRiskLevel(command, targetType string) string
 }
 
-// MCPToolExecutor executes MCP tool calls via the chat service.
-type MCPToolExecutor interface {
-	ExecuteMCPTool(ctx context.Context, command, approvalID string) (output string, exitCode int, err error)
+// ApprovedAssistantToolExecutor executes approved native Assistant tool
+// invocations via the shared Pulse tool registry.
+type ApprovedAssistantToolExecutor interface {
+	ExecuteApprovedAssistantTool(ctx context.Context, command, approvalID string) (output string, exitCode int, err error)
 }
 
 // AgentCommandExecutor executes shell commands via connected agents.

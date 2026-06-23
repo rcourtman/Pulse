@@ -4,21 +4,22 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 )
 
-// FindingsMCPAdapter adapts FindingsStore to MCP FindingsProvider interface
-type FindingsMCPAdapter struct {
+// FindingsToolAdapter adapts FindingsStore to the native Assistant findings
+// provider interface used by the shared Pulse Intelligence tool registry.
+type FindingsToolAdapter struct {
 	store *FindingsStore
 }
 
-// NewFindingsMCPAdapter creates a new adapter for findings store
-func NewFindingsMCPAdapter(store *FindingsStore) *FindingsMCPAdapter {
+// NewFindingsToolAdapter creates a new adapter for findings store.
+func NewFindingsToolAdapter(store *FindingsStore) *FindingsToolAdapter {
 	if store == nil {
 		return nil
 	}
-	return &FindingsMCPAdapter{store: store}
+	return &FindingsToolAdapter{store: store}
 }
 
 // GetActiveFindings implements tools.FindingsProvider
-func (a *FindingsMCPAdapter) GetActiveFindings() []tools.Finding {
+func (a *FindingsToolAdapter) GetActiveFindings() []tools.Finding {
 	if a.store == nil {
 		return nil
 	}
@@ -49,7 +50,7 @@ func (a *FindingsMCPAdapter) GetActiveFindings() []tools.Finding {
 }
 
 // GetDismissedFindings implements tools.FindingsProvider
-func (a *FindingsMCPAdapter) GetDismissedFindings() []tools.Finding {
+func (a *FindingsToolAdapter) GetDismissedFindings() []tools.Finding {
 	if a.store == nil {
 		return nil
 	}

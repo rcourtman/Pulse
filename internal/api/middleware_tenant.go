@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
@@ -236,13 +237,7 @@ func writeJSONError(w http.ResponseWriter, status int, code, message string) {
 func writeJSONErrorWithDetails(w http.ResponseWriter, status int, code, message string, details map[string]string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	body := map[string]any{
-		"error":   code,
-		"message": message,
-	}
-	if len(details) > 0 {
-		body["details"] = details
-	}
+	body := agentcapabilities.NewErrorEnvelope(code, message, details)
 	_ = json.NewEncoder(w).Encode(body)
 }
 

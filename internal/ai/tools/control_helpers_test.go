@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/stretchr/testify/assert"
@@ -53,7 +54,7 @@ func TestIsPreApproved(t *testing.T) {
 	defer approval.SetStore(nil)
 
 	assert.False(t, isPreApproved(map[string]interface{}{}))
-	assert.False(t, isPreApproved(map[string]interface{}{"_approval_id": "missing"}))
+	assert.False(t, isPreApproved(agentcapabilities.WithApprovalArgument(nil, "missing")))
 
 	req := &approval.ApprovalRequest{
 		ID:      "app-1",
@@ -61,11 +62,11 @@ func TestIsPreApproved(t *testing.T) {
 	}
 	require.NoError(t, store.CreateApproval(req))
 
-	assert.False(t, isPreApproved(map[string]interface{}{"_approval_id": "app-1"}))
+	assert.False(t, isPreApproved(agentcapabilities.WithApprovalArgument(nil, "app-1")))
 
 	_, err = store.Approve("app-1", "tester")
 	require.NoError(t, err)
-	assert.True(t, isPreApproved(map[string]interface{}{"_approval_id": "app-1"}))
+	assert.True(t, isPreApproved(agentcapabilities.WithApprovalArgument(nil, "app-1")))
 }
 
 func TestConsumeApprovalWithValidation_RejectsCrossOrg(t *testing.T) {
@@ -88,7 +89,7 @@ func TestConsumeApprovalWithValidation_RejectsCrossOrg(t *testing.T) {
 	_, err = store.Approve("app-1", "tester")
 	require.NoError(t, err)
 
-	ok := consumeApprovalWithValidation(map[string]interface{}{"_approval_id": "app-1"}, "org-b", "ls", "agent", "h1")
+	ok := consumeApprovalWithValidation(agentcapabilities.WithApprovalArgument(nil, "app-1"), "org-b", "ls", "agent", "h1")
 	assert.False(t, ok)
 
 	stored, found := store.GetApproval("app-1")
@@ -116,7 +117,7 @@ func TestConsumeApprovalWithValidation_AllowsMatchingOrg(t *testing.T) {
 	_, err = store.Approve("app-2", "tester")
 	require.NoError(t, err)
 
-	ok := consumeApprovalWithValidation(map[string]interface{}{"_approval_id": "app-2"}, "org-a", "ls", "agent", "h1")
+	ok := consumeApprovalWithValidation(agentcapabilities.WithApprovalArgument(nil, "app-2"), "org-a", "ls", "agent", "h1")
 	assert.True(t, ok)
 
 	stored, found := store.GetApproval("app-2")

@@ -277,7 +277,7 @@ func TestIntelligence_GetSummary_DegradesWhenRecentPatrolCoverageIsScopedAndErro
 	if summary.OverallHealth.Grade == HealthGradeA {
 		t.Fatalf("expected non-A grade, got %s", summary.OverallHealth.Grade)
 	}
-	if !strings.Contains(summary.OverallHealth.Prediction, "not fully verified") {
+	if !strings.Contains(summary.OverallHealth.Prediction, "Run Patrol to check everything") {
 		t.Fatalf("expected coverage warning prediction, got %q", summary.OverallHealth.Prediction)
 	}
 	foundCoverageFactor := false
@@ -314,7 +314,7 @@ func TestIntelligence_GetSummary_DegradesWhenRecentPatrolCoverageIsVerificationO
 	if summary.OverallHealth.Grade == HealthGradeA {
 		t.Fatalf("expected non-A grade, got %s", summary.OverallHealth.Grade)
 	}
-	want := "Patrol coverage is incomplete: recent activity was limited to verification checks, so overall infrastructure health is not fully verified."
+	want := "Recent Patrol activity only covered follow-up checks. Run Patrol to check everything."
 	if summary.OverallHealth.Prediction != want {
 		t.Fatalf("expected verification-only coverage warning, got %q", summary.OverallHealth.Prediction)
 	}
@@ -351,7 +351,7 @@ func TestIntelligence_GetSummary_DegradesWhenRecentFullPatrolErrored(t *testing.
 	if summary.OverallHealth.Grade == HealthGradeA {
 		t.Fatalf("expected non-A grade, got %s", summary.OverallHealth.Grade)
 	}
-	want := "Patrol coverage is incomplete: a recent full patrol ended with errors, so overall health is not fully verified."
+	want := "Patrol needs a clean check: a recent check ended with errors, so current health may be incomplete."
 	if summary.OverallHealth.Prediction != want {
 		t.Fatalf("expected full-patrol coverage warning, got %q", summary.OverallHealth.Prediction)
 	}

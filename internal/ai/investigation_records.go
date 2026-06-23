@@ -175,6 +175,8 @@ func investigationRecordVerificationNotes(outcome aicontracts.InvestigationOutco
 		return []string{"Patrol could not conclusively verify remediation."}
 	case aicontracts.OutcomeFixFailed:
 		return []string{"Patrol attempted remediation, but the fix did not complete successfully."}
+	case aicontracts.OutcomeFixRejected:
+		return []string{"The operator rejected the proposed fix before execution."}
 	default:
 		return []string{}
 	}
@@ -200,7 +202,7 @@ func deriveInvestigationRecordConfidence(record *aicontracts.InvestigationRecord
 		return aicontracts.InvestigationRecordConfidenceHigh
 	case aicontracts.OutcomeFixQueued, aicontracts.OutcomeFixExecuted, aicontracts.OutcomeCannotFix, aicontracts.OutcomeNeedsAttention:
 		return aicontracts.InvestigationRecordConfidenceMedium
-	case aicontracts.OutcomeFixFailed, aicontracts.OutcomeFixVerificationFailed, aicontracts.OutcomeFixVerificationUnknown, aicontracts.OutcomeTimedOut:
+	case aicontracts.OutcomeFixRejected, aicontracts.OutcomeFixFailed, aicontracts.OutcomeFixVerificationFailed, aicontracts.OutcomeFixVerificationUnknown, aicontracts.OutcomeTimedOut:
 		return aicontracts.InvestigationRecordConfidenceLow
 	}
 	if strings.TrimSpace(record.Conclusion) != "" || len(record.Evidence) > 0 {

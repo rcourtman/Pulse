@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
@@ -70,11 +71,11 @@ func (r *Router) registerAIRelayRoutesGroup() {
 	})))
 	r.mux.HandleFunc("/api/ai/cost/reset", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleResetAICostHistory)))
 	r.mux.HandleFunc("/api/ai/cost/export", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.aiSettingsHandler.HandleExportAICostHistory)))
-	// OAuth endpoints for Claude Pro/Max subscription authentication
-	// Require settings:write scope to prevent low-privilege tokens from modifying OAuth credentials
+	// Legacy OAuth cleanup endpoints. Setup/exchange fail closed; disconnect
+	// requires settings:write so low-privilege tokens cannot modify credentials.
 	r.mux.HandleFunc("/api/ai/oauth/start", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleOAuthStart)))
-	r.mux.HandleFunc("/api/ai/oauth/exchange", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleOAuthExchange))) // Manual code input
-	r.mux.HandleFunc("/api/ai/oauth/callback", r.aiSettingsHandler.HandleOAuthCallback)                                                                  // Public - receives redirect from Anthropic
+	r.mux.HandleFunc("/api/ai/oauth/exchange", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleOAuthExchange)))
+	r.mux.HandleFunc("/api/ai/oauth/callback", r.aiSettingsHandler.HandleOAuthCallback)
 	r.mux.HandleFunc("/api/ai/oauth/disconnect", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleOAuthDisconnect)))
 
 	// Relay routes for mobile remote access
@@ -117,14 +118,35 @@ func (r *Router) registerAIRelayRoutesGroup() {
 	r.mux.HandleFunc("/api/ai/patrol/preflight", RequirePermission(r.config, r.authorizer, auth.ActionWrite, auth.ResourceSettings, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandlePatrolPreflight)))
 	// SECURITY: AI Patrol mutation endpoints - require ai:execute scope to prevent low-privilege tokens from
 	// dismissing, suppressing, or otherwise hiding findings. This prevents attackers from blinding AI Patrol.
-	r.mux.HandleFunc("/api/ai/patrol/acknowledge", RequireAuth(r.config, requireRelayMobileRuntimeRoute(relayMobileRoutePatrolAcknowledge, r.aiSettingsHandler.HandleAcknowledgeFinding)))
+	r.mux.HandleFunc("/api/ai/patrol/acknowledge", RequireAuth(r.config, requireRelayMobileRuntimeRoute(
+		relayMobileRoutePatrolAcknowledge,
+		r.withExternalAgentCapabilityActivity(
+			agentcapabilities.AcknowledgeFindingCapabilityName,
+			r.aiSettingsHandler.HandleAcknowledgeFinding,
+		),
+	)))
 	// Dismiss and resolve don't require Pro license - users should be able to clear findings they can see
 	// This is especially important for users who accumulated findings before fixing the patrol-without-AI bug
-	r.mux.HandleFunc("/api/ai/patrol/dismiss", RequireAuth(r.config, requireRelayMobileRuntimeRoute(relayMobileRoutePatrolDismiss, r.aiSettingsHandler.HandleDismissFinding)))
+	r.mux.HandleFunc("/api/ai/patrol/dismiss", RequireAuth(r.config, requireRelayMobileRuntimeRoute(
+		relayMobileRoutePatrolDismiss,
+		r.withExternalAgentCapabilityActivity(
+			agentcapabilities.DismissFindingCapabilityName,
+			r.aiSettingsHandler.HandleDismissFinding,
+		),
+	)))
 	r.mux.HandleFunc("/api/ai/patrol/findings/note", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleSetFindingNote)))
 	r.mux.HandleFunc("/api/ai/patrol/suppress", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleSuppressFinding)))
-	r.mux.HandleFunc("/api/ai/patrol/snooze", RequireAuth(r.config, requireRelayMobileRuntimeRoute(relayMobileRoutePatrolSnooze, r.aiSettingsHandler.HandleSnoozeFinding)))
-	r.mux.HandleFunc("/api/ai/patrol/resolve", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleResolveFinding)))
+	r.mux.HandleFunc("/api/ai/patrol/snooze", RequireAuth(r.config, requireRelayMobileRuntimeRoute(
+		relayMobileRoutePatrolSnooze,
+		r.withExternalAgentCapabilityActivity(
+			agentcapabilities.SnoozeFindingCapabilityName,
+			r.aiSettingsHandler.HandleSnoozeFinding,
+		),
+	)))
+	r.mux.HandleFunc("/api/ai/patrol/resolve", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.withExternalAgentCapabilityActivity(
+		agentcapabilities.ResolveFindingCapabilityName,
+		r.aiSettingsHandler.HandleResolveFinding,
+	))))
 	r.mux.HandleFunc("/api/ai/patrol/runs", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleGetPatrolRunHistory)))
 	r.mux.HandleFunc("/api/ai/patrol/runs/", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleGetPatrolRun)))
 	// Suppression rules management - require scope to prevent low-privilege tokens from creating suppression rules
@@ -203,6 +225,9 @@ func (r *Router) registerAIRelayRoutesGroup() {
 	// AI chat endpoints
 	// SECURITY: Status endpoint is part of chat UX and should require ai:chat scope for token clients.
 	r.mux.HandleFunc("/api/ai/status", RequireAuth(r.config, RequireScope(config.ScopeAIChat, r.aiHandler.HandleStatus)))
+	r.mux.HandleFunc("/api/ai/assistant/surface-tools", RequireAuth(r.config, RequireScope(config.ScopeAIChat, r.aiHandler.HandleAssistantSurfaceTools)))
+	r.mux.HandleFunc("/api/ai/workflow-prompts/render", RequireAuth(r.config, RequireScope(config.ScopeAIChat, r.aiHandler.HandleRenderWorkflowPrompt)))
+	r.mux.HandleFunc("/api/ai/workflow-prompts/activity", RequireAuth(r.config, RequireScope(config.ScopeAIChat, r.aiHandler.HandleRecordWorkflowPromptActivity)))
 	r.mux.HandleFunc("/api/ai/chat", RequireAuth(r.config, requireRelayMobileRuntimeRoute(relayMobileRouteChatSend, r.aiHandler.HandleChat)))
 	r.mux.HandleFunc("/api/ai/sessions", RequireAuth(r.config, r.routeAISessionsCollection))
 	r.mux.HandleFunc("/api/ai/sessions/", RequireAuth(r.config, r.routeAISessions))
@@ -219,7 +244,7 @@ func (r *Router) registerAIRelayRoutesGroup() {
 	r.aiSettingsHandler.SetAIAutoFixEndpoints(r.aiAutoFixEndpoints)
 }
 
-// --- Safe remediation free-tier adapter ---
+// --- Patrol fix-action free-tier adapter ---
 // All methods return 402 "requires Pulse Pro". Enterprise binders replace this
 // with real handler implementations.
 
@@ -266,7 +291,7 @@ func (aiAutoFixFreeAdapter) HandleRollbackRemediationPlan(w http.ResponseWriter,
 }
 
 func (aiAutoFixFreeAdapter) HandleApproveInvestigationFix(w http.ResponseWriter, _ *http.Request) {
-	WriteLicenseRequired(w, featureAIAutoFixKey, "Safe remediation workflows require Pulse Pro")
+	WriteLicenseRequired(w, featureAIAutoFixKey, "Patrol fix actions require Pulse Pro")
 }
 
 func (a aiAutoFixFreeAdapter) HandleListApprovals(w http.ResponseWriter, req *http.Request) {
@@ -298,6 +323,7 @@ func newAIAutoFixRuntime(r *Router) extensions.AIAutoFixRuntime {
 
 func newAIAutoFixHandlerDeps(r *Router) extensions.AIAutoFixHandlerDeps {
 	h := r.aiSettingsHandler
+	toolAdapter := &assistantToolAdapter{handler: h}
 	return extensions.AIAutoFixHandlerDeps{
 		GetInvestigationStore: func(orgID string) aicontracts.InvestigationStore {
 			h.investigationMu.RLock()
@@ -310,10 +336,10 @@ func newAIAutoFixHandlerDeps(r *Router) extensions.AIAutoFixHandlerDeps {
 			}
 			return &approvalStoreAdapter{}
 		},
-		MCPExecutor:    &mcpToolAdapter{handler: h},
-		AgentExecutor:  &agentCommandAdapter{handler: h},
-		FindingUpdater: &findingOutcomeAdapter{handler: h},
-		FixVerifier:    &fixVerificationAdapter{handler: h},
+		AssistantToolExecutor: toolAdapter,
+		AgentExecutor:         &agentCommandAdapter{handler: h},
+		FindingUpdater:        &findingOutcomeAdapter{handler: h},
+		FixVerifier:           &fixVerificationAdapter{handler: h},
 		PatrolConfig: func(req *http.Request) aicontracts.PatrolConfigAccessor {
 			svc := h.GetAIService(req.Context())
 			if svc == nil {
@@ -636,14 +662,15 @@ func preflightInfoToRequest(preflight *aicontracts.ActionPreflightInfo) *approva
 	}
 }
 
-// mcpToolAdapter implements aicontracts.MCPToolExecutor by wrapping the chat service.
-type mcpToolAdapter struct {
+// assistantToolAdapter executes approved native Assistant tool invocations by
+// wrapping the chat service's shared registry execution path.
+type assistantToolAdapter struct {
 	handler *AISettingsHandler
 }
 
-var _ aicontracts.MCPToolExecutor = (*mcpToolAdapter)(nil)
+var _ aicontracts.ApprovedAssistantToolExecutor = (*assistantToolAdapter)(nil)
 
-func (m *mcpToolAdapter) ExecuteMCPTool(ctx context.Context, command, approvalID string) (string, int, error) {
+func (m *assistantToolAdapter) ExecuteApprovedAssistantTool(ctx context.Context, command, approvalID string) (string, int, error) {
 	if m.handler.chatHandler == nil {
 		return "", -1, fmt.Errorf("chat handler not available")
 	}
@@ -655,15 +682,13 @@ func (m *mcpToolAdapter) ExecuteMCPTool(ctx context.Context, command, approvalID
 	if !ok {
 		return "", -1, fmt.Errorf("chat service type mismatch")
 	}
-	toolName, args, err := parseMCPToolCall(command)
+	params, err := agentcapabilities.ParseTextToolInvocation(command)
 	if err != nil {
 		return "", -1, fmt.Errorf("failed to parse tool call: %w", err)
 	}
-	if approvalID != "" {
-		args["_approval_id"] = approvalID
-	}
-	log.Info().Str("tool", toolName).Str("approvalID", approvalID).Interface("args", args).Msg("Executing MCP tool fix with pre-approval")
-	result, toolErr := chatService.ExecuteMCPTool(ctx, toolName, args)
+	params.Arguments = agentcapabilities.WithApprovalArgument(params.Arguments, approvalID)
+	log.Info().Str("tool", params.Name).Str("approvalID", approvalID).Interface("args", params.Arguments).Msg("Executing Assistant tool fix with pre-approval")
+	result, toolErr := chatService.ExecuteAssistantTool(ctx, params.Name, params.Arguments)
 	if toolErr != nil {
 		return result, 1, toolErr
 	}
@@ -872,15 +897,6 @@ func (u *patrolConfigUpdateAdapter) ReloadConfig(ctx context.Context) error {
 // Pure helper functions (used by adapters)
 // ---------------------------------------------------------------------------
 
-// isMCPToolCall checks if a command is an MCP tool call (vs a shell command).
-func isMCPToolCall(command string) bool {
-	return strings.HasPrefix(command, "pulse_") ||
-		strings.HasPrefix(command, "default_api:") ||
-		strings.Contains(command, "pulse_control_guest") ||
-		strings.Contains(command, "pulse_run_command") ||
-		strings.Contains(command, "pulse_get_resource")
-}
-
 // cleanTargetHost extracts just the hostname from a target host string.
 // Handles cases like "pve-node (The container's host is 'pve-node')" → "pve-node".
 func cleanTargetHost(targetHost string) string {
@@ -894,81 +910,6 @@ func cleanTargetHost(targetHost string) string {
 		return strings.TrimSpace(targetHost[:idx])
 	}
 	return strings.TrimSpace(targetHost)
-}
-
-// parseMCPToolCall parses an MCP tool call string into tool name and arguments.
-func parseMCPToolCall(command string) (string, map[string]interface{}, error) {
-	command = strings.TrimPrefix(command, "default_api:")
-	openParen := strings.Index(command, "(")
-	if openParen == -1 {
-		return "", nil, fmt.Errorf("no opening parenthesis in tool call")
-	}
-	toolName := strings.TrimSpace(command[:openParen])
-	closeParen := strings.LastIndex(command, ")")
-	if closeParen == -1 || closeParen <= openParen {
-		return "", nil, fmt.Errorf("no closing parenthesis in tool call")
-	}
-	argsStr := command[openParen+1 : closeParen]
-	args := make(map[string]interface{})
-	if strings.TrimSpace(argsStr) == "" {
-		return toolName, args, nil
-	}
-	pairs := splitToolArgs(argsStr)
-	for _, pair := range pairs {
-		parts := strings.SplitN(pair, "=", 2)
-		if len(parts) != 2 {
-			continue
-		}
-		key := strings.TrimSpace(parts[0])
-		value := strings.TrimSpace(parts[1])
-		value = strings.Trim(value, "'\"")
-		args[key] = value
-	}
-	return toolName, args, nil
-}
-
-// splitToolArgs splits tool arguments respecting quoted strings.
-func splitToolArgs(argsStr string) []string {
-	var result []string
-	var current strings.Builder
-	var inQuote rune
-	var escaped bool
-	for _, r := range argsStr {
-		if escaped {
-			current.WriteRune(r)
-			escaped = false
-			continue
-		}
-		if r == '\\' {
-			escaped = true
-			current.WriteRune(r)
-			continue
-		}
-		if inQuote != 0 {
-			current.WriteRune(r)
-			if r == inQuote {
-				inQuote = 0
-			}
-			continue
-		}
-		if r == '\'' || r == '"' {
-			inQuote = r
-			current.WriteRune(r)
-			continue
-		}
-		if r == ',' {
-			if s := strings.TrimSpace(current.String()); s != "" {
-				result = append(result, s)
-			}
-			current.Reset()
-			continue
-		}
-		current.WriteRune(r)
-	}
-	if s := strings.TrimSpace(current.String()); s != "" {
-		result = append(result, s)
-	}
-	return result
 }
 
 func newAIAlertAnalysisRuntime(r *Router) extensions.AIAlertAnalysisRuntime {

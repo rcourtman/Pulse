@@ -134,8 +134,8 @@ func (f *fakeUpdatesConfig) IsDockerUpdateActionsEnabled() bool {
 	return f.enabled
 }
 
-func TestAlertManagerMCPAdapter(t *testing.T) {
-	if NewAlertManagerMCPAdapter(nil) != nil {
+func TestAlertManagerToolAdapter(t *testing.T) {
+	if NewAlertManagerToolAdapter(nil) != nil {
 		t.Fatal("expected nil adapter for nil manager")
 	}
 
@@ -156,7 +156,7 @@ func TestAlertManagerMCPAdapter(t *testing.T) {
 		},
 	}
 
-	adapter := NewAlertManagerMCPAdapter(manager)
+	adapter := NewAlertManagerToolAdapter(manager)
 	got := adapter.GetActiveAlerts()
 	if len(got) != 1 {
 		t.Fatalf("expected 1 alert, got %d", len(got))
@@ -173,17 +173,17 @@ func TestBackupAndDiskAdapters(t *testing.T) {
 	pbsInstances := []models.PBSInstance{{ID: "pbs1"}}
 	repJobs := []models.ReplicationJob{{ID: "rep1"}}
 
-	if NewBackupMCPAdapter(nil, nil) != nil {
+	if NewBackupToolAdapter(nil, nil) != nil {
 		t.Fatal("expected nil backup adapter for nil getters")
 	}
 	// Partial-nil: one getter nil should also return nil
-	if NewBackupMCPAdapter(func() models.Backups { return models.Backups{} }, nil) != nil {
+	if NewBackupToolAdapter(func() models.Backups { return models.Backups{} }, nil) != nil {
 		t.Fatal("expected nil backup adapter when getPBSInstances is nil")
 	}
-	if NewBackupMCPAdapter(nil, func() []models.PBSInstance { return nil }) != nil {
+	if NewBackupToolAdapter(nil, func() []models.PBSInstance { return nil }) != nil {
 		t.Fatal("expected nil backup adapter when getBackups is nil")
 	}
-	backupAdapter := NewBackupMCPAdapter(
+	backupAdapter := NewBackupToolAdapter(
 		func() models.Backups { return backups },
 		func() []models.PBSInstance { return pbsInstances },
 	)
@@ -194,7 +194,7 @@ func TestBackupAndDiskAdapters(t *testing.T) {
 		t.Fatal("expected pbs instances")
 	}
 
-	if NewDiskHealthMCPAdapter(nil) != nil {
+	if NewDiskHealthToolAdapter(nil) != nil {
 		t.Fatal("expected nil disk health adapter for nil read state")
 	}
 	rs := &fakeReadState{
@@ -202,27 +202,27 @@ func TestBackupAndDiskAdapters(t *testing.T) {
 			newHostView("host-resource-1", "Host 1", "host1", "host-1", nil, nil, nil),
 		},
 	}
-	diskAdapter := NewDiskHealthMCPAdapter(
+	diskAdapter := NewDiskHealthToolAdapter(
 		rs,
 	)
 	if len(diskAdapter.GetHosts()) != 1 {
 		t.Fatal("expected hosts")
 	}
 
-	if NewReplicationMCPAdapter(nil) != nil {
+	if NewReplicationToolAdapter(nil) != nil {
 		t.Fatal("expected nil replication adapter for nil getter")
 	}
-	replicationAdapter := NewReplicationMCPAdapter(
+	replicationAdapter := NewReplicationToolAdapter(
 		func() []models.ReplicationJob { return repJobs },
 	)
 	if len(replicationAdapter.GetReplicationJobs()) != 1 {
 		t.Fatal("expected replication jobs")
 	}
 
-	if NewConnectionHealthMCPAdapter(nil) != nil {
+	if NewConnectionHealthToolAdapter(nil) != nil {
 		t.Fatal("expected nil connection health adapter for nil getter")
 	}
-	connectionHealthAdapter := NewConnectionHealthMCPAdapter(
+	connectionHealthAdapter := NewConnectionHealthToolAdapter(
 		func() map[string]bool { return nil },
 	)
 	if connectionHealthAdapter.GetConnectionHealth() != nil {
@@ -230,7 +230,7 @@ func TestBackupAndDiskAdapters(t *testing.T) {
 	}
 }
 
-func TestMetricsHistoryMCPAdapter(t *testing.T) {
+func TestMetricsHistoryToolAdapter(t *testing.T) {
 	now := time.Now()
 	points := map[string][]RawMetricPoint{
 		"cpu":    {{Value: 10, Timestamp: now}},
@@ -243,7 +243,7 @@ func TestMetricsHistoryMCPAdapter(t *testing.T) {
 	}
 
 	rs := &fakeReadState{}
-	adapter := NewMetricsHistoryMCPAdapter(source, rs)
+	adapter := NewMetricsHistoryToolAdapter(source, rs)
 	got, err := adapter.GetResourceMetrics("100", time.Hour)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -262,7 +262,7 @@ func TestMetricsHistoryMCPAdapter(t *testing.T) {
 			},
 		},
 	}
-	adapter = NewMetricsHistoryMCPAdapter(source, rs)
+	adapter = NewMetricsHistoryToolAdapter(source, rs)
 	got, err = adapter.GetResourceMetrics("node1", time.Hour)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -271,7 +271,7 @@ func TestMetricsHistoryMCPAdapter(t *testing.T) {
 		t.Fatalf("unexpected node metrics: %+v", got)
 	}
 
-	adapter = &MetricsHistoryMCPAdapter{}
+	adapter = &MetricsHistoryToolAdapter{}
 	empty, err := adapter.GetResourceMetrics("missing", time.Hour)
 	if err != nil || empty != nil {
 		t.Fatal("expected nil metrics when source missing")
@@ -305,7 +305,7 @@ func TestMetricsSummaryAndHelpers(t *testing.T) {
 		nodes:      []*ur.NodeView{newNodeView("reg-node-hash", "node-1", "node1")},
 	}
 
-	adapter := NewMetricsHistoryMCPAdapter(source, rs)
+	adapter := NewMetricsHistoryToolAdapter(source, rs)
 	summary, err := adapter.GetAllMetricsSummary(time.Hour)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -348,27 +348,27 @@ func TestMetricsSummaryAndHelpers(t *testing.T) {
 	}
 }
 
-func TestBaselineMCPAdapter(t *testing.T) {
-	if NewBaselineMCPAdapter(nil) != nil {
+func TestBaselineToolAdapter(t *testing.T) {
+	if NewBaselineToolAdapter(nil) != nil {
 		t.Fatal("expected nil baseline adapter for nil source")
 	}
-	adapter := NewBaselineMCPAdapter(&fakeBaselineSource{mean: 10, stddev: 2, ok: true})
+	adapter := NewBaselineToolAdapter(&fakeBaselineSource{mean: 10, stddev: 2, ok: true})
 	baseline := adapter.GetBaseline("vm1", "cpu")
 	if baseline == nil || baseline.Min != 6 || baseline.Max != 14 {
 		t.Fatalf("unexpected baseline: %+v", baseline)
 	}
 
-	adapter = &BaselineMCPAdapter{}
+	adapter = &BaselineToolAdapter{}
 	if adapter.GetBaseline("vm1", "cpu") != nil {
 		t.Fatal("expected nil baseline when source missing")
 	}
 
-	adapter = NewBaselineMCPAdapter(&fakeBaselineSource{ok: false})
+	adapter = NewBaselineToolAdapter(&fakeBaselineSource{ok: false})
 	if adapter.GetBaseline("vm1", "cpu") != nil {
 		t.Fatal("expected nil baseline when not found")
 	}
 
-	adapter = NewBaselineMCPAdapter(&fakeBaselineSource{all: nil})
+	adapter = NewBaselineToolAdapter(&fakeBaselineSource{all: nil})
 	if adapter.GetAllBaselines() != nil {
 		t.Fatal("expected nil baselines when source returns nil")
 	}
@@ -376,14 +376,14 @@ func TestBaselineMCPAdapter(t *testing.T) {
 	all := map[string]map[string]BaselineData{
 		"100": {"cpu": {Mean: 5, StdDev: 1}},
 	}
-	adapter = NewBaselineMCPAdapter(&fakeBaselineSource{all: all})
+	adapter = NewBaselineToolAdapter(&fakeBaselineSource{all: all})
 	allBaselines := adapter.GetAllBaselines()
 	if allBaselines["100"]["cpu"].Min != 3 || allBaselines["100"]["cpu"].Max != 7 {
 		t.Fatalf("unexpected all baselines: %+v", allBaselines)
 	}
 }
 
-func TestPatternMCPAdapter(t *testing.T) {
+func TestPatternToolAdapter(t *testing.T) {
 	rs := &fakeReadState{
 		vms:        []*ur.VMView{newVMView("vm-100", "vm1", 100)},
 		containers: []*ur.ContainerView{newContainerView("ct-200", "ct1", 200)},
@@ -399,7 +399,7 @@ func TestPatternMCPAdapter(t *testing.T) {
 		},
 	}
 
-	adapter := NewPatternMCPAdapter(source, rs)
+	adapter := NewPatternToolAdapter(source, rs)
 	patterns := adapter.GetPatterns()
 	if len(patterns) != 2 || patterns[0].ResourceName != "vm1" || patterns[1].ResourceName != "node-1" {
 		t.Fatalf("unexpected patterns: %+v", patterns)
@@ -409,7 +409,7 @@ func TestPatternMCPAdapter(t *testing.T) {
 		t.Fatalf("unexpected predictions: %+v", predictions)
 	}
 
-	adapter = NewPatternMCPAdapter(source, nil)
+	adapter = NewPatternToolAdapter(source, nil)
 	patterns = adapter.GetPatterns()
 	if patterns[0].ResourceName != "100" {
 		t.Fatal("expected resource ID when readState missing")
@@ -418,7 +418,7 @@ func TestPatternMCPAdapter(t *testing.T) {
 
 func TestFindingsAndMetadataAdapters(t *testing.T) {
 	manager := &fakeFindingsManager{resolveErr: errors.New("resolve"), dismissErr: errors.New("dismiss")}
-	adapter := NewFindingsManagerMCPAdapter(manager)
+	adapter := NewFindingsManagerToolAdapter(manager)
 	if err := adapter.ResolveFinding("f1", "note"); err == nil {
 		t.Fatal("expected resolve error")
 	}
@@ -429,34 +429,34 @@ func TestFindingsAndMetadataAdapters(t *testing.T) {
 		t.Fatal("expected args to be captured")
 	}
 
-	adapter = &FindingsManagerMCPAdapter{}
+	adapter = &FindingsManagerToolAdapter{}
 	if err := adapter.ResolveFinding("f1", "note"); err == nil {
 		t.Fatal("expected error when manager missing")
 	}
 
 	updater := &fakeMetadataUpdater{err: errors.New("update")}
-	meta := NewMetadataUpdaterMCPAdapter(updater)
+	meta := NewMetadataUpdaterToolAdapter(updater)
 	if err := meta.SetResourceURL("vm", "1", "http://x"); err == nil {
 		t.Fatal("expected update error")
 	}
 	if len(updater.resourceArgs) != 3 {
 		t.Fatal("expected resource args captured")
 	}
-	meta = &MetadataUpdaterMCPAdapter{}
+	meta = &MetadataUpdaterToolAdapter{}
 	if err := meta.SetResourceURL("vm", "1", "http://x"); err == nil {
 		t.Fatal("expected error when metadata updater missing")
 	}
 }
 
-func TestUpdatesMCPAdapter(t *testing.T) {
-	if NewUpdatesMCPAdapter(nil, nil, nil) != nil {
+func TestUpdatesToolAdapter(t *testing.T) {
+	if NewUpdatesToolAdapter(nil, nil, nil) != nil {
 		t.Fatal("expected nil updates adapter for nil getters")
 	}
 	// Partial-nil: either read state or commands nil should return nil.
-	if NewUpdatesMCPAdapter(&fakeReadState{}, nil, nil) != nil {
+	if NewUpdatesToolAdapter(&fakeReadState{}, nil, nil) != nil {
 		t.Fatal("expected nil updates adapter when commands is nil")
 	}
-	if NewUpdatesMCPAdapter(nil, &fakeUpdatesCommandRunner{}, nil) != nil {
+	if NewUpdatesToolAdapter(nil, &fakeUpdatesCommandRunner{}, nil) != nil {
 		t.Fatal("expected nil updates adapter when readState is nil")
 	}
 
@@ -496,7 +496,7 @@ func TestUpdatesMCPAdapter(t *testing.T) {
 	}
 
 	runner := &fakeUpdatesCommandRunner{}
-	adapter := NewUpdatesMCPAdapter(
+	adapter := NewUpdatesToolAdapter(
 		rs,
 		runner,
 		&fakeUpdatesConfig{enabled: false},
@@ -510,7 +510,7 @@ func TestUpdatesMCPAdapter(t *testing.T) {
 	if adapter.IsUpdateActionsEnabled() {
 		t.Fatal("expected updates disabled")
 	}
-	if (&UpdatesMCPAdapter{}).IsUpdateActionsEnabled() != true {
+	if (&UpdatesToolAdapter{}).IsUpdateActionsEnabled() != true {
 		t.Fatal("expected updates enabled by default")
 	}
 

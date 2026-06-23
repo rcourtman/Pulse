@@ -18,22 +18,24 @@ import (
 func TestNoPersistenceBoilerplate(t *testing.T) {
 	// Methods with domain-specific logic that legitimately can't use the generics.
 	allowedMethods := map[string]bool{
-		"SaveAlertConfig":           true, // 400+ lines of validation
-		"SaveAPITokens":             true, // backup + sanitize
-		"SaveNodesConfig":           true, // wipe guard, multi-type
-		"SaveNodesConfigAllowEmpty": true, // wipe guard variant
-		"SaveSystemSettings":        true, // .env file update
-		"SaveSSOConfig":             true, // nil guard, clone, clear overrides
-		"SaveAppriseConfig":         true, // normalize config
-		"SaveOrganization":          true, // uses fs.WriteFile directly
-		"SaveEmailConfig":           true, // domain-specific logging
-		"SaveWebhooks":              true, // domain-specific logging with count
-		"SaveAIConfig":              true, // complex AI-specific logic
-		"SaveAIFindings":            true, // versioned envelope
-		"SaveAIChatSessions":        true, // versioned envelope
-		"SaveAIChatSession":         true, // delegates to SaveAIChatSessions
-		"SaveAIUsageHistory":        true, // versioned envelope
-		"SavePatrolRunHistory":      true, // versioned envelope
+		"SaveAlertConfig":                   true, // 400+ lines of validation
+		"SaveAPITokens":                     true, // backup + sanitize
+		"SaveNodesConfig":                   true, // wipe guard, multi-type
+		"SaveNodesConfigAllowEmpty":         true, // wipe guard variant
+		"SaveSystemSettings":                true, // .env file update
+		"SaveSSOConfig":                     true, // nil guard, clone, clear overrides
+		"SaveAppriseConfig":                 true, // normalize config
+		"SaveOrganization":                  true, // uses fs.WriteFile directly
+		"SaveEmailConfig":                   true, // domain-specific logging
+		"SaveWebhooks":                      true, // domain-specific logging with count
+		"SaveAIConfig":                      true, // complex AI-specific logic
+		"SaveAIFindings":                    true, // versioned envelope
+		"SaveAIChatSessions":                true, // versioned envelope
+		"SaveAIChatSession":                 true, // delegates to SaveAIChatSessions
+		"SaveAIUsageHistory":                true, // versioned envelope
+		"SaveExternalAgentActivityHistory":  true, // versioned envelope
+		"SaveWorkflowPromptActivityHistory": true, // versioned envelope
+		"SavePatrolRunHistory":              true, // versioned envelope
 	}
 
 	data, err := os.ReadFile("persistence.go")
@@ -83,23 +85,25 @@ func TestNoPersistenceBoilerplate(t *testing.T) {
 func TestNoPersistenceLoadBoilerplate(t *testing.T) {
 	// Methods with domain-specific logic that legitimately can't use generic loaders.
 	allowedMethods := map[string]bool{
-		"LoadAlertConfig":      true, // complex validation
-		"LoadAPITokens":        true, // ensureScopes post-processing
-		"LoadNodesConfig":      true, // multi-type
-		"LoadSystemSettings":   true, // complex with defaults
-		"LoadSSOConfig":        true, // nil fallback + encrypted payload handling
-		"LoadAppriseConfig":    true, // complex with defaults
-		"LoadEmailConfig":      true, // complex with defaults
-		"LoadWebhooks":         true, // legacy migration
-		"LoadOrganization":     true, // different error handling
-		"LoadAIConfig":         true, // complex migration logic
-		"LoadAIFindings":       true, // versioned envelope
-		"LoadAIChatSessions":   true, // versioned envelope
-		"LoadAIUsageHistory":   true, // versioned envelope
-		"LoadPatrolRunHistory": true, // versioned envelope
-		"LoadGuestMetadata":    true, // metadata store
-		"LoadDockerMetadata":   true, // metadata store
-		"LoadHostMetadata":     true, // metadata store
+		"LoadAlertConfig":                   true, // complex validation
+		"LoadAPITokens":                     true, // ensureScopes post-processing
+		"LoadNodesConfig":                   true, // multi-type
+		"LoadSystemSettings":                true, // complex with defaults
+		"LoadSSOConfig":                     true, // nil fallback + encrypted payload handling
+		"LoadAppriseConfig":                 true, // complex with defaults
+		"LoadEmailConfig":                   true, // complex with defaults
+		"LoadWebhooks":                      true, // legacy migration
+		"LoadOrganization":                  true, // different error handling
+		"LoadAIConfig":                      true, // complex migration logic
+		"LoadAIFindings":                    true, // versioned envelope
+		"LoadAIChatSessions":                true, // versioned envelope
+		"LoadAIUsageHistory":                true, // versioned envelope
+		"LoadExternalAgentActivityHistory":  true, // versioned envelope
+		"LoadWorkflowPromptActivityHistory": true, // versioned envelope
+		"LoadPatrolRunHistory":              true, // versioned envelope
+		"LoadGuestMetadata":                 true, // metadata store
+		"LoadDockerMetadata":                true, // metadata store
+		"LoadHostMetadata":                  true, // metadata store
 	}
 
 	data, err := os.ReadFile("persistence.go")

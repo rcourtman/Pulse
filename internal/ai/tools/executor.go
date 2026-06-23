@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
@@ -21,7 +22,7 @@ type UnifiedResourceProvider interface {
 	GetByType(t unifiedresources.ResourceType) []unifiedresources.Resource
 }
 
-// ServerVersion is the version of the MCP tool implementation
+// ServerVersion is the version of the shared Assistant tool implementation
 const ServerVersion = "1.0.0"
 
 // StateProvider is a type alias for models.SnapshotProvider.
@@ -200,7 +201,7 @@ type DiskHealthProvider interface {
 	GetHosts() []*unifiedresources.HostView
 }
 
-// UpdatesProvider provides Docker update operations for MCP tools
+// UpdatesProvider provides Docker update operations for Assistant tools
 type UpdatesProvider interface {
 	GetPendingUpdates(hostID string) []ContainerUpdateInfo
 	TriggerUpdateCheck(hostID string) (DockerCommandStatus, error)
@@ -425,18 +426,6 @@ type DiscoveryFact struct {
 	Confidence float64 `json:"confidence,omitempty"` // 0-1 confidence for this fact
 }
 
-// ControlLevel represents the AI's permission level for infrastructure control
-type ControlLevel string
-
-const (
-	// ControlLevelReadOnly - AI can only query, no control tools available
-	ControlLevelReadOnly ControlLevel = "read_only"
-	// ControlLevelControlled - AI can execute with per-command approval
-	ControlLevelControlled ControlLevel = "controlled"
-	// ControlLevelAutonomous - AI executes without approval (requires Pro license)
-	ControlLevelAutonomous ControlLevel = "autonomous"
-)
-
 // ExecutorConfig holds all dependencies for the tool executor
 type ExecutorConfig struct {
 	// Required providers
@@ -657,18 +646,18 @@ func NewPulseToolExecutor(cfg ExecutorConfig) *PulseToolExecutor {
 	if sp := e.stateProvider; sp != nil {
 		getSnapshot := func() models.StateSnapshot { return sp.ReadSnapshot() }
 		if e.backupProvider == nil {
-			e.backupProvider = NewBackupMCPAdapter(
+			e.backupProvider = NewBackupToolAdapter(
 				func() models.Backups { return getSnapshot().Backups },
 				func() []models.PBSInstance { return getSnapshot().PBSInstances },
 			)
 		}
 		if e.replicationProvider == nil {
-			e.replicationProvider = NewReplicationMCPAdapter(
+			e.replicationProvider = NewReplicationToolAdapter(
 				func() []models.ReplicationJob { return getSnapshot().ReplicationJobs },
 			)
 		}
 		if e.connectionHealth == nil {
-			e.connectionHealth = NewConnectionHealthMCPAdapter(
+			e.connectionHealth = NewConnectionHealthToolAdapter(
 				func() map[string]bool { return getSnapshot().ConnectionHealth },
 			)
 		}
@@ -1013,31 +1002,33 @@ func (e *PulseToolExecutor) ListToolGovernance() []ToolGovernanceDescriptor {
 func (e *PulseToolExecutor) isToolAvailable(name string) bool {
 	switch name {
 	// Check tool availability based on primary requirements
-	case "pulse_query":
+	case agentcapabilities.PulseQueryToolName:
 		return e.hasReadState()
-	case "pulse_metrics":
+	case agentcapabilities.PulseMetricsToolName:
 		return e.hasReadState() || e.metricsHistory != nil || e.baselineProvider != nil || e.patternProvider != nil
-	case "pulse_storage":
+	case agentcapabilities.PulseStorageToolName:
 		return e.hasReadState() || e.unifiedResourceProvider != nil || e.backupProvider != nil || e.diskHealthProvider != nil || e.recoveryPointsProvider != nil
-	case "pulse_docker":
+	case agentcapabilities.PulseDockerToolName:
 		return e.hasReadState() || e.updatesProvider != nil
-	case "pulse_kubernetes":
+	case agentcapabilities.PulseKubernetesToolName:
 		return e.hasCanonicalReadState()
-	case "pulse_alerts":
+	case agentcapabilities.PulseAlertsToolName:
 		return e.alertProvider != nil || e.findingsProvider != nil || e.findingsManager != nil || e.hasReadState()
-	case "pulse_read":
+	case agentcapabilities.PulseReadToolName:
 		return e.agentServer != nil || (e.appContainerReadProvider != nil && e.hasReadState())
-	case "pulse_control":
+	case agentcapabilities.PulseControlToolName:
 		return (e.agentServer != nil || e.appContainerActionProvider != nil) && e.hasReadState()
-	case "pulse_file_edit":
+	case agentcapabilities.PulseFileEditToolName:
 		return e.agentServer != nil
-	case "pulse_discovery":
+	case agentcapabilities.PulseDiscoveryToolName:
 		return e.discoveryProvider != nil
-	case "pulse_knowledge":
+	case agentcapabilities.PulseKnowledgeToolName:
 		return e.knowledgeStoreProvider != nil || e.incidentRecorderProvider != nil || e.eventCorrelatorProvider != nil
-	case "pulse_pmg":
+	case agentcapabilities.PulsePMGToolName:
 		return e.hasReadState()
-	case "patrol_report_finding", "patrol_resolve_finding", "patrol_get_findings":
+	case agentcapabilities.PulseSummarizeToolName:
+		return e.hasReadState()
+	case agentcapabilities.PatrolReportFindingToolName, agentcapabilities.PatrolResolveFindingToolName, agentcapabilities.PatrolGetFindingsToolName:
 		// Always available when registered; handler checks patrolFindingCreator at runtime
 		return e.GetPatrolFindingCreator() != nil
 	default:
@@ -1057,7 +1048,7 @@ func (e *PulseToolExecutor) ExecuteTool(ctx context.Context, name string, args m
 
 // registerTools registers all available tools
 func (e *PulseToolExecutor) registerTools() {
-	// All tools registered below (12 tools total)
+	// All registry tools are registered below in provider exposure order.
 
 	// pulse_query - search, get, config, topology, list, health
 	e.registerQueryTools()

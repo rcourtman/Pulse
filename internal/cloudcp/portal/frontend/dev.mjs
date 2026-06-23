@@ -981,9 +981,9 @@ function routeCommercialAPI(request, response, url, scenario) {
   if (request.method === 'GET' && route === '/v1/public/pricing-model') {
     sendJSON(response, 200, {
       title: 'Simple self-hosted pricing for Pulse',
-      description: 'Community keeps core monitoring free. Relay gives secure remote access to the Pulse web UI, mobile app pairing, push notifications, and 14-day history. Pro adds root-cause analysis, safe remediation workflows, and 90-day history.',
+      description: 'Community keeps core monitoring free. Relay gives secure remote access to the Pulse web UI, mobile app pairing, push notifications, and 14-day history. Pro adds Patrol control, alert investigation, verified fixes, and 90-day history.',
       explainer:
-        'Community keeps core monitoring free. Relay gets your Pulse web UI securely reachable from anywhere. Pro adds root-cause analysis, safe remediation workflows, and 90-day history.',
+        'Community keeps core monitoring free. Relay gets your Pulse web UI securely reachable from anywhere. Pro adds Patrol control, alert investigation, verified fixes, and 90-day history.',
       plans: [
         {
           badge: 'Recommended',
@@ -1009,12 +1009,12 @@ function routeCommercialAPI(request, response, url, scenario) {
           title: 'Pro',
           price: '$79/year',
           period: 'or $8.99/month',
-          blurb: 'The operator tier for root-cause analysis, safe remediation workflows, and 90-day history.',
+          blurb: 'The operator tier for Patrol control, alert investigation, verified fixes, and 90-day history.',
           features: [
             { tone: 'check', html: 'Core <strong>self-hosted monitoring</strong> included' },
             { tone: 'check', html: 'Everything in Relay' },
-            { tone: 'check', html: 'Alert-triggered root-cause analysis' },
-            { tone: 'check', html: 'Safe remediation workflows with approval or autonomous mode' },
+            { tone: 'check', html: 'Patrol investigates alerts' },
+            { tone: 'check', html: 'Patrol fixes safe issues within your control level' },
             { tone: 'check', html: '90-day history' },
           ],
           buttons: [

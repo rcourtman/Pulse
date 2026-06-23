@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -10,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/safety"
@@ -22,7 +22,7 @@ import (
 func (e *PulseToolExecutor) registerControlTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
-			Name:        "pulse_control",
+			Name:        agentcapabilities.PulseControlToolName,
 			Description: `WRITE operations: control canonical resources that explicitly advertise shared Pulse actions (for example Proxmox guests and supported app-containers) or execute state-modifying commands. Some canonical resources are read-only and will reject pulse_control even when their type is vm or system-container. Read-only and Docker-only workflows are exposed through their own governed tools.`,
 			InputSchema: InputSchema{
 				Type: "object",
@@ -70,9 +70,10 @@ func (e *PulseToolExecutor) registerControlTools() {
 		},
 		RequireControl: true,
 		Governance: ToolGovernance{
-			ActionMode:     ToolActionWrite,
-			ApprovalPolicy: "hidden in read-only mode; approval required in controlled mode",
-			Summary:        "Runs shared Pulse control actions and state-changing commands only against resources that advertise supported actions.",
+			ActionMode:      ToolActionWrite,
+			ApprovalPolicy:  ToolApprovalActionPlan,
+			ApprovalSummary: "hidden in read-only mode; approval required in controlled mode",
+			Summary:         "Runs shared Pulse control actions; control only resources that explicitly support shared Pulse actions.",
 		},
 	})
 }
@@ -97,8 +98,7 @@ func (e *PulseToolExecutor) executeControlResource(ctx context.Context, args map
 	resourceRef = strings.TrimSpace(resourceRef)
 	action, _ := args["action"].(string)
 	action = strings.TrimSpace(action)
-	approvalID, _ := args["_approval_id"].(string)
-	approvalID = strings.TrimSpace(approvalID)
+	approvalID := agentcapabilities.ApprovalArgument(args)
 
 	if resourceRef == "" {
 		return NewErrorResult(fmt.Errorf("resource_id is required")), nil
@@ -132,7 +132,7 @@ func (e *PulseToolExecutor) executeControlResource(ctx context.Context, args map
 			guestArgs["force"] = force
 		}
 		if approvalID != "" {
-			guestArgs["_approval_id"] = approvalID
+			agentcapabilities.WithApprovalArgument(guestArgs, approvalID)
 		}
 		return e.executeControlGuest(ctx, guestArgs)
 
@@ -145,7 +145,7 @@ func (e *PulseToolExecutor) executeControlResource(ctx context.Context, args map
 				"operation": action,
 			}
 			if approvalID != "" {
-				dockerArgs["_approval_id"] = approvalID
+				agentcapabilities.WithApprovalArgument(dockerArgs, approvalID)
 			}
 			return e.executeDockerControl(ctx, dockerArgs)
 		case "truenas":
@@ -186,7 +186,7 @@ func (e *PulseToolExecutor) executeNativeAppContainerControl(ctx context.Context
 		approvalTargetID = strings.TrimSpace(resource.GetProviderUID())
 	}
 
-	preApproved := consumeApprovalWithValidation(map[string]interface{}{"_approval_id": approvalID}, e.orgID, command, approvalTargetType, approvalTargetID)
+	preApproved := consumeApprovalWithValidation(agentcapabilities.WithApprovalArgument(nil, approvalID), e.orgID, command, approvalTargetType, approvalTargetID)
 	decision := agentexec.PolicyAllow
 	if e.policy != nil {
 		decision = e.policy.Evaluate(command)
@@ -317,8 +317,7 @@ func resolvedResourceDisplayName(resource ResolvedResourceInfo) string {
 func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
 	command, _ := args["command"].(string)
 	targetHost, _ := args["target_host"].(string)
-	approvalID, _ := args["_approval_id"].(string)
-	approvalID = strings.TrimSpace(approvalID)
+	approvalID := agentcapabilities.ApprovalArgument(args)
 
 	if command == "" {
 		return NewErrorResult(fmt.Errorf("command is required")), nil
@@ -510,8 +509,7 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 	guestID, _ := args["guest_id"].(string)
 	action, _ := args["action"].(string)
 	force, _ := args["force"].(bool)
-	approvalID, _ := args["_approval_id"].(string)
-	approvalID = strings.TrimSpace(approvalID)
+	approvalID := agentcapabilities.ApprovalArgument(args)
 
 	if guestID == "" {
 		return NewErrorResult(fmt.Errorf("guest_id is required")), nil
@@ -1809,8 +1807,8 @@ func approvalDryRunAvailable(targetType, command string) bool {
 // This is used when the agentic loop re-executes a tool after user approval.
 // DEPRECATED: Use consumeApprovalWithValidation instead for replay protection.
 func isPreApproved(args map[string]interface{}) bool {
-	approvalID, ok := args["_approval_id"].(string)
-	if !ok || approvalID == "" {
+	approvalID := agentcapabilities.ApprovalArgument(args)
+	if approvalID == "" {
 		return false
 	}
 
@@ -1838,8 +1836,8 @@ func isPreApproved(args map[string]interface{}) bool {
 // It verifies the command hash matches the approval and marks it as consumed (single-use).
 // Returns true if the approval is valid and was consumed, false otherwise.
 func consumeApprovalWithValidation(args map[string]interface{}, orgID, command, targetType, targetID string) bool {
-	approvalID, ok := args["_approval_id"].(string)
-	if !ok || approvalID == "" {
+	approvalID := agentcapabilities.ApprovalArgument(args)
+	if approvalID == "" {
 		return false
 	}
 
@@ -1935,27 +1933,21 @@ func enrichApprovalRequiredPayload(payload map[string]interface{}, approvalID st
 
 func formatApprovalNeeded(command, reason, approvalID string) string {
 	payload := map[string]interface{}{
-		"type":           "approval_required",
 		"approval_id":    approvalID,
 		"command":        command,
 		"reason":         reason,
 		"how_to_approve": "Click the approval button in the chat to execute this command.",
-		"do_not_retry":   true,
 	}
 	payload = enrichApprovalRequiredPayload(payload, approvalID)
-	b, _ := json.Marshal(payload)
-	return "APPROVAL_REQUIRED: " + string(b)
+	return agentcapabilities.FormatApprovalRequiredToolMarker(payload)
 }
 
 func formatPolicyBlocked(command, reason string) string {
 	payload := map[string]interface{}{
-		"type":         "policy_blocked",
-		"command":      command,
-		"reason":       reason,
-		"do_not_retry": true,
+		"command": command,
+		"reason":  reason,
 	}
-	b, _ := json.Marshal(payload)
-	return "POLICY_BLOCKED: " + string(b)
+	return agentcapabilities.FormatPolicyBlockedToolMarker(payload)
 }
 
 func collectAgentHostnames(agents []agentexec.ConnectedAgent, max int) (all []string, truncated []string) {
@@ -2007,39 +1999,32 @@ func formatAvailableAgentHosts(agents []agentexec.ConnectedAgent) string {
 
 func formatControlApprovalNeeded(name string, vmID int, action, command, approvalID string) string {
 	payload := map[string]interface{}{
-		"type":           "approval_required",
 		"approval_id":    approvalID,
 		"guest_name":     name,
 		"guest_vmid":     vmID,
 		"action":         action,
 		"command":        command,
 		"how_to_approve": "Click the approval button in the chat to execute this action.",
-		"do_not_retry":   true,
 	}
 	payload = enrichApprovalRequiredPayload(payload, approvalID)
-	b, _ := json.Marshal(payload)
-	return "APPROVAL_REQUIRED: " + string(b)
+	return agentcapabilities.FormatApprovalRequiredToolMarker(payload)
 }
 
 func formatDockerApprovalNeeded(name, host, action, command, approvalID string) string {
 	payload := map[string]interface{}{
-		"type":           "approval_required",
 		"approval_id":    approvalID,
 		"container_name": name,
 		"docker_host":    host,
 		"action":         action,
 		"command":        command,
 		"how_to_approve": "Click the approval button in the chat to execute this action.",
-		"do_not_retry":   true,
 	}
 	payload = enrichApprovalRequiredPayload(payload, approvalID)
-	b, _ := json.Marshal(payload)
-	return "APPROVAL_REQUIRED: " + string(b)
+	return agentcapabilities.FormatApprovalRequiredToolMarker(payload)
 }
 
 func formatAppContainerApprovalNeeded(name, host, action, command, approvalID string) string {
 	payload := map[string]interface{}{
-		"type":           "approval_required",
 		"approval_id":    approvalID,
 		"resource_name":  name,
 		"resource_host":  host,
@@ -2047,9 +2032,7 @@ func formatAppContainerApprovalNeeded(name, host, action, command, approvalID st
 		"action":         action,
 		"command":        command,
 		"how_to_approve": "Click the approval button in the chat to execute this action.",
-		"do_not_retry":   true,
 	}
 	payload = enrichApprovalRequiredPayload(payload, approvalID)
-	b, _ := json.Marshal(payload)
-	return "APPROVAL_REQUIRED: " + string(b)
+	return agentcapabilities.FormatApprovalRequiredToolMarker(payload)
 }

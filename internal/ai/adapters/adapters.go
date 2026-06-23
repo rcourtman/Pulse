@@ -208,8 +208,8 @@ func (e *CommandExecutionDisabledError) Error() string {
 	return "command execution is disabled - commands must be run manually"
 }
 
-// IncidentRecorderMCPAdapter adapts metrics.IncidentRecorder to tools.IncidentRecorderProvider
-type IncidentRecorderMCPAdapter struct {
+// IncidentRecorderToolAdapter adapts metrics.IncidentRecorder to tools.IncidentRecorderProvider
+type IncidentRecorderToolAdapter struct {
 	recorder IncidentRecorderSource
 }
 
@@ -250,13 +250,13 @@ type IncidentSummaryData struct {
 	Changes    map[string]float64
 }
 
-// NewIncidentRecorderMCPAdapter creates a new incident recorder adapter
-func NewIncidentRecorderMCPAdapter(recorder IncidentRecorderSource) *IncidentRecorderMCPAdapter {
-	return &IncidentRecorderMCPAdapter{recorder: recorder}
+// NewIncidentRecorderToolAdapter creates a new incident recorder adapter
+func NewIncidentRecorderToolAdapter(recorder IncidentRecorderSource) *IncidentRecorderToolAdapter {
+	return &IncidentRecorderToolAdapter{recorder: recorder}
 }
 
 // GetWindowsForResource returns incident windows for a resource
-func (a *IncidentRecorderMCPAdapter) GetWindowsForResource(resourceID string, limit int) []*IncidentWindowData {
+func (a *IncidentRecorderToolAdapter) GetWindowsForResource(resourceID string, limit int) []*IncidentWindowData {
 	if a.recorder == nil {
 		return nil
 	}
@@ -264,15 +264,15 @@ func (a *IncidentRecorderMCPAdapter) GetWindowsForResource(resourceID string, li
 }
 
 // GetWindow returns a specific incident window
-func (a *IncidentRecorderMCPAdapter) GetWindow(windowID string) *IncidentWindowData {
+func (a *IncidentRecorderToolAdapter) GetWindow(windowID string) *IncidentWindowData {
 	if a.recorder == nil {
 		return nil
 	}
 	return a.recorder.GetWindow(windowID)
 }
 
-// EventCorrelatorMCPAdapter adapts proxmox.EventCorrelator to tools.EventCorrelatorProvider
-type EventCorrelatorMCPAdapter struct {
+// EventCorrelatorToolAdapter adapts proxmox.EventCorrelator to tools.EventCorrelatorProvider
+type EventCorrelatorToolAdapter struct {
 	correlator EventCorrelatorSource
 }
 
@@ -303,13 +303,13 @@ type ProxmoxEventData struct {
 	Status       string
 }
 
-// NewEventCorrelatorMCPAdapter creates a new event correlator adapter
-func NewEventCorrelatorMCPAdapter(correlator EventCorrelatorSource) *EventCorrelatorMCPAdapter {
-	return &EventCorrelatorMCPAdapter{correlator: correlator}
+// NewEventCorrelatorToolAdapter creates a new event correlator adapter
+func NewEventCorrelatorToolAdapter(correlator EventCorrelatorSource) *EventCorrelatorToolAdapter {
+	return &EventCorrelatorToolAdapter{correlator: correlator}
 }
 
 // GetCorrelationsForResource returns correlated events for a resource
-func (a *EventCorrelatorMCPAdapter) GetCorrelationsForResource(resourceID string, window time.Duration) []EventCorrelationData {
+func (a *EventCorrelatorToolAdapter) GetCorrelationsForResource(resourceID string, window time.Duration) []EventCorrelationData {
 	if a.correlator == nil {
 		return nil
 	}

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -217,11 +218,10 @@ func TestPulseToolExecutor_ExecuteRunCommand(t *testing.T) {
 		})
 		exec.SetContext("host", "different-session-target", false)
 
-		result, err := exec.executeRunCommand(ctx, map[string]interface{}{
-			"command":      "uptime",
-			"target_host":  "tower",
-			"_approval_id": "approval-1",
-		})
+		result, err := exec.executeRunCommand(ctx, agentcapabilities.WithApprovalArgument(map[string]interface{}{
+			"command":     "uptime",
+			"target_host": "tower",
+		}, "approval-1"))
 		require.NoError(t, err)
 
 		resp := mustParseJSONMap(t, result.Content[0].Text)

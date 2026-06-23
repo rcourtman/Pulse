@@ -146,7 +146,7 @@ func TestMetricsSummaryWithReadState(t *testing.T) {
 		nodes:      []*ur.NodeView{newNodeView("reg-node-hash", "node-1", "node1")},
 	}
 
-	adapter := NewMetricsHistoryMCPAdapter(source, rs)
+	adapter := NewMetricsHistoryToolAdapter(source, rs)
 	if adapter == nil {
 		t.Fatal("expected non-nil adapter when readState provided")
 	}
@@ -177,7 +177,7 @@ func TestMetricsSummaryReadStateVMsOnly(t *testing.T) {
 			"100": {"cpu": {{Value: 10, Timestamp: now}}},
 		},
 	}
-	adapter := NewMetricsHistoryMCPAdapter(source, rs)
+	adapter := NewMetricsHistoryToolAdapter(source, rs)
 	if adapter == nil {
 		t.Fatal("expected non-nil adapter with readState")
 	}
@@ -196,7 +196,7 @@ func TestMetricsSummaryReadStateVMsOnly(t *testing.T) {
 func TestMetricsSummaryNilMetricsSource(t *testing.T) {
 	// When metricsSource is nil, constructor returns nil
 	rs := &fakeReadState{}
-	if adapter := NewMetricsHistoryMCPAdapter(nil, rs); adapter != nil {
+	if adapter := NewMetricsHistoryToolAdapter(nil, rs); adapter != nil {
 		t.Fatal("expected nil adapter for nil metricsSource")
 	}
 }
@@ -204,7 +204,7 @@ func TestMetricsSummaryNilMetricsSource(t *testing.T) {
 func TestMetricsSummaryNilReadState(t *testing.T) {
 	// When readState is nil, constructor returns nil
 	source := &fakeMetricsSource{}
-	if adapter := NewMetricsHistoryMCPAdapter(source, nil); adapter != nil {
+	if adapter := NewMetricsHistoryToolAdapter(source, nil); adapter != nil {
 		t.Fatal("expected nil adapter when readState is nil")
 	}
 }
@@ -226,7 +226,7 @@ func TestPatternAdapterWithReadState(t *testing.T) {
 		},
 	}
 
-	adapter := NewPatternMCPAdapter(source, rs)
+	adapter := NewPatternToolAdapter(source, rs)
 	patterns := adapter.GetPatterns()
 	if len(patterns) != 2 {
 		t.Fatalf("expected 2 patterns, got %d", len(patterns))
@@ -258,7 +258,7 @@ func TestPatternAdapterReadStateFallbackForUnknownID(t *testing.T) {
 		},
 	}
 
-	adapter := NewPatternMCPAdapter(source, rs)
+	adapter := NewPatternToolAdapter(source, rs)
 	patterns := adapter.GetPatterns()
 	if len(patterns) != 1 {
 		t.Fatalf("expected 1 pattern, got %d", len(patterns))
@@ -276,7 +276,7 @@ func TestPatternAdapterNilReadState(t *testing.T) {
 		},
 	}
 
-	adapter := NewPatternMCPAdapter(source, nil)
+	adapter := NewPatternToolAdapter(source, nil)
 	patterns := adapter.GetPatterns()
 	// nil readState → resource ID returned as name
 	if patterns[0].ResourceName != "100" {
@@ -299,7 +299,7 @@ func TestPatternAdapterReadStateContainerVMIDLookup(t *testing.T) {
 		},
 	}
 
-	adapter := NewPatternMCPAdapter(source, rs)
+	adapter := NewPatternToolAdapter(source, rs)
 	patterns := adapter.GetPatterns()
 	if patterns[0].ResourceName != "my-container" {
 		t.Fatalf("expected 'my-container', got %q", patterns[0].ResourceName)
@@ -323,7 +323,7 @@ func TestMetricsSummaryNodeEmptySourceIDSkipped(t *testing.T) {
 		nodes: []*ur.NodeView{emptySourceNode},
 	}
 
-	adapter := NewMetricsHistoryMCPAdapter(source, rs)
+	adapter := NewMetricsHistoryToolAdapter(source, rs)
 	summary, err := adapter.GetAllMetricsSummary(time.Hour)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -349,7 +349,7 @@ func TestPatternAdapterNodeEmptySourceIDFallsBackToID(t *testing.T) {
 		},
 	}
 
-	adapter := NewPatternMCPAdapter(source, rs)
+	adapter := NewPatternToolAdapter(source, rs)
 	patterns := adapter.GetPatterns()
 	// No node matches "some-legacy-id" (the node has empty SourceID),
 	// so the raw resource ID is returned as the name.

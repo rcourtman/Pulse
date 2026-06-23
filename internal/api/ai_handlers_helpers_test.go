@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
@@ -31,18 +30,6 @@ func newTestAISettingsHandlerLite() *AISettingsHandler {
 	}
 }
 
-func TestIsMCPToolCall(t *testing.T) {
-	if !isMCPToolCall("pulse_control_guest(guest_id='102')") {
-		t.Fatalf("expected MCP tool call to be detected")
-	}
-	if !isMCPToolCall("default_api:pulse_get_resource(id='1')") {
-		t.Fatalf("expected MCP tool call with default_api prefix")
-	}
-	if isMCPToolCall("echo hello") {
-		t.Fatalf("expected non-tool command to be false")
-	}
-}
-
 func TestCleanTargetHost(t *testing.T) {
 	if got := cleanTargetHost("pve-node (The container's host is 'pve-node')"); got != "pve-node" {
 		t.Fatalf("expected cleaned host, got %q", got)
@@ -58,67 +45,19 @@ func TestCleanTargetHost(t *testing.T) {
 	}
 }
 
-func TestSplitToolArgs(t *testing.T) {
-	args := "action='start', guest_id=\"102\", note='hello, world', path=\"/tmp/a,b\", escaped=\"\\\"quote\\\"\""
-	parts := splitToolArgs(args)
-	expected := []string{
-		"action='start'",
-		"guest_id=\"102\"",
-		"note='hello, world'",
-		"path=\"/tmp/a,b\"",
-		"escaped=\"\\\"quote\\\"\"",
-	}
-	if len(parts) != len(expected) {
-		t.Fatalf("expected %d parts, got %d", len(expected), len(parts))
-	}
-	for i := range expected {
-		if strings.TrimSpace(parts[i]) != expected[i] {
-			t.Fatalf("expected part %q, got %q", expected[i], parts[i])
-		}
-	}
-}
-
-func TestParseMCPToolCall(t *testing.T) {
-	tool, args, err := parseMCPToolCall("default_api:pulse_control_guest(guest_id=\"102\", action='start')")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if tool != "pulse_control_guest" {
-		t.Fatalf("expected tool name pulse_control_guest, got %q", tool)
-	}
-	if args["guest_id"] != "102" || args["action"] != "start" {
-		t.Fatalf("unexpected args: %#v", args)
-	}
-
-	tool, args, err = parseMCPToolCall("pulse_run_command()")
-	if err != nil {
-		t.Fatalf("unexpected error for empty args: %v", err)
-	}
-	if tool != "pulse_run_command" || len(args) != 0 {
-		t.Fatalf("expected empty args, got %#v", args)
-	}
-
-	if _, _, err = parseMCPToolCall("pulse_control_guest"); err == nil {
-		t.Fatalf("expected error for missing parenthesis")
-	}
-	if _, _, err = parseMCPToolCall("pulse_control_guest("); err == nil {
-		t.Fatalf("expected error for missing closing parenthesis")
-	}
-}
-
-func TestMCPToolAdapter_Errors(t *testing.T) {
-	adapter := &mcpToolAdapter{handler: &AISettingsHandler{}}
-	if _, _, err := adapter.ExecuteMCPTool(context.Background(), "pulse_control_guest()", ""); err == nil {
+func TestAssistantToolAdapter_Errors(t *testing.T) {
+	adapter := &assistantToolAdapter{handler: &AISettingsHandler{}}
+	if _, _, err := adapter.ExecuteApprovedAssistantTool(context.Background(), "pulse_control_guest()", ""); err == nil {
 		t.Fatalf("expected error when chat handler is missing")
 	}
 
 	adapter.handler.chatHandler = &AIHandler{}
-	if _, _, err := adapter.ExecuteMCPTool(context.Background(), "pulse_control_guest()", ""); err == nil {
+	if _, _, err := adapter.ExecuteApprovedAssistantTool(context.Background(), "pulse_control_guest()", ""); err == nil {
 		t.Fatalf("expected error when chat service is missing")
 	}
 
 	adapter.handler.chatHandler.defaultService = &fakeChatWrapper{}
-	if _, _, err := adapter.ExecuteMCPTool(context.Background(), "pulse_control_guest()", ""); err == nil {
+	if _, _, err := adapter.ExecuteApprovedAssistantTool(context.Background(), "pulse_control_guest()", ""); err == nil {
 		t.Fatalf("expected error for chat service type mismatch")
 	}
 }

@@ -17,6 +17,8 @@ type UsageEvent struct {
 	RequestModel  string    `json:"request_model"`
 	ResponseModel string    `json:"response_model,omitempty"`
 	UseCase       string    `json:"use_case,omitempty"` // "chat" or "patrol"
+	ContextScope  string    `json:"context_scope,omitempty"`
+	ToolCallCount int       `json:"tool_call_count,omitempty"`
 	InputTokens   int       `json:"input_tokens,omitempty"`
 	OutputTokens  int       `json:"output_tokens,omitempty"`
 	TargetType    string    `json:"target_type,omitempty"`

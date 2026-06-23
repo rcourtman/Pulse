@@ -67,30 +67,27 @@ func (a *chatServiceAdapter) GetMessages(ctx context.Context, sessionID string) 
 	}
 	result := make([]ai.ChatMessage, len(messages))
 	for i, m := range messages {
-		msg := ai.ChatMessage{
-			ID:               m.ID,
-			Role:             m.Role,
-			Content:          m.Content,
-			ReasoningContent: m.ReasoningContent,
-			Timestamp:        m.Timestamp,
-		}
-		for _, tc := range m.ToolCalls {
-			msg.ToolCalls = append(msg.ToolCalls, ai.ChatToolCall{
-				ID:    tc.ID,
-				Name:  tc.Name,
-				Input: tc.Input,
-			})
-		}
-		if m.ToolResult != nil {
-			msg.ToolResult = &ai.ChatToolResult{
-				ToolUseID: m.ToolResult.ToolUseID,
-				Content:   m.ToolResult.Content,
-				IsError:   m.ToolResult.IsError,
-			}
-		}
-		result[i] = msg.NormalizeCollections()
+		result[i] = adaptChatMessage(m)
 	}
 	return result, nil
+}
+
+func adaptChatMessage(m chat.Message) ai.ChatMessage {
+	msg := ai.ChatMessage{
+		ID:               m.ID,
+		Role:             m.Role,
+		Content:          m.Content,
+		ReasoningContent: m.ReasoningContent,
+		Timestamp:        m.Timestamp,
+	}
+	for _, tc := range m.ToolCalls {
+		msg.ToolCalls = append(msg.ToolCalls, tc.ProviderToolCall())
+	}
+	if m.ToolResult != nil {
+		toolResult := *m.ToolResult
+		msg.ToolResult = &toolResult
+	}
+	return msg.NormalizeCollections()
 }
 
 func (a *chatServiceAdapter) DeleteSession(ctx context.Context, sessionID string) error {

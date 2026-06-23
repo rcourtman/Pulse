@@ -2,6 +2,30 @@
   "version": 13,
   "shared_ownerships": [
     {
+      "path": "cmd/pulse-mcp/main.go",
+      "rationale": "the Pulse MCP adapter runtime is both an AI runtime surface for external-agent access to Pulse Intelligence and a canonical API contract projection over the agent capabilities manifest and Pulse MCP surface tool contract",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "cmd/pulse-mcp/README.md",
+      "rationale": "the Pulse MCP adapter guide is both an AI runtime surface for external-agent access to Pulse Intelligence and a canonical API contract projection over the agent capabilities manifest",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/api/agentCapabilities.ts",
+      "rationale": "the agent capabilities frontend client is both the Pulse Intelligence external-agent manifest consumer and a canonical API payload contract boundary",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
       "path": "frontend-modern/src/api/agentProfiles.ts",
       "rationale": "the agent profiles frontend client is both an agent lifecycle control surface and a canonical API payload contract boundary",
       "subsystems": [
@@ -12,6 +36,22 @@
     {
       "path": "frontend-modern/src/api/ai.ts",
       "rationale": "the AI frontend client is both an AI runtime control surface and a canonical API payload contract boundary",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/api/aiChat.ts",
+      "rationale": "the Assistant chat frontend client is both the first-party Assistant transport surface and a canonical API payload contract boundary",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/api/generated/agentCapabilities.ts",
+      "rationale": "the generated agent capabilities frontend types are both the Pulse Intelligence manifest TypeScript projection and a canonical API payload contract boundary",
       "subsystems": [
         "ai-runtime",
         "api-contracts"
@@ -167,6 +207,15 @@
       "subsystems": [
         "performance-and-scalability",
         "unified-resources"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx",
+      "rationale": "the External agents settings panel is the optional settings-shell projection of Pulse MCP onboarding, the AI runtime connected-agent onboarding surface, and a presentation consumer of the shared agent capabilities frontend client",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts",
+        "frontend-primitives"
       ]
     },
     {
@@ -442,6 +491,206 @@
       ]
     },
     {
+      "path": "internal/agentcapabilities/action_target.go",
+      "rationale": "the Pulse Intelligence governed action target type and resource-to-action-target mapping vocabulary are both the Assistant approval/runtime routing contract and the canonical API/agent target contract for governed actions",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "internal/agentcapabilities/control_level.go",
+      "rationale": "the Pulse Intelligence control-level vocabulary and control-tool availability predicate are both the Assistant runtime gating contract and the canonical API/agent permission posture for governed action tools",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "internal/agentcapabilities/errors.go",
+      "rationale": "the Pulse Intelligence agent error envelope is both the canonical API failure payload contract and the AI runtime adapter error-parsing contract for Assistant and external-agent surfaces",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "internal/agentcapabilities/events.go",
+      "rationale": "the Pulse Intelligence event vocabulary is both the canonical API SSE event contract and the AI runtime adapter notification contract for Assistant and external-agent surfaces",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "internal/agentcapabilities/governance_prompt.go",
+      "rationale": "the Pulse Intelligence surface-affordance-resolved model-facing operating-instruction, tool-governance prompt, reusable provider-tool governance description, Assistant-native offered-tool filtering, and Assistant-native interactive question-tool governance projections are both the Assistant system-prompt governance section and the shared API/agent vocabulary for action mode, approval posture, MCP affordance advertisement, and non-registry interaction-tool boundaries",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "internal/agentcapabilities/http.go",
+      "rationale": "the Pulse Intelligence agent HTTP substrate is both the API capabilities invocation contract and the shared AI runtime adapter execution primitive for MCP and reference agent clients",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "internal/agentcapabilities/manifest.go",
+      "rationale": "the canonical Pulse Intelligence agent capabilities manifest declaration, including capability display titles, manifest-owned finding lifecycle schemas, manifest-owned governed action schemas and routes, manifest-owned external-adapter surface tool contracts, and manifest-owned structured output schemas, is both the API discovery payload source and the AI runtime projection contract for Pulse Assistant and MCP-facing agent tools",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "internal/agentcapabilities/markdown.go",
+      "rationale": "the Pulse Intelligence manifest Markdown projection, including manifest-owned capability titles, surface-filtered Pulse MCP tool/error inventories, and prompt labels, is both the canonical API/agent documentation projection and the AI runtime onboarding projection for Assistant-compatible external-agent surfaces",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "internal/agentcapabilities/mcp.go",
+      "rationale": "the Pulse Intelligence MCP protocol version, JSON-RPC, method dispatch, method payload, surface-tool-contract-gated initialize operating-instruction and capability advertisement payload, manifest surface-filtered tools/list and tools/call execution bridge, manifest surface-gated resources/list and resources/read bridge, manifest-owned and surface-affordance-gated workflow prompt projection, protocol wire aliases, resource and prompt handler gates, and notification projection collectively define the external-agent adapter wire contract over the shared Pulse Intelligence tool core; MCP initialize, tools/call execution, resource list/read projection, and prompt list/get projection must enter through manifest-owned surface and workflow-prompt contracts so raw capability slices cannot bypass the published external-adapter contract",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "internal/agentcapabilities/mcp_adapter.go",
+      "rationale": "the Pulse MCP adapter setup contract defaults and normalization are both the canonical API manifest setup projection and the AI runtime onboarding contract for Assistant-compatible external-agent surfaces",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "internal/agentcapabilities/projection.go",
+      "rationale": "the agent capability external-tool projection helper, normalized manifest-owned surface tool contract resolution and tools-affordance gating, manifest-owned resource-context route and argument vocabulary, operator-state capability and route vocabulary, finding workflow capability and lifecycle argument vocabulary including resolution and dismissal notes, governed action capability, route, and argument vocabulary, manifest-owned tool title and outputSchema projection, structured Pulse capability _meta, and shared tool behavior hints are both the canonical API manifest projection contract and the AI runtime adapter projection for Pulse Assistant and MCP-facing agent tools, with MCP annotation and metadata wire names confined to adapter-edge aliases",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "internal/agentcapabilities/provider_tool_artifacts.go",
+      "rationale": "the provider tool-call artifact detector and streaming tool-name prefix splitter are both the Assistant stream-sanitization boundary and the shared external-adapter leak guard for provider-native tool-call markup that escaped the structured channel",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "internal/agentcapabilities/schema.go",
+      "rationale": "the agent capability input schema contract is both the canonical API manifest schema envelope and the AI runtime structured tool-schema, governance-aware provider-projection with neutral behavior hints and Pulse governance metadata, offered-tool governance extraction for Assistant prompt policy, manifest-affordance-gated Assistant provider-surface composition, manifest raw-schema to Assistant provider-schema projection for capability tools, legacy native Assistant utility provider aliases and schemas, provider-call normalization, provider-result context projection, Assistant-native interaction provider-tool declaration, and live Assistant execution-normalization contract for Pulse Assistant and MCP-facing agent tools",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "internal/agentcapabilities/scopes.go",
+      "rationale": "the manifest-derived required-scope summary is both the canonical API/agent token guidance contract and the AI runtime adapter startup/onboarding contract for Assistant-compatible external-agent surfaces",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "internal/agentcapabilities/sse.go",
+      "rationale": "the Pulse Intelligence SSE subscription transport and record parser are both the canonical API event-stream consumption contract and the AI runtime adapter push bridge contract for MCP and reference agent clients",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "internal/agentcapabilities/surface_contract.go",
+      "rationale": "the Pulse Intelligence operator-surface affordance contract, shared surface-affordance, surface-tool identity, Assistant surface tool filtering, normalized external surface tool resolver, surface lookup, affordance labels, and manifest-published external-adapter surface tool allowlist projection are both the canonical API manifest surface model and the AI runtime prompt and onboarding guardrail for Assistant and MCP-facing surfaces",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "internal/agentcapabilities/text_tool_invocation.go",
+      "rationale": "the Pulse Intelligence text tool invocation parser, internal approval argument, and current_resource handle vocabulary are both the Assistant approved-action execution projection and the shared tool-call params bridge for governed Pulse Intelligence tool calls, with MCP tools/call compatibility staying at the adapter edge",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "internal/agentcapabilities/tool_call.go",
+      "rationale": "the Pulse Intelligence shared tool-call params, normalization, validation, direct registry preparation, registry-entrypoint failure result helpers, and provider/registry tool-call safety classification are both the native Assistant execution/FSM contract and the canonical API/agent tools/call compatibility contract for governed Pulse Intelligence tool calls",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "internal/agentcapabilities/tool_execution.go",
+      "rationale": "the Pulse Intelligence neutral capability tool HTTP execution helper and direct tool execution output/error mapper are both the Assistant-native direct execution contract and the canonical API/agent request/response execution contract, with MCP adapters consuming the neutral helpers only after the shared MCP manifest-surface execution bridge has applied the published surface tool contract",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "internal/agentcapabilities/tool_marker.go",
+      "rationale": "the Pulse Intelligence Assistant tool marker vocabulary and approval/policy marker parser are both the Assistant structured tool-result compatibility contract and the canonical API/agent branching contract for governed tool outcomes",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "internal/agentcapabilities/tool_names.go",
+      "rationale": "the Pulse Intelligence registry tool-name vocabulary is both the native Assistant execution/display contract and the canonical API/agent tool identity contract for MCP-facing external-agent adapters",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "internal/agentcapabilities/tool_response.go",
+      "rationale": "the shared tool response envelope, tool error-code vocabulary, and tool-result error-code and verification evidence parsers are both the Assistant structured tool-result contract and the canonical API/agent branching contract for Pulse Intelligence tool failures, recovery tracking, and write self-verification",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "internal/agentcapabilities/tool_result.go",
+      "rationale": "the Pulse Intelligence shared tool-result content/result envelope, structuredContent projection, result constructors, HTTP response-to-result mapping, text projection, and result interpretation helpers are both the Assistant registry result contract and the canonical API/agent result projection contract for governed tool outcomes",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "internal/agentcapabilities/types.go",
+      "rationale": "the agent capabilities manifest wire type, manifest-owned external-adapter surface tool contract field, capability display title and structured output schema fields, approval-policy vocabulary, capability governance normalization, and tool-governance descriptor shape are both the canonical API payload contract and the AI runtime projection contract for Pulse Assistant and MCP-facing agent tools",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "internal/agentcapabilities/workflow_prompt.go",
+      "rationale": "the Pulse Intelligence workflow prompt catalogue, manifest-owned `workflowPrompts` projection, MCP prompt title projection, presentation kind hints, shared resource-context and finding argument vocabulary, Patrol issue-handling capability gating, argument validation, and manifest-gated shared prompt rendering rules are both the AI runtime starter contract for Assistant-compatible surfaces and the canonical API/agent prompt projection contract for MCP-facing clients",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
       "path": "internal/api/access_control_handlers.go",
       "rationale": "RBAC role and user-assignment handlers are both an organization settings control surface and a canonical API payload contract boundary",
       "subsystems": [
@@ -697,6 +946,46 @@
         "alerts",
         "monitoring",
         "storage-recovery"
+      ]
+    },
+    {
+      "path": "pkg/aicontracts/fix_execution.go",
+      "rationale": "the public approved-fix execution contract is both an AI runtime approved-action boundary and a canonical API dependency contract for Patrol and enterprise auto-fix binders",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "pkg/aicontracts/investigation.go",
+      "rationale": "the public Patrol investigation record and finding contract is both an AI runtime handoff boundary and a canonical API payload contract for Patrol, Assistant, unified findings, persistence, and audit surfaces",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "pkg/aicontracts/orchestrator_deps.go",
+      "rationale": "the public investigation orchestrator dependency contract is both an AI runtime handoff boundary and a canonical API payload contract for Assistant and Patrol tool-call history",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "pkg/extensions/ai_autofix.go",
+      "rationale": "the enterprise auto-fix extension dependency seam is both an AI runtime approved-action boundary and a canonical API extension contract over Assistant and Patrol execution dependencies",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
+      "path": "scripts/generate-pulse-intelligence-docs.go",
+      "rationale": "the Pulse Intelligence manifest docs generator is both an AI runtime docs/onboarding projection and a canonical API contract projection over the agent capabilities manifest and Pulse MCP surface tool contract",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
       ]
     },
     {
@@ -1124,14 +1413,22 @@
       "lane": "L6",
       "contract": "docs/release-control/v6/internal/subsystems/ai-runtime.md",
       "owned_prefixes": [
+        "cmd/pulse-mcp/",
         "frontend-modern/src/components/AI/Chat/",
+        "internal/agentcapabilities/",
         "internal/ai/"
       ],
       "owned_files": [
+        "cmd/pulse-mcp/main.go",
+        "cmd/pulse-mcp/README.md",
         "docs/AI.md",
+        "frontend-modern/src/api/agentCapabilities.ts",
         "frontend-modern/src/api/ai.ts",
+        "frontend-modern/src/api/aiChat.ts",
+        "frontend-modern/src/api/generated/agentCapabilities.ts",
         "frontend-modern/src/api/patrol.ts",
         "frontend-modern/src/components/AI/AICostDashboard.tsx",
+        "frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx",
         "frontend-modern/src/stores/aiChat.ts",
         "frontend-modern/src/stores/aiRuntimeState.ts",
         "frontend-modern/src/utils/aiChatPresentation.ts",
@@ -1142,7 +1439,12 @@
         "internal/api/ai_handler.go",
         "internal/api/ai_handlers.go",
         "internal/api/ai_intelligence_handlers.go",
-        "internal/config/ai.go"
+        "internal/config/ai.go",
+        "pkg/aicontracts/fix_execution.go",
+        "pkg/aicontracts/investigation.go",
+        "pkg/aicontracts/orchestrator_deps.go",
+        "pkg/extensions/ai_autofix.go",
+        "scripts/generate-pulse-intelligence-docs.go"
       ],
       "verification": {
         "allow_same_subsystem_tests": false,
@@ -1151,11 +1453,45 @@
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
+            "id": "pulse-mcp-adapter",
+            "label": "Pulse MCP adapter proof",
+            "match_prefixes": [
+              "cmd/pulse-mcp/"
+            ],
+            "match_files": [
+              "cmd/pulse-mcp/main.go",
+              "cmd/pulse-mcp/README.md"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "cmd/pulse-mcp/main_test.go",
+              "internal/agentcapabilities/markdown_test.go",
+              "internal/api/contract_test.go"
+            ]
+          },
+          {
+            "id": "pulse-intelligence-docs-generator",
+            "label": "Pulse Intelligence manifest docs generator proof",
+            "match_prefixes": [],
+            "match_files": [
+              "scripts/generate-pulse-intelligence-docs.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/agentcapabilities/markdown_test.go",
+              "internal/api/contract_test.go",
+              "scripts/release_control/ai_runtime_docs_policy_test.py"
+            ]
+          },
+          {
             "id": "ai-api-surface",
             "label": "AI transport and handler proof",
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/api/ai.ts",
+              "frontend-modern/src/api/aiChat.ts",
               "frontend-modern/src/api/patrol.ts",
               "internal/api/ai_handler.go",
               "internal/api/ai_handlers.go",
@@ -1184,7 +1520,8 @@
             "exact_files": [
               "frontend-modern/src/components/AI/__tests__/AICostDashboard.test.tsx",
               "frontend-modern/src/utils/__tests__/aiCostPresentation.test.ts",
-              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts"
+              "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+              "frontend-modern/src/utils/__tests__/patrolRuntimePresentation.test.ts"
             ]
           },
           {
@@ -1225,6 +1562,87 @@
               "frontend-modern/src/utils/__tests__/aiProviderHealthPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/aiProviderPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts"
+            ]
+          },
+          {
+            "id": "agent-capabilities-wire-contract",
+            "label": "agent capabilities shared wire-contract proof",
+            "match_prefixes": [
+              "internal/agentcapabilities/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "cmd/pulse-mcp/main_test.go",
+              "internal/agentcapabilities/action_target_test.go",
+              "internal/agentcapabilities/manifest_test.go",
+              "internal/agentcapabilities/mcp_test.go",
+              "internal/agentcapabilities/schema_test.go",
+              "internal/agentcapabilities/types_test.go",
+              "internal/api/agent_capabilities_test.go",
+              "internal/api/contract_test.go"
+            ]
+          },
+          {
+            "id": "agent-integrations-manifest-projection",
+            "label": "Agent integrations manifest projection proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/api/agentCapabilities.ts",
+              "frontend-modern/src/api/generated/agentCapabilities.ts",
+              "frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/api/__tests__/agentCapabilities.test.ts",
+              "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+              "internal/api/contract_test.go"
+            ]
+          },
+          {
+            "id": "ai-investigation-contract",
+            "label": "AI investigation record contract proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/aicontracts/investigation.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/contract_test.go",
+              "pkg/aicontracts/contracts_test.go"
+            ]
+          },
+          {
+            "id": "ai-orchestrator-dependency-contract",
+            "label": "AI orchestrator dependency contract proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/aicontracts/orchestrator_deps.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/ai_handlers_test.go",
+              "internal/api/contract_test.go",
+              "pkg/aicontracts/contracts_test.go"
+            ]
+          },
+          {
+            "id": "ai-approved-fix-execution-contract",
+            "label": "AI approved fix execution contract proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/aicontracts/fix_execution.go",
+              "pkg/extensions/ai_autofix.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/contract_test.go",
+              "pkg/extensions/ai_autofix_test.go"
             ]
           },
           {
@@ -1560,10 +1978,16 @@
       "lane": "L6",
       "contract": "docs/release-control/v6/internal/subsystems/api-contracts.md",
       "owned_prefixes": [
+        "cmd/pulse-mcp/",
         "frontend-modern/src/api/",
+        "internal/agentcapabilities/",
         "internal/api/"
       ],
       "owned_files": [
+        "cmd/agent-probe/main.go",
+        "cmd/pulse-mcp/main.go",
+        "cmd/pulse-mcp/README.md",
+        "frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx",
         "frontend-modern/src/components/Settings/APITokenManager.tsx",
         "frontend-modern/src/components/Settings/apiTokenManagerModel.ts",
         "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx",
@@ -1589,10 +2013,15 @@
         "frontend-modern/src/utils/infrastructureSettingsPresentation.ts",
         "internal/api/setup_script_render.go",
         "internal/websocket/hub.go",
+        "pkg/aicontracts/fix_execution.go",
+        "pkg/aicontracts/investigation.go",
+        "pkg/aicontracts/orchestrator_deps.go",
+        "pkg/extensions/ai_autofix.go",
         "pkg/pulsecli/actions.go",
         "pkg/pulsecli/api_client.go",
         "pkg/pulsecli/fleet.go",
         "pkg/pulsecli/root.go",
+        "scripts/generate-pulse-intelligence-docs.go",
         "scripts/generate-types.go"
       ],
       "verification": {
@@ -1606,6 +2035,78 @@
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
+            "id": "agent-capabilities-manifest-contract",
+            "label": "agent capabilities manifest contract proof",
+            "match_prefixes": [
+              "internal/agentcapabilities/"
+            ],
+            "match_files": [
+              "cmd/agent-probe/main.go",
+              "cmd/pulse-mcp/main.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "cmd/pulse-mcp/main_test.go",
+              "internal/agentcapabilities/action_target_test.go",
+              "internal/agentcapabilities/manifest_test.go",
+              "internal/agentcapabilities/mcp_test.go",
+              "internal/agentcapabilities/schema_test.go",
+              "internal/agentcapabilities/types_test.go",
+              "internal/api/agent_capabilities_test.go",
+              "internal/api/contract_test.go"
+            ]
+          },
+          {
+            "id": "agent-integrations-manifest-projection",
+            "label": "Agent integrations manifest projection proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/api/agentCapabilities.ts",
+              "frontend-modern/src/api/generated/agentCapabilities.ts",
+              "frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/api/__tests__/agentCapabilities.test.ts",
+              "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+              "internal/api/contract_test.go"
+            ]
+          },
+          {
+            "id": "pulse-mcp-manifest-adapter",
+            "label": "Pulse MCP manifest adapter proof",
+            "match_prefixes": [
+              "cmd/pulse-mcp/"
+            ],
+            "match_files": [
+              "cmd/pulse-mcp/main.go",
+              "cmd/pulse-mcp/README.md"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "cmd/pulse-mcp/main_test.go",
+              "internal/agentcapabilities/markdown_test.go",
+              "internal/api/contract_test.go"
+            ]
+          },
+          {
+            "id": "pulse-intelligence-docs-generator",
+            "label": "Pulse Intelligence manifest docs generator proof",
+            "match_prefixes": [],
+            "match_files": [
+              "scripts/generate-pulse-intelligence-docs.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/agentcapabilities/markdown_test.go",
+              "internal/api/contract_test.go"
+            ]
+          },
+          {
             "id": "ai-chat-stream-event-types",
             "label": "AI chat SSE generated type proof",
             "match_prefixes": [],
@@ -1618,6 +2119,50 @@
             "exact_files": [
               "frontend-modern/src/api/__tests__/aiChatEvents.test.ts",
               "internal/api/contract_test.go"
+            ]
+          },
+          {
+            "id": "ai-investigation-contract",
+            "label": "AI investigation record API contract proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/aicontracts/investigation.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/contract_test.go",
+              "pkg/aicontracts/contracts_test.go"
+            ]
+          },
+          {
+            "id": "ai-orchestrator-dependency-contract",
+            "label": "AI orchestrator dependency API contract proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/aicontracts/orchestrator_deps.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/ai_handlers_test.go",
+              "internal/api/contract_test.go",
+              "pkg/aicontracts/contracts_test.go"
+            ]
+          },
+          {
+            "id": "ai-approved-fix-execution-contract",
+            "label": "AI approved fix execution API contract proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/aicontracts/fix_execution.go",
+              "pkg/extensions/ai_autofix.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/contract_test.go",
+              "pkg/extensions/ai_autofix_test.go"
             ]
           },
           {
@@ -1971,6 +2516,7 @@
         "frontend-modern/src/components/Settings/ProLicensePlanSection.tsx",
         "frontend-modern/src/components/Settings/RelayPairingSection.tsx",
         "frontend-modern/src/components/Settings/RelaySettingsPanel.tsx",
+        "frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts",
         "frontend-modern/src/components/Settings/SelfHostedCommercialRecoverySection.tsx",
         "frontend-modern/src/components/Settings/useBillingAdminPanelState.ts",
         "frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts",
@@ -2006,6 +2552,7 @@
         "pulse-pro:.github/workflows/deploy-v6-preview-demo.yml",
         "pulse-pro:landing-page/thanks.html",
         "pulse-pro:license-server/grandfathering.go",
+        "pulse-pro:license-server/intelligence_value.go",
         "pulse-pro:license-server/main.go",
         "pulse-pro:license-server/self_hosted_feature_catalog.generated.go",
         "pulse-pro:license-server/v6_checkout.go",
@@ -2135,6 +2682,21 @@
               "pkg/licensing/activation_types_test.go",
               "pkg/licensing/grant_claims_contract_test.go",
               "pkg/licensing/service_activate_test.go"
+            ]
+          },
+          {
+            "id": "pulse-intelligence-value-report",
+            "label": "Pulse Intelligence value reporting proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pulse-pro:license-server/intelligence_value.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pulse-pro:license-server/intelligence_value_test.go",
+              "pulse-pro:license-server/main_test.go",
+              "pulse-pro:license-server/telemetry_test.go"
             ]
           },
           {
@@ -2790,6 +3352,8 @@
         "scripts/hot-dev.sh",
         "scripts/install-container-agent.sh",
         "scripts/install-docker.sh",
+        "scripts/install-mcp.ps1",
+        "scripts/install-mcp.sh",
         "scripts/install.ps1",
         "scripts/install.sh",
         "scripts/lib/hot-dev-auth.sh",
@@ -2941,6 +3505,20 @@
               "scripts/installtests/backfill_release_assets_test.go",
               "scripts/installtests/build_release_assets_test.go",
               "scripts/installtests/release_ldflags_test.go"
+            ]
+          },
+          {
+            "id": "pulse-mcp-installer-release-runtime",
+            "label": "Pulse MCP installer release proof",
+            "match_prefixes": [],
+            "match_files": [
+              "scripts/install-mcp.ps1",
+              "scripts/install-mcp.sh"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/installtests/build_release_assets_test.go"
             ]
           },
           {
@@ -3197,6 +3775,9 @@
         "frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx",
         "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx",
         "frontend-modern/src/hooks/createNonSuspendingQuery.ts",
+        "frontend-modern/src/i18n/messages.de.ts",
+        "frontend-modern/src/i18n/messages.es.ts",
+        "frontend-modern/src/i18n/messages.ts",
         "frontend-modern/src/index.css",
         "frontend-modern/src/routing/routePreload.ts",
         "frontend-modern/src/stores/aiChat.ts",
@@ -3363,6 +3944,22 @@
             "exact_files": [
               "frontend-modern/src/components/Settings/__tests__/dataHandlingPanelModel.test.ts",
               "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts"
+            ]
+          },
+          {
+            "id": "localized-settings-message-catalog",
+            "label": "localized settings message catalog proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/i18n/messages.de.ts",
+              "frontend-modern/src/i18n/messages.es.ts",
+              "frontend-modern/src/i18n/messages.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Settings/__tests__/settingsLocalization.test.ts",
+              "frontend-modern/src/i18n/__tests__/i18n.test.ts"
             ]
           },
           {
@@ -4284,14 +4881,14 @@
         "frontend-modern/src/components/patrol/index.ts",
         "frontend-modern/src/components/patrol/InvestigationMessages.tsx",
         "frontend-modern/src/components/patrol/InvestigationSection.tsx",
-        "frontend-modern/src/components/patrol/PatrolStatusBar.tsx",
         "frontend-modern/src/components/patrol/RemediationStatus.tsx",
         "frontend-modern/src/components/patrol/RunHistoryEntry.tsx",
         "frontend-modern/src/components/patrol/RunHistoryPanel.tsx",
         "frontend-modern/src/components/patrol/RunToolCallTrace.tsx",
+        "frontend-modern/src/features/patrol/patrolAutonomyAvailability.ts",
+        "frontend-modern/src/features/patrol/patrolControlPresentation.ts",
         "frontend-modern/src/features/patrol/PatrolIntelligenceBanners.tsx",
         "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx",
-        "frontend-modern/src/features/patrol/PatrolIntelligenceSummary.tsx",
         "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx",
         "frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx",
         "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts",
@@ -4307,6 +4904,7 @@
         "frontend-modern/src/utils/findingAlertIdentity.ts",
         "frontend-modern/src/utils/patrolEmptyStatePresentation.ts",
         "frontend-modern/src/utils/patrolFormat.ts",
+        "frontend-modern/src/utils/patrolPagePresentation.ts",
         "frontend-modern/src/utils/patrolRunPresentation.ts",
         "frontend-modern/src/utils/patrolRuntimeActions.ts",
         "frontend-modern/src/utils/patrolRuntimePresentation.ts",
@@ -4331,9 +4929,10 @@
             "match_files": [
               "frontend-modern/src/components/Brand/PulsePatrolLogo.tsx",
               "frontend-modern/src/components/patrol/index.ts",
+              "frontend-modern/src/features/patrol/patrolAutonomyAvailability.ts",
+              "frontend-modern/src/features/patrol/patrolControlPresentation.ts",
               "frontend-modern/src/features/patrol/PatrolIntelligenceBanners.tsx",
               "frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx",
-              "frontend-modern/src/features/patrol/PatrolIntelligenceSummary.tsx",
               "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx",
               "frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx",
               "frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts",
@@ -4341,17 +4940,20 @@
               "frontend-modern/src/pages/AIIntelligence.tsx",
               "frontend-modern/src/stores/aiIntelligence.ts",
               "frontend-modern/src/stores/aiIntelligenceSummaryModel.ts",
-              "frontend-modern/src/types/aiIntelligence.ts"
+              "frontend-modern/src/types/aiIntelligence.ts",
+              "frontend-modern/src/utils/patrolPagePresentation.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/components/Brand/__tests__/PulsePatrolLogo.test.tsx",
+              "frontend-modern/src/features/patrol/__tests__/PatrolIntelligenceHeader.test.ts",
               "frontend-modern/src/features/patrol/__tests__/patrolInvestigationContextModel.test.ts",
               "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
               "frontend-modern/src/stores/__tests__/aiIntelligence.test.ts",
               "frontend-modern/src/stores/__tests__/aiIntelligenceSummaryModel.test.ts",
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+              "frontend-modern/src/utils/__tests__/patrolPagePresentation.test.ts",
               "tests/integration/tests/18-patrol-runtime-state.spec.ts",
               "tests/integration/tests/73-patrol-assistant-operator-briefing.spec.ts"
             ]
@@ -4425,7 +5027,6 @@
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/components/patrol/CountdownTimer.tsx",
-              "frontend-modern/src/components/patrol/PatrolStatusBar.tsx",
               "frontend-modern/src/components/patrol/RunHistoryEntry.tsx",
               "frontend-modern/src/components/patrol/RunHistoryPanel.tsx",
               "frontend-modern/src/components/patrol/RunToolCallTrace.tsx",
@@ -4437,8 +5038,8 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "frontend-modern/src/components/patrol/__tests__/PatrolStatusBar.test.tsx",
               "frontend-modern/src/components/patrol/__tests__/RunHistoryEntry.test.tsx",
+              "frontend-modern/src/components/patrol/__tests__/RunHistoryPanel.test.tsx",
               "frontend-modern/src/components/patrol/__tests__/RunToolCallTrace.test.tsx",
               "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
@@ -4827,6 +5428,7 @@
       ],
       "owned_files": [
         "docs/PRIVACY.md",
+        "frontend-modern/public/docs/PRIVACY.md",
         "frontend-modern/src/api/security.ts",
         "frontend-modern/src/components/Settings/APIAccessPanel.tsx",
         "frontend-modern/src/components/Settings/APITokenManager.tsx",
@@ -4860,6 +5462,7 @@
         "pkg/audit/async_logger.go",
         "pkg/audit/audit.go",
         "pkg/audit/sqlite_logger.go",
+        "pkg/server/telemetry_pulse_intelligence.go",
         "pkg/tlsutil/fingerprint.go",
         "scripts/telemetry_adoption_report.py",
         "SECURITY.md"
@@ -4883,6 +5486,7 @@
           "internal/config/config_load_test.go",
           "internal/config/watcher_test.go",
           "internal/telemetry/telemetry_test.go",
+          "pkg/server/telemetry_pulse_intelligence_test.go",
           "pkg/tlsutil/tlsutil_test.go",
           "scripts/tests/test_telemetry_adoption_report.py"
         ],
@@ -4894,8 +5498,10 @@
             "match_prefixes": [],
             "match_files": [
               "docs/PRIVACY.md",
+              "frontend-modern/public/docs/PRIVACY.md",
               "frontend-modern/src/components/Settings/useSystemSettingsState.ts",
               "internal/telemetry/telemetry.go",
+              "pkg/server/telemetry_pulse_intelligence.go",
               "scripts/telemetry_adoption_report.py",
               "SECURITY.md"
             ],
@@ -4905,6 +5511,7 @@
               "frontend-modern/src/stores/__tests__/systemSettings.test.ts",
               "internal/api/system_settings_telemetry_test.go",
               "internal/telemetry/telemetry_test.go",
+              "pkg/server/telemetry_pulse_intelligence_test.go",
               "scripts/tests/test_telemetry_adoption_report.py"
             ]
           },
@@ -5228,6 +5835,7 @@
         "internal/unifiedresources/"
       ],
       "owned_files": [
+        "frontend-modern/src/components/Discovery/discoveryReadiness.ts",
         "frontend-modern/src/components/Discovery/DiscoveryTab.tsx",
         "frontend-modern/src/components/Discovery/useDiscoveryTabState.ts",
         "frontend-modern/src/components/Docker/SwarmServicesDrawer.tsx",
@@ -5398,6 +6006,7 @@
             "label": "unified resource consumer proof",
             "match_prefixes": [],
             "match_files": [
+              "frontend-modern/src/components/Discovery/discoveryReadiness.ts",
               "frontend-modern/src/components/Discovery/DiscoveryTab.tsx",
               "frontend-modern/src/components/Discovery/useDiscoveryTabState.ts",
               "frontend-modern/src/components/Docker/SwarmServicesDrawer.tsx",

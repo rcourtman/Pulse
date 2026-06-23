@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rs/zerolog/log"
@@ -132,9 +133,15 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 	r.mux.HandleFunc("/api/config/nodes", func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
-			RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.configHandlers.HandleGetNodes))(w, req)
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.withExternalAgentCapabilityActivity(
+				agentcapabilities.ListNodesCapabilityName,
+				r.configHandlers.HandleGetNodes,
+			)))(w, req)
 		case http.MethodPost:
-			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleAddNode))(w, req)
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.withExternalAgentCapabilityActivity(
+				agentcapabilities.AddNodeCapabilityName,
+				r.configHandlers.HandleAddNode,
+			)))(w, req)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -142,7 +149,10 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 	// Test node configuration endpoint (for new nodes)
 	r.mux.HandleFunc("/api/config/nodes/test-config", func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodPost {
-			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleTestNodeConfig))(w, req)
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.withExternalAgentCapabilityActivity(
+				agentcapabilities.TestNodeCredentialsCapabilityName,
+				r.configHandlers.HandleTestNodeConfig,
+			)))(w, req)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -159,15 +169,27 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 	r.mux.HandleFunc("/api/config/nodes/", func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodPut:
-			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleUpdateNode))(w, req)
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.withExternalAgentCapabilityActivity(
+				agentcapabilities.UpdateNodeCapabilityName,
+				r.configHandlers.HandleUpdateNode,
+			)))(w, req)
 		case http.MethodDelete:
-			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleDeleteNode))(w, req)
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.withExternalAgentCapabilityActivity(
+				agentcapabilities.RemoveNodeCapabilityName,
+				r.configHandlers.HandleDeleteNode,
+			)))(w, req)
 		case http.MethodPost:
 			// Handle test endpoint and refresh-cluster endpoint
 			if strings.HasSuffix(req.URL.Path, "/test") {
-				RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleTestNode))(w, req)
+				RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.withExternalAgentCapabilityActivity(
+					agentcapabilities.TestNodeConnectionCapabilityName,
+					r.configHandlers.HandleTestNode,
+				)))(w, req)
 			} else if strings.HasSuffix(req.URL.Path, "/refresh-cluster") {
-				RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.configHandlers.HandleRefreshClusterNodes))(w, req)
+				RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.withExternalAgentCapabilityActivity(
+					agentcapabilities.RefreshNodeClusterMembershipCapabilityName,
+					r.configHandlers.HandleRefreshClusterNodes,
+				)))(w, req)
 			} else {
 				http.Error(w, "Not found", http.StatusNotFound)
 			}

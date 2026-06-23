@@ -117,7 +117,7 @@ func TestHandleGetPatrolStatus_NoAIService(t *testing.T) {
 	if resp.Readiness.Status != patrolReadinessNotReady {
 		t.Fatalf("readiness status = %q, want %q", resp.Readiness.Status, patrolReadinessNotReady)
 	}
-	if check := requirePatrolReadinessCheck(t, *resp.Readiness, "service"); check.Message != "Pulse AI runtime service is not available." {
+	if check := requirePatrolReadinessCheck(t, *resp.Readiness, "service"); check.Message != "Pulse Assistant runtime service is not available." {
 		t.Fatalf("service readiness message = %q", check.Message)
 	}
 }

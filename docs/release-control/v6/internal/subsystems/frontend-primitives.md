@@ -9,10 +9,7 @@
   "contract_file": "docs/release-control/v6/internal/subsystems/frontend-primitives.md",
   "status_file": "docs/release-control/v6/internal/status.json",
   "registry_file": "docs/release-control/v6/internal/subsystems/registry.json",
-  "dependency_subsystem_ids": [
-    "agent-lifecycle",
-    "storage-recovery"
-  ]
+  "dependency_subsystem_ids": ["agent-lifecycle", "cloud-paid", "storage-recovery"]
 }
 ```
 
@@ -29,7 +26,7 @@ work extends shared components instead of creating new local variants.
 4. `frontend-modern/src/components/Settings/SettingsPageShell.tsx`
 5. `frontend-modern/src/components/Settings/settingsPanelRegistry.ts`
 6. `frontend-modern/src/components/Settings/APIAccessPanel.tsx`
-6a. `frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx`
+   6a. `frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx`
 7. `frontend-modern/src/components/Settings/AIChatMaintenanceSection.tsx`
 8. `frontend-modern/src/components/Settings/AIModelSelectionSection.tsx`
 9. `frontend-modern/src/components/Settings/AIProviderConfigurationSection.tsx`
@@ -66,7 +63,7 @@ work extends shared components instead of creating new local variants.
 40. `frontend-modern/src/utils/systemSettingsPresentation.ts`
 41. `frontend-modern/src/utils/aiSettingsPresentation.ts`
 42. `frontend-modern/src/utils/settingsShellPresentation.ts`
-42a. `frontend-modern/src/i18n/`
+    42a. `frontend-modern/src/i18n/`
 43. `frontend-modern/src/utils/textPresentation.ts`
 44. `frontend-modern/src/components/Settings/UpdateInstallGuide.tsx`
 45. `frontend-modern/src/components/Settings/updatesSettingsModel.ts`
@@ -84,11 +81,11 @@ work extends shared components instead of creating new local variants.
 57. `frontend-modern/src/components/shared/FilterBar/AddFilterMenu.tsx`
 58. `frontend-modern/src/components/shared/FilterBar/filterCatalog.ts`
 59. `frontend-modern/src/components/shared/FilterBar/index.ts`
-59a. `frontend-modern/src/components/shared/FilterBar/SavedViewsMenu.tsx`
-59b. `frontend-modern/src/components/shared/FilterBar/useSavedViews.ts`
-59c. `frontend-modern/src/components/shared/FilterBar/filterOptionPresentation.tsx`
+    59a. `frontend-modern/src/components/shared/FilterBar/SavedViewsMenu.tsx`
+    59b. `frontend-modern/src/components/shared/FilterBar/useSavedViews.ts`
+    59c. `frontend-modern/src/components/shared/FilterBar/filterOptionPresentation.tsx`
 60. `frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts`
-61. `frontend-modern/src/features/`
+61. `frontend-modern/src/features/` (including Patrol presentation, where Patrol control starter counts are context only even when mirrored through `patrolAutonomy*` compatibility fields, successful direct Patrol control saves may record the content-free `patrol_control` starter only when paid control is available and the effective control posture changes and must then refresh Patrol status, findings, approvals, and run history before the operator waits for polling, legacy `proActivation*` starter aliases must not render a separate proof strip by themselves, Patrol control completed/resolved counts may only project backend-owned terminal proof, current active findings and pending approvals outrank historical completion proof in the primary operator state, selected run history must read as a Patrol run record rather than a findings filter or snapshot workflow, terminal verified/rejected outcomes with no active finding or pending approval must stay history detail without rendering a no-op proof strip, resolved-only issue history must not be promoted into current-work copy or actions, compact recurrence/trust counters must read as historical evidence rather than current issue state, Patrol-owned status/history evidence must keep the assessment visible when the broader intelligence summary is missing, the default Patrol workspace must lead with current work while run history stays a deliberate secondary review surface, setup-only Patrol runtime failures must instead use `Fix Patrol setup` framing with a dedicated setup task and direct provider-settings action while suppressing generic issue-row chips and filter chrome, Patrol must not expose a generic Details/supporting-context panel for nearby activity, related patterns, or policy limits, locked-control copy must state the watch-only boundary in positive capability language by saying Patrol watches infrastructure and shows current issues, avoid repeating the same sentence across the header and control, and avoid repeatedly restating infrastructure-unchanged caveats or relying on disabled controls, compact Pro badges, Limits controls, or manual-review framing, `patrolControlValueState` decides whether a terminal decision is partial review context or verified value proof while `patrolAutonomyValueState` remains a compatibility mirror, legacy `proActivation*` fields are compatibility fallback only, native Patrol state must not load the operations-loop status projection to decide current work, local Patrol state must expose issue-backed `patrolWork*` evidence rather than legacy proof naming, Patrol mode labels remain domain copy that must describe backend-owned risk policy without creating page-local safety thresholds, the Patrol schedule and model drawer must stay separate from the always-visible Patrol mode selector instead of duplicating the four control choices or reintroducing save/apply configuration framing, and Patrol header refresh controls must call an explicit operator-refresh handler whose spinning/disabled state is separate from background polling and initial data loads)
 62. `frontend-modern/src/components/SetupWizard/SetupWizard.tsx`
 63. `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`
 64. `frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx`
@@ -144,8 +141,8 @@ work extends shared components instead of creating new local variants.
 114. `frontend-modern/src/components/shared/useUpgradeNavigation.ts`
 115. `frontend-modern/src/utils/upgradeNavigation.ts`
 116. `frontend-modern/src/components/DemoBanner.tsx`
-116a. `frontend-modern/src/components/CommercialMigrationBanner.tsx`
-116b. `frontend-modern/src/components/GitHubStarBanner.tsx`
+     116a. `frontend-modern/src/components/CommercialMigrationBanner.tsx`
+     116b. `frontend-modern/src/components/GitHubStarBanner.tsx`
 117. `frontend-modern/src/components/Login.tsx`
 118. `frontend-modern/src/stores/sessionCapabilities.ts`
 119. `frontend-modern/src/stores/sessionPresentationPolicy.ts`
@@ -161,9 +158,9 @@ work extends shared components instead of creating new local variants.
 129. `frontend-modern/scripts/shared-template-audit.mjs`
 130. `frontend-modern/scripts/shared-template-registry.json`
 131. `frontend-modern/src/features/platformPage/sharedPlatformPage.tsx`
-131a. `frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx`
-131b. `frontend-modern/src/features/platformPage/PlatformOutdatedAgentNotice.tsx`
-131c. `frontend-modern/src/features/platformPage/PlatformOutdatedSensorSetupNotice.tsx`
+     131a. `frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx`
+     131b. `frontend-modern/src/features/platformPage/PlatformOutdatedAgentNotice.tsx`
+     131c. `frontend-modern/src/features/platformPage/PlatformOutdatedSensorSetupNotice.tsx`
 132. `frontend-modern/src/utils/platformSupportManifest.generated.ts`
 133. `frontend-modern/src/utils/platformSupportManifest.ts`
 134. `frontend-modern/src/utils/sourcePlatformOptions.ts`
@@ -172,10 +169,10 @@ work extends shared components instead of creating new local variants.
 137. `frontend-modern/src/components/shared/Button.tsx`
 138. `frontend-modern/src/components/shared/buttonModel.ts`
 139. `frontend-modern/src/components/shared/Button.test.tsx`
-139a. `frontend-modern/src/components/shared/InlineNotice.tsx`
-139b. `frontend-modern/src/components/shared/InlineNotice.test.tsx`
-139c. `frontend-modern/src/components/shared/ExternalTextLink.tsx`
-139d. `frontend-modern/src/components/shared/ExternalTextLink.test.tsx`
+     139a. `frontend-modern/src/components/shared/InlineNotice.tsx`
+     139b. `frontend-modern/src/components/shared/InlineNotice.test.tsx`
+     139c. `frontend-modern/src/components/shared/ExternalTextLink.tsx`
+     139d. `frontend-modern/src/components/shared/ExternalTextLink.test.tsx`
 140. `frontend-modern/src/components/shared/CopyableCodeRow.tsx`
 141. `frontend-modern/src/components/shared/DetailSectionTable.tsx`
 142. `frontend-modern/src/components/shared/detailSectionModel.ts`
@@ -183,6 +180,13 @@ work extends shared components instead of creating new local variants.
 144. `frontend-modern/src/i18n/__tests__/i18n.test.ts`
 
 ## Shared Boundaries
+
+Settings navigation discoverability is part of the shared settings-shell
+boundary. A settings route that is available in normal commercial presentation
+must be reachable through the sidebar unless it is explicitly a hidden
+deep-link flow. The self-hosted `Plans` page is not a deep-link-only flow:
+`system-billing` stays visible whenever commercial presentation is allowed,
+while demo or commercial-suppressed sessions may still hide it.
 
 Frontend localization is a shared primitive boundary. Locale support must flow
 through typed message catalogs with an English fallback and explicit seed
@@ -198,9 +202,20 @@ settings, first-run, empty-state, and alert copy may be localized, but
 machine-facing values must remain stable: commands, environment variables, API
 fields, config keys, log lines, error codes, hostnames, resource names, product
 identifiers, and vendor object names stay untranslated unless the owning
-runtime contract explicitly says otherwise. Migrated settings surfaces must
-render customer-facing copy through the catalog and shared presentation helpers
-rather than reintroducing panel-local English. Migrated first-session surfaces,
+runtime contract explicitly says otherwise. Shared settings-shell header copy
+for the self-hosted plan must keep first-wave locale catalogs aligned with the
+English product stance: on Pro, the operator chooses how autonomous Patrol
+should be. The settings shell must not teach a separate activation loop, MCP
+readiness, or operations-loop proof model as the default plan setup story.
+Pulse Intelligence external-agent setup uses the same shell language with a
+`Choose Patrol mode` handoff before scoped-token setup, and the expanded setup
+checklist must say to set how autonomous Patrol should be before connected
+agents request work rather than repeating internal automation/proof wording.
+Developer-only external-agent posture uses `External agents` plus Patrol mode
+before surfacing MCP or workflow prompt wire names.
+Migrated settings surfaces must render customer-facing copy through the catalog
+and shared presentation helpers rather than reintroducing panel-local English.
+Migrated first-session surfaces,
 including the Setup Wizard shell, welcome/security steps, setup completion
 handoff, and runtime-home loading handoff, follow the same catalog path; their
 guardrails must fail if the migrated journey returns to page-local English or
@@ -385,88 +400,183 @@ attention/running/other filters so large bridge or overlay networks remain
 scan-friendly without hiding any container from drilldown.
 
 1. `frontend-modern/src/components/CommercialMigrationBanner.tsx` shared with `cloud-paid`: the global commercial migration notice is both a cloud-paid entitlement recovery surface and a shared app-shell notice primitive consumer.
-2. `frontend-modern/src/components/Settings/APIAccessPanel.tsx` shared with `security-privacy`: the API Access settings intro is both a security/privacy token-management trust surface and a canonical settings-shell presentation boundary.
+2. `frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx` shared with `ai-runtime`, `api-contracts`: the External agents settings panel is the optional settings-shell projection of Pulse MCP onboarding, the AI runtime connected-agent onboarding surface, and a presentation consumer of the shared agent capabilities frontend client.
+3. `frontend-modern/src/components/Settings/APIAccessPanel.tsx` shared with `security-privacy`: the API Access settings intro is both a security/privacy token-management trust surface and a canonical settings-shell presentation boundary.
    The panel may own shell placement and local action layout, but
    token-specific Docker / Podman copy must come from
    `frontend-modern/src/utils/apiTokenPresentation.ts` rather than page-local
    text.
-3. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx` shared with `security-privacy`: the data-handling settings surface is both a security/privacy trust surface and a canonical settings-shell presentation boundary.
-4. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts` shared with `security-privacy`: the data-handling settings model is both a security/privacy posture projection and a canonical settings-shell presentation boundary.
-5. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx` shared with `security-privacy`: the general settings privacy panel is both a security/privacy control surface and a canonical settings-shell presentation boundary.
+   `frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx` stays
+   under Pulse Intelligence Assistant settings because connected agents are an
+   optional access path to Patrol work, while API Access remains the token
+   minting surface linked from setup. Its setup copy must present one shared
+   `pulse-mcp` runtime contract with client-native wrappers: OpenCode's top-level
+   `opencode.json` / `mcp` shape and the common `mcpServers` shape for
+   Claude-style clients. The server name, command, base URL flag/default,
+   token environment variable, supported config families, and copied config
+   snippets must flow through `frontend-modern/src/api/agentCapabilities.ts`
+   from `/api/agent/capabilities.mcpAdapter`; the component may arrange and
+   label them, but must keep setup mechanics, raw client config snippets, and
+   developer details behind deliberate disclosures so the default Assistant
+   settings view stays focused on chat command access and optional external
+   access rather than raw JSON. External-agent posture should present
+   `External agents` as the visible surface and reserve `Pulse MCP` or
+   `pulse_operations_loop` for wire-name/debugging detail. The Patrol control handoff must route to the
+   Patrol operator surface where the inline control level is configured. When
+   setup is opened, the setup order must put Patrol control before scoped-token
+   creation and client connection, while installer commands, client config
+   snippets, and developer details remain deliberate disclosures.
+   It must not frame
+   Pulse MCP as a Claude-only surface, force OpenCode through a Claude-style
+   wrapper, or duplicate a client-specific tool list. Full-surface token guidance in that panel must render the manifest-provided
+   `requiredScopes` list through
+   `frontend-modern/src/api/agentCapabilities.ts`; it must not hardcode a
+   partial scope set in browser copy. Capability category order, labels, and
+   descriptions must also come from the same manifest client; the settings
+   panel may provide compatibility fallback rendering through that client, but
+   it must not own a local category presentation table or
+   `/api/agent/capabilities` fetcher. The panel's Pulse Intelligence surface
+   summary is the same manifest projection: Pulse Intelligence Core, Patrol,
+   Assistant, and MCP labels/descriptions plus surface affordance badges must flow through
+   `frontend-modern/src/api/agentCapabilities.ts` from
+   `/api/agent/capabilities.surfaceContract`, leaving the component to own only
+   settings-shell layout. The visible external-adapter label in onboarding copy
+   must also come from that manifest-derived capability posture instead of a
+   hard-coded panel-local product label, so the settings shell cannot drift from
+   the published agent surface contract. MCP capability-posture chips in that same panel must also
+   flow through `getAgentManifestSurfaceToolContract(manifest,
+AGENT_SURFACE_ID_PULSE_MCP)` and `getAgentSurfaceToolPosturePresentation`,
+   with the static inventory read only from
+   `/api/agent/capabilities.surfaceToolContracts`; missing
+   `surfaceToolContracts` entries must not make the browser infer MCP tools
+   from raw capabilities. The panel must not own request / response capability
+   filtering, call a per-surface projection alias, know the `subscribe_events`
+   streaming exception, or maintain a local MCP tool count. The shared frontend
+   manifest client must keep MCP onboarding on the generic surface resolver
+   rather than exporting a Pulse-MCP-specific tool-contract helper. The panel's
+   settings shell may arrange the external-agent setup hierarchy, but it must
+   keep connected agents framed as optional access to Pulse context and Patrol
+   work, with Patrol as the built-in operator that watches, acts within Patrol
+   mode, asks when approval is required, verifies outcomes, and records
+   history, state that external agents use that same boundary, and make the canonical
+   `/settings/pulse-intelligence/assistant#external-agent-setup` route land on
+   and briefly focus this panel with setup open rather than leaving the user at
+   the generic API token inventory. Legacy `/settings/security/api#external-agent-setup` and
+   `/settings/security/api#pulse-mcp-setup` links must remain accepted and may
+   redirect to the canonical Pulse Intelligence Assistant route. Normal API
+   Access visits remain token-management first, and external-agent setup must
+   not reorder the API token inventory because it no longer lives on that page.
+   The Assistant settings default must keep setup mechanics behind a `Show connector setup`
+   disclosure so it does not introduce a separate external-agent operator
+   journey or make copied MCP config blocks or tool-contract proof badges the
+   default visual weight of Pulse Intelligence settings. Its Developer details
+   disclosure may show posture and policy summaries behind Patrol
+   access model, but prompt, scope, failure-code, and tool inventories must sit
+   behind a nested Live manifest details disclosure so the advanced surface
+   remains navigable. The panel's
+   manifest-owned `pulse_operations_loop` prompt row may expose the stable
+   prompt id for client builders, but its visible label, description, and badge
+   must keep the user-facing Patrol framing from the manifest instead
+   of reintroducing operations-loop proof wording in the settings shell. The panel's
+   explanatory onboarding copy must name published manifest-owned surface
+   contracts as the publication boundary rather than suggesting raw backend
+   capabilities become visible automatically.
+   The visible token preset name in that setup must be `Patrol external agent`,
+   not `Pulse Intelligence agent`; the latter may survive only as a route/model
+   compatibility id.
+   Manifest-backed stable failure-code
+   summaries may use settings-shell chips or compact lists, but code selection
+   and capability attribution stay owned by the API manifest client. Token
+   setup handoff buttons or anchors in
+   the Agent integrations panel are settings-shell chrome only: they may route
+   to the API Access token creation section, but token preset semantics and
+   required-scope derivation remain owned by the API/security boundary.
+4. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx` shared with `security-privacy`: the data-handling settings surface is both a security/privacy trust surface and a canonical settings-shell presentation boundary.
+5. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts` shared with `security-privacy`: the data-handling settings model is both a security/privacy posture projection and a canonical settings-shell presentation boundary.
+6. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx` shared with `security-privacy`: the general settings privacy panel is both a security/privacy control surface and a canonical settings-shell presentation boundary.
    The panel owns compact settings-shell framing for anonymous telemetry, but
    its vocabulary must stay aligned with `security-privacy`: aggregate
-   self-hosted adoption counts and coarse feature flags may be named, while
+   self-hosted adoption counts, coarse feature flags, and coarse Patrol,
+   Assistant, and external-agent usage counters may be named, while
    hostnames, credentials, infrastructure identifiers, prompts, chat messages,
-   and personal information must stay explicitly excluded.
-6. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx` shared with `security-privacy`: the authentication settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
-7. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx` shared with `security-privacy`: the security overview settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
-8. `frontend-modern/src/routing/routePreload.ts` shared with `performance-and-scalability`: the app-shell route preload registry is both a canonical frontend shell boundary and an authenticated hot-path performance boundary.
-9. `frontend-modern/src/stores/aiChat.ts` shared with `ai-runtime`: the assistant drawer and session store is both an AI runtime control surface and a canonical app-shell presentation boundary.
-   Assistant session pickers and reloads must restore only safe
-   `handoff_summary` presentation state from the session list. Loading a plain
-   session or starting a new conversation must clear stale scoped handoff
-   briefing state so Patrol and alert context does not visually leak between
-   conversations. Browser-originated model handoff payloads are one-shot
-   request seeds: after the first successful chat send, this store must clear
-   `handoffContext`, `handoffResources`, `handoffActions`, and safe
-   `handoffMetadata` while preserving the safe visible briefing and scoped
-   approval-required posture, so later turns rely on backend session hydration
-   instead of resending stale browser context. Patrol handoffs must not include
-   Persisted Assistant redo availability is safe session chrome, not transcript
-   content. The drawer may consume `ChatSession.can_redo` from the backend
-   session list to re-enable Redo after reload or session refresh, but it must
-   not read or duplicate the redo stack in frontend state. Undo restores the
-   editable prompt draft and safe structured send metadata into the composer;
-   Redo clears that recovered draft only after the backend restores the turn.
-   Patrol handoffs must not include
-   safe next-step labels, action kinds, or whitelisted app-route hrefs in
-   `handoffMetadata`; the drawer must treat
-   `handoff_summary.requires_approval` as a current pending-decision flag, not a
-   historical action marker, so completed or rejected handoff actions render as
-   action context rather than pending approval. A restored Patrol run summary
-   must remain visibly sourced to Pulse Patrol, restore a `patrol-run` target
-   plus run ID/type/status/runtime-failure presentation only, and must not
-   rehydrate model-only runtime failure detail into browser context. New Patrol
-   run requests follow the same drawer boundary: source-owned context and
-   briefing copy may show classified, redacted failure summaries for operator
-   review, but `handoffContext`, `handoffResources`, and `handoffActions` for
-   run-history context must stay absent from the browser request so the backend
-   can rebuild model-bound context from the stored Patrol run. Restored
-   Patrol assessment, Patrol finding, and Patrol configuration-failure sessions
-   follow the same safe-summary rule: the drawer may restore source label,
-   title, target type, status badge, bounded resource facts, and approval/action
-   status from `handoff_summary`, but
-   it must not infer a finding target from bounded action references or
-   reconstruct hidden model context, provider details, retry payloads, commands,
-   preflight output, or action results in the browser. If the safe summary
-   was created by a legacy build that stored Patrol next-step metadata,
-   recommendation detail, action labels, safe action kind, or whitelisted
-   app-route href, the session picker plus restored drawer must ignore those
-   fields rather than carrying them forward as hidden context or visible
-   recommendation copy.
-   Session-load and new-conversation transitions must be success-bound: if the
-   underlying session operation fails, the shared drawer store must not clear or
-   replace the current scoped handoff context.
-   Live Patrol assessment drawer opens must use that same
-   `patrol-assessment`/`pulse-patrol-assessment` target identity rather than a
-   retired dashboard target, so first-open and restored-session chrome remain
-   source-named.
-   The shared `frontend-modern/src/components/shared/AIModelPicker.tsx`
-   primitive must keep model route presentation delegated to the AI runtime
-   label helpers. Pulse-owned local Assistant routes such as
-   `pulse:local-inventory` and `pulse:mock-assistant` are implementation
-   routes and must render as named choices without secondary raw route IDs,
-   while external provider route IDs may remain visible where they disambiguate
-   catalog entries.
-10. `frontend-modern/src/utils/platformSupportManifest.generated.ts` shared with `unified-resources`: the generated platform support projection is both a canonical unified-resource platform union boundary and a shared frontend source/platform vocabulary boundary.
-   It must expose the manifest `surface_kind` field so runtime lenses such as
-   `docker` are not collapsed back into owning platform semantics.
-   It must also preserve canonical projection lists from the governed manifest
-   without page-local narrowing; for example, TrueNAS exposes both native
-   `vm`, `network-share`, and `app-container` workloads through the same
-   generated platform projection used by route helpers, badges, source
-   filters, reportable-resource pickers, and type unions.
-11. `frontend-modern/src/utils/sourcePlatforms.ts` shared with `unified-resources`: the source platform normalizer is both a canonical unified-resource source adapter boundary and a shared frontend source/platform vocabulary boundary.
+   command text, action output, token values, and personal information must
+   stay explicitly excluded.
+7. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx` shared with `security-privacy`: the authentication settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
+8. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx` shared with `security-privacy`: the security overview settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
+9. `frontend-modern/src/routing/routePreload.ts` shared with `performance-and-scalability`: the app-shell route preload registry is both a canonical frontend shell boundary and an authenticated hot-path performance boundary.
+10. `frontend-modern/src/stores/aiChat.ts` shared with `ai-runtime`: the assistant drawer and session store is both an AI runtime control surface and a canonical app-shell presentation boundary.
+    Assistant session pickers and reloads must restore only safe
+    `handoff_summary` presentation state from the session list. Loading a plain
+    session or starting a new conversation must clear stale scoped handoff
+    briefing state so Patrol and alert context does not visually leak between
+    conversations. Browser-originated model handoff payloads are one-shot
+    request seeds: after the first successful chat send, this store must clear
+    `handoffContext`, `handoffResources`, `handoffActions`, and safe
+    `handoffMetadata`; it must also clear any preferred workflow prompt request
+    once the manifest-rendered starter has seeded the composer and the first
+    scoped send succeeds. The store must preserve the safe visible briefing and
+    scoped approval-required posture, so later turns rely on backend session
+    hydration instead of resending stale browser context. Patrol handoffs must not include
+    Persisted Assistant redo availability is safe session chrome, not transcript
+    content. The drawer may consume `ChatSession.can_redo` from the backend
+    session list to re-enable Redo after reload or session refresh, but it must
+    not read or duplicate the redo stack in frontend state. Undo restores the
+    editable prompt draft and safe structured send metadata into the composer;
+    Redo clears that recovered draft only after the backend restores the turn.
+    Browser-owned session-management comments, command request handling, and
+    question-answer plumbing in this store and the adjacent chat hook must name
+    the native drawer surface as Pulse Assistant rather than reviving the
+    retired generic `Pulse AI` label. Shared model/provider settings guidance
+    still belongs to Pulse Intelligence > Provider & Models.
+    Patrol handoffs must not include
+    safe next-step labels, action kinds, or whitelisted app-route hrefs in
+    `handoffMetadata`; the drawer must treat
+    `handoff_summary.requires_approval` as a current pending-decision flag, not a
+    historical action marker, so completed or rejected handoff actions render as
+    action context rather than pending approval. A restored Patrol run summary
+    must remain visibly sourced to Pulse Patrol, restore a `patrol-run` target
+    plus run ID/type/status/runtime-failure presentation only, and must not
+    rehydrate model-only runtime failure detail into browser context. New Patrol
+    run requests follow the same drawer boundary: source-owned context and
+    briefing copy may show classified, redacted failure summaries for operator
+    review, but `handoffContext`, `handoffResources`, and `handoffActions` for
+    run-history context must stay absent from the browser request so the backend
+    can rebuild model-bound context from the stored Patrol run. Restored
+    Patrol assessment, Patrol finding, and Patrol control save-failure sessions
+    follow the same safe-summary rule: the drawer may restore source label,
+    title, target type, status badge, bounded resource facts, and approval/action
+    status from `handoff_summary`, but
+    it must not infer a finding target from bounded action references or
+    reconstruct hidden model context, provider details, retry payloads, commands,
+    preflight output, or action results in the browser. If the safe summary
+    was created by a legacy build that stored Patrol next-step metadata,
+    recommendation detail, action labels, safe action kind, or whitelisted
+    app-route href, the session picker plus restored drawer must ignore those
+    fields rather than carrying them forward as hidden context or visible
+    recommendation copy.
+    Session-load and new-conversation transitions must be success-bound: if the
+    underlying session operation fails, the shared drawer store must not clear or
+    replace the current scoped handoff context.
+    Live Patrol assessment drawer opens must use that same
+    `patrol-assessment`/`pulse-patrol-assessment` target identity rather than a
+    retired dashboard target, so first-open and restored-session chrome remain
+    source-named.
+    The shared `frontend-modern/src/components/shared/AIModelPicker.tsx`
+    primitive must keep model route presentation delegated to the AI runtime
+    label helpers. Pulse-owned local Assistant routes such as
+    `pulse:local-inventory` and `pulse:mock-assistant` are implementation
+    routes and must render as named choices without secondary raw route IDs,
+    while external provider route IDs may remain visible where they disambiguate
+    catalog entries.
+11. `frontend-modern/src/utils/platformSupportManifest.generated.ts` shared with `unified-resources`: the generated platform support projection is both a canonical unified-resource platform union boundary and a shared frontend source/platform vocabulary boundary.
+    It must expose the manifest `surface_kind` field so runtime lenses such as
+    `docker` are not collapsed back into owning platform semantics.
+    It must also preserve canonical projection lists from the governed manifest
+    without page-local narrowing; for example, TrueNAS exposes both native
+    `vm`, `network-share`, and `app-container` workloads through the same
+    generated platform projection used by route helpers, badges, source
+    filters, reportable-resource pickers, and type unions.
+12. `frontend-modern/src/utils/sourcePlatforms.ts` shared with `unified-resources`: the source platform normalizer is both a canonical unified-resource source adapter boundary and a shared frontend source/platform vocabulary boundary.
     That shared boundary must preserve `availability` as the agentless
     monitoring source for `network-endpoint` resources and settings presets,
     so source badges and platform/source type resolution do not fall back to
@@ -488,6 +598,27 @@ Feature surfaces under `frontend-modern/src/features/` may own product-specific
 assessment semantics, but they must keep those semantics in their governed
 presentation helpers and render them inside the shared neutral Pulse surface
 language rather than introducing page-local verdict bands or nested cards.
+Feature-owned runtime hooks may also own non-visual side effects when those
+effects are part of the governed feature workflow. For Patrol, current-work
+action chrome must keep active findings in the Patrol findings workflow first;
+Assistant handoffs stay contextual actions on selected findings, approvals, or
+history records rather than the primary current-work CTA. When provider/model
+readiness blocks manual Patrol, the feature header must render the shared
+primary-action chrome as a Provider & Models setup link instead of a disabled
+run button that looks primary but cannot act. The Patrol hook owns the
+content-free `pulse_operations_loop` starter marker so render components do not
+fork telemetry or privacy behavior.
+When the shared operations-loop status projection reports contextual
+Assistant/external-agent collaboration inside the Assistant step, Assistant or
+Pulse MCP starter counts, Patrol control starter evidence, or Patrol control
+completed-loop or resolved-loop proof, feature presentation helpers may render
+those facts as compact title or step detail inside the existing journey layout.
+They must read primary `patrolControl*` fields first, then fall back to legacy
+`patrolAutonomy*` compatibility fields, and may fall back to legacy
+`proActivation*` fields only when the Patrol-control projections are absent.
+They must keep the neutral shared surface chrome stable and must not add
+page-local badges, nested cards, or alternate progress widgets for the same
+evidence.
 Feature-owned table drawers use shared disclosure and inline-detail primitives
 as local interaction state. Unless a surface has a separately governed deep-link
 write contract, opening or closing a row drawer must preserve the current
@@ -603,6 +734,10 @@ not a replacement status card, CTA band, or page-local nested card.
    entitlement state, and click handlers, while `Button`, `ButtonLink`, and
    `UpgradeButtonLink` own the primary, outline, warning, and upgrade/link
    chrome.
+   Manual self-hosted key recovery is a secondary detail in that same boundary:
+   settings surfaces may expose the fallback, but they must label it as license
+   recovery/key recovery and keep normal checkout plus the Pro Patrol-mode setup
+   path ahead of recovery mechanics or activation-key terminology.
    Hosted billing admin organization row actions follow the same boundary:
    cloud-paid surfaces own Suspend, Activate, Reload, tenant state, and mutation
    semantics, while `Button` owns the row-action chrome through the secondary
@@ -749,11 +884,11 @@ not a replacement status card, CTA band, or page-local nested card.
    Native select state belongs to the shared
    `frontend-modern/src/components/shared/FormSelect.tsx` primitive. It must
    apply controlled `value` props after options are mounted so settings panels
-   such as workload discovery show the persisted option instead of falling back
+   such as Discovery show the persisted option instead of falling back
    to the first option while the collapsed summary shows a different value.
    The Assistant runtime controls in
    `frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx` — e.g. the
-   workload discovery `Toggle` — are settings-shell chrome bound to the canonical
+   service context scan `Toggle` — are settings-shell chrome bound to the canonical
    `useAISettingsState` form and `/api/settings/ai` payload, not local browser
    state. Each must bind to a `state.form.*` field, round-trip through the
    field-by-field settings payload, and source its label, help, and summary copy
@@ -761,7 +896,7 @@ not a replacement status card, CTA band, or page-local nested card.
    strings or reaching for a bespoke fetch outside the canonical payload. There is
    no cloud-context-privacy control here: cloud context behavior is a fixed posture
    (see `ai-runtime`), not an operator setting.
-3. Add feature-specific presentation only when no shared primitive should own it.
+2. Add feature-specific presentation only when no shared primitive should own it.
    Feature surfaces under `frontend-modern/src/features/` that display
    product labels must consume the owning subsystem's presentation utilities
    rather than hard-coding divergent page-local copy. Shared primitives and
@@ -830,7 +965,7 @@ not a replacement status card, CTA band, or page-local nested card.
    hard-to-scan strip. Narrow consumers such as
    `ColumnPicker` must opt into their panel width through that primitive rather
    than layering competing width classes page by page.
-4. Add guardrail tests when a new shared pattern is introduced.
+3. Add guardrail tests when a new shared pattern is introduced.
    Shared monitored-system primitives must prove they remain informational
    grouping or ledger surfaces rather than admission-freeze banners, cap
    summaries, or `current / limit` quota math.
@@ -848,7 +983,7 @@ not a replacement status card, CTA band, or page-local nested card.
    from a platform-owned product surface such as a recovery tab, the first
    highlighted step should match that route instead of always restarting at
    Dashboard.
-5. Keep shared infrastructure shell state on the reusable settings boundary: `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts` and `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx` must continue to derive provider counts and shared subtab copy from one infrastructure-settings source — via the unified aggregator through `frontend-modern/src/components/Settings/useConnectionsLedger.ts` — instead of creating provider-local summary fetches or VMware-only shell vocabulary. Phase 9 retired the old `PlatformConnectionsWorkspace` per-type shell; setup guidance should now use `Add infrastructure` plus source-strategy language for API-backed onboarding. The standalone connections-table presenter is retired; `frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx` is the only landing-ledger presenter for configured infrastructure rows, and it must exclude agentless availability probes because those belong to `frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx`.
+4. Keep shared infrastructure shell state on the reusable settings boundary: `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts` and `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx` must continue to derive provider counts and shared subtab copy from one infrastructure-settings source — via the unified aggregator through `frontend-modern/src/components/Settings/useConnectionsLedger.ts` — instead of creating provider-local summary fetches or VMware-only shell vocabulary. Phase 9 retired the old `PlatformConnectionsWorkspace` per-type shell; setup guidance should now use `Add infrastructure` plus source-strategy language for API-backed onboarding. The standalone connections-table presenter is retired; `frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx` is the only landing-ledger presenter for configured infrastructure rows, and it must exclude agentless availability probes because those belong to `frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx`.
    The first-run setup wizard inherits that same source-strategy vocabulary:
    step labels and completion copy must frame the final setup step as choosing
    the first infrastructure source, not installing a host. Successful token
@@ -862,7 +997,7 @@ not a replacement status card, CTA band, or page-local nested card.
    and no redundant monitored-systems ledger beneath it. The landing route may
    include a dedicated first-viewport toolbar that explains platform APIs and
    Pulse Agent telemetry as infrastructure sources and exposes `Add
-   infrastructure`, `Run discovery`, and `Discovery settings` inside the
+infrastructure`, `Run discovery`, and `Discovery settings` inside the
    source manager. Per-source add actions, including `Install Pulse Agent`,
    belong on the governed source rows, and `Detect address` stays inside the
    single API-platform probe path instead of a duplicate toolbar action. It may
@@ -890,7 +1025,7 @@ not a replacement status card, CTA band, or page-local nested card.
    `useConnectionsLedger.ts`, `InfrastructureSourceManager.tsx`, and
    `InfrastructureWorkspace.tsx` must render attached collection methods as a
    plain-language row subtitle on the owning row (`via platform API`, `via
-   Pulse Agent`, or `via platform API and Pulse Agent`), with fuller detail in
+Pulse Agent`, or `via platform API and Pulse Agent`), with fuller detail in
    the edit dialog, instead of duplicating the same machine across multiple
    peer groups or forcing operators to decode badge jargon.
    The table-level product/system group rows in
@@ -923,7 +1058,7 @@ not a replacement status card, CTA band, or page-local nested card.
    that destination. `InfrastructureSourceManager.tsx` exposes one Network
    discovery status/action band from the shared landing shell with scan state,
    saved scope, last result metadata, errors, `Run discovery`, `Discovery
-   settings`, and candidate review when discovered sources are waiting. It must
+settings`, and candidate review when discovered sources are waiting. It must
    not start a network scan just because the page rendered. New-source
    admission belongs on the table's per-platform `Add` actions, the compact
    first-run/readiness actions, or the discovery band's explicit review action,
@@ -1027,8 +1162,8 @@ not a replacement status card, CTA band, or page-local nested card.
    become the primary top-level system wording when a provider/API platform or
    reported host OS/appliance identity better explains what the operator is
    looking at.
-6. Keep Proxmox deep-link route selection on the shared settings-navigation boundary. `frontend-modern/src/components/Settings/settingsNavigationModel.ts` and `frontend-modern/src/components/Settings/useSettingsNavigation.ts` must treat the canonical PBS and PMG Proxmox deep links as agent-selection authority even though those URLs resolve to the shared `infrastructure-operations` tab. Reloading or remounting on a PBS or PMG deep link must not silently fall back to the PVE selector state.
-7. Keep shared storage feature presenters on canonical platform truth. When reusable storage presenters under `frontend-modern/src/features/storageBackups/` classify canonical resources for the shared storage route, API-backed virtualization datastores such as VMware must stay inventory-only datastores instead of inheriting PBS-specific backup-repository or protected-target copy from older fallback branches.
+5. Keep settings deep-link route selection on the shared settings-navigation boundary. `frontend-modern/src/components/Settings/settingsNavigationModel.ts` and `frontend-modern/src/components/Settings/useSettingsNavigation.ts` must treat the canonical PBS and PMG Proxmox deep links as agent-selection authority even though those URLs resolve to the shared `infrastructure-operations` tab. Reloading or remounting on a PBS or PMG deep link must not silently fall back to the PVE selector state. Assistant OAuth callback compatibility queries such as `ai_oauth_error` and `ai_oauth_success` must route the bare settings root to Pulse Intelligence > Provider & Models while preserving the query long enough for `useAISettingsState` to consume and clear it, rather than normalizing the user back to Infrastructure and dropping the callback result.
+6. Keep shared storage feature presenters on canonical platform truth. When reusable storage presenters under `frontend-modern/src/features/storageBackups/` classify canonical resources for the shared storage route, API-backed virtualization datastores such as VMware must stay inventory-only datastores instead of inheriting PBS-specific backup-repository or protected-target copy from older fallback branches.
    Those reusable storage presenters must also keep primary issue copy separate
    from contextual impact copy. Composite posture fields may include dependent
    resource or protected workload impact, but shared table/presenter primitives
@@ -1083,7 +1218,7 @@ not a replacement status card, CTA band, or page-local nested card.
    Jobs, and CronJobs, including targets, active/current counts,
    ready/succeeded counts, availability, exceptions, service names, schedules,
    and last run metadata.
-8. Keep shared source/platform vocabulary on the governed manifest boundary. `frontend-modern/src/utils/platformSupportManifest.generated.ts` must be the tracked frontend projection of `docs/release-control/v6/internal/PLATFORM_SUPPORT_MANIFEST.json`, `frontend-modern/src/utils/platformSupportManifest.ts`, `frontend-modern/src/utils/sourcePlatforms.ts`, and `frontend-modern/src/utils/sourcePlatformOptions.ts` must consume that generated projection instead of embedding divergent future-label lists, setup/onboarding path allowlists, host-profile labels, surface-kind guesses, readiness-state guesses, or presentation-only guesses, and `frontend-modern/scripts/canonical-platform-audit.mjs` must fail when the generated projection drifts from the governed manifest. The generated governance/readiness split is authoritative: supported platform arrays drive current support claims, while admitted platform arrays may keep route/navigation and add-flow vocabulary available without turning `first-lab-ready` entries such as VMware into supported-source copy. Kubernetes manifest projections must enumerate the native API-backed page sections the shared tab shell can expose, including controllers, networking, storage, config, policy, autoscaling, and events, so platform pages do not invent local support claims outside the governed JSON. The generated `surface_kind` is the machine-readable boundary between owning platform entries and runtime lenses: `docker` is a `runtime-lens`, not a `platform`, even when the container-runtime route stays available as a primary shell destination. The generic `docker` source-platform label is "Docker / Podman" in shared selectors, badges, and filter options so v5 Docker users can find the runtime surface while Podman-backed rows are not mislabeled as Docker-only; "Container runtime" remains the governed runtime family, not the primary customer-facing label. Identity colour is semantic, not page-local decoration: shared source/platform badges, host identity badges, and container runtime badges must use the shared presentation helpers so Docker remains on the Docker/Podman blue runtime tone, Podman uses its distinct runtime tone, Proxmox PVE remains orange, and those meanings do not drift across table rows, filters, drawers, or platform pages. Agent host-profile entries, including Unraid, stay in the generated `agentHostProfiles` projection and shared wrapper helpers; frontend primitives may render those labels for Pulse Agent install/identity copy but must not add them to the first-class platform union.
+7. Keep shared source/platform vocabulary on the governed manifest boundary. `frontend-modern/src/utils/platformSupportManifest.generated.ts` must be the tracked frontend projection of `docs/release-control/v6/internal/PLATFORM_SUPPORT_MANIFEST.json`, `frontend-modern/src/utils/platformSupportManifest.ts`, `frontend-modern/src/utils/sourcePlatforms.ts`, and `frontend-modern/src/utils/sourcePlatformOptions.ts` must consume that generated projection instead of embedding divergent future-label lists, setup/onboarding path allowlists, host-profile labels, surface-kind guesses, readiness-state guesses, or presentation-only guesses, and `frontend-modern/scripts/canonical-platform-audit.mjs` must fail when the generated projection drifts from the governed manifest. The generated governance/readiness split is authoritative: supported platform arrays drive current support claims, while admitted platform arrays may keep route/navigation and add-flow vocabulary available without turning `first-lab-ready` entries such as VMware into supported-source copy. Kubernetes manifest projections must enumerate the native API-backed page sections the shared tab shell can expose, including controllers, networking, storage, config, policy, autoscaling, and events, so platform pages do not invent local support claims outside the governed JSON. The generated `surface_kind` is the machine-readable boundary between owning platform entries and runtime lenses: `docker` is a `runtime-lens`, not a `platform`, even when the container-runtime route stays available as a primary shell destination. The generic `docker` source-platform label is "Docker / Podman" in shared selectors, badges, and filter options so v5 Docker users can find the runtime surface while Podman-backed rows are not mislabeled as Docker-only; "Container runtime" remains the governed runtime family, not the primary customer-facing label. Identity colour is semantic, not page-local decoration: shared source/platform badges, host identity badges, and container runtime badges must use the shared presentation helpers so Docker remains on the Docker/Podman blue runtime tone, Podman uses its distinct runtime tone, Proxmox PVE remains orange, and those meanings do not drift across table rows, filters, drawers, or platform pages. Agent host-profile entries, including Unraid, stay in the generated `agentHostProfiles` projection and shared wrapper helpers; frontend primitives may render those labels for Pulse Agent install/identity copy but must not add them to the first-class platform union.
    The generated host-profile projection also carries runtime platform fallback
    metadata for shared explanation and parity with backend normalization, but
    frontend primitives must still render host-profile labels through
@@ -1106,11 +1241,11 @@ not a replacement status card, CTA band, or page-local nested card.
    system badge names a platform with its version, source/method context may
    still add collection labels such as Pulse Agent, but it must not repeat the
    same platform again as an unversioned source badge.
-10. Keep summary chart interaction identity on one shared helper. Summary surfaces that expose row-hover, group-hover, chart-hover, or route-focus-driven chart emphasis must derive page/group/entity scope through `frontend-modern/src/components/shared/summaryCardInteraction.ts` and pass that same resolved scope into card-state, sparkline, and density-map primitives, rather than letting cards read `hovered || focused` while charts listen to a different page-local ID source. Hovering one summary chart must promote that series into the shared active entity so sibling cards highlight the same object instead of keeping chart-local hover islands, and hovering or pinning a workload group header, infrastructure cluster header, or storage pool-group header must scope the matching summary cards through that same shared contract instead of forking a page-local summary filter path. Sibling cards should surface that synchronized hover as one compact header readout through the shared summary-card contract, while the chart under the pointer keeps the only floating tooltip. Recovery is explicitly outside this interaction dialect: its retired posture-card strip must not return with row/group/chart hover behavior without a separate governed product decision.
-11. Keep page summaries page-scoped when table rows enter contextual focus. Route-backed row selection may add a focused label and shared series emphasis, but infrastructure, workloads, and storage summary cards must continue to render the page-level series set instead of collapsing the summary down to the selected row or replacing the global trend view with row-local empty states.
-12. Keep contextual row focus on the shared summary primitive. Summary surfaces and same-route table drill-ins must reuse `frontend-modern/src/components/shared/contextualFocus.ts` for interactive-series filtering, focused-name lookup, active-series derivation, local scroll preservation, and deliberate inline-detail reveal instead of rebuilding page-local `Set` filters, focused-label scans, drawer-aware scroll math, or ad hoc scroll restoration in each surface.
-13. Keep summary-linked table row emphasis on the shared primitive contract. Workloads, infrastructure, and storage rows that mirror the active summary entity must expose that state through `data-summary-row-active` and let the shared presentation in `frontend-modern/src/index.css` render the row emphasis, rather than carrying page-local sky or blue fill classes inside each row renderer. Group-scoped preview and pin must use that same shared presentation boundary: child rows that belong to a hovered or pinned summary group should expose `data-summary-group-member-active="preview|pinned"` so the block-level emphasis stays subtle, consistent, and reversible instead of each table inventing its own outline, badge, or full-strength fill treatment. Static grouped row headers on workloads, infrastructure, storage, recovery, and future grouped tables must use `frontend-modern/src/components/shared/groupedTableRowPresentation.ts` plus the `.grouped-table-row` CSS contract in `frontend-modern/src/index.css`, rather than rebuilding local `bg-surface-alt` variants with subtly different light/dark behavior or page-local left-accent markers. That shared grouped-table primitive owns the subgroup cell padding, typography, small metadata, and badge treatment as well as the row background token, so a future adjustment to the subgroup visual language changes every grouped product table from one owner. Inline table detail rows on platform, workload, and infrastructure tables must compose `frontend-modern/src/components/shared/InlineDetailTableRow.tsx` for the full-width row, surface-alt cell, detail padding, and row-click containment instead of rebuilding page-local `TableRow` / `TableCell` / `div` shells around each drawer. Storage-backed reusable row presenters under `frontend-modern/src/features/storageBackups/` must also keep row height and alert accents on class/data-attribute presentation instead of runtime inline style maps, so the shared table contract stays CSP-safe on both steady-state and alert-highlighted routes.
-14. Keep retained-value data loading honest at the ownership boundary. Helpers
+8. Keep summary chart interaction identity on one shared helper. Summary surfaces that expose row-hover, group-hover, chart-hover, or route-focus-driven chart emphasis must derive page/group/entity scope through `frontend-modern/src/components/shared/summaryCardInteraction.ts` and pass that same resolved scope into card-state, sparkline, and density-map primitives, rather than letting cards read `hovered || focused` while charts listen to a different page-local ID source. Hovering one summary chart must promote that series into the shared active entity so sibling cards highlight the same object instead of keeping chart-local hover islands, and hovering or pinning a workload group header, infrastructure cluster header, or storage pool-group header must scope the matching summary cards through that same shared contract instead of forking a page-local summary filter path. Sibling cards should surface that synchronized hover as one compact header readout through the shared summary-card contract, while the chart under the pointer keeps the only floating tooltip. Recovery is explicitly outside this interaction dialect: its retired posture-card strip must not return with row/group/chart hover behavior without a separate governed product decision.
+9. Keep page summaries page-scoped when table rows enter contextual focus. Route-backed row selection may add a focused label and shared series emphasis, but infrastructure, workloads, and storage summary cards must continue to render the page-level series set instead of collapsing the summary down to the selected row or replacing the global trend view with row-local empty states.
+10. Keep contextual row focus on the shared summary primitive. Summary surfaces and same-route table drill-ins must reuse `frontend-modern/src/components/shared/contextualFocus.ts` for interactive-series filtering, focused-name lookup, active-series derivation, local scroll preservation, and deliberate inline-detail reveal instead of rebuilding page-local `Set` filters, focused-label scans, drawer-aware scroll math, or ad hoc scroll restoration in each surface.
+11. Keep summary-linked table row emphasis on the shared primitive contract. Workloads, infrastructure, and storage rows that mirror the active summary entity must expose that state through `data-summary-row-active` and let the shared presentation in `frontend-modern/src/index.css` render the row emphasis, rather than carrying page-local sky or blue fill classes inside each row renderer. Group-scoped preview and pin must use that same shared presentation boundary: child rows that belong to a hovered or pinned summary group should expose `data-summary-group-member-active="preview|pinned"` so the block-level emphasis stays subtle, consistent, and reversible instead of each table inventing its own outline, badge, or full-strength fill treatment. Static grouped row headers on workloads, infrastructure, storage, recovery, and future grouped tables must use `frontend-modern/src/components/shared/groupedTableRowPresentation.ts` plus the `.grouped-table-row` CSS contract in `frontend-modern/src/index.css`, rather than rebuilding local `bg-surface-alt` variants with subtly different light/dark behavior or page-local left-accent markers. That shared grouped-table primitive owns the subgroup cell padding, typography, small metadata, and badge treatment as well as the row background token, so a future adjustment to the subgroup visual language changes every grouped product table from one owner. Inline table detail rows on platform, workload, and infrastructure tables must compose `frontend-modern/src/components/shared/InlineDetailTableRow.tsx` for the full-width row, surface-alt cell, detail padding, and row-click containment instead of rebuilding page-local `TableRow` / `TableCell` / `div` shells around each drawer. Storage-backed reusable row presenters under `frontend-modern/src/features/storageBackups/` must also keep row height and alert accents on class/data-attribute presentation instead of runtime inline style maps, so the shared table contract stays CSP-safe on both steady-state and alert-highlighted routes.
+12. Keep retained-value data loading honest at the ownership boundary. Helpers
     that prevent a feature surface from falling through the app-level Suspense
     boundary during in-flight refresh should stay feature-local until multiple
     governed surfaces truly share the behavior. Once that boundary is shared,
@@ -1118,7 +1253,7 @@ not a replacement status card, CTA band, or page-local nested card.
     `frontend-modern/src/hooks/createNonSuspendingQuery.ts` rather than
     re-copying suspense-escape logic into each feature area or burying it
     inside one feature's private state model.
-15. Keep shared commercial warning banners truthful about destination intent.
+13. Keep shared commercial warning banners truthful about destination intent.
     When a shared banner renders both explanatory and commercial CTAs, those
     labels must resolve to distinct owned destinations or section anchors
     instead of presenting two different labels that land on the same
@@ -1129,7 +1264,7 @@ not a replacement status card, CTA band, or page-local nested card.
     review destination for a current paid feature, it must scope the operator into the
     usage-owned policy ledger rather than plan-selection intent or CTA copy
     that frames the flow as monitored-system-cap expansion.
-16. Keep assistant availability bootstrap on the shared app-shell boundary.
+14. Keep assistant availability bootstrap on the shared app-shell boundary.
     `frontend-modern/src/useAppRuntimeState.ts`,
     `frontend-modern/src/App.tsx`,
     `frontend-modern/src/stores/aiChat.ts`, and
@@ -1159,22 +1294,19 @@ not a replacement status card, CTA band, or page-local nested card.
     must stay on the app-shell assistant-availability fact instead of
     re-reading raw AI settings just to decide whether assistant affordances
     should render.
-18. Keep Patrol shell composition and product-first provider vocabulary on the
+15. Keep Patrol shell composition and product-first provider vocabulary on the
     shared feature-presentation boundary.
-    `frontend-modern/src/features/patrol/PatrolIntelligenceSummary.tsx`,
     `frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx`,
     `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`,
     `frontend-modern/src/features/patrol/PatrolIntelligenceBanners.tsx`,
     `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`,
     `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`,
-    `frontend-modern/src/features/patrol/patrolSupportingContextPresentation.ts`,
-    `frontend-modern/src/components/patrol/PatrolStatusBar.tsx`, and
+    `frontend-modern/src/components/patrol/RunHistoryEntry.tsx`, and
     `frontend-modern/src/utils/patrolRuntimeActions.ts` must keep
     Patrol assessment, verification, and findings primary; surface recent
-    changes, learned correlations, and policy coverage only as explicitly
-    secondary supporting context when degraded or incomplete verification,
-    active findings, or selected-run investigation makes that evidence
-    relevant; and use Patrol/provider wording for the shared provider settings,
+    changes, learned correlations, and policy coverage only as backend,
+    Assistant, selected-finding, or selected-run context when investigation
+    makes that evidence relevant; and use Patrol/provider wording for the shared provider settings,
     provider model, and provider circuit-breaker affordances instead of
     generic AI labels inside Patrol-owned shells. The shared app shell in
     `frontend-modern/src/App.tsx` and `frontend-modern/src/AppLayout.tsx` must
@@ -1183,33 +1315,65 @@ not a replacement status card, CTA band, or page-local nested card.
     second Patrol-branded primary route. `PatrolIntelligenceHeader.tsx`
     must also keep the page heading's accessible name singular: when the
     `PulsePatrolLogo` appears beside visible Patrol heading text, it is
-    decorative rather than a second label source. The Patrol-owned supporting-context
-    presenter must also keep the disclosure toggle plus evidence-boundary copy
-    centralized instead of letting the workspace reintroduce inline shell-local
-    trust wording, while the Patrol investigation-context owner normalizes
-    same-state recent-change records into changed-substate wording before the
-    workspace or Assistant handoff renders them. The same shared feature-shell
+    decorative rather than a second label source. The Patrol workspace must not
+    expose a generic Details/supporting-context panel for nearby activity,
+    learned correlations, or policy buckets; those payloads stay backend and
+    Assistant context rather than a default page section. Patrol initial data
+    refresh failures must stay inside the Patrol feature shell as one compact
+    stale-data retry banner; they must not replace the route with Suspense,
+    blank loading, raw transport errors, or page-local diagnostic panels. The Patrol
+    investigation-context owner normalizes same-state recent-change records into
+    changed-substate wording before Assistant handoff renders them. The same shared feature-shell
     boundary owns the
-    commercial-facing Patrol capability language: Pro-locked helper copy,
-    autonomy segmented controls, and run-history/result labels must use
-    `Remediate`, `remediated`, or safe remediation wording while legacy API
-    names remain hidden from operators. The Patrol configuration popover is part
-    of that shared feature-presentation boundary: it must stay viewport-bounded,
-    expose an accessible dialog label, and pass backend save rejection reasons
-    through as inline dialog state instead of replacing them with generic toast
-    copy. When the failure includes Patrol readiness context, the inline state
-    must expose the provider, model, and readiness summary next to a direct
-    provider-settings action instead of hiding that diagnosis behind Assistant
-    alone. The provider-model selector in that popover must stay bound to the
-    shared runtime settings/model catalog even when the popover mounts after
-    async catalog loading, so a saved direct-provider Patrol model renders as
+    commercial-facing Patrol capability language: autonomy segmented controls
+    and run-history/result labels must present the operator-facing policy levels
+    as `Watch only`, `Ask first`, `Safe auto-fix`, and `Autopilot`, while legacy
+    API names remain hidden from operators and compact controls do not collapse
+    into unexplained shorthand. Patrol run-history rows must lead with what
+    Patrol did or could not do before exposing trigger, token, tool-call, or raw
+    trace details. Plan-locked Patrol controls may badge paid levels as Pro and
+    may show one compact `Plans & Billing` handoff beside the selector when
+    upgrade prompts are allowed, but the default watch-only surface must not
+    render a Pro-absence explainer. Visible product copy calls the selector `Patrol mode`; compatibility route and wire identifiers may keep stable names
+    such as `patrol_control` and `patrolControl*`. Plan-locked Patrol controls
+    may keep paid levels visible as disabled buttons, and may badge them as Pro
+    only when upgrade prompts are allowed. The always-visible Patrol mode selector must stay on
+    the selected mode and one plain summary, without a separate `Limits`
+    disclosure or hard-limit matrix beside the picker. Shared feature shells must not invent their own Patrol safety
+    thresholds, policy labels, or disabled-control explanations. The Patrol page
+    header must consume the same effective control state, using watch-and-report
+    copy for locked or `Watch only` mode and full governed-operations copy only
+    for modes where that capability is actually available. Paid-control
+    availability and commercial-plan copy must describe the same decision as
+    choosing what Patrol may handle automatically; they must not ask users to
+    decide how far Patrol can go or how much control Patrol has. The
+    Current work workspace copy belongs to that same product-facing boundary:
+    empty and descriptive text must explain what Patrol-found problems will
+    appear there, what the selected control level allows, and the next useful
+    operator action; it must not fall back to activation-loop, proof, queue, or
+    verification-accounting language. The
+    Patrol schedule and model drawer is part of that shared
+    feature-presentation boundary: it must stay viewport-bounded, expose an
+    accessible dialog label, keep the four-level control policy on the default
+    Patrol header, and keep provider model, schedule, trigger tuning, and
+    readiness validation inside the secondary disclosure. Backend save rejection reasons must pass
+    through as inline dialog state instead of being replaced with generic toast
+    copy, and that advanced disclosure must open when the inline state exists.
+    When the failure includes
+    Patrol readiness context, the inline state must expose the provider, model,
+    and readiness summary next to a direct provider-settings action instead of
+    hiding that diagnosis behind Assistant alone. The provider-model selector in
+    that popover must stay bound to the shared runtime settings/model catalog
+    even when the popover mounts after async catalog loading, but the full
+    catalog must stay behind an explicit change action so the default advanced
+    drawer leads with the current effective model summary rather than a raw
+    provider route list. A saved direct-provider Patrol model still renders as
     that model instead of visually falling back to the default selection.
     Successful provider-model saves that return a not-ready Patrol
     readiness snapshot must use that same inline surface with `needs attention`
     wording, while Assistant receives a saved configuration issue rather than a
-    failed-save handoff. When safe remediation is locked, the same popover
-    state owner must
-    clear stale full-mode unlock state before Apply Configuration submits the
+    failed-save handoff. When governed fixes are locked, the same Patrol state
+    owner must clear stale full-mode unlock state before persisting the
     monitor-only autonomy payload, so disabled paid controls cannot leak stale
     permission into a save. If that inline state opens Assistant, the Patrol
     feature must hand off
@@ -1222,14 +1386,35 @@ not a replacement status card, CTA band, or page-local nested card.
     findings tab, run-scoped findings panels, and tab badges so shared feature
     composition does not rebuild Patrol state by filtering the cross-product
     unified findings feed.
-19. Keep the shared `system-ai` settings shell product-first.
+16. Keep Pulse Intelligence settings product-first and page-scoped.
     `frontend-modern/src/components/Settings/AISettings.tsx`,
     `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`,
     `frontend-modern/src/components/Settings/settingsNavCatalog.ts`,
+    `frontend-modern/src/components/Settings/settingsNavigationModel.ts`,
+    `frontend-modern/src/components/Settings/settingsPanelRegistry.ts`,
+    `frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx`,
     `frontend-modern/src/components/Settings/useAISettingsState.ts`, and
     `frontend-modern/src/utils/aiSettingsPresentation.ts` must present that
-    surface to operators as `Assistant & Patrol` plus provider/model
-    configuration rather than as a generic `AI Services` shell. Settings-save
+    surface to operators under the `Pulse Intelligence` settings group as
+    separate focused pages rather than as a generic `AI Services` shell or one
+    oversized mixed form. `Provider & Models` owns API keys, default model
+    selection, provider health/preflight, provider runtime budget/timeout, and
+    usage/cost visibility. `Patrol` owns schedule, alert/anomaly triggers,
+    runtime readiness, Patrol model override, and a simple `Open Patrol` handoff
+    to the `/patrol` operator page; the actual watch/investigate/act/verify/record
+    operator loop stays on `/patrol`. `Assistant` owns chat/tool permission,
+    command-access, model override, and session maintenance. Service context may
+    exist under Pulse Intelligence only for model-backed or continuous service
+    discovery that supplies Assistant and Patrol context; normal infrastructure
+    discovery and onboarding remain under Infrastructure, and the Pulse
+    Intelligence navigation item, route header, model override, reset/save
+    affordances, and setup copy must use the `Service Context` label so
+    operators do not confuse it with infrastructure discovery. The
+    `Provider & Models` page must not carry a discovery summary,
+    Patrol-control banner, or Patrol CTA; the Patrol-control handoff belongs on
+    the `Patrol` settings page and `/patrol`, where copy describes Patrol
+    autonomy in plain operator terms rather than exposing an internal
+    `operations policy` concept. Settings-save
     feedback must preserve provider-specific preflight failures and successful
     save responses that carry Patrol readiness warnings, including the provider,
     selected Patrol model, failure cause, safe recommendation, and readiness
@@ -1239,37 +1424,57 @@ not a replacement status card, CTA band, or page-local nested card.
     setup cards must describe provider families through the current
     backend-owned provider contract; DeepSeek setup copy is the V4 family and
     must not regress to old V3 or compatibility-alias wording.
+    Provider connection controls are page-scoped: the global Pulse
+    Intelligence enable toggle, provider readiness strip, and Test Connection
+    action belong to `Provider & Models`; Patrol, Assistant, and Service Context
+    subpages keep their focused settings plus reset/save actions without
+    repeating provider health chrome. Those reset/save actions and save
+    notifications must be page-scoped as well: saving `Patrol`, `Assistant`,
+    or `Service Context` settings must not report
+    `Provider & Models settings saved` or render a generic `Save changes`
+    affordance that hides which Pulse
+    Intelligence page owns the change.
     Runtime controls inside `frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx`
-    must likewise describe discovery as workload discovery that supplies
-    concrete service context to Pulse Assistant and Patrol, not as a generic
-    AI context feature. `frontend-modern/src/components/Settings/useAISettingsState.ts`
-    must save workload discovery enablement and interval as one explicit
+    must stay split by page-specific exports: provider runtime controls on
+    `Provider & Models`, Assistant chat actions on `Assistant`, and service
+    context controls on `Service Context`. Assistant chat-action copy
+    must name Patrol control as configured on the Patrol page, not as an
+    Assistant command mode, because `/patrol` remains the operator surface for
+    choosing how much autonomy Patrol has. Service context copy must describe
+    the model-backed loop that supplies concrete service facts to Pulse
+    Assistant and Patrol, not as generic discovery or AI context.
+    `frontend-modern/src/components/Settings/useAISettingsState.ts`
+    must save service context scan enablement and interval as one explicit
     settings pair so selecting "Every 6 hours" or "Manual only" round-trips
     through `/api/settings/ai` without depending on stale read-side diffing.
-    The same workload-discovery settings section must expose a manual
-    "Run discovery now" action wired through `/api/discovery/run` when
-    workload discovery is enabled in manual-only mode, while resource-drawer
+    The same Service Context settings section must expose a manual
+    context-scan action wired through `/api/discovery/run` when
+    service context scanning is enabled in manual-only mode, while resource-drawer
     discovery remains the forced single-resource refresh path. The collapsed
     section and run-action copy must make automatic scheduling visible by
     distinguishing `Auto <interval>`, `Manual only`, and `Off`, and the run
-    action must describe whether it is executing the scheduled sweep or a
+    action must describe whether it is running the scheduled scan or a
     one-off manual-only sweep rather than implying recurring scans were
     enabled.
-    Assistant-only controls inside the shared shell, such
-    as execution permissions and session maintenance, must stay explicitly
-    labeled as Pulse Assistant controls, while Patrol schedule and autonomy
-    continue to live on Patrol-owned surfaces rather than drifting back into
-    the shared settings shell. Session maintenance in that shell is limited to
+    Assistant-only controls such as execution permissions and session
+    maintenance must stay explicitly labeled as Pulse Assistant controls, while
+    Patrol schedule and trigger readiness live on the Patrol settings page and
+    Patrol autonomy/control level lives on the `/patrol` operator page rather
+    than drifting back into the provider shell. Session maintenance is limited to
     Pulse-owned conversation operations such as summarization; OpenCode-style
     file diff, revert, or unrevert actions must not appear in Settings unless
     Pulse owns a real governed infrastructure action-history/reversal contract
-    for the affected resources. Shared/default model choices may remain on the
-    combined shell only when Assistant, Patrol, and Discovery overrides are
-    presented as explicit per-surface overrides instead of a generic advanced
-    AI bucket. Each per-surface override must fall back to the shared default
-    when left empty rather than silently using a hard-coded backend default,
-    so the shared shell stays the single place an operator picks the model
-    for any of the three surfaces.
+    for the affected resources. Shared/default model choice belongs on
+    `Provider & Models`, while Assistant, Patrol, and service context model
+    overrides belong on their respective settings pages instead of a generic
+    advanced AI bucket. Each per-surface override must fall back to the shared
+    default when
+    left empty rather than silently using a hard-coded backend default, so
+    `Provider & Models` stays the single place an operator picks the default
+    model for all three surfaces. Assistant model copy must describe chat,
+    explanation, and review support; it must not present Assistant as the
+    approved-fix executor because Patrol is the hands-on operator for checks,
+    governed fixes, and verification.
     The shared shell must not show Pro-only autonomous execution as a default
     free-user control when upgrade prompts are suppressed; it may surface that
     option only when the entitlement is present, commercial prompts are
@@ -1317,7 +1522,7 @@ not a replacement status card, CTA band, or page-local nested card.
     selected route also carries a shared-default or override badge, the shared
     picker owns that badge as separate metadata in both visible text and the
     button accessible name; labels must render as `model via OpenRouter ·
-    default` instead of fusing provider and badge text such as
+default` instead of fusing provider and badge text such as
     `OpenRouterdefault`.
     Platform-first top-level pages registered through
     `frontend-modern/src/App.tsx` must stay chrome-only and route through the
@@ -1376,6 +1581,47 @@ not a replacement status card, CTA band, or page-local nested card.
     first/default positions only when the current estate has standalone Pulse
     Agent machines or agentless availability endpoints and no
     provider/runtime platform evidence.
+    Patrol workflow components under
+    `frontend-modern/src/features/patrol/` may compose shared `Button` and
+    `ButtonLink` chrome for issue actions, but the workflow state, route
+    anchors, single-finding direct-action selection, Assistant handoff, autonomy
+    label, and multi-finding fallback semantics stay with `patrol-intelligence`;
+    the canonical Patrol control anchor belongs on the visible selector, not the
+    workspace shell. Setup-only readiness may hide run, schedule, model, trigger,
+    and provider-repair controls, but it must not hide that selector or replace
+    it with a setup/status explainer. Shared primitives must not grow
+    Patrol-specific activation, autonomy, provider-settings, or
+    Assistant-routing behavior. The default loop is a
+    Patrol-owned watch / investigate / act under policy / verify / record loop.
+    Active current-issue expansion is a task surface, not a history transcript:
+    raw finding lifecycle rows may render in explicit all/resolved/history or
+    selected-run review states, but not in the default active Patrol issue
+    expansion.
+    Compact Patrol status chrome may render work/health evidence passed by
+    Patrol, but trigger/scheduling status remains header/control context and
+    must not be repeated by shared default status primitives. Shared primitives
+    must preserve that plain visible label instead of exposing internal
+    assessment terminology on the default page.
+    External-agent readiness from Pulse MCP may remain compact optional context
+    derived from the shared manifest-client contract verdict and backend
+    operations-loop `externalAgentReady` signal, but shared primitives must not
+    create page-local MCP setup constants, token-scope checks, tool filters,
+    readiness shortcuts, MCP readiness props, or a visible external-agent stage
+    as the primary first-party loop. The journey's loaded progress state must come from the
+    canonical operations-loop status projection exposed by the shared
+    agent-capabilities frontend client, while shared primitives remain passive
+    renderers of the state Patrol passes them. Patrol control starter,
+    completed-loop, or resolved-loop evidence may change compact journey copy
+    only after Patrol has derived it from that projection; shared primitives must
+    not infer Patrol control or legacy Pro activation state from route anchors,
+    billing state, generic Patrol recency, or MCP readiness alone.
+    Shared presentation
+    helpers may render the operations-loop state they receive, but they must
+    not infer operations-loop progress from a generic Patrol run, recency
+    timestamp, or MCP readiness alone; Patrol owns the issue-backed evidence
+    model that decides when the loop can advance through Assistant, approval,
+    rejected no-execution terminal decisions, approved-action verification, and
+    external-agent parity.
 
 ## Forbidden Paths
 
@@ -1390,7 +1636,12 @@ not a replacement status card, CTA band, or page-local nested card.
    conversion, or infrastructure onboarding telemetry. Those signals belong in
    admin-owned metrics surfaces, not the product diagnostics UI or customer
    frontend event emission.
-6. Settings route models normalizing retired aliases such as
+6. User-facing diagnostics panels rendering the native Pulse Assistant runtime
+   as an MCP connection. Settings diagnostics must consume
+   `assistantRuntimeConnected` and label it as Assistant runtime availability;
+   `mcpConnected`, `mcpToolCount`, and "MCP Connection" are forbidden on the
+   first-party diagnostics surface.
+7. Settings route models normalizing retired aliases such as
    `/settings/operations/*`, `/settings/integrations/api`,
    `/settings/system-pro`, `/settings/workloads/*`, or nested
    `/settings/infrastructure/*` paths back into current settings panels.
@@ -1424,28 +1675,32 @@ not a replacement status card, CTA band, or page-local nested card.
    placeholders must stay on `LoadingSpinner` and the `loading-spinner-shell`
    registry rule instead of local `border-t-transparent` or `border-b-2`
    animate-spin shells.
-3. Update this contract when a new canonical UI pattern is adopted
-4. Remove local forks after the shared primitive is introduced
-5. Keep shared feature-level presenters on capability truth. When reusable
+4. Update this contract when a new canonical UI pattern is adopted
+5. Remove local forks after the shared primitive is introduced
+6. Keep shared feature-level presenters on capability truth. When reusable
    presenters under `frontend-modern/src/features/` explain why a control,
    chart, or detail surface is unavailable, they must describe the owned
    identity or capability gap instead of prescribing a provider-local install
    path that conflicts with API-backed platforms like TrueNAS.
-6. When a settings route header and a top-level settings shell describe the same
+7. When a settings route header and a top-level settings shell describe the same
    commercial surface, keep them on the same shared presentation owner instead
    of allowing route metadata in `settingsHeaderMeta.ts` or labels in
    `settingsNavCatalog.ts` to drift into independent title or description copy,
    and keep adjacent settings-shell referrals such as
    `InfrastructureWorkspace.tsx` on that same shared owner instead of
    reintroducing local “go to Pulse Pro” variants.
-   That same shared owner must also support explicit IA/title separation for
-   self-hosted commercial settings: the nav label may stay product-IA-first
-   (`Plans`) while the page shell stays task-first (`Self-hosted plan`), and
-   the owned plan shell must foreground the active plan name plus available
+   That same shared owner must also keep self-hosted commercial settings
+   discoverable: the nav label and page shell title use the shared
+   `Plans & Billing` label, and the owned plan shell must foreground the active
+   plan name plus available
    capabilities before secondary billing or recovery detail so paid upgrades
    can confirm their entitlement immediately after activation without making
    default Community look like it is missing an activation key.
-7. When settings surfaces need informational, warning, success, or danger
+   Routine plan and capability-status copy must stay product-facing: describe
+   what is available on the instance, point failed capability checks to refresh
+   the plan or open recovery, and avoid raw entitlement-payload phrasing or
+   activation language as the normal setup story.
+8. When settings surfaces need informational, warning, success, or danger
    callouts, compose `frontend-modern/src/components/shared/CalloutCard.tsx`
    and register the consumer in
    `frontend-modern/scripts/shared-template-registry.json` instead of adding
@@ -1462,7 +1717,7 @@ not a replacement status card, CTA band, or page-local nested card.
    boundary. The update flow owns version, prerequisite, root-access, restart,
    and error copy; `CalloutCard` owns the info/warning/danger shell, spacing,
    dark-mode tone, and icon layout.
-8. Keep hosted settings-shell framing imports safe for bundle initialization.
+9. Keep hosted settings-shell framing imports safe for bundle initialization.
    Self-hosted billing titles, descriptions, and referral copy used by
    `settingsHeaderMeta.ts`, `settingsNavCatalog.ts`, and adjacent settings
    shells must flow through
@@ -1474,28 +1729,32 @@ not a replacement status card, CTA band, or page-local nested card.
    badge titles, Pro-suffixed option labels, monitored-system limit claims, or
    browser-local commercial/onboarding metrics wrappers in SSO, audit,
    reporting, AI controls, agent profiles, or shared warning banners.
-9. Keep shared settings-shell AI control copy capability-scoped rather than
-   upsell-scoped. `AIRuntimeControlsSection.tsx` may describe read-only,
-   approval-required, and autonomous action posture, but option labels and
-   helper text must avoid tier labels or broad "executes everything" wording;
-   paid capability availability belongs to entitlement-backed visibility and
-   lock state, not local select copy.
-10. Keep first-session dashboard empty-state copy on
-   `frontend-modern/src/utils/workloadEmptyStatePresentation.ts`, and make
-   infrastructure setup guidance name the canonical destination explicitly
-   instead of falling back to generic settings CTA labels.
-9. Keep the live first-session wizard on the canonical three-step runtime
-   shape in `frontend-modern/src/components/SetupWizard/SetupWizard.tsx`
-   (`Welcome`, `Security`, then `Install`), and keep the step indicator plus
-   completion CTA language aligned with the governed infrastructure install
-   workspace instead of regressing to a route jump that leaves the next action
-   implicit. Preview-only follow-up surfaces such as
-   `frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx`
-   must stay deterministic and scenario-driven: they may not poll the live
-   `/api/state` runtime or inherit whatever connected systems happen to exist
-   on the current backend, and browser proof for `/preview/setup-complete`
-   must select explicit preview scenarios instead of ambient runtime state.
-10. Keep AI settings setup UI backend-driven:
+10. Keep shared settings-shell AI control copy capability-scoped rather than
+    upsell-scoped. `AIRuntimeControlsSection.tsx` may describe read-only,
+    approval-required, and autonomous action posture, but option labels and
+    helper text must avoid tier labels or broad "executes everything" wording;
+    paid capability availability belongs to entitlement-backed visibility and
+    lock state, not local select copy. Provider & Models settings copy must keep
+    Patrol autonomy distinct from Assistant chat actions: Patrol's
+    hands-on control level belongs on the Patrol page, while the shared settings
+    shell may only describe whether Assistant chat can run eligible chat
+    actions.
+11. Keep first-session dashboard empty-state copy on
+    `frontend-modern/src/utils/workloadEmptyStatePresentation.ts`, and make
+    infrastructure setup guidance name the canonical destination explicitly
+    instead of falling back to generic settings CTA labels.
+12. Keep the live first-session wizard on the canonical three-step runtime
+    shape in `frontend-modern/src/components/SetupWizard/SetupWizard.tsx`
+    (`Welcome`, `Security`, then `Install`), and keep the step indicator plus
+    completion CTA language aligned with the governed infrastructure install
+    workspace instead of regressing to a route jump that leaves the next action
+    implicit. Preview-only follow-up surfaces such as
+    `frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx`
+    must stay deterministic and scenario-driven: they may not poll the live
+    `/api/state` runtime or inherit whatever connected systems happen to exist
+    on the current backend, and browser proof for `/preview/setup-complete`
+    must select explicit preview scenarios instead of ambient runtime state.
+13. Keep AI settings setup UI backend-driven:
     `frontend-modern/src/components/Settings/useAISettingsState.ts` and
     `frontend-modern/src/components/Settings/AISettingsDialogs.tsx` may collect
     provider credentials or runtime URLs, but they must not bake vendor model
@@ -1608,19 +1867,19 @@ not a replacement status card, CTA band, or page-local nested card.
     or proposed fix, must pass `autonomousMode:false` as a request-local
     override so the drawer shows approval-required posture without mutating the
     persistent Assistant control setting.
-11. Keep shared filter primitives coherent with source-owned option hydration.
+14. Keep shared filter primitives coherent with source-owned option hydration.
     Active platform/runtime pages and Settings infrastructure surfaces must keep
     canonical options visible in shared filter controls even when current
     results do not contain that option, so provider- or endpoint-scoped
     handoffs do not flash back to generic host-only language.
-12. Keep the first welcome screen in
+15. Keep the first welcome screen in
     `frontend-modern/src/components/SetupWizard/steps/WelcomeStep.tsx`
     explicit about operator context. The shell must explain that the bootstrap
     token only unlocks first-run setup, state where the command should run, and
     adapt command/help text to detected Docker or containerized deployments
     instead of assuming the operator already knows which host or container owns
     the Pulse install.
-13. Keep the settings-shell infrastructure landing path aligned with that same
+16. Keep the settings-shell infrastructure landing path aligned with that same
     first-session story. `frontend-modern/src/components/Settings/settingsNavigationModel.ts`
     must treat `/settings` and the infrastructure settings tab as the canonical
     path to the bare `/settings/infrastructure`, which renders the unified
@@ -1629,7 +1888,7 @@ not a replacement status card, CTA band, or page-local nested card.
     and the `Add infrastructure` entry point on it, not by a second landing route,
     so first-time operators and returning operators see one consistent
     infrastructure surface by default.
-14. Keep Infrastructure and Workloads onboarding copy on the shared
+17. Keep Infrastructure and Workloads onboarding copy on the shared
     presentation owner in
     `frontend-modern/src/utils/workloadEmptyStatePresentation.ts`. Both the
     infrastructure empty state and the Workloads no-resources state must route
@@ -1643,28 +1902,37 @@ not a replacement status card, CTA band, or page-local nested card.
     operators at credentials, permissions, and collection status in the
     canonical infrastructure workspace instead of reusing first-run onboarding
     copy.
-15. Keep cross-surface investigation handoffs on shared route ownership.
+18. Keep cross-surface investigation handoffs on shared route ownership.
     Feature shells such as Alerts and Patrol may decide which governed
     destination chips to render, but canonical href, label, dedupe, and
     infrastructure-fallback truth must stay in
     `frontend-modern/src/routing/resourceLinks.ts` instead of freezing raw
     route strings or provider-local link builders inside feature panels.
-16. Keep shared summary-card emphasis coherent. When shared summary primitives enter an `inactive` state, `SummaryMetricCard`, `InteractiveSparkline`, and `DensityMap` must all demote background context together so storage, infrastructure, and workloads read as one interaction model instead of mixing page-local opacity, sticky-shell, or highlight rules.
-17. Keep density-map summaries overview-first. When a shared summary density map receives row focus or chart-hover emphasis, `frontend-modern/src/components/shared/DensityMap.tsx`, `frontend-modern/src/components/shared/useDensityMapState.ts`, and `frontend-modern/src/components/shared/densityMapModel.ts` must preserve the multi-entity overview rows and keep focused-entity detail in the hover tooltip instead of swapping the card into a single-series chart, dimming the rest of the map into unusable background noise, duplicating cursor-value tooltip copy, or adding persistent card chrome that steals heatmap space. The card body must stay overview-first; the tooltip may carry the active entity identity, current value, and peak, shared tooltip shells must follow semantic surface tokens instead of forcing a dark palette in light mode, the tooltip header must let long entity names consume the available width before truncating rather than clipping against an arbitrary fixed label cap, numeric metric readouts such as `16.9 MB/s` or `37.4 MB/s` must stay single-line instead of wrapping the unit onto a second row, and density-map detail that cannot fit cleanly inside the canonical tooltip shell must be omitted rather than introducing tooltip-specific chrome or a secondary chart inside the hover surface.
-18. Keep retired self-hosted hosted-model and trial acquisition surfaces out of
+    Patrol workflow handoffs follow the same rule: start/continue Patrol
+    control links must compose the route-backed `patrol_control` helper from
+    `resourceLinks.ts`, single-finding direct action links must use canonical
+    finding-presentation destinations such as the Patrol provider-settings
+    route, while `patrol_autonomy` and legacy Pro activation URLs remain parser
+    aliases only and verified review links use the plain Patrol history anchor.
+    UI surfaces must not duplicate the `patrolControlStarter` query string or
+    write Patrol control or legacy entry-point starter telemetry from local
+    click handlers.
+19. Keep shared summary-card emphasis coherent. When shared summary primitives enter an `inactive` state, `SummaryMetricCard`, `InteractiveSparkline`, and `DensityMap` must all demote background context together so storage, infrastructure, and workloads read as one interaction model instead of mixing page-local opacity, sticky-shell, or highlight rules.
+20. Keep density-map summaries overview-first. When a shared summary density map receives row focus or chart-hover emphasis, `frontend-modern/src/components/shared/DensityMap.tsx`, `frontend-modern/src/components/shared/useDensityMapState.ts`, and `frontend-modern/src/components/shared/densityMapModel.ts` must preserve the multi-entity overview rows and keep focused-entity detail in the hover tooltip instead of swapping the card into a single-series chart, dimming the rest of the map into unusable background noise, duplicating cursor-value tooltip copy, or adding persistent card chrome that steals heatmap space. The card body must stay overview-first; the tooltip may carry the active entity identity, current value, and peak, shared tooltip shells must follow semantic surface tokens instead of forcing a dark palette in light mode, the tooltip header must let long entity names consume the available width before truncating rather than clipping against an arbitrary fixed label cap, numeric metric readouts such as `16.9 MB/s` or `37.4 MB/s` must stay single-line instead of wrapping the unit onto a second row, and density-map detail that cannot fit cleanly inside the canonical tooltip shell must be omitted rather than introducing tooltip-specific chrome or a secondary chart inside the hover surface.
+21. Keep retired self-hosted hosted-model and trial acquisition surfaces out of
     normal v6 GA runtime. Shared shells and helper-driven badges may continue to
     parse legacy payload fields, but ordinary self-hosted Assistant, Patrol, and
     settings flows must present provider setup as BYOK/local/self-managed and
     must not surface hosted-model credits, in-app trial starts, or generic
     managed-model claims.
-19. Keep sparkline scrubbing source-local and sibling-sync timestamp-based. The chart a user is actively scrubbing in `frontend-modern/src/components/shared/InteractiveSparkline.tsx` and `frontend-modern/src/components/shared/useInteractiveSparklineState.ts` must keep its dashed hover cursor on the real local mouse `x`, while sibling cards may map the shared hover timestamp onto their own timelines. Shared cursor sync must not snap the source chart back onto the nearest sample timestamp, the rendered SVG/canvas hover cursor must bind to the actual numeric cursor coordinate rather than a boolean guard state, the time cursor must span the chart viewport instead of collapsing to the series height, and the hover tooltip must track the pointer instead of anchoring to the chart top edge while following the active theme rather than a hardcoded dark shell. The hover tooltip must stay side-offset from the active scrub cursor and flip to the available side near viewport edges so it does not cover the highlighted guide or graph point.
-20. Keep shared contextual focus canonical after adoption. Once a summary or table surface enters route-backed contextual focus, future additions must extend `frontend-modern/src/components/shared/contextualFocus.ts` and its guardrail tests rather than forking another helper for workload IDs, resource IDs, or scroll-preserving same-route selection.
-21. Keep shared infrastructure/resource selectors on the canonical agent-facet
+22. Keep sparkline scrubbing source-local and sibling-sync timestamp-based. The chart a user is actively scrubbing in `frontend-modern/src/components/shared/InteractiveSparkline.tsx` and `frontend-modern/src/components/shared/useInteractiveSparklineState.ts` must keep its dashed hover cursor on the real local mouse `x`, while sibling cards may map the shared hover timestamp onto their own timelines. Shared cursor sync must not snap the source chart back onto the nearest sample timestamp, the rendered SVG/canvas hover cursor must bind to the actual numeric cursor coordinate rather than a boolean guard state, the time cursor must span the chart viewport instead of collapsing to the series height, and the hover tooltip must track the pointer instead of anchoring to the chart top edge while following the active theme rather than a hardcoded dark shell. The hover tooltip must stay side-offset from the active scrub cursor and flip to the available side near viewport edges so it does not cover the highlighted guide or graph point.
+23. Keep shared contextual focus canonical after adoption. Once a summary or table surface enters route-backed contextual focus, future additions must extend `frontend-modern/src/components/shared/contextualFocus.ts` and its guardrail tests rather than forking another helper for workload IDs, resource IDs, or scroll-preserving same-route selection.
+24. Keep shared infrastructure/resource selectors on the canonical agent-facet
     truth. Shared primitives and settings-facing selector helpers must treat
     top-level TrueNAS appliances as agent-facet infrastructure via shared
     helper ownership instead of reviving a direct `resource.type === 'truenas'`
     branch inside page shells, selectors, or reporting-resource type helpers.
-22. Keep shared feature-shell Patrol run fixtures on the canonical run-record
+25. Keep shared feature-shell Patrol run fixtures on the canonical run-record
     contract. When `frontend-modern/src/features/patrol/` consumes Patrol run
     history, the shared normalized record must preserve provider-backed counts
     such as `truenas_checked` instead of letting feature-local fixtures or
@@ -1684,7 +1952,7 @@ not a replacement status card, CTA band, or page-local nested card.
     dashboard route is retired, that audit must also discover live top-level
     pages from `src/pages/` and may not keep a hard required-header entry for
     `frontend-modern/src/pages/Dashboard.tsx`.
-23. Keep the authenticated app root aligned with that same first-session path.
+26. Keep the authenticated app root aligned with that same first-session path.
     That same shared-primitive ownership now includes contextual row focus.
     `frontend-modern/src/components/shared/contextualFocus.ts` is the canonical
     owner for interactive-series filtering, focused-label lookup, active-series
@@ -1724,35 +1992,35 @@ not a replacement status card, CTA band, or page-local nested card.
     renders the chart. `frontend-modern/src/useAppRuntimeState.ts` must not
     prewarm retired Infrastructure summary-chart caches or eager Workloads
     chart caches as a generic authenticated-shell side effect.
-24. Keep relay settings shell copy on the shared presentation owner in
+27. Keep relay settings shell copy on the shared presentation owner in
     `frontend-modern/src/utils/relayPresentation.ts`. The route metadata in
     `settingsHeaderMeta.ts` and the leading `SettingsPanel` in
     `RelaySettingsPanel.tsx` must reuse the same description and availability
     copy instead of drifting into separate rollout or pairing wording. Relay
     availability copy must describe the Relay tier boundary as Relay and higher
     plans rather than collapsing Remote Access back into a Pro-only feature.
-25. Keep shared settings-shell legal and docs referrals on
+28. Keep shared settings-shell legal and docs referrals on
     `frontend-modern/src/utils/docsLinks.ts`. Shared settings surfaces such as
     `AIRuntimeControlsSection.tsx` must not hardcode GitHub `main` doc URLs for
     privacy, security, proxy-auth, scope-reference, or Terms-of-Service links.
-26. Keep shared settings-shell telemetry transparency controls on the governed
+29. Keep shared settings-shell telemetry transparency controls on the governed
     general settings panel. Preview/reset affordances for anonymous telemetry
     must stay rendered inside
     `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`
     instead of drifting into route-local modals, hidden dev tools, or shell
     chrome that operators would not naturally inspect.
-27. Keep the short telemetry/privacy summary copy on that same shared surface
+30. Keep the short telemetry/privacy summary copy on that same shared surface
     accurate to the governed privacy doc. If the trust boundary depends on a
     specific retention window or on “IP addresses are not stored” rather than
     “IPs are never seen,” the summary copy in
     `GeneralSettingsPanel.tsx` must state those facts plainly instead of
     reverting to a stronger but inaccurate shorthand.
-28. Keep maintainer commercial-event controls out of customer settings.
+31. Keep maintainer commercial-event controls out of customer settings.
     The shared general settings privacy panel may expose anonymous outbound
     telemetry controls, preview, and reset affordances, but it must not render
     local commercial handoff event toggles, `PULSE_DISABLE_LOCAL_UPGRADE_METRICS`,
     or other commercial-debug controls as normal customer-facing preferences.
-29. Keep shared storage-route feature presentation on neutral capability truth.
+32. Keep shared storage-route feature presentation on neutral capability truth.
     Reusable mappers and presenters in `frontend-modern/src/features/storageBackups/`
     must distinguish inventory datastores from backup repositories so VMware
     rows on the shared storage route stay canonical to the admitted phase-1 floor instead of
@@ -1774,7 +2042,7 @@ not a replacement status card, CTA band, or page-local nested card.
     must only carry fields the row actually renders; per-row source-platform
     badges and other identical-on-every-row decorations belong in the row
     expansion, not in `StoragePoolRowModel`.
-30. Keep infrastructure settings-shell API alternatives on the shared shell
+33. Keep infrastructure settings-shell API alternatives on the shared shell
     contract. `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`,
     `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`, and
     `frontend-modern/src/components/Settings/settingsNavigationModel.ts` must
@@ -1786,7 +2054,7 @@ not a replacement status card, CTA band, or page-local nested card.
     and no per-type `ProxmoxSettingsPanel` / `TrueNASSettingsPanel` /
     `VMwareSettingsPanel` to route through; the provider is a field inside
     one `ConnectionEditor`, not a destination.
-31. Keep the infrastructure settings connection inventory on one shared
+34. Keep the infrastructure settings connection inventory on one shared
     source. `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`
     composes rows exclusively from
     `frontend-modern/src/components/Settings/useConnectionsLedger.ts`,
@@ -1796,14 +2064,14 @@ not a replacement status card, CTA band, or page-local nested card.
     `PlatformConnectionsWorkspace` / `TrueNASSettingsPanel` /
     `VMwareSettingsPanel` panels must not be reintroduced as a second
     fetch path.
-32. Keep alert-history feature composition on the current owned state contract.
+35. Keep alert-history feature composition on the current owned state contract.
     `frontend-modern/src/features/alerts/tabs/HistoryTab.tsx` must react to the
     shared `alertData()` history state instead of reviving deleted aliases, and
     it must pass unified-resource resolution through to
     `frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx` so
     the panel can render shared route chips without creating another page-local
     resource lookup or provider-specific handoff layer.
-33. Keep the alert-thresholds containers surface on the canonical shared owner.
+36. Keep the alert-thresholds containers surface on the canonical shared owner.
     `alertOverridesModel.ts`, `useAlertOverridesState.ts`, and
     `useAlertsConfigurationState.ts` must surface API-backed `app-container`
     parents such as TrueNAS as first-class `Container Runtimes`, while
@@ -1812,7 +2080,7 @@ not a replacement status card, CTA band, or page-local nested card.
     props that can collapse functions on the live Solid surface. Docker-only
     controls in `ThresholdsTableDockerTab.tsx` must remain gated to real
     `docker-host` resources instead of leaking onto platform-managed runtimes.
-34. Keep shared commercial upgrade navigation typed and destination-aware.
+37. Keep shared commercial upgrade navigation typed and destination-aware.
     Shared paywall shells and upgrade actions must route internal billing or
     cloud destinations through `frontend-modern/src/utils/upgradeNavigation.ts`,
     `frontend-modern/src/components/shared/UpgradeLink.tsx`, and
@@ -1823,24 +2091,25 @@ not a replacement status card, CTA band, or page-local nested card.
     width, tone, focus, route/new-tab behavior, and opener preservation stay on
     the shared `ButtonLink` primitive instead of page-local Tailwind anchors or
     commercial helper class strings.
-35. Keep same-shell platform/runtime route transitions on retained shared state.
+38. Keep same-shell platform/runtime route transitions on retained shared state.
     Active infrastructure consumers may show full-page loading only before the
     first compatible resource snapshot exists; once a fresh canonical snapshot
     is already present in the shared app shell, top-level platform/runtime tab
     switches must reuse that state boundary instead of flashing a transient
     page takeover between tabs.
-36. Keep self-hosted paid-service prompts opt-in at the shared shell layer.
+39. Keep self-hosted paid-service prompts opt-in at the shared shell layer.
     `settingsNavCatalog.ts`, `settingsNavVisibility.ts`, shared upgrade link
     primitives, trial banners, monitored-system warning banners, history-lock
     overlays, and Patrol lock helpers must honor `presentationPolicy.hideUpgrade`
     by hiding paid prompts by default on ordinary self-hosted installs. Direct
     activation/recovery routes may render their owned content, but sidebar
-    discovery, trial CTAs, plan upsells, monitored-system limit pressure, and
-    feature upgrade links must require hosted mode, explicit handoff, or active
-    entitlement. Cloud interest links from self-hosted plan surfaces must hand
+    discovery, trial CTAs, plan upsells, monitored-system limit pressure,
+    feature upgrade links, and plan-lock Patrol banners must require hosted
+    mode, explicit handoff, or active entitlement. Cloud interest links from
+    self-hosted plan surfaces must hand
     off to Pulse Account/public Cloud ownership rather than route to an
     in-product Cloud trial/signup page.
-37. Keep the identified-service reducer on `discoveryPresentation.ts`. Any
+40. Keep the identified-service reducer on `discoveryPresentation.ts`. Any
     surface that wants to label a workload with the AI-identified service
     (drawer overview card, future row chips, MCP capability payloads) must
     consume `getDiscoveryIdentifiedSummary` rather than re-implement the
@@ -1869,6 +2138,33 @@ not a replacement status card, CTA band, or page-local nested card.
     facts without reading a drawer-specific explanation.
 
 ## Current State
+
+Patrol `fix_rejected` presentation is owned by the Patrol/AI finding surfaces
+that render the governed-action loop, while the surrounding badge, button,
+loading, and icon composition still uses shared frontend primitives. Shared
+primitive code must not special-case rejected Patrol fixes outside the standard
+metadata badge, button, and lucide-icon contracts.
+Setup-only Patrol action chrome is also governed by the shared Patrol workspace
+composition contract: provider-blocked states may show only the setup task and
+direct `Open Provider & Models` action, must suppress the duplicate readiness
+banner, and must not expose run-history buttons as a competing primary action
+before Patrol can check infrastructure.
+Patrol page setup banners must stay at operator level: render Patrol readiness
+payloads as `Patrol setup issue` or `Patrol setup warning`, keep provider/model
+context visible, and keep preflight/tool-call diagnostic wording inside
+Provider & Models rather than the first-party Patrol header.
+Pulse Intelligence settings now keep `Provider & Models` focused on provider
+setup, default model selection, health, budget, usage, and provider checks; it
+must not reintroduce the Patrol-control banner or `Open Patrol control` CTA
+that belongs to the `Patrol` settings page and `/patrol` operator surface.
+The Patrol settings page may still hydrate the cached Patrol diagnostic
+snapshot, but the rendered model-check panel must summarize it as model
+readiness rather than exposing preflight/tool-call implementation wording.
+The canonical Provider & Models browser route is
+`/settings/pulse-intelligence/provider`; `/settings/system-ai` remains a
+routeable compatibility alias for old deep links, while new settings
+navigation, OAuth callback redirects, Assistant repair actions, and Patrol
+provider-repair CTAs must emit the Pulse Intelligence route.
 
 Shared loading indicators are part of the active frontend primitive contract.
 `LoadingSpinner` owns pure loading and action-pending spinner shells for shared
@@ -1907,9 +2203,11 @@ The Patrol alert-trigger severity selector under
 `frontend-modern/src/features/patrol/` is built on the shared `FormSelect`
 primitive (label-for/id wiring, `selectBaseClass` styling hook) rather than a
 hand-rolled `<select>`, so its labeling and disabled-state affordances stay
-consistent with the rest of the AI settings surface.
+consistent with the rest of the AI settings surface. That selector belongs in the
+advanced Patrol settings disclosure, below the control policy that defines what
+Patrol may do.
 
-The Patrol configuration toggles in the same surface bind each `Toggle`
+The advanced Patrol control toggles in the same surface bind each `Toggle`
 primitive's accessible name through `ariaLabelledBy` pointing at the row's
 heading span, so renaming a control's visible label (for example
 "Alert-Triggered Analysis" to "Container Update Risk") updates the accessible
@@ -1997,8 +2295,9 @@ The Patrol page header copy lives in a single canonical helper at
 tooltip on `PatrolIntelligenceHeader.tsx` must read from
 `PATROL_PAGE_TITLE_TOOLTIP` exported alongside the description rather
 than carrying an inline copy, so hover and inline never drift apart on
-what Patrol actually owns: scheduled probing, context assembly for the
-configured model, and approval-bound action.
+what Patrol actually owns: watching infrastructure, detecting issues,
+recording findings, and escalating into governed investigation/action
+only when the selected Patrol mode allows it.
 The same `PatrolIntelligenceHeader.tsx` shell also renders a compact
 trust-at-a-glance summary directly under the page title (a
 render-only consumer of `state.patrolStatus()?.trust`), gated on at
@@ -2341,13 +2640,16 @@ states: shared section shells under `frontend-modern/src/features/patrol/`
 must not render a green healthy empty state from `0 active findings` alone
 when the owning Patrol runtime or overall-health summary is degraded, blocked,
 or not fully verified.
+The same empty-state helper must consume Patrol trust-history evidence so a
+historical regression reads as history review context, not as a current issue
+and not as a healthy all-clear.
 The same hierarchy also applies inside the Patrol summary shell: once the
 primary assessment strip states Patrol's current risk and verification basis,
 supporting metrics under that strip must stay metric-oriented and must not
 repeat assessment or verification labels as a second compact verdict row.
 The collapsed Patrol assessment strip itself must remain a compact readout
 rather than a headline-plus-paragraph block; explanatory assessment and
-recommendation copy belongs in the owning Findings, Runs, Supporting context,
+recommendation copy belongs in the owning Findings, Runs, `Details`,
 or Assistant chat surfaces rather than a normal-path summary details expansion.
 That readout should lead with current operator state and score rather than
 mixing a reassuring grade label with issue-state copy in the same line.
@@ -2359,6 +2661,12 @@ That same summary-shell rule also applies to timing metadata: if the header,
 verification card, or findings footer already presents the governed Patrol
 activity timestamp, the summary chip row must not add another recency badge
 that competes with those owned timing surfaces.
+The same default-readout rule applies to collapsed Patrol issue rows:
+`MetadataBadge` may carry severity, recurrence, and active decision/work states,
+but the default Patrol page must not render raw lifecycle or investigation
+process badges such as `detected`, `review finding`, loop state, status, outcome,
+or confidence as row chrome. Those details belong in expansion, run history,
+Assistant handoff context, or diagnostics.
 The same ownership split applies to supporting counts: if the Patrol summary
 surface renders the metric strip for active findings, warnings, criticals, and
 fixes, the primary assessment strip should not repeat those same counts in badge
@@ -2617,14 +2925,11 @@ behavior, and whitespace handling. Product surfaces such as Patrol findings
 may own the labels and state-to-tone mapping in their presentation helpers, but
 they must render visible metadata chips through `MetadataBadge` instead of
 recreating local bordered xs spans.
-Patrol run-history, status-bar, and runtime-summary status labels follow this
-state-badge boundary: Patrol may derive the status label and typed variant in
+Patrol run-history labels follow this state-badge boundary:
+Patrol may derive the status label and typed variant in
 `patrolRunPresentation.ts` or `patrolSummaryPresentation.ts`, but
-`RunHistoryEntry.tsx`, `PatrolStatusBar.tsx`, and
-`PatrolIntelligenceSummary.tsx` must render visible state badges through
-`StatusIndicatorBadge` rather than `runStatus.badgeClass`,
-`lastRunStatus.badgeClass`, `runtimeShellPresentation().badgeClass`, or a local
-span.
+`RunHistoryEntry.tsx` must render visible state badges through
+`StatusIndicatorBadge` rather than `runStatus.badgeClass` or a local span.
 The shared segmented selector now follows that same owner split.
 `frontend-modern/src/components/shared/FilterButtonGroup.tsx` stays the render
 shell, `frontend-modern/src/components/shared/useFilterButtonGroupState.ts`
@@ -3019,7 +3324,7 @@ handoff lifecycle, and
 utility tab ordering, alert badge counts, fade-state derivation, and tab
 button class policy. Future mobile-nav work should extend those owners instead
 of pushing tab-order or DOM lifecycle logic back into the shared shell. With
-support/admin tools moved under Settings, that utility ordering must no longer
+support/admin controls moved under Settings, that utility ordering must no longer
 reserve a standalone `operations` slot; alerts, Patrol, and Settings are the
 remaining authenticated utility tabs.
 The shared command palette now follows that same owner split.
@@ -3453,7 +3758,10 @@ top-level settings shell, while
 deployment-specific install guide, copy-command block, and update-channel/install
 model data plus customer-facing update status/action copy. The panel shell must
 not rebuild copy-to-clipboard command cards, deployment instruction trees, or
-update-surface wording inline.
+update-surface wording inline. `CopyCommandBlock` must use the shared
+`copyToClipboard` helper so install/update/agent snippets keep the same
+Clipboard API fallback path and only report copied state after the shared copy
+path succeeds.
 
 The reporting operations surface now follows the same shell-state-model rule.
 `frontend-modern/src/components/Settings/ReportingPanel.tsx` stays the
@@ -3708,52 +4016,74 @@ recency/verification helpers already prove a successful full patrol with
 non-zero resource coverage.
 That same Patrol shell ownership includes refresh affordance state:
 `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts` must keep
-operator refresh controls generation-aware and timeout-bounded, so a slow
-supporting intelligence read cannot permanently disable the shared Patrol header
-Refresh button while Patrol findings and status remain visible.
+operator refresh controls generation-aware, timeout-bounded, and separate from
+background polling state, so a slow supporting intelligence read cannot make the
+shared Patrol header Refresh Patrol action spin indefinitely or stay disabled
+while Patrol findings and status remain visible.
 That same Patrol shell should make scoped trigger policy legible without
 another navigation step. `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`
-should present alert-triggered and anomaly-triggered Patrol toggles as distinct
-controls, and `frontend-modern/src/components/patrol/PatrolStatusBar.tsx`
-should render compact activity breakdown and scoped-trigger-state copy from the
-shared transport rather than leaving busy Patrol periods as unexplained noise.
+should keep actionable scoped-trigger state legible without promoting
+background-only policy pauses as default operator guidance; run-trigger details
+belong in run history or explicit secondary context.
 That same Patrol-facing primitive vocabulary must stay product-first. Patrol
 summary actions, runtime banners, run-history runtime-failure actions,
-runtime-finding actions, circuit-breaker copy, and Patrol configuration controls
+runtime-finding actions, circuit-breaker copy, and Patrol control/provider controls
 may point at the shared provider settings route or model catalog, but they
 should describe those controls as Patrol/provider surfaces through
 `frontend-modern/src/utils/patrolRuntimeActions.ts` rather than falling back to
 generic `AI Settings`, `AI Model`, or `AI circuit breaker` copy inside the
 Patrol shell itself.
-That same product-first naming rule also applies to the shared `system-ai`
-settings shell: `frontend-modern/src/components/Settings/AISettings.tsx`,
+That same product-first naming rule also applies to Pulse Intelligence settings:
+`frontend-modern/src/components/Settings/AISettings.tsx`,
 `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`,
 `frontend-modern/src/components/Settings/settingsNavCatalog.ts`,
 `frontend-modern/src/components/Settings/useAISettingsState.ts`, and
-`frontend-modern/src/utils/aiSettingsPresentation.ts` must present that surface
-to operators as `Assistant & Patrol` plus provider/model configuration rather
-than as a generic `AI Services` shell.
-On the main Patrol page, though, that same governed activity context belongs
-inside `frontend-modern/src/features/patrol/PatrolIntelligenceSummary.tsx`
-alongside the verification readout rather than as a second full-width band
-above the findings workspace. If `PatrolStatusBar.tsx` is reused elsewhere, it
-must stay a compact factual support surface and must not reintroduce a parallel
-page-level verdict strip once the summary shell already owns that explanation.
-That same composition rule applies to `frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx`:
-once the summary shell carries the operator-facing verification and activity
-story, the workspace should move directly into findings and run history instead
-of repeating that same runtime context through a second pre-tab status strip.
-Supporting context follows that same composition rule. Recent changes, learned
-correlations, and policy coverage belong behind an explicitly secondary
-supporting-context disclosure that only appears when Patrol has active
-findings, degraded or incomplete verification, or a selected run that needs
-explanation; healthy fully verified Patrol states must not advertise that
-supporting evidence as a peer workflow. When that disclosure expands, the
-workspace must explicitly label findings and run history as Patrol verification
-evidence and frame the supporting cards as explanatory context rather than as a
-fresh Patrol result. `frontend-modern/src/features/patrol/patrolSupportingContextPresentation.ts`
-must own that disclosure copy and toggle wording so the Patrol workspace does
-not regress into inline shell-local trust language.
+`frontend-modern/src/utils/aiSettingsPresentation.ts` must present the provider
+surface to operators under the `Pulse Intelligence` settings group as
+`Provider & Models` provider/model configuration rather than as a generic
+`AI Services` shell. The canonical browser route for that surface is
+`/settings/pulse-intelligence/provider`; legacy `/settings/system-ai` links may
+remain routeable compatibility aliases, but new navigation, setup, Assistant,
+and Patrol repair CTAs must emit the Pulse Intelligence route.
+On the main Patrol page, though, governed activity context belongs inside
+`frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx` as current
+work, selected run history, or explicit details. Do not reintroduce a
+parallel page-level status strip above the current-work workspace.
+That same composition rule applies to the workspace: the default path should
+move directly into findings and run history instead of repeating runtime
+context through a second pre-tab status strip.
+`Details` follows that same composition rule. Recent changes,
+learned correlations, and policy coverage belong behind an explicitly secondary
+supporting-context affordance that only appears when Patrol has active findings
+or a selected run that needs explanation; healthy fully verified Patrol states
+and degraded summary health by themselves must not advertise that supporting
+evidence as a peer workflow. The default workspace may show the compact
+`Details` control, but the full panel must render only after the operator
+opens it. When that disclosure expands, the workspace must explicitly label the
+selected finding or run as Patrol's record and frame the supporting cards as
+explanatory context rather than as a fresh Patrol result or raw evidence
+console.
+Selected-run history should also suppress generic findings filter chrome and
+read as a Patrol run record. Missing legacy `finding_ids` remains an internal
+fail-closed scoping condition, but the visible caveat should say the finding
+record is unavailable rather than exposing snapshot/filter vocabulary.
+Workspace section descriptions must use Patrol-owned mode presentation copy
+that reflects the selected mode and lock state; they must not hardcode
+an all-mode sentence that tells watch-only users Patrol can investigate, ask for
+approval, or fix issues. The Patrol workspace must not add a generic Details
+panel to explain learned correlations, recent changes, or policy buckets; those
+signals may support Assistant and backend reasoning without becoming default
+operator chrome. Setup-only Patrol runtime failures must use the Patrol-owned
+`Fix Patrol setup` workspace title and setup description plus a dedicated setup
+task with the direct provider-settings action, rather than presenting that state
+as a normal `Current issues` infrastructure queue, and they must suppress
+generic issue-row chips, expand chevrons, and `Active` / `All` / `Resolved`
+filter chrome in that setup-only state. That setup-only workspace must also be
+the only visible provider-repair CTA for that state: it should use the
+`Open Provider & Models` action and suppress the readiness banner so setup does
+not appear twice. Run history must stay hidden as a competing action until
+Patrol can check infrastructure or an operator is already reviewing a specific
+run record.
 
 Shared primitive consumers that split status-dot tone and status-text tone
 must now keep both values routed through the same exported presentation helper.
@@ -4047,9 +4377,12 @@ runtime lifecycle and persistence flow, model/provider setup now routes
 through `AIModelSelectionSection.tsx`, discovery, budget, timeout, and
 permission controls route through `AIRuntimeControlsSection.tsx`, chat
 maintenance routes through `AIChatMaintenanceSection.tsx`, and readiness plus
-save/test actions route through `AISettingsStatusAndActions.tsx`. Future AI
-settings work must extend those section owners instead of re-inlining large
-runtime subsections into the shell.
+save/test actions route through `AISettingsStatusAndActions.tsx`.
+`AISettingsStatusAndActions.tsx` may expose provider connection status and
+test actions only for the Provider & Models page; section pages reuse the save
+bar without making Patrol, Assistant, or Discovery look like provider setup
+screens. Future AI settings work must extend those section owners instead of
+re-inlining large runtime subsections into the shell.
 Provider-specific settings fields inside
 `AIProviderConfigurationSection.tsx` must remain model-driven through
 `aiSettingsModel.ts` `extraFields`, including Ollama `keep_alive`, so the
@@ -4096,21 +4429,20 @@ the `system-billing` navigation label, header title/description, and billing
 shell framing must all route through `SELF_HOSTED_PRO_BILLING_PRESENTATION`
 instead of drifting independently. The owned split is now explicit: the
 navigation label comes from `navLabel`, while the route header and billing
-shell reuse `shellTitle` plus `shellDescription`, so the settings IA can stay
-plan-owned (`Plans`) while the page itself still names the concrete job
-(`Self-hosted plan`) without reintroducing local label drift.
+shell reuse `shellTitle` plus `shellDescription`, so the settings IA and page
+shell stay aligned on `Plans & Billing` without reintroducing local label drift.
 That same settings-shell framing boundary also covers adjacent top-level
 settings references to the self-hosted commercial surface. When
 `InfrastructureWorkspace.tsx` or other settings-shell surfaces point operators
-toward Plans for billing, license status, or paid feature activation, they
+toward Plans & Billing for billing, license status, Patrol mode, or paid feature access, they
 must reuse the shared referral copy from
 `SELF_HOSTED_PRO_BILLING_PRESENTATION` rather than drafting local “go there
 for billing” variants.
 That same shared presentation owner now also carries the entitlement-first
 commercial summary contract for self-hosted settings. The top-level navigation
-entry stays product-IA owned through `navLabel` (`Plans`), while the page
-header and shell title stay task-owned through `shellTitle`
-(`Self-hosted plan`), and the billing shell must foreground the active plan
+entry stays product-IA owned through `navLabel` (`Plans & Billing`), while the
+page header and shell title stay owned through `shellTitle`
+(`Plans & Billing`), and the billing shell must foreground the active plan
 name plus available capabilities before secondary billing or recovery detail.
 Paid upgrades should be able to confirm “Current plan: Pulse Pro” immediately
 after activation without hunting through generic billing language or a second
@@ -4217,9 +4549,11 @@ external URLs.
 That same shared-shell framing also covers the concise telemetry summary in
 General settings. The shell may present the privacy contract in compact product
 copy, but the vocabulary for anonymous outbound telemetry must stay aligned
-with `security-privacy`: aggregate self-hosted adoption counts and coarse
-feature flags are allowed, while hostnames, credentials, infrastructure
-identifiers, prompts, chat messages, and personal information are not.
+with `security-privacy`: aggregate self-hosted adoption counts, coarse feature
+flags, and coarse Patrol, Assistant, and external-agent usage counters are
+allowed, while hostnames, credentials, infrastructure identifiers, prompts,
+chat messages, command text, action output, token values, and personal
+information are not.
 That same docs-link boundary also governs local legal docs surfaced from the
 settings shell: shared settings surfaces such as
 `AIRuntimeControlsSection.tsx` must route Terms-of-Service links through the

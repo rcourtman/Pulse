@@ -106,9 +106,9 @@ than sold by monitored-system volume.
 | SSO | OIDC/SAML with multi-provider support |
 | Update notifications | Yes |
 | Metrics history | **7 days** |
-| AI Patrol | Monitor + root-cause summaries + fix suggestions with the operator's configured provider or local model |
-| Safe remediation workflows | **No** (must apply fixes manually) |
-| Alert-triggered root-cause analysis | No |
+| AI Patrol | Watch-only findings with the operator's configured provider or local model |
+| Patrol governed fixes | **No** (must apply fixes manually) |
+| Alert investigation | No |
 | Relay | No |
 | Push notifications | No |
 | Customer-specific Relay URL | No |
@@ -123,9 +123,10 @@ than sold by monitored-system volume.
 it's their provider, their key or local runtime, and their operating cost. Pulse
 applies technical guardrails such as anti-loop protection and rate protection.
 
-In both modes, the paid gate is governed execution through Pulse: free users see the
-full analysis and fix suggestions but apply fixes manually. Pro users can run approved
-remediation actions through Pulse.
+In both modes, the paid gate is governed execution through Pulse: free users see
+watch-only Patrol findings but apply fixes manually. Pro users can let Patrol
+investigate, ask for approval when policy requires it, run governed fixes, verify
+outcomes, and record what happened.
 
 ### Relay — $4.99/month or $39/year
 
@@ -138,8 +139,8 @@ remediation actions through Pulse.
 | Push notifications | **Yes** |
 | Customer-specific Relay URL | No; Relay uses the standard outbound relay service for v6 GA |
 | Metrics history | **14 days** |
-| Safe remediation workflows | No |
-| Alert-triggered root-cause analysis | No |
+| Patrol governed fixes | No |
+| Alert investigation | No |
 | RBAC/Audit/Reporting | No |
 | Reporting | No |
 
@@ -153,8 +154,9 @@ without changing their self-hosted monitoring scope.
 |---|---|
 | Monitoring scope | **Core self-hosted monitoring included** |
 | Everything in Relay | Yes |
-| Safe remediation workflows | **Yes** (approved execution, safety preflight, rollback) |
-| Alert-triggered root-cause analysis | **Yes** |
+| Patrol modes | **Yes** (choose how much Patrol can do) |
+| Issue investigation | **Yes** |
+| Governed fixes | **Yes** (approved execution, safety preflight, rollback, verification) |
 | Metrics history | **90 days** |
 | RBAC | **Yes** |
 | Audit logging | **Yes** |
@@ -165,8 +167,8 @@ without changing their self-hosted monitoring scope.
 
 **Positioning:** For serious self-hosted operators who want Pulse to move from monitoring
 into operations. The marketing pitch focuses on three things:
-1. "Explain what broke" (alert-triggered root-cause analysis)
-2. "Fix it safely" (safe remediation workflows)
+1. "Choose Patrol mode" (how much Patrol can do)
+2. "Let Patrol investigate and fix governed issues" (issue investigation, governed fixes, verification)
 3. "Keep longer operating memory" (90-day history)
 
 Relay convenience and the team extras (RBAC, audit logging, reporting, and agent
@@ -291,8 +293,8 @@ Patrol finding is a conversion moment.
 
 ### 3. Provider setup stays self-managed
 AI setup on self-hosted installs should point operators at their own provider connection or
-local model endpoint. Paid operations features such as safe remediation
-workflows, alert analysis, and longer history remain opt-in extras; they do not
+local model endpoint. Paid operations features such as governed fixes,
+issue investigation, and longer history remain opt-in extras; they do not
 replace the self-managed AI runtime path.
 
 ### 4. Relay as optional convenience ($39/yr)
@@ -309,7 +311,7 @@ opens pricing/activation/recovery/support flows, when the session is hosted/clou
 existing entitlement requires a clear renewal or recovery path.
 
 High-intent product moments should stay useful without becoming sales surfaces:
-- Patrol finds a fixable issue -> show the manual fix and BYOK/provider path first; safe remediation execution can
+- Patrol finds a fixable issue -> show the manual fix and BYOK/provider path first; governed fix execution can
   remain an opt-in Pro capability where commercial prompts are explicitly allowed.
 - An alert needs deeper explanation -> keep free investigation context useful; paid alert
   analysis stays an optional, discoverable extra.
@@ -322,7 +324,7 @@ High-intent product moments should stay useful without becoming sales surfaces:
 Self-hosted Community users should not need a temporary monitored-system overflow path because
 core self-hosted monitoring is included by default and not metered. Onboarding can still surface
 Relay and Pro value when users try remote access, push notifications, longer history, alert
-investigation, or safe remediation workflows.
+investigation, or governed fixes.
 
 ### 7. Transparent monitored-system ledger
 The ledger remains important for inventory truth, hosted/MSP limits, and support. It should
@@ -428,7 +430,7 @@ explain monitored-system identity:
 ### Boundary-upgrade copy
 
 - **Community → Relay:** Want Pulse outside your LAN? Upgrade to Relay for secure remote access, mobile, push notifications, and 14-day history.
-- **Relay → Pro:** Want Pulse to do more than alert? Upgrade to Pro for root-cause analysis, safe remediation workflows, and 90-day history.
+- **Relay → Pro:** Want Pulse to do more than alert? Upgrade to Pro for hands-on Patrol modes, issue investigation, governed fixes, verified outcomes, and 90-day history.
 - **Existing self-hosted monitoring:** Your monitored systems keep working. Paid self-hosted tiers add convenience and operations features, not more monitoring room.
 
 ---

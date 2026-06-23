@@ -3,6 +3,8 @@ package chat
 import (
 	"strings"
 	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 )
 
 func TestFSM_InitialState(t *testing.T) {
@@ -287,7 +289,7 @@ func TestClassifyToolCall(t *testing.T) {
 		{"pulse_search_resources", "pulse_search_resources", nil, ToolKindResolve},
 
 		// Interactive user input tools
-		{"pulse_question", "pulse_question", nil, ToolKindUserInput},
+		{"pulse_question", agentcapabilities.PulseQuestionToolName, nil, ToolKindUserInput},
 
 		// Read tools
 		{"pulse_metrics", "pulse_metrics", nil, ToolKindRead},
@@ -333,6 +335,11 @@ func TestClassifyToolCall(t *testing.T) {
 		// Unknown tool defaults to write so state-changing safety policy applies.
 		{"unknown_tool", "some_new_tool", nil, ToolKindWrite},
 
+		// Legacy native Assistant compatibility aliases are classified by the shared core.
+		{"legacy run_command", agentcapabilities.LegacyAssistantRunCommandToolName, nil, ToolKindWrite},
+		{"legacy fetch_url", agentcapabilities.LegacyAssistantFetchURLToolName, nil, ToolKindRead},
+		{"legacy set_resource_url", agentcapabilities.LegacyAssistantSetResourceURLToolName, nil, ToolKindWrite},
+
 		// Action parameter fallback
 		{"generic restart", "some_tool", map[string]interface{}{"action": "restart"}, ToolKindWrite},
 		{"generic stop", "some_tool", map[string]interface{}{"action": "stop"}, ToolKindWrite},
@@ -355,7 +362,7 @@ func TestFSM_UserInputDoesNotAdvanceState(t *testing.T) {
 		t.Fatalf("initial state=%s, want %s", fsm.State, StateResolving)
 	}
 
-	fsm.OnToolSuccess(ToolKindUserInput, "pulse_question")
+	fsm.OnToolSuccess(ToolKindUserInput, agentcapabilities.PulseQuestionToolName)
 
 	if fsm.State != StateResolving {
 		t.Fatalf("state after user input=%s, want %s", fsm.State, StateResolving)
@@ -394,7 +401,7 @@ func TestFSM_RecoveryTracking(t *testing.T) {
 	fsm := NewSessionFSM()
 
 	// Track a pending recovery
-	recoveryID := fsm.TrackPendingRecovery("FSM_BLOCKED", "pulse_control")
+	recoveryID := fsm.TrackPendingRecovery(agentcapabilities.ErrCodeFSMBlocked, "pulse_control")
 	if recoveryID == "" {
 		t.Error("TrackPendingRecovery should return a recovery ID")
 	}
@@ -415,8 +422,8 @@ func TestFSM_RecoveryTracking(t *testing.T) {
 	if pr == nil {
 		t.Error("CheckRecoverySuccess should return the pending recovery")
 	}
-	if pr.ErrorCode != "FSM_BLOCKED" {
-		t.Errorf("ErrorCode = %s, want FSM_BLOCKED", pr.ErrorCode)
+	if pr.ErrorCode != agentcapabilities.ErrCodeFSMBlocked {
+		t.Errorf("ErrorCode = %s, want %s", pr.ErrorCode, agentcapabilities.ErrCodeFSMBlocked)
 	}
 	if pr.Tool != "pulse_control" {
 		t.Errorf("Tool = %s, want pulse_control", pr.Tool)

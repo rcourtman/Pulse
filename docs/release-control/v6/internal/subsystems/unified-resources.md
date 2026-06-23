@@ -89,15 +89,16 @@ cross-source deduplication.
 64. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`
 65. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
 66. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts`
-67. `frontend-modern/src/components/Discovery/DiscoveryTab.tsx`
-68. `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts`
-69. `frontend-modern/src/utils/agentResources.ts`
-70. `frontend-modern/src/utils/canonicalResourceTypes.ts`
-71. `frontend-modern/src/utils/resourceBadgePresentation.ts`
-72. `frontend-modern/src/utils/resourceChangePresentation.ts`
-73. `frontend-modern/src/utils/actionAuditPresentation.ts`
-74. `frontend-modern/src/utils/resourceCorrelationPresentation.ts`
-75. `frontend-modern/src/utils/resourcePlatformData.ts`
+67. `frontend-modern/src/components/Discovery/discoveryReadiness.ts`
+68. `frontend-modern/src/components/Discovery/DiscoveryTab.tsx`
+69. `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts`
+70. `frontend-modern/src/utils/agentResources.ts`
+71. `frontend-modern/src/utils/canonicalResourceTypes.ts`
+72. `frontend-modern/src/utils/resourceBadgePresentation.ts`
+73. `frontend-modern/src/utils/resourceChangePresentation.ts`
+74. `frontend-modern/src/utils/actionAuditPresentation.ts`
+75. `frontend-modern/src/utils/resourceCorrelationPresentation.ts`
+76. `frontend-modern/src/utils/resourcePlatformData.ts`
 76. `frontend-modern/src/utils/resourcePolicyPresentation.ts`
 77. `frontend-modern/src/utils/resourceStateAdapters.ts`
 78. `frontend-modern/src/utils/resourceTypeCompat.ts`
@@ -823,7 +824,7 @@ AI-only summary payloads, or page-local heuristics.
    generic disk-count aggregate, so resource drawers and incidents do not hide
    the actual protection boundary behind a broader count phrase.
 6. Add canonical governed name-resolution or policy-aware resource lookup behavior through `internal/unifiedresources/resolve.go` and `internal/unifiedresources/resolve_context.go`
-8. Add or change discovery-support runtime under the resource drawer through `frontend-modern/src/components/Discovery/DiscoveryTab.tsx` for shell/presentation ownership and `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts` for fetch, websocket-progress, manual-run triggering, and notes-mutation ownership. Embedded drawers may expose the top-level run action through this shared Discovery tab, but they must still call the canonical discovery trigger state path instead of introducing drawer-local API mutations.
+8. Add or change discovery-support runtime under the resource drawer through `frontend-modern/src/components/Discovery/DiscoveryTab.tsx` for shell/presentation ownership, `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts` for fetch, websocket-progress, manual-run triggering, and notes-mutation ownership, and `frontend-modern/src/components/Discovery/discoveryReadiness.ts` for the shared readiness verdict used by resource-drawer Discovery surfaces. Embedded drawers may expose the top-level run action through this shared Discovery tab, but they must still call the canonical discovery trigger state path instead of introducing drawer-local API mutations.
    Resource drawer secondary sections, action history, discovery run summaries,
    and other compact resource-detail cards may own their resource-specific
    labels, rows, filters, and actions, but the repeated bordered compact frame
@@ -898,12 +899,27 @@ AI-only summary payloads, or page-local heuristics.
 16. Keep platform/runtime top-level route paths on the canonical resource-link
     helper. `frontend-modern/src/routing/resourceLinks.ts` owns the
     `STANDALONE_PATH`, `DOCKER_PATH`, `KUBERNETES_PATH`, `TRUENAS_PATH`,
-    `VMWARE_PATH` constants and the `buildStandalonePath`, `buildDockerPath`,
-    `buildKubernetesPath`, `buildTrueNASPath`, `buildVmwarePath` builders.
+    `VMWARE_PATH`, `PATROL_PATH`, `PATROL_CONTROL_ANCHOR`,
+    `PATROL_CONTROL_PATH`, and `PATROL_CONTROL_STARTER_QUERY_PARAM` constants,
+    the route-backed Patrol control starter helpers, and the `buildStandalonePath`,
+    `buildDockerPath`, `buildKubernetesPath`, `buildTrueNASPath`,
+    `buildVmwarePath` builders.
     Per-platform surfaces and tab specs must
     derive every internal link from those builders so the canonical resource
     URL vocabulary stays single-sourced; ad hoc string concatenation of
-    platform routes inside feature directories is not permitted.
+    platform routes inside feature directories is not permitted. The canonical
+    Pulse Intelligence external-agent hash
+    `/settings/pulse-intelligence/assistant#external-agent-setup` and legacy
+    `/settings/security/api#external-agent-setup` /
+    `/settings/security/api#pulse-mcp-setup` compatibility hashes may live in
+    the shared route helper, but they are adjacent settings route state, not
+    unified-resource identity, platform scope, or drawer focus state.
+    The Patrol `patrolControlStarter=patrol_control` query is an adjacent
+    first-party Patrol control handoff flag, with legacy
+    `operationsLoopStarter` values accepted only as compatibility aliases, not
+    unified-resource filters or focus keys. Unified-resource consumers must not reuse those values for resource
+    identity, list filtering, contextual focus, storage state, recovery state,
+    or platform scoping.
     The user-facing Machines surface's default resource route is the machines projection
     (`/standalone/machines`); agentless endpoint rows use the
     `/standalone/availability` projection and must not be collapsed into a
@@ -2094,7 +2110,10 @@ from raw resource fields or invent relationship-map fallbacks locally.
 The same surfaces now also render recent changes through the shared
 `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
 card, so canonical timeline wording and ordering stay governed by one
-frontend feed instead of separate page-local loops.
+frontend feed instead of separate page-local loops. Callers may suppress
+resource-change metadata badges only for compact operator-context surfaces such
+as Patrol's supporting context; the shared card still owns headline/reason
+dedupe so prefixed backend reasons do not render as duplicated visible copy.
 Assistant finding handoffs are part of that same timeline contract: when the AI
 runtime needs recent changes for product-originated handoff resources, it should
 read the canonical unified-resource timeline and `FormatResourceRecentChangesContext`
@@ -2812,14 +2831,17 @@ change-kind wording, source-type wording, source-adapter provenance labels,
 headline formatting, and timeline sort order. Future recent-change wording or
 badge changes should extend those unified-resource owners instead of leaving
 recent-change presentation unowned or rebuilding helper-local labels inside AI,
-Patrol, performance, or infrastructure surfaces.
+Patrol, performance, or infrastructure surfaces. The shared card must not repeat
+a reason line when that reason already equals the canonical headline.
 The shared correlation and policy-posture presentation boundaries are also
 owned here now. `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
 is the canonical shared card for canonical resource relationships, dependency,
 dependent, and learned-correlation context, while
 `frontend-modern/src/utils/resourceCorrelationPresentation.ts` owns endpoint
 labels, relationship labels, headline formatting, summary wording, and canonical
-relationship/correlation ordering.
+relationship/correlation ordering. Correlation and relationship badge text must
+preserve the formatter's human-readable title case instead of forcing visual
+uppercase over enum-like payloads such as `ALERT → ALERT`.
 `frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx`
 is the canonical shared card for governed policy-posture counts, while
 `frontend-modern/src/utils/resourcePolicyPresentation.ts` owns the canonical

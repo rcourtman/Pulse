@@ -62,6 +62,58 @@ class RepoFileIoTest(unittest.TestCase):
                 self.assertEqual(read_repo_text(rel, staged=True), '{"version": "staged"}\n')
                 self.assertEqual(load_repo_json(rel, staged=True), {"version": "staged"})
 
+    def test_staged_reads_preserve_standalone_temporary_index(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            rel = "docs/release-control/v6/internal/status.json"
+            path = repo_root / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+
+            self.git(repo_root, "init")
+            path.write_text('{"version": "head"}\n', encoding="utf-8")
+            self.git(repo_root, "add", rel)
+            self.git(
+                repo_root,
+                "-c",
+                "user.name=Pulse Test",
+                "-c",
+                "user.email=pulse-test@example.invalid",
+                "commit",
+                "-m",
+                "initial",
+            )
+
+            with tempfile.TemporaryDirectory() as index_tmpdir:
+                index_path = Path(index_tmpdir) / "copied-index"
+                env = {"PATH": os.environ.get("PATH", ""), "GIT_INDEX_FILE": str(index_path)}
+                path.write_text('{"version": "temporary-index"}\n', encoding="utf-8")
+                subprocess.run(
+                    ["git", "read-tree", "HEAD"],
+                    cwd=repo_root,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    env=env,
+                )
+                subprocess.run(
+                    ["git", "add", rel],
+                    cwd=repo_root,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    env=env,
+                )
+                path.write_text('{"version": "working-tree"}\n', encoding="utf-8")
+
+                with (
+                    patch("repo_file_io.REPO_ROOT", repo_root),
+                    patch("repo_file_io.DEFAULT_REPO_ROOT", repo_root),
+                    patch.dict(os.environ, env, clear=True),
+                ):
+                    self.assertEqual(read_repo_text(rel), '{"version": "working-tree"}\n')
+                    self.assertEqual(read_repo_text(rel, staged=True), '{"version": "temporary-index"}\n')
+                    self.assertEqual(load_repo_json(rel, staged=True), {"version": "temporary-index"})
+
     def test_strict_staged_read_rejects_worktree_only_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             repo_root = Path(tmpdir)

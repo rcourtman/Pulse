@@ -63,8 +63,8 @@ PUBLIC_COPY_AUDIT_FILES: tuple[CopyAuditFileSpec, ...] = (
             r"monitored[-\s]system volume is no longer the paid gate",
             r"Relay.*14[-\s]day history",
             r"Pro.*90[-\s]day history",
-            r"Alert-triggered root-cause analysis",
-            r"Safe remediation workflows",
+            r"Patrol investigates issues",
+            r"Patrol handles safe fixes",
         ),
     ),
     CopyAuditFileSpec(
@@ -72,7 +72,7 @@ PUBLIC_COPY_AUDIT_FILES: tuple[CopyAuditFileSpec, ...] = (
         relative_path="docs/AI.md",
         required_patterns=(
             r"Pulse Patrol is available to everyone on the Community plan with BYOK",
-            r"Pro adds alert-triggered root-cause analysis and safe remediation workflows",
+            r"Pro adds hands-on Patrol modes, issue investigation, governed fixes, verified outcomes, and 90-day history",
             r"Community and Relay installs can still run scheduled Patrol findings with BYOK",
         ),
     ),
@@ -101,10 +101,10 @@ PUBLIC_COPY_AUDIT_FILES: tuple[CopyAuditFileSpec, ...] = (
         repo="pulse",
         relative_path="frontend-modern/src/utils/selfHostedPlans.ts",
         required_patterns=(
-            r"Self-hosted Pulse includes core monitoring for free",
+            r"Self-hosted Pulse includes core monitoring and watch-only Patrol for free",
             r"Remote web access, pairing, and push",
             r"14-day metric history",
-            r"Root-cause analysis, safe remediation workflows, 90-day history",
+            r"hands-on Patrol modes, verified fixes, 90-day history",
             r"admin/reporting extras",
         ),
     ),
@@ -115,7 +115,7 @@ PUBLIC_COPY_AUDIT_FILES: tuple[CopyAuditFileSpec, ...] = (
             r"Relay Tier.*14-day history",
             r"Pulse Relay.*secure remote access",
             r"No inbound firewall ports",
-            r"Self-hosted Pro should be sold on root-cause analysis",
+            r"Self-hosted Pro should be sold on hands-on Patrol modes",
         ),
     ),
     CopyAuditFileSpec(
@@ -124,7 +124,7 @@ PUBLIC_COPY_AUDIT_FILES: tuple[CopyAuditFileSpec, ...] = (
         required_patterns=(
             r"Community keeps core monitoring free",
             r"(?:Pulse Mobile|mobile app) pairing(?: for handoff)?, push notifications, and 14-day history",
-            r"root-cause analysis, safe remediation workflows, and 90-day history",
+            r"hands-on Patrol modes, issue investigation, verified fixes, and 90-day history",
             r"Do Relay or Pro charge by server\?",
             r"Existing Pulse Pro and legacy Pro\+ holders keep their paid runtime access",
         ),
@@ -135,7 +135,7 @@ PUBLIC_COPY_AUDIT_FILES: tuple[CopyAuditFileSpec, ...] = (
         required_patterns=(
             r"Community keeps core monitoring free",
             r"(?:Pulse Mobile|mobile app) pairing(?: for handoff)?, push notifications, and 14-day history",
-            r"root-cause analysis, safe remediation workflows, team controls, and 90-day history",
+            r"hands-on Patrol modes, issue investigation, verified fixes, team controls, and 90-day history",
             r"not as the self-hosted paid gate",
         ),
     ),

@@ -8,13 +8,13 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
-func newTestProfileManager(t *testing.T) *MCPAgentProfileManager {
+func newTestProfileManager(t *testing.T) *AssistantAgentProfileManager {
 	t.Helper()
 	persistence := config.NewConfigPersistence(t.TempDir())
-	return NewMCPAgentProfileManager(persistence, nil)
+	return NewAssistantAgentProfileManager(persistence, nil)
 }
 
-func TestMCPAgentProfileManagerApplyAndGetScope(t *testing.T) {
+func TestAssistantAgentProfileManagerApplyAndGetScope(t *testing.T) {
 	manager := newTestProfileManager(t)
 	ctx := context.Background()
 
@@ -64,7 +64,7 @@ func TestMCPAgentProfileManagerApplyAndGetScope(t *testing.T) {
 	}
 }
 
-func TestMCPAgentProfileManagerAssignProfile(t *testing.T) {
+func TestAssistantAgentProfileManagerAssignProfile(t *testing.T) {
 	manager := newTestProfileManager(t)
 	ctx := context.Background()
 
@@ -99,7 +99,7 @@ func TestMCPAgentProfileManagerAssignProfile(t *testing.T) {
 	}
 }
 
-func TestMCPAgentProfileManagerGetScopeMissing(t *testing.T) {
+func TestAssistantAgentProfileManagerGetScopeMissing(t *testing.T) {
 	manager := newTestProfileManager(t)
 
 	scope, err := manager.GetAgentScope(context.Background(), "missing")

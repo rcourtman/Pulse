@@ -282,7 +282,10 @@ context. `frontend-modern/src/components/Settings/settingsPanelRegistryContext.t
 must pass the effective authenticated username from `SecurityStatus` into the
 organization overview, access, and sharing panels so membership-derived owner
 and admin actions render consistently for local auth, proxy-auth, and SSO
-sessions.
+sessions. Non-organization settings composition, including Pulse Intelligence
+panel splits, may share the same registry context only when it does not fork or
+reorder that current-user projection for organization overview, access, or
+sharing panels.
 The RBAC settings area now follows the same extracted-owner pattern as the
 other modernized settings surfaces: `RBACFeatureGateSection.tsx` owns the
 shared paywall CTA rendering, `useRBACFeatureGateState.ts` owns the shared

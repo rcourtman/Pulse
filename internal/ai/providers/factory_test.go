@@ -1,6 +1,7 @@
 package providers
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -221,7 +222,7 @@ func TestNewFromConfig_GeminiNoAPIKey(t *testing.T) {
 	}
 }
 
-func TestNewFromConfig_AnthropicOAuth(t *testing.T) {
+func TestNewFromConfig_AnthropicOAuthUnsupported(t *testing.T) {
 	cfg := &config.AIConfig{
 		Enabled:           true,
 		Model:             "anthropic:claude-3-5-sonnet-20241022",
@@ -229,15 +230,12 @@ func TestNewFromConfig_AnthropicOAuth(t *testing.T) {
 		OAuthAccessToken:  "test-token",
 		OAuthRefreshToken: "test-refresh",
 	}
-	provider, err := NewFromConfig(cfg)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
+	_, err := NewFromConfig(cfg)
+	if err == nil {
+		t.Fatal("expected unsupported OAuth error")
 	}
-	if provider == nil {
-		t.Fatal("Provider should not be nil")
-	}
-	if provider.Name() != "anthropic-oauth" {
-		t.Errorf("Expected provider name 'anthropic-oauth', got '%s'", provider.Name())
+	if !strings.Contains(err.Error(), "OAuth subscription authentication is unsupported") {
+		t.Fatalf("expected unsupported OAuth error, got %v", err)
 	}
 }
 
@@ -393,19 +391,19 @@ func TestNewForProvider_GeminiNoAPIKey(t *testing.T) {
 	}
 }
 
-func TestNewForProvider_AnthropicOAuth(t *testing.T) {
+func TestNewForProvider_AnthropicOAuthUnsupported(t *testing.T) {
 	cfg := &config.AIConfig{
 		Enabled:           true,
 		AuthMethod:        config.AuthMethodOAuth,
 		OAuthAccessToken:  "test-token",
 		OAuthRefreshToken: "test-refresh",
 	}
-	provider, err := NewForProvider(cfg, config.AIProviderAnthropic, "claude-3")
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
+	_, err := NewForProvider(cfg, config.AIProviderAnthropic, "claude-3")
+	if err == nil {
+		t.Fatal("expected unsupported OAuth error")
 	}
-	if provider.Name() != "anthropic-oauth" {
-		t.Errorf("Expected provider name 'anthropic-oauth', got '%s'", provider.Name())
+	if !strings.Contains(err.Error(), "OAuth subscription authentication is unsupported") {
+		t.Fatalf("expected unsupported OAuth error, got %v", err)
 	}
 }
 

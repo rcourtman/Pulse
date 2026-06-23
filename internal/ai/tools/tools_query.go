@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
@@ -85,7 +86,7 @@ func (e *ErrRoutingMismatch) Error() string {
 
 // Code returns the error code for structured responses
 func (e *ErrRoutingMismatch) Code() string {
-	return "ROUTING_MISMATCH"
+	return ErrCodeRoutingMismatch
 }
 
 // ToToolResponse returns a consistent ToolResponse for routing mismatches.
@@ -105,7 +106,7 @@ func (e *ErrRoutingMismatch) ToToolResponse() ToolResponse {
 	}
 
 	return NewToolBlockedError(
-		"ROUTING_MISMATCH",
+		ErrCodeRoutingMismatch,
 		e.Message,
 		details,
 	)
@@ -2149,7 +2150,7 @@ func logRoutingMismatchDebug(targetHost string, childKinds, childIDs []string) {
 func (e *PulseToolExecutor) registerQueryTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
-			Name:        "pulse_query",
+			Name:        agentcapabilities.PulseQueryToolName,
 			Description: `Query and search canonical infrastructure resources. Start here to discover systems, workloads, storage, and disks by name. Actions: search, get, config, topology, list, health.`,
 			InputSchema: InputSchema{
 				Type: "object",
@@ -2250,9 +2251,10 @@ func (e *PulseToolExecutor) registerQueryTools() {
 			return exec.executeQuery(ctx, args)
 		},
 		Governance: ToolGovernance{
-			ActionMode:     ToolActionRead,
-			ApprovalPolicy: "no approval required",
-			Summary:        "Resolves canonical infrastructure identity, topology, config, and health without changing state.",
+			ActionMode:      ToolActionRead,
+			ApprovalPolicy:  ToolApprovalScopeOnly,
+			ApprovalSummary: "no approval required",
+			Summary:         "Resolves canonical infrastructure identity, topology, config, and health without changing state.",
 		},
 	})
 }
@@ -4768,7 +4770,7 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 	resourceTypeRaw := strings.TrimSpace(resourceType)
 	resourceType = canonicalQueryResourceType(resourceType)
 
-	if isCurrentResourceReference(resourceID) || isCurrentResourceReference(resourceTypeRaw) {
+	if IsCurrentResourceReference(resourceID) || IsCurrentResourceReference(resourceTypeRaw) {
 		resource, err := e.resolveCurrentResource()
 		if err != nil {
 			return NewErrorResult(err), nil

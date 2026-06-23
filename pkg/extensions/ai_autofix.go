@@ -57,8 +57,8 @@ type AIAutoFixHandlerDeps struct {
 	Approvals func() aicontracts.ApprovalStoreAccessor
 
 	// Command execution
-	MCPExecutor   aicontracts.MCPToolExecutor
-	AgentExecutor aicontracts.AgentCommandExecutor
+	AssistantToolExecutor aicontracts.ApprovedAssistantToolExecutor
+	AgentExecutor         aicontracts.AgentCommandExecutor
 
 	// Finding/patrol operations
 	FindingUpdater     aicontracts.FindingOutcomeUpdater
@@ -84,6 +84,12 @@ type AIAutoFixHandlerDeps struct {
 	EnsureScope    func(w http.ResponseWriter, r *http.Request, scope string) bool
 	AuditLog       func(event, username, ip, path string, success bool, details string)
 	GetClientIP    func(r *http.Request) string
+}
+
+// ResolveApprovedAssistantToolExecutor returns the native approved Assistant
+// tool executor.
+func (d AIAutoFixHandlerDeps) ResolveApprovedAssistantToolExecutor() aicontracts.ApprovedAssistantToolExecutor {
+	return d.AssistantToolExecutor
 }
 
 // BindAIAutoFixEndpointsFunc allows enterprise modules to bind replacement

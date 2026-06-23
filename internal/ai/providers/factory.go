@@ -38,19 +38,11 @@ func NewForProvider(cfg *config.AIConfig, provider, model string) (Provider, err
 
 	switch provider {
 	case config.AIProviderAnthropic:
-		// Check for OAuth first
-		if cfg.IsUsingOAuth() && cfg.OAuthAccessToken != "" {
-			return NewAnthropicOAuthClient(
-				cfg.OAuthAccessToken,
-				cfg.OAuthRefreshToken,
-				cfg.OAuthExpiresAt,
-				model,
-				timeout,
-			), nil
-		}
-		// Then check for per-provider API key
 		apiKey := cfg.GetAPIKeyForProvider(config.AIProviderAnthropic)
 		if apiKey == "" {
+			if cfg.AuthMethod == config.AuthMethodOAuth && cfg.OAuthAccessToken != "" {
+				return nil, fmt.Errorf("Anthropic OAuth subscription authentication is unsupported; configure an Anthropic API key")
+			}
 			return nil, fmt.Errorf("Anthropic API key not configured")
 		}
 		return NewAnthropicClient(apiKey, model, timeout), nil

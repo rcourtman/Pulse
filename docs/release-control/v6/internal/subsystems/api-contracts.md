@@ -25,100 +25,113 @@ the trust boundary that keeps customer-safe support diagnostics and normal
 product API routes free of maintainer commercial analytics.
 
 ## Canonical Files
+
 1. `internal/api/contract_test.go`
-1a. `internal/api/platform_connection_shared.go`
-1b. `internal/api/metadata_handlers_shared.go`
+   1a. `internal/api/platform_connection_shared.go`
+   1b. `internal/api/metadata_handlers_shared.go`
 2. `internal/api/resources.go`
 3. `internal/api/discovery_handlers.go`
-3. `internal/api/alerts.go`
-4. `internal/api/activity_audit_handlers.go`
-5. `internal/api/actions.go`
-5a. `internal/api/action_executor.go`
-5b. `internal/api/docker_container_action_executor.go`
-5c. `internal/api/proxmox_guest_action_executor.go`
-6. `internal/actionplanner/planner.go`
-7. `pkg/pulsecli/api_client.go`
-8. `pkg/pulsecli/actions.go`
-9. `pkg/pulsecli/fleet.go`
-10. `pkg/pulsecli/root.go`
-5. `frontend-modern/src/types/api.ts`
-6. `frontend-modern/src/types/actionAudit.ts`
-7. `frontend-modern/src/api/actionAudit.ts`
-7a. `frontend-modern/src/api/resourceActions.ts`
-6. `frontend-modern/src/api/responseUtils.ts`
-7. `frontend-modern/src/components/Settings/APITokenManager.tsx`
-8. `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`
-9. `frontend-modern/src/constants/apiScopes.ts`
-9. `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`
-10. `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`
-11. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`
-12. `frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx`
-15. `frontend-modern/src/components/Settings/NodeModalBasicInfoSection.tsx`
-16. `frontend-modern/src/components/Settings/nodeModalModel.ts`
-17. `frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx`
-18. `frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx`
-19. `frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx`
-20. `frontend-modern/src/components/Settings/useNodeModalState.ts`
-21. `frontend-modern/src/utils/agentInstallCommand.ts`
-22. `frontend-modern/src/api/nodes.ts`
-23. `frontend-modern/src/api/license.ts`
-24. `frontend-modern/src/api/monitoredSystemLedger.ts`
-25. `frontend-modern/src/api/resources.ts`
-26. `frontend-modern/src/api/monitoring.ts`
-27. `internal/api/monitored_system_ledger.go`
-28. `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`
-29. `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts`
-31. `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts`
-32. `frontend-modern/src/utils/apiTokenPresentation.ts`
-33. `frontend-modern/src/utils/infrastructureSettingsPresentation.ts`
-34. `internal/api/router_routes_auth_security.go`
-35. `internal/api/relay_hosted_runtime.go`
-36. `internal/api/ai_hosted_runtime.go`
-37. `internal/api/router_routes_licensing.go`
-38. `internal/api/reporting_inventory_handlers.go`
-39. `internal/cloudcp/portal/bootstrap.go`
-40. `internal/cloudcp/portal/handlers.go`
-41. `internal/cloudcp/portal/page.go`
-42. `internal/cloudcp/portal/page_templates.go`
-43. `internal/cloudcp/portal/frontend/src/index.ts`
-44. `internal/cloudcp/portal/frontend/src/shell.ts`
-45. `internal/cloudcp/portal/frontend/src/billing.ts`
-46. `internal/cloudcp/portal/frontend/src/runtime.ts`
-47. `internal/cloudcp/portal/frontend/src/types.ts`
-48. `internal/cloudcp/portal/frontend/src/styles.css`
-49. `internal/cloudcp/portal/frontend/tsconfig.json`
-50. `internal/cloudcp/portal/frontend_sync_test.go`
-51. `internal/api/recovery_handlers.go`
-51a. `internal/api/pbs_backups.go`
-52. `internal/api/config_setup_handlers.go`
-52a. `internal/api/setup_script_render.go`
-52b. `internal/api/cloud_agent_install_command.go`
-53. `internal/api/demo_mode_commercial.go`
-54. `internal/api/demo_mode_operations.go`
-55. `internal/api/security_status_capabilities.go`
-56. `internal/api/demo_middleware.go`
-56. `frontend-modern/src/stores/aiRuntimeState.ts`
-57. `internal/api/connections_types.go`
-58. `internal/api/connections_aggregator.go`
-59. `internal/api/connections_handlers.go`
-60. `internal/api/connections_probe.go`
-61. `frontend-modern/src/api/connections.ts`
-62. `frontend-modern/src/utils/connectionErrorPresentation.ts`
-63. `internal/api/availability_handlers.go`
-64. `frontend-modern/src/api/availabilityTargets.ts`
-65. `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx`
-65a. `frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx`
-65b. `frontend-modern/src/components/Settings/availabilitySettingsModel.ts`
-66. `pkg/aicontracts/investigation.go`
-67. `internal/api/ai_intelligence_handlers.go`
-68. `frontend-modern/src/api/ai.ts`
-69. `frontend-modern/src/api/aiChat.ts`
-69a. `frontend-modern/src/api/aiChatDevStreamFixture.ts`
-70. `frontend-modern/src/api/patrol.ts`
-71. `frontend-modern/src/api/generated/aiChatEvents.ts`
-72. `internal/api/agent_exec_token_binding.go`
-73. `internal/agentcontext/`
-74. `scripts/generate-types.go`
+4. `internal/api/alerts.go`
+5. `internal/api/activity_audit_handlers.go`
+6. `internal/api/actions.go`
+   5a. `internal/api/action_executor.go`
+   5b. `internal/api/docker_container_action_executor.go`
+   5c. `internal/api/proxmox_guest_action_executor.go`
+7. `internal/actionplanner/planner.go`
+8. `pkg/pulsecli/api_client.go`
+9. `pkg/pulsecli/actions.go`
+10. `pkg/pulsecli/fleet.go`
+11. `pkg/pulsecli/root.go`
+12. `frontend-modern/src/types/api.ts`
+13. `frontend-modern/src/types/actionAudit.ts`
+14. `frontend-modern/src/api/actionAudit.ts`
+    7a. `frontend-modern/src/api/resourceActions.ts`
+    7b. `frontend-modern/src/api/agentCapabilities.ts`
+    7c. `frontend-modern/src/api/generated/agentCapabilities.ts`
+15. `frontend-modern/src/api/responseUtils.ts`
+16. `frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx`
+17. `frontend-modern/src/components/Settings/APITokenManager.tsx`
+18. `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`
+19. `frontend-modern/src/constants/apiScopes.ts`
+20. `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`
+21. `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`
+22. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`
+23. `frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx`
+24. `frontend-modern/src/components/Settings/NodeModalBasicInfoSection.tsx`
+25. `frontend-modern/src/components/Settings/nodeModalModel.ts`
+26. `frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx`
+27. `frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx`
+28. `frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx`
+29. `frontend-modern/src/components/Settings/useNodeModalState.ts`
+30. `frontend-modern/src/utils/agentInstallCommand.ts`
+31. `frontend-modern/src/api/nodes.ts`
+32. `frontend-modern/src/api/license.ts`
+    23a. `frontend-modern/src/api/settings.ts`
+33. `frontend-modern/src/api/monitoredSystemLedger.ts`
+34. `frontend-modern/src/api/resources.ts`
+35. `frontend-modern/src/api/monitoring.ts`
+36. `internal/api/monitored_system_ledger.go`
+37. `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`
+38. `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts`
+39. `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts`
+40. `frontend-modern/src/utils/apiTokenPresentation.ts`
+41. `frontend-modern/src/utils/infrastructureSettingsPresentation.ts`
+42. `internal/api/router_routes_auth_security.go`
+43. `internal/api/relay_hosted_runtime.go`
+44. `internal/api/ai_hosted_runtime.go`
+45. `internal/api/router_routes_licensing.go`
+46. `internal/api/reporting_inventory_handlers.go`
+47. `internal/cloudcp/portal/bootstrap.go`
+48. `internal/cloudcp/portal/handlers.go`
+49. `internal/cloudcp/portal/page.go`
+50. `internal/cloudcp/portal/page_templates.go`
+51. `internal/cloudcp/portal/frontend/src/index.ts`
+52. `internal/cloudcp/portal/frontend/src/shell.ts`
+53. `internal/cloudcp/portal/frontend/src/billing.ts`
+54. `internal/cloudcp/portal/frontend/src/runtime.ts`
+55. `internal/cloudcp/portal/frontend/src/types.ts`
+56. `internal/cloudcp/portal/frontend/src/styles.css`
+57. `internal/cloudcp/portal/frontend/tsconfig.json`
+58. `internal/cloudcp/portal/frontend_sync_test.go`
+59. `internal/api/recovery_handlers.go`
+    51a. `internal/api/pbs_backups.go`
+60. `internal/api/config_setup_handlers.go`
+    52a. `internal/api/setup_script_render.go`
+    52b. `internal/api/cloud_agent_install_command.go`
+61. `internal/api/demo_mode_commercial.go`
+62. `internal/api/demo_mode_operations.go`
+63. `internal/api/security_status_capabilities.go`
+64. `internal/api/demo_middleware.go`
+65. `frontend-modern/src/stores/aiRuntimeState.ts`
+66. `internal/api/connections_types.go`
+67. `internal/api/connections_aggregator.go`
+68. `internal/api/connections_handlers.go`
+69. `internal/api/connections_probe.go`
+70. `frontend-modern/src/api/connections.ts`
+71. `frontend-modern/src/utils/connectionErrorPresentation.ts`
+72. `internal/api/availability_handlers.go`
+73. `frontend-modern/src/api/availabilityTargets.ts`
+74. `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx`
+    65a. `frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx`
+    65b. `frontend-modern/src/components/Settings/availabilitySettingsModel.ts`
+75. `pkg/aicontracts/investigation.go`
+    66a. `pkg/aicontracts/orchestrator_deps.go`
+    66b. `pkg/aicontracts/fix_execution.go`
+76. `internal/api/ai_intelligence_handlers.go`
+77. `frontend-modern/src/api/ai.ts`
+78. `frontend-modern/src/api/aiChat.ts`
+    69a. `frontend-modern/src/api/aiChatDevStreamFixture.ts`
+79. `frontend-modern/src/api/patrol.ts`
+80. `frontend-modern/src/api/generated/aiChatEvents.ts`
+81. `internal/api/agent_exec_token_binding.go`
+    72a. `cmd/pulse-mcp/main.go`
+    72b. `cmd/pulse-mcp/README.md`
+    72c. `cmd/agent-probe/main.go`
+    72d. `scripts/generate-pulse-intelligence-docs.go`
+82. `internal/agentcontext/`
+    73a. `internal/agentcapabilities/`
+    73b. `pkg/extensions/ai_autofix.go`
+83. `scripts/generate-types.go`
 
 ## Shared Boundaries
 
@@ -126,6 +139,285 @@ Assistant chat `workflow_state` events are a shared AI/API payload boundary.
 The backend source of truth is `internal/ai/chat.WorkflowStateData`, generated
 to `frontend-modern/src/api/generated/aiChatEvents.ts` by
 `scripts/generate-types.go` and pinned by `internal/api/contract_test.go`.
+Agent capabilities manifest payloads follow the same rule:
+`internal/agentcapabilities.Manifest`, `Capability`, `CapabilityCategory`,
+`SurfaceContract`, `SurfaceContractComponent`, `OperatorSurfaceContract`,
+`SurfaceAffordanceContract`, `MCPAdapterContract`, and
+`MCPAdapterConfigFamily` generate
+`frontend-modern/src/api/generated/agentCapabilities.ts`; the shared frontend
+client must alias those generated types instead of redeclaring a browser-local
+manifest model. The manifest-owned `surfaceContract` is the
+canonical API statement that Pulse Intelligence Core is shared, Pulse Patrol is
+the primary built-in operator, and Pulse Assistant plus Pulse MCP are the
+supported access paths over the same governed capabilities, including the
+affordances each path exposes. The Patrol surface description is also
+manifest-owned product copy; API clients, docs, and settings projections must
+render the concise policy-bound operator summary from the manifest instead of
+carrying local control-level prose.
+The manifest-owned `mcpAdapter` is the canonical API statement for Pulse MCP
+client setup facts: server name, command, base URL flag/default, token
+environment variable, and supported client config families. UI and docs may
+compose copy around those facts, but they must not carry component-local or
+README-local setup constants.
+Manifest-backed MCP initialize responses must render that relationship from
+`Manifest.SurfaceContract` rather than hard-coded adapter prose. Native
+Assistant operating instructions must use the same shared renderer, with
+surface-specific affordance flags controlling only whether tools, resources,
+prompts, capability metadata, and Assistant-native interactive questions are
+advertised. MCP initialize responses and JSON-RPC handlers must resolve those
+surface affordances before advertising or serving tools, resources, prompts, or
+capability metadata; raw manifest capability and prompt presence can satisfy an
+allowed affordance, but cannot enable a disabled surface affordance. Prompt
+advertising and serving must use `MCPManifestSurfacePromptProjectionSupported`
+and `GetMCPPromptFromManifestSurface` so the target surface's `prompts`
+affordance and the manifest-owned workflow prompt catalogue are resolved
+together before initialize, `prompts/list`, or `prompts/get` exposes prompts.
+The Pulse Intelligence manifest docs generator must also render the MCP README
+surface-contract block from `Manifest.SurfaceContract` and the MCP client
+config block from `Manifest.MCPAdapter`; scope, tool, prompt, error-code, and
+Assistant/MCP/Core/Patrol relationship docs are all API-manifest projections,
+not parallel onboarding snapshots.
+Native Assistant workflow-prompt rendering is a canonical API projection of
+that same manifest. `POST /api/ai/workflow-prompts/render` is an authenticated
+`ai:chat` route owned by `internal/api/ai_handler.go` and
+`internal/api/router_routes_ai_relay.go`; it accepts the manifest prompt name
+plus argument map, validates them against the manifest-owned workflow prompt
+catalogue through `internal/agentcapabilities`, and returns only the rendered
+Assistant prompt text plus description. Browser
+clients must read prompt names, display labels, presentation kind hints,
+descriptions, and arguments through the generated `workflowPrompts` manifest
+type and call `AIChatAPI.renderWorkflowPrompt` rather than rendering prompt
+templates locally. Browser context may carry a preferred workflow prompt name
+only as a request to render one manifest-owned starter through that API route;
+it is not a transport for prompt text or a reason to bypass argument resolution.
+MCP `prompts/list` projects those same labels as protocol prompt titles and MCP
+`prompts/get` remains the protocol-edge projection over the same shared
+workflow-prompt core. Route inventory and AI chat scope tests must pin that
+route so it does not drift into public manifest discovery, relay-mobile access,
+or `ai:execute` approval replay.
+Successful workflow prompt rendering is also the API boundary for content-free
+guided-starter activity: native Assistant rendering records only the manifest
+prompt name, coarse Assistant surface, and timestamp; first-party Pulse app
+surfaces that start the same governed journey without rendering prompt text may
+record through authenticated `POST /api/ai/workflow-prompts/activity`; and MCP
+adapters that render prompts locally may report the same event through
+`POST /api/agent/workflow-prompt-activity`. The first-party marker route is an
+authenticated `ai:chat` route owned by `internal/api/ai_handler.go` and
+`internal/api/router_routes_ai_relay.go`; it accepts one JSON object with a
+manifest-declared prompt name plus an optional first-party surface, allows only
+`pulse_assistant`, `pulse_patrol`, `patrol_control`, `patrol_autonomy`, and
+the legacy `pulse_pro_activation` alias, defaults omitted surface to `pulse_assistant`,
+rejects unknown prompts or non-first-party surfaces, and returns no payload.
+`pulse_patrol` is the ordinary first-party Patrol entry marker, while
+`patrol_control` is the current paid Patrol control handoff marker for the
+same manifest-owned Patrol work prompt. `patrol_autonomy` and
+`pulse_pro_activation` remain legacy Pro activation entry-point aliases for
+compatibility only; none of these surfaces is a separate prompt, route,
+Assistant surface, or completion proof.
+The browser-only paid Patrol control handoff may carry the coarse
+`patrolControlStarter=patrol_control` route query so Patrol can record that
+same marker after navigation. The old `operationsLoopStarter=patrol_control`,
+`operationsLoopStarter=patrol_autonomy`, and
+`operationsLoopStarter=pulse_pro_activation` values must remain accepted as
+legacy aliases that normalize to the current Patrol control starter, but those
+queries are not API payload fields and may not contain prompt arguments,
+resource IDs, finding IDs, account identity, token identity, or terminal proof.
+Consuming that route handoff must still enter the authenticated first-party
+marker route described here before any status projection treats it as Patrol
+control starter evidence. Operations status projections count `pulse_patrol`,
+`patrol_control`, legacy `patrol_autonomy`, and legacy `pulse_pro_activation`
+as Patrol control starter evidence, while `proActivationOperationsLoopStarterCount`
+preserves only the legacy Pro activation entry-point count. The
+agent marker route is an authenticated `monitoring:read` API-token route,
+accepts only one JSON object with a manifest-declared prompt name, normalizes
+the `X-Pulse-Agent-Surface` value `pulse_mcp` to the Pulse MCP surface, and
+must reject unknown prompts without recording activity. Neither route may
+accept or persist prompt arguments, rendered text, resource IDs, finding IDs,
+session IDs, token identity, request bodies, or model output.
+Telemetry preview and outbound ping payloads project that same content-free
+activity into 30-day Patrol work starter counters: one total starter count
+plus source-specific Assistant, Pulse Patrol, primary Patrol control, legacy
+Pro activation entry-point, and Pulse MCP counts. Those payload fields are
+API-contract fields for adoption/value measurement only; they must not carry
+prompt text, prompt arguments, resource/finding identity, session identity,
+checkout/account identity, or request details.
+`GET /api/agent/patrol-control/status` owns the shared content-safe Patrol
+control value state exposed to native Pulse and MCP-facing agents. The legacy
+`GET /api/agent/operations-loop/status` URL remains a compatibility alias, not
+the primary route:
+`not_started`, `in_progress`, `governed_decision_recorded`,
+`verified_needs_mcp`, and `verified`. `verified_needs_mcp` remains a tolerated
+legacy value for older payloads, but MCP readiness is no longer a Patrol
+control value gate. Counts remain the aggregate evidence source, while
+`patrolControlValueState` is the canonical branch signal for distinguishing a
+safe terminal rejection from a verified operations-value outcome.
+`patrolAutonomyValueState` and
+`proActivationValueProofState` mirror that value as compatibility aliases for
+older commercial and telemetry consumers. Only `verified` means the first-party
+Patrol control loop has approved-governed action, verified outcome proof, and
+recorded action history; adjacent UI or agent clients must not infer that from
+`nextAction=complete` alone.
+Current-work precedence is part of that same contract: `activeFindingCount` must
+include aggregate active issue-level findings from the canonical Patrol findings
+store, including runtime/service findings that are not attached to a unified
+registry resource. Pending approvals and active findings are current operator
+work and must outrank older completed/resolved loop proof when the route chooses
+`nextAction` and step status. Historical Patrol control proof remains recorded
+as count-only value evidence, but it must render as history until the current
+finding or approval is handled.
+The authenticated `GET /api/agent/patrol-control/status` projection exposes the same content-free starter evidence as count-only fields
+(`operationsLoopStarterCount`, `assistantOperationsLoopStarterCount`,
+`patrolOperationsLoopStarterCount`,
+`patrolControlOperationsLoopStarterCount`,
+`patrolControlCompletedOperationsLoopCount`,
+`patrolControlResolvedOperationsLoopCount`, `patrolControlValueState`,
+`patrolAutonomyOperationsLoopStarterCount`,
+`patrolAutonomyCompletedOperationsLoopCount`,
+`patrolAutonomyResolvedOperationsLoopCount`, `patrolAutonomyValueState`,
+`proActivationOperationsLoopStarterCount`,
+`proActivationCompletedOperationsLoopCount`,
+`proActivationResolvedOperationsLoopCount`, and `mcpOperationsLoopStarterCount`)
+inside the status evidence window. These fields are orientation/adoption
+evidence for Assistant, Patrol control, older compatibility clients, and MCP
+loop entry points. `patrolControlOperationsLoopStarterCount` is the primary
+starter count for native Pulse Patrol and Patrol control starts, while
+`patrolAutonomyOperationsLoopStarterCount` mirrors it for compatibility and
+`proActivationOperationsLoopStarterCount` is retained only for older
+external-agent clients; primary clients must use
+`patrolControlOperationsLoopStarterCount`. Only the completed-loop and
+resolved-loop counts may
+summarize that first-party starter evidence and terminal loop evidence
+coexisted in the current evidence window. `patrolControlCompletedOperationsLoopCount`
+requires Patrol issue evidence, contextual Assistant or external-agent
+collaboration, and either a rejected governed decision or an approved governed
+decision with verified outcome proof. `patrolControlResolvedOperationsLoopCount`
+is stricter: it requires Patrol issue evidence, contextual Assistant or
+external-agent collaboration, an approved governed decision, and verified
+outcome proof. The completed-loop, resolved-loop, and value-state
+`patrolAutonomy*` and `proActivation*` fields are compatibility aliases for the
+same Patrol control proof model; human-facing manifest descriptions and
+external-agent docs must describe all of these fields as Patrol control
+compatibility metadata rather than a Pro activation journey. The
+`internal/telemetry.ClassifyPulseIntelligencePatrolControlProof` helper is the
+canonical count-only classifier for those completed/resolved counts and the
+`patrolControlValueState` string; API status projections and outbound
+telemetry/adoption projections must call that helper or its legacy alias
+wrapper instead of restating the branch rules locally, and must not pass
+`externalAgentReady` into that classifier because MCP readiness is not a Patrol
+control proof input. The
+`externalAgentReady` field is not manifest-shape readiness by itself: the route
+must first prove the Pulse MCP Patrol work contract exists in the canonical
+manifest and then require a single non-expired API token covering every scope
+required by the published Pulse MCP Patrol work capability set. It is
+optional external-agent readiness for settings handoff and MCP clients, not a
+completed/resolved Patrol control proof requirement. They must
+not expose
+prompt names, surfaces, identities, payloads, checkout/account
+identity, route parameters, action IDs, command text, resource names, or
+finding IDs, and they do not replace the detail-owning Assistant, Patrol,
+governed-action, verification, or finding-resolution routes.
+The public `docs/AI.md` Pulse Intelligence overview must use the same API
+projection: its marked Core/Patrol/Assistant/MCP block is rendered by
+`PulseIntelligenceOverviewMarkdown(Manifest.SurfaceContract)`, while
+surrounding product detail may stay human-authored.
+The External agents settings panel is part of the same API projection: its
+surface summary must consume the generated frontend manifest types and
+`/api/agent/capabilities.surfaceContract` through
+`frontend-modern/src/api/agentCapabilities.ts` instead of repeating
+Assistant/MCP/Core/Patrol relationship copy or affordance labels in the
+component.
+Its MCP client examples and copied config snippets must also consume
+`/api/agent/capabilities.mcpAdapter` through that same shared frontend client;
+the component must not own local `pulse-mcp`, `--base-url`, token-env, or
+client-family constants, and copied config snippets should be available only
+inside an on-demand setup disclosure rather than becoming the default API Access
+page content.
+The public investigation orchestrator dependency contract in
+`pkg/aicontracts/orchestrator_deps.go` is also part of this shared boundary:
+orchestrator tool-call and tool-result payloads must bridge to the shared
+`agentcapabilities.ProviderToolCall` / `ProviderToolResult` shapes through the
+`aicontracts` projection helpers, preserving Assistant/MCP input-map,
+thought-signature, and provider-result normalization instead of duplicating
+local payload copies in API handlers.
+The API contract proof for native Assistant provider tools follows the same
+shared-boundary rule: chat-facing API tests must pin
+`PulseToolExecutor.AssistantProviderTools` as the single native Assistant
+provider-tool projection entrypoint, while the executor owns the manifest
+surface-affordance gate and the pairing of runtime-available registry tools,
+registry governance descriptors, and Assistant-native interaction tools before
+provider requests are assembled.
+Surface tool inventories are a shared Pulse Intelligence API contract rather
+than a UI or adapter inference. `internal/agentcapabilities.SurfaceToolContract`
+and `ProjectPulseIntelligenceSurfaceToolContracts` must describe Pulse
+Assistant tools as `assistant_registry` sourced provider tools, splitting
+registry-backed tools from Assistant-native interaction tools such as
+`pulse_question`, while manifest-declared external-adapter tools are
+`capability_manifest` sourced request/response capabilities projected from
+`Manifest.Capabilities` by `ProjectManifestSurfaceToolContracts` and published
+on `Manifest.SurfaceToolContracts`. External surfaces, including Pulse MCP,
+must resolve through the surface-generic manifest contract path and must fail
+closed when their published `surfaceToolContracts` entry is missing. Native
+Assistant provider-tool projection must enter through
+`ProjectPulseAssistantProviderTools`, so disabled Assistant affordances also
+fail closed instead of letting runtime registry availability re-enable provider
+tools. The two surfaces therefore share governance vocabulary and core
+execution contracts without pretending their tool-name lists are
+interchangeable.
+The frontend-facing contract type must be generated from that same Go shape
+(`frontend-modern/src/api/generated/agentCapabilities.ts`) and re-exported by
+the shared agent-capabilities client. Do not hand-write a parallel frontend
+copy. Runtime surface-tool normalization and count/presentation helpers also
+belong in `frontend-modern/src/api/agentCapabilities.ts`, so native Assistant
+UI, MCP onboarding surfaces, and future agent-compatible surfaces do not infer
+tool availability from local tool-name lists. Do not expose live Assistant
+registry availability through the public, cacheable `/api/agent/capabilities`
+manifest; that runtime inventory belongs behind the authenticated
+`GET /api/ai/assistant/surface-tools` Assistant surface endpoint when the UI
+needs it. The Pulse Assistant shell may render a runtime tool-posture chip, but
+it must call `AIChatAPI.getAssistantSurfaceTools()` and
+`getAgentSurfaceToolPosturePresentation` instead of hard-coding registry tool
+names or treating MCP capability names as native Assistant tools. The Agent
+integrations panel may render MCP tool posture from the static public manifest,
+but the request/response capability filtering and `SurfaceToolContract`
+construction must be backend-owned in `Manifest.SurfaceToolContracts`; the
+generic `getAgentManifestSurfaceToolContract(manifest,
+AGENT_SURFACE_ID_PULSE_MCP)` frontend client path may normalize only that
+published manifest field. Missing `surfaceToolContracts` entries must not cause
+the browser to infer MCP tools from raw capabilities. The panel must not know the
+streaming-only `subscribe_events` exception, call a per-surface projection
+alias, or maintain a local MCP tool count. The shared frontend client must not
+export a Pulse-MCP-specific surface tool helper; MCP onboarding uses the generic
+surface resolver with `AGENT_SURFACE_ID_PULSE_MCP` so future external surfaces do
+not require browser-side helper duplication.
+Frontend surfaces that need to know whether Pulse MCP exposes the full Patrol
+work loop must derive that readiness through the shared agent-capabilities
+client from the manifest-owned operations-loop workflow prompt, MCP adapter
+contract, and Pulse MCP surface tool contract rather than hard-coding readiness
+in the consuming component. The Patrol work capability set includes the
+content-safe `get_patrol_control_status` capability as the first orientation
+read, followed by fleet context, resource context, findings, governed action
+planning, action decision, action execution, and finding resolution; readiness
+helpers, workflow-prompt gates, and MCP surface projections must consume that
+one shared set instead of maintaining local loop-tool lists. Native Patrol
+surfaces that need the current loop evidence must call the authenticated
+`GET /api/agent/patrol-control/status` route through
+`frontend-modern/src/api/agentCapabilities.ts`, not through a
+Patrol-local fetcher or a browser-side reconstruction of agent capability
+progress. First-party Patrol presentation may tolerate legacy `open_mcp` and
+`verified_needs_mcp` payloads as already verified operator-loop history, and it
+may show `externalAgentReady` only as optional external-agent context. Patrol
+current-work state/model must not fetch the manifest to derive MCP readiness,
+accept MCP readiness props, or introduce a page-local MCP readiness contract.
+First-party Patrol UI may present that projection as Patrol current work, but
+the authenticated route, query compatibility aliases, and generated wire fields
+remain the `operations-loop` contract until a deliberate API migration changes
+them.
+Backend consumers that need an external surface's request/response capability
+set must resolve it through `ResolveManifestSurfaceToolContract` and
+`ManifestSurfaceToolCapabilities`, not by reading raw `surfaceToolContracts`
+entries directly; that shared path normalizes `CapabilityNames`/`ToolNames`,
+filters non-request/response capabilities, and enforces the resolved surface
+`tools` affordance before docs, adapters, or UI projections see any tools.
 Provider retry progress must use typed fields (`attempt`, `max_attempts`,
 `retry_after_ms`) on that same event instead of frontend-only string parsing or
 provider-specific ad hoc events; the Assistant UI may format those fields, but
@@ -334,38 +626,280 @@ templates are collapsible guidance over the account payload; they must not
 replace tenant-local setup facts, become a readiness source, or require a
 payload shape change when the portal presents compact client rows.
 
-1. `frontend-modern/src/api/agentProfiles.ts` shared with `agent-lifecycle`: the agent profiles frontend client is both an agent lifecycle control surface and a canonical API payload contract boundary.
-2. `frontend-modern/src/api/ai.ts` shared with `ai-runtime`: the AI frontend client is both an AI runtime control surface and a canonical API payload contract boundary.
-3. `frontend-modern/src/api/nodes.ts` shared with `agent-lifecycle`: the shared Proxmox node client is both an agent lifecycle setup/install control surface and a canonical API payload contract boundary.
-4. `frontend-modern/src/api/notifications.ts` shared with `notifications`: the notifications frontend client is both a notification delivery control surface and a canonical API payload contract boundary.
-5. `frontend-modern/src/api/orgs.ts` shared with `organization-settings`: the organization frontend client is both an organization settings control surface and a canonical API payload contract boundary.
-6. `frontend-modern/src/api/patrol.ts` shared with `ai-runtime`: the Patrol frontend client is both an AI runtime control surface and a canonical API payload contract boundary.
-   The Patrol status payload owns Patrol readiness as structured API state:
-   provider/model/settings/tool prerequisites must travel as bounded readiness
-   checks instead of frontend-only heuristics or generic analysis-failed text.
-   `/api/settings/ai/update` must persist recoverable provider/model changes
-   and return the same structured readiness cause in its settings payload, while
-   `/api/ai/patrol/run` must use the `patrol_readiness_not_ready` error taxonomy
-   when it rejects a known-bad Patrol runtime configuration. Bounded `status`,
-   `cause`, `provider`, and `model` details are the canonical transport shape.
-   `/api/ai/patrol/findings` is the canonical Patrol-page findings source, and
-   `/api/ai/patrol/runs` records may expose bounded `source` provenance so demo
-   evidence can be separated from live runtime assessment state without
-   changing the stable run payload shape.
-   The Patrol status payload's `trigger_status` object is the canonical
-   transport for alert/anomaly trigger queue and mode facts. Patrol summary UI
-   may present that state as factual trigger-mode context, but it must not infer
-   trigger enablement or queue state from settings payloads, route state, or
-   run-history labels.
-7. `frontend-modern/src/api/rbac.ts` shared with `organization-settings`: the RBAC frontend client is both an organization settings control surface and a canonical API payload contract boundary.
-8. `frontend-modern/src/api/security.ts` shared with `security-privacy`: the security frontend client is both a security/privacy control surface and a canonical API payload contract boundary.
-9. `frontend-modern/src/api/updates.ts` shared with `deployment-installability`: the updates frontend client is both a deployment-installability control surface and a canonical API payload contract boundary.
-   It must preserve `/api/updates/plan.readiness` payloads as backend-owned
-   API state so settings UI can render `ready`, `attention`, and `blocked`
-   update checks without rebuilding upgrade state locally. The frontend may
-   disable blocked installs, but the backend apply route remains authoritative
-   and must reject a recomputed `blocked` readiness verdict.
-10. `frontend-modern/src/components/Settings/APITokenManager.tsx` shared with `security-privacy`: the API token settings surface is both a security/privacy control surface and a canonical API payload contract boundary.
+1. `cmd/pulse-mcp/main.go` shared with `ai-runtime`: the Pulse MCP adapter runtime is both an AI runtime surface for external-agent access to Pulse Intelligence and a canonical API contract projection over the agent capabilities manifest and Pulse MCP surface tool contract.
+2. `cmd/pulse-mcp/README.md` shared with `ai-runtime`: the Pulse MCP adapter guide is both an AI runtime surface for external-agent access to Pulse Intelligence and a canonical API contract projection over the agent capabilities manifest.
+   Manifest path placeholders projected by `cmd/pulse-mcp` are canonical API
+   path parameters, not string concatenation hints: adapter calls must use the
+   shared `internal/agentcapabilities` call projection helper to
+   percent-encode placeholder values as single path segments before dispatching
+   to Pulse so resource IDs and node IDs cannot change the declared route. That
+   same helper owns the top-level-argument fallback for JSON request bodies:
+   non-placeholder write arguments become the body when the caller does not
+   provide a nested `body` object, and internal tool-call metadata such as
+   approved-action grants is stripped before any public API body is built.
+   MCP tool descriptions and fallback tool input schemas must project the same
+   manifest-owned method/path, scope, request/response shape, category,
+   action-mode, approval-policy, and stable error-code metadata through that
+   shared helper rather than maintaining a second adapter-local capability
+   table. The manifest-owned `surfaceToolContracts` field is the Pulse MCP
+   tool allowlist for `tools/list` and `tools/call`, and the same shared
+   `ManifestSurfaceToolCapabilities` resolver must gate execution, so
+   streaming-only capabilities such as `subscribe_events`, or raw manifest
+   capabilities omitted from the Pulse MCP surface contract, cannot be invoked
+   through an MCP request/response tool even if a client sends their name
+   manually. Adding a raw capability to `Manifest.Capabilities` is not enough
+   to publish an MCP tool; the Pulse MCP `surfaceToolContracts` allowlist must
+   opt it into that external-agent surface. A `surfaceToolContracts` entry may
+   narrow the operator surface's affordance posture, but it must not re-enable a
+   disabled surface affordance; normalized external-adapter surface summaries
+   must clear tool and capability names when the effective `tools` affordance is
+   false. MCP initialize capability
+   advertisement and the shared manifest-backed tool, resource, and prompt
+   handlers must also pass through the manifest-owned surface affordance
+   contract, so tools, resources, prompts, and capability metadata are exposed
+   only when the target surface allows that affordance and the manifest has the
+   backing data to satisfy it. Prompt support is proven through
+   `MCPManifestSurfacePromptProjectionSupported`, not a raw workflow-prompt
+   presence check at individual call sites. Generated MCP prompt inventory must
+   also pass through the same surface prompt projection gate rather than listing
+   raw workflow prompts directly.
+   MCP notification advertising, transport-event filtering, notification
+   method projection, and SSE-to-MCP notification bridging are also shared API
+   contract projections: the event kinds listed in
+   `capabilities.experimental.pulseNotifications.kinds`, the
+   `subscribe_events` manifest description, and the API SSE producer must use
+   the same `internal/agentcapabilities` event vocabulary rather than
+   adapter-local string lists.
+   The agent SSE subscription transport, record parser, actionable-record
+   filter, and MCP notification projector are part of that same shared boundary:
+   `cmd/pulse-mcp` and reference probes may own connection lifetime and
+   reconnect policy, but they must not carry their own event-stream request
+   headers, subscribe status handling, `event:` / `data:` scanner loops,
+   transport-event parser semantics, or SSE-to-MCP notification bridge.
+   MCP JSON-RPC method constants, JSON-RPC envelopes, request decoding,
+   notification response policy, shared manifest-backed and
+   surface-affordance-gated tool-server semantics,
+   shared tool-server method dispatch, initialize/tool-call/resource payloads,
+   notification method projection, MCP resource URI projection,
+   context-backed `resources/list` / `resources/read` projection, and prompt
+   catalog/rendering payloads belong to the MCP adapter edge. MCP must not
+   re-export neutral provider-call, provider-result, registry-preparation,
+   result-construction, result-text, result-interpretation, or direct-execution
+   helpers under MCP names; those helpers live under the neutral shared tool
+   core and are consumed directly by Assistant and adapter surfaces. The raw
+   `tools/call` params decode may stay in `mcp.go`, but parameter
+   normalization and validation belong to the neutral shared tool-call core:
+   tool names must be trimmed and required, argument maps must be cloned deeply
+   enough to detach nested JSON-like `body` maps/slices and then initialized,
+   and invalid params must fail before capability lookup so empty-name calls are
+   not reported as unknown manifest tools.
+   Projected-tool behavior hints are neutral API manifest projection state:
+   `ToolBehaviorHints` belongs in the shared projection core, while
+   `MCPToolAnnotations` may exist only as a protocol-facing alias at the MCP
+   adapter edge.
+   Native Assistant direct registry execution must consume the neutral
+   `ToolCallParams` normalization/validation contract and the shared
+   invalid-params, unknown-tool, and control-disabled tool result helpers from
+   `internal/agentcapabilities/tool_call.go` before tool lookup or handler
+   dispatch, rather than carrying a second name/argument path or local
+   entrypoint failure envelope for in-app execution.
+   The approved-action text projection for Pulse tool calls is part of that
+   same boundary: API relay execution may receive the legacy command string,
+   but parsing tool names, `default_api:` prefixes, and quoted arguments must
+   happen in `internal/agentcapabilities`, return the shared
+   `ToolCallParams` shape, and pass through the same normalization and
+   validation contract as decoded MCP `tools/call` payloads. The same helper
+   owns the `current_resource` handle plus governed aliases and recursive
+   tool-argument detector so native Assistant, API relay execution, and
+   MCP-compatible adapters cannot drift on unresolved attached-resource
+   placeholder handling.
+   Structured tool response envelopes, the tool-result error-code parser,
+   the `verification.ok` evidence parser, provider tool/call/result shape projection,
+   provider-result context projection for full transcript plus model-context results,
+   neutral provider-tool behavior hints and Pulse governance metadata,
+   provider-emitted streamed tool-input parsing, final provider tool-input raw
+   fallback handling, native Assistant provider-tool name catalog and exact/prefix matching,
+   provider tool-call artifact detection and streaming tool-name prefix holding, question-type/defaulting
+   vocabulary, native Assistant question input parsing, and tool error-code/FSM recovery vocabulary are part of that same boundary; native Assistant tool
+   protocol wrappers may preserve only neutral registry tool aliases and must
+   not expose MCP/JSON-RPC wire aliases or carry local copies of provider
+   tool JSON, provider call params, chat tool-call JSON, chat tool-result JSON,
+   provider-native tool-call artifact regexes, the blocked/failed/retryable shape, common error-code strings, recovery error-code parsing, write self-verification evidence parsing, or the
+   approval-required / policy-blocked marker prefixes, payload `type` values,
+   formatter helpers, parser helpers, or typed approval-required payload
+   contract used by governed Assistant tool outcomes. Chat and API consumers
+   may project that shared marker payload into their own event shapes, but they
+   must not define anonymous local approval-marker readers or discard the shared
+   approved-action argument map returned for replayed tool execution. MCP-shaped
+   provider projection aliases and structured tool-response result aliases must
+   not exist as helper wrappers; MCP may keep protocol wire aliases only for the
+   actual `tools/call` params/result envelopes while using the neutral provider,
+   tool-response, and direct-execution helpers by their shared names.
+   Assistant registry tool schemas must also behave as API-contract values:
+   `agentcapabilities.Tool.NormalizeCollections` owns independent copies of
+   structured `InputSchema` maps, required slices, enum slices, provider
+   input-schema maps, and JSON-schema default containers; direct provider
+   schema projection helpers must normalize through that same path before
+   emitting provider JSON, while `ToolRegistry.Register` and
+   `ToolRegistry.ListTools` must normalize at their respective boundaries
+   instead of exposing mutable caller-owned or registry-owned schema
+   collections.
+   Manifest-backed external-agent tools follow the same rule:
+   `agentcapabilities.CloneCapability`, `CloneCapabilities`, and
+   `CloneRawMessage` must detach raw manifest `inputSchema` and `outputSchema`
+   bytes, structured `_meta["pulse.capability"]` maps, and error-code slices
+   before lookup or projection results leave the shared boundary, so MCP
+   `tools/list` serialization and adapter post-processing cannot mutate the
+   fetched or canonical manifest.
+   Provider tool-call input normalization is owned there too: provider
+   responses, stored Assistant transcript calls, and API-facing chat-message
+   projections must clone tool input maps, nested JSON-like argument values, and
+   raw provider thought-signature payload bytes
+   through the shared `ProviderToolCall.NormalizeCollections` path rather than
+   reusing mutable caller maps across surfaces.
+   Provider result context projection is owned there as well: native Assistant,
+   external adapters, and future Pulse Intelligence surfaces must use the shared
+   projection for full transcript results and model-context results instead of
+   locally pairing provider tool-result structs or reimplementing the truncation
+   notice.
+   Shared tool result normalization is also owned by the neutral tool-result
+   core:
+   `agentcapabilities.ToolResult.NormalizeCollections` must initialize empty
+   content collections, detach content slices, and clone structuredContent maps
+   before native Assistant registry execution or external MCP method dispatch
+   returns a result envelope.
+   Result-text extraction, result interpretation, JSON object and array-wrapper
+   structuredContent projection, and `HTTPCallResponse` to shared tool-result
+   wrapping must live in `internal/agentcapabilities/tool_result.go`; MCP may
+   alias only the actual `MCPToolResult`/`MCPContent` wire envelopes and must
+   not keep MCP-named constructor, text, or interpretation wrappers.
+   Direct native execution over those shared result envelopes must use the
+   surface-neutral `agentcapabilities.InterpretDirectToolExecution` helper;
+   MCP-named direct-execution symbols are not part of the adapter contract.
+   Manifest fetches, agent request
+   construction, API-token header placement, JSON content-type posture,
+   capability HTTP invocation, neutral `ExecuteCapabilityToolHTTP`
+   request/response execution, request/response capability body-return helpers,
+   and stable non-2xx error-envelope formatting are
+   shared-core behavior. `cmd/pulse-mcp` may own stdio and retry/backoff policy,
+   but it must not re-declare the MCP wire/result structs or local agent HTTP
+   client rules that Assistant tool execution and reference clients also
+   consume.
+3. `frontend-modern/src/api/agentCapabilities.ts` shared with `ai-runtime`: the agent capabilities frontend client is both the Pulse Intelligence external-agent manifest consumer and a canonical API payload contract boundary.
+4. `frontend-modern/src/api/agentProfiles.ts` shared with `agent-lifecycle`: the agent profiles frontend client is both an agent lifecycle control surface and a canonical API payload contract boundary.
+5. `frontend-modern/src/api/ai.ts` shared with `ai-runtime`: the AI frontend client is both an AI runtime control surface and a canonical API payload contract boundary.
+6. `frontend-modern/src/api/aiChat.ts` shared with `ai-runtime`: the Assistant chat frontend client is both the first-party Assistant transport surface and a canonical API payload contract boundary.
+7. `frontend-modern/src/api/generated/agentCapabilities.ts` shared with `ai-runtime`: the generated agent capabilities frontend types are both the Pulse Intelligence manifest TypeScript projection and a canonical API payload contract boundary.
+8. `frontend-modern/src/api/nodes.ts` shared with `agent-lifecycle`: the shared Proxmox node client is both an agent lifecycle setup/install control surface and a canonical API payload contract boundary.
+9. `frontend-modern/src/api/notifications.ts` shared with `notifications`: the notifications frontend client is both a notification delivery control surface and a canonical API payload contract boundary.
+10. `frontend-modern/src/api/orgs.ts` shared with `organization-settings`: the organization frontend client is both an organization settings control surface and a canonical API payload contract boundary.
+11. `frontend-modern/src/api/patrol.ts` shared with `ai-runtime`: the Patrol frontend client is both an AI runtime control surface and a canonical API payload contract boundary.
+    The Patrol status payload owns Patrol readiness as structured API state:
+    provider/model/settings/tool prerequisites must travel as bounded readiness
+    checks instead of frontend-only heuristics or generic analysis-failed text.
+    `/api/settings/ai/update` must persist recoverable provider/model changes
+    and return the same structured readiness cause in its settings payload, while
+    `/api/ai/patrol/run` must use the `patrol_readiness_not_ready` error taxonomy
+    when it rejects a known-bad Patrol runtime configuration. Bounded `status`,
+    `cause`, `provider`, and `model` details are the canonical transport shape.
+    Patrol may demote the shared model catalog behind an explicit advanced UI
+    action, but it must still source selectable model routes from the shared AI
+    runtime catalog/settings payloads rather than introducing a Patrol-local
+    model list or inferred provider catalog.
+    `/api/ai/patrol/findings` is the canonical Patrol-page findings source, and
+    `/api/ai/patrol/runs` records may expose bounded `source` provenance so demo
+    evidence can be separated from live runtime assessment state without
+    changing the stable run payload shape.
+    The Patrol status payload's `trigger_status` object is the canonical
+    transport for alert/anomaly trigger queue and mode facts. Patrol summary UI
+    may present that state as factual trigger-mode context, but it must not infer
+    trigger enablement or queue state from settings payloads, route state, or
+    run-history labels.
+12. `frontend-modern/src/api/rbac.ts` shared with `organization-settings`: the RBAC frontend client is both an organization settings control surface and a canonical API payload contract boundary.
+13. `frontend-modern/src/api/security.ts` shared with `security-privacy`: the security frontend client is both a security/privacy control surface and a canonical API payload contract boundary.
+14. `frontend-modern/src/api/updates.ts` shared with `deployment-installability`: the updates frontend client is both a deployment-installability control surface and a canonical API payload contract boundary.
+    It must preserve `/api/updates/plan.readiness` payloads as backend-owned
+    API state so settings UI can render `ready`, `attention`, and `blocked`
+    update checks without rebuilding upgrade state locally. The frontend may
+    disable blocked installs, but the backend apply route remains authoritative
+    and must reject a recomputed `blocked` readiness verdict.
+15. `frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx` shared with `ai-runtime`, `frontend-primitives`: the External agents settings panel is the optional settings-shell projection of Pulse MCP onboarding, the AI runtime connected-agent onboarding surface, and a presentation consumer of the shared agent capabilities frontend client.
+    The panel may own settings placement, copy composition, local fallback
+    rendering, and the user-facing hierarchy that frames Patrol as the primary
+    governed operator with MCP clients as secondary access to the same approval
+    policy and action history. Capability category order, labels,
+    descriptions, required scopes, the Pulse Intelligence surface contract,
+    surface affordance badges, and capability rows must still come through
+    `frontend-modern/src/api/agentCapabilities.ts` instead of a browser-local
+    category table or component-local manifest fetcher.
+    Manifest-owned prompt, scope, failure-code, tool-contract posture, and raw capability
+    inventories should be available for client builders but must stay demoted
+    behind a builder-oriented Developer details disclosure rather than occupying
+    the default Assistant settings view. The external-agent setup checklist must
+    stay behind a user-triggered `Show connector setup` disclosure, while direct setup
+    links open that disclosure automatically. Posture and policy summaries
+    belong under Patrol access model, while prompt, scope, failure-code, and
+    tool inventories must be nested behind Live manifest details so opening the
+    developer disclosure does not immediately dump the full manifest. Visible
+    nested labels should use user-facing terms such as Agent starting points and
+    Agent capabilities rather than raw workflow/MCP inventory labels. External
+    adapter posture must read as `External agents expose ... through Patrol
+    mode`; `Pulse MCP` and `pulse_operations_loop` may remain only as manifest
+    or wire names inside builder/debugging detail, not as the visible product
+    model a user must learn.
+    The External agents Patrol handoff must use `Choose Patrol mode` and
+    frame the first step as choosing what Patrol may handle automatically before
+    a connected agent can request work; connected-agent setup must not revive
+    activation-loop or raw MCP readiness language as the primary call to action.
+    When the setup checklist is expanded, Step 1 owns the visible Patrol-mode
+    handoff and the panel header must not repeat the same call to action.
+    The same wording applies when API-owned projections feed Patrol availability
+    or plan-comparison presentation: customer-facing helpers must describe
+    governed scope as what Patrol may handle automatically, not as how far Patrol
+    can go or how much control Patrol has.
+    Client config follows the same product hierarchy: it may expose
+    manifest-derived OpenCode and Claude-style wrappers, but the default panel
+    must lead with Patrol control and scoped-token setup, not raw JSON blocks.
+    Direct `/settings/pulse-intelligence/assistant#external-agent-setup` links
+    must scroll and briefly focus the External agents panel after the
+    Assistant settings layout settles, so the external-agent setup route lands
+    on the optional client setup boundary rather than generic token inventory.
+    Legacy `/settings/security/api#external-agent-setup` and
+    `/settings/security/api#pulse-mcp-setup` links must remain accepted and
+    redirect to the canonical Pulse Intelligence Assistant route. Normal API
+    Access visits keep token management first; token-preset links may still
+    land on API Access because credential minting remains the API token
+    contract, not a separate credential or execution surface.
+    The Patrol control handoff must target the Patrol operator surface where the
+    inline control level is configured, while API Access remains the token
+    and external-agent setup surface.
+    Failure-code
+    summaries in the panel must derive from capability `errorCodes` through the
+    same frontend manifest client instead of a browser-local recovery-code
+    registry. Explanatory capability-publication copy in that panel must point
+    at the manifest-owned surface contract, not raw backend capability rows, so
+    the API contract remains clear that Pulse MCP publication requires the
+    `surfaceToolContracts` boundary. Token setup handoffs in
+    this panel may link to the API token creation form, but the named
+    full-surface preset must remain the manifest-derived `Patrol external agent`
+    preset from `frontend-modern/src/components/Settings/APITokenManager.tsx`
+    and `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`; the
+    Agent integrations panel must not hardcode or recompute the required token
+    scope set. MCP adapter setup facts in the panel are also manifest-owned:
+    server name, command, base URL flag/default, token environment variable,
+    supported config families, and copied OpenCode/`mcpServers` snippets must
+    flow through `frontend-modern/src/api/agentCapabilities.ts` from
+    `/api/agent/capabilities.mcpAdapter`, not component-local constants.
+    The default setup copy must frame connected agents as optional access to
+    Pulse context and Patrol work, keep Patrol as the built-in operator that
+    watches, acts within Patrol mode, asks when approval is required, verifies
+    outcomes, and records history, and say external agents use that same
+    boundary. It must not use "Use Pulse MCP only" or "outside client" copy, and
+    it must not describe external-agent setup as a separate operator journey.
+    The Patrol control handoff belongs to the Patrol control route; API Access
+    may mint the token and show MCP client setup, but it must not send operators
+    to Assistant settings to choose Patrol's control level.
+16. `frontend-modern/src/components/Settings/APITokenManager.tsx` shared with `security-privacy`: the API token settings surface is both a security/privacy control surface and a canonical API payload contract boundary.
     The API token inventory table may own credential and usage cells, but it
     must inherit embedded table framing from `frontend-primitives`
     `PulseDataGrid` rather than carrying API-token-local scroll or border
@@ -381,13 +915,21 @@ payload shape change when the portal presents compact client rows.
     Token refresh/loading state remains API contract data only while the
     visible spinner shell routes through frontend-primitives-owned
     `LoadingSpinner` instead of an API-token-local animate-spin SVG.
+    The create-token section may expose stable in-page anchors for sibling
+    API Access onboarding surfaces, but preset scope contents must continue to
+    flow from the API manifest client and token manager model rather than from
+    anchor callers such as Agent integrations.
+    Empty scope selection is not a wildcard request in the token manager UI:
+    generation must require an explicit scoped preset, custom scope, or
+    deliberate Full access selection before the frontend sends a create-token
+    payload.
     Token scope selector semantics stay API-contract owned, but the visible
     pressed/unpressed selector pill shell routes through frontend-primitives
     `SelectablePillButton` instead of API-token-local rounded-full selector
     classes.
-11. `frontend-modern/src/components/Settings/apiTokenManagerModel.ts` shared with `security-privacy`: the pure API token settings model is both a security/privacy control surface and a canonical API payload contract boundary.
-12. `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx` shared with `agent-lifecycle`: the inline node credential slot is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
-13. `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx` shared with `agent-lifecycle`: the pure infrastructure operations inventory/install model is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
+17. `frontend-modern/src/components/Settings/apiTokenManagerModel.ts` shared with `security-privacy`: the pure API token settings model is both a security/privacy control surface and a canonical API payload contract boundary.
+18. `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx` shared with `agent-lifecycle`: the inline node credential slot is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
+19. `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx` shared with `agent-lifecycle`: the pure infrastructure operations inventory/install model is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
     Docker and Podman install-profile labels and descriptions in that shared
     model must derive their customer-facing source name from
     `frontend-modern/src/utils/sourcePlatforms.ts` rather than page-local
@@ -424,15 +966,15 @@ payload shape change when the portal presents compact client rows.
     Mock mode must expose authored availability targets through those same
     list, saved-test, and connections-ledger payloads so demo endpoints exercise
     the canonical API contract rather than a frontend-only fixture.
-13. `frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx` shared with `agent-lifecycle`: the node setup authentication section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
-16. `frontend-modern/src/components/Settings/NodeModalBasicInfoSection.tsx` shared with `agent-lifecycle`: the node setup basic-info section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
-17. `frontend-modern/src/components/Settings/nodeModalModel.ts` shared with `agent-lifecycle`: the pure node setup modal model is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
-18. `frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx` shared with `agent-lifecycle`: the node setup monitoring section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
-19. `frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx` shared with `agent-lifecycle`: the node setup guide section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
-20. `frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx` shared with `agent-lifecycle`: the node setup status/footer section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
-21. `frontend-modern/src/components/Settings/useAPITokenManagerState.ts` shared with `security-privacy`: the API token settings state hook is both a security/privacy control surface and a canonical API payload contract boundary.
-22. `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts` shared with `agent-lifecycle`: the direct-node infrastructure settings state hook is both an agent lifecycle control surface and a shared Proxmox node API contract boundary.
-23. `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts` shared with `agent-lifecycle`: the infrastructure discovery runtime state hook is both an agent lifecycle control surface and a shared discovery/settings API contract boundary.
+20. `frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx` shared with `agent-lifecycle`: the node setup authentication section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
+21. `frontend-modern/src/components/Settings/NodeModalBasicInfoSection.tsx` shared with `agent-lifecycle`: the node setup basic-info section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
+22. `frontend-modern/src/components/Settings/nodeModalModel.ts` shared with `agent-lifecycle`: the pure node setup modal model is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
+23. `frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx` shared with `agent-lifecycle`: the node setup monitoring section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
+24. `frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx` shared with `agent-lifecycle`: the node setup guide section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
+25. `frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx` shared with `agent-lifecycle`: the node setup status/footer section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
+26. `frontend-modern/src/components/Settings/useAPITokenManagerState.ts` shared with `security-privacy`: the API token settings state hook is both a security/privacy control surface and a canonical API payload contract boundary.
+27. `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts` shared with `agent-lifecycle`: the direct-node infrastructure settings state hook is both an agent lifecycle control surface and a shared Proxmox node API contract boundary.
+28. `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts` shared with `agent-lifecycle`: the infrastructure discovery runtime state hook is both an agent lifecycle control surface and a shared discovery/settings API contract boundary.
     That same shared boundary also owns settings-route polling scope for discovery payloads: the `/api/discover` refresh loop and websocket-backed discovery status hydration may run only while the operator is on the canonical Infrastructure settings workspace at `/settings/infrastructure`, not on retired infrastructure sub-routes.
     Discovery refreshes and scan results are route-scoped state updates. If the
     settings route unmounts while a request is in flight, the hook must drop the
@@ -446,19 +988,23 @@ payload shape change when the portal presents compact client rows.
     normalize their `updated` / `timestamp` values into one millisecond-backed
     `lastResultAt` state so discovery review rows do not depend on transport-
     specific timestamp shapes.
-24. `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx` shared with `agent-lifecycle`: the infrastructure install state hook is both an agent fleet lifecycle control surface and an API token, lookup, and install transport contract boundary.
+29. `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx` shared with `agent-lifecycle`: the infrastructure install state hook is both an agent fleet lifecycle control surface and an API token, lookup, and install transport contract boundary.
     Setup-completion handoff token creation is valid only while the active
     infrastructure add step is an installer route (`agent`, `linux-host`,
     `unraid`, `docker`, or `kubernetes`). Mounting the infrastructure workspace
     for unrelated settings panels must not auto-create install tokens from a
     stale setup handoff.
-25. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx` shared with `agent-lifecycle`: the shared infrastructure operations state hook is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
-26. `frontend-modern/src/components/Settings/useNodeModalState.ts` shared with `agent-lifecycle`: the node setup modal state hook is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
-27. `frontend-modern/src/constants/apiScopes.ts` shared with `security-privacy`: the API token scope catalog is both a security/privacy token-management trust surface and a canonical API token payload boundary.
+30. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx` shared with `agent-lifecycle`: the shared infrastructure operations state hook is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
+31. `frontend-modern/src/components/Settings/useNodeModalState.ts` shared with `agent-lifecycle`: the node setup modal state hook is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
+32. `frontend-modern/src/constants/apiScopes.ts` shared with `security-privacy`: the API token scope catalog is both a security/privacy token-management trust surface and a canonical API token payload boundary.
     Docker and Podman scope labels must use the shared source platform label
     rather than generic `container` copy, because those labels surface directly
     in token presets, custom scopes, and inventory badges.
-28. `frontend-modern/src/utils/agentInstallCommand.ts` shared with `agent-lifecycle`: the shared frontend install-command helper is both an agent lifecycle control surface and a canonical API/install transport contract boundary.
+    The `ai:execute` scope label is customer-facing API contract copy: it must
+    describe Pulse Intelligence actions as governed Patrol actions for plans,
+    approvals, policy-allowed fixes, verification, and history rather than as
+    generic operations workflows or a separate agent product.
+33. `frontend-modern/src/utils/agentInstallCommand.ts` shared with `agent-lifecycle`: the shared frontend install-command helper is both an agent lifecycle control surface and a canonical API/install transport contract boundary.
     Generated install commands are part of the API contract because they bind
     the UI-selected Pulse URL, token source, custom CA, insecure/plain-HTTP
     behavior, and `/download/pulse-agent?arch=...` availability proof into the
@@ -469,11 +1015,36 @@ payload shape change when the portal presents compact client rows.
     PowerShell `-File` calls so Windows PowerShell argument binding cannot
     reinterpret copied `$true` values as strings or let preflight-only returns
     abort the parent wrapper before install.
-29. `frontend-modern/src/utils/apiTokenPresentation.ts` shared with `security-privacy`: the API token presentation helper is both a security/privacy control surface and a canonical API token management boundary.
+34. `frontend-modern/src/utils/apiTokenPresentation.ts` shared with `security-privacy`: the API token presentation helper is both a security/privacy control surface and a canonical API token management boundary.
     It owns the operator-facing Docker / Podman token vocabulary used by API
     Access, token presets, usage summaries, and revoke warnings.
-30. `frontend-modern/src/utils/infrastructureSettingsPresentation.ts` shared with `agent-lifecycle`: the infrastructure settings presentation helper is both an agent lifecycle control surface and an API-backed direct-node/discovery settings boundary.
-31. `internal/api/access_control_handlers.go` shared with `organization-settings`: RBAC role and user-assignment handlers are both an organization settings control surface and a canonical API payload contract boundary.
+35. `frontend-modern/src/utils/infrastructureSettingsPresentation.ts` shared with `agent-lifecycle`: the infrastructure settings presentation helper is both an agent lifecycle control surface and an API-backed direct-node/discovery settings boundary.
+36. `internal/agentcapabilities/action_target.go` shared with `ai-runtime`: the Pulse Intelligence governed action target type and resource-to-action-target mapping vocabulary are both the Assistant approval/runtime routing contract and the canonical API/agent target contract for governed actions.
+37. `internal/agentcapabilities/control_level.go` shared with `ai-runtime`: the Pulse Intelligence control-level vocabulary and control-tool availability predicate are both the Assistant runtime gating contract and the canonical API/agent permission posture for governed action tools.
+38. `internal/agentcapabilities/errors.go` shared with `ai-runtime`: the Pulse Intelligence agent error envelope is both the canonical API failure payload contract and the AI runtime adapter error-parsing contract for Assistant and external-agent surfaces.
+39. `internal/agentcapabilities/events.go` shared with `ai-runtime`: the Pulse Intelligence event vocabulary is both the canonical API SSE event contract and the AI runtime adapter notification contract for Assistant and external-agent surfaces.
+40. `internal/agentcapabilities/governance_prompt.go` shared with `ai-runtime`: the Pulse Intelligence surface-affordance-resolved model-facing operating-instruction, tool-governance prompt, reusable provider-tool governance description, Assistant-native offered-tool filtering, and Assistant-native interactive question-tool governance projections are both the Assistant system-prompt governance section and the shared API/agent vocabulary for action mode, approval posture, MCP affordance advertisement, and non-registry interaction-tool boundaries.
+41. `internal/agentcapabilities/http.go` shared with `ai-runtime`: the Pulse Intelligence agent HTTP substrate is both the API capabilities invocation contract and the shared AI runtime adapter execution primitive for MCP and reference agent clients.
+42. `internal/agentcapabilities/manifest.go` shared with `ai-runtime`: the canonical Pulse Intelligence agent capabilities manifest declaration, including capability display titles, manifest-owned finding lifecycle schemas, manifest-owned governed action schemas and routes, manifest-owned external-adapter surface tool contracts, and manifest-owned structured output schemas, is both the API discovery payload source and the AI runtime projection contract for Pulse Assistant and MCP-facing agent tools.
+43. `internal/agentcapabilities/markdown.go` shared with `ai-runtime`: the Pulse Intelligence manifest Markdown projection, including manifest-owned capability titles, surface-filtered Pulse MCP tool/error inventories, and prompt labels, is both the canonical API/agent documentation projection and the AI runtime onboarding projection for Assistant-compatible external-agent surfaces.
+44. `internal/agentcapabilities/mcp.go` shared with `ai-runtime`: the Pulse Intelligence MCP protocol version, JSON-RPC, method dispatch, method payload, surface-tool-contract-gated initialize operating-instruction and capability advertisement payload, manifest surface-filtered tools/list and tools/call execution bridge, manifest surface-gated resources/list and resources/read bridge, manifest-owned and surface-affordance-gated workflow prompt projection, protocol wire aliases, resource and prompt handler gates, and notification projection collectively define the external-agent adapter wire contract over the shared Pulse Intelligence tool core; MCP initialize, tools/call execution, resource list/read projection, and prompt list/get projection must enter through manifest-owned surface and workflow-prompt contracts so raw capability slices cannot bypass the published external-adapter contract.
+45. `internal/agentcapabilities/mcp_adapter.go` shared with `ai-runtime`: the Pulse MCP adapter setup contract defaults and normalization are both the canonical API manifest setup projection and the AI runtime onboarding contract for Assistant-compatible external-agent surfaces.
+46. `internal/agentcapabilities/projection.go` shared with `ai-runtime`: the agent capability external-tool projection helper, normalized manifest-owned surface tool contract resolution and tools-affordance gating, manifest-owned resource-context route and argument vocabulary, operator-state capability and route vocabulary, finding workflow capability and lifecycle argument vocabulary including resolution and dismissal notes, governed action capability, route, and argument vocabulary, manifest-owned tool title and outputSchema projection, structured Pulse capability _meta, and shared tool behavior hints are both the canonical API manifest projection contract and the AI runtime adapter projection for Pulse Assistant and MCP-facing agent tools, with MCP annotation and metadata wire names confined to adapter-edge aliases.
+47. `internal/agentcapabilities/provider_tool_artifacts.go` shared with `ai-runtime`: the provider tool-call artifact detector and streaming tool-name prefix splitter are both the Assistant stream-sanitization boundary and the shared external-adapter leak guard for provider-native tool-call markup that escaped the structured channel.
+48. `internal/agentcapabilities/schema.go` shared with `ai-runtime`: the agent capability input schema contract is both the canonical API manifest schema envelope and the AI runtime structured tool-schema, governance-aware provider-projection with neutral behavior hints and Pulse governance metadata, offered-tool governance extraction for Assistant prompt policy, manifest-affordance-gated Assistant provider-surface composition, manifest raw-schema to Assistant provider-schema projection for capability tools, legacy native Assistant utility provider aliases and schemas, provider-call normalization, provider-result context projection, Assistant-native interaction provider-tool declaration, and live Assistant execution-normalization contract for Pulse Assistant and MCP-facing agent tools.
+49. `internal/agentcapabilities/scopes.go` shared with `ai-runtime`: the manifest-derived required-scope summary is both the canonical API/agent token guidance contract and the AI runtime adapter startup/onboarding contract for Assistant-compatible external-agent surfaces.
+50. `internal/agentcapabilities/sse.go` shared with `ai-runtime`: the Pulse Intelligence SSE subscription transport and record parser are both the canonical API event-stream consumption contract and the AI runtime adapter push bridge contract for MCP and reference agent clients.
+51. `internal/agentcapabilities/surface_contract.go` shared with `ai-runtime`: the Pulse Intelligence operator-surface affordance contract, shared surface-affordance, surface-tool identity, Assistant surface tool filtering, normalized external surface tool resolver, surface lookup, affordance labels, and manifest-published external-adapter surface tool allowlist projection are both the canonical API manifest surface model and the AI runtime prompt and onboarding guardrail for Assistant and MCP-facing surfaces.
+52. `internal/agentcapabilities/text_tool_invocation.go` shared with `ai-runtime`: the Pulse Intelligence text tool invocation parser, internal approval argument, and current_resource handle vocabulary are both the Assistant approved-action execution projection and the shared tool-call params bridge for governed Pulse Intelligence tool calls, with MCP tools/call compatibility staying at the adapter edge.
+53. `internal/agentcapabilities/tool_call.go` shared with `ai-runtime`: the Pulse Intelligence shared tool-call params, normalization, validation, direct registry preparation, registry-entrypoint failure result helpers, and provider/registry tool-call safety classification are both the native Assistant execution/FSM contract and the canonical API/agent tools/call compatibility contract for governed Pulse Intelligence tool calls.
+54. `internal/agentcapabilities/tool_execution.go` shared with `ai-runtime`: the Pulse Intelligence neutral capability tool HTTP execution helper and direct tool execution output/error mapper are both the Assistant-native direct execution contract and the canonical API/agent request/response execution contract, with MCP adapters consuming the neutral helpers only after the shared MCP manifest-surface execution bridge has applied the published surface tool contract.
+55. `internal/agentcapabilities/tool_marker.go` shared with `ai-runtime`: the Pulse Intelligence Assistant tool marker vocabulary and approval/policy marker parser are both the Assistant structured tool-result compatibility contract and the canonical API/agent branching contract for governed tool outcomes.
+56. `internal/agentcapabilities/tool_names.go` shared with `ai-runtime`: the Pulse Intelligence registry tool-name vocabulary is both the native Assistant execution/display contract and the canonical API/agent tool identity contract for MCP-facing external-agent adapters.
+57. `internal/agentcapabilities/tool_response.go` shared with `ai-runtime`: the shared tool response envelope, tool error-code vocabulary, and tool-result error-code and verification evidence parsers are both the Assistant structured tool-result contract and the canonical API/agent branching contract for Pulse Intelligence tool failures, recovery tracking, and write self-verification.
+58. `internal/agentcapabilities/tool_result.go` shared with `ai-runtime`: the Pulse Intelligence shared tool-result content/result envelope, structuredContent projection, result constructors, HTTP response-to-result mapping, text projection, and result interpretation helpers are both the Assistant registry result contract and the canonical API/agent result projection contract for governed tool outcomes.
+59. `internal/agentcapabilities/types.go` shared with `ai-runtime`: the agent capabilities manifest wire type, manifest-owned external-adapter surface tool contract field, capability display title and structured output schema fields, approval-policy vocabulary, capability governance normalization, and tool-governance descriptor shape are both the canonical API payload contract and the AI runtime projection contract for Pulse Assistant and MCP-facing agent tools.
+60. `internal/agentcapabilities/workflow_prompt.go` shared with `ai-runtime`: the Pulse Intelligence workflow prompt catalogue, manifest-owned `workflowPrompts` projection, MCP prompt title projection, presentation kind hints, shared resource-context and finding argument vocabulary, Patrol issue-handling capability gating, argument validation, and manifest-gated shared prompt rendering rules are both the AI runtime starter contract for Assistant-compatible surfaces and the canonical API/agent prompt projection contract for MCP-facing clients.
+61. `internal/api/access_control_handlers.go` shared with `organization-settings`: RBAC role and user-assignment handlers are both an organization settings control surface and a canonical API payload contract boundary.
     The shared node setup boundary above owns the guided/manual setup split
     for PVE/PBS consumers: API Inventory and Host Telemetry Agent setup modes
     are auto-registration paths, while Token ID/Value fields, Test Connection,
@@ -493,7 +1064,7 @@ payload shape change when the portal presents compact client rows.
     controls. That sequence is presentation guidance for the existing setup
     payload phases; it does not create a second node setup API model or allow
     page-local payload ownership.
-32. `internal/api/agent_install_command_shared.go` shared with `agent-lifecycle`: agent install command assembly is both an agent lifecycle control surface and a canonical API payload contract boundary.
+62. `internal/api/agent_install_command_shared.go` shared with `agent-lifecycle`: agent install command assembly is both an agent lifecycle control surface and a canonical API payload contract boundary.
     Frontend and backend Unix install command builders must stay on the same
     token-file and preflight transport contract: tokens are passed to the
     installer as ephemeral files, and host install snippets must verify the
@@ -504,12 +1075,12 @@ payload shape change when the portal presents compact client rows.
     the operator wants Patrol actions or server-opted-in Docker-in-LXC
     inventory from the Proxmox node; generic Proxmox API Inventory setup must
     remain least-privilege and command-execution-free.
-32a. `internal/api/cloud_agent_install_command.go` shared with `agent-lifecycle`, `cloud-paid`: hosted tenant agent install commands are agent lifecycle enrollment transport, hosted/provider MSP tenant boundary, and canonical API payload contract.
+    32a. `internal/api/cloud_agent_install_command.go` shared with `agent-lifecycle`, `cloud-paid`: hosted tenant agent install commands are agent lifecycle enrollment transport, hosted/provider MSP tenant boundary, and canonical API payload contract.
     The route and reusable helper must both mint PVE/PBS install tokens only in
     hosted mode, only for an existing tenant/org, and only into that tenant
     runtime's token store with the org boundary, command shape, token metadata,
     and already-loaded tenant-monitor refresh behavior preserved.
-33. `internal/api/ai_handler.go` shared with `ai-runtime`: Pulse Assistant handlers are both an AI runtime control surface and a canonical API payload contract boundary.
+63. `internal/api/ai_handler.go` shared with `ai-runtime`: Pulse Assistant handlers are both an AI runtime control surface and a canonical API payload contract boundary.
     Assistant session list payloads may expose only the safe
     `handoff_summary` projection needed by the browser to mark and restore a
     scoped handoff. The payload must not expose provider-bound model context,
@@ -544,34 +1115,34 @@ payload shape change when the portal presents compact client rows.
     browser-safe `ChatSession` projection. Rename must not expose or mutate
     stored prompts, messages, provider reasoning, model handoff context,
     approvals, action state, or tool evidence. Browser clients must call the
-	    shared `AIChatAPI.renameSession(sessionId, title)` helper so path encoding
-	    and JSON body shape stay canonical.
-	    `POST /api/ai/sessions/{id}/undo` and
-	    `POST /api/ai/sessions/{id}/redo` own the Assistant turn-repair API
-	    contract. Undo removes the latest user-authored turn and all later
-	    assistant/tool messages as one durable unit, returns a browser-safe
-	    `restored_prompt`, `removed_messages`, and `can_redo`, and must not expose
-	    provider reasoning, raw tool output, model-only handoff text, approval
-	    payload internals, or remediation command data. Redo restores the latest
-	    undone turn and returns `restored_messages` plus the remaining `can_redo`
-	    state. `GET /api/ai/sessions` and other `ChatSession` projections may
-	    expose only the boolean `can_redo` hint alongside safe title/timestamp,
-	    count, and handoff-summary fields so the drawer can re-enable redo after a
-	    reload without reading the redo stack itself. Browser clients must use the
-	    shared `AIChatAPI.undoLastTurn(sessionId)` and
-	    `AIChatAPI.redoLastTurn(sessionId)` helpers so path encoding and response
-	    shape stay canonical.
-	    OpenCode-style file diff/revert session routes are deliberately not part
-	    of Pulse's supported Assistant session contract: Pulse sessions do not own
-	    local code-file edits, and infrastructure mutations must be reviewed
-	    through governed approval/action history. Browser clients must not expose
-	    or call `GET /api/ai/sessions/{id}/diff`,
-	    `POST /api/ai/sessions/{id}/revert`, or
-	    `POST /api/ai/sessions/{id}/unrevert`; legacy direct calls to those routes
-	    return `501 Not Implemented` with an explicit unsupported message rather
-	    than a placeholder success payload.
-	    Resource-context follow-up turns are different from Patrol-run rehydration:
-	    browser-safe `handoff_metadata.kind=resource_context` must not replace a
+    shared `AIChatAPI.renameSession(sessionId, title)` helper so path encoding
+    and JSON body shape stay canonical.
+    `POST /api/ai/sessions/{id}/undo` and
+    `POST /api/ai/sessions/{id}/redo` own the Assistant turn-repair API
+    contract. Undo removes the latest user-authored turn and all later
+    assistant/tool messages as one durable unit, returns a browser-safe
+    `restored_prompt`, `removed_messages`, and `can_redo`, and must not expose
+    provider reasoning, raw tool output, model-only handoff text, approval
+    payload internals, or remediation command data. Redo restores the latest
+    undone turn and returns `restored_messages` plus the remaining `can_redo`
+    state. `GET /api/ai/sessions` and other `ChatSession` projections may
+    expose only the boolean `can_redo` hint alongside safe title/timestamp,
+    count, and handoff-summary fields so the drawer can re-enable redo after a
+    reload without reading the redo stack itself. Browser clients must use the
+    shared `AIChatAPI.undoLastTurn(sessionId)` and
+    `AIChatAPI.redoLastTurn(sessionId)` helpers so path encoding and response
+    shape stay canonical.
+    OpenCode-style file diff/revert session routes are deliberately not part
+    of Pulse's supported Assistant session contract: Pulse sessions do not own
+    local code-file edits, and infrastructure mutations must be reviewed
+    through governed approval/action history. Browser clients must not expose
+    or call `GET /api/ai/sessions/{id}/diff`,
+    `POST /api/ai/sessions/{id}/revert`, or
+    `POST /api/ai/sessions/{id}/unrevert`; legacy direct calls to those routes
+    return `501 Not Implemented` with an explicit unsupported message rather
+    than a placeholder success payload.
+    Resource-context follow-up turns are different from Patrol-run rehydration:
+    browser-safe `handoff_metadata.kind=resource_context` must not replace a
     stored rich handoff envelope with a partial metadata-only envelope, and the
     handler must not ask the browser to resend resource context that the chat
     runtime can rehydrate from the stored selected-resource envelope.
@@ -593,8 +1164,12 @@ payload shape change when the portal presents compact client rows.
     restored `tool_calls[].input` from backend history as a structured object
     as well as legacy/display strings, then normalize it before rendering.
     Chat stream events are generated from `internal/ai/chat` payload structs
-    into `frontend-modern/src/api/generated/aiChatEvents.ts`; that generated
-    union must not include the retired `explore_status` pre-pass event. Runtime
+    into `frontend-modern/src/api/generated/aiChatEvents.ts`; agent capability
+    manifest types are generated from `internal/agentcapabilities` payload
+    structs into `frontend-modern/src/api/generated/agentCapabilities.ts`.
+    Those generated projections must stay derived through
+    `scripts/generate-types.go`, and the chat event union must not include the
+    retired `explore_status` pre-pass event. Runtime
     workflow telemetry may remain a transport event, but browser Assistant
     streams must use `chat.StreamEvent.ClientSafe()` so raw provider
     `thinking` payloads and serialized tool-call prose cannot cross the API
@@ -621,25 +1196,25 @@ payload shape change when the portal presents compact client rows.
     consumption rule only: it must not change event payload shape, event order,
     timeout handling, reader cleanup, parse-error handling, or ordinary
     content-token throughput.
-	    Cold Assistant streams must include a typed `session` event backed by
-	    `internal/ai/chat.SessionData` as soon as the HTTP SSE writer is ready and
-	    an immediate neutral `workflow_state` preparation event before backend
-	    handoff recovery, model resolution, selected-route retry planning, context
-	    prefetch, inventory reads, or user-visible provider output so the frontend
-	    can bind the backend-created session and show live progress without a
-	    separate create-session request. That cold-stream model resolution must use
-	    explicit configured chat routes or stable provider defaults without waiting
-	    on provider model catalogs; `/api/ai/models` and settings responses own
-	    catalog-backed recommendation, not the first-response chat stream.
-	    The same SSE transport must emit neutral `workflow_state` events with
-	    phase `stream_idle` during governed silent intervals while request-bound
-	    Assistant execution is still in flight. Hidden SSE comment heartbeats are
-	    not sufficient user-visible progress. The handler must serialize comment
-	    heartbeats and JSON event writes through one writer lock, and the
+    Cold Assistant streams must include a typed `session` event backed by
+    `internal/ai/chat.SessionData` as soon as the HTTP SSE writer is ready and
+    an immediate neutral `workflow_state` preparation event before backend
+    handoff recovery, model resolution, selected-route retry planning, context
+    prefetch, inventory reads, or user-visible provider output so the frontend
+    can bind the backend-created session and show live progress without a
+    separate create-session request. That cold-stream model resolution must use
+    explicit configured chat routes or stable provider defaults without waiting
+    on provider model catalogs; `/api/ai/models` and settings responses own
+    catalog-backed recommendation, not the first-response chat stream.
+    The same SSE transport must emit neutral `workflow_state` events with
+    phase `stream_idle` during governed silent intervals while request-bound
+    Assistant execution is still in flight. Hidden SSE comment heartbeats are
+    not sufficient user-visible progress. The handler must serialize comment
+    heartbeats and JSON event writes through one writer lock, and the
     `stream_idle` event must stop before terminal `done`/`error` rather than
     becoming assistant-authored transcript content.
-	    The generated frontend union, stream parser
-	    tests, and backend JSON snapshot proof must stay in lockstep with that payload;
+    The generated frontend union, stream parser
+    tests, and backend JSON snapshot proof must stay in lockstep with that payload;
     `done.session_id` and `question.session_id` remain compatibility payloads,
     not the primary cold-session creation contract. Assistant `done` events
     must also carry the effective `model` route that completed the stream so
@@ -660,48 +1235,48 @@ payload shape change when the portal presents compact client rows.
     fast UX iteration against the real stream reducer. That fixture may
     short-circuit `frontend-modern/src/api/aiChat.ts` only in Vite dev or test
     mode, only for reserved `/fixture ...` prompts, and only by calling the
-	normal `AIChatAPI.chat` event callback with the generated
-	`AIChatStreamEvent` union (`session`, `workflow_state`, `thinking`,
-	`tool_start`, `tool_progress`, `tool_cancel`, `tool_end`, `content`,
-	`done`). It must not open a backend session, mutate persisted chat history,
-	add browser-only stream event shapes, or become a production fallback for
-	provider or VPN failures. At least one fixture-backed Assistant tool
-	sequence must exercise the OpenCode-parity raw tool-input path by starting
-	with incomplete provider-style `raw_input`, then mutating the same tool row
-	with completed arguments through the normal `tool_progress` event.
-	At least one fixture-backed Assistant tool sequence must exercise the
-	skipped-tool lifecycle by resolving a visible `tool_start` row through
-	`tool_cancel` instead of hiding the activity. At least one fixture-backed
-	Assistant tool sequence must exercise live pending/running tool evidence by
-	emitting placeholder structured input plus raw provider-style input on
-	`tool_start`, mutating that same row through `tool_progress`, and pacing the
-	running state long enough for browser proof to inspect and copy both the
-		completed input and current progress before `tool_end`. At least one
-		fixture-backed Assistant tool sequence must exercise successful long
-		plain-text tool output by emitting enough output lines to prove the browser
-		drawer renders a bounded collapsed preview, avoids an opaque output badge,
-		and preserves the full output in expandable details. At least one
-		fixture-backed Assistant tool sequence must exercise compacted provider artifact
-	suppression by emitting compacted pre-tool content before a governed tool row
-	and final normal answer content. At least one fixture-backed Assistant tool
-	sequence must exercise a buffered `tool_start` -> `tool_end` burst with no
-	provider delay between the two events, followed by a paced content/terminal
-	step, so browser proof can verify that fast command activity remains
-	perceptible without a real provider request. At least one fixture-backed
-	Assistant tool sequence must exercise consecutive multi-tool activity with a
-	paced completed first row followed by a live second row, so browser proof can
-	verify replacement/compaction motion without provider timing. At least one
-	fixture-backed Assistant sequence must exercise `provider_retry` with `attempt`,
-	`max_attempts`, and `retry_after_ms` metadata plus a paced retry window, so
-	browser proof can verify visible retry countdown behavior without a real
-	provider request, VPN dependency, or API spend. At least one fixture-backed
-	Assistant sequence must exercise `stream_idle` after selected-provider
-	startup, so browser proof can verify visible idle liveness without forcing a
-	real provider to pause on demand. At least one fixture-backed Assistant
-	sequence must exercise the local prompt-send state by emitting `session`,
-	then pacing the first backend `workflow_state` long enough for browser proof
-	to verify immediate visible activity without opening a provider request.
-34. `internal/api/ai_handlers.go` shared with `ai-runtime`: AI settings and remediation handlers are both an AI runtime control surface and a canonical API payload contract boundary.
+    normal `AIChatAPI.chat` event callback with the generated
+    `AIChatStreamEvent` union (`session`, `workflow_state`, `thinking`,
+    `tool_start`, `tool_progress`, `tool_cancel`, `tool_end`, `content`,
+    `done`). It must not open a backend session, mutate persisted chat history,
+    add browser-only stream event shapes, or become a production fallback for
+    provider or VPN failures. At least one fixture-backed Assistant tool
+    sequence must exercise the OpenCode-parity raw tool-input path by starting
+    with incomplete provider-style `raw_input`, then mutating the same tool row
+    with completed arguments through the normal `tool_progress` event.
+    At least one fixture-backed Assistant tool sequence must exercise the
+    skipped-tool lifecycle by resolving a visible `tool_start` row through
+    `tool_cancel` instead of hiding the activity. At least one fixture-backed
+    Assistant tool sequence must exercise live pending/running tool evidence by
+    emitting placeholder structured input plus raw provider-style input on
+    `tool_start`, mutating that same row through `tool_progress`, and pacing the
+    running state long enough for browser proof to inspect and copy both the
+    completed input and current progress before `tool_end`. At least one
+    fixture-backed Assistant tool sequence must exercise successful long
+    plain-text tool output by emitting enough output lines to prove the browser
+    drawer renders a bounded collapsed preview, avoids an opaque output badge,
+    and preserves the full output in expandable details. At least one
+    fixture-backed Assistant tool sequence must exercise compacted provider artifact
+    suppression by emitting compacted pre-tool content before a governed tool row
+    and final normal answer content. At least one fixture-backed Assistant tool
+    sequence must exercise a buffered `tool_start` -> `tool_end` burst with no
+    provider delay between the two events, followed by a paced content/terminal
+    step, so browser proof can verify that fast command activity remains
+    perceptible without a real provider request. At least one fixture-backed
+    Assistant tool sequence must exercise consecutive multi-tool activity with a
+    paced completed first row followed by a live second row, so browser proof can
+    verify replacement/compaction motion without provider timing. At least one
+    fixture-backed Assistant sequence must exercise `provider_retry` with `attempt`,
+    `max_attempts`, and `retry_after_ms` metadata plus a paced retry window, so
+    browser proof can verify visible retry countdown behavior without a real
+    provider request, VPN dependency, or API spend. At least one fixture-backed
+    Assistant sequence must exercise `stream_idle` after selected-provider
+    startup, so browser proof can verify visible idle liveness without forcing a
+    real provider to pause on demand. At least one fixture-backed Assistant
+    sequence must exercise the local prompt-send state by emitting `session`,
+    then pacing the first backend `workflow_state` long enough for browser proof
+    to verify immediate visible activity without opening a provider request.
+64. `internal/api/ai_handlers.go` shared with `ai-runtime`: AI settings and remediation handlers are both an AI runtime control surface and a canonical API payload contract boundary.
     The AI settings payload on `/api/settings/ai` carries no cloud-context-privacy
     field: cloud context behavior is a fixed posture (real context to cloud, with
     credentials and local-only resources always withheld), not a settings-payload
@@ -734,8 +1309,8 @@ payload shape change when the portal presents compact client rows.
     evidence. The frontend API client, settings shell, and Assistant drawer
     must treat this payload as the canonical provider health contract rather
     than parsing free-form provider error strings.
-35. `internal/api/ai_intelligence_handlers.go` shared with `ai-runtime`: AI intelligence handlers are both an AI runtime control surface and a canonical API payload contract boundary.
-36. `internal/api/config_setup_handlers.go` shared with `agent-lifecycle`: auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
+65. `internal/api/ai_intelligence_handlers.go` shared with `ai-runtime`: AI intelligence handlers are both an AI runtime control surface and a canonical API payload contract boundary.
+66. `internal/api/config_setup_handlers.go` shared with `agent-lifecycle`: auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
     That same shared boundary also owns reachable-host selection truth for canonical Proxmox registration: runtime callers may propose ordered `candidateHosts`, but the API contract must persist and echo the first candidate Pulse can actually reach instead of freezing the caller's rejected first preference into the stored node endpoint.
     That same canonical payload contract also owns strict-TLS truth for that selected host: `/api/auto-register` may only persist `VerifySSL=true` when Pulse actually captured a certificate fingerprint for the selected candidate, and it must not pretend public-CA verification is safe after every candidate fingerprint probe failed.
     For PVE cluster sources, that same contract must distinguish primary
@@ -764,9 +1339,9 @@ payload shape change when the portal presents compact client rows.
     id. PBS scripts must grant `Audit` to both `pulse-monitor@pbs` and the
     concrete token id. Browser/runtime setup callers must not fork this into
     token-shared, token-unprivileged, or user-only ACL variants.
-37. `internal/api/enterprise_extension_rbac_admin.go` shared with `organization-settings`: RBAC admin extension endpoints are both an organization settings control surface and a canonical API payload contract boundary.
-38. `internal/api/licensing_bridge.go` shared with `cloud-paid`: commercial licensing bridge handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
-39. `internal/api/licensing_handlers.go` shared with `cloud-paid`: commercial licensing handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
+67. `internal/api/enterprise_extension_rbac_admin.go` shared with `organization-settings`: RBAC admin extension endpoints are both an organization settings control surface and a canonical API payload contract boundary.
+68. `internal/api/licensing_bridge.go` shared with `cloud-paid`: commercial licensing bridge handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
+69. `internal/api/licensing_handlers.go` shared with `cloud-paid`: commercial licensing handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
     That same shared licensing boundary also owns authenticated
     install-version and runtime-build attribution: `internal/api/router.go`
     must hand the canonical process `serverVersion` and normalized runtime
@@ -786,20 +1361,20 @@ payload shape change when the portal presents compact client rows.
     destination, but the browser/API contract must not reintroduce
     Pulse-Pro-as-page-name copy in callback titles, actions, or retry
     guidance.
-40. `internal/api/licensing_legacy_retry.go` shared with `cloud-paid`: the background legacy-exchange retry loop carries both API payload contract and cloud-paid entitlement boundary ownership.
-41. `internal/api/notifications.go` shared with `notifications`: notification handlers are both a notification delivery control surface and a canonical API payload contract boundary.
-42. `internal/api/org_handlers.go` shared with `organization-settings`: organization management handlers are both an organization settings control surface and a canonical API payload contract boundary.
-43. `internal/api/org_lifecycle_handlers.go` shared with `organization-settings`: organization lifecycle handlers are both an organization settings control surface and a canonical API payload contract boundary.
-44. `internal/api/payments_webhook_handlers.go` shared with `cloud-paid`: commercial payment webhook handlers carry both API payload contract and cloud-paid billing boundary ownership.
-45. `internal/api/public_signup_handlers.go` shared with `cloud-paid`: hosted signup handlers carry both API payload contract and cloud-paid hosted provisioning boundary ownership.
+70. `internal/api/licensing_legacy_retry.go` shared with `cloud-paid`: the background legacy-exchange retry loop carries both API payload contract and cloud-paid entitlement boundary ownership.
+71. `internal/api/notifications.go` shared with `notifications`: notification handlers are both a notification delivery control surface and a canonical API payload contract boundary.
+72. `internal/api/org_handlers.go` shared with `organization-settings`: organization management handlers are both an organization settings control surface and a canonical API payload contract boundary.
+73. `internal/api/org_lifecycle_handlers.go` shared with `organization-settings`: organization lifecycle handlers are both an organization settings control surface and a canonical API payload contract boundary.
+74. `internal/api/payments_webhook_handlers.go` shared with `cloud-paid`: commercial payment webhook handlers carry both API payload contract and cloud-paid billing boundary ownership.
+75. `internal/api/public_signup_handlers.go` shared with `cloud-paid`: hosted signup handlers carry both API payload contract and cloud-paid hosted provisioning boundary ownership.
     That same shared boundary also owns public hosted-signup response privacy:
     syntactically valid `/api/public/signup` requests must return one generic
     `202 Accepted` Pulse Account message whether provisioning/email side effects
     ran or were suppressed by the owner-email limiter, while invalid bodies and
     true server failures remain explicit.
-46. `internal/api/relay_mobile_capability.go` shared with `relay-runtime`: the backend-owned Pulse Mobile relay capability inventory is both a relay runtime boundary and a canonical API payload contract surface.
-47. `internal/api/resources.go` shared with `unified-resources`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
-48. `internal/api/security.go` shared with `security-privacy`: the security handlers are both a security/privacy control surface and a canonical API payload contract boundary.
+76. `internal/api/relay_mobile_capability.go` shared with `relay-runtime`: the backend-owned Pulse Mobile relay capability inventory is both a relay runtime boundary and a canonical API payload contract surface.
+77. `internal/api/resources.go` shared with `unified-resources`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
+78. `internal/api/security.go` shared with `security-privacy`: the security handlers are both a security/privacy control surface and a canonical API payload contract boundary.
     That same shared security/API boundary owns CSRF replacement-token
     concurrency. When parallel browser mutations arrive with stale or missing
     CSRF tokens for the same session, `internal/api/csrf_store.go` may retain
@@ -807,7 +1382,7 @@ payload shape change when the portal presents compact client rows.
     replacement can validate its retry. Logout, password-change, and explicit
     session revocation must still delete the full session token set rather than
     leaving any retained replacement token valid.
-49. `internal/api/security_tokens.go` shared with `security-privacy`: the security token handlers are both a security/privacy control surface and a canonical API payload contract boundary.
+79. `internal/api/security_tokens.go` shared with `security-privacy`: the security token handlers are both a security/privacy control surface and a canonical API payload contract boundary.
     Token owner identity is reserved for the server-authenticated principal:
     shared token-minting helpers must derive `owner_user_id` from the current
     session or caller token and reject extension metadata that tries to
@@ -823,15 +1398,20 @@ payload shape change when the portal presents compact client rows.
     before minting a `relay:mobile:access` credential. Community installs may
     receive the standard license-required response, but direct API calls must
     not bypass Relay entitlement by creating mobile runtime tokens.
-50. `internal/api/setup_script_render.go` shared with `agent-lifecycle`, `storage-recovery`: the generated Proxmox setup-script is a shared boundary across agent lifecycle (forced-command keys, install/uninstall edits), API contracts (rendered token shape and encoded rerun URL), and storage/recovery (backup visibility grants, Pulse-managed temperature SSH keys, and SMART disk-temperature collection).
-51. `internal/api/slo.go` shared with `performance-and-scalability`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
-52. `internal/api/system_settings.go` shared with `security-privacy`: the system settings telemetry and auth controls are both a security/privacy control surface and a canonical API payload contract boundary.
-53. `internal/api/unified_agent.go` shared with `agent-lifecycle`: unified agent download and installer handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
+80. `internal/api/setup_script_render.go` shared with `agent-lifecycle`, `storage-recovery`: the generated Proxmox setup-script is a shared boundary across agent lifecycle (forced-command keys, install/uninstall edits), API contracts (rendered token shape and encoded rerun URL), and storage/recovery (backup visibility grants, Pulse-managed temperature SSH keys, and SMART disk-temperature collection).
+81. `internal/api/slo.go` shared with `performance-and-scalability`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
+82. `internal/api/system_settings.go` shared with `security-privacy`: the system settings telemetry and auth controls are both a security/privacy control surface and a canonical API payload contract boundary.
+83. `internal/api/unified_agent.go` shared with `agent-lifecycle`: unified agent download and installer handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
     Development-mode missing-binary responses must report the build command
     for the requested normalized OS/architecture, not a hard-coded Linux
     target, so installer preflight failures point operators at the artifact
     they actually need.
-54. `internal/api/updates.go` shared with `deployment-installability`: update handlers are both a deployment-installability control surface and a canonical API payload contract boundary.
+84. `internal/api/updates.go` shared with `deployment-installability`: update handlers are both a deployment-installability control surface and a canonical API payload contract boundary.
+85. `pkg/aicontracts/fix_execution.go` shared with `ai-runtime`: the public approved-fix execution contract is both an AI runtime approved-action boundary and a canonical API dependency contract for Patrol and enterprise auto-fix binders.
+86. `pkg/aicontracts/investigation.go` shared with `ai-runtime`: the public Patrol investigation record and finding contract is both an AI runtime handoff boundary and a canonical API payload contract for Patrol, Assistant, unified findings, persistence, and audit surfaces.
+87. `pkg/aicontracts/orchestrator_deps.go` shared with `ai-runtime`: the public investigation orchestrator dependency contract is both an AI runtime handoff boundary and a canonical API payload contract for Assistant and Patrol tool-call history.
+88. `pkg/extensions/ai_autofix.go` shared with `ai-runtime`: the enterprise auto-fix extension dependency seam is both an AI runtime approved-action boundary and a canonical API extension contract over Assistant and Patrol execution dependencies.
+89. `scripts/generate-pulse-intelligence-docs.go` shared with `ai-runtime`: the Pulse Intelligence manifest docs generator is both an AI runtime docs/onboarding projection and a canonical API contract projection over the agent capabilities manifest and Pulse MCP surface tool contract.
     Update-plan responses own the structured readiness verdict for server
     updater capability, rollback support, agent continuity, v5 agent migration
     transport security, and agent reporting token scope. That verdict is part
@@ -843,20 +1423,20 @@ payload shape change when the portal presents compact client rows.
     the requested target version through the shared update-target validation
     path, recompute readiness from live backend state, and reject `blocked`
     verdicts before update execution starts.
-The platform-connections API contract also owns inactive monitored-system
-candidate semantics end to end. `enabled=false` on TrueNAS or VMware preview,
-test, add, and update payloads must serialize through the shared ledger client
-as `active:false`, and preview responses may legitimately return `no_change`,
-`removes_existing`, or `removes_multiple` with empty projected-system lists
-when the disabled candidate no longer contributes to a monitored-system group.
-That same monitored-system grouping contract now also owns restart-safe host
-report continuity at the API boundary. The removed monitored-system limit
-enforcement path must not return; the API should treat a returning standalone
-host report as existing grouping context when monitoring can match it to recent
-persisted host continuity, so a server restart or v6 upgrade does not change
-the explanatory grouping model before the live
-inventory rebuild catches up. Genuinely new host identities must still return
-the canonical monitored-system blocked payload.
+    The platform-connections API contract also owns inactive monitored-system
+    candidate semantics end to end. `enabled=false` on TrueNAS or VMware preview,
+    test, add, and update payloads must serialize through the shared ledger client
+    as `active:false`, and preview responses may legitimately return `no_change`,
+    `removes_existing`, or `removes_multiple` with empty projected-system lists
+    when the disabled candidate no longer contributes to a monitored-system group.
+    That same monitored-system grouping contract now also owns restart-safe host
+    report continuity at the API boundary. The removed monitored-system limit
+    enforcement path must not return; the API should treat a returning standalone
+    host report as existing grouping context when monitoring can match it to recent
+    persisted host continuity, so a server restart or v6 upgrade does not change
+    the explanatory grouping model before the live
+    inventory rebuild catches up. Genuinely new host identities must still return
+    the canonical monitored-system blocked payload.
 
 ## Extension Points
 
@@ -887,26 +1467,26 @@ the canonical monitored-system blocked payload.
 1. Add or change payload fields through handler + contract tests together
 2. Update frontend API types in lockstep with backend contract changes.
    Websocket-backed API consumers such as `frontend-modern/src/components/Settings/useAPITokenManagerState.ts` and `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx` may read runtime context only through `frontend-modern/src/contexts/appRuntime.ts`; they must not import `frontend-modern/src/App.tsx`, because payload ownership remains in the API contract rather than the root shell.
-2a. Route settings infrastructure connected-system ledgers through
-    `/api/connections` and `frontend-modern/src/components/Settings/useConnectionsLedger.ts`
-    together. The frontend ledger may retain the last fulfilled connection
-    snapshot while polling or manual reload is in flight, but that retention is
-    only a fetch lifecycle rule; it must not synthesize rows, downgrade backend
-    fleet state, or replace the shared connection projection with page-local
-    placeholders.
-2b. Route agentless availability target kind changes through
-    `internal/api/availability_handlers.go`,
-    `internal/api/platform_mock_connections.go`,
-    `frontend-modern/src/api/availabilityTargets.ts`, and the unified-resource
-    availability payload together. The bounded `targetKind` vocabulary is
-    `machine`, `service`, and `device`; missing legacy values default to
-    `service`. Browser add-dialog routes may carry a `targetKind` query value
-    to preselect that bounded kind, but the persisted contract remains the
-    `AvailabilityTarget.targetKind` payload. Browser consumers must not place
-    availability targets into Standalone Machines from that classification;
-    Machines membership requires Pulse Agent resource evidence. API clients
-    must not infer that classification from protocol, hostname, port, or row
-    label.
+   2a. Route settings infrastructure connected-system ledgers through
+   `/api/connections` and `frontend-modern/src/components/Settings/useConnectionsLedger.ts`
+   together. The frontend ledger may retain the last fulfilled connection
+   snapshot while polling or manual reload is in flight, but that retention is
+   only a fetch lifecycle rule; it must not synthesize rows, downgrade backend
+   fleet state, or replace the shared connection projection with page-local
+   placeholders.
+   2b. Route agentless availability target kind changes through
+   `internal/api/availability_handlers.go`,
+   `internal/api/platform_mock_connections.go`,
+   `frontend-modern/src/api/availabilityTargets.ts`, and the unified-resource
+   availability payload together. The bounded `targetKind` vocabulary is
+   `machine`, `service`, and `device`; missing legacy values default to
+   `service`. Browser add-dialog routes may carry a `targetKind` query value
+   to preselect that bounded kind, but the persisted contract remains the
+   `AvailabilityTarget.targetKind` payload. Browser consumers must not place
+   availability targets into Standalone Machines from that classification;
+   Machines membership requires Pulse Agent resource evidence. API clients
+   must not infer that classification from protocol, hostname, port, or row
+   label.
 3. Add dedicated contract tests for new stable payloads
    Unified resource type-filter and organization-share resource type additions
    must route through `internal/api/resources.go`, `internal/api/org_handlers.go`,
@@ -915,86 +1495,90 @@ the canonical monitored-system blocked payload.
    by `/api/resources` filters and cross-organization share normalization only
    after the unified-resource contract defines the canonical resource type and
    payload facet.
-3a. Route diagnostics payload fields and user-facing diagnostics copy through
-    `internal/api/diagnostics.go`,
-    `internal/api/diagnostics_additional_test.go`, and
-    `internal/api/diagnostics_memory_test.go` together. Docker and Podman
-    health notes emitted by diagnostics must lead with Docker / Podman module
-    language and route operator recovery to the Infrastructure and
-    Security settings surfaces rather than generic runtime family wording or
-    retired agent-management destinations.
-3b. Route Docker / Podman management API response copy through
-    `internal/api/docker_agents.go`, `internal/api/docker_metadata.go`,
-    `frontend-modern/src/api/monitoring.ts`, and their route/client tests
-    together. Operator-facing responses for Docker / Podman host removal,
-    hide/unhide, pending uninstall, display-name, and host metadata paths must
-    use Docker / Podman module or host wording instead of generic container
-    runtime labels.
-3c. Route Assistant finding handoff context changes through
-    `internal/api/ai_handler.go`, `internal/api/ai_handler_test.go`, and
-    `internal/api/contract_test.go` together. Patrol-originated handoffs must
-    keep `[Finding Briefing]`, `[Finding Context]`, `[Finding Lifecycle
+   3a. Route diagnostics payload fields and user-facing diagnostics copy through
+   `internal/api/diagnostics.go`,
+   `internal/api/diagnostics_contract_test.go`,
+   `internal/api/diagnostics_additional_test.go`, and
+   `internal/api/diagnostics_memory_test.go` together. Docker and Podman
+   health notes emitted by diagnostics must lead with Docker / Podman module
+   language and route operator recovery to the Infrastructure and
+   Security settings surfaces rather than generic runtime family wording or
+   retired agent-management destinations. Pulse Assistant diagnostics must
+   expose native runtime availability as `assistantRuntimeConnected`; the
+   diagnostics payload must not revive legacy MCP transport fields such as
+   `mcpConnected` or `mcpToolCount` for the first-party Assistant surface.
+   3b. Route Docker / Podman management API response copy through
+   `internal/api/docker_agents.go`, `internal/api/docker_metadata.go`,
+   `frontend-modern/src/api/monitoring.ts`, and their route/client tests
+   together. Operator-facing responses for Docker / Podman host removal,
+   hide/unhide, pending uninstall, display-name, and host metadata paths must
+   use Docker / Podman module or host wording instead of generic container
+   runtime labels.
+   3c. Route Assistant finding handoff context changes through
+   `internal/api/ai_handler.go`, `internal/api/ai_handler_test.go`, and
+   `internal/api/contract_test.go` together. Patrol-originated handoffs must
+   keep `[Finding Briefing]`, `[Finding Context]`, `[Finding Lifecycle
     Context]`, structured handoff resources, related root-cause/correlation
-    finding context, and structured handoff actions model-only, with the
-    briefing summarizing latest lifecycle event and factual governed action
-    artifact metadata without raw command text or Pulse-authored next-step
-    guidance. Structured handoff action
-    references may use the current live Patrol investigation-fix approval for
-    the finding when that approval is newer than the approval ID on the durable
-    record, but the payload may carry only IDs, status/risk/target metadata,
-    request/expiry timestamps, action plan identity and expiry, safe generated
-    approval summaries, command counts, and fix/action references, never the
-    approval command payload. Patrol
-    remediation-plan handoffs must use the same boundary for model-only
-    context: plan status, risk, step labels, and command counts are allowed,
-    while raw command and rollback command payloads remain in governed action
-    surfaces. Frontend Patrol finding-discussion handoffs must force a
-    request-local approval-required Assistant mode instead of inheriting the
-    user's persistent autonomous control setting; live approval, action artifact,
-    fix-outcome, and remediation-plan references only add structured action
-    metadata, they are not the trigger for the boundary. Frontend-visible Patrol
-    briefing payloads must stay compact and must not include suggested prompt
-    chips, Patrol-authored next-step recommendations, or route-owned
-    recommendation metadata. Frontend queued-fix recovery handoffs
-    where the live approval or action artifact payload is unavailable must still
-    carry that Patrol-owned finding briefing, current `fix_queued` posture,
-    request-local approval-required mode, and model-only evidence context; they must
-    not degrade into generic Assistant investigation chat or imply that
-    execution can proceed from missing command payloads. Expired-approval
-    recovery handoffs may use a still-available structured action artifact payload
-    only as safe metadata: description, target, risk, rationale, destructive
-    posture, and command count may enter the briefing, while raw command text
-    remains owned by governed remediation or approval surfaces. If the unified
-    finding list lacks a full investigation record, frontend finding-discussion
-    handoffs may hydrate the latest investigation session for the same safe
-    action artifact metadata, but they must not paste raw action command text
-    into the authored prompt or visible briefing. Direct
-    alert-investigation API handoffs through `internal/api/ai_handlers.go` must
-    enforce that same request-scoped boundary by setting
-    `ai.ExecuteRequest.AutonomousMode` to
-    false and `ai.ExecuteRequest.RequireCommandApproval` to true; API proof must
-    keep this guarded in both `internal/api/ai_handlers_test.go` and
-    `internal/api/contract_test.go`. Governed action artifact lines in the
-    briefing must derive from those
-    same structured action references after recovery so the briefing cannot
-    contradict the handoff action payload. Related finding
-    context must resolve from the current unified finding store, stay bounded
-    and deduplicated, include current recency and latest lifecycle facts, and
-    seed only structured handoff resources for canonical policy, state,
-    topology, and timeline hydration. Chat execution owns
-    resource-policy sanitization of the assembled model-only handoff before
-    prompt injection, so API payload builders may pass structured product
-    context without turning raw resource identity into user-authored text or
-    disclosure authority.
-3d. Route command-agent WebSocket registration token semantics through
-    `internal/api/agent_exec_token_binding.go`, `internal/api/router.go`, and
-    `internal/api/contract_test.go` together. `agent:exec` tokens must already
-    be bound to the registering agent ID or hostname before `/api/agent/ws`
-    accepts command registration. The only first-use exception is a
-    Pulse-minted PVE/PBS install-command token carrying the governed install
-    metadata; that token may bind once to the first command agent ID and
-    hostname that registers, and a later different agent or hostname must be
-    rejected. Generic unbound `agent:exec` tokens remain fail-closed.
+   finding context, and structured handoff actions model-only, with the
+   briefing summarizing latest lifecycle event and factual governed action
+   artifact metadata without raw command text or Pulse-authored next-step
+   guidance. Structured handoff action
+   references may use the current live Patrol investigation-fix approval for
+   the finding when that approval is newer than the approval ID on the durable
+   record, but the payload may carry only IDs, status/risk/target metadata,
+   request/expiry timestamps, action plan identity and expiry, safe generated
+   approval summaries, command counts, and fix/action references, never the
+   approval command payload. Patrol
+   remediation-plan handoffs must use the same boundary for model-only
+   context: plan status, risk, step labels, and command counts are allowed,
+   while raw command and rollback command payloads remain in governed action
+   surfaces. Frontend Patrol finding-discussion handoffs must force a
+   request-local approval-required Assistant mode instead of inheriting the
+   user's persistent autonomous control setting; live approval, action artifact,
+   fix-outcome, and remediation-plan references only add structured action
+   metadata, they are not the trigger for the boundary. Frontend-visible Patrol
+   briefing payloads must stay compact and must not include suggested prompt
+   chips, Patrol-authored next-step recommendations, or route-owned
+   recommendation metadata. Frontend queued-fix recovery handoffs
+   where the live approval or action artifact payload is unavailable must still
+   carry that Patrol-owned finding briefing, current `fix_queued` posture,
+   request-local approval-required mode, and model-only evidence context; they must
+   not degrade into generic Assistant investigation chat or imply that
+   execution can proceed from missing command payloads. Expired-approval
+   recovery handoffs may use a still-available structured action artifact payload
+   only as safe metadata: description, target, risk, rationale, destructive
+   posture, and command count may enter the briefing, while raw command text
+   remains owned by governed remediation or approval surfaces. If the unified
+   finding list lacks a full investigation record, frontend finding-discussion
+   handoffs may hydrate the latest investigation session for the same safe
+   action artifact metadata, but they must not paste raw action command text
+   into the authored prompt or visible briefing. Direct
+   alert-investigation API handoffs through `internal/api/ai_handlers.go` must
+   enforce that same request-scoped boundary by setting
+   `ai.ExecuteRequest.AutonomousMode` to
+   false and `ai.ExecuteRequest.RequireCommandApproval` to true; API proof must
+   keep this guarded in both `internal/api/ai_handlers_test.go` and
+   `internal/api/contract_test.go`. Governed action artifact lines in the
+   briefing must derive from those
+   same structured action references after recovery so the briefing cannot
+   contradict the handoff action payload. Related finding
+   context must resolve from the current unified finding store, stay bounded
+   and deduplicated, include current recency and latest lifecycle facts, and
+   seed only structured handoff resources for canonical policy, state,
+   topology, and timeline hydration. Chat execution owns
+   resource-policy sanitization of the assembled model-only handoff before
+   prompt injection, so API payload builders may pass structured product
+   context without turning raw resource identity into user-authored text or
+   disclosure authority.
+   3d. Route command-agent WebSocket registration token semantics through
+   `internal/api/agent_exec_token_binding.go`, `internal/api/router.go`, and
+   `internal/api/contract_test.go` together. `agent:exec` tokens must already
+   be bound to the registering agent ID or hostname before `/api/agent/ws`
+   accepts command registration. The only first-use exception is a
+   Pulse-minted PVE/PBS install-command token carrying the governed install
+   metadata; that token may bind once to the first command agent ID and
+   hostname that registers, and a later different agent or hostname must be
+   rejected. Generic unbound `agent:exec` tokens remain fail-closed.
 4. Route unified resource sensitivity, routing, and `aiSafeSummary` payload changes through `internal/api/resources.go`, `internal/api/contract_test.go`, and the canonical frontend resource consumer proofs together; resource governance metadata must not ship as an API-only or frontend-only heuristic
    That same resource payload contract owns `aggregations.policyPosture` on
    `/api/resources` and `/api/resources/stats`. The aggregation must be derived
@@ -1079,7 +1663,12 @@ the canonical monitored-system blocked payload.
    current action state from action audit. Backend `/api/ai/chat` refresh of
    a finding handoff must also recover that requester identity from the live
    approval record when action audit has not yet hydrated the current action
-   state.
+   state. Denying a Patrol investigation-fix approval through
+   `/api/ai/approvals/{id}/deny` is part of the same API contract: it must
+   persist the approval-store denial, record a `rejected` action-audit decision
+   when the approval carries a governed action plan, and update the owning
+   finding's investigation outcome to `fix_rejected` instead of leaving
+   `fix_queued` with no live approval.
    Action execution is API-owned as the next explicit contract:
    `POST /api/actions/{id}/execute` may only start execution for an approved
    action or an approval-free executable plan, must atomically persist the
@@ -1141,20 +1730,108 @@ the canonical monitored-system blocked payload.
    hybrid `agent` resource with merged source facets, not as duplicate rows
    that disappear only after REST reconciliation.
 8. Route unified-agent installer and binary download headers through `internal/api/unified_agent.go` and `internal/api/contract_test.go` together. Unified-agent BINARY downloads must keep the canonical `X-Checksum-Sha256` plus `X-Signature-Ed25519` contract for updater clients whether the binary is served locally or proxied from the matching GitHub release, instead of leaving callers to infer trust from source location alone. The served install-script endpoints (GET /install.sh and /install.ps1) are governed differently and have NO GitHub fallback at all: they serve the locally bundled AGENT installer or fail closed with 503. The agent installer is a per-build artifact bundled into every release tarball and Docker image, not a release asset, so the endpoint must never fetch the top-level GitHub install.sh release asset (the SERVER installer, which rejects the agent wizard's --url / --token-file, issue #1470). It attaches the base64-encoded `X-Signature-SSHSIG` header when the local detached signatures are present and omits it when they are not; a present-but-unsigned local agent installer is still served, because the agent install path (curl piped into bash) does not verify these headers, so correctness of the served script outranks signature presence.
-9. Route canonical AI intelligence summary and resource-intelligence reads through `frontend-modern/src/api/ai.ts`, `frontend-modern/src/stores/aiIntelligence.ts`, `frontend-modern/src/stores/aiIntelligenceSummaryModel.ts`, `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`, `frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx`, the Patrol-owned section files under `frontend-modern/src/features/patrol/`, `frontend-modern/src/pages/AIIntelligence.tsx`, `internal/api/ai_handlers.go`, and `internal/api/contract_test.go` together so the summary card, store normalization owner, runtime hook, feature shell, section owners, route shell, and backend payload stay aligned on one governed surface, including the canonical recent-changes slice
-   while keeping the learning counters backend-only coverage, so the summary page keeps Patrol health and findings primary and renders timeline, correlation, and policy-posture data as secondary investigation context rather than as a separate headline product metric
+9. Route canonical AI intelligence summary and resource-intelligence reads through `frontend-modern/src/api/ai.ts`, `frontend-modern/src/stores/aiIntelligence.ts`, `frontend-modern/src/stores/aiIntelligenceSummaryModel.ts`, `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`, `frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx`, the Patrol-owned section files under `frontend-modern/src/features/patrol/`, `frontend-modern/src/pages/AIIntelligence.tsx`, `internal/api/ai_handlers.go`, and `internal/api/contract_test.go` together so the store normalization owner, runtime hook, feature shell, Current work workspace, section owners, route shell, and backend payload stay aligned on one governed surface, including the canonical recent-changes slice
+   while keeping the learning counters backend-only coverage, so Patrol keeps health and findings primary and renders timeline, correlation, and policy-posture data as selected-item investigation context rather than as a separate headline product metric
+   and that secondary investigation context remains explanatory API evidence,
+   not a default workspace mode: the Patrol page may expand recent-change,
+   correlation, and policy-posture details only for an active Patrol finding or
+   an explicitly selected run record, and must not surface those backend
+   context payloads as a page-level forensic block from degraded summary health
+   alone
+   and the Patrol status presentation boundary, so trigger/scheduling status
+   from Patrol status APIs stays in the header/control surface instead of being
+   repeated as default status chrome, watch-only presentation says Patrol watches
+   infrastructure and shows current issues while the selected Watch only mode
+   describes the capability positively, such as Patrol watching infrastructure
+   and reporting issues only, avoiding repeated header/control
+   sentences, `Will not` policy-list wording, secondary Limits disclosures, or repeated
+   infrastructure-unchanged caveats, and the browser-visible label stays
+   operator-readable even when internal Assistant handoff metadata still uses
+   assessment terminology
    and the Patrol findings empty-state behavior, so `0 active findings` only renders as a healthy frontend conclusion when the same governed AI summary contract still reports healthy overall health; degraded or not-fully-verified health predictions must flow through to the Patrol findings surface instead of being replaced by page-local "looks healthy" copy
-   and the Patrol assessment headline plus compact summary-strip behavior, so the same governed AI summary contract decides whether the page leads with verified health, issues detected, coverage incomplete, or another attention state instead of letting count-only page fragments emit a stale `No issues found` conclusion
-   and the Patrol summary shell treatment itself, so the same governed summary contract still lands inside the shared neutral page-card base while severity travels through compact header accents and icon badges instead of a page-local full-width semantic background
-   and the Patrol summary/workspace badge treatment, so the API-owned finding,
+   and the Patrol control presentation boundary, so the always-visible Patrol
+   control selector owns the selected autonomy level, plan-locked installs keep
+   watch-only as the current capability while disabled paid-level buttons may
+   stay visible. Compact Pro badges and a `Plans & Billing` action may appear
+   only when upgrade prompts are allowed; that billing action stays a compact
+   handoff beside the selector rather than a separate upsell panel, and the
+   selector must still avoid Limits controls, hard-limit matrices, or
+   absent-feature explainers.
+   Compact control labels remain understandable decisions such as `Ask first`,
+   `Safe auto-fix`, and
+   `Autopilot` rather than transport shorthand or Pro-matrix labels, the Patrol
+   header description derives from the same
+   effective control state, and the advanced settings
+   drawer stays limited to model, schedule, trigger, and user-level model checks
+   sourced from the existing settings APIs rather than duplicating a second
+   control-level chooser. Runtime or provider setup
+   readiness may suppress run, schedule, model, trigger, and provider-repair
+   controls until Patrol can check infrastructure reliably, but it must not hide
+   the Patrol mode selector or replace it with setup-first proof/status chrome.
+   When provider/model readiness blocks manual Patrol while the header still
+   shows current infrastructure work, the primary run control projects that API
+   state as a direct Provider & Models setup action instead of an inert disabled
+   `Run Patrol` button
+   and the first-party Patrol mode starter boundary, so successful direct
+   autonomy saves may record the coarse content-free `patrol_control` workflow
+   prompt marker only when the effective control level or full-control
+   acknowledgement changes and the paid Patrol control feature is available,
+   while the autonomy settings API remains the source of truth for persisted
+   control state rather than carrying prompt content, finding context, or
+   completed-work proof; after recording that marker, Patrol state must reload
+   Patrol status, findings, approvals, and run history so first-party control
+   changes become visible as the next current-work step without waiting for polling
+   and the Patrol trust-history evidence carried by Patrol status, so historical
+   regressions keep the current findings empty state out of green all-clear copy
+   even when the active finding count is zero and the latest summary score is
+   otherwise healthy
+   and the Patrol Current work assessment behavior, so the same governed AI summary contract decides whether the workspace leads with verified health, issues detected, coverage incomplete, or another attention state instead of letting count-only page fragments emit a stale `No issues found` conclusion
+   and the Patrol Current work copy boundary, so the API-owned health,
+   finding, run, and control facts remain semantic inputs while browser-visible
+   empty and descriptive text stays operator-facing: what will appear there,
+   what Patrol may do under the selected control level, and what to run or
+   review next, not activation-loop proof, queue internals, or verification
+   accounting
+   and the Patrol control dialog/cross-surface Assistant handoff copy, so API
+   compatibility identifiers such as `patrol_configuration_failure` may remain
+   stable while user-facing and model-facing labels describe setting, saving,
+   and reviewing Patrol control rather than a generic configuration/apply flow
+   and the Patrol main-surface treatment itself, so the same governed summary contract lands inside the existing workspace and Current work surfaces while severity travels through compact header accents and icon badges instead of a page-local full-width verdict strip
+   and the Patrol workspace badge treatment, so the API-owned finding,
    runtime, and run-history counts remain semantic input only while visible
    state and count badges route through frontend-primitives-owned
    `StatusIndicatorBadge` and `MetadataBadge` instead of page-local class
    strings in the Patrol section owners
-   and Patrol loading indicator state remains API data only while the visible
-   header and finding loading spinners route through frontend-primitives-owned
-   `LoadingSpinner` instead of encoding API state in page-local spinner shells
-   and the Patrol verification summary derived from run history, so the page also states whether recent Patrol evidence came from a successful full patrol or only from scoped/erroring runs instead of leaving verification scope implicit
+   and the Patrol control-level copy, so frontend section owners treat
+   `PatrolAutonomyLevel` plus lock state as the API input for current-work and
+   findings-workspace descriptions instead of presenting generic investigation
+   or fix capabilities when the payload currently resolves to watch-only.
+   The same API input owns the visible Patrol control boundary summary: what
+   Patrol may do, what must ask for approval or Pro/runtime availability, and
+   any explicit hard limits must derive from `PatrolAutonomyLevel` plus lock
+   state, not from page-local safety thresholds or operations-loop completion
+   proof. The default API-backed presentation must stay on the selected control
+   level and its plain summary; it must not render a separate Limits disclosure,
+   hard-limit matrix, or always-on explanatory matrix beside the mode picker.
+   and the Patrol run-record copy, so `finding_ids` remains the API-owned
+   fail-closed scoping input while the frontend presents selected history as a
+   Patrol run record instead of a generic findings filter or snapshot workflow
+	   and Patrol loading indicator state remains API data only while the visible
+	   header and finding loading spinners route through frontend-primitives-owned
+	   `LoadingSpinner` instead of encoding API state in page-local spinner shells
+	   and Patrol first-load refresh failures remain degraded data state rather
+	   than route failure, so frontend Patrol load orchestration keeps the
+	   workspace mounted, preserves any last-known Patrol evidence, exposes a
+	   retry affordance, and sends transport details only to debug/API diagnostics
+	   instead of raw page copy
+	   and the Patrol issue-row presentation boundary, so active collapsed Patrol
+	   rows use API-owned severity, subject, recency, recurrence, and actionable
+	   workflow state as semantic input while suppressing raw `loopState`,
+	   investigation-status, investigation-outcome, confidence, and generic
+	   review/detected process badges from the default row; those process details
+	   remain available in expanded context, selected run records, Assistant
+	   handoff context, or API diagnostics when they are actually needed
+	   and the Patrol verification summary derived from run history, so the page also states whether recent Patrol evidence came from a successful full patrol or only from scoped/erroring runs instead of leaving verification scope implicit
    and the same-day activity-mix explanation derived from that governed run history, so when a recent full patrol is followed by alert-triggered or anomaly-triggered scoped work the verification surface can explain the mix directly instead of reconstructing it from page-local timing heuristics
    and the Patrol status recency split, so `last_patrol_at` remains reserved for completed full Patrol sweeps while scoped runs and verification checks advance `last_activity_at` without claiming a fresh full-estate verification pass
    and the Patrol Assistant handoff model, so frontend handoff prompts pass
@@ -1162,25 +1839,53 @@ the canonical monitored-system blocked payload.
    bounded request metadata while leaving tool selection and remediation
    reasoning to the configured LLM instead of serializing a frontend-authored
    tool route or fix plan into the API request
+   and the Patrol control presentation boundary, so frontend copy may summarize
+   assisted mode as low or medium-risk automatic fixes allowed by policy, but
+   the risk threshold itself remains backend-owned and must not be inferred from
+   warning severity, UI labels, or page-local finding state
+   and the Patrol control route target, so the frontend-owned
+   `/patrol#patrol-control` anchor remains the canonical navigation affordance,
+   while `/patrol#operations-loop` remains inbound compatibility only, rather
+   than becoming an API payload field, Assistant prompt body, or backend
+   completion state machine. The canonical anchor must resolve to the visible
+   Patrol mode selector, not to the assessment workspace; that anchor may
+   route a new Pro user to Patrol mode from a generic Patrol run state, but issue-backed
+   progress through Assistant, governed decision, verification, and MCP parity
+   must still derive from real Patrol finding, investigation, approval, action,
+   or trust evidence owned by the Patrol state model. The native Patrol
+   workspace must not load the authenticated operations-loop status projection
+   to decide current work; that projection remains an API/MCP/telemetry and
+   adjacent commercial compatibility surface, while local Patrol state exposes
+   Patrol work from status, findings, approvals, and run history. The route
+   anchor itself must stay out of API payloads and must not become completion
+   proof.
+   When that projection still returns `nextAction: open_assistant` for a
+   current Patrol finding, the first-party Patrol page must treat it as
+   compatibility guidance and route the primary action into the Patrol findings
+   workflow; Assistant handoffs remain contextual selected-finding actions, not
+   the canonical API completion step for Patrol current work.
    and the canonical alert-triggered Patrol enqueue path in `internal/api/router.go`, so alert-fired Patrol work flows through the unified alert bridge and trigger manager instead of being duplicated by monitor callback wiring
    and the shared `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx` card, so canonical recent-change timelines stay rendered through one governed frontend card instead of separate page-local list loops
    and the shared `frontend-modern/src/utils/resourceChangePresentation.ts` formatter used by the summary page and resource drawer, so canonical change wording does not drift across surfaces
-   and the Patrol-owned supporting-context selector, so same-state recent-change
+   and the Patrol-owned `Details` context selector, so same-state recent-change
    records from the canonical AI payload are normalized into changed-substate
    wording before Patrol renders them or attaches them to Assistant, avoiding
    no-op operator copy such as `online` to `online` while preserving the
-   backend-owned timeline event
+   backend-owned timeline event, and so those context payloads stay behind a
+   compact operator-opened affordance rather than creating a default forensic
+   block on the Patrol page
    and the `/api/ai/intelligence/changes` route plus `internal/api/contract_test.go`, so the canonical recent-changes endpoint stays on the same intelligence facade and contract snapshot instead of bypassing the shared timeline source
    and the canonical policy-posture snapshot derived from unified resources, so sensitivity, routing, and redaction counts stay owned by the same AI summary contract instead of being reconstructed as a page-local governance rollup
    and the resource-intelligence payload carried by the drawer AI card, so the resource-detail surface stays on one canonical intelligence contract instead of introducing a separate detail endpoint
    and the learned-correlation payload loaded into the shared AI intelligence store, so the Patrol intelligence page and the AI summary page consume the same governed correlation slice instead of each page fetching its own copy
    and the shared dashboard-load bundle inside `frontend-modern/src/stores/aiIntelligence.ts`, so the page orchestration stays on the store-owned bundle instead of enumerating the AI fetches inline
    and the Patrol page refresh lifecycle in `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`, so slow or stalled secondary reads from that shared dashboard-load bundle may continue resolving in the background while the operator-facing Patrol refresh control remains generation-aware, timeout-bounded, and reusable once Patrol findings and status are already visible
+   and the Patrol header support drawer in `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`, so API-owned Patrol status and trigger facts can feed a secondary Schedule & model surface without turning provider model, schedule, trigger tuning, or background-only runtime-policy pauses into the primary Patrol control decision
    and the shared `frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx` card, so the AI summary page renders the governed policy-posture counts while the resource drawer stays on per-resource policy lines instead of carrying duplicate posture UI loops
    and the dedicated `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts` owner, so recent-change, learned-correlation, and policy-coverage summary text stays derived from the canonical AI payload in one place instead of as hook-local count and pluralization logic
    and that same Patrol investigation-context owner, so the current Patrol
    assessment summary may open Assistant with bounded model-only assessment,
-   verification, latest-run, supporting-context evidence, active-finding, and
+   verification, latest-run, supporting-context, active-finding, and
    resource reference context while leaving prioritization and next-step
    reasoning to the configured LLM; active
    finding entries may carry live pending Patrol approval posture only as safe
@@ -1223,39 +1928,101 @@ the canonical monitored-system blocked payload.
    and the shared `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx` card, so learned correlations and correlation context stay rendered through one governed frontend card instead of separate page-local list loops
    and the same shared correlation card's ordering and truncation rule, so callers pass raw correlations instead of encoding their own top-N sort behavior
    and the shared `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx` and `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx` cards' infrastructure resource-link default, so the Patrol page, resource drawer, and problem-resource dashboard panels inherit the canonical resource-filter path construction instead of rebuilding infrastructure URLs inline
-   and the Patrol runtime-remediation destination shared with the AI settings endpoint, so summary actions, run-history runtime-failure actions, and runtime-finding actions may reuse the governed provider-settings route while still presenting that destination to Patrol operators as Patrol provider configuration instead of generic `AI Settings` copy
+   and the Patrol runtime-remediation destination shared with the AI settings endpoint, so summary actions, run-history runtime-failure actions, and runtime-finding actions may reuse the governed provider-settings route while still presenting that destination in Patrol as provider configuration instead of generic `AI Settings` copy
    and the Patrol route-shell destination itself, so the thin page shell at `frontend-modern/src/pages/AIIntelligence.tsx` may continue to bridge the shared AI-runtime payload boundary while exposing `/patrol` as the canonical product route and keeping retired `/ai` browser entry points unregistered
    and the Patrol route-shell accessibility boundary, so brand icons in `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx` stay decorative when the same heading already exposes visible Patrol text, preventing duplicate accessible names such as `Pulse Patrol Patrol`
-   and the Patrol autonomy selector boundary, so the header composes the shared `frontend-modern/src/components/shared/FilterButtonGroup.tsx` segmented primitive for the `Monitor` / `Investigate` / `Remediate` presentation while the API contract remains the sole owner of accepted autonomy values, license-required rejection shape, and the monitor-only clamp
-9. Route frontend API-client parsed error propagation, API-error-status fallback handling, allowed-status handling, custom status-specific error handling, command-trigger success envelope handling, shared response parsing pipelines, missing-resource lookup handling, metadata CRUD routing, stream event consumption, response status, collection normalization, scalar payload coercion, and structured error normalization through canonical shared helpers under `frontend-modern/src/api/`
-   Assistant chat stream workflow-state payloads are part of this same
-   frontend API-client boundary. `workflow_state` events must keep `phase`,
-   `message`, `state`, and `tool` stable, selected-route starts may carry
-   `provider` and `model`, and selected-route retry may carry `attempt`,
-   `max_attempts`, and `retry_after_ms`; automatic provider fallback metadata
-   (`provider_fallback`, `failed_provider`, `failed_model`, `next_provider`,
-   `next_model`) is retired from `/api/ai/chat` stream payloads. The
-   selected-route `provider_start` message is operator
-   progress copy and must be active/in-progress wording such as
-   `<Provider> is starting the response.` while the typed `provider` and `model`
-   fields carry the exact route identity. The generated
-   `frontend-modern/src/api/generated/aiChatEvents.ts` type must stay derived
-   from `internal/ai/chat/types.go` through `scripts/generate-types.go`, and
-   frontend API tests must pin any new generated SSE fields, including live
-   tool-start and tool-progress payload fields such as `phase` and `message`
-   and pending tool cancellation payloads such as `reason`.
-   That same shared org-management client boundary now owns target-consent
-   sharing semantics across `frontend-modern/src/api/orgs.ts`,
-   `internal/api/org_handlers.go`, and the shared org route wiring. Cross-org
-   share creation must remain a pending request until the target organization
-   accepts it, the payload must preserve `status`, `acceptedAt`, and
-   `acceptedBy`, and widening an accepted share's requested role must reset the
-   share back to `pending`. Downstream settings surfaces must not infer live
-   access from share creation alone or recreate manager-only pending-share
-   visibility rules locally.
-10. Add or change API token scope, assignment, and revocation presentation through `frontend-modern/src/components/Settings/APITokenManager.tsx`, `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`, and `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`
+   and the Patrol mode selector boundary, so the default header and the
+   Patrol mode dialog compose the shared
+   `frontend-modern/src/components/shared/FilterButtonGroup.tsx` primitive for
+   the visible `Watch only` / `Ask before changes` / `Auto-fix safe issues` /
+   `Policy autopilot` presentation while the API contract remains the sole owner of
+   accepted autonomy values, `full_mode_unlocked` persistence,
+   license-required rejection shape, and the monitor-only clamp; when the
+   API/license state clamps Patrol to monitor for plan reasons, frontend
+   consumers must present watch-only as the effective capability and badge paid
+   levels rather than rendering a default Pro-absence explainer or a full-loop
+   header description, while runtime-locked Pro installs may explain the missing
+   runtime; provider model, schedule, trigger tuning, and readiness validation
+   must remain advanced settings plumbing alongside that inline Patrol mode
+   boundary. API-adjacent frontend and docs projections may keep legacy wire
+   values such as `monitor`, `assisted`, and `full`, but customer-facing copy
+   must name the visible choices as `Watch only`, `Auto-fix safe issues`, and
+   `Policy autopilot` rather than leaking compatibility terminology.
+   policy rather than changing the compatibility API boundary; setup-only
+   readiness may hide those run/configuration affordances, but the visible
+   Patrol mode selector remains the primary policy boundary during setup
+   and the Patrol mode presentation boundary, so `frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx` routes active Patrol findings into the Patrol-owned findings workflow, renders the first-party loop as watch/investigate/act-under-policy/verify/record, uses `Patrol mode` as the human-facing name for the governed autonomy selector while preserving `patrol_control`, `patrolControl*`, and `patrol_autonomy` only for compatibility route and wire identifiers, and demotes Assistant and external-agent readiness out of the primary operator loop without introducing a new API request shape, frontend-authored tool route, serialized remediation plan, or page-local MCP setup contract; direct single-finding CTAs must derive from existing finding-presentation helpers and canonical routes such as the Patrol provider-settings route, selected findings, approvals, and history rows may still open contextual Assistant handoffs through their governed owners, setup-only Patrol runtime failures must use existing finding/runtime fields to render the Patrol-owned `Fix Patrol setup` framing, a dedicated setup task, and one direct `Open Provider & Models` action while suppressing the readiness banner, generic issue-row chips, filter chrome, and run-history action chrome that would compete with provider setup, but recent changes, correlations, and policy-coverage payloads must not render as a generic first-party Details/evidence console on the Patrol page, and raw finding lifecycle telemetry must be reserved for explicit all/resolved/history or selected-run review states instead of default active current-issue expansion
+   The Patrol page may consume server-authored readiness and preflight-backed
+   status, but it must translate that transport state into `Patrol setup issue`
+   or `Patrol setup warning`, provider/model context, and the canonical
+   `Open Provider & Models` action. Raw preflight, tool-call observation, and
+   readiness-internal wording remain API/settings diagnostics rather than
+   first-party Patrol operator banner copy.
+   and the external-agent Patrol-control status route, so `GET /api/agent/patrol-control/status` may expose only aggregate Patrol issue evidence, aggregate active issue-level Patrol finding counts, pending approvals, contextual collaboration counts inside the Assistant step, governed action counts split into approved and rejected decision counts, verified outcome counts, Patrol control starter/completed-loop/resolved-loop proof exposed through primary `patrolControl*` fields, `patrolAutonomy*` compatibility fields, `proActivationOperationsLoopStarterCount` as an older-client compatibility field, completed/resolved/value `proActivation*` compatibility aliases, optional token-backed MCP readiness, generated timestamps, and the next coarse loop action for native and MCP-facing orchestration; it must not expose finding IDs, action IDs, resource names, commands, prompt text, model output, actors, request bodies, token identity, token names, or token counts, and it must not replace the canonical fleet-context, resource-context, finding, approval, or action routes that own the underlying detail. Its `progressLabel` is operator-facing Patrol status copy: it must describe the current action or outcome in plain Patrol terms such as checking, investigating, approval, rejection, verification, and recorded history rather than activation-loop, value-proof, autonomy, or MCP-completion language. Human-facing manifest capability descriptions, generated MCP README text, and frontend projections for this route must say Patrol mode; wire identifiers such as `patrol_control`, `patrolControlCompletedOperationsLoopCount`, `patrol_autonomy`, `patrolAutonomyCompletedOperationsLoopCount`, and `patrolAutonomyValueState` may retain control/autonomy terminology for compatibility, and `proActivation*` wire identifiers may remain only as compatibility fields, not as user-visible Pro activation journey copy. The route may count generic execution lifecycle as recent loop activity, but the governance stage is decision-backed: `governedActionCount` must require approved or rejected governed-action evidence, `approvedDecisionCount` and `rejectedDecisionCount` must preserve that split without identifiers, and `verifiedOutcomeCount` must require an approved governed action with verified post-action evidence. Current active findings and pending approvals are live operator work: they must keep the next action and four-step rollup pointed at the current finding or approval before older Patrol control completed/resolved proof is presented as history. Aggregate issue evidence and resolved trust history are not by themselves current operator work, so native Patrol consumers must not turn resolved-only history into current finding copy or actions. `patrolControlCompletedOperationsLoopCount` and the mirrored `patrolAutonomyCompletedOperationsLoopCount` may only be derived when content-free Patrol control starter evidence, Patrol issue evidence, contextual Assistant or external-agent collaboration evidence, and either rejected governed-decision evidence or approved governed-decision evidence with verified outcome evidence coexist in the same status window. `patrolControlResolvedOperationsLoopCount` and the mirrored `patrolAutonomyResolvedOperationsLoopCount` may only be derived when content-free Patrol control starter evidence, Patrol issue evidence, contextual Assistant or external-agent collaboration evidence, approved governed-decision evidence, and verified outcome evidence coexist in the same status window; no Patrol control or compatibility alias field may carry prompt, account, action, resource, or finding identity. The four-step `steps` rollup must keep counts aligned with the operator evidence that satisfies each stage: Patrol counts issue evidence, Assistant counts contextual collaboration without prompt or response content, governance counts pending approvals until an approved or rejected decision exists, then counts those decisions, and verification counts verified outcomes or terminal rejected decisions when no write ran. External agents remain optional readiness context through `externalAgentReady` rather than a first-party activation gate or operator step. A rejected-only decision is terminal for the execution-verification branch because no write ran; an approved decision still requires verified outcome proof before the verification step completes.
+   The approved-success/verified-outcome predicate is shared inside
+   `internal/api/`: outbound Pulse Intelligence action telemetry and
+   `GET /api/agent/patrol-control/status` must both route through the same
+   approved-action verification helper. A completed action with
+   `ExecutionResult.Success=true` is execution evidence only; it must not set
+   `verifiedOutcomeCount`, approved-action-success telemetry, Patrol control
+   resolved-loop proof, or paid resolved-loop proof unless the action also has
+   `VerificationOutcome.Status=verified` or a canonical verification result that
+   ran and succeeded.
+10. Route frontend API-client parsed error propagation, API-error-status fallback handling, allowed-status handling, custom status-specific error handling, command-trigger success envelope handling, shared response parsing pipelines, missing-resource lookup handling, metadata CRUD routing, stream event consumption, response status, collection normalization, scalar payload coercion, and structured error normalization through canonical shared helpers under `frontend-modern/src/api/`
+    Telemetry preview payloads are part of this same frontend API-client
+    boundary. `frontend-modern/src/api/settings.ts` must mirror the
+    content-free `internal/telemetry.Ping` payload shape exposed by the system
+    settings preview route, including Pulse Intelligence loop booleans, Assistant
+    and Patrol counters, operations-loop workflow starter counts, governed-action
+    counters including approved/rejected action decisions, and external-agent/MCP aggregate, adapter-origin, and
+    capability-class counters, so browser preview, privacy disclosure, and
+    outbound heartbeat JSON do not drift into separate contracts.
+    Operations-loop starter fields may count only the canonical
+    `pulse_operations_loop` prompt over the rotating telemetry window, with
+    total, native Assistant, first-party Patrol, primary Patrol control,
+    legacy Pro activation entry-point, and Pulse MCP counters. They are
+    active-journey evidence,
+    not proof that the user collaborated with context/tools, approved execution,
+    verified an outcome, or resolved a finding.
+    The external-agent/MCP readiness boolean in that same payload is a
+    manifest-surface capability signal: a non-expired API token covering any
+    Pulse MCP-published capability scope may configure the surface, while recent
+    use still requires route activity markers and generic `ai:chat` tokens do
+    not count as external-agent readiness.
+    Assistant chat stream workflow-state payloads are part of this same
+    frontend API-client boundary. `workflow_state` events must keep `phase`,
+    `message`, `state`, and `tool` stable, selected-route starts may carry
+    `provider` and `model`, and selected-route retry may carry `attempt`,
+    `max_attempts`, and `retry_after_ms`; automatic provider fallback metadata
+    (`provider_fallback`, `failed_provider`, `failed_model`, `next_provider`,
+    `next_model`) is retired from `/api/ai/chat` stream payloads. The
+    selected-route `provider_start` message is operator
+    progress copy and must be active/in-progress wording such as
+    `<Provider> is starting the response.` while the typed `provider` and `model`
+    fields carry the exact route identity. The generated
+    `frontend-modern/src/api/generated/aiChatEvents.ts` type must stay derived
+    from `internal/ai/chat/types.go` through `scripts/generate-types.go`;
+    `frontend-modern/src/api/generated/agentCapabilities.ts` must stay
+    derived from `internal/agentcapabilities`, including manifest surface
+    contract fields; and frontend API tests must pin
+    any new generated SSE fields, including live tool-start and tool-progress
+    payload fields such as `phase` and `message` and pending tool
+    cancellation payloads such as `reason`. Control-level
+    values exposed through AI settings or chat payloads must alias the shared
+    `agentcapabilities.ControlLevel` vocabulary rather than redefining
+    read-only/controlled/autonomous strings in API-local code.
+    That same shared org-management client boundary now owns target-consent
+    sharing semantics across `frontend-modern/src/api/orgs.ts`,
+    `internal/api/org_handlers.go`, and the shared org route wiring. Cross-org
+    share creation must remain a pending request until the target organization
+    accepts it, the payload must preserve `status`, `acceptedAt`, and
+    `acceptedBy`, and widening an accepted share's requested role must reset the
+    share back to `pending`. Downstream settings surfaces must not infer live
+    access from share creation alone or recreate manager-only pending-share
+    visibility rules locally.
+11. Add or change API token scope, assignment, and revocation presentation through `frontend-modern/src/components/Settings/APITokenManager.tsx`, `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`, and `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`
     That same shared token contract also owns audit scope separation: audit event, verification, summary, export, and unified action/export audit reads must require the dedicated `audit:read` scope instead of reusing broader monitoring or settings-read token grants.
-11. Add or change infrastructure operations token generation, lookup, assignment, the pure unified-agent inventory/install model, the split infrastructure install state owner, the split direct-node/discovery infrastructure settings owners, the shared infrastructure-operations state provider/context shell, and install presentation through `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`, `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts`, `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts`, `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`, and `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`. Phase 9 retired the InfrastructureOperationsController shell and the useInfrastructureReportingState reporting path; they must not be reintroduced, and aggregator-backed reporting reads are owned by `frontend-modern/src/components/Settings/useConnectionsLedger.ts` under the frontend-primitives contract.
+12. Add or change infrastructure operations token generation, lookup, assignment, the pure unified-agent inventory/install model, the split infrastructure install state owner, the split direct-node/discovery infrastructure settings owners, the shared infrastructure-operations state provider/context shell, and install presentation through `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`, `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts`, `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts`, `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`, and `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`. Phase 9 retired the InfrastructureOperationsController shell and the useInfrastructureReportingState reporting path; they must not be reintroduced, and aggregator-backed reporting reads are owned by `frontend-modern/src/components/Settings/useConnectionsLedger.ts` under the frontend-primitives contract.
     That same aggregator-backed reporting read may hide passive config or
     rollout handshakes from primary source-manager attention when the API
     reason says only that an agent has not yet reported a comparable applied
@@ -1275,11 +2042,11 @@ the canonical monitored-system blocked payload.
     temperature-key install and uninstall edits must resolve the real
     authorized-keys target before filtering Pulse-managed `# pulse-` lines,
     and `internal/api/contract_test.go` must pin the generated shell shape.
-12. Keep `internal/api/session_store.go` on a fail-closed auth-persistence boundary: persisted OIDC refresh tokens may only round-trip through encrypted-at-rest session payloads, and any missing-crypto or invalid-ciphertext path must drop the token instead of preserving plaintext-at-rest session state.
-13. Keep tenant AI handler wiring on canonical provider ownership: `internal/api/ai_handlers.go` may wire tenant `ReadState` and tenant-scoped unified-resource providers into AI services, but it must not revive tenant snapshot-provider bridges once Patrol can initialize and verify from those canonical providers directly.
-14. Keep Patrol status transport semantics explicit in that same AI handler layer: the Patrol status endpoint must carry machine-readable runtime availability such as blocked, running, disabled, active, or unavailable rather than asking frontend consumers to infer operator state from stale summaries or run history.
-15. Keep legacy Patrol quickstart transport semantics retired from the public v6 GA contract: ordinary AI settings and Patrol status payloads must not expose quickstart credit/status fields, and any stale hosted-model blocked copy that survives from compatibility state must normalize back to provider/local-model setup rather than presenting credit badges or acquisition prompts.
-16. Keep Patrol intelligence summary transport semantics single-voiced: the canonical overall-health payload and Patrol run-history payload together must support one primary assessment plus one explicit verification explanation, and frontend consumers must not need to derive a second compact assessment or verification verdict row from the same payloads beneath the primary assessment strip.
+13. Keep `internal/api/session_store.go` on a fail-closed auth-persistence boundary: persisted OIDC refresh tokens may only round-trip through encrypted-at-rest session payloads, and any missing-crypto or invalid-ciphertext path must drop the token instead of preserving plaintext-at-rest session state.
+14. Keep tenant AI handler wiring on canonical provider ownership: `internal/api/ai_handlers.go` may wire tenant `ReadState` and tenant-scoped unified-resource providers into AI services, but it must not revive tenant snapshot-provider bridges once Patrol can initialize and verify from those canonical providers directly.
+15. Keep Patrol status transport semantics explicit in that same AI handler layer: the Patrol status endpoint must carry machine-readable runtime availability such as blocked, running, disabled, active, or unavailable rather than asking frontend consumers to infer operator state from stale summaries or run history.
+16. Keep legacy Patrol quickstart transport semantics retired from the public v6 GA contract: ordinary AI settings and Patrol status payloads must not expose quickstart credit/status fields, and any stale hosted-model blocked copy that survives from compatibility state must normalize back to provider/local-model setup rather than presenting credit badges or acquisition prompts.
+17. Keep Patrol intelligence summary transport semantics single-voiced: the canonical overall-health payload and Patrol run-history payload together must support one primary assessment plus one explicit verification explanation, and frontend consumers must not need to derive a second compact assessment or verification verdict row from the same payloads beneath the primary assessment strip.
     That same transport split now supports the visible Patrol assessment and
     action metadata without adding another API field: the frontend summary
     contract derives compact state from existing overall-health, run-history,
@@ -1293,10 +2060,10 @@ the canonical monitored-system blocked payload.
     compact operator summary, but it must not imply a hero, card, duplicate
     verdict layout, or expanded assessment panel. Normal Patrol page consumers
     should keep explanatory assessment, verification, activity, and supporting
-    context in the owning Findings, Runs, and Supporting context surfaces rather
+    context in the owning Findings, Runs, and `Details` surfaces rather
     than re-expanding the primary assessment strip.
-17. Keep Pulse Mobile relay credential minting and permission ownership on backend ownership: `internal/api/router_routes_auth_security.go`, `internal/api/security_tokens.go`, `internal/api/auth.go`, `internal/api/relay_mobile_capability.go`, `internal/api/router_routes_ai_relay.go`, and `frontend-modern/src/api/security.ts` may expose the canonical mobile runtime token creator and governed route gates, but browser callers must only consume that route and must not define the mobile runtime scope, compatibility gate list, route inventory, or token-purpose metadata locally.
-18. Keep hosted tenant browser-session precedence on the shared auth boundary: `internal/api/auth.go`, `internal/api/contract_test.go`, and hosted tenant callers must treat a valid `pulse_session` as authoritative before any API-only token fallback or no-local-auth anonymous fallback, so cloud handoff can continue into protected hosted routes without flattening the operator back to `anonymous` or forcing a browser session through bearer-token-only mode after the tenant has minted API tokens.
+18. Keep Pulse Mobile relay credential minting and permission ownership on backend ownership: `internal/api/router_routes_auth_security.go`, `internal/api/security_tokens.go`, `internal/api/auth.go`, `internal/api/relay_mobile_capability.go`, `internal/api/router_routes_ai_relay.go`, and `frontend-modern/src/api/security.ts` may expose the canonical mobile runtime token creator and governed route gates, but browser callers must only consume that route and must not define the mobile runtime scope, compatibility gate list, route inventory, or token-purpose metadata locally.
+19. Keep hosted tenant browser-session precedence on the shared auth boundary: `internal/api/auth.go`, `internal/api/contract_test.go`, and hosted tenant callers must treat a valid `pulse_session` as authoritative before any API-only token fallback or no-local-auth anonymous fallback, so cloud handoff can continue into protected hosted routes without flattening the operator back to `anonymous` or forcing a browser session through bearer-token-only mode after the tenant has minted API tokens.
     That same shared auth boundary also owns hosted handoff authorization. `internal/api/cloud_handoff.go`,
     `internal/api/cloud_handoff_handlers.go`, and hosted tenant callers must derive the effective tenant role from
     pre-existing server-side org membership only, rather than trusting the handoff JWT to append missing members,
@@ -1331,7 +2098,7 @@ the canonical monitored-system blocked payload.
     server-side for org metadata and RBAC assignment while using returned
     contact email only for `GenerateToken`/`SendMagicLink`; the accepted signup
     response remains uniform and must not expose the owner principal.
-19. Keep tenant settings-scope authorization aligned with org management: `internal/api/security_setup_fix.go`, `internal/api/contract_test.go`, and settings-bound hosted callers must allow the current non-default org owner/admin membership to exercise privileged tenant routes, rather than requiring a separate configured local admin identity after hosted handoff.
+20. Keep tenant settings-scope authorization aligned with org management: `internal/api/security_setup_fix.go`, `internal/api/contract_test.go`, and settings-bound hosted callers must allow the current non-default org owner/admin membership to exercise privileged tenant routes, rather than requiring a separate configured local admin identity after hosted handoff.
     Hosted handoff must not be treated as an org-management side effect for that same privilege boundary. Only
     canonical invitation, membership-management, or explicit owner-transfer flows may create tenant membership or
     change the stored owner/admin role. Shared auth routes and downstream settings consumers must treat handoff role
@@ -1358,7 +2125,7 @@ the canonical monitored-system blocked payload.
     development workflows, but release builds must compile that env override
     out entirely instead of reading it and deciding at runtime whether to
     honor or ignore it.
-20. Keep mobile onboarding payload reads aligned with the server-owned relay-mobile credential: `internal/api/router_routes_ai_relay.go`, `internal/api/onboarding_handlers.go`, and `internal/api/contract_test.go` must allow the dedicated `relay:mobile:access` scope to reach the governed QR, deep-link, and connection-validation payloads without reintroducing a broader `settings:read` requirement for token-authenticated pairing clients.
+21. Keep mobile onboarding payload reads aligned with the server-owned relay-mobile credential: `internal/api/router_routes_ai_relay.go`, `internal/api/onboarding_handlers.go`, and `internal/api/contract_test.go` must allow the dedicated `relay:mobile:access` scope to reach the governed QR, deep-link, and connection-validation payloads without reintroducing a broader `settings:read` requirement for token-authenticated pairing clients.
     That same shared relay/runtime boundary also owns hostname target
     equivalence for agent command routing. `internal/api/router_routes_ai_relay.go`
     and `internal/api/contract_test.go` may match a short host against the
@@ -1386,13 +2153,13 @@ the canonical monitored-system blocked payload.
     authenticated Proxmox node agent, and must keep inventory collection behind
     the monitoring-owned minimal Docker summary contract rather than exposing
     a new public API payload shape.
-21. Keep hosted billing-state quickstart grants retired from new shared API flows: `internal/api/hosted_entitlement_refresh.go`, hosted signup, and trial-state construction must not auto-grant or refresh quickstart inventory for new workspaces, while low-level billing-state readers may still preserve historical fields that already exist on disk.
-22. Keep hosted AI settings bootstrap on the shared API contract as a retired path: `internal/api/ai_hosted_runtime.go`, `internal/api/ai_handlers.go`, `internal/api/ai_handler.go`, and `internal/api/contract_test.go` must treat a missing `ai.enc` in hosted mode as an unconfigured BYOK/local-provider state, not as a machine-owned `quickstart:pulse-hosted` bootstrap condition. Hosted tenant reads may inherit billing state for commercial authorization, but they must not create quickstart-backed AI config or call the quickstart bootstrap upstream route.
-23. Keep post-boot AI enablement contract-backed on the shared AI/mobile approval surface: `internal/api/ai_handler.go`, `internal/api/ai_handlers.go`, `internal/api/router_routes_ai_relay.go`, and `internal/api/contract_test.go` must turn the governed approvals-list API into the canonical empty-list payload as soon as settings-driven AI enablement succeeds, rather than leaving that surface on `503 Approval store not initialized` until some separate startup-only side effect happens.
-24. Keep infrastructure summary chart transport contract-backed on the shared API surface: `internal/api/router.go`, `internal/api/contract_test.go`, and frontend infrastructure summary consumers must normalize long-range mixed-cadence history into equal-time summary buckets before shipping the infrastructure charts API payload, so 7-day and 30-day summary cards do not expose compressed right-edge tails just because recent samples arrive at a finer storage resolution.
-25. Keep long-range workload chart transport time-proportional on the shared API surface: `internal/api/router.go`, `internal/api/contract_test.go`, and workload chart consumers must cap mixed-cadence workload history by equal-time buckets rather than raw point index for the per-workload and aggregate workload chart APIs, so 7-day and 30-day workload cards do not bunch recent samples at the right edge just because recent telemetry is stored more densely.
-26. Keep chart timestamp precision canonical on that same shared API surface: when `internal/api/router.go` serializes monitoring history into infrastructure or workload chart payloads, it must preserve canonical millisecond timestamps from the shared monitoring timeline instead of rounding through whole-second conversion, so seeded mock history and live appends collapse onto one operator-visible timeline instead of appearing as duplicated tail samples.
-27. Keep Patrol remediation payload naming backward-compatible without leaking
+22. Keep hosted billing-state quickstart grants retired from new shared API flows: `internal/api/hosted_entitlement_refresh.go`, hosted signup, and trial-state construction must not auto-grant or refresh quickstart inventory for new workspaces, while low-level billing-state readers may still preserve historical fields that already exist on disk.
+23. Keep hosted AI settings bootstrap on the shared API contract as a retired path: `internal/api/ai_hosted_runtime.go`, `internal/api/ai_handlers.go`, `internal/api/ai_handler.go`, and `internal/api/contract_test.go` must treat a missing `ai.enc` in hosted mode as an unconfigured BYOK/local-provider state, not as a machine-owned `quickstart:pulse-hosted` bootstrap condition. Hosted tenant reads may inherit billing state for commercial authorization, but they must not create quickstart-backed AI config or call the quickstart bootstrap upstream route.
+24. Keep post-boot AI enablement contract-backed on the shared AI/mobile approval surface: `internal/api/ai_handler.go`, `internal/api/ai_handlers.go`, `internal/api/router_routes_ai_relay.go`, and `internal/api/contract_test.go` must turn the governed approvals-list API into the canonical empty-list payload as soon as settings-driven AI enablement succeeds, rather than leaving that surface on `503 Approval store not initialized` until some separate startup-only side effect happens.
+25. Keep infrastructure summary chart transport contract-backed on the shared API surface: `internal/api/router.go`, `internal/api/contract_test.go`, and frontend infrastructure summary consumers must normalize long-range mixed-cadence history into equal-time summary buckets before shipping the infrastructure charts API payload, so 7-day and 30-day summary cards do not expose compressed right-edge tails just because recent samples arrive at a finer storage resolution.
+26. Keep long-range workload chart transport time-proportional on the shared API surface: `internal/api/router.go`, `internal/api/contract_test.go`, and workload chart consumers must cap mixed-cadence workload history by equal-time buckets rather than raw point index for the per-workload and aggregate workload chart APIs, so 7-day and 30-day workload cards do not bunch recent samples at the right edge just because recent telemetry is stored more densely.
+27. Keep chart timestamp precision canonical on that same shared API surface: when `internal/api/router.go` serializes monitoring history into infrastructure or workload chart payloads, it must preserve canonical millisecond timestamps from the shared monitoring timeline instead of rounding through whole-second conversion, so seeded mock history and live appends collapse onto one operator-visible timeline instead of appearing as duplicated tail samples.
+28. Keep Patrol remediation payload naming backward-compatible without leaking
     legacy automation-first wording into product copy. `frontend-modern/src/api/patrol.ts`,
     `internal/api/ai_handlers.go`, and `internal/api/router_routes_ai_relay.go`
     may continue to expose stable transport fields such as `fixed_count`,
@@ -1400,8 +2167,8 @@ the canonical monitored-system blocked payload.
     API license-required messages, and presentation labels layered on that API
     contract must describe the operator-visible capability as remediation or
     safe remediation workflows.
-27. Keep storage chart identity canonical on that same shared API surface: the shared storage charts endpoint must key pool and physical-disk series by the resolved unified-resource `MetricsTarget.ResourceID`, not by canonical resource IDs or page-local aliases, so storage rows, focused summary cards, sticky summary shells, and detail charts all address the same history series in live and mock mode.
-28. Keep synthetic summary-chart fallback identity canonical on that same shared API surface: when `internal/api/router.go` has to synthesize mock summary history for infrastructure, workloads, or storage cards, it must derive the fallback from canonical `resourceType`, `resourceID`, and `metricType` ownership instead of raw min/max seed-prefix helpers, so range changes and runtime mock updates stay on one governed timeline.
+29. Keep storage chart identity canonical on that same shared API surface: the shared storage charts endpoint must key pool and physical-disk series by the resolved unified-resource `MetricsTarget.ResourceID`, not by canonical resource IDs or page-local aliases, so storage rows, focused summary cards, sticky summary shells, and detail charts all address the same history series in live and mock mode.
+30. Keep synthetic summary-chart fallback identity canonical on that same shared API surface: when `internal/api/router.go` has to synthesize mock summary history for infrastructure, workloads, or storage cards, it must derive the fallback from canonical `resourceType`, `resourceID`, and `metricType` ownership instead of raw min/max seed-prefix helpers, so range changes and runtime mock updates stay on one governed timeline.
     The same compact chart boundary also owns aggregate-only storage summary
     transport. `/api/charts/storage-summary` may batch only the canonical
     `used` and `avail` storage series required for the aggregate capacity
@@ -1411,24 +2178,24 @@ the canonical monitored-system blocked payload.
     When mock mode is active, that same endpoint must come from the
     monitor-owned aggregate summary cache rather than rehydrating each pool
     chart on request.
-29. Keep workload-chart response identity canonical on that same shared API surface: `internal/api/router.go`, `internal/api/contract_test.go`, and workload summary consumers must emit provider-backed VM and system-container series under the same canonical workload IDs that workloads page rows use, while resolving history through the unified `MetricsTarget.ResourceID`, so hover and focus selection do not fall off for provider-backed rows.
+31. Keep workload-chart response identity canonical on that same shared API surface: `internal/api/router.go`, `internal/api/contract_test.go`, and workload summary consumers must emit provider-backed VM and system-container series under the same canonical workload IDs that workloads page rows use, while resolving history through the unified `MetricsTarget.ResourceID`, so hover and focus selection do not fall off for provider-backed rows.
     Kubernetes pod workload rows follow that same contract through their
     metrics target. `/api/resources` may expose pod history only through the
     unified `MetricsTarget.ResourceID`, but that target must be the canonical
     prefixed runtime key `k8s:<cluster>:pod:<uid>` and not the bare source pod
     ID, so pod workload rows and pod chart payloads stay on one history series.
-30. Keep the hosted account portal bootstrap intelligible without duplicate
+32. Keep the hosted account portal bootstrap intelligible without duplicate
     chrome. `internal/cloudcp/portal/page.go`, the maintained portal frontend
     bundle, and the shared portal styles may refine layout density, but the
     account/billing shell must remain understandable from the primary header,
     section title, and factual body content alone instead of depending on a
     second context-chip strip to restate the same scope.
-31. Keep storage wire metadata lossless across shared API payload types.
+33. Keep storage wire metadata lossless across shared API payload types.
     `frontend-modern/src/types/api.ts` must continue to expose provider-backed
     storage metadata such as Proxmox `pool` and `zfsPool` fields when the
     backend emits them, instead of silently dropping that detail from the
     shared runtime contract.
-32. Keep hosted entitlement refresh ownership on the same governed API contract
+34. Keep hosted entitlement refresh ownership on the same governed API contract
     as hosted status and entitlements reads. `internal/api/licensing_handlers.go`,
     `internal/api/hosted_entitlement_refresh.go`, and
     `internal/api/contract_test.go` must resolve the effective hosted billing
@@ -1441,7 +2208,7 @@ the canonical monitored-system blocked payload.
     must route through the `HostedEntitlement*` licensing aliases rather than
     treating the retired trial-activation callback as the active acquisition
     model.
-33. Keep public demo bootstrap posture on the shared security-status contract.
+35. Keep public demo bootstrap posture on the shared security-status contract.
     `internal/api/router_routes_auth_security.go`,
     `internal/api/security_status_capabilities.go`, frontend security-status
     consumers, and shared demo-mode stores must treat
@@ -1453,7 +2220,7 @@ the canonical monitored-system blocked payload.
     the store boundary, so public demo shells do not probe `/api/ai/approvals`
     or `/api/ai/remediation/plans` after the read-only demo posture is already
     known.
-34. Keep public demo commercial posture middleware-owned on that same shared
+36. Keep public demo commercial posture middleware-owned on that same shared
     API contract. `internal/api/demo_middleware.go`,
     `internal/api/demo_mode_commercial.go`,
     `internal/api/subscription_entitlements.go`, and
@@ -1465,7 +2232,7 @@ the canonical monitored-system blocked payload.
     hidden. Upgrade prompts, trial nudges, monitored-system migration guidance,
     usage counts, billing identity, and plan metadata must therefore not depend
     on hidden commercial routes surviving the public demo boundary.
-35. Keep the storage summary route in `internal/api/router.go` as the
+37. Keep the storage summary route in `internal/api/router.go` as the
     canonical storage summary contract across dashboard and storage consumers.
     `internal/api/router.go`,
     `internal/api/contract_test.go`, and shared frontend consumers must expose
@@ -1473,7 +2240,7 @@ the canonical monitored-system blocked payload.
     metrics-target IDs, preserve millisecond chart timestamps, and avoid
     reconstructing storage summary behavior from per-pool
     `/api/metrics-store/history` fan-out.
-36. Keep infrastructure summary metric filtering canonical on that same shared
+38. Keep infrastructure summary metric filtering canonical on that same shared
     API surface. `frontend-modern/src/api/charts.ts`,
     `internal/api/router_routes_monitoring.go`, `internal/api/router.go`,
     `internal/api/types.go`, and `internal/api/contract_test.go` must route
@@ -1484,7 +2251,7 @@ the canonical monitored-system blocked payload.
     requested metric filters through the shared guest-chart batch loader in
     `internal/monitoring/monitor_metrics.go` instead of fetching the full guest
     metric set and trimming after the API payload is already assembled.
-37. Keep the retired compact dashboard overview route absent from that same
+39. Keep the retired compact dashboard overview route absent from that same
     shared API surface. `internal/api/resources.go`,
     `internal/api/router_routes_monitoring.go`, and
     `frontend-modern/src/api/resources.ts` must not restore
@@ -1493,7 +2260,7 @@ the canonical monitored-system blocked payload.
     rows, governed resource labels, top-infrastructure identity, or metrics-
     target join keys. New summary payloads must be owned by their product
     route and pinned in the API contract there.
-38. Keep mock and demo chart reads on the same canonical unified snapshot as
+40. Keep mock and demo chart reads on the same canonical unified snapshot as
     the rest of the API surface. `internal/api/router.go`,
     `internal/api/contract_test.go`, and chart consumers must route
     `/api/charts`, `/api/charts/infrastructure`, and `/api/storage-charts`
@@ -1501,7 +2268,7 @@ the canonical monitored-system blocked payload.
     presentation is active, so VMware, storage, and infrastructure series stay
     aligned with `/api/resources` and `/api/state` instead of drifting onto the
     live store-backed graph.
-39. Route the unified connections ledger and address probe through
+41. Route the unified connections ledger and address probe through
     `internal/api/connections_types.go`,
     `internal/api/connections_aggregator.go`,
     `internal/api/connections_handlers.go`,
@@ -1631,7 +2398,10 @@ the canonical monitored-system blocked payload.
 
 ## Completion Obligations
 
-1. Update contract tests when payloads change, including admin verification endpoints such as `POST /api/ai/patrol/preflight` whose response shape (`tool_call_observed`, `duration_ms`, classified `cause`/`summary`/`recommendation`, plus `recorded_at`/`recorded_at_unix` for the cached snapshot) is part of the canonical Patrol diagnostic surface, the `patrol_preflight` snapshot field on `/api/settings/ai` that hydrates the Verify Patrol panel on page load, the auto-trigger contract on `POST/PUT /api/settings/ai` whose handler dispatches preflight in the background only when the change actually moved Patrol transport so routine saves do not write a new `patrol_preflight` snapshot, the startup-seed contract where `NewAISettingsHandler` dispatches the same async preflight after `LoadConfig()` succeeds so the first `/api/settings/ai` poll after a Pulse restart already carries a populated `patrol_preflight` snapshot, and the GET-symmetry contract where `HandleGetAISettings` includes `patrol_readiness` (with the cached-preflight-augmented `tools` check) on the same response that already carries `patrol_preflight`, so the Patrol page picks up classified preflight evidence on first load instead of only after a save
+1. Update contract tests when payloads change, including admin verification endpoints such as `POST /api/ai/patrol/preflight` whose response shape (`tool_call_observed`, `duration_ms`, classified `cause`/`summary`/`recommendation`, plus `recorded_at`/`recorded_at_unix` for the cached snapshot) is part of the canonical Patrol diagnostic surface, the `patrol_preflight` snapshot field on `/api/settings/ai` that hydrates the Check Patrol model panel on page load, the auto-trigger contract on `POST/PUT /api/settings/ai` whose handler dispatches preflight in the background only when the change actually moved Patrol transport so routine saves do not write a new `patrol_preflight` snapshot, the startup-seed contract where `NewAISettingsHandler` dispatches the same async preflight after `LoadConfig()` succeeds so the first `/api/settings/ai` poll after a Pulse restart already carries a populated `patrol_preflight` snapshot, and the GET-symmetry contract where `HandleGetAISettings` includes `patrol_readiness` (with the cached-preflight-augmented `tools` check) on the same response that already carries `patrol_preflight`, so the Patrol page picks up classified preflight evidence on first load instead of only after a save; readiness checks may keep stable machine IDs such as `configuration`, but user-facing labels in this payload must say Patrol mode rather than Patrol configuration, and the settings UI must summarize successful diagnostic snapshots as model readiness instead of rendering raw preflight/tool-call wording
+   The same diagnostic payload may inform Patrol page setup banners, but the
+   Patrol page must present it as setup/model-check state and must not render
+   raw preflight or tool-call-observation copy in the header banner.
 2. Update frontend API types in the same slice
 3. Route runtime changes through the explicit API-contract proof policies in `registry.json`; default fallback proof routing is not allowed
 4. Update this contract when canonical payload ownership changes
@@ -1643,7 +2413,9 @@ the canonical monitored-system blocked payload.
    `event_triggers_blocked_reason`, and
    `event_triggers_blocked_message` explain effective runtime policy without
    making the transport look like the operator turned alert or anomaly triggers
-   off
+   off; default Patrol UI surfaces may use that payload to explain an
+   actionable manual-run block, but must not promote a background-only policy
+   pause as ordinary operator guidance when manual Patrol still works
    and the split Patrol trigger settings contract, so `patrol_alert_triggers_enabled` and `patrol_anomaly_triggers_enabled` are the canonical AI settings fields while legacy `patrol_event_triggers_enabled` remains a compatibility aggregate rather than the primary control surface
    and the retired quickstart compatibility contract, so `/api/settings/ai` and
    `/api/ai/patrol/status` no longer carry `quickstart_credits_remaining`,
@@ -1767,8 +2539,7 @@ the canonical monitored-system blocked payload.
    `recommendation`, and the Finding to UnifiedFinding conversion in
    `internal/api/router.go` must copy `f.PreviousResolvedFixSummary`
    alongside the other operator-facing strings.
-   The same shape also carries an optional `remind_at` timestamp (ISO
-   8601) on both `UnifiedFindingRecord` and Patrol `Finding` shapes. It
+   The same shape also carries an optional `remind_at` timestamp (ISO 8601) on both `UnifiedFindingRecord` and Patrol `Finding` shapes. It
    is populated only when `dismissed_reason === 'will_fix_later'` and
    represents the wake-up deadline at which the next re-detection clears
    the dismissal — the operator-facing half of the canonical
@@ -1782,7 +2553,7 @@ the canonical monitored-system blocked payload.
    time and badge dismissed-as-will_fix_later rows with the pending
    remind-at, otherwise the new behavior is invisible until the
    reminder fires.
-   The Patrol operator-feedback endpoint surface also includes
+   The Patrol manual-feedback endpoint surface also includes
    `POST /api/ai/patrol/resolve` (handled by `HandleResolveFinding` in
    `internal/api/ai_handlers.go`) for operator-driven manual resolution
    when the operator has fixed an issue out-of-band. The TS client
@@ -1809,10 +2580,11 @@ the canonical monitored-system blocked payload.
    `PatrolIntelligenceHeader` shell on the Patrol API surface reads
    the title, description, and title tooltip from
    `getPatrolPageHeaderMeta()` rather than carrying inline copy, so the
-   operator-facing framing of what Patrol owns (scheduled probing,
-   context assembly for the configured model, and approval-bound action)
-   stays tied to the contract instead of drifting between hover and
-   inline.
+   operator-facing framing of what Patrol owns (watching infrastructure,
+   detecting issues, recording findings, and escalating into governed
+   investigation/action only when the selected Patrol mode
+   allows it) stays tied to the contract instead of drifting between
+   hover and inline.
    The Patrol page must not introduce header or workspace trust strips over
    this payload. High-signal trust facts from
    `state.patrolStatus()?.trust` (the `FindingsTrustSummary` block already
@@ -1828,7 +2600,7 @@ the canonical monitored-system blocked payload.
    new API surface. The label stays optional when coverage is zero, says
    verified only for successful full patrols, and uses neutral checked wording
    for errored full patrols or scoped activity.
-   The primary Patrol assessment copy uses that same run-history-backed
+   The Patrol Current work empty-state copy uses that same run-history-backed
    coverage truth when reconciling AI summary coverage factors: a successful
    full run with non-zero `resources_checked` suppresses stale
    coverage-incomplete wording, while scoped, missing, zero-coverage, or errored
@@ -1922,8 +2694,8 @@ the canonical monitored-system blocked payload.
    and must not expose raw command text or raw execution output. Frontend
    handoff briefings must derive from the same shared investigation payload
    rather than inventing a second finding-context transport shape.
-7. Keep Patrol summary payload consumers aligned on one assessment hierarchy: transport-driven Patrol summary surfaces may show supporting counts and outcomes, but the canonical assessment and verification states must remain singular and not be repeated as a second compact verdict strip. The collapsed readout should describe current operator state and score directly rather than combining reassuring grade labels with active-issue copy.
-8. Keep Patrol verification and activity facts unified on one transport-backed secondary status area: when frontend consumers combine Patrol status payloads (`runtime_state`, `last_patrol_at`, `last_activity_at`, `trigger_status`) with run-history transport, the latest run result, activity mix, scoped-trigger state, and circuit-breaker context must read as one supporting explanation beneath the primary assessment instead of being re-expanded into a separate full-width status strip plus duplicate summary layers
+7. Keep Patrol summary payload consumers aligned on one assessment hierarchy: transport-driven Patrol summary data may show supporting counts and outcomes, but the canonical assessment and verification states must remain singular and not be repeated as a second compact verdict strip. The collapsed readout should describe current operator state and score directly rather than combining reassuring grade labels with active-issue copy; recurrence and trust counters are historical evidence unless the active finding or approval payload marks current operator work. Patrol-owned status, finding, and run-history payloads are sufficient fallback evidence for Current issues when the broader intelligence summary payload is missing, slow, or unavailable. Frontend consumers of the operations-loop projection must present the compact progress label as current work state, not as a duplicate of the selected Patrol autonomy mode, and terminal verified/rejected outcomes with no active finding or pending approval must stay history detail behind `No active work`; native Patrol consumers must not render a separate proof strip solely to expose that history action. A first-party Patrol control starter may render a ready-to-run Patrol step only after subtracting the legacy `proActivationOperationsLoopStarterCount` alias from aggregate Patrol-control starter evidence, so a legacy activation-entry count alone cannot revive the old proof UI.
+8. Keep Patrol verification and activity facts unified on one transport-backed secondary status area: when frontend consumers combine Patrol status payloads (`runtime_state`, `last_patrol_at`, `last_activity_at`, `trigger_status`) with run-history transport, the latest run result, activity mix, scoped-trigger state, and circuit-breaker context must read as one supporting explanation beneath Current issues or selected history instead of being re-expanded into a separate full-width status strip plus duplicate summary layers
    and the Patrol runtime-failure run-history contract, so backend payloads,
    persistence adapters, and `frontend-modern/src/api/patrol.ts` preserve
    `error_summary` and `error_detail` whenever an erroring run has structured
@@ -1936,19 +2708,15 @@ the canonical monitored-system blocked payload.
    while forcing request-local approval-required mode and leaving retries,
    configuration changes, and remediation authority outside the chat payload
    and the main Patrol page composition boundary, so once that governed
-   secondary area exists inside the summary shell the same payloads must not
+   secondary area exists inside the Current issues and history workspace the same payloads must not
    also drive a second page-level status strip elsewhere on the route
-   and the Patrol supporting-context disclosure rule, so recent changes,
-   learned correlations, and policy coverage stay secondary explanatory context
-   that opens only when degraded verification, active findings, or selected-run
-   investigation makes that evidence relevant instead of advertising a parallel
-   Patrol workflow on otherwise healthy fully verified states, and the
-   disclosure copy must explicitly tell operators that findings and run history
-   are the Patrol verification evidence while those supporting cards only add
-   explanation from the same governed payload family, and the Patrol-owned
-   helper `frontend-modern/src/features/patrol/patrolSupportingContextPresentation.ts`
-   must keep that transport-derived trust copy aligned across the workspace
-   disclosure rather than letting page shells invent local wording
+   and the Patrol `Details` disclosure rule, so recent changes,
+   learned correlations, and policy coverage stay backend and Assistant context
+   instead of advertising a parallel Patrol workflow on otherwise healthy fully
+   verified states or degraded summary health alone. First-party Patrol page
+   consumers must not turn those payloads into a generic Details/supporting
+   context panel; selected finding and run records remain the source of truth for
+   what the operator can inspect or do next.
 9. Keep AI settings setup transport vendor-neutral: `/api/settings/ai/update`
    must accept provider credentials or base URLs without a baked vendor model
    ID, resolve the effective BYOK `model` through the canonical runtime
@@ -1961,17 +2729,17 @@ the canonical monitored-system blocked payload.
     analysis preferences in config, but response payloads must expose only the
     control level and paid Patrol settings currently allowed by runtime
     entitlements.
-10. Treat Patrol summary supporting metrics as readouts, not reinterpretations: when frontend consumers derive cards such as active findings, criticals, warnings, or fixes from the canonical payloads, those cards must stay numeric and must not synthesize new assessment labels like `Issues detected` or verification labels like `Partial verification` beneath the primary summary contract
-11. Treat active Patrol runtime transport as compatible with factual activity surfaces: when the runtime is currently running, frontend consumers may surface in-progress activity context, but they must not replace the activity strip with a second assessment verdict derived from runtime state alone
-12. Treat Patrol recency as a singular transport-driven fact: once header metadata, verification copy, or the findings footer already present the governed Patrol timing context, frontend summary consumers must not derive an extra timing pill from the same payloads inside the primary summary card
-13. Treat Patrol findings counts as a singular supporting surface as well: when the summary shell already exposes count cards for active findings, warnings, criticals, and fixes, the primary assessment card must not repeat those same payload-derived counts as secondary badges
-14. Treat Patrol schedule and recency as header-owned metadata on the main Patrol page: findings empty-state consumers should not receive or restate `next_patrol_at`, `last_patrol_at`, `last_activity_at`, or interval timing once those transport fields are already presented by the primary header and verification shell
-15. Keep recovery payload filters canonical across `/api/recovery/rollups`, `/api/recovery/points`, `/api/recovery/series`, and `/api/recovery/facets`: when `internal/api/recovery_handlers.go` adds a governed recovery filter or display field such as provider-neutral `itemType`, the same normalized transport must land across all four endpoints and the contract tests must pin both outbound payload shape and accepted query aliases in the same slice
-16. Keep recovery platform-query vocabulary canonical across that same `/api/recovery/*` surface: operator-facing transport must emit `platform` as the canonical query field, accepted legacy `provider` aliases must remain compatibility-only input, and `internal/api/contract_test.go` must pin that fallback behavior in the same slice as any handler change
-17. Keep recovery payload platform vocabulary canonical across that same `/api/recovery/*` surface: point payloads must expose `platform`, rollup payloads must expose `platforms`, and any compatibility `provider` / `providers` aliases must remain secondary fallback fields rather than replacing the shared response model
-18. Keep recovery linked-resource vocabulary canonical across that same `/api/recovery/*` surface: points and rollups must expose `itemResourceId` as the canonical linked-resource field, accepted legacy `subjectResourceId` aliases must remain compatibility-only input or secondary payload fields, and the shared proof surface must pin that normalization in the same slice as any handler change
-19. Keep recovery external item-reference vocabulary canonical across that same `/api/recovery/*` surface: point and rollup payloads must expose `itemRef` as the canonical external item-reference field, accepted legacy `subjectRef` aliases must remain compatibility-only secondary payload fields, and the shared proof surface must pin that normalization in the same slice as any handler change
-20. Keep first-host lookup completion explicit on the shared install-state API
+11. Treat Patrol summary supporting metrics as readouts, not reinterpretations: when frontend consumers derive cards such as active findings, criticals, warnings, or fixes from the canonical payloads, those cards must stay numeric and must not synthesize new assessment labels like `Issues detected` or verification labels like `Partial verification` beneath the primary summary contract
+12. Treat active Patrol runtime transport as compatible with factual activity surfaces: when the runtime is currently running, frontend consumers may surface in-progress activity context, but they must not replace the activity strip with a second assessment verdict derived from runtime state alone
+13. Treat Patrol recency as a singular transport-driven fact: once header metadata, verification copy, or the findings footer already present the governed Patrol timing context, frontend summary consumers must not derive an extra timing pill from the same payloads inside the primary summary card
+14. Treat Patrol findings counts as a singular supporting surface as well: when the summary shell already exposes count cards for active findings, warnings, criticals, and fixes, the primary assessment card must not repeat those same payload-derived counts as secondary badges
+15. Treat Patrol schedule and recency as header-owned metadata on the main Patrol page: findings empty-state consumers should not receive or restate `next_patrol_at`, `last_patrol_at`, `last_activity_at`, or interval timing once those transport fields are already presented by the primary header and verification shell
+16. Keep recovery payload filters canonical across `/api/recovery/rollups`, `/api/recovery/points`, `/api/recovery/series`, and `/api/recovery/facets`: when `internal/api/recovery_handlers.go` adds a governed recovery filter or display field such as provider-neutral `itemType`, the same normalized transport must land across all four endpoints and the contract tests must pin both outbound payload shape and accepted query aliases in the same slice
+17. Keep recovery platform-query vocabulary canonical across that same `/api/recovery/*` surface: operator-facing transport must emit `platform` as the canonical query field, accepted legacy `provider` aliases must remain compatibility-only input, and `internal/api/contract_test.go` must pin that fallback behavior in the same slice as any handler change
+18. Keep recovery payload platform vocabulary canonical across that same `/api/recovery/*` surface: point payloads must expose `platform`, rollup payloads must expose `platforms`, and any compatibility `provider` / `providers` aliases must remain secondary fallback fields rather than replacing the shared response model
+19. Keep recovery linked-resource vocabulary canonical across that same `/api/recovery/*` surface: points and rollups must expose `itemResourceId` as the canonical linked-resource field, accepted legacy `subjectResourceId` aliases must remain compatibility-only input or secondary payload fields, and the shared proof surface must pin that normalization in the same slice as any handler change
+20. Keep recovery external item-reference vocabulary canonical across that same `/api/recovery/*` surface: point and rollup payloads must expose `itemRef` as the canonical external item-reference field, accepted legacy `subjectRef` aliases must remain compatibility-only secondary payload fields, and the shared proof surface must pin that normalization in the same slice as any handler change
+21. Keep first-host lookup completion explicit on the shared install-state API
     boundary: when
     `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`
     receives a successful connected-agent lookup result, the canonical install
@@ -1979,14 +2747,14 @@ the canonical monitored-system blocked payload.
     first visible platform/runtime page rather than leaving the operator on a
     transport-only status readout or reviving the removed `/infrastructure`
     route.
-21. Keep the shared first-host detection contract explicit on `/api/state` as
+22. Keep the shared first-host detection contract explicit on `/api/state` as
     used by
     `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`:
     the canonical `connectedInfrastructure` projection must stay suitable for
     detecting the first active reporting system during install so brand-new
     operators can receive the first success handoff without typing a hostname
     or agent ID.
-22. Keep the shared first-run install-token transport explicit on
+23. Keep the shared first-run install-token transport explicit on
     `/api/security/tokens` as used by
     `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`:
     once quick setup has produced the setup handoff credentials, the canonical
@@ -1997,7 +2765,7 @@ the canonical monitored-system blocked payload.
     install-state surface must describe that prepared token path consistently
     with the live runtime behavior rather than directing the operator to create
     another install token manually.
-23. Keep connected-infrastructure surface vocabulary canonical across the
+24. Keep connected-infrastructure surface vocabulary canonical across the
     shared `/api/state` and reporting/install consumers:
     `frontend-modern/src/types/api.ts` must treat `truenas` as a first-class
     connected-infrastructure surface kind, and connected-infrastructure
@@ -2015,13 +2783,20 @@ the canonical monitored-system blocked payload.
     `linkedContainerId`, so settings consumers can keep the top connections
     ledger scoped to top-level infrastructure without re-deriving guest status
     from names or local heuristics.
-24. Keep AI settings payload continuity explicit on the shared `/api/settings/ai`
+25. Keep AI settings payload continuity explicit on the shared `/api/settings/ai`
     surface: `internal/api/ai_handlers.go` and `internal/api/contract_test.go`
     must expose masked provider-auth state such as `ollama_username` and
     `ollama_password_set` without echoing raw stored secrets, and the same
     backend contract must keep provider test routes bound to the selected
     provider's configured model instead of whichever other provider currently
     owns the default `model` field.
+    Anthropic provider readiness on this shared settings payload is API-key
+    backed only: legacy OAuth fields may be echoed as cleanup state, but they
+    must not count toward `configured`, `anthropic_configured`,
+    `configured_providers`, model listing, provider tests, or runtime provider
+    construction. `/api/ai/oauth/start` and `/api/ai/oauth/exchange` fail closed
+    with `unsupported_anthropic_oauth`, `/api/ai/oauth/callback` must not save
+    tokens, and `/api/ai/oauth/disconnect` may clear stored legacy tokens.
     The Ollama provider payload also owns `ollama_keep_alive` as the canonical
     request keep-alive field: GET and update responses must expose the
     normalized configured value, update requests must reject malformed values,
@@ -2039,7 +2814,7 @@ the canonical monitored-system blocked payload.
     closed before any agent command dispatch. The API progress payload must
     describe discovery evidence analysis rather than presenting background work
     as a visible Pulse Assistant chat session.
-25. Keep shared AI runtime reads centralized on that same governed contract:
+26. Keep shared AI runtime reads centralized on that same governed contract:
     `frontend-modern/src/stores/aiRuntimeState.ts` is the canonical frontend
     read owner for `/api/settings/ai` and `/api/ai/models`. AI-owned consumers
     such as `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`,
@@ -2059,7 +2834,7 @@ the canonical monitored-system blocked payload.
     live provider catalog reads fail, so Patrol and Assistant model selectors
     keep saved `deepseek:` selections visible without inventing page-local
     catalog entries or falling back to another provider's model.
-26. Keep API-backed first-target onboarding canonical on that same shared
+27. Keep API-backed first-target onboarding canonical on that same shared
     infrastructure-settings boundary:
     `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`,
     `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`,
@@ -2077,7 +2852,7 @@ the canonical monitored-system blocked payload.
     normalize the browser back to `/settings/infrastructure`, but first-run
     callers must not fall back to the retired `/settings/infrastructure/install`
     or `/settings/infrastructure/platforms` deep links.
-27. Keep the shared agent-download fallback transport pinned to published
+28. Keep the shared agent-download fallback transport pinned to published
     release lineage. The served install-script endpoints (/install.sh,
     /install.ps1) have no GitHub fallback at all (see item 8); they serve the
     locally bundled agent installer or fail closed. The remaining GitHub fallback
@@ -2087,7 +2862,7 @@ the canonical monitored-system blocked payload.
     prereleases such as `v6.0.0-dev`, git-described `+git...` builds, and other
     unpublished prerelease identifiers must fail closed on that API boundary
     instead of generating fake release URLs from a local runtime version string.
-28. Keep local trial-start transport retired from self-hosted v6 GA runtime
+29. Keep local trial-start transport retired from self-hosted v6 GA runtime
     paths. `POST /api/license/trial/start` must not be registered as an ordinary
     in-app acquisition endpoint; browser API clients, route inventory, demo
     mode, and feature gates must all treat it as absent. The retired
@@ -2099,7 +2874,7 @@ the canonical monitored-system blocked payload.
     but ordinary self-hosted responses leave eligibility false and the reason
     empty; active trial state is represented by `subscription_state`,
     `trial_expires_at`, and `trial_days_remaining` only.
-29. Keep `/api/security/dev/reset-first-run` transport-backed and genuinely
+30. Keep `/api/security/dev/reset-first-run` transport-backed and genuinely
     unauthenticated: when the dev reset route clears first-run auth it must
     also clear any env-backed auth state that feeds `/api/security/status`, so
     the status payload flips `hasAuthentication` to `false`, preserves
@@ -2108,12 +2883,12 @@ the canonical monitored-system blocked payload.
     already-authenticated app state. That recovery transport may expose the
     bootstrap token file path, but it must not emit the token value into
     automatic runtime logs.
-30. Keep shared SSO test and metadata-preview transport fail-closed: SAML
+31. Keep shared SSO test and metadata-preview transport fail-closed: SAML
     metadata URLs and OIDC issuer URLs must reject non-HTTP or userinfo-bearing
     inputs before any outbound request is attempted, and OIDC discovery must
     append `/.well-known/openid-configuration` beneath the configured issuer
     base path instead of resetting to the origin root.
-31. Keep config-archive import reloads fail-closed on the shared API/runtime
+32. Keep config-archive import reloads fail-closed on the shared API/runtime
     boundary. `internal/api/config_export_import_handlers.go`,
     `internal/api/contract_test.go`, and adjacent config/runtime helpers must
     tolerate absent notification managers and other optional runtime managers
@@ -2122,6 +2897,24 @@ the canonical monitored-system blocked payload.
     rewired.
 
 ## Current State
+
+Manifest-backed Patrol finding lifecycle schemas are the API source of truth
+for Assistant provider-tool optionality as well as MCP/API discovery. Legacy
+Assistant runtime paths may project those schemas into provider-tool JSON, but
+they must not re-require optional lifecycle fields such as `resolution_note` or
+dismissal `note` after `/api/agent/capabilities` and the Patrol lifecycle API
+declare them optional.
+Legacy native Assistant utility provider aliases for `run_command`, `fetch_url`,
+and `set_resource_url`, plus their provider JSON schemas, are part of the same
+shared API/runtime contract through
+`agentcapabilities.LegacyAssistantUtilityProviderTools`. The older native
+Assistant service may keep exposing those compatibility aliases, but it must not
+own separate inline provider schema maps or local tool-input argument strings
+while the registry-backed execution path continues to converge.
+Native Assistant registry tools that expose Patrol finding lifecycle actions
+must use the same `agentcapabilities` argument constants for `finding_id`,
+`resolution_note`, `reason`, and `note`, so provider tool schemas, execution
+maps, `/api/agent/capabilities`, and MCP projections stay on one API vocabulary.
 
 That same shared API boundary now also owns the default-org token scoping
 rule and instance-wide notification settings propagation. A token explicitly
@@ -2207,7 +3000,7 @@ investigation runtime in `internal/ai/patrol_findings.go` attaches
 the projection to the Finding before calling the orchestrator. This
 is the one in-process write path that decides what the orchestrator
 sees about operator commitments; all consumers (in-process Patrol,
-external Claude Code, future MCP) read the same enriched shape.
+external Claude Code, and MCP-speaking clients) read the same enriched shape.
 
 `/api/agent/events` is the agent SSE stream — the substrate piece
 that closes the agent-paradigm triangle (discovery + bundled reads +
@@ -2249,9 +3042,13 @@ approval store's post-create callback, the executor's
 post-completion callback, and the API action-execution terminal
 publisher) cannot stall on consumer slowness. The
 stream sits behind `monitoring:read` and runs through the same auth
-path as the rest of the agent surface; the capabilities manifest declares the stream
+path as the rest of the external-agent surface; the capabilities manifest declares the stream
 under `subscribe_events` so external agents discover it without
 out-of-band documentation.
+The stable event kind strings and the stream-local transport markers are owned
+by `internal/agentcapabilities/events.go`; API constants may expose typed
+aliases, but API handlers, manifest descriptions, MCP adapters, and probes must
+not re-declare the vocabulary independently.
 
 The approval store exposes `SetOnApprovalCreated(cb)` so the API
 layer can install a fire-and-forget callback that runs after every
@@ -2292,31 +3089,127 @@ refusal-token prefixes (`plan_drift:`, `action_plan_expired:`,
 `errorMessage` verbatim so agents branch on the stable code
 without parsing human messages.
 
-`/api/agent/capabilities` is the discovery document for Pulse's
-agent surface. The manifest declares each agent-consumable
+`/api/agent/capabilities` is the discovery document for Pulse
+Intelligence's external-agent surface. The manifest declares each
+agent-consumable
 capability with stable name (snake_case agent identifier),
 description, category (`context` / `provisioning` /
 `operator-state` / `finding` / `action`), HTTP method + path,
-required auth scope, response shape name, optional JSON Schema
-`inputSchema`, and the closed set of stable error codes the
-response may carry. Agents fetch this once at startup to learn
-what's available; the `cmd/pulse-mcp` adapter reads the manifest
-to register MCP tools, and any future adapter (HTTP-API SDK,
-Claude-Code custom toolkit, etc.) reads the same manifest the
-same way: manifest-driven projection is the substrate's deliberate
-single source of truth for "what can an agent do here?". The manifest
-itself is unauthenticated and cacheable (`Cache-Control: public,
+required auth scope, action mode (`read`, `mixed`, `write`),
+approval policy (`scope_only`, `action_plan`), response shape name,
+optional JSON Schema `inputSchema`, and the closed set of stable
+error codes the response may carry. Agents fetch this once at startup
+to learn what's available; the `cmd/pulse-mcp` adapter reads the
+manifest's Pulse MCP `surfaceToolContracts` entry to register MCP tools, and
+any future adapter (HTTP-API SDK, Claude-Code custom toolkit, etc.) reads the
+same manifest surface contract the same way:
+manifest-driven projection is the substrate's deliberate single source
+of truth for "what can an agent do here?". The canonical manifest declaration,
+manifest wire type, registry tool-name vocabulary, external tool projection
+helpers, typed capability lookup error, request/response capability resolver, call route/body
+projection helpers, path-parameter substitution helpers, JSON Schema
+object-envelope helpers, manifest HTTP fetch, authenticated agent request
+builder, capability HTTP executor, named capability HTTP executor,
+named request/response capability HTTP executor, shared MCP
+request decoder, line-delimited request serving, notification response policy,
+stable JSON-RPC encoding, manifest-backed tool server,
+surface-tool contract lookup, surface-filtered tool projection and execution,
+tool-server method dispatcher,
+initialize-result builder, MCP resource URI projection, context-backed
+resources/list and resources/read projection, stable error-envelope formatter,
+MCP tool-result text/marker interpreter, provider tool-result constructor and
+context projection,
+approved-action argument handling for replayed tool execution, internal
+tool-argument filtering before public body projection, SSE record parser,
+SSE-to-MCP notification bridge, shared tool-governance defaulting, and
+disabled-control guidance live in
+`internal/agentcapabilities` and are consumed by Assistant tool governance, the
+API, `cmd/pulse-mcp`, and the in-repo `cmd/agent-probe` reference client; new
+Pulse-native or external agent surfaces must reuse that contract instead of
+defining local manifest structs, local tool-description builders, local
+request/response filters, local argument-to-body shapers, local path
+placeholder parsers, local `/api/agent/capabilities` fetchers, local API-token
+header spelling, local named capability execution, local MCP initialize-result
+builders, local MCP manifest-backed tool handlers, local MCP request decoding,
+local MCP line-framing loops, local JSON-RPC encoders, local MCP notification
+response checks, local MCP method dispatch, local MCP
+result interpretation, local provider tool-result struct assembly, local
+request/response capability body readers, local non-2xx error formatting,
+local MCP resource URI builders, local resources/list or resources/read
+projectors, local SSE scanners, local SSE-to-MCP notification bridges, local
+tool-governance defaulting, local approved-action argument keys, local
+disabled-control guidance, or local schema wrappers. Native Assistant registry
+declarations must also reuse that API identity contract: every registry
+`Tool.Definition.Name`, including `pulse_summarize` and Patrol runtime tools,
+must come from `internal/agentcapabilities/tool_names.go` so MCP and future
+external-agent adapters project the same tool identities that Assistant
+executes. The manifest-backed MCP
+tool server must receive the whole manifest and derive its surface-specific
+tool projection, execution allowlist, and initialize surface-contract
+instructions from that single value; adapters must not pass only a capability
+slice and then maintain a parallel surface relationship beside it. The manifest itself is unauthenticated
+and cacheable (`Cache-Control: public,
 max-age=300`) — declared in the router's `publicPaths` list so
 the global auth middleware does not gate it; the underlying
 capabilities keep their own auth scopes. The manifest's
 `unauthenticated` posture is the chicken-and-egg fix: an agent
 that does not yet have a token must still be able to introspect
 Pulse to learn how to ask for one. Adding a capability is a
-deliberate "this is part of the agent surface" commitment — the
+deliberate "this is part of the external-agent surface" commitment — the
 manifest is hand-authored rather than auto-generated so contract
 decisions (which capabilities are agent-stable, what the stable
-error codes are, what category each belongs to) cannot drift
-behind code changes.
+error codes are, what category and governance posture each belongs to) cannot
+drift behind code changes. Capability `scope` values are not part of that
+hand-authored vocabulary: they must come from `pkg/auth` via manifest-local
+aliases, matching the constants API authorization uses, rather than literal
+strings that can drift from the enforced route scopes.
+Every manifest capability's method, path, and advertised scope must also be
+proved against the live router by projecting a concrete request through
+`agentcapabilities.ProjectCapabilityCall` and requiring a wrong-scope API token
+to fail with the manifest's advertised missing scope. The proof is intentionally
+router-owned rather than table-owned: manifest placeholder names may stay
+agent-facing, but the concrete projected route must reach the API boundary that
+enforces the same scope.
+API-owned Pulse Assistant dependency seams must also keep MCP as an adapter
+boundary, not an internal name for the native Assistant runtime. `AIService`
+provider setter types, AI handler pass-throughs, router chat dependency wiring,
+AI settings control-refresh callbacks, direct approved-tool replay into chat, and the native tool adapter family must
+use Assistant/Pulse Intelligence terminology, while `MCP` remains valid only
+for the external adapter, shared MCP wire/result contracts, and explicitly
+deprecated API compatibility aliases. The cross-repo auto-fix dependency shape must
+publish `ApprovedAssistantToolExecutor` / `AssistantToolExecutor` as the native
+approved-tool execution contract. Callers must use
+`AIAutoFixHandlerDeps.ResolveApprovedAssistantToolExecutor`, and that resolver
+returns only the native Assistant executor; MCP-named executor compatibility is
+not part of this boundary. Current public API relay wiring must populate only
+`AssistantToolExecutor`.
+API-visible Assistant runtime readiness and lifecycle messages must name the
+first-party surface as Pulse Assistant rather than the legacy generic `Pulse AI`
+runtime.
+API-visible shared Intelligence messages such as profile-suggestion
+unavailability, AI settings persistence failures, Patrol preflight copy, and
+remediation-impact logs must not narrow the shared Assistant/Patrol substrate
+back to `Pulse Assistant settings` or generic `Pulse AI`; they must use Pulse
+Intelligence for shared runtime availability and Provider & Models for the
+shared provider/model settings surface.
+Patrol finding capability scopes are API-authorization-owned, not
+adapter-owned. `list_findings`, `acknowledge_finding`, `snooze_finding`, and
+`dismiss_finding` must match the relay/mobile runtime route inventory, and
+`resolve_finding` must match the direct `POST /api/ai/patrol/resolve` route.
+Those Patrol finding review and lifecycle routes are gated by `ai:execute`, so
+the manifest and MCP projection must not advertise monitoring scopes for them
+while the router enforces AI execution authorization.
+Capabilities that replace operator-state, mutate Patrol finding lifecycle, or
+participate in the action plan/decision/execute loop must publish typed
+`inputSchema` definitions for their exact top-level tool arguments, including
+path parameters such as `resourceId` / `actionId`, full-replacement flags such
+as `intentionallyOffline` / `neverAutoRemediate`, and stable enums such as
+criticality, dismissal reasons, or approval outcomes. External adapters may
+project those schemas directly, but must not replace them with adapter-local
+body wrappers or prose-only argument hints. Shared manifest schemas use the
+shared strict object envelope; adapter fallback schemas use the same helper with
+explicitly permissive additional properties when the endpoint contract is only
+partially known.
 
 Infrastructure onboarding is part of that same manifest contract,
 not an MCP-only shim. The provisioning category projects the
@@ -2330,7 +3223,7 @@ sources returns redacted credential state only; token or password
 secret values may be accepted on write/test requests but must not
 come back through `list_nodes` or any manifest metadata.
 
-The agent surface uses one error-envelope shape across every
+The external-agent surface uses one error-envelope shape across every
 endpoint — `{"error": "<stable_code>", "message": "<human>",
 "details"?: {"<field>": "<reason>"}}` — written via
 `writeJSONError` (no details) or `writeJSONErrorWithDetails`
@@ -2340,6 +3233,15 @@ human-readable text agents can surface to operators without
 losing the code; the optional `details` map carries field-level
 failure reasons on validation errors so agents do not parse
 human text to identify which field went wrong.
+The envelope type, constructor, and parser live in
+`internal/agentcapabilities/errors.go`; API handlers emit that shared type and
+external-agent clients/probes parse it there instead of carrying local envelope
+structs.
+The same file owns the `AgentErrCode*` constants for every
+capability-specific agent error code. The canonical manifest and the
+agent-surface handlers must reference those constants rather than duplicate
+string literals, so Assistant, MCP clients, probes, and API handlers share one
+branching vocabulary.
 
 There are two layers of stable codes. First, **capability-specific
 codes** are declared per capability in the manifest's `errorCodes`
@@ -2347,7 +3249,12 @@ list and represent the closed set of failure modes that
 capability's handler emits. Today these are:
 `resource_not_found` (`get_resource_context`),
 `operator_state_not_set` (`get_operator_state`),
-`operator_state_invalid` (`set_operator_state`).
+`operator_state_invalid` (`set_operator_state`);
+`invalid_finding_request`, `finding_not_found`,
+`finding_action_not_allowed`, and `patrol_unavailable`
+(`acknowledge_finding`, `snooze_finding`, `dismiss_finding`,
+`resolve_finding`); and the action-governance codes declared on
+`plan_action`, `decide_action`, and `execute_action`.
 Adding or renaming one requires both the handler emission and the
 manifest declaration to move together — drift between them is a
 contract regression. Second, **cross-cutting codes** apply to
@@ -2360,10 +3267,11 @@ request. Agents must accept these alongside any capability's
 declared codes; the manifest deliberately does not duplicate them
 on every entry.
 
-The agent substrate is end-to-end exercised by two paired tests in
+The external-agent substrate is end-to-end exercised by two paired tests in
 `internal/api/agent_substrate_e2e_test.go`. The first test boots
 the full router stack and walks discovery → triage → depth: fetch
-the manifest unauthenticated, call `/api/agent/fleet-context`
+the manifest unauthenticated, call `/api/agent/patrol-control/status`
+authenticated, call `/api/agent/fleet-context`
 authenticated, drill into `/api/agent/resource-context/{id}`, and
 confirm the SSE stream path is gated rather than absent. The
 second test walks the operator-state intent loop end-to-end:
@@ -2373,58 +3281,148 @@ manifest's declared error codes (`operator_state_not_set`,
 `operator_state_invalid`) reach the wire under the canonical
 `error` key and that the URL canonical id wins over any
 body-supplied id (preventing scope-confusion writes). Together
-the two tests are the substantive proof for the agent surface —
+the two tests are the substantive proof for the external-agent surface —
 read, write, push — as one substrate.
 
 The companion worked example lives at `cmd/agent-probe/main.go` —
 a small standalone Go program that walks the same discovery →
 triage → depth → push flow against a running Pulse instance.
-The probe depends only on the standard library so it doubles as
-a reference implementation: anyone building MCP servers, Claude
-Code integrations, or custom agents on top of Pulse can read it
-top-to-bottom to see how the substrate fits together. The probe
-resolves paths from the manifest rather than hardcoding them, so
-discovery moves automatically follow.
+The probe avoids API handler and AI-runtime imports; it reuses only the tiny
+`internal/agentcapabilities` wire/projection/HTTP contract so the in-repo
+reference client cannot drift from the manifest shape, named capability HTTP
+execution rule, request/response body-return helper, path projection
+semantics, API-token header convention, or stable error envelope behavior; it
+also consumes the shared SSE subscription
+transport, record parser, and actionable-record filter so the push walkthrough
+uses the same event-stream request, status, framing, and transport-event
+filtering rules as the MCP bridge. External agents can define the same JSON shape from the
+manifest or a generated client. Anyone building MCP servers, Claude Code
+integrations, or custom agents on top of Pulse can read it top-to-bottom to see
+how the substrate fits together. The probe resolves capabilities and paths from
+the manifest rather than hardcoding them, so discovery moves automatically
+follow.
 
 A second adapter lives at `cmd/pulse-mcp/main.go` — a minimal
-MCP (Model Context Protocol) server that exposes the agent
-substrate as MCP tools so Claude Desktop, Claude Code, and other
-MCP-speaking clients can drive Pulse natively. The adapter is
-the test for whether the substrate's contracts were really cheap
-to project: each MCP tool is one entry in the hand-authored
-manifest. When the manifest supplies an `inputSchema`, MCP must
-use it verbatim; otherwise the adapter falls back to deriving a
-minimal schema from path placeholders and method (path `{name}`
-segments become required string properties; non-GET/DELETE tools
-accept a `body` object). Adding a capability to the manifest
-automatically extends the MCP tool surface without changes in the
-adapter. `subscribe_events` is
+MCP (Model Context Protocol) server that exposes Pulse Intelligence's
+external-agent substrate as MCP tools so Claude Desktop, Claude Code,
+OpenCode, and other MCP-speaking clients can drive Pulse
+natively. The adapter is the test for whether the substrate's contracts
+were really cheap to project: each MCP tool is a manifest capability allowed
+by the manifest-owned Pulse MCP surface tool contract. `cmd/pulse-mcp` must use the shared
+`internal/agentcapabilities` projection helpers for the complete
+surface-filtered request/response tool-list projection, tools/call params
+decode, surface-filtered capability lookup translation, initialize-result
+construction through the target surface affordance contract, manifest fetch, neutral
+capability tool HTTP execution (including path placeholder substitution,
+argument-to-route/body projection, agent request construction, and capability
+HTTP dispatch), MCP JSON-RPC request decoding, notification response policy,
+manifest-backed MCP tool-server handlers, MCP JSON-RPC method dispatch, MCP
+result wrapping, MCP resource URI projection, context-backed `resources/list`
+and `resources/read` projection through `get_fleet_context` and
+`get_resource_context`, shared result text projection at execution sites,
+shared result text/marker interpretation, and the shared SSE-to-MCP notification
+bridge. When the manifest supplies an `inputSchema`, the shared helper forwards
+it verbatim; otherwise it derives a minimal fallback from path placeholders and
+method (path `{name}` segments become required string properties;
+non-GET/DELETE tools accept a `body` object). Adding a request/response
+capability to the manifest-owned Pulse MCP surface tool contract automatically
+extends the MCP tool surface without changes in the adapter. Adding a raw
+manifest capability without adding it to that surface contract must not alter
+MCP `tools/list` or `tools/call`. Pulse Assistant remains the first-party
+in-app surface over the same
+governed contracts; MCP is the external-agent adapter and must not grow a
+parallel action pipeline.
+MCP resource browsing follows that same rule: the adapter may advertise
+resources when the target surface affordance allows resources and the manifest
+carries the canonical context capabilities, but `resources/list` is only a
+fleet-context projection and `resources/read` is only a resource-context
+projection. Resource projection must enter through
+`ManifestSurfaceResourceCapabilities`,
+`ListMCPManifestSurfaceResourcesHTTP`, and
+`ReadMCPManifestSurfaceResourceHTTP`; raw-capability resource helpers must not
+define a second MCP resource surface. Prompt advertising and `prompts/get`
+follow the same surface affordance gate before the shared workflow-prompt
+catalogue is projected; initialize and `prompts/list` must use
+`MCPManifestSurfacePromptProjectionSupported`, and `prompts/get` must use
+`GetMCPPromptFromManifestSurface`, so disabled prompt affordances cannot be
+re-enabled by raw workflow prompt presence.
+The global `pulse_operations_loop` prompt is a Patrol work API manifest contract as much
+as an Assistant starter: it is advertised only when the manifest includes fleet
+operations-loop status, fleet context, resource context, finding list, action
+planning, action decision, action execution, and finding resolution
+capabilities. Its rendered instructions
+must keep external agents on the same governed Patrol work flow as Pulse
+Assistant by explaining Patrol evidence in context, planning first, asking for
+approval or rejection only when the returned policy requires a decision,
+executing when policy allows, re-reading Patrol status, context, and findings
+for verification, and resolving the finding only after the outcome has been checked.
+Resource URIs use the shared `pulse://resource/<resource-id>` shape and must
+not become an adapter-local resource registry.
+`subscribe_events` is
 intentionally excluded — SSE streaming doesn't fit the
 request/response tool shape; agents that need real-time push
 consume the SSE stream directly. The adapter speaks JSON-RPC 2.0
 over stdio with line-delimited framing, and preserves the
 substrate's stable error envelope (`{"error": "code", "message":
-"..."}`) verbatim through MCP's content-and-isError result so
-agents on the MCP side branch on the same stable codes.
+"..."}`) verbatim through the shared `HTTPCallResponse` to MCP
+content-and-isError result helper so agents on the MCP side branch on the same
+stable codes without the adapter reinterpreting response bodies or statuses.
 Optionally, with `--emit-notifications`, the adapter also
-subscribes to `/api/agent/events` and translates each
-non-transport SSE event into a JSON-RPC notification on stdout
+uses the shared initialize-result builder to advertise
+`experimental.pulseNotifications.kinds`, then uses the shared event bridge to
+subscribe to `/api/agent/events` and write each non-transport SSE event as a
+JSON-RPC notification on stdout
 (`notifications/finding.created`, `notifications/approval.pending`,
 `notifications/action.completed`); the notification's `params` is
 the SSE `data` payload verbatim so MCP-bound autonomous agents
 react to pushes without holding a separate HTTP connection. The
 flag is off by default because not every MCP client surfaces
 server-initiated notifications; transport plumbing
-(`stream.connected`, `heartbeat`) is filtered.
+(`stream.connected`, `heartbeat`) is filtered through the shared
+agent-capabilities event vocabulary.
 
 The integration guide for `cmd/pulse-mcp` lives at
-`cmd/pulse-mcp/README.md`. It carries the canonical Claude Desktop
-and Claude Code config snippets, the env-var contract for the API
-token, the published list of tools the manifest currently
-exposes, and the documented limitations (no `subscribe_events`,
-manifest fetched once at startup). External maintainers wiring
+`cmd/pulse-mcp/README.md`. It carries the canonical reusable MCP runtime facts,
+OpenCode's native top-level `mcp` config shape for `opencode.json` /
+`opencode.jsonc`, the common `mcpServers` block for Claude-style clients, the
+env-var contract for the API token, manifest-derived generated scope,
+surface-filtered request/response tool, workflow prompt, and stable error-code inventories, the
+context-backed MCP resource browsing behavior, and the documented limitations
+(`subscribe_events` is not a callable tool; manifest fetched once at startup).
+`scripts/generate-pulse-intelligence-docs.go` owns the generated public
+overview and README scope/tool/prompt/error-code blocks and must use
+`internal/agentcapabilities` projections rather than a second catalogue. README
+tool and capability-specific error-code blocks must use the same manifest-owned
+Pulse MCP surface contract as runtime `tools/list` and `tools/call`.
+Manifest-owned capability titles, workflow prompt definitions,
+manifest-owned `workflowPrompts` catalogue selection, MCP tool/prompt title
+projection, presentation kind hints, Patrol work availability gating, and
+prompt argument validation are owned by the neutral
+`ManifestPulseWorkflowPrompts` / `ProjectPulseWorkflowPrompts` /
+`BuildPulseWorkflowPromptFromManifest` contract; MCP keeps only protocol wire
+projection and surface-specific resource URI hints.
+documentation-local capability table. External maintainers wiring
 Pulse into their MCP-speaking client read that document, not the
 package source.
+`docs/AGENT_SUBSTRATE.md` is the current high-level operator and integrator
+summary for the same substrate. It must reflect the in-app
+`Settings -> API Access -> Agent integrations` surface, both the OpenCode
+native `opencode.json` / `mcp` shape and the common `mcpServers` block, and the
+published `install-mcp.sh` / `install-mcp.ps1` release path; it must not
+preserve old gap copy claiming there is no Pulse settings surface, no config
+snippet, or no `pulse-mcp` distribution path.
+`docs/releases/AGENT_PARADIGM.md` is the release-facing projection of the same
+contract. It must frame `cmd/pulse-mcp` as a generic MCP adapter for
+MCP-speaking clients, include OpenCode-native `mcp` setup alongside the common
+`mcpServers` shape, and point full surface token guidance at the manifest-owned
+`requiredScopes` list rather than hand-maintained partial scope examples.
+The public `/api/agent/capabilities` manifest must also expose
+`requiredScopes`, the canonical deduplicated scope list derived from its
+declared capabilities through `internal/agentcapabilities.RequiredCapabilityScopes`.
+Browser settings surfaces, `cmd/pulse-mcp` startup errors, MCP documentation,
+probes, and future clients must consume that manifest-owned list for
+full-surface token guidance instead of rebuilding a scope list from local
+hardcoded assumptions.
 
 `/api/agent/resource-context/{id}` is the agent-consumable bundled
 context endpoint. One read returns the full situated picture of a
@@ -2577,13 +3575,15 @@ that the frontend has historically called (zero current frontend
 consumers, verified) now back the manifest entries; the
 substrate's "manifest projection is cheap" promise has a
 documented footnote that bringing an existing endpoint into the
-agent surface may require migrating its error envelope from the
+external-agent surface may require migrating its error envelope from the
 platform-wide `APIError` shape to the agent-stable shape. That
-migration was the slice 58 work for these three handlers; future
-agent-surface additions on existing endpoints will pay the same
-cost. The trade-off is intentional: the agent surface keeps a
-single envelope contract rather than carrying a wrapper layer to
-translate per capability.
+migration now covers the action governance handlers and the Patrol
+finding lifecycle handlers (`acknowledge_finding`, `snooze_finding`,
+`dismiss_finding`, `resolve_finding`). Future external-agent additions
+on existing endpoints will pay the same cost. The trade-off is
+intentional: the external-agent surface keeps a single envelope
+contract rather than carrying a wrapper layer to translate per
+capability.
 
 Deploy-job monitored-system volume denials are retired. API routes may still
 accept historical payloads that mention old license-slot terminology for
@@ -2628,9 +3628,145 @@ published-release truth from raw build strings.
 That same preview contract now includes the complete anonymous telemetry
 payload shape, including aggregate self-hosted adoption counters for monitored
 platforms, workloads, storage, and availability targets plus coarse feature
-booleans. Browser callers may display or copy the exact payload, but they must
-not derive hostnames, infrastructure identifiers, prompt/chat content, license
-tiers, or API-token counts from it.
+booleans and content-free Patrol, Assistant, and external-agent usage counters.
+The frontend `TelemetryPingPreview` type in
+`frontend-modern/src/api/settings.ts` must mirror every browser-visible JSON
+field from `internal/telemetry.Ping`, including the resolved operations-loop,
+approved-execution, first-party Assistant, external-agent, and Pulse MCP adapter
+variants used by Pro value reporting, plus source-specific operations-loop
+starter request counts including the Pro activation entry point.
+Those Pulse Intelligence fields may describe only configured/active/governed-action
+adoption state plus Assistant, Patrol detection, Patrol investigation, Patrol
+resolution, aggregate external-agent use, adapter-origin MCP use, approval,
+and governed-action counts inside the
+rotating telemetry window. Browser callers
+may display or copy the exact payload, but they must not derive hostnames,
+infrastructure identifiers, prompt/chat content, command text, action output,
+license tiers, token values, token counts, resource IDs, finding IDs, or
+approval identities from it.
+Approved action decision telemetry is part of that same anonymous API
+contract: `pulse_intelligence_approved_action_decisions_30d` must count
+distinct action IDs with approved-decision lifecycle evidence in the telemetry
+window, or approval records whose approved decision timestamp is inside the
+window for older rows that lack lifecycle events. It may count toward completed
+operations-loop proof, but it must not be conflated with approved execution
+attempts or approved action successes, and it must never expose action IDs,
+actors, reasons, resource IDs, command text, action output, or verification
+detail.
+Approved execution attempt telemetry is part of that same anonymous API
+contract: `pulse_intelligence_approved_action_attempts_30d` must be counted as
+distinct action IDs with execution-attempt lifecycle evidence (`executing`,
+`completed`, or `failed`) resolved back to an approved action audit, with final
+audit-state fallback only for older rows that lack lifecycle events. It must
+not be derived from generic action-plan, approval-request, token-use, Assistant
+chat, or MCP call counts, and it must never expose action IDs, actors, reasons,
+resource IDs, command text, or action output.
+Approved action success telemetry is the stricter completion proof in that same
+contract: `pulse_intelligence_approved_action_successes_30d` must count only
+distinct approved action audits that reached completed state successfully, with
+lifecycle-backed attribution where lifecycle evidence exists and final
+audit-state fallback only for older rows. Failed or refused approved actions may
+count as attempts but must not count as successes, and the success counter must
+not expose action IDs, actors, reasons, resource IDs, command text, verification
+detail, or action output.
+Rejected action decision telemetry is the declined-governance proof in that same
+contract: `pulse_intelligence_rejected_action_decisions_30d` must count distinct
+action IDs with rejection-decision lifecycle evidence in the telemetry window,
+with final rejected audit-state fallback only for older rows that lack lifecycle
+events. It may count toward governed-action activity, but it must not count as
+an approved execution attempt, approved success, or resolved operations loop
+proof, and it must never expose action IDs, actors, reasons, resource IDs,
+command text, or action output.
+Completed operations-loop telemetry is the coarse approve/reject journey proof
+in that same contract. `pulse_intelligence_complete_operations_loop_30d` and
+the source-specific operations-loop booleans may be true only when the same
+rotating telemetry window contains Patrol issue evidence, contextual
+Assistant/MCP/external-agent collaboration, and either a rejected action
+decision, an approved action decision, or approved execution-attempt evidence.
+Generic Patrol runs, Patrol AI calls, action plans, and approval requests may
+activate or reach the loop, but they must not complete it without issue-backed
+Patrol evidence and a real decision/outcome signal.
+Patrol resolution telemetry is the content-free outcome proof in that same
+contract. `pulse_intelligence_patrol_resolved_findings_30d` may count only
+findings whose own lifecycle reached resolved state in the telemetry window, or
+findings whose investigation outcome reached `resolved` or `fix_verified` with
+investigation completion evidence in that window. It must not count generic
+Patrol runs, new findings, model calls, action approvals, or successful actions
+without a resolved/fix-verified Patrol finding outcome, and it must never expose
+finding IDs, resource IDs, finding text, remediation details, verification
+detail, actors, command text, or action output.
+Resolved operations loop telemetry is a derived content-free boolean:
+`pulse_intelligence_resolved_operations_loop_30d` may be true only when the
+same telemetry window contains Patrol resolution plus Assistant governed-context
+or governed-tool collaboration or MCP/external-agent collaboration, and at
+least one approved action success. In this contract, approved action success is
+the shared verified-outcome predicate used by the operations-loop status route:
+the approved action must have `VerificationOutcome.Status=verified` or a
+canonical verification result that ran and succeeded. A bare successful
+execution result is not sufficient. It is co-occurrence proof for value
+reporting, not causality proof, and it must not carry any identifiers, prompts,
+tool names, command payloads, action outputs, or finding text.
+Patrol control completed-loop telemetry is the primary derived content-free
+paid-value boolean:
+`pulse_intelligence_patrol_control_completed_operations_loop_30d` may be true
+only when the same telemetry window contains Patrol control starter evidence
+from `pulse_patrol`, `patrol_control`, legacy `patrol_autonomy`, or legacy
+`pulse_pro_activation`, Patrol issue evidence, contextual Assistant or
+MCP/external-agent collaboration, and either a rejected governed decision or an
+approved governed decision with verified outcome proof. It is terminal-loop
+Patrol control proof, not causality proof, and it must not carry
+checkout/account identity, token identity, prompt content, resource IDs,
+finding IDs, action IDs, command payloads, action outputs, or verification
+detail.
+Patrol control resolved-loop telemetry is stricter:
+`pulse_intelligence_patrol_control_resolved_operations_loop_30d` may be true
+only when the same content-free window also contains an approved governed
+decision and verified outcome proof. It must not treat rejected decisions as
+resolved-loop proof. These telemetry booleans must use the same
+`internal/telemetry.ClassifyPulseIntelligencePatrolControlProof` count-only
+classifier as `GET /api/agent/patrol-control/status`, so native status, MCP
+status consumers, telemetry preview, and outbound telemetry cannot diverge on
+what completed, resolved, or governed-decision proof means. Legacy
+`pulse_intelligence_pro_activation_completed_operations_loop_30d` and
+`pulse_intelligence_pro_activation_resolved_operations_loop_30d` are
+compatibility mirrors of those primary Patrol control booleans.
+Paid Patrol control telemetry is a derived content-free cohort:
+`pulse_intelligence_patrol_control_paid_completed_operations_loop_30d` may be
+true only when the same payload also reports `paid_license=true` and
+`pulse_intelligence_patrol_control_completed_operations_loop_30d=true`.
+`pulse_intelligence_patrol_control_paid_resolved_operations_loop_30d` may be
+true only when the same payload also reports `paid_license=true` and
+`pulse_intelligence_patrol_control_resolved_operations_loop_30d=true`. Legacy
+`pulse_intelligence_pro_activation_paid_completed_operations_loop_30d` and
+`pulse_intelligence_pro_activation_paid_resolved_operations_loop_30d` mirror
+those primary paid Patrol-control fields for cohort continuity. These fields
+are paid-cohort proof for aggregate activation, retention, and free-to-paid
+comparison, not causality proof; they must not carry exact plan tier,
+checkout/account identity, license IDs, token identity, prompts, resources,
+findings, action IDs, command payloads, action outputs, or verification detail.
+External-agent recent-use telemetry is a content-free capability-activity marker
+for authenticated calls into the agent/MCP contract. Every request/response
+capability published through the Pulse MCP surface must map to one coarse
+activity class before the route handler runs, and the marker must require the
+called capability's manifest-declared scope rather than the entire manifest
+scope set. Read-only external agents using `monitoring:read` must therefore
+count for context/event-stream activity without being treated as action,
+settings, or approval-capable callers. Generic API token last-use timestamps
+are not canonical proof that the external-agent surface was used.
+The `pulse-mcp` adapter may stamp the content-free
+`X-Pulse-Agent-Surface: pulse_mcp` header on those same capability requests so
+the telemetry snapshot can expose adapter-specific recent use while keeping the
+aggregate external-agent recent-use bit valid for both direct HTTP agents and
+the adapter. Route handlers must normalize unknown or absent surface markers
+back to direct `agent_api` use and must never persist client identity, prompts,
+request bodies, route parameters, or local resource identifiers as part of the
+surface marker.
+Pulse MCP `prompts/get` starter activity uses the same surface marker but a
+separate route-specific payload: `POST /api/agent/workflow-prompt-activity`
+records only the manifest prompt name after successful local prompt rendering.
+It does not count as a capability-class request and must not infer
+external-agent contextual collaboration or action execution from prompt access
+alone.
 That same browser-transport contract now tolerates sparse preview
 payloads without changing the runtime truth. Patrol transport may omit
 `finding_ids`, and infrastructure removal previews may stage optimistic rows
@@ -3512,7 +4648,7 @@ projection layer instead of by handler-local heuristics. It must not return an
 enforced-limit verdict or make persistence depend on a commercial volume
 decision.
 Configured Proxmox, PBS, and PMG update handlers in
-internal/api/config_node_handlers.go may use that same structured
+internal/api/config*node_handlers.go may use that same structured
 replacement-selector contract when they explain monitored-system grouping:
 source-owned names, host URLs, hostnames, and resource identifiers may cross
 the API boundary, but handler-local matcher closures must not become the
@@ -3573,7 +4709,11 @@ shared access layer instead of routing directly to Patrol-local correlation
 state.
 That store now also owns the Patrol page load bundle, so the page refresh path
 stays aligned on one store-owned orchestration layer instead of re-encoding
-the AI bundle inline.
+the AI bundle inline. Frontend Patrol load orchestration must treat first-load
+transport or settings failures as stale-data state rather than throwing through
+the route: the page stays mounted, preserves any last-known Patrol evidence,
+and exposes a retry affordance while backend/API failures remain available to
+debug logging and API-level diagnostics.
 The AI summary page now also renders the canonical
 `frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx`
 card for policy posture, so sensitivity, routing, and redaction counts are
@@ -3769,7 +4909,10 @@ customer frontend state. `frontend-modern/scripts/settings-diagnostics-boundary-
 now checks `internal/api/diagnostics.go` alongside the Settings diagnostics
 frontend boundary through the canonical frontend audit runner, so this
 admin-analytics payload class cannot return as a customer-visible diagnostics
-contract.
+contract. The same diagnostics boundary also keeps the first-party Assistant
+surface out of MCP transport vocabulary: `AIChatDiagnostic` may report native
+Assistant runtime availability through `assistantRuntimeConnected`, but
+`mcpConnected` and `mcpToolCount` must stay out of `/api/diagnostics`.
 That same admin-analytics boundary now retires the local commercial metrics
 routes from the normal customer product API: `/api/upgrade-metrics/events`,
 `/api/upgrade-metrics/stats`, `/api/upgrade-metrics/health`,
@@ -3796,7 +4939,7 @@ command-execution flags between display and clipboard transport.
 That same shared infrastructure-settings boundary now also consumes the canonical
 `connectedInfrastructure` projection from the backend state contract instead of
 reconstructing reporting rows by merging raw unified-resource facets and
-removed-_ arrays in the browser. v6 clients no longer receive those removed-_
+removed-* arrays in the browser. v6 clients no longer receive those removed-\_
 arrays at all for this surface; Connected infrastructure row
 identity, reporting-surface labels, and ignore/reconnect scope must be owned
 by the backend payload contract, with frontend rendering limited to
@@ -4699,12 +5842,12 @@ handoff context as secondary to durable finding context, not a replacement for
 server-refreshed approval, resource, action, or requester authority. Frontend Patrol
 handoff helpers may consume current pending
 approval list payloads only as safe metadata for that visible briefing and any
-   structured `handoff_actions`: approval ID, status, risk, request/expiry
-   timestamps, target label, requester identity, action ID, approval policy,
-   plan expiry, and dry-run summary are allowed. Assessment-level visible
-   briefings may reuse that same safe metadata for factual action labels and safety notes,
-   while approval command text remains inside the governed approval/remediation
-   surface.
+structured `handoff_actions`: approval ID, status, risk, request/expiry
+timestamps, target label, requester identity, action ID, approval policy,
+plan expiry, and dry-run summary are allowed. Assessment-level visible
+briefings may reuse that same safe metadata for factual action labels and safety notes,
+while approval command text remains inside the governed approval/remediation
+surface.
 Patrol approval-row Assistant handoffs must use the same safe metadata boundary
 and set `autonomousMode:false` for the request-local chat handoff; they must not
 paste raw approval or action command text into a chat prompt.
@@ -4739,6 +5882,11 @@ context. When a Patrol run records `error_count > 0`, the backend may include
 `frontend-modern/src/api/patrol.ts` must preserve those fields so the Patrol UI
 can explain provider/model/tool runtime failures without scraping finding
 copy or inferring meaning from a generic error status.
+Frontend run-history presentation must derive the collapsed operator record
+from the canonical run payload rather than from page-local telemetry strings:
+runtime errors may read as `Patrol needs attention`, finding counts may read as
+found/fixed/open/resolved work, and technical fields such as trigger reason,
+tool-call count, tokens, and raw traces remain secondary forensic context.
 Patrol status payloads no longer carry quickstart credit state as an ordinary
 v6 GA API contract. `quickstart_credits_remaining`,
 `quickstart_credits_total`, and `using_quickstart` are retired public fields;
@@ -4763,7 +5911,9 @@ source preferences from effective runtime policy. `alert_triggers_enabled` and
 `event_triggers_blocked`, `event_triggers_blocked_reason`, and
 `event_triggers_blocked_message` describe a runtime policy pause such as the
 local development background-automation guard. Runtime policy must not make the
-transport look like the operator turned alert or anomaly triggers off.
+transport look like the operator turned alert or anomaly triggers off, and the
+default Patrol UI must not treat a background-only policy pause as actionable
+operator guidance unless it also explains why manual Patrol is blocked.
 Patrol mutate endpoints that depend on the background service must also fail
 closed with `503 Service Unavailable` when AI service initialization is absent
 rather than dereferencing a nil service and crashing before a contract response
@@ -5316,7 +6466,9 @@ provider-scoped test selection. `internal/api/ai_handlers.go` and
 `ollama_username` and `ollama_password_set`, accept provider-auth updates
 without echoing raw secrets back into the payload, and keep provider test
 routes bound to the provider's own configured model instead of whichever
-other provider currently owns the default `model` selection.
+other provider currently owns the default `model` selection. Legacy Anthropic
+OAuth fields are cleanup-only compatibility state on that same contract and
+must never revive an OAuth-backed Anthropic provider path.
 That same shared `/api/settings/ai` contract now also owns vendor-neutral BYOK
 setup. Frontend callers may submit provider credentials or base URLs without a
 concrete vendor model ID, and `internal/api/ai_handlers.go` must resolve and
@@ -5422,12 +6574,14 @@ owners must not rely on that 402 as normal control flow for stale local state:
 when the current entitlement locks safe remediation, they submit `monitor` even
 if older persisted settings or a previous entitlement left `approval`,
 `assisted`, or `full` in memory.
-The Patrol header presentation for that API boundary must compose the shared
-`frontend-modern/src/components/shared/FilterButtonGroup.tsx` segmented
-selector: the endpoint contract still owns the accepted autonomy values and
-license-required response shape, while the frontend owns only the option
-mapping and entitlement-derived disabled state. Local Patrol selector styling
-must not become a second source of truth for the API's monitor-only clamp.
+The Patrol header and configuration-dialog presentation for that API boundary
+must compose the shared
+`frontend-modern/src/components/shared/FilterButtonGroup.tsx` selector: the
+endpoint contract still owns the accepted autonomy values and license-required
+response shape, while the frontend owns only the option mapping,
+entitlement-derived disabled state, and layout choice needed to keep labels
+readable in the current container. Local Patrol selector styling must not become
+a second source of truth for the API's monitor-only clamp.
 The reporting transport contract now also carries an optional narrative
 interpretation layer alongside the deterministic data surface. The Go-side
 `pkg/reporting.MetricReportRequest` gains optional `Narrator` and

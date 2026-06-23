@@ -855,6 +855,7 @@ func TestParallelToolExecution(t *testing.T) {
 		assert.Equal(t, "call_a", toolResultIDs[0])
 		assert.Equal(t, "call_b", toolResultIDs[1])
 		assert.Equal(t, "call_c", toolResultIDs[2])
+		assert.Equal(t, 3, loop.GetTotalToolCalls())
 
 		// Verify final response
 		lastMsg := results[len(results)-1]

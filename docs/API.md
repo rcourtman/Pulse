@@ -940,7 +940,7 @@ Revoke a resource share. Admin or owner role required.
 
 ---
 
-## 🤖 Pulse AI
+## 🤖 Pulse Intelligence
 
 **Paid gating:** endpoints labeled with a paid plan require the relevant Relay, Pro, legacy Pro+, or Cloud capability and return `402 Payment Required` if the feature is not licensed.
 
@@ -960,11 +960,13 @@ Lists models available to the configured providers (queried live from provider A
 - `POST /api/ai/test`
 - `POST /api/ai/test/{provider}`
 
-### OAuth (Anthropic)
-- `POST /api/ai/oauth/start` (admin)
-- `POST /api/ai/oauth/exchange` (admin, manual code input)
-- `GET /api/ai/oauth/callback` (public, IdP redirect)
-- `POST /api/ai/oauth/disconnect` (admin)
+### Legacy Anthropic OAuth Cleanup
+Anthropic subscription OAuth is unsupported. These routes remain only for
+fail-closed compatibility and token cleanup:
+- `POST /api/ai/oauth/start` (admin): returns `501` with `unsupported_anthropic_oauth`
+- `POST /api/ai/oauth/exchange` (admin): returns `501` with `unsupported_anthropic_oauth`
+- `GET /api/ai/oauth/callback` (public): redirects to settings with `ai_oauth_error=unsupported` unless the provider supplied a specific error
+- `POST /api/ai/oauth/disconnect` (admin): clears stored legacy OAuth tokens
 
 ### Execute (Chat + Tools)
 `POST /api/ai/execute`

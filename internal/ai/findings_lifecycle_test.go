@@ -399,3 +399,264 @@ func TestFindingsStore_KeyCollisionOnResolvedFindingRecordsBothEvents(t *testing
 		t.Fatalf("expected regressed event to remain, lifecycle=%+v", got.Lifecycle)
 	}
 }
+
+func TestFindingsStore_MergesEquivalentActiveSiblingWithHigherSeverity(t *testing.T) {
+	store := NewFindingsStore()
+	first := &Finding{
+		ID:           "provider-warning",
+		Key:          "provider-connection",
+		ResourceID:   "patrol-runtime",
+		ResourceName: "Patrol runtime",
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryReliability,
+		Title:        "Provider connection issue",
+		Description:  "The configured provider could not complete Patrol analysis.",
+	}
+	second := &Finding{
+		ID:           "provider-critical",
+		Key:          "openrouter-provider-unavailable",
+		ResourceID:   "patrol-runtime",
+		ResourceName: "Patrol runtime",
+		Severity:     FindingSeverityCritical,
+		Category:     FindingCategoryReliability,
+		Title:        "Provider connection issue",
+		Description:  "OpenRouter could not complete the selected Patrol model request.",
+	}
+
+	if !store.Add(first) {
+		t.Fatal("expected first provider finding to be new")
+	}
+	if store.Add(second) {
+		t.Fatal("expected equivalent provider finding to merge into the active issue")
+	}
+
+	active := store.GetActive(FindingSeverityWarning)
+	if len(active) != 1 {
+		t.Fatalf("expected one active finding after equivalent merge, got %d", len(active))
+	}
+	got := store.Get("provider-warning")
+	if got == nil {
+		t.Fatal("expected original finding to remain as merged active issue")
+	}
+	if store.Get("provider-critical") != nil {
+		t.Fatal("expected duplicate finding ID not to be stored as a second active issue")
+	}
+	if got.Severity != FindingSeverityCritical {
+		t.Fatalf("expected merged issue to keep highest severity critical, got %s", got.Severity)
+	}
+	if got.TimesRaised != 2 {
+		t.Fatalf("expected merged issue timesRaised=2, got %d", got.TimesRaised)
+	}
+	events := findLifecycleEvents(got, "duplicate_merged")
+	if len(events) != 1 {
+		t.Fatalf("expected one duplicate_merged lifecycle event, got %d (lifecycle=%+v)", len(events), got.Lifecycle)
+	}
+	if events[0].Metadata["duplicate_id"] != "provider-critical" {
+		t.Fatalf("expected duplicate_id metadata, got %+v", events[0].Metadata)
+	}
+}
+
+func TestFindingsStore_DoesNotMergeDistinctSameResourceCategoryIssues(t *testing.T) {
+	store := NewFindingsStore()
+	if !store.Add(&Finding{
+		ID:           "cpu-high",
+		Key:          "cpu-high",
+		ResourceID:   "vm-100",
+		ResourceName: "vm-100",
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryPerformance,
+		Title:        "High CPU usage",
+		Description:  "CPU saturation is sustained.",
+	}) {
+		t.Fatal("expected CPU finding to be new")
+	}
+	if !store.Add(&Finding{
+		ID:           "memory-high",
+		Key:          "memory-high",
+		ResourceID:   "vm-100",
+		ResourceName: "vm-100",
+		Severity:     FindingSeverityCritical,
+		Category:     FindingCategoryPerformance,
+		Title:        "High memory usage",
+		Description:  "Memory pressure is sustained.",
+	}) {
+		t.Fatal("expected memory finding to remain a separate active issue")
+	}
+
+	active := store.GetActive(FindingSeverityWarning)
+	if len(active) != 2 {
+		t.Fatalf("expected two distinct active findings, got %d", len(active))
+	}
+}
+
+func TestFindingsStore_MergesRelatedStorageCapacitySibling(t *testing.T) {
+	store := NewFindingsStore()
+	if !store.Add(&Finding{
+		ID:           "tower-array-critical",
+		Key:          "unraid-array-no-parity-capacity-risk",
+		ResourceID:   "storage/tower-array",
+		ResourceName: "Tower Array",
+		ResourceType: "storage",
+		Severity:     FindingSeverityCritical,
+		Category:     FindingCategoryReliability,
+		Title:        "Unraid array running without parity protection while at 86% capacity",
+		Description:  "The Unraid array is at 85.9% capacity while parity is unavailable.",
+	}) {
+		t.Fatal("expected first storage finding to be new")
+	}
+	if store.Add(&Finding{
+		ID:           "tower-array-warning",
+		Key:          "storage-pool-usage",
+		ResourceID:   "storage/tower",
+		ResourceName: "Tower",
+		ResourceType: "storage",
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryCapacity,
+		Title:        "Storage pool Tower Array at 85.9% usage",
+		Description:  "Usage at 86% exceeds the configured storage warning threshold.",
+	}) {
+		t.Fatal("expected related storage capacity sibling to merge into the active issue")
+	}
+
+	active := store.GetActive(FindingSeverityWarning)
+	if len(active) != 1 {
+		t.Fatalf("expected one active storage issue after merge, got %d", len(active))
+	}
+	got := store.Get("tower-array-critical")
+	if got == nil {
+		t.Fatal("expected original critical issue to remain")
+	}
+	if got.Severity != FindingSeverityCritical {
+		t.Fatalf("expected merged issue to keep critical severity, got %s", got.Severity)
+	}
+	if got.Title != "Unraid array running without parity protection while at 86% capacity" {
+		t.Fatalf("expected broader critical title to remain, got %q", got.Title)
+	}
+	if store.Get("tower-array-warning") != nil {
+		t.Fatal("expected generic storage usage warning not to be stored as a second active issue")
+	}
+	if got.TimesRaised != 2 {
+		t.Fatalf("expected merged issue timesRaised=2, got %d", got.TimesRaised)
+	}
+	if events := findLifecycleEvents(got, "duplicate_merged"); len(events) != 1 {
+		t.Fatalf("expected duplicate_merged event, got %d lifecycle=%+v", len(events), got.Lifecycle)
+	}
+}
+
+func TestFindingsStore_MergesRelatedStorageCapacitySiblingEscalation(t *testing.T) {
+	store := NewFindingsStore()
+	if !store.Add(&Finding{
+		ID:           "tower-array-warning",
+		Key:          "storage-pool-usage",
+		ResourceID:   "storage/tower",
+		ResourceName: "Tower",
+		ResourceType: "storage",
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryCapacity,
+		Title:        "Storage pool Tower Array at 85.9% usage",
+		Description:  "Usage at 86% exceeds the configured storage warning threshold.",
+	}) {
+		t.Fatal("expected first storage finding to be new")
+	}
+	if store.Add(&Finding{
+		ID:           "tower-array-critical",
+		Key:          "unraid-array-no-parity-capacity-risk",
+		ResourceID:   "storage/tower-array",
+		ResourceName: "Tower Array",
+		ResourceType: "storage",
+		Severity:     FindingSeverityCritical,
+		Category:     FindingCategoryReliability,
+		Title:        "Unraid array running without parity protection while at 86% capacity",
+		Description:  "The Unraid array is at 85.9% capacity while parity is unavailable.",
+	}) {
+		t.Fatal("expected broader storage capacity sibling to merge into the active issue")
+	}
+
+	active := store.GetActive(FindingSeverityWarning)
+	if len(active) != 1 {
+		t.Fatalf("expected one active storage issue after merge, got %d", len(active))
+	}
+	got := store.Get("tower-array-warning")
+	if got == nil {
+		t.Fatal("expected original warning issue to remain as merged record")
+	}
+	if got.Severity != FindingSeverityCritical {
+		t.Fatalf("expected merged issue to escalate to critical, got %s", got.Severity)
+	}
+	if got.Title != "Unraid array running without parity protection while at 86% capacity" {
+		t.Fatalf("expected merged issue to adopt higher-severity title, got %q", got.Title)
+	}
+	if store.Get("tower-array-critical") != nil {
+		t.Fatal("expected critical sibling not to be stored as a second active issue")
+	}
+}
+
+func TestFindingsStore_DoesNotMergeStorageCapacityWithDistinctBackupIssue(t *testing.T) {
+	store := NewFindingsStore()
+	if !store.Add(&Finding{
+		ID:           "tower-array-usage",
+		Key:          "storage-pool-usage",
+		ResourceID:   "storage/tower-array",
+		ResourceName: "Tower Array",
+		ResourceType: "storage",
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryCapacity,
+		Title:        "Storage pool Tower Array at 85.9% usage",
+		Description:  "Usage at 86% exceeds the configured storage warning threshold.",
+	}) {
+		t.Fatal("expected storage capacity finding to be new")
+	}
+	if !store.Add(&Finding{
+		ID:           "tower-array-backup",
+		Key:          "backup-job-failed",
+		ResourceID:   "storage/tower-array",
+		ResourceName: "Tower Array",
+		ResourceType: "storage",
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryBackup,
+		Title:        "Backup job failed for Tower Array",
+		Description:  "The latest backup job failed and no new restore point was created.",
+	}) {
+		t.Fatal("expected distinct backup finding to remain separate")
+	}
+
+	active := store.GetActive(FindingSeverityWarning)
+	if len(active) != 2 {
+		t.Fatalf("expected two distinct storage findings, got %d", len(active))
+	}
+}
+
+func TestFindingsStore_DoesNotMergeStoragePoolWithPhysicalDiskChild(t *testing.T) {
+	store := NewFindingsStore()
+	if !store.Add(&Finding{
+		ID:           "pool-usage",
+		Key:          "storage-pool-usage",
+		ResourceID:   "storage/local-zfs-data",
+		ResourceName: "local-zfs (data)",
+		ResourceType: "storage",
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryCapacity,
+		Title:        "Storage pool local-zfs (data) at 86% usage",
+		Description:  "Usage at 86% exceeds the configured storage warning threshold.",
+	}) {
+		t.Fatal("expected pool finding to be new")
+	}
+	if !store.Add(&Finding{
+		ID:           "disk-usage",
+		Key:          "physical-disk-usage",
+		ResourceID:   "storage/local-zfs-data-dev-sda4",
+		ResourceName: "local-zfs (data, /dev/sda4)",
+		ResourceType: "storage",
+		Severity:     FindingSeverityWarning,
+		Category:     FindingCategoryCapacity,
+		Title:        "Storage disk local-zfs (data, /dev/sda4) at 96% usage",
+		Description:  "Usage at 96% exceeds the configured storage critical threshold.",
+	}) {
+		t.Fatal("expected physical disk child finding to remain separate")
+	}
+
+	active := store.GetActive(FindingSeverityWarning)
+	if len(active) != 2 {
+		t.Fatalf("expected pool and disk child to remain separate, got %d", len(active))
+	}
+}

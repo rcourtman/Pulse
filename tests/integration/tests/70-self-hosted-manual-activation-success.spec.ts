@@ -251,8 +251,8 @@ test.describe('Self-hosted manual activation success', () => {
       ),
     ).toBeVisible();
     await expect(activationSummary.getByText('Available now on this instance')).toBeVisible();
-    await expect(activationSummary.getByText('Safe Remediation Workflows')).toBeVisible();
-    await expect(activationSummary.getByText('Alert Root-Cause Analysis')).toBeVisible();
+    await expect(activationSummary.getByText('Patrol Fixes Safe Issues')).toBeVisible();
+    await expect(activationSummary.getByText('Patrol Investigates Alerts')).toBeVisible();
     await expect.poll(() => requestCounts.activate).toBe(1);
     await expect.poll(() => requestCounts.active.entitlements).toBeGreaterThan(0);
     await expect.poll(() => requestCounts.active.runtimeCapabilities).toBeGreaterThan(0);
@@ -265,7 +265,7 @@ test.describe('Self-hosted manual activation success', () => {
       .first();
     await expect(
       currentPlanCard.getByText(
-        'Pulse Pro is active on this instance. Root-cause analysis, safe remediation workflows, 90-day history, and admin/reporting extras are available right now.',
+        'Pulse Pro is active on this instance. Patrol control, alert investigation, verified fixes, 90-day history, and admin/reporting extras are available right now.',
       ),
     ).toBeVisible();
     await expect(currentPlanCard.getByText('Included extras')).toBeVisible();

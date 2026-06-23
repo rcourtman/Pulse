@@ -240,14 +240,14 @@ describe('services view', function() {
       title: 'Pricing',
       description: 'Canonical pricing model',
       explainer:
-        'Community keeps core monitoring free. Relay gets your Pulse web UI securely reachable from anywhere. Pro adds root-cause analysis, safe remediation workflows, and 90-day history.',
+        'Community keeps core monitoring free. Relay gets your Pulse web UI securely reachable from anywhere. Pro adds Patrol control, alert investigation, verified fixes, and 90-day history.',
       plans: [
         {
           tierKicker: 'Pro',
           title: 'Pro',
           price: '$79/year',
           period: 'or $8.99/month',
-          blurb: 'The operator tier for root-cause analysis, safe remediation workflows, and 90-day history.',
+          blurb: 'The operator tier for Patrol control, alert investigation, verified fixes, and 90-day history.',
           features: [{ tone: 'check', html: 'Core <strong>self-hosted monitoring</strong> included' }],
           buttons: [
             {
@@ -273,7 +273,7 @@ describe('services view', function() {
       'Pulse Account keeps checkout tied to the Pulse instance that opened it, so completed Relay or Pro purchases return to the right Plans page automatically.',
     );
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain(
-      'Community keeps core monitoring free. Relay gets your Pulse web UI securely reachable from anywhere. Pro adds root-cause analysis, safe remediation workflows, and 90-day history.',
+      'Community keeps core monitoring free. Relay gets your Pulse web UI securely reachable from anywhere. Pro adds Patrol control, alert investigation, verified fixes, and 90-day history.',
     );
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).not.toMatch(
       /Unlimited[\s\S]{0,80}self-hosted monitoring/i,
@@ -349,7 +349,7 @@ describe('services view', function() {
           title: 'Pro',
           price: '$8.99',
           period: '$79/year available too',
-          blurb: 'Root-cause analysis, alert analysis, and safe remediation workflows.',
+          blurb: 'Patrol control, alert investigation, and verified fixes.',
           features: [{ tone: 'check', html: 'Core <strong>self-hosted monitoring</strong> included' }],
           buttons: [
             {
@@ -389,7 +389,7 @@ describe('services view', function() {
           title: 'Pro',
           price: '$8.99',
           period: '$79/year available too',
-          blurb: 'Root-cause analysis, alert analysis, and safe remediation workflows.',
+          blurb: 'Patrol control, alert investigation, and verified fixes.',
           features: [{ tone: 'check', html: 'Core <strong>self-hosted monitoring</strong> included' }],
           buttons: [
             {

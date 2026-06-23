@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 )
@@ -74,17 +75,18 @@ func TestAgentSubstrate_DiscoveryToTriageToDepthFlowsThroughHTTPBoundary(t *test
 		byName[c.Name] = c
 	}
 	required := []string{
-		"get_resource_context",
-		"get_fleet_context",
-		"subscribe_events",
-		"get_operator_state",
-		"set_operator_state",
-		"clear_operator_state",
-		"list_findings",
-		"acknowledge_finding",
-		"snooze_finding",
-		"dismiss_finding",
-		"resolve_finding",
+		agentcapabilities.ResourceContextCapabilityName,
+		agentcapabilities.FleetContextCapabilityName,
+		agentcapabilities.OperationsLoopStatusCapabilityName,
+		agentcapabilities.EventSubscriptionCapabilityName,
+		agentcapabilities.GetOperatorStateCapabilityName,
+		agentcapabilities.SetOperatorStateCapabilityName,
+		agentcapabilities.ClearOperatorStateCapabilityName,
+		agentcapabilities.ListFindingsCapabilityName,
+		agentcapabilities.AcknowledgeFindingCapabilityName,
+		agentcapabilities.SnoozeFindingCapabilityName,
+		agentcapabilities.DismissFindingCapabilityName,
+		agentcapabilities.ResolveFindingCapabilityName,
 	}
 	for _, name := range required {
 		if _, ok := byName[name]; !ok {
@@ -95,24 +97,25 @@ func TestAgentSubstrate_DiscoveryToTriageToDepthFlowsThroughHTTPBoundary(t *test
 	// --- 2. Triage: call the path the manifest declares for the
 	// fleet view. The declared shape is "AgentFleetContext", which
 	// must round-trip through the actual handler. ---
-	fleetCap := byName["get_fleet_context"]
-	if fleetCap.Path != "/api/agent/fleet-context" {
-		t.Fatalf("get_fleet_context path: got %q, want /api/agent/fleet-context", fleetCap.Path)
+	fleetCap := byName[agentcapabilities.FleetContextCapabilityName]
+	if fleetCap.Path != agentcapabilities.FleetContextCapabilityPath {
+		t.Fatalf("%s path: got %q, want %q", agentcapabilities.FleetContextCapabilityName, fleetCap.Path, agentcapabilities.FleetContextCapabilityPath)
 	}
 	if fleetCap.Method != http.MethodGet {
-		t.Fatalf("get_fleet_context method: got %q, want GET", fleetCap.Method)
+		t.Fatalf("%s method: got %q, want GET", agentcapabilities.FleetContextCapabilityName, fleetCap.Method)
 	}
-	if fleetCap.Scope != "monitoring:read" {
-		t.Fatalf("get_fleet_context scope: got %q, want monitoring:read", fleetCap.Scope)
+	if fleetCap.Scope != config.ScopeMonitoringRead {
+		t.Fatalf("%s scope: got %q, want %s", agentcapabilities.FleetContextCapabilityName, fleetCap.Scope, config.ScopeMonitoringRead)
 	}
 	if fleetCap.ResponseShape != "AgentFleetContext" {
-		t.Fatalf("get_fleet_context response shape: got %q, want AgentFleetContext", fleetCap.ResponseShape)
+		t.Fatalf("%s response shape: got %q, want AgentFleetContext", agentcapabilities.FleetContextCapabilityName, fleetCap.ResponseShape)
 	}
+	fleetPath := projectAgentCapabilityPath(t, fleetCap, nil)
 
 	// Unauthenticated call must be rejected — the underlying
 	// capability's own auth scope holds even though discovery is
 	// unauthenticated.
-	req = httptest.NewRequest(http.MethodGet, fleetCap.Path, nil)
+	req = httptest.NewRequest(http.MethodGet, fleetPath, nil)
 	rec = httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
@@ -120,7 +123,7 @@ func TestAgentSubstrate_DiscoveryToTriageToDepthFlowsThroughHTTPBoundary(t *test
 	}
 
 	// Authenticated call must serve the iteration-safe shape.
-	req = httptest.NewRequest(http.MethodGet, fleetCap.Path, nil)
+	req = httptest.NewRequest(http.MethodGet, fleetPath, nil)
 	req.Header.Set("X-API-Token", rawToken)
 	rec = httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
@@ -146,23 +149,55 @@ func TestAgentSubstrate_DiscoveryToTriageToDepthFlowsThroughHTTPBoundary(t *test
 		t.Error("fleet.GeneratedAt must be populated so agents can reason about freshness")
 	}
 
+	statusCap := byName[agentcapabilities.OperationsLoopStatusCapabilityName]
+	if statusCap.Path != agentcapabilities.OperationsLoopStatusCapabilityPath {
+		t.Fatalf("%s path: got %q, want %q", agentcapabilities.OperationsLoopStatusCapabilityName, statusCap.Path, agentcapabilities.OperationsLoopStatusCapabilityPath)
+	}
+	if statusCap.Method != http.MethodGet {
+		t.Fatalf("%s method: got %q, want GET", agentcapabilities.OperationsLoopStatusCapabilityName, statusCap.Method)
+	}
+	if statusCap.Scope != config.ScopeMonitoringRead {
+		t.Fatalf("%s scope: got %q, want %s", agentcapabilities.OperationsLoopStatusCapabilityName, statusCap.Scope, config.ScopeMonitoringRead)
+	}
+	if statusCap.ResponseShape != "AgentOperationsLoopStatus" {
+		t.Fatalf("%s response shape: got %q, want AgentOperationsLoopStatus", agentcapabilities.OperationsLoopStatusCapabilityName, statusCap.ResponseShape)
+	}
+	req = httptest.NewRequest(http.MethodGet, projectAgentCapabilityPath(t, statusCap, nil), nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec = httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("operations-loop status GET auth: status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var loopStatus AgentOperationsLoopStatus
+	if err := json.NewDecoder(rec.Body).Decode(&loopStatus); err != nil {
+		t.Fatalf("decode operations-loop status: %v", err)
+	}
+	loopSteps := agentOperationsLoopStepsByID(loopStatus.Steps)
+	if loopStatus.NextAction != "run_patrol" || len(loopStatus.Steps) != 4 || loopStatus.GeneratedAt.IsZero() {
+		t.Fatalf("operations-loop status shape = %+v", loopStatus)
+	}
+	if _, ok := loopSteps["external_agents"]; ok {
+		t.Fatalf("operations-loop status must keep external-agent readiness out of steps: %+v", loopStatus.Steps)
+	}
+
 	// --- 3. Depth: call the path the manifest declares for the
 	// per-resource bundle. The manifest also declares the stable
 	// error code "resource_not_found" — exercise the unknown-id path
 	// to confirm the error code reaches the wire verbatim. ---
-	contextCap := byName["get_resource_context"]
-	if contextCap.Path != "/api/agent/resource-context/{resourceId}" {
-		t.Fatalf("get_resource_context path: got %q, want /api/agent/resource-context/{resourceId}", contextCap.Path)
+	contextCap := byName[agentcapabilities.ResourceContextCapabilityName]
+	if contextCap.Path != agentcapabilities.ResourceContextCapabilityPath {
+		t.Fatalf("%s path: got %q, want %q", agentcapabilities.ResourceContextCapabilityName, contextCap.Path, agentcapabilities.ResourceContextCapabilityPath)
 	}
 	hasNotFoundCode := false
 	for _, code := range contextCap.ErrorCodes {
-		if code == "resource_not_found" {
+		if code == agentcapabilities.AgentErrCodeResourceNotFound {
 			hasNotFoundCode = true
 			break
 		}
 	}
 	if !hasNotFoundCode {
-		t.Fatalf("get_resource_context manifest must declare resource_not_found error code; got %v", contextCap.ErrorCodes)
+		t.Fatalf("%s manifest must declare %s error code; got %v", agentcapabilities.ResourceContextCapabilityName, agentcapabilities.AgentErrCodeResourceNotFound, contextCap.ErrorCodes)
 	}
 
 	// Substitute a deliberately-unknown canonical id so the handler
@@ -170,7 +205,9 @@ func TestAgentSubstrate_DiscoveryToTriageToDepthFlowsThroughHTTPBoundary(t *test
 	// token. The substrate's contract is that this token reaches the
 	// wire intact so agents branch on it rather than parsing human
 	// text.
-	unknownPath := strings.Replace(contextCap.Path, "{resourceId}", "vm:e2e-unknown-99", 1)
+	unknownPath := projectAgentCapabilityPath(t, contextCap, map[string]any{
+		agentcapabilities.ResourceIDArgumentName: "vm:e2e-unknown-99",
+	})
 	req = httptest.NewRequest(http.MethodGet, unknownPath, nil)
 	req.Header.Set("X-API-Token", rawToken)
 	rec = httptest.NewRecorder()
@@ -184,15 +221,15 @@ func TestAgentSubstrate_DiscoveryToTriageToDepthFlowsThroughHTTPBoundary(t *test
 	// human-readable text under `"message"`. Pin both: the stable
 	// token agents branch on, and the message field's presence so
 	// agents can surface human text without losing the code.
-	if !strings.Contains(body, `"error":"resource_not_found"`) {
-		t.Errorf("resource-context unknown body must carry stable error code resource_not_found under the \"error\" key; body = %s", body)
+	if !strings.Contains(body, `"error":"`+agentcapabilities.AgentErrCodeResourceNotFound+`"`) {
+		t.Errorf("resource-context unknown body must carry stable error code %s under the \"error\" key; body = %s", agentcapabilities.AgentErrCodeResourceNotFound, body)
 	}
 	var errEnvelope map[string]string
 	if err := json.Unmarshal([]byte(body), &errEnvelope); err != nil {
 		t.Fatalf("decode error envelope: %v", err)
 	}
-	if errEnvelope["error"] != "resource_not_found" {
-		t.Errorf("error envelope code: got %q, want resource_not_found", errEnvelope["error"])
+	if errEnvelope["error"] != agentcapabilities.AgentErrCodeResourceNotFound {
+		t.Errorf("error envelope code: got %q, want %s", errEnvelope["error"], agentcapabilities.AgentErrCodeResourceNotFound)
 	}
 	if strings.TrimSpace(errEnvelope["message"]) == "" {
 		t.Error("error envelope must carry a human-readable message alongside the stable code")
@@ -203,9 +240,9 @@ func TestAgentSubstrate_DiscoveryToTriageToDepthFlowsThroughHTTPBoundary(t *test
 	// hold the connection open). The substrate proof here is that
 	// discovery's claim about /api/agent/events is honest: the path
 	// resolves (auth-gated) rather than 404'ing. ---
-	streamCap := byName["subscribe_events"]
-	if streamCap.Path != "/api/agent/events" {
-		t.Fatalf("subscribe_events path: got %q, want /api/agent/events", streamCap.Path)
+	streamCap := byName[agentcapabilities.EventSubscriptionCapabilityName]
+	if streamCap.Path != agentcapabilities.AgentEventsPath {
+		t.Fatalf("%s path: got %q, want %s", agentcapabilities.EventSubscriptionCapabilityName, streamCap.Path, agentcapabilities.AgentEventsPath)
 	}
 	req = httptest.NewRequest(http.MethodGet, streamCap.Path, nil)
 	rec = httptest.NewRecorder()
@@ -369,37 +406,42 @@ func TestAgentSubstrate_OperatorStateWriteRoundTripsThroughHTTPBoundary(t *testi
 	for _, c := range manifest.Capabilities {
 		byName[c.Name] = c
 	}
-	setCap := byName["set_operator_state"]
-	getCap := byName["get_operator_state"]
-	clearCap := byName["clear_operator_state"]
+	setCap := byName[agentcapabilities.SetOperatorStateCapabilityName]
+	getCap := byName[agentcapabilities.GetOperatorStateCapabilityName]
+	clearCap := byName[agentcapabilities.ClearOperatorStateCapabilityName]
 
-	if setCap.Method != http.MethodPut || setCap.Scope != "monitoring:write" {
-		t.Fatalf("set_operator_state declared method/scope: got %q/%q, want PUT/monitoring:write",
-			setCap.Method, setCap.Scope)
+	if setCap.Method != http.MethodPut || setCap.Scope != config.ScopeMonitoringWrite {
+		t.Fatalf("%s declared method/scope: got %q/%q, want PUT/%s",
+			agentcapabilities.SetOperatorStateCapabilityName, setCap.Method, setCap.Scope, config.ScopeMonitoringWrite)
 	}
-	if !stringSliceContains(setCap.ErrorCodes, "operator_state_invalid") {
-		t.Fatalf("set_operator_state must declare operator_state_invalid; got %v", setCap.ErrorCodes)
+	if !stringSliceContains(setCap.ErrorCodes, agentcapabilities.AgentErrCodeOperatorStateInvalid) {
+		t.Fatalf("%s must declare %s; got %v", agentcapabilities.SetOperatorStateCapabilityName, agentcapabilities.AgentErrCodeOperatorStateInvalid, setCap.ErrorCodes)
 	}
-	if getCap.Method != http.MethodGet || getCap.Scope != "monitoring:read" {
-		t.Fatalf("get_operator_state declared method/scope: got %q/%q, want GET/monitoring:read",
-			getCap.Method, getCap.Scope)
+	if getCap.Method != http.MethodGet || getCap.Scope != config.ScopeMonitoringRead {
+		t.Fatalf("%s declared method/scope: got %q/%q, want GET/%s",
+			agentcapabilities.GetOperatorStateCapabilityName, getCap.Method, getCap.Scope, config.ScopeMonitoringRead)
 	}
-	if !stringSliceContains(getCap.ErrorCodes, "operator_state_not_set") {
-		t.Fatalf("get_operator_state must declare operator_state_not_set; got %v", getCap.ErrorCodes)
+	if !stringSliceContains(getCap.ErrorCodes, agentcapabilities.AgentErrCodeOperatorStateNotSet) {
+		t.Fatalf("%s must declare %s; got %v", agentcapabilities.GetOperatorStateCapabilityName, agentcapabilities.AgentErrCodeOperatorStateNotSet, getCap.ErrorCodes)
 	}
-	if clearCap.Method != http.MethodDelete || clearCap.Scope != "monitoring:write" {
-		t.Fatalf("clear_operator_state declared method/scope: got %q/%q, want DELETE/monitoring:write",
-			clearCap.Method, clearCap.Scope)
+	if clearCap.Method != http.MethodDelete || clearCap.Scope != config.ScopeMonitoringWrite {
+		t.Fatalf("%s declared method/scope: got %q/%q, want DELETE/%s",
+			agentcapabilities.ClearOperatorStateCapabilityName, clearCap.Method, clearCap.Scope, config.ScopeMonitoringWrite)
 	}
 
 	// The capability paths use {resourceId} as the placeholder. Sub
 	// in a colon-bearing canonical id so the test exercises the
 	// URL-routing path most agents will actually hit.
 	resourceID := "vm:e2e-write-101"
-	resolvedPath := strings.Replace(setCap.Path, "{resourceId}", resourceID, 1)
+	pathArgs := map[string]any{
+		agentcapabilities.ResourceIDArgumentName: resourceID,
+	}
+	getPath := projectAgentCapabilityPath(t, getCap, pathArgs)
+	setPath := projectAgentCapabilityPath(t, setCap, pathArgs)
+	clearPath := projectAgentCapabilityPath(t, clearCap, pathArgs)
 
 	// --- 1. GET on never-written resource → 404 not_set. ---
-	req = httptest.NewRequest(http.MethodGet, resolvedPath, nil)
+	req = httptest.NewRequest(http.MethodGet, getPath, nil)
 	req.Header.Set("X-API-Token", rawToken)
 	rec = httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
@@ -407,8 +449,8 @@ func TestAgentSubstrate_OperatorStateWriteRoundTripsThroughHTTPBoundary(t *testi
 		t.Fatalf("GET unset: status = %d, want 404, body = %s", rec.Code, rec.Body.String())
 	}
 	notSetBody := rec.Body.String()
-	if !strings.Contains(notSetBody, `"error":"operator_state_not_set"`) {
-		t.Errorf("GET unset must carry stable error code operator_state_not_set; body = %s", notSetBody)
+	if !strings.Contains(notSetBody, `"error":"`+agentcapabilities.AgentErrCodeOperatorStateNotSet+`"`) {
+		t.Errorf("GET unset must carry stable error code %s; body = %s", agentcapabilities.AgentErrCodeOperatorStateNotSet, notSetBody)
 	}
 
 	// --- 2. PUT valid state → 200 with persisted state. ---
@@ -417,7 +459,7 @@ func TestAgentSubstrate_OperatorStateWriteRoundTripsThroughHTTPBoundary(t *testi
 		"neverAutoRemediate": true,
 		"note": "decommissioned for hardware refresh"
 	}`)
-	req = httptest.NewRequest(http.MethodPut, resolvedPath, bytes.NewReader(validBody))
+	req = httptest.NewRequest(http.MethodPut, setPath, bytes.NewReader(validBody))
 	req.Header.Set("X-API-Token", rawToken)
 	req.Header.Set("Content-Type", "application/json")
 	rec = httptest.NewRecorder()
@@ -450,7 +492,7 @@ func TestAgentSubstrate_OperatorStateWriteRoundTripsThroughHTTPBoundary(t *testi
 	}
 
 	// --- 3. GET after PUT round-trips. ---
-	req = httptest.NewRequest(http.MethodGet, resolvedPath, nil)
+	req = httptest.NewRequest(http.MethodGet, getPath, nil)
 	req.Header.Set("X-API-Token", rawToken)
 	rec = httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
@@ -475,7 +517,7 @@ func TestAgentSubstrate_OperatorStateWriteRoundTripsThroughHTTPBoundary(t *testi
 	// pin (human text), but the stable code is what agents branch
 	// on.
 	invalidBody := []byte(`{"criticality": "very-high"}`)
-	req = httptest.NewRequest(http.MethodPut, resolvedPath, bytes.NewReader(invalidBody))
+	req = httptest.NewRequest(http.MethodPut, setPath, bytes.NewReader(invalidBody))
 	req.Header.Set("X-API-Token", rawToken)
 	req.Header.Set("Content-Type", "application/json")
 	rec = httptest.NewRecorder()
@@ -484,12 +526,12 @@ func TestAgentSubstrate_OperatorStateWriteRoundTripsThroughHTTPBoundary(t *testi
 		t.Fatalf("PUT invalid: status = %d, want 400, body = %s", rec.Code, rec.Body.String())
 	}
 	invalidBodyResp := rec.Body.String()
-	if !strings.Contains(invalidBodyResp, `"error":"operator_state_invalid"`) {
-		t.Errorf("PUT invalid must carry stable error code operator_state_invalid; body = %s", invalidBodyResp)
+	if !strings.Contains(invalidBodyResp, `"error":"`+agentcapabilities.AgentErrCodeOperatorStateInvalid+`"`) {
+		t.Errorf("PUT invalid must carry stable error code %s; body = %s", agentcapabilities.AgentErrCodeOperatorStateInvalid, invalidBodyResp)
 	}
 
 	// --- 5. DELETE → 204 (idempotent). ---
-	req = httptest.NewRequest(http.MethodDelete, resolvedPath, nil)
+	req = httptest.NewRequest(http.MethodDelete, clearPath, nil)
 	req.Header.Set("X-API-Token", rawToken)
 	rec = httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
@@ -498,19 +540,19 @@ func TestAgentSubstrate_OperatorStateWriteRoundTripsThroughHTTPBoundary(t *testi
 	}
 
 	// --- 6. GET after DELETE → 404 not_set, closing the loop. ---
-	req = httptest.NewRequest(http.MethodGet, resolvedPath, nil)
+	req = httptest.NewRequest(http.MethodGet, getPath, nil)
 	req.Header.Set("X-API-Token", rawToken)
 	rec = httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("GET after DELETE: status = %d, want 404, body = %s", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), `"error":"operator_state_not_set"`) {
+	if !strings.Contains(rec.Body.String(), `"error":"`+agentcapabilities.AgentErrCodeOperatorStateNotSet+`"`) {
 		t.Errorf("GET after DELETE must surface operator_state_not_set again; body = %s", rec.Body.String())
 	}
 
 	// --- 7. DELETE again → still 204 (idempotency contract). ---
-	req = httptest.NewRequest(http.MethodDelete, resolvedPath, nil)
+	req = httptest.NewRequest(http.MethodDelete, clearPath, nil)
 	req.Header.Set("X-API-Token", rawToken)
 	rec = httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
@@ -584,7 +626,11 @@ func TestAgentSubstrate_ActionEndpointsEmitAgentStableEnvelope(t *testing.T) {
 	for _, c := range manifest.Capabilities {
 		byName[c.Name] = c
 	}
-	for _, want := range []string{"plan_action", "decide_action", "execute_action"} {
+	for _, want := range []string{
+		agentcapabilities.PlanActionCapabilityName,
+		agentcapabilities.DecideActionCapabilityName,
+		agentcapabilities.ExecuteActionCapabilityName,
+	} {
 		cap, ok := byName[want]
 		if !ok {
 			t.Fatalf("manifest missing %q capability", want)
@@ -592,8 +638,8 @@ func TestAgentSubstrate_ActionEndpointsEmitAgentStableEnvelope(t *testing.T) {
 		if cap.Category != "action" {
 			t.Errorf("%s: category = %q, want \"action\"", want, cap.Category)
 		}
-		if cap.Scope != "ai:execute" {
-			t.Errorf("%s: scope = %q, want \"ai:execute\"", want, cap.Scope)
+		if cap.Scope != config.ScopeAIExecute {
+			t.Errorf("%s: scope = %q, want %q", want, cap.Scope, config.ScopeAIExecute)
 		}
 		if len(cap.ErrorCodes) == 0 {
 			t.Errorf("%s: must declare at least one stable errorCode", want)
@@ -602,47 +648,74 @@ func TestAgentSubstrate_ActionEndpointsEmitAgentStableEnvelope(t *testing.T) {
 
 	// --- 1. plan_action: invalid request body lands under the
 	// stable invalid_action_request code with a details map. ---
-	planCap := byName["plan_action"]
-	body := strings.NewReader(`{"resourceId": "", "capabilityName": "restart"}`)
-	req = httptest.NewRequest(http.MethodPost, planCap.Path, body)
+	planCap := byName[agentcapabilities.PlanActionCapabilityName]
+	body := agentSubstrateJSONBody(t, map[string]string{
+		agentcapabilities.ResourceIDArgumentName:     "",
+		agentcapabilities.CapabilityNameArgumentName: "restart",
+	})
+	req = httptest.NewRequest(http.MethodPost, projectAgentCapabilityPath(t, planCap, nil), body)
 	req.Header.Set("X-API-Token", rawToken)
 	req.Header.Set("Content-Type", "application/json")
 	rec = httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("plan_action invalid: status = %d, want 400, body = %s", rec.Code, rec.Body.String())
+		t.Fatalf("%s invalid: status = %d, want 400, body = %s", agentcapabilities.PlanActionCapabilityName, rec.Code, rec.Body.String())
 	}
-	assertAgentStableEnvelope(t, "plan_action", rec.Body.String(), "invalid_action_request")
-	if !stringSliceContains(planCap.ErrorCodes, "invalid_action_request") {
-		t.Errorf("manifest plan_action.ErrorCodes must declare invalid_action_request; got %v", planCap.ErrorCodes)
+	assertAgentStableEnvelope(t, agentcapabilities.PlanActionCapabilityName, rec.Body.String(), agentcapabilities.AgentErrCodeInvalidActionRequest)
+	if !stringSliceContains(planCap.ErrorCodes, agentcapabilities.AgentErrCodeInvalidActionRequest) {
+		t.Errorf("manifest %s.ErrorCodes must declare %s; got %v", agentcapabilities.PlanActionCapabilityName, agentcapabilities.AgentErrCodeInvalidActionRequest, planCap.ErrorCodes)
 	}
 
 	// --- 2. decide_action against a non-existent action id. ---
-	decideCap := byName["decide_action"]
-	decidePath := strings.Replace(decideCap.Path, "{actionId}", "act_does_not_exist_xyz", 1)
-	body = strings.NewReader(`{"outcome": "approved"}`)
+	decideCap := byName[agentcapabilities.DecideActionCapabilityName]
+	decidePath := projectAgentCapabilityPath(t, decideCap, map[string]any{
+		agentcapabilities.ActionIDArgumentName: "act_does_not_exist_xyz",
+	})
+	body = agentSubstrateJSONBody(t, map[string]string{
+		agentcapabilities.OutcomeArgumentName: "approved",
+	})
 	req = httptest.NewRequest(http.MethodPost, decidePath, body)
 	req.Header.Set("X-API-Token", rawToken)
 	req.Header.Set("Content-Type", "application/json")
 	rec = httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusNotFound {
-		t.Fatalf("decide_action unknown: status = %d, want 404, body = %s", rec.Code, rec.Body.String())
+		t.Fatalf("%s unknown: status = %d, want 404, body = %s", agentcapabilities.DecideActionCapabilityName, rec.Code, rec.Body.String())
 	}
-	assertAgentStableEnvelope(t, "decide_action", rec.Body.String(), "action_not_found")
+	assertAgentStableEnvelope(t, agentcapabilities.DecideActionCapabilityName, rec.Body.String(), agentcapabilities.AgentErrCodeActionNotFound)
 
 	// --- 3. execute_action against a non-existent action id. ---
-	executeCap := byName["execute_action"]
-	executePath := strings.Replace(executeCap.Path, "{actionId}", "act_does_not_exist_xyz", 1)
-	req = httptest.NewRequest(http.MethodPost, executePath, strings.NewReader(`{}`))
+	executeCap := byName[agentcapabilities.ExecuteActionCapabilityName]
+	executePath := projectAgentCapabilityPath(t, executeCap, map[string]any{
+		agentcapabilities.ActionIDArgumentName: "act_does_not_exist_xyz",
+	})
+	req = httptest.NewRequest(http.MethodPost, executePath, agentSubstrateJSONBody(t, map[string]any{}))
 	req.Header.Set("X-API-Token", rawToken)
 	req.Header.Set("Content-Type", "application/json")
 	rec = httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusNotFound {
-		t.Fatalf("execute_action unknown: status = %d, want 404, body = %s", rec.Code, rec.Body.String())
+		t.Fatalf("%s unknown: status = %d, want 404, body = %s", agentcapabilities.ExecuteActionCapabilityName, rec.Code, rec.Body.String())
 	}
-	assertAgentStableEnvelope(t, "execute_action", rec.Body.String(), "action_not_found")
+	assertAgentStableEnvelope(t, agentcapabilities.ExecuteActionCapabilityName, rec.Body.String(), agentcapabilities.AgentErrCodeActionNotFound)
+}
+
+func projectAgentCapabilityPath(t *testing.T, cap AgentCapability, args map[string]any) string {
+	t.Helper()
+	projected, err := agentcapabilities.ProjectCapabilityCall(cap, args)
+	if err != nil {
+		t.Fatalf("%s route projection failed: %v", cap.Name, err)
+	}
+	return projected.Path
+}
+
+func agentSubstrateJSONBody(t *testing.T, payload any) *bytes.Reader {
+	t.Helper()
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal agent substrate request body: %v", err)
+	}
+	return bytes.NewReader(raw)
 }
 
 // assertAgentStableEnvelope is the inverse APIError-shape check: it

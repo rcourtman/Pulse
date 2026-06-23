@@ -14,7 +14,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-func TestRecoveryPointsMCPAdapter_ListPointsToleratesMalformedPersistedMetadata(t *testing.T) {
+func TestRecoveryPointsToolAdapter_ListPointsToleratesMalformedPersistedMetadata(t *testing.T) {
 	baseDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(baseDir)
 	manager := recoverymanager.New(mtp)
@@ -59,7 +59,7 @@ func TestRecoveryPointsMCPAdapter_ListPointsToleratesMalformedPersistedMetadata(
 		"adapter-point-bad-json",
 	)
 
-	adapter := NewRecoveryPointsMCPAdapter(manager, "default")
+	adapter := NewRecoveryPointsToolAdapter(manager, "default")
 	points, total, err := adapter.ListPoints(context.Background(), recovery.ListPointsOptions{
 		Page:  1,
 		Limit: 50,

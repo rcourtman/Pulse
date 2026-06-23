@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 	"github.com/rs/zerolog/log"
 )
@@ -24,7 +25,7 @@ import (
 func (e *PulseToolExecutor) registerSummarizeTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
-			Name: "pulse_summarize",
+			Name: agentcapabilities.PulseSummarizeToolName,
 			Description: `Generate a retrospective summary of one resource or a fleet across a time window. Use this when the operator asks questions like "what's been happening with pve1 this week" or "where should I look across my fleet" — answers grounded in metric stats, alerts, storage state, disk health, and Patrol findings within the window.
 
 Two modes via the 'action' parameter:
@@ -65,9 +66,10 @@ Time window defaults to the last 7 days; supported ranges: 24h, 7d, 30d.`,
 			return exec.executeSummarize(ctx, args)
 		},
 		Governance: ToolGovernance{
-			ActionMode:     ToolActionRead,
-			ApprovalPolicy: "no approval required; pure read of metrics history and findings store.",
-			Summary:        "Returns a retrospective synthesis (observations, recommendations, outliers, period comparison) for one resource or a fleet within a time window.",
+			ActionMode:      ToolActionRead,
+			ApprovalPolicy:  ToolApprovalScopeOnly,
+			ApprovalSummary: "no approval required; pure read of metrics history and findings store.",
+			Summary:         "Returns a retrospective synthesis (observations, recommendations, outliers, period comparison) for one resource or a fleet within a time window.",
 		},
 	})
 }

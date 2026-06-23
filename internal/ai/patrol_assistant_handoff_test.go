@@ -35,7 +35,7 @@ func TestBuildPatrolRunAssistantHandoffUsesBackendSafeRunContext(t *testing.T) {
 	if handoff.Metadata != (chat.HandoffMetadata{
 		Kind:           "patrol_run",
 		RunID:          "run-runtime-error",
-		RunType:        "Scoped run",
+		RunType:        "Targeted check",
 		RunStatus:      "error",
 		RuntimeFailure: true,
 	}) {
@@ -49,7 +49,7 @@ func TestBuildPatrolRunAssistantHandoffUsesBackendSafeRunContext(t *testing.T) {
 		"[Patrol Run Context]",
 		"Source: Pulse Patrol run history",
 		"Run ID: run-runtime-error",
-		"Run Type: Scoped run",
+		"Run Type: Targeted check",
 		"Trigger: Alert fired",
 		"Runtime Failure: Selected model does not support Patrol tools",
 		"no tool-capable endpoint",

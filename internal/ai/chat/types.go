@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 )
 
@@ -82,9 +83,16 @@ func EmptyMessage() Message {
 func (m Message) NormalizeCollections() Message {
 	if m.ToolCalls == nil {
 		m.ToolCalls = []ToolCall{}
+	} else {
+		toolCalls := make([]ToolCall, len(m.ToolCalls))
+		for i := range m.ToolCalls {
+			toolCalls[i] = m.ToolCalls[i].NormalizeCollections()
+		}
+		m.ToolCalls = toolCalls
 	}
-	for i := range m.ToolCalls {
-		m.ToolCalls[i] = m.ToolCalls[i].NormalizeCollections()
+	if m.ToolResult != nil {
+		toolResult := *m.ToolResult
+		m.ToolResult = &toolResult
 	}
 	return m
 }
@@ -116,18 +124,52 @@ func EmptyToolCall() ToolCall {
 }
 
 func (t ToolCall) NormalizeCollections() ToolCall {
-	if t.Input == nil {
-		t.Input = map[string]interface{}{}
+	providerCall := agentcapabilities.ProviderToolCall{
+		ID:               t.ID,
+		Name:             t.Name,
+		Input:            t.Input,
+		ThoughtSignature: t.ThoughtSignature,
+	}.NormalizeCollections()
+	t.ID = providerCall.ID
+	t.Name = providerCall.Name
+	t.Input = providerCall.Input
+	t.ThoughtSignature = providerCall.ThoughtSignature
+	if t.Success != nil {
+		success := *t.Success
+		t.Success = &success
 	}
 	return t
 }
 
-// ToolResult represents the result of a tool execution
-type ToolResult struct {
-	ToolUseID string `json:"tool_use_id"`
-	Content   string `json:"content"`
-	IsError   bool   `json:"is_error,omitempty"`
+// ToolCallFromProvider stores a provider-facing tool call in the richer
+// Assistant transcript shape used for in-app history.
+func ToolCallFromProvider(tc agentcapabilities.ProviderToolCall) ToolCall {
+	tc = tc.NormalizeCollections()
+	return ToolCall{
+		ID:               tc.ID,
+		Name:             tc.Name,
+		Input:            tc.Input,
+		ThoughtSignature: tc.ThoughtSignature,
+	}.NormalizeCollections()
 }
+
+// ProviderToolCall projects a stored Assistant transcript call back to the
+// shared provider-facing shape, deliberately excluding in-app output/success
+// display fields.
+func (t ToolCall) ProviderToolCall() agentcapabilities.ProviderToolCall {
+	t = t.NormalizeCollections()
+	return agentcapabilities.ProviderToolCall{
+		ID:               t.ID,
+		Name:             t.Name,
+		Input:            t.Input,
+		ThoughtSignature: t.ThoughtSignature,
+	}.NormalizeCollections()
+}
+
+// ToolResult represents the result of a tool execution. It aliases the shared
+// Pulse Intelligence provider-result shape so stored Assistant transcripts and
+// provider turns do not drift on tool result JSON.
+type ToolResult = agentcapabilities.ProviderToolResult
 
 // StreamEvent represents a streaming event sent to the frontend
 type StreamEvent struct {
@@ -329,38 +371,17 @@ type ToolEndData struct {
 	Success  bool   `json:"success"`
 }
 
-// ApprovalPlanData is the user-facing subset of the governed action plan.
-type ApprovalPlanData struct {
-	ActionID          string `json:"action_id,omitempty"`
-	RequestID         string `json:"request_id,omitempty"`
-	Summary           string `json:"summary,omitempty"`
-	RequiresApproval  bool   `json:"requires_approval"`
-	ApprovalPolicy    string `json:"approval_policy,omitempty"`
-	BlastRadius       string `json:"blast_radius,omitempty"`
-	RollbackAvailable bool   `json:"rollback_available"`
-	PlanHash          string `json:"plan_hash,omitempty"`
-	ExpiresAt         string `json:"expires_at,omitempty"`
-}
+// ApprovalPlanData aliases the shared approval-marker plan subset. The
+// browser event shape stays in chat, but the marker payload contract lives in
+// agentcapabilities so tool producers and chat consumers cannot drift.
+type ApprovalPlanData = agentcapabilities.ApprovalPlanData
 
-// ApprovalContextConfidenceData describes how strongly a proposed action was
-// bound to a concrete target before approval.
-type ApprovalContextConfidenceData struct {
-	Level    string   `json:"level,omitempty"`
-	Summary  string   `json:"summary,omitempty"`
-	Evidence []string `json:"evidence,omitempty"`
-}
+// ApprovalContextConfidenceData aliases the shared approval-marker confidence
+// payload.
+type ApprovalContextConfidenceData = agentcapabilities.ApprovalContextConfidenceData
 
-// ApprovalPreflightData describes the pre-execution dry-run and verification boundary.
-type ApprovalPreflightData struct {
-	Target            string   `json:"target,omitempty"`
-	CurrentState      string   `json:"current_state,omitempty"`
-	IntendedChange    string   `json:"intended_change,omitempty"`
-	DryRunAvailable   bool     `json:"dry_run_available"`
-	DryRunSummary     string   `json:"dry_run_summary,omitempty"`
-	SafetyChecks      []string `json:"safety_checks,omitempty"`
-	VerificationSteps []string `json:"verification_steps,omitempty"`
-	GeneratedAt       string   `json:"generated_at,omitempty"`
-}
+// ApprovalPreflightData aliases the shared approval-marker preflight payload.
+type ApprovalPreflightData = agentcapabilities.ApprovalPreflightData
 
 // ApprovalNeededData is the data for "approval_needed" events
 type ApprovalNeededData struct {
@@ -421,9 +442,9 @@ type DoneData struct {
 
 // Control level constants
 const (
-	ControlLevelReadOnly   = "read_only"
-	ControlLevelControlled = "controlled"
-	ControlLevelAutonomous = "autonomous"
+	ControlLevelReadOnly   = string(tools.ControlLevelReadOnly)
+	ControlLevelControlled = string(tools.ControlLevelControlled)
+	ControlLevelAutonomous = string(tools.ControlLevelAutonomous)
 )
 
 // ResolvedResource represents a resource that has been authoritatively resolved

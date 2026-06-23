@@ -384,7 +384,7 @@ func TestRecordApprovalDecisionUsesRejectedActionDecisionStoreContract(t *testin
 		t.Fatalf("Deny: %v", err)
 	}
 
-	executor.RecordApprovalDecision("approval-rejected-decision", unifiedresources.ActionStateRejected, "operator@example.com", "outside maintenance")
+	RecordApprovalDecision(actionStore, "approval-rejected-decision", unifiedresources.ActionStateRejected, "operator@example.com", "outside maintenance")
 
 	audit, ok, err := actionStore.GetActionAudit("act-rejected-decision-contract")
 	if err != nil {

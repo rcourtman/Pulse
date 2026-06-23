@@ -5,10 +5,10 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"strings"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/safety"
 	"github.com/rs/zerolog/log"
@@ -35,7 +35,7 @@ type ExecutionProvenance struct {
 func (e *PulseToolExecutor) registerFileTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
-			Name: "pulse_file_edit",
+			Name: agentcapabilities.PulseFileEditToolName,
 			Description: `Read and edit files on remote hosts, containers, VMs, and Docker containers safely.
 
 Actions:
@@ -88,9 +88,10 @@ Examples:
 		},
 		RequireControl: true,
 		Governance: ToolGovernance{
-			ActionMode:     ToolActionWrite,
-			ApprovalPolicy: "hidden in read-only mode; approval required in controlled mode",
-			Summary:        "Reads or changes files through the governed file-edit path; read-only file inspection is exposed through the read-only tool surface.",
+			ActionMode:      ToolActionWrite,
+			ApprovalPolicy:  ToolApprovalActionPlan,
+			ApprovalSummary: "hidden in read-only mode; approval required in controlled mode",
+			Summary:         "Reads or changes files through the governed file-edit path; read-only file inspection is exposed through the read-only tool surface.",
 		},
 	})
 }
@@ -276,8 +277,7 @@ func (e *PulseToolExecutor) executeFileMutation(ctx context.Context, path, conte
 	if e.agentServer == nil {
 		return NewErrorResult(fmt.Errorf("no agent server available")), nil
 	}
-	approvalID, _ := args["_approval_id"].(string)
-	approvalID = strings.TrimSpace(approvalID)
+	approvalID := agentcapabilities.ApprovalArgument(args)
 
 	if blocked, reason := safety.IsSensitivePath(path); blocked {
 		return NewToolResponseResult(NewToolBlockedError(
@@ -512,7 +512,7 @@ func (e *ErrExecutionContextUnavailable) Error() string {
 }
 
 func (e *ErrExecutionContextUnavailable) ToToolResponse() ToolResponse {
-	return NewToolBlockedError("EXECUTION_CONTEXT_UNAVAILABLE", e.Message, map[string]interface{}{
+	return NewToolBlockedError(ErrCodeExecutionContextUnavailable, e.Message, map[string]interface{}{
 		"target_host":     e.TargetHost,
 		"resolved_kind":   e.ResolvedKind,
 		"resolved_node":   e.ResolvedNode,
@@ -612,7 +612,6 @@ func shellEscape(s string) string {
 // formatFileApprovalNeeded formats an approval-required response for file operations
 func formatFileApprovalNeeded(path, host, action string, size int, approvalID string) string {
 	payload := map[string]interface{}{
-		"type":        "approval_required",
 		"approval_id": approvalID,
 		"action":      "file_" + action,
 		"path":        path,
@@ -621,6 +620,5 @@ func formatFileApprovalNeeded(path, host, action string, size int, approvalID st
 		"message":     fmt.Sprintf("File %s operation requires approval", action),
 	}
 	payload = enrichApprovalRequiredPayload(payload, approvalID)
-	b, _ := json.Marshal(payload)
-	return "APPROVAL_REQUIRED: " + string(b)
+	return agentcapabilities.FormatApprovalRequiredToolMarker(payload)
 }

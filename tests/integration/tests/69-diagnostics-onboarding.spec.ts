@@ -188,7 +188,7 @@ const DIAGNOSTICS_PAYLOAD = {
     enabled: true,
     running: true,
     healthy: true,
-    mcpConnected: true,
+    assistantRuntimeConnected: true,
     notes: [],
   },
   errors: [],

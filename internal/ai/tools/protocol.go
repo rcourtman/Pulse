@@ -1,318 +1,87 @@
 package tools
 
-import (
-	"encoding/json"
-)
+import "github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 
-// JSON-RPC 2.0 types for MCP protocol
+// Tool describes an available Assistant registry tool. The shape aliases the
+// shared Pulse Intelligence tool schema so provider projection and external
+// agent adapters cannot drift.
+type Tool = agentcapabilities.Tool
 
-// Request represents a JSON-RPC request
-type Request struct {
-	JSONRPC string          `json:"jsonrpc"`
-	ID      interface{}     `json:"id,omitempty"`
-	Method  string          `json:"method"`
-	Params  json.RawMessage `json:"params,omitempty"`
-}
+// InputSchema describes the expected input for a tool.
+type InputSchema = agentcapabilities.InputSchema
 
-// Response represents a JSON-RPC response
-type Response struct {
-	JSONRPC string          `json:"jsonrpc"`
-	ID      interface{}     `json:"id,omitempty"`
-	Result  json.RawMessage `json:"result,omitempty"`
-	Error   *Error          `json:"error,omitempty"`
-}
+// PropertySchema describes a property in the input schema.
+type PropertySchema = agentcapabilities.PropertySchema
 
-// Error represents a JSON-RPC error
-type Error struct {
-	Code    int         `json:"code"`
-	Message string      `json:"message"`
-	Data    interface{} `json:"data,omitempty"`
-}
+// CallToolParams are the shared params for registry tool calls.
+type CallToolParams = agentcapabilities.ToolCallParams
 
-// Standard JSON-RPC error codes
-const (
-	ErrParse          = -32700
-	ErrInvalidRequest = -32600
-	ErrMethodNotFound = -32601
-	ErrInvalidParams  = -32602
-	ErrInternal       = -32603
-)
+// CallToolResult is the shared result envelope returned by Assistant registry
+// tools.
+type CallToolResult = agentcapabilities.ToolResult
 
-// MCP-specific types
+// Content represents content in a shared tool result.
+type Content = agentcapabilities.ToolContent
 
-// ServerInfo describes the MCP server
-type ServerInfo struct {
-	Name         string       `json:"name"`
-	Version      string       `json:"version"`
-	Capabilities Capabilities `json:"capabilities,omitempty"`
-}
+// ToolResponse is the shared structured tool-result envelope used for
+// machine-readable blocked/failed Assistant registry tool outcomes.
+type ToolResponse = agentcapabilities.ToolResponse
 
-// Capabilities describes what the server supports
-type Capabilities struct {
-	Tools     *ToolsCapability     `json:"tools,omitempty"`
-	Resources *ResourcesCapability `json:"resources,omitempty"`
-	Prompts   *PromptsCapability   `json:"prompts,omitempty"`
-}
-
-// ToolsCapability describes tool support
-type ToolsCapability struct {
-	ListChanged bool `json:"listChanged,omitempty"`
-}
-
-// ResourcesCapability describes resource support
-type ResourcesCapability struct {
-	Subscribe   bool `json:"subscribe,omitempty"`
-	ListChanged bool `json:"listChanged,omitempty"`
-}
-
-// PromptsCapability describes prompt support
-type PromptsCapability struct {
-	ListChanged bool `json:"listChanged,omitempty"`
-}
-
-// InitializeParams are the params for the initialize method
-type InitializeParams struct {
-	ProtocolVersion string       `json:"protocolVersion"`
-	Capabilities    Capabilities `json:"capabilities"`
-	ClientInfo      ClientInfo   `json:"clientInfo"`
-}
-
-// ClientInfo describes the client
-type ClientInfo struct {
-	Name    string `json:"name"`
-	Version string `json:"version"`
-}
-
-// InitializeResult is the result of the initialize method
-type InitializeResult struct {
-	ProtocolVersion string       `json:"protocolVersion"`
-	Capabilities    Capabilities `json:"capabilities"`
-	ServerInfo      ServerInfo   `json:"serverInfo"`
-}
-
-// Tool describes an available tool
-type Tool struct {
-	Name        string      `json:"name"`
-	Description string      `json:"description,omitempty"`
-	InputSchema InputSchema `json:"inputSchema"`
-}
-
-// InputSchema describes the expected input for a tool
-type InputSchema struct {
-	Type       string                    `json:"type"` // Always "object"
-	Properties map[string]PropertySchema `json:"properties"`
-	Required   []string                  `json:"required,omitempty"`
-}
-
-// PropertySchema describes a property in the input schema
-type PropertySchema struct {
-	Type        string      `json:"type"`
-	Description string      `json:"description,omitempty"`
-	Enum        []string    `json:"enum,omitempty"`
-	Default     interface{} `json:"default,omitempty"`
-}
-
-// ListToolsResult is the result of tools/list
-type ListToolsResult struct {
-	Tools []Tool `json:"tools"`
-}
-
-// CallToolParams are the params for tools/call
-type CallToolParams struct {
-	Name      string                 `json:"name"`
-	Arguments map[string]interface{} `json:"arguments,omitempty"`
-}
-
-// CallToolResult is the result of tools/call
-type CallToolResult struct {
-	Content []Content `json:"content"`
-	IsError bool      `json:"isError,omitempty"`
-}
-
-// Content represents content in a tool result
-type Content struct {
-	Type     string `json:"type"` // "text", "image", "resource"
-	Text     string `json:"text,omitempty"`
-	MimeType string `json:"mimeType,omitempty"`
-	Data     string `json:"data,omitempty"` // base64 for images
-	URI      string `json:"uri,omitempty"`  // for resources
-}
-
-// Resource describes an available resource
-type Resource struct {
-	URI         string `json:"uri"`
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
-	MimeType    string `json:"mimeType,omitempty"`
-}
-
-// ListResourcesResult is the result of resources/list
-type ListResourcesResult struct {
-	Resources []Resource `json:"resources"`
-}
-
-// ReadResourceParams are the params for resources/read
-type ReadResourceParams struct {
-	URI string `json:"uri"`
-}
-
-// ReadResourceResult is the result of resources/read
-type ReadResourceResult struct {
-	Contents []ResourceContent `json:"contents"`
-}
-
-// ResourceContent is the content of a resource
-type ResourceContent struct {
-	URI      string `json:"uri"`
-	MimeType string `json:"mimeType,omitempty"`
-	Text     string `json:"text,omitempty"`
-	Blob     string `json:"blob,omitempty"` // base64
-}
-
-// Prompt describes an available prompt template
-type Prompt struct {
-	Name        string           `json:"name"`
-	Description string           `json:"description,omitempty"`
-	Arguments   []PromptArgument `json:"arguments,omitempty"`
-}
-
-// PromptArgument describes an argument for a prompt
-type PromptArgument struct {
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
-	Required    bool   `json:"required,omitempty"`
-}
-
-// ListPromptsResult is the result of prompts/list
-type ListPromptsResult struct {
-	Prompts []Prompt `json:"prompts"`
-}
-
-// GetPromptParams are the params for prompts/get
-type GetPromptParams struct {
-	Name      string            `json:"name"`
-	Arguments map[string]string `json:"arguments,omitempty"`
-}
-
-// GetPromptResult is the result of prompts/get
-type GetPromptResult struct {
-	Description string          `json:"description,omitempty"`
-	Messages    []PromptMessage `json:"messages"`
-}
-
-// PromptMessage is a message in a prompt
-type PromptMessage struct {
-	Role    string  `json:"role"` // "user" or "assistant"
-	Content Content `json:"content"`
-}
-
-// ToolResponse is a consistent envelope for tool results.
-// All tool results should use this structure for predictable parsing.
-type ToolResponse struct {
-	OK    bool                   `json:"ok"`              // true if tool succeeded
-	Data  interface{}            `json:"data,omitempty"`  // result data if ok=true
-	Error *ToolError             `json:"error,omitempty"` // error details if ok=false
-	Meta  map[string]interface{} `json:"meta,omitempty"`  // optional metadata
-}
-
-// ToolError provides consistent error structure for tool failures.
-// Use Blocked=true for policy/validation blocks, Failed=true for runtime errors.
-type ToolError struct {
-	Code      string                 `json:"code"`                // Error code (e.g., "STRICT_RESOLUTION", "NOT_FOUND")
-	Message   string                 `json:"message"`             // Human-readable message
-	Blocked   bool                   `json:"blocked,omitempty"`   // True if blocked by policy/validation
-	Failed    bool                   `json:"failed,omitempty"`    // True if runtime failure
-	Retryable bool                   `json:"retryable,omitempty"` // True if auto-retry might succeed
-	Details   map[string]interface{} `json:"details,omitempty"`   // Additional context
-}
+// ToolError is the shared structured failure shape for ToolResponse.
+type ToolError = agentcapabilities.ToolError
 
 // Common error codes
 const (
-	ErrCodeStrictResolution = "STRICT_RESOLUTION"
-	ErrCodeNotFound         = "NOT_FOUND"
-	ErrCodeActionNotAllowed = "ACTION_NOT_ALLOWED"
-	ErrCodePolicyBlocked    = "POLICY_BLOCKED"
-	ErrCodeApprovalRequired = "APPROVAL_REQUIRED"
-	ErrCodeInvalidInput     = "INVALID_INPUT"
-	ErrCodeExecutionFailed  = "EXECUTION_FAILED"
-	ErrCodeNoAgent          = "NO_AGENT"
+	ErrCodeFSMBlocked                  = agentcapabilities.ErrCodeFSMBlocked
+	ErrCodeStrictResolution            = agentcapabilities.ErrCodeStrictResolution
+	ErrCodeRoutingMismatch             = agentcapabilities.ErrCodeRoutingMismatch
+	ErrCodeExecutionContextUnavailable = agentcapabilities.ErrCodeExecutionContextUnavailable
+	ErrCodeNotFound                    = agentcapabilities.ErrCodeNotFound
+	ErrCodeActionNotAllowed            = agentcapabilities.ErrCodeActionNotAllowed
+	ErrCodePolicyBlocked               = agentcapabilities.ErrCodePolicyBlocked
+	ErrCodeApprovalRequired            = agentcapabilities.ErrCodeApprovalRequired
+	ErrCodeInvalidInput                = agentcapabilities.ErrCodeInvalidInput
+	ErrCodeExecutionFailed             = agentcapabilities.ErrCodeExecutionFailed
+	ErrCodeNoAgent                     = agentcapabilities.ErrCodeNoAgent
 )
 
 // NewToolBlockedError creates a policy/validation blocked error
 func NewToolBlockedError(code, message string, details map[string]interface{}) ToolResponse {
-	return ToolResponse{
-		OK: false,
-		Error: &ToolError{
-			Code:    code,
-			Message: message,
-			Blocked: true,
-			Details: details,
-		},
-	}
+	return agentcapabilities.NewToolBlockedError(code, message, details)
 }
 
 // Helper functions
 
 // NewTextContent creates a text content object
 func NewTextContent(text string) Content {
-	return Content{
-		Type: "text",
-		Text: text,
-	}
+	return agentcapabilities.NewToolTextContent(text)
 }
 
 // NewErrorResult creates an error tool result
 func NewErrorResult(err error) CallToolResult {
-	return CallToolResult{
-		Content: []Content{NewTextContent(err.Error())},
-		IsError: true,
-	}
+	return agentcapabilities.NewToolErrorResult(err)
 }
 
 // NewTextResult creates a successful text tool result
 func NewTextResult(text string) CallToolResult {
-	return CallToolResult{
-		Content: []Content{NewTextContent(text)},
-		IsError: false,
-	}
+	return agentcapabilities.NewToolTextResult(text)
 }
 
 // NewJSONResult creates a successful JSON tool result
 // The data is marshaled to JSON and returned as text content
 func NewJSONResult(data interface{}) CallToolResult {
-	b, err := json.Marshal(data)
-	if err != nil {
-		return NewErrorResult(err)
-	}
-	return CallToolResult{
-		Content: []Content{NewTextContent(string(b))},
-		IsError: false,
-	}
+	return agentcapabilities.NewToolJSONResult(data)
 }
 
 // NewJSONResultWithIsError creates a JSON tool result with explicit error state.
 // Use this when you want to return structured JSON to the model/UI while still
 // signalling a failure to the agentic loop (IsError=true).
 func NewJSONResultWithIsError(data interface{}, isError bool) CallToolResult {
-	b, err := json.Marshal(data)
-	if err != nil {
-		return NewErrorResult(err)
-	}
-	return CallToolResult{
-		Content: []Content{NewTextContent(string(b))},
-		IsError: isError,
-	}
+	return agentcapabilities.NewToolJSONResultWithIsError(data, isError)
 }
 
 // NewToolResponseResult creates a CallToolResult from a ToolResponse
-// This provides the consistent envelope while maintaining MCP protocol compatibility
+// This provides the consistent shared tool-result envelope.
 func NewToolResponseResult(resp ToolResponse) CallToolResult {
-	b, err := json.Marshal(resp)
-	if err != nil {
-		return NewErrorResult(err)
-	}
-	return CallToolResult{
-		Content: []Content{NewTextContent(string(b))},
-		IsError: !resp.OK,
-	}
+	return agentcapabilities.NewToolResponseResult(resp)
 }

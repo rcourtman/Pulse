@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 )
 
 func TestEffectiveControlLevelForEntitlement(t *testing.T) {
@@ -45,6 +47,24 @@ func TestEffectiveControlLevelForEntitlement(t *testing.T) {
 				t.Fatalf("EffectiveControlLevelForEntitlement(%q, %v) = %q, want %q", tt.level, tt.autonomousAllowed, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestAIConfigControlLevelsUseSharedAgentCapabilityVocabulary(t *testing.T) {
+	if ControlLevelReadOnly != string(agentcapabilities.ControlLevelReadOnly) {
+		t.Fatalf("ControlLevelReadOnly = %q, want shared %q", ControlLevelReadOnly, agentcapabilities.ControlLevelReadOnly)
+	}
+	if ControlLevelControlled != string(agentcapabilities.ControlLevelControlled) {
+		t.Fatalf("ControlLevelControlled = %q, want shared %q", ControlLevelControlled, agentcapabilities.ControlLevelControlled)
+	}
+	if ControlLevelAutonomous != string(agentcapabilities.ControlLevelAutonomous) {
+		t.Fatalf("ControlLevelAutonomous = %q, want shared %q", ControlLevelAutonomous, agentcapabilities.ControlLevelAutonomous)
+	}
+	if !(&AIConfig{ControlLevel: ControlLevelControlled}).IsControlEnabled() {
+		t.Fatalf("controlled config should allow control tools through the shared predicate")
+	}
+	if (&AIConfig{ControlLevel: "bad"}).IsControlEnabled() {
+		t.Fatalf("unknown config control level should fail closed through the shared predicate")
 	}
 }
 
@@ -100,13 +120,13 @@ func TestAIConfig_IsConfigured(t *testing.T) {
 			expected: true,
 		},
 		{
-			name: "enabled with oauth",
+			name: "enabled with legacy oauth only",
 			config: AIConfig{
 				Enabled:          true,
 				AuthMethod:       AuthMethodOAuth,
 				OAuthAccessToken: "oauth-token",
 			},
-			expected: true,
+			expected: false,
 		},
 		{
 			name: "enabled but no credentials",
@@ -170,13 +190,13 @@ func TestAIConfig_HasProvider(t *testing.T) {
 			expected: true,
 		},
 		{
-			name: "anthropic with oauth",
+			name: "anthropic with legacy oauth only",
 			config: AIConfig{
 				AuthMethod:       AuthMethodOAuth,
 				OAuthAccessToken: "token",
 			},
 			provider: AIProviderAnthropic,
-			expected: true,
+			expected: false,
 		},
 		{
 			name:     "openai configured",
@@ -430,7 +450,7 @@ func TestAIConfig_OllamaKeepAliveDefaultsAndValidation(t *testing.T) {
 	}
 }
 
-func TestAIConfig_IsUsingOAuth(t *testing.T) {
+func TestAIConfig_IsUsingOAuthUnsupported(t *testing.T) {
 	tests := []struct {
 		name     string
 		config   AIConfig
@@ -449,12 +469,12 @@ func TestAIConfig_IsUsingOAuth(t *testing.T) {
 			expected: false,
 		},
 		{
-			name: "using oauth with token",
+			name: "legacy oauth with token",
 			config: AIConfig{
 				AuthMethod:       AuthMethodOAuth,
 				OAuthAccessToken: "token",
 			},
-			expected: true,
+			expected: false,
 		},
 	}
 

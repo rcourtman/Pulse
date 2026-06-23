@@ -80,7 +80,7 @@ test.describe("Pulse Account upgrade bootstrap", () => {
     ).toBeVisible();
 	    await expect(
 	      page.getByText(
-	        "Community keeps core monitoring free. Relay gets your Pulse web UI securely reachable from anywhere. Pro adds root-cause analysis, safe remediation workflows, and 90-day history.",
+	        "Community keeps core monitoring free. Relay gets your Pulse web UI securely reachable from anywhere. Pro adds Patrol control, alert investigation, verified fixes, and 90-day history.",
 	      ),
 	    ).toBeVisible();
     await expect(

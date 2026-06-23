@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -624,8 +625,18 @@ func (e *PulseToolExecutor) recordActionLifecycle(actionID string, state unified
 // RecordApprovalDecision updates the unified action audit for an approval that
 // reached a terminal or pre-execution decision state.
 func (e *PulseToolExecutor) RecordApprovalDecision(approvalID string, state unifiedresources.ActionState, actor, message string) {
+	var store unifiedresources.ResourceStore
+	if e != nil {
+		store = e.actionAuditStore
+	}
+	RecordApprovalDecision(store, approvalID, state, actor, message)
+}
+
+// RecordApprovalDecision updates the unified action audit for an approval that
+// reached a terminal or pre-execution decision state.
+func RecordApprovalDecision(store unifiedresources.ResourceStore, approvalID string, state unifiedresources.ActionState, actor, message string) {
 	req := approvalRequestForID(approvalID)
-	if e == nil || req == nil || req.Plan == nil {
+	if req == nil || req.Plan == nil {
 		return
 	}
 	if strings.TrimSpace(actor) == "" {
@@ -636,22 +647,29 @@ func (e *PulseToolExecutor) RecordApprovalDecision(approvalID string, state unif
 	}
 	record := actionAuditRecordFromApproval(req, state, actor)
 	record.Approvals = approvalRecordsForID(req.ID)
-	if e.recordApprovalDecisionAtomically(req.ID, record, actor) {
+	if recordApprovalDecisionAtomically(store, req.ID, record, actor) {
 		return
 	}
-	e.recordActionAudit(record)
-	e.recordActionLifecycle(req.Plan.ActionID, state, actor, message)
+	recordActionAudit(store, record)
+	recordActionLifecycle(store, req.Plan.ActionID, state, actor, message)
 }
 
 func (e *PulseToolExecutor) recordApprovalDecisionAtomically(approvalID string, record unifiedresources.ActionAuditRecord, actor string) bool {
-	if e == nil || e.actionAuditStore == nil {
+	if e == nil {
+		return false
+	}
+	return recordApprovalDecisionAtomically(e.actionAuditStore, approvalID, record, actor)
+}
+
+func recordApprovalDecisionAtomically(store unifiedresources.ResourceStore, approvalID string, record unifiedresources.ActionAuditRecord, actor string) bool {
+	if store == nil {
 		return false
 	}
 	if record.State != unifiedresources.ActionStateApproved && record.State != unifiedresources.ActionStateRejected {
 		return false
 	}
 
-	current, ok, err := e.actionAuditStore.GetActionAudit(record.ID)
+	current, ok, err := store.GetActionAudit(record.ID)
 	if err != nil {
 		log.Warn().Err(err).Str("action_id", record.ID).Msg("failed to query action audit before approval decision")
 		return false
@@ -681,11 +699,44 @@ func (e *PulseToolExecutor) recordApprovalDecisionAtomically(approvalID string, 
 		log.Warn().Err(err).Str("action_id", record.ID).Msg("failed to normalize approval decision")
 		return false
 	}
-	if err := e.actionAuditStore.RecordActionDecision(updated, event); err != nil {
+	if err := store.RecordActionDecision(updated, event); err != nil {
 		log.Warn().Err(err).Str("action_id", record.ID).Msg("failed to persist approval decision")
 		return false
 	}
 	return true
+}
+
+func recordActionAudit(store unifiedresources.ResourceStore, record unifiedresources.ActionAuditRecord) {
+	if store == nil {
+		return
+	}
+	if err := store.RecordActionAudit(record); err != nil {
+		log.Warn().
+			Err(err).
+			Str("action_id", record.ID).
+			Str("resource_id", record.Request.ResourceID).
+			Msg("failed to persist action audit")
+	}
+}
+
+func recordActionLifecycle(store unifiedresources.ResourceStore, actionID string, state unifiedresources.ActionState, actor, message string) {
+	if store == nil || strings.TrimSpace(actionID) == "" {
+		return
+	}
+	event := unifiedresources.ActionLifecycleEvent{
+		ActionID:  actionID,
+		Timestamp: time.Now().UTC(),
+		State:     state,
+		Actor:     actor,
+		Message:   message,
+	}
+	if err := store.RecordActionLifecycleEvent(event); err != nil {
+		log.Warn().
+			Err(err).
+			Str("action_id", actionID).
+			Str("state", string(state)).
+			Msg("failed to persist action lifecycle event")
+	}
 }
 
 func (e *PulseToolExecutor) recordPendingApprovalAction(req *approval.ApprovalRequest) {
@@ -880,13 +931,13 @@ func approvalDecisionActor(req *approval.ApprovalRequest, fallback string) strin
 func approvalCapabilityForTargetType(targetType string) string {
 	switch strings.ToLower(strings.TrimSpace(targetType)) {
 	case "docker":
-		return "pulse_docker"
+		return agentcapabilities.PulseDockerToolName
 	case "file":
-		return "pulse_file_edit"
+		return agentcapabilities.PulseFileEditToolName
 	case "kubernetes":
-		return "pulse_kubernetes"
+		return agentcapabilities.PulseKubernetesToolName
 	default:
-		return "pulse_control"
+		return agentcapabilities.PulseControlToolName
 	}
 }
 

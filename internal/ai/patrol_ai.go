@@ -21,7 +21,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/cost"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
@@ -213,7 +213,7 @@ func CleanThinkingTokens(content string) string {
 }
 
 // runAIAnalysis uses the agentic tool-driven approach to analyze infrastructure.
-// The LLM investigates using MCP tools and reports findings via patrol_report_finding.
+// The LLM investigates using Assistant tools and reports findings via patrol_report_finding.
 // An optional scope focuses the patrol on specific resources.
 func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRuntimeState, scope *PatrolScope, executionID string) (*AIAnalysisResult, error) {
 	if p.aiService == nil {
@@ -688,23 +688,6 @@ func computeTriageMaxTurns(flagCount int, scope *PatrolScope) int {
 	return turns
 }
 
-func formatToolResult(result tools.CallToolResult) string {
-	if len(result.Content) == 0 {
-		return ""
-	}
-
-	var text string
-	for _, c := range result.Content {
-		if c.Type == "text" && c.Text != "" {
-			if text != "" {
-				text += "\n"
-			}
-			text += c.Text
-		}
-	}
-	return text
-}
-
 // runEvaluationPass runs a focused second LLM call to evaluate unmatched signals
 // that the main patrol pass detected but did not report as findings.
 func (p *PatrolService) runEvaluationPass(ctx context.Context, adapter *patrolFindingCreatorAdapter, unmatchedSignals []DetectedSignal, executionID string) (*PatrolStreamResponse, error) {
@@ -832,13 +815,53 @@ func buildEvalUserPrompt(signals []DetectedSignal) string {
 	return sb.String()
 }
 
+func patrolAutonomyPrompt(level string) string {
+	switch level {
+	case config.PatrolAutonomyApproval:
+		return `
+
+## Patrol Control Mode: Ask First
+
+Patrol may investigate findings with read-only tools and propose a governed fix. Do not execute remediation commands in this mode. When a fix is appropriate, queue it for operator approval and record the evidence, risk, rollback posture, and verification steps so the operator can approve or reject it.
+
+If a tool or command requires approval, stop at the approval request. Do not treat the request as a failed fix.`
+	case config.PatrolAutonomyAssisted:
+		return `
+
+## Patrol Control Mode: Safe Auto-Fix
+
+Patrol may investigate findings and execute only low-risk, policy-approved fixes automatically. Queue approval for destructive, high-risk, critical, ambiguous, restricted, or never-auto-remediate actions. After any automatic fix, run verification and record the outcome.
+
+If policy requires approval, stop at the approval request. Do not work around approval by choosing a different command with the same effect.`
+	case config.PatrolAutonomyFull:
+		return `
+
+## Patrol Control Mode: Autopilot
+
+Patrol may investigate findings and execute policy-approved fixes automatically, including critical fixes, after checking risk and target confidence. Approval boundaries still win: destructive commands, restricted policy, ambiguous targets, full-mode lock, and never-auto-remediate resources must be queued or blocked rather than executed.
+
+After any automatic fix, run verification and record whether the issue was fixed, still failing, or inconclusive.`
+	default:
+		return `
+
+## Patrol Control Mode: Watch Only
+
+Patrol may inspect infrastructure with read-only evidence and record findings. Do not investigate through remediation flows, queue approvals, or execute any infrastructure-changing action. Report clear recommendations for the operator to handle manually.`
+	}
+}
+
 // getPatrolSystemPrompt returns the system prompt for AI patrol analysis.
 // The new agentic prompt instructs the LLM to use investigation tools and
 // report findings via the patrol_report_finding tool instead of text blocks.
 func (p *PatrolService) getPatrolSystemPrompt() string {
-	autoFix := false
-	if cfg := p.aiService.GetAIConfig(); cfg != nil {
-		autoFix = cfg.PatrolAutoFix
+	autonomyLevel := config.PatrolAutonomyMonitor
+	if p != nil && p.aiService != nil {
+		autonomyLevel = p.aiService.GetEffectivePatrolAutonomyLevel()
+		if cfg := p.aiService.GetConfig(); cfg != nil &&
+			autonomyLevel == config.PatrolAutonomyFull &&
+			!cfg.PatrolFullModeUnlocked {
+			autonomyLevel = config.PatrolAutonomyAssisted
+		}
 	}
 
 	basePrompt := `You are Pulse Patrol, an autonomous infrastructure analysis agent. Your job is to find issues that simple threshold-based alerts CANNOT catch — trends, capacity risks, misconfigurations, reliability gaps, and cross-resource correlations.
@@ -948,30 +971,7 @@ One sentence overall health verdict (e.g., "All 3 nodes and 18 guests are operat
 
 Keep the summary factual, terse, and scannable. Do NOT repeat your investigation process or thinking. Do NOT use phrases like "Let me check..." or "I'll start by..." — only state results. Maximum 15 lines.`
 
-	if autoFix {
-		return basePrompt + `
-
-## Auto-Fix Mode
-
-Auto-fix is enabled. Governed read and control tools are available for remediation when the model determines they are needed.
-
-Safe operations you can perform autonomously:
-- Restart services (systemctl restart)
-- Clear caches and temp files
-- Rotate/compress logs
-- Trigger garbage collection
-
-Always:
-1. Run a verification command after any fix to confirm success
-2. Report findings for issues you attempted to fix (include fix outcome in evidence)
-3. Stop and report if the fix doesn't resolve the issue`
-	}
-
-	return basePrompt + `
-
-## Observe Only Mode
-
-You are in observation mode. Read-only diagnostic evidence is available, but do not modify anything. Report findings with clear recommendations for the user to review and action manually.`
+	return basePrompt + patrolAutonomyPrompt(autonomyLevel)
 }
 
 const triageSystemPreamble = `You are Pulse Patrol, a model-owned infrastructure analysis agent.

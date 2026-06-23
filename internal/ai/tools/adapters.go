@@ -13,8 +13,8 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
-// AlertManagerMCPAdapter adapts alerts.Manager to MCP AlertProvider interface
-type AlertManagerMCPAdapter struct {
+// AlertManagerToolAdapter adapts alerts.Manager to AlertProvider interface
+type AlertManagerToolAdapter struct {
 	manager AlertManager
 }
 
@@ -24,16 +24,16 @@ type AlertManager interface {
 	GetRecentlyResolved() []models.ResolvedAlert
 }
 
-// NewAlertManagerMCPAdapter creates a new adapter for alert manager
-func NewAlertManagerMCPAdapter(manager AlertManager) *AlertManagerMCPAdapter {
+// NewAlertManagerToolAdapter creates a new adapter for alert manager
+func NewAlertManagerToolAdapter(manager AlertManager) *AlertManagerToolAdapter {
 	if manager == nil {
 		return nil
 	}
-	return &AlertManagerMCPAdapter{manager: manager}
+	return &AlertManagerToolAdapter{manager: manager}
 }
 
-// GetActiveAlerts implements mcp.AlertProvider
-func (a *AlertManagerMCPAdapter) GetActiveAlerts() []ActiveAlert {
+// GetActiveAlerts implements AlertProvider
+func (a *AlertManagerToolAdapter) GetActiveAlerts() []ActiveAlert {
 	if a.manager == nil {
 		return nil
 	}
@@ -58,8 +58,8 @@ func (a *AlertManagerMCPAdapter) GetActiveAlerts() []ActiveAlert {
 	return result
 }
 
-// GetRecentlyResolved implements mcp.AlertProvider
-func (a *AlertManagerMCPAdapter) GetRecentlyResolved(minutes int) []models.ResolvedAlert {
+// GetRecentlyResolved implements AlertProvider
+func (a *AlertManagerToolAdapter) GetRecentlyResolved(minutes int) []models.ResolvedAlert {
 	if a.manager == nil {
 		return nil
 	}
@@ -71,25 +71,25 @@ type GuestConfigSource interface {
 	GetGuestConfig(ctx context.Context, guestType, instance, node string, vmID int) (map[string]interface{}, error)
 }
 
-// GuestConfigMCPAdapter adapts monitoring config access to MCP GuestConfigProvider interface.
-type GuestConfigMCPAdapter struct {
+// GuestConfigToolAdapter adapts monitoring config access to GuestConfigProvider interface.
+type GuestConfigToolAdapter struct {
 	source  GuestConfigSource
 	timeout time.Duration
 }
 
-// NewGuestConfigMCPAdapter creates a new adapter for guest config data.
-func NewGuestConfigMCPAdapter(source GuestConfigSource) *GuestConfigMCPAdapter {
+// NewGuestConfigToolAdapter creates a new adapter for guest config data.
+func NewGuestConfigToolAdapter(source GuestConfigSource) *GuestConfigToolAdapter {
 	if source == nil {
 		return nil
 	}
-	return &GuestConfigMCPAdapter{
+	return &GuestConfigToolAdapter{
 		source:  source,
 		timeout: 5 * time.Second,
 	}
 }
 
-// GetGuestConfig implements mcp.GuestConfigProvider.
-func (a *GuestConfigMCPAdapter) GetGuestConfig(guestType, instance, node string, vmID int) (map[string]interface{}, error) {
+// GetGuestConfig implements GuestConfigProvider.
+func (a *GuestConfigToolAdapter) GetGuestConfig(guestType, instance, node string, vmID int) (map[string]interface{}, error) {
 	if a == nil || a.source == nil {
 		return nil, fmt.Errorf("guest config source not available")
 	}
@@ -98,105 +98,105 @@ func (a *GuestConfigMCPAdapter) GetGuestConfig(guestType, instance, node string,
 	return a.source.GetGuestConfig(ctx, guestType, instance, node, vmID)
 }
 
-// BackupMCPAdapter adapts backup data sources to MCP BackupProvider interface.
+// BackupToolAdapter adapts backup data sources to BackupProvider interface.
 // Uses functional getters so callers can wire ReadState or StateSnapshot sources.
-type BackupMCPAdapter struct {
+type BackupToolAdapter struct {
 	getBackups      func() models.Backups
 	getPBSInstances func() []models.PBSInstance
 }
 
-// NewBackupMCPAdapter creates a new adapter for backup data.
+// NewBackupToolAdapter creates a new adapter for backup data.
 // Both getters must be non-nil; returns nil if either is nil.
-func NewBackupMCPAdapter(getBackups func() models.Backups, getPBSInstances func() []models.PBSInstance) *BackupMCPAdapter {
+func NewBackupToolAdapter(getBackups func() models.Backups, getPBSInstances func() []models.PBSInstance) *BackupToolAdapter {
 	if getBackups == nil || getPBSInstances == nil {
 		return nil
 	}
-	return &BackupMCPAdapter{getBackups: getBackups, getPBSInstances: getPBSInstances}
+	return &BackupToolAdapter{getBackups: getBackups, getPBSInstances: getPBSInstances}
 }
 
-// GetBackups implements mcp.BackupProvider
-func (a *BackupMCPAdapter) GetBackups() models.Backups {
+// GetBackups implements BackupProvider
+func (a *BackupToolAdapter) GetBackups() models.Backups {
 	if a.getBackups == nil {
 		return models.Backups{}
 	}
 	return a.getBackups()
 }
 
-// GetPBSInstances implements mcp.BackupProvider
-func (a *BackupMCPAdapter) GetPBSInstances() []models.PBSInstance {
+// GetPBSInstances implements BackupProvider
+func (a *BackupToolAdapter) GetPBSInstances() []models.PBSInstance {
 	if a.getPBSInstances == nil {
 		return nil
 	}
 	return a.getPBSInstances()
 }
 
-// ReplicationMCPAdapter adapts replication data sources to MCP ReplicationProvider.
+// ReplicationToolAdapter adapts replication data sources to ReplicationProvider.
 // Uses a functional getter so callers can wire ReadState or StateSnapshot sources.
-type ReplicationMCPAdapter struct {
+type ReplicationToolAdapter struct {
 	getJobs func() []models.ReplicationJob
 }
 
-// NewReplicationMCPAdapter creates a new adapter for replication data.
-func NewReplicationMCPAdapter(getJobs func() []models.ReplicationJob) *ReplicationMCPAdapter {
+// NewReplicationToolAdapter creates a new adapter for replication data.
+func NewReplicationToolAdapter(getJobs func() []models.ReplicationJob) *ReplicationToolAdapter {
 	if getJobs == nil {
 		return nil
 	}
-	return &ReplicationMCPAdapter{getJobs: getJobs}
+	return &ReplicationToolAdapter{getJobs: getJobs}
 }
 
 // GetReplicationJobs implements ReplicationProvider.
-func (a *ReplicationMCPAdapter) GetReplicationJobs() []models.ReplicationJob {
+func (a *ReplicationToolAdapter) GetReplicationJobs() []models.ReplicationJob {
 	if a.getJobs == nil {
 		return nil
 	}
 	return a.getJobs()
 }
 
-// ConnectionHealthMCPAdapter adapts connection health data sources to MCP ConnectionHealthProvider.
+// ConnectionHealthToolAdapter adapts connection health data sources to ConnectionHealthProvider.
 // Uses a functional getter so callers can wire ReadState or StateSnapshot sources.
-type ConnectionHealthMCPAdapter struct {
+type ConnectionHealthToolAdapter struct {
 	getHealth func() map[string]bool
 }
 
-// NewConnectionHealthMCPAdapter creates a new adapter for connection health data.
-func NewConnectionHealthMCPAdapter(getHealth func() map[string]bool) *ConnectionHealthMCPAdapter {
+// NewConnectionHealthToolAdapter creates a new adapter for connection health data.
+func NewConnectionHealthToolAdapter(getHealth func() map[string]bool) *ConnectionHealthToolAdapter {
 	if getHealth == nil {
 		return nil
 	}
-	return &ConnectionHealthMCPAdapter{getHealth: getHealth}
+	return &ConnectionHealthToolAdapter{getHealth: getHealth}
 }
 
 // GetConnectionHealth implements ConnectionHealthProvider.
-func (a *ConnectionHealthMCPAdapter) GetConnectionHealth() map[string]bool {
+func (a *ConnectionHealthToolAdapter) GetConnectionHealth() map[string]bool {
 	if a.getHealth == nil {
 		return nil
 	}
 	return a.getHealth()
 }
 
-// RecoveryPointsMCPAdapter provides MCP tools access to persisted recovery points.
+// RecoveryPointsToolAdapter provides Assistant tools access to persisted recovery points.
 // It is org-scoped to avoid leaking cross-tenant data.
-type RecoveryPointsMCPAdapter struct {
+type RecoveryPointsToolAdapter struct {
 	manager *recoverymanager.Manager
 	orgID   string
 	timeout time.Duration
 }
 
-func NewRecoveryPointsMCPAdapter(manager *recoverymanager.Manager, orgID string) *RecoveryPointsMCPAdapter {
+func NewRecoveryPointsToolAdapter(manager *recoverymanager.Manager, orgID string) *RecoveryPointsToolAdapter {
 	if manager == nil {
 		return nil
 	}
 	if orgID == "" {
 		orgID = "default"
 	}
-	return &RecoveryPointsMCPAdapter{
+	return &RecoveryPointsToolAdapter{
 		manager: manager,
 		orgID:   orgID,
 		timeout: 5 * time.Second,
 	}
 }
 
-func (a *RecoveryPointsMCPAdapter) ListPoints(ctx context.Context, opts recovery.ListPointsOptions) ([]recovery.RecoveryPoint, int, error) {
+func (a *RecoveryPointsToolAdapter) ListPoints(ctx context.Context, opts recovery.ListPointsOptions) ([]recovery.RecoveryPoint, int, error) {
 	if a == nil || a.manager == nil {
 		return nil, 0, fmt.Errorf("recovery points provider not available")
 	}
@@ -210,21 +210,21 @@ func (a *RecoveryPointsMCPAdapter) ListPoints(ctx context.Context, opts recovery
 	return store.ListPoints(ctx, opts)
 }
 
-// DiskHealthMCPAdapter adapts unified read-state hosts to MCP DiskHealthProvider.
-type DiskHealthMCPAdapter struct {
+// DiskHealthToolAdapter adapts unified read-state hosts to DiskHealthProvider.
+type DiskHealthToolAdapter struct {
 	readState unifiedresources.ReadState
 }
 
-// NewDiskHealthMCPAdapter creates a new adapter for disk health data
-func NewDiskHealthMCPAdapter(readState unifiedresources.ReadState) *DiskHealthMCPAdapter {
+// NewDiskHealthToolAdapter creates a new adapter for disk health data
+func NewDiskHealthToolAdapter(readState unifiedresources.ReadState) *DiskHealthToolAdapter {
 	if readState == nil {
 		return nil
 	}
-	return &DiskHealthMCPAdapter{readState: readState}
+	return &DiskHealthToolAdapter{readState: readState}
 }
 
-// GetHosts implements mcp.DiskHealthProvider
-func (a *DiskHealthMCPAdapter) GetHosts() []*unifiedresources.HostView {
+// GetHosts implements DiskHealthProvider
+func (a *DiskHealthToolAdapter) GetHosts() []*unifiedresources.HostView {
 	if a.readState == nil {
 		return nil
 	}
@@ -244,26 +244,26 @@ type MetricsSource interface {
 	GetAllGuestMetrics(guestID string, duration time.Duration) map[string][]RawMetricPoint
 }
 
-// MetricsHistoryMCPAdapter adapts the metrics history to MCP MetricsHistoryProvider interface
-type MetricsHistoryMCPAdapter struct {
+// MetricsHistoryToolAdapter adapts the metrics history to MetricsHistoryProvider interface
+type MetricsHistoryToolAdapter struct {
 	readState     unifiedresources.ReadState
 	metricsSource MetricsSource
 }
 
-// NewMetricsHistoryMCPAdapter creates a new adapter for metrics history.
+// NewMetricsHistoryToolAdapter creates a new adapter for metrics history.
 // readState is required for iterating VMs/Containers/Nodes in GetAllMetricsSummary.
-func NewMetricsHistoryMCPAdapter(metricsSource MetricsSource, readState unifiedresources.ReadState) *MetricsHistoryMCPAdapter {
+func NewMetricsHistoryToolAdapter(metricsSource MetricsSource, readState unifiedresources.ReadState) *MetricsHistoryToolAdapter {
 	if metricsSource == nil || readState == nil {
 		return nil
 	}
-	return &MetricsHistoryMCPAdapter{
+	return &MetricsHistoryToolAdapter{
 		readState:     readState,
 		metricsSource: metricsSource,
 	}
 }
 
-// GetResourceMetrics implements mcp.MetricsHistoryProvider
-func (a *MetricsHistoryMCPAdapter) GetResourceMetrics(resourceID string, period time.Duration) ([]MetricPoint, error) {
+// GetResourceMetrics implements MetricsHistoryProvider
+func (a *MetricsHistoryToolAdapter) GetResourceMetrics(resourceID string, period time.Duration) ([]MetricPoint, error) {
 	if a.metricsSource == nil {
 		return nil, nil
 	}
@@ -290,9 +290,9 @@ func (a *MetricsHistoryMCPAdapter) GetResourceMetrics(resourceID string, period 
 	return mergeMetricsByTimestamp(allMetrics), nil
 }
 
-// GetAllMetricsSummary implements mcp.MetricsHistoryProvider.
+// GetAllMetricsSummary implements MetricsHistoryProvider.
 // Uses ReadState to iterate VMs, Containers, and Nodes.
-func (a *MetricsHistoryMCPAdapter) GetAllMetricsSummary(period time.Duration) (map[string]ResourceMetricsSummary, error) {
+func (a *MetricsHistoryToolAdapter) GetAllMetricsSummary(period time.Duration) (map[string]ResourceMetricsSummary, error) {
 	if a.metricsSource == nil || a.readState == nil {
 		return nil, nil
 	}
@@ -325,7 +325,7 @@ func (a *MetricsHistoryMCPAdapter) GetAllMetricsSummary(period time.Duration) (m
 	return result, nil
 }
 
-func (a *MetricsHistoryMCPAdapter) computeSummary(resourceID, resourceName, resourceType string, period time.Duration) *ResourceMetricsSummary {
+func (a *MetricsHistoryToolAdapter) computeSummary(resourceID, resourceName, resourceType string, period time.Duration) *ResourceMetricsSummary {
 	var cpuPoints, memPoints []RawMetricPoint
 
 	if resourceType == "node" {
@@ -452,21 +452,21 @@ type BaselineData struct {
 	SampleCount int
 }
 
-// BaselineMCPAdapter adapts baseline.Store to MCP BaselineProvider interface
-type BaselineMCPAdapter struct {
+// BaselineToolAdapter adapts baseline.Store to BaselineProvider interface
+type BaselineToolAdapter struct {
 	source BaselineSource
 }
 
-// NewBaselineMCPAdapter creates a new adapter for baseline data
-func NewBaselineMCPAdapter(source BaselineSource) *BaselineMCPAdapter {
+// NewBaselineToolAdapter creates a new adapter for baseline data
+func NewBaselineToolAdapter(source BaselineSource) *BaselineToolAdapter {
 	if source == nil {
 		return nil
 	}
-	return &BaselineMCPAdapter{source: source}
+	return &BaselineToolAdapter{source: source}
 }
 
-// GetBaseline implements mcp.BaselineProvider
-func (a *BaselineMCPAdapter) GetBaseline(resourceID, metric string) *MetricBaseline {
+// GetBaseline implements BaselineProvider
+func (a *BaselineToolAdapter) GetBaseline(resourceID, metric string) *MetricBaseline {
 	if a.source == nil {
 		return nil
 	}
@@ -484,8 +484,8 @@ func (a *BaselineMCPAdapter) GetBaseline(resourceID, metric string) *MetricBasel
 	}
 }
 
-// GetAllBaselines implements mcp.BaselineProvider
-func (a *BaselineMCPAdapter) GetAllBaselines() map[string]map[string]*MetricBaseline {
+// GetAllBaselines implements BaselineProvider
+func (a *BaselineToolAdapter) GetAllBaselines() map[string]map[string]*MetricBaseline {
 	if a.source == nil {
 		return nil
 	}
@@ -537,24 +537,24 @@ type PredictionData struct {
 	Recommendation string
 }
 
-// PatternMCPAdapter adapts patterns.Detector to MCP PatternProvider interface
-type PatternMCPAdapter struct {
+// PatternToolAdapter adapts patterns.Detector to PatternProvider interface
+type PatternToolAdapter struct {
 	source    PatternSource
 	readState unifiedresources.ReadState
 }
 
-// NewPatternMCPAdapter creates a new adapter for pattern data.
+// NewPatternToolAdapter creates a new adapter for pattern data.
 // readState is optional: when provided, resource name lookups resolve via
 // ReadState views; when nil, raw resource IDs are returned as names.
-func NewPatternMCPAdapter(source PatternSource, readState unifiedresources.ReadState) *PatternMCPAdapter {
+func NewPatternToolAdapter(source PatternSource, readState unifiedresources.ReadState) *PatternToolAdapter {
 	if source == nil {
 		return nil
 	}
-	return &PatternMCPAdapter{source: source, readState: readState}
+	return &PatternToolAdapter{source: source, readState: readState}
 }
 
-// GetPatterns implements mcp.PatternProvider
-func (a *PatternMCPAdapter) GetPatterns() []Pattern {
+// GetPatterns implements PatternProvider
+func (a *PatternToolAdapter) GetPatterns() []Pattern {
 	if a.source == nil {
 		return nil
 	}
@@ -579,8 +579,8 @@ func (a *PatternMCPAdapter) GetPatterns() []Pattern {
 	return result
 }
 
-// GetPredictions implements mcp.PatternProvider
-func (a *PatternMCPAdapter) GetPredictions() []Prediction {
+// GetPredictions implements PatternProvider
+func (a *PatternToolAdapter) GetPredictions() []Prediction {
 	if a.source == nil {
 		return nil
 	}
@@ -605,7 +605,7 @@ func (a *PatternMCPAdapter) GetPredictions() []Prediction {
 	return result
 }
 
-func (a *PatternMCPAdapter) getResourceName(resourceID string) string {
+func (a *PatternToolAdapter) getResourceName(resourceID string) string {
 	if a.readState == nil {
 		return resourceID
 	}
@@ -636,29 +636,29 @@ type FindingsManagerSource interface {
 	DismissFinding(findingID, reason, note string) error
 }
 
-// FindingsManagerMCPAdapter adapts PatrolService to MCP FindingsManager interface
-type FindingsManagerMCPAdapter struct {
+// FindingsManagerToolAdapter adapts PatrolService to the Assistant findings manager provider.
+type FindingsManagerToolAdapter struct {
 	source FindingsManagerSource
 }
 
-// NewFindingsManagerMCPAdapter creates a new adapter for findings management
-func NewFindingsManagerMCPAdapter(source FindingsManagerSource) *FindingsManagerMCPAdapter {
+// NewFindingsManagerToolAdapter creates a new adapter for findings management
+func NewFindingsManagerToolAdapter(source FindingsManagerSource) *FindingsManagerToolAdapter {
 	if source == nil {
 		return nil
 	}
-	return &FindingsManagerMCPAdapter{source: source}
+	return &FindingsManagerToolAdapter{source: source}
 }
 
-// ResolveFinding implements mcp.FindingsManager
-func (a *FindingsManagerMCPAdapter) ResolveFinding(findingID, note string) error {
+// ResolveFinding implements FindingsManager
+func (a *FindingsManagerToolAdapter) ResolveFinding(findingID, note string) error {
 	if a.source == nil {
 		return fmt.Errorf("findings manager not available")
 	}
 	return a.source.ResolveFinding(findingID, note)
 }
 
-// DismissFinding implements mcp.FindingsManager
-func (a *FindingsManagerMCPAdapter) DismissFinding(findingID, reason, note string) error {
+// DismissFinding implements FindingsManager
+func (a *FindingsManagerToolAdapter) DismissFinding(findingID, reason, note string) error {
 	if a.source == nil {
 		return fmt.Errorf("findings manager not available")
 	}
@@ -672,21 +672,21 @@ type MetadataUpdaterSource interface {
 	SetResourceURL(resourceType, resourceID, url string) error
 }
 
-// MetadataUpdaterMCPAdapter adapts ai.Service to MCP MetadataUpdater interface
-type MetadataUpdaterMCPAdapter struct {
+// MetadataUpdaterToolAdapter adapts ai.Service to the Assistant metadata updater provider.
+type MetadataUpdaterToolAdapter struct {
 	source MetadataUpdaterSource
 }
 
-// NewMetadataUpdaterMCPAdapter creates a new adapter for metadata updates
-func NewMetadataUpdaterMCPAdapter(source MetadataUpdaterSource) *MetadataUpdaterMCPAdapter {
+// NewMetadataUpdaterToolAdapter creates a new adapter for metadata updates
+func NewMetadataUpdaterToolAdapter(source MetadataUpdaterSource) *MetadataUpdaterToolAdapter {
 	if source == nil {
 		return nil
 	}
-	return &MetadataUpdaterMCPAdapter{source: source}
+	return &MetadataUpdaterToolAdapter{source: source}
 }
 
-// SetResourceURL implements mcp.MetadataUpdater
-func (a *MetadataUpdaterMCPAdapter) SetResourceURL(resourceType, resourceID, url string) error {
+// SetResourceURL implements MetadataUpdater
+func (a *MetadataUpdaterToolAdapter) SetResourceURL(resourceType, resourceID, url string) error {
 	if a.source == nil {
 		return fmt.Errorf("metadata updater not available")
 	}
@@ -707,26 +707,26 @@ type UpdatesConfig interface {
 	IsDockerUpdateActionsEnabled() bool
 }
 
-// UpdatesMCPAdapter adapts Monitor to MCP UpdatesProvider interface.
+// UpdatesToolAdapter adapts Monitor to UpdatesProvider interface.
 // Uses a functional getter for Docker host iteration (decoupled from GetState)
 // and a command runner for Docker update operations.
-type UpdatesMCPAdapter struct {
+type UpdatesToolAdapter struct {
 	readState unifiedresources.ReadState
 	commands  UpdatesCommandRunner
 	config    UpdatesConfig
 }
 
-// NewUpdatesMCPAdapter creates a new adapter for update operations.
+// NewUpdatesToolAdapter creates a new adapter for update operations.
 // readState provides Docker host/container views; commands provides update command execution.
-func NewUpdatesMCPAdapter(readState unifiedresources.ReadState, commands UpdatesCommandRunner, config UpdatesConfig) *UpdatesMCPAdapter {
+func NewUpdatesToolAdapter(readState unifiedresources.ReadState, commands UpdatesCommandRunner, config UpdatesConfig) *UpdatesToolAdapter {
 	if readState == nil || commands == nil {
 		return nil
 	}
-	return &UpdatesMCPAdapter{readState: readState, commands: commands, config: config}
+	return &UpdatesToolAdapter{readState: readState, commands: commands, config: config}
 }
 
-// GetPendingUpdates implements mcp.UpdatesProvider
-func (a *UpdatesMCPAdapter) GetPendingUpdates(hostID string) []ContainerUpdateInfo {
+// GetPendingUpdates implements UpdatesProvider
+func (a *UpdatesToolAdapter) GetPendingUpdates(hostID string) []ContainerUpdateInfo {
 	if a.readState == nil {
 		return nil
 	}
@@ -811,8 +811,8 @@ func (a *UpdatesMCPAdapter) GetPendingUpdates(hostID string) []ContainerUpdateIn
 	return updates
 }
 
-// TriggerUpdateCheck implements mcp.UpdatesProvider
-func (a *UpdatesMCPAdapter) TriggerUpdateCheck(hostID string) (DockerCommandStatus, error) {
+// TriggerUpdateCheck implements UpdatesProvider
+func (a *UpdatesToolAdapter) TriggerUpdateCheck(hostID string) (DockerCommandStatus, error) {
 	if a.commands == nil {
 		return DockerCommandStatus{}, fmt.Errorf("monitor not available")
 	}
@@ -830,8 +830,8 @@ func (a *UpdatesMCPAdapter) TriggerUpdateCheck(hostID string) (DockerCommandStat
 	}, nil
 }
 
-// UpdateContainer implements mcp.UpdatesProvider
-func (a *UpdatesMCPAdapter) UpdateContainer(hostID, containerID, containerName string) (DockerCommandStatus, error) {
+// UpdateContainer implements UpdatesProvider
+func (a *UpdatesToolAdapter) UpdateContainer(hostID, containerID, containerName string) (DockerCommandStatus, error) {
 	if a.commands == nil {
 		return DockerCommandStatus{}, fmt.Errorf("monitor not available")
 	}
@@ -849,8 +849,8 @@ func (a *UpdatesMCPAdapter) UpdateContainer(hostID, containerID, containerName s
 	}, nil
 }
 
-// IsUpdateActionsEnabled implements mcp.UpdatesProvider
-func (a *UpdatesMCPAdapter) IsUpdateActionsEnabled() bool {
+// IsUpdateActionsEnabled implements UpdatesProvider
+func (a *UpdatesToolAdapter) IsUpdateActionsEnabled() bool {
 	if a.config == nil {
 		return true // Default to enabled if no config
 	}
@@ -932,21 +932,21 @@ type DiscoverySourceFact struct {
 	Confidence float64 // 0-1 confidence for this fact
 }
 
-// DiscoveryMCPAdapter adapts servicediscovery.Service to MCP DiscoveryProvider interface
-type DiscoveryMCPAdapter struct {
+// DiscoveryToolAdapter adapts servicediscovery.Service to DiscoveryProvider interface
+type DiscoveryToolAdapter struct {
 	source DiscoverySource
 }
 
-// NewDiscoveryMCPAdapter creates a new adapter for discovery data
-func NewDiscoveryMCPAdapter(source DiscoverySource) *DiscoveryMCPAdapter {
+// NewDiscoveryToolAdapter creates a new adapter for discovery data
+func NewDiscoveryToolAdapter(source DiscoverySource) *DiscoveryToolAdapter {
 	if source == nil {
 		return nil
 	}
-	return &DiscoveryMCPAdapter{source: source}
+	return &DiscoveryToolAdapter{source: source}
 }
 
 // GetDiscovery implements tools.DiscoveryProvider
-func (a *DiscoveryMCPAdapter) GetDiscovery(id string) (*ResourceDiscoveryInfo, error) {
+func (a *DiscoveryToolAdapter) GetDiscovery(id string) (*ResourceDiscoveryInfo, error) {
 	if a.source == nil {
 		return nil, fmt.Errorf("discovery source not available")
 	}
@@ -960,7 +960,7 @@ func (a *DiscoveryMCPAdapter) GetDiscovery(id string) (*ResourceDiscoveryInfo, e
 }
 
 // GetDiscoveryByResource implements tools.DiscoveryProvider
-func (a *DiscoveryMCPAdapter) GetDiscoveryByResource(resourceType, targetID, resourceID string) (*ResourceDiscoveryInfo, error) {
+func (a *DiscoveryToolAdapter) GetDiscoveryByResource(resourceType, targetID, resourceID string) (*ResourceDiscoveryInfo, error) {
 	if a.source == nil {
 		return nil, fmt.Errorf("discovery source not available")
 	}
@@ -974,7 +974,7 @@ func (a *DiscoveryMCPAdapter) GetDiscoveryByResource(resourceType, targetID, res
 }
 
 // ListDiscoveries implements tools.DiscoveryProvider
-func (a *DiscoveryMCPAdapter) ListDiscoveries() ([]*ResourceDiscoveryInfo, error) {
+func (a *DiscoveryToolAdapter) ListDiscoveries() ([]*ResourceDiscoveryInfo, error) {
 	if a.source == nil {
 		return nil, fmt.Errorf("discovery source not available")
 	}
@@ -988,7 +988,7 @@ func (a *DiscoveryMCPAdapter) ListDiscoveries() ([]*ResourceDiscoveryInfo, error
 }
 
 // ListDiscoveriesByType implements tools.DiscoveryProvider
-func (a *DiscoveryMCPAdapter) ListDiscoveriesByType(resourceType string) ([]*ResourceDiscoveryInfo, error) {
+func (a *DiscoveryToolAdapter) ListDiscoveriesByType(resourceType string) ([]*ResourceDiscoveryInfo, error) {
 	if a.source == nil {
 		return nil, fmt.Errorf("discovery source not available")
 	}
@@ -1002,7 +1002,7 @@ func (a *DiscoveryMCPAdapter) ListDiscoveriesByType(resourceType string) ([]*Res
 }
 
 // ListDiscoveriesByTarget implements tools.DiscoveryProvider
-func (a *DiscoveryMCPAdapter) ListDiscoveriesByTarget(targetID string) ([]*ResourceDiscoveryInfo, error) {
+func (a *DiscoveryToolAdapter) ListDiscoveriesByTarget(targetID string) ([]*ResourceDiscoveryInfo, error) {
 	if a.source == nil {
 		return nil, fmt.Errorf("discovery source not available")
 	}
@@ -1016,7 +1016,7 @@ func (a *DiscoveryMCPAdapter) ListDiscoveriesByTarget(targetID string) ([]*Resou
 }
 
 // FormatForAIContext implements tools.DiscoveryProvider
-func (a *DiscoveryMCPAdapter) FormatForAIContext(discoveries []*ResourceDiscoveryInfo) string {
+func (a *DiscoveryToolAdapter) FormatForAIContext(discoveries []*ResourceDiscoveryInfo) string {
 	if a.source == nil {
 		return ""
 	}
@@ -1086,7 +1086,7 @@ func (a *DiscoveryMCPAdapter) FormatForAIContext(discoveries []*ResourceDiscover
 }
 
 // TriggerDiscovery implements tools.DiscoveryProvider
-func (a *DiscoveryMCPAdapter) TriggerDiscovery(ctx context.Context, resourceType, targetID, resourceID string, force bool) (*ResourceDiscoveryInfo, error) {
+func (a *DiscoveryToolAdapter) TriggerDiscovery(ctx context.Context, resourceType, targetID, resourceID string, force bool) (*ResourceDiscoveryInfo, error) {
 	if a.source == nil {
 		return nil, fmt.Errorf("discovery source not available")
 	}
@@ -1099,7 +1099,7 @@ func (a *DiscoveryMCPAdapter) TriggerDiscovery(ctx context.Context, resourceType
 	return a.convertToInfo(data), nil
 }
 
-func (a *DiscoveryMCPAdapter) convertToInfo(data DiscoverySourceData) *ResourceDiscoveryInfo {
+func (a *DiscoveryToolAdapter) convertToInfo(data DiscoverySourceData) *ResourceDiscoveryInfo {
 	if data.ID == "" {
 		return nil
 	}
@@ -1169,7 +1169,7 @@ func (a *DiscoveryMCPAdapter) convertToInfo(data DiscoverySourceData) *ResourceD
 	}
 }
 
-func (a *DiscoveryMCPAdapter) convertList(dataList []DiscoverySourceData) []*ResourceDiscoveryInfo {
+func (a *DiscoveryToolAdapter) convertList(dataList []DiscoverySourceData) []*ResourceDiscoveryInfo {
 	result := make([]*ResourceDiscoveryInfo, 0, len(dataList))
 	for _, data := range dataList {
 		if info := a.convertToInfo(data); info != nil {

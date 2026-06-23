@@ -13,11 +13,13 @@ RECOVERY_PRODUCT_SURFACE_EXACT_FILES = [
 
 PATROL_PAGE_AND_STATE_EXACT_FILES = [
     "frontend-modern/src/components/Brand/__tests__/PulsePatrolLogo.test.tsx",
+    "frontend-modern/src/features/patrol/__tests__/PatrolIntelligenceHeader.test.ts",
     "frontend-modern/src/features/patrol/__tests__/patrolInvestigationContextModel.test.ts",
     "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
     "frontend-modern/src/stores/__tests__/aiIntelligence.test.ts",
     "frontend-modern/src/stores/__tests__/aiIntelligenceSummaryModel.test.ts",
     "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+    "frontend-modern/src/utils/__tests__/patrolPagePresentation.test.ts",
     "tests/integration/tests/18-patrol-runtime-state.spec.ts",
     "tests/integration/tests/73-patrol-assistant-operator-briefing.spec.ts",
 ]
@@ -813,6 +815,32 @@ class SubsystemLookupTest(unittest.TestCase):
             self.assertEqual(match["lane_context"]["lane_id"], lane_id)
             self.assertEqual(match["verification_requirement"]["id"], requirement_id)
 
+    def test_lookup_paths_reports_assistant_chat_frontend_client_as_shared_boundary(self) -> None:
+        result = lookup_paths(["frontend-modern/src/api/aiChat.ts"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"ai-runtime", "api-contracts"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"ai-runtime", "api-contracts"},
+        )
+        self.assertEqual(
+            file_entry["shared_ownership"]["subsystems"],
+            ["ai-runtime", "api-contracts"],
+        )
+        expected = {
+            "ai-runtime": ("L6", "ai-api-surface"),
+            "api-contracts": ("L6", "frontend-api-clients"),
+        }
+        for match in file_entry["matches"]:
+            lane_id, requirement_id = expected[match["subsystem"]]
+            self.assertEqual(match["lane_context"]["lane_id"], lane_id)
+            self.assertEqual(match["verification_requirement"]["id"], requirement_id)
+
     def test_lookup_paths_reports_agent_profiles_client_as_shared_boundary(self) -> None:
         result = lookup_paths(["frontend-modern/src/api/agentProfiles.ts"])
         self.assertEqual(result["unowned_runtime_files"], [])
@@ -1184,6 +1212,33 @@ class SubsystemLookupTest(unittest.TestCase):
             lane_id, requirement_id = expected[match["subsystem"]]
             self.assertEqual(match["lane_context"]["lane_id"], lane_id)
             self.assertEqual(match["verification_requirement"]["id"], requirement_id)
+
+    def test_lookup_paths_reports_pulse_mcp_adapter_as_shared_boundary(self) -> None:
+        result = lookup_paths(["cmd/pulse-mcp", "cmd/pulse-mcp/session_policy.go"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"ai-runtime", "api-contracts"},
+        )
+
+        directory_entry = result["files"][0]
+        self.assertEqual(directory_entry["classification"], "runtime")
+        self.assertIsNone(directory_entry["shared_ownership"])
+
+        expected = {
+            "ai-runtime": ("L6", "pulse-mcp-adapter"),
+            "api-contracts": ("L6", "pulse-mcp-manifest-adapter"),
+        }
+        for file_entry in result["files"]:
+            self.assertEqual(file_entry["classification"], "runtime")
+            self.assertEqual(
+                {match["subsystem"] for match in file_entry["matches"]},
+                {"ai-runtime", "api-contracts"},
+            )
+            for match in file_entry["matches"]:
+                lane_id, requirement_id = expected[match["subsystem"]]
+                self.assertEqual(match["lane_context"]["lane_id"], lane_id)
+                self.assertEqual(match["verification_requirement"]["id"], requirement_id)
 
     def test_lookup_paths_reports_config_setup_backend_as_shared_boundary(self) -> None:
         result = lookup_paths(["internal/api/config_setup_handlers.go"])
@@ -2857,14 +2912,14 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(
             api_match["matched_contract_references"],
             [
-					{
-						"heading": "## Shared Boundaries",
-						"path": "internal/api/access_control_handlers.go",
-						"line": 476,
-						"heading_line": 123,
-					}
-				],
-			)
+                {
+                    "heading": "## Shared Boundaries",
+                    "path": "internal/api/access_control_handlers.go",
+                    "line": 1047,
+                    "heading_line": 136,
+                }
+            ],
+        )
 
         organization_match = by_subsystem["organization-settings"]
         self.assertEqual(
@@ -2935,6 +2990,36 @@ class SubsystemLookupTest(unittest.TestCase):
 
     def test_lookup_paths_assigns_patrol_surface_to_patrol_intelligence(self) -> None:
         result = lookup_paths(["frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"patrol-intelligence"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"patrol-intelligence"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(
+            match["contract"],
+            "docs/release-control/v6/internal/subsystems/patrol-intelligence.md",
+        )
+        self.assertEqual(match["lane_context"]["lane_id"], "L6")
+        self.assertEqual(
+            match["verification_requirement"]["id"],
+            "patrol-page-and-state",
+        )
+        self.assertEqual(
+            match["verification_requirement"]["exact_files"],
+            PATROL_PAGE_AND_STATE_EXACT_FILES,
+        )
+
+    def test_lookup_paths_assigns_patrol_control_presentation_to_patrol_intelligence(
+        self,
+    ) -> None:
+        result = lookup_paths(["frontend-modern/src/features/patrol/patrolControlPresentation.ts"])
         self.assertEqual(result["unowned_runtime_files"], [])
         self.assertEqual(
             {item["subsystem"] for item in result["impacted_subsystems"]},
@@ -3310,6 +3395,34 @@ class SubsystemLookupTest(unittest.TestCase):
                 "scripts/installtests/root_install_sh_test.go",
             ],
         )
+
+    def test_lookup_paths_assigns_mcp_installers_to_deployment_installability(self) -> None:
+        result = lookup_paths(["scripts/install-mcp.sh", "scripts/install-mcp.ps1"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"deployment-installability"},
+        )
+        for file_entry in result["files"]:
+            self.assertEqual(file_entry["classification"], "runtime")
+            self.assertEqual(
+                {match["subsystem"] for match in file_entry["matches"]},
+                {"deployment-installability"},
+            )
+            match = file_entry["matches"][0]
+            self.assertEqual(
+                match["contract"],
+                "docs/release-control/v6/internal/subsystems/deployment-installability.md",
+            )
+            self.assertEqual(match["lane_context"]["lane_id"], "L1")
+            self.assertEqual(
+                match["verification_requirement"]["id"],
+                "pulse-mcp-installer-release-runtime",
+            )
+            self.assertEqual(
+                match["verification_requirement"]["exact_files"],
+                ["scripts/installtests/build_release_assets_test.go"],
+            )
 
     def test_lookup_paths_assigns_container_installer_to_deployment_installability(self) -> None:
         result = lookup_paths(["scripts/install-container-agent.sh"])
@@ -4119,7 +4232,7 @@ class SubsystemLookupTest(unittest.TestCase):
             ),
             _contract_reference(
                 "docs/release-control/v6/internal/subsystems/ai-runtime.md",
-                "4. `internal/api/ai_handler.go` shared with `api-contracts`",
+                "35. `internal/api/ai_handler.go` shared with `api-contracts`",
                 "internal/api/ai_handler.go",
             ),
             _contract_reference(
@@ -4131,17 +4244,17 @@ class SubsystemLookupTest(unittest.TestCase):
         api_contracts_expected = [
             _contract_reference(
                 "docs/release-control/v6/internal/subsystems/api-contracts.md",
-                "33. `internal/api/ai_handler.go` shared with `ai-runtime`",
+                "63. `internal/api/ai_handler.go` shared with `ai-runtime`",
                 "internal/api/ai_handler.go",
             ),
             _contract_reference(
                 "docs/release-control/v6/internal/subsystems/api-contracts.md",
-                "22. Keep hosted AI settings bootstrap on the shared API contract",
+                "23. Keep hosted AI settings bootstrap on the shared API contract",
                 "internal/api/ai_handler.go",
             ),
             _contract_reference(
                 "docs/release-control/v6/internal/subsystems/api-contracts.md",
-                "23. Keep post-boot AI enablement contract-backed on the shared AI/mobile approval surface",
+                "24. Keep post-boot AI enablement contract-backed on the shared AI/mobile approval surface",
                 "internal/api/ai_handler.go",
             ),
         ]
@@ -4175,17 +4288,17 @@ class SubsystemLookupTest(unittest.TestCase):
             [
                 _contract_reference(
                     "docs/release-control/v6/internal/subsystems/api-contracts.md",
-                    "33. `internal/api/ai_handler.go` shared with `ai-runtime`",
+                    "63. `internal/api/ai_handler.go` shared with `ai-runtime`",
                     "internal/api/ai_handler.go",
                 )["line"],
                 _contract_reference(
                     "docs/release-control/v6/internal/subsystems/api-contracts.md",
-                    "22. Keep hosted AI settings bootstrap on the shared API contract",
+                    "23. Keep hosted AI settings bootstrap on the shared API contract",
                     "internal/api/ai_handler.go",
                 )["line"],
                 _contract_reference(
                     "docs/release-control/v6/internal/subsystems/api-contracts.md",
-                    "23. Keep post-boot AI enablement contract-backed on the shared AI/mobile approval surface",
+                    "24. Keep post-boot AI enablement contract-backed on the shared AI/mobile approval surface",
                     "internal/api/ai_handler.go",
                 )["line"],
             ],
@@ -4195,8 +4308,8 @@ class SubsystemLookupTest(unittest.TestCase):
         rendered = render_pretty(lookup_paths(["internal/api/ai_handler.go"], lean=True))
         self.assertIn(
             "contract focus: "
-            f"{_contract_reference('docs/release-control/v6/internal/subsystems/api-contracts.md', '33. `internal/api/ai_handler.go` shared with `ai-runtime`', 'internal/api/ai_handler.go')['heading']} "
-            f"@L{_contract_reference('docs/release-control/v6/internal/subsystems/api-contracts.md', '33. `internal/api/ai_handler.go` shared with `ai-runtime`', 'internal/api/ai_handler.go')['line']}: "
+            f"{_contract_reference('docs/release-control/v6/internal/subsystems/api-contracts.md', '63. `internal/api/ai_handler.go` shared with `ai-runtime`', 'internal/api/ai_handler.go')['heading']} "
+            f"@L{_contract_reference('docs/release-control/v6/internal/subsystems/api-contracts.md', '63. `internal/api/ai_handler.go` shared with `ai-runtime`', 'internal/api/ai_handler.go')['line']}: "
             "internal/api/ai_handler.go",
             rendered,
         )

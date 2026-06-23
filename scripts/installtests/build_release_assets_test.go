@@ -962,6 +962,7 @@ func TestBuildReleasePackagesPulseMcpForAllPlatforms(t *testing.T) {
 		// publish them as the canonical curl-pipe-bash entry
 		// point.
 		`cp scripts/install-mcp.sh "$RELEASE_DIR/install-mcp.sh"`,
+		`[ -f scripts/install-mcp.ps1 ] && cp scripts/install-mcp.ps1 "$RELEASE_DIR/install-mcp.ps1"`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(script, needle) {
@@ -998,6 +999,22 @@ func TestBuildReleasePackagesPulseMcpForAllPlatforms(t *testing.T) {
 	} {
 		if !strings.Contains(string(mcpScript), needle) {
 			t.Fatalf("install-mcp.sh missing required helper or guard: %s", needle)
+		}
+	}
+
+	mcpPowerShell, err := os.ReadFile(repoFile("scripts", "install-mcp.ps1"))
+	if err != nil {
+		t.Fatalf("read install-mcp.ps1: %v", err)
+	}
+	for _, needle := range []string{
+		`function Resolve-Architecture`,
+		`PULSE_MCP_NO_VERIFY`,
+		`checksums.txt`,
+		`Get-FileHash -Path $tmp -Algorithm SHA256`,
+		`sha256 mismatch`,
+	} {
+		if !strings.Contains(string(mcpPowerShell), needle) {
+			t.Fatalf("install-mcp.ps1 missing required helper or guard: %s", needle)
 		}
 	}
 }

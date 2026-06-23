@@ -141,11 +141,11 @@ func patrolRunRuntimeFailureSummary(run PatrolRunRecord) string {
 func patrolRunKindLabel(runType string) string {
 	switch strings.ToLower(strings.TrimSpace(runType)) {
 	case "scoped":
-		return "Scoped run"
+		return "Targeted check"
 	case "verification":
-		return "Verification check"
+		return "Follow-up check"
 	case "", "patrol", "full", "scheduled":
-		return "Full patrol"
+		return "Patrol check"
 	default:
 		return "Patrol run"
 	}

@@ -267,45 +267,60 @@ func convertToolChoiceToGemini(tc *ToolChoice) string {
 	return ""
 }
 
-// Chat sends a chat request to the Gemini API
-func (c *GeminiClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse, error) {
-	// Convert messages to Gemini format
-	contents := make([]geminiContent, 0, len(req.Messages))
-	for _, m := range req.Messages {
-		// Skip system messages - they go in systemInstruction
+// convertMessagesToGemini converts provider-neutral messages into Gemini's
+// content shape used by both non-streaming and streaming requests. Gemini
+// requires function responses to reference function names rather than provider
+// call ids, and consecutive tool results are grouped into one user content
+// block after the model function calls.
+func convertMessagesToGemini(reqMessages []Message) []geminiContent {
+	contents := make([]geminiContent, 0, len(reqMessages))
+
+	for i := 0; i < len(reqMessages); i++ {
+		m := reqMessages[i]
 		if m.Role == "system" {
 			continue
 		}
 
-		// Convert role names (Gemini uses "user" and "model")
 		role := m.Role
 		if role == "assistant" {
 			role = "model"
 		}
 
-		// Handle tool results
 		if m.ToolResult != nil {
+			var assistantMsg *Message
+			if i > 0 && reqMessages[i-1].Role == "assistant" {
+				assistantMsg = &reqMessages[i-1]
+			}
+			resolveName := func(id string) string {
+				if assistantMsg != nil {
+					for _, call := range assistantMsg.ToolCalls {
+						if call.ID == id {
+							return call.Name
+						}
+					}
+				}
+				return id
+			}
+
+			parts := []geminiPart{geminiFunctionResponsePart(resolveName(m.ToolResult.ToolUseID), m.ToolResult.Content)}
+			for i+1 < len(reqMessages) {
+				next := reqMessages[i+1]
+				if next.ToolResult == nil {
+					break
+				}
+				parts = append(parts, geminiFunctionResponsePart(resolveName(next.ToolResult.ToolUseID), next.ToolResult.Content))
+				i++
+			}
+
 			contents = append(contents, geminiContent{
-				Role: "user",
-				Parts: []geminiPart{
-					{
-						FunctionResponse: &geminiFunctionResponse{
-							Name: m.ToolResult.ToolUseID, // In Gemini, this is the function name
-							Response: struct {
-								Content string `json:"content"`
-							}{
-								Content: m.ToolResult.Content,
-							},
-						},
-					},
-				},
+				Role:  "user",
+				Parts: parts,
 			})
 			continue
 		}
 
-		// Handle assistant messages with tool calls
 		if m.Role == "assistant" && len(m.ToolCalls) > 0 {
-			parts := make([]geminiPart, 0)
+			parts := make([]geminiPart, 0, len(m.ToolCalls)+1)
 			if m.Content != "" {
 				parts = append(parts, geminiPart{Text: m.Content})
 			}
@@ -325,12 +340,10 @@ func (c *GeminiClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 			continue
 		}
 
-		// Skip messages with empty content - Gemini requires at least one of text, functionCall, or functionResponse
 		if m.Content == "" {
 			continue
 		}
 
-		// Simple text message
 		contents = append(contents, geminiContent{
 			Role: role,
 			Parts: []geminiPart{
@@ -339,8 +352,19 @@ func (c *GeminiClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 		})
 	}
 
-	// Sanitize message ordering for Gemini's constraints
-	contents = sanitizeGeminiContents(contents)
+	return sanitizeGeminiContents(contents)
+}
+
+func geminiFunctionResponsePart(name, content string) geminiPart {
+	response := geminiFunctionResponse{Name: name}
+	response.Response.Content = content
+	return geminiPart{FunctionResponse: &response}
+}
+
+// Chat sends a chat request to the Gemini API
+func (c *GeminiClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse, error) {
+	// Convert messages to Gemini format
+	contents := convertMessagesToGemini(req.Messages)
 
 	// Use provided model or fall back to client default
 	model := req.Model
@@ -623,126 +647,7 @@ type geminiStreamEvent struct {
 // ChatStream sends a chat request and streams the response via callback
 func (c *GeminiClient) ChatStream(ctx context.Context, req ChatRequest, callback StreamCallback) error {
 	// Convert messages to Gemini format (same as Chat)
-	contents := make([]geminiContent, 0, len(req.Messages))
-
-	for i := 0; i < len(req.Messages); i++ {
-		m := req.Messages[i]
-		if m.Role == "system" {
-			continue
-		}
-
-		// Convert role names (Gemini uses "user" and "model")
-		role := m.Role
-		if role == "assistant" {
-			role = "model"
-		}
-
-		// Handle tool results - merge consecutive tool results into one content block
-		if m.ToolResult != nil {
-			// Find the preceding assistant message to resolve function names
-			// Gemini requires the 'name' in FunctionResponse to match the function name, not the ID
-			var assistantMsg *Message
-			if i > 0 && req.Messages[i-1].Role == "assistant" {
-				assistantMsg = &req.Messages[i-1]
-			}
-
-			// Helper to resolve name
-			resolveName := func(id string) string {
-				if assistantMsg != nil {
-					for _, call := range assistantMsg.ToolCalls {
-						if call.ID == id {
-							return call.Name
-						}
-					}
-				}
-				return id
-			}
-
-			toolName := resolveName(m.ToolResult.ToolUseID)
-
-			parts := []geminiPart{
-				{
-					FunctionResponse: &geminiFunctionResponse{
-						Name: toolName,
-						Response: struct {
-							Content string `json:"content"`
-						}{
-							Content: m.ToolResult.Content,
-						},
-					},
-				},
-			}
-
-			// Look ahead for more tool results
-			for i+1 < len(req.Messages) {
-				next := req.Messages[i+1]
-				if next.ToolResult == nil {
-					break
-				}
-
-				nextToolName := resolveName(next.ToolResult.ToolUseID)
-
-				// Add next tool result to parts
-				parts = append(parts, geminiPart{
-					FunctionResponse: &geminiFunctionResponse{
-						Name: nextToolName,
-						Response: struct {
-							Content string `json:"content"`
-						}{
-							Content: next.ToolResult.Content,
-						},
-					},
-				})
-
-				// Advance index
-				i++
-			}
-
-			contents = append(contents, geminiContent{
-				Role:  "user",
-				Parts: parts,
-			})
-			continue
-		}
-
-		// Handle assistant messages with tool calls
-		if m.Role == "assistant" && len(m.ToolCalls) > 0 {
-			parts := make([]geminiPart, 0)
-			if m.Content != "" {
-				parts = append(parts, geminiPart{Text: m.Content})
-			}
-			for _, tc := range m.ToolCalls {
-				parts = append(parts, geminiPart{
-					FunctionCall: &geminiFunctionCall{
-						Name: tc.Name,
-						Args: tc.Input,
-					},
-					ThoughtSignature: tc.ThoughtSignature,
-				})
-			}
-			contents = append(contents, geminiContent{
-				Role:  "model",
-				Parts: parts,
-			})
-			continue
-		}
-
-		// Skip messages with empty content - Gemini requires at least one of text, functionCall, or functionResponse
-		if m.Content == "" {
-			continue
-		}
-
-		// Simple text message
-		contents = append(contents, geminiContent{
-			Role: role,
-			Parts: []geminiPart{
-				{Text: m.Content},
-			},
-		})
-	}
-
-	// Sanitize message ordering for Gemini's constraints
-	contents = sanitizeGeminiContents(contents)
+	contents := convertMessagesToGemini(req.Messages)
 
 	model := req.Model
 	if strings.HasPrefix(model, "gemini:") {

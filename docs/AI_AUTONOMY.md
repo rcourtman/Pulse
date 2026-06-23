@@ -1,8 +1,8 @@
-# AI Autonomy and Safety Configuration
+# Pulse Intelligence Modes and Safety Configuration
 
-This guide covers how to configure and manage Pulse's AI autonomy levels, control levels, and safety guardrails.
+This guide covers how to configure Patrol mode, Pulse Assistant command access, and the safety guardrails that apply before Pulse can change infrastructure.
 
-For a general overview of Pulse AI, see [AI.md](AI.md). For plan-level feature availability, see [PULSE_PRO.md](PULSE_PRO.md).
+For a general overview of Pulse Intelligence, see [AI.md](AI.md). For plan-level feature availability, see [PULSE_PRO.md](PULSE_PRO.md).
 
 ---
 
@@ -10,39 +10,40 @@ For a general overview of Pulse AI, see [AI.md](AI.md). For plan-level feature a
 
 Pulse separates AI permissions into two independent axes:
 
-1. **Patrol Autonomy Level** — How much Patrol can do on its own (detect, investigate, fix).
-2. **Assistant Control Level** — Whether the interactive chat assistant can execute commands.
+1. **Patrol Mode** — What Patrol may handle automatically after it finds an issue: watch only, ask before changes, handle safe fixes, or use policy autopilot.
+2. **Assistant Command Access** — Whether the interactive chat assistant can execute commands during a chat session.
 
-These are configured independently in **Settings → System → AI Assistant**.
+Patrol mode is configured on the **Patrol** page. Assistant command access is configured in **Settings → Pulse Intelligence → Assistant**.
 
 ---
 
-## Patrol Autonomy Levels
+## Patrol Modes
 
-Patrol autonomy controls how aggressively Patrol responds to findings.
+Patrol mode sets how far Pulse can go when Patrol finds something that needs attention.
 
-| Level | Key | Detect | Investigate | Fix (Warning) | Fix (Critical) | Plan |
-|-------|-----|:------:|:-----------:|:-------------:|:--------------:|------|
-| **Monitor** | `monitor` | Yes | No | No | No | Community |
-| **Approval** | `approval` | Yes | Yes | Approval required | Approval required | Pro / legacy Pro+ / Cloud |
-| **Assisted** | `assisted` | Yes | Yes | Execute automatically | Approval required | Pro / legacy Pro+ / Cloud |
-| **Full** | `full` | Yes | Yes | Execute automatically | Execute automatically | Pro / legacy Pro+ / Cloud |
+| Mode | Key | Detect | Investigate | Fix warning-level issues | Fix critical issues | Plan |
+|-------|-----|:------:|:-----------:|:------------------------:|:-------------------:|------|
+| **Watch only** | `monitor` | Yes | No | No | No | Community |
+| **Ask before changes** | `approval` | Yes | Yes | Approval required | Approval required | Pro / legacy Pro+ / Cloud |
+| **Auto-fix safe issues** | `assisted` | Yes | Yes | Execute automatically | Approval required | Pro / legacy Pro+ / Cloud |
+| **Policy autopilot** | `full` | Yes | Yes | Execute automatically | Execute automatically | Pro / legacy Pro+ / Cloud |
 
-- **Monitor** (default): Patrol creates findings but takes no action. This is the Community and Relay baseline. Suitable for learning what Patrol detects before enabling investigation or remediation.
-- **Approval** (Pro and above): Patrol investigates findings and proposes fixes. All fixes queue for manual approval before execution.
-- **Assisted** (Pro and above): Warning-level safe remediation plans can execute automatically. Critical findings still require approval. This is the recommended starting point for most Pro and legacy Pro+ users who enable fix execution.
-- **Full** (Pro and above): Safe remediation plans can execute without approval. Requires an explicit toggle and a Pro, legacy Pro+, or Cloud license. Recommended only for environments with thorough alert coverage.
+- **Watch only** (default): Patrol creates findings but takes no action. This is the Community and Relay baseline. Suitable for learning what Patrol detects before enabling investigation or fix execution.
+- **Ask before changes** (Pro and above): Patrol investigates findings and proposes fixes. All fixes queue for manual approval before execution.
+- **Auto-fix safe issues** (Pro and above): Warning-level safe fix plans can execute automatically. Critical findings still require approval. This is the recommended starting point for most Pro and legacy Pro+ users who enable fix execution.
+- **Policy autopilot** (Pro and above): Safe fix plans can execute without approval. Requires an explicit toggle and a Pro, legacy Pro+, or Cloud license. Recommended only for environments with thorough alert coverage.
 
 ### Configuration
 
-**UI:** Settings → System → AI Assistant → Patrol Autonomy Level
+**UI:** Patrol → Patrol mode
 
 **API:**
 ```bash
-# Get current patrol autonomy settings
+# Get current Patrol mode settings
 curl -s -u admin:admin http://localhost:7655/api/ai/patrol/autonomy
 
-# Update autonomy level
+# Update Patrol mode.
+# The API keeps the autonomy_level field name for compatibility.
 curl -X PUT http://localhost:7655/api/ai/patrol/autonomy \
   -u admin:admin \
   -H "Content-Type: application/json" \
@@ -54,7 +55,7 @@ curl -X PUT http://localhost:7655/api/ai/patrol/autonomy \
 - `monitor`: Available on all plans. Community and Relay can run Patrol with BYOK.
 - `approval`, `assisted`, and `full`: Require the `ai_autofix` capability (Pro, legacy Pro+, or Cloud license).
 
-Without the `ai_autofix` capability, the effective autonomy level is clamped to `monitor` at runtime, regardless of the saved configuration. If you previously had a Pro license and downgraded, your saved setting is preserved but enforcement reverts to `monitor`.
+Without the `ai_autofix` capability, the effective Patrol mode is clamped to `monitor` at runtime, regardless of the saved configuration. If you previously had a Pro license and downgraded, your saved setting is preserved but enforcement reverts to `monitor`.
 
 ---
 
@@ -74,7 +75,7 @@ Control levels govern what the interactive Pulse Assistant can do during chat se
 
 ### Configuration
 
-**UI:** Settings → System → AI Assistant → Control Level
+**UI:** Settings → Pulse Intelligence → Assistant → Chat command mode
 
 **API:**
 ```bash
@@ -100,7 +101,7 @@ Approvals expire after 5 minutes if not acted upon.
 
 ## Investigation Configuration
 
-When autonomy is `approval`, `assisted`, or `full`, Patrol investigates findings. These parameters tune investigation behavior:
+When Patrol mode is `approval`, `assisted`, or `full`, Patrol investigates findings. These parameters tune investigation behavior:
 
 | Setting | Default | Range | Description |
 |---------|---------|-------|-------------|
@@ -115,7 +116,7 @@ When autonomy is `approval`, `assisted`, or `full`, Patrol investigates findings
 
 ## Safety Guardrails
 
-Regardless of autonomy level, Pulse enforces multiple safety layers:
+Regardless of Patrol mode, Pulse enforces multiple safety layers:
 
 ### Blocked Commands
 
@@ -144,12 +145,12 @@ After executing any control action, the assistant must verify the result with a 
 
 ## Recommended Progression
 
-For new deployments, we recommend gradually increasing autonomy:
+For new deployments, gradually increase Patrol mode:
 
-1. **Start with Monitor** — Run Patrol for a few cycles to see what it detects. Dismiss false positives.
-2. **Move to Approval where available** — Enable investigation. Review proposed fixes to build confidence.
-3. **Use Assisted when fix execution is enabled** — Let Patrol execute warning-level remediation while you approve critical fixes.
-4. **Consider Full** — Only if your environment has comprehensive alerting and you trust the fix patterns.
+1. **Start with Watch only** — Run Patrol for a few cycles to see what it detects. Dismiss false positives.
+2. **Move to Ask before changes where available** — Enable investigation. Review proposed fixes to build confidence.
+3. **Use Auto-fix safe issues when fix execution is enabled** — Let Patrol execute warning-level fixes while you approve critical fixes.
+4. **Consider Policy autopilot** — Only if your environment has comprehensive alerting and you trust the fix patterns.
 
 ---
 
@@ -165,7 +166,7 @@ Prometheus counters (prefix `pulse_patrol_*`) track:
 ### Cost Tracking
 
 Token usage and estimated costs are tracked per provider:
-- **UI:** Settings → System → AI Assistant → Usage
+- **UI:** Settings → Pulse Intelligence → Provider & Models → Provider Usage & Spend
 - **API:** `GET /api/ai/cost/summary`
 - Set monthly budget limits to cap spending
 
@@ -178,7 +179,7 @@ Token usage and estimated costs are tracked per provider:
 
 ## Related Documentation
 
-- [Pulse AI Overview](AI.md) — Full AI system documentation
+- [Pulse Intelligence Overview](AI.md) — Full Pulse Intelligence system documentation
 - [Plans and Entitlements](PULSE_PRO.md) — Feature availability by plan
 - [API Reference](API.md) — Complete API documentation
 - [Pulse Patrol Deep Dive](architecture/pulse-patrol-deep-dive.md) — Technical architecture details

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 )
 
 // IncidentRecorderProvider provides access to incident recording data
@@ -79,7 +81,7 @@ type KnowledgeEntry struct {
 func (e *PulseToolExecutor) registerKnowledgeTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
-			Name: "pulse_knowledge",
+			Name: agentcapabilities.PulseKnowledgeToolName,
 			Description: `Manage AI knowledge, notes, and incident analysis.
 
 Actions:
@@ -137,9 +139,10 @@ Examples:
 			return exec.executeKnowledge(ctx, args)
 		},
 		Governance: ToolGovernance{
-			ActionMode:     ToolActionMixed,
-			ApprovalPolicy: "recall and analysis are safe; remember records operator-visible knowledge",
-			Summary:        "Reads operational memory and records governed knowledge notes when requested.",
+			ActionMode:      ToolActionMixed,
+			ApprovalPolicy:  ToolApprovalScopeOnly,
+			ApprovalSummary: "recall and analysis are safe; remember records operator-visible knowledge",
+			Summary:         "Reads operational memory and records governed knowledge notes when requested.",
 		},
 	})
 }

@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	airuntime "github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
@@ -23,6 +25,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 type MockAIService struct {
@@ -183,24 +186,40 @@ func (m *MockAIService) AnswerQuestion(ctx context.Context, questionID string, a
 	return args.Error(0)
 }
 
-func (m *MockAIService) SetAlertProvider(provider chat.MCPAlertProvider)       { m.Called(provider) }
-func (m *MockAIService) SetFindingsProvider(provider chat.MCPFindingsProvider) { m.Called(provider) }
-func (m *MockAIService) SetBaselineProvider(provider chat.MCPBaselineProvider) { m.Called(provider) }
-func (m *MockAIService) SetPatternProvider(provider chat.MCPPatternProvider)   { m.Called(provider) }
-func (m *MockAIService) SetMetricsHistory(provider chat.MCPMetricsHistoryProvider) {
+func (m *MockAIService) AssistantSurfaceToolContract(ctx context.Context) agentcapabilities.SurfaceToolContract {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return agentcapabilities.SurfaceToolContract{}
+	}
+	return args.Get(0).(agentcapabilities.SurfaceToolContract)
+}
+
+func (m *MockAIService) SetAlertProvider(provider chat.AssistantAlertProvider) { m.Called(provider) }
+func (m *MockAIService) SetFindingsProvider(provider chat.AssistantFindingsProvider) {
 	m.Called(provider)
 }
-func (m *MockAIService) SetBackupProvider(provider chat.MCPBackupProvider) { m.Called(provider) }
-func (m *MockAIService) SetGuestConfigProvider(provider chat.MCPGuestConfigProvider) {
+func (m *MockAIService) SetBaselineProvider(provider chat.AssistantBaselineProvider) {
 	m.Called(provider)
 }
-func (m *MockAIService) SetAppContainerConfigProvider(provider chat.MCPAppContainerConfigProvider) {
+func (m *MockAIService) SetPatternProvider(provider chat.AssistantPatternProvider) {
 	m.Called(provider)
 }
-func (m *MockAIService) SetDiskHealthProvider(provider chat.MCPDiskHealthProvider) {
+func (m *MockAIService) SetMetricsHistory(provider chat.AssistantMetricsHistoryProvider) {
 	m.Called(provider)
 }
-func (m *MockAIService) SetUpdatesProvider(provider chat.MCPUpdatesProvider) { m.Called(provider) }
+func (m *MockAIService) SetBackupProvider(provider chat.AssistantBackupProvider) { m.Called(provider) }
+func (m *MockAIService) SetGuestConfigProvider(provider chat.AssistantGuestConfigProvider) {
+	m.Called(provider)
+}
+func (m *MockAIService) SetAppContainerConfigProvider(provider chat.AssistantAppContainerConfigProvider) {
+	m.Called(provider)
+}
+func (m *MockAIService) SetDiskHealthProvider(provider chat.AssistantDiskHealthProvider) {
+	m.Called(provider)
+}
+func (m *MockAIService) SetUpdatesProvider(provider chat.AssistantUpdatesProvider) {
+	m.Called(provider)
+}
 func (m *MockAIService) SetAgentProfileManager(manager chat.AgentProfileManager) {
 	m.Called(manager)
 }
@@ -215,16 +234,16 @@ func (m *MockAIService) SetIncidentRecorderProvider(provider chat.IncidentRecord
 func (m *MockAIService) SetEventCorrelatorProvider(provider chat.EventCorrelatorProvider) {
 	m.Called(provider)
 }
-func (m *MockAIService) SetDiscoveryProvider(provider chat.MCPDiscoveryProvider) {
+func (m *MockAIService) SetDiscoveryProvider(provider chat.AssistantDiscoveryProvider) {
 	m.Called(provider)
 }
-func (m *MockAIService) SetUnifiedResourceProvider(provider chat.MCPUnifiedResourceProvider) {
+func (m *MockAIService) SetUnifiedResourceProvider(provider chat.AssistantUnifiedResourceProvider) {
 	m.Called(provider)
 }
-func (m *MockAIService) SetAppContainerActionProvider(provider chat.MCPAppContainerActionProvider) {
+func (m *MockAIService) SetAppContainerActionProvider(provider chat.AssistantAppContainerActionProvider) {
 	m.Called(provider)
 }
-func (m *MockAIService) SetAppContainerReadProvider(provider chat.MCPAppContainerReadProvider) {
+func (m *MockAIService) SetAppContainerReadProvider(provider chat.AssistantAppContainerReadProvider) {
 	m.Called(provider)
 }
 
@@ -528,6 +547,74 @@ func TestHandleStatus(t *testing.T) {
 	assert.Equal(t, "direct", resp["engine"])
 }
 
+func TestHandleAssistantSurfaceTools_UsesRuntimeSurfaceContract(t *testing.T) {
+	h := newTestAIHandler(&config.Config{}, nil, nil)
+	mockSvc := new(MockAIService)
+	h.defaultService = mockSvc
+
+	want := agentcapabilities.SurfaceToolContract{
+		SurfaceID:         agentcapabilities.SurfaceIDPulseAssistant,
+		SurfaceLabel:      "Pulse Assistant",
+		ToolSource:        agentcapabilities.SurfaceToolSourceAssistantRegistry,
+		ToolNames:         []string{agentcapabilities.PulseQueryToolName, agentcapabilities.PulseQuestionToolName},
+		RegistryToolNames: []string{agentcapabilities.PulseQueryToolName},
+		NativeToolNames:   []string{agentcapabilities.PulseQuestionToolName},
+		Affordances: agentcapabilities.SurfaceAffordanceContract{
+			Tools:                true,
+			InteractiveQuestions: true,
+		},
+	}
+	mockSvc.On("IsRunning").Return(true)
+	mockSvc.On("AssistantSurfaceToolContract", mock.Anything).Return(want)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/assistant/surface-tools", nil)
+	w := httptest.NewRecorder()
+
+	h.HandleAssistantSurfaceTools(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
+
+	var got agentcapabilities.SurfaceToolContract
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
+	assert.Equal(t, want.SurfaceID, got.SurfaceID)
+	assert.Equal(t, want.ToolSource, got.ToolSource)
+	assert.Equal(t, want.ToolNames, got.ToolNames)
+	assert.Equal(t, want.RegistryToolNames, got.RegistryToolNames)
+	assert.Equal(t, want.NativeToolNames, got.NativeToolNames)
+	assert.Empty(t, got.CapabilityNames)
+	assert.True(t, got.Affordances.InteractiveQuestions)
+	mockSvc.AssertExpectations(t)
+}
+
+func TestHandleAssistantSurfaceTools_RequiresRunningAssistant(t *testing.T) {
+	h := newTestAIHandler(&config.Config{}, nil, nil)
+	mockSvc := new(MockAIService)
+	h.defaultService = mockSvc
+	mockSvc.On("IsRunning").Return(false)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/assistant/surface-tools", nil)
+	w := httptest.NewRecorder()
+
+	h.HandleAssistantSurfaceTools(w, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+	assert.Contains(t, w.Body.String(), "Pulse Assistant is not running")
+	mockSvc.AssertExpectations(t)
+	mockSvc.AssertNotCalled(t, "AssistantSurfaceToolContract", mock.Anything)
+}
+
+func TestHandleAssistantSurfaceTools_MethodNotAllowed(t *testing.T) {
+	h := newTestAIHandler(&config.Config{}, nil, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/assistant/surface-tools", nil)
+	w := httptest.NewRecorder()
+
+	h.HandleAssistantSurfaceTools(w, req)
+
+	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+}
+
 func TestHandleSessions(t *testing.T) {
 	cfg := &config.Config{}
 	h := newTestAIHandler(cfg, nil, nil)
@@ -738,6 +825,160 @@ func TestHandleChat_InvalidJSON(t *testing.T) {
 	h.HandleChat(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestHandleRenderWorkflowPrompt_UsesSharedPulseIntelligenceRenderer(t *testing.T) {
+	h := newTestAIHandler(&config.Config{}, nil, nil)
+
+	body := fmt.Sprintf(
+		`{"name":%q,"arguments":{"resourceId":"vm:101"}}`,
+		agentcapabilities.PulseWorkflowPromptInvestigateResource,
+	)
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/workflow-prompts/render", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	h.HandleRenderWorkflowPrompt(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
+
+	var got AssistantWorkflowPromptRenderResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal render response: %v", err)
+	}
+	assert.Equal(t, "Pulse resource investigation", got.Description)
+	assert.Contains(t, got.Text, `Investigate Pulse resource "vm:101"`)
+	assert.Contains(t, got.Text, "Use the Assistant's current Pulse context")
+	assert.Contains(t, got.Text, "shared resource context capability")
+}
+
+func TestHandleRenderWorkflowPrompt_RecordsWorkflowPromptActivity(t *testing.T) {
+	persistence := config.NewConfigPersistence(t.TempDir())
+	h := newTestAIHandler(&config.Config{}, persistence, nil)
+
+	body := fmt.Sprintf(`{"name":%q}`, agentcapabilities.PulseWorkflowPromptOperationsLoop)
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/workflow-prompts/render", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	h.HandleRenderWorkflowPrompt(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	history, err := persistence.LoadWorkflowPromptActivityHistory()
+	require.NoError(t, err)
+	require.Len(t, history.Events, 1)
+	assert.Equal(t, config.WorkflowPromptActivitySurfacePulseAssistant, history.Events[0].Surface)
+	assert.Equal(t, agentcapabilities.PulseWorkflowPromptOperationsLoop, history.Events[0].PromptName)
+}
+
+func TestHandleRecordWorkflowPromptActivity_RecordsFirstPartyActivationStarter(t *testing.T) {
+	for _, surface := range []string{
+		config.WorkflowPromptActivitySurfacePulsePatrol,
+		config.WorkflowPromptActivitySurfacePatrolControl,
+		config.WorkflowPromptActivitySurfacePatrolAutonomy,
+		config.WorkflowPromptActivitySurfaceProActivation,
+	} {
+		t.Run(surface, func(t *testing.T) {
+			persistence := config.NewConfigPersistence(t.TempDir())
+			h := newTestAIHandler(&config.Config{}, persistence, nil)
+
+			body := fmt.Sprintf(
+				`{"name":%q,"surface":%q}`,
+				agentcapabilities.PulseWorkflowPromptOperationsLoop,
+				surface,
+			)
+			req := httptest.NewRequest(http.MethodPost, "/api/ai/workflow-prompts/activity", strings.NewReader(body))
+			w := httptest.NewRecorder()
+
+			h.HandleRecordWorkflowPromptActivity(w, req)
+
+			assert.Equal(t, http.StatusNoContent, w.Code)
+			history, err := persistence.LoadWorkflowPromptActivityHistory()
+			require.NoError(t, err)
+			require.Len(t, history.Events, 1)
+			assert.Equal(t, surface, history.Events[0].Surface)
+			assert.Equal(t, agentcapabilities.PulseWorkflowPromptOperationsLoop, history.Events[0].PromptName)
+		})
+	}
+}
+
+func TestHandleRecordWorkflowPromptActivity_RejectsUnknownPrompt(t *testing.T) {
+	h := newTestAIHandler(&config.Config{}, nil, nil)
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/ai/workflow-prompts/activity",
+		strings.NewReader(`{"name":"pulse_unknown","surface":"pulse_patrol"}`),
+	)
+	w := httptest.NewRecorder()
+
+	h.HandleRecordWorkflowPromptActivity(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "Unknown workflow prompt")
+}
+
+func TestHandleRecordWorkflowPromptActivity_RejectsExternalAgentSurfaces(t *testing.T) {
+	h := newTestAIHandler(&config.Config{}, nil, nil)
+
+	body := fmt.Sprintf(
+		`{"name":%q,"surface":%q}`,
+		agentcapabilities.PulseWorkflowPromptOperationsLoop,
+		config.WorkflowPromptActivitySurfacePulseMCP,
+	)
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/workflow-prompts/activity", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	h.HandleRecordWorkflowPromptActivity(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "Unknown workflow prompt surface")
+}
+
+func TestHandleRenderWorkflowPrompt_UsesManifestWorkflowPromptRenderer(t *testing.T) {
+	source, err := os.ReadFile("ai_handler.go")
+	require.NoError(t, err)
+
+	text := string(source)
+	assert.Contains(t, text, "agentcapabilities.BuildPulseWorkflowPromptFromManifestWithOptions(")
+	assert.Contains(t, text, "manifest := agentcapabilities.CanonicalManifest()")
+	assert.NotContains(t, text, "agentcapabilities.BuildPulseWorkflowPromptWithOptions(\n\t\tagentcapabilities.CanonicalManifest().Capabilities")
+}
+
+func TestHandleRenderWorkflowPrompt_ValidatesSharedPromptArguments(t *testing.T) {
+	h := newTestAIHandler(&config.Config{}, nil, nil)
+
+	body := fmt.Sprintf(`{"name":%q}`, agentcapabilities.PulseWorkflowPromptInvestigateResource)
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/workflow-prompts/render", strings.NewReader(body))
+	w := httptest.NewRecorder()
+
+	h.HandleRenderWorkflowPrompt(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "prompt argument resourceId is required")
+}
+
+func TestHandleRenderWorkflowPrompt_RejectsUnknownSharedPrompt(t *testing.T) {
+	h := newTestAIHandler(&config.Config{}, nil, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/workflow-prompts/render", strings.NewReader(`{"name":"pulse_unknown"}`))
+	w := httptest.NewRecorder()
+
+	h.HandleRenderWorkflowPrompt(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "unknown prompt: pulse_unknown")
+}
+
+func TestHandleRenderWorkflowPrompt_RejectsInvalidJSON(t *testing.T) {
+	h := newTestAIHandler(&config.Config{}, nil, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/workflow-prompts/render", strings.NewReader("invalid"))
+	w := httptest.NewRecorder()
+
+	h.HandleRenderWorkflowPrompt(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "Invalid request")
 }
 
 func TestHandleChat_Success(t *testing.T) {

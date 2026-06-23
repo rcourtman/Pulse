@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/cost"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
@@ -46,9 +47,9 @@ func TestService_GetToolInputDisplay(t *testing.T) {
 		{
 			name: "run_command",
 			tc: providers.ToolCall{
-				Name: "run_command",
+				Name: agentcapabilities.LegacyAssistantRunCommandToolName,
 				Input: map[string]interface{}{
-					"command": "uptime",
+					agentcapabilities.LegacyAssistantCommandArgumentName: "uptime",
 				},
 			},
 			expected: "uptime",
@@ -56,10 +57,10 @@ func TestService_GetToolInputDisplay(t *testing.T) {
 		{
 			name: "run_command on host",
 			tc: providers.ToolCall{
-				Name: "run_command",
+				Name: agentcapabilities.LegacyAssistantRunCommandToolName,
 				Input: map[string]interface{}{
-					"command":     "uptime",
-					"run_on_host": true,
+					agentcapabilities.LegacyAssistantCommandArgumentName:   "uptime",
+					agentcapabilities.LegacyAssistantRunOnHostArgumentName: true,
 				},
 			},
 			expected: "[host] uptime",
@@ -67,9 +68,9 @@ func TestService_GetToolInputDisplay(t *testing.T) {
 		{
 			name: "fetch_url",
 			tc: providers.ToolCall{
-				Name: "fetch_url",
+				Name: agentcapabilities.LegacyAssistantFetchURLToolName,
 				Input: map[string]interface{}{
-					"url": "https://google.com",
+					agentcapabilities.LegacyAssistantURLArgumentName: "https://google.com",
 				},
 			},
 			expected: "https://google.com",
@@ -77,10 +78,10 @@ func TestService_GetToolInputDisplay(t *testing.T) {
 		{
 			name: "set_resource_url",
 			tc: providers.ToolCall{
-				Name: "set_resource_url",
+				Name: agentcapabilities.LegacyAssistantSetResourceURLToolName,
 				Input: map[string]interface{}{
-					"resource_type": "vm",
-					"url":           "http://1.2.3.4",
+					agentcapabilities.LegacyAssistantResourceTypeArgumentName: "vm",
+					agentcapabilities.LegacyAssistantURLArgumentName:          "http://1.2.3.4",
 				},
 			},
 			expected: "Set vm URL: http://1.2.3.4",
@@ -119,13 +120,120 @@ func TestService_GetTools(t *testing.T) {
 	// Verify some common tools are present
 	foundRunCommand := false
 	for _, tool := range tools {
-		if tool.Name == "run_command" {
+		if tool.Name == agentcapabilities.LegacyAssistantRunCommandToolName {
 			foundRunCommand = true
 			break
 		}
 	}
 	if !foundRunCommand {
 		t.Error("Expected run_command tool to be available")
+	}
+}
+
+func TestService_GetToolsUsesSharedLegacyUtilitySchemas(t *testing.T) {
+	svc := NewService(nil, nil)
+	tools := svc.getTools()
+	byName := map[string]providers.Tool{}
+	for _, tool := range tools {
+		byName[tool.Name] = tool
+	}
+
+	for _, shared := range agentcapabilities.LegacyAssistantUtilityProviderTools() {
+		assistantTool, ok := byName[shared.Name]
+		if !ok {
+			t.Fatalf("legacy Assistant tools missing %s", shared.Name)
+		}
+		if !providerSchemaRequiredEqual(assistantTool.InputSchema, shared.InputSchema) {
+			t.Fatalf("%s Assistant provider schema required = %#v, want shared required %#v",
+				shared.Name, assistantTool.InputSchema["required"], shared.InputSchema["required"])
+		}
+		gotProps, ok := assistantTool.InputSchema["properties"].(map[string]interface{})
+		if !ok {
+			t.Fatalf("%s Assistant provider schema properties = %T, want map", shared.Name, assistantTool.InputSchema["properties"])
+		}
+		wantProps, ok := shared.InputSchema["properties"].(map[string]interface{})
+		if !ok {
+			t.Fatalf("%s shared provider schema properties = %T, want map", shared.Name, shared.InputSchema["properties"])
+		}
+		for field := range wantProps {
+			if _, ok := gotProps[field]; !ok {
+				t.Fatalf("%s Assistant provider schema missing shared field %q: %#v", shared.Name, field, gotProps)
+			}
+		}
+	}
+}
+
+func TestService_GetToolsUsesManifestFindingLifecycleSchemas(t *testing.T) {
+	svc := NewService(nil, nil)
+	tools := svc.getTools()
+	byName := map[string]providers.Tool{}
+	for _, tool := range tools {
+		byName[tool.Name] = tool
+	}
+
+	for _, name := range []string{
+		agentcapabilities.ResolveFindingCapabilityName,
+		agentcapabilities.DismissFindingCapabilityName,
+	} {
+		assistantTool, ok := byName[name]
+		if !ok {
+			t.Fatalf("legacy Assistant tools missing %s", name)
+		}
+		capability, ok := agentcapabilities.FindCapability(agentcapabilities.CanonicalManifest().Capabilities, name)
+		if !ok {
+			t.Fatalf("canonical manifest missing %s", name)
+		}
+		manifestSchema := agentcapabilities.ProviderInputSchemaFromRaw(agentcapabilities.ToolInputSchema(capability))
+		if !providerSchemaRequiredEqual(assistantTool.InputSchema, manifestSchema) {
+			t.Fatalf("%s Assistant provider schema required = %#v, want manifest required %#v",
+				name, assistantTool.InputSchema["required"], manifestSchema["required"])
+		}
+	}
+	if providerSchemaRequiredContains(byName[agentcapabilities.ResolveFindingCapabilityName].InputSchema, agentcapabilities.ResolutionNoteArgumentName) {
+		t.Fatalf("%s must not require optional %s", agentcapabilities.ResolveFindingCapabilityName, agentcapabilities.ResolutionNoteArgumentName)
+	}
+	if providerSchemaRequiredContains(byName[agentcapabilities.DismissFindingCapabilityName].InputSchema, agentcapabilities.NoteArgumentName) {
+		t.Fatalf("%s must not require optional note", agentcapabilities.DismissFindingCapabilityName)
+	}
+}
+
+func providerSchemaRequiredEqual(got map[string]interface{}, want map[string]interface{}) bool {
+	gotRequired := providerSchemaRequiredValues(got)
+	wantRequired := providerSchemaRequiredValues(want)
+	if len(gotRequired) != len(wantRequired) {
+		return false
+	}
+	for i := range gotRequired {
+		if gotRequired[i] != wantRequired[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func providerSchemaRequiredContains(schema map[string]interface{}, want string) bool {
+	for _, value := range providerSchemaRequiredValues(schema) {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func providerSchemaRequiredValues(schema map[string]interface{}) []string {
+	switch required := schema["required"].(type) {
+	case []string:
+		return append([]string(nil), required...)
+	case []interface{}:
+		values := make([]string, 0, len(required))
+		for _, value := range required {
+			if text, ok := value.(string); ok {
+				values = append(values, text)
+			}
+		}
+		return values
+	default:
+		return nil
 	}
 }
 
@@ -456,7 +564,7 @@ func TestApprovalNeededFromToolCall(t *testing.T) {
 			"command": "uptime",
 		},
 	}
-	result := "APPROVAL_REQUIRED:{\"command\":\"uptime\",\"tool_id\":\"call-1\"}"
+	result := formatApprovalNeededToolResult("uptime", "tool-1", "needs approval", "approval-1")
 
 	data, needed := approvalNeededFromToolCall(req, tc, result)
 	if !needed {
@@ -464,6 +572,12 @@ func TestApprovalNeededFromToolCall(t *testing.T) {
 	}
 	if data.Command != "uptime" || data.TargetHost != "node-1" {
 		t.Errorf("Unexpected data: %+v", data)
+	}
+	if data.ToolID != "tool-1" {
+		t.Errorf("Expected parsed tool id, got %q", data.ToolID)
+	}
+	if data.ApprovalID != "approval-1" {
+		t.Errorf("Expected parsed approval id, got %q", data.ApprovalID)
 	}
 
 	// Not a run_command
@@ -1035,10 +1149,10 @@ func TestService_ExecuteTool_ResolveFinding(t *testing.T) {
 
 	// 1. Successful resolution
 	tc := providers.ToolCall{
-		Name: "resolve_finding",
+		Name: agentcapabilities.ResolveFindingCapabilityName,
 		Input: map[string]interface{}{
-			"finding_id":      "test-finding-1",
-			"resolution_note": "Restarted the service",
+			agentcapabilities.FindingIDArgumentName:      "test-finding-1",
+			agentcapabilities.ResolutionNoteArgumentName: "Restarted the service",
 		},
 	}
 
@@ -1053,9 +1167,9 @@ func TestService_ExecuteTool_ResolveFinding(t *testing.T) {
 	// 2. Missing finding_id (should use from request context)
 	req2 := ExecuteRequest{FindingID: "test-finding-1"}
 	tc2 := providers.ToolCall{
-		Name: "resolve_finding",
+		Name: agentcapabilities.ResolveFindingCapabilityName,
 		Input: map[string]interface{}{
-			"resolution_note": "Fixed it",
+			agentcapabilities.ResolutionNoteArgumentName: "Fixed it",
 		},
 	}
 	_, exec2 := svc.executeTool(ctx, req2, tc2)
@@ -1064,24 +1178,32 @@ func TestService_ExecuteTool_ResolveFinding(t *testing.T) {
 		t.Error("Expected failure for already resolved finding")
 	}
 
-	// 3. Missing resolution_note
+	// 3. Missing resolution_note is allowed by the shared Pulse Intelligence manifest
+	findingWithoutNote := &Finding{
+		ID:           "new-finding",
+		Severity:     FindingSeverityWarning,
+		ResourceID:   "vm-101",
+		ResourceName: "test-vm-2",
+		Title:        "Recovered CPU",
+	}
+	patrol.GetFindings().Add(findingWithoutNote)
 	tc3 := providers.ToolCall{
-		Name: "resolve_finding",
+		Name: agentcapabilities.ResolveFindingCapabilityName,
 		Input: map[string]interface{}{
-			"finding_id": "new-finding",
+			agentcapabilities.FindingIDArgumentName: "new-finding",
 		},
 	}
 	result3, exec3 := svc.executeTool(ctx, ExecuteRequest{}, tc3)
-	if exec3.Success {
-		t.Error("Expected failure for missing resolution_note")
+	if !exec3.Success {
+		t.Errorf("Expected success without resolution_note, got failure: %s", result3)
 	}
-	if !strings.Contains(result3, "resolution_note is required") {
-		t.Errorf("Expected resolution_note error, got: %s", result3)
+	if strings.Contains(result3, "resolution_note is required") {
+		t.Errorf("Unexpected resolution_note error: %s", result3)
 	}
 
 	// 4. Missing both
 	tc4 := providers.ToolCall{
-		Name:  "resolve_finding",
+		Name:  agentcapabilities.ResolveFindingCapabilityName,
 		Input: map[string]interface{}{},
 	}
 	result4, exec4 := svc.executeTool(ctx, ExecuteRequest{}, tc4)
@@ -1505,6 +1627,29 @@ func TestService_ExecuteOnAgent_RejectsLegacyContainerTargetTypeAlias(t *testing
 	}
 	if !strings.Contains(err.Error(), "unsupported target_type") {
 		t.Fatalf("expected unsupported target_type error, got %v", err)
+	}
+}
+
+func TestService_NormalizeExecuteTargetTypeUsesSharedActionTargetVocabulary(t *testing.T) {
+	valid, err := normalizeExecuteTargetType(" SYSTEM-CONTAINER ", "101", nil)
+	if err != nil {
+		t.Fatalf("normalizeExecuteTargetType returned error: %v", err)
+	}
+	if valid != agentcapabilities.ActionTargetTypeSystemContainer {
+		t.Fatalf("normalizeExecuteTargetType returned %q, want %q", valid, agentcapabilities.ActionTargetTypeSystemContainer)
+	}
+
+	hostRouted, err := normalizeExecuteTargetType("", "", map[string]interface{}{"node": "pve-a"})
+	if err != nil {
+		t.Fatalf("normalizeExecuteTargetType with host routing returned error: %v", err)
+	}
+	if hostRouted != agentcapabilities.ActionTargetTypeAgent {
+		t.Fatalf("normalizeExecuteTargetType host-routed target = %q, want %q", hostRouted, agentcapabilities.ActionTargetTypeAgent)
+	}
+
+	_, err = normalizeExecuteTargetType("container", "101", nil)
+	if err == nil || !strings.Contains(err.Error(), agentcapabilities.ActionTargetTypeAllowedDescription()) {
+		t.Fatalf("expected shared allowed-target description in error, got %v", err)
 	}
 }
 
@@ -2040,8 +2185,8 @@ func TestService_ExecuteStream_ResultTruncation(t *testing.T) {
 			// Check if the previous tool result was truncated in the request messages
 			for _, msg := range req.Messages {
 				if msg.Role == "user" && msg.ToolResult != nil {
-					// Use a more flexible check as the exact string might vary
-					if strings.Contains(msg.ToolResult.Content, "omitted") || strings.Contains(msg.ToolResult.Content, "truncated") {
+					if strings.Contains(msg.ToolResult.Content, "[TRUNCATED: 4000 characters cut.") &&
+						!strings.Contains(msg.ToolResult.Content, "bytes omitted") {
 						return &providers.ChatResponse{Content: "Verified truncation", StopReason: "end_turn"}, nil
 					}
 				}

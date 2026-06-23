@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
@@ -63,6 +64,131 @@ func TestAIHandlersUseSafeRemediationCommercialCopy(t *testing.T) {
 		require.NotContains(t, text, "Pulse Patrol Auto-Fix requires Pulse Pro")
 		require.NotContains(t, text, "Auto-Fix requires Pulse Pro")
 	}
+}
+
+func TestAISettingsHandler_AnthropicOAuthSetupFailsClosed(t *testing.T) {
+	handler := &AISettingsHandler{}
+
+	tests := []struct {
+		name   string
+		method string
+		path   string
+		body   string
+		call   func(http.ResponseWriter, *http.Request)
+	}{
+		{
+			name:   "start",
+			method: http.MethodGet,
+			path:   "/api/ai/oauth/start",
+			call:   handler.HandleOAuthStart,
+		},
+		{
+			name:   "exchange",
+			method: http.MethodPost,
+			path:   "/api/ai/oauth/exchange",
+			body:   `{"code":"code","state":"state"}`,
+			call:   handler.HandleOAuthExchange,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := newLoopbackRequest(tt.method, tt.path, strings.NewReader(tt.body))
+			rec := httptest.NewRecorder()
+
+			tt.call(rec, req)
+
+			require.Equal(t, http.StatusNotImplemented, rec.Code, rec.Body.String())
+			var resp struct {
+				Success bool   `json:"success"`
+				Error   string `json:"error"`
+				Message string `json:"message"`
+			}
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+			require.False(t, resp.Success)
+			require.Equal(t, "unsupported_anthropic_oauth", resp.Error)
+			require.Contains(t, resp.Message, "Configure an Anthropic API key")
+		})
+	}
+}
+
+func TestAIHandlersDelegateApprovedToolInvocationParsingToSharedCapabilities(t *testing.T) {
+	source, err := os.ReadFile("ai_handlers.go")
+	require.NoError(t, err)
+	aiHandlers := string(source)
+	for _, fragment := range []string{
+		"isMCPToolCall",
+		"parseMCPToolCall",
+		"splitToolArgs",
+	} {
+		require.NotContains(t, aiHandlers, fragment)
+	}
+
+	source, err = os.ReadFile("router_routes_ai_relay.go")
+	require.NoError(t, err)
+	relay := string(source)
+	require.Contains(t, relay, "agentcapabilities.ParseTextToolInvocation(command)")
+	require.NotContains(t, relay, "func parseMCPToolCall(")
+	require.NotContains(t, relay, "func splitToolArgs(")
+	require.NotContains(t, relay, "func isMCPToolCall(")
+}
+
+func TestAIHandlersUseSharedPatrolFindingAgentErrorCodes(t *testing.T) {
+	source, err := os.ReadFile("ai_handlers.go")
+	require.NoError(t, err)
+	aiHandlers := string(source)
+
+	for _, constant := range []string{
+		"agentcapabilities.AgentErrCodePatrolUnavailable",
+		"agentcapabilities.AgentErrCodeInvalidFindingRequest",
+		"agentcapabilities.AgentErrCodeFindingNotFound",
+		"agentcapabilities.AgentErrCodeFindingActionNotAllowed",
+	} {
+		require.Contains(t, aiHandlers, constant)
+	}
+
+	for _, literal := range []string{
+		`writeJSONError(w, http.StatusServiceUnavailable, "` + agentcapabilities.AgentErrCodePatrolUnavailable + `"`,
+		`writeJSONErrorWithDetails(w, http.StatusBadRequest, "` + agentcapabilities.AgentErrCodeInvalidFindingRequest + `"`,
+		`writeJSONError(w, http.StatusNotFound, "` + agentcapabilities.AgentErrCodeFindingNotFound + `"`,
+		`writeJSONError(w, http.StatusConflict, "` + agentcapabilities.AgentErrCodeFindingActionNotAllowed + `"`,
+	} {
+		require.NotContains(t, aiHandlers, literal)
+	}
+}
+
+func TestAISettingsHandler_PatrolFindingLifecycleUsesAgentStableUnavailableEnvelope(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	handler := newTestAISettingsHandler(cfg, nil, nil)
+
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/patrol/acknowledge", strings.NewReader(`{"finding_id":"finding-1"}`))
+	rec := httptest.NewRecorder()
+	handler.HandleAcknowledgeFinding(rec, req)
+
+	require.Equal(t, http.StatusServiceUnavailable, rec.Code, rec.Body.String())
+	var resp agentStableErrorEnvelope
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Equal(t, agentcapabilities.AgentErrCodePatrolUnavailable, resp.Error)
+	require.Equal(t, "Pulse Patrol service not available", resp.Message)
+}
+
+func TestAISettingsHandler_ResolveFindingPersistsResolutionNote(t *testing.T) {
+	handler, patrol, unifiedStore, _ := setupAIHandlerWithPatrol(t)
+	detectedAt := time.Now().Add(-2 * time.Hour)
+	addPatrolFinding(t, patrol, "finding-resolve-note", detectedAt)
+	addUnifiedFinding(unifiedStore, "finding-resolve-note", detectedAt)
+
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/patrol/resolve", strings.NewReader(`{"finding_id":"finding-resolve-note","resolution_note":" fixed after restarting the worker "}`))
+	rec := httptest.NewRecorder()
+
+	handler.HandleResolveFinding(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	patrolFinding := patrol.GetFindings().Get("finding-resolve-note")
+	require.NotNil(t, patrolFinding)
+	require.NotNil(t, patrolFinding.ResolvedAt)
+	require.Equal(t, "fixed after restarting the worker", patrolFinding.UserNote)
 }
 
 func TestAISettingsHandler_PatrolAutonomyMonitorOnlyAllowsMonitor(t *testing.T) {
@@ -172,6 +298,23 @@ func TestAISettingsHandler_UpdateSettingsPersistsNotReadyPatrolModelWithReadines
 	require.Equal(t, model, persisted.PatrolModel)
 }
 
+func TestAISettingsHandler_PatrolConfigReadinessUsesControlLabel(t *testing.T) {
+	readiness := patrolReadinessResponseFromConfigReadiness(ai.PatrolConfigReadiness{
+		Status:   ai.PatrolReadinessWarning,
+		Ready:    true,
+		Cause:    ai.PatrolFailureCauseModelToolSupportUnverified,
+		Summary:  "Ollama connectivity alone does not prove tool support.",
+		Provider: "ollama",
+		Model:    "ollama:llama3",
+	})
+
+	require.Equal(t, patrolReadinessWarning, readiness.Status)
+	require.True(t, readiness.Ready)
+	check := requirePatrolReadinessCheck(t, readiness, "configuration")
+	require.Equal(t, "Patrol control", check.Label)
+	require.NotContains(t, check.Label, "configuration")
+}
+
 func TestAISettingsHandler_UpdateSettingsDoesNotLockUnrelatedSavesBehindExistingPatrolReadiness(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
@@ -199,6 +342,56 @@ func TestAISettingsHandler_UpdateSettingsDoesNotLockUnrelatedSavesBehindExisting
 	require.NoError(t, err)
 	require.Equal(t, 120, persisted.RequestTimeoutSeconds)
 	require.Equal(t, model, persisted.PatrolModel)
+}
+
+func TestAISettingsHandler_UpdateSettingsRefreshesAssistantToolVisibilityForControlChanges(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	controlRefreshes := 0
+	handler.SetOnControlSettingsChange(func() {
+		controlRefreshes++
+	})
+
+	unrelatedBody, err := json.Marshal(AISettingsUpdateRequest{
+		RequestTimeoutSeconds: ptr(90),
+	})
+	require.NoError(t, err)
+	unrelatedReq := newLoopbackRequest(http.MethodPut, "/api/settings/ai/update", bytes.NewReader(unrelatedBody))
+	unrelatedRec := httptest.NewRecorder()
+	handler.HandleUpdateAISettings(unrelatedRec, unrelatedReq)
+
+	require.Equal(t, http.StatusOK, unrelatedRec.Code, unrelatedRec.Body.String())
+	require.Equal(t, 0, controlRefreshes, "non-control settings must not refresh Assistant tool visibility")
+
+	controlBody, err := json.Marshal(AISettingsUpdateRequest{
+		ControlLevel: ptr(config.ControlLevelControlled),
+	})
+	require.NoError(t, err)
+	controlReq := newLoopbackRequest(http.MethodPut, "/api/settings/ai/update", bytes.NewReader(controlBody))
+	controlRec := httptest.NewRecorder()
+	handler.HandleUpdateAISettings(controlRec, controlReq)
+
+	require.Equal(t, http.StatusOK, controlRec.Code, controlRec.Body.String())
+	require.Equal(t, 1, controlRefreshes, "control level changes must refresh Assistant tool visibility")
+
+	protectedBody, err := json.Marshal(AISettingsUpdateRequest{
+		ProtectedGuests: []string{"vm-101"},
+	})
+	require.NoError(t, err)
+	protectedReq := newLoopbackRequest(http.MethodPut, "/api/settings/ai/update", bytes.NewReader(protectedBody))
+	protectedRec := httptest.NewRecorder()
+	handler.HandleUpdateAISettings(protectedRec, protectedReq)
+
+	require.Equal(t, http.StatusOK, protectedRec.Code, protectedRec.Body.String())
+	require.Equal(t, 2, controlRefreshes, "protected guest changes must refresh Assistant tool visibility")
+
+	persisted, err := persistence.LoadAIConfig()
+	require.NoError(t, err)
+	require.Equal(t, config.ControlLevelControlled, persisted.GetControlLevel())
+	require.Equal(t, []string{"vm-101"}, persisted.GetProtectedGuests())
 }
 
 func TestAISettingsHandler_PatrolReadinessBranches(t *testing.T) {
@@ -362,6 +555,23 @@ func TestAISettingsHandler_PatrolReadinessBranches(t *testing.T) {
 			require.Equal(t, tt.wantCheck, check.Status)
 		})
 	}
+}
+
+func TestAISettingsHandler_PatrolReadinessMissingAssistantServiceUsesNativeSurfaceIdentity(t *testing.T) {
+	t.Parallel()
+
+	handler := &AISettingsHandler{}
+	readiness := handler.buildPatrolReadiness(context.Background(), nil, true)
+
+	require.Equal(t, patrolReadinessNotReady, readiness.Status)
+	require.False(t, readiness.Ready)
+	require.Equal(t, "Pulse Assistant runtime service is not available.", readiness.Summary)
+	require.NotContains(t, readiness.Summary, "Pulse AI")
+
+	check := requirePatrolReadinessCheck(t, readiness, "service")
+	require.Equal(t, "Assistant runtime service", check.Label)
+	require.Equal(t, "Pulse Assistant runtime service is not available.", check.Message)
+	require.NotContains(t, check.Message, "Pulse AI")
 }
 
 func TestAISettingsHandler_PatrolReadinessNotReadyTakesPrecedenceOverWarnings(t *testing.T) {
@@ -1123,6 +1333,9 @@ func TestNormalizeAIExecuteTargetType_StrictCanonicalV6(t *testing.T) {
 		got := normalizeAIExecuteTargetType(tt.in)
 		if got != tt.want {
 			t.Fatalf("normalizeAIExecuteTargetType(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+		if shared := agentcapabilities.NormalizeActionTargetType(tt.in); got != shared {
+			t.Fatalf("normalizeAIExecuteTargetType(%q) = %q, shared contract returned %q", tt.in, got, shared)
 		}
 	}
 }
@@ -2934,6 +3147,47 @@ func TestAISettingsHandler_Approvals(t *testing.T) {
 		assert.Equal(t, "too dangerous", app.DenyReason)
 	})
 
+	t.Run("HandleDenyCommand_RecordsRejectedInvestigationOutcome", func(t *testing.T) {
+		findingID := "finding-denied-fix"
+		handler.SetStateProvider(&MockStateProvider{})
+		patrol := handler.defaultAIService.GetPatrolService()
+		require.NotNil(t, patrol)
+		patrol.GetFindings().Add(&ai.Finding{
+			ID:                   findingID,
+			ResourceID:           "vm:100",
+			ResourceName:         "web-100",
+			ResourceType:         "vm",
+			Severity:             ai.FindingSeverityWarning,
+			Category:             ai.FindingCategoryPerformance,
+			Title:                "High CPU",
+			Description:          "CPU stayed high.",
+			InvestigationStatus:  string(ai.InvestigationStatusCompleted),
+			InvestigationOutcome: string(ai.InvestigationOutcomeFixQueued),
+		})
+		appIDRejected := "app-investigation-deny"
+		_ = approvalStore.CreateApproval(&approval.ApprovalRequest{
+			ID:         appIDRejected,
+			ToolID:     "investigation_fix",
+			Command:    "systemctl restart workload.service",
+			TargetType: "investigation",
+			TargetID:   findingID,
+			TargetName: "web-100",
+			Context:    "Automated fix from patrol investigation: restart workload",
+			Status:     approval.StatusPending,
+		})
+
+		body, _ := json.Marshal(map[string]string{"reason": "outside maintenance"})
+		req := newLoopbackRequest(http.MethodPost, "/api/ai/approvals/"+appIDRejected+"/deny", bytes.NewReader(body))
+		rec := httptest.NewRecorder()
+		handler.HandleDenyCommand(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		updated := patrol.GetFindings().Get(findingID)
+		require.NotNil(t, updated)
+		assert.Equal(t, string(ai.InvestigationOutcomeFixRejected), updated.InvestigationOutcome)
+		assert.Equal(t, string(ai.FindingLoopStateNeedsAttention), updated.LoopState)
+	})
+
 	t.Run("HandleApproveCommand_AcceptsRelayMobileScope", func(t *testing.T) {
 		appID3 := "app-789"
 		_ = approvalStore.CreateApproval(&approval.ApprovalRequest{
@@ -3321,25 +3575,46 @@ func TestAISettingsHandler_PatrolPreflight_RejectsInvalidProviderName(t *testing
 // GetMessages mirror between orchestratorChatAdapter (ai_handlers.go) and
 // chatServiceAdapter (chat_service_adapter.go) honest: both convert the same
 // chat-service messages onto separate output contracts, and a field mapped by
-// one must be mapped by the other.
+// one must be mapped by the other. chatServiceAdapter routes through
+// adaptChatMessage so its API-facing tool calls stay on the shared provider
+// shape instead of hand-copying a local duplicate.
 func TestOrchestratorAndChatAdaptersMapTheSameMessageFields(t *testing.T) {
-	requiredMappings := []string{
-		"ID:",
-		"Role:",
-		"Content:",
-		"ReasoningContent:",
-		"Timestamp:",
-		"ToolUseID:",
-		"IsError:",
-		".NormalizeCollections()",
-	}
-
 	for _, tc := range []struct {
-		file string
-		fn   string
+		file     string
+		fn       string
+		label    string
+		required []string
 	}{
-		{"ai_handlers.go", "func (a *orchestratorChatAdapter) GetMessages("},
-		{"chat_service_adapter.go", "func (a *chatServiceAdapter) GetMessages("},
+		{
+			file:  "ai_handlers.go",
+			fn:    "func (a *orchestratorChatAdapter) GetMessages(",
+			label: "orchestratorChatAdapter.GetMessages",
+			required: []string{
+				"ID:",
+				"Role:",
+				"Content:",
+				"ReasoningContent:",
+				"Timestamp:",
+				"aicontracts.OrchestratorToolCallInfoFromProvider(tc.ProviderToolCall())",
+				"aicontracts.OrchestratorToolResultInfoFromProvider(*msg.ToolResult)",
+				".NormalizeCollections()",
+			},
+		},
+		{
+			file:  "chat_service_adapter.go",
+			fn:    "func adaptChatMessage(",
+			label: "adaptChatMessage",
+			required: []string{
+				"ID:",
+				"Role:",
+				"Content:",
+				"ReasoningContent:",
+				"Timestamp:",
+				"tc.ProviderToolCall()",
+				"toolResult := *m.ToolResult",
+				".NormalizeCollections()",
+			},
+		},
 	} {
 		source, err := os.ReadFile(tc.file)
 		if err != nil {
@@ -3355,10 +3630,18 @@ func TestOrchestratorAndChatAdaptersMapTheSameMessageFields(t *testing.T) {
 			end = len(text) - start
 		}
 		body := text[start : start+end]
-		for _, required := range requiredMappings {
+		for _, required := range tc.required {
 			if !strings.Contains(body, required) {
-				t.Errorf("%s GetMessages must map %q — keep the adapter mirror in sync", tc.file, required)
+				t.Errorf("%s %s must map %q — keep the adapter mirror in sync", tc.file, tc.label, required)
 			}
 		}
+	}
+
+	chatAdapter, err := os.ReadFile("chat_service_adapter.go")
+	if err != nil {
+		t.Fatalf("read chat_service_adapter.go: %v", err)
+	}
+	if !strings.Contains(string(chatAdapter), "result[i] = adaptChatMessage(m)") {
+		t.Error("chatServiceAdapter.GetMessages must route through adaptChatMessage")
 	}
 }

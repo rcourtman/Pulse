@@ -450,7 +450,7 @@ func TestSessionStore_ListIncludesSafePatrolRunHandoffSummary(t *testing.T) {
 		"[Patrol Run Context]",
 		"Source: Pulse Patrol run history",
 		"Run ID: run-runtime-error",
-		"Run Type: Scoped run",
+		"Run Type: Targeted check",
 		"Status: error",
 		"Runtime Failure: Selected model does not support Patrol tools: No endpoints found that support the provided 'tool_choice' value.",
 		"Patrol Analysis: Runtime failure prevented analysis.",
@@ -461,7 +461,7 @@ func TestSessionStore_ListIncludesSafePatrolRunHandoffSummary(t *testing.T) {
 	}}, nil, HandoffMetadata{
 		Kind:           " patrol_run ",
 		RunID:          " run-runtime-error ",
-		RunType:        " Scoped run ",
+		RunType:        " Targeted check ",
 		RunStatus:      " error ",
 		RuntimeFailure: true,
 	}); err != nil {
@@ -475,7 +475,7 @@ func TestSessionStore_ListIncludesSafePatrolRunHandoffSummary(t *testing.T) {
 	if metadata != (HandoffMetadata{
 		Kind:           sessionHandoffKindPatrolRun,
 		RunID:          "run-runtime-error",
-		RunType:        "Scoped run",
+		RunType:        "Targeted check",
 		RunStatus:      "error",
 		RuntimeFailure: true,
 	}) {
@@ -500,7 +500,7 @@ func TestSessionStore_ListIncludesSafePatrolRunHandoffSummary(t *testing.T) {
 	if summary.FindingID != "" {
 		t.Fatalf("finding ID = %q, want empty Patrol run summary", summary.FindingID)
 	}
-	if summary.RunID != "run-runtime-error" || summary.RunType != "Scoped run" || summary.RunStatus != "error" || !summary.RuntimeFailure {
+	if summary.RunID != "run-runtime-error" || summary.RunType != "Targeted check" || summary.RunStatus != "error" || !summary.RuntimeFailure {
 		t.Fatalf("run summary = %#v, want safe Patrol run identity", summary)
 	}
 	if !summary.HasModelContext {

@@ -244,6 +244,57 @@ test_hot_dev_lab_agent_mode_enables_lan_and_guest_docker_inventory_defaults() {
   assert_contains "lab-agent mode allows the wildcard dev origin Electron may report" "${output}" "http://0.0.0.0:5173"
 }
 
+test_hot_dev_remembers_explicit_lab_agent_mode_for_later_managed_starts() {
+  local test_dir output
+  test_dir="$(make_temp_dir)"
+
+  output="$(
+    HOT_DEV_RUNTIME_LIB="${HOT_DEV_RUNTIME_LIB}" \
+    HOT_DEV_LAB_MODE_FILE="${test_dir}/hot-dev.lab-agents-mode" \
+    bash -c '
+      set -euo pipefail
+      source "${HOT_DEV_RUNTIME_LIB}"
+      reset_network_env() {
+        unset FRONTEND_PORT PORT FRONTEND_DEV_HOST FRONTEND_DEV_PORT BIND_ADDRESS
+        unset PULSE_DEV_LAN PULSE_DEV_API_HOST PULSE_DEV_API_PORT PULSE_DEV_API_URL PULSE_DEV_WS_URL
+        unset PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY
+        unset ALLOWED_ORIGINS
+        LAN_IP=192.168.50.10
+        ALL_IPS="192.168.50.10"
+      }
+
+      reset_network_env
+      PULSE_DEV_LAB_AGENTS=true
+      hot_dev_configure_network_defaults
+      printf "first_lab=%s\n" "${PULSE_DEV_LAB_AGENTS}"
+      printf "first_bind=%s\n" "${BIND_ADDRESS}"
+      printf "remembered_after_first=%s\n" "$(test -f "${HOT_DEV_LAB_MODE_FILE}" && echo yes || echo no)"
+
+      reset_network_env
+      unset PULSE_DEV_LAB_AGENTS
+      hot_dev_configure_network_defaults
+      printf "remembered_lab=%s\n" "${PULSE_DEV_LAB_AGENTS:-}"
+      printf "remembered_bind=%s\n" "${BIND_ADDRESS}"
+
+      reset_network_env
+      PULSE_DEV_LAB_AGENTS=false
+      hot_dev_configure_network_defaults
+      printf "cleared_lab=%s\n" "${PULSE_DEV_LAB_AGENTS:-}"
+      printf "cleared_bind=%s\n" "${BIND_ADDRESS}"
+      printf "remembered_after_clear=%s\n" "$(test -f "${HOT_DEV_LAB_MODE_FILE}" && echo yes || echo no)"
+    '
+  )"
+
+  assert_contains "explicit lab-agent mode starts in lab mode" "${output}" "first_lab=true"
+  assert_contains "explicit lab-agent mode binds backend on all interfaces" "${output}" "first_bind=0.0.0.0"
+  assert_contains "explicit lab-agent mode is remembered locally" "${output}" "remembered_after_first=yes"
+  assert_contains "ordinary later start inherits remembered lab-agent mode" "${output}" "remembered_lab=true"
+  assert_contains "remembered lab-agent mode keeps LAN backend binding" "${output}" "remembered_bind=0.0.0.0"
+  assert_contains "explicit false override clears lab-agent mode" "${output}" "cleared_lab=false"
+  assert_contains "explicit false override returns backend to loopback" "${output}" "cleared_bind=127.0.0.1"
+  assert_contains "explicit false override removes remembered lab-agent state" "${output}" "remembered_after_clear=no"
+}
+
 test_hot_dev_browser_urls_distinguish_bind_and_browser_hosts() {
   local output
   output="$(
@@ -272,6 +323,7 @@ test_hot_dev_preserves_proxmox_guest_docker_env
 test_hot_dev_avoids_self_killing_npm_wrapper
 test_hot_dev_network_defaults_are_local_first_with_explicit_lan_opt_in
 test_hot_dev_lab_agent_mode_enables_lan_and_guest_docker_inventory_defaults
+test_hot_dev_remembers_explicit_lab_agent_mode_for_later_managed_starts
 test_hot_dev_browser_urls_distinguish_bind_and_browser_hosts
 
 if (( failures > 0 )); then

@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/safety"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
@@ -1493,19 +1494,27 @@ func executeToolCall(ctx context.Context, executor *tools.PulseToolExecutor, too
 	result, execErr := executor.ExecuteTool(ctx, toolName, args)
 	output := ""
 	success := false
+	var interpreted agentcapabilities.ToolResultInterpretation
 	if execErr != nil {
 		output = execErr.Error()
 	} else {
-		output = formatToolResult(result)
-		success = !result.IsError
+		interpreted = agentcapabilities.InterpretToolResult(result)
+		output = interpreted.Text
+		success = !interpreted.IsError && !interpreted.ApprovalRequired && !interpreted.PolicyBlocked
 	}
 	end := time.Now().UnixMilli()
 
 	if execErr != nil {
 		return ToolCallRecord{}, fmt.Errorf("%w: tool execution failed (%s): %v", aicontracts.ErrVerificationUnknown, toolName, execErr)
 	}
-	if result.IsError {
+	if interpreted.IsError {
 		return ToolCallRecord{}, fmt.Errorf("%w: tool returned error (%s): %s", aicontracts.ErrVerificationUnknown, toolName, output)
+	}
+	if interpreted.ApprovalRequired {
+		return ToolCallRecord{}, fmt.Errorf("%w: tool requires approval (%s): %s", aicontracts.ErrVerificationUnknown, toolName, output)
+	}
+	if interpreted.PolicyBlocked {
+		return ToolCallRecord{}, fmt.Errorf("%w: tool blocked by security policy (%s): %s", aicontracts.ErrVerificationUnknown, toolName, output)
 	}
 	// Most verification probes rely on parsing structured JSON outputs. If we receive
 	// non-JSON text, treat verification as inconclusive rather than "resolved".

@@ -27,7 +27,7 @@ const (
 
 	// Pro tier features (everything in Relay, plus:)
 	FeatureAIAlerts          = "ai_alerts"          // AI analysis when alerts fire
-	FeatureAIAutoFix         = "ai_autofix"         // Governed remediation workflows
+	FeatureAIAutoFix         = "ai_autofix"         // Governed Patrol fixes
 	FeatureKubernetesAI      = "kubernetes_ai"      // Legacy Kubernetes analysis compatibility gate (NOT basic monitoring)
 	FeatureAgentProfiles     = "agent_profiles"     // Centralized agent configuration profiles
 	FeatureRBAC              = "rbac"               // Role-Based Access Control
@@ -225,7 +225,7 @@ var freeFeatures = []string{
 	FeatureUpdateAlerts,
 	FeatureSSO,
 	FeatureAdvancedSSO,
-	FeatureAIPatrol, // Patrol is free with BYOK; remediation workflows require Pro.
+	FeatureAIPatrol, // Patrol is free with BYOK; governed fixes require Pro.
 }
 
 // relayFeatures adds remote access and mobile on top of free.

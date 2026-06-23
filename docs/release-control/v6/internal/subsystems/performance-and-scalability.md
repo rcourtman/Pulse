@@ -148,6 +148,22 @@ regression protection.
 1. Add performance budgets through SLO or contract tests
 2. Add query-plan guardrails for DB-backed hot paths
 3. Optimize hot paths only when backed by benchmarks or proven query issues
+   The operations-loop status endpoint is performance-adjacent because it
+   aggregates fleet, action-audit, workflow-starter, AI-usage, and
+   external-agent activity evidence for every request. Starter and contextual
+   collaboration evidence on that endpoint must come from persisted
+   count-oriented histories in the existing evidence window, not from prompt
+   payload scans, per-session transcript reads, model-response reads, or
+   unbounded route/request history.
+   Aggregate active finding precedence on that endpoint may read the existing
+   in-memory Patrol findings store once for issue-level active counts, but it
+   must not add a second per-resource registry walk or call the sorted UI
+   presentation list just to decide current work.
+   External-agent readiness on that same endpoint may inspect only the already
+   loaded in-memory API token registry against manifest-derived Pulse MCP
+   surface scopes; it must not add persistence scans, token usage history
+   walks, transcript reads, or per-capability route probes to the protected
+   request hot path.
    Workload platform-scope filtering and option derivation are part of the
    workload table hot path. Shared selectors in
    `frontend-modern/src/components/Workloads/workloadSelectors.ts`,
@@ -278,6 +294,13 @@ regression protection.
    action audit record to the agent SSE projection, but it must not perform
    executor dispatch, resource rescans, model calls, or persistence fan-out on
    the protected request setup path.
+   Native Pulse Assistant tool provider and adapter wiring in
+   `internal/api/router.go` follows that same protected hot-path rule: router
+   setup may inject already-constructed Assistant `ToolAdapter` dependencies,
+   while native Assistant naming and MCP protocol projection remain AI/runtime
+   plus API-contract concerns. Performance-owned code must not use MCP-named
+   native seams to justify extra model calls, persistence walks, or tool
+   registry scans during route setup or generic request admission.
    Docker / Podman lifecycle execution uses the same bounded setup rule:
    `internal/api/router.go` may wire the API action executor once at startup,
    while per-action resource refresh, policy validation, agent command dispatch,

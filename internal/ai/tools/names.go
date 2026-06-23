@@ -1,8 +1,9 @@
 package tools
 
 import (
-	"strings"
 	"sync"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 )
 
 // IsKnownToolName reports whether name is one of the canonical Pulse tool
@@ -13,9 +14,7 @@ func IsKnownToolName(name string) bool {
 	if name == "" {
 		return false
 	}
-	initKnownToolNames()
-	_, ok := knownToolNamesSet[name]
-	return ok
+	return AssistantProviderToolNameCatalog().Has(name)
 }
 
 // IsKnownToolNamePrefix reports whether prefix can still become a canonical
@@ -26,29 +25,25 @@ func IsKnownToolNamePrefix(prefix string) bool {
 	if prefix == "" {
 		return false
 	}
+	return AssistantProviderToolNameCatalog().HasPrefix(prefix)
+}
+
+// AssistantProviderToolNameCatalog returns the registry-backed provider-tool
+// name catalog for the native Assistant surface, including native provider
+// tools such as pulse_question.
+func AssistantProviderToolNameCatalog() agentcapabilities.ProviderToolNameCatalog {
 	initKnownToolNames()
-	for _, name := range knownToolNamesList {
-		if strings.HasPrefix(name, prefix) {
-			return true
-		}
-	}
-	return false
+	return knownToolNameCatalog
 }
 
 var (
-	knownToolNamesOnce sync.Once
-	knownToolNamesList []string
-	knownToolNamesSet  map[string]struct{}
+	knownToolNamesOnce   sync.Once
+	knownToolNameCatalog agentcapabilities.ProviderToolNameCatalog
 )
 
 func initKnownToolNames() {
 	knownToolNamesOnce.Do(func() {
 		e := NewPulseToolExecutor(ExecutorConfig{})
-		names := e.registry.allNames()
-		knownToolNamesList = names
-		knownToolNamesSet = make(map[string]struct{}, len(names))
-		for _, n := range names {
-			knownToolNamesSet[n] = struct{}{}
-		}
+		knownToolNameCatalog = agentcapabilities.NewAssistantProviderToolNameCatalog(e.registry.allNames())
 	})
 }

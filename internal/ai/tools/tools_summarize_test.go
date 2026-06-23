@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 )
@@ -46,19 +47,19 @@ func TestSummarizeTool_RegisteredAndDiscoverable(t *testing.T) {
 	tools := exec.registry.ListTools("")
 	var found bool
 	for _, tool := range tools {
-		if tool.Name == "pulse_summarize" {
+		if tool.Name == agentcapabilities.PulseSummarizeToolName {
 			found = true
 			if _, ok := tool.InputSchema.Properties["action"]; !ok {
-				t.Error("pulse_summarize should declare 'action' property")
+				t.Errorf("%s should declare 'action' property", agentcapabilities.PulseSummarizeToolName)
 			}
 			if _, ok := tool.InputSchema.Properties["resource_type"]; !ok {
-				t.Error("pulse_summarize should declare 'resource_type' property")
+				t.Errorf("%s should declare 'resource_type' property", agentcapabilities.PulseSummarizeToolName)
 			}
 			break
 		}
 	}
 	if !found {
-		t.Fatal("pulse_summarize not registered")
+		t.Fatalf("%s not registered", agentcapabilities.PulseSummarizeToolName)
 	}
 }
 

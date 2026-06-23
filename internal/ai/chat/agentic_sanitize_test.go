@@ -67,6 +67,16 @@ func TestCleanToolCallArtifacts(t *testing.T) {
 			"Let me inspect the device nodes.",
 		},
 		{
+			"shared native Assistant question leak: JSON",
+			"I need to ask a follow-up.\n{\"name\":\"pulse_question\",\"input\":{\"questions\":[{\"id\":\"target\",\"question\":\"Which resource?\"}]}}",
+			"I need to ask a follow-up.",
+		},
+		{
+			"shared native Assistant question leak: function",
+			"I need to clarify the target.\npulse_question(questions=[{\"id\":\"target\",\"question\":\"Which resource?\"}])",
+			"I need to clarify the target.",
+		},
+		{
 			"plain function leak inline after prose",
 			"I will check that now. pulse_read(target_host=\"current_resource\", command=\"lsblk\")",
 			"I will check that now.",
@@ -159,8 +169,10 @@ func TestContainsToolCallMarker(t *testing.T) {
 		// Plain-JSON tool-call leak detection during streaming.
 		{"json leak pulse_query", "{\"name\": \"pulse_query\", \"parameters\": {}}", true},
 		{"json leak pulse_discovery", "prose\n{\"name\": \"pulse_discovery\", \"parameters\": {}}", true},
+		{"json leak pulse_question", "prose\n{\"name\": \"pulse_question\", \"input\": {}}", true},
 		{"json leak with code-fence", "answer\n```json\n{\"name\": \"pulse_query\"}", true},
 		{"plain function leak pulse_read", "pulse_read(target_host=\"current_resource\", command=\"lsblk\")", true},
+		{"plain function leak pulse_question", "pulse_question(questions=[])", true},
 		{"plain function leak after prose", "text. pulse_read(target_host=\"current_resource\")", true},
 		{"json non-tool name", "{\"name\": \"frobnicate\", \"parameters\": {}}", false},
 		{"json unrelated object", "{\"foo\": \"bar\"}", false},
@@ -202,6 +214,13 @@ func TestAppendVisibleContentBeforeToolLeak(t *testing.T) {
 	}
 	if builder.String() != "Let me check. " || pending != "" {
 		t.Fatalf("builder should not append leaked call suffix, got builder=%q pending=%q", builder.String(), pending)
+	}
+}
+
+func TestSplitTrailingPotentialToolNamePrefixUsesAssistantProviderCatalog(t *testing.T) {
+	visible, held := splitTrailingPotentialToolNamePrefix("I need to clarify. pulse_quest")
+	if visible != "I need to clarify. " || held != "pulse_quest" {
+		t.Fatalf("splitTrailingPotentialToolNamePrefix() = (%q, %q), want Assistant-native pulse_question prefix held", visible, held)
 	}
 }
 

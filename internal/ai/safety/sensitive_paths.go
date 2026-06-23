@@ -50,9 +50,9 @@ func IsSensitivePath(path string) (bool, string) {
 		}
 	}
 
-	// Pulse AI encrypted configuration store.
+	// Pulse encrypted AI provider configuration store.
 	if strings.HasSuffix(lower, "/ai.enc") || strings.Contains(lower, "ai.enc") {
-		return true, "pulse ai encrypted config store"
+		return true, "pulse encrypted AI provider config store"
 	}
 
 	// Common dotfiles that may include tokens.

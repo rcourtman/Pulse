@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -491,12 +492,11 @@ func TestExecuteKubernetesExec(t *testing.T) {
 			cfg.ControlLevel = ControlLevelControlled
 		})
 
-		result, err := exec.executeKubernetesExec(ctx, map[string]interface{}{
-			"cluster":      "cluster-1",
-			"pod":          "nginx-pod",
-			"command":      "cat /etc/nginx/nginx.conf",
-			"_approval_id": "approval-1",
-		})
+		result, err := exec.executeKubernetesExec(ctx, agentcapabilities.WithApprovalArgument(map[string]interface{}{
+			"cluster": "cluster-1",
+			"pod":     "nginx-pod",
+			"command": "cat /etc/nginx/nginx.conf",
+		}, "approval-1"))
 		require.NoError(t, err)
 		assert.Contains(t, result.Content[0].Text, "APPROVAL_REQUIRED")
 		mockAgent.AssertNotCalled(t, "ExecuteCommand", mock.Anything, mock.Anything, mock.Anything)
@@ -542,23 +542,21 @@ func TestExecuteKubernetesExec(t *testing.T) {
 			cfg.ControlLevel = ControlLevelControlled
 		})
 
-		result, err := exec.executeKubernetesExec(ctx, map[string]interface{}{
-			"cluster":      "cluster-1",
-			"pod":          "nginx-pod",
-			"command":      "cat /etc/nginx/nginx.conf",
-			"_approval_id": "approval-2",
-		})
+		result, err := exec.executeKubernetesExec(ctx, agentcapabilities.WithApprovalArgument(map[string]interface{}{
+			"cluster": "cluster-1",
+			"pod":     "nginx-pod",
+			"command": "cat /etc/nginx/nginx.conf",
+		}, "approval-2"))
 		require.NoError(t, err)
 		assert.NotContains(t, result.Content[0].Text, "APPROVAL_REQUIRED")
 		mockAgent.AssertExpectations(t)
 
 		// Approval is single-use; second attempt should not bypass.
-		result, err = exec.executeKubernetesExec(ctx, map[string]interface{}{
-			"cluster":      "cluster-1",
-			"pod":          "nginx-pod",
-			"command":      "cat /etc/nginx/nginx.conf",
-			"_approval_id": "approval-2",
-		})
+		result, err = exec.executeKubernetesExec(ctx, agentcapabilities.WithApprovalArgument(map[string]interface{}{
+			"cluster": "cluster-1",
+			"pod":     "nginx-pod",
+			"command": "cat /etc/nginx/nginx.conf",
+		}, "approval-2"))
 		require.NoError(t, err)
 		assert.Contains(t, result.Content[0].Text, "APPROVAL_REQUIRED")
 	})

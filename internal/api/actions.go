@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionplanner"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -63,13 +64,13 @@ func (h *ResourceHandlers) HandlePlanAction(w http.ResponseWriter, r *http.Reque
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxActionPlanRequestBytes))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&req); err != nil {
-		writeJSONErrorWithDetails(w, http.StatusBadRequest, "invalid_action_request", "Invalid action planning request", map[string]string{
+		writeJSONErrorWithDetails(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidActionRequest, "Invalid action planning request", map[string]string{
 			"body": "request body must be a valid ActionRequest JSON object",
 		})
 		return
 	}
 	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		writeJSONErrorWithDetails(w, http.StatusBadRequest, "invalid_action_request", "Invalid action planning request", map[string]string{
+		writeJSONErrorWithDetails(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidActionRequest, "Invalid action planning request", map[string]string{
 			"body": "request body must contain one JSON object",
 		})
 		return
@@ -77,7 +78,7 @@ func (h *ResourceHandlers) HandlePlanAction(w http.ResponseWriter, r *http.Reque
 
 	req.ResourceID = unified.CanonicalResourceID(req.ResourceID)
 	if req.ResourceID == "" {
-		writeJSONErrorWithDetails(w, http.StatusBadRequest, "invalid_action_request", "Invalid action planning request", map[string]string{
+		writeJSONErrorWithDetails(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidActionRequest, "Invalid action planning request", map[string]string{
 			"resourceId": "resource id is required",
 		})
 		return
@@ -92,7 +93,7 @@ func (h *ResourceHandlers) HandlePlanAction(w http.ResponseWriter, r *http.Reque
 
 	resource, ok := registry.Get(req.ResourceID)
 	if !ok || resource == nil {
-		writeJSONErrorWithDetails(w, http.StatusNotFound, "resource_not_found", "Resource not found", map[string]string{
+		writeJSONErrorWithDetails(w, http.StatusNotFound, agentcapabilities.AgentErrCodeResourceNotFound, "Resource not found", map[string]string{
 			"resourceId": req.ResourceID,
 		})
 		return
@@ -105,11 +106,11 @@ func (h *ResourceHandlers) HandlePlanAction(w http.ResponseWriter, r *http.Reque
 			if validationErr.Field != "" {
 				details[validationErr.Field] = validationErr.Message
 			}
-			writeJSONErrorWithDetails(w, http.StatusBadRequest, "invalid_action_request", "Invalid action planning request", details)
+			writeJSONErrorWithDetails(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidActionRequest, "Invalid action planning request", details)
 			return
 		}
 		if errors.Is(err, actionplanner.ErrCapabilityNotFound) {
-			writeJSONErrorWithDetails(w, http.StatusNotFound, "capability_not_found", "Capability not found on resource", map[string]string{
+			writeJSONErrorWithDetails(w, http.StatusNotFound, agentcapabilities.AgentErrCodeCapabilityNotFound, "Capability not found on resource", map[string]string{
 				"resourceId":     req.ResourceID,
 				"capabilityName": req.CapabilityName,
 			})
@@ -122,7 +123,7 @@ func (h *ResourceHandlers) HandlePlanAction(w http.ResponseWriter, r *http.Reque
 	req = normalizeActionRequestForAudit(req)
 	if checker, ok := h.actionExecutor.(ActionAvailabilityChecker); ok {
 		if readiness := checker.CheckActionAvailable(r.Context(), req, *resource); readiness.Name != "" && !readiness.Available {
-			writeJSONErrorWithDetails(w, http.StatusConflict, "action_execution_unavailable", "Action execution is unavailable", map[string]string{
+			writeJSONErrorWithDetails(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionExecutionUnavailable, "Action execution is unavailable", map[string]string{
 				"resourceId":     req.ResourceID,
 				"capabilityName": req.CapabilityName,
 				"reasonCode":     readiness.ReasonCode,
@@ -222,11 +223,11 @@ func (h *ResourceHandlers) HandleDecideAction(w http.ResponseWriter, r *http.Req
 
 	actionID := strings.TrimSpace(r.PathValue("id"))
 	if actionID == "" {
-		writeJSONError(w, http.StatusBadRequest, "missing_id", "Missing action ID")
+		writeJSONError(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeMissingID, "Missing action ID")
 		return
 	}
 	if !validAuditEventID.MatchString(actionID) || len(actionID) > 128 {
-		writeJSONError(w, http.StatusBadRequest, "invalid_id", "Invalid action ID format")
+		writeJSONError(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidID, "Invalid action ID format")
 		return
 	}
 
@@ -234,13 +235,13 @@ func (h *ResourceHandlers) HandleDecideAction(w http.ResponseWriter, r *http.Req
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxActionDecisionRequestBytes))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&decision); err != nil {
-		writeJSONErrorWithDetails(w, http.StatusBadRequest, "invalid_action_decision", "Invalid action decision request", map[string]string{
+		writeJSONErrorWithDetails(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidActionDecision, "Invalid action decision request", map[string]string{
 			"body": "request body must be a valid action decision JSON object",
 		})
 		return
 	}
 	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		writeJSONErrorWithDetails(w, http.StatusBadRequest, "invalid_action_decision", "Invalid action decision request", map[string]string{
+		writeJSONErrorWithDetails(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidActionDecision, "Invalid action decision request", map[string]string{
 			"body": "request body must contain one JSON object",
 		})
 		return
@@ -248,7 +249,7 @@ func (h *ResourceHandlers) HandleDecideAction(w http.ResponseWriter, r *http.Req
 	decision.Outcome = unified.ApprovalOutcome(strings.TrimSpace(string(decision.Outcome)))
 	decision.Reason = strings.TrimSpace(decision.Reason)
 	if decision.Outcome != unified.OutcomeApproved && decision.Outcome != unified.OutcomeRejected {
-		writeJSONErrorWithDetails(w, http.StatusBadRequest, "invalid_action_decision", "Invalid action decision request", map[string]string{
+		writeJSONErrorWithDetails(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidActionDecision, "Invalid action decision request", map[string]string{
 			"outcome": "outcome must be approved or rejected",
 		})
 		return
@@ -266,7 +267,7 @@ func (h *ResourceHandlers) HandleDecideAction(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if !ok {
-		writeJSONErrorWithDetails(w, http.StatusNotFound, "action_not_found", "Action not found", map[string]string{
+		writeJSONErrorWithDetails(w, http.StatusNotFound, agentcapabilities.AgentErrCodeActionNotFound, "Action not found", map[string]string{
 			"actionId": actionID,
 		})
 		return
@@ -318,11 +319,11 @@ func (h *ResourceHandlers) HandleExecuteAction(w http.ResponseWriter, r *http.Re
 
 	actionID := strings.TrimSpace(r.PathValue("id"))
 	if actionID == "" {
-		writeJSONError(w, http.StatusBadRequest, "missing_id", "Missing action ID")
+		writeJSONError(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeMissingID, "Missing action ID")
 		return
 	}
 	if !validAuditEventID.MatchString(actionID) || len(actionID) > 128 {
-		writeJSONError(w, http.StatusBadRequest, "invalid_id", "Invalid action ID format")
+		writeJSONError(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidID, "Invalid action ID format")
 		return
 	}
 
@@ -331,13 +332,13 @@ func (h *ResourceHandlers) HandleExecuteAction(w http.ResponseWriter, r *http.Re
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&execution); err != nil {
 		if !errors.Is(err, io.EOF) {
-			writeJSONErrorWithDetails(w, http.StatusBadRequest, "invalid_action_execution", "Invalid action execution request", map[string]string{
+			writeJSONErrorWithDetails(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidActionExecution, "Invalid action execution request", map[string]string{
 				"body": "request body must be a valid action execution JSON object",
 			})
 			return
 		}
 	} else if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		writeJSONErrorWithDetails(w, http.StatusBadRequest, "invalid_action_execution", "Invalid action execution request", map[string]string{
+		writeJSONErrorWithDetails(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidActionExecution, "Invalid action execution request", map[string]string{
 			"body": "request body must contain one JSON object",
 		})
 		return
@@ -356,7 +357,7 @@ func (h *ResourceHandlers) HandleExecuteAction(w http.ResponseWriter, r *http.Re
 		return
 	}
 	if !ok {
-		writeJSONErrorWithDetails(w, http.StatusNotFound, "action_not_found", "Action not found", map[string]string{
+		writeJSONErrorWithDetails(w, http.StatusNotFound, agentcapabilities.AgentErrCodeActionNotFound, "Action not found", map[string]string{
 			"actionId": actionID,
 		})
 		return
@@ -377,7 +378,7 @@ func (h *ResourceHandlers) HandleExecuteAction(w http.ResponseWriter, r *http.Re
 		return
 	}
 	if h.actionExecutor == nil {
-		writeJSONError(w, http.StatusNotImplemented, "action_executor_unavailable", "No action executor is configured for this API instance")
+		writeJSONError(w, http.StatusNotImplemented, agentcapabilities.AgentErrCodeActionExecutorUnavailable, "No action executor is configured for this API instance")
 		return
 	}
 	if err := h.validateActionPlanFresh(orgID, record); err != nil {
@@ -545,13 +546,13 @@ func actionDecisionActor(h *ResourceHandlers, r *http.Request) string {
 func writeActionDecisionApplyError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, unified.ErrInvalidApprovalOutcome):
-		writeJSONErrorWithDetails(w, http.StatusBadRequest, "invalid_action_decision", "Invalid action decision request", map[string]string{
+		writeJSONErrorWithDetails(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidActionDecision, "Invalid action decision request", map[string]string{
 			"outcome": "outcome must be approved or rejected",
 		})
 	case errors.Is(err, unified.ErrActionNotPending):
-		writeJSONError(w, http.StatusConflict, "action_not_pending", "Action is not pending approval")
+		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionNotPending, "Action is not pending approval")
 	case errors.Is(err, unified.ErrActionPlanExpired):
-		writeJSONError(w, http.StatusConflict, "action_plan_expired", "Action plan has expired")
+		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionPlanExpired, "Action plan has expired")
 	default:
 		writeJSONError(w, http.StatusInternalServerError, "action_decision_failed", sanitizeErrorForClient(err, "Action decision failed"))
 	}
@@ -560,21 +561,21 @@ func writeActionDecisionApplyError(w http.ResponseWriter, err error) {
 func writeActionExecutionApplyError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, unified.ErrActionNotApproved):
-		writeJSONError(w, http.StatusConflict, "action_not_approved", "Action is not approved for execution")
+		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionNotApproved, "Action is not approved for execution")
 	case errors.Is(err, unified.ErrActionAlreadyExecuting):
-		writeJSONError(w, http.StatusConflict, "action_already_executing", "Action is already executing")
+		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionAlreadyExecuting, "Action is already executing")
 	case errors.Is(err, unified.ErrActionExecutionFinal):
-		writeJSONError(w, http.StatusConflict, "action_execution_final", "Action execution is already final")
+		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionExecutionFinal, "Action execution is already final")
 	case errors.Is(err, unified.ErrActionNotExecuting):
 		writeJSONError(w, http.StatusConflict, "action_not_executing", "Action is not executing")
 	case errors.Is(err, unified.ErrActionPlanExpired):
-		writeJSONError(w, http.StatusConflict, "action_plan_expired", "Action plan has expired")
+		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionPlanExpired, "Action plan has expired")
 	case errors.Is(err, unified.ErrActionDryRunOnly):
-		writeJSONError(w, http.StatusConflict, "action_dry_run_only", "Action plan is dry-run only and cannot be executed")
+		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionDryRunOnly, "Action plan is dry-run only and cannot be executed")
 	case errors.Is(err, unified.ErrActionPlanDrift):
-		writeJSONError(w, http.StatusConflict, "action_plan_drift", "Action plan no longer matches the current resource contract; re-plan before executing")
+		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionPlanDrift, "Action plan no longer matches the current resource contract; re-plan before executing")
 	case errors.Is(err, unified.ErrResourceRemediationLocked):
-		writeJSONError(w, http.StatusConflict, "resource_remediation_locked", "Resource is operator-locked against automated remediation")
+		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeResourceRemediationLocked, "Resource is operator-locked against automated remediation")
 	default:
 		writeJSONError(w, http.StatusInternalServerError, "action_execution_failed", sanitizeErrorForClient(err, "Action execution failed"))
 	}

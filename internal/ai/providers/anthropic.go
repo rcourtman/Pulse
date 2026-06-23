@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rs/zerolog/log"
 )
 
@@ -550,58 +551,9 @@ type anthropicDelta struct {
 // ChatStream sends a chat request and streams the response via callback
 func (c *AnthropicClient) ChatStream(ctx context.Context, req ChatRequest, callback StreamCallback) error {
 	// Convert messages to Anthropic format (same as Chat)
-	messages := make([]anthropicMessage, 0, len(req.Messages))
-	for _, m := range req.Messages {
-		if m.Role == "system" {
-			continue
-		}
-
-		if m.ToolResult != nil {
-			contentJSON, err := json.Marshal(m.ToolResult.Content)
-			if err != nil {
-				return fmt.Errorf("failed to marshal tool result content for %s: %w", m.ToolResult.ToolUseID, err)
-			}
-			messages = append(messages, anthropicMessage{
-				Role: "user",
-				Content: []anthropicContent{
-					{
-						Type:      "tool_result",
-						ToolUseID: m.ToolResult.ToolUseID,
-						Content:   contentJSON,
-						IsError:   m.ToolResult.IsError,
-					},
-				},
-			})
-			continue
-		}
-
-		if m.Role == "assistant" && len(m.ToolCalls) > 0 {
-			contentBlocks := make([]anthropicContent, 0)
-			if m.Content != "" {
-				contentBlocks = append(contentBlocks, anthropicContent{
-					Type: "text",
-					Text: m.Content,
-				})
-			}
-			for _, tc := range m.ToolCalls {
-				contentBlocks = append(contentBlocks, anthropicContent{
-					Type:  "tool_use",
-					ID:    tc.ID,
-					Name:  tc.Name,
-					Input: tc.Input,
-				})
-			}
-			messages = append(messages, anthropicMessage{
-				Role:    "assistant",
-				Content: contentBlocks,
-			})
-			continue
-		}
-
-		messages = append(messages, anthropicMessage{
-			Role:    m.Role,
-			Content: m.Content,
-		})
+	messages, err := convertMessagesToAnthropic(req.Messages)
+	if err != nil {
+		return err
 	}
 
 	model := req.Model
@@ -771,7 +723,7 @@ func (c *AnthropicClient) ChatStream(ctx context.Context, req ChatRequest, callb
 							currentToolInput.WriteString(event.Delta.PartialJSON)
 							if currentToolName != "" {
 								rawInput := currentToolInput.String()
-								parsedInput := parseStreamToolInput(rawInput)
+								parsedInput, _ := agentcapabilities.ParseProviderToolInput(rawInput)
 								message := "Receiving tool input."
 								if parsedInput != nil {
 									message = "Prepared tool input."
@@ -794,10 +746,7 @@ func (c *AnthropicClient) ChatStream(ctx context.Context, req ChatRequest, callb
 				case "content_block_stop":
 					if currentToolID != "" {
 						// Parse the accumulated tool input
-						var input map[string]interface{}
-						if err := json.Unmarshal([]byte(currentToolInput.String()), &input); err != nil {
-							input = map[string]interface{}{"raw": currentToolInput.String()}
-						}
+						input := agentcapabilities.ProviderToolInputOrRaw(currentToolInput.String())
 						toolCalls = append(toolCalls, ToolCall{
 							ID:    currentToolID,
 							Name:  currentToolName,

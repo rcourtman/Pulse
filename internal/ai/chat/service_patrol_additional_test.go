@@ -639,16 +639,16 @@ func TestService_isAutonomousModeEnabled(t *testing.T) {
 	}
 }
 
-func TestService_ExecuteMCPTool(t *testing.T) {
+func TestService_ExecuteAssistantTool(t *testing.T) {
 	service := &Service{}
-	if _, err := service.ExecuteMCPTool(context.Background(), "pulse_knowledge", nil); err == nil {
+	if _, err := service.ExecuteAssistantTool(context.Background(), "pulse_knowledge", nil); err == nil {
 		t.Fatalf("expected error when executor missing")
 	}
 
 	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{KnowledgeStoreProvider: mockKnowledgeStore{}})
 	service.executor = executor
 
-	result, err := service.ExecuteMCPTool(context.Background(), "pulse_knowledge", map[string]interface{}{
+	result, err := service.ExecuteAssistantTool(context.Background(), "pulse_knowledge", map[string]interface{}{
 		"action":      "recall",
 		"resource_id": "vm1",
 	})
@@ -659,7 +659,7 @@ func TestService_ExecuteMCPTool(t *testing.T) {
 		t.Fatalf("expected result text")
 	}
 
-	if _, err := service.ExecuteMCPTool(context.Background(), "pulse_knowledge", map[string]interface{}{
+	if _, err := service.ExecuteAssistantTool(context.Background(), "pulse_knowledge", map[string]interface{}{
 		"action": "recall",
 	}); err == nil {
 		t.Fatalf("expected error for missing resource_id")

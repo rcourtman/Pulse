@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 )
 
 func TestEmptyOrchestratorMessage_UsesCanonicalEmptyCollections(t *testing.T) {
@@ -39,6 +41,61 @@ func TestEmptyOrchestratorToolCallInfo_UsesCanonicalEmptyCollections(t *testing.
 	}
 }
 
+func TestOrchestratorToolCallInfoUsesSharedProviderProjection(t *testing.T) {
+	input := map[string]interface{}{
+		"resource_id": "vm/100",
+		"body": map[string]interface{}{
+			"tags": []interface{}{"prod"},
+		},
+	}
+	signature := json.RawMessage(`{"provider":"gemini"}`)
+
+	info := OrchestratorToolCallInfoFromProvider(agentcapabilities.ProviderToolCall{
+		ID:               "call-1",
+		Name:             "diagnose",
+		Input:            input,
+		ThoughtSignature: signature,
+	})
+	if info.ID != "call-1" || info.Name != "diagnose" || info.Input == nil {
+		t.Fatalf("orchestrator tool call info = %+v", info)
+	}
+	info.Input["resource_id"] = "vm/101"
+	info.Input["body"].(map[string]interface{})["tags"].([]interface{})[0] = "changed"
+	info.ThoughtSignature[0] = '['
+	if input["resource_id"] != "vm/100" || input["body"].(map[string]interface{})["tags"].([]interface{})[0] != "prod" {
+		t.Fatalf("orchestrator projection must not alias provider input: source=%#v info=%#v", input, info.Input)
+	}
+	if string(signature) != `{"provider":"gemini"}` {
+		t.Fatalf("orchestrator projection must not alias provider thought signature: source=%s info=%s", signature, info.ThoughtSignature)
+	}
+
+	orchestratorInput := map[string]interface{}{"resource_id": "vm/300"}
+	infoForProvider := OrchestratorToolCallInfo{
+		ID:               "call-2",
+		Name:             "inspect",
+		Input:            orchestratorInput,
+		ThoughtSignature: json.RawMessage(`{"provider":"gemini"}`),
+	}.NormalizeCollections()
+	provider := infoForProvider.ProviderToolCall()
+	provider.Input["resource_id"] = "vm/102"
+	provider.ThoughtSignature[0] = '['
+	if infoForProvider.Input["resource_id"] != "vm/300" || string(infoForProvider.ThoughtSignature) != `{"provider":"gemini"}` {
+		t.Fatalf("provider projection must not alias orchestrator tool call info: info=%#v provider=%#v", infoForProvider, provider)
+	}
+}
+
+func TestOrchestratorToolResultInfoUsesSharedProviderProjection(t *testing.T) {
+	info := OrchestratorToolResultInfoFromProvider(agentcapabilities.NewProviderToolResult("call-1", "done", true))
+	if info.ToolUseID != "call-1" || info.Content != "done" || !info.IsError {
+		t.Fatalf("orchestrator tool result info = %+v", info)
+	}
+
+	var shared agentcapabilities.ProviderToolResult = info.ProviderToolResult()
+	if shared.ToolUseID != "call-1" || shared.Content != "done" || !shared.IsError {
+		t.Fatalf("shared provider tool result = %+v", shared)
+	}
+}
+
 func TestEmptyInvestigationSession_UsesCanonicalEmptyCollections(t *testing.T) {
 	payload, err := json.Marshal(EmptyInvestigationSession())
 	if err != nil {
@@ -68,6 +125,20 @@ func TestEmptyInvestigationRecord_UsesCanonicalEmptyCollections(t *testing.T) {
 	}
 	if !strings.Contains(string(payload), `"tools_used":[]`) {
 		t.Fatalf("expected empty investigation record to retain tools_used array, got %s", payload)
+	}
+}
+
+func TestInvestigationOutcomeFixRejected_IsCanonicalWireValue(t *testing.T) {
+	payload, err := json.Marshal(struct {
+		Outcome InvestigationOutcome `json:"outcome"`
+	}{
+		Outcome: OutcomeFixRejected,
+	})
+	if err != nil {
+		t.Fatalf("marshal rejected investigation outcome: %v", err)
+	}
+	if !strings.Contains(string(payload), `"outcome":"fix_rejected"`) {
+		t.Fatalf("expected rejected investigation outcome wire value, got %s", payload)
 	}
 }
 

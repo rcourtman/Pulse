@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -369,6 +370,51 @@ func TestVerifyFixResolved_WithoutRuntimeStateFailsClosed(t *testing.T) {
 	}
 	if err != nil && !errors.Is(err, aicontracts.ErrVerificationUnknown) {
 		t.Fatalf("expected verification unknown error, got %v", err)
+	}
+}
+
+func TestExecuteToolCallTreatsSharedApprovalAndPolicyMarkersAsInconclusive(t *testing.T) {
+	tests := []struct {
+		name        string
+		resultText  string
+		wantMessage string
+	}{
+		{
+			name:        "approval required",
+			resultText:  agentcapabilities.ApprovalRequiredToolMarker("rm -rf /", "call-1", "needs approval", "approval-1", "approve in Pulse"),
+			wantMessage: "tool requires approval",
+		},
+		{
+			name:        "policy blocked",
+			resultText:  agentcapabilities.PolicyBlockedToolMarker("rm -rf /", "blocked"),
+			wantMessage: "tool blocked by security policy",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+			executor.RegisterTool(tools.RegisteredTool{
+				Definition: tools.Tool{
+					Name:        "patrol_marker_probe",
+					Description: "test-only marker probe",
+				},
+				Handler: func(context.Context, *tools.PulseToolExecutor, map[string]interface{}) (tools.CallToolResult, error) {
+					return tools.NewTextResult(tt.resultText), nil
+				},
+			})
+
+			record, err := executeToolCall(context.Background(), executor, "patrol_marker_probe", nil)
+			if err == nil {
+				t.Fatalf("expected shared marker to fail closed, got record %+v", record)
+			}
+			if !errors.Is(err, aicontracts.ErrVerificationUnknown) {
+				t.Fatalf("expected verification unknown, got %v", err)
+			}
+			if !strings.Contains(err.Error(), tt.wantMessage) {
+				t.Fatalf("expected %q in error, got %v", tt.wantMessage, err)
+			}
+		})
 	}
 }
 

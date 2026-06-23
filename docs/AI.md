@@ -1,17 +1,22 @@
-# Pulse AI
+# Pulse Intelligence
 
-Pulse Patrol is available to everyone on the Community plan with BYOK (your own AI provider). Pro adds alert-triggered root-cause analysis and safe remediation workflows, while hosted Cloud carries those capabilities for hosted environments. Learn more at <https://pulserelay.pro> or see [PULSE_PRO.md](PULSE_PRO.md).
+Pulse Patrol is available to everyone on the Community plan with BYOK (your own AI provider). Pro adds hands-on Patrol modes, issue investigation, governed fixes, verified outcomes, and 90-day history, while hosted Cloud carries those capabilities for hosted environments. Learn more at <https://pulserelay.pro> or see [PULSE_PRO.md](PULSE_PRO.md).
 
 ---
 
 ## Overview
 
-Pulse includes two model-powered systems:
+<!-- pulse-intelligence-overview:start -->
+Pulse Intelligence is built around a shared **Pulse Intelligence Core**: Canonical context, governed actions, safety gates, approval state, action audit, and verification shared by Pulse Assistant, Pulse MCP, and Pulse Patrol.
 
-1. **Pulse Assistant** — An interactive chat interface for ad-hoc troubleshooting, investigations, and infrastructure control.
-2. **Pulse Patrol** — A scheduled, context-aware model workflow that gathers infrastructure evidence, exposes governed tools, and asks your configured LLM to report actionable findings.
+That core is deliberately surfaced with Patrol as the primary built-in operator and Assistant plus MCP as access paths over the same governed capabilities:
 
-Both systems are built on the same tool-driven architecture: the configured LLM owns diagnosis, prioritization, remediation reasoning, and tool choice; Pulse supplies context, tools, safety gates, approval state, and audit trails.
+1. **Pulse Patrol**: Patrol is the first-party operations surface: it watches, investigates, acts within the chosen Patrol mode, verifies outcomes, and records what happened.
+2. **Pulse Assistant**: The contextual explanation, approval, and handoff surface for Patrol findings, governed actions, verification, and operator questions. Affordances: tools and interactive questions.
+3. **Pulse MCP**: The external-agent adapter that projects canonical Pulse Intelligence capabilities as MCP tools. Affordances: tools, resources, prompts, and capability metadata.
+<!-- pulse-intelligence-overview:end -->
+
+These surfaces are built on the same action-driven architecture: the configured LLM owns diagnosis, prioritization, fix reasoning, and action choice; Pulse supplies context, capabilities, safety gates, approval state, and audit trails. Verification is part of the governed action lifecycle rather than a separate model-owned feature.
 
 ### Not Just Another Chatbot
 
@@ -21,14 +26,14 @@ Pulse Assistant is a **protocol-driven, safety-gated LLM tool surface** that:
 - **Caches session facts** — extracts bounded tool facts to avoid redundant queries during the current conversation
 - **Enforces workflow invariants** — FSM prevents dangerous state transitions
 - **Supports parallel tool execution** — efficient batch operations with concurrency control
-- **Detects and prevents hallucinations** — phantom execution detection
+- **Grounds answers in real tool work** — visible tool traces, read-after-write verification, and transcript hygiene prevent unsupported execution claims from being treated as facts
 - **Returns structured tool errors** — the model can recover from clear, machine-readable failures
 
 📖 **For a deep technical dive into the Assistant architecture, see [architecture/pulse-assistant-deep-dive.md](architecture/pulse-assistant-deep-dive.md).**
 
 ### Not Just Another Alerting System
 
-Pulse Patrol is a **scheduled model-owned operations loop** that:
+Pulse Patrol is a **scheduled and event-triggered governed operator** that:
 
 - **Assembles evidence** from metrics, storage, backups, discovery, alerts, and resource timelines
 - **Provides statistical context** such as baselines, trend summaries, capacity estimates, and event relationships
@@ -41,6 +46,19 @@ All while running entirely on your infrastructure with BYOK for complete privacy
 📖 **For a deep technical dive into the Patrol runtime, see [architecture/pulse-patrol-deep-dive.md](architecture/pulse-patrol-deep-dive.md).**
 
 See [architecture/pulse-assistant.md](architecture/pulse-assistant.md) for the original safety architecture documentation.
+
+### Assistant And MCP
+
+Pulse Assistant and `pulse-mcp` are sibling surfaces over Pulse Intelligence,
+not competing implementations, and neither replaces the other. Assistant remains
+the in-app Pro surface for current resource/finding/run handoffs, approval
+cards, governed action status, and operator-friendly timelines. `pulse-mcp`
+owns the external-agent bridge: it fetches `/api/agent/capabilities`, projects
+those canonical API capabilities as MCP tools, and preserves the same stable
+error envelopes and approval/audit contracts. New operational capabilities
+should be added to the canonical API manifest first, then consumed by Assistant
+or MCP as appropriate; MCP-only actions and Assistant-only copies of the same
+business logic are drift.
 
 ---
 
@@ -71,7 +89,7 @@ patrol_report_finding() / patrol_resolve_finding() ── model-owned finding li
 model-reported findings ── validated, deduplicated, stored
         │
         ▼ (if configured)
-MaybeInvestigateFinding() ── model investigation + governed remediation
+MaybeInvestigateFinding() ── model investigation + governed fix planning/execution
 ```
 
 ### What Patrol Sees
@@ -162,23 +180,22 @@ Dismissed and resolved findings persist across Pulse restarts.
 
 ---
 
-## Autonomy Levels
+## Patrol Modes
 
-Patrol supports three autonomy modes that control how much action it can take:
+Patrol supports four modes that decide how far Pulse can go after it finds an issue:
 
 | Mode | Behavior | Plan |
-|------|----------|------|
-| **Monitor** | Detect issues only. No investigation or fixes. | Community (BYOK) |
-| **Investigate** | Investigates findings and proposes fixes. All fixes require approval before execution. | Pro / hosted Cloud |
-| **Remediate** | Runs governed remediation actions and verifies results. Critical findings still require approval by default. | Pro / hosted Cloud |
+|-------|----------|------|
+| **Watch only** | Detect issues only. No investigation or fixes. | Community (BYOK) |
+| **Ask before changes** | Investigates findings and proposes fixes. All fixes require approval before execution. | Pro / hosted Cloud |
+| **Auto-fix safe issues** | Runs warning-level governed fixes automatically and verifies results. Critical findings still require approval by default. | Pro / hosted Cloud |
+| **Policy autopilot** | Runs eligible governed fixes automatically and verifies results. Use only in environments where this is acceptable. | Pro / hosted Cloud |
 
-Community and Relay installs can still run scheduled Patrol findings with BYOK.
-Investigation, proposed remediation, and fix execution are paid AI-operations
-capabilities rather than a core monitoring limit.
+Community and Relay installs can still run scheduled Patrol findings with BYOK. Watch only remains the free-first baseline; investigation, proposed fixes, and fix execution are paid AI-operations capabilities rather than a core monitoring limit.
 
 ### Investigation Flow
 
-When a finding is created in Investigate or Remediate mode:
+When a finding is created in a Pro Patrol mode:
 
 ```
 Finding created
@@ -245,24 +262,24 @@ Pulse Assistant is a **tool-driven** chat interface. It does not "guess" system 
 2. **Investigate**: Uses `pulse_read` to run bounded, read-only commands and check status/logs
 3. **Act** (optional): Uses `pulse_control` for changes, then verifies with a read
 
-### Available Tools
+### Tool Inventory
 
-| Tool | Classification | Purpose |
-|------|---------------|---------|
-| `pulse_query`, `pulse_discovery` | Resolve | Resource discovery and query |
-| `pulse_read` | Read | Read-only operations: exec, file, find, tail, logs |
-| `pulse_metrics` | Read | Performance metrics and baselines |
-| `pulse_storage` | Read | Storage pools, backups, snapshots, Ceph, RAID, disk health |
-| `pulse_kubernetes` | Read | Kubernetes cluster info |
-| `pulse_pmg` | Read | Proxmox Mail Gateway stats |
-| `pulse_alerts` | Read/Write | Alert management (resolve/dismiss are writes) |
-| `pulse_docker` | Read/Write | Docker operations (control/update are writes) |
-| `pulse_knowledge` | Read/Write | Knowledge persistence (remember/note/save are writes) |
-| `pulse_file_edit` | Read/Write | File operations (write/append are writes) |
-| `pulse_control` | Write | Guest control, service management |
-| `patrol_report_finding` | Patrol | Report a new finding (patrol runs only) |
-| `patrol_resolve_finding` | Patrol | Resolve an active finding (patrol runs only) |
-| `patrol_get_findings` | Patrol | List active findings (patrol runs only) |
+The Assistant tool list is registry-owned at runtime, not hand-maintained in
+this public overview. Each turn receives an available-tool manifest generated
+from Pulse's governed tool registry, including action mode (`read`, `mixed`,
+`write`) and approval policy (`scope_only`, `action_plan`). That same registry
+feeds the Assistant system prompt, provider tool declarations, tool-result
+handling, approval boundaries, and Patrol-only tool filtering.
+
+For the current source-owned inventory, see the native tool registry and
+governance projection in `internal/ai/tools/` and
+`internal/agentcapabilities/`. For external agents, use the live
+`/api/agent/capabilities` manifest or `pulse-mcp` `tools/list`; those surfaces
+project the canonical agent capabilities rather than a separate MCP-only tool
+table.
+The same manifest also carries reusable `workflowPrompts` metadata so Pulse
+Assistant-compatible starters and MCP `prompts/list` clients discover the same
+fleet triage, resource investigation, and Patrol finding review workflows.
 
 ### Safety Gates
 
@@ -271,7 +288,7 @@ The assistant enforces multiple safety gates:
 1. **Discovery Before Action** — Action tools cannot operate on resources that weren't first discovered
 2. **Verification After Write** — After any write, the model must perform a read/status check before providing a final answer
 3. **Read/Write Separation** — Read operations route through `pulse_read` (stays in READING state); write operations route through `pulse_control` (enters VERIFYING state)
-4. **Phantom Detection** — Detects when the model claims execution without tool calls
+4. **Grounded Execution Guardrails** — Visible tool traces and read-after-write checks prevent unsupported execution claims from being treated as facts
 5. **Approval Mode** — In Controlled mode, every write requires explicit user approval
 6. **Execution Context Binding** — Commands execute within the resolved resource's context, not on parent hosts
 
@@ -297,17 +314,21 @@ When control level is **Controlled**, write actions pause for approval:
 
 ## Configuration
 
-Configure in the UI: **Settings → System → AI Assistant**
+Configure providers in the UI: **Settings → Pulse Intelligence → Provider & Models**
 
 ### Supported Providers
 
-- **Anthropic** (API key or OAuth)
+- **Anthropic** (API key)
 - **OpenAI**
 - **OpenRouter**
 - **DeepSeek**
 - **Google Gemini**
 - **Ollama** (self-hosted, with tool/function calling support)
 - **OpenAI-compatible base URL** (for providers that implement the OpenAI API shape)
+
+Legacy Anthropic OAuth fields may still appear in stored settings so existing
+installs can disconnect and clear old tokens, but Anthropic OAuth is not a
+supported runtime authentication method and does not make Anthropic configured.
 
 ### Models
 
@@ -316,7 +337,7 @@ Pulse uses model identifiers in the form: `provider:model-name`
 You can set separate models for:
 - Chat (`chat_model`)
 - Patrol (`patrol_model`)
-- Safe remediation model (`auto_fix_model`)
+- Patrol fix model (`auto_fix_model`, retained as the compatibility settings key)
 
 ### Storage
 
@@ -421,10 +442,10 @@ go run ./cmd/eval -scenario resource-context -url http://127.0.0.1:7655 -user ad
 
 Pulse includes settings that control how "active" AI features are:
 
-- **Autonomous mode (Pro and above)**: When enabled, AI may execute safe commands without approval
-- **Safe remediation workflows (Pro and above)**: Allows Patrol to propose and run governed remediation actions under the approval or autonomy policy you choose
-- **Alert-triggered analysis (Pro and above)**: Limits AI to analyzing specific events when alerts occur
-- **Full autonomy unlock (Pro and above)**: Permits critical remediation actions without approval (requires explicit toggle)
+- **Patrol modes (Pro and above)**: Lets you choose whether Patrol only watches, asks before changes, handles safe fixes, or uses policy autopilot
+- **Governed fixes (Pro and above)**: Allows Patrol to propose, approve, run, verify, and record fixes under the Patrol mode you choose
+- **Issue investigation (Pro and above)**: Lets Patrol investigate findings with surrounding infrastructure context
+- **Policy autopilot unlock (Pro and above)**: Permits eligible critical fixes without per-fix approval after an explicit opt-in
 
 If you enable execution features, ensure agent tokens and scopes are appropriately restricted.
 
@@ -440,7 +461,7 @@ Use this only in trusted environments.
 
 ## Privacy
 
-Patrol runs on your server and only sends the minimal context needed for analysis to the configured provider (when AI is enabled). Anonymous outbound telemetry (counts and feature flags only — no hostnames or credentials) is enabled by default and can be disabled any time — see [Privacy](PRIVACY.md) for details.
+Patrol runs on your server and only sends the minimal context needed for analysis to the configured provider (when AI is enabled). Anonymous outbound telemetry (counts, feature flags, and coarse Patrol mode and governed Pulse Intelligence operations adoption flags and counters only; no hostnames, credentials, prompts, chat messages, command text, action output, token values, or resource identifiers) is enabled by default and can be disabled any time. See [Privacy](PRIVACY.md) for details.
 
 ---
 
@@ -449,7 +470,7 @@ Patrol runs on your server and only sends the minimal context needed for analysi
 Alerts are threshold-based and narrow. Patrol gives the selected model a broader, tool-backed operating picture.
 
 - **Alerts**: "Disk > 90%"
-- **Patrol**: "The model sees ZFS pool usage, growth rate, datastore consumers, backup context, and governed tools, then decides whether that evidence warrants a finding or action recommendation."
+- **Patrol**: "The model sees ZFS pool usage, growth rate, datastore consumers, backup context, and governed actions, then decides whether that evidence warrants a finding or action recommendation."
 
 ---
 
@@ -467,7 +488,7 @@ Pulse tracks token usage and costs:
 
 | Issue | Solution |
 |-------|----------|
-| AI not responding | Verify provider credentials in **Settings → System → AI Assistant** |
+| Assistant or Patrol not responding | Verify provider credentials in **Settings → Pulse Intelligence → Provider & Models** |
 | No execution capability | Confirm at least one agent is connected |
 | Findings not persisting | Check Pulse has write access to `ai_findings.json` in the config directory |
 | Too many findings | This shouldn't happen — please report if it does |
@@ -478,7 +499,7 @@ Pulse tracks token usage and costs:
 
 ### Deep Dives (Recommended for Technical Audiences)
 
-- **[Pulse Assistant Deep Dive](architecture/pulse-assistant-deep-dive.md)** — Complete technical breakdown of the model-owned tool surface: explicit context, session fact caching, FSM enforcement, parallel execution, phantom detection, structured errors
+- **[Pulse Assistant Deep Dive](architecture/pulse-assistant-deep-dive.md)** — Complete technical breakdown of the model-owned tool surface: explicit context, session fact caching, FSM enforcement, parallel execution, grounded execution guardrails, structured errors
 - **[Pulse Patrol Deep Dive](architecture/pulse-patrol-deep-dive.md)** — Patrol runtime documentation: evidence assembly, deterministic signal extraction, model evaluation, investigation context, investigation orchestration
 
 ### Reference Documentation

@@ -588,7 +588,7 @@ func TestHandleGetInvestigationMessages(t *testing.T) {
 	}
 }
 
-// TestHandleReinvestigateFinding, TestExecuteInvestigationFix_MCPTool, and
+// TestHandleReinvestigateFinding, TestExecuteInvestigationFix_AssistantTool, and
 // TestExecuteInvestigationFix_TargetDriftBlocked have been moved to enterprise.
 
 func wsURLForHTTP(url string) string {

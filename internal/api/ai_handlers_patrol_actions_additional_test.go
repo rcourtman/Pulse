@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/learning"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
@@ -111,6 +112,8 @@ func addUnifiedRuntimeFinding(store *unified.UnifiedStore, id string, detectedAt
 	store.AddFromAI(finding)
 	return finding
 }
+
+type agentStableErrorEnvelope = agentcapabilities.ErrorEnvelope
 
 func TestHandleGetPatrolStatus_DistinguishesLastFullPatrolFromLastActivity(t *testing.T) {
 	handler, patrol, _, _ := setupAIHandlerWithPatrol(t)
@@ -224,11 +227,12 @@ func TestPatrolActionHandlers_NoAIService_ReturnStructuredServiceUnavailable(t *
 	handler := newTestAISettingsHandler(cfg, nil, nil)
 
 	tests := []struct {
-		name    string
-		method  string
-		path    string
-		body    string
-		handler func(http.ResponseWriter, *http.Request)
+		name          string
+		method        string
+		path          string
+		body          string
+		handler       func(http.ResponseWriter, *http.Request)
+		agentEnvelope bool
 	}{
 		{
 			name:    "force_patrol",
@@ -237,25 +241,28 @@ func TestPatrolActionHandlers_NoAIService_ReturnStructuredServiceUnavailable(t *
 			handler: handler.HandleForcePatrol,
 		},
 		{
-			name:    "acknowledge",
-			method:  http.MethodPost,
-			path:    "/api/ai/patrol/acknowledge",
-			body:    `{"finding_id":"finding-1"}`,
-			handler: handler.HandleAcknowledgeFinding,
+			name:          "acknowledge",
+			method:        http.MethodPost,
+			path:          "/api/ai/patrol/acknowledge",
+			body:          `{"finding_id":"finding-1"}`,
+			handler:       handler.HandleAcknowledgeFinding,
+			agentEnvelope: true,
 		},
 		{
-			name:    "snooze",
-			method:  http.MethodPost,
-			path:    "/api/ai/patrol/snooze",
-			body:    `{"finding_id":"finding-1","duration_hours":1}`,
-			handler: handler.HandleSnoozeFinding,
+			name:          "snooze",
+			method:        http.MethodPost,
+			path:          "/api/ai/patrol/snooze",
+			body:          `{"finding_id":"finding-1","duration_hours":1}`,
+			handler:       handler.HandleSnoozeFinding,
+			agentEnvelope: true,
 		},
 		{
-			name:    "resolve",
-			method:  http.MethodPost,
-			path:    "/api/ai/patrol/resolve",
-			body:    `{"finding_id":"finding-1"}`,
-			handler: handler.HandleResolveFinding,
+			name:          "resolve",
+			method:        http.MethodPost,
+			path:          "/api/ai/patrol/resolve",
+			body:          `{"finding_id":"finding-1"}`,
+			handler:       handler.HandleResolveFinding,
+			agentEnvelope: true,
 		},
 		{
 			name:    "note",
@@ -265,11 +272,12 @@ func TestPatrolActionHandlers_NoAIService_ReturnStructuredServiceUnavailable(t *
 			handler: handler.HandleSetFindingNote,
 		},
 		{
-			name:    "dismiss",
-			method:  http.MethodPost,
-			path:    "/api/ai/patrol/dismiss",
-			body:    `{"finding_id":"finding-1","reason":"expected_behavior"}`,
-			handler: handler.HandleDismissFinding,
+			name:          "dismiss",
+			method:        http.MethodPost,
+			path:          "/api/ai/patrol/dismiss",
+			body:          `{"finding_id":"finding-1","reason":"expected_behavior"}`,
+			handler:       handler.HandleDismissFinding,
+			agentEnvelope: true,
 		},
 		{
 			name:    "suppress",
@@ -310,6 +318,20 @@ func TestPatrolActionHandlers_NoAIService_ReturnStructuredServiceUnavailable(t *
 				t.Fatalf("status = %d, want %d", rec.Code, http.StatusServiceUnavailable)
 			}
 
+			if tc.agentEnvelope {
+				var resp agentStableErrorEnvelope
+				if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+					t.Fatalf("decode response: %v", err)
+				}
+				if resp.Error != "patrol_unavailable" {
+					t.Fatalf("error = %q, want patrol_unavailable", resp.Error)
+				}
+				if resp.Message != "Pulse Patrol service not available" {
+					t.Fatalf("message = %q, want Pulse Patrol service not available", resp.Message)
+				}
+				return
+			}
+
 			var resp APIError
 			if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 				t.Fatalf("decode response: %v", err)
@@ -319,6 +341,148 @@ func TestPatrolActionHandlers_NoAIService_ReturnStructuredServiceUnavailable(t *
 			}
 			if resp.ErrorMessage != "Pulse Patrol service not available" {
 				t.Fatalf("error = %q, want Pulse Patrol service not available", resp.ErrorMessage)
+			}
+		})
+	}
+}
+
+func TestPatrolFindingLifecycleHandlers_ReturnAgentStableValidationErrors(t *testing.T) {
+	handler, _, _, _ := setupAIHandlerWithPatrol(t)
+
+	tests := []struct {
+		name        string
+		path        string
+		body        string
+		handler     func(http.ResponseWriter, *http.Request)
+		wantMessage string
+		wantDetails map[string]string
+	}{
+		{
+			name:        "acknowledge_missing_finding_id",
+			path:        "/api/ai/patrol/acknowledge",
+			body:        `{}`,
+			handler:     handler.HandleAcknowledgeFinding,
+			wantMessage: "finding_id is required",
+			wantDetails: map[string]string{"finding_id": "required"},
+		},
+		{
+			name:        "snooze_invalid_duration",
+			path:        "/api/ai/patrol/snooze",
+			body:        `{"finding_id":"finding-1","duration_hours":0}`,
+			handler:     handler.HandleSnoozeFinding,
+			wantMessage: "duration_hours must be positive",
+			wantDetails: map[string]string{"duration_hours": "must be positive"},
+		},
+		{
+			name:        "dismiss_invalid_reason",
+			path:        "/api/ai/patrol/dismiss",
+			body:        `{"finding_id":"finding-1","reason":"invalid_reason"}`,
+			handler:     handler.HandleDismissFinding,
+			wantMessage: "Invalid reason. Valid values: not_an_issue, expected_behavior, will_fix_later",
+			wantDetails: map[string]string{"reason": "must be one of not_an_issue, expected_behavior, will_fix_later"},
+		},
+		{
+			name:        "resolve_invalid_json",
+			path:        "/api/ai/patrol/resolve",
+			body:        `{`,
+			handler:     handler.HandleResolveFinding,
+			wantMessage: "Invalid request body",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := newLoopbackRequest(http.MethodPost, tt.path, strings.NewReader(tt.body))
+			rec := httptest.NewRecorder()
+
+			tt.handler(rec, req)
+
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusBadRequest, rec.Body.String())
+			}
+
+			var resp agentStableErrorEnvelope
+			if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("decode response: %v", err)
+			}
+			if resp.Error != "invalid_finding_request" {
+				t.Fatalf("error = %q, want invalid_finding_request", resp.Error)
+			}
+			if resp.Message != tt.wantMessage {
+				t.Fatalf("message = %q, want %q", resp.Message, tt.wantMessage)
+			}
+			for key, want := range tt.wantDetails {
+				if got := resp.Details[key]; got != want {
+					t.Fatalf("details[%q] = %q, want %q; details=%v", key, got, want, resp.Details)
+				}
+			}
+			if len(tt.wantDetails) == 0 && len(resp.Details) != 0 {
+				t.Fatalf("details = %v, want empty", resp.Details)
+			}
+		})
+	}
+}
+
+func TestPatrolFindingLifecycleHandlers_ReturnAgentStableNotFoundErrors(t *testing.T) {
+	handler, _, _, _ := setupAIHandlerWithPatrol(t)
+
+	tests := []struct {
+		name        string
+		path        string
+		body        string
+		handler     func(http.ResponseWriter, *http.Request)
+		wantMessage string
+	}{
+		{
+			name:        "acknowledge",
+			path:        "/api/ai/patrol/acknowledge",
+			body:        `{"finding_id":"missing"}`,
+			handler:     handler.HandleAcknowledgeFinding,
+			wantMessage: "Finding not found",
+		},
+		{
+			name:        "snooze",
+			path:        "/api/ai/patrol/snooze",
+			body:        `{"finding_id":"missing","duration_hours":1}`,
+			handler:     handler.HandleSnoozeFinding,
+			wantMessage: "Finding not found or already resolved",
+		},
+		{
+			name:        "resolve",
+			path:        "/api/ai/patrol/resolve",
+			body:        `{"finding_id":"missing"}`,
+			handler:     handler.HandleResolveFinding,
+			wantMessage: "Finding not found or already resolved",
+		},
+		{
+			name:        "dismiss",
+			path:        "/api/ai/patrol/dismiss",
+			body:        `{"finding_id":"missing","reason":"expected_behavior"}`,
+			handler:     handler.HandleDismissFinding,
+			wantMessage: "Finding not found",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := newLoopbackRequest(http.MethodPost, tt.path, strings.NewReader(tt.body))
+			rec := httptest.NewRecorder()
+
+			tt.handler(rec, req)
+
+			if rec.Code != http.StatusNotFound {
+				t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusNotFound, rec.Body.String())
+			}
+
+			var resp agentStableErrorEnvelope
+			if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("decode response: %v", err)
+			}
+			if resp.Error != "finding_not_found" {
+				t.Fatalf("error = %q, want finding_not_found", resp.Error)
+			}
+			if resp.Message != tt.wantMessage {
+				t.Fatalf("message = %q, want %q", resp.Message, tt.wantMessage)
 			}
 		})
 	}
@@ -482,7 +646,7 @@ func TestHandleResolveFinding_SetsResolved(t *testing.T) {
 	addPatrolFinding(t, patrol, "finding-resolve", detectedAt)
 	addUnifiedFinding(unifiedStore, "finding-resolve", detectedAt)
 
-	req := newLoopbackRequest(http.MethodPost, "/api/ai/patrol/resolve", strings.NewReader(`{"finding_id":"finding-resolve"}`))
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/patrol/resolve", strings.NewReader(`{"finding_id":"finding-resolve","resolution_note":"fixed after restarting the worker"}`))
 	rec := httptest.NewRecorder()
 
 	handler.HandleResolveFinding(rec, req)
@@ -494,6 +658,9 @@ func TestHandleResolveFinding_SetsResolved(t *testing.T) {
 	patrolFinding := patrol.GetFindings().Get("finding-resolve")
 	if patrolFinding == nil || patrolFinding.ResolvedAt == nil {
 		t.Fatalf("expected patrol finding to be resolved")
+	}
+	if patrolFinding.UserNote != "fixed after restarting the worker" {
+		t.Fatalf("patrol finding resolution note = %q", patrolFinding.UserNote)
 	}
 
 	unifiedFinding := unifiedStore.Get("finding-resolve")
@@ -597,39 +764,44 @@ func TestHandlePatrolRuntimeFindingActions_AreRejected(t *testing.T) {
 	addUnifiedRuntimeFinding(unifiedStore, "finding-runtime", detectedAt)
 
 	tests := []struct {
-		name       string
-		path       string
-		body       string
-		handler    func(http.ResponseWriter, *http.Request)
-		wantPhrase string
+		name          string
+		path          string
+		body          string
+		handler       func(http.ResponseWriter, *http.Request)
+		wantPhrase    string
+		wantAgentCode string
 	}{
 		{
-			name:       "acknowledge",
-			path:       "/api/ai/patrol/acknowledge",
-			body:       `{"finding_id":"finding-runtime"}`,
-			handler:    handler.HandleAcknowledgeFinding,
-			wantPhrase: "cannot be acknowledged manually",
+			name:          "acknowledge",
+			path:          "/api/ai/patrol/acknowledge",
+			body:          `{"finding_id":"finding-runtime"}`,
+			handler:       handler.HandleAcknowledgeFinding,
+			wantPhrase:    "cannot be acknowledged manually",
+			wantAgentCode: "finding_action_not_allowed",
 		},
 		{
-			name:       "snooze",
-			path:       "/api/ai/patrol/snooze",
-			body:       `{"finding_id":"finding-runtime","duration_hours":24}`,
-			handler:    handler.HandleSnoozeFinding,
-			wantPhrase: "cannot be snoozed manually",
+			name:          "snooze",
+			path:          "/api/ai/patrol/snooze",
+			body:          `{"finding_id":"finding-runtime","duration_hours":24}`,
+			handler:       handler.HandleSnoozeFinding,
+			wantPhrase:    "cannot be snoozed manually",
+			wantAgentCode: "finding_action_not_allowed",
 		},
 		{
-			name:       "resolve",
-			path:       "/api/ai/patrol/resolve",
-			body:       `{"finding_id":"finding-runtime"}`,
-			handler:    handler.HandleResolveFinding,
-			wantPhrase: "cannot be resolved manually",
+			name:          "resolve",
+			path:          "/api/ai/patrol/resolve",
+			body:          `{"finding_id":"finding-runtime"}`,
+			handler:       handler.HandleResolveFinding,
+			wantPhrase:    "cannot be resolved manually",
+			wantAgentCode: "finding_action_not_allowed",
 		},
 		{
-			name:       "dismiss",
-			path:       "/api/ai/patrol/dismiss",
-			body:       `{"finding_id":"finding-runtime","reason":"expected_behavior","note":"ignore"}`,
-			handler:    handler.HandleDismissFinding,
-			wantPhrase: "cannot be dismissed manually",
+			name:          "dismiss",
+			path:          "/api/ai/patrol/dismiss",
+			body:          `{"finding_id":"finding-runtime","reason":"expected_behavior","note":"ignore"}`,
+			handler:       handler.HandleDismissFinding,
+			wantPhrase:    "cannot be dismissed manually",
+			wantAgentCode: "finding_action_not_allowed",
 		},
 		{
 			name:       "suppress",
@@ -649,6 +821,19 @@ func TestHandlePatrolRuntimeFindingActions_AreRejected(t *testing.T) {
 
 			if rec.Code != http.StatusConflict {
 				t.Fatalf("status = %d, want 409", rec.Code)
+			}
+			if tt.wantAgentCode != "" {
+				var resp agentStableErrorEnvelope
+				if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+					t.Fatalf("decode response: %v", err)
+				}
+				if resp.Error != tt.wantAgentCode {
+					t.Fatalf("error = %q, want %q", resp.Error, tt.wantAgentCode)
+				}
+				if !strings.Contains(resp.Message, tt.wantPhrase) {
+					t.Fatalf("expected message to contain %q, got %q", tt.wantPhrase, resp.Message)
+				}
+				return
 			}
 			if !strings.Contains(rec.Body.String(), tt.wantPhrase) {
 				t.Fatalf("expected response to contain %q, got %q", tt.wantPhrase, rec.Body.String())

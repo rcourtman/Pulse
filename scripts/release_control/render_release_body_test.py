@@ -225,6 +225,20 @@ Old metadata section.
         self.assertIn("/api/agent/capabilities", blurb)
         self.assertIn("cmd/pulse-mcp", blurb)
         self.assertIn("cmd/agent-probe", blurb)
+        self.assertIn("OpenCode, other MCP clients", blurb)
+        self.assertIn("client-ready MCP config snippets", blurb)
+        self.assertIn("OpenCode's native", blurb)
+        self.assertIn("common `mcpServers` shape", blurb)
+        self.assertIn("Drivable from MCP clients in one command", blurb)
+        self.assertIn("Wire it into any MCP-speaking client", blurb)
+        self.assertIn("manifest `requiredScopes`", blurb)
+        self.assertIn("read-only subset", blurb)
+        self.assertNotIn("common MCP config snippet", blurb)
+        self.assertNotIn("clients that accept\n  `mcpServers`", blurb)
+        self.assertNotIn("Claude Desktop / Claude Code", blurb)
+        self.assertNotIn("Drivable from Claude in one command", blurb)
+        self.assertNotIn("adapter for Claude Desktop and Claude Code", blurb)
+        self.assertNotIn("`monitoring:read` (and", blurb)
         # The four-axis frame is the substrate's load-bearing claim;
         # if any axis name drifts in the blurb, agents reading
         # release notes will look for a different surface than what

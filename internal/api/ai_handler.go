@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	airuntime "github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
@@ -59,26 +61,27 @@ type AIService interface {
 	UndoLastTurn(ctx context.Context, sessionID string) (*chat.SessionTurnUndoResult, error)
 	RedoLastTurn(ctx context.Context, sessionID string) (*chat.SessionTurnRedoResult, error)
 	AnswerQuestion(ctx context.Context, questionID string, answers []chat.QuestionAnswer) error
-	SetAlertProvider(provider chat.MCPAlertProvider)
-	SetFindingsProvider(provider chat.MCPFindingsProvider)
-	SetBaselineProvider(provider chat.MCPBaselineProvider)
-	SetPatternProvider(provider chat.MCPPatternProvider)
-	SetMetricsHistory(provider chat.MCPMetricsHistoryProvider)
+	AssistantSurfaceToolContract(ctx context.Context) agentcapabilities.SurfaceToolContract
+	SetAlertProvider(provider chat.AssistantAlertProvider)
+	SetFindingsProvider(provider chat.AssistantFindingsProvider)
+	SetBaselineProvider(provider chat.AssistantBaselineProvider)
+	SetPatternProvider(provider chat.AssistantPatternProvider)
+	SetMetricsHistory(provider chat.AssistantMetricsHistoryProvider)
 	SetAgentProfileManager(manager chat.AgentProfileManager)
-	SetGuestConfigProvider(provider chat.MCPGuestConfigProvider)
-	SetAppContainerConfigProvider(provider chat.MCPAppContainerConfigProvider)
-	SetBackupProvider(provider chat.MCPBackupProvider)
-	SetDiskHealthProvider(provider chat.MCPDiskHealthProvider)
-	SetUpdatesProvider(provider chat.MCPUpdatesProvider)
+	SetGuestConfigProvider(provider chat.AssistantGuestConfigProvider)
+	SetAppContainerConfigProvider(provider chat.AssistantAppContainerConfigProvider)
+	SetBackupProvider(provider chat.AssistantBackupProvider)
+	SetDiskHealthProvider(provider chat.AssistantDiskHealthProvider)
+	SetUpdatesProvider(provider chat.AssistantUpdatesProvider)
 	SetFindingsManager(manager chat.FindingsManager)
 	SetMetadataUpdater(updater chat.MetadataUpdater)
 	SetKnowledgeStoreProvider(provider chat.KnowledgeStoreProvider)
 	SetIncidentRecorderProvider(provider chat.IncidentRecorderProvider)
 	SetEventCorrelatorProvider(provider chat.EventCorrelatorProvider)
-	SetDiscoveryProvider(provider chat.MCPDiscoveryProvider)
-	SetUnifiedResourceProvider(provider chat.MCPUnifiedResourceProvider)
-	SetAppContainerActionProvider(provider chat.MCPAppContainerActionProvider)
-	SetAppContainerReadProvider(provider chat.MCPAppContainerReadProvider)
+	SetDiscoveryProvider(provider chat.AssistantDiscoveryProvider)
+	SetUnifiedResourceProvider(provider chat.AssistantUnifiedResourceProvider)
+	SetAppContainerActionProvider(provider chat.AssistantAppContainerActionProvider)
+	SetAppContainerReadProvider(provider chat.AssistantAppContainerReadProvider)
 	UpdateControlSettings(cfg *config.AIConfig)
 	GetBaseURL() string
 }
@@ -616,7 +619,7 @@ func (h *AIHandler) initTenantService(ctx context.Context, orgID string) AIServi
 		},
 	}
 	if recoveryManager != nil {
-		chatCfg.RecoveryPointsProvider = tools.NewRecoveryPointsMCPAdapter(recoveryManager, orgID)
+		chatCfg.RecoveryPointsProvider = tools.NewRecoveryPointsToolAdapter(recoveryManager, orgID)
 	}
 
 	// Get monitor for state provider
@@ -867,7 +870,7 @@ func (h *AIHandler) startWithConfig(ctx context.Context, monitor *monitoring.Mon
 	}
 	_, _, _, _, _, recoveryManager := h.stateRefs()
 	if recoveryManager != nil {
-		chatCfg.RecoveryPointsProvider = tools.NewRecoveryPointsMCPAdapter(recoveryManager, orgID)
+		chatCfg.RecoveryPointsProvider = tools.NewRecoveryPointsToolAdapter(recoveryManager, orgID)
 	}
 
 	chatCfg.ReportNarrator, chatCfg.ReportFleetNarrator, chatCfg.ReportFindingsProvider = h.resolveReportNarrator(serviceCtx)
@@ -885,7 +888,7 @@ func (h *AIHandler) startWithConfig(ctx context.Context, monitor *monitoring.Mon
 	// Initialize approval store for command approval workflow.
 	h.ensureApprovalStore(dataDir)
 
-	log.Info().Msg("Pulse AI started (direct integration)")
+	log.Info().Msg("Pulse Assistant service started")
 	return nil
 }
 
@@ -1002,6 +1005,21 @@ type ChatRequest struct {
 	HandoffActions   []chat.HandoffAction   `json:"handoff_actions,omitempty"`
 	HandoffMetadata  chat.HandoffMetadata   `json:"handoff_metadata,omitempty"`
 	AutonomousMode   *bool                  `json:"autonomous_mode,omitempty"`
+}
+
+type AssistantWorkflowPromptRenderRequest struct {
+	Name      string            `json:"name"`
+	Arguments map[string]string `json:"arguments,omitempty"`
+}
+
+type AssistantWorkflowPromptActivityRequest struct {
+	Name    string `json:"name"`
+	Surface string `json:"surface,omitempty"`
+}
+
+type AssistantWorkflowPromptRenderResponse struct {
+	Description string `json:"description"`
+	Text        string `json:"text"`
 }
 
 type RenameSessionRequest struct {
@@ -2944,6 +2962,186 @@ func (h *AIHandler) HandleStatus(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(status)
 }
 
+// HandleAssistantSurfaceTools handles GET /api/ai/assistant/surface-tools.
+func (h *AIHandler) HandleAssistantSurfaceTools(w http.ResponseWriter, r *http.Request) {
+	if cfg := h.getConfig(r.Context()); cfg != nil {
+		applyConfiguredCORSHeaders(
+			w,
+			r.Header.Get("Origin"),
+			cfg.AllowedOrigins,
+			"GET, OPTIONS",
+			"Accept, Cookie",
+		)
+	}
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	ctx := r.Context()
+	if !h.IsRunning(ctx) {
+		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
+		return
+	}
+
+	svc := h.GetService(ctx)
+	if svc == nil {
+		http.Error(w, "Pulse Assistant service not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(svc.AssistantSurfaceToolContract(ctx))
+}
+
+// HandleRenderWorkflowPrompt handles POST /api/ai/workflow-prompts/render.
+func (h *AIHandler) HandleRenderWorkflowPrompt(w http.ResponseWriter, r *http.Request) {
+	if cfg := h.getConfig(r.Context()); cfg != nil {
+		applyConfiguredCORSHeaders(
+			w,
+			r.Header.Get("Origin"),
+			cfg.AllowedOrigins,
+			"POST, OPTIONS",
+			"Content-Type, Accept, Cookie",
+		)
+	}
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req AssistantWorkflowPromptRenderRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	manifest := agentcapabilities.CanonicalManifest()
+	result, err := agentcapabilities.BuildPulseWorkflowPromptFromManifestWithOptions(
+		manifest,
+		agentcapabilities.PulseWorkflowPromptParams{
+			Name:      req.Name,
+			Arguments: req.Arguments,
+		},
+		agentcapabilities.PulseWorkflowPromptRenderOptions{
+			ResourceContextInstruction: func(resourceID string) string {
+				return fmt.Sprintf("Use the Assistant's current Pulse context for resource %q; if it is not already attached, use the shared resource context capability before making a recommendation", resourceID)
+			},
+		},
+	)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	h.recordAssistantWorkflowPromptActivity(r.Context(), req.Name)
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(AssistantWorkflowPromptRenderResponse{
+		Description: result.Description,
+		Text:        result.Text,
+	})
+}
+
+// HandleRecordWorkflowPromptActivity handles POST /api/ai/workflow-prompts/activity.
+func (h *AIHandler) HandleRecordWorkflowPromptActivity(w http.ResponseWriter, r *http.Request) {
+	if cfg := h.getConfig(r.Context()); cfg != nil {
+		applyConfiguredCORSHeaders(
+			w,
+			r.Header.Get("Origin"),
+			cfg.AllowedOrigins,
+			"POST, OPTIONS",
+			"Content-Type, Accept, Cookie",
+		)
+	}
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req AssistantWorkflowPromptActivityRequest
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
+	if err := dec.Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+	var discard json.RawMessage
+	if err := dec.Decode(&discard); err != io.EOF {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	promptName := strings.TrimSpace(req.Name)
+	if !canonicalWorkflowPromptDeclared(promptName) {
+		http.Error(w, "Unknown workflow prompt", http.StatusBadRequest)
+		return
+	}
+
+	surface := normalizeFirstPartyWorkflowPromptActivitySurface(req.Surface)
+	if surface == "" {
+		http.Error(w, "Unknown workflow prompt surface", http.StatusBadRequest)
+		return
+	}
+
+	h.recordFirstPartyWorkflowPromptActivity(r.Context(), surface, promptName)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func normalizeFirstPartyWorkflowPromptActivitySurface(surface string) string {
+	switch strings.TrimSpace(surface) {
+	case "", config.WorkflowPromptActivitySurfacePulseAssistant:
+		return config.WorkflowPromptActivitySurfacePulseAssistant
+	case config.WorkflowPromptActivitySurfacePulsePatrol:
+		return config.WorkflowPromptActivitySurfacePulsePatrol
+	case config.WorkflowPromptActivitySurfacePatrolControl:
+		return config.WorkflowPromptActivitySurfacePatrolControl
+	case config.WorkflowPromptActivitySurfacePatrolAutonomy:
+		return config.WorkflowPromptActivitySurfacePatrolAutonomy
+	case config.WorkflowPromptActivitySurfaceProActivation:
+		return config.WorkflowPromptActivitySurfaceProActivation
+	default:
+		return ""
+	}
+}
+
+func (h *AIHandler) recordAssistantWorkflowPromptActivity(ctx context.Context, promptName string) {
+	h.recordFirstPartyWorkflowPromptActivity(ctx, config.WorkflowPromptActivitySurfacePulseAssistant, promptName)
+}
+
+func (h *AIHandler) recordFirstPartyWorkflowPromptActivity(ctx context.Context, surface, promptName string) {
+	if h == nil || strings.TrimSpace(promptName) == "" {
+		return
+	}
+	persistence, ok := h.getPersistence(ctx).(*config.ConfigPersistence)
+	if !ok || persistence == nil {
+		return
+	}
+	if err := persistence.RecordWorkflowPromptActivity(config.WorkflowPromptActivityRecord{
+		Timestamp:  time.Now().UTC(),
+		Surface:    strings.TrimSpace(surface),
+		PromptName: promptName,
+	}); err != nil {
+		log.Debug().Err(err).Str("prompt_name", strings.TrimSpace(promptName)).Msg("Failed to record first-party workflow prompt activity")
+	}
+}
+
 // HandleSummarize handles POST /api/ai/sessions/{id}/summarize
 // Compresses context when nearing model limits
 func (h *AIHandler) HandleSummarize(w http.ResponseWriter, r *http.Request, sessionID string) {
@@ -3119,99 +3317,101 @@ func (h *AIHandler) HandleAnswerQuestion(w http.ResponseWriter, r *http.Request,
 	w.WriteHeader(http.StatusOK)
 }
 
-// SetAlertProvider sets the alert provider for MCP tools
-func (h *AIHandler) SetAlertProvider(provider chat.MCPAlertProvider) {
+// SetAlertProvider sets the alert provider for Assistant tools.
+func (h *AIHandler) SetAlertProvider(provider chat.AssistantAlertProvider) {
 	if svc := h.getDefaultService(); svc != nil {
 		svc.SetAlertProvider(provider)
 	}
 }
 
-// SetFindingsProvider sets the findings provider for MCP tools
-func (h *AIHandler) SetFindingsProvider(provider chat.MCPFindingsProvider) {
+// SetFindingsProvider sets the findings provider for Assistant tools.
+func (h *AIHandler) SetFindingsProvider(provider chat.AssistantFindingsProvider) {
 	if svc := h.getDefaultService(); svc != nil {
 		svc.SetFindingsProvider(provider)
 	}
 }
 
-// SetBaselineProvider sets the baseline provider for MCP tools
-func (h *AIHandler) SetBaselineProvider(provider chat.MCPBaselineProvider) {
+// SetBaselineProvider sets the baseline provider for Assistant tools.
+func (h *AIHandler) SetBaselineProvider(provider chat.AssistantBaselineProvider) {
 	if svc := h.getDefaultService(); svc != nil {
 		svc.SetBaselineProvider(provider)
 	}
 }
 
-// SetPatternProvider sets the pattern provider for MCP tools
-func (h *AIHandler) SetPatternProvider(provider chat.MCPPatternProvider) {
+// SetPatternProvider sets the pattern provider for Assistant tools.
+func (h *AIHandler) SetPatternProvider(provider chat.AssistantPatternProvider) {
 	if svc := h.getDefaultService(); svc != nil {
 		svc.SetPatternProvider(provider)
 	}
 }
 
-// SetMetricsHistory sets the metrics history provider for MCP tools
-func (h *AIHandler) SetMetricsHistory(provider chat.MCPMetricsHistoryProvider) {
+// SetMetricsHistory sets the metrics history provider for Assistant tools.
+func (h *AIHandler) SetMetricsHistory(provider chat.AssistantMetricsHistoryProvider) {
 	if svc := h.getDefaultService(); svc != nil {
 		svc.SetMetricsHistory(provider)
 	}
 }
 
-// SetAgentProfileManager sets the agent profile manager for MCP tools
+// SetAgentProfileManager sets the agent profile manager for Assistant tools.
 func (h *AIHandler) SetAgentProfileManager(manager chat.AgentProfileManager) {
 	if svc := h.getDefaultService(); svc != nil {
 		svc.SetAgentProfileManager(manager)
 	}
 }
 
-// SetGuestConfigProvider sets the guest config provider for MCP tools
-func (h *AIHandler) SetGuestConfigProvider(provider chat.MCPGuestConfigProvider) {
+// SetGuestConfigProvider sets the guest config provider for Assistant tools.
+func (h *AIHandler) SetGuestConfigProvider(provider chat.AssistantGuestConfigProvider) {
 	if svc := h.getDefaultService(); svc != nil {
 		svc.SetGuestConfigProvider(provider)
 	}
 }
 
-// SetAppContainerConfigProvider sets the native app-container config provider for MCP tools
-func (h *AIHandler) SetAppContainerConfigProvider(provider chat.MCPAppContainerConfigProvider) {
+// SetAppContainerConfigProvider sets the native app-container config provider
+// for Assistant tools.
+func (h *AIHandler) SetAppContainerConfigProvider(provider chat.AssistantAppContainerConfigProvider) {
 	if svc := h.getDefaultService(); svc != nil {
 		svc.SetAppContainerConfigProvider(provider)
 	}
 }
 
-// SetBackupProvider sets the backup provider for MCP tools
-func (h *AIHandler) SetBackupProvider(provider chat.MCPBackupProvider) {
+// SetBackupProvider sets the backup provider for Assistant tools.
+func (h *AIHandler) SetBackupProvider(provider chat.AssistantBackupProvider) {
 	if svc := h.getDefaultService(); svc != nil {
 		svc.SetBackupProvider(provider)
 	}
 }
 
-// SetDiskHealthProvider sets the disk health provider for MCP tools
-func (h *AIHandler) SetDiskHealthProvider(provider chat.MCPDiskHealthProvider) {
+// SetDiskHealthProvider sets the disk health provider for Assistant tools.
+func (h *AIHandler) SetDiskHealthProvider(provider chat.AssistantDiskHealthProvider) {
 	if svc := h.getDefaultService(); svc != nil {
 		svc.SetDiskHealthProvider(provider)
 	}
 }
 
-// SetUpdatesProvider sets the updates provider for MCP tools
-func (h *AIHandler) SetUpdatesProvider(provider chat.MCPUpdatesProvider) {
+// SetUpdatesProvider sets the updates provider for Assistant tools.
+func (h *AIHandler) SetUpdatesProvider(provider chat.AssistantUpdatesProvider) {
 	if svc := h.getDefaultService(); svc != nil {
 		svc.SetUpdatesProvider(provider)
 	}
 }
 
-// SetFindingsManager sets the findings manager for MCP tools
+// SetFindingsManager sets the findings manager for Assistant tools.
 func (h *AIHandler) SetFindingsManager(manager chat.FindingsManager) {
 	if svc := h.getDefaultService(); svc != nil {
 		svc.SetFindingsManager(manager)
 	}
 }
 
-// SetMetadataUpdater sets the metadata updater for MCP tools
+// SetMetadataUpdater sets the metadata updater for Assistant tools.
 func (h *AIHandler) SetMetadataUpdater(updater chat.MetadataUpdater) {
 	if svc := h.getDefaultService(); svc != nil {
 		svc.SetMetadataUpdater(updater)
 	}
 }
 
-// SetUnifiedResourceProvider sets the unified resource provider for MCP tools
-func (h *AIHandler) SetUnifiedResourceProvider(provider chat.MCPUnifiedResourceProvider) {
+// SetUnifiedResourceProvider sets the unified resource provider for Assistant
+// tools.
+func (h *AIHandler) SetUnifiedResourceProvider(provider chat.AssistantUnifiedResourceProvider) {
 	if svc := h.getDefaultService(); svc != nil {
 		svc.SetUnifiedResourceProvider(provider)
 	}

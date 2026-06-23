@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 )
 
 // ---------------------------------------------------------------------------
@@ -120,9 +122,10 @@ func (m OrchestratorMessage) NormalizeCollections() OrchestratorMessage {
 
 // OrchestratorToolCallInfo represents a tool invocation.
 type OrchestratorToolCallInfo struct {
-	ID    string                 `json:"id"`
-	Name  string                 `json:"name"`
-	Input map[string]interface{} `json:"input"`
+	ID               string                 `json:"id"`
+	Name             string                 `json:"name"`
+	Input            map[string]interface{} `json:"input"`
+	ThoughtSignature json.RawMessage        `json:"thought_signature,omitempty"`
 }
 
 func EmptyOrchestratorToolCallInfo() OrchestratorToolCallInfo {
@@ -130,10 +133,31 @@ func EmptyOrchestratorToolCallInfo() OrchestratorToolCallInfo {
 }
 
 func (t OrchestratorToolCallInfo) NormalizeCollections() OrchestratorToolCallInfo {
-	if t.Input == nil {
-		t.Input = map[string]interface{}{}
+	return OrchestratorToolCallInfoFromProvider(t.ProviderToolCall())
+}
+
+// OrchestratorToolCallInfoFromProvider projects the shared provider-facing
+// tool-call shape into the public orchestrator contract without duplicating
+// Pulse Intelligence normalization rules.
+func OrchestratorToolCallInfoFromProvider(tc agentcapabilities.ProviderToolCall) OrchestratorToolCallInfo {
+	tc = tc.NormalizeCollections()
+	return OrchestratorToolCallInfo{
+		ID:               tc.ID,
+		Name:             tc.Name,
+		Input:            tc.Input,
+		ThoughtSignature: tc.ThoughtSignature,
 	}
-	return t
+}
+
+// ProviderToolCall returns the shared provider-facing shape used by Assistant
+// and MCP-facing Pulse Intelligence tool projections.
+func (t OrchestratorToolCallInfo) ProviderToolCall() agentcapabilities.ProviderToolCall {
+	return agentcapabilities.ProviderToolCall{
+		ID:               t.ID,
+		Name:             t.Name,
+		Input:            t.Input,
+		ThoughtSignature: t.ThoughtSignature,
+	}.NormalizeCollections()
 }
 
 // OrchestratorToolResultInfo represents the result of a tool invocation.
@@ -141,6 +165,22 @@ type OrchestratorToolResultInfo struct {
 	ToolUseID string `json:"tool_use_id"`
 	Content   string `json:"content"`
 	IsError   bool   `json:"is_error,omitempty"`
+}
+
+// OrchestratorToolResultInfoFromProvider projects the shared provider-facing
+// result shape into the public orchestrator contract.
+func OrchestratorToolResultInfoFromProvider(result agentcapabilities.ProviderToolResult) OrchestratorToolResultInfo {
+	return OrchestratorToolResultInfo{
+		ToolUseID: result.ToolUseID,
+		Content:   result.Content,
+		IsError:   result.IsError,
+	}
+}
+
+// ProviderToolResult returns the shared provider-facing result shape used by
+// Assistant and MCP-facing Pulse Intelligence tool projections.
+func (r OrchestratorToolResultInfo) ProviderToolResult() agentcapabilities.ProviderToolResult {
+	return agentcapabilities.NewProviderToolResult(r.ToolUseID, r.Content, r.IsError)
 }
 
 // OrchestratorApproval represents a queued approval request.

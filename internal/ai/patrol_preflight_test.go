@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -98,6 +99,47 @@ func TestRunPatrolToolPreflight_Success_ToolCallObserved(t *testing.T) {
 	}
 }
 
+func TestRunPatrolToolPreflight_SuccessResolvesPreviousRuntimeFailure(t *testing.T) {
+	h := newPatrolPreflightTestService(t, "openai:gpt-4o-mini", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"id": "chatcmpl-preflight-ok",
+			"model": "gpt-4o-mini",
+			"choices": [{
+				"finish_reason": "tool_calls",
+				"message": {
+					"role": "assistant",
+					"content": "",
+					"tool_calls": [{
+						"id": "call_1",
+						"type": "function",
+						"function": {"name": "verify_pulse_patrol", "arguments": "{\"ok\":true}"}
+					}]
+				}
+			}]
+		}`))
+	})
+	defer h.close()
+
+	patrol := NewPatrolService(h.svc, nil)
+	h.svc.patrolService = patrol
+	runtimeFinding := newPatrolRuntimeFailureFinding(patrolRuntimeFailureFromError(errors.New("provider connection failed")), time.Now().Add(-time.Hour))
+	patrol.recordFinding(runtimeFinding)
+
+	result := h.svc.RunPatrolToolPreflight(context.Background(), "", "")
+	if !result.Success || !result.ToolCallObserved {
+		t.Fatalf("expected green preflight, got %+v", result)
+	}
+
+	finding := patrol.findings.Get(runtimeFinding.ID)
+	if finding == nil {
+		t.Fatal("expected runtime finding to remain available as resolved history")
+	}
+	if !finding.IsResolved() {
+		t.Fatalf("expected successful preflight to auto-resolve runtime finding, got resolved_at=%v", finding.ResolvedAt)
+	}
+}
+
 func TestRunPatrolToolPreflight_Success_NoToolCall(t *testing.T) {
 	// Provider accepts the request but the model returned plain text
 	// instead of calling the verify tool. Pulse soft-warns rather than
@@ -127,6 +169,39 @@ func TestRunPatrolToolPreflight_Success_NoToolCall(t *testing.T) {
 	}
 	if !strings.Contains(result.Recommendation, "real Patrol") {
 		t.Fatalf("expected recommendation to mention real Patrol run, got %q", result.Recommendation)
+	}
+}
+
+func TestRunPatrolToolPreflight_NoToolCallKeepsPreviousRuntimeFailureActive(t *testing.T) {
+	h := newPatrolPreflightTestService(t, "openai:gpt-4o-mini", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"id": "chatcmpl-preflight-no-tool",
+			"model": "gpt-4o-mini",
+			"choices": [{
+				"finish_reason": "stop",
+				"message": {"role": "assistant", "content": "ok"}
+			}]
+		}`))
+	})
+	defer h.close()
+
+	patrol := NewPatrolService(h.svc, nil)
+	h.svc.patrolService = patrol
+	runtimeFinding := newPatrolRuntimeFailureFinding(patrolRuntimeFailureFromError(errors.New("provider connection failed")), time.Now().Add(-time.Hour))
+	patrol.recordFinding(runtimeFinding)
+
+	result := h.svc.RunPatrolToolPreflight(context.Background(), "", "")
+	if !result.Success || result.ToolCallObserved {
+		t.Fatalf("expected soft-warning preflight, got %+v", result)
+	}
+
+	finding := patrol.findings.Get(runtimeFinding.ID)
+	if finding == nil {
+		t.Fatal("expected runtime finding to remain available")
+	}
+	if finding.IsResolved() {
+		t.Fatalf("expected no-tool-call preflight to leave runtime finding active, got resolved_at=%v", finding.ResolvedAt)
 	}
 }
 
@@ -188,6 +263,25 @@ func TestRunPatrolToolPreflight_AssistantDisabled(t *testing.T) {
 	}
 	if result.Cause != PatrolFailureCauseAssistantDisabled {
 		t.Fatalf("unexpected cause %q", result.Cause)
+	}
+}
+
+func TestRunPatrolToolPreflight_SettingsUnavailableUsesAssistantPatrolCopy(t *testing.T) {
+	svc := NewService(config.NewConfigPersistence(t.TempDir()), nil)
+	svc.cfg = nil
+
+	result := svc.RunPatrolToolPreflight(context.Background(), "", "")
+	if result.Success {
+		t.Fatalf("expected failure when settings are unavailable, got %+v", result)
+	}
+	if result.Cause != PatrolFailureCauseSettingsPersistence {
+		t.Fatalf("unexpected cause %q", result.Cause)
+	}
+	if result.Title != "Pulse Patrol: Assistant & Patrol settings unavailable" {
+		t.Fatalf("unexpected title %q", result.Title)
+	}
+	if result.Summary != "Assistant & Patrol settings could not be loaded" {
+		t.Fatalf("unexpected summary %q", result.Summary)
 	}
 }
 

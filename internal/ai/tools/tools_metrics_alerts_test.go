@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -271,18 +272,30 @@ func TestExecuteResolveAndDismissFinding(t *testing.T) {
 
 	executor.findingsManager = &stubFindingsManager{resolveErr: errors.New("resolve")}
 	result, _ = executor.executeResolveFinding(context.Background(), map[string]interface{}{
-		"finding_id":      "f1",
-		"resolution_note": "note",
+		agentcapabilities.FindingIDArgumentName:      "f1",
+		agentcapabilities.ResolutionNoteArgumentName: "note",
 	})
 	if !result.IsError {
 		t.Fatal("expected resolve error")
 	}
 
+	executor.findingsManager = &stubFindingsManager{}
+	result, _ = executor.executeResolveFinding(context.Background(), map[string]interface{}{
+		agentcapabilities.FindingIDArgumentName: "f1",
+	})
+	var resolveResp map[string]interface{}
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &resolveResp); err != nil {
+		t.Fatalf("decode resolve response: %v", err)
+	}
+	if resolveResp["success"] != true {
+		t.Fatalf("unexpected resolve response without note: %+v", resolveResp)
+	}
+
 	executor.findingsManager = &stubFindingsManager{dismissErr: errors.New("dismiss")}
 	result, _ = executor.executeDismissFinding(context.Background(), map[string]interface{}{
-		"finding_id": "f1",
-		"reason":     "not_an_issue",
-		"note":       "note",
+		agentcapabilities.FindingIDArgumentName: "f1",
+		agentcapabilities.ReasonArgumentName:    "not_an_issue",
+		agentcapabilities.NoteArgumentName:      "note",
 	})
 	if !result.IsError {
 		t.Fatal("expected dismiss error")
@@ -290,9 +303,21 @@ func TestExecuteResolveAndDismissFinding(t *testing.T) {
 
 	executor.findingsManager = &stubFindingsManager{}
 	result, _ = executor.executeDismissFinding(context.Background(), map[string]interface{}{
-		"finding_id": "f1",
-		"reason":     "not_an_issue",
-		"note":       "note",
+		agentcapabilities.FindingIDArgumentName: "f1",
+		agentcapabilities.ReasonArgumentName:    "not_an_issue",
+	})
+	var dismissWithoutNoteResp map[string]interface{}
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &dismissWithoutNoteResp); err != nil {
+		t.Fatalf("decode dismiss response without note: %v", err)
+	}
+	if dismissWithoutNoteResp["success"] != true {
+		t.Fatalf("unexpected dismiss response without note: %+v", dismissWithoutNoteResp)
+	}
+
+	result, _ = executor.executeDismissFinding(context.Background(), map[string]interface{}{
+		agentcapabilities.FindingIDArgumentName: "f1",
+		agentcapabilities.ReasonArgumentName:    "not_an_issue",
+		agentcapabilities.NoteArgumentName:      "note",
 	})
 	var okResp map[string]interface{}
 	if err := json.Unmarshal([]byte(result.Content[0].Text), &okResp); err != nil {
@@ -300,6 +325,31 @@ func TestExecuteResolveAndDismissFinding(t *testing.T) {
 	}
 	if okResp["success"] != true {
 		t.Fatalf("unexpected dismiss response: %+v", okResp)
+	}
+}
+
+func TestAlertsToolUsesSharedFindingLifecycleVocabulary(t *testing.T) {
+	executor := NewPulseToolExecutor(ExecutorConfig{StateProvider: &mockStateProvider{}})
+	var alerts Tool
+	for _, tool := range executor.ListTools() {
+		if tool.Name == "pulse_alerts" {
+			alerts = tool
+			break
+		}
+	}
+	if alerts.Name == "" {
+		t.Fatal("pulse_alerts tool not registered")
+	}
+
+	for _, field := range []string{
+		agentcapabilities.FindingIDArgumentName,
+		agentcapabilities.ResolutionNoteArgumentName,
+		agentcapabilities.ReasonArgumentName,
+		agentcapabilities.NoteArgumentName,
+	} {
+		if _, ok := alerts.InputSchema.Properties[field]; !ok {
+			t.Fatalf("pulse_alerts schema missing shared field %q: %#v", field, alerts.InputSchema.Properties)
+		}
 	}
 }
 

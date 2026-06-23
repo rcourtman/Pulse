@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/safety"
 	"github.com/rs/zerolog/log"
@@ -15,7 +16,7 @@ import (
 func (e *PulseToolExecutor) registerReadTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
-			Name:        "pulse_read",
+			Name:        agentcapabilities.PulseReadToolName,
 			Description: `Execute read-only operations on infrastructure (exec, file, find, tail, logs). Rejects write commands. Use target_host for agent-routed reads, or resource_id for API-backed native resource logs such as supported TrueNAS app-containers. When Pulse has attached resource context, use target_host="current_resource" or resource_id="current_resource" for the attached resource instead of copying redacted identifiers.`,
 			InputSchema: InputSchema{
 				Type: "object",
@@ -78,9 +79,10 @@ func (e *PulseToolExecutor) registerReadTools() {
 			return exec.executeRead(ctx, args)
 		},
 		Governance: ToolGovernance{
-			ActionMode:     ToolActionRead,
-			ApprovalPolicy: "no approval required; write-like commands are rejected",
-			Summary:        "Runs read-only infrastructure inspection such as logs, file reads, tails, and safe exec.",
+			ActionMode:      ToolActionRead,
+			ApprovalPolicy:  ToolApprovalScopeOnly,
+			ApprovalSummary: "no approval required; write-like commands are rejected",
+			Summary:         "Runs read-only infrastructure inspection such as logs, file reads, tails, and safe exec.",
 		},
 		// Note: RequireControl is NOT set - this is a read-only tool
 		// It's available at all control levels including read_only
@@ -117,7 +119,7 @@ func (e *PulseToolExecutor) executeReadExec(ctx context.Context, args map[string
 	if command == "" {
 		return NewErrorResult(fmt.Errorf("command is required for exec action")), nil
 	}
-	if strings.TrimSpace(targetHost) == "" && isCurrentResourceReference(resourceRef) {
+	if strings.TrimSpace(targetHost) == "" && IsCurrentResourceReference(resourceRef) {
 		targetHost = resourceRef
 	}
 	if targetHost == "" {
@@ -261,7 +263,7 @@ func (e *PulseToolExecutor) executeReadFile(ctx context.Context, args map[string
 	if path == "" {
 		return NewErrorResult(fmt.Errorf("path is required for file action")), nil
 	}
-	if strings.TrimSpace(targetHost) == "" && isCurrentResourceReference(resourceRef) {
+	if strings.TrimSpace(targetHost) == "" && IsCurrentResourceReference(resourceRef) {
 		targetHost = resourceRef
 	}
 	if targetHost == "" {
@@ -296,7 +298,7 @@ func (e *PulseToolExecutor) executeReadFind(ctx context.Context, args map[string
 	if pattern == "" && path == "" {
 		return NewErrorResult(fmt.Errorf("pattern or path is required for find action")), nil
 	}
-	if strings.TrimSpace(targetHost) == "" && isCurrentResourceReference(resourceRef) {
+	if strings.TrimSpace(targetHost) == "" && IsCurrentResourceReference(resourceRef) {
 		targetHost = resourceRef
 	}
 	if targetHost == "" {
@@ -347,7 +349,7 @@ func (e *PulseToolExecutor) executeReadTail(ctx context.Context, args map[string
 	if path == "" {
 		return NewErrorResult(fmt.Errorf("path is required for tail action")), nil
 	}
-	if strings.TrimSpace(targetHost) == "" && isCurrentResourceReference(resourceRef) {
+	if strings.TrimSpace(targetHost) == "" && IsCurrentResourceReference(resourceRef) {
 		targetHost = resourceRef
 	}
 	if targetHost == "" {
@@ -410,7 +412,7 @@ func (e *PulseToolExecutor) executeReadLogs(ctx context.Context, args map[string
 		lines = 100
 	}
 
-	if isCurrentResourceReference(resourceRef) {
+	if IsCurrentResourceReference(resourceRef) {
 		resource, err := e.resolveCurrentResource()
 		if err != nil {
 			return NewErrorResult(err), nil

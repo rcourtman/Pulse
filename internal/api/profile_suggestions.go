@@ -14,7 +14,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// ProfileSuggestionHandler handles AI-assisted profile suggestions
+// ProfileSuggestionHandler handles Pulse Intelligence-assisted profile suggestions
 type ProfileSuggestionHandler struct {
 	mtPersistence *config.MultiTenantPersistence
 	aiHandler     *AIHandler
@@ -33,7 +33,7 @@ type SuggestionRequest struct {
 	Prompt string `json:"prompt"`
 }
 
-// ProfileSuggestion is the AI-generated profile suggestion
+// ProfileSuggestion is the Pulse Intelligence-generated profile suggestion
 type ProfileSuggestion struct {
 	Name        string                 `json:"name"`
 	Description string                 `json:"description"`
@@ -50,7 +50,7 @@ func (h *ProfileSuggestionHandler) HandleSuggestProfile(w http.ResponseWriter, r
 
 	// Check if AI is running
 	if h.aiHandler == nil || !h.aiHandler.IsRunning(r.Context()) {
-		http.Error(w, "Pulse Assistant service is not available", http.StatusServiceUnavailable)
+		http.Error(w, "Pulse Intelligence is not available", http.StatusServiceUnavailable)
 		return
 	}
 

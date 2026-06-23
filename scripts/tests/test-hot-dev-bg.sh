@@ -211,10 +211,14 @@ EOF
 }
 
 test_managed_wrapper_defaults_to_local_only_runtime() {
-  local output
+  local output test_dir
+  test_dir="$(mktemp -d)"
+  temp_dirs+=("${test_dir}")
+
   output="$(
     LAN_IP=192.168.50.10 \
     ALL_IPS="192.168.50.10" \
+    HOT_DEV_LAB_MODE_FILE="${test_dir}/hot-dev.lab-agents-mode" \
     HOT_DEV_BG_PATH="${HOT_DEV_BG}" \
     bash -lc '
       source "${HOT_DEV_BG_PATH}"
@@ -952,6 +956,7 @@ test_hot_dev_bg_preserves_proxmox_guest_docker_env() {
   assert_contains "hot-dev-bg child preserves lab-agent mode" "${output}" 'PULSE_DEV_LAB_AGENTS="${PULSE_DEV_LAB_AGENTS:-}"'
   assert_contains "hot-dev-bg child preserves LAN opt-in" "${output}" 'PULSE_DEV_LAN="${PULSE_DEV_LAN:-}"'
   assert_contains "hot-dev-bg child preserves backend bind address" "${output}" 'BIND_ADDRESS="${BIND_ADDRESS:-}"'
+  assert_contains "hot-dev-bg child preserves remembered lab-agent mode file" "${output}" 'HOT_DEV_LAB_MODE_FILE="${HOT_DEV_LAB_MODE_FILE:-}"'
   assert_contains "hot-dev-bg child preserves debug log level" "${output}" 'LOG_LEVEL="${LOG_LEVEL:-}"'
   assert_contains "hot-dev-bg restart takeover clears launchd before env-sensitive relaunch" "${output}" 'stop_launchd_hot_dev_job'
 }

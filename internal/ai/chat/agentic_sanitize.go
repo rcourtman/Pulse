@@ -5,68 +5,14 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 )
 
-// Compiled regexes for structural tool call artifacts from various LLM providers.
-// These patterns catch tool call markup that leaks into content when models are
-// told not to use tools but still see tool definitions.
+// Compiled regexes for Assistant presentation artifacts. Generic provider
+// tool-call artifact detection lives in agentcapabilities so native Assistant
+// and external adapter boundaries share the same leak guard.
 var (
-	dsmlMarkers = []string{
-		"<｜DSML｜",    // Unicode single pipe (opening)
-		"</｜DSML｜",   // Unicode single pipe (closing)
-		"<｜｜DSML｜｜",  // Unicode double pipe (opening) — deepseek-v4-flash
-		"</｜｜DSML｜｜", // Unicode double pipe (closing)
-		"<||DSML||",  // ASCII double pipe (opening)
-		"</||DSML||", // ASCII double pipe (closing)
-		"<|DSML|",    // ASCII single pipe (opening)
-		"</|DSML|",   // ASCII single pipe (closing)
-		"<｜/DSML｜",   // Alternative Unicode closing
-		"<｜｜/DSML｜｜", // Alternative Unicode double-pipe closing
-		"<|/DSML|",   // Alternative ASCII closing
-		"<||/DSML||", // Alternative ASCII double-pipe closing
-	}
-
-	// XML-style tool call envelopes: <tool_call>...</tool_call>, <tool_calls>...</tool_calls>,
-	// <function_call>...</function_call>, <function_calls>...</function_calls>
-	xmlToolCallRe = regexp.MustCompile(`(?s)</?(?:tool_calls?|function_calls?)>`)
-
-	// Pipe-delimited markers: <|plugin|>, <|interpreter|>, <|tool_call|>, etc.
-	pipeMarkerRe = regexp.MustCompile(`<\|(?:plugin|interpreter|tool_call)\|>`)
-
-	// MiniMax-style markers: minimax:tool_call followed by JSON-like content
-	minimaxMarkerRe = regexp.MustCompile(`(?m)^minimax:tool_call\b`)
-
-	// DeepSeek DSML markers with arbitrary pipe-count variants. The
-	// fast-path string list below covers the single- and double-pipe
-	// forms we've actually observed in the wild
-	// (`<｜DSML｜...>` and `<｜｜DSML｜｜...>` — the latter from
-	// deepseek-v4-flash). This regex is the catch-all backstop for any
-	// pipe-count variant the model might emit so the chat orchestrator
-	// never falls through to showing raw DSML to the user as the
-	// assistant's "final response."
-	dsmlRe = regexp.MustCompile(`</?[\|｜]+/?DSML[\|｜]*`)
-
-	// Plain-JSON tool-call leak: weak local models (qwen2.5:11b/14b and
-	// similar small Ollama models) frequently emit Pulse tool invocations
-	// as JSON inside content instead of through the structured tool_calls
-	// channel. The leak shape is a JSON object whose first key is "name"
-	// with a value matching a known Pulse tool, optionally wrapped in a
-	// markdown code fence. Anchored on (?:^|\n) so prose containing JSON
-	// fragments inline (e.g. "the field {"name":"x"} in the schema") is
-	// not stripped. The captured tool name is gated against the canonical
-	// allowlist in tools.IsKnownToolName so arbitrary JSON the user might
-	// legitimately share is left untouched.
-	jsonToolCallRe = regexp.MustCompile(
-		`(?:^|\n)[ \t]*(?:` + "```" + `[ \t]*(?:json|JSON)?[ \t]*\n?[ \t]*)?\{[ \t\n]*"name"[ \t]*:[ \t]*"([a-zA-Z_][a-zA-Z0-9_]*)"`,
-	)
-
-	// Plain function-style tool-call leak: some models emit
-	// pulse_read(target_host="...", command="...") as assistant content
-	// instead of a structured tool call. Gate on canonical tool names so a
-	// random prose function call is not stripped.
-	plainFunctionToolCallRe = regexp.MustCompile(`(?:^|[^a-zA-Z0-9_])([a-zA-Z_][a-zA-Z0-9_]*)[ \t\r\n]*\(`)
-
 	// Operational providers often decorate alert/status answers with emoji
 	// badges even when instructed not to. Pulse renders state through typed
 	// tool/progress rows, so these glyphs are treated as presentation artifacts
@@ -189,42 +135,7 @@ func containsToolCallMarker(content string) bool {
 // toolCallArtifactIndex returns the byte offset of the first known tool-call
 // artifact in content, or -1 if no artifact is present.
 func toolCallArtifactIndex(content string) int {
-	if content == "" {
-		return -1
-	}
-
-	first := -1
-	record := func(idx int) {
-		if idx < 0 {
-			return
-		}
-		if first < 0 || idx < first {
-			first = idx
-		}
-	}
-
-	for _, marker := range dsmlMarkers {
-		if idx := strings.Index(content, marker); idx >= 0 {
-			record(idx)
-		}
-	}
-
-	if loc := dsmlRe.FindStringIndex(content); loc != nil {
-		record(loc[0])
-	}
-	if loc := xmlToolCallRe.FindStringIndex(content); loc != nil {
-		record(loc[0])
-	}
-	if loc := pipeMarkerRe.FindStringIndex(content); loc != nil {
-		record(loc[0])
-	}
-	if loc := minimaxMarkerRe.FindStringIndex(content); loc != nil {
-		record(loc[0])
-	}
-	record(findJSONToolCallLeak(content))
-	record(findPlainFunctionToolCallLeak(content))
-
-	return first
+	return agentcapabilities.ProviderToolCallArtifactIndex(content, tools.AssistantProviderToolNameCatalog())
 }
 
 func appendVisibleContentBeforeToolLeak(
@@ -306,29 +217,7 @@ func appendSanitizedVisibleDelta(builder *strings.Builder, visible string) strin
 }
 
 func splitTrailingPotentialToolNamePrefix(content string) (visible string, held string) {
-	if content == "" {
-		return "", ""
-	}
-
-	start := len(content)
-	for start > 0 {
-		ch := content[start-1]
-		if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_' {
-			start--
-			continue
-		}
-		break
-	}
-
-	if start == len(content) {
-		return content, ""
-	}
-
-	token := content[start:]
-	if tools.IsKnownToolNamePrefix(token) {
-		return content[:start], token
-	}
-	return content, ""
+	return agentcapabilities.SplitTrailingProviderToolNamePrefix(content, tools.AssistantProviderToolNameCatalog())
 }
 
 func isCompactedToolPrelude(content string) bool {
@@ -355,44 +244,4 @@ func isCompactedToolPrelude(content string) bool {
 		return true
 	}
 	return letters >= 48 && whitespace <= 1
-}
-
-// findJSONToolCallLeak returns the byte offset to strip from when a plain-JSON
-// tool-call leak is found, or -1 if none. A match must (a) sit at start of
-// content or after a newline, (b) be a JSON object whose first key is "name",
-// and (c) reference a tool in tools.IsKnownToolName's allowlist. Returning
-// the position of the leading newline (or 0) lets the caller preserve any
-// natural-language text before the leak via TrimSpace.
-func findJSONToolCallLeak(content string) int {
-	if content == "" {
-		return -1
-	}
-	matches := jsonToolCallRe.FindAllStringSubmatchIndex(content, -1)
-	for _, m := range matches {
-		if len(m) < 4 || m[2] < 0 || m[3] < 0 {
-			continue
-		}
-		name := content[m[2]:m[3]]
-		if tools.IsKnownToolName(name) {
-			return m[0]
-		}
-	}
-	return -1
-}
-
-func findPlainFunctionToolCallLeak(content string) int {
-	if content == "" {
-		return -1
-	}
-	matches := plainFunctionToolCallRe.FindAllStringSubmatchIndex(content, -1)
-	for _, m := range matches {
-		if len(m) < 4 || m[2] < 0 || m[3] < 0 {
-			continue
-		}
-		name := content[m[2]:m[3]]
-		if tools.IsKnownToolName(name) {
-			return m[2]
-		}
-	}
-	return -1
 }

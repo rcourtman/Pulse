@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
@@ -15,9 +16,9 @@ import (
 
 type capturingAIService struct {
 	running                    bool
-	appContainerConfigProvider chat.MCPAppContainerConfigProvider
-	appContainerActionProvider chat.MCPAppContainerActionProvider
-	appContainerReadProvider   chat.MCPAppContainerReadProvider
+	appContainerConfigProvider chat.AssistantAppContainerConfigProvider
+	appContainerActionProvider chat.AssistantAppContainerActionProvider
+	appContainerReadProvider   chat.AssistantAppContainerReadProvider
 }
 
 func (s *capturingAIService) Start(ctx context.Context) error { s.running = true; return nil }
@@ -71,30 +72,34 @@ func (s *capturingAIService) RedoLastTurn(ctx context.Context, sessionID string)
 func (s *capturingAIService) AnswerQuestion(ctx context.Context, questionID string, answers []chat.QuestionAnswer) error {
 	return nil
 }
-func (s *capturingAIService) SetAlertProvider(provider chat.MCPAlertProvider)             {}
-func (s *capturingAIService) SetFindingsProvider(provider chat.MCPFindingsProvider)       {}
-func (s *capturingAIService) SetBaselineProvider(provider chat.MCPBaselineProvider)       {}
-func (s *capturingAIService) SetPatternProvider(provider chat.MCPPatternProvider)         {}
-func (s *capturingAIService) SetMetricsHistory(provider chat.MCPMetricsHistoryProvider)   {}
-func (s *capturingAIService) SetAgentProfileManager(manager chat.AgentProfileManager)     {}
-func (s *capturingAIService) SetGuestConfigProvider(provider chat.MCPGuestConfigProvider) {}
-func (s *capturingAIService) SetAppContainerConfigProvider(provider chat.MCPAppContainerConfigProvider) {
+func (s *capturingAIService) AssistantSurfaceToolContract(ctx context.Context) agentcapabilities.SurfaceToolContract {
+	return agentcapabilities.SurfaceToolContract{}
+}
+func (s *capturingAIService) SetAlertProvider(provider chat.AssistantAlertProvider)             {}
+func (s *capturingAIService) SetFindingsProvider(provider chat.AssistantFindingsProvider)       {}
+func (s *capturingAIService) SetBaselineProvider(provider chat.AssistantBaselineProvider)       {}
+func (s *capturingAIService) SetPatternProvider(provider chat.AssistantPatternProvider)         {}
+func (s *capturingAIService) SetMetricsHistory(provider chat.AssistantMetricsHistoryProvider)   {}
+func (s *capturingAIService) SetAgentProfileManager(manager chat.AgentProfileManager)           {}
+func (s *capturingAIService) SetGuestConfigProvider(provider chat.AssistantGuestConfigProvider) {}
+func (s *capturingAIService) SetAppContainerConfigProvider(provider chat.AssistantAppContainerConfigProvider) {
 	s.appContainerConfigProvider = provider
 }
-func (s *capturingAIService) SetBackupProvider(provider chat.MCPBackupProvider)                   {}
-func (s *capturingAIService) SetDiskHealthProvider(provider chat.MCPDiskHealthProvider)           {}
-func (s *capturingAIService) SetUpdatesProvider(provider chat.MCPUpdatesProvider)                 {}
-func (s *capturingAIService) SetFindingsManager(manager chat.FindingsManager)                     {}
-func (s *capturingAIService) SetMetadataUpdater(updater chat.MetadataUpdater)                     {}
-func (s *capturingAIService) SetKnowledgeStoreProvider(provider chat.KnowledgeStoreProvider)      {}
-func (s *capturingAIService) SetIncidentRecorderProvider(provider chat.IncidentRecorderProvider)  {}
-func (s *capturingAIService) SetEventCorrelatorProvider(provider chat.EventCorrelatorProvider)    {}
-func (s *capturingAIService) SetDiscoveryProvider(provider chat.MCPDiscoveryProvider)             {}
-func (s *capturingAIService) SetUnifiedResourceProvider(provider chat.MCPUnifiedResourceProvider) {}
-func (s *capturingAIService) SetAppContainerActionProvider(provider chat.MCPAppContainerActionProvider) {
+func (s *capturingAIService) SetBackupProvider(provider chat.AssistantBackupProvider)            {}
+func (s *capturingAIService) SetDiskHealthProvider(provider chat.AssistantDiskHealthProvider)    {}
+func (s *capturingAIService) SetUpdatesProvider(provider chat.AssistantUpdatesProvider)          {}
+func (s *capturingAIService) SetFindingsManager(manager chat.FindingsManager)                    {}
+func (s *capturingAIService) SetMetadataUpdater(updater chat.MetadataUpdater)                    {}
+func (s *capturingAIService) SetKnowledgeStoreProvider(provider chat.KnowledgeStoreProvider)     {}
+func (s *capturingAIService) SetIncidentRecorderProvider(provider chat.IncidentRecorderProvider) {}
+func (s *capturingAIService) SetEventCorrelatorProvider(provider chat.EventCorrelatorProvider)   {}
+func (s *capturingAIService) SetDiscoveryProvider(provider chat.AssistantDiscoveryProvider)      {}
+func (s *capturingAIService) SetUnifiedResourceProvider(provider chat.AssistantUnifiedResourceProvider) {
+}
+func (s *capturingAIService) SetAppContainerActionProvider(provider chat.AssistantAppContainerActionProvider) {
 	s.appContainerActionProvider = provider
 }
-func (s *capturingAIService) SetAppContainerReadProvider(provider chat.MCPAppContainerReadProvider) {
+func (s *capturingAIService) SetAppContainerReadProvider(provider chat.AssistantAppContainerReadProvider) {
 	s.appContainerReadProvider = provider
 }
 func (s *capturingAIService) UpdateControlSettings(cfg *config.AIConfig) {}

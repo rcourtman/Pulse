@@ -123,7 +123,7 @@ class DocumentationCurrentnessTest(unittest.TestCase):
         pulse_pro_doc = read("docs/PULSE_PRO.md")
 
         self.assertIn(
-            "| **Investigate** | Investigates findings and proposes fixes. All fixes require approval before execution. | Pro / hosted Cloud |",
+            "| **Ask before changes** | Investigates findings and proposes fixes. All fixes require approval before execution. | Pro / hosted Cloud |",
             ai_doc,
         )
         self.assertIn(
@@ -140,13 +140,17 @@ class DocumentationCurrentnessTest(unittest.TestCase):
         )
         self.assertNotIn("Upgrade to Assisted", autonomy_doc)
         self.assertIn(
-            "| **Investigate** | Investigates findings and proposes fixes. All remediation actions require approval. | Pro / hosted Cloud |",
+            "| **Ask before changes** | Investigates findings and proposes fixes. All fixes require approval before execution. | Pro / hosted Cloud |",
             pulse_pro_doc,
         )
         self.assertNotIn(
-            "| **Investigate** | Investigates findings and proposes fixes. All remediation actions require approval. | Community / Relay |",
+            "| **Ask before changes** | Investigates findings and proposes fixes. All fixes require approval before execution. | Community / Relay |",
             pulse_pro_doc,
         )
+        for rel in ("docs/AI.md", "docs/PULSE_PRO.md", "docs/FAQ.md", "docs/README.md"):
+            content = read(rel)
+            self.assertNotIn("alert-triggered root-cause analysis", content)
+            self.assertNotIn("safe remediation workflows", content)
 
     def test_public_self_hosted_docs_avoid_unlimited_monitoring_claims(self) -> None:
         public_docs = (

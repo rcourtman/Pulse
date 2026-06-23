@@ -2,8 +2,8 @@ package ai
 
 import "testing"
 
-func TestFindingsMCPAdapter(t *testing.T) {
-	if NewFindingsMCPAdapter(nil) != nil {
+func TestFindingsToolAdapter(t *testing.T) {
+	if NewFindingsToolAdapter(nil) != nil {
 		t.Fatal("expected nil adapter for nil store")
 	}
 
@@ -20,7 +20,7 @@ func TestFindingsMCPAdapter(t *testing.T) {
 	store.Add(finding)
 	store.Dismiss("f1", "not_an_issue", "ok")
 
-	adapter := NewFindingsMCPAdapter(store)
+	adapter := NewFindingsToolAdapter(store)
 	active := adapter.GetActiveFindings()
 	if len(active) != 0 {
 		t.Fatalf("expected no active findings, got %d", len(active))
@@ -31,7 +31,7 @@ func TestFindingsMCPAdapter(t *testing.T) {
 		t.Fatalf("unexpected dismissed findings: %+v", dismissed)
 	}
 
-	adapter = &FindingsMCPAdapter{}
+	adapter = &FindingsToolAdapter{}
 	if adapter.GetActiveFindings() != nil || adapter.GetDismissedFindings() != nil {
 		t.Fatal("expected nil results when store missing")
 	}

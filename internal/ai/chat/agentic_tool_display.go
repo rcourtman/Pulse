@@ -3,6 +3,8 @@ package chat
 import (
 	"encoding/json"
 	"fmt"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 )
 
 func formatToolInputForFrontend(toolName string, input map[string]interface{}, emptyIfNil bool) (inputStr string, rawInput string) {
@@ -18,7 +20,7 @@ func formatToolInputForFrontend(toolName string, input map[string]interface{}, e
 	}
 
 	// Special handling for command execution tools to avoid showing raw JSON.
-	if toolName == "pulse_control" || toolName == "pulse_run_command" || toolName == "control" {
+	if toolName == agentcapabilities.PulseControlToolName || toolName == agentcapabilities.PulseRunCommandToolName || toolName == "control" {
 		if cmd, ok := input["command"].(string); ok {
 			return fmt.Sprintf("Running: %s", cmd), rawInput
 		}

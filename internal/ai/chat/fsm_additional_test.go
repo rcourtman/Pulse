@@ -3,6 +3,8 @@ package chat
 import (
 	"strings"
 	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 )
 
 func TestFSMBlockedErrorFormatting(t *testing.T) {
@@ -16,8 +18,8 @@ func TestFSMBlockedErrorFormatting(t *testing.T) {
 	if !strings.Contains(msg, "pulse_control") {
 		t.Fatalf("expected tool name in error message")
 	}
-	if err.Code() != "FSM_BLOCKED" {
-		t.Fatalf("expected FSM_BLOCKED code")
+	if err.Code() != agentcapabilities.ErrCodeFSMBlocked {
+		t.Fatalf("expected %s code", agentcapabilities.ErrCodeFSMBlocked)
 	}
 
 	err = &FSMBlockedError{State: StateReading, Reason: "test"}

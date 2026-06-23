@@ -17,7 +17,8 @@ type FactEntry struct {
 }
 
 // ExtractFacts deterministically extracts knowledge facts from a tool result.
-// No LLM calls. Parses the JSON text from FormatToolResult() output.
+// No LLM calls. Parses the JSON text projected through
+// agentcapabilities.ToolResultText.
 // Returns empty slice on parse errors or unrecognized tools — never panics.
 //
 // Tool results use NewJSONResult (direct struct marshaling), NOT ToolResponse wrapper.

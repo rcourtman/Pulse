@@ -1,224 +1,51 @@
 package chat
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rs/zerolog/log"
 )
 
-func userQuestionTool() providers.Tool {
-	return providers.Tool{
-		Name:        pulseQuestionToolName,
-		Description: "Ask the user for missing information using a structured prompt. Use this when you must clarify before proceeding (e.g., choose a target, confirm a risky action, or select among options).",
-		InputSchema: map[string]interface{}{
-			"type": "object",
-			"properties": map[string]interface{}{
-				"questions": map[string]interface{}{
-					"type": "array",
-					"items": map[string]interface{}{
-						"type": "object",
-						"properties": map[string]interface{}{
-							"id": map[string]interface{}{
-								"type":        "string",
-								"description": "Stable identifier for this question (used in the answer payload).",
-							},
-							"type": map[string]interface{}{
-								"type":        "string",
-								"description": "Question type. Use 'text' for free-form input or 'select' for predefined options.",
-								"enum":        []string{"text", "select"},
-							},
-							"header": map[string]interface{}{
-								"type":        "string",
-								"description": "Optional short context shown above the question.",
-							},
-							"question": map[string]interface{}{
-								"type":        "string",
-								"description": "The question shown to the user.",
-							},
-							"options": map[string]interface{}{
-								"type": "array",
-								"items": map[string]interface{}{
-									"type": "object",
-									"properties": map[string]interface{}{
-										"label": map[string]interface{}{"type": "string"},
-										"value": map[string]interface{}{"type": "string"},
-										"description": map[string]interface{}{
-											"type":        "string",
-											"description": "Optional detail shown under the label.",
-										},
-									},
-									"required": []string{"label"},
-								},
-							},
-						},
-						"required": []string{"id", "question"},
-					},
-				},
-			},
-			"required": []string{"questions"},
-		},
-	}
-}
-
-const pulseQuestionToolName = "pulse_question"
-
-type questionToolType string
-
-const (
-	questionToolTypeText   questionToolType = "text"
-	questionToolTypeSelect questionToolType = "select"
-)
-
-type questionToolInputPayload struct {
-	Questions json.RawMessage `json:"questions"`
-}
-
-type questionToolInputQuestion struct {
-	ID       string          `json:"id"`
-	Type     string          `json:"type,omitempty"`
-	Header   string          `json:"header,omitempty"`
-	Question string          `json:"question"`
-	Options  json.RawMessage `json:"options,omitempty"`
-}
-
-type questionToolInputOption struct {
-	Label       string `json:"label"`
-	Value       string `json:"value,omitempty"`
-	Description string `json:"description,omitempty"`
-}
+const pulseQuestionToolName = agentcapabilities.PulseQuestionToolName
 
 func parseQuestionToolInput(input map[string]interface{}) ([]Question, error) {
-	payloadBytes, err := json.Marshal(input)
+	parsedQuestions, err := agentcapabilities.ParsePulseQuestionToolInput(input)
 	if err != nil {
-		return nil, fmt.Errorf("invalid question payload: %w", err)
+		return nil, err
 	}
 
-	var payload questionToolInputPayload
-	if err := json.Unmarshal(payloadBytes, &payload); err != nil {
-		return nil, fmt.Errorf("invalid question payload: %w", err)
-	}
-
-	if len(payload.Questions) == 0 {
-		return nil, fmt.Errorf("missing required field: questions")
-	}
-
-	var rawQuestions []json.RawMessage
-	if err := json.Unmarshal(payload.Questions, &rawQuestions); err != nil {
-		return nil, fmt.Errorf("questions must be an array")
-	}
-
-	if len(rawQuestions) == 0 {
-		return nil, fmt.Errorf("questions must not be empty")
-	}
-
-	questions := make([]Question, 0, len(rawQuestions))
-	for _, rawQuestion := range rawQuestions {
-		var parsedQuestion questionToolInputQuestion
-		if err := json.Unmarshal(rawQuestion, &parsedQuestion); err != nil {
-			return nil, fmt.Errorf("invalid question entry")
+	questions := make([]Question, 0, len(parsedQuestions))
+	for _, parsedQuestion := range parsedQuestions {
+		options := make([]QuestionOption, 0, len(parsedQuestion.Options))
+		for _, parsedOption := range parsedQuestion.Options {
+			option := QuestionOption{
+				Label: parsedOption.Label,
+				Value: parsedOption.Value,
+			}
+			if parsedOption.Description != "" {
+				option.Description = parsedOption.Description
+			}
+			options = append(options, option)
 		}
 
-		id := strings.TrimSpace(parsedQuestion.ID)
-		questionText := strings.TrimSpace(parsedQuestion.Question)
-		header := strings.TrimSpace(parsedQuestion.Header)
-
-		if id == "" {
-			return nil, fmt.Errorf("question.id is required")
+		question := Question{
+			ID:       parsedQuestion.ID,
+			Type:     string(parsedQuestion.Type),
+			Question: parsedQuestion.Question,
+			Options:  options,
 		}
-		if questionText == "" {
-			return nil, fmt.Errorf("question.question is required")
+		if parsedQuestion.Header != "" {
+			question.Header = parsedQuestion.Header
 		}
-
-		opts, err := parseQuestionToolOptions(parsedQuestion.Options)
-		if err != nil {
-			return nil, err
-		}
-
-		qType, err := normalizeQuestionToolType(parsedQuestion.Type, len(opts) > 0)
-		if err != nil {
-			return nil, err
-		}
-
-		q := Question{
-			ID:       id,
-			Type:     string(qType),
-			Question: questionText,
-			Options:  opts,
-		}
-		if header != "" {
-			q.Header = header
-		}
-		questions = append(questions, q)
+		questions = append(questions, question)
 	}
 	return questions, nil
-}
-
-func parseQuestionToolOptions(rawOptions json.RawMessage) ([]QuestionOption, error) {
-	if len(rawOptions) == 0 {
-		return nil, nil
-	}
-
-	trimmed := bytes.TrimSpace(rawOptions)
-	if bytes.Equal(trimmed, []byte("null")) {
-		return nil, fmt.Errorf("question.options must be an array")
-	}
-
-	var decodedOptions []questionToolInputOption
-	if err := json.Unmarshal(rawOptions, &decodedOptions); err != nil {
-		return nil, fmt.Errorf("question.options must be an array")
-	}
-
-	options := make([]QuestionOption, 0, len(decodedOptions))
-	for _, decodedOption := range decodedOptions {
-		label := strings.TrimSpace(decodedOption.Label)
-		value := strings.TrimSpace(decodedOption.Value)
-		desc := strings.TrimSpace(decodedOption.Description)
-
-		if label == "" {
-			return nil, fmt.Errorf("option.label is required")
-		}
-		if value == "" {
-			value = label
-		}
-
-		option := QuestionOption{Label: label, Value: value}
-		if desc != "" {
-			option.Description = desc
-		}
-		options = append(options, option)
-	}
-
-	return options, nil
-}
-
-func normalizeQuestionToolType(rawType string, hasOptions bool) (questionToolType, error) {
-	normalizedType := strings.TrimSpace(strings.ToLower(rawType))
-	if normalizedType == "" {
-		if hasOptions {
-			normalizedType = string(questionToolTypeSelect)
-		} else {
-			normalizedType = string(questionToolTypeText)
-		}
-	}
-
-	switch questionToolType(normalizedType) {
-	case questionToolTypeText:
-		return questionToolTypeText, nil
-	case questionToolTypeSelect:
-		if !hasOptions {
-			return "", fmt.Errorf("select questions must include options")
-		}
-		return questionToolTypeSelect, nil
-	default:
-		return "", fmt.Errorf("question.type must be 'text' or 'select'")
-	}
 }
 
 func (a *AgenticLoop) executeQuestionTool(ctx context.Context, sessionID string, tc providers.ToolCall, callback StreamCallback) (string, bool) {

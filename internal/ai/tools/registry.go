@@ -2,38 +2,55 @@ package tools
 
 import (
 	"context"
-	"fmt"
 	"sync"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 )
 
 // ToolActionMode describes the state-changing capability of a registered tool.
-type ToolActionMode string
+// It aliases the shared Pulse Intelligence capability action mode so Assistant
+// and external-agent manifests cannot drift on the read/mixed/write vocabulary.
+type ToolActionMode = agentcapabilities.ActionMode
 
 const (
-	ToolActionRead  ToolActionMode = "read"
-	ToolActionMixed ToolActionMode = "mixed"
-	ToolActionWrite ToolActionMode = "write"
+	ToolActionRead  ToolActionMode = agentcapabilities.ActionModeRead
+	ToolActionMixed ToolActionMode = agentcapabilities.ActionModeMixed
+	ToolActionWrite ToolActionMode = agentcapabilities.ActionModeWrite
 )
 
-const assistantControlToolsDisabledMessage = "Control tools are disabled. Open Assistant & Patrol settings, then set Pulse Assistant Permissions > Control mode to Controlled before using action tools."
+// ToolApprovalPolicy describes whether a tool can run with its granted scope or
+// must participate in Pulse's governed action-plan approval lifecycle. It
+// aliases the shared Pulse Intelligence approval vocabulary so Assistant
+// prompts and external-agent manifests cannot drift.
+type ToolApprovalPolicy = agentcapabilities.ApprovalPolicy
+
+const (
+	ToolApprovalScopeOnly  ToolApprovalPolicy = agentcapabilities.ApprovalPolicyScopeOnly
+	ToolApprovalActionPlan ToolApprovalPolicy = agentcapabilities.ApprovalPolicyActionPlan
+)
+
+// ControlLevel represents the Assistant permission level for infrastructure
+// control. It aliases the shared Pulse Intelligence control vocabulary so
+// Assistant tool availability and external-agent adapters cannot drift.
+type ControlLevel = agentcapabilities.ControlLevel
+
+const (
+	// ControlLevelReadOnly - AI can only query, no control tools available
+	ControlLevelReadOnly ControlLevel = agentcapabilities.ControlLevelReadOnly
+	// ControlLevelControlled - AI can execute with per-command approval
+	ControlLevelControlled ControlLevel = agentcapabilities.ControlLevelControlled
+	// ControlLevelAutonomous - AI executes without approval (requires Pro license)
+	ControlLevelAutonomous ControlLevel = agentcapabilities.ControlLevelAutonomous
+)
 
 // ToolGovernance records the operator-facing governance contract for a tool.
-type ToolGovernance struct {
-	ActionMode     ToolActionMode
-	ApprovalPolicy string
-	Summary        string
-}
+// It aliases the shared Pulse Intelligence shape so Assistant and
+// external-agent governance descriptors cannot drift.
+type ToolGovernance = agentcapabilities.ToolGovernance
 
 // ToolGovernanceDescriptor is the read-only manifest used by Assistant prompts
 // and action-governance surfaces.
-type ToolGovernanceDescriptor struct {
-	Name           string
-	Description    string
-	RequireControl bool
-	ActionMode     ToolActionMode
-	ApprovalPolicy string
-	Summary        string
-}
+type ToolGovernanceDescriptor = agentcapabilities.ToolGovernanceDescriptor
 
 // ToolHandler is a function that handles tool execution
 type ToolHandler func(ctx context.Context, e *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error)
@@ -66,6 +83,7 @@ func (r *ToolRegistry) Register(tool RegisteredTool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	tool.Definition = tool.Definition.NormalizeCollections()
 	name := tool.Definition.Name
 	if _, exists := r.tools[name]; !exists {
 		r.order = append(r.order, name)
@@ -82,10 +100,10 @@ func (r *ToolRegistry) ListTools(controlLevel ControlLevel) []Tool {
 	for _, name := range r.order {
 		tool := r.tools[name]
 		// Skip control tools if in read-only mode
-		if tool.RequireControl && (controlLevel == ControlLevelReadOnly || controlLevel == "") {
+		if tool.RequireControl && !agentcapabilities.ControlLevelAllowsControlTools(controlLevel) {
 			continue
 		}
-		result = append(result, tool.Definition)
+		result = append(result, tool.Definition.NormalizeCollections())
 	}
 	return result
 }
@@ -98,44 +116,17 @@ func (r *ToolRegistry) ListToolGovernance(controlLevel ControlLevel) []ToolGover
 	result := make([]ToolGovernanceDescriptor, 0, len(r.tools))
 	for _, name := range r.order {
 		tool := r.tools[name]
-		if tool.RequireControl && (controlLevel == ControlLevelReadOnly || controlLevel == "") {
+		if tool.RequireControl && !agentcapabilities.ControlLevelAllowsControlTools(controlLevel) {
 			continue
 		}
-		governance := normalizeToolGovernance(tool)
-		result = append(result, ToolGovernanceDescriptor{
-			Name:           tool.Definition.Name,
-			Description:    tool.Definition.Description,
-			RequireControl: tool.RequireControl,
-			ActionMode:     governance.ActionMode,
-			ApprovalPolicy: governance.ApprovalPolicy,
-			Summary:        governance.Summary,
-		})
+		result = append(result, agentcapabilities.NewToolGovernanceDescriptor(
+			tool.Definition.Name,
+			tool.Definition.Description,
+			tool.RequireControl,
+			tool.Governance,
+		))
 	}
 	return result
-}
-
-func normalizeToolGovernance(tool RegisteredTool) ToolGovernance {
-	governance := tool.Governance
-	if governance.ActionMode == "" {
-		if tool.RequireControl {
-			governance.ActionMode = ToolActionWrite
-		} else {
-			governance.ActionMode = ToolActionRead
-		}
-	}
-	if governance.ApprovalPolicy == "" {
-		if governance.ActionMode == ToolActionRead {
-			governance.ApprovalPolicy = "no approval required"
-		} else if tool.RequireControl {
-			governance.ApprovalPolicy = "hidden in read-only mode; approval required in controlled mode"
-		} else {
-			governance.ApprovalPolicy = "write subactions require the tool's governed approval path"
-		}
-	}
-	if governance.Summary == "" {
-		governance.Summary = tool.Definition.Description
-	}
-	return governance
 }
 
 // allNames returns the canonical list of registered tool names in
@@ -150,20 +141,28 @@ func (r *ToolRegistry) allNames() []string {
 
 // Execute runs a tool by name
 func (r *ToolRegistry) Execute(ctx context.Context, e *PulseToolExecutor, name string, args map[string]interface{}) (CallToolResult, error) {
+	params, invalidResult, ok := agentcapabilities.PrepareToolRegistryExecution(name, args)
+	if !ok {
+		return invalidResult, nil
+	}
+	name = params.Name
+	args = params.Arguments
+
 	r.mu.RLock()
 	tool, exists := r.tools[name]
 	r.mu.RUnlock()
 
 	if !exists {
-		return NewErrorResult(fmt.Errorf("unknown tool: %s", name)), nil
+		return agentcapabilities.NewUnknownToolResult(name), nil
 	}
 
 	// Centralized control level check
 	if tool.RequireControl {
-		if e.controlLevel == ControlLevelReadOnly || e.controlLevel == "" {
-			return NewTextResult(assistantControlToolsDisabledMessage), nil
+		if !agentcapabilities.ControlLevelAllowsControlTools(e.controlLevel) {
+			return agentcapabilities.NewControlToolsDisabledToolResult(), nil
 		}
 	}
 
-	return tool.Handler(ctx, e, args)
+	result, err := tool.Handler(ctx, e, args)
+	return result.NormalizeCollections(), err
 }

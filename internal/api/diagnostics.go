@@ -704,17 +704,16 @@ func (d AlertsDiagnostic) NormalizeCollections() AlertsDiagnostic {
 	return d
 }
 
-// AIChatDiagnostic reports on the AI chat service status.
+// AIChatDiagnostic reports on the native Pulse Assistant runtime status.
 type AIChatDiagnostic struct {
-	Enabled      bool     `json:"enabled"`
-	Running      bool     `json:"running"`
-	Healthy      bool     `json:"healthy"`
-	Port         int      `json:"port,omitempty"`
-	URL          string   `json:"url,omitempty"`
-	Model        string   `json:"model,omitempty"`
-	MCPConnected bool     `json:"mcpConnected"`
-	MCPToolCount int      `json:"mcpToolCount,omitempty"`
-	Notes        []string `json:"notes"`
+	Enabled                   bool     `json:"enabled"`
+	Running                   bool     `json:"running"`
+	Healthy                   bool     `json:"healthy"`
+	Port                      int      `json:"port,omitempty"`
+	URL                       string   `json:"url,omitempty"`
+	Model                     string   `json:"model,omitempty"`
+	AssistantRuntimeConnected bool     `json:"assistantRuntimeConnected"`
+	Notes                     []string `json:"notes"`
 }
 
 func (d AIChatDiagnostic) NormalizeCollections() AIChatDiagnostic {
@@ -1959,8 +1958,8 @@ func buildAIChatDiagnostic(cfg *config.Config, aiHandler *AIHandler) *AIChatDiag
 				}
 			}
 
-			// Check MCP connection (if we had access to check it)
-			diag.MCPConnected = diag.Running // Assume connected if running for now
+			// Native Assistant diagnostics report runtime availability, not MCP transport.
+			diag.AssistantRuntimeConnected = diag.Running
 
 			if !diag.Running && diag.Enabled {
 				diag.Notes = append(diag.Notes, "Pulse Assistant service is enabled but not running")

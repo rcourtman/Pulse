@@ -3,6 +3,8 @@ package eval
 import (
 	"fmt"
 	"strings"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 )
 
 // === Common Assertions ===
@@ -322,10 +324,10 @@ func AssertToolNotBlocked() Assertion {
 	return func(result *StepResult) AssertionResult {
 		for _, tc := range result.ToolCalls {
 			if strings.Contains(tc.Output, `"blocked":true`) ||
-				strings.Contains(tc.Output, "ROUTING_MISMATCH") ||
-				strings.Contains(tc.Output, "FSM_BLOCKED") ||
+				strings.Contains(tc.Output, agentcapabilities.ErrCodeRoutingMismatch) ||
+				strings.Contains(tc.Output, agentcapabilities.ErrCodeFSMBlocked) ||
 				strings.Contains(tc.Output, "READ_ONLY_VIOLATION") ||
-				strings.Contains(tc.Output, "STRICT_RESOLUTION") {
+				strings.Contains(tc.Output, agentcapabilities.ErrCodeStrictResolution) {
 				return AssertionResult{
 					Name:    "tool_not_blocked",
 					Passed:  false,

@@ -170,20 +170,101 @@ func TestComputePatrolMaxTurns(t *testing.T) {
 }
 
 func TestGetPatrolSystemPrompt_ModeSwitch(t *testing.T) {
-	svc := &Service{cfg: &config.AIConfig{PatrolAutoFix: true}}
-	ps := NewPatrolService(svc, nil)
-	prompt := ps.getPatrolSystemPrompt()
-	if !strings.Contains(prompt, "Auto-Fix Mode") || !strings.Contains(prompt, "Governed read and control tools are available") {
-		t.Fatalf("expected auto-fix prompt, got: %s", prompt)
-	}
-	if !strings.Contains(prompt, "pulse_discovery") || !strings.Contains(prompt, "Read or refresh discovered service details") {
-		t.Fatalf("expected patrol prompt to expose discovery refresh capability, got: %s", prompt)
+	tests := []struct {
+		name       string
+		cfg        *config.AIConfig
+		contains   []string
+		notContain []string
+	}{
+		{
+			name: "monitor",
+			cfg:  &config.AIConfig{PatrolAutonomyLevel: config.PatrolAutonomyMonitor},
+			contains: []string{
+				"Patrol Control Mode: Watch Only",
+				"Do not investigate through remediation flows, queue approvals, or execute any infrastructure-changing action.",
+			},
+		},
+		{
+			name: "approval",
+			cfg:  &config.AIConfig{PatrolAutonomyLevel: config.PatrolAutonomyApproval},
+			contains: []string{
+				"Patrol Control Mode: Ask First",
+				"Do not execute remediation commands in this mode.",
+				"queue it for operator approval",
+			},
+		},
+		{
+			name: "assisted",
+			cfg:  &config.AIConfig{PatrolAutonomyLevel: config.PatrolAutonomyAssisted},
+			contains: []string{
+				"Patrol Control Mode: Safe Auto-Fix",
+				"execute only low-risk, policy-approved fixes automatically",
+				"Queue approval for destructive, high-risk, critical, ambiguous, restricted, or never-auto-remediate actions.",
+			},
+		},
+		{
+			name: "full",
+			cfg: &config.AIConfig{
+				PatrolAutonomyLevel:    config.PatrolAutonomyFull,
+				PatrolFullModeUnlocked: true,
+			},
+			contains: []string{
+				"Patrol Control Mode: Autopilot",
+				"execute policy-approved fixes automatically, including critical fixes",
+				"Approval boundaries still win",
+			},
+		},
+		{
+			name: "locked full downgrades to assisted",
+			cfg: &config.AIConfig{
+				PatrolAutonomyLevel:    config.PatrolAutonomyFull,
+				PatrolFullModeUnlocked: false,
+			},
+			contains: []string{
+				"Patrol Control Mode: Safe Auto-Fix",
+			},
+			notContain: []string{
+				"Patrol Control Mode: Autopilot",
+			},
+		},
+		{
+			name: "legacy autofix flag does not overstate autonomy",
+			cfg: &config.AIConfig{
+				PatrolAutoFix: true,
+			},
+			contains: []string{
+				"Patrol Control Mode: Watch Only",
+			},
+			notContain: []string{
+				"Patrol Control Mode: Autopilot",
+				"Auto-Fix Mode",
+			},
+		},
 	}
 
-	svc.cfg = &config.AIConfig{PatrolAutoFix: false}
-	prompt = ps.getPatrolSystemPrompt()
-	if !strings.Contains(prompt, "Observe Only Mode") {
-		t.Fatalf("expected observe-only prompt, got: %s", prompt)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := &Service{cfg: tt.cfg}
+			ps := NewPatrolService(svc, nil)
+			prompt := ps.getPatrolSystemPrompt()
+
+			if !strings.Contains(prompt, "pulse_discovery") || !strings.Contains(prompt, "Read or refresh discovered service details") {
+				t.Fatalf("expected patrol prompt to expose discovery refresh capability, got: %s", prompt)
+			}
+			for _, want := range tt.contains {
+				if !strings.Contains(prompt, want) {
+					t.Fatalf("prompt missing %q:\n%s", want, prompt)
+				}
+			}
+			for _, forbidden := range tt.notContain {
+				if strings.Contains(prompt, forbidden) {
+					t.Fatalf("prompt contained forbidden %q:\n%s", forbidden, prompt)
+				}
+			}
+			if strings.Contains(prompt, "Observe Only Mode") {
+				t.Fatalf("prompt should use Patrol control-mode vocabulary, got legacy observe-only wording:\n%s", prompt)
+			}
+		})
 	}
 }
 

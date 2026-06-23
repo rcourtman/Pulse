@@ -3,8 +3,8 @@ package providers
 
 import (
 	"context"
-	"encoding/json"
-	"strings"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 )
 
 // Message represents a chat message
@@ -30,50 +30,25 @@ func (m Message) NormalizeCollections() Message {
 	return m
 }
 
-// ToolCall represents a tool invocation from the AI
-type ToolCall struct {
-	ID               string                 `json:"id"`
-	Name             string                 `json:"name"`
-	Input            map[string]interface{} `json:"input"`
-	ThoughtSignature json.RawMessage        `json:"thought_signature,omitempty"`
-}
+// ToolCall represents a tool invocation from the AI. It aliases the shared
+// Pulse Intelligence provider-call shape so Assistant execution projects
+// model-selected calls through the same boundary as external agent adapters.
+type ToolCall = agentcapabilities.ProviderToolCall
 
 func EmptyToolCall() ToolCall {
-	return ToolCall{}.NormalizeCollections()
+	return agentcapabilities.EmptyProviderToolCall()
 }
 
-func (t ToolCall) NormalizeCollections() ToolCall {
-	if t.Input == nil {
-		t.Input = map[string]interface{}{}
-	}
-	return t
-}
+// ToolResult represents the result of a tool execution.
+type ToolResult = agentcapabilities.ProviderToolResult
 
-// ToolResult represents the result of a tool execution
-type ToolResult struct {
-	ToolUseID string `json:"tool_use_id"`
-	Content   string `json:"content"`
-	IsError   bool   `json:"is_error,omitempty"`
-}
-
-// Tool represents an AI tool definition
-type Tool struct {
-	Type        string                 `json:"type,omitempty"` // "web_search_20250305" for web search, empty for regular tools
-	Name        string                 `json:"name"`
-	Description string                 `json:"description,omitempty"`
-	InputSchema map[string]interface{} `json:"input_schema"`
-	MaxUses     int                    `json:"max_uses,omitempty"` // For web search: limit searches per request
-}
+// Tool represents an AI tool definition. It aliases the shared Pulse
+// Intelligence provider tool shape so Assistant provider clients project tools
+// through the same schema boundary.
+type Tool = agentcapabilities.ProviderTool
 
 func EmptyTool() Tool {
-	return Tool{}.NormalizeCollections()
-}
-
-func (t Tool) NormalizeCollections() Tool {
-	if t.InputSchema == nil {
-		t.InputSchema = map[string]interface{}{}
-	}
-	return t
+	return agentcapabilities.EmptyProviderTool()
 }
 
 // ToolChoiceType represents how the model should choose tools
@@ -211,17 +186,6 @@ func (e ToolProgressEvent) NormalizeCollections() ToolProgressEvent {
 		e.Input = map[string]interface{}{}
 	}
 	return e
-}
-
-func parseStreamToolInput(rawArgs string) map[string]interface{} {
-	if strings.TrimSpace(rawArgs) == "" {
-		return nil
-	}
-	var input map[string]interface{}
-	if err := json.Unmarshal([]byte(rawArgs), &input); err != nil {
-		return nil
-	}
-	return input
 }
 
 // ToolEndEvent is the data for "tool_end" stream events

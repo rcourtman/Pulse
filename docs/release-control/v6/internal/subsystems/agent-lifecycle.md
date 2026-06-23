@@ -111,6 +111,29 @@ shared `/api/resources` payload carries a backend-authored Proxmox workload
 target linked to that node agent. Suppressing an inside-guest install cue for
 that case means governed actions have a node-agent path; it must not be
 presented as proof that a guest-local agent is installed.
+Agent-facing operations-loop status wiring in `internal/api/router.go` and
+`internal/api/agent_resource_context.go` is lifecycle-adjacent only because it
+shares agent route infrastructure. Workflow starter counts on that endpoint,
+contextual Assistant/external-agent collaboration counts inside the Assistant
+step, the content-free Patrol control starter split, and Patrol control
+completed-loop, resolved-loop, or `patrolControlValueState` proof mirrored to
+`patrolAutonomyValueState` compatibility fields are
+API-contract telemetry/orientation fields, not agent enrollment, liveness,
+setup completion, install, update, command, recovery, or fleet-control
+lifecycle authority. Native `pulse_patrol` starts, current paid
+`patrol_control` starts, legacy `patrol_autonomy` starts, and legacy
+`pulse_pro_activation` starts all contribute to Patrol control starter orientation;
+`proActivationOperationsLoopStarterCount` remains a legacy entry-point counter
+for the old alias only, while the legacy completed/resolved/value
+`proActivation*` fields are compatibility aliases for that same first-party
+Patrol control proof while older commercial and telemetry consumers migrate.
+Lifecycle surfaces must
+not treat `verified`,
+legacy-compatible `verified_needs_mcp`, or `governed_decision_recorded` as
+proof that an agent install, update, registration, profile rollout, or fleet
+command completed. External-agent/MCP readiness is optional collaboration
+setup for agents outside the app, not a first-party Patrol control completion
+gate and not a lifecycle setup stage.
 
 1. `frontend-modern/src/api/agentProfiles.ts` shared with `api-contracts`: the agent profiles frontend client is both an agent lifecycle control surface and a canonical API payload contract boundary.
 2. `frontend-modern/src/api/nodes.ts` shared with `api-contracts`: the shared Proxmox node client is both an agent lifecycle setup/install control surface and a canonical API payload contract boundary.
@@ -260,6 +283,11 @@ same browser-safe history boundary. Lifecycle surfaces, MCP adapters, and
 agents may display the updated title as human navigation metadata, but they
 must not treat a renamed title as command authorization, host identity,
 enrollment state, capability evidence, or install-token disclosure.
+The native Assistant surface-tool inventory at
+`GET /api/ai/assistant/surface-tools` is also AI-runtime/API-contract metadata:
+lifecycle surfaces may display which Assistant tools are available, but must
+not reinterpret that list as agent enrollment state, command authority, install
+token scope, or proof that a host can execute lifecycle actions.
 Agent lifecycle consumers of `/api/agent/events` and
 `/api/agent/resource-context/{id}` must also honor the shared API command
 payload boundary: API tokens with monitoring/read scope receive
@@ -268,6 +296,20 @@ text unless they also hold action execution scope. Lifecycle UI and agents may
 use those redacted events as doorbells or status summaries, but they must fetch
 governed detail through the approval/action surfaces and must not treat a
 monitoring-readable event stream as command disclosure or execution authority.
+Lifecycle surfaces that inspect agent event kinds must consume the shared
+`internal/agentcapabilities` event vocabulary. Local lifecycle, MCP, or probe
+copies of `finding.created`, `approval.pending`, `action.completed`,
+`stream.connected`, or `heartbeat`, or local SSE parser semantics for those
+events, are contract drift because event naming and stream framing are
+API/AI-owned, not lifecycle-owned.
+Lifecycle consumers of agent-surface failures must also consume the shared
+`internal/agentcapabilities` error envelope; lifecycle work may branch on the
+stable `error` code but must not define a local failure envelope or reinterpret
+agent errors as install, enrollment, command, or update authority. Branchable
+agent-surface codes exposed through shared `internal/api/` routes must be
+referenced from `agentcapabilities.AgentErrCode*` constants so lifecycle UI,
+Assistant handoffs, MCP adapters, and manifest declarations do not drift into
+separate string vocabularies.
 The resource-context endpoint's additive context sections are the same
 read-only boundary: lifecycle consumers, MCP adapters, and external agents may
 use their bounded facts, provenance, freshness, and explicit redaction metadata
@@ -566,6 +608,40 @@ instead of lifecycle-local centered icon/text shells.
    lifecycle surfaces may display contact email when supplied by the shared
    auth boundary, but they must not reinterpret SSO or Stripe email as the
    canonical user identifier for setup, install, or fleet-management actions.
+   Approved-action tool invocation parsing in `internal/api/router_routes_ai_relay.go`
+   is not an agent-lifecycle route grammar: lifecycle-adjacent setup or repair
+   flows that execute governed Pulse tools must inherit
+   `internal/agentcapabilities.ParseTextToolInvocation` through the API relay
+   instead of duplicating `pulse_*` command-string parsing in lifecycle helpers.
+   Approved-action replay through that same relay must also use the shared
+   `internal/agentcapabilities` approved-action argument helper, not lifecycle-local
+   approval argument keys or pass-through maps.
+   Native Assistant workflow-prompt rendering through
+   `POST /api/ai/workflow-prompts/render` is likewise AI-runtime/API-contract
+   ownership even though it is wired through shared `internal/api/` files:
+   lifecycle surfaces may benefit from the resulting Assistant prompt text, but
+   they must not treat manifest `workflowPrompts`, rendered prompt bodies, or
+   Assistant starter availability as install, enrollment, or fleet-control
+   route grammar.
+   The adjacent workflow-starter activity markers on
+   `POST /api/ai/workflow-prompts/activity` and
+   `POST /api/agent/workflow-prompt-activity` follow that same split:
+   lifecycle surfaces may use the aggregate activation reports, but the
+   content-free prompt-name/surface/timestamp marker is not agent enrollment,
+   install readiness, fleet-control liveness, command authority, or agent
+   update state. The first-party `pulse_patrol` starter surface means a user
+   entered the Pulse Intelligence operations-loop journey from app UX; it does
+   not imply a host agent is installed, healthy, or authorized to run commands.
+   The first-party `patrol_control` starter surface and legacy
+   `patrol_autonomy` / `pulse_pro_activation` aliases are paid Patrol control
+   journey markers only; lifecycle code must not treat any of them as setup,
+   install, fleet-health, or command-agent state.
+   The adjacent `GET /api/agent/patrol-control/status` projection in
+   `internal/api/agent_resource_context.go` may expose operator-readable Patrol
+   status copy for native and external-agent orchestration, but lifecycle
+   surfaces must not reinterpret that copy, its next action, or its
+   completed/resolved Patrol outcome counts as install readiness, enrollment
+   health, command authorization, or agent update state.
    Hosted Pulse Account may deep-link an MSP operator into a tenant workspace's
    agent-install surface through a signed local handoff target such as
    `/settings/infrastructure?add=linux-host`, but install-token generation,
@@ -599,7 +675,20 @@ instead of lifecycle-local centered icon/text shells.
    Patrol readiness and settings-save payload changes on those shared handlers
    are also adjacent only: structured provider/model/tool causes may be exposed
    to Patrol and Assistant, but they do not grant agent install, enrollment,
-   or fleet command authority.
+   or fleet command authority. Assistant runtime identity strings exposed by
+   those handlers must name the first-party surface as Pulse Assistant rather
+   than the legacy generic `Pulse AI`, and lifecycle consumers must not treat
+   that label as agent registration, install progress, or command-agent
+   readiness state. Diagnostics from `internal/api/diagnostics.go` follow the
+   same adjacent boundary: lifecycle consumers may read
+   `assistantRuntimeConnected`, but they must not reinterpret it as MCP
+   transport state, agent registration, install progress, or command-agent
+   readiness.
+   Profile-suggestion availability errors consumed through
+   `frontend-modern/src/api/agentProfiles.ts` are shared Pulse Intelligence
+   availability guidance, not lifecycle registration state; the client must
+   point operators at Assistant & Patrol settings instead of reviving `Pulse
+   Assistant settings` copy.
    Hosted handoff subjects consumed through the shared API auth boundary must
    already be stable, non-email principals; lifecycle-adjacent routes must not
    recover authority from a blank handoff subject by falling back to contact
@@ -653,7 +742,16 @@ instead of lifecycle-local centered icon/text shells.
    `internal/api/ai_handlers.go` and `internal/api/chat_service_adapter.go`
    may be invoked by lifecycle-adjacent surfaces, but AI runtime auth and
    provider selection remain `ai-runtime` plus `api-contracts` concerns rather
-   than install-token or lifecycle credential state. Lifecycle flows must not
+   than install-token or lifecycle credential state. Legacy Anthropic OAuth
+   fields exposed by AI settings are cleanup-only compatibility state:
+   lifecycle-adjacent setup, install, profile, and relay flows must not treat
+   stored OAuth tokens or `auth_method=oauth` as an agent enrollment, provider
+   bootstrap, or AI provider-readiness signal. API-facing Assistant chat tool
+   calls projected through `internal/api/chat_service_adapter.go` must stay
+   on the shared `agentcapabilities` provider-call shape; lifecycle consumers
+   must not treat Assistant transcript tool-call IDs, inputs, output, success
+   flags, or provider continuation metadata as enrollment, assignment, installer,
+   or fleet-command evidence. Lifecycle flows must not
    recreate the retired Patrol quickstart bootstrap path, mint server-issued
    hosted-model tokens, or derive AI provider state from installation identity.
    Per-request `/api/ai/chat` execution-mode overrides follow that same
@@ -756,13 +854,36 @@ instead of lifecycle-local centered icon/text shells.
 4. Keep shared agent-side TLS identity fail-closed across `cmd/pulse-agent/main.go`, `internal/hostagent/`, `internal/agentupdate/`, `internal/remoteconfig/client.go`, and `internal/agenttls/config.go`. Self-signed deployments may use a canonical pinned Pulse server certificate fingerprint, but lifecycle transport must route that pin through reporting, enrollment, command websocket, remote-config, and self-update clients instead of widening `PULSE_INSECURE_SKIP_VERIFY` into a blanket MITM carve-out. A configured custom CA bundle is part of that same trust boundary: if the bundle is unreadable or invalid, lifecycle transport must refuse the connection path rather than silently downgrading back to system roots.
 5. Keep release-grade updater trust fail-closed across `internal/agentupdate/`, `internal/dockeragent/`, and the shared `internal/api/unified_agent.go` download helpers. When release builds embed trusted update signing keys, published agent binaries and installer assets must carry detached `.sig` plus `.sshsig` sidecars; updater/runtime paths must require `X-Signature-Ed25519` in addition to `X-Checksum-Sha256`, and installer-owned download flows must require the matching base64-encoded `X-Signature-SSHSIG`, instead of silently downgrading to checksum-only trust.
 6. Keep shared `internal/api/` helper edits isolated from agent lifecycle semantics: Patrol-specific status transport or alert-trigger wiring changes in shared handlers must not bleed into auto-register, installer, or fleet-control behavior unless this contract moves in the same slice.
-   The same isolation rule applies to AI settings payload work in `internal/api/ai_handlers.go`: provider auth fields, masked-secret echoes, and provider-test model selection remain AI/runtime plus API-contract ownership and must not be reinterpreted as lifecycle setup or registration semantics just because they share backend helper layers.
+   The same isolation rule applies to AI settings payload work in `internal/api/ai_handlers.go`: provider auth fields, masked-secret echoes, provider-test model selection, and legacy Anthropic OAuth cleanup fields remain AI/runtime plus API-contract ownership and must not be reinterpreted as lifecycle setup, provider activation, or registration semantics just because they share backend helper layers.
+   Patrol readiness labels on the same settings payload, including the
+   user-facing Patrol control label for the stable `configuration` check ID,
+   remain AI/runtime plus API-contract wording and must not be treated as agent
+   lifecycle configuration, install readiness, registration state, or fleet
+   control setup.
+   Governed AI action-target normalization in
+   `internal/api/ai_handlers.go` and `internal/api/ai_resource_types.go`
+   follows that same split: Assistant approval routing may map resource types
+   to action targets, but lifecycle setup, enrollment, installer, and command
+   websocket target semantics remain owned by the lifecycle contracts above.
    The same isolation rule applies to Pulse Assistant chat SSE progress in
    `internal/api/ai_handler.go`: neutral `workflow_state` transport liveness
    such as `stream_idle`, provider startup, retry, fallback, and model-thinking
    status remains AI/runtime plus API-contract ownership and must not be
    reinterpreted as agent enrollment, install progress, command websocket
    liveness, or fleet-control freshness.
+   Native Assistant workflow-prompt rendering through
+   `POST /api/ai/workflow-prompts/render` follows the same split: manifest-owned
+   prompt names, argument validation, and rendered starter text remain
+   AI/runtime plus API-contract ownership and must not become lifecycle setup,
+   enrollment, installer, or fleet-control state just because the route lives in
+   `internal/api/ai_handler.go`.
+   Workflow-starter activity telemetry recorded after successful Assistant
+   prompt rendering, first-party Patrol activation handoff, Pro activation
+   handoff, or Pulse MCP prompt rendering follows the same ownership split. The
+   marker may contribute to Pulse Intelligence activation reporting, but
+   lifecycle code must not treat it as proof of installed agents, reported
+   hosts, command connectivity, stale-agent freshness, or fleet-operation
+   capability.
    The same isolation rule applies to report branding validation and rendering
    request assembly in `internal/api/system_settings.go` and
    `internal/api/metrics_reporting_handlers.go`: lifecycle-owned install,
@@ -832,6 +953,45 @@ instead of lifecycle-local centered icon/text shells.
    valid for one authenticated session, but retained CSRF hashes are not
    install tokens, setup-token state, enrollment authority, or agent credential
    continuity.
+   The same isolation rule applies to the Pulse Intelligence agent capability
+   manifest in `internal/agentcapabilities/manifest.go`: lifecycle surfaces may consume infrastructure
+   setup routes advertised there, but manifest governance fields, MCP tool
+   projection, shared external-tool projection helpers, shared schema-envelope
+   helpers, and external-agent typed argument schemas remain API/AI-owned
+   contract state rather than agent enrollment or installer semantics.
+   Native Pulse Assistant provider seams and native tool-adapter names in
+   shared `internal/api/ai_handler.go`, `internal/api/ai_handlers.go`,
+   `internal/api/agent_profiles_tools.go`, `internal/api/router.go`, and
+   `internal/api/router_routes_ai_relay.go`
+   follow that same isolation rule: `MCP` remains an external protocol,
+   manifest, and wire-schema term, while the in-app Assistant tool family is
+   AI/runtime plus API-contract state. Lifecycle consumers must not infer
+   enrollment, installer, command-websocket, or fleet-control authority from
+   those native Assistant tool names, and must not reintroduce MCP-named native
+   adapters to express lifecycle ownership.
+   Pulse Intelligence operations-loop external-agent readiness in
+   `internal/api/agent_resource_context.go` follows that same shared-helper
+   split: the Pulse MCP token/scope check is AI/runtime plus API-contract
+   ownership and must not become agent enrollment, installer, fleet-control, or
+   command-websocket readiness.
+   Patrol control completed/resolved proof and `patrolControlValueState`
+   follow the shared `internal/telemetry` count-only classifier even when they
+   are surfaced by `internal/api/agent_resource_context.go`; legacy
+   `patrolAutonomy*` fields mirror those values only for compatibility, and
+   lifecycle surfaces may observe them as operations-orientation evidence only.
+   `proActivationOperationsLoopStarterCount` is only legacy entry-point
+   orientation, and the legacy completed/resolved/value `proActivation*` status
+   fields mirror Patrol control values as compatibility aliases, not as a second
+   lifecycle signal. MCP readiness remains a separate
+   external-agent handoff signal and is not a Patrol control proof input,
+   agent install, registration, update, profile, command, or fleet-control
+   completion.
+   Approved Assistant tool execution exposed through the same shared
+   `internal/api/router_routes_ai_relay.go` extension point follows that native
+   naming rule: `AssistantToolExecutor` / `ApprovedAssistantToolExecutor` is the
+   only current cross-repo fix-execution dependency. MCP remains an external
+   protocol adapter term and must not reappear as a lifecycle command ownership
+   or approved-fix execution dependency.
    The same shared-helper rule now covers SSO outbound discovery and metadata fetches plus credential-file loads in `internal/api/sso_outbound.go`, `internal/api/saml_service.go`, and `internal/api/oidc_service.go`: lifecycle-adjacent setup or auth work may depend on that shared trust boundary, but it must not fork a second HTTP client, redirect policy, file-read rule, or SSO entitlement interpretation inside lifecycle-local flows. SAML and multi-provider SSO availability remains API/security-owned Community-tier behavior, not an agent lifecycle setup gate.
    The same shared-helper rule also covers organization membership and
    cross-organization sharing transport in `internal/api/org_handlers.go` plus
@@ -1292,6 +1452,18 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+Denied Patrol investigation-fix approvals passing through shared
+`internal/api/` handlers are adjacent AI-runtime/action-governance state only.
+The `fix_rejected` finding outcome records that an operator declined a proposed
+Patrol fix before execution; it must not be reinterpreted as agent enrollment,
+install progress, fleet liveness, or an agent-command failure.
+
+Patrol finding lifecycle payloads exposed through shared AI handlers, including
+operator resolution-note fields, remain AI-runtime/API-contract vocabulary:
+adjacent fleet and install surfaces may render the lifecycle state when another
+surface supplies it, but they must not reinterpret it as install progress,
+agent approval state, topology truth, or lifecycle-owned remediation policy.
+
 Default-org token scoping and notification-settings fan-out on shared
 `internal/api/` handlers are likewise adjacent only: org-bound token denial
 for the default org and instance-wide webhook allowlist propagation are
@@ -1363,6 +1535,14 @@ unauthenticated and cacheable; the underlying capabilities keep
 their own auth scopes. Adding a capability is a deliberate "this
 is part of the agent surface" commitment so the agent contract
 stays curated, not auto-derived from every internal endpoint.
+The manifest's action mode and approval policy metadata are API/AI-owned
+governance posture; lifecycle setup, enrollment, and fleet-control flows may
+surface that metadata to agents but must not reinterpret it as install,
+registration, heartbeat, update, or agent authority.
+The same adjacency applies to manifest `inputSchema` metadata: typed tool
+arguments help external agents call API-owned actions, but do not create a
+lifecycle-owned setup command path, operator-state write contract, or
+agent-control argument registry.
 
 `/api/agent/resource-context/{id}` is the agent-paradigm substrate
 endpoint: any agent (in-process Patrol/Assistant or external) reads
@@ -1409,6 +1589,12 @@ The handlers were migrated from the platform-wide `APIError`
 envelope to the agent-stable `{"error", "message", "details"?}`
 shape so the substrate keeps a single envelope contract across
 read, write, and action capabilities.
+The governed Patrol finding lifecycle tools advertised in the same
+manifest (`acknowledge_finding`, `snooze_finding`, `dismiss_finding`,
+`resolve_finding`) also return that agent-stable envelope for branchable
+failures and declare their closed error-code set in the manifest. That is
+an API/AI-runtime contract only: it does not create agent lifecycle state,
+registration state, install state, or any new durable recovery artifact.
 Docker / Podman lifecycle execution extends that same action category only:
 the manifest advertises the `execute_action` substrate, while per-resource
 container capabilities, policy checks, action audit records, and terminal
@@ -1748,6 +1934,94 @@ setup or router work touches shared `internal/api/` files, telemetry preview
 and install-ID reset routes must keep reusing the canonical system-settings
 trust boundary and server-owned telemetry runtime instead of borrowing agent
 lifecycle proof or state ownership just because the same router surface moved.
+Content-free Pulse Intelligence telemetry rollups under shared `internal/api/`
+also remain system-settings, API-contract, and security/privacy ownership:
+lifecycle-adjacent surfaces may observe that action-plan, approval,
+approved-action-decision, rejected-action-decision, first-party workflow
+starter, Pro activation starter, and external-agent usage is summarized, but
+they must not reinterpret those anonymous counters as agent enrollment, install
+success, recovery scope, or lifecycle state.
+External-agent activity may be counted when a narrow API token satisfies the
+specific manifest capability scope being called, including read-only
+`monitoring:read` context usage. That signal remains API-owned collaboration
+telemetry, not evidence that a command agent installed, checked in, or applied
+fleet state.
+External-agent/MCP readiness may also be true for a non-expired token that
+covers any Pulse MCP-published capability scope, but that readiness remains a
+collaboration-surface setup signal. Agent lifecycle code must not reinterpret
+it as host-agent enrollment, command-agent reachability, or applied fleet
+configuration. The manifest shape alone may prove that Pulse can publish the
+external-agent contract, but it must not satisfy `externalAgentReady` on
+`/api/agent/patrol-control/status` without a current token that covers at
+least one Pulse MCP surface capability. The legacy
+`/api/agent/operations-loop/status` URL is only a compatibility alias. Missing
+external-agent readiness must not downgrade or block first-party Patrol control
+completed/resolved proof; the legacy `verified_needs_mcp` state is retained
+only as compatibility input and must not become new lifecycle or activation
+output.
+The Patrol-control status projection at
+`GET /api/agent/patrol-control/status` follows the same ownership split. Its
+stage labels, next action, Patrol issue evidence count, pending approval count,
+contextual collaboration count, governed action count, verified outcome count,
+Patrol control starter/completed/resolved proof exposed first through
+`patrolControl*` fields and mirrored through `patrolAutonomy*` compatibility
+fields,
+`proActivationOperationsLoopStarterCount` as legacy entry-point orientation,
+legacy completed/resolved/value `proActivation*` aliases, and optional
+external-agent readiness
+are content-free Pulse Intelligence collaboration signals; lifecycle code must
+not reinterpret them as installed-agent proof, command-agent heartbeat,
+installer progress, profile convergence, or fleet-control authority.
+When that projection lets an aggregate active Patrol finding or pending approval
+outrank older completed/resolved loop proof, the result is still operator
+orientation only; it is not host-agent liveness, install health, or command
+authorization evidence.
+The same route may use action lifecycle events to notice recent loop activity,
+but its governance and verification counts remain action-governance signals:
+`governedActionCount` requires approved or rejected governed-action evidence,
+`approvedDecisionCount` and `rejectedDecisionCount` expose that split without
+identifiers, and `verifiedOutcomeCount` requires an approved governed action
+with verified post-action evidence. Agent lifecycle surfaces must not satisfy
+those stages from generic `executing`, `completed`, or `failed` command-agent
+state, and must not reinterpret a rejected-only no-execution terminal decision
+as command-agent success or failure.
+The same verified-outcome predicate backs outbound Pulse Intelligence
+approved-success telemetry: a completed action result is not lifecycle proof
+unless the approved action also has `VerificationOutcome.Status=verified` or a
+canonical verification result that ran and succeeded. Agent lifecycle surfaces
+must not count host-agent command completion, installer success, or generic
+execution success as Patrol control resolved-loop proof.
+The route's four-step operator rollup follows the same boundary: governance
+step counts may represent pending approvals before a decision or
+approved/rejected decision evidence after one exists, while verification step
+counts may represent verified outcomes or terminal rejected decisions. Optional
+MCP readiness stays in `externalAgentReady`, not in the operator step list.
+Agent lifecycle surfaces must not read those step counts as host-agent
+heartbeat, command-agent install state, or fleet-control authority.
+Approved action decision telemetry may use action lifecycle events or approved
+approval records as its API-owned proof source, but the exported value remains
+an anonymous approve/reject journey counter. Agent-lifecycle surfaces must not
+read that rollup as command dispatch, command-agent reachability, profile
+convergence, install success, or fleet lifecycle state.
+Approved execution attempt telemetry may use action lifecycle events as its
+API-owned proof source, but the exported value remains an anonymous operations
+loop counter. Agent-lifecycle surfaces must not treat that rollup as command
+agent heartbeat, installation proof, profile convergence, or fleet lifecycle
+state.
+Approved action success telemetry may also derive from the same governed action
+audit stream, but only as a content-free count of approved actions that reached
+completed state with a successful result. The existing approved execution
+counter remains attempt-based for compatibility; the success counter must not
+export resource identifiers, actor identifiers, command text, command output,
+verification details, or host-agent state.
+The external-agent recent-use bit is backed by content-free authenticated
+agent/MCP route activity for manifest-capable API tokens; it is not an agent
+lifecycle heartbeat, install proof, or generic token-last-used proxy.
+The MCP adapter recent-use bit is narrower adapter-origin telemetry for
+`pulse-mcp` requests on that same shared agent surface. It may distinguish MCP
+adapter collaboration from direct external-agent API collaboration, but agent
+lifecycle surfaces must not treat it as evidence that `pulse-agent` installed,
+checked in, accepted remote config, or executed a command.
 That same shared `internal/api/ai_handlers.go` dependency also now assumes
 Patrol-specific settings and status expansions stay Patrol-owned. When shared
 AI handlers add split scoped-trigger fields, recency labels, or trigger-state

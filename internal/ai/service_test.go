@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -159,6 +160,24 @@ func TestChatMessage_UsesCanonicalEmptyCollections(t *testing.T) {
 		t.Fatalf("expected empty chat tool call to retain input object, got %s", payload)
 	}
 
+	sharedCall := ChatToolCall{
+		ID:               "call-1",
+		Name:             "diagnose",
+		ThoughtSignature: json.RawMessage(`{"provider":"gemini"}`),
+	}
+	var sharedProviderCall agentcapabilities.ProviderToolCall = sharedCall.NormalizeCollections()
+	if sharedProviderCall.ID != "call-1" || sharedProviderCall.Input == nil {
+		t.Fatalf("shared chat tool call = %+v", sharedProviderCall)
+	}
+
+	payload, err = json.Marshal(sharedCall.NormalizeCollections())
+	if err != nil {
+		t.Fatalf("marshal shared chat tool call: %v", err)
+	}
+	if string(payload) != `{"id":"call-1","name":"diagnose","input":{},"thought_signature":{"provider":"gemini"}}` {
+		t.Fatalf("shared chat tool call JSON = %s", payload)
+	}
+
 	payload, err = json.Marshal(ChatMessage{
 		ToolCalls: []ChatToolCall{{
 			ID:   "call-1",
@@ -170,6 +189,27 @@ func TestChatMessage_UsesCanonicalEmptyCollections(t *testing.T) {
 	}
 	if !strings.Contains(string(payload), `"input":{}`) {
 		t.Fatalf("expected normalized chat message tool call to retain input object, got %s", payload)
+	}
+
+	var shared agentcapabilities.ProviderToolResult = ChatToolResult{
+		ToolUseID: "call-1",
+		Content:   "done",
+		IsError:   true,
+	}
+	if shared.ToolUseID != "call-1" {
+		t.Fatalf("shared chat tool result id = %q", shared.ToolUseID)
+	}
+
+	payload, err = json.Marshal(ChatToolResult{
+		ToolUseID: "call-1",
+		Content:   "done",
+		IsError:   true,
+	})
+	if err != nil {
+		t.Fatalf("marshal chat tool result: %v", err)
+	}
+	if string(payload) != `{"tool_use_id":"call-1","content":"done","is_error":true}` {
+		t.Fatalf("chat tool result JSON = %s", payload)
 	}
 }
 
@@ -609,14 +649,19 @@ func TestFormatApprovalNeededToolResult(t *testing.T) {
 		t.Error("Expected non-empty result")
 	}
 
-	// Should contain APPROVAL_REQUIRED prefix
-	if !hasPrefix(result, "APPROVAL_REQUIRED:") {
-		t.Error("Expected APPROVAL_REQUIRED prefix")
+	if !agentcapabilities.HasApprovalRequiredToolMarker(result) {
+		t.Error("Expected shared APPROVAL_REQUIRED marker")
 	}
 
-	// Should contain the command
-	if !containsString(result, "rm -rf /") {
-		t.Error("Expected result to contain command")
+	payload, ok := agentcapabilities.ParseApprovalRequiredToolMarkerPayload(result)
+	if !ok {
+		t.Fatalf("Expected shared approval marker payload, got %s", result)
+	}
+	if payload["command"] != "rm -rf /" {
+		t.Errorf("Expected result to contain command, got %#v", payload)
+	}
+	if payload["type"] != agentcapabilities.ToolMarkerApprovalRequiredType {
+		t.Errorf("Expected shared approval marker type, got %#v", payload["type"])
 	}
 }
 
@@ -627,45 +672,70 @@ func TestFormatPolicyBlockedToolResult(t *testing.T) {
 		t.Error("Expected non-empty result")
 	}
 
-	// Should contain POLICY_BLOCKED prefix
-	if !hasPrefix(result, "POLICY_BLOCKED:") {
-		t.Error("Expected POLICY_BLOCKED prefix")
+	if !agentcapabilities.HasPolicyBlockedToolMarker(result) {
+		t.Error("Expected shared POLICY_BLOCKED marker")
+	}
+
+	payload, ok := agentcapabilities.ParsePolicyBlockedToolMarkerPayload(result)
+	if !ok {
+		t.Fatalf("Expected shared policy marker payload, got %s", result)
+	}
+	if payload["reason"] != "Command not allowed by policy" {
+		t.Errorf("Expected result to contain policy reason, got %#v", payload)
+	}
+	if payload["type"] != agentcapabilities.ToolMarkerPolicyBlockedType {
+		t.Errorf("Expected shared policy marker type, got %#v", payload["type"])
 	}
 }
 
-func TestParseApprovalNeededMarker(t *testing.T) {
-	// Valid approval needed response
-	validResult := formatApprovalNeededToolResult("rm -rf /", "tool-123", "test", "approval-1")
-	data, found := parseApprovalNeededMarker(validResult)
-	if !found {
-		t.Error("Expected to parse approval needed marker")
+func TestServiceUsesSharedProviderToolResultConstruction(t *testing.T) {
+	src, err := os.ReadFile("service.go")
+	if err != nil {
+		t.Fatalf("read service.go: %v", err)
 	}
-	if data.Command != "rm -rf /" {
-		t.Errorf("Expected command 'rm -rf /', got '%s'", data.Command)
-	}
-	if data.ToolID != "tool-123" {
-		t.Errorf("Expected tool ID 'tool-123', got '%s'", data.ToolID)
-	}
-	if data.ApprovalID != "approval-1" {
-		t.Errorf("Expected approval ID 'approval-1', got '%s'", data.ApprovalID)
-	}
+	text := string(src)
 
-	// Invalid input
-	_, found = parseApprovalNeededMarker("not an approval marker")
-	if found {
-		t.Error("Expected not found for invalid input")
+	for _, fragment := range []string{
+		"projection := newLegacyServiceProviderToolResultContextProjection(tc.ID, result, !execution.Success)",
+		"projection := newLegacyServiceProviderToolResultContextProjection(tc.ID, result, true)",
+		"agentcapabilities.NewProviderToolResultContextProjection(toolUseID, content, isError, legacyServiceProviderToolResultContextOptions())",
+		"ToolResult: &projection.Model",
+		"agentcapabilities.ParseApprovalRequiredToolMarkerData(result)",
+	} {
+		if !strings.Contains(text, fragment) {
+			t.Fatalf("service tool loop must use shared provider tool-result construction; missing %s", fragment)
+		}
 	}
-
-	// Empty input
-	_, found = parseApprovalNeededMarker("")
-	if found {
-		t.Error("Expected not found for empty input")
+	for _, forbidden := range []string{
+		"ToolResult: &providers.ToolResult{",
+		"resultForContext",
+		"maxResultSize",
+		"output truncated (",
+	} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("service tool loop must not assemble or truncate provider tool-result context locally; found %s", forbidden)
+		}
 	}
+	if strings.Contains(text, "func parseApprovalNeededMarker(") {
+		t.Fatalf("service approval marker handling must call the shared parser directly, not wrap it locally")
+	}
+}
 
-	// Only prefix without JSON
-	_, found = parseApprovalNeededMarker("APPROVAL_REQUIRED:")
-	if found {
-		t.Error("Expected not found for prefix without JSON")
+func TestLegacyServiceProviderToolResultContextProjectionUsesSharedTruncation(t *testing.T) {
+	content := strings.Repeat("x", legacyServiceToolResultModelContextChars+12)
+	projection := newLegacyServiceProviderToolResultContextProjection("call-1", content, false)
+
+	if projection.Transcript.ToolUseID != "call-1" || projection.Transcript.Content != content || projection.Transcript.IsError {
+		t.Fatalf("transcript result = %+v", projection.Transcript)
+	}
+	if projection.Model.ToolUseID != "call-1" || projection.Model.IsError {
+		t.Fatalf("model result metadata = %+v", projection.Model)
+	}
+	if !strings.HasPrefix(projection.Model.Content, strings.Repeat("x", legacyServiceToolResultModelContextChars)) {
+		t.Fatalf("model result did not retain shared prefix truncation")
+	}
+	if !strings.Contains(projection.Model.Content, "[TRUNCATED: 12 characters cut.") {
+		t.Fatalf("model result missing shared truncation notice: %q", projection.Model.Content)
 	}
 }
 

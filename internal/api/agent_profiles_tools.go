@@ -15,22 +15,22 @@ import (
 
 const aiProfileDescription = "Managed by Pulse Patrol"
 
-// MCPAgentProfileManager manages agent profiles for MCP tools.
-type MCPAgentProfileManager struct {
+// AssistantAgentProfileManager manages agent profiles for Assistant tools.
+type AssistantAgentProfileManager struct {
 	persistence    *config.ConfigPersistence
 	licenseService licenseFeatureChecker
 	validator      *models.ProfileValidator
 }
 
-func NewMCPAgentProfileManager(persistence *config.ConfigPersistence, licenseService licenseFeatureChecker) *MCPAgentProfileManager {
-	return &MCPAgentProfileManager{
+func NewAssistantAgentProfileManager(persistence *config.ConfigPersistence, licenseService licenseFeatureChecker) *AssistantAgentProfileManager {
+	return &AssistantAgentProfileManager{
 		persistence:    persistence,
 		licenseService: licenseService,
 		validator:      models.NewProfileValidator(),
 	}
 }
 
-func (m *MCPAgentProfileManager) ApplyAgentScope(_ context.Context, agentID, agentLabel string, settings map[string]interface{}) (string, string, bool, error) {
+func (m *AssistantAgentProfileManager) ApplyAgentScope(_ context.Context, agentID, agentLabel string, settings map[string]interface{}) (string, string, bool, error) {
 	if err := m.requireLicense(); err != nil {
 		return "", "", false, err
 	}
@@ -116,7 +116,7 @@ func (m *MCPAgentProfileManager) ApplyAgentScope(_ context.Context, agentID, age
 	return profile.ID, profile.Name, created, nil
 }
 
-func (m *MCPAgentProfileManager) AssignProfile(_ context.Context, agentID, profileID string) (string, error) {
+func (m *AssistantAgentProfileManager) AssignProfile(_ context.Context, agentID, profileID string) (string, error) {
 	if err := m.requireLicense(); err != nil {
 		return "", err
 	}
@@ -154,7 +154,7 @@ func (m *MCPAgentProfileManager) AssignProfile(_ context.Context, agentID, profi
 	return profile.Name, nil
 }
 
-func (m *MCPAgentProfileManager) GetAgentScope(_ context.Context, agentID string) (*tools.AgentScope, error) {
+func (m *AssistantAgentProfileManager) GetAgentScope(_ context.Context, agentID string) (*tools.AgentScope, error) {
 	if err := m.requireLicense(); err != nil {
 		return nil, err
 	}
@@ -202,7 +202,7 @@ func (m *MCPAgentProfileManager) GetAgentScope(_ context.Context, agentID string
 	return nil, nil
 }
 
-func (m *MCPAgentProfileManager) assignProfile(agentID string, profile models.AgentProfile, username string) error {
+func (m *AssistantAgentProfileManager) assignProfile(agentID string, profile models.AgentProfile, username string) error {
 	assignments, err := m.persistence.LoadAgentProfileAssignments()
 	if err != nil {
 		return fmt.Errorf("failed to load assignments: %w", err)
@@ -240,7 +240,7 @@ func (m *MCPAgentProfileManager) assignProfile(agentID string, profile models.Ag
 	return nil
 }
 
-func (m *MCPAgentProfileManager) validateSettings(settings map[string]interface{}) error {
+func (m *AssistantAgentProfileManager) validateSettings(settings map[string]interface{}) error {
 	if m.validator == nil {
 		return nil
 	}
@@ -265,7 +265,7 @@ func formatValidationIssues(result models.ValidationResult) string {
 	return strings.Join(parts, "; ")
 }
 
-func (m *MCPAgentProfileManager) saveVersion(profile models.AgentProfile, note string) error {
+func (m *AssistantAgentProfileManager) saveVersion(profile models.AgentProfile, note string) error {
 	versions, err := m.persistence.LoadAgentProfileVersions()
 	if err != nil {
 		return fmt.Errorf("load profile versions: %w", err)
@@ -289,13 +289,13 @@ func (m *MCPAgentProfileManager) saveVersion(profile models.AgentProfile, note s
 	return nil
 }
 
-func (m *MCPAgentProfileManager) logChange(entry models.ProfileChangeLog) {
+func (m *AssistantAgentProfileManager) logChange(entry models.ProfileChangeLog) {
 	if err := m.persistence.AppendProfileChangeLog(entry); err != nil {
 		log.Warn().Err(err).Msg("Failed to log profile change")
 	}
 }
 
-func (m *MCPAgentProfileManager) requireLicense() error {
+func (m *AssistantAgentProfileManager) requireLicense() error {
 	if m.licenseService == nil {
 		return nil
 	}

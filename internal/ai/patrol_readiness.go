@@ -48,7 +48,7 @@ type PatrolConfigReadiness struct {
 
 func EvaluatePatrolConfigReadiness(cfg *config.AIConfig) PatrolConfigReadiness {
 	if cfg == nil {
-		return patrolConfigReadiness("", "", PatrolReadinessNotReady, PatrolFailureCauseSettingsPersistence, "Pulse Assistant settings could not be loaded from persistence.")
+		return patrolConfigReadiness("", "", PatrolReadinessNotReady, PatrolFailureCauseSettingsPersistence, "Assistant & Patrol settings could not be loaded from persistence.")
 	}
 	if !cfg.Enabled {
 		return patrolConfigReadiness("", "", PatrolReadinessNotReady, PatrolFailureCauseAssistantDisabled, "Pulse Assistant is disabled, so Patrol cannot run model-backed verification.")
@@ -140,7 +140,7 @@ func patrolConfigReadiness(provider, model, status string, cause PatrolFailureCa
 
 func (s *Service) PatrolRuntimeReadiness() PatrolConfigReadiness {
 	if s == nil {
-		return patrolConfigReadiness("", "", PatrolReadinessNotReady, PatrolFailureCauseServiceUnavailable, "Pulse AI runtime service is not available.")
+		return patrolConfigReadiness("", "", PatrolReadinessNotReady, PatrolFailureCauseServiceUnavailable, "Pulse Assistant runtime service is not available.")
 	}
 	s.mu.RLock()
 	cfg := s.cfg

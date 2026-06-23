@@ -541,6 +541,13 @@ func Run(ctx context.Context, version string) error {
 				}
 			}
 
+			now := time.Now().UTC()
+			var actionSnapshot telemetry.PulseIntelligenceActionSnapshot
+			if router != nil {
+				actionSnapshot = router.GetPulseIntelligenceActionTelemetry(now.Add(-telemetry.PulseIntelligenceTelemetryWindow))
+			}
+			applyPulseIntelligenceTelemetrySnapshot(&snap, telemetryPersistence, currentCfg, actionSnapshot, now)
+
 			return snap
 		},
 	}

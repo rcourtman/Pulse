@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -627,6 +628,23 @@ func TestMessage_UsesCanonicalEmptyCollections(t *testing.T) {
 	}.NormalizeCollections())
 	require.NoError(t, err)
 	assert.Contains(t, string(payload), `"input":{}`)
+}
+
+func TestToolResultUsesSharedAgentCapabilitiesShape(t *testing.T) {
+	var shared agentcapabilities.ProviderToolResult = ToolResult{
+		ToolUseID: "call-1",
+		Content:   "done",
+		IsError:   true,
+	}
+	assert.Equal(t, "call-1", shared.ToolUseID)
+
+	payload, err := json.Marshal(ToolResult{
+		ToolUseID: "call-1",
+		Content:   "done",
+		IsError:   true,
+	})
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"tool_use_id":"call-1","content":"done","is_error":true}`, string(payload))
 }
 
 func TestGenerateTitle(t *testing.T) {

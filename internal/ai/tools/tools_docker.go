@@ -2,11 +2,11 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/safety"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -30,7 +30,7 @@ var dockerUpdateQueueSleepFn = sleepWithContext
 func (e *PulseToolExecutor) registerDockerTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
-			Name:        "pulse_docker",
+			Name:        agentcapabilities.PulseDockerToolName,
 			Description: `Manage Docker containers, updates, and Swarm services. Actions: control, updates, check_updates, update, services, tasks, swarm.`,
 			InputSchema: InputSchema{
 				Type: "object",
@@ -69,9 +69,10 @@ func (e *PulseToolExecutor) registerDockerTools() {
 			return exec.executeDocker(ctx, args)
 		},
 		Governance: ToolGovernance{
-			ActionMode:     ToolActionMixed,
-			ApprovalPolicy: "read/list actions are safe; control and update subactions require approval in controlled mode",
-			Summary:        "Lists Docker state and performs governed Docker control/update subactions.",
+			ActionMode:      ToolActionMixed,
+			ApprovalPolicy:  ToolApprovalActionPlan,
+			ApprovalSummary: "read/list actions are safe; control and update subactions require approval in controlled mode",
+			Summary:         "Lists Docker state and performs governed Docker control/update subactions.",
 		},
 	})
 }
@@ -104,8 +105,7 @@ func (e *PulseToolExecutor) executeDockerControl(ctx context.Context, args map[s
 	containerName, _ := args["container"].(string)
 	hostName, _ := args["host"].(string)
 	operation, _ := args["operation"].(string)
-	approvalID, _ := args["_approval_id"].(string)
-	approvalID = strings.TrimSpace(approvalID)
+	approvalID := agentcapabilities.ApprovalArgument(args)
 
 	if containerName == "" {
 		return NewErrorResult(fmt.Errorf("container name is required")), nil
@@ -585,18 +585,15 @@ func (e *PulseToolExecutor) getDockerHostName(hostID string) string {
 
 func formatDockerUpdateApprovalNeeded(containerName, hostName, approvalID string) string {
 	payload := map[string]interface{}{
-		"type":           "approval_required",
 		"approval_id":    approvalID,
 		"container_name": containerName,
 		"docker_host":    hostName,
 		"action":         "update",
 		"command":        fmt.Sprintf("docker update %s (pull latest + recreate)", containerName),
 		"how_to_approve": "Click the approval button in the chat to execute this update.",
-		"do_not_retry":   true,
 	}
 	payload = enrichApprovalRequiredPayload(payload, approvalID)
-	b, _ := json.Marshal(payload)
-	return "APPROVAL_REQUIRED: " + string(b)
+	return agentcapabilities.FormatApprovalRequiredToolMarker(payload)
 }
 
 func trimLeadingSlash(name string) string {

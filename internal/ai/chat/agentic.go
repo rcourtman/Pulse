@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
@@ -147,46 +148,19 @@ func fallbackProviderStreamErrorMessage(err error) string {
 }
 
 func currentResourceUnavailableToolResult(err error) string {
-	reason := "current_resource is unavailable because no single attached Pulse resource is selected in this chat turn"
+	reason := fmt.Sprintf("%s is unavailable because no single attached Pulse resource is selected in this chat turn", agentcapabilities.CurrentResourceHandle)
 	if err != nil && strings.TrimSpace(err.Error()) != "" {
 		reason = strings.TrimSpace(err.Error())
 	}
 	return fmt.Sprintf(
-		"CURRENT_RESOURCE_UNAVAILABLE: %s. Ask which host, VM, container, app, or storage resource the user means before calling resource-targeted tools. Do not retry this tool with current_resource until the user provides or opens a specific resource context.",
+		"CURRENT_RESOURCE_UNAVAILABLE: %s. Ask which host, VM, container, app, or storage resource the user means before calling resource-targeted tools. Do not retry this tool with %s until the user provides or opens a specific resource context.",
 		reason,
+		agentcapabilities.CurrentResourceHandle,
 	)
 }
 
-func toolInputContainsCurrentResourceReference(value interface{}) bool {
-	switch v := value.(type) {
-	case nil:
-		return false
-	case string:
-		return tools.IsCurrentResourceReference(v)
-	case map[string]interface{}:
-		for _, child := range v {
-			if toolInputContainsCurrentResourceReference(child) {
-				return true
-			}
-		}
-	case []interface{}:
-		for _, child := range v {
-			if toolInputContainsCurrentResourceReference(child) {
-				return true
-			}
-		}
-	case []string:
-		for _, child := range v {
-			if tools.IsCurrentResourceReference(child) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 func (a *AgenticLoop) currentResourcePlaceholderBlock(tc providers.ToolCall) (string, bool) {
-	if !toolInputContainsCurrentResourceReference(tc.Input) {
+	if !agentcapabilities.ToolInputContainsCurrentResourceReference(tc.Input) {
 		return "", false
 	}
 	if a == nil || a.executor == nil {
@@ -331,11 +305,11 @@ func emitToolEndEvent(callback StreamCallback, id, name string, input map[string
 
 func toolExecutionProgressMessage(toolName string, input map[string]interface{}, toolKind ToolKind) string {
 	switch strings.TrimSpace(toolName) {
-	case "pulse_run_command", "run_command":
+	case agentcapabilities.PulseRunCommandToolName, agentcapabilities.LegacyAssistantRunCommandToolName:
 		return "Running command."
-	case "pulse_query":
+	case agentcapabilities.PulseQueryToolName:
 		return "Reading inventory."
-	case "pulse_read", "read":
+	case agentcapabilities.PulseReadToolName, "read":
 		return "Reading target."
 	}
 	if isKnownGovernedWriteProgress(toolName, input, toolKind) {
@@ -351,19 +325,19 @@ func isKnownGovernedWriteProgress(toolName string, input map[string]interface{},
 	action, _ := input["action"].(string)
 	action = strings.ToLower(strings.TrimSpace(action))
 	switch strings.TrimSpace(toolName) {
-	case "pulse_control", "pulse_control_guest", "pulse_control_docker":
+	case agentcapabilities.PulseControlToolName, agentcapabilities.PulseControlGuestToolName, agentcapabilities.PulseControlDockerToolName:
 		return true
-	case "pulse_alerts":
+	case agentcapabilities.PulseAlertsToolName:
 		return action == "resolve" || action == "dismiss"
-	case "pulse_docker":
+	case agentcapabilities.PulseDockerToolName:
 		return action == "control" || action == "update" || action == "check_updates" || action == "trigger_update"
-	case "pulse_kubernetes":
+	case agentcapabilities.PulseKubernetesToolName:
 		return action == "scale" || action == "restart" || action == "delete_pod" || action == "exec"
-	case "pulse_file_edit":
+	case agentcapabilities.PulseFileEditToolName:
 		return action == "write" || action == "append"
-	case "pulse_knowledge":
+	case agentcapabilities.PulseKnowledgeToolName:
 		return action == "remember" || action == "note" || action == "save"
-	case "patrol_report_finding", "patrol_resolve_finding":
+	case agentcapabilities.PatrolReportFindingToolName, agentcapabilities.PatrolResolveFindingToolName:
 		return true
 	default:
 		return false
@@ -515,6 +489,7 @@ type AgenticLoop struct {
 	// Token accumulation across all turns
 	totalInputTokens  int
 	totalOutputTokens int
+	totalToolCalls    int
 
 	// State for ongoing executions
 	mu             sync.Mutex
@@ -542,10 +517,9 @@ type AgenticLoop struct {
 
 // NewAgenticLoop creates a new agentic loop
 func NewAgenticLoop(provider providers.StreamingProvider, executor *tools.PulseToolExecutor, systemPrompt string) *AgenticLoop {
-	// Convert MCP tools to provider format
-	mcpTools := executor.ListTools()
-	providerTools := ConvertMCPToolsToProvider(mcpTools)
-	providerTools = append(providerTools, userQuestionTool())
+	providerTools := executor.AssistantProviderTools(agentcapabilities.AssistantProviderToolOptions{
+		IncludeQuestionTool: true,
+	})
 
 	return &AgenticLoop{
 		provider:         provider,
@@ -561,9 +535,9 @@ func NewAgenticLoop(provider providers.StreamingProvider, executor *tools.PulseT
 
 // UpdateTools refreshes the tool list from the executor
 func (a *AgenticLoop) UpdateTools() {
-	mcpTools := a.executor.ListTools()
-	tools := ConvertMCPToolsToProvider(mcpTools)
-	a.tools = append(tools, userQuestionTool())
+	a.tools = a.executor.AssistantProviderTools(agentcapabilities.AssistantProviderToolOptions{
+		IncludeQuestionTool: true,
+	})
 }
 
 // SetRequestSanitizer installs a model-bound request sanitizer. It is called
@@ -973,7 +947,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				case "done":
 					if data, ok := event.Data.(providers.DoneEvent); ok {
 						attemptSawDone = true
-						toolCalls = data.ToolCalls
+						toolCalls = agentcapabilities.NormalizeProviderToolCallsForExecution(data.ToolCalls)
 						a.totalInputTokens += data.InputTokens
 						a.totalOutputTokens += data.OutputTokens
 						log.Info().
@@ -1093,6 +1067,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				Msg("[AgenticLoop] Model returned tool calls after tools were omitted — stripping them")
 			toolCalls = nil
 		}
+		a.totalToolCalls += len(toolCalls)
 
 		// Check mid-run budget after each turn completes
 		if a.budgetChecker != nil {
@@ -1117,12 +1092,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		if len(toolCalls) > 0 {
 			assistantMsg.ToolCalls = make([]ToolCall, len(toolCalls))
 			for i, tc := range toolCalls {
-				assistantMsg.ToolCalls[i] = ToolCall{
-					ID:               tc.ID,
-					Name:             tc.Name,
-					Input:            tc.Input,
-					ThoughtSignature: tc.ThoughtSignature,
-				}
+				assistantMsg.ToolCalls[i] = ToolCallFromProvider(tc)
 			}
 		}
 
@@ -1270,13 +1240,10 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 						Msg("[AgenticLoop] Blocked invalid current_resource tool call before interactive-set execution")
 
 					emitCurrentResourceBlock(tc, blockMsg)
+					projection := newProviderToolResultContextProjection(tc.ID, blockMsg, true)
 					providerMessages = append(providerMessages, providers.Message{
-						Role: "user",
-						ToolResult: &providers.ToolResult{
-							ToolUseID: tc.ID,
-							Content:   truncateToolResultForModel(blockMsg),
-							IsError:   true,
-						},
+						Role:       "user",
+						ToolResult: &projection.Model,
 					})
 					continue
 				}
@@ -1293,33 +1260,26 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 
 						fsmBlockedErr, ok := fsmErr.(*FSMBlockedError)
 						if ok && fsmBlockedErr.Recoverable {
-							fsm.TrackPendingRecovery("FSM_BLOCKED", tc.Name)
+							fsm.TrackPendingRecovery(agentcapabilities.ErrCodeFSMBlocked, tc.Name)
 							if metrics := GetAIMetrics(); metrics != nil {
-								metrics.RecordAutoRecoveryAttempt("FSM_BLOCKED", tc.Name)
+								metrics.RecordAutoRecoveryAttempt(agentcapabilities.ErrCodeFSMBlocked, tc.Name)
 							}
 						}
 
 						emitToolStartIfNeeded(tc)
 						emitToolEndEvent(callback, tc.ID, tc.Name, tc.Input, fsmErr.Error(), false)
 
+						projection := newProviderToolResultContextProjection(tc.ID, fsmErr.Error(), true)
 						toolResultMsg := Message{
-							ID:        uuid.New().String(),
-							Role:      "user",
-							Timestamp: time.Now(),
-							ToolResult: &ToolResult{
-								ToolUseID: tc.ID,
-								Content:   fsmErr.Error(),
-								IsError:   true,
-							},
+							ID:         uuid.New().String(),
+							Role:       "user",
+							Timestamp:  time.Now(),
+							ToolResult: &projection.Transcript,
 						}
 						resultMessages = append(resultMessages, toolResultMsg)
 						providerMessages = append(providerMessages, providers.Message{
-							Role: "user",
-							ToolResult: &providers.ToolResult{
-								ToolUseID: tc.ID,
-								Content:   truncateToolResultForModel(fsmErr.Error()),
-								IsError:   true,
-							},
+							Role:       "user",
+							ToolResult: &projection.Model,
 						})
 						continue
 					}
@@ -1334,24 +1294,17 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					emitToolStartIfNeeded(tc)
 					emitToolEndEvent(callback, tc.ID, tc.Name, tc.Input, loopMsg, false)
 
+					projection := newProviderToolResultContextProjection(tc.ID, loopMsg, true)
 					toolResultMsg := Message{
-						ID:        uuid.New().String(),
-						Role:      "user",
-						Timestamp: time.Now(),
-						ToolResult: &ToolResult{
-							ToolUseID: tc.ID,
-							Content:   loopMsg,
-							IsError:   true,
-						},
+						ID:         uuid.New().String(),
+						Role:       "user",
+						Timestamp:  time.Now(),
+						ToolResult: &projection.Transcript,
 					}
 					resultMessages = append(resultMessages, toolResultMsg)
 					providerMessages = append(providerMessages, providers.Message{
-						Role: "user",
-						ToolResult: &providers.ToolResult{
-							ToolUseID: tc.ID,
-							Content:   truncateToolResultForModel(loopMsg),
-							IsError:   true,
-						},
+						Role:       "user",
+						ToolResult: &projection.Model,
 					})
 					continue
 				}
@@ -1363,24 +1316,17 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					emitToolStartIfNeeded(tc)
 					emitToolEndEvent(callback, tc.ID, tc.Name, tc.Input, skipMsg, false)
 
+					projection := newProviderToolResultContextProjection(tc.ID, skipMsg, true)
 					toolResultMsg := Message{
-						ID:        uuid.New().String(),
-						Role:      "user",
-						Timestamp: time.Now(),
-						ToolResult: &ToolResult{
-							ToolUseID: tc.ID,
-							Content:   skipMsg,
-							IsError:   true,
-						},
+						ID:         uuid.New().String(),
+						Role:       "user",
+						Timestamp:  time.Now(),
+						ToolResult: &projection.Transcript,
 					}
 					resultMessages = append(resultMessages, toolResultMsg)
 					providerMessages = append(providerMessages, providers.Message{
-						Role: "user",
-						ToolResult: &providers.ToolResult{
-							ToolUseID: tc.ID,
-							Content:   truncateToolResultForModel(skipMsg),
-							IsError:   true,
-						},
+						Role:       "user",
+						ToolResult: &projection.Model,
 					})
 					continue
 				}
@@ -1406,25 +1352,18 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					fsm.OnToolSuccess(toolKind, tc.Name)
 				}
 
+				projection := newProviderToolResultContextProjection(tc.ID, resultText, isError)
 				toolResultMsg := Message{
-					ID:        uuid.New().String(),
-					Role:      "user",
-					Timestamp: time.Now(),
-					ToolResult: &ToolResult{
-						ToolUseID: tc.ID,
-						Content:   resultText,
-						IsError:   isError,
-					},
+					ID:         uuid.New().String(),
+					Role:       "user",
+					Timestamp:  time.Now(),
+					ToolResult: &projection.Transcript,
 				}
 				resultMessages = append(resultMessages, toolResultMsg)
 
 				providerMessages = append(providerMessages, providers.Message{
-					Role: "user",
-					ToolResult: &providers.ToolResult{
-						ToolUseID: tc.ID,
-						Content:   truncateToolResultForModel(resultText),
-						IsError:   isError,
-					},
+					Role:       "user",
+					ToolResult: &projection.Model,
 				})
 			}
 
@@ -1451,13 +1390,10 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					Msg("[AgenticLoop] Blocked invalid current_resource tool call before execution")
 
 				emitCurrentResourceBlock(tc, blockMsg)
+				projection := newProviderToolResultContextProjection(tc.ID, blockMsg, true)
 				providerMessages = append(providerMessages, providers.Message{
-					Role: "user",
-					ToolResult: &providers.ToolResult{
-						ToolUseID: tc.ID,
-						Content:   truncateToolResultForModel(blockMsg),
-						IsError:   true,
-					},
+					Role:       "user",
+					ToolResult: &projection.Model,
 				})
 				continue
 			}
@@ -1480,10 +1416,10 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					fsmBlockedErr, ok := fsmErr.(*FSMBlockedError)
 					if ok && fsmBlockedErr.Recoverable {
 						// Track pending recovery for success correlation
-						fsm.TrackPendingRecovery("FSM_BLOCKED", tc.Name)
+						fsm.TrackPendingRecovery(agentcapabilities.ErrCodeFSMBlocked, tc.Name)
 						// Record that the model received a recoverable policy block.
 						if metrics := GetAIMetrics(); metrics != nil {
-							metrics.RecordAutoRecoveryAttempt("FSM_BLOCKED", tc.Name)
+							metrics.RecordAutoRecoveryAttempt(agentcapabilities.ErrCodeFSMBlocked, tc.Name)
 						}
 					}
 
@@ -1492,26 +1428,19 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					emitToolEndEvent(callback, tc.ID, tc.Name, tc.Input, fsmErr.Error(), false)
 
 					// Create tool result message with the error
+					projection := newProviderToolResultContextProjection(tc.ID, fsmErr.Error(), true)
 					toolResultMsg := Message{
-						ID:        uuid.New().String(),
-						Role:      "user",
-						Timestamp: time.Now(),
-						ToolResult: &ToolResult{
-							ToolUseID: tc.ID,
-							Content:   fsmErr.Error(),
-							IsError:   true,
-						},
+						ID:         uuid.New().String(),
+						Role:       "user",
+						Timestamp:  time.Now(),
+						ToolResult: &projection.Transcript,
 					}
 					resultMessages = append(resultMessages, toolResultMsg)
 
 					// Add to provider messages for next turn
 					providerMessages = append(providerMessages, providers.Message{
-						Role: "user",
-						ToolResult: &providers.ToolResult{
-							ToolUseID: tc.ID,
-							Content:   fsmErr.Error(),
-							IsError:   true,
-						},
+						Role:       "user",
+						ToolResult: &projection.Model,
 					})
 
 					// Skip execution but continue the loop to process other tool calls
@@ -1534,24 +1463,17 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				emitToolStartIfNeeded(tc)
 				emitToolEndEvent(callback, tc.ID, tc.Name, tc.Input, loopMsg, false)
 
+				projection := newProviderToolResultContextProjection(tc.ID, loopMsg, true)
 				toolResultMsg := Message{
-					ID:        uuid.New().String(),
-					Role:      "user",
-					Timestamp: time.Now(),
-					ToolResult: &ToolResult{
-						ToolUseID: tc.ID,
-						Content:   loopMsg,
-						IsError:   true,
-					},
+					ID:         uuid.New().String(),
+					Role:       "user",
+					Timestamp:  time.Now(),
+					ToolResult: &projection.Transcript,
 				}
 				resultMessages = append(resultMessages, toolResultMsg)
 				providerMessages = append(providerMessages, providers.Message{
-					Role: "user",
-					ToolResult: &providers.ToolResult{
-						ToolUseID: tc.ID,
-						Content:   loopMsg,
-						IsError:   true,
-					},
+					Role:       "user",
+					ToolResult: &projection.Model,
 				})
 				budgetBlockedThisTurn++
 				continue
@@ -1629,11 +1551,13 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			var isError bool
 
 			if err != nil {
-				resultText = fmt.Sprintf("Error: %v", err)
-				isError = true
+				toolResult := agentcapabilities.NewProviderToolErrorResult(tc.ID, fmt.Sprintf("Error: %v", err))
+				resultText = toolResult.Content
+				isError = toolResult.IsError
 			} else {
-				resultText = FormatToolResult(result)
-				isError = result.IsError
+				toolResult := agentcapabilities.NewProviderToolResultFromToolResult(tc.ID, result)
+				resultText = toolResult.Content
+				isError = toolResult.IsError
 				// Extract and accumulate knowledge facts from both success and structured error responses
 				if a.knowledgeAccumulator != nil {
 					a.knowledgeAccumulator.SetTurn(turn)
@@ -1673,45 +1597,23 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 
 			// Track pending recovery for strict resolution blocks
 			// (FSM blocks are tracked above; strict resolution blocks come from the executor)
-			if isError && fsm != nil && strings.Contains(resultText, "STRICT_RESOLUTION") {
-				fsm.TrackPendingRecovery("STRICT_RESOLUTION", tc.Name)
+			if isError && fsm != nil && agentcapabilities.ToolResultHasErrorCode(resultText, agentcapabilities.ErrCodeStrictResolution) {
+				fsm.TrackPendingRecovery(agentcapabilities.ErrCodeStrictResolution, tc.Name)
 				log.Debug().
 					Str("tool", tc.Name).
 					Msg("[AgenticLoop] Tracking pending recovery for strict resolution block")
 			}
 
 			// Check if this is an approval request
-			if strings.HasPrefix(resultText, "APPROVAL_REQUIRED:") {
-				// Parse approval request
-				approvalJSON := strings.TrimPrefix(resultText, "APPROVAL_REQUIRED:")
-				approvalJSON = strings.TrimSpace(approvalJSON)
-
-				var approvalData struct {
-					ApprovalID        string                         `json:"approval_id"`
-					Command           string                         `json:"command"`
-					Risk              string                         `json:"risk"`
-					Description       string                         `json:"description"`
-					Reason            string                         `json:"reason"`
-					TargetHost        string                         `json:"target_host"`
-					Host              string                         `json:"host"`
-					DockerHost        string                         `json:"docker_host"`
-					ResourceHost      string                         `json:"resource_host"`
-					Cluster           string                         `json:"cluster"`
-					TargetName        string                         `json:"target_name"`
-					TargetType        string                         `json:"target_type"`
-					TargetID          string                         `json:"target_id"`
-					AuditID           string                         `json:"audit_id"`
-					Plan              *ApprovalPlanData              `json:"plan"`
-					ContextConfidence *ApprovalContextConfidenceData `json:"context_confidence"`
-					Preflight         *ApprovalPreflightData         `json:"preflight"`
-				}
-				if err := json.Unmarshal([]byte(approvalJSON), &approvalData); err != nil {
-					log.Error().Err(err).Str("data", approvalJSON).Msg("failed to parse approval request")
+			if agentcapabilities.HasApprovalRequiredToolMarker(resultText) {
+				// Parse approval request through the shared marker payload
+				// contract so tool producers and chat consumers stay aligned.
+				approvalData, ok := agentcapabilities.ParseApprovalRequiredToolMarkerData(resultText)
+				if !ok {
+					log.Error().Str("data", resultText).Msg("failed to parse approval request")
 					resultText = "Error: failed to parse approval request"
 					isError = true
 				} else {
-					targetHost := firstNonEmptyTrimmed(approvalData.TargetHost, approvalData.Host, approvalData.DockerHost, approvalData.ResourceHost, approvalData.Cluster, approvalData.TargetName)
-					description := firstNonEmptyTrimmed(approvalData.Description, approvalData.Reason)
 					// Send approval_needed event
 					jsonData, _ := json.Marshal(ApprovalNeededData{
 						ApprovalID:        approvalData.ApprovalID,
@@ -1719,11 +1621,11 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 						ToolName:          tc.Name,
 						Command:           approvalData.Command,
 						RunOnHost:         true, // Control commands run on host
-						TargetHost:        targetHost,
+						TargetHost:        approvalData.TargetHint(),
 						TargetType:        approvalData.TargetType,
 						TargetID:          approvalData.TargetID,
 						Risk:              approvalData.Risk,
-						Description:       description,
+						Description:       approvalData.DescriptionText(),
 						AuditID:           approvalData.AuditID,
 						Plan:              approvalData.Plan,
 						ContextConfidence: approvalData.ContextConfidence,
@@ -1774,14 +1676,16 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 								for k, v := range tc.Input {
 									inputWithApproval[k] = v
 								}
-								inputWithApproval["_approval_id"] = approvalData.ApprovalID
+								inputWithApproval = agentcapabilities.WithApprovalArgument(inputWithApproval, approvalData.ApprovalID)
 								result, err = a.executeToolSafely(ctx, tc.Name, inputWithApproval)
 								if err != nil {
-									resultText = fmt.Sprintf("Error after approval: %v", err)
-									isError = true
+									toolResult := agentcapabilities.NewProviderToolErrorResult(tc.ID, fmt.Sprintf("Error after approval: %v", err))
+									resultText = toolResult.Content
+									isError = toolResult.IsError
 								} else {
-									resultText = FormatToolResult(result)
-									isError = result.IsError
+									toolResult := agentcapabilities.NewProviderToolResultFromToolResult(tc.ID, result)
+									resultText = toolResult.Content
+									isError = toolResult.IsError
 								}
 							} else {
 								if a.executor != nil {
@@ -1840,7 +1744,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				//
 				// Verification evidence is a structured field in the tool output:
 				//   { "verification": { "ok": true, ... } }
-				if toolKind == ToolKindWrite && toolResultHasVerificationOK(resultText) {
+				if toolKind == ToolKindWrite && agentcapabilities.ToolResultHasVerificationOK(resultText) {
 					fsm.OnToolSuccess(ToolKindRead, "self_verify")
 					if fsm.State == StateVerifying && fsm.ReadAfterWrite {
 						fsm.CompleteVerification()
@@ -1873,31 +1777,23 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				}
 			}
 
-			// Compute model-facing result text AFTER auto-verify may have appended data.
+			// Compute model-facing result AFTER auto-verify may have appended data.
 			// This ensures the model sees the verification result and task-completion signal.
-			modelResultText := truncateToolResultForModel(resultText)
+			projection := newProviderToolResultContextProjection(tc.ID, resultText, isError)
 
 			// Create tool result message
 			toolResultMsg := Message{
-				ID:        uuid.New().String(),
-				Role:      "user", // Tool results are sent as user messages
-				Timestamp: time.Now(),
-				ToolResult: &ToolResult{
-					ToolUseID: tc.ID,
-					Content:   resultText,
-					IsError:   isError,
-				},
+				ID:         uuid.New().String(),
+				Role:       "user", // Tool results are sent as user messages
+				Timestamp:  time.Now(),
+				ToolResult: &projection.Transcript,
 			}
 			resultMessages = append(resultMessages, toolResultMsg)
 
 			// Add to provider messages for next turn
 			providerMessages = append(providerMessages, providers.Message{
-				Role: "user",
-				ToolResult: &providers.ToolResult{
-					ToolUseID: tc.ID,
-					Content:   modelResultText,
-					IsError:   isError,
-				},
+				Role:       "user",
+				ToolResult: &projection.Model,
 			})
 		}
 

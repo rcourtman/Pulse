@@ -1,9 +1,12 @@
 package chat
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 )
 
 func TestResolvedResource_GettersAndAliases(t *testing.T) {
@@ -39,6 +42,122 @@ func TestResolvedResource_GettersAndAliases(t *testing.T) {
 	}
 	if !res.HasAlias("alpha-vm") {
 		t.Fatalf("expected HasAlias to be case-insensitive")
+	}
+}
+
+func TestToolCallProviderProjectionUsesSharedAgentCapabilitiesShape(t *testing.T) {
+	success := true
+	runtimeCall := ToolCall{
+		ID:               "call-1",
+		Name:             "diagnose",
+		Output:           "in-app output",
+		Success:          &success,
+		ThoughtSignature: json.RawMessage(`{"provider":"gemini"}`),
+	}
+
+	projected := runtimeCall.ProviderToolCall()
+	var shared agentcapabilities.ProviderToolCall = projected
+	if shared.ID != "call-1" || shared.Name != "diagnose" {
+		t.Fatalf("shared provider call = %+v", shared)
+	}
+	if shared.Input == nil {
+		t.Fatal("shared provider call input must normalize to an empty object")
+	}
+
+	payload, err := json.Marshal(projected)
+	if err != nil {
+		t.Fatalf("marshal provider projection: %v", err)
+	}
+	text := string(payload)
+	if !strings.Contains(text, `"input":{}`) {
+		t.Fatalf("provider projection must retain empty input object, got %s", text)
+	}
+	if !strings.Contains(text, `"thought_signature":{"provider":"gemini"}`) {
+		t.Fatalf("provider projection must retain provider continuation signature, got %s", text)
+	}
+	if strings.Contains(text, `"output"`) || strings.Contains(text, `"success"`) {
+		t.Fatalf("provider projection leaked in-app transcript fields: %s", text)
+	}
+
+	roundTrip := ToolCallFromProvider(shared)
+	if roundTrip.ID != "call-1" || roundTrip.Name != "diagnose" || roundTrip.Input == nil {
+		t.Fatalf("stored runtime call from provider shape = %+v", roundTrip)
+	}
+}
+
+func TestToolCallProviderProjectionDoesNotAliasInputs(t *testing.T) {
+	input := map[string]interface{}{"resource_id": "vm/100"}
+	runtimeCall := ToolCall{
+		ID:    "call-1",
+		Name:  "diagnose",
+		Input: input,
+	}
+	projected := runtimeCall.ProviderToolCall()
+	projected.Input["resource_id"] = "vm/101"
+	if input["resource_id"] != "vm/100" {
+		t.Fatalf("provider projection aliased transcript input: source=%#v projected=%#v", input, projected.Input)
+	}
+
+	providerInput := map[string]interface{}{"resource_id": "vm/200"}
+	roundTrip := ToolCallFromProvider(agentcapabilities.ProviderToolCall{
+		ID:    "call-2",
+		Name:  "diagnose",
+		Input: providerInput,
+	})
+	roundTrip.Input["resource_id"] = "vm/201"
+	if providerInput["resource_id"] != "vm/200" {
+		t.Fatalf("provider-to-transcript projection aliased provider input: source=%#v roundTrip=%#v", providerInput, roundTrip.Input)
+	}
+}
+
+func TestMessageNormalizeCollectionsDoesNotAliasToolCallState(t *testing.T) {
+	success := true
+	sourceInput := map[string]interface{}{
+		"body": map[string]interface{}{
+			"resource_id": "vm/100",
+		},
+		"items": []interface{}{
+			map[string]interface{}{"name": "alpha"},
+		},
+	}
+	sourceSignature := json.RawMessage(`{"provider":"gemini"}`)
+	sourceResult := agentcapabilities.NewProviderToolResult("call-1", "ok", false)
+	source := Message{
+		ToolCalls: []ToolCall{{
+			ID:               "call-1",
+			Name:             "diagnose",
+			Input:            sourceInput,
+			Success:          &success,
+			ThoughtSignature: sourceSignature,
+		}},
+		ToolResult: &sourceResult,
+	}
+
+	normalized := source.NormalizeCollections()
+	normalized.ToolCalls[0].Name = "changed"
+	normalized.ToolCalls[0].Input["body"].(map[string]interface{})["resource_id"] = "vm/101"
+	normalized.ToolCalls[0].Input["items"].([]interface{})[0].(map[string]interface{})["name"] = "bravo"
+	normalized.ToolCalls[0].ThoughtSignature[0] = '['
+	*normalized.ToolCalls[0].Success = false
+	normalized.ToolResult.Content = "changed"
+
+	if source.ToolCalls[0].Name != "diagnose" {
+		t.Fatalf("message normalization aliased tool-call slice: source=%#v normalized=%#v", source.ToolCalls, normalized.ToolCalls)
+	}
+	if got := sourceInput["body"].(map[string]interface{})["resource_id"]; got != "vm/100" {
+		t.Fatalf("message normalization aliased nested tool input: got %v", got)
+	}
+	if got := sourceInput["items"].([]interface{})[0].(map[string]interface{})["name"]; got != "alpha" {
+		t.Fatalf("message normalization aliased nested tool input slice: got %v", got)
+	}
+	if string(sourceSignature) != `{"provider":"gemini"}` {
+		t.Fatalf("message normalization aliased thought signature: %s", sourceSignature)
+	}
+	if !success {
+		t.Fatalf("message normalization aliased success pointer")
+	}
+	if sourceResult.Content != "ok" {
+		t.Fatalf("message normalization aliased tool result pointer: %+v", sourceResult)
 	}
 }
 

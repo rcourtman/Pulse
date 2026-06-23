@@ -2,9 +2,10 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 )
 
 // registerPatrolTools registers the three patrol-specific tools.
@@ -13,7 +14,7 @@ func (e *PulseToolExecutor) registerPatrolTools() {
 	// patrol_report_finding — LLM calls this to create a finding
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
-			Name: "patrol_report_finding",
+			Name: agentcapabilities.PatrolReportFindingToolName,
 			Description: `Report an infrastructure finding discovered during patrol investigation.
 
 Call this tool to create a structured finding after you have gathered sufficient evidence via investigation tools.
@@ -76,16 +77,17 @@ Returns: {"ok": true, "finding_id": "...", "is_new": true/false} on success.`,
 		},
 		Handler: handlePatrolReportFinding,
 		Governance: ToolGovernance{
-			ActionMode:     ToolActionWrite,
-			ApprovalPolicy: "patrol-only; records a governed finding after evidence collection",
-			Summary:        "Creates a structured patrol finding during autonomous investigation.",
+			ActionMode:      ToolActionWrite,
+			ApprovalPolicy:  ToolApprovalScopeOnly,
+			ApprovalSummary: "patrol-only; records a governed finding after evidence collection",
+			Summary:         "Creates a structured patrol finding during autonomous investigation.",
 		},
 	})
 
 	// patrol_resolve_finding — LLM calls this to resolve an active finding
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
-			Name: "patrol_resolve_finding",
+			Name: agentcapabilities.PatrolResolveFindingToolName,
 			Description: `Resolve an active patrol finding after verifying the issue is no longer present.
 
 Call this after investigating an existing finding and confirming the issue has been resolved.
@@ -93,30 +95,31 @@ Returns: {"ok": true, "resolved": true} on success.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
-					"finding_id": {
+					agentcapabilities.FindingIDArgumentName: {
 						Type:        "string",
 						Description: "The ID of the finding to resolve",
 					},
-					"reason": {
+					agentcapabilities.ReasonArgumentName: {
 						Type:        "string",
 						Description: "Brief explanation of why this finding is being resolved (e.g. 'CPU has returned to 35%, well below threshold')",
 					},
 				},
-				Required: []string{"finding_id", "reason"},
+				Required: []string{agentcapabilities.FindingIDArgumentName, agentcapabilities.ReasonArgumentName},
 			},
 		},
 		Handler: handlePatrolResolveFinding,
 		Governance: ToolGovernance{
-			ActionMode:     ToolActionWrite,
-			ApprovalPolicy: "patrol-only; resolves a finding after verification",
-			Summary:        "Marks a patrol finding resolved after current evidence supports closure.",
+			ActionMode:      ToolActionWrite,
+			ApprovalPolicy:  ToolApprovalScopeOnly,
+			ApprovalSummary: "patrol-only; resolves a finding after verification",
+			Summary:         "Marks a patrol finding resolved after current evidence supports closure.",
 		},
 	})
 
 	// patrol_get_findings — LLM calls this to check existing active findings
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
-			Name: "patrol_get_findings",
+			Name: agentcapabilities.PatrolGetFindingsToolName,
 			Description: `Get currently active patrol findings. Use this to check what findings already exist before reporting new ones (avoids duplicates) and to identify findings that may need resolution.
 
 Returns a list of active findings with their IDs, severity, resource, and title.`,
@@ -137,9 +140,10 @@ Returns a list of active findings with their IDs, severity, resource, and title.
 		},
 		Handler: handlePatrolGetFindings,
 		Governance: ToolGovernance{
-			ActionMode:     ToolActionRead,
-			ApprovalPolicy: "no approval required",
-			Summary:        "Reads active patrol findings for deduplication and investigation context.",
+			ActionMode:      ToolActionRead,
+			ApprovalPolicy:  ToolApprovalScopeOnly,
+			ApprovalSummary: "no approval required",
+			Summary:         "Reads active patrol findings for deduplication and investigation context.",
 		},
 	})
 }
@@ -246,12 +250,11 @@ func handlePatrolReportFinding(_ context.Context, e *PulseToolExecutor, args map
 	}
 
 	result := map[string]interface{}{
-		"ok":         true,
-		"finding_id": findingID,
-		"is_new":     isNew,
+		"ok":                                    true,
+		agentcapabilities.FindingIDArgumentName: findingID,
+		"is_new":                                isNew,
 	}
-	b, _ := json.Marshal(result)
-	return NewTextResult(string(b)), nil
+	return NewJSONResult(result), nil
 }
 
 func handlePatrolResolveFinding(_ context.Context, e *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
@@ -263,14 +266,14 @@ func handlePatrolResolveFinding(_ context.Context, e *PulseToolExecutor, args ma
 		return NewErrorResult(fmt.Errorf("call patrol_get_findings before resolving a finding")), nil
 	}
 
-	findingID, _ := args["finding_id"].(string)
-	reason, _ := args["reason"].(string)
+	findingID, _ := args[agentcapabilities.FindingIDArgumentName].(string)
+	reason, _ := args[agentcapabilities.ReasonArgumentName].(string)
 
 	if findingID == "" {
-		return NewErrorResult(fmt.Errorf("missing required field: finding_id")), nil
+		return NewErrorResult(fmt.Errorf("missing required field: %s", agentcapabilities.FindingIDArgumentName)), nil
 	}
 	if reason == "" {
-		return NewErrorResult(fmt.Errorf("missing required field: reason")), nil
+		return NewErrorResult(fmt.Errorf("missing required field: %s", agentcapabilities.ReasonArgumentName)), nil
 	}
 
 	if err := creator.ResolveFinding(findingID, reason); err != nil {
@@ -281,8 +284,7 @@ func handlePatrolResolveFinding(_ context.Context, e *PulseToolExecutor, args ma
 		"ok":       true,
 		"resolved": true,
 	}
-	b, _ := json.Marshal(result)
-	return NewTextResult(string(b)), nil
+	return NewJSONResult(result), nil
 }
 
 func handlePatrolGetFindings(_ context.Context, e *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
@@ -301,8 +303,7 @@ func handlePatrolGetFindings(_ context.Context, e *PulseToolExecutor, args map[s
 		"count":    len(findings),
 		"findings": findings,
 	}
-	b, _ := json.Marshal(result)
-	return NewTextResult(string(b)), nil
+	return NewJSONResult(result), nil
 }
 
 func canonicalPatrolResourceType(resourceType string) string {

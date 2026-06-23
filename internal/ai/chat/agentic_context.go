@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rs/zerolog/log"
 )
@@ -55,18 +56,33 @@ func pruneMessagesForModel(messages []Message) []Message {
 }
 
 func truncateToolResultForModel(text string) string {
-	if MaxToolResultCharsLimit <= 0 || len(text) <= MaxToolResultCharsLimit {
-		return text
+	content, truncation := agentcapabilities.ProviderToolResultModelContent(text, providerToolResultContextOptions())
+	logProviderToolResultTruncation(truncation)
+	return content
+}
+
+func providerToolResultContextOptions() agentcapabilities.ProviderToolResultContextOptions {
+	return agentcapabilities.ProviderToolResultContextOptions{
+		MaxModelContentChars: MaxToolResultCharsLimit,
+	}
+}
+
+func newProviderToolResultContextProjection(toolUseID, content string, isError bool) agentcapabilities.ProviderToolResultContextProjection {
+	projection := agentcapabilities.NewProviderToolResultContextProjection(toolUseID, content, isError, providerToolResultContextOptions())
+	logProviderToolResultTruncation(projection.Truncation)
+	return projection
+}
+
+func logProviderToolResultTruncation(truncation agentcapabilities.ProviderToolResultTruncation) {
+	if !truncation.Applied {
+		return
 	}
 
-	truncated := text[:MaxToolResultCharsLimit]
-	truncatedChars := len(text) - MaxToolResultCharsLimit
 	log.Warn().
-		Int("original_chars", len(text)).
-		Int("truncated_to", MaxToolResultCharsLimit).
-		Int("chars_cut", truncatedChars).
+		Int("original_chars", truncation.OriginalChars).
+		Int("truncated_to", truncation.MaxChars).
+		Int("chars_cut", truncation.TruncatedChars).
 		Msg("[AgenticLoop] Truncating oversized tool result")
-	return fmt.Sprintf("%s\n\n---\n[TRUNCATED: %d characters cut. The result was too large. If you need specific details that may have been cut, make a more targeted query (e.g., filter by specific resource or type).]", truncated, truncatedChars)
 }
 
 // convertToProviderMessages converts our messages to provider format
@@ -84,21 +100,13 @@ func convertToProviderMessages(messages []Message) []providers.Message {
 
 		if len(m.ToolCalls) > 0 {
 			for _, tc := range m.ToolCalls {
-				pm.ToolCalls = append(pm.ToolCalls, providers.ToolCall{
-					ID:               tc.ID,
-					Name:             tc.Name,
-					Input:            tc.Input,
-					ThoughtSignature: tc.ThoughtSignature,
-				})
+				pm.ToolCalls = append(pm.ToolCalls, tc.ProviderToolCall())
 			}
 		}
 
 		if m.ToolResult != nil {
-			pm.ToolResult = &providers.ToolResult{
-				ToolUseID: m.ToolResult.ToolUseID,
-				Content:   truncateToolResultForModel(m.ToolResult.Content),
-				IsError:   m.ToolResult.IsError,
-			}
+			projection := newProviderToolResultContextProjection(m.ToolResult.ToolUseID, m.ToolResult.Content, m.ToolResult.IsError)
+			pm.ToolResult = &projection.Model
 		}
 
 		result = append(result, pm)
@@ -181,13 +189,10 @@ func repairOrphanToolCalls(messages []providers.Message) []providers.Message {
 		// message.
 		inject := make([]providers.Message, 0, len(missing))
 		for _, id := range missing {
+			toolResult := agentcapabilities.NewProviderToolErrorResult(id, orphanToolCallRepairMessage)
 			inject = append(inject, providers.Message{
-				Role: "user",
-				ToolResult: &providers.ToolResult{
-					ToolUseID: id,
-					Content:   orphanToolCallRepairMessage,
-					IsError:   true,
-				},
+				Role:       "user",
+				ToolResult: &toolResult,
 			})
 		}
 		// Splice the synthetic messages in at position i+1.

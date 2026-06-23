@@ -96,13 +96,18 @@ def repo_common_dir(git_dir: Path) -> Path | None:
 
 
 def git_env_targets_repo(env: dict[str, str], repo_root: Path) -> bool:
-    if not any(name in env for name in REPO_TARGET_GIT_ENV_VARS):
+    target_vars = {name for name in REPO_TARGET_GIT_ENV_VARS if name in env}
+    if not target_vars:
         return True
 
     repo_root = repo_root.resolve()
     work_tree = env.get("GIT_WORK_TREE")
     if not work_tree:
-        return False
+        # A standalone temporary index is how verify_commit_slice.py runs
+        # staged-index checks without mutating the user's real index. It is
+        # still scoped by the subprocess cwd. Environments that also carry
+        # GIT_DIR/GIT_COMMON_DIR need an explicit worktree to prove identity.
+        return target_vars == {"GIT_INDEX_FILE"}
 
     try:
         if resolve_env_path(work_tree, repo_root) != repo_root:

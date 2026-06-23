@@ -17,6 +17,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
@@ -152,6 +153,10 @@ type failClosedLicenseChecker struct{}
 func (failClosedLicenseChecker) HasFeature(string) bool { return false }
 func (failClosedLicenseChecker) GetLicenseStateString() (string, bool) {
 	return string(ai.LicenseStateNone), false
+}
+
+type actionAuditStoreProvider interface {
+	GetActionAuditStore() unifiedresources.ResourceStore
 }
 
 func (h *AISettingsHandler) providerSnapshot() aiSettingsProviderSnapshot {
@@ -1749,7 +1754,7 @@ func aiSettingsUpdateTouchesPatrolReadiness(req AISettingsUpdateRequest) bool {
 }
 
 // SetOnControlSettingsChange sets a callback to be invoked when control settings change
-// Used by Router to update MCP tool visibility without restarting AI chat
+// Used by Router to update Assistant tool visibility without restarting AI chat.
 func (h *AISettingsHandler) SetOnControlSettingsChange(callback func()) {
 	h.onControlSettingsChange = callback
 }
@@ -2045,18 +2050,11 @@ func (a *orchestratorChatAdapter) GetMessages(ctx context.Context, sessionID str
 			Timestamp:        msg.Timestamp,
 		}
 		for _, tc := range msg.ToolCalls {
-			m.ToolCalls = append(m.ToolCalls, aicontracts.OrchestratorToolCallInfo{
-				ID:    tc.ID,
-				Name:  tc.Name,
-				Input: tc.Input,
-			})
+			m.ToolCalls = append(m.ToolCalls, aicontracts.OrchestratorToolCallInfoFromProvider(tc.ProviderToolCall()))
 		}
 		if msg.ToolResult != nil {
-			m.ToolResult = &aicontracts.OrchestratorToolResultInfo{
-				ToolUseID: msg.ToolResult.ToolUseID,
-				Content:   msg.ToolResult.Content,
-				IsError:   msg.ToolResult.IsError,
-			}
+			toolResult := aicontracts.OrchestratorToolResultInfoFromProvider(*msg.ToolResult)
+			m.ToolResult = &toolResult
 		}
 		messages[i] = m.NormalizeCollections()
 	}
@@ -2264,9 +2262,9 @@ type AISettingsResponse struct {
 	AutoFixModel  string `json:"auto_fix_model,omitempty"` // Model for auto-fix (empty = use patrol model)
 	Configured    bool   `json:"configured"`               // true if AI is ready to use
 	CustomContext string `json:"custom_context"`           // user-provided infrastructure context
-	// OAuth fields for Claude Pro/Max subscription authentication
-	AuthMethod     string `json:"auth_method"`     // "api_key" or "oauth"
-	OAuthConnected bool   `json:"oauth_connected"` // true if OAuth tokens are configured
+	// Legacy OAuth fields are retained for cleanup/migration only.
+	AuthMethod     string `json:"auth_method"`     // "api_key" or legacy "oauth"
+	OAuthConnected bool   `json:"oauth_connected"` // true if legacy OAuth tokens are stored
 	// Patrol settings for token efficiency
 	PatrolIntervalMinutes        int  `json:"patrol_interval_minutes"`         // Patrol interval in minutes (0 = disabled)
 	PatrolEnabled                bool `json:"patrol_enabled"`                  // true if patrol is enabled
@@ -2281,7 +2279,7 @@ type AISettingsResponse struct {
 	UseProactiveThresholds        bool                  `json:"use_proactive_thresholds"`          // true if patrol warns before thresholds (false = use exact thresholds)
 	AvailableModels               []providers.ModelInfo `json:"available_models"`                  // List of models for current provider
 	// Multi-provider credentials - shows which providers are configured
-	AnthropicConfigured  bool     `json:"anthropic_configured"`      // true if Anthropic API key or OAuth is set
+	AnthropicConfigured  bool     `json:"anthropic_configured"`      // true if Anthropic API key is set
 	OpenAIConfigured     bool     `json:"openai_configured"`         // true if OpenAI API key is set
 	OpenRouterConfigured bool     `json:"openrouter_configured"`     // true if OpenRouter API key is set
 	DeepSeekConfigured   bool     `json:"deepseek_configured"`       // true if DeepSeek API key is set
@@ -2457,8 +2455,8 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 	ctx := r.Context()
 	settings, err := h.loadAIConfig(ctx)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to load Pulse Assistant settings")
-		http.Error(w, "Failed to load Pulse Assistant settings", http.StatusInternalServerError)
+		log.Error().Err(err).Msg("Failed to load Assistant & Patrol settings")
+		http.Error(w, "Failed to load Assistant & Patrol settings", http.StatusInternalServerError)
 		return
 	}
 
@@ -2608,9 +2606,9 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 	}
 
 	if req.PatrolAutoFix != nil {
-		// Safe remediation requires Pro license with the ai_autofix feature.
+		// Patrol fix actions require Pro license with the ai_autofix feature.
 		if *req.PatrolAutoFix && !h.GetAIService(r.Context()).HasLicenseFeature(ai.FeatureAIAutoFix) {
-			WriteLicenseRequired(w, ai.FeatureAIAutoFix, "Safe remediation workflows require Pulse Pro")
+			WriteLicenseRequired(w, ai.FeatureAIAutoFix, "Patrol fix actions require Pulse Pro")
 			return
 		}
 		settings.PatrolAutoFix = *req.PatrolAutoFix
@@ -2908,8 +2906,8 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		h.onModelChange()
 	}
 
-	// Update MCP control settings if control level or protected guests changed
-	// This updates tool visibility without restarting AI chat
+	// Update Assistant control settings if control level or protected guests changed.
+	// This updates tool visibility without restarting AI chat.
 	if h.onControlSettingsChange != nil && (req.ControlLevel != nil || req.ProtectedGuests != nil) {
 		h.onControlSettingsChange()
 	}
@@ -3329,21 +3327,11 @@ type AIExecuteRequest struct {
 }
 
 func normalizeAIExecuteTargetType(raw string) string {
-	return strings.ToLower(strings.TrimSpace(raw))
+	return agentcapabilities.NormalizeActionTargetType(raw)
 }
 
 func normalizeAndValidateAIExecuteTargetType(raw string) (string, error) {
-	targetType := normalizeAIExecuteTargetType(raw)
-	if targetType == "" {
-		return "", nil
-	}
-
-	switch targetType {
-	case "agent", "system-container", "vm":
-		return targetType, nil
-	default:
-		return "", fmt.Errorf("invalid target_type")
-	}
+	return agentcapabilities.NormalizeAndValidateOptionalActionTargetType(raw)
 }
 
 // AIExecuteResponse is the response from POST /api/ai/execute
@@ -3606,7 +3594,7 @@ func (h *AISettingsHandler) HandleExecute(w http.ResponseWriter, r *http.Request
 	useCase := strings.ToLower(strings.TrimSpace(req.UseCase))
 	if useCase == "autofix" || useCase == "remediation" {
 		if !h.GetAIService(r.Context()).HasLicenseFeature(ai.FeatureAIAutoFix) {
-			WriteLicenseRequired(w, ai.FeatureAIAutoFix, "Safe remediation workflows require Pulse Pro")
+			WriteLicenseRequired(w, ai.FeatureAIAutoFix, "Patrol fix actions require Pulse Pro")
 			return
 		}
 	}
@@ -3787,7 +3775,7 @@ func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.R
 	useCase := strings.ToLower(strings.TrimSpace(req.UseCase))
 	if useCase == "autofix" || useCase == "remediation" {
 		if !h.GetAIService(r.Context()).HasLicenseFeature(ai.FeatureAIAutoFix) {
-			WriteLicenseRequired(w, ai.FeatureAIAutoFix, "Safe remediation workflows require Pulse Pro")
+			WriteLicenseRequired(w, ai.FeatureAIAutoFix, "Patrol fix actions require Pulse Pro")
 			return
 		}
 	}
@@ -4005,10 +3993,10 @@ func (h *AISettingsHandler) HandleRunCommand(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Gated for safe remediation workflows (Pro feature). Request shape is validated before the
+	// Gated for Patrol fix actions (Pro feature). Request shape is validated before the
 	// entitlement check so clients get deterministic 400s for malformed calls.
 	if !h.GetAIService(r.Context()).HasLicenseFeature(ai.FeatureAIAutoFix) {
-		WriteLicenseRequired(w, ai.FeatureAIAutoFix, "Safe remediation workflows require Pulse Pro")
+		WriteLicenseRequired(w, ai.FeatureAIAutoFix, "Patrol fix actions require Pulse Pro")
 		return
 	}
 
@@ -4069,14 +4057,8 @@ func normalizeRunCommandApprovalTarget(req AIRunCommandRequest) (string, string,
 	targetID := strings.TrimSpace(req.TargetID)
 	targetHost := strings.ToLower(strings.TrimSpace(req.TargetHost))
 
-	allowedTargetTypes := map[string]struct{}{
-		"agent":            {},
-		"system-container": {},
-		"vm":               {},
-	}
-
 	if req.RunOnHost {
-		targetType = "agent"
+		targetType = agentcapabilities.ActionTargetTypeAgent
 		if targetHost == "" {
 			return "", "", errors.New("target_host is required when run_on_host is true")
 		}
@@ -4084,17 +4066,17 @@ func normalizeRunCommandApprovalTarget(req AIRunCommandRequest) (string, string,
 	}
 
 	if targetType == "" {
-		targetType = "agent"
+		targetType = agentcapabilities.ActionTargetTypeAgent
 	}
-	if _, ok := allowedTargetTypes[targetType]; !ok {
-		return "", "", fmt.Errorf("unsupported target_type %q (allowed: agent, system-container, vm)", targetType)
+	if !agentcapabilities.IsActionTargetType(targetType) {
+		return "", "", fmt.Errorf("unsupported target_type %q (allowed: %s)", targetType, agentcapabilities.ActionTargetTypeAllowedDescription())
 	}
 
-	if (targetType == "system-container" || targetType == "vm") && strings.TrimSpace(req.VMID) != "" {
+	if (targetType == agentcapabilities.ActionTargetTypeSystemContainer || targetType == agentcapabilities.ActionTargetTypeVM) && strings.TrimSpace(req.VMID) != "" {
 		targetID = strings.TrimSpace(req.VMID)
 	}
 
-	if targetType == "agent" {
+	if targetType == agentcapabilities.ActionTargetTypeAgent {
 		if targetID == "" {
 			targetID = targetHost
 		}
@@ -4546,19 +4528,7 @@ func (r AIInvestigateAlertRequest) alertIdentifier() string {
 }
 
 func normalizeInvestigateAlertTargetType(raw string) (string, error) {
-	resourceType := normalizeAITransportResourceType(raw)
-	switch resourceType {
-	case "vm":
-		return "vm", nil
-	case "system-container", "oci-container":
-		return "system-container", nil
-	case "agent", "node", "docker-host", "app-container", "pod", "k8s-node", "k8s-cluster", "k8s-deployment", "k8s-service", "storage", "disk", "pbs", "pmg", "proxmox", "ceph":
-		return "agent", nil
-	case "":
-		return "", errors.New("resource_type is required")
-	default:
-		return "", fmt.Errorf("unsupported resource_type %q (allowed: vm, system-container, oci-container, app-container, pod, agent, node, docker-host, k8s-cluster, k8s-node, k8s-deployment, k8s-service, storage, disk, pbs, pmg, proxmox, ceph)", raw)
-	}
+	return agentcapabilities.ActionTargetTypeForResourceType(raw)
 }
 
 // HandleInvestigateAlert investigates an alert using AI (POST /api/ai/investigate-alert)
@@ -4774,336 +4744,55 @@ func (h *AISettingsHandler) SetAlertResolver(resolver ai.AlertResolver) {
 	}
 }
 
-// oauthSessions stores active OAuth sessions (state -> session)
-// In production, consider using a more robust session store with expiry
-type oauthSessionBinding struct {
-	session *providers.OAuthSession
-	orgID   string
-}
+const unsupportedAnthropicOAuthMessage = "Anthropic subscription OAuth is not supported by Pulse Assistant. Configure an Anthropic API key or another supported provider."
 
-const oauthSessionTTL = 15 * time.Minute
-
-var oauthSessions = make(map[string]*oauthSessionBinding)
-var oauthSessionsMu sync.Mutex
-var exchangeOAuthCodeForTokens = providers.ExchangeCodeForTokens
-var createAPIKeyFromOAuth = providers.CreateAPIKeyFromOAuth
-
-func storeOAuthSession(session *providers.OAuthSession, orgID string) {
-	oauthSessionsMu.Lock()
-	defer oauthSessionsMu.Unlock()
-
-	cutoff := time.Now().Add(-oauthSessionTTL)
-	for state, binding := range oauthSessions {
-		if binding == nil || binding.session == nil || binding.session.CreatedAt.Before(cutoff) {
-			delete(oauthSessions, state)
-		}
-	}
-
-	oauthSessions[session.State] = &oauthSessionBinding{
-		session: session,
-		orgID:   orgID,
+func writeAnthropicOAuthUnsupported(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusNotImplemented)
+	if err := utils.WriteJSONResponse(w, map[string]interface{}{
+		"success": false,
+		"error":   "unsupported_anthropic_oauth",
+		"message": unsupportedAnthropicOAuthMessage,
+	}); err != nil {
+		log.Error().Err(err).Msg("Failed to write unsupported Anthropic OAuth response")
 	}
 }
 
-func consumeOAuthSession(state string) (*oauthSessionBinding, bool) {
-	oauthSessionsMu.Lock()
-	binding, ok := oauthSessions[state]
-	if ok {
-		delete(oauthSessions, state) // One-time use
-	}
-	oauthSessionsMu.Unlock()
-
-	if !ok || binding == nil || binding.session == nil {
-		return nil, false
-	}
-	if time.Since(binding.session.CreatedAt) > oauthSessionTTL {
-		return nil, false
-	}
-	if !isValidOrganizationID(binding.orgID) {
-		return nil, false
-	}
-
-	return binding, true
-}
-
-// HandleOAuthStart initiates the OAuth flow for Claude Pro/Max subscription (POST /api/ai/oauth/start)
-// Returns an authorization URL for the user to visit manually
+// HandleOAuthStart rejects legacy Anthropic subscription OAuth setup.
 func (h *AISettingsHandler) HandleOAuthStart(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Generate OAuth session (redirect URI is not used since we use Anthropic's callback)
-	session, err := providers.GenerateOAuthSession("")
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to generate OAuth session")
-		http.Error(w, "Failed to start OAuth flow", http.StatusInternalServerError)
-		return
-	}
-
-	orgID := strings.TrimSpace(GetOrgID(r.Context()))
-	if !isValidOrganizationID(orgID) {
-		orgID = "default"
-	}
-
-	// Store session, bound to the tenant context that initiated OAuth.
-	storeOAuthSession(session, orgID)
-
-	// Get authorization URL
-	authURL := providers.GetAuthorizationURL(session)
-
-	log.Info().
-		Str("state", safePrefixForLog(session.State, 8)+"...").
-		Str("org_id", orgID).
-		Str("verifier_len", fmt.Sprintf("%d", len(session.CodeVerifier))).
-		Str("auth_url", authURL).
-		Msg("Starting Claude OAuth flow - user must visit URL and paste code back")
-
-	// Return the URL for the user to visit
-	response := map[string]string{
-		"auth_url": authURL,
-		"state":    session.State,
-	}
-
-	if err := utils.WriteJSONResponse(w, response); err != nil {
-		log.Error().Err(err).Msg("Failed to write OAuth start response")
-	}
+	writeAnthropicOAuthUnsupported(w)
 }
 
-// HandleOAuthExchange exchanges a manually-pasted authorization code for tokens (POST /api/ai/oauth/exchange)
+// HandleOAuthExchange rejects legacy Anthropic subscription OAuth setup.
 func (h *AISettingsHandler) HandleOAuthExchange(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Limit body size — OAuth codes are short strings, 4 KB is plenty.
-	r.Body = http.MaxBytesReader(w, r.Body, 4*1024)
-
-	// Parse request body
-	var req struct {
-		Code  string `json:"code"`
-		State string `json:"state"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	if req.Code == "" || req.State == "" {
-		http.Error(w, "Missing code or state", http.StatusBadRequest)
-		return
-	}
-
-	// Trim any whitespace from the code (user might have copied extra spaces)
-	code := strings.TrimSpace(req.Code)
-
-	// Anthropic's callback page displays the code as "code#state"
-	// We need to extract just the code part before the #
-	if idx := strings.Index(code, "#"); idx > 0 {
-		code = code[:idx]
-	}
-
-	log.Debug().
-		Str("code_len", fmt.Sprintf("%d", len(code))).
-		Str("code_prefix", code[:min(20, len(code))]).
-		Str("state_prefix", req.State[:min(8, len(req.State))]).
-		Msg("Processing OAuth code exchange")
-
-	// Consume one-time OAuth session and enforce TTL.
-	binding, ok := consumeOAuthSession(req.State)
-
-	if !ok {
-		log.Error().Str("state", req.State[:min(8, len(req.State))]+"...").Msg("OAuth exchange with unknown state")
-		http.Error(w, "Invalid or expired session. Please start the OAuth flow again.", http.StatusBadRequest)
-		return
-	}
-	orgID := binding.orgID
-	oauthCtx := context.WithValue(r.Context(), OrgIDContextKey, orgID)
-
-	// Exchange code for tokens
-	ctx, cancel := context.WithTimeout(oauthCtx, 30*time.Second)
-	defer cancel()
-
-	tokens, err := exchangeOAuthCodeForTokens(ctx, code, binding.session)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to exchange OAuth code for tokens")
-		http.Error(w, "Failed to exchange authorization code", http.StatusBadRequest)
-		return
-	}
-
-	// Try to create an API key from the OAuth access token
-	// Team/Enterprise users get org:create_api_key scope and can create API keys
-	// Pro/Max users don't have this scope and will use OAuth tokens directly
-	apiKey, err := createAPIKeyFromOAuth(ctx, tokens.AccessToken)
-	if err != nil {
-		// Check if it's a permission error (Pro/Max users)
-		if strings.Contains(err.Error(), "org:create_api_key") || strings.Contains(err.Error(), "403") {
-			log.Info().Msg("User doesn't have org:create_api_key permission - will use OAuth tokens directly")
-			// This is fine for Pro/Max users - they'll use OAuth tokens
-		} else {
-			log.Error().Err(err).Msg("Failed to create API key from OAuth token")
-			http.Error(w, "Failed to create API key", http.StatusBadRequest)
-			return
-		}
-	}
-
-	if apiKey != "" {
-		log.Info().Msg("Successfully created API key from OAuth - using subscription-based billing")
-	}
-
-	// Load existing settings
-	persistence := h.getPersistence(oauthCtx)
-	if persistence == nil {
-		http.Error(w, "Tenant persistence unavailable", http.StatusInternalServerError)
-		return
-	}
-	settings, err := h.loadAIConfig(oauthCtx)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to load Pulse Assistant settings for OAuth")
-		settings = config.NewDefaultAIConfig()
-	}
-	if settings == nil {
-		settings = config.NewDefaultAIConfig()
-	}
-
-	// Update settings
-	settings.AuthMethod = config.AuthMethodOAuth
-	settings.OAuthAccessToken = tokens.AccessToken
-	settings.OAuthRefreshToken = tokens.RefreshToken
-	settings.OAuthExpiresAt = tokens.ExpiresAt
-	settings.Enabled = true
-
-	// If we got an API key, use it; otherwise use OAuth tokens directly
-	if apiKey != "" {
-		settings.AnthropicAPIKey = apiKey
-	} else {
-		// Pro/Max users: clear any old API key, will use OAuth client
-		settings.ClearAPIKey()
-	}
-
-	// Save settings
-	if err := persistence.SaveAIConfig(*settings); err != nil {
-		log.Error().Err(err).Msg("Failed to save OAuth tokens")
-		http.Error(w, "Failed to save OAuth credentials", http.StatusInternalServerError)
-		return
-	}
-
-	// Reload the AI service with new settings
-	if svc := h.GetAIService(oauthCtx); svc != nil {
-		if err := svc.Reload(); err != nil {
-			log.Warn().Err(err).Msg("Failed to reload AI service after OAuth setup")
-		}
-	}
-
-	log.Info().Msg("Claude OAuth authentication successful")
-
-	response := map[string]interface{}{
-		"success": true,
-		"message": "Successfully connected to Claude with your subscription",
-	}
-
-	if err := utils.WriteJSONResponse(w, response); err != nil {
-		log.Error().Err(err).Msg("Failed to write OAuth exchange response")
-	}
+	writeAnthropicOAuthUnsupported(w)
 }
 
-// HandleOAuthCallback handles the OAuth callback (GET /api/ai/oauth/callback)
-// This is kept for backwards compatibility but mainly serves as a fallback
+// HandleOAuthCallback rejects stale legacy OAuth redirects without saving tokens.
 func (h *AISettingsHandler) HandleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Get code and state from query params
-	code := r.URL.Query().Get("code")
-	state := r.URL.Query().Get("state")
 	errParam := r.URL.Query().Get("error")
-	errDesc := r.URL.Query().Get("error_description")
-
-	// Check for OAuth error
 	if errParam != "" {
-		log.Error().
-			Str("error", errParam).
-			Str("description", errDesc).
-			Msg("OAuth authorization failed")
-		// Redirect to settings page with error (URL-encode to prevent injection)
+		log.Info().Str("error", errParam).Msg("Unsupported Anthropic OAuth callback returned provider error")
 		http.Redirect(w, r, "/settings?ai_oauth_error="+url.QueryEscape(errParam), http.StatusTemporaryRedirect)
 		return
 	}
 
-	if code == "" || state == "" {
-		log.Error().Msg("OAuth callback missing code or state")
-		http.Redirect(w, r, "/settings?ai_oauth_error=missing_params", http.StatusTemporaryRedirect)
-		return
-	}
-
-	// Consume one-time OAuth session and enforce TTL.
-	binding, ok := consumeOAuthSession(state)
-
-	if !ok {
-		log.Error().Str("state", state).Msg("OAuth callback with unknown state")
-		http.Redirect(w, r, "/settings?ai_oauth_error=invalid_state", http.StatusTemporaryRedirect)
-		return
-	}
-	orgID := binding.orgID
-	oauthCtx := context.WithValue(r.Context(), OrgIDContextKey, orgID)
-
-	// Exchange code for tokens
-	ctx, cancel := context.WithTimeout(oauthCtx, 30*time.Second)
-	defer cancel()
-
-	tokens, err := exchangeOAuthCodeForTokens(ctx, code, binding.session)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to exchange OAuth code for tokens")
-		http.Redirect(w, r, "/settings?ai_oauth_error=token_exchange_failed", http.StatusTemporaryRedirect)
-		return
-	}
-
-	// Load existing settings
-	persistence := h.getPersistence(oauthCtx)
-	if persistence == nil {
-		http.Redirect(w, r, "/settings?ai_oauth_error=save_failed", http.StatusTemporaryRedirect)
-		return
-	}
-	settings, err := h.loadAIConfig(oauthCtx)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to load Pulse Assistant settings for OAuth")
-		settings = config.NewDefaultAIConfig()
-	}
-	if settings == nil {
-		settings = config.NewDefaultAIConfig()
-	}
-
-	// Update settings with OAuth tokens
-	settings.AuthMethod = config.AuthMethodOAuth
-	settings.OAuthAccessToken = tokens.AccessToken
-	settings.OAuthRefreshToken = tokens.RefreshToken
-	settings.OAuthExpiresAt = tokens.ExpiresAt
-	settings.Enabled = true
-	// Clear API key since we're using OAuth
-	settings.ClearAPIKey()
-
-	// Save settings
-	if err := persistence.SaveAIConfig(*settings); err != nil {
-		log.Error().Err(err).Msg("Failed to save OAuth tokens")
-		http.Redirect(w, r, "/settings?ai_oauth_error=save_failed", http.StatusTemporaryRedirect)
-		return
-	}
-
-	// Reload the AI service with new settings
-	if svc := h.GetAIService(oauthCtx); svc != nil {
-		if err := svc.Reload(); err != nil {
-			log.Warn().Err(err).Msg("Failed to reload AI service after OAuth setup")
-		}
-	}
-
-	log.Info().Msg("Claude OAuth authentication successful")
-
-	// Redirect to settings page with success
-	http.Redirect(w, r, "/settings?ai_oauth_success=true", http.StatusTemporaryRedirect)
+	http.Redirect(w, r, "/settings?ai_oauth_error=unsupported", http.StatusTemporaryRedirect)
 }
 
 // HandleOAuthDisconnect disconnects OAuth and clears tokens (POST /api/ai/oauth/disconnect)
@@ -5127,7 +4816,7 @@ func (h *AISettingsHandler) HandleOAuthDisconnect(w http.ResponseWriter, r *http
 	}
 	settings, err := h.loadAIConfig(r.Context())
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to load Pulse Assistant settings for OAuth disconnect")
+		log.Error().Err(err).Msg("Failed to load Assistant & Patrol settings for OAuth disconnect")
 		http.Error(w, "Failed to load settings", http.StatusInternalServerError)
 		return
 	}
@@ -5153,7 +4842,7 @@ func (h *AISettingsHandler) HandleOAuthDisconnect(w http.ResponseWriter, r *http
 		}
 	}
 
-	log.Info().Msg("Claude OAuth disconnected")
+	log.Info().Msg("Legacy Anthropic OAuth disconnected")
 
 	response := map[string]interface{}{
 		"success": true,
@@ -5244,7 +4933,7 @@ func (h *AISettingsHandler) buildPatrolReadiness(ctx context.Context, aiService 
 	}
 
 	if aiService == nil {
-		addCheck("service", patrolReadinessNotReady, ai.PatrolFailureCauseServiceUnavailable, "AI runtime service", "Pulse AI runtime service is not available.", "restart_service")
+		addCheck("service", patrolReadinessNotReady, ai.PatrolFailureCauseServiceUnavailable, "Assistant runtime service", "Pulse Assistant runtime service is not available.", "restart_service")
 		return summarizePatrolReadiness("", "", checks)
 	}
 	if !patrolAvailable {
@@ -5255,10 +4944,10 @@ func (h *AISettingsHandler) buildPatrolReadiness(ctx context.Context, aiService 
 
 	cfg, err := h.loadAIConfig(ctx)
 	if err != nil || cfg == nil {
-		addCheck("settings", patrolReadinessNotReady, ai.PatrolFailureCauseSettingsPersistence, "Settings persistence", "Pulse Assistant settings could not be loaded from persistence.", "open_provider_settings")
+		addCheck("settings", patrolReadinessNotReady, ai.PatrolFailureCauseSettingsPersistence, "Settings persistence", "Assistant & Patrol settings could not be loaded from persistence.", "open_provider_settings")
 		return summarizePatrolReadiness("", "", checks)
 	}
-	addCheck("settings", patrolReadinessReady, ai.PatrolFailureCauseNone, "Settings persistence", "Pulse Assistant and Patrol settings are readable.", "")
+	addCheck("settings", patrolReadinessReady, ai.PatrolFailureCauseNone, "Settings persistence", "Assistant & Patrol settings are readable.", "")
 
 	if !cfg.Enabled {
 		addCheck("enabled", patrolReadinessNotReady, ai.PatrolFailureCauseAssistantDisabled, "Assistant enabled", "Pulse Assistant is disabled, so Patrol cannot run model-backed verification.", "open_provider_settings")
@@ -5412,7 +5101,7 @@ func patrolReadinessResponseFromConfigReadiness(readiness ai.PatrolConfigReadine
 				ID:      "configuration",
 				Status:  readiness.Status,
 				Cause:   cause,
-				Label:   "Patrol configuration",
+				Label:   "Patrol control",
 				Message: readiness.Summary,
 				Action:  action,
 			},
@@ -5434,6 +5123,22 @@ func (h *AISettingsHandler) getPatrolService(ctx context.Context) *ai.PatrolServ
 
 func writePatrolServiceUnavailableResponse(w http.ResponseWriter) {
 	writeErrorResponse(w, http.StatusServiceUnavailable, "service_unavailable", "Pulse Patrol service not available", nil)
+}
+
+func writePatrolAgentUnavailableResponse(w http.ResponseWriter) {
+	writeJSONError(w, http.StatusServiceUnavailable, agentcapabilities.AgentErrCodePatrolUnavailable, "Pulse Patrol service not available")
+}
+
+func writeFindingInvalidRequestResponse(w http.ResponseWriter, message string, details map[string]string) {
+	writeJSONErrorWithDetails(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidFindingRequest, message, details)
+}
+
+func writeFindingNotFoundResponse(w http.ResponseWriter, message string) {
+	writeJSONError(w, http.StatusNotFound, agentcapabilities.AgentErrCodeFindingNotFound, message)
+}
+
+func writeFindingActionNotAllowedResponse(w http.ResponseWriter, message string) {
+	writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeFindingActionNotAllowed, message)
 }
 
 func writePatrolReadinessNotReadyResponse(w http.ResponseWriter, statusCode int, readiness ai.PatrolConfigReadiness) {
@@ -5984,7 +5689,7 @@ func (h *AISettingsHandler) HandleAcknowledgeFinding(w http.ResponseWriter, r *h
 
 	patrol := h.getPatrolService(r.Context())
 	if patrol == nil {
-		writePatrolServiceUnavailableResponse(w)
+		writePatrolAgentUnavailableResponse(w)
 		return
 	}
 
@@ -5992,12 +5697,12 @@ func (h *AISettingsHandler) HandleAcknowledgeFinding(w http.ResponseWriter, r *h
 		FindingID string `json:"finding_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		writeFindingInvalidRequestResponse(w, "Invalid request body", nil)
 		return
 	}
 
 	if req.FindingID == "" {
-		http.Error(w, "finding_id is required", http.StatusBadRequest)
+		writeFindingInvalidRequestResponse(w, "finding_id is required", map[string]string{"finding_id": "required"})
 		return
 	}
 
@@ -6029,16 +5734,16 @@ func (h *AISettingsHandler) HandleAcknowledgeFinding(w http.ResponseWriter, r *h
 			resourceID = unifiedFinding.ResourceID
 			findingKey = unifiedFinding.ID
 		} else {
-			http.Error(w, "Finding not found", http.StatusNotFound)
+			writeFindingNotFoundResponse(w, "Finding not found")
 			return
 		}
 	} else if !foundInPatrol {
-		http.Error(w, "Finding not found", http.StatusNotFound)
+		writeFindingNotFoundResponse(w, "Finding not found")
 		return
 	}
 	if foundInPatrol {
 		if err := patrol.RejectManualActionForRuntimeFinding(req.FindingID, "acknowledged"); err != nil {
-			http.Error(w, err.Error(), http.StatusConflict)
+			writeFindingActionNotAllowedResponse(w, err.Error())
 			return
 		}
 	}
@@ -6046,7 +5751,7 @@ func (h *AISettingsHandler) HandleAcknowledgeFinding(w http.ResponseWriter, r *h
 	// Acknowledge in patrol findings if it exists there
 	if foundInPatrol {
 		if !findings.Acknowledge(req.FindingID) {
-			http.Error(w, "Finding not found", http.StatusNotFound)
+			writeFindingNotFoundResponse(w, "Finding not found")
 			return
 		}
 	}
@@ -6098,7 +5803,7 @@ func (h *AISettingsHandler) HandleSnoozeFinding(w http.ResponseWriter, r *http.R
 
 	patrol := h.getPatrolService(r.Context())
 	if patrol == nil {
-		writePatrolServiceUnavailableResponse(w)
+		writePatrolAgentUnavailableResponse(w)
 		return
 	}
 
@@ -6107,17 +5812,17 @@ func (h *AISettingsHandler) HandleSnoozeFinding(w http.ResponseWriter, r *http.R
 		DurationHours int    `json:"duration_hours"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		writeFindingInvalidRequestResponse(w, "Invalid request body", nil)
 		return
 	}
 
 	if req.FindingID == "" {
-		http.Error(w, "finding_id is required", http.StatusBadRequest)
+		writeFindingInvalidRequestResponse(w, "finding_id is required", map[string]string{"finding_id": "required"})
 		return
 	}
 
 	if req.DurationHours <= 0 {
-		http.Error(w, "duration_hours must be positive", http.StatusBadRequest)
+		writeFindingInvalidRequestResponse(w, "duration_hours must be positive", map[string]string{"duration_hours": "must be positive"})
 		return
 	}
 
@@ -6155,16 +5860,16 @@ func (h *AISettingsHandler) HandleSnoozeFinding(w http.ResponseWriter, r *http.R
 			resourceID = unifiedFinding.ResourceID
 			findingKey = unifiedFinding.ID
 		} else {
-			http.Error(w, "Finding not found or already resolved", http.StatusNotFound)
+			writeFindingNotFoundResponse(w, "Finding not found or already resolved")
 			return
 		}
 	} else if !foundInPatrol {
-		http.Error(w, "Finding not found or already resolved", http.StatusNotFound)
+		writeFindingNotFoundResponse(w, "Finding not found or already resolved")
 		return
 	}
 	if foundInPatrol {
 		if err := patrol.RejectManualActionForRuntimeFinding(req.FindingID, "snoozed"); err != nil {
-			http.Error(w, err.Error(), http.StatusConflict)
+			writeFindingActionNotAllowedResponse(w, err.Error())
 			return
 		}
 	}
@@ -6172,7 +5877,7 @@ func (h *AISettingsHandler) HandleSnoozeFinding(w http.ResponseWriter, r *http.R
 	// Snooze in patrol findings if it exists there
 	if foundInPatrol {
 		if !findings.Snooze(req.FindingID, duration) {
-			http.Error(w, "Finding not found or already resolved", http.StatusNotFound)
+			writeFindingNotFoundResponse(w, "Finding not found or already resolved")
 			return
 		}
 	}
@@ -6225,20 +5930,23 @@ func (h *AISettingsHandler) HandleResolveFinding(w http.ResponseWriter, r *http.
 
 	patrol := h.getPatrolService(r.Context())
 	if patrol == nil {
-		writePatrolServiceUnavailableResponse(w)
+		writePatrolAgentUnavailableResponse(w)
 		return
 	}
 
 	var req struct {
-		FindingID string `json:"finding_id"`
+		FindingID      string `json:"finding_id"`
+		ResolutionNote string `json:"resolution_note"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		writeFindingInvalidRequestResponse(w, "Invalid request body", nil)
 		return
 	}
 
+	req.ResolutionNote = strings.TrimSpace(req.ResolutionNote)
+
 	if req.FindingID == "" {
-		http.Error(w, "finding_id is required", http.StatusBadRequest)
+		writeFindingInvalidRequestResponse(w, "finding_id is required", map[string]string{"finding_id": "required"})
 		return
 	}
 
@@ -6247,12 +5955,15 @@ func (h *AISettingsHandler) HandleResolveFinding(w http.ResponseWriter, r *http.
 	// Get finding details before resolving (for learning/analytics)
 	finding := findings.Get(req.FindingID)
 	if finding == nil {
-		http.Error(w, "Finding not found or already resolved", http.StatusNotFound)
+		writeFindingNotFoundResponse(w, "Finding not found or already resolved")
 		return
 	}
 	if err := patrol.RejectManualActionForRuntimeFinding(req.FindingID, "resolved"); err != nil {
-		http.Error(w, err.Error(), http.StatusConflict)
+		writeFindingActionNotAllowedResponse(w, err.Error())
 		return
+	}
+	if req.ResolutionNote != "" {
+		findings.SetUserNote(req.FindingID, req.ResolutionNote)
 	}
 
 	// Capture details before action
@@ -6263,7 +5974,7 @@ func (h *AISettingsHandler) HandleResolveFinding(w http.ResponseWriter, r *http.
 
 	// Mark as manually resolved (auto=false since user did it)
 	if !findings.Resolve(req.FindingID, false) {
-		http.Error(w, "Finding not found or already resolved", http.StatusNotFound)
+		writeFindingNotFoundResponse(w, "Finding not found or already resolved")
 		return
 	}
 
@@ -6282,6 +5993,7 @@ func (h *AISettingsHandler) HandleResolveFinding(w http.ResponseWriter, r *http.
 			Severity:     severity,
 			Action:       learning.ActionQuickFix, // Manual resolve means user took action to fix
 			TimeToAction: time.Since(detectedAt),
+			UserNote:     req.ResolutionNote,
 		})
 	}
 
@@ -6369,7 +6081,7 @@ func (h *AISettingsHandler) HandleDismissFinding(w http.ResponseWriter, r *http.
 
 	patrol := h.getPatrolService(r.Context())
 	if patrol == nil {
-		writePatrolServiceUnavailableResponse(w)
+		writePatrolAgentUnavailableResponse(w)
 		return
 	}
 
@@ -6379,17 +6091,17 @@ func (h *AISettingsHandler) HandleDismissFinding(w http.ResponseWriter, r *http.
 		Note      string `json:"note"`   // Optional freeform note
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		writeFindingInvalidRequestResponse(w, "Invalid request body", nil)
 		return
 	}
 
 	if req.FindingID == "" {
-		http.Error(w, "finding_id is required", http.StatusBadRequest)
+		writeFindingInvalidRequestResponse(w, "finding_id is required", map[string]string{"finding_id": "required"})
 		return
 	}
 
 	if req.Reason == "" {
-		http.Error(w, "reason is required", http.StatusBadRequest)
+		writeFindingInvalidRequestResponse(w, "reason is required", map[string]string{"reason": "required"})
 		return
 	}
 
@@ -6400,7 +6112,7 @@ func (h *AISettingsHandler) HandleDismissFinding(w http.ResponseWriter, r *http.
 		"will_fix_later":    true,
 	}
 	if req.Reason != "" && !validReasons[req.Reason] {
-		http.Error(w, "Invalid reason. Valid values: not_an_issue, expected_behavior, will_fix_later", http.StatusBadRequest)
+		writeFindingInvalidRequestResponse(w, "Invalid reason. Valid values: not_an_issue, expected_behavior, will_fix_later", map[string]string{"reason": "must be one of not_an_issue, expected_behavior, will_fix_later"})
 		return
 	}
 
@@ -6432,16 +6144,16 @@ func (h *AISettingsHandler) HandleDismissFinding(w http.ResponseWriter, r *http.
 			resourceID = unifiedFinding.ResourceID
 			findingKey = unifiedFinding.ID // Use ID as key for unified findings
 		} else {
-			http.Error(w, "Finding not found", http.StatusNotFound)
+			writeFindingNotFoundResponse(w, "Finding not found")
 			return
 		}
 	} else if !foundInPatrol {
-		http.Error(w, "Finding not found", http.StatusNotFound)
+		writeFindingNotFoundResponse(w, "Finding not found")
 		return
 	}
 	if foundInPatrol {
 		if err := patrol.RejectManualActionForRuntimeFinding(req.FindingID, "dismissed"); err != nil {
-			http.Error(w, err.Error(), http.StatusConflict)
+			writeFindingActionNotAllowedResponse(w, err.Error())
 			return
 		}
 	}
@@ -6449,7 +6161,7 @@ func (h *AISettingsHandler) HandleDismissFinding(w http.ResponseWriter, r *http.
 	// Dismiss in patrol findings if it exists there
 	if foundInPatrol {
 		if !findings.Dismiss(req.FindingID, req.Reason, req.Note) {
-			http.Error(w, "Finding not found", http.StatusNotFound)
+			writeFindingNotFoundResponse(w, "Finding not found")
 			return
 		}
 	}
@@ -7297,7 +7009,7 @@ func (h *AISettingsHandler) HandleApproveCommand(w http.ResponseWriter, r *http.
 		if h.aiAutoFixEndpoints != nil {
 			h.aiAutoFixEndpoints.HandleApproveInvestigationFix(w, r)
 		} else {
-			WriteLicenseRequired(w, featureAIAutoFixValue, "Safe remediation workflows require Pulse Pro")
+			WriteLicenseRequired(w, featureAIAutoFixValue, "Patrol fix actions require Pulse Pro")
 		}
 		return
 	}
@@ -7334,9 +7046,8 @@ func (h *AISettingsHandler) HandleApproveCommand(w http.ResponseWriter, r *http.
 
 // executeInvestigationFix has been moved to enterprise.
 
-// isMCPToolCall, cleanTargetHost, executeMCPToolFix, parseMCPToolCall,
-// splitToolArgs, and findAgentForTarget have been moved to
-// router_routes_ai_relay.go as package-level functions used by the
+// cleanTargetHost and the agent command/tool executor adapters have been
+// moved to router_routes_ai_relay.go as package-level helpers used by the
 // AIAutoFixHandlerDeps adapters.
 
 // updateFindingOutcome updates the investigation outcome on a finding
@@ -7366,6 +7077,24 @@ func (h *AISettingsHandler) updateFindingOutcome(ctx context.Context, orgID, fin
 	}
 
 	log.Info().Str("findingID", findingID).Str("outcome", outcome).Msg("Updated finding investigation outcome")
+}
+
+func (h *AISettingsHandler) actionAuditStoreForApprovalDecision(ctx context.Context) unifiedresources.ResourceStore {
+	if h == nil {
+		return nil
+	}
+	h.stateMu.RLock()
+	chatHandler := h.chatHandler
+	h.stateMu.RUnlock()
+	if chatHandler == nil {
+		return nil
+	}
+	service := chatHandler.GetService(ctx)
+	provider, ok := service.(actionAuditStoreProvider)
+	if !ok {
+		return nil
+	}
+	return provider.GetActionAuditStore()
 }
 
 // HandleDenyCommand denies a pending command.
@@ -7419,6 +7148,20 @@ func (h *AISettingsHandler) HandleDenyCommand(w http.ResponseWriter, r *http.Req
 	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "denial_failed", err.Error(), nil)
 		return
+	}
+	reason := strings.TrimSpace(body.Reason)
+	if reason == "" {
+		reason = "approval denied"
+	}
+	tools.RecordApprovalDecision(
+		h.actionAuditStoreForApprovalDecision(r.Context()),
+		req.ID,
+		unifiedresources.ActionStateRejected,
+		username,
+		reason,
+	)
+	if req.ToolID == "investigation_fix" && strings.EqualFold(strings.TrimSpace(req.TargetType), "investigation") && strings.TrimSpace(req.TargetID) != "" {
+		h.updateFindingOutcome(r.Context(), orgID, strings.TrimSpace(req.TargetID), string(ai.InvestigationOutcomeFixRejected))
 	}
 
 	// Log audit event

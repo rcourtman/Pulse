@@ -77,7 +77,7 @@ class RegistryAuditTest(unittest.TestCase):
                     **registry_audit.DEFAULT_CONTROL_PLANE,
                     "subsystems_dir_path": str(contracts_dir),
                 },
-            ):
+            ), patch.dict(os.environ, self.hook_env_for_worktree(linked_worktree), clear=False):
                 files = tracked_workspace_files(
                     active_repos=["pulse"],
                     local_repo=canonical_repo_id(linked_worktree),

@@ -1,28 +1,34 @@
 package tools
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
+)
 
 func TestKnownToolNamesIncludesRegisteredTools(t *testing.T) {
 	// Spot-check a representative subset of canonical names that should
 	// always be registered. Drift here means registerTools() lost a tool
-	// or KnownToolNames() stopped reading from the canonical registry.
+	// or IsKnownToolName() stopped reading from the canonical registry-backed
+	// shared provider-tool name catalog.
 	expected := []string{
-		"pulse_query",
-		"pulse_discovery",
-		"pulse_read",
-		"pulse_summarize",
-		"pulse_control",
-		"pulse_metrics",
-		"pulse_storage",
-		"pulse_docker",
-		"pulse_kubernetes",
-		"pulse_alerts",
-		"pulse_file_edit",
-		"pulse_knowledge",
-		"pulse_pmg",
-		"patrol_report_finding",
-		"patrol_resolve_finding",
-		"patrol_get_findings",
+		agentcapabilities.PulseQueryToolName,
+		agentcapabilities.PulseDiscoveryToolName,
+		agentcapabilities.PulseReadToolName,
+		agentcapabilities.PulseSummarizeToolName,
+		agentcapabilities.PulseControlToolName,
+		agentcapabilities.PulseMetricsToolName,
+		agentcapabilities.PulseStorageToolName,
+		agentcapabilities.PulseDockerToolName,
+		agentcapabilities.PulseKubernetesToolName,
+		agentcapabilities.PulseAlertsToolName,
+		agentcapabilities.PulseFileEditToolName,
+		agentcapabilities.PulseKnowledgeToolName,
+		agentcapabilities.PulsePMGToolName,
+		agentcapabilities.PulseQuestionToolName,
+		agentcapabilities.PatrolReportFindingToolName,
+		agentcapabilities.PatrolResolveFindingToolName,
+		agentcapabilities.PatrolGetFindingsToolName,
 	}
 	for _, name := range expected {
 		if !IsKnownToolName(name) {
@@ -50,6 +56,7 @@ func TestIsKnownToolNamePrefix(t *testing.T) {
 	cases := []string{
 		"p",
 		"pulse_",
+		"pulse_q",
 		"pulse_re",
 		"pulse_read",
 		"patrol_",

@@ -23,6 +23,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionplanner"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
@@ -1043,6 +1044,63 @@ func TestContractAISettingsClampsPaidRuntimeControlsToEntitlements(t *testing.T)
 	}
 }
 
+func TestContractAnthropicOAuthSetupEndpointsFailClosedPayload(t *testing.T) {
+	handler := &AISettingsHandler{}
+
+	tests := []struct {
+		name   string
+		method string
+		path   string
+		body   string
+		call   func(http.ResponseWriter, *http.Request)
+	}{
+		{
+			name:   "start",
+			method: http.MethodGet,
+			path:   "/api/ai/oauth/start",
+			call:   handler.HandleOAuthStart,
+		},
+		{
+			name:   "exchange",
+			method: http.MethodPost,
+			path:   "/api/ai/oauth/exchange",
+			body:   `{"code":"code","state":"state"}`,
+			call:   handler.HandleOAuthExchange,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := newLoopbackRequest(tt.method, tt.path, strings.NewReader(tt.body))
+			rec := httptest.NewRecorder()
+
+			tt.call(rec, req)
+
+			if rec.Code != http.StatusNotImplemented {
+				t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusNotImplemented, rec.Body.String())
+			}
+
+			var resp struct {
+				Success bool   `json:"success"`
+				Error   string `json:"error"`
+				Message string `json:"message"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("decode response: %v", err)
+			}
+			if resp.Success {
+				t.Fatal("unsupported OAuth response must not report success")
+			}
+			if resp.Error != "unsupported_anthropic_oauth" {
+				t.Fatalf("error=%q, want unsupported_anthropic_oauth", resp.Error)
+			}
+			if !strings.Contains(resp.Message, "Configure an Anthropic API key") {
+				t.Fatalf("message must direct operators to API-key setup, got %q", resp.Message)
+			}
+		})
+	}
+}
+
 func sortedVMChartKeys(values map[string]VMChartData) []string {
 	keys := make([]string, 0, len(values))
 	for key := range values {
@@ -1187,6 +1245,19 @@ func TestContract_WireAIChatDependencies_WiresTrueNASAppActionProvider(t *testin
 	}
 	if service.appContainerConfigProvider == nil {
 		t.Fatal("expected TrueNAS app config provider to be wired into AI chat dependencies")
+	}
+}
+
+func TestContract_AITransportResourceTypeUsesSharedActionResourceVocabulary(t *testing.T) {
+	for _, input := range []string{"truenas", "SYSTEM-CONTAINER", "app-container", "host"} {
+		got := normalizeAITransportResourceType(input)
+		want := agentcapabilities.NormalizeActionResourceType(input)
+		if got != want {
+			t.Fatalf("normalizeAITransportResourceType(%q) = %q, want shared action resource type %q", input, got, want)
+		}
+	}
+	if got := normalizeAITransportResourceType("truenas"); got != agentcapabilities.ActionTargetTypeAgent {
+		t.Fatalf("truenas resource type = %q, want %q", got, agentcapabilities.ActionTargetTypeAgent)
 	}
 }
 
@@ -1348,7 +1419,7 @@ func TestContract_AISettingsUpdateProviderResolutionJSONSnapshot(t *testing.T) {
 				"id":"configuration",
 				"status":"warning",
 				"cause":"model_tool_support_unverified",
-				"label":"Patrol configuration",
+				"label":"Patrol control",
 				"message":"Ollama connectivity alone does not prove tool support. Use an Ollama model that returns tool_calls for Patrol verification."
 			}]
 		}
@@ -1398,6 +1469,49 @@ func TestContract_PatrolStatusDoesNotSurfaceQuickstartActivation(t *testing.T) {
 	}
 	if strings.Contains(strings.ToLower(resp.BlockedReason), "quickstart") {
 		t.Fatalf("blocked_reason must not expose retired quickstart copy, got %q", resp.BlockedReason)
+	}
+}
+
+func TestContract_PatrolStatusMissingAssistantServiceUsesNativeSurfaceIdentity(t *testing.T) {
+	handler := &AISettingsHandler{}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/status", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleGetPatrolStatus(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var resp PatrolStatusResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode patrol status: %v", err)
+	}
+	if resp.Readiness == nil {
+		t.Fatal("expected readiness payload when Assistant service is missing")
+	}
+	if resp.Readiness.Summary != "Pulse Assistant runtime service is not available." {
+		t.Fatalf("readiness summary = %q", resp.Readiness.Summary)
+	}
+
+	var serviceCheck *PatrolReadinessCheck
+	for i := range resp.Readiness.Checks {
+		if resp.Readiness.Checks[i].ID == "service" {
+			serviceCheck = &resp.Readiness.Checks[i]
+			break
+		}
+	}
+	if serviceCheck == nil {
+		t.Fatalf("service readiness check missing from %+v", resp.Readiness.Checks)
+	}
+	if serviceCheck.Label != "Assistant runtime service" {
+		t.Fatalf("service readiness label = %q", serviceCheck.Label)
+	}
+	if serviceCheck.Message != "Pulse Assistant runtime service is not available." {
+		t.Fatalf("service readiness message = %q", serviceCheck.Message)
+	}
+	if strings.Contains(rec.Body.String(), "Pulse AI") {
+		t.Fatalf("patrol status payload must not expose legacy Pulse AI runtime identity: %s", rec.Body.String())
 	}
 }
 
@@ -6624,8 +6738,8 @@ func TestContract_SelfHostedCommunityEntitlementsJSONSnapshot(t *testing.T) {
 			{"key":"push_notifications","reason":"Get Relay so important alerts reach you immediately on mobile instead of waiting for you to reopen Pulse.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=push_notifications"},
 			{"key":"relay","reason":"Get Relay so Pulse stays reachable securely from anywhere instead of only on the local dashboard.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=relay"},
 			{"key":"long_term_metrics","reason":"Get Relay for 14 days of history, or Pro for 90 days, so you can see what changed before and after an incident.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=long_term_metrics"},
-			{"key":"ai_autofix","reason":"Upgrade to Pro so Pulse can move from finding issues to governed remediation with your approval or autonomy policy.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=ai_autofix"},
-			{"key":"ai_alerts","reason":"Upgrade to Pro so alerts arrive with root-cause analysis instead of a stack of symptoms.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=ai_alerts"},
+			{"key":"ai_autofix","reason":"Upgrade to Pro so Patrol can investigate issues, handle safe fixes within Patrol mode, and verify the outcome.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=ai_autofix"},
+			{"key":"ai_alerts","reason":"Upgrade to Pro so Patrol can investigate issues instead of handing you a stack of symptoms.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=ai_alerts"},
 			{"key":"rbac","reason":"Upgrade to Pro when more than one operator needs safe access boundaries around infrastructure changes.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=rbac"},
 			{"key":"agent_profiles","reason":"Upgrade to Pro to standardize agent behavior across systems without reconfiguring every install by hand.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=agent_profiles"},
 			{"key":"audit_logging","reason":"Upgrade to Pro to keep a trustworthy action trail for incident review, accountability, and compliance.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=audit_logging"},
@@ -13343,7 +13457,7 @@ func TestContract_APIActionExecutionRevalidatesPlanFreshness(t *testing.T) {
 		"errors.Is(err, unified.ErrActionPlanDrift)",
 		"recordRefusedActionExecution(store, record, actor, now, err)",
 		"unified.RefuseActionExecution(record, reason, actor, now)",
-		"writeJSONError(w, http.StatusConflict, \"action_plan_drift\"",
+		"writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionPlanDrift",
 	} {
 		if !strings.Contains(src, snippet) {
 			t.Fatalf("actions.go must pin API execute plan freshness guard snippet %q", snippet)
@@ -13355,21 +13469,28 @@ func TestContract_APIActionExecutionRevalidatesPlanFreshness(t *testing.T) {
 	}
 }
 
-func TestContract_ExecuteActionCapabilityDeclaresPlanExpired(t *testing.T) {
-	source, err := os.ReadFile("agent_capabilities.go")
+func readAgentCapabilitiesManifestSource(t *testing.T) string {
+	t.Helper()
+	source, err := os.ReadFile(filepath.Join("..", "agentcapabilities", "manifest.go"))
 	if err != nil {
-		t.Fatalf("read agent_capabilities.go: %v", err)
+		t.Fatalf("read shared agent capabilities manifest: %v", err)
 	}
-	src := string(source)
-	start := strings.Index(src, `Name:             "execute_action"`)
-	if start < 0 {
-		t.Fatal("agent capabilities manifest must declare execute_action")
+	return string(source)
+}
+
+func TestContract_ExecuteActionCapabilityDeclaresPlanExpired(t *testing.T) {
+	manifest := agentcapabilities.CanonicalManifest()
+	var executeAction agentcapabilities.Capability
+	for _, cap := range manifest.Capabilities {
+		if cap.Name == agentcapabilities.ExecuteActionCapabilityName {
+			executeAction = cap
+			break
+		}
 	}
-	block := src[start:]
-	if end := strings.Index(block, "\n\t\t},"); end >= 0 {
-		block = block[:end]
+	if executeAction.Name == "" {
+		t.Fatalf("agent capabilities manifest must declare %s", agentcapabilities.ExecuteActionCapabilityName)
 	}
-	if !strings.Contains(block, `"action_plan_expired"`) {
+	if !stringSliceContains(executeAction.ErrorCodes, agentcapabilities.AgentErrCodeActionPlanExpired) {
 		t.Error("execute_action manifest must declare action_plan_expired so agents can branch on permanent expired-plan refusals")
 	}
 }
@@ -14463,13 +14584,12 @@ func TestContract_ApprovalStorePostCreateCallback(t *testing.T) {
 // breaks every agent that branches on the SSE event-type field; the
 // constant is part of the contract, not an implementation detail.
 func TestContract_AgentEventApprovalPendingKindIsStable(t *testing.T) {
-	source, err := os.ReadFile("agent_events.go")
-	if err != nil {
-		t.Fatalf("read agent_events.go: %v", err)
+	if AgentEventApprovalPending != AgentEventKind(agentcapabilities.EventKindApprovalPending) {
+		t.Errorf("AgentEventApprovalPending = %q, want shared event kind %q",
+			AgentEventApprovalPending, agentcapabilities.EventKindApprovalPending)
 	}
-	src := string(source)
-	if !strings.Contains(src, `AgentEventApprovalPending AgentEventKind = "approval.pending"`) {
-		t.Error("AgentEventApprovalPending must remain bound to the wire-stable string \"approval.pending\" — renaming it breaks every agent that branches on the SSE event type")
+	if string(AgentEventApprovalPending) != "approval.pending" {
+		t.Errorf("AgentEventApprovalPending wire value = %q, want approval.pending", AgentEventApprovalPending)
 	}
 }
 
@@ -14480,12 +14600,11 @@ func TestContract_AgentEventApprovalPendingKindIsStable(t *testing.T) {
 // Drift here means external agents miss the event entirely because
 // they didn't know to listen for it.
 func TestContract_SubscribeEventsCapabilityListsApprovalPending(t *testing.T) {
-	source, err := os.ReadFile("agent_capabilities.go")
-	if err != nil {
-		t.Fatalf("read agent_capabilities.go: %v", err)
+	capability, ok := agentcapabilities.FindCapability(agentcapabilities.CanonicalManifest().Capabilities, agentcapabilities.EventSubscriptionCapabilityName)
+	if !ok {
+		t.Fatal("canonical manifest must include subscribe_events")
 	}
-	src := string(source)
-	if !strings.Contains(src, "approval.pending when a remediation request enters StatusPending") {
+	if !strings.Contains(capability.Description, string(agentcapabilities.EventKindApprovalPending)+" when a remediation request enters StatusPending") {
 		t.Error("subscribe_events description must mention approval.pending so agents discover the kind through the manifest")
 	}
 }
@@ -14550,6 +14669,117 @@ func TestContract_AgentEventsStreamPublishesOnActionCompleted(t *testing.T) {
 	}
 }
 
+// TestContract_ExternalAgentActivityUsesRouteSpecificMarkers pins the
+// anonymous usage signal behind Pulse Intelligence external-agent telemetry:
+// configured/readiness may come from token capability posture, but recent-use
+// must come from authenticated calls into a manifest-backed agent/MCP
+// capability route. Generic API-token LastUsedAt is too broad because the same
+// token can hit unrelated routes; requiring every manifest scope is too narrow
+// because read-only MCP clients are supported.
+func TestContract_ExternalAgentActivityUsesRouteSpecificMarkers(t *testing.T) {
+	activitySource, err := os.ReadFile("agent_activity_telemetry.go")
+	if err != nil {
+		t.Fatalf("read agent_activity_telemetry.go: %v", err)
+	}
+	activitySrc := string(activitySource)
+	for _, required := range []string{
+		"getAPITokenRecordFromRequest(req)",
+		"externalAgentCapabilityActivity(capabilityName)",
+		"agentcapabilities.FindCapability(agentcapabilities.CanonicalManifest().Capabilities, capabilityName)",
+		"apiTokenCoversExternalAgentSurface(token, time.Now().UTC(), requiredScopes...)",
+		"agentcapabilities.CanonicalManifest().RequiredScopes",
+		"func externalAgentActivityForCapability(capabilityName string) (string, bool)",
+		"persistence.RecordExternalAgentActivity(config.ExternalAgentActivityRecord{",
+	} {
+		if !strings.Contains(activitySrc, required) {
+			t.Errorf("external-agent activity marker must stay token-scoped and manifest-capable; missing %s", required)
+		}
+	}
+	readCapability, ok := agentcapabilities.FindCapability(agentcapabilities.CanonicalManifest().Capabilities, agentcapabilities.FleetContextCapabilityName)
+	if !ok {
+		t.Fatalf("manifest missing %s", agentcapabilities.FleetContextCapabilityName)
+	}
+	if _, requiredScope, ok := externalAgentCapabilityActivity(agentcapabilities.FleetContextCapabilityName); !ok || requiredScope != readCapability.Scope {
+		t.Fatalf("external-agent activity must use the called capability scope, got scope=%q ok=%v want %q", requiredScope, ok, readCapability.Scope)
+	}
+	for _, capability := range agentcapabilities.ManifestSurfaceToolCapabilities(agentcapabilities.CanonicalManifest(), agentcapabilities.SurfaceIDPulseMCP) {
+		if _, ok := externalAgentActivityForCapability(capability.Name); !ok {
+			t.Errorf("MCP-published capability %q must have an external-agent activity class", capability.Name)
+		}
+	}
+
+	routeFiles := []string{
+		"router_routes_monitoring.go",
+		"router_routes_registration.go",
+		"router_routes_ai_relay.go",
+		"router.go",
+	}
+	var routesBuilder strings.Builder
+	for _, file := range routeFiles {
+		routesSource, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("read %s: %v", file, err)
+		}
+		routesBuilder.Write(routesSource)
+	}
+	routesSrc := routesBuilder.String()
+	for _, required := range []string{
+		"agentcapabilities.ResourceContextCapabilityName",
+		"agentcapabilities.FleetContextCapabilityName",
+		"agentcapabilities.OperationsLoopStatusCapabilityName",
+		"agentcapabilities.EventSubscriptionCapabilityName",
+		"agentcapabilities.ListNodesCapabilityName",
+		"agentcapabilities.AddNodeCapabilityName",
+		"agentcapabilities.UpdateNodeCapabilityName",
+		"agentcapabilities.RemoveNodeCapabilityName",
+		"agentcapabilities.TestNodeCredentialsCapabilityName",
+		"agentcapabilities.TestNodeConnectionCapabilityName",
+		"agentcapabilities.RefreshNodeClusterMembershipCapabilityName",
+		"agentcapabilities.DiscoverLANCapabilityName",
+		"agentcapabilities.GetOperatorStateCapabilityName",
+		"agentcapabilities.SetOperatorStateCapabilityName",
+		"agentcapabilities.ClearOperatorStateCapabilityName",
+		"agentcapabilities.ListFindingsCapabilityName",
+		"agentcapabilities.AcknowledgeFindingCapabilityName",
+		"agentcapabilities.SnoozeFindingCapabilityName",
+		"agentcapabilities.DismissFindingCapabilityName",
+		"agentcapabilities.ResolveFindingCapabilityName",
+		"agentcapabilities.PlanActionCapabilityName",
+		"agentcapabilities.DecideActionCapabilityName",
+		"agentcapabilities.ExecuteActionCapabilityName",
+	} {
+		if !strings.Contains(routesSrc, required) {
+			t.Errorf("manifest-backed external-agent routes must record capability-specific activity; missing %s", required)
+		}
+	}
+
+	telemetrySource, err := os.ReadFile(filepath.Join("..", "..", "pkg", "server", "telemetry_pulse_intelligence.go"))
+	if err != nil {
+		t.Fatalf("read telemetry_pulse_intelligence.go: %v", err)
+	}
+	telemetrySrc := string(telemetrySource)
+	if !strings.Contains(telemetrySrc, "persistence.LoadExternalAgentActivityHistory()") {
+		t.Error("Pulse Intelligence external-agent recent-use telemetry must read route activity history")
+	}
+	for _, required := range []string{
+		"pulseIntelligenceExternalAgentSurfaceScopes(agentcapabilities.CanonicalManifest())",
+		"agentcapabilities.ManifestSurfaceToolCapabilities(manifest, agentcapabilities.SurfaceIDPulseMCP)",
+		"agentcapabilities.RequiredCapabilityScopes(",
+		"func pulseIntelligenceExternalAgentToken(token config.APITokenRecord, surfaceScopes []string, now time.Time) bool",
+		"if token.HasScope(scope) {\n\t\t\treturn true",
+	} {
+		if !strings.Contains(telemetrySrc, required) {
+			t.Errorf("Pulse Intelligence external-agent readiness telemetry must use MCP-published capability scopes; missing %s", required)
+		}
+	}
+	if strings.Contains(telemetrySrc, "LastUsedAt != nil && !token.LastUsedAt.UTC().Before(since)") {
+		t.Error("Pulse Intelligence external-agent recent-use telemetry must not infer usage from generic token LastUsedAt")
+	}
+	if strings.Contains(telemetrySrc, "requiredScopes := agentcapabilities.CanonicalManifest().RequiredScopes") {
+		t.Error("Pulse Intelligence external-agent readiness telemetry must not require every manifest scope")
+	}
+}
+
 // TestContract_ExecutorPostCompletionCallback pins the seam the SSE
 // bridge depends on. The executor must expose SetOnActionCompleted
 // and the action_audit hot path must dispatch the callback for every
@@ -14598,13 +14828,12 @@ func TestContract_ExecutorPostCompletionCallback(t *testing.T) {
 // breaks every agent that branches on the SSE event-type field; the
 // constant is part of the contract, not an implementation detail.
 func TestContract_AgentEventActionCompletedKindIsStable(t *testing.T) {
-	source, err := os.ReadFile("agent_events.go")
-	if err != nil {
-		t.Fatalf("read agent_events.go: %v", err)
+	if AgentEventActionCompleted != AgentEventKind(agentcapabilities.EventKindActionCompleted) {
+		t.Errorf("AgentEventActionCompleted = %q, want shared event kind %q",
+			AgentEventActionCompleted, agentcapabilities.EventKindActionCompleted)
 	}
-	src := string(source)
-	if !strings.Contains(src, `AgentEventActionCompleted AgentEventKind = "action.completed"`) {
-		t.Error("AgentEventActionCompleted must remain bound to the wire-stable string \"action.completed\" — renaming it breaks every agent that branches on the SSE event type")
+	if string(AgentEventActionCompleted) != "action.completed" {
+		t.Errorf("AgentEventActionCompleted wire value = %q, want action.completed", AgentEventActionCompleted)
 	}
 }
 
@@ -14615,12 +14844,11 @@ func TestContract_AgentEventActionCompletedKindIsStable(t *testing.T) {
 // Drift here means external agents miss the event entirely because
 // they didn't know to listen for it.
 func TestContract_SubscribeEventsCapabilityListsActionCompleted(t *testing.T) {
-	source, err := os.ReadFile("agent_capabilities.go")
-	if err != nil {
-		t.Fatalf("read agent_capabilities.go: %v", err)
+	capability, ok := agentcapabilities.FindCapability(agentcapabilities.CanonicalManifest().Capabilities, agentcapabilities.EventSubscriptionCapabilityName)
+	if !ok {
+		t.Fatal("canonical manifest must include subscribe_events")
 	}
-	src := string(source)
-	if !strings.Contains(src, "action.completed when an action audit reaches a terminal state") {
+	if !strings.Contains(capability.Description, string(agentcapabilities.EventKindActionCompleted)+" when an action audit reaches a terminal state") {
 		t.Error("subscribe_events description must mention action.completed so agents discover the kind through the manifest")
 	}
 }
@@ -14632,27 +14860,2989 @@ func TestContract_SubscribeEventsCapabilityListsActionCompleted(t *testing.T) {
 // bumps it shows up as a test failure rather than silently breaking
 // every external agent that validates compatibility on startup.
 func TestContract_AgentCapabilitiesManifestVersionIsPinned(t *testing.T) {
-	source, err := os.ReadFile("agent_capabilities.go")
-	if err != nil {
-		t.Fatalf("read agent_capabilities.go: %v", err)
-	}
-	src := string(source)
+	src := readAgentCapabilitiesManifestSource(t)
 	if !strings.Contains(src, `Version: "v1"`) {
 		t.Error("agent capabilities manifest must pin Version to v1; bumping is a breaking-change decision and should not happen silently")
+	}
+	for _, required := range []string{
+		`SurfaceContract: SurfaceContract{`,
+		`ID:          "pulse_intelligence_core"`,
+		`Label:       "Pulse Intelligence Core"`,
+		`ID:          "pulse_patrol"`,
+		`ID:              SurfaceIDPulseAssistant`,
+		`ID:              SurfaceIDPulseMCP`,
+		`InteractiveQuestions: true`,
+		`CapabilityMetadata: true`,
+		`SurfaceToolContracts: []SurfaceToolContract{`,
+		`ToolNames:  canonicalPulseMCPSurfaceToolNames(),`,
+		`publishedSurfaceToolContracts := CloneSurfaceToolContracts(canonicalManifest.SurfaceToolContracts)`,
+		`SurfaceToolContracts: CloneSurfaceToolContracts(surfaceToolContracts)`,
+		`WorkflowPrompts:`,
+		`ClonePulseWorkflowPrompts(ProjectPulseWorkflowPrompts(capabilities))`,
+	} {
+		if !strings.Contains(src, required) {
+			t.Errorf("agent capabilities manifest must pin the Pulse Intelligence surface contract; missing %s", required)
+		}
+	}
+	if strings.Contains(src, `ID:              "pulse_patrol"`) {
+		t.Error("Pulse Patrol must stay the primary built-in operator component, not be flattened into the compatibility access-path list")
 	}
 	// Capability surface anchors — these names are agent-stable
 	// identifiers and renaming any of them breaks every external
 	// integration. Pin them here so renames must be deliberate.
 	required := []string{
-		"\"get_resource_context\"",
-		"\"get_operator_state\"",
-		"\"set_operator_state\"",
-		"\"clear_operator_state\"",
-		"\"list_findings\"",
+		agentcapabilities.ResourceContextCapabilityName,
+		agentcapabilities.GetOperatorStateCapabilityName,
+		agentcapabilities.SetOperatorStateCapabilityName,
+		agentcapabilities.ClearOperatorStateCapabilityName,
+		agentcapabilities.ListFindingsCapabilityName,
 	}
+	manifest := agentcapabilities.CanonicalManifest()
 	for _, name := range required {
-		if !strings.Contains(src, name) {
-			t.Errorf("agent capabilities manifest must declare canonical capability %s", name)
+		if _, ok := agentcapabilities.FindCapability(manifest.Capabilities, name); !ok {
+			t.Errorf("agent capabilities manifest must declare canonical capability %q", name)
+		}
+	}
+}
+
+func TestContract_PulseIntelligenceSurfaceToolProjectionKeepsAssistantAndMCPDistinct(t *testing.T) {
+	surfaceSource, err := os.ReadFile(filepath.Join("..", "agentcapabilities", "surface_contract.go"))
+	if err != nil {
+		t.Fatalf("read internal/agentcapabilities/surface_contract.go: %v", err)
+	}
+	surfaceContract := string(surfaceSource)
+	for _, required := range []string{
+		`type SurfaceToolContract struct`,
+		`SurfaceToolSourceAssistantRegistry  = "assistant_registry"`,
+		`SurfaceToolSourceCapabilityManifest = "capability_manifest"`,
+		`func ProjectPulseAssistantSurfaceToolContract(`,
+		`func ProjectManifestSurfaceToolContract(`,
+		`func ProjectManifestSurfaceToolContracts(`,
+		`func ResolveManifestSurfaceToolContract(`,
+		`func ProjectPulseIntelligenceSurfaceToolContracts(`,
+		`type ResolvedSurfaceAffordanceContract struct`,
+		`func ResolveSurfaceAffordanceContract(`,
+		`ResolveSurfaceAffordanceContract(contract, SurfaceIDPulseAssistant, "")`,
+		`ResolveSurfaceAffordanceContract(manifest.SurfaceContract, surface.ID, surface.Label)`,
+		`func ManifestSurfaceAffordances(`,
+		`func IntersectSurfaceAffordances(`,
+		`IntersectSurfaceAffordances(resolvedSurface.Affordances, contract.Affordances)`,
+		`ProviderToolNames(providerTools)`,
+		`AssistantNativeProviderToolNames()`,
+		`if !surface.Affordances.Tools`,
+		`if !surface.Affordances.InteractiveQuestions`,
+		`ToolNames:         offeredNames`,
+		`!surface.ExternalAdapter`,
+		`FindManifestSurfaceToolContract(manifest, surface.ID)`,
+		`requestResponseCapabilityNamesForNames(manifest.Capabilities, contract.ToolNames)`,
+		`ProjectManifestSurfaceToolContract(manifest, surface.ID)`,
+	} {
+		if !strings.Contains(surfaceContract, required) {
+			t.Errorf("agentcapabilities must own shared Assistant/MCP surface tool projection; missing %s", required)
+		}
+	}
+	for _, forbidden := range []string{
+		`func ProjectPulseMCPSurfaceToolContract(`,
+		`projectManifestSurfaceToolContractFromCapabilities`,
+		`requestResponseCapabilityNames(manifest.Capabilities)`,
+		`ProjectManifestSurfaceToolContract(manifest, SurfaceIDPulseMCP)`,
+		`ProjectTools(manifest.Capabilities)`,
+	} {
+		if strings.Contains(surfaceContract, forbidden) {
+			t.Errorf("agentcapabilities surface resolver must not keep MCP-specific or raw-capability fallback projection; found %s", forbidden)
+		}
+	}
+
+	projectionSource, err := os.ReadFile(filepath.Join("..", "agentcapabilities", "projection.go"))
+	if err != nil {
+		t.Fatalf("read internal/agentcapabilities/projection.go: %v", err)
+	}
+	projectionContract := string(projectionSource)
+	for _, required := range []string{
+		`ResolveManifestSurfaceToolContract(manifest, surfaceID)`,
+		`ManifestSurfaceAffordances(manifest, contract.SurfaceID)`,
+		`if !affordances.Tools`,
+	} {
+		if !strings.Contains(projectionContract, required) {
+			t.Errorf("agentcapabilities projection must resolve external-surface tools through the normalized surface contract; missing %s", required)
+		}
+	}
+
+	assistantProjectionSource, err := os.ReadFile(filepath.Join("..", "ai", "tools", "provider_projection.go"))
+	if err != nil {
+		t.Fatalf("read internal/ai/tools/provider_projection.go: %v", err)
+	}
+	assistantProjection := string(assistantProjectionSource)
+	for _, required := range []string{
+		`func (e *PulseToolExecutor) AssistantSurfaceToolContract(opts agentcapabilities.AssistantProviderToolOptions) agentcapabilities.SurfaceToolContract`,
+		`agentcapabilities.ProjectPulseAssistantSurfaceToolContract(`,
+		`agentcapabilities.CanonicalManifest().SurfaceContract`,
+		`e.AssistantProviderTools(opts)`,
+	} {
+		if !strings.Contains(assistantProjection, required) {
+			t.Errorf("Assistant executor must expose native surface projection through shared core contract; missing %s", required)
+		}
+	}
+
+	chatServiceSource, err := os.ReadFile(filepath.Join("..", "ai", "chat", "service.go"))
+	if err != nil {
+		t.Fatalf("read internal/ai/chat/service.go: %v", err)
+	}
+	chatService := string(chatServiceSource)
+	for _, required := range []string{
+		`func (s *Service) AssistantSurfaceToolContract(_ context.Context) agentcapabilities.SurfaceToolContract`,
+		`executor.AssistantSurfaceToolContract(agentcapabilities.AssistantProviderToolOptions{`,
+		`IncludeQuestionTool: !s.isAutonomousModeEnabled(),`,
+	} {
+		if !strings.Contains(chatService, required) {
+			t.Errorf("chat service must expose live native Assistant surface tools through the shared core contract; missing %s", required)
+		}
+	}
+
+	aiHandlerSource, err := os.ReadFile("ai_handler.go")
+	if err != nil {
+		t.Fatalf("read internal/api/ai_handler.go: %v", err)
+	}
+	aiHandler := string(aiHandlerSource)
+	for _, required := range []string{
+		`AssistantSurfaceToolContract(ctx context.Context) agentcapabilities.SurfaceToolContract`,
+		`func (h *AIHandler) HandleAssistantSurfaceTools(w http.ResponseWriter, r *http.Request)`,
+		`svc.AssistantSurfaceToolContract(ctx)`,
+		`Pulse Assistant is not running`,
+	} {
+		if !strings.Contains(aiHandler, required) {
+			t.Errorf("AI handler must expose authenticated native Assistant surface tool contract from runtime service; missing %s", required)
+		}
+	}
+
+	aiRelaySource, err := os.ReadFile("router_routes_ai_relay.go")
+	if err != nil {
+		t.Fatalf("read internal/api/router_routes_ai_relay.go: %v", err)
+	}
+	aiRelay := string(aiRelaySource)
+	for _, required := range []string{
+		`"/api/ai/assistant/surface-tools"`,
+		`RequireScope(config.ScopeAIChat, r.aiHandler.HandleAssistantSurfaceTools)`,
+	} {
+		if !strings.Contains(aiRelay, required) {
+			t.Errorf("Assistant surface tools endpoint must stay authenticated behind ai:chat route scope; missing %s", required)
+		}
+	}
+
+	manifest := agentcapabilities.CanonicalManifest()
+	contracts := agentcapabilities.ProjectPulseIntelligenceSurfaceToolContracts(manifest, []agentcapabilities.ProviderTool{
+		{Name: agentcapabilities.PulseQueryToolName},
+		{Name: agentcapabilities.PulseReadToolName},
+		agentcapabilities.NewPulseQuestionProviderTool(),
+	})
+	if len(contracts) != 2 {
+		t.Fatalf("Pulse Intelligence surface tool contracts = %+v, want Assistant and MCP", contracts)
+	}
+
+	bySurface := map[string]agentcapabilities.SurfaceToolContract{}
+	for _, contract := range contracts {
+		bySurface[contract.SurfaceID] = contract
+	}
+	assistant := bySurface[agentcapabilities.SurfaceIDPulseAssistant]
+	if assistant.ToolSource != agentcapabilities.SurfaceToolSourceAssistantRegistry {
+		t.Fatalf("Assistant tool source = %q", assistant.ToolSource)
+	}
+	if !reflect.DeepEqual(assistant.ToolNames, []string{
+		agentcapabilities.PulseQueryToolName,
+		agentcapabilities.PulseReadToolName,
+		agentcapabilities.PulseQuestionToolName,
+	}) {
+		t.Fatalf("Assistant surface tool names = %#v", assistant.ToolNames)
+	}
+	if !reflect.DeepEqual(assistant.NativeToolNames, []string{agentcapabilities.PulseQuestionToolName}) {
+		t.Fatalf("Assistant native tool names = %#v", assistant.NativeToolNames)
+	}
+	if len(assistant.CapabilityNames) != 0 {
+		t.Fatalf("Assistant surface must not duplicate MCP manifest capabilities: %#v", assistant.CapabilityNames)
+	}
+
+	mcp := bySurface[agentcapabilities.SurfaceIDPulseMCP]
+	if mcp.ToolSource != agentcapabilities.SurfaceToolSourceCapabilityManifest {
+		t.Fatalf("MCP tool source = %q", mcp.ToolSource)
+	}
+	if len(mcp.CapabilityNames) == 0 || len(mcp.ToolNames) != len(mcp.CapabilityNames) {
+		t.Fatalf("MCP tools must be manifest request/response capabilities, got tools=%#v capabilities=%#v", mcp.ToolNames, mcp.CapabilityNames)
+	}
+	if !reflect.DeepEqual(mcp.ToolNames, manifest.SurfaceToolContracts[0].ToolNames) {
+		t.Fatalf("MCP tools must come from manifest-published surface contract, got tools=%#v published=%#v", mcp.ToolNames, manifest.SurfaceToolContracts[0].ToolNames)
+	}
+	for _, forbidden := range []string{
+		agentcapabilities.PulseQuestionToolName,
+		agentcapabilities.EventSubscriptionCapabilityName,
+	} {
+		if stringSliceContains(mcp.ToolNames, forbidden) {
+			t.Fatalf("MCP tools must not include %s; names=%#v", forbidden, mcp.ToolNames)
+		}
+	}
+	if len(mcp.RegistryToolNames) != 0 || len(mcp.NativeToolNames) != 0 {
+		t.Fatalf("MCP surface must not expose Assistant registry/native tool buckets: %+v", mcp)
+	}
+
+	disabledManifest := manifest
+	disabledManifest.SurfaceContract = agentcapabilities.CloneSurfaceContract(manifest.SurfaceContract)
+	for i := range disabledManifest.SurfaceContract.OperatorSurfaces {
+		if disabledManifest.SurfaceContract.OperatorSurfaces[i].ID == agentcapabilities.SurfaceIDPulseMCP {
+			disabledManifest.SurfaceContract.OperatorSurfaces[i].Affordances = agentcapabilities.SurfaceAffordanceContract{
+				Resources:          true,
+				Prompts:            true,
+				CapabilityMetadata: true,
+			}
+		}
+	}
+	disabledContracts := agentcapabilities.ProjectPulseIntelligenceSurfaceToolContracts(disabledManifest, []agentcapabilities.ProviderTool{
+		{Name: agentcapabilities.PulseQueryToolName},
+		agentcapabilities.NewPulseQuestionProviderTool(),
+	})
+	disabledBySurface := map[string]agentcapabilities.SurfaceToolContract{}
+	for _, contract := range disabledContracts {
+		disabledBySurface[contract.SurfaceID] = contract
+	}
+	disabledMCP := disabledBySurface[agentcapabilities.SurfaceIDPulseMCP]
+	if disabledMCP.Affordances.Tools || len(disabledMCP.ToolNames) != 0 || len(disabledMCP.CapabilityNames) != 0 {
+		t.Fatalf("MCP disabled tools affordance must clear static surface tools, got %+v", disabledMCP)
+	}
+}
+
+func TestContract_AgentCapabilitiesManifestScopesUseAuthConstants(t *testing.T) {
+	src := readAgentCapabilitiesManifestSource(t)
+	for _, required := range []string{
+		`agentCapabilityScopeMonitoringRead  = auth.ScopeMonitoringRead`,
+		`agentCapabilityScopeMonitoringWrite = auth.ScopeMonitoringWrite`,
+		`agentCapabilityScopeSettingsRead    = auth.ScopeSettingsRead`,
+		`agentCapabilityScopeSettingsWrite   = auth.ScopeSettingsWrite`,
+		`agentCapabilityScopeAIExecute       = auth.ScopeAIExecute`,
+	} {
+		if !strings.Contains(src, required) {
+			t.Errorf("agent capabilities manifest must pin scope vocabulary to pkg/auth; missing %s", required)
+		}
+	}
+	if strings.Contains(src, `Scope:          "`) || strings.Contains(src, `Scope:            "`) {
+		t.Error("agent capabilities manifest must not declare scope values as local string literals")
+	}
+
+	known := map[string]bool{}
+	for _, scope := range authpkg.AllKnownScopes {
+		known[scope] = true
+	}
+	for _, cap := range agentcapabilities.CanonicalManifest().Capabilities {
+		if !known[cap.Scope] {
+			t.Errorf("capability %q scope = %q, want auth-owned scope vocabulary", cap.Name, cap.Scope)
+		}
+	}
+}
+
+func TestContract_AgentCapabilitiesFrontendTypesAreGeneratedFromManifest(t *testing.T) {
+	generatorSource, err := os.ReadFile(filepath.Join("..", "..", "scripts", "generate-types.go"))
+	if err != nil {
+		t.Fatalf("read scripts/generate-types.go: %v", err)
+	}
+	generator := string(generatorSource)
+	for _, required := range []string{
+		`"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"`,
+		`filepath.Join("frontend-modern", "src", "api", "generated", "agentCapabilities.ts")`,
+		`reflect.TypeOf(agentcapabilities.Capability{})`,
+		`reflect.TypeOf(agentcapabilities.CapabilityCategory{})`,
+		`reflect.TypeOf(agentcapabilities.Manifest{})`,
+		`reflect.TypeOf(agentcapabilities.MCPAdapterConfigFamily{})`,
+		`reflect.TypeOf(agentcapabilities.MCPAdapterContract{})`,
+		`reflect.TypeOf(agentcapabilities.OperatorSurfaceContract{})`,
+		`reflect.TypeOf(agentcapabilities.PulseWorkflowPrompt{})`,
+		`reflect.TypeOf(agentcapabilities.PulseWorkflowPromptArgument{})`,
+		`reflect.TypeOf(agentcapabilities.SurfaceAffordanceContract{})`,
+		`reflect.TypeOf(agentcapabilities.SurfaceContract{})`,
+		`reflect.TypeOf(agentcapabilities.SurfaceContractComponent{})`,
+		`reflect.TypeOf(agentcapabilities.SurfaceToolContract{})`,
+		`func agentCapabilitiesAliases() string`,
+		`return "AgentCapabilityActionMode"`,
+		`return "AgentCapabilityApprovalPolicy"`,
+		`return "Record<string, unknown>"`,
+	} {
+		if !strings.Contains(generator, required) {
+			t.Errorf("generate-types.go must derive frontend agent capabilities types from internal/agentcapabilities; missing %s", required)
+		}
+	}
+
+	generatedSource, err := os.ReadFile(filepath.Join("..", "..", "frontend-modern", "src", "api", "generated", "agentCapabilities.ts"))
+	if err != nil {
+		t.Fatalf("read generated agent capabilities frontend types: %v", err)
+	}
+	generated := string(generatedSource)
+	for _, required := range []string{
+		`// This file is generated from scripts/generate-types.go; DO NOT EDIT.`,
+		`// Source: internal/agentcapabilities manifest structs.`,
+		`export type AgentCapabilityActionMode = 'read' | 'mixed' | 'write';`,
+		`export type AgentCapabilityApprovalPolicy = 'scope_only' | 'action_plan';`,
+		`export interface Capability {`,
+		`title?: string;`,
+		`actionMode: AgentCapabilityActionMode;`,
+		`approvalPolicy: AgentCapabilityApprovalPolicy;`,
+		`inputSchema?: Record<string, unknown>;`,
+		`outputSchema?: Record<string, unknown>;`,
+		`export interface CapabilityCategory {`,
+		`export interface MCPAdapterConfigFamily {`,
+		`clientLabels?: string[];`,
+		`export interface MCPAdapterContract {`,
+		`serverName: string;`,
+		`command: string;`,
+		`baseUrlFlag: string;`,
+		`defaultBaseUrl: string;`,
+		`tokenEnv: string;`,
+		`configFamilies: MCPAdapterConfigFamily[];`,
+		`export interface Manifest {`,
+		`surfaceContract: SurfaceContract;`,
+		`surfaceToolContracts: SurfaceToolContract[];`,
+		`mcpAdapter: MCPAdapterContract;`,
+		`requiredScopes: string[];`,
+		`categories: CapabilityCategory[];`,
+		`workflowPrompts: PulseWorkflowPrompt[];`,
+		`capabilities: Capability[];`,
+		`export interface PulseWorkflowPrompt {`,
+		`label?: string;`,
+		`presentationKind?: string;`,
+		`arguments?: PulseWorkflowPromptArgument[];`,
+		`export interface PulseWorkflowPromptArgument {`,
+		`export interface SurfaceContract {`,
+		`core: SurfaceContractComponent;`,
+		`proactiveEngine: SurfaceContractComponent;`,
+		`operatorSurfaces: OperatorSurfaceContract[];`,
+		`export interface OperatorSurfaceContract {`,
+		`native: boolean;`,
+		`externalAdapter: boolean;`,
+		`affordances?: SurfaceAffordanceContract;`,
+		`export interface SurfaceAffordanceContract {`,
+		`interactiveQuestions?: boolean;`,
+		`export interface SurfaceToolContract {`,
+		`surfaceId: string;`,
+		`toolSource: string;`,
+		`toolNames: string[];`,
+		`registryToolNames?: string[];`,
+		`capabilityNames?: string[];`,
+		`nativeToolNames?: string[];`,
+	} {
+		if !strings.Contains(generated, required) {
+			t.Errorf("generated agent capabilities frontend types drifted from manifest contract; missing %s", required)
+		}
+	}
+
+	clientSource, err := os.ReadFile(filepath.Join("..", "..", "frontend-modern", "src", "api", "agentCapabilities.ts"))
+	if err != nil {
+		t.Fatalf("read frontend agent capabilities client: %v", err)
+	}
+	client := string(clientSource)
+	for _, required := range []string{
+		`from './generated/agentCapabilities'`,
+		`export type AgentCapability = Capability;`,
+		`export type AgentCapabilityCategory = CapabilityCategory;`,
+		`export type AgentCapabilitiesManifest = Manifest;`,
+		`export type AgentMCPAdapterConfigFamily = MCPAdapterConfigFamily;`,
+		`export type AgentMCPAdapterContract = MCPAdapterContract;`,
+		`export type AgentOperatorSurfaceContract = OperatorSurfaceContract;`,
+		`export type AgentWorkflowPrompt = PulseWorkflowPrompt;`,
+		`export type AgentWorkflowPromptArgument = PulseWorkflowPromptArgument;`,
+		`export type AgentSurfaceAffordanceContract = SurfaceAffordanceContract;`,
+		`export type AgentSurfaceContractComponent = SurfaceContractComponent;`,
+		`export type AgentSurfaceToolContract = SurfaceToolContract;`,
+		`export interface AgentSurfaceToolPosturePresentation {`,
+		`export interface AgentSurfaceContractEntry {`,
+		`normalizeAgentSurfaceToolContract(`,
+		`findAgentSurfaceToolContract(`,
+		`getAgentManifestSurfaceToolContract(`,
+		`getAgentManifestSurfaceToolContracts(`,
+		`getAgentSurfaceToolPosturePresentation(`,
+		`normalizeAgentMCPAdapter(`,
+		`getAgentMCPClientExamples(`,
+		`formatAgentOpenCodeMCPConfig(`,
+		`formatAgentMCPServersConfig(`,
+		`getAgentSurfaceContractEntries(`,
+		`getAgentWorkflowPrompts(`,
+		`normalizeSurfaceAffordances(`,
+		`surfaceAffordanceLabels(`,
+		`manifest?.workflowPrompts`,
+		`manifest.surfaceContract?.core`,
+		`manifest.surfaceContract?.proactiveEngine`,
+		`manifest.surfaceContract?.operatorSurfaces`,
+		`manifest?.surfaceToolContracts`,
+		`manifest?.mcpAdapter`,
+	} {
+		if !strings.Contains(client, required) {
+			t.Errorf("frontend agent capabilities client must consume generated manifest types; missing %s", required)
+		}
+	}
+	for _, forbidden := range []string{
+		`export interface AgentCapability {`,
+		`export interface AgentCapabilityCategory {`,
+		`export interface AgentCapabilitiesManifest {`,
+		`export interface AgentMCPAdapterContract {`,
+		`AGENT_CAPABILITY_NAME_SUBSCRIBE_EVENTS`,
+		`getRequestResponseCapabilityNames(`,
+		`isRequestResponseAgentCapability(`,
+		`getAgentMCPSurfaceToolContract(`,
+		`subscribe_events`,
+	} {
+		if strings.Contains(client, forbidden) {
+			t.Errorf("frontend agent capabilities client must not redeclare manifest types locally; found %s", forbidden)
+		}
+	}
+
+	panelSource, err := os.ReadFile(filepath.Join("..", "..", "frontend-modern", "src", "components", "Settings", "AgentIntegrationsPanel.tsx"))
+	if err != nil {
+		t.Fatalf("read AgentIntegrationsPanel.tsx: %v", err)
+	}
+	panel := string(panelSource)
+	for _, required := range []string{
+		`getAgentSurfaceContractEntries`,
+		`normalizeAgentMCPAdapter`,
+		`formatAgentOpenCodeMCPConfig`,
+		`formatAgentMCPServersConfig`,
+		`AGENT_SURFACE_ID_PULSE_MCP`,
+		`getAgentManifestSurfaceToolContract`,
+		`getAgentSurfaceToolPosturePresentation`,
+		`surfaceContractEntries`,
+		`mcpSurfaceToolPosture`,
+		`data-testid="agent-mcp-tool-posture"`,
+		`External agents expose`,
+	} {
+		if !strings.Contains(panel, required) {
+			t.Errorf("Agent integrations panel must project the manifest surface contract through the shared client; missing %s", required)
+		}
+	}
+	for _, forbidden := range []string{
+		`Pulse Intelligence Core`,
+		`Pulse Assistant`,
+		`Pulse Patrol`,
+		`Pulse MCP`,
+	} {
+		if strings.Contains(panel, forbidden) {
+			t.Errorf("Agent integrations panel must not duplicate manifest surface labels locally; found %s", forbidden)
+		}
+	}
+	for _, forbidden := range []string{
+		`const MCP_CLIENT_EXAMPLES`,
+		`function formatClaudeMcpConfig`,
+		`function formatOpenCodeMcpConfig`,
+		`command: 'pulse-mcp'`,
+		`PULSE_API_TOKEN: '<your-api-token>'`,
+		`getAgentMCPClientExamples`,
+		`getAgentMCPSurfaceToolContract`,
+		`subscribe_events`,
+		`capability.name`,
+	} {
+		if strings.Contains(panel, forbidden) {
+			t.Errorf("Agent integrations panel must consume manifest-backed MCP adapter helpers instead of local setup snippets; found %s", forbidden)
+		}
+	}
+
+	assistantChatSource, err := os.ReadFile(filepath.Join("..", "..", "frontend-modern", "src", "components", "AI", "Chat", "index.tsx"))
+	if err != nil {
+		t.Fatalf("read AI Chat index.tsx: %v", err)
+	}
+	assistantChat := string(assistantChatSource)
+	for _, required := range []string{
+		`getAgentSurfaceToolPosturePresentation`,
+		`type AgentSurfaceToolContract`,
+		`AIChatAPI.getAssistantSurfaceTools()`,
+		`data-testid="assistant-surface-tools-health"`,
+	} {
+		if !strings.Contains(assistantChat, required) {
+			t.Errorf("Assistant chat shell must consume the authenticated runtime surface-tool contract through the shared frontend client; missing %s", required)
+		}
+	}
+	for _, forbidden := range []string{
+		`'pulse_query'`,
+		`"pulse_query"`,
+		`'pulse_read'`,
+		`"pulse_read"`,
+		`'pulse_question'`,
+		`"pulse_question"`,
+	} {
+		if strings.Contains(assistantChat, forbidden) {
+			t.Errorf("Assistant chat shell must not hardcode native Assistant tool names for surface posture; found %s", forbidden)
+		}
+	}
+}
+
+func TestContract_AgentCapabilitiesPatrolFindingScopesMatchAPIAuthorization(t *testing.T) {
+	manifest := agentcapabilities.CanonicalManifest()
+	byName := map[string]agentcapabilities.Capability{}
+	for _, cap := range manifest.Capabilities {
+		byName[cap.Name] = cap
+	}
+
+	relayBacked := map[string]relayMobileRuntimeRouteID{
+		agentcapabilities.ListFindingsCapabilityName:       relayMobileRoutePatrolFindingsList,
+		agentcapabilities.AcknowledgeFindingCapabilityName: relayMobileRoutePatrolAcknowledge,
+		agentcapabilities.SnoozeFindingCapabilityName:      relayMobileRoutePatrolSnooze,
+		agentcapabilities.DismissFindingCapabilityName:     relayMobileRoutePatrolDismiss,
+	}
+	for capabilityName, routeID := range relayBacked {
+		capability, ok := byName[capabilityName]
+		if !ok {
+			t.Fatalf("agent capabilities manifest missing %s", capabilityName)
+		}
+		route := relayMobileRuntimeRouteSpecFor(routeID)
+		if capability.Method != route.method || capability.Path != route.path || capability.Scope != route.requiredScope {
+			t.Fatalf("%s manifest route/scope = %s %s => %s, want API authorization route %s %s => %s",
+				capabilityName, capability.Method, capability.Path, capability.Scope, route.method, route.path, route.requiredScope)
+		}
+	}
+
+	resolve, ok := byName[agentcapabilities.ResolveFindingCapabilityName]
+	if !ok {
+		t.Fatalf("agent capabilities manifest missing %s", agentcapabilities.ResolveFindingCapabilityName)
+	}
+	if resolve.Method != http.MethodPost || resolve.Path != "/api/ai/patrol/resolve" || resolve.Scope != config.ScopeAIExecute {
+		t.Fatalf("resolve_finding manifest route/scope = %s %s => %s, want API authorization route POST /api/ai/patrol/resolve => %s",
+			resolve.Method, resolve.Path, resolve.Scope, config.ScopeAIExecute)
+	}
+	var resolveSchema struct {
+		Properties map[string]json.RawMessage `json:"properties"`
+		Required   []string                   `json:"required"`
+	}
+	if err := json.Unmarshal(resolve.InputSchema, &resolveSchema); err != nil {
+		t.Fatalf("decode resolve_finding input schema: %v", err)
+	}
+	if _, ok := resolveSchema.Properties[agentcapabilities.ResolutionNoteArgumentName]; !ok {
+		t.Fatalf("resolve_finding input schema missing optional %s property", agentcapabilities.ResolutionNoteArgumentName)
+	}
+	for _, required := range resolveSchema.Required {
+		if required == agentcapabilities.ResolutionNoteArgumentName {
+			t.Fatalf("resolve_finding input schema made optional %s required", agentcapabilities.ResolutionNoteArgumentName)
+		}
+	}
+
+	dismiss := byName[agentcapabilities.DismissFindingCapabilityName]
+	var dismissSchema struct {
+		Properties map[string]json.RawMessage `json:"properties"`
+		Required   []string                   `json:"required"`
+	}
+	if err := json.Unmarshal(dismiss.InputSchema, &dismissSchema); err != nil {
+		t.Fatalf("decode dismiss_finding input schema: %v", err)
+	}
+	if _, ok := dismissSchema.Properties[agentcapabilities.NoteArgumentName]; !ok {
+		t.Fatalf("dismiss_finding input schema missing optional %s property", agentcapabilities.NoteArgumentName)
+	}
+	for _, required := range dismissSchema.Required {
+		if required == agentcapabilities.NoteArgumentName {
+			t.Fatalf("dismiss_finding input schema made optional %s required", agentcapabilities.NoteArgumentName)
+		}
+	}
+}
+
+func TestContract_AgentCapabilitiesManifestRoutesReachRouterWithAdvertisedScope(t *testing.T) {
+	rawToken := "agent-route-contract-token.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentReport}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	args := map[string]any{
+		"actionId":                              "act_contract",
+		"capabilityName":                        "restart",
+		"duration_hours":                        1,
+		agentcapabilities.FindingIDArgumentName: "finding-contract",
+		"host":                                  "https://pve-contract.example.com:8006",
+		"intentionallyOffline":                  false,
+		"name":                                  "contract-node",
+		"neverAutoRemediate":                    false,
+		"nodeId":                                "pve-contract",
+		"outcome":                               "approved",
+		"params":                                map[string]any{},
+		"password":                              "not-a-real-secret",
+		agentcapabilities.ReasonArgumentName:    "contract proof",
+		"requestedBy":                           "agent:contract",
+		"requestId":                             "req-contract",
+		"resourceId":                            "vm101",
+		"subnet":                                "auto",
+		"type":                                  "pve",
+		"use_cache":                             true,
+		"user":                                  "root@pam",
+		"verifySSL":                             false,
+		"monitorVMs":                            true,
+		"monitorContainers":                     true,
+		"monitorStorage":                        true,
+		"monitorBackups":                        true,
+		"monitorPhysicalDisks":                  true,
+		"temperatureMonitoringEnabled":          true,
+	}
+
+	for _, capability := range agentcapabilities.CanonicalManifest().Capabilities {
+		capability := capability
+		t.Run(capability.Name, func(t *testing.T) {
+			projected, err := agentcapabilities.ProjectCapabilityCall(capability, args)
+			if err != nil {
+				t.Fatalf("project manifest route %s %s: %v", capability.Method, capability.Path, err)
+			}
+
+			body := bytes.NewReader(nil)
+			if projected.HasBody {
+				body = bytes.NewReader(projected.Body)
+			}
+			req := httptest.NewRequest(capability.Method, projected.Path, body)
+			req.Header.Set(agentcapabilities.AgentAPITokenHeader, rawToken)
+			if projected.HasBody {
+				req.Header.Set("Content-Type", "application/json")
+			}
+
+			rec := httptest.NewRecorder()
+			router.Handler().ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusForbidden {
+				t.Fatalf("%s projected to %s %s, got HTTP %d body=%s, want missing-scope 403 for %s",
+					capability.Name, capability.Method, projected.Path, rec.Code, rec.Body.String(), capability.Scope)
+			}
+			if !strings.Contains(rec.Body.String(), capability.Scope) {
+				t.Fatalf("%s projected to %s %s, missing-scope body %q does not mention advertised scope %q",
+					capability.Name, capability.Method, projected.Path, rec.Body.String(), capability.Scope)
+			}
+		})
+	}
+}
+
+func TestContract_AgentCapabilitiesRequiredScopeSummaryUsesManifestScopes(t *testing.T) {
+	scopesSource, err := os.ReadFile(filepath.Join("..", "agentcapabilities", "scopes.go"))
+	if err != nil {
+		t.Fatalf("read internal/agentcapabilities/scopes.go: %v", err)
+	}
+	src := string(scopesSource)
+	for _, required := range []string{
+		`func NormalizeRequiredScopes(scopes []string) []string`,
+		`func RequiredCapabilityScopes(capabilities []Capability) []string`,
+		`for _, scope := range auth.AllKnownScopes`,
+		`func RequiredScopeList(scopes []string) string`,
+		`func RequiredCapabilityScopeList(capabilities []Capability) string`,
+		`func ManifestRequiredScopeList(manifest *Manifest) string`,
+	} {
+		if !strings.Contains(src, required) {
+			t.Errorf("agent capabilities scope summary must stay in the shared manifest contract; missing %s", required)
+		}
+	}
+
+	got := agentcapabilities.RequiredCapabilityScopes(agentcapabilities.CanonicalManifest().Capabilities)
+	want := []string{
+		authpkg.ScopeMonitoringRead,
+		authpkg.ScopeMonitoringWrite,
+		authpkg.ScopeSettingsRead,
+		authpkg.ScopeSettingsWrite,
+		authpkg.ScopeAIExecute,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("canonical agent capability scopes = %v, want %v", got, want)
+	}
+	manifest := agentcapabilities.CanonicalManifest()
+	if !reflect.DeepEqual(manifest.RequiredScopes, want) {
+		t.Fatalf("canonical agent capability manifest requiredScopes = %v, want %v", manifest.RequiredScopes, want)
+	}
+
+	mcpSource, err := os.ReadFile(filepath.Join("..", "..", "cmd", "pulse-mcp", "main.go"))
+	if err != nil {
+		t.Fatalf("read cmd/pulse-mcp/main.go: %v", err)
+	}
+	mcp := string(mcpSource)
+	if !strings.Contains(mcp, `agentcapabilities.ManifestRequiredScopeList(manifest)`) {
+		t.Error("pulse-mcp token guidance must consume the manifest-owned requiredScopes summary")
+	}
+	if strings.Contains(mcp, `RequiredCapabilityScopeList(capabilities)`) {
+		t.Error("pulse-mcp token guidance must not recompute current manifest scopes from capability rows")
+	}
+	if strings.Contains(mcp, `monitoring:read scope (and monitoring:write`) {
+		t.Error("pulse-mcp startup guidance must not carry a hand-maintained partial scope list")
+	}
+}
+
+func TestContract_PulseMCPReadmeManifestProjectionStaysGenerated(t *testing.T) {
+	readmeBytes, err := os.ReadFile(filepath.Join("..", "..", "cmd", "pulse-mcp", "README.md"))
+	if err != nil {
+		t.Fatalf("read cmd/pulse-mcp/README.md: %v", err)
+	}
+	readme := string(readmeBytes)
+	manifest := agentcapabilities.CanonicalManifest()
+	generatorSource, err := os.ReadFile(filepath.Join("..", "..", "scripts", "generate-pulse-intelligence-docs.go"))
+	if err != nil {
+		t.Fatalf("read scripts/generate-pulse-intelligence-docs.go: %v", err)
+	}
+	generator := string(generatorSource)
+	for _, required := range []string{
+		"regeneratePulseIntelligenceDocs",
+		"regeneratePulseMCPReadme",
+		"regeneratePublicPulseIntelligenceOverview",
+		"agentcapabilities.MCPSurfaceContractMarkdown(manifest.SurfaceContract)",
+		"agentcapabilities.PulseIntelligenceOverviewMarkdown(manifest.SurfaceContract)",
+		"agentcapabilities.MCPClientConfigMarkdown(manifest.MCPAdapter)",
+		"agentcapabilities.MCPToolCapabilityInventoryMarkdown(manifest)",
+		"agentcapabilities.MCPPromptInventoryMarkdown(manifest)",
+		"agentcapabilities.MCPErrorCodeInventoryMarkdown(manifest)",
+		"agentcapabilities.PulseIntelligenceOverviewStartMarker",
+		"agentcapabilities.MCPReadmeSurfaceContractStartMarker",
+		"agentcapabilities.MCPReadmeClientConfigStartMarker",
+	} {
+		if !strings.Contains(generator, required) {
+			t.Errorf("Pulse Intelligence docs generator must own manifest-backed docs projection; missing %q", required)
+		}
+	}
+	markdownSource, err := os.ReadFile(filepath.Join("..", "agentcapabilities", "markdown.go"))
+	if err != nil {
+		t.Fatalf("read internal/agentcapabilities/markdown.go: %v", err)
+	}
+	markdown := string(markdownSource)
+	for _, required := range []string{
+		"func MCPPromptInventoryMarkdown(manifest Manifest) string",
+		"MCPManifestSurfacePromptProjectionSupported(manifest, SurfaceIDPulseMCP)",
+		"ProjectMCPWorkflowPrompts(ManifestPulseWorkflowPrompts(manifest))",
+	} {
+		if !strings.Contains(markdown, required) {
+			t.Errorf("MCP prompt inventory docs must use the shared surface prompt projection; missing %q", required)
+		}
+	}
+	if strings.Contains(markdown, "prompts := ManifestPulseWorkflowPrompts(manifest)") {
+		t.Fatal("MCP prompt inventory docs must not project raw workflow prompts without the MCP surface affordance gate")
+	}
+
+	surfaceBlock, err := markedContractBlock(readme, agentcapabilities.MCPReadmeSurfaceContractStartMarker, agentcapabilities.MCPReadmeSurfaceContractEndMarker)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantSurfaceBlock := agentcapabilities.MCPSurfaceContractMarkdown(manifest.SurfaceContract)
+	if surfaceBlock != wantSurfaceBlock {
+		t.Fatalf("pulse-mcp README surface-contract block drifted from canonical manifest; run `go run ./scripts/generate-pulse-intelligence-docs.go`\n%s\nwant:\n%s", surfaceBlock, wantSurfaceBlock)
+	}
+
+	scopeBlock, err := markedContractBlock(readme, agentcapabilities.MCPReadmeScopeListStartMarker, agentcapabilities.MCPReadmeScopeListEndMarker)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantScopeBlock := agentcapabilities.ManifestRequiredScopeMarkdownList(manifest)
+	if scopeBlock != wantScopeBlock {
+		t.Fatalf("pulse-mcp README scope block drifted from canonical manifest:\n%s\nwant:\n%s", scopeBlock, wantScopeBlock)
+	}
+
+	clientConfigBlock, err := markedContractBlock(readme, agentcapabilities.MCPReadmeClientConfigStartMarker, agentcapabilities.MCPReadmeClientConfigEndMarker)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantClientConfigBlock := agentcapabilities.MCPClientConfigMarkdown(manifest.MCPAdapter)
+	if clientConfigBlock != wantClientConfigBlock {
+		t.Fatalf("pulse-mcp README client config block drifted from canonical manifest; run `go run ./scripts/generate-pulse-intelligence-docs.go`\n%s\nwant:\n%s", clientConfigBlock, wantClientConfigBlock)
+	}
+
+	toolBlock, err := markedContractBlock(readme, agentcapabilities.MCPReadmeToolInventoryStartMarker, agentcapabilities.MCPReadmeToolInventoryEndMarker)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantToolBlock := agentcapabilities.MCPToolCapabilityInventoryMarkdown(manifest)
+	if toolBlock != wantToolBlock {
+		t.Fatalf("pulse-mcp README tool block drifted from canonical manifest; run `go run ./scripts/generate-pulse-intelligence-docs.go`\n%s\nwant:\n%s", toolBlock, wantToolBlock)
+	}
+
+	promptBlock, err := markedContractBlock(readme, agentcapabilities.MCPReadmePromptInventoryStartMarker, agentcapabilities.MCPReadmePromptInventoryEndMarker)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantPromptBlock := agentcapabilities.MCPPromptInventoryMarkdown(manifest)
+	if promptBlock != wantPromptBlock {
+		t.Fatalf("pulse-mcp README prompt block drifted from canonical manifest; run `go run ./scripts/generate-pulse-intelligence-docs.go`\n%s\nwant:\n%s", promptBlock, wantPromptBlock)
+	}
+
+	errorBlock, err := markedContractBlock(readme, agentcapabilities.MCPReadmeErrorInventoryStartMarker, agentcapabilities.MCPReadmeErrorInventoryEndMarker)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantErrorBlock := agentcapabilities.MCPErrorCodeInventoryMarkdown(manifest)
+	if errorBlock != wantErrorBlock {
+		t.Fatalf("pulse-mcp README error-code block drifted from canonical manifest; run `go run ./scripts/generate-pulse-intelligence-docs.go`\n%s\nwant:\n%s", errorBlock, wantErrorBlock)
+	}
+	if strings.Contains(readme, "As of this writing") {
+		t.Fatal("pulse-mcp README must not frame the manifest-derived tool inventory as a hand-maintained snapshot")
+	}
+}
+
+func TestContract_AgentSubstrateDocReflectsCurrentMCPOnboarding(t *testing.T) {
+	source, err := os.ReadFile(filepath.Join("..", "..", "docs", "AGENT_SUBSTRATE.md"))
+	if err != nil {
+		t.Fatalf("read docs/AGENT_SUBSTRATE.md: %v", err)
+	}
+	doc := string(source)
+	for _, required := range []string{
+		"Settings -> API Access -> Agent integrations",
+		"client-ready `pulse-mcp` config snippets",
+		"manifest-owned MCP adapter setup contract",
+		"surface contract and affordance badges",
+		"server name, command",
+		"supported client config families",
+		"OpenCode's native `opencode.json` / `mcp` shape",
+		"common `mcpServers` shape for Claude-style clients",
+		"from the same adapter contract",
+		"shows both",
+		"OpenCode's native `opencode.json` shape",
+		"common `mcpServers`",
+		"`pulse-mcp` also has a published distribution path",
+		"`install-mcp.sh` and `install-mcp.ps1`",
+		"release installers",
+		"frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx",
+	} {
+		if !strings.Contains(doc, required) {
+			t.Errorf("docs/AGENT_SUBSTRATE.md must reflect current MCP onboarding; missing %q", required)
+		}
+	}
+	for _, forbidden := range []string{
+		"no Settings panel listing the declared capabilities",
+		"no \"generate MCP config snippet\" button",
+		"no token template that says \"create token for agent integration\"",
+		"A distribution path for `pulse-mcp`. Today an integrator must",
+		"clone the repo and `go build`",
+		"generates the reusable `pulse-mcp` server block",
+	} {
+		if strings.Contains(doc, forbidden) {
+			t.Errorf("docs/AGENT_SUBSTRATE.md must not preserve stale pre-onboarding gap copy; found %q", forbidden)
+		}
+	}
+}
+
+func TestContract_PulseIntelligenceOverviewPinsPatrolPrimaryCore(t *testing.T) {
+	source, err := os.ReadFile(filepath.Join("..", "..", "docs", "AI.md"))
+	if err != nil {
+		t.Fatalf("read docs/AI.md: %v", err)
+	}
+	doc := string(source)
+	manifest := agentcapabilities.CanonicalManifest()
+	overviewBlock, err := markedContractBlock(doc, agentcapabilities.PulseIntelligenceOverviewStartMarker, agentcapabilities.PulseIntelligenceOverviewEndMarker)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantOverviewBlock := agentcapabilities.PulseIntelligenceOverviewMarkdown(manifest.SurfaceContract)
+	if overviewBlock != wantOverviewBlock {
+		t.Fatalf("docs/AI.md Pulse Intelligence overview block drifted from canonical manifest:\n%s\nwant:\n%s", overviewBlock, wantOverviewBlock)
+	}
+
+	normalized := strings.Join(strings.Fields(doc), " ")
+	for _, required := range []string{
+		"Pulse Intelligence Core",
+		"Canonical context, governed actions, safety gates, approval state, action audit, and verification",
+		"Patrol as the primary built-in operator",
+		"Assistant plus MCP as access paths",
+		"Patrol is the first-party operations surface: it watches, investigates, acts within the chosen Patrol mode, verifies outcomes, and records what happened",
+		"Pulse Assistant",
+		"Pulse MCP",
+		"contextual explanation, approval, and handoff surface for Patrol findings",
+		"Pulse Assistant and `pulse-mcp` are sibling surfaces over Pulse Intelligence, not competing implementations, and neither replaces the other",
+		"Assistant remains the in-app Pro surface",
+		"New operational capabilities should be added to the canonical API manifest first",
+		"MCP-only actions and Assistant-only copies of the same business logic are drift",
+	} {
+		if !strings.Contains(normalized, required) {
+			t.Errorf("docs/AI.md must pin Pulse Intelligence Core Patrol-primary product framing; missing %q", required)
+		}
+	}
+	for _, forbidden := range []string{
+		"three supported operator-facing ways",
+		"three supported surfaces",
+		"two supported operator-facing surfaces",
+		"proactive detection and investigation engine running on the shared Pulse Intelligence Core",
+		"Pulse Assistant should be replaced by",
+		"MCP replaces Pulse Assistant",
+		"Assistant can be removed",
+		"hand-maintained Assistant tool table",
+	} {
+		if strings.Contains(normalized, forbidden) {
+			t.Errorf("docs/AI.md must not drift away from the shared-core/Patrol-primary strategy; found %q", forbidden)
+		}
+	}
+}
+
+func TestContract_AgentParadigmDocReflectsGenericMCPOnboarding(t *testing.T) {
+	source, err := os.ReadFile(filepath.Join("..", "..", "docs", "releases", "AGENT_PARADIGM.md"))
+	if err != nil {
+		t.Fatalf("read docs/releases/AGENT_PARADIGM.md: %v", err)
+	}
+	doc := string(source)
+	for _, required := range []string{
+		"Claude Desktop, Claude Code, OpenCode, other MCP clients",
+		"client-ready MCP config snippets",
+		"OpenCode's native\n  `opencode.json` / `mcp` shape",
+		"Drivable from MCP clients in one command",
+		"Wire it into any MCP-speaking client",
+		"OpenCode-native `mcp` block",
+		"common\n  `mcpServers` block",
+		"manifest `requiredScopes`",
+		"read-only subset",
+	} {
+		if !strings.Contains(doc, required) {
+			t.Errorf("docs/releases/AGENT_PARADIGM.md must reflect generic MCP onboarding; missing %q", required)
+		}
+	}
+	for _, forbidden := range []string{
+		"Claude Desktop / Claude Code",
+		"Drivable from Claude in one command",
+		"Wire it into Claude Desktop or Claude Code",
+		"adapter for Claude Desktop and Claude Code",
+		"clients that accept\n  `mcpServers`",
+		"`monitoring:read` (and",
+	} {
+		if strings.Contains(doc, forbidden) {
+			t.Errorf("docs/releases/AGENT_PARADIGM.md must not preserve stale Claude-only or partial-scope copy; found %q", forbidden)
+		}
+	}
+}
+
+func markedContractBlock(content, startMarker, endMarker string) (string, error) {
+	start := strings.Index(content, startMarker)
+	if start < 0 {
+		return "", fmt.Errorf("missing marker %s", startMarker)
+	}
+	bodyStart := start + len(startMarker)
+	end := strings.Index(content[bodyStart:], endMarker)
+	if end < 0 {
+		return "", fmt.Errorf("missing marker %s", endMarker)
+	}
+	return strings.TrimSpace(content[bodyStart : bodyStart+end]), nil
+}
+
+func TestContract_AssistantProviderSeamsDoNotUseMCPTerminology(t *testing.T) {
+	chatServiceSource, err := os.ReadFile(filepath.Join("..", "ai", "chat", "service.go"))
+	if err != nil {
+		t.Fatalf("read internal/ai/chat/service.go: %v", err)
+	}
+	chatService := string(chatServiceSource)
+	for _, fragment := range []string{
+		`AssistantAlertProvider              = tools.AlertProvider`,
+		`AssistantFindingsProvider           = tools.FindingsProvider`,
+		`AssistantDiscoveryProvider          = tools.DiscoveryProvider`,
+		`AssistantUnifiedResourceProvider    = tools.UnifiedResourceProvider`,
+		`func (s *Service) ExecuteAssistantTool(ctx context.Context, toolName string, args map[string]interface{}) (string, error)`,
+		`Msg("Executing Assistant registry tool directly")`,
+	} {
+		if !strings.Contains(chatService, fragment) {
+			t.Errorf("native Assistant provider seam must be Assistant-owned, missing %s", fragment)
+		}
+	}
+	for _, fragment := range []string{
+		`MCPAlertProvider`,
+		`MCPFindingsProvider`,
+		`MCPDiscoveryProvider`,
+		`MCPUnifiedResourceProvider`,
+		`func (s *Service) ExecuteMCPTool(`,
+		`MCP provider type aliases`,
+		`Msg("Executing MCP tool directly")`,
+	} {
+		if strings.Contains(chatService, fragment) {
+			t.Errorf("native Assistant provider seam must not be named as the MCP adapter surface; found %s", fragment)
+		}
+	}
+
+	apiHandlerSource, err := os.ReadFile("ai_handler.go")
+	if err != nil {
+		t.Fatalf("read internal/api/ai_handler.go: %v", err)
+	}
+	apiHandler := string(apiHandlerSource)
+	for _, fragment := range []string{
+		`SetAlertProvider(provider chat.AssistantAlertProvider)`,
+		`SetFindingsProvider(provider chat.AssistantFindingsProvider)`,
+		`SetDiscoveryProvider(provider chat.AssistantDiscoveryProvider)`,
+		`SetUnifiedResourceProvider(provider chat.AssistantUnifiedResourceProvider)`,
+	} {
+		if !strings.Contains(apiHandler, fragment) {
+			t.Errorf("API chat service interface must expose Assistant provider seams; missing %s", fragment)
+		}
+	}
+	for _, fragment := range []string{
+		`chat.MCPAlertProvider`,
+		`chat.MCPFindingsProvider`,
+		`chat.MCPDiscoveryProvider`,
+		`chat.MCPUnifiedResourceProvider`,
+		`for MCP tools`,
+	} {
+		if strings.Contains(apiHandler, fragment) {
+			t.Errorf("API chat service interface must not describe native Assistant providers as MCP tools; found %s", fragment)
+		}
+	}
+
+	settingsHandlerSource, err := os.ReadFile("ai_handlers.go")
+	if err != nil {
+		t.Fatalf("read internal/api/ai_handlers.go: %v", err)
+	}
+	settingsHandler := string(settingsHandlerSource)
+	for _, fragment := range []string{
+		`Used by Router to update Assistant tool visibility without restarting AI chat.`,
+		`Update Assistant control settings if control level or protected guests changed.`,
+		`This updates tool visibility without restarting AI chat.`,
+	} {
+		if !strings.Contains(settingsHandler, fragment) {
+			t.Errorf("AI settings handler must describe control refresh as native Assistant tool visibility; missing %s", fragment)
+		}
+	}
+	for _, fragment := range []string{
+		`Update MCP control settings`,
+		`MCP control settings`,
+		`MCP tool visibility`,
+	} {
+		if strings.Contains(settingsHandler, fragment) {
+			t.Errorf("AI settings handler must not describe native Assistant control refresh as MCP wiring; found %s", fragment)
+		}
+	}
+
+	routerSource, err := os.ReadFile("router.go")
+	if err != nil {
+		t.Fatalf("read internal/api/router.go: %v", err)
+	}
+	router := string(routerSource)
+	for _, fragment := range []string{
+		`ai.NewFindingsToolAdapter(findingsStore)`,
+		`tools.NewAlertManagerToolAdapter(alertManager)`,
+		`tools.NewDiscoveryToolAdapter(adapter)`,
+		`NewAssistantAgentProfileManager(persistence, licenseSvc)`,
+		`AI chat Assistant tool providers wired`,
+		`Wire control settings change callback to update Assistant tool visibility`,
+	} {
+		if !strings.Contains(router, fragment) {
+			t.Errorf("router must wire native Assistant providers without MCP terminology; missing %s", fragment)
+		}
+	}
+	for _, fragment := range []string{
+		`ai.NewFindingsMCPAdapter(findingsStore)`,
+		`tools.NewAlertManagerMCPAdapter(alertManager)`,
+		`tools.NewDiscoveryMCPAdapter(adapter)`,
+		`NewMCPAgentProfileManager(persistence, licenseSvc)`,
+		`AI chat MCP tool providers wired`,
+		`org-scoped MCP tool providers`,
+	} {
+		if strings.Contains(router, fragment) {
+			t.Errorf("router must not describe native Assistant provider wiring as MCP adapter wiring; found %s", fragment)
+		}
+	}
+
+	relaySource, err := os.ReadFile("router_routes_ai_relay.go")
+	if err != nil {
+		t.Fatalf("read internal/api/router_routes_ai_relay.go: %v", err)
+	}
+	relay := string(relaySource)
+	for _, fragment := range []string{
+		`toolAdapter := &assistantToolAdapter{handler: h}`,
+		`AssistantToolExecutor: toolAdapter`,
+		`type assistantToolAdapter struct`,
+		`var _ aicontracts.ApprovedAssistantToolExecutor = (*assistantToolAdapter)(nil)`,
+		`func (m *assistantToolAdapter) ExecuteApprovedAssistantTool(ctx context.Context, command, approvalID string) (string, int, error)`,
+	} {
+		if !strings.Contains(relay, fragment) {
+			t.Errorf("approved Assistant tool adapter must expose native Assistant execution from the current runtime; missing %s", fragment)
+		}
+	}
+	if !strings.Contains(relay, `chatService.ExecuteAssistantTool(ctx, params.Name, params.Arguments)`) {
+		t.Error("approved Assistant tool adapter must delegate to the native Assistant tool executor")
+	}
+	if strings.Contains(relay, `type mcpToolAdapter struct`) || strings.Contains(relay, `&mcpToolAdapter{`) {
+		t.Error("approved Assistant tool adapter must not be named as the MCP adapter surface")
+	}
+	for _, fragment := range []string{
+		`MCPExecutor:           toolAdapter`,
+		`MCPExecutor: toolAdapter`,
+		`var _ aicontracts.MCPToolExecutor = (*assistantToolAdapter)(nil)`,
+		`func (m *assistantToolAdapter) ExecuteMCPTool(ctx context.Context, command, approvalID string) (string, int, error)`,
+		`chatService.ExecuteMCPTool(`,
+	} {
+		if strings.Contains(relay, fragment) {
+			t.Errorf("current runtime must not expose native Assistant execution through the legacy MCP executor seam; found %s", fragment)
+		}
+	}
+
+	contractSource, err := os.ReadFile(filepath.Join("..", "..", "pkg", "aicontracts", "fix_execution.go"))
+	if err != nil {
+		t.Fatalf("read pkg/aicontracts/fix_execution.go: %v", err)
+	}
+	contracts := string(contractSource)
+	for _, fragment := range []string{
+		`type ApprovedAssistantToolExecutor interface`,
+		`ExecuteApprovedAssistantTool(ctx context.Context, command, approvalID string) (output string, exitCode int, err error)`,
+	} {
+		if !strings.Contains(contracts, fragment) {
+			t.Errorf("cross-repo approved tool contract must expose native Assistant executor only; missing %s", fragment)
+		}
+	}
+	for _, fragment := range []string{
+		`type MCPToolExecutor interface`,
+		`ExecuteMCPTool(ctx context.Context, command, approvalID string) (output string, exitCode int, err error)`,
+		`Prefer ApprovedAssistantToolExecutor for new integrations`,
+	} {
+		if strings.Contains(contracts, fragment) {
+			t.Errorf("cross-repo approved tool contract must not preserve legacy MCP executor compatibility; found %s", fragment)
+		}
+	}
+
+	extensionSource, err := os.ReadFile(filepath.Join("..", "..", "pkg", "extensions", "ai_autofix.go"))
+	if err != nil {
+		t.Fatalf("read pkg/extensions/ai_autofix.go: %v", err)
+	}
+	extensionsSrc := string(extensionSource)
+	for _, fragment := range []string{
+		`AssistantToolExecutor aicontracts.ApprovedAssistantToolExecutor`,
+		`func (d AIAutoFixHandlerDeps) ResolveApprovedAssistantToolExecutor() aicontracts.ApprovedAssistantToolExecutor`,
+		`return d.AssistantToolExecutor`,
+	} {
+		if !strings.Contains(extensionsSrc, fragment) {
+			t.Errorf("auto-fix extension deps must expose native Assistant tool execution without MCP compatibility; missing %s", fragment)
+		}
+	}
+	for _, fragment := range []string{
+		`MCPExecutor`,
+		`MCPToolExecutor`,
+		`legacyMCPApprovedAssistantToolExecutor`,
+		`ExecuteMCPTool`,
+		`compatibility fallback for enterprise binders`,
+	} {
+		if strings.Contains(extensionsSrc, fragment) {
+			t.Errorf("auto-fix extension deps must not expose legacy MCP executor compatibility; found %s", fragment)
+		}
+	}
+
+	findingsAdapterSource, err := os.ReadFile(filepath.Join("..", "ai", "findings_tools_adapter.go"))
+	if err != nil {
+		t.Fatalf("read internal/ai/findings_tools_adapter.go: %v", err)
+	}
+	findingsAdapter := string(findingsAdapterSource)
+	if !strings.Contains(findingsAdapter, `type FindingsToolAdapter struct`) ||
+		!strings.Contains(findingsAdapter, `func NewFindingsToolAdapter(store *FindingsStore) *FindingsToolAdapter`) {
+		t.Error("findings store adapter must be named for the native tool registry")
+	}
+	if strings.Contains(findingsAdapter, `FindingsMCPAdapter`) || strings.Contains(findingsAdapter, `NewFindingsMCPAdapter`) {
+		t.Error("findings store adapter must not be named as an MCP adapter")
+	}
+
+	toolAdaptersSource, err := os.ReadFile(filepath.Join("..", "ai", "tools", "adapters.go"))
+	if err != nil {
+		t.Fatalf("read internal/ai/tools/adapters.go: %v", err)
+	}
+	toolAdapters := string(toolAdaptersSource)
+	for _, fragment := range []string{
+		`type AlertManagerToolAdapter struct`,
+		`func NewAlertManagerToolAdapter(manager AlertManager) *AlertManagerToolAdapter`,
+		`type RecoveryPointsToolAdapter struct`,
+		`func NewRecoveryPointsToolAdapter(manager *recoverymanager.Manager, orgID string) *RecoveryPointsToolAdapter`,
+		`type DiscoveryToolAdapter struct`,
+		`func NewDiscoveryToolAdapter(source DiscoverySource) *DiscoveryToolAdapter`,
+	} {
+		if !strings.Contains(toolAdapters, fragment) {
+			t.Errorf("Assistant runtime adapters must be named for the native tool registry; missing %s", fragment)
+		}
+	}
+	for _, fragment := range []string{
+		`MCPAdapter`,
+		`NewAlertManagerMCPAdapter`,
+		`NewRecoveryPointsMCPAdapter`,
+		`NewDiscoveryMCPAdapter`,
+		`MCP tools`,
+		`mcp.`,
+	} {
+		if strings.Contains(toolAdapters, fragment) {
+			t.Errorf("Assistant runtime adapters must not be named as MCP adapters; found %s", fragment)
+		}
+	}
+
+	intelligenceAdaptersSource, err := os.ReadFile(filepath.Join("..", "ai", "adapters", "adapters.go"))
+	if err != nil {
+		t.Fatalf("read internal/ai/adapters/adapters.go: %v", err)
+	}
+	intelligenceAdapters := string(intelligenceAdaptersSource)
+	for _, fragment := range []string{
+		`type IncidentRecorderToolAdapter struct`,
+		`func NewIncidentRecorderToolAdapter(recorder IncidentRecorderSource) *IncidentRecorderToolAdapter`,
+		`type EventCorrelatorToolAdapter struct`,
+		`func NewEventCorrelatorToolAdapter(correlator EventCorrelatorSource) *EventCorrelatorToolAdapter`,
+	} {
+		if !strings.Contains(intelligenceAdapters, fragment) {
+			t.Errorf("Assistant intelligence adapters must be named for the native tool registry; missing %s", fragment)
+		}
+	}
+	if strings.Contains(intelligenceAdapters, `MCPAdapter`) || strings.Contains(intelligenceAdapters, `NewIncidentRecorderMCPAdapter`) || strings.Contains(intelligenceAdapters, `NewEventCorrelatorMCPAdapter`) {
+		t.Error("Assistant intelligence adapters must not be named as MCP adapters")
+	}
+
+	agentProfilesSource, err := os.ReadFile("agent_profiles_tools.go")
+	if err != nil {
+		t.Fatalf("read internal/api/agent_profiles_tools.go: %v", err)
+	}
+	agentProfiles := string(agentProfilesSource)
+	if !strings.Contains(agentProfiles, `type AssistantAgentProfileManager struct`) ||
+		!strings.Contains(agentProfiles, `func NewAssistantAgentProfileManager(persistence *config.ConfigPersistence, licenseService licenseFeatureChecker) *AssistantAgentProfileManager`) {
+		t.Error("agent profile manager must be named for the native Assistant tool registry")
+	}
+	if strings.Contains(agentProfiles, `MCPAgentProfileManager`) || strings.Contains(agentProfiles, `NewMCPAgentProfileManager`) || strings.Contains(agentProfiles, `MCP tools`) {
+		t.Error("agent profile manager must not be named as an MCP adapter")
+	}
+}
+
+// TestContract_PulseMCPAdapterProjectsAgentCapabilitiesManifest pins the
+// external-agent adapter boundary: pulse-mcp must stay a projection of the
+// canonical capabilities manifest, not a second action registry.
+func TestContract_PulseMCPAdapterProjectsAgentCapabilitiesManifest(t *testing.T) {
+	source, err := os.ReadFile(filepath.Join("..", "..", "cmd", "pulse-mcp", "main.go"))
+	if err != nil {
+		t.Fatalf("read cmd/pulse-mcp/main.go: %v", err)
+	}
+	src := string(source)
+	required := []string{
+		`internal/agentcapabilities`,
+		`type agentCapability = agentcapabilities.Capability`,
+		`type agentCapabilitiesManifest = agentcapabilities.Manifest`,
+		`type jsonRPCRequest = agentcapabilities.JSONRPCRequest`,
+		`agentcapabilities.ServeJSONRPCLines(`,
+		`agentcapabilities.WriteJSONRPCMessage(out, v)`,
+		`agentcapabilities.DispatchMCPToolServerRequest(ctx, *req, s.manifestToolServer().Handlers(func()`,
+		`agentcapabilities.MCPManifestToolServer{`,
+		`ServerName:                   pulseMCPServerName`,
+		`SurfaceID:                    agentcapabilities.SurfaceIDPulseMCP`,
+		`Manifest:                     manifest`,
+		`agentcapabilities.FetchManifest(context.Background(), manifestClient, *baseURL)`,
+		`agentcapabilities.StreamMCPEventNotifications(ctx, pulseMCPAgentSurfaceHTTPDoer{}, s.baseURL, path, s.token, func(notification agentcapabilities.JSONRPCRequest) error`,
+	}
+	for _, fragment := range required {
+		if !strings.Contains(src, fragment) {
+			t.Errorf("pulse-mcp must project the canonical agent capabilities manifest; missing %s", fragment)
+		}
+	}
+	forbidden := []string{
+		`type jsonRPCRequest struct`,
+		`type jsonRPCResponse struct`,
+		`type jsonRPCError struct`,
+		`type jsonRPCResponse = agentcapabilities.JSONRPCResponse`,
+		`type jsonRPCError = agentcapabilities.JSONRPCError`,
+		`bufio.NewScanner(in)`,
+		`scanner.Scan()`,
+		`agentcapabilities.DecodeJSONRPCRequest(`,
+		`agentcapabilities.NewJSONRPCParseErrorResponse(`,
+		`agentcapabilities.JSONRPCRequestExpectsResponse(`,
+		`json.Unmarshal([]byte(line)`,
+		`agentcapabilities.JSONRPCErrorParse`,
+		`len(req.ID) == 0`,
+		`string(req.ID) == "null"`,
+		`switch req.Method`,
+		`agentcapabilities.NewJSONRPCResponse(req.ID, nil)`,
+		`agentcapabilities.JSONRPCErrorInternal`,
+		`agentcapabilities.JSONRPCErrorMethodNotFound`,
+		`agentcapabilities.MCPToolServerHandlers{`,
+		`agentcapabilities.MCPMethodToolsList`,
+		`agentcapabilities.MCPMethodToolsCall`,
+		`agentcapabilities.MCPMethodResourcesList`,
+		`agentcapabilities.MCPMethodResourcesRead`,
+		`agentcapabilities.MCPMethodPromptsList`,
+		`agentcapabilities.MCPMethodPromptsGet`,
+		`agentcapabilities.MCPMethodPing`,
+		`func (s *mcpServer) handleInitialize(`,
+		`func (s *mcpServer) handleToolsList(`,
+		`func (s *mcpServer) handleToolsCall(`,
+		`func (s *mcpServer) handleResourcesList(`,
+		`func (s *mcpServer) handleResourcesRead(`,
+		`func (s *mcpServer) handlePromptsList(`,
+		`func (s *mcpServer) handlePromptsGet(`,
+		`agentcapabilities.NewMCPToolServerInitializeResult(pulseMCPServerName`,
+		`agentcapabilities.ProjectTools(s.manifest.Capabilities)`,
+		`agentcapabilities.ProjectMCPPrompts(s.manifest.Capabilities)`,
+		`agentcapabilities.GetMCPPrompt(s.manifest.Capabilities`,
+		`agentcapabilities.BuildMCPPrompt(s.manifest.Capabilities`,
+		`agentcapabilities.ExecuteMCPToolHTTP(`,
+		`agentcapabilities.ExecuteMCPManifestSurfaceToolHTTP(ctx, s.http, s.baseURL, s.token, s.manifest, agentcapabilities.SurfaceIDPulseMCP, raw)`,
+		`"protocolVersion": "2024-11-05"`,
+		`"protocolVersion": "2025-06-18"`,
+		`"isError": isError`,
+		`NewMCPHTTPTextResult(resp.Body, resp.StatusCode)`,
+		`agentcapabilities.MCPCapabilities{`,
+		`agentcapabilities.MCPToolsCapability{}`,
+		`agentcapabilities.MCPPulseNotificationsCapability{`,
+		`json.Unmarshal(raw, &params)`,
+		`fmt.Errorf("unknown tool: %s", params.Name)`,
+		`agentcapabilities.FindCapability(s.manifest.Capabilities, params.Name)`,
+		`agentcapabilities.CallCapabilityHTTP(ctx, s.http, s.baseURL, s.token, cap, params.Arguments)`,
+		`agentcapabilities.NewMCPCapabilityHTTPResult(resp)`,
+		`http.NewRequestWithContext(ctx, cap.Method`,
+		`httpReq.Header.Set("X-API-Token"`,
+		`baseURL+"/api/agent/capabilities"`,
+		`req.Header.Set("Accept", "text/event-stream")`,
+		`http.DefaultClient.Do(req)`,
+		`scanner := bufio.NewScanner(resp.Body)`,
+		`strings.HasPrefix(line, "event: ")`,
+		`strings.HasPrefix(line, "data: ")`,
+		`agentcapabilities.StreamAgentSSERecords(ctx, nil, s.baseURL, path, s.token`,
+		`agentcapabilities.IsTransportEventKind(event)`,
+		`agentcapabilities.NewMCPEventNotification(event, []byte(data))`,
+		`agentcapabilities.NewJSONRPCNotification(agentcapabilities.MCPNotificationMethod(event), params)`,
+	}
+	for _, fragment := range forbidden {
+		if strings.Contains(src, fragment) {
+			t.Errorf("pulse-mcp must not preserve local MCP wire/result envelope logic; found %s", fragment)
+		}
+	}
+
+	projectionSource, err := os.ReadFile(filepath.Join("..", "agentcapabilities", "projection.go"))
+	if err != nil {
+		t.Fatalf("read internal/agentcapabilities/projection.go: %v", err)
+	}
+	projection := string(projectionSource)
+	sharedRequired := []string{
+		`type ProjectedTool struct`,
+		`Title        string`,
+		`OutputSchema json.RawMessage`,
+		`Annotations  *ToolBehaviorHints`,
+		`Meta         map[string]any`,
+		`type ToolBehaviorHints struct`,
+		`ToolMetaPulseCapabilityKey = "pulse.capability"`,
+		`ReadOnlyHint`,
+		`DestructiveHint`,
+		`IdempotentHint`,
+		`OpenWorldHint`,
+		`func ProjectTools(capabilities []Capability) []ProjectedTool`,
+		`func ProjectManifestSurfaceTools(manifest Manifest, surfaceID string) []ProjectedTool`,
+		`func ManifestSurfaceToolCapabilities(manifest Manifest, surfaceID string) []Capability`,
+		`func FindManifestSurfaceToolContract(manifest Manifest, surfaceID string) (SurfaceToolContract, bool)`,
+		`func ProjectTool(cap Capability) (ProjectedTool, bool)`,
+		`func CapabilityTitle(cap Capability) string`,
+		`func ToolAnnotations(cap Capability) *ToolBehaviorHints`,
+		`func ToolGovernanceBehaviorHints(governance ToolGovernanceDescriptor) *ToolBehaviorHints`,
+		`func CloneToolBehaviorHints(hints *ToolBehaviorHints) *ToolBehaviorHints`,
+		`func ToolMeta(cap Capability) map[string]any`,
+		`NormalizeCapabilityGovernance(cap)`,
+		`func FindCapability(capabilities []Capability, name string) (Capability, bool)`,
+		`type CapabilityLookupError struct`,
+		`func ResolveCapability(capabilities []Capability, name string) (Capability, error)`,
+		`func ResolveRequestResponseCapability(capabilities []Capability, name string) (Capability, error)`,
+		`return CloneCapability(cap), true`,
+		`IsRequestResponseCapability(cap)`,
+		`ResolutionNoteArgumentName = "resolution_note"`,
+		`NoteArgumentName = "note"`,
+		`Title:        CapabilityTitle(cap)`,
+		`Description:  ToolDescription(cap)`,
+		`InputSchema:  ToolInputSchema(cap)`,
+		`OutputSchema: ToolOutputSchema(cap)`,
+		`Annotations:  ToolAnnotations(cap)`,
+		`Meta:         ToolMeta(cap)`,
+		`ToolMetaPulseCapabilityKey: capability`,
+		`return CloneRawMessage(cap.InputSchema)`,
+		`return CloneRawMessage(cap.OutputSchema)`,
+	}
+	for _, fragment := range sharedRequired {
+		if !strings.Contains(projection, fragment) {
+			t.Errorf("agentcapabilities must own the external-agent tool projection; missing %s", fragment)
+		}
+	}
+	for _, fragment := range []string{
+		`Annotations *MCPToolAnnotations`,
+		`type MCPToolAnnotations struct`,
+		`func ToolAnnotations(cap Capability) *MCPToolAnnotations`,
+	} {
+		if strings.Contains(projection, fragment) {
+			t.Errorf("external-agent tool projection must not make MCP the owner of shared behavior hints; found %s", fragment)
+		}
+	}
+
+	mcpAliasSource, err := os.ReadFile(filepath.Join("..", "agentcapabilities", "mcp.go"))
+	if err != nil {
+		t.Fatalf("read internal/agentcapabilities/mcp.go: %v", err)
+	}
+	mcp := string(mcpAliasSource)
+	if !strings.Contains(mcp, `type MCPToolAnnotations = ToolBehaviorHints`) {
+		t.Error("MCP adapter edge must keep the protocol-facing tool annotations alias over shared behavior hints")
+	}
+
+	schemaSource, err := os.ReadFile(filepath.Join("..", "agentcapabilities", "schema.go"))
+	if err != nil {
+		t.Fatalf("read internal/agentcapabilities/schema.go: %v", err)
+	}
+	schema := string(schemaSource)
+	for _, fragment := range []string{
+		`type ProviderTool struct`,
+		`type ProviderToolCall struct`,
+		`type ProviderToolResult struct`,
+		`func (t Tool) NormalizeCollections() Tool`,
+		`func (s InputSchema) NormalizeCollections() InputSchema`,
+		`func ClonePropertySchemas(properties map[string]PropertySchema) map[string]PropertySchema`,
+		`func CloneProviderInputSchema(schema map[string]interface{}) map[string]interface{}`,
+		`func CloneRawMessage(raw json.RawMessage) json.RawMessage`,
+		`func EmptyProviderTool() ProviderTool`,
+		`func (t ProviderTool) NormalizeCollections() ProviderTool`,
+		`t.InputSchema = CloneProviderInputSchema(t.InputSchema)`,
+		`t.BehaviorHints = CloneToolBehaviorHints(t.BehaviorHints)`,
+		`BehaviorHints   *ToolBehaviorHints`,
+		`PulseGovernance *ToolGovernanceDescriptor`,
+		`func EmptyProviderToolCall() ProviderToolCall`,
+		`func (t ProviderToolCall) NormalizeCollections() ProviderToolCall`,
+		`t.Input = CloneToolArguments(t.Input)`,
+		`t.ThoughtSignature = CloneRawMessage(t.ThoughtSignature)`,
+		`type ProviderToolResultContextOptions struct`,
+		`type ProviderToolResultTruncation struct`,
+		`type ProviderToolResultContextProjection struct`,
+		`func NewProviderToolResult(toolUseID, content string, isError bool) ProviderToolResult`,
+		`func NewProviderToolErrorResult(toolUseID, content string) ProviderToolResult`,
+		`func NewProviderToolResultFromToolResult(toolUseID string, result ToolResult) ProviderToolResult`,
+		`func NewProviderToolResultContextProjection(toolUseID, content string, isError bool, opts ProviderToolResultContextOptions) ProviderToolResultContextProjection`,
+		`func NewProviderToolResultContextProjectionFromToolResult(toolUseID string, result ToolResult, opts ProviderToolResultContextOptions) ProviderToolResultContextProjection`,
+		`func ProviderToolResultModelContent(content string, opts ProviderToolResultContextOptions) (string, ProviderToolResultTruncation)`,
+		`func ProviderInputSchemaFromRaw(raw json.RawMessage) map[string]interface{}`,
+		`func ProjectProviderTool(tool Tool) ProviderTool`,
+		`func ProjectProviderToolWithGovernance(tool Tool, governance ToolGovernanceDescriptor) ProviderTool`,
+		`func ProjectProviderTools(tools []Tool) []ProviderTool`,
+		`func ProjectProviderToolsWithGovernance(tools []Tool, governance []ToolGovernanceDescriptor) []ProviderTool`,
+		`type AssistantProviderToolOptions struct`,
+		`func ProjectAssistantProviderTools(tools []Tool, governance []ToolGovernanceDescriptor, opts AssistantProviderToolOptions) []ProviderTool`,
+		`func ProjectPulseAssistantProviderTools(manifest Manifest, tools []Tool, governance []ToolGovernanceDescriptor, opts AssistantProviderToolOptions) []ProviderTool`,
+		`func ProviderToolGovernanceDescriptors(tools []ProviderTool) ([]ToolGovernanceDescriptor, bool)`,
+		`func AssistantNativeProviderTools() []ProviderTool`,
+		`func AssistantNativeProviderToolNames() []string`,
+		`func LegacyAssistantUtilityProviderTools() []ProviderTool`,
+		`LegacyAssistantRunCommandToolName = "run_command"`,
+		`LegacyAssistantFetchURLToolName = "fetch_url"`,
+		`LegacyAssistantSetResourceURLToolName = "set_resource_url"`,
+		`func ProviderToolNames(tools []ProviderTool) []string`,
+		`type ProviderToolNameCatalog struct`,
+		`func NewProviderToolNameCatalog(nameGroups ...[]string) ProviderToolNameCatalog`,
+		`func NewAssistantProviderToolNameCatalog(registryToolNames []string) ProviderToolNameCatalog`,
+		`func (c ProviderToolNameCatalog) Names() []string`,
+		`func (c ProviderToolNameCatalog) Has(name string) bool`,
+		`func (c ProviderToolNameCatalog) HasPrefix(prefix string) bool`,
+		`func ProviderToolDescriptionWithGovernance(description string, governance ToolGovernanceDescriptor) string`,
+		`func ProjectProviderToolCallToToolCall(tc ProviderToolCall) ToolCallParams`,
+		`func NormalizeProviderToolCallForExecution(tc ProviderToolCall) ProviderToolCall`,
+		`func NormalizeProviderToolCallsForExecution(calls []ProviderToolCall) []ProviderToolCall`,
+		`func NewPulseQuestionProviderTool() ProviderTool`,
+		`func PulseQuestionProviderInputSchema() map[string]interface{}`,
+		`func ParseProviderToolInput(raw string) (map[string]interface{}, bool)`,
+		`func ProviderToolInputOrRaw(raw string) map[string]interface{}`,
+		`schema = schema.NormalizeCollections()`,
+		`projected := CloneProviderInputSchema(schema)`,
+		`property = property.NormalizeCollections()`,
+		`tool = tool.NormalizeCollections()`,
+		`InputSchema: ProviderInputSchema(tool.InputSchema)`,
+		`ToolGovernancePromptDescription(governance)`,
+		`Pulse governance: `,
+		`projected.BehaviorHints = ToolGovernanceBehaviorHints(governance)`,
+		`projected.PulseGovernance = &governance`,
+		`return NewProviderToolResult(toolUseID, interpreted.Text, interpreted.IsError)`,
+		`ProviderToolResultModelContent(content, opts)`,
+		`return NormalizeToolCallParams(ToolCallParams{`,
+		`Arguments: tc.Input,`,
+		`params := ProjectProviderToolCallToToolCall(tc)`,
+		`normalized.Name = params.Name`,
+		`normalized.Input = params.Arguments`,
+		`projected = append(projected, AssistantNativeProviderTools()...)`,
+		`ManifestSurfaceAffordances(manifest, SurfaceIDPulseAssistant)`,
+		`if !affordances.Tools`,
+		`if !affordances.InteractiveQuestions`,
+		`return ProviderToolNames(AssistantNativeProviderTools())`,
+		`Name:        PulseQuestionToolName`,
+		`InputSchema: PulseQuestionProviderInputSchema(),`,
+		`Name:        LegacyAssistantRunCommandToolName`,
+		`Name:        LegacyAssistantFetchURLToolName`,
+		`Name:        LegacyAssistantSetResourceURLToolName`,
+		`type PulseQuestionToolType string`,
+		`PulseQuestionToolTypeText   PulseQuestionToolType = "text"`,
+		`PulseQuestionToolTypeSelect PulseQuestionToolType = "select"`,
+		`func PulseQuestionToolTypeValues() []string`,
+		`func NormalizePulseQuestionToolType(rawType string, hasOptions bool) (PulseQuestionToolType, error)`,
+		`type PulseQuestionToolQuestion struct`,
+		`type PulseQuestionToolOption struct`,
+		`func ParsePulseQuestionToolInput(input map[string]interface{}) ([]PulseQuestionToolQuestion, error)`,
+		`func parsePulseQuestionToolOptions(rawOptions json.RawMessage) ([]PulseQuestionToolOption, error)`,
+		`"enum":        PulseQuestionToolTypeValues(),`,
+		`return map[string]interface{}{"raw": raw}`,
+	} {
+		if !strings.Contains(schema, fragment) {
+			t.Errorf("agentcapabilities must own the Assistant provider tool projection; missing %s", fragment)
+		}
+	}
+	for _, fragment := range []string{
+		`func ProjectProviderToolCallToMCP(tc ProviderToolCall) MCPCallToolParams`,
+	} {
+		if strings.Contains(schema, fragment) {
+			t.Errorf("neutral provider schema must not own MCP compatibility aliases; found %s", fragment)
+		}
+	}
+
+	providerArtifactSource, err := os.ReadFile(filepath.Join("..", "agentcapabilities", "provider_tool_artifacts.go"))
+	if err != nil {
+		t.Fatalf("read internal/agentcapabilities/provider_tool_artifacts.go: %v", err)
+	}
+	providerArtifacts := string(providerArtifactSource)
+	for _, fragment := range []string{
+		`func ProviderToolCallArtifactIndex(content string, catalog ProviderToolNameCatalog) int`,
+		`func SplitTrailingProviderToolNamePrefix(content string, catalog ProviderToolNameCatalog) (visible string, held string)`,
+		`providerJSONToolCallLeakIndex(content, catalog)`,
+		`providerPlainFunctionToolCallLeakIndex(content, catalog)`,
+		`catalog.Has(name)`,
+		`catalog.HasPrefix(token)`,
+	} {
+		if !strings.Contains(providerArtifacts, fragment) {
+			t.Errorf("agentcapabilities must own provider tool-call artifact detection; missing %s", fragment)
+		}
+	}
+
+	mcpSource, err := os.ReadFile(filepath.Join("..", "agentcapabilities", "mcp.go"))
+	if err != nil {
+		t.Fatalf("read internal/agentcapabilities/mcp.go: %v", err)
+	}
+	mcpWire := string(mcpSource)
+	toolCallSource, err := os.ReadFile(filepath.Join("..", "agentcapabilities", "tool_call.go"))
+	if err != nil {
+		t.Fatalf("read internal/agentcapabilities/tool_call.go: %v", err)
+	}
+	toolNameSource, err := os.ReadFile(filepath.Join("..", "agentcapabilities", "tool_names.go"))
+	if err != nil {
+		t.Fatalf("read internal/agentcapabilities/tool_names.go: %v", err)
+	}
+	toolResultSource, err := os.ReadFile(filepath.Join("..", "agentcapabilities", "tool_result.go"))
+	if err != nil {
+		t.Fatalf("read internal/agentcapabilities/tool_result.go: %v", err)
+	}
+	toolExecutionSource, err := os.ReadFile(filepath.Join("..", "agentcapabilities", "tool_execution.go"))
+	if err != nil {
+		t.Fatalf("read internal/agentcapabilities/tool_execution.go: %v", err)
+	}
+	toolCore := string(toolNameSource) + "\n" + string(toolCallSource) + "\n" + string(toolResultSource) + "\n" + string(toolExecutionSource) + "\n" + projection
+	mcpWireContract := mcpWire + "\n" + toolCore
+	toolCallSrc := string(toolCallSource)
+	toolNameSrc := string(toolNameSource)
+	for _, pair := range []struct {
+		name  string
+		value string
+	}{
+		{`PulseQueryToolName`, `"pulse_query"`},
+		{`PulseControlToolName`, `"pulse_control"`},
+		{`PulseReadToolName`, `"pulse_read"`},
+		{`PulseSummarizeToolName`, `"pulse_summarize"`},
+		{`PulseRunCommandToolName`, `"pulse_run_command"`},
+		{`PatrolGetFindingsToolName`, `"patrol_get_findings"`},
+		{`PatrolReportFindingToolName`, `"patrol_report_finding"`},
+		{`PatrolResolveFindingToolName`, `"patrol_resolve_finding"`},
+	} {
+		if !strings.Contains(toolNameSrc, pair.name) || !strings.Contains(toolNameSrc, pair.value) {
+			t.Errorf("agentcapabilities must own stable Pulse Intelligence tool identity %s=%s", pair.name, pair.value)
+		}
+	}
+	for _, fragment := range []string{
+		`type ToolCallKind int`,
+		`ToolCallKindResolve`,
+		`ToolCallKindRead`,
+		`ToolCallKindWrite`,
+		`ToolCallKindUserInput`,
+		`func (k ToolCallKind) String() string`,
+		`func ClassifyToolCall(toolName string, args map[string]interface{}) ToolCallKind`,
+		`case PulseQuestionToolName:`,
+		`case PulseQueryToolName, PulseDiscoveryToolName:`,
+		`case PulseControlToolName:`,
+		`case PulseReadToolName, LegacyAssistantFetchURLToolName:`,
+		`LegacyAssistantRunCommandToolName, LegacyAssistantSetResourceURLToolName`,
+		`return ToolCallKindWrite`,
+	} {
+		if !strings.Contains(toolCallSrc, fragment) {
+			t.Errorf("agentcapabilities must own shared tool-call safety classification; missing %s", fragment)
+		}
+	}
+	for _, fragment := range []string{
+		`type JSONRPCRequest struct`,
+		`type JSONRPCResponse struct`,
+		`type JSONRPCError struct`,
+		`type MCPInitializeResult struct`,
+		`type ToolCallParams struct`,
+		`type MCPCallToolParams = ToolCallParams`,
+		`func NormalizeToolCallParams(params ToolCallParams) ToolCallParams`,
+		`func ValidateToolCallParams(params ToolCallParams) error`,
+		`type MCPProjectedToolsResult struct`,
+		`type MCPResource struct`,
+		`type MCPListResourcesResult struct`,
+		`type MCPReadResourceParams struct`,
+		`type MCPReadResourceResult struct`,
+		`type MCPResourceContent struct`,
+		`type MCPPrompt struct`,
+		`Title       string`,
+		`type MCPPromptArgument struct`,
+		`type MCPListPromptsResult struct`,
+		`type MCPGetPromptParams struct`,
+		`type MCPGetPromptResult struct`,
+		`type MCPPromptMessage struct`,
+		`type MCPCapabilities struct`,
+		`Instructions    string`,
+		`Resources    *MCPResourcesCapability`,
+		`Prompts      *MCPPromptsCapability`,
+		`type MCPResourcesCapability struct`,
+		`type MCPPromptsCapability struct`,
+		`type ProjectedTool struct`,
+		`OutputSchema json.RawMessage`,
+		`Meta         map[string]any`,
+		`type ToolResult struct`,
+		`StructuredContent map[string]any`,
+		`type MCPToolResult = ToolResult`,
+		`type ToolContent struct`,
+		`type MCPContent = ToolContent`,
+		`func (r MCPListResourcesResult) NormalizeCollections() MCPListResourcesResult`,
+		`func (r MCPReadResourceResult) NormalizeCollections() MCPReadResourceResult`,
+		`func (r MCPListPromptsResult) NormalizeCollections() MCPListPromptsResult`,
+		`func (r MCPGetPromptResult) NormalizeCollections() MCPGetPromptResult`,
+		`func EmptyToolResult() ToolResult`,
+		`func (r ToolResult) NormalizeCollections() ToolResult`,
+		`MCPPulseNotificationsExperimentalKey = "pulseNotifications"`,
+		`func NewMCPToolServerInitializeResult(`,
+		`func NewMCPManifestToolServerInitializeResult(`,
+		`func NewMCPManifestSurfaceToolServerInitializeResult(`,
+		`ManifestSurfaceAffordances(manifest, surfaceID)`,
+		`ResolveManifestSurfaceToolContract(manifest, surfaceID)`,
+		`affordances.Tools && hasSurfaceToolContract`,
+		`MCPManifestSurfacePromptProjectionSupported(manifest, surfaceID)`,
+		`Instructions: BuildPulseMCPOperatingInstructions(PulseMCPOperatingInstructionOptions{`,
+		`SupportsTools:              exposeTools`,
+		`func MCPManifestResourceProjectionSupported(manifest Manifest, surfaceID string) bool`,
+		`func ManifestSurfaceResourceCapabilities(manifest Manifest, surfaceID string) []Capability`,
+		`func MCPManifestPromptProjectionSupported(manifest Manifest) bool`,
+		`func MCPManifestSurfacePromptProjectionSupported(manifest Manifest, surfaceID string) bool`,
+		`func ProjectMCPWorkflowPrompts(workflowPrompts []PulseWorkflowPrompt) []MCPPrompt`,
+		`func DecodeMCPGetPromptParams(raw json.RawMessage) (MCPGetPromptParams, error)`,
+		`func GetMCPPromptFromManifest(manifest Manifest, raw json.RawMessage) (MCPGetPromptResult, error)`,
+		`func GetMCPPromptFromManifestSurface(manifest Manifest, surfaceID string, raw json.RawMessage) (MCPGetPromptResult, error)`,
+		`func BuildMCPPromptFromManifest(manifest Manifest, params MCPGetPromptParams) (MCPGetPromptResult, error)`,
+		`ManifestPulseWorkflowPrompts(manifest)`,
+		`func MCPResourceURI(resourceID string) string`,
+		`func ResourceIDFromMCPResourceURI(rawURI string) (string, error)`,
+		`func DecodeMCPReadResourceParams(raw json.RawMessage) (MCPReadResourceParams, error)`,
+		`func ListMCPManifestSurfaceResourcesHTTP(`,
+		`func ReadMCPManifestSurfaceResourceHTTP(`,
+		`func resolveMCPManifestSurfaceResourceCapabilities(`,
+		`CallRequestResponseCapabilityHTTPBodyByName(ctx, client, baseURL, token, capabilities, FleetContextCapabilityName, map[string]any{})`,
+		`CallRequestResponseCapabilityHTTPBodyByName(ctx, client, baseURL, token, capabilities, ResourceContextCapabilityName, map[string]any{`,
+		`ResourceIDArgumentName: resourceID`,
+		`caps.Tools = &MCPToolsCapability{}`,
+		`MCPPulseNotificationsExperimentalKey: MCPPulseNotificationsCapability`,
+		`type MCPToolServerHandlers struct`,
+		`func DecodeJSONRPCRequest(`,
+		`fmt.Errorf("malformed JSON-RPC request: %w", err)`,
+		`func NewJSONRPCParseErrorResponse(`,
+		`func JSONRPCRequestExpectsResponse(`,
+		`type JSONRPCLineDispatcher func(context.Context, JSONRPCRequest) JSONRPCResponse`,
+		`type JSONRPCResponseWriter func(JSONRPCResponse) error`,
+		`func ServeJSONRPCLines(`,
+		`scanner.Buffer(make([]byte, 64*1024), 1<<22)`,
+		`DecodeJSONRPCRequest([]byte(line))`,
+		`NewJSONRPCParseErrorResponse(err)`,
+		`JSONRPCRequestExpectsResponse(req)`,
+		`func WriteJSONRPCMessage(`,
+		`enc.SetEscapeHTML(false)`,
+		`type MCPManifestToolServer struct`,
+		`SurfaceID                    string`,
+		`func (s MCPManifestToolServer) Handlers(`,
+		`func (s MCPManifestToolServer) Initialize() MCPInitializeResult`,
+		`func (s MCPManifestToolServer) ToolsList() MCPProjectedToolsResult`,
+		`func (s MCPManifestToolServer) ToolsCall(ctx context.Context, raw json.RawMessage) (MCPToolResult, error)`,
+		`func (s MCPManifestToolServer) ResourcesList(ctx context.Context) (MCPListResourcesResult, error)`,
+		`func (s MCPManifestToolServer) ResourcesRead(ctx context.Context, raw json.RawMessage) (MCPReadResourceResult, error)`,
+		`func (s MCPManifestToolServer) PromptsList() MCPListPromptsResult`,
+		`func (s MCPManifestToolServer) PromptsGet(ctx context.Context, raw json.RawMessage) (MCPGetPromptResult, error)`,
+		`return NewMCPManifestSurfaceToolServerInitializeResult(s.ServerName, s.ServerVersion, s.EmitPulseNotifications, s.Manifest, s.surfaceID())`,
+		`if !s.surfaceAffordances().Tools`,
+		`return MCPProjectedToolsResult{Tools: ProjectManifestSurfaceTools(s.Manifest, s.surfaceID())}`,
+		`return ExecuteMCPManifestSurfaceToolHTTP(ctx, s.Client, s.BaseURL, s.Token, s.Manifest, s.surfaceID(), raw)`,
+		`return ListMCPManifestSurfaceResourcesHTTP(ctx, s.Client, s.BaseURL, s.Token, s.Manifest, s.surfaceID())`,
+		`return ReadMCPManifestSurfaceResourceHTTP(ctx, s.Client, s.BaseURL, s.Token, s.Manifest, s.surfaceID(), raw)`,
+		`if !affordances.Resources`,
+		`fmt.Errorf("MCP resources are not enabled for surface %s", surfaceID)`,
+		`return (MCPListPromptsResult{Prompts: ProjectMCPWorkflowPrompts(ManifestPulseWorkflowPrompts(s.Manifest))}).NormalizeCollections()`,
+		`result, err := GetMCPPromptFromManifestSurface(s.Manifest, s.surfaceID(), raw)`,
+		`func (s MCPManifestToolServer) surfaceAffordances() SurfaceAffordanceContract`,
+		`func (s MCPManifestToolServer) surfaceID() string`,
+		`func normalizeMCPManifestSurfaceID(surfaceID string) string`,
+		`func DispatchMCPToolServerRequest(`,
+		`case MCPMethodInitialize:`,
+		`case MCPMethodToolsList:`,
+		`case MCPMethodToolsCall:`,
+		`case MCPMethodResourcesList:`,
+		`case MCPMethodResourcesRead:`,
+		`case MCPMethodPromptsList:`,
+		`case MCPMethodPromptsGet:`,
+		`return NewJSONRPCResponse(req.ID, result.NormalizeCollections())`,
+		`NewJSONRPCErrorResponse(req.ID, JSONRPCErrorInternal, err.Error(), nil)`,
+		`NewJSONRPCErrorResponse(req.ID, JSONRPCErrorMethodNotFound, fmt.Sprintf("method not found: %s", req.Method), nil)`,
+		`func DecodeMCPCallToolParams(`,
+		`params = NormalizeToolCallParams(params)`,
+		`ValidateToolCallParams(params)`,
+		`func PrepareToolRegistryExecution(name string, args map[string]any) (ToolCallParams, ToolResult, bool)`,
+		`func NewInvalidToolCallParamsResult(err error) ToolResult`,
+		`func NewUnknownToolResult(name string) ToolResult`,
+		`func NewControlToolsDisabledToolResult() ToolResult`,
+		`func ExecuteMCPManifestSurfaceToolHTTP(`,
+		`DecodeMCPCallToolParams(raw)`,
+		`ManifestSurfaceAffordances(manifest, surfaceID)`,
+		`ManifestSurfaceToolCapabilities(manifest, surfaceID)`,
+		`return ExecuteCapabilityToolHTTP(ctx, client, baseURL, token, ManifestSurfaceToolCapabilities(manifest, surfaceID), params)`,
+		`OutputSchema: ToolOutputSchema(cap)`,
+		`func ToolOutputSchema(cap Capability) json.RawMessage`,
+		`func ExecuteCapabilityToolHTTP(`,
+		`params = NormalizeToolCallParams(params)`,
+		`ValidateToolCallParams(params)`,
+		`CallRequestResponseCapabilityHTTPByName(ctx, client, baseURL, token, capabilities, params.Name, params.Arguments)`,
+		`var lookupErr CapabilityLookupError`,
+		`errors.As(err, &lookupErr)`,
+		`return NewCapabilityHTTPToolResult(resp), nil`,
+		`func NewToolTextContent(text string) ToolContent`,
+		`func NewToolTextResult(text string) ToolResult`,
+		`func NewToolErrorResult(err error) ToolResult`,
+		`func NewToolJSONResult(data any) ToolResult`,
+		`func NewToolJSONResultWithIsError(data any, isError bool) ToolResult`,
+		`func NewToolHTTPTextResult(`,
+		`func NewCapabilityHTTPToolResult(`,
+		`func ToolStructuredContentFromJSON(`,
+		`func CloneToolStructuredContent(`,
+		`func ToolResultText(result ToolResult) string`,
+		`type ToolResultInterpretation struct`,
+		`func InterpretToolResult(result ToolResult) ToolResultInterpretation`,
+		`ApprovalRequired: HasApprovalRequiredToolMarker(text)`,
+		`PolicyBlocked:    HasPolicyBlockedToolMarker(text)`,
+		`type DirectToolExecutionOptions struct`,
+		`type DirectToolExecutionOutcome struct`,
+		`func InterpretDirectToolExecution(result ToolResult, opts DirectToolExecutionOptions) (DirectToolExecutionOutcome, error)`,
+		`resp.OK()`,
+		`func NewJSONRPCNotification(`,
+		`func NewMCPEventNotification(`,
+		`const (`,
+		`MCPProtocolVersion = "2025-06-18"`,
+		`MCPMethodResourcesList = "resources/list"`,
+		`MCPMethodResourcesRead = "resources/read"`,
+		`MCPMethodPromptsList   = "prompts/list"`,
+		`MCPMethodPromptsGet    = "prompts/get"`,
+		`MCPResourceContextURIHost  = "resource"`,
+		`MCPResourceContextMIMEType = "application/json"`,
+	} {
+		if !strings.Contains(mcpWireContract, fragment) {
+			t.Errorf("agentcapabilities must own the shared MCP wire/result envelope; missing %s", fragment)
+		}
+	}
+	for _, fragment := range []string{
+		`func MCPResourceProjectionSupported(capabilities []Capability) bool`,
+		`func ListMCPResourcesHTTP(ctx context.Context, client HTTPDoer, baseURL, token string, capabilities []Capability)`,
+		`func ReadMCPResourceHTTP(ctx context.Context, client HTTPDoer, baseURL, token string, capabilities []Capability`,
+		`return ListMCPResourcesHTTP(ctx, s.Client, s.BaseURL, s.Token, s.Manifest.Capabilities)`,
+		`return ReadMCPResourceHTTP(ctx, s.Client, s.BaseURL, s.Token, s.Manifest.Capabilities, raw)`,
+	} {
+		if strings.Contains(mcpWireContract, fragment) {
+			t.Errorf("shared MCP resource projection must be manifest-surface-owned, not raw-capability-owned; found %s", fragment)
+		}
+	}
+	for _, fragment := range []string{
+		`func MCPPromptProjectionSupported(capabilities []Capability) bool`,
+		`func ProjectMCPPrompts(capabilities []Capability) []MCPPrompt`,
+		`func GetMCPPrompt(capabilities []Capability, raw json.RawMessage)`,
+		`func BuildMCPPrompt(capabilities []Capability, params MCPGetPromptParams)`,
+		`return GetMCPPromptFromManifest(s.Manifest, raw)`,
+	} {
+		if strings.Contains(mcpWireContract, fragment) {
+			t.Errorf("shared MCP prompt projection must be manifest-owned, not raw-capability-owned; found %s", fragment)
+		}
+	}
+	for _, fragment := range []string{
+		`type ToolCallParams struct`,
+		`func NormalizeToolCallParams(params ToolCallParams) ToolCallParams`,
+		`func ValidateToolCallParams(params ToolCallParams) error`,
+		`func PrepareToolRegistryExecution(name string, args map[string]any) (ToolCallParams, ToolResult, bool)`,
+		`func NewInvalidToolCallParamsResult(err error) ToolResult`,
+		`func NewUnknownToolResult(name string) ToolResult`,
+		`func NewControlToolsDisabledToolResult() ToolResult`,
+		`type ProjectedTool struct`,
+		`OutputSchema json.RawMessage`,
+		`Meta         map[string]any`,
+		`type ToolContent struct`,
+		`type ToolResult struct`,
+		`StructuredContent map[string]any`,
+		`func EmptyToolResult() ToolResult`,
+		`func (r ToolResult) NormalizeCollections() ToolResult`,
+		`func NewToolTextContent(text string) ToolContent`,
+		`func NewToolTextResult(text string) ToolResult`,
+		`func NewToolErrorResult(err error) ToolResult`,
+		`func NewToolJSONResult(data any) ToolResult`,
+		`func NewToolHTTPTextResult(`,
+		`func NewCapabilityHTTPToolResult(`,
+		`func ToolOutputSchema(cap Capability) json.RawMessage`,
+		`func ToolStructuredContentFromJSON(`,
+		`func CloneToolStructuredContent(`,
+		`func ToolResultText(result ToolResult) string`,
+		`type ToolResultInterpretation struct`,
+		`func InterpretToolResult(result ToolResult) ToolResultInterpretation`,
+		`func ExecuteCapabilityToolHTTP(`,
+		`type DirectToolExecutionOptions struct`,
+		`type DirectToolExecutionOutcome struct`,
+		`func InterpretDirectToolExecution(result ToolResult, opts DirectToolExecutionOptions) (DirectToolExecutionOutcome, error)`,
+	} {
+		if strings.Contains(mcpWire, fragment) {
+			t.Errorf("neutral Pulse Intelligence tool primitive must not be implemented in mcp.go; found %s", fragment)
+		}
+		if !strings.Contains(toolCore, fragment) {
+			t.Errorf("neutral Pulse Intelligence tool primitive must live outside mcp.go; missing %s", fragment)
+		}
+	}
+
+	workflowPromptSource, err := os.ReadFile(filepath.Join("..", "agentcapabilities", "workflow_prompt.go"))
+	if err != nil {
+		t.Fatalf("read internal/agentcapabilities/workflow_prompt.go: %v", err)
+	}
+	workflowPromptCore := string(workflowPromptSource)
+	for _, fragment := range []string{
+		`PulseWorkflowPromptTriageFleet         = "pulse_triage_fleet"`,
+		`PulseWorkflowPromptOperationsLoop`,
+		`MCPPromptTriageFleet         = PulseWorkflowPromptTriageFleet`,
+		`MCPPromptOperationsLoop`,
+		`type PulseWorkflowPrompt struct`,
+		`type PulseWorkflowPromptArgument struct`,
+		`type PulseWorkflowPromptParams struct`,
+		`type PulseWorkflowPromptResult struct`,
+		`type PulseWorkflowPromptRenderOptions struct`,
+		`func ManifestPulseWorkflowPrompts(manifest Manifest) []PulseWorkflowPrompt`,
+		`func ProjectPulseWorkflowPrompts(capabilities []Capability) []PulseWorkflowPrompt`,
+		`func BuildPulseWorkflowPrompt(capabilities []Capability, params PulseWorkflowPromptParams) (PulseWorkflowPromptResult, error)`,
+		`func BuildPulseWorkflowPromptWithOptions(capabilities []Capability, params PulseWorkflowPromptParams, opts PulseWorkflowPromptRenderOptions) (PulseWorkflowPromptResult, error)`,
+		`func BuildPulseWorkflowPromptFromManifest(manifest Manifest, params PulseWorkflowPromptParams) (PulseWorkflowPromptResult, error)`,
+		`func BuildPulseWorkflowPromptFromManifestWithOptions(manifest Manifest, params PulseWorkflowPromptParams, opts PulseWorkflowPromptRenderOptions) (PulseWorkflowPromptResult, error)`,
+		`func RequiredPulseWorkflowPromptArgument(args map[string]string, name string) (string, error)`,
+		`Name:        ResourceIDArgumentName`,
+		`RequiredPulseWorkflowPromptArgument(params.Arguments, ResourceIDArgumentName)`,
+		`ResourceIDArgumentName, resourceID`,
+		`Name:        FindingIDArgumentName`,
+		`FindCapability(capabilities, ListFindingsCapabilityName)`,
+		`RequiredPulseWorkflowPromptArgument(params.Arguments, FindingIDArgumentName)`,
+		`ListFindingsCapabilityName`,
+		`PlanActionCapabilityName`,
+		`DecideActionCapabilityName`,
+		`ExecuteActionCapabilityName`,
+		`ResolveFindingCapabilityName`,
+		`Triage the Pulse fleet using the canonical fleet context capability`,
+		`Review one Patrol finding and propose the safest governed next step`,
+		`Patrol issue handling`,
+		`Do not execute write tools unless the operator explicitly asks for a governed action`,
+	} {
+		if !strings.Contains(workflowPromptCore, fragment) {
+			t.Errorf("neutral Pulse Intelligence workflow prompt contract must live outside mcp.go; missing %s", fragment)
+		}
+	}
+	for _, fragment := range []string{
+		`func PulseWorkflowPromptProjectionSupported(capabilities []Capability) bool`,
+	} {
+		if strings.Contains(workflowPromptCore, fragment) {
+			t.Errorf("shared workflow prompt projection must be manifest-owned, not raw-capability-owned; found %s", fragment)
+		}
+	}
+	for _, fragment := range []string{
+		`Pulse fleet triage`,
+		`Triage the Pulse fleet using the canonical fleet context capability`,
+		`Review one Patrol finding and propose the safest governed next step`,
+		`prompt argument %s is required`,
+		`func RequiredPulseWorkflowPromptArgument`,
+	} {
+		if strings.Contains(mcpWire, fragment) {
+			t.Errorf("MCP edge must not own neutral Pulse Intelligence workflow prompt behavior; found %s", fragment)
+		}
+	}
+	for _, fragment := range []string{
+		`func NormalizeMCPCallToolParams(`,
+		`func ValidateMCPCallToolParams(`,
+		`func ProjectProviderToolCallToMCP(`,
+		`func PrepareMCPToolRegistryExecution(`,
+		`func NewInvalidMCPToolCallParamsResult(`,
+		`func NewUnknownMCPToolResult(`,
+		`func NewControlToolsDisabledMCPToolResult(`,
+		`func EmptyMCPToolResult(`,
+		`func NewMCPTextContent(`,
+		`func NewMCPTextResult(`,
+		`func NewMCPErrorResult(`,
+		`func NewProviderToolResultFromMCP(`,
+		`func NewMCPToolResponseResult(`,
+		`func NewMCPJSONResult(`,
+		`func NewMCPJSONResultWithIsError(`,
+		`func NewMCPHTTPTextResult(`,
+		`func NewMCPCapabilityHTTPResult(`,
+		`func MCPToolResultText(`,
+		`type MCPToolResultInterpretation`,
+		`func InterpretMCPToolResult(`,
+		`type DirectMCPToolExecutionOptions`,
+		`type DirectMCPToolExecutionOutcome`,
+		`func InterpretDirectMCPToolExecution(`,
+	} {
+		if strings.Contains(mcpWire, fragment) {
+			t.Errorf("MCP edge must not preserve compatibility wrappers around neutral tool helpers; found %s", fragment)
+		}
+	}
+
+	sseSource, err := os.ReadFile(filepath.Join("..", "agentcapabilities", "sse.go"))
+	if err != nil {
+		t.Fatalf("read internal/agentcapabilities/sse.go: %v", err)
+	}
+	sse := string(sseSource)
+	for _, fragment := range []string{
+		`type SSERecord struct`,
+		`const AgentSSEAccept = "text/event-stream"`,
+		`func ScanSSERecords(`,
+		`scanner.Buffer(make([]byte, 64*1024), 1<<22)`,
+		`case "event":`,
+		`case "data":`,
+		`strings.Join(dataLines, "\n")`,
+		`func StreamAgentSSERecords(`,
+		`NewAgentHTTPRequest(ctx, http.MethodGet, baseURL, path, token, nil)`,
+		`req.Header.Set("Accept", AgentSSEAccept)`,
+		`httpClient(client).Do(req)`,
+		`ScanSSERecords(resp.Body, handle)`,
+		`func IsActionableSSERecord(`,
+		`func StreamAgentActionableSSERecords(`,
+		`type MCPEventNotificationWriter func(JSONRPCRequest) error`,
+		`func StreamMCPEventNotifications(`,
+		`StreamAgentActionableSSERecords(ctx, client, baseURL, path, token, func(record SSERecord) bool`,
+		`NewMCPEventNotification(record.Event, []byte(record.Data))`,
+	} {
+		if !strings.Contains(sse, fragment) {
+			t.Errorf("agentcapabilities must own the shared agent SSE parser, subscription transport, and MCP notification bridge; missing %s", fragment)
+		}
+	}
+
+	textInvocationSource, err := os.ReadFile(filepath.Join("..", "agentcapabilities", "text_tool_invocation.go"))
+	if err != nil {
+		t.Fatalf("read internal/agentcapabilities/text_tool_invocation.go: %v", err)
+	}
+	textInvocation := string(textInvocationSource)
+	for _, fragment := range []string{
+		`func IsTextToolInvocation(command string) bool`,
+		`func ParseTextToolInvocation(command string) (ToolCallParams, error)`,
+		`const ApprovalArgumentKey = "_approval_id"`,
+		`func ApprovalArgument(args map[string]any) string`,
+		`func IsInternalToolArgument(name string) bool`,
+		`func CloneToolArguments(args map[string]any) map[string]any`,
+		`func PublicToolArguments(args map[string]any) map[string]any`,
+		`func WithApprovalArgument(args map[string]any, approvalID string) map[string]any`,
+		`cloned[k] = cloneSchemaValue(v)`,
+		`public[k] = cloneSchemaValue(v)`,
+		`strings.TrimPrefix(command, "default_api:")`,
+		`args := make(map[string]any)`,
+		`ToolCallParams{Name: toolName, Arguments: args}`,
+		`ValidateToolCallParams(params)`,
+		`func splitTextToolArguments(argsStr string) []string`,
+	} {
+		if !strings.Contains(textInvocation, fragment) {
+			t.Errorf("agentcapabilities must own the shared text tool invocation parser; missing %s", fragment)
+		}
+	}
+
+	aiRelaySource, err := os.ReadFile("router_routes_ai_relay.go")
+	if err != nil {
+		t.Fatalf("read internal/api/router_routes_ai_relay.go: %v", err)
+	}
+	aiRelay := string(aiRelaySource)
+	for _, fragment := range []string{
+		`agentcapabilities.ParseTextToolInvocation(command)`,
+		`params.Arguments = agentcapabilities.WithApprovalArgument(params.Arguments, approvalID)`,
+		`chatService.ExecuteAssistantTool(ctx, params.Name, params.Arguments)`,
+	} {
+		if !strings.Contains(aiRelay, fragment) {
+			t.Errorf("AI relay MCP executor must consume the shared text tool invocation parser; missing %s", fragment)
+		}
+	}
+	for _, fragment := range []string{
+		`func parseMCPToolCall(`,
+		`func splitToolArgs(`,
+		`func isMCPToolCall(`,
+		`params.Arguments["_approval_id"]`,
+	} {
+		if strings.Contains(aiRelay, fragment) {
+			t.Errorf("AI relay must not preserve local text tool invocation parsing; found %s", fragment)
+		}
+	}
+
+	assistantToolFiles := []string{
+		filepath.Join("..", "ai", "chat", "agentic.go"),
+		filepath.Join("..", "ai", "tools", "tools_control.go"),
+		filepath.Join("..", "ai", "tools", "tools_docker.go"),
+		filepath.Join("..", "ai", "tools", "tools_file.go"),
+		filepath.Join("..", "ai", "tools", "tools_kubernetes.go"),
+	}
+	for _, path := range assistantToolFiles {
+		source, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		if strings.Contains(string(source), `["_approval_id"]`) {
+			t.Errorf("%s must consume shared approved-action argument helpers instead of local key indexing", path)
+		}
+	}
+
+	httpSource, err := os.ReadFile(filepath.Join("..", "agentcapabilities", "http.go"))
+	if err != nil {
+		t.Fatalf("read internal/agentcapabilities/http.go: %v", err)
+	}
+	agentHTTP := string(httpSource)
+	for _, fragment := range []string{
+		`const (`,
+		`AgentCapabilitiesPath           = "/api/agent/capabilities"`,
+		`AgentAPITokenHeader             = "X-API-Token"`,
+		`type HTTPCallResponse struct`,
+		`func NewAgentHTTPRequest(`,
+		`func FetchManifest(`,
+		`func BuildCapabilityHTTPRequest(`,
+		`func CallCapabilityHTTP(`,
+		`func CallCapabilityHTTPByName(`,
+		`func CallRequestResponseCapabilityHTTPByName(`,
+		`func (r HTTPCallResponse) FailureError() error`,
+		`ProjectCapabilityCall(cap, args)`,
+		`ResolveRequestResponseCapability(capabilities, name)`,
+		`ResolveCapability(capabilities, name)`,
+		`DecodeErrorEnvelope(r.Body)`,
+	} {
+		if !strings.Contains(agentHTTP, fragment) {
+			t.Errorf("agentcapabilities must own the shared agent HTTP substrate; missing %s", fragment)
+		}
+	}
+	if !strings.Contains(projection, `for k, v := range PublicToolArguments(args)`) {
+		t.Error("manifest-backed HTTP projection must strip internal tool-call arguments before building public request bodies")
+	}
+
+	toolResponseSource, err := os.ReadFile(filepath.Join("..", "agentcapabilities", "tool_response.go"))
+	if err != nil {
+		t.Fatalf("read internal/agentcapabilities/tool_response.go: %v", err)
+	}
+	toolResponse := string(toolResponseSource)
+	for _, fragment := range []string{
+		`type ToolResponse struct`,
+		`type ToolError struct`,
+		`ErrCodeFSMBlocked`,
+		`ErrCodeStrictResolution`,
+		`ErrCodeRoutingMismatch`,
+		`ErrCodeExecutionContextUnavailable`,
+		`func NewToolBlockedError(`,
+		`func NewToolResponseResult(resp ToolResponse) ToolResult`,
+		`func ToolResultErrorCode(resultText string) (string, bool)`,
+		`func ToolResultHasErrorCode(resultText, code string) bool`,
+		`func ToolResultHasVerificationOK(resultText string) bool`,
+	} {
+		if !strings.Contains(toolResponse, fragment) {
+			t.Errorf("agentcapabilities must own the shared tool response envelope; missing %s", fragment)
+		}
+	}
+	for _, fragment := range []string{
+		`func NewMCPToolResponseResult(`,
+	} {
+		if strings.Contains(toolResponse, fragment) {
+			t.Errorf("neutral tool response envelope must not own MCP compatibility wrappers; found %s", fragment)
+		}
+	}
+
+	agenticVerificationSource, err := os.ReadFile(filepath.Join("..", "ai", "chat", "agentic_verification.go"))
+	if err != nil {
+		t.Fatalf("read internal/ai/chat/agentic_verification.go: %v", err)
+	}
+	if strings.Contains(string(agenticVerificationSource), `func toolResultHasVerificationOK(`) {
+		t.Error("chat FSM verification evidence parsing must live in shared agentcapabilities, not a chat-local helper")
+	}
+	agenticSource, err := os.ReadFile(filepath.Join("..", "ai", "chat", "agentic.go"))
+	if err != nil {
+		t.Fatalf("read internal/ai/chat/agentic.go: %v", err)
+	}
+	if !strings.Contains(string(agenticSource), `agentcapabilities.ToolResultHasVerificationOK(resultText)`) {
+		t.Error("chat FSM self-verification must consume the shared tool-result verification parser")
+	}
+	if !strings.Contains(string(agenticSource), `agentcapabilities.ToolResultHasErrorCode(resultText, agentcapabilities.ErrCodeStrictResolution)`) {
+		t.Error("chat strict-resolution recovery must consume the shared tool-result error-code parser")
+	}
+	if strings.Contains(string(agenticSource), `strings.Contains(resultText, "STRICT_RESOLUTION")`) {
+		t.Error("chat strict-resolution recovery must not use local string matching")
+	}
+	if !strings.Contains(string(agenticSource), `agentcapabilities.ErrCodeFSMBlocked`) {
+		t.Error("chat FSM recovery tracking must consume the shared FSM-blocked error code")
+	}
+	if strings.Contains(string(agenticSource), `"FSM_BLOCKED"`) {
+		t.Error("chat FSM recovery tracking must not hard-code the FSM-blocked error code")
+	}
+
+	toolMarkerSource, err := os.ReadFile(filepath.Join("..", "agentcapabilities", "tool_marker.go"))
+	if err != nil {
+		t.Fatalf("read internal/agentcapabilities/tool_marker.go: %v", err)
+	}
+	toolMarker := string(toolMarkerSource)
+	for _, fragment := range []string{
+		`ToolMarkerApprovalRequiredPrefix = ErrCodeApprovalRequired + ":"`,
+		`ToolMarkerPolicyBlockedPrefix = ErrCodePolicyBlocked + ":"`,
+		`ToolMarkerApprovalRequiredType = "approval_required"`,
+		`ToolMarkerPolicyBlockedType = "policy_blocked"`,
+		`type ApprovalRequiredToolMarkerData struct`,
+		`func (d ApprovalRequiredToolMarkerData) TargetHint() string`,
+		`func (d ApprovalRequiredToolMarkerData) DescriptionText() string`,
+		`func ApprovalRequiredToolMarker(`,
+		`func PolicyBlockedToolMarker(`,
+		`func FormatApprovalRequiredToolMarker(`,
+		`func FormatPolicyBlockedToolMarker(`,
+		`func HasApprovalRequiredToolMarker(`,
+		`func HasPolicyBlockedToolMarker(`,
+		`func ApprovalRequiredToolMarkerPayloadJSON(`,
+		`func ParseApprovalRequiredToolMarkerPayload(`,
+		`func ParseApprovalRequiredToolMarkerData(`,
+	} {
+		if !strings.Contains(toolMarker, fragment) {
+			t.Errorf("agentcapabilities must own the shared Assistant tool marker vocabulary; missing %s", fragment)
+		}
+	}
+
+	controlLevelSource, err := os.ReadFile(filepath.Join("..", "agentcapabilities", "control_level.go"))
+	if err != nil {
+		t.Fatalf("read internal/agentcapabilities/control_level.go: %v", err)
+	}
+	controlLevel := string(controlLevelSource)
+	for _, fragment := range []string{
+		`type ControlLevel string`,
+		`ControlLevelReadOnly`,
+		`ControlLevelControlled`,
+		`ControlLevelAutonomous`,
+		`func NormalizeControlLevel(`,
+		`func IsValidControlLevel(`,
+		`func ControlLevelAllowsControlTools(`,
+	} {
+		if !strings.Contains(controlLevel, fragment) {
+			t.Errorf("agentcapabilities must own the shared control-level contract; missing %s", fragment)
+		}
+	}
+
+	typesSource, err := os.ReadFile(filepath.Join("..", "agentcapabilities", "types.go"))
+	if err != nil {
+		t.Fatalf("read internal/agentcapabilities/types.go: %v", err)
+	}
+	typesSrc := string(typesSource)
+	for _, fragment := range []string{
+		`const ControlToolsDisabledMessage = "Control tools are disabled.`,
+		`func NormalizeToolGovernance(`,
+		`func NormalizeCapabilityGovernance(cap Capability) ToolGovernance`,
+		`func CapabilityActionMode(cap Capability) ActionMode`,
+		`func NewToolGovernanceDescriptor(`,
+		`func NormalizeToolGovernanceDescriptor(descriptor ToolGovernanceDescriptor) ToolGovernanceDescriptor`,
+		`governance.ActionMode = ActionModeWrite`,
+		`CapabilityActionMode(cap)`,
+		`governance.ApprovalPolicy = ApprovalPolicyActionPlan`,
+		`DefaultApprovalPolicyDescription(governance.ApprovalPolicy)`,
+		`ToolGovernanceDescriptor{`,
+	} {
+		if !strings.Contains(typesSrc, fragment) {
+			t.Errorf("agentcapabilities must own shared tool-governance defaults; missing %s", fragment)
+		}
+	}
+	governancePromptSource, err := os.ReadFile(filepath.Join("..", "agentcapabilities", "governance_prompt.go"))
+	if err != nil {
+		t.Fatalf("read internal/agentcapabilities/governance_prompt.go: %v", err)
+	}
+	governancePromptSrc := string(governancePromptSource)
+	for _, fragment := range []string{
+		`type ToolGovernancePromptOptions struct`,
+		`type PulseIntelligenceOperatingInstructionOptions struct`,
+		`func BuildToolGovernancePromptSection(`,
+		`func BuildAssistantToolGovernancePromptSection(`,
+		`func BuildPulseIntelligenceOperatingInstructions() string`,
+		`func BuildPulseAssistantOperatingInstructions() string`,
+		`type PulseMCPOperatingInstructionOptions struct`,
+		`func BuildPulseMCPOperatingInstructions(`,
+		`func BuildPulseIntelligenceOperatingInstructionsForSurface(`,
+		`ResolveSurfaceAffordanceContract(`,
+		`func ToolGovernancePromptLine(`,
+		`func ToolGovernancePromptDescription(`,
+		`func AssistantGovernanceOfferedToolNames(`,
+		`AdditionalToolGovernanceLines []string`,
+		`const PulseQuestionToolName = "pulse_question"`,
+		`func PulseQuestionToolGovernancePromptLine() string`,
+		`SupportsInteractiveQuestions bool`,
+		`SurfaceAffordanceLabels(surfaceAffordancesFromOptions(opts))`,
+		`## PULSE INTELLIGENCE OPERATING MODEL`,
+		`No Pulse tools are offered for this turn.`,
+		`This manifest is generated from Pulse's governed tool registry.`,
+		`ApprovalPolicyScopeOnly`,
+		`ActionModeRead`,
+	} {
+		if !strings.Contains(governancePromptSrc, fragment) {
+			t.Errorf("agentcapabilities must own shared tool-governance prompt projection; missing %s", fragment)
+		}
+	}
+	for _, fragment := range []string{
+		`func CloneCapability(cap Capability) Capability`,
+		`func CloneCapabilities(capabilities []Capability) []Capability`,
+		`cap.InputSchema = CloneRawMessage(cap.InputSchema)`,
+	} {
+		if !strings.Contains(typesSrc, fragment) {
+			t.Errorf("agentcapabilities must own detached capability projection helpers; missing %s", fragment)
+		}
+	}
+
+	textToolInvocationSource, err := os.ReadFile(filepath.Join("..", "agentcapabilities", "text_tool_invocation.go"))
+	if err != nil {
+		t.Fatalf("read internal/agentcapabilities/text_tool_invocation.go: %v", err)
+	}
+	textToolInvocation := string(textToolInvocationSource)
+	for _, fragment := range []string{
+		`const CurrentResourceHandle = "current_resource"`,
+		`func IsCurrentResourceReference(value string) bool`,
+		`func ToolInputContainsCurrentResourceReference(value any) bool`,
+		`currentResourceReferenceAliases`,
+		`"redacted by policy"`,
+	} {
+		if !strings.Contains(textToolInvocation, fragment) {
+			t.Errorf("agentcapabilities must own shared current_resource tool-argument semantics; missing %s", fragment)
+		}
+	}
+
+	configSource, err := os.ReadFile(filepath.Join("..", "config", "ai.go"))
+	if err != nil {
+		t.Fatalf("read internal/config/ai.go: %v", err)
+	}
+	configAI := string(configSource)
+	for _, fragment := range []string{
+		`ControlLevelReadOnly = string(agentcapabilities.ControlLevelReadOnly)`,
+		`ControlLevelControlled = string(agentcapabilities.ControlLevelControlled)`,
+		`ControlLevelAutonomous = string(agentcapabilities.ControlLevelAutonomous)`,
+		`return string(agentcapabilities.NormalizeControlLevel(c.ControlLevel))`,
+		`return agentcapabilities.ControlLevelAllowsControlTools(agentcapabilities.ControlLevel(c.GetControlLevel()))`,
+		`return agentcapabilities.IsValidControlLevel(level)`,
+	} {
+		if !strings.Contains(configAI, fragment) {
+			t.Errorf("AI config must alias shared control-level vocabulary; missing %s", fragment)
+		}
+	}
+
+	assistantProtocol, err := os.ReadFile(filepath.Join("..", "ai", "tools", "protocol.go"))
+	if err != nil {
+		t.Fatalf("read internal/ai/tools/protocol.go: %v", err)
+	}
+	assistantSrc := string(assistantProtocol)
+	for _, fragment := range []string{
+		`type Tool = agentcapabilities.Tool`,
+		`type CallToolResult = agentcapabilities.ToolResult`,
+		`type Content = agentcapabilities.ToolContent`,
+		`type CallToolParams = agentcapabilities.ToolCallParams`,
+		`type ToolResponse = agentcapabilities.ToolResponse`,
+		`type ToolError = agentcapabilities.ToolError`,
+		`ErrCodeStrictResolution`,
+		`agentcapabilities.ErrCodeStrictResolution`,
+		`ErrCodeRoutingMismatch`,
+		`agentcapabilities.ErrCodeRoutingMismatch`,
+		`return agentcapabilities.NewToolTextResult(text)`,
+		`return agentcapabilities.NewToolJSONResultWithIsError(data, isError)`,
+		`return agentcapabilities.NewToolResponseResult(resp)`,
+	} {
+		if !strings.Contains(assistantSrc, fragment) {
+			t.Errorf("Assistant tool protocol must wrap the shared tool result envelope; missing %s", fragment)
+		}
+	}
+	for _, fragment := range []string{
+		`type Request = agentcapabilities.JSONRPCRequest`,
+		`type Response = agentcapabilities.JSONRPCResponse`,
+		`type Error = agentcapabilities.JSONRPCError`,
+		`type InitializeResult = agentcapabilities.MCPInitializeResult`,
+		`type ServerInfo = agentcapabilities.MCPServerInfo`,
+		`type ListToolsResult = agentcapabilities.MCPListToolsResult`,
+		`type Resource = agentcapabilities.MCPResource`,
+		`type Prompt = agentcapabilities.MCPPrompt`,
+	} {
+		if strings.Contains(assistantSrc, fragment) {
+			t.Errorf("native Assistant tool protocol must not expose MCP/JSON-RPC wire aliases; found %s", fragment)
+		}
+	}
+
+	providerSource, err := os.ReadFile(filepath.Join("..", "ai", "providers", "provider.go"))
+	if err != nil {
+		t.Fatalf("read internal/ai/providers/provider.go: %v", err)
+	}
+	providerSrc := string(providerSource)
+	for _, fragment := range []string{
+		`type Tool = agentcapabilities.ProviderTool`,
+		`type ToolCall = agentcapabilities.ProviderToolCall`,
+		`type ToolResult = agentcapabilities.ProviderToolResult`,
+		`return agentcapabilities.EmptyProviderTool()`,
+		`return agentcapabilities.EmptyProviderToolCall()`,
+	} {
+		if !strings.Contains(providerSrc, fragment) {
+			t.Errorf("Assistant providers must alias the shared provider tool shape; missing %s", fragment)
+		}
+	}
+
+	for _, path := range []string{
+		filepath.Join("..", "ai", "chat", "tools.go"),
+		filepath.Join("..", "ai", "tools", "schema_projection.go"),
+	} {
+		if _, err := os.Stat(path); err == nil {
+			t.Errorf("%s must not keep provider projection compatibility wrappers; use internal/agentcapabilities directly", path)
+		} else if !os.IsNotExist(err) {
+			t.Fatalf("stat %s: %v", path, err)
+		}
+	}
+
+	assistantQuestionToolSource, err := os.ReadFile(filepath.Join("..", "ai", "chat", "agentic_question_tool.go"))
+	if err != nil {
+		t.Fatalf("read internal/ai/chat/agentic_question_tool.go: %v", err)
+	}
+	assistantQuestionToolSrc := string(assistantQuestionToolSource)
+	for _, fragment := range []string{
+		`const pulseQuestionToolName = agentcapabilities.PulseQuestionToolName`,
+		`agentcapabilities.ParsePulseQuestionToolInput(input)`,
+	} {
+		if !strings.Contains(assistantQuestionToolSrc, fragment) {
+			t.Errorf("Assistant question tool must use shared provider declaration; missing %s", fragment)
+		}
+	}
+	for _, fragment := range []string{
+		`InputSchema: map[string]interface{}{`,
+		`Name:        pulseQuestionToolName`,
+		`Description: "Ask the user for missing information using a structured prompt.`,
+		`func userQuestionTool()`,
+		`type questionToolInputPayload struct`,
+		`type questionToolInputQuestion struct`,
+		`type questionToolInputOption struct`,
+		`func parseQuestionToolOptions(`,
+		`type questionToolType string`,
+		`questionToolTypeText`,
+		`questionToolTypeSelect`,
+		`func normalizeQuestionToolType(`,
+		`agentcapabilities.NormalizePulseQuestionToolType(parsedQuestion.Type, len(opts) > 0)`,
+	} {
+		if strings.Contains(assistantQuestionToolSrc, fragment) {
+			t.Errorf("Assistant question tool must not keep a chat-local provider declaration; found %s", fragment)
+		}
+	}
+
+	assistantFSMSource, err := os.ReadFile(filepath.Join("..", "ai", "chat", "fsm.go"))
+	if err != nil {
+		t.Fatalf("read internal/ai/chat/fsm.go: %v", err)
+	}
+	assistantFSMSrc := string(assistantFSMSource)
+	for _, fragment := range []string{
+		`type ToolKind = agentcapabilities.ToolCallKind`,
+		`ToolKindResolve = agentcapabilities.ToolCallKindResolve`,
+		`ToolKindRead = agentcapabilities.ToolCallKindRead`,
+		`ToolKindWrite = agentcapabilities.ToolCallKindWrite`,
+		`ToolKindUserInput = agentcapabilities.ToolCallKindUserInput`,
+		`return agentcapabilities.ClassifyToolCall(toolName, args)`,
+	} {
+		if !strings.Contains(assistantFSMSrc, fragment) {
+			t.Errorf("Assistant FSM must consume shared tool-call safety classification; missing %s", fragment)
+		}
+	}
+	for _, fragment := range []string{
+		`case agentcapabilities.PulseQuestionToolName:`,
+		`case "pulse_question":`,
+		`case "pulse_control":`,
+		`case "pulse_read":`,
+		`writeActions := map[string]bool`,
+		`readActions := map[string]bool`,
+		`actionLower := strings.ToLower(action)`,
+	} {
+		if strings.Contains(assistantFSMSrc, fragment) {
+			t.Errorf("Assistant FSM must not keep local tool-call safety classification; found %s", fragment)
+		}
+	}
+
+	chatTypesSource, err := os.ReadFile(filepath.Join("..", "ai", "chat", "types.go"))
+	if err != nil {
+		t.Fatalf("read internal/ai/chat/types.go: %v", err)
+	}
+	chatTypesSrc := string(chatTypesSource)
+	for _, fragment := range []string{
+		`func ToolCallFromProvider(tc agentcapabilities.ProviderToolCall) ToolCall`,
+		`func (t ToolCall) ProviderToolCall() agentcapabilities.ProviderToolCall`,
+		`type ToolResult = agentcapabilities.ProviderToolResult`,
+	} {
+		if !strings.Contains(chatTypesSrc, fragment) {
+			t.Errorf("Assistant chat transcript must project through shared provider tool shapes; missing %s", fragment)
+		}
+	}
+
+	aiServiceSource, err := os.ReadFile(filepath.Join("..", "ai", "service.go"))
+	if err != nil {
+		t.Fatalf("read internal/ai/service.go: %v", err)
+	}
+	aiServiceSrc := string(aiServiceSource)
+	for _, fragment := range []string{
+		`type ChatToolCall = agentcapabilities.ProviderToolCall`,
+		`return agentcapabilities.EmptyProviderToolCall()`,
+		`type ChatToolResult = agentcapabilities.ProviderToolResult`,
+		`return agentcapabilities.ApprovalRequiredToolMarker(`,
+		`return agentcapabilities.PolicyBlockedToolMarker(command, reason)`,
+		`agentcapabilities.ParseApprovalRequiredToolMarkerData(result)`,
+		`agentcapabilities.HasApprovalRequiredToolMarker(result)`,
+		`agentcapabilities.LegacyAssistantUtilityProviderTools()`,
+		`agentcapabilities.LegacyAssistantRunCommandToolName`,
+		`agentcapabilities.LegacyAssistantCommandArgumentName`,
+		`agentcapabilities.LegacyAssistantURLArgumentName`,
+		`agentcapabilities.LegacyAssistantResourceTypeArgumentName`,
+		`agentcapabilities.LegacyAssistantResourceIDArgumentName`,
+		`projection := newLegacyServiceProviderToolResultContextProjection(tc.ID, result, !execution.Success)`,
+		`projection := newLegacyServiceProviderToolResultContextProjection(tc.ID, result, true)`,
+		`agentcapabilities.NewProviderToolResultContextProjection(toolUseID, content, isError, legacyServiceProviderToolResultContextOptions())`,
+		`ToolResult: &projection.Model`,
+	} {
+		if !strings.Contains(aiServiceSrc, fragment) {
+			t.Errorf("AI service chat messages and tool markers must use shared provider/tool shapes; missing %s", fragment)
+		}
+	}
+	for _, fragment := range []string{
+		`ToolResult: &providers.ToolResult{`,
+		`resultForContext`,
+		`maxResultSize`,
+		`output truncated (`,
+	} {
+		if strings.Contains(aiServiceSrc, fragment) {
+			t.Errorf("AI service must not preserve local provider-result context shaping; found %s", fragment)
+		}
+	}
+	for _, fragment := range []string{
+		`Name:        "run_command"`,
+		`Name:        "fetch_url"`,
+		`Name:        "set_resource_url"`,
+		`case "run_command":`,
+		`case "fetch_url":`,
+		`case "set_resource_url":`,
+		`tc.Input["command"]`,
+		`tc.Input["run_on_host"]`,
+		`tc.Input["target_host"]`,
+		`tc.Input["url"]`,
+		`tc.Input["resource_type"]`,
+		`tc.Input["resource_id"]`,
+	} {
+		if strings.Contains(aiServiceSrc, fragment) {
+			t.Errorf("legacy Assistant utility tool schemas and input keys must stay in agentcapabilities; AI service found %s", fragment)
+		}
+	}
+	if strings.Contains(aiServiceSrc, `func parseApprovalNeededMarker(`) {
+		t.Error("AI service approval marker handling must call the shared marker parser directly")
+	}
+
+	assistantChatAgentic, err := os.ReadFile(filepath.Join("..", "ai", "chat", "agentic.go"))
+	if err != nil {
+		t.Fatalf("read internal/ai/chat/agentic.go: %v", err)
+	}
+	agenticSrc := string(assistantChatAgentic)
+	for _, fragment := range []string{
+		`providerTools := executor.AssistantProviderTools(agentcapabilities.AssistantProviderToolOptions{`,
+		`a.tools = a.executor.AssistantProviderTools(agentcapabilities.AssistantProviderToolOptions{`,
+		`IncludeQuestionTool: true`,
+		`agentcapabilities.HasApprovalRequiredToolMarker(resultText)`,
+		`agentcapabilities.ParseApprovalRequiredToolMarkerData(resultText)`,
+		`inputWithApproval = agentcapabilities.WithApprovalArgument(inputWithApproval, approvalData.ApprovalID)`,
+		`agentcapabilities.NewProviderToolResultFromToolResult(tc.ID, result)`,
+		`projection := newProviderToolResultContextProjection(tc.ID, resultText, isError)`,
+		`ToolResult: &projection.Transcript`,
+		`ToolResult: &projection.Model`,
+		`toolCalls = agentcapabilities.NormalizeProviderToolCallsForExecution(data.ToolCalls)`,
+		`agentcapabilities.ToolInputContainsCurrentResourceReference(tc.Input)`,
+	} {
+		if !strings.Contains(agenticSrc, fragment) {
+			t.Errorf("Assistant agentic loop must use shared provider-result and marker vocabulary; missing %s", fragment)
+		}
+	}
+	if strings.Contains(agenticSrc, `ProjectAssistantProviderTools(`) || strings.Contains(agenticSrc, `ListToolGovernance()`) {
+		t.Error("Assistant agentic loop must request provider-tool projection from the shared executor entrypoint")
+	}
+	if strings.Contains(agenticSrc, `resultText = FormatToolResult(result)`) {
+		t.Error("Assistant agentic loop must project MCP tool results through shared provider-result construction, not local result text assignment")
+	}
+	for _, fragment := range []string{
+		`agentcapabilities.ApprovalRequiredToolMarkerPayloadJSON(resultText)`,
+		`var approvalData struct`,
+		"\n\t\t\t\t\t\t\tagentcapabilities.WithApprovalArgument(inputWithApproval, approvalData.ApprovalID)",
+		`ToolResult: &providers.ToolResult{`,
+		`ToolResult: &ToolResult{`,
+		`modelResultText := truncateToolResultForModel(resultText)`,
+		`func toolInputContainsCurrentResourceReference`,
+		`append(providerTools, userQuestionTool())`,
+		`userQuestionTool()`,
+		`toolCalls = NormalizeProviderToolCallsForExecution(data.ToolCalls)`,
+		`func ConvertPulseToolsToProvider`,
+		`func ConvertPulseToolsToProviderWithGovernance`,
+		`func ConvertProviderToolCallToMCP`,
+		`func NormalizeProviderToolCallForExecution`,
+		`func NormalizeProviderToolCallsForExecution`,
+	} {
+		if strings.Contains(agenticSrc, fragment) {
+			t.Errorf("Assistant agentic loop must not assemble provider tool-result structs locally; found %s", fragment)
+		}
+	}
+
+	currentResourceSource, err := os.ReadFile(filepath.Join("..", "ai", "tools", "current_resource.go"))
+	if err != nil {
+		t.Fatalf("read internal/ai/tools/current_resource.go: %v", err)
+	}
+	currentResourceSrc := string(currentResourceSource)
+	for _, fragment := range []string{
+		`const currentResourceHandle = agentcapabilities.CurrentResourceHandle`,
+		`return agentcapabilities.IsCurrentResourceReference(value)`,
+	} {
+		if !strings.Contains(currentResourceSrc, fragment) {
+			t.Errorf("Assistant current_resource executor must use shared handle semantics; missing %s", fragment)
+		}
+	}
+	for _, fragment := range []string{
+		`"attached_resource"`,
+		`"selected_resource"`,
+		`"this_resource"`,
+		`"redacted by policy"`,
+	} {
+		if strings.Contains(currentResourceSrc, fragment) {
+			t.Errorf("Assistant current_resource executor must not keep local handle aliases; found %s", fragment)
+		}
+	}
+
+	assistantChatContext, err := os.ReadFile(filepath.Join("..", "ai", "chat", "agentic_context.go"))
+	if err != nil {
+		t.Fatalf("read internal/ai/chat/agentic_context.go: %v", err)
+	}
+	agenticContextSrc := string(assistantChatContext)
+	for _, fragment := range []string{
+		`agentcapabilities.ProviderToolResultModelContent(text, providerToolResultContextOptions())`,
+		`agentcapabilities.NewProviderToolResultContextProjection(toolUseID, content, isError, providerToolResultContextOptions())`,
+		`pm.ToolResult = &projection.Model`,
+		`agentcapabilities.NewProviderToolErrorResult(`,
+	} {
+		if !strings.Contains(agenticContextSrc, fragment) {
+			t.Errorf("Assistant provider message conversion must use shared provider-result construction; missing %s", fragment)
+		}
+	}
+	for _, fragment := range []string{
+		`func newProviderToolResult(`,
+		`func newProviderToolErrorResult(`,
+		`ToolResult: &providers.ToolResult{`,
+	} {
+		if strings.Contains(agenticContextSrc, fragment) {
+			t.Errorf("Assistant provider message conversion must not preserve local provider-result wrappers or structs; found %s", fragment)
+		}
+	}
+
+	assistantChatService, err := os.ReadFile(filepath.Join("..", "ai", "chat", "service.go"))
+	if err != nil {
+		t.Fatalf("read internal/ai/chat/service.go: %v", err)
+	}
+	chatServiceSrc := string(assistantChatService)
+	for _, fragment := range []string{
+		`manifest = s.executor.ListToolGovernance()`,
+		`agentcapabilities.ProviderToolNames(offeredTools)`,
+		`agentcapabilities.ProviderToolGovernanceDescriptors(offeredTools)`,
+		`agentcapabilities.BuildAssistantToolGovernancePromptSection(manifest, orderedOfferedNames)`,
+		`tools.CanonicalToolGovernanceForManifestSurface(`,
+		`agentcapabilities.SurfaceIDPulseAssistant`,
+		`fallbackAssistantToolGovernanceOfferedNames(manifest)`,
+		`agentcapabilities.ManifestSurfaceAffordances(`,
+		`providerTools := s.executor.AssistantProviderTools(agentcapabilities.AssistantProviderToolOptions{`,
+		`IncludeQuestionTool: includeQuestionTool`,
+		`agentcapabilities.BuildPulseAssistantOperatingInstructions()`,
+		`func (s *Service) executeAssistantRegistryToolDirect(ctx context.Context, toolName string, args map[string]interface{}, opts agentcapabilities.DirectToolExecutionOptions) (agentcapabilities.DirectToolExecutionOutcome, error)`,
+		`outcome, executionErr := s.executeAssistantRegistryToolDirect(ctx, agentcapabilities.PulseRunCommandToolName, args, agentcapabilities.DirectToolExecutionOptions{`,
+		`outcome, executionErr := s.executeAssistantRegistryToolDirect(ctx, toolName, args, agentcapabilities.DirectToolExecutionOptions{`,
+		`result, toolErr := executor.ExecuteTool(ctx, toolName, args)`,
+		`agentcapabilities.InterpretDirectToolExecution(result`,
+		`FailurePrefix:           "command execution failed"`,
+		`ApprovalRequiredMessage: "command requires approval (unexpected in autonomous mode)"`,
+		`PolicyBlockedMessage:    "command blocked by security policy"`,
+		`FailurePrefix:           "tool execution failed"`,
+		`ApprovalRequiredMessage: "tool requires approval (unexpected in fix execution)"`,
+		`PolicyBlockedMessage:    "tool blocked by security policy"`,
+	} {
+		if !strings.Contains(chatServiceSrc, fragment) {
+			t.Errorf("Assistant chat service must use shared direct result execution mapping; missing %s", fragment)
+		}
+	}
+	for _, fragment := range []string{
+		`agentcapabilities.DirectMCPToolExecutionOptions`,
+		`agentcapabilities.DirectMCPToolExecutionOutcome`,
+		`agentcapabilities.InterpretDirectMCPToolExecution`,
+	} {
+		if strings.Contains(chatServiceSrc, fragment) {
+			t.Errorf("Assistant chat service must use neutral direct tool execution helpers, found %s", fragment)
+		}
+	}
+	if strings.Contains(chatServiceSrc, `ProjectAssistantProviderTools(`) {
+		t.Error("Assistant chat service must request provider-tool projection from the shared executor entrypoint")
+	}
+	if strings.Contains(chatServiceSrc, `tools.CanonicalToolGovernanceForSurface(`) ||
+		strings.Contains(chatServiceSrc, `tools.ToolGovernanceSurfacePulseAssistant`) {
+		t.Error("Assistant chat service fallback governance must enter through manifest surface affordances")
+	}
+	for _, fragment := range []string{
+		`b.WriteString("## AVAILABLE TOOL GOVERNANCE`,
+		`agentcapabilities.ToolGovernancePromptOptions{`,
+		`agentcapabilities.PulseQuestionToolGovernancePromptLine()`,
+		`assistantGovernanceOfferedToolNames`,
+		`userQuestionTool()`,
+		`mode := tool.ActionMode`,
+		`approvalSummary := strings.TrimSpace(tool.ApprovalSummary)`,
+		`fmt.Sprintf("- %s: mode=%s; approval=%s`,
+		`for _, content := range result.Content`,
+		`resultText += content.Text`,
+		`agentcapabilities.HasApprovalRequiredToolMarker(resultText)`,
+		`agentcapabilities.HasPolicyBlockedToolMarker(resultText)`,
+		`interpreted := agentcapabilities.InterpretToolResult(result)`,
+		`if interpreted.IsError`,
+		`if interpreted.ApprovalRequired`,
+		`if interpreted.PolicyBlocked`,
+		`func assistantQuestionToolGovernancePromptLine() string`,
+	} {
+		if strings.Contains(chatServiceSrc, fragment) {
+			t.Errorf("Assistant chat service must not flatten or interpret direct MCP result outcomes locally; found %s", fragment)
+		}
+	}
+
+	chatServiceAdapterSource, err := os.ReadFile(filepath.Join("..", "api", "chat_service_adapter.go"))
+	if err != nil {
+		t.Fatalf("read internal/api/chat_service_adapter.go: %v", err)
+	}
+	chatServiceAdapterSrc := string(chatServiceAdapterSource)
+	for _, fragment := range []string{
+		`func adaptChatMessage(m chat.Message) ai.ChatMessage`,
+		`msg.ToolCalls = append(msg.ToolCalls, tc.ProviderToolCall())`,
+		`toolResult := *m.ToolResult`,
+	} {
+		if !strings.Contains(chatServiceAdapterSrc, fragment) {
+			t.Errorf("chat service adapter must bridge messages through shared provider tool shapes; missing %s", fragment)
+		}
+	}
+
+	orchestratorDepsSource, err := os.ReadFile(filepath.Join("..", "..", "pkg", "aicontracts", "orchestrator_deps.go"))
+	if err != nil {
+		t.Fatalf("read pkg/aicontracts/orchestrator_deps.go: %v", err)
+	}
+	orchestratorDepsSrc := string(orchestratorDepsSource)
+	for _, fragment := range []string{
+		`func OrchestratorToolCallInfoFromProvider(tc agentcapabilities.ProviderToolCall) OrchestratorToolCallInfo`,
+		`func (t OrchestratorToolCallInfo) ProviderToolCall() agentcapabilities.ProviderToolCall`,
+		`func OrchestratorToolResultInfoFromProvider(result agentcapabilities.ProviderToolResult) OrchestratorToolResultInfo`,
+		`func (r OrchestratorToolResultInfo) ProviderToolResult() agentcapabilities.ProviderToolResult`,
+		`return agentcapabilities.NewProviderToolResult(r.ToolUseID, r.Content, r.IsError)`,
+	} {
+		if !strings.Contains(orchestratorDepsSrc, fragment) {
+			t.Errorf("orchestrator dependency contract must bridge messages through shared provider tool shapes; missing %s", fragment)
+		}
+	}
+
+	aiHandlersSource, err := os.ReadFile(filepath.Join("..", "api", "ai_handlers.go"))
+	if err != nil {
+		t.Fatalf("read internal/api/ai_handlers.go: %v", err)
+	}
+	aiHandlersSrc := string(aiHandlersSource)
+	for _, fragment := range []string{
+		`aicontracts.OrchestratorToolCallInfoFromProvider(tc.ProviderToolCall())`,
+		`toolResult := aicontracts.OrchestratorToolResultInfoFromProvider(*msg.ToolResult)`,
+	} {
+		if !strings.Contains(aiHandlersSrc, fragment) {
+			t.Errorf("orchestrator chat adapter must bridge messages through shared provider tool shapes; missing %s", fragment)
+		}
+	}
+
+	patrolRuntime, err := os.ReadFile(filepath.Join("..", "ai", "patrol_ai.go"))
+	if err != nil {
+		t.Fatalf("read internal/ai/patrol_ai.go: %v", err)
+	}
+	patrolSrc := string(patrolRuntime)
+	if strings.Contains(patrolSrc, "func formatToolResult(") {
+		t.Error("Patrol runtime must not keep a local result-text wrapper; call agentcapabilities.ToolResultText at the execution site")
+	}
+
+	patrolFindings, err := os.ReadFile(filepath.Join("..", "ai", "patrol_findings.go"))
+	if err != nil {
+		t.Fatalf("read internal/ai/patrol_findings.go: %v", err)
+	}
+	patrolFindingsSrc := string(patrolFindings)
+	for _, fragment := range []string{
+		`agentcapabilities.InterpretToolResult(result)`,
+		`if interpreted.IsError`,
+		`if interpreted.ApprovalRequired`,
+		`if interpreted.PolicyBlocked`,
+	} {
+		if !strings.Contains(patrolFindingsSrc, fragment) {
+			t.Errorf("Patrol tool-call records must use shared tool result interpretation; missing %s", fragment)
+		}
+	}
+	for _, fragment := range []string{
+		`output = agentcapabilities.MCPToolResultText(result)`,
+		`agentcapabilities.InterpretMCPToolResult(result)`,
+		`agentcapabilities.MCPToolResultInterpretation`,
+		`success = !result.IsError`,
+		`if result.IsError`,
+		`formatToolResult(result)`,
+	} {
+		if strings.Contains(patrolFindingsSrc, fragment) {
+			t.Errorf("Patrol tool-call records must not duplicate shared result interpretation locally; found %s", fragment)
+		}
+	}
+
+	assistantRegistry, err := os.ReadFile(filepath.Join("..", "ai", "tools", "registry.go"))
+	if err != nil {
+		t.Fatalf("read internal/ai/tools/registry.go: %v", err)
+	}
+	registrySrc := string(assistantRegistry)
+	for _, fragment := range []string{
+		`type ControlLevel = agentcapabilities.ControlLevel`,
+		`ControlLevelReadOnly ControlLevel = agentcapabilities.ControlLevelReadOnly`,
+		`ControlLevelControlled ControlLevel = agentcapabilities.ControlLevelControlled`,
+		`ControlLevelAutonomous ControlLevel = agentcapabilities.ControlLevelAutonomous`,
+		`!agentcapabilities.ControlLevelAllowsControlTools(controlLevel)`,
+		`!agentcapabilities.ControlLevelAllowsControlTools(e.controlLevel)`,
+		`agentcapabilities.NewToolGovernanceDescriptor(`,
+		`tool.Definition = tool.Definition.NormalizeCollections()`,
+		`result = append(result, tool.Definition.NormalizeCollections())`,
+		`params, invalidResult, ok := agentcapabilities.PrepareToolRegistryExecution(name, args)`,
+		`agentcapabilities.NewUnknownToolResult(name)`,
+		`agentcapabilities.NewControlToolsDisabledToolResult()`,
+		`return result.NormalizeCollections(), err`,
+	} {
+		if !strings.Contains(registrySrc, fragment) {
+			t.Errorf("Assistant tool registry must use shared agentcapabilities contracts; missing %s", fragment)
+		}
+	}
+	for _, fragment := range []string{
+		`assistantControlToolsDisabledMessage`,
+		`func normalizeToolGovernance(`,
+		`DefaultApprovalPolicyDescription(governance.ApprovalPolicy)`,
+		`governance.ActionMode = ToolActionWrite`,
+		`governance.ApprovalPolicy = ToolApprovalActionPlan`,
+		`invalid tools/call params:`,
+		`unknown tool: %s`,
+		`agentcapabilities.ControlToolsDisabledMessage`,
+	} {
+		if strings.Contains(registrySrc, fragment) {
+			t.Errorf("Assistant tool registry must not preserve local governance defaults; found %s", fragment)
+		}
+	}
+
+	assistantRegistryToolFiles := []string{
+		filepath.Join("..", "ai", "tools", "tools_alerts.go"),
+		filepath.Join("..", "ai", "tools", "tools_control.go"),
+		filepath.Join("..", "ai", "tools", "tools_discovery.go"),
+		filepath.Join("..", "ai", "tools", "tools_docker.go"),
+		filepath.Join("..", "ai", "tools", "tools_file.go"),
+		filepath.Join("..", "ai", "tools", "tools_kubernetes.go"),
+		filepath.Join("..", "ai", "tools", "tools_knowledge.go"),
+		filepath.Join("..", "ai", "tools", "tools_metrics.go"),
+		filepath.Join("..", "ai", "tools", "tools_patrol.go"),
+		filepath.Join("..", "ai", "tools", "tools_pmg.go"),
+		filepath.Join("..", "ai", "tools", "tools_query.go"),
+		filepath.Join("..", "ai", "tools", "tools_read.go"),
+		filepath.Join("..", "ai", "tools", "tools_storage.go"),
+		filepath.Join("..", "ai", "tools", "tools_summarize.go"),
+	}
+	assistantRegistryToolSrc := strings.Builder{}
+	for _, path := range assistantRegistryToolFiles {
+		source, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		assistantRegistryToolSrc.Write(source)
+		assistantRegistryToolSrc.WriteString("\n")
+	}
+	registryToolDeclarations := assistantRegistryToolSrc.String()
+	for _, fragment := range []string{
+		`Name: agentcapabilities.PulseAlertsToolName`,
+		`Name:        agentcapabilities.PulseControlToolName`,
+		`Name:        agentcapabilities.PulseDiscoveryToolName`,
+		`Name:        agentcapabilities.PulseDockerToolName`,
+		`Name: agentcapabilities.PulseFileEditToolName`,
+		`Name:        agentcapabilities.PulseKubernetesToolName`,
+		`Name: agentcapabilities.PulseKnowledgeToolName`,
+		`Name: agentcapabilities.PulseMetricsToolName`,
+		`Name: agentcapabilities.PatrolReportFindingToolName`,
+		`Name: agentcapabilities.PatrolResolveFindingToolName`,
+		`Name: agentcapabilities.PatrolGetFindingsToolName`,
+		`Name:        agentcapabilities.PulsePMGToolName`,
+		`Name:        agentcapabilities.PulseQueryToolName`,
+		`Name:        agentcapabilities.PulseReadToolName`,
+		`Name:        agentcapabilities.PulseStorageToolName`,
+		`Name: agentcapabilities.PulseSummarizeToolName`,
+	} {
+		if !strings.Contains(registryToolDeclarations, fragment) {
+			t.Errorf("Assistant registry tool declarations must use shared tool identities; missing %s", fragment)
+		}
+	}
+	for _, fragment := range []string{
+		`Name: "pulse_`,
+		`Name:        "pulse_`,
+		`Name: "patrol_`,
+		`Name:        "patrol_`,
+	} {
+		if strings.Contains(registryToolDeclarations, fragment) {
+			t.Errorf("Assistant registry tool declarations must not own local Pulse tool-name strings; found %s", fragment)
+		}
+	}
+
+	assistantPatrolTools, err := os.ReadFile(filepath.Join("..", "ai", "tools", "tools_patrol.go"))
+	if err != nil {
+		t.Fatalf("read internal/ai/tools/tools_patrol.go: %v", err)
+	}
+	assistantPatrolToolsSrc := string(assistantPatrolTools)
+	for _, fragment := range []string{
+		`agentcapabilities.FindingIDArgumentName`,
+		`agentcapabilities.ReasonArgumentName`,
+		`return NewJSONResult(result), nil`,
+	} {
+		if !strings.Contains(assistantPatrolToolsSrc, fragment) {
+			t.Errorf("Assistant Patrol tools must use shared finding vocabulary and JSON result envelope; missing %s", fragment)
+		}
+	}
+	for _, fragment := range []string{
+		`json.Marshal(result)`,
+		`NewTextResult(string(b))`,
+	} {
+		if strings.Contains(assistantPatrolToolsSrc, fragment) {
+			t.Errorf("Assistant Patrol tools must not manually marshal JSON text results; found %s", fragment)
+		}
+	}
+
+	assistantProjection, err := os.ReadFile(filepath.Join("..", "ai", "tools", "provider_projection.go"))
+	if err != nil {
+		t.Fatalf("read internal/ai/tools/provider_projection.go: %v", err)
+	}
+	assistantProjectionSrc := string(assistantProjection)
+	for _, fragment := range []string{
+		`func (e *PulseToolExecutor) AssistantProviderTools(opts agentcapabilities.AssistantProviderToolOptions) []agentcapabilities.ProviderTool`,
+		`return agentcapabilities.ProjectPulseAssistantProviderTools(agentcapabilities.CanonicalManifest(), e.ListTools(), e.ListToolGovernance(), opts)`,
+		`return agentcapabilities.ProjectPulseAssistantProviderTools(agentcapabilities.CanonicalManifest(), nil, nil, opts)`,
+	} {
+		if !strings.Contains(assistantProjectionSrc, fragment) {
+			t.Errorf("Assistant provider-tool projection must stay centralized on the shared executor; missing %s", fragment)
+		}
+	}
+	for _, fragment := range []string{
+		`return agentcapabilities.ProjectAssistantProviderTools(e.ListTools(), e.ListToolGovernance(), opts)`,
+		`return agentcapabilities.ProjectAssistantProviderTools(nil, nil, opts)`,
+	} {
+		if strings.Contains(assistantProjectionSrc, fragment) {
+			t.Errorf("Assistant provider-tool projection must enter through manifest surface affordances; found %s", fragment)
+		}
+	}
+
+	assistantToolNames, err := os.ReadFile(filepath.Join("..", "ai", "tools", "names.go"))
+	if err != nil {
+		t.Fatalf("read internal/ai/tools/names.go: %v", err)
+	}
+	assistantToolNamesSrc := string(assistantToolNames)
+	for _, fragment := range []string{
+		`agentcapabilities.ProviderToolNameCatalog`,
+		`func AssistantProviderToolNameCatalog() agentcapabilities.ProviderToolNameCatalog`,
+		`return AssistantProviderToolNameCatalog().Has(name)`,
+		`return AssistantProviderToolNameCatalog().HasPrefix(prefix)`,
+		`return knownToolNameCatalog`,
+		`agentcapabilities.NewAssistantProviderToolNameCatalog(e.registry.allNames())`,
+	} {
+		if !strings.Contains(assistantToolNamesSrc, fragment) {
+			t.Errorf("Assistant tool-name allowlist must adapt the shared provider-tool catalog; missing %s", fragment)
+		}
+	}
+	for _, fragment := range []string{
+		`agentcapabilities.AssistantNativeProviderToolNames()`,
+		`knownToolNamesList`,
+		`knownToolNamesSet`,
+		`strings.HasPrefix(name, prefix)`,
+	} {
+		if strings.Contains(assistantToolNamesSrc, fragment) {
+			t.Errorf("Assistant tool-name allowlist must not keep local provider-tool catalog logic; found %s", fragment)
+		}
+	}
+	if strings.Contains(assistantToolNamesSrc, `"pulse_question"`) {
+		t.Error("Assistant tool-name allowlist must not hard-code native Assistant provider tool names")
+	}
+
+	assistantSanitize, err := os.ReadFile(filepath.Join("..", "ai", "chat", "agentic_sanitize.go"))
+	if err != nil {
+		t.Fatalf("read internal/ai/chat/agentic_sanitize.go: %v", err)
+	}
+	assistantSanitizeSrc := string(assistantSanitize)
+	for _, fragment := range []string{
+		`agentcapabilities.ProviderToolCallArtifactIndex(content, tools.AssistantProviderToolNameCatalog())`,
+		`agentcapabilities.SplitTrailingProviderToolNamePrefix(content, tools.AssistantProviderToolNameCatalog())`,
+	} {
+		if !strings.Contains(assistantSanitizeSrc, fragment) {
+			t.Errorf("Assistant chat sanitizer must use shared provider tool-call artifact detection; missing %s", fragment)
+		}
+	}
+	for _, fragment := range []string{
+		`dsmlMarkers`,
+		`xmlToolCallRe`,
+		`pipeMarkerRe`,
+		`minimaxMarkerRe`,
+		`jsonToolCallRe`,
+		`plainFunctionToolCallRe`,
+		`findJSONToolCallLeak`,
+		`findPlainFunctionToolCallLeak`,
+	} {
+		if strings.Contains(assistantSanitizeSrc, fragment) {
+			t.Errorf("Assistant chat sanitizer must not preserve local provider artifact detection; found %s", fragment)
+		}
+	}
+}
+
+// TestContract_AgentProbeUsesSharedAgentCapabilityProjection pins the reference
+// client boundary: the probe may demonstrate transport mechanics, but manifest
+// lookup and route projection must use the same shared helpers as MCP.
+func TestContract_AgentProbeUsesSharedAgentCapabilityProjection(t *testing.T) {
+	source, err := os.ReadFile(filepath.Join("..", "..", "cmd", "agent-probe", "main.go"))
+	if err != nil {
+		t.Fatalf("read cmd/agent-probe/main.go: %v", err)
+	}
+	src := string(source)
+	required := []string{
+		`internal/agentcapabilities`,
+		`agentcapabilities.FleetContextCapabilityName`,
+		`agentcapabilities.ResourceContextCapabilityName`,
+		`agentcapabilities.FindCapability(manifest.Capabilities, agentcapabilities.EventSubscriptionCapabilityName)`,
+		`agentcapabilities.FetchManifest(context.Background(), client, *baseURL)`,
+		`agentcapabilities.CallRequestResponseCapabilityHTTPBodyByName(`,
+		`agentcapabilities.StreamAgentActionableSSERecords(ctx, nil, baseURL, path, token, func(record agentcapabilities.SSERecord) bool`,
+	}
+	for _, fragment := range required {
+		if !strings.Contains(src, fragment) {
+			t.Errorf("agent-probe must use the shared agent capability projection helpers; missing %s", fragment)
+		}
+	}
+	forbidden := []string{
+		`agentcapabilities.FindCapability(manifest.Capabilities, "get_fleet_context")`,
+		`agentcapabilities.FindCapability(manifest.Capabilities, "get_resource_context")`,
+		`agentcapabilities.CallCapabilityHTTPByName(`,
+		`agentcapabilities.CallCapabilityHTTP(ctx, client, baseURL, token, cap, args)`,
+		`resp.FailureError()`,
+		`strings.Replace(contextCap.Path`,
+		`byName := map[string]agentCapability`,
+		`type errorEnvelope struct`,
+		`baseURL + "/api/agent/capabilities"`,
+		`req.Header.Set("X-API-Token", token)`,
+		`agentcapabilities.DecodeErrorEnvelope(body)`,
+		`req.Header.Set("Accept", "text/event-stream")`,
+		`http.DefaultClient.Do(req)`,
+		`scanner := bufio.NewScanner(resp.Body)`,
+		`strings.HasPrefix(line, "event: ")`,
+		`strings.HasPrefix(line, "data: ")`,
+		`agentcapabilities.StreamAgentSSERecords(ctx, nil, baseURL, path, token`,
+		`agentcapabilities.IsTransportEventKind(record.Event)`,
+	}
+	for _, fragment := range forbidden {
+		if strings.Contains(src, fragment) {
+			t.Errorf("agent-probe must not preserve local manifest projection logic; found %s", fragment)
+		}
+	}
+}
+
+// TestContract_AgentSurfaceErrorEnvelopeUsesSharedAgentCapabilitiesType pins
+// the stable agent error envelope as part of the shared agent capabilities
+// contract instead of an API-local map or probe-local struct.
+func TestContract_AgentSurfaceErrorEnvelopeUsesSharedAgentCapabilitiesType(t *testing.T) {
+	source, err := os.ReadFile("middleware_tenant.go")
+	if err != nil {
+		t.Fatalf("read middleware_tenant.go: %v", err)
+	}
+	if !strings.Contains(string(source), "agentcapabilities.NewErrorEnvelope(code, message, details)") {
+		t.Error("writeJSONErrorWithDetails must emit the shared agentcapabilities.ErrorEnvelope shape")
+	}
+
+	agentCapabilitiesSource, err := os.ReadFile(filepath.Join("..", "agentcapabilities", "errors.go"))
+	if err != nil {
+		t.Fatalf("read internal/agentcapabilities/errors.go: %v", err)
+	}
+	for _, fragment := range []string{
+		"type ErrorEnvelope struct",
+		"Error   string",
+		"Message string",
+		"Details map[string]string",
+		`AgentErrCodeResourceNotFound           = "resource_not_found"`,
+		`AgentErrCodeOperatorStateNotSet        = "operator_state_not_set"`,
+		`AgentErrCodeInvalidActionRequest       = "invalid_action_request"`,
+		`AgentErrCodeActionExecutionUnavailable = "action_execution_unavailable"`,
+		"func NewErrorEnvelope(",
+		"func DecodeErrorEnvelope(",
+	} {
+		if !strings.Contains(string(agentCapabilitiesSource), fragment) {
+			t.Errorf("agentcapabilities must own the shared agent error envelope; missing %s", fragment)
 		}
 	}
 }
@@ -14662,38 +17852,149 @@ func TestContract_AgentCapabilitiesManifestVersionIsPinned(t *testing.T) {
 // backend API payload proof required when the hand-authored manifest starts
 // projecting /api/config/nodes and /api/discover to external agents.
 func TestContract_AgentCapabilitiesManifestDeclaresProvisioningSurface(t *testing.T) {
-	source, err := os.ReadFile("agent_capabilities.go")
-	if err != nil {
-		t.Fatalf("read agent_capabilities.go: %v", err)
-	}
-	src := string(source)
+	src := readAgentCapabilitiesManifestSource(t)
 
 	required := []string{
 		`"provisioning"`,
-		`"list_nodes"`,
-		`Path:          "/api/config/nodes"`,
-		`Scope:         "settings:read"`,
-		`"add_node"`,
+		`ActionMode:`,
+		`ApprovalPolicy:`,
+		`StrictObjectInputSchema`,
+		`agentCapabilityActionModeRead`,
+		`agentCapabilityActionModeMixed`,
+		`agentCapabilityActionModeWrite`,
+		`agentCapabilityApprovalPolicyScopeOnly`,
+		`agentCapabilityApprovalPolicyActionPlan`,
+		`ListNodesCapabilityName`,
+		`Path:           "/api/config/nodes"`,
+		`Scope:          agentCapabilityScopeSettingsRead`,
+		`AddNodeCapabilityName`,
 		`InputSchema:      addNodeInputSchema()`,
-		`"update_node"`,
+		`UpdateNodeCapabilityName`,
 		`InputSchema:      updateNodeInputSchema()`,
-		`"remove_node"`,
-		`InputSchema:   nodeIDInputSchema()`,
-		`"test_node_credentials"`,
+		`RemoveNodeCapabilityName`,
+		`InputSchema:    nodeIDInputSchema()`,
+		`TestNodeCredentialsCapabilityName`,
 		`Path:             "/api/config/nodes/test-config"`,
-		`"test_node_connection"`,
-		`Path:          "/api/config/nodes/{nodeId}/test"`,
-		`"refresh_node_cluster_membership"`,
-		`Path:          "/api/config/nodes/{nodeId}/refresh-cluster"`,
-		`"discover_lan"`,
+		`TestNodeConnectionCapabilityName`,
+		`Path:           "/api/config/nodes/{nodeId}/test"`,
+		`RefreshNodeClusterMembershipCapabilityName`,
+		`Path:           "/api/config/nodes/{nodeId}/refresh-cluster"`,
+		`DiscoverLANCapabilityName`,
 		`Path:             "/api/discover"`,
 		`InputSchema:      discoverLANInputSchema()`,
 		`"tokenValue"`,
-		`"additionalProperties": false`,
+		`StrictObjectInputSchema`,
 	}
 	for _, fragment := range required {
 		if !strings.Contains(src, fragment) {
 			t.Errorf("agent capabilities manifest must declare provisioning contract fragment %s", fragment)
+		}
+	}
+
+	manifest := agentcapabilities.CanonicalManifest()
+	mcp, ok := agentcapabilities.FindManifestSurfaceToolContract(manifest, agentcapabilities.SurfaceIDPulseMCP)
+	if !ok {
+		t.Fatal("agent capabilities manifest must publish Pulse MCP surface tool contract")
+	}
+	for _, name := range []string{
+		agentcapabilities.ListNodesCapabilityName,
+		agentcapabilities.AddNodeCapabilityName,
+		agentcapabilities.UpdateNodeCapabilityName,
+		agentcapabilities.RemoveNodeCapabilityName,
+		agentcapabilities.TestNodeCredentialsCapabilityName,
+		agentcapabilities.TestNodeConnectionCapabilityName,
+		agentcapabilities.RefreshNodeClusterMembershipCapabilityName,
+		agentcapabilities.DiscoverLANCapabilityName,
+	} {
+		if _, ok := agentcapabilities.FindCapability(manifest.Capabilities, name); !ok {
+			t.Errorf("agent capabilities manifest must declare provisioning capability %q", name)
+		}
+		if !stringSliceContains(mcp.ToolNames, name) {
+			t.Errorf("Pulse MCP surface contract must explicitly allow provisioning capability %q", name)
+		}
+	}
+}
+
+// TestContract_AgentCapabilitiesManifestDeclaresTypedActionAndFindingSchemas
+// pins that high-risk external-agent tools expose exact manifest-owned
+// argument schemas instead of adapter-local free-form body conventions.
+func TestContract_AgentCapabilitiesManifestDeclaresTypedActionAndFindingSchemas(t *testing.T) {
+	src := readAgentCapabilitiesManifestSource(t)
+	required := []string{
+		`operatorStateInputSchema()`,
+		`findingIDInputSchema(`,
+		`snoozeFindingInputSchema()`,
+		`dismissFindingInputSchema()`,
+		`actionPlanInputSchema()`,
+		`actionDecisionInputSchema()`,
+		`actionExecutionInputSchema()`,
+		`FindingIDArgumentName: stringOption(description)`,
+		`FindingIDArgumentName, "duration_hours"`,
+		`FindingIDArgumentName, ReasonArgumentName`,
+		`NoteArgumentName: stringOption("Optional operator note explaining the dismissal.")`,
+		`ResourceIDArgumentName, "intentionallyOffline", "neverAutoRemediate"`,
+		`"maintenanceStartAt": {"maintenanceEndAt"}`,
+		`"not_an_issue", "expected_behavior", "will_fix_later"`,
+		`"approved", "rejected"`,
+		`RequestIDArgumentName, ResourceIDArgumentName, CapabilityNameArgumentName, ReasonArgumentName, RequestedByArgumentName`,
+		`ActionIDArgumentName, OutcomeArgumentName`,
+	}
+	for _, fragment := range required {
+		if !strings.Contains(src, fragment) {
+			t.Errorf("agent capabilities manifest must declare typed action/finding input schema fragment %s", fragment)
+		}
+	}
+}
+
+// TestContract_AgentCapabilitiesManifestDeclaresStructuredOutputSchemas pins
+// that MCP structuredContent validation metadata is owned by the canonical
+// capabilities manifest rather than a local adapter table.
+func TestContract_AgentCapabilitiesManifestDeclaresStructuredOutputSchemas(t *testing.T) {
+	src := readAgentCapabilitiesManifestSource(t)
+	required := []string{
+		`fleetContextOutputSchema()`,
+		`operationsLoopStatusOutputSchema()`,
+		`resourceContextOutputSchema()`,
+		`operatorStateOutputSchema()`,
+		`toolArrayOutputSchema("Configured infrastructure source records visible to the agent.")`,
+		`nodeConnectionTestOutputSchema()`,
+		`clusterRefreshOutputSchema()`,
+		`discoveryOutputSchema()`,
+		`findingActionOutputSchema()`,
+		`actionPlanOutputSchema()`,
+		`actionDecisionOutputSchema()`,
+		`actionExecutionOutputSchema()`,
+		`OutputSchema:   fleetContextOutputSchema()`,
+		`OutputSchema:   operationsLoopStatusOutputSchema()`,
+		`OutputSchema:   resourceContextOutputSchema()`,
+		`OutputSchema:   operatorStateOutputSchema()`,
+		`OutputSchema:   toolArrayOutputSchema("Patrol finding records returned by the lifecycle endpoint.")`,
+		`OutputSchema:     actionPlanOutputSchema()`,
+		`"resources", "generatedAt"`,
+		`"nextAction", "progressLabel", "steps", "patrolEvidenceCount", "patrolIssueEvidenceCount", "activeFindingCount", "pendingApprovalCount", "governedActionCount", "approvedDecisionCount", "rejectedDecisionCount", "verifiedOutcomeCount", "operationsLoopStarterCount", "assistantOperationsLoopStarterCount", "patrolOperationsLoopStarterCount", "patrolControlOperationsLoopStarterCount", "patrolControlCompletedOperationsLoopCount", "patrolControlResolvedOperationsLoopCount", "patrolControlValueState", "patrolAutonomyOperationsLoopStarterCount", "patrolAutonomyCompletedOperationsLoopCount", "patrolAutonomyResolvedOperationsLoopCount", "patrolAutonomyValueState", "proActivationOperationsLoopStarterCount", "proActivationCompletedOperationsLoopCount", "proActivationResolvedOperationsLoopCount", "proActivationValueProofState", "mcpOperationsLoopStarterCount", "externalAgentReady", "windowStart", "generatedAt"`,
+		`"Count of recent decision-backed governed actions without action ids or command content."`,
+		`"Count of recent approved governed-action decisions without action ids or command content."`,
+		`"Count of recent rejected governed-action decisions without action ids or command content."`,
+		`"Count of recent approved governed actions with a verified post-action outcome."`,
+		`"Count of content-free Patrol work prompt starter events in the evidence window."`,
+		`"Count of Patrol work prompt starters rendered by Pulse Assistant in the evidence window."`,
+		`"Count of Patrol work prompt starters launched from Pulse Patrol in the evidence window."`,
+		`"Count of Patrol work prompt starters launched from the first-party Patrol control journey in the evidence window."`,
+		`"Count-only evidence that the Patrol control journey reached a terminal Patrol work result in the evidence window: Patrol issue evidence, contextual Assistant or external-agent collaboration, and either a rejected governed decision or an approved governed decision with a verified outcome."`,
+		`"Count-only evidence that the Patrol control journey reached a verified Patrol work result in the evidence window: Patrol issue evidence, contextual Assistant or external-agent collaboration, approved governed decision, and verified outcome."`,
+		`"Content-safe Patrol control value state. Only verified means Patrol completed a verified work outcome; governed_decision_recorded means a safe terminal decision exists without verified outcome evidence."`,
+		`"Compatibility field retained for older external-agent clients; primary clients should use patrolControlOperationsLoopStarterCount."`,
+		`"Compatibility alias for patrolControlCompletedOperationsLoopCount."`,
+		`"Compatibility alias for patrolControlResolvedOperationsLoopCount."`,
+		`"Compatibility alias for patrolControlValueState."`,
+		`"Count of Patrol work prompt starters rendered by the Pulse MCP surface in the evidence window."`,
+		`"canonicalId", "resourceType", "resourceName", "activeFindings", "pendingApprovals", "recentActions", "contextSections", "generatedAt"`,
+		`"canonicalId", "intentionallyOffline", "neverAutoRemediate", "setAt"`,
+		`ActionIDArgumentName, RequestIDArgumentName, "allowed", "requiresApproval", "approvalPolicy", "rollbackAvailable", "plannedAt", "expiresAt", "resourceVersion", "policyVersion", "planHash"`,
+	}
+	for _, fragment := range required {
+		if !strings.Contains(src, fragment) {
+			t.Errorf("agent capabilities manifest must declare structured output schema fragment %s", fragment)
 		}
 	}
 }
@@ -14842,11 +18143,7 @@ func TestContract_AgentResourceContextWiresApprovalsProvider(t *testing.T) {
 // dimension. Drift here means external agents still expect the
 // pre-slice-45 shape.
 func TestContract_GetResourceContextCapabilityListsPendingApprovals(t *testing.T) {
-	source, err := os.ReadFile("agent_capabilities.go")
-	if err != nil {
-		t.Fatalf("read agent_capabilities.go: %v", err)
-	}
-	src := string(source)
+	src := readAgentCapabilitiesManifestSource(t)
 	if !strings.Contains(src, "pending approvals scoped to this resource") {
 		t.Error("get_resource_context description must mention pending approvals so agents discover the bundle's new governance section through the manifest")
 	}
@@ -14906,6 +18203,95 @@ func TestContract_AgentFleetContextEndpointSurfacesStableShape(t *testing.T) {
 	}
 	if !strings.Contains(src, "PendingApprovalCount    int                     `json:\"pendingApprovalCount\"`") {
 		t.Error("AgentFleetResourceSummary must carry PendingApprovalCount so agents see governance-blocked resources at a glance")
+	}
+}
+
+// TestContract_AgentOperationsLoopStatusEndpointSurfacesStableShape pins the
+// content-safe loop-status wire shape external agents use before choosing
+// fleet, resource, finding, or action tools.
+func TestContract_AgentOperationsLoopStatusEndpointSurfacesStableShape(t *testing.T) {
+	source, err := os.ReadFile("agent_resource_context.go")
+	if err != nil {
+		t.Fatalf("read agent_resource_context.go: %v", err)
+	}
+	src := string(source)
+	required := []string{
+		"Steps:              []AgentOperationsLoopStep{}",
+		"NextAction                          string                    `json:\"nextAction\"`",
+		"ProgressLabel                       string                    `json:\"progressLabel\"`",
+		"Steps                               []AgentOperationsLoopStep `json:\"steps\"`",
+		"PatrolEvidenceCount                 int                       `json:\"patrolEvidenceCount\"`",
+		"PatrolIssueEvidenceCount            int                       `json:\"patrolIssueEvidenceCount\"`",
+		"ActiveFindingCount                  int                       `json:\"activeFindingCount\"`",
+		"PendingApprovalCount                int                       `json:\"pendingApprovalCount\"`",
+		"GovernedActionCount                 int                       `json:\"governedActionCount\"`",
+		"ApprovedDecisionCount               int                       `json:\"approvedDecisionCount\"`",
+		"RejectedDecisionCount               int                       `json:\"rejectedDecisionCount\"`",
+		"VerifiedOutcomeCount                int                       `json:\"verifiedOutcomeCount\"`",
+		"OperationsLoopStarterCount          int                       `json:\"operationsLoopStarterCount\"`",
+		"AssistantOperationsLoopStarterCount int                       `json:\"assistantOperationsLoopStarterCount\"`",
+		"PatrolOperationsLoopStarterCount    int                       `json:\"patrolOperationsLoopStarterCount\"`",
+		"PatrolControlLoopStarterCount       int                       `json:\"patrolControlOperationsLoopStarterCount\"`",
+		"PatrolControlCompletedLoopCount     int                       `json:\"patrolControlCompletedOperationsLoopCount\"`",
+		"PatrolControlResolvedLoopCount      int                       `json:\"patrolControlResolvedOperationsLoopCount\"`",
+		"PatrolControlValueState             string                    `json:\"patrolControlValueState\"`",
+		"PatrolAutonomyLoopStarterCount      int                       `json:\"patrolAutonomyOperationsLoopStarterCount\"`",
+		"PatrolAutonomyCompletedLoopCount    int                       `json:\"patrolAutonomyCompletedOperationsLoopCount\"`",
+		"PatrolAutonomyResolvedLoopCount     int                       `json:\"patrolAutonomyResolvedOperationsLoopCount\"`",
+		"PatrolAutonomyValueState            string                    `json:\"patrolAutonomyValueState\"`",
+		"ProActivationLoopStarterCount       int                       `json:\"proActivationOperationsLoopStarterCount\"`",
+		"ProActivationCompletedLoopCount     int                       `json:\"proActivationCompletedOperationsLoopCount\"`",
+		"ProActivationResolvedLoopCount      int                       `json:\"proActivationResolvedOperationsLoopCount\"`",
+		"ProActivationValueProofState        string                    `json:\"proActivationValueProofState\"`",
+		"MCPOperationsLoopStarterCount       int                       `json:\"mcpOperationsLoopStarterCount\"`",
+		"ExternalAgentReady                  bool                      `json:\"externalAgentReady\"`",
+		"WindowStart                         time.Time                 `json:\"windowStart\"`",
+		"GeneratedAt                         time.Time                 `json:\"generatedAt\"`",
+		"External-agent readiness is a separate capability signal,",
+		"manifest := agentcapabilities.CanonicalManifest()",
+		"ExternalAgentReady: h.agentOperationsLoopExternalAgentReady(r.Context(), manifest, now)",
+		"func agentOperationsLoopExternalAgentTokenReady(manifest agentcapabilities.Manifest, tokens []config.APITokenRecord, now time.Time) bool",
+		"agentcapabilities.RequiredCapabilityScopes(",
+		"coversLoop := true",
+		"if !token.HasScope(scope) {",
+		`store.GetActionLifecycleEvents("", since, 0)`,
+		"return pulseIntelligenceActionWasApproved(record) || pulseIntelligenceActionWasRejected(record)",
+		"return pulseIntelligenceActionVerifiedOutcome(record)",
+		"governanceStepCount := status.PendingApprovalCount",
+		"decisionCount := status.ApprovedDecisionCount + status.RejectedDecisionCount",
+		"verificationStepCount := status.VerifiedOutcomeCount",
+		"verificationStepCount = status.RejectedDecisionCount",
+		"patrolControlProof := agentOperationsLoopPatrolControlProof(status)",
+		"status.PatrolControlLoopStarterCount = starterCounts.patrolControl",
+		"status.PatrolAutonomyLoopStarterCount = status.PatrolControlLoopStarterCount",
+		"status.PatrolControlValueState = patrolControlProof.ValueProofState",
+		"status.PatrolAutonomyValueState = status.PatrolControlValueState",
+		"status.ProActivationValueProofState = status.PatrolControlValueState",
+		"case config.WorkflowPromptActivitySurfacePatrolControl:",
+		"case config.WorkflowPromptActivitySurfacePatrolAutonomy:",
+		"counts.patrolControl++",
+		"return telemetry.ClassifyPulseIntelligencePatrolControlProof(telemetry.PulseIntelligencePatrolControlProofInput{",
+		"ContextualCollaborationCount: agentOperationsLoopContextualCollaborationCount(status)",
+		"type AgentAggregateFindingsProvider interface {",
+		"ActiveFindingCount() int",
+		"if aggregateProvider, ok := h.findingsProvider.(AgentAggregateFindingsProvider); ok {",
+		"aggregateProvider.ActiveFindingCount()",
+		"case status.PendingApprovalCount > 0:",
+		"Review pending Patrol approvals before treating previous verified work as current.",
+		"case status.ActiveFindingCount > 0 && hasVerifiedOutcome:",
+		"Open Assistant on the active Patrol finding before treating previous verified work as current.",
+		"Review active Patrol findings before treating previous verified work as current.",
+	}
+	for _, fragment := range required {
+		if !strings.Contains(src, fragment) {
+			t.Errorf("AgentOperationsLoopStatus contract missing %s", fragment)
+		}
+	}
+	if strings.Contains(src, "ExternalAgentReady:           status.ExternalAgentReady") {
+		t.Error("AgentOperationsLoopStatus must not pass MCP readiness into Patrol control proof classification")
+	}
+	if strings.Contains(src, `ID: "external_agents"`) {
+		t.Error("AgentOperationsLoopStatus steps must not make optional MCP readiness a Patrol operator step")
 	}
 }
 
@@ -14972,6 +18358,114 @@ func TestContract_AgentResourceActionSummaryCarriesVerification(t *testing.T) {
 	}
 }
 
+// TestContract_PulseIntelligenceApprovedExecutionTelemetryUsesActionLifecycle
+// pins that the paid-value approved execution counter is sourced from
+// action lifecycle evidence and only then resolved back to the action audit
+// approval state. Drift here would let generic planning, approval, or token
+// use masquerade as a completed operations loop.
+func TestContract_PulseIntelligenceApprovedExecutionTelemetryUsesActionLifecycle(t *testing.T) {
+	source, err := os.ReadFile("telemetry_pulse_intelligence.go")
+	if err != nil {
+		t.Fatalf("read telemetry_pulse_intelligence.go: %v", err)
+	}
+	src := string(source)
+	for _, fragment := range []string{
+		`store.GetActionLifecycleEvents("", since, 0)`,
+		`store.GetActionAudit(actionID)`,
+		`pulseIntelligenceActionWasApproved(record)`,
+		`pulseIntelligenceApprovedActionSuccess(record)`,
+		`case unifiedresources.ActionStateExecuting, unifiedresources.ActionStateCompleted, unifiedresources.ActionStateFailed:`,
+		`snapshot.ApprovedActionAttempts30d += len(approvedAttemptIDs)`,
+		`snapshot.ApprovedActionSuccesses30d += len(approvedSuccessIDs)`,
+	} {
+		if !strings.Contains(src, fragment) {
+			t.Errorf("Pulse Intelligence approved execution telemetry must stay lifecycle-backed and audit-approved; missing %s", fragment)
+		}
+	}
+}
+
+// TestContract_PulseIntelligenceApprovedDecisionTelemetryUsesActionDecisionEvidence
+// pins that approved governed-action decisions are counted separately from
+// approved execution attempts, so completed operations-loop proof can mean an
+// approve/reject decision without pretending every approval executed.
+func TestContract_PulseIntelligenceApprovedDecisionTelemetryUsesActionDecisionEvidence(t *testing.T) {
+	source, err := os.ReadFile("telemetry_pulse_intelligence.go")
+	if err != nil {
+		t.Fatalf("read telemetry_pulse_intelligence.go: %v", err)
+	}
+	src := string(source)
+	for _, fragment := range []string{
+		`approvedDecisionIDs := pulseIntelligenceApprovedActionDecisionIDs(store, orgID, since)`,
+		`if event.State != unifiedresources.ActionStateApproved`,
+		`pulseIntelligenceActionWasApprovedSince(record, since)`,
+		`if approval.Outcome != unifiedresources.OutcomeApproved`,
+		`snapshot.ApprovedActionDecisions30d += len(approvedDecisionIDs)`,
+	} {
+		if !strings.Contains(src, fragment) {
+			t.Errorf("Pulse Intelligence approved decision telemetry must stay decision-backed and separate from execution attempts; missing %s", fragment)
+		}
+	}
+}
+
+// TestContract_PulseIntelligenceApprovedSuccessTelemetryRequiresVerifiedOutcome
+// pins that outbound Pulse Intelligence approved-success telemetry and the
+// operations-loop status route share the same verified-outcome predicate.
+// A completed action result alone is execution evidence, not post-action proof
+// for Patrol control resolved-loop reporting.
+func TestContract_PulseIntelligenceApprovedSuccessTelemetryRequiresVerifiedOutcome(t *testing.T) {
+	telemetrySource, err := os.ReadFile("telemetry_pulse_intelligence.go")
+	if err != nil {
+		t.Fatalf("read telemetry_pulse_intelligence.go: %v", err)
+	}
+	telemetrySrc := string(telemetrySource)
+	for _, fragment := range []string{
+		`if record.State != unifiedresources.ActionStateCompleted`,
+		`return pulseIntelligenceActionVerifiedOutcome(record)`,
+		`func pulseIntelligenceActionVerifiedOutcome(record unifiedresources.ActionAuditRecord) bool`,
+		`outcome := unifiedresources.NormalizeVerificationOutcome(record.VerificationOutcome)`,
+		`outcome.Status == unifiedresources.VerificationVerified`,
+		`verification := unifiedresources.CanonicalActionVerification(record)`,
+		`return verification != nil && verification.Ran && verification.Success`,
+	} {
+		if !strings.Contains(telemetrySrc, fragment) {
+			t.Errorf("Pulse Intelligence approved-success telemetry must require verified outcome proof; missing %s", fragment)
+		}
+	}
+	if strings.Contains(telemetrySrc, `return record.Result == nil || record.Result.Success`) {
+		t.Error("Pulse Intelligence approved-success telemetry must not treat a bare successful execution result as verified outcome proof")
+	}
+
+	statusSource, err := os.ReadFile("agent_resource_context.go")
+	if err != nil {
+		t.Fatalf("read agent_resource_context.go: %v", err)
+	}
+	if !strings.Contains(string(statusSource), `return pulseIntelligenceActionVerifiedOutcome(record)`) {
+		t.Error("operations-loop status verified outcome count must use the shared Pulse Intelligence verified-outcome predicate")
+	}
+}
+
+// TestContract_PulseIntelligenceRejectedDecisionTelemetryUsesActionLifecycle
+// pins that rejected governed-action decisions are counted from decision
+// lifecycle evidence and remain separate from approved execution proof.
+func TestContract_PulseIntelligenceRejectedDecisionTelemetryUsesActionLifecycle(t *testing.T) {
+	source, err := os.ReadFile("telemetry_pulse_intelligence.go")
+	if err != nil {
+		t.Fatalf("read telemetry_pulse_intelligence.go: %v", err)
+	}
+	src := string(source)
+	for _, fragment := range []string{
+		`rejectedDecisionIDs := pulseIntelligenceRejectedActionDecisionIDs(store, orgID, since)`,
+		`if event.State != unifiedresources.ActionStateRejected`,
+		`store.GetActionAudit(actionID)`,
+		`pulseIntelligenceActionWasRejected(record)`,
+		`snapshot.RejectedActionDecisions30d += len(rejectedDecisionIDs)`,
+	} {
+		if !strings.Contains(src, fragment) {
+			t.Errorf("Pulse Intelligence rejected decision telemetry must stay lifecycle-backed and audit-rejected; missing %s", fragment)
+		}
+	}
+}
+
 // TestContract_OperatorStateWriteServerPopulatesAttribution pins the
 // audit-honesty contract for the agent surface's only write loop:
 // the PUT handler must populate SetAt and SetBy from the server,
@@ -15007,10 +18501,10 @@ func TestContract_OperatorStateWriteEmitsStableErrorTokens(t *testing.T) {
 		t.Fatalf("read resources_operator_state.go: %v", err)
 	}
 	src := string(source)
-	if !strings.Contains(src, `"operator_state_not_set"`) {
+	if !strings.Contains(src, "agentcapabilities.AgentErrCodeOperatorStateNotSet") {
 		t.Error("GET handler must emit operator_state_not_set when no entry exists — manifest declares this code")
 	}
-	if !strings.Contains(src, `"operator_state_invalid"`) {
+	if !strings.Contains(src, "agentcapabilities.AgentErrCodeOperatorStateInvalid") {
 		t.Error("PUT handler must emit operator_state_invalid on validation failure — manifest declares this code")
 	}
 	if !strings.Contains(src, "errors.Is(err, unified.ErrResourceOperatorStateInvalid)") {
@@ -15047,6 +18541,7 @@ func TestContract_AgentSurfaceErrorCodesMatchManifestDeclarations(t *testing.T) 
 		"agent_resource_context.go",
 		"resources_operator_state.go",
 		"actions.go",
+		"ai_handlers.go",
 	}
 
 	// Codes the action handlers emit that are deliberately NOT in
@@ -15074,49 +18569,73 @@ func TestContract_AgentSurfaceErrorCodesMatchManifestDeclarations(t *testing.T) 
 		"resource_registry_unavailable":   true,
 	}
 
-	// Extract every emitted code from writeJSONError /
-	// writeJSONErrorWithDetails calls. The regex tolerates
-	// whitespace/newlines that gofmt may insert between the call's
-	// arguments and matches both function names since they share
-	// the same envelope contract.
+	agentErrorConstantValues := map[string]string{
+		"AgentErrCodeResourceNotFound":           agentcapabilities.AgentErrCodeResourceNotFound,
+		"AgentErrCodeOperatorStateNotSet":        agentcapabilities.AgentErrCodeOperatorStateNotSet,
+		"AgentErrCodeOperatorStateInvalid":       agentcapabilities.AgentErrCodeOperatorStateInvalid,
+		"AgentErrCodeInvalidFindingRequest":      agentcapabilities.AgentErrCodeInvalidFindingRequest,
+		"AgentErrCodeFindingNotFound":            agentcapabilities.AgentErrCodeFindingNotFound,
+		"AgentErrCodeFindingActionNotAllowed":    agentcapabilities.AgentErrCodeFindingActionNotAllowed,
+		"AgentErrCodePatrolUnavailable":          agentcapabilities.AgentErrCodePatrolUnavailable,
+		"AgentErrCodeInvalidActionRequest":       agentcapabilities.AgentErrCodeInvalidActionRequest,
+		"AgentErrCodeCapabilityNotFound":         agentcapabilities.AgentErrCodeCapabilityNotFound,
+		"AgentErrCodeActionExecutionUnavailable": agentcapabilities.AgentErrCodeActionExecutionUnavailable,
+		"AgentErrCodeMissingID":                  agentcapabilities.AgentErrCodeMissingID,
+		"AgentErrCodeInvalidID":                  agentcapabilities.AgentErrCodeInvalidID,
+		"AgentErrCodeInvalidActionDecision":      agentcapabilities.AgentErrCodeInvalidActionDecision,
+		"AgentErrCodeActionNotFound":             agentcapabilities.AgentErrCodeActionNotFound,
+		"AgentErrCodeActionNotPending":           agentcapabilities.AgentErrCodeActionNotPending,
+		"AgentErrCodeActionPlanExpired":          agentcapabilities.AgentErrCodeActionPlanExpired,
+		"AgentErrCodeInvalidActionExecution":     agentcapabilities.AgentErrCodeInvalidActionExecution,
+		"AgentErrCodeActionNotApproved":          agentcapabilities.AgentErrCodeActionNotApproved,
+		"AgentErrCodeActionAlreadyExecuting":     agentcapabilities.AgentErrCodeActionAlreadyExecuting,
+		"AgentErrCodeActionExecutionFinal":       agentcapabilities.AgentErrCodeActionExecutionFinal,
+		"AgentErrCodeActionDryRunOnly":           agentcapabilities.AgentErrCodeActionDryRunOnly,
+		"AgentErrCodeActionPlanDrift":            agentcapabilities.AgentErrCodeActionPlanDrift,
+		"AgentErrCodeResourceRemediationLocked":  agentcapabilities.AgentErrCodeResourceRemediationLocked,
+		"AgentErrCodeActionExecutorUnavailable":  agentcapabilities.AgentErrCodeActionExecutorUnavailable,
+	}
+
+	// Extract every emitted shared code from writeJSONError /
+	// writeJSONErrorWithDetails calls. Agent-surface codes must flow
+	// through agentcapabilities.AgentErrCode* constants so the manifest and
+	// handlers cannot drift by editing duplicate literals.
 	emitted := map[string]bool{}
 	for _, file := range handlerFiles {
 		body, err := os.ReadFile(file)
 		if err != nil {
 			t.Fatalf("read %s: %v", file, err)
 		}
-		// Match the second string literal (the code) on
-		// writeJSONError(w, status, "code", ...) or
-		// writeJSONErrorWithDetails(w, status, "code", ...). The
-		// first arg `w` is an identifier, then a status int or
-		// http.StatusXxx selector, so the regex skips past those.
-		looseRE := regexp.MustCompile(`writeJSONError(?:WithDetails)?\([^)]*?"([a-z_][a-z_0-9]+)"`)
-		for _, m := range looseRE.FindAllSubmatch(body, -1) {
-			code := string(m[1])
-			if internalOnlyCodes[code] {
+		constantRE := regexp.MustCompile(`(?s)writeJSONError(?:WithDetails)?\(\s*w\s*,\s*[^,]+,\s*agentcapabilities\.(AgentErrCode[A-Za-z0-9]+)`)
+		for _, m := range constantRE.FindAllSubmatch(body, -1) {
+			constantName := string(m[1])
+			code, ok := agentErrorConstantValues[constantName]
+			if !ok {
+				t.Errorf("%s emits unknown shared agent error constant %s", file, constantName)
 				continue
 			}
 			emitted[code] = true
 		}
+
+		literalRE := regexp.MustCompile(`(?s)writeJSONError(?:WithDetails)?\(\s*w\s*,\s*[^,]+,\s*"([a-z_][a-z_0-9]+)"`)
+		for _, m := range literalRE.FindAllSubmatch(body, -1) {
+			code := string(m[1])
+			if internalOnlyCodes[code] || crossCutting[code] {
+				continue
+			}
+			t.Errorf("%s emits agent-surface error code %q as a local literal; use an agentcapabilities.AgentErrCode* constant", file, code)
+		}
 	}
 	if len(emitted) == 0 {
-		t.Fatal("no writeJSONError emissions found in agent-surface handler files; the audit regex must be wrong")
+		t.Fatal("no shared writeJSONError emissions found in agent-surface handler files; the audit regex or handler constants must be wrong")
 	}
 
-	// Pull declared codes from the manifest source so the test
-	// follows manifest edits without duplicating the data here.
-	manifestSrc, err := os.ReadFile("agent_capabilities.go")
-	if err != nil {
-		t.Fatalf("read agent_capabilities.go: %v", err)
-	}
+	// Pull declared codes from the runtime manifest so the test follows
+	// constant-backed manifest edits without source scraping.
 	declared := map[string]bool{}
-	declaredRE := regexp.MustCompile(`ErrorCodes:\s*\[\]string\{([^}]+)\}`)
-	for _, m := range declaredRE.FindAllSubmatch(manifestSrc, -1) {
-		// The capture group is the content between `{` and `}`,
-		// shaped like `"code1", "code2"`. Pull each quoted string.
-		quoted := regexp.MustCompile(`"([a-z_][a-z_0-9]+)"`)
-		for _, q := range quoted.FindAllSubmatch(m[1], -1) {
-			declared[string(q[1])] = true
+	for _, cap := range agentcapabilities.CanonicalManifest().Capabilities {
+		for _, code := range cap.ErrorCodes {
+			declared[code] = true
 		}
 	}
 
@@ -15140,15 +18659,18 @@ func TestContract_AgentSurfaceErrorCodesMatchManifestDeclarations(t *testing.T) 
 }
 
 func TestContract_PlanActionDeclaresExecutionUnavailable(t *testing.T) {
-	source, err := os.ReadFile("agent_capabilities.go")
-	if err != nil {
-		t.Fatalf("read agent_capabilities.go: %v", err)
+	manifest := agentcapabilities.CanonicalManifest()
+	var planAction agentcapabilities.Capability
+	for _, cap := range manifest.Capabilities {
+		if cap.Name == agentcapabilities.PlanActionCapabilityName {
+			planAction = cap
+			break
+		}
 	}
-	src := string(source)
-	if !strings.Contains(src, `Name:             "plan_action"`) {
-		t.Fatal("agent capabilities manifest must declare plan_action")
+	if planAction.Name == "" {
+		t.Fatalf("agent capabilities manifest must declare %s", agentcapabilities.PlanActionCapabilityName)
 	}
-	if !strings.Contains(src, `"action_execution_unavailable"`) {
+	if !stringSliceContains(planAction.ErrorCodes, agentcapabilities.AgentErrCodeActionExecutionUnavailable) {
 		t.Error("plan_action must declare action_execution_unavailable so agents can branch on executor-owned live-readiness refusal")
 	}
 }
@@ -15285,19 +18807,22 @@ func TestContract_AgentCapabilitiesManifestIsPublic(t *testing.T) {
 // what its response shape is. Drift here means external agents
 // still expect to walk every resource id one-by-one.
 func TestContract_GetFleetContextCapabilityListed(t *testing.T) {
-	source, err := os.ReadFile("agent_capabilities.go")
-	if err != nil {
-		t.Fatalf("read agent_capabilities.go: %v", err)
+	var cap *AgentCapability
+	manifest := agentcapabilities.CanonicalManifest()
+	for i := range manifest.Capabilities {
+		if manifest.Capabilities[i].Name == "get_fleet_context" {
+			cap = &manifest.Capabilities[i]
+			break
+		}
 	}
-	src := string(source)
-	if !strings.Contains(src, `Name:          "get_fleet_context"`) {
-		t.Error("agent capabilities manifest must declare get_fleet_context — the substrate's triage entry point")
+	if cap == nil {
+		t.Fatal("agent capabilities manifest must declare get_fleet_context — the substrate's triage entry point")
 	}
-	if !strings.Contains(src, `Path:          "/api/agent/fleet-context"`) {
-		t.Error("get_fleet_context must point at /api/agent/fleet-context")
+	if cap.Path != agentcapabilities.FleetContextCapabilityPath {
+		t.Errorf("get_fleet_context path = %q, want %s", cap.Path, agentcapabilities.FleetContextCapabilityPath)
 	}
-	if !strings.Contains(src, `ResponseShape: "AgentFleetContext"`) {
-		t.Error("get_fleet_context response shape must be AgentFleetContext so agents know what to parse")
+	if cap.ResponseShape != "AgentFleetContext" {
+		t.Errorf("get_fleet_context response shape = %q, want AgentFleetContext so agents know what to parse", cap.ResponseShape)
 	}
 }
 

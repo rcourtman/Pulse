@@ -138,3 +138,14 @@ func TestEvaluatePatrolConfigReadiness_AssignsStableCause(t *testing.T) {
 		})
 	}
 }
+
+func TestEvaluatePatrolConfigReadiness_NilConfigUsesAssistantPatrolSettingsCopy(t *testing.T) {
+	readiness := EvaluatePatrolConfigReadiness(nil)
+
+	if readiness.Cause != PatrolFailureCauseSettingsPersistence {
+		t.Fatalf("cause = %q, want %q", readiness.Cause, PatrolFailureCauseSettingsPersistence)
+	}
+	if readiness.Summary != "Assistant & Patrol settings could not be loaded from persistence." {
+		t.Fatalf("summary = %q", readiness.Summary)
+	}
+}

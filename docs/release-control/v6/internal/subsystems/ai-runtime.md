@@ -9,50 +9,910 @@
   "contract_file": "docs/release-control/v6/internal/subsystems/ai-runtime.md",
   "status_file": "docs/release-control/v6/internal/status.json",
   "registry_file": "docs/release-control/v6/internal/subsystems/registry.json",
-  "dependency_subsystem_ids": ["api-contracts", "cloud-paid", "frontend-primitives"]
+  "dependency_subsystem_ids": [
+    "api-contracts",
+    "cloud-paid",
+    "frontend-primitives"
+  ]
 }
 ```
 
 ## Purpose
 
-Own Pulse Assistant and Patrol backend runtime behavior, AI orchestration,
-runtime cost control, shared AI transport surfaces, and browser-visible
-Assistant transcript actions that define what visible operator/model text can
-leave the transcript without exposing hidden provider/tool metadata.
+Own the Pulse Intelligence Core: canonical context, governed actions, safety
+gates, approval state, action audit, and verification. That core backs Pulse
+Patrol as the primary built-in operator that watches, investigates, acts within
+the chosen Patrol mode, verifies outcomes, and records what happened. Pulse
+Assistant is the contextual
+explanation, approval, and handoff access path over that same work, while the
+Pulse MCP adapter is the external-agent access path over canonical API
+contracts. The subsystem also owns AI orchestration, runtime cost control,
+shared AI transport surfaces, and browser-visible Assistant transcript actions
+that define what visible operator/model text can leave the transcript without
+exposing hidden provider/tool metadata.
+When backend Patrol summaries or Assistant handoffs expose run coverage to the
+browser, they translate internal full-run, scoped-run, and verification
+precision into plain operator check language rather than activation-loop,
+proof-strip, or scoped/full-run jargon.
+Coverage warnings must stay action-oriented: they may tell the operator to run
+Patrol to check everything, but must not ask for a "full issue list" or otherwise
+expose backend full-run vocabulary as the product instruction.
+Patrol model-facing system prompts must derive the active control-mode block
+from the effective `patrol_autonomy_level`, after license and full-mode-lock
+clamping, so Watch only, Ask first, Safe auto-fix, and Autopilot give the model
+the same investigate, approval, execution, and verification boundaries enforced
+by the orchestrator. Prompt copy must not fall back to the legacy
+`patrol_auto_fix` boolean or the retired "observe only" / "auto-fix mode"
+framing.
+Patrol finding storage must consolidate equivalent active storage-capacity
+siblings before they reach browser surfaces: a broader storage risk and a
+generic usage/capacity finding for the same normalized storage identity are one
+operator issue, while distinct backup, health, and pool-vs-device findings
+remain separate. This consolidation belongs in the finding store, not the
+frontend row renderer.
+
+The public Pulse Intelligence overview is a projection of those runtime
+contracts, not a second Assistant tool inventory. It must point readers at the
+registry-owned Assistant tool governance and the manifest-owned external-agent
+capabilities instead of carrying hand-maintained tool tables.
+It is also the public product-language contract for paid Patrol capabilities:
+Pro positioning must describe hands-on Patrol modes, issue investigation,
+governed fixes, verified outcomes, and history. Public docs and generated
+commercial copy must not reintroduce proof-first activation-loop framing or the
+retired `Patrol Control Levels`, `Patrol control`, and `Alert investigation`
+labels as the visible paid story. API fields and route markers may retain
+compatibility names such as `autonomy_level` only when the surrounding copy
+plainly calls the operator-facing choice `Patrol mode`.
+Its Core/Patrol/Assistant/MCP relationship block must be rendered from
+`PulseIntelligenceOverviewMarkdown(Manifest.SurfaceContract)` rather than
+maintained as prose separate from the agent capabilities manifest.
+Reusable workflow starters are manifest-owned `workflowPrompts` metadata
+derived from the shared Pulse Intelligence workflow-prompt core. Prompt names,
+Assistant display labels, presentation kind hints, descriptions, arguments,
+availability, and rendered text belong to that shared catalogue. Pulse
+Assistant-compatible starters, frontend manifest clients, MCP `prompts/list`,
+and generated docs consume that catalogue instead of maintaining per-surface
+prompt lists or browser-local starter copy.
+The shared catalogue includes the global `pulse_operations_loop` workflow
+starter for the Patrol mode operations loop: it is projected only when the
+manifest has fleet context, resource context, findings, governed
+plan/decide/execute action, and finding resolution capabilities. Its rendered
+prompt must keep the operator in an approve-or-reject loop with execution only
+after policy allows it and verification before finding resolution, while the
+status schema treats Patrol mode starter evidence only as entry-point
+orientation, Patrol mode completed-loop evidence as aggregate terminal
+approve/reject proof, and Patrol mode resolved-loop evidence only as
+aggregate approved-and-verified outcome proof, not Assistant transcript, Patrol
+finding identity, approval payload, action command, or MCP setup detail.
+`pulse_patrol`, the current paid `patrol_control` marker, the legacy
+`patrol_autonomy` marker, and the legacy `pulse_pro_activation` alias all
+contribute to first-party Patrol mode starter evidence;
+`proActivationOperationsLoopStarterCount` is a compatibility field retained
+for older external-agent clients, while primary clients must read
+`patrolControlOperationsLoopStarterCount`. The other `proActivation*` status
+fields are compatibility aliases for the same first-party Patrol mode
+journey rather than a separate AI-runtime loop, and manifest descriptions must
+not describe them as a Pro activation journey.
+The same status schema must expose the aggregate Patrol mode value state as
+a content-safe enum so Assistant-compatible and MCP-facing agents can branch
+without reverse-engineering counts. `governed_decision_recorded` is a safe
+terminal decision state, not proven operations value; `verified` is the only
+completed first-party value state and requires the approved, verified outcome
+plus recorded action history. MCP/external-agent readiness remains optional
+external-agent setup context.
+Native Assistant workflow starters in `frontend-modern/src/components/AI/Chat/`
+are a browser projection of that same catalogue, not a second prompt registry:
+they may decide which manifest-owned prompt is contextually usable, but display
+labels and rendered prompt text must come from shared manifest metadata and the
+shared backend renderer on
+`POST /api/ai/workflow-prompts/render`.
 
 ## Canonical Files
 
 1. `internal/ai/`
+   1a. `cmd/pulse-mcp/main.go`
+   1b. `cmd/pulse-mcp/README.md`
+   1c. `internal/agentcapabilities/`
+   1d. `scripts/generate-pulse-intelligence-docs.go`
 2. `internal/config/ai.go`
 3. `internal/api/ai_handler.go`
 4. `internal/api/ai_handlers.go`
 5. `internal/api/ai_hosted_runtime.go`
 6. `internal/api/ai_intelligence_handlers.go`
-7. `frontend-modern/src/api/ai.ts`
-8. `frontend-modern/src/api/aiChat.ts`
+7. `frontend-modern/src/api/agentCapabilities.ts`
+   7a. `frontend-modern/src/api/generated/agentCapabilities.ts`
+8. `frontend-modern/src/api/ai.ts`
+   8a. `frontend-modern/src/api/aiChat.ts`
 9. `frontend-modern/src/api/patrol.ts`
 10. `frontend-modern/src/components/AI/AICostDashboard.tsx`
-11. `frontend-modern/src/components/AI/Chat/`
-12. `frontend-modern/src/utils/aiChatPresentation.ts`
-13. `frontend-modern/src/utils/aiControlLevelPresentation.ts`
-14. `frontend-modern/src/utils/aiCostPresentation.ts`
-15. `frontend-modern/src/utils/aiProviderHealthPresentation.ts`
-16. `frontend-modern/src/utils/aiProviderPresentation.ts`
-17. `frontend-modern/src/utils/textPresentation.ts`
-18. `frontend-modern/src/stores/aiRuntimeState.ts`
-19. `frontend-modern/src/stores/aiChat.ts`
-20. `docs/AI.md`
-21. `pkg/aicontracts/investigation.go`
+11. `frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx`
+12. `frontend-modern/src/components/AI/Chat/`
+13. `frontend-modern/src/utils/aiChatPresentation.ts`
+14. `frontend-modern/src/utils/aiControlLevelPresentation.ts`
+15. `frontend-modern/src/utils/aiCostPresentation.ts`
+16. `frontend-modern/src/utils/aiProviderHealthPresentation.ts`
+17. `frontend-modern/src/utils/aiProviderPresentation.ts`
+18. `frontend-modern/src/utils/textPresentation.ts`
+19. `frontend-modern/src/stores/aiRuntimeState.ts`
+20. `frontend-modern/src/stores/aiChat.ts`
+21. `docs/AI.md`
+22. `pkg/aicontracts/investigation.go`
+23. `pkg/aicontracts/orchestrator_deps.go`
+24. `pkg/aicontracts/fix_execution.go`
+25. `pkg/extensions/ai_autofix.go`
 
 ## Shared Boundaries
 
-1. `frontend-modern/src/api/ai.ts` shared with `api-contracts`: the AI frontend client is both an AI runtime control surface and a canonical API payload contract boundary.
-2. `frontend-modern/src/api/patrol.ts` shared with `api-contracts`: the Patrol frontend client is both an AI runtime control surface and a canonical API payload contract boundary.
-3. `frontend-modern/src/stores/aiChat.ts` shared with `frontend-primitives`: the assistant drawer and session store is both an AI runtime control surface and a canonical app-shell presentation boundary.
-4. `internal/api/ai_handler.go` shared with `api-contracts`: Pulse Assistant handlers are both an AI runtime control surface and a canonical API payload contract boundary.
-5. `internal/api/ai_handlers.go` shared with `api-contracts`: AI settings and remediation handlers are both an AI runtime control surface and a canonical API payload contract boundary.
-6. `internal/api/ai_intelligence_handlers.go` shared with `api-contracts`: AI intelligence handlers are both an AI runtime control surface and a canonical API payload contract boundary.
+1. `cmd/pulse-mcp/main.go` shared with `api-contracts`: the Pulse MCP adapter runtime is both an AI runtime surface for external-agent access to Pulse Intelligence and a canonical API contract projection over the agent capabilities manifest and Pulse MCP surface tool contract.
+2. `cmd/pulse-mcp/README.md` shared with `api-contracts`: the Pulse MCP adapter guide is both an AI runtime surface for external-agent access to Pulse Intelligence and a canonical API contract projection over the agent capabilities manifest.
+3. `frontend-modern/src/api/agentCapabilities.ts` shared with `api-contracts`: the agent capabilities frontend client is both the Pulse Intelligence external-agent manifest consumer and a canonical API payload contract boundary.
+   Its presentation sanitizer may translate legacy Pro activation manifest
+   descriptions into Patrol mode outcome/status language, but it must not
+   reintroduce proof-first or activation-loop copy into Assistant, Patrol, or
+   external-agent onboarding surfaces.
+4. `frontend-modern/src/api/ai.ts` shared with `api-contracts`: the AI frontend client is both an AI runtime control surface and a canonical API payload contract boundary.
+5. `frontend-modern/src/api/aiChat.ts` shared with `api-contracts`: the Assistant chat frontend client is both the first-party Assistant transport surface and a canonical API payload contract boundary.
+6. `frontend-modern/src/api/generated/agentCapabilities.ts` shared with `api-contracts`: the generated agent capabilities frontend types are both the Pulse Intelligence manifest TypeScript projection and a canonical API payload contract boundary.
+7. `frontend-modern/src/api/patrol.ts` shared with `api-contracts`: the Patrol frontend client is both an AI runtime control surface and a canonical API payload contract boundary.
+8. `frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx` shared with `api-contracts`, `frontend-primitives`: the External agents settings panel is the optional settings-shell projection of Pulse MCP onboarding, the AI runtime connected-agent onboarding surface, and a presentation consumer of the shared agent capabilities frontend client.
+   Its default copy must frame connected clients as optional connector access
+   to Pulse context and Patrol work, with Patrol as the operator that watches,
+   acts within Patrol mode, asks for approval when required, verifies outcomes,
+   and records history. The normal Assistant settings view must keep setup
+   mechanics behind a `Show connector setup` disclosure, with direct setup
+   links opening that disclosure automatically. Default copy must make clear
+   that connected tools do not get separate powers. Tool-contract posture and manifest facts are
+   client-builder diagnostics and must stay behind a Developer details
+   disclosure rather than beside the normal external-agent setup steps; posture
+   and policy context belongs under Patrol access model, while prompt, scope,
+   failure-code, and tool inventories must sit one level deeper behind Live
+   manifest details using user-facing labels such as Agent starting points and
+   Agent capabilities.
+   Direct links to
+   `/settings/pulse-intelligence/assistant#external-agent-setup` must focus this
+   External agents panel after the Assistant settings layout settles,
+   because connected agents are optional access to Patrol work and should not
+   strand users at the generic token inventory. Legacy
+   `/settings/security/api#external-agent-setup` and
+   `/settings/security/api#pulse-mcp-setup` links must remain accepted and
+   redirect to the canonical Pulse Intelligence Assistant route.
+   The `Choose Patrol mode` handoff must target the Patrol operator surface at
+   `/patrol#patrol-control`, where the mode is configured, while API
+   Access remains the token and external-client setup surface. The expanded
+   setup checklist owns that handoff as Step 1; the panel header must not repeat
+   a second visible `Choose Patrol mode` action while setup is open.
+   The visible full-surface token preset for that setup is `Patrol external agent`;
+   `pulse_intelligence_agent` remains only the compatibility preset id used by
+   the route and token model.
+9. `frontend-modern/src/stores/aiChat.ts` shared with `frontend-primitives`: the assistant drawer and session store is both an AI runtime control surface and a canonical app-shell presentation boundary.
+10. `internal/agentcapabilities/action_target.go` shared with `api-contracts`: the Pulse Intelligence governed action target type and resource-to-action-target mapping vocabulary are both the Assistant approval/runtime routing contract and the canonical API/agent target contract for governed actions.
+11. `internal/agentcapabilities/control_level.go` shared with `api-contracts`: the Pulse Intelligence control-level vocabulary and control-tool availability predicate are both the Assistant runtime gating contract and the canonical API/agent permission posture for governed action tools.
+12. `internal/agentcapabilities/errors.go` shared with `api-contracts`: the Pulse Intelligence agent error envelope is both the canonical API failure payload contract and the AI runtime adapter error-parsing contract for Assistant and external-agent surfaces.
+13. `internal/agentcapabilities/events.go` shared with `api-contracts`: the Pulse Intelligence event vocabulary is both the canonical API SSE event contract and the AI runtime adapter notification contract for Assistant and external-agent surfaces.
+14. `internal/agentcapabilities/governance_prompt.go` shared with `api-contracts`: the Pulse Intelligence surface-affordance-resolved model-facing operating-instruction, tool-governance prompt, reusable provider-tool governance description, Assistant-native offered-tool filtering, and Assistant-native interactive question-tool governance projections are both the Assistant system-prompt governance section and the shared API/agent vocabulary for action mode, approval posture, MCP affordance advertisement, and non-registry interaction-tool boundaries.
+15. `internal/agentcapabilities/http.go` shared with `api-contracts`: the Pulse Intelligence agent HTTP substrate is both the API capabilities invocation contract and the shared AI runtime adapter execution primitive for MCP and reference agent clients.
+16. `internal/agentcapabilities/manifest.go` shared with `api-contracts`: the canonical Pulse Intelligence agent capabilities manifest declaration, including capability display titles, manifest-owned finding lifecycle schemas, manifest-owned governed action schemas and routes, manifest-owned external-adapter surface tool contracts, and manifest-owned structured output schemas, is both the API discovery payload source and the AI runtime projection contract for Pulse Assistant and MCP-facing agent tools.
+17. `internal/agentcapabilities/markdown.go` shared with `api-contracts`: the Pulse Intelligence manifest Markdown projection, including manifest-owned capability titles, surface-filtered Pulse MCP tool/error inventories, and prompt labels, is both the canonical API/agent documentation projection and the AI runtime onboarding projection for Assistant-compatible external-agent surfaces.
+18. `internal/agentcapabilities/mcp.go` shared with `api-contracts`: the Pulse Intelligence MCP protocol version, JSON-RPC, method dispatch, method payload, surface-tool-contract-gated initialize operating-instruction and capability advertisement payload, manifest surface-filtered tools/list and tools/call execution bridge, manifest surface-gated resources/list and resources/read bridge, manifest-owned and surface-affordance-gated workflow prompt projection, protocol wire aliases, resource and prompt handler gates, and notification projection collectively define the external-agent adapter wire contract over the shared Pulse Intelligence tool core; MCP initialize, tools/call execution, resource list/read projection, and prompt list/get projection must enter through manifest-owned surface and workflow-prompt contracts so raw capability slices cannot bypass the published external-adapter contract.
+19. `internal/agentcapabilities/mcp_adapter.go` shared with `api-contracts`: the Pulse MCP adapter setup contract defaults and normalization are both the canonical API manifest setup projection and the AI runtime onboarding contract for Assistant-compatible external-agent surfaces.
+20. `internal/agentcapabilities/projection.go` shared with `api-contracts`: the agent capability external-tool projection helper, normalized manifest-owned surface tool contract resolution and tools-affordance gating, manifest-owned resource-context route and argument vocabulary, operator-state capability and route vocabulary, finding workflow capability and lifecycle argument vocabulary including resolution and dismissal notes, governed action capability, route, and argument vocabulary, manifest-owned tool title and outputSchema projection, structured Pulse capability _meta, and shared tool behavior hints are both the canonical API manifest projection contract and the AI runtime adapter projection for Pulse Assistant and MCP-facing agent tools, with MCP annotation and metadata wire names confined to adapter-edge aliases.
+21. `internal/agentcapabilities/provider_tool_artifacts.go` shared with `api-contracts`: the provider tool-call artifact detector and streaming tool-name prefix splitter are both the Assistant stream-sanitization boundary and the shared external-adapter leak guard for provider-native tool-call markup that escaped the structured channel.
+22. `internal/agentcapabilities/schema.go` shared with `api-contracts`: the agent capability input schema contract is both the canonical API manifest schema envelope and the AI runtime structured tool-schema, governance-aware provider-projection with neutral behavior hints and Pulse governance metadata, offered-tool governance extraction for Assistant prompt policy, manifest-affordance-gated Assistant provider-surface composition, manifest raw-schema to Assistant provider-schema projection for capability tools, legacy native Assistant utility provider aliases and schemas, provider-call normalization, provider-result context projection, Assistant-native interaction provider-tool declaration, and live Assistant execution-normalization contract for Pulse Assistant and MCP-facing agent tools.
+23. `internal/agentcapabilities/scopes.go` shared with `api-contracts`: the manifest-derived required-scope summary is both the canonical API/agent token guidance contract and the AI runtime adapter startup/onboarding contract for Assistant-compatible external-agent surfaces.
+24. `internal/agentcapabilities/sse.go` shared with `api-contracts`: the Pulse Intelligence SSE subscription transport and record parser are both the canonical API event-stream consumption contract and the AI runtime adapter push bridge contract for MCP and reference agent clients.
+25. `internal/agentcapabilities/surface_contract.go` shared with `api-contracts`: the Pulse Intelligence operator-surface affordance contract, shared surface-affordance, surface-tool identity, Assistant surface tool filtering, normalized external surface tool resolver, surface lookup, affordance labels, and manifest-published external-adapter surface tool allowlist projection are both the canonical API manifest surface model and the AI runtime prompt and onboarding guardrail for Assistant and MCP-facing surfaces.
+26. `internal/agentcapabilities/text_tool_invocation.go` shared with `api-contracts`: the Pulse Intelligence text tool invocation parser, internal approval argument, and current_resource handle vocabulary are both the Assistant approved-action execution projection and the shared tool-call params bridge for governed Pulse Intelligence tool calls, with MCP tools/call compatibility staying at the adapter edge.
+27. `internal/agentcapabilities/tool_call.go` shared with `api-contracts`: the Pulse Intelligence shared tool-call params, normalization, validation, direct registry preparation, registry-entrypoint failure result helpers, and provider/registry tool-call safety classification are both the native Assistant execution/FSM contract and the canonical API/agent tools/call compatibility contract for governed Pulse Intelligence tool calls.
+28. `internal/agentcapabilities/tool_execution.go` shared with `api-contracts`: the Pulse Intelligence neutral capability tool HTTP execution helper and direct tool execution output/error mapper are both the Assistant-native direct execution contract and the canonical API/agent request/response execution contract, with MCP adapters consuming the neutral helpers only after the shared MCP manifest-surface execution bridge has applied the published surface tool contract.
+29. `internal/agentcapabilities/tool_marker.go` shared with `api-contracts`: the Pulse Intelligence Assistant tool marker vocabulary and approval/policy marker parser are both the Assistant structured tool-result compatibility contract and the canonical API/agent branching contract for governed tool outcomes.
+30. `internal/agentcapabilities/tool_names.go` shared with `api-contracts`: the Pulse Intelligence registry tool-name vocabulary is both the native Assistant execution/display contract and the canonical API/agent tool identity contract for MCP-facing external-agent adapters.
+31. `internal/agentcapabilities/tool_response.go` shared with `api-contracts`: the shared tool response envelope, tool error-code vocabulary, and tool-result error-code and verification evidence parsers are both the Assistant structured tool-result contract and the canonical API/agent branching contract for Pulse Intelligence tool failures, recovery tracking, and write self-verification.
+32. `internal/agentcapabilities/tool_result.go` shared with `api-contracts`: the Pulse Intelligence shared tool-result content/result envelope, structuredContent projection, result constructors, HTTP response-to-result mapping, text projection, and result interpretation helpers are both the Assistant registry result contract and the canonical API/agent result projection contract for governed tool outcomes.
+33. `internal/agentcapabilities/types.go` shared with `api-contracts`: the agent capabilities manifest wire type, manifest-owned external-adapter surface tool contract field, capability display title and structured output schema fields, approval-policy vocabulary, capability governance normalization, and tool-governance descriptor shape are both the canonical API payload contract and the AI runtime projection contract for Pulse Assistant and MCP-facing agent tools.
+34. `internal/agentcapabilities/workflow_prompt.go` shared with `api-contracts`: the Pulse Intelligence workflow prompt catalogue, manifest-owned `workflowPrompts` projection, MCP prompt title projection, presentation kind hints, shared resource-context and finding argument vocabulary, Patrol issue-handling capability gating, argument validation, and manifest-gated shared prompt rendering rules are both the AI runtime starter contract for Assistant-compatible surfaces and the canonical API/agent prompt projection contract for MCP-facing clients.
+35. `internal/api/ai_handler.go` shared with `api-contracts`: Pulse Assistant handlers are both an AI runtime control surface and a canonical API payload contract boundary.
+36. `internal/api/ai_handlers.go` shared with `api-contracts`: AI settings and remediation handlers are both an AI runtime control surface and a canonical API payload contract boundary.
+37. `internal/api/ai_intelligence_handlers.go` shared with `api-contracts`: AI intelligence handlers are both an AI runtime control surface and a canonical API payload contract boundary.
+38. `pkg/aicontracts/fix_execution.go` shared with `api-contracts`: the public approved-fix execution contract is both an AI runtime approved-action boundary and a canonical API dependency contract for Patrol and enterprise auto-fix binders.
+39. `pkg/aicontracts/investigation.go` shared with `api-contracts`: the public Patrol investigation record and finding contract is both an AI runtime handoff boundary and a canonical API payload contract for Patrol, Assistant, unified findings, persistence, and audit surfaces.
+40. `pkg/aicontracts/orchestrator_deps.go` shared with `api-contracts`: the public investigation orchestrator dependency contract is both an AI runtime handoff boundary and a canonical API payload contract for Assistant and Patrol tool-call history.
+41. `pkg/extensions/ai_autofix.go` shared with `api-contracts`: the enterprise auto-fix extension dependency seam is both an AI runtime approved-action boundary and a canonical API extension contract over Assistant and Patrol execution dependencies.
+42. `scripts/generate-pulse-intelligence-docs.go` shared with `api-contracts`: the Pulse Intelligence manifest docs generator is both an AI runtime docs/onboarding projection and a canonical API contract projection over the agent capabilities manifest and Pulse MCP surface tool contract.
+
+The shared agent-capabilities manifest also owns the runtime surface contract:
+the manifest wire type and generated frontend projection must name Pulse
+Intelligence Core as the shared core, Pulse Patrol as the primary built-in
+operator, and Pulse Assistant plus Pulse MCP as contextual and external-agent
+access paths over the same governed capabilities. Frontend copy, MCP docs, and
+Assistant onboarding must consume that relationship from the manifest rather
+than carrying parallel surface tables.
+The same manifest owns Pulse MCP adapter setup facts: server name, command,
+base URL flag/default, token environment variable, and supported client config
+families. Settings, README generation, and adapter onboarding may present those
+facts for operators, but they must not maintain separate MCP setup constants.
+The in-app setup surface for those facts belongs under Pulse Intelligence
+settings because Pulse MCP is an external-agent access path over governed
+Patrol actions. API Access may be linked for scoped-token creation, but it must
+not host the external-agent setup walkthrough.
+Pulse Intelligence telemetry readiness for the external-agent surface follows
+that same manifest surface boundary: a non-expired API token covering any
+Pulse MCP-published capability scope is enough to mark MCP/external-agent
+readiness, while route-level usage still comes only from authenticated
+capability activity markers. Readiness must not be tied to the full manifest
+scope set because least-privilege external-agent setups are supported.
+The `pulse-mcp` adapter marks its own capability requests with the content-free
+`X-Pulse-Agent-Surface: pulse_mcp` header so telemetry can distinguish adapter
+use from direct external-agent API use without recording prompts, payloads,
+route parameters, token identity, or resource identifiers.
+Successful workflow starter rendering follows the same content-free boundary:
+native Assistant render calls, first-party paid Patrol autonomy handoffs, and
+Pulse MCP `prompts/get` calls may persist only the manifest prompt name, coarse
+surface (`pulse_assistant`, `pulse_patrol`, `patrol_autonomy`, legacy
+`pulse_pro_activation`, or `pulse_mcp`), and timestamp. The first-party
+activation marker is `POST /api/ai/workflow-prompts/activity`; it is an
+authenticated `ai:chat` route for app-owned surfaces such as the paid Patrol
+autonomy handoff into Patrol, validates prompt names against the manifest
+workflow prompt catalogue, accepts only first-party surfaces, and must remain a
+starter marker rather than proof that Assistant context, governed action
+approval, execution, verification, or finding resolution occurred.
+`pulse_pro_activation` exists only as a legacy alias for older Pro
+success/current-plan entry points; current paid handoffs use `patrol_autonomy`
+and neither surface adds a new prompt, tool, model surface, or operations-loop
+completion signal. Prompt arguments, rendered text, resource
+IDs, finding IDs, session IDs, token identity, request bodies, and model output
+must not enter workflow starter activity history or outbound telemetry.
+Runtime model-facing instructions must consume that same contract as data.
+`BuildPulseAssistantOperatingInstructions` identifies Pulse Assistant as the
+native in-app surface over Pulse Intelligence Core, while manifest-backed MCP
+initialize responses identify Pulse MCP as the external-agent adapter over the
+same core and Pulse Patrol as the primary built-in operator. That copy belongs in
+`internal/agentcapabilities`; Assistant prompts, MCP initialize payloads, and
+future agent surfaces must not re-create local Assistant/MCP/Patrol relationship
+wording outside the manifest-owned surface contract.
+Surface tool summaries follow the same shared-core rule. The native Assistant
+runtime exposes provider tools through `ProjectPulseAssistantProviderTools`,
+which applies the manifest-owned Pulse Assistant surface affordances before
+registry or native interaction tools reach model requests, and exposes
+`PulseToolExecutor.AssistantSurfaceToolContract`, which projects the same
+runtime-available provider tools through `ProjectPulseAssistantSurfaceToolContract`;
+external-agent adapters project request/response manifest capabilities through
+`ProjectManifestSurfaceToolContract` and publish the static external-adapter
+inventory on `Manifest.SurfaceToolContracts`. Missing external-adapter
+`surfaceToolContracts` entries fail closed rather than inferring tools from raw
+manifest capabilities; static surface-tool affordance metadata may narrow an
+external operator surface, but must not re-enable a disabled surface affordance
+or keep tool/capability names when the effective `tools` affordance is false.
+Disabled Assistant affordances likewise fail closed rather than allowing runtime
+registry availability to re-enable provider tools.
+Assistant prompt fallback governance follows that same contract: when no live
+executor-owned offered-tool manifest is available, registry-owned fallback
+governance must enter through
+`CanonicalToolGovernanceForManifestSurface(ControlLevelControlled, CanonicalManifest(), SurfaceIDPulseAssistant)`,
+and the chat prompt fallback must derive explicit offered tool names from
+`ManifestSurfaceAffordances` so registry tools and the native `pulse_question`
+interaction tool cannot be reintroduced by nil offered-tool semantics.
+Assistant registry tools, Assistant-native interaction tools, and MCP manifest
+capabilities must stay explicit buckets in that contract so Pulse can support
+both surfaces without duplicating tool logic or
+implying MCP replaces the in-app Assistant.
+Frontend consumers must import the generated `SurfaceToolContract` shape from
+the shared agent-capabilities client rather than maintaining a local copy.
+Patrol work contract availability for browser surfaces is also a shared
+agent-capabilities-client verdict: consumers must derive the Pulse MCP contract
+from the normalized MCP adapter setup, the manifest-owned
+`pulse_operations_loop` workflow prompt, and the Pulse MCP surface tool contract
+through `frontend-modern/src/api/agentCapabilities.ts`; feature shells must not
+hard-code MCP contract availability or infer it from raw manifest capabilities.
+Runtime external-agent readiness is stricter:
+`GET /api/agent/patrol-control/status` may mark `externalAgentReady` only when
+that contract is available and a single non-expired API token covers every
+scope required by the published Pulse MCP Patrol work capability set.
+`GET /api/agent/operations-loop/status` remains only a compatibility alias for
+older clients. That shared Patrol work tool set starts with
+`get_patrol_control_status`, the count-only
+`GET /api/agent/patrol-control/status` orientation read, then uses the same
+fleet-context, resource-context, finding, governed action, and finding
+resolution tools as the rest of the governed issue-handling flow.
+`get_operations_loop_status` and `/api/agent/operations-loop/status` are
+compatibility aliases, not primary capability names. AI runtime prompts, MCP
+readiness helpers, and frontend presentation helpers must not carry separate
+Patrol work inventories. The native Patrol work surface may display that same
+status projection, but it must fetch it through the shared agent-capabilities
+frontend client so Assistant, MCP, and native UI stay on the same Patrol work
+contract. The manifest-owned status schema must describe governed counts as
+decision-backed, split approved and rejected decision counts explicitly, and
+describe verified counts as approved-action-backed. The same schema now exposes
+content-free Patrol work starter counts for the total flow and the
+Assistant, Patrol mode, older-client compatibility field, and Pulse MCP
+source surfaces, an Assistant step count for contextual Assistant or
+external-agent collaboration, plus a content-free Patrol mode
+completed-loop count derived when Patrol mode starter evidence, Patrol
+issue evidence, contextual collaboration, and either a rejected governed
+decision or an approved governed decision with verified outcome proof coexist
+in the same status window. It also exposes a stricter Patrol mode
+resolved-loop count only when that status window has an approved governed
+decision and verified outcome proof. The `proActivationOperationsLoopStarterCount`
+field is retained only for older clients; primary clients must use
+`patrolControlOperationsLoopStarterCount`. The legacy `patrolAutonomy*` and
+`proActivation*` completed-loop, resolved-loop, and value-state fields mirror
+the Patrol mode counts and value state for compatibility. AI runtime
+surfaces may use those counts to show that a starter
+was rendered or launched, that contextual collaboration occurred, or that the
+first-party Patrol mode
+loop reached terminal or resolved proof, but must not treat them as Assistant
+transcript, approval payload, action command, resource identity, or
+finding-resolution detail. External-agent prompts and MCP adapters may treat a
+rejected-only decision as a terminal no-execution outcome, but approved
+decisions must still continue through execution and verification before the
+verified-outcome stage is complete.
+Runtime Assistant availability remains an authenticated Assistant concern,
+served by `GET /api/ai/assistant/surface-tools`, not a static fact in the
+public agent-capabilities manifest. When the Pulse Assistant shell displays
+live capability availability, it must load that authenticated endpoint through
+`AIChatAPI.getAssistantSurfaceTools()` and format the posture through
+`frontend-modern/src/api/agentCapabilities.ts`; the shell must not keep a local
+registry-tool catalogue or reuse MCP manifest capability names as native
+Assistant inventory. The External agents settings panel may show the
+external Pulse MCP tool posture, but it must get the normalized static
+`SurfaceToolContract` from `manifest.surfaceToolContracts` through
+`getAgentManifestSurfaceToolContract(manifest, AGENT_SURFACE_ID_PULSE_MCP)`
+and format it with `getAgentSurfaceToolPosturePresentation`;
+external-adapter request/response filtering, including the `subscribe_events`
+streaming exception and any capability omitted from the published Pulse MCP
+surface allowlist, must be owned by the backend projection in
+`ProjectManifestSurfaceToolContracts`; shared capability reads must use
+`ResolveManifestSurfaceToolContract` and `ManifestSurfaceToolCapabilities` so
+the normalized surface contract and the resolved `tools` affordance gate are
+applied once. MCP initialize must also advertise the `tools` capability and
+name "offered tools" in operating instructions only when that same published
+surface tool contract resolves. MCP prompt support must similarly enter through
+`MCPManifestSurfacePromptProjectionSupported`, which combines the target
+surface's `prompts` affordance with the manifest-owned workflow prompt
+catalogue before initialize or `prompts/list` advertises prompts, and through
+`GetMCPPromptFromManifestSurface` before `prompts/get` renders any prompt. The
+global `pulse_operations_loop` prompt is part of that same shared catalogue,
+not a native Assistant-only starter: it must appear in Assistant and MCP only
+when the manifest can support the full Patrol-to-Assistant-to-governed-action
+flow, and it must guide contextual explanation, plan-first governed action,
+approval or rejection only when the returned policy requires a decision,
+policy-allowed execution, post-action verification, and finding resolution from
+the same rendered prompt text. The rendered prompt must orient
+first through `get_patrol_control_status` and re-read that status, resource
+context, and findings before treating an outcome as verified. Successful render activity for
+that starter is activation evidence for the Patrol issue-handling journey, not
+proof of contextual collaboration, governed action execution, verification, or
+finding resolution.
+Native Assistant callers may request a preferred workflow prompt through safe
+browser context, but the drawer must resolve that request against the
+manifest-owned workflow prompt catalogue and render it through
+`/api/ai/workflow-prompts/render`; it must not inline prompt templates or
+silently append to an existing composer draft. Preferred workflow prompt
+requests are one-shot browser seeds and must be cleared with the scoped handoff
+payload after the first successful send.
+The MCP `tools/call` execution
+helper must
+accept the manifest and surface id, apply the same affordance and surface-tool
+allowlist used by `tools/list`, and only then delegate to neutral capability
+HTTP execution; it must not accept a caller-supplied raw capability slice as the
+MCP execution boundary. Frontend consumers may normalize a published
+`surfaceToolContracts` entry for presentation, but must not infer MCP tools
+from raw manifest capabilities when that entry is missing, and must not add a
+Pulse-MCP-specific frontend helper alias around the generic surface resolver.
+The generated Pulse MCP README follows the same rule: its surface-contract
+block must be rendered by `MCPSurfaceContractMarkdown` from
+`Manifest.SurfaceContract`, alongside the manifest-derived scope, tool, prompt,
+and error-code inventories.
+The public Pulse Intelligence overview follows the public-docs version of that
+rule: the marked overview block in `docs/AI.md` must be rendered by
+`PulseIntelligenceOverviewMarkdown` from the same manifest-owned
+`SurfaceContract`, while surrounding product detail may remain human-authored.
+The External agents settings panel follows the browser-facing version of
+that same rule: its Pulse Intelligence Core, Patrol, Assistant, and MCP surface
+summary must be projected from `/api/agent/capabilities.surfaceContract` through
+`frontend-modern/src/api/agentCapabilities.ts`, not maintained as panel-local
+copy; surface affordance badges are part of that same manifest projection. Its
+capability-publication wording must describe published manifest-owned surface
+contracts, not raw backend capability rows, so the panel does not imply that
+adding a raw capability automatically exposes it to Pulse MCP.
+Its external-agent recovery summary must also be manifest-backed: stable
+failure-code chips or summaries may be rendered for setup ergonomics, but they
+must derive from capability `errorCodes` through the shared frontend manifest
+client rather than a panel-local recovery-code list.
+External-agent token setup copy in that panel must route operators back to the
+API Access token creation surface and the manifest-derived `Pulse Intelligence
+agent` preset instead of carrying MCP-local token minting logic or a
+component-local required-scope list.
+
 ## Extension Points
+
+Pulse Intelligence presents Patrol as the primary first-party operations
+surface. Pulse Assistant is the in-app contextual explanation, approval-card,
+governed-action, verification, and handoff access path over Patrol work.
+`cmd/pulse-mcp/` is the external-agent adapter for MCP-speaking clients. The
+adapter must stay thin: it fetches `/api/agent/capabilities`, projects that
+canonical manifest as MCP tools, and forwards calls to the declared API routes.
+The shared `MCPManifestToolServer` must therefore consume the manifest as a
+unit, not only a detached capability slice, so initialize instructions, tool
+projection, resources, prompts, notifications, and future manifest-backed
+surface metadata remain coupled to the same discovery document. It must resolve
+the target surface's affordance contract before initialize advertisement and
+before tool, resource, and prompt handlers run; raw manifest capabilities,
+workflow prompts, or context routes are availability inputs only after the
+surface contract allows that affordance.
+When an adapter renders a manifest prompt locally, it may notify Pulse through
+the authenticated `POST /api/agent/workflow-prompt-activity` marker endpoint
+only after the prompt render succeeds. That marker route accepts manifest-owned
+prompt names only, requires the token to cover `monitoring:read`, normalizes
+`X-Pulse-Agent-Surface: pulse_mcp` into the Pulse MCP surface, and records no
+prompt arguments, rendered text, resources, findings, token identity, or
+request payload.
+`scripts/generate-pulse-intelligence-docs.go` is part of that coupling: it
+must update the MCP README's Pulse Intelligence surface contract and the public
+`docs/AI.md` overview from the manifest instead of leaving hand-written
+Core/Patrol/Assistant/MCP relationship prose beside generated inventories.
+Public AI docs may describe anonymous outbound telemetry only as counts,
+feature flags, and coarse Patrol control and governed Pulse Intelligence
+operations adoption flags and counters.
+They must keep prompts, chat messages, command text, action output, token
+values, resource identifiers, and hostnames explicitly outside that telemetry
+scope.
+Governed-operation workflow starter counts may appear in that outbound telemetry
+only as 30-day aggregate counts for the canonical `pulse_operations_loop`
+prompt, split by total, native Assistant, first-party Patrol, and Pulse MCP surfaces. Those counts
+may make `pulse_intelligence_loop_active_30d` true because the operator entered
+the guided journey, but they must not satisfy contextual-collaboration,
+complete-loop, approved-execution, or resolved-loop telemetry by themselves.
+Assistant cost-ledger events may carry only the coarse `context_scope`
+classifier for product-originated finding, resource, handoff, action, or
+structured-mention turns; telemetry may aggregate that classifier into
+governed-context Assistant counts, but it must not export prompts, session IDs,
+resource IDs, finding IDs, command text, or action payloads.
+Assistant cost-ledger events may also carry only a count-only
+`tool_call_count` for accepted, model-selected governed tool calls within the
+turn. Telemetry may aggregate that number into Assistant governed-tool
+collaboration counts, but it must not export tool names, tool arguments, tool
+results, provider call IDs, transcript content, resource IDs, finding IDs,
+command text, action payloads, or session IDs.
+The Pulse MCP README and the in-app Agent integrations panel must present that
+adapter as one reusable runtime contract with client-native config wrappers:
+OpenCode uses a top-level `mcp` object in `opencode.json` / `opencode.jsonc`,
+while Claude-style clients use `mcpServers`. The shared command, base URL, and
+token environment variable remain the Pulse Intelligence contract; client file
+formats are wrappers around that contract, not separate Pulse Intelligence
+surfaces. In the in-app Pulse Intelligence settings panel, those copied wrapper
+snippets are on-demand setup detail; they must not occupy the default
+external-agent read above the Patrol-autonomy and scoped-token hierarchy. The
+Security API Access page may mint the scoped token, but it must not become the
+external-agent setup page.
+Full-surface token scope guidance must come from the canonical manifest's
+manifest-owned `requiredScopes` set through shared
+`agentcapabilities.ManifestRequiredScopeList` /
+`ManifestRequiredScopeMarkdownList` helpers rather than Assistant-, UI-, or
+adapter-local hardcoded or recomputed scope copy.
+The native Assistant runtime prompt, lifecycle logs, and readiness messages
+must identify that first-party surface as Pulse Assistant rather than the
+legacy generic `Pulse AI` persona; the shared engine/core vocabulary remains
+Pulse Intelligence.
+The canonical manifest declaration, manifest wire shape, action-mode enum,
+registry tool-name vocabulary, structured registry tool schema, provider projection helpers, JSON Schema
+object-envelope helpers, provider tool/call/result shapes, provider-call
+projection helper, provider tool-name catalog exact/prefix matching,
+provider tool-call artifact detection and streaming tool-name prefix holding,
+provider tool-call input normalization that clones caller
+maps and nested JSON-like argument values before initializing empty input
+objects, provider-emitted streamed tool-input parsing, final provider
+tool-input raw fallback handling, and native Assistant question input parsing,
+control-level vocabulary, control-tool availability
+predicate, tool-governance defaulting, disabled-control guidance, capability
+lookup and typed lookup-error helpers, external-tool
+projection helpers, and shared agent HTTP substrate, including named capability
+execution, live in
+`internal/agentcapabilities`; MCP JSON-RPC envelopes, method constants,
+request decoding, line-delimited stdio request serving, notification response
+policy, stable JSON-RPC encoding, manifest-backed tool-server semantics,
+tool-server method dispatch, initialize instruction/tool-call/resource/prompt payloads,
+tool-server initialize result construction, notification methods, MCP
+`tools/call` raw params decode, MCP resource URI projection, context-backed
+`resources/list` / `resources/read` projection, and manifest-backed
+`prompts/list` / `prompts/get` projection live at the MCP adapter edge.
+Native Assistant registry declarations are part of that same identity contract:
+every registry `Tool.Definition.Name` for Pulse Intelligence tools, including
+the read-only `pulse_summarize` reporting synthesis tool and Patrol runtime
+tools, must consume `internal/agentcapabilities/tool_names.go` constants rather
+than owning string literals in `internal/ai/tools`.
+Shared Pulse Intelligence workflow prompt definitions, manifest-owned
+`workflowPrompts` catalogue selection, prompt display labels, MCP prompt title
+projection, presentation kind hints, prompt argument validation, and prompt
+rendering rules live in the neutral workflow-prompt core so native Assistant
+starters, frontend manifest consumers, and external MCP prompts cannot drift.
+When `workflowPrompts` is present on a manifest it is authoritative; capability
+projection is compatibility plumbing for older manifests, not a second prompt
+catalogue. The native Assistant starter row must therefore derive starter
+availability from `workflowPrompts` and the attached Assistant context, then call
+the AI/API-owned render route before inserting any prompt text into the composer;
+it must not copy prompt labels, prompt bodies, or MCP `prompts/get` rendering
+logic into frontend state. MCP prompt list/get helpers must likewise accept the
+manifest-owned workflow prompt catalogue through `ManifestPulseWorkflowPrompts`,
+`ProjectMCPWorkflowPrompts`, `GetMCPPromptFromManifestSurface`,
+`GetMCPPromptFromManifest`, and
+`BuildMCPPromptFromManifest`; they must not expose raw-capability `ProjectMCPPrompts`,
+`GetMCPPrompt`, or `BuildMCPPrompt` entrypoints that can re-create a second MCP
+prompt catalogue. Shared tool-call
+parameter normalization and validation live in the neutral tool-call core: tool
+names are trimmed and required, argument maps
+are cloned deeply enough to detach nested JSON-like `body` maps/slices and
+initialized, and malformed or semantically invalid tool-call params must fail
+before capability lookup so native Assistant execution, the legacy text
+projection, and external MCP adapters cannot drift on empty-name, nil-argument,
+or caller-owned nested argument handling. Shared capability tool HTTP execution
+and direct execution output/error mapping live in the neutral tool-execution
+core, while result wrapping, result-text extraction, result interpretation, and
+the canonical `HTTPCallResponse` to shared tool-result mapping live in the
+neutral tool-result core. JSON object result bodies must also project into the
+same shared structuredContent envelope while preserving the serialized text
+content block for compatibility, so MCP clients and native Assistant paths see
+one canonical result contract. Native Assistant direct execution paths must use that
+shared text/marker interpretation and output/error projection instead of
+flattening tool-result content blocks or branching on `isError`, approval, or
+policy outcomes locally, so in-app execution and external MCP adapters
+interpret the shared result envelope the same way. MCP `tools/call` decoding is
+adapter-edge protocol work, but execution authorization must still enter the
+neutral tool-execution core only after the shared manifest surface contract has
+selected the allowed request/response capabilities. Patrol-only Assistant
+registry tools that return JSON must build those responses through the shared
+`agentcapabilities` JSON result constructors instead of manually marshaling JSON
+into text-only results, so `structuredContent` remains available to both native
+Assistant and external-agent result consumers. Patrol verification
+tool-call records that decide success, failure,
+approval-required, or policy-blocked outcomes must also branch through the
+shared tool result interpretation rather than treating `isError` alone as the
+success boundary. Reference clients that need a successful raw response body must also
+use the shared request/response capability body helper so named capability
+lookup, path/body projection, API-token headers, and stable non-2xx error
+formatting stay in one place. The
+agent SSE subscription transport, record parser, actionable-record filter, and
+SSE-to-MCP notification bridge also live there so MCP notification bridges and
+reference probes consume the same `Accept: text/event-stream`, status handling,
+`event:` / `data:` framing rules, transport-event filtering, and JSON-RPC
+notification projection.
+The legacy
+approved-action text projection for Pulse tool calls is also parsed there into
+the shared `ToolCallParams` shape, including the internal approved-action
+argument key/helper that carries a granted approval into replayed tool execution,
+the `current_resource` handle plus governed aliases, and the recursive
+tool-argument detector that blocks unresolved attached-resource placeholders
+before visible execution; text invocations are then normalized and validated
+through the same shared parameter contract, so
+Assistant approval execution and MCP-compatible adapters cannot drift on tool
+name, `default_api:` prefix, quoted argument handling, placeholder target
+semantics, empty names, nil
+arguments, or pre-approved action replay semantics. Structured tool
+response envelopes, tool error-code vocabulary, the structured tool-result
+error-code parser, and the `verification.ok` evidence parser also live there
+so Assistant blocked/failed tool outcomes, provider call params, agent-facing
+tool failure contracts, FSM block/recovery codes, recovery tracking, and
+write-tool self-verification semantics cannot drift. The legacy-compatible Assistant tool markers
+for approval-required and policy-blocked outcomes also live there, including
+the stable `APPROVAL_REQUIRED:` / `POLICY_BLOCKED:` prefixes, payload `type`
+values, formatter helpers, parser helpers, and the typed approval-required
+payload contract for plan, context-confidence, preflight, target, risk, and
+description data. Tool families may own the resource-specific payload fields
+they add to those markers, but they must not redeclare the marker envelope,
+rebuild anonymous approval payload readers, branch on local prefix strings, or
+hide shared marker parsing behind Assistant-local parser wrappers. Legacy
+service approval-marker handling may keep compatibility fallback behavior for
+old marker text, but the canonical decision path must call the shared marker
+parser directly at the branch site. Tool execution must not drop the returned
+argument map when carrying a granted approval into replayed tool execution.
+Native Assistant tool protocol aliases must expose only the shared neutral
+registry shapes the Assistant actually executes (`Tool`, `ToolCallParams`,
+`ToolResult`, `ToolContent`, and structured tool-response envelopes). JSON-RPC,
+MCP initialize/list/resource/prompt payloads, and other MCP wire aliases remain
+at the external adapter edge in `internal/agentcapabilities/mcp.go`, not in
+`internal/ai/tools/protocol.go`. Chat transcript and API-facing tool-result
+shapes must alias the shared provider-call contract while the richer in-app
+Assistant transcript projects to that shared shape through an explicit helper.
+Provider-result context projection also belongs to `internal/agentcapabilities`:
+native Assistant, the legacy AI service loop, external adapters, and future
+Pulse Intelligence surfaces must build full transcript results and model-context
+results through the shared projection so transcript preservation, error flags,
+and model-result truncation cannot drift into surface-local pairs.
+API handlers, Assistant tool governance, `cmd/pulse-mcp`, and the in-repo probe
+consume that shared contract so agent projections cannot drift into local
+structs, local structured schema types, local provider schema projection, local
+schema wrappers, local request/response filters, local capability maps, local
+path placeholder parsing, local argument-to-body shaping, local manifest
+fetchers, local API-token header spelling, local stable error-envelope
+formatting, local named capability execution, local tool-governance defaulting,
+local disabled-control guidance, local MCP manifest-backed
+tool-server handlers, local MCP method dispatch, local MCP request decoding or
+line-framing loops, local JSON-RPC encoders, local notification response
+checks, local MCP initialize builders, local
+HTTP-to-MCP result wrapping, local MCP result interpretation,
+local SSE record scanners, local SSE-to-MCP notification bridges, local
+tool-result maps, or local tool-description builders. Path placeholders from the manifest and top-level
+tool arguments must be projected through the shared
+`agentcapabilities.ProjectCapabilityCall` helper before dispatch, so path
+values are percent-encoded single segments and non-placeholder write arguments
+become the JSON request body when no nested `body` object is provided.
+Internal tool-call metadata such as approved-action grants must stay on the
+shared `agentcapabilities` argument helper path and be stripped by the shared
+projection before any public manifest-backed HTTP body is built.
+Canonical IDs containing `:`, `/`, spaces, or other reserved characters cannot
+alter the route shape.
+The Assistant and MCP surfaces must also rely on the router-owned manifest
+route/scope proof: every canonical capability is projected through the shared
+call helper into a concrete request, then exercised against the API router with
+a token that lacks the advertised scope so drift between manifest metadata,
+agent-facing placeholders, and real authorization fails before either surface
+ships a mismatched tool.
+Native Assistant provider seams are part of the Pulse Assistant surface, not
+the external MCP adapter. Chat service aliases, API handler setter signatures,
+router dependency wiring, direct in-app tool execution, and findings-store
+adapters plus the broader native tool adapter family must use Assistant/Pulse
+Intelligence terminology; `MCP` names are reserved for the protocol adapter,
+MCP-compatible action-contract interface, wire envelopes, and result
+interpretation contracts.
+The Pulse Intelligence event vocabulary is part of that same shared
+`internal/agentcapabilities` boundary. API SSE producers, the
+`subscribe_events` manifest description, MCP notification advertising, MCP
+transport-event filtering, MCP notification method projection, shared SSE
+record parsing, shared SSE-to-MCP notification bridging, and reference probes
+must consume the shared event kind constants/helpers instead of maintaining local copies of
+`finding.created`, `approval.pending`, `action.completed`, `stream.connected`,
+or `heartbeat`.
+MCP `tools/list` must use the shared
+`agentcapabilities.ProjectManifestSurfaceTools` projection for the Pulse MCP
+surface. The manifest-owned `surfaceToolContracts` field is the allowlist for
+which request/response tools Pulse MCP may advertise or execute; raw
+`Manifest.Capabilities` remains the metadata and execution source, not the
+surface availability decision. MCP initialize capability advertisement,
+operating-instruction affordance copy, `tools/list`, `tools/call`,
+`resources/list`, `resources/read`, `prompts/list`, and `prompts/get` must also
+pass through the manifest-owned surface affordance contract: the surface must
+allow tools, resources, prompts, and capability metadata before raw manifest
+capability or prompt presence can expose them to an external client. The shared
+`agentcapabilities.ProjectTools`
+helper still owns the full request/response tool shape, including
+manifest-owned capability metadata (category, method/path, scope, action mode,
+approval policy, request/response shape, stable error codes, input schema, and
+structured output schema). That metadata must be available both in model-facing
+description prose and in the standard MCP `_meta["pulse.capability"]` object
+for clients that need structured route/scope/governance facts, so external-agent
+clients see the same governed API contract without a second MCP-specific tool
+registry, projection loop, allowlist, or prose table. Action mode (`read`,
+`mixed`, `write`) and approval policy (`scope_only`, `action_plan`) are
+manifest-owned governance fields; MCP must not infer or override them from HTTP
+method or local tool names. Manifest-backed capability lookup and `tools/list`
+projection must also detach raw `inputSchema`, raw `outputSchema`, structured
+metadata maps, and error-code slices through `agentcapabilities.CloneCapability`,
+`CloneCapabilities`, and `CloneRawMessage`, so external-agent adapters cannot
+mutate the manifest-backed contract while serializing or post-processing one
+projected tool list.
+The manifest-owned `get_patrol_control_status` structured output schema is
+part of the same AI runtime contract. Its four-step operator rollup is a
+content-free stage projection for Assistant and MCP callers: governance step
+counts represent pending approvals until an approved or rejected decision
+exists, then represent decision evidence, while verification step counts
+represent verified outcomes or terminal rejected decisions. Optional MCP
+readiness remains a separate `externalAgentReady` capability signal, not an
+operator step. AI runtime surfaces must consume that manifest schema and backend
+projection instead of inventing chat-local stage-count rules. The schema's
+Patrol control starter count includes native Patrol, current paid Patrol
+control, and legacy Pro activation handoff starts; its
+completed-loop and resolved-loop counts are aggregate orientation fields for
+native Assistant and MCP-facing orchestration only. Legacy
+`patrolAutonomy*` and `proActivation*` completed-loop, resolved-loop, and
+value-state fields are aliases for the Patrol control values; the legacy Pro
+activation starter field remains an entry-point-specific count. All of
+those fields must remain free of prompt names, finding IDs, action IDs,
+resource names, actors, request bodies, commands, or model output.
+Resolved-loop semantics remain approved-and-verified only.
+`cmd/pulse-mcp` startup guidance and the generated MCP README token-scope
+block must consume the manifest-owned `requiredScopes` summary through
+`agentcapabilities.ManifestRequiredScopeList` /
+`agentcapabilities.ManifestRequiredScopeMarkdownList`. MCP README tool and
+capability-specific error-code inventories are generated through
+`scripts/generate-pulse-intelligence-docs.go` from the manifest-owned Pulse MCP
+surface contract via `agentcapabilities.MCPToolCapabilityInventoryMarkdown` and
+`agentcapabilities.MCPErrorCodeInventoryMarkdown`. Workflow-prompt inventory is
+generated through `agentcapabilities.MCPPromptInventoryMarkdown` from the same
+`MCPManifestSurfacePromptProjectionSupported` gate and
+`ManifestPulseWorkflowPrompts` / `ProjectMCPWorkflowPrompts` projection used by
+`prompts/list`, including manifest labels as prompt titles. README tool lists,
+prompt lists, scope lists, and capability-specific error-code lists must not be
+hand-maintained snapshots. MCP
+`tools/call` must use the same shared
+`agentcapabilities.ManifestSurfaceToolCapabilities` resolver as `tools/list`;
+streaming capabilities such as `subscribe_events`, and raw manifest
+capabilities omitted from the Pulse MCP surface contract, remain unavailable to
+request/response tool calls even if a client sends their name manually. Adding
+a raw capability to `Manifest.Capabilities` is not enough to publish an MCP
+tool; the Pulse MCP `surfaceToolContracts` allowlist must opt it into that
+external-agent surface. Publishing the Patrol work prompt also requires the
+surface contract to include `get_patrol_control_status`, so MCP clients can
+read the same content-safe Patrol work stage before requesting fleet, finding,
+resource, approval, action, or resolution detail. The legacy
+`get_operations_loop_status` name may remain accepted only at compatibility
+edges.
+MCP `resources/list` and `resources/read` are also shared manifest-backed
+projections: `resources/list` must call the canonical `get_fleet_context`
+capability, `resources/read` must call `get_resource_context`, and the
+`pulse://resource/<resource-id>` URI shape, resource content MIME type, and
+resource read parameter validation live in `internal/agentcapabilities` rather
+than in `cmd/pulse-mcp` or an MCP-only inventory registry. They must enter
+through `ManifestSurfaceResourceCapabilities`,
+`ListMCPManifestSurfaceResourcesHTTP`, and
+`ReadMCPManifestSurfaceResourceHTTP`, not raw-capability
+`ListMCPResourcesHTTP` or `ReadMCPResourceHTTP` helpers. The MCP resource
+methods remain disabled when the target surface affordance contract disables
+resources, even if those context capabilities exist in the manifest.
+Operator-state writes, governed finding lifecycle tools, and action
+plan/decision/execute tools must also carry manifest-owned `inputSchema`
+definitions for their exact arguments so external-agent clients receive typed
+fields and enums from the canonical manifest instead of an MCP-local free-form
+body convention. When the manifest has no authored schema, MCP may derive a
+permissive fallback through the shared `agentcapabilities.ToolInputSchema`
+helper, but it must not hand-roll a second JSON Schema envelope.
+Governed finding lifecycle tools must return the agent-stable error envelope
+from `internal/agentcapabilities/errors.go` for branchable failures
+(`invalid_finding_request`, `finding_not_found`,
+`finding_action_not_allowed`, `patrol_unavailable`) and declare those codes in
+the canonical manifest; UI callers may still use the same HTTP routes, but the
+wire contract is owned by the Pulse Intelligence agent surface once the route
+is advertised there. The exported `agentcapabilities.AgentErrCode*` constants
+are the source of those values for both manifest declarations and
+`internal/api/` handler emissions; local string literals in either layer are
+contract drift. Manifest `scope` values are auth-owned vocabulary from
+`pkg/auth` and must be declared through manifest-local aliases to those
+constants, not repeated as string literals, so MCP tools and direct HTTP agents
+advertise the same scopes the API authorization layer enforces. Patrol finding
+capabilities (`list_findings`, `acknowledge_finding`, `snooze_finding`,
+`dismiss_finding`, and `resolve_finding`) are part of the AI runtime route
+surface and therefore advertise `ai:execute`; they must not be downgraded to
+monitoring scopes in MCP docs or manifest projections while the router gates
+those HTTP routes through AI execution authorization.
+Do not add MCP-only business logic or a second tool registry here. If a new
+operation should be available to external agents, add it to the canonical API
+capability manifest and make Assistant consume the same governed backend
+contract when the in-app UX needs it.
+Assistant prompt governance follows the same rule: live turns derive tool
+mode, typed approval policy (`scope_only` or `action_plan`), approval summary,
+and tool summary text from the shared `agentcapabilities.ToolGovernanceDescriptor`
+shape returned by `PulseToolExecutor.ListToolGovernance`; descriptor defaults
+must be constructed through `agentcapabilities.NewToolGovernanceDescriptor`,
+and fallback prompt
+text must call the registry-owned
+`tools.CanonicalToolGovernanceForSurface` helper with the explicit requesting
+Pulse Intelligence surface rather than maintaining a chat-local copy of tool names, governance
+descriptor fields, policy vocabulary, or governance prose.
+Assistant-only structured interaction tools such as `pulse_question` must also
+be projected through the shared
+`agentcapabilities.BuildAssistantToolGovernancePromptSection` and
+`agentcapabilities.AssistantGovernanceOfferedToolNames` helpers rather than by
+hand-building prompt-policy lines or offered-tool filters in chat-local code;
+those tools remain native Assistant interaction boundaries, not MCP manifest
+capabilities.
+Direct Assistant registry execution is also part of the shared Pulse
+Intelligence tool-call contract: `ToolRegistry.Execute` must normalize and
+validate tool names and arguments through `agentcapabilities.ToolCallParams`
+and use the shared invalid-params, unknown-tool, and control-disabled tool
+result helpers before lookup or handler dispatch, so in-app direct execution
+cannot drift from external MCP `tools/call` on trimmed names, blank-name
+rejection, nil-argument initialization, deep caller-argument copying, or
+standard entrypoint failure envelopes.
+Chat-service direct execution paths such as autonomous command execution and
+approved-fix replay must route through one Assistant registry execution helper
+before calling `agentcapabilities.InterpretDirectToolExecution`, so
+surface-specific failure wording does not fork executor lookup, registry
+dispatch, marker interpretation, or shared result handling. MCP-named
+direct-execution symbols are not part of the shared adapter contract; native
+Assistant code and MCP adapters must use the neutral direct tool execution
+helper.
+Cross-repo auto-fix and Patrol-approved action binders must resolve approved
+tool execution through `AIAutoFixHandlerDeps.ResolveApprovedAssistantToolExecutor`;
+that resolver returns the native `ApprovedAssistantToolExecutor` only, so
+enterprise code cannot recreate MCP-named Assistant execution selection. The
+current public runtime must populate `AssistantToolExecutor` only; MCP remains
+an external adapter boundary and is not an approved-fix execution dependency.
+Assistant telemetry that records recoverable policy-block attempts must also
+use the shared `agentcapabilities` tool-response error-code constants rather
+than local string literals, so metrics labels, structured tool responses,
+Assistant recovery tracking, and MCP-facing agent error vocabulary stay
+aligned.
+Assistant provider tool schemas are also registry-owned: chat must obtain the
+runtime provider tool surface from `PulseToolExecutor.AssistantProviderTools`
+so availability filtering, registry-owned governance descriptors, and
+Assistant-native interaction tools are composed at one executor-owned boundary
+instead of being paired manually in chat paths. That executor projection must
+project registered `tools.Tool.InputSchema` values through the shared
+`agentcapabilities.ProjectProviderTools` provider-schema helper and the
+manifest-affordance-gated
+`agentcapabilities.ProjectPulseAssistantProviderTools` provider-surface helper,
+and model-selected tool calls must flow through
+`agentcapabilities.ProjectProviderToolCallToToolCall` and the shared
+`agentcapabilities.NormalizeProviderToolCallForExecution` /
+`NormalizeProviderToolCallsForExecution` execution normalizers, not local schema
+maps, compatibility aliases, raw provider call fields, chat-local provider
+projection wrappers, or MCP-shaped provider-projection wrappers.
+MCP-shaped provider projection names remain protocol compatibility aliases in
+`internal/agentcapabilities/mcp.go`; they must not be implemented in the neutral
+provider schema boundary or imported by native Assistant runtime paths.
+Shared projected-tool behavior hints are the same class of boundary: the
+neutral projection owns `ToolBehaviorHints`, while any `MCPToolAnnotations`
+name is an alias in the MCP wire edge only.
+Assistant-only provider tools are still shared Pulse Intelligence declarations:
+the native `pulse_question` clarification tool must be included in provider
+tool lists through `agentcapabilities.ProjectPulseAssistantProviderTools` and
+`agentcapabilities.AssistantNativeProviderTools`, its declaration must come
+from `agentcapabilities.NewPulseQuestionProviderTool`, its JSON Schema must
+remain owned by `agentcapabilities.PulseQuestionProviderInputSchema`, its
+question type/defaulting vocabulary must use
+`agentcapabilities.PulseQuestionToolTypeValues` and
+`agentcapabilities.NormalizePulseQuestionToolType`, its emitted provider input
+must parse through `agentcapabilities.ParsePulseQuestionToolInput`, and
+allowlists that recognize leaked provider tool calls must consume
+`agentcapabilities.NewAssistantProviderToolNameCatalog` instead of hard-coding
+Assistant-native names or rebuilding provider-tool name sets locally. Provider
+tool-call artifact detection and streaming partial-tool-name holding must use
+`agentcapabilities.ProviderToolCallArtifactIndex` and
+`agentcapabilities.SplitTrailingProviderToolNamePrefix` with that shared catalog,
+so Assistant and future adapter boundaries do not fork DSML/XML/pipe/JSON/function
+leak semantics. Chat may own waiting for user answers, UI event
+emission, and FSM user-input behavior, but it must not carry a chat-local
+provider schema, description, tool-list append rule, prompt-filter rule, parser,
+tool identity, or provider artifact detector for that interaction.
+That schema boundary is also a copy boundary: registry tool definitions must
+normalize through `agentcapabilities.Tool.NormalizeCollections`, and
+`ToolRegistry.Register` / `ToolRegistry.ListTools` must not expose caller-owned
+or registry-owned `InputSchema` maps, required slices, enum slices, provider
+input-schema maps, or JSON-schema default containers for later mutation by an
+Assistant, provider, or external-agent surface. Direct provider schema
+projection helpers must normalize through that same copy boundary before
+emitting provider JSON so JSON-schema default containers cannot alias registry
+definitions.
+Provider tool-call normalization must also stay shared: provider responses,
+Assistant transcript storage, live Assistant execution, and API adapter
+projections must get independent input maps, nested JSON-like argument values,
+trimmed executable tool names, initialized empty argument maps, and raw provider
+thought-signature payload bytes from
+`agentcapabilities.ProviderToolCall.NormalizeCollections` plus the shared
+execution normalizers so a later mutation in one surface cannot rewrite another
+surface's tool arguments or provider reasoning-continuity metadata.
+Assistant transcript normalization is part of that copy boundary:
+`chat.Message.NormalizeCollections` and `chat.ToolCall.NormalizeCollections`
+must detach tool-call slices, nested tool-call input maps/slices, provider
+thought signatures, success pointers, and tool-result pointers before stored
+messages are reused across session storage, provider-continuation, browser/API,
+or orchestrator adapter surfaces.
+Provider-facing tool results follow the same shared boundary: Assistant
+tool execution must project shared tool-call results through
+`agentcapabilities.NewProviderToolResultFromToolResult` and build transcript or
+model-context result messages through `agentcapabilities.NewProviderToolResult`
+so result text flattening and `is_error` semantics stay aligned with
+external-agent adapters. MCP-named provider-result projection helpers are not
+part of the adapter contract; runtime paths that need the plain text from a
+shared tool result must call `agentcapabilities.ToolResultText` at the execution
+site instead of keeping Assistant-, Patrol-, or MCP-local result-text wrappers.
+Runtime paths that convert chat transcripts, repair orphan tool calls, or run
+legacy service tool loops must not assemble `providers.ToolResult` or
+`chat.ToolResult` structs locally, and must not hide shared provider-result
+construction behind Assistant-local pointer wrappers.
+Native Assistant registry execution and external MCP method dispatch must also
+normalize shared `ToolResult` values through
+`agentcapabilities.ToolResult.NormalizeCollections` before returning them, so
+handler-owned content slices and nil content collections cannot leak across
+Assistant, provider, or MCP response boundaries. MCP may retain only actual
+`MCPToolResult` / `MCPContent` protocol wire aliases; result constructors,
+structured tool-response projection, JSON object and array-wrapper
+structuredContent projection, text extraction, and interpretation stay neutral
+shared helpers rather than MCP-named wrappers.
+Assistant runtime settings and tool exposure must derive
+read-only/controlled/autonomous semantics from
+`agentcapabilities.ControlLevel` and
+`agentcapabilities.ControlLevelAllowsControlTools`; future MCP adapters may
+alias the same values, but must not carry separate control-tool availability
+rules, disabled-control guidance, or tool-governance defaulting.
 
 Guest-family AI runtime code paths (VMs and LXC system containers) share
 generic helpers instead of per-family copies. Patrol guest intelligence
@@ -70,10 +930,15 @@ driven by `fileMutationSpec` (`internal/ai/tools/tools_file.go`), and
 namespaced kubectl actions share `executeKubernetesResourceAction` driven by
 `kubernetesResourceAction` (`internal/ai/tools/tools_kubernetes.go`) — new
 file or kubectl actions add a spec, keeping approval-command text stable,
-instead of duplicating the approval/audit pipeline. Anthropic message
-conversion is shared by the API-key and OAuth clients through
-`convertMessagesToAnthropic` (`internal/ai/providers/anthropic.go`), and AI
-memory history files load through the generic `loadMemoryHistory`
+instead of duplicating the approval/audit pipeline. OpenAI-compatible message
+conversion for both non-streaming and streaming turns is shared through
+`convertMessagesToOpenAI` (`internal/ai/providers/openai.go`), Anthropic message
+conversion for both non-streaming and streaming turns is shared by the API-key
+and OAuth clients through `convertMessagesToAnthropic`
+(`internal/ai/providers/anthropic.go`), Gemini message conversion for both
+non-streaming and streaming turns is shared through `convertMessagesToGemini`
+(`internal/ai/providers/gemini.go`), and AI memory history files load through
+the generic `loadMemoryHistory`
 (`internal/ai/memory/paths.go`). `Finding`/`findingJSON` and
 `UnifiedFinding`/`unifiedFindingJSON` are deliberate marshal-mirror twins —
 do not merge them; the mirror invariants are enforced by
@@ -83,7 +948,14 @@ the transport side: `orchestratorChatAdapter.GetMessages`
 (`internal/api/ai_handlers.go`) and `chatServiceAdapter.GetMessages`
 (`internal/api/chat_service_adapter.go`) convert the same chat-service
 messages onto deliberately separate output contracts; do not merge them, and
-keep their field mapping aligned —
+keep their field mapping aligned. Orchestrator-facing tool-call and
+tool-result payloads must project through
+`aicontracts.OrchestratorToolCallInfoFromProvider`,
+`OrchestratorToolCallInfo.ProviderToolCall`,
+`aicontracts.OrchestratorToolResultInfoFromProvider`, and
+`OrchestratorToolResultInfo.ProviderToolResult` so the public investigation
+handoff contract inherits the same `agentcapabilities` input-map,
+thought-signature, and provider-result normalization as Assistant and MCP —
 `TestOrchestratorAndChatAdaptersMapTheSameMessageFields` enforces it.
 
 Assistant frontend presentation changes under
@@ -158,30 +1030,30 @@ deriving an older display status from `workflowStatusHistory`.
       `ResourceRoutingScopeLocalOnly` (Restricted sensitivity — tagged secret/pii,
       PMG, k8s-secrets, ...) have their identifiers redacted and never leave the
       local trust boundary. Everything else (Internal and Sensitive) flows.
-   Both are enforced by the model-boundary sanitizer
-   `modelboundary.RequestSanitizerForModel(model, provider)` (`internal/ai/modelboundary`),
-   which returns nil for local (Ollama) models — local always receives full context.
-   UNIVERSAL backstop rule: EVERY code path that sends infrastructure-derived
-   content to an external model MUST install `RequestSanitizerForModel` before the
-   provider request — not only the interactive agentic loop. This explicitly
-   includes session compaction (`internal/ai/chat/session_compaction.go`
-   `SummarizeSession`), which sends the PERSISTED transcript (original user prompts
-   and tool outputs carry raw identifiers), and the shared service helper
-   `(*Service).requestSanitizerForModel` (`internal/ai/service.go`) used by
-   discovery analysis, the report and fleet narrators, quick analysis, and the
-   ExecuteAgentic paths. A new model-bound request path that skips the sanitizer is
-   a leak and is not permitted. (Static capability probes with no resource content,
-   e.g. the Patrol preflight self-test, are exempt only because their payload is
-   fixed and carries no identifiers.)
-   Redaction-placeholder hygiene: Pulse-authored model-bound directives (the
-   resource-context handoff instructions in `internal/ai/chat/service.go` and
-   `internal/ai/chat/plain_text_resource_context.go`) must NOT inject the literal
-   redaction placeholder (`unifiedresources.ResourcePolicyRedactedLabel`,
-   "redacted by policy") into the prompt — naming it makes the model echo it back
-   as if it were a resource name. Directives reference withheld labels neutrally
-   ("a withheld or placeholder label") and must instruct the model not to repeat a
-   withheld placeholder back to the user as the resource identity; the
-   `current_resource` handle remains the authoritative target.
+      Both are enforced by the model-boundary sanitizer
+      `modelboundary.RequestSanitizerForModel(model, provider)` (`internal/ai/modelboundary`),
+      which returns nil for local (Ollama) models — local always receives full context.
+      UNIVERSAL backstop rule: EVERY code path that sends infrastructure-derived
+      content to an external model MUST install `RequestSanitizerForModel` before the
+      provider request — not only the interactive agentic loop. This explicitly
+      includes session compaction (`internal/ai/chat/session_compaction.go`
+      `SummarizeSession`), which sends the PERSISTED transcript (original user prompts
+      and tool outputs carry raw identifiers), and the shared service helper
+      `(*Service).requestSanitizerForModel` (`internal/ai/service.go`) used by
+      discovery analysis, the report and fleet narrators, quick analysis, and the
+      ExecuteAgentic paths. A new model-bound request path that skips the sanitizer is
+      a leak and is not permitted. (Static capability probes with no resource content,
+      e.g. the Patrol preflight self-test, are exempt only because their payload is
+      fixed and carries no identifiers.)
+      Redaction-placeholder hygiene: Pulse-authored model-bound directives (the
+      resource-context handoff instructions in `internal/ai/chat/service.go` and
+      `internal/ai/chat/plain_text_resource_context.go`) must NOT inject the literal
+      redaction placeholder (`unifiedresources.ResourcePolicyRedactedLabel`,
+      "redacted by policy") into the prompt — naming it makes the model echo it back
+      as if it were a resource name. Directives reference withheld labels neutrally
+      ("a withheld or placeholder label") and must instruct the model not to repeat a
+      withheld placeholder back to the user as the resource identity; the
+      `current_resource` handle remains the authoritative target.
 3. Add or change Pulse Assistant request flow through `internal/api/ai_handler.go`, `frontend-modern/src/api/ai.ts`, and `frontend-modern/src/api/aiChat.ts`
    Assistant session compaction is a runtime-backed session workflow, not a
    local waiting message, transcript-only UI action, or stubbed summarize
@@ -369,17 +1241,17 @@ deriving an older display status from `workflowStatusHistory`.
    question controls live in the transcript. The referenced OpenCode source at
    commit `9ed17da55ab1f7360cc0e01075f763e27fa899e9` mutates active tool
    parts into terminal `success` or `failed` rows in
-	   `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx`
-	   (`session.next.tool.success`, lines 328-348;
-	   `session.next.tool.failed`, lines 350-371), and the processor marks
-	   interrupted active tools terminal before completing the assistant message in
-	   `packages/opencode/src/session/processor.ts` (lines 888-917). Pulse adapts
-	   that by retaining completed tool rows and assistant text while removing
-	   unresolved interactive rows from terminal browser transcript state.
-	   Completed tool rows must preserve timing once a pending row resolves. The
-	   referenced OpenCode source at fetched `origin/dev` commit
-	   `effd27b23900720a53e965396ff1a105c1f7e9c8` carries tool identity and
-	   state through `toolCommit` / `startTool` / `doneTool` in
+   `packages/opencode/src/cli/cmd/tui/context/sync-v2.tsx`
+   (`session.next.tool.success`, lines 328-348;
+   `session.next.tool.failed`, lines 350-371), and the processor marks
+   interrupted active tools terminal before completing the assistant message in
+   `packages/opencode/src/session/processor.ts` (lines 888-917). Pulse adapts
+   that by retaining completed tool rows and assistant text while removing
+   unresolved interactive rows from terminal browser transcript state.
+   Completed tool rows must preserve timing once a pending row resolves. The
+   referenced OpenCode source at fetched `origin/dev` commit
+   `effd27b23900720a53e965396ff1a105c1f7e9c8` carries tool identity and
+   state through `toolCommit` / `startTool` / `doneTool` in
    `packages/opencode/src/cli/cmd/run/session-data.ts` (lines 622-733) and
    formats elapsed tool state with `span` in
    `packages/opencode/src/cli/cmd/run/tool.ts` (lines 191-200). Pulse adapts
@@ -417,16 +1289,16 @@ deriving an older display status from `workflowStatusHistory`.
    `pulse_read` or bare fallback labels such as `read` remain fallback-only
    debug/detail vocabulary.
    Live workflow activity is also active turn state, not disposable waiting
-	   copy. The referenced OpenCode source at fetched `origin/dev` commit
-	   `1025540fcc2a69609a0131a7168300205656d728` defines model, shell, step,
-	   and tool lifecycle events in `packages/core/src/session/event.ts` (model
-	   switched lines 62-70; shell started/ended lines 151-174; tool lifecycle
-	   lines 340-392), projects them into durable message/part rows in
-	   `packages/core/src/session/message-updater.ts` (step started lines
-	   189-210; tool called/progress/success/failed lines 269-335), and renders
-	   model-switch plus tool rows in
-	   `packages/opencode/src/cli/cmd/tui/feature-plugins/system/session-v2.tsx`
-	   (model switch lines 120-122 and 262-274; tool rows lines 455-500).
+   copy. The referenced OpenCode source at fetched `origin/dev` commit
+   `1025540fcc2a69609a0131a7168300205656d728` defines model, shell, step,
+   and tool lifecycle events in `packages/core/src/session/event.ts` (model
+   switched lines 62-70; shell started/ended lines 151-174; tool lifecycle
+   lines 340-392), projects them into durable message/part rows in
+   `packages/core/src/session/message-updater.ts` (step started lines
+   189-210; tool called/progress/success/failed lines 269-335), and renders
+   model-switch plus tool rows in
+   `packages/opencode/src/cli/cmd/tui/feature-plugins/system/session-v2.tsx`
+   (model switch lines 120-122 and 262-274; tool rows lines 455-500).
    Pulse adapts that by keeping the latest browser `workflow_status` activity
    visible in the live stream event sequence across content, tool, approval,
    and question boundaries instead of dropping it the instant a richer row
@@ -1180,10 +2052,10 @@ deriving an older display status from `workflowStatusHistory`.
    `packages/opencode/src/cli/cmd/tui/feature-plugins/system/session-v2.tsx`.
    Pulse's compact tool rows must follow that operator-language model: the row
    should summarize the actual governed action (`search "prowlarr"`, `list
-   active alerts`, `topology summary`, `Inspect devices on current resource`,
+active alerts`, `topology summary`, `Inspect devices on current resource`,
    or exact governed write commands where the command itself is the operator
    decision) instead of exposing only internal action names such as `QUERY
-   search`, `exec`, provider function calls, or raw JSON; raw input and full
+search`, `exec`, provider function calls, or raw JSON; raw input and full
    output stay available behind Details. The referenced OpenCode source at
    fetched `origin/dev` commit
    `06d7840d1d42c9815d2d2e45e7fa4090ca4e3577` renders Bash tool state through
@@ -1205,7 +2077,7 @@ deriving an older display status from `workflowStatusHistory`.
    (`InlineTool`, lines 563-651; `Bash`, lines 701-735; `Read`, lines
    758-770; `Grep`, lines 788-790). Pulse adapts that by using
    action-specific pending copy such as `Writing command...`, `Preparing
-   query...`, and `Reading storage...` before streamed tool arguments are
+query...`, and `Reading storage...` before streamed tool arguments are
    parseable, then replacing that copy with the governed command/query/resource
    summary as soon as input arrives.
    The referenced OpenCode source at fetched `origin/dev` commit
@@ -1614,6 +2486,12 @@ deriving an older display status from `workflowStatusHistory`.
    logged server-side or attached as redacted internal Patrol evidence where
    governed, but they must not be returned through the browser provider-test
    contract.
+   Anthropic runtime provider execution must be API-key backed. Legacy
+   Anthropic OAuth tokens may remain in encrypted settings only as cleanup
+   state; they must not make Anthropic configured, instantiate an OAuth-backed
+   provider, refresh tokens, or send model requests. OAuth start/exchange and
+   callback handling must fail closed, while disconnect may clear stored legacy
+   tokens.
    Patrol findings history transport must stay bounded when resolved findings
    are included: `/api/ai/patrol/findings?include_resolved=1` defaults to a
    200-finding limit and caps explicit limits at 500, and the frontend Patrol
@@ -1644,6 +2522,16 @@ deriving an older display status from `workflowStatusHistory`.
    remain route-distinct: if the configured chat override resolves to the same
    route as the effective default or the already selected session model, the
    drawer must not render a duplicate override action.
+   Assistant provider-readiness actions must send operators to the canonical
+   Pulse Intelligence > Provider & Models route
+   `/settings/pulse-intelligence/provider`; `/settings/system-ai` remains a
+   compatibility alias for old deep links rather than the href emitted by new
+   Assistant repair actions.
+   Assistant discovery-context hints must use the same product language as
+   Pulse Intelligence settings: the visible hint is `Discovery is off`, while
+   the body explains that enabling it gives Assistant real service, version,
+   and command context instead of generic guidance. The hint must not
+   reintroduce the old `Workload Discovery` label as a separate product concept.
    Assistant route and control chrome belongs with the prompt surface, not the
    drawer title row. The referenced OpenCode source at commit
    `9ed17da55ab1f7360cc0e01075f763e27fa899e9`
@@ -1727,6 +2615,13 @@ deriving an older display status from `workflowStatusHistory`.
    edit, remove, promote, resume, and clear controls, but the primary headline
    must not imply the user's just-submitted follow-up disappeared behind a
    generic `Generating response` state.
+   Restored Patrol mode save-failure handoffs may preserve compatible
+   summary kinds such as `patrol_configuration_failure`, but Assistant drawer
+   titles, subjects, action labels, and safety notes must describe Patrol mode
+   rather than reviving generic configuration wording. Stable route markers,
+   telemetry fields, and API wire names may retain `patrol_control`;
+   user-facing Assistant, external-agent, generated MCP, and frontend copy must
+   call the operator's choice `Patrol mode`.
 7. Keep AI chat presentation helpers aligned through `frontend-modern/src/components/AI/Chat/` and the shared `frontend-modern/src/utils/textPresentation.ts`
 8. Keep assistant drawer context, session, and org-switch reset state aligned through the shared `frontend-modern/src/stores/aiChat.ts` boundary instead of letting `frontend-modern/src/App.tsx`, `frontend-modern/src/AppLayout.tsx`, or feature callers fork their own assistant shell state
    That shared drawer ownership also covers passive resource reads while the
@@ -1754,25 +2649,52 @@ deriving an older display status from `workflowStatusHistory`.
    attached, the Assistant empty
    message state must also remain source-named and must not fall back to generic
    cluster/system starter prompts that compete with the attached briefing.
-   Structured Patrol run and Patrol configuration handoffs may render bounded,
+   Structured Patrol run and Patrol mode save-failure handoffs may render bounded,
    redacted diagnostic lines in the drawer when they are opened directly from
-   Patrol runtime/configuration surfaces, but the attached headline must remain
-   source-owned (`Patrol run attached`, `Patrol configuration ... attached`)
+   Patrol runtime/control surfaces, but the attached headline must remain
+   source-owned (`Patrol run attached`, `Patrol mode ... attached`)
    and the drawer must still exclude raw provider payloads, commands, and
    Patrol-authored remediation steps.
    Reloaded Assistant sessions may consume the backend-owned
    `handoff_summary` only as safe presentation state and a Patrol finding
    pointer; hidden model context, command payloads, preflight data, and action
    results stay backend-owned and must not be reconstructed in the browser.
-9. Add or change public AI overview wording through `docs/AI.md`; it may
+9. Add or change public Pulse Intelligence overview wording through `docs/AI.md`; it may
    describe Assistant and Patrol capabilities, but it must not revive legacy
    commercial shorthand such as `incident memory` as a current product promise.
+   The public overview must preserve the product architecture: Pulse
+   Intelligence Core owns canonical context, governed actions, safety gates,
+   approval state, action audit, and verification; Pulse Patrol is the primary
+   built-in operator on that core; its public summary must stay concise as
+   watching, investigating, acting within the chosen Patrol mode, verifying outcomes,
+   and recording what happened; and Pulse Assistant plus Pulse MCP are
+   contextual and external-agent access paths over the same governed
+   capabilities.
+   Public overview, safety, and onboarding copy must use the same visible
+   Patrol mode labels as the product (`Watch only`, `Ask before changes`,
+   `Auto-fix safe issues`, `Policy autopilot`) and must not reintroduce the
+   retired `Only watch`, `Fix safe issues`, or `Full control` labels as
+   customer-facing names.
    The public overview must also preserve the model-owned AI boundary: Pulse
    Assistant and Patrol provide governed context, tools, safety gates,
    approval state, and audit trails, while the configured LLM owns diagnosis,
-   prioritization, remediation reasoning, and tool choice. Public copy must not
+   prioritization, fix reasoning, and tool choice. Public copy must not
    present Pulse code as the intelligence engine, a prompt-keyword router, a
-   learned operational-meaning engine, or a deterministic finding author.
+   deterministic auto-remediation oracle, a provider replacement, a learned
+   operational-meaning engine, or a deterministic finding author.
+   The public overview must not carry a hand-maintained Assistant tool table.
+   Assistant tool inventory, action modes, approval policies, provider
+   declarations, and Patrol-only filtering are registry-owned in
+   `internal/ai/tools/` and projected through `internal/agentcapabilities/`;
+   external-agent inventory belongs to `/api/agent/capabilities` and
+   `pulse-mcp` `tools/list`.
+   External-agent setup metadata follows the same rule: Pulse MCP server name,
+   command, base URL flag/default, token environment variable, and supported
+   client config families are manifest-owned in
+   `/api/agent/capabilities.mcpAdapter`. Assistant, Pulse Intelligence
+   settings, README, and MCP surfaces may present that setup, but must not
+   maintain separate MCP setup constants. Security API settings may only host
+   the scoped-token creation link used by that setup.
 10. Platform/runtime top-level pages registered in
     `frontend-modern/src/App.tsx` and the primary tab list in
     `frontend-modern/src/AppLayout.tsx` must keep the AI launcher chrome
@@ -1816,7 +2738,7 @@ deriving an older display status from `workflowStatusHistory`.
 
 ## Completion Obligations
 
-1. Update this contract when canonical AI runtime or transport entry points move, including transport-level provider request-shape changes such as OpenAI-compatible `tool_choice` handling, runtime-failure classification splits (for example separating tool-choice request rejection, no tool-capable endpoint, and generic model-level lack of tool support into distinct causes), Patrol-specific verification surfaces such as `POST /api/ai/patrol/preflight` that exercise the full chat-completions path with a minimal tool definition rather than only listing models, Patrol-preflight cache observability where the AI Service caches the most recent preflight outcome (success, soft warning, or classified failure) and the AI settings response surfaces it as `patrol_preflight` so the UI can hydrate a "last verified" indicator without forcing operators to re-run preflight on every page load, the auto-trigger contract on `HandleUpdateAISettings` where the save handler runs `TriggerPatrolPreflightAsync` only when the change actually moved Patrol transport (model swap, provider key for that model changed, or assistant just enabled with a Patrol model) so routine settings saves do not burn provider tokens, the startup-seed contract where the AI Service handler dispatches the same async preflight on Pulse boot when assistant is enabled and a Patrol model is configured so the cache is populated for the first `/api/settings/ai` poll after a restart instead of blanking back to "never verified", the readiness-integration contract where the `tools` check in the Patrol readiness payload consults the cached preflight and surfaces the classified evidence (success, soft warning, or failure with classified summary plus "last preflight <age>") for the configured provider+model when available (falling back to the static `PatrolToolReadinessForModel` classifier only when the cache is empty or holds a result for a different model), the stateless-Patrol-input contract where `ExecutePatrolStream` must pass only the current run's user prompt into the agentic loop rather than reloading the persisted `patrol-main` session history (so a prior run that ended with orphan `tool_calls` cannot poison every subsequent run with malformed conversation structure), and the deterministic-resolve-gate contract where the `patrol_resolve_finding` tool adapter rejects LLM-driven resolves of event/persistent category findings (`backup`, `reliability`, `security`, `general`) when a deterministic verifier exists for the finding's key and that verifier either still detects the failure signal **or returns an inconclusive result** — preventing the LLM from optimistically resolving a finding its current investigation simply didn't re-surface, which was the source of the "Backup failed" flap (detected → auto-resolved → re-detected ten times in a day before this gate). The fail-closed-on-inconclusive policy treats verifier errors (timeouts, executor unavailability, transport faults) as "we don't know" rather than "go ahead": resolution of an event/persistent finding is effectively permanent (next detection registers as a regression and inflates counters), so the safe default is to refuse and require either a successful re-verification or operator action. The gate has a symmetric counterpart, the verified stale-resolve contract: `reconcileStaleFindings` (`internal/ai/patrol_ai.go`) may auto-resolve an event/persistent finding that was seeded but neither re-reported nor resolved ONLY when the finding's key has a deterministic verifier and that verifier affirmatively confirms the failure signal is gone — absence of a re-report remains insufficient evidence for these categories, "still present" or inconclusive verification leaves the finding active (the same fail-closed default), and verifications are capped per reconcile pass (`maxVerifiedStaleResolvesPerRun`) with deferred candidates logged and retried on the next successful full patrol. Without this counterpart the lifecycle was asymmetric: a genuinely fixed backup or recovered service stayed an active finding indefinitely unless the LLM happened to call `patrol_resolve_finding`. `hasDeterministicVerifierForKey` (`internal/ai/patrol_findings.go`) is the single source of truth for which keys have verifiers, consulted by both the gate and the reconcile pass, and must stay aligned with the dispatch switch in `verifyFixDeterministically` (it previously listed two of the seven dispatch keys, silently skipping verification that existed). Finding keys normalize onto the canonical verifier vocabulary in `normalizeFindingKey` via an alias map of unambiguous directional synonyms (`high-cpu` → `cpu-high`, `high-memory` → `memory-high`, `high-disk` → `disk-high`) so deduplication and deterministic verification meet on one key, and the `patrol_report_finding` key guidance (`internal/ai/tools/tools_patrol.go`) teaches the canonical vocabulary; semantically distinct keys (`pbs-job-failed`, `node-offline`) must not be aliased onto verifier keys whose resource model they do not match, the assessment-recovery contract where the overall-health "Recent Patrol errors" coverage factor in `summarizeRecentPatrolCoverage` suppresses the score penalty once three consecutive trailing successful full Patrol runs exist at the most-recent end of the recent-runs window — so the grade reflects current reality after a Patrol-affecting bug is fixed rather than dragging stale failures forward for the ~9 hours it takes scheduled runs to age them out of the trailing-10 ratio, the orphan-tool-call-repair contract where `convertToProviderMessages` injects synthetic is_error tool result messages for any `tool_call_id` in an assistant message that has no matching downstream tool result, so a chat session that ended mid-tool-call (network drop, ctx timeout, browser crash) cannot poison its next message with the structural-violation error the provider rejects — the synthetic content is marked is_error=true and explains the interruption so the model can retry the call or proceed without the data, and the patrol-session-bound contract where `ExecutePatrolStream` calls `SessionStore.TrimMessages` after persisting each run's messages to cap the patrol-main session at 200 messages (roughly two recent runs' worth) — without the bound the file grew unbounded at every scheduled run, reaching 16 MB and 3,593 messages within a month and making every `AddMessage` rewrite linearly more expensive; the canonical Patrol forensic log is the `PatrolRunRecord` history surfaced at `/api/ai/patrol/runs`, not the chat-session-shaped file
+1. Update this contract when canonical AI runtime or transport entry points move, including transport-level provider request-shape changes such as OpenAI-compatible `tool_choice` handling, runtime-failure classification splits (for example separating tool-choice request rejection, no tool-capable endpoint, and generic model-level lack of tool support into distinct causes), Patrol-specific verification surfaces such as `POST /api/ai/patrol/preflight` that exercise the full chat-completions path with a minimal tool definition rather than only listing models, Patrol-preflight cache observability where the AI Service caches the most recent preflight outcome (success, soft warning, or classified failure) and the AI settings response surfaces it as `patrol_preflight` so the UI can hydrate a "last verified" indicator without forcing operators to re-run preflight on every page load, the auto-trigger contract on `HandleUpdateAISettings` where the save handler runs `TriggerPatrolPreflightAsync` only when the change actually moved Patrol transport (model swap, provider key for that model changed, or assistant just enabled with a Patrol model) so routine settings saves do not burn provider tokens, the startup-seed contract where the AI Service handler dispatches the same async preflight on Pulse boot when assistant is enabled and a Patrol model is configured so the cache is populated for the first `/api/settings/ai` poll after a restart instead of blanking back to "never verified", the readiness-integration contract where the `tools` check in the Patrol readiness payload consults the cached preflight and surfaces the classified evidence (success, soft warning, or failure with classified summary plus "last preflight <age>") for the configured provider+model when available (falling back to the static `PatrolToolReadinessForModel` classifier only when the cache is empty or holds a result for a different model), the preflight-runtime-recovery contract where a successful Patrol preflight with an observed tool call resolves the synthetic Patrol runtime failure finding while failed or no-tool-call preflights leave it active, the stateless-Patrol-input contract where `ExecutePatrolStream` must pass only the current run's user prompt into the agentic loop rather than reloading the persisted `patrol-main` session history (so a prior run that ended with orphan `tool_calls` cannot poison every subsequent run with malformed conversation structure), and the deterministic-resolve-gate contract where the `patrol_resolve_finding` tool adapter rejects LLM-driven resolves of event/persistent category findings (`backup`, `reliability`, `security`, `general`) when a deterministic verifier exists for the finding's key and that verifier either still detects the failure signal **or returns an inconclusive result** — preventing the LLM from optimistically resolving a finding its current investigation simply didn't re-surface, which was the source of the "Backup failed" flap (detected → auto-resolved → re-detected ten times in a day before this gate). The fail-closed-on-inconclusive policy treats verifier errors (timeouts, executor unavailability, transport faults) as "we don't know" rather than "go ahead": resolution of an event/persistent finding is effectively permanent (next detection registers as a regression and inflates counters), so the safe default is to refuse and require either a successful re-verification or operator action. The gate has a symmetric counterpart, the verified stale-resolve contract: `reconcileStaleFindings` (`internal/ai/patrol_ai.go`) may auto-resolve an event/persistent finding that was seeded but neither re-reported nor resolved ONLY when the finding's key has a deterministic verifier and that verifier affirmatively confirms the failure signal is gone — absence of a re-report remains insufficient evidence for these categories, "still present" or inconclusive verification leaves the finding active (the same fail-closed default), and verifications are capped per reconcile pass (`maxVerifiedStaleResolvesPerRun`) with deferred candidates logged and retried on the next successful full patrol. Without this counterpart the lifecycle was asymmetric: a genuinely fixed backup or recovered service stayed an active finding indefinitely unless the LLM happened to call `patrol_resolve_finding`. `hasDeterministicVerifierForKey` (`internal/ai/patrol_findings.go`) is the single source of truth for which keys have verifiers, consulted by both the gate and the reconcile pass, and must stay aligned with the dispatch switch in `verifyFixDeterministically` (it previously listed two of the seven dispatch keys, silently skipping verification that existed). Finding keys normalize onto the canonical verifier vocabulary in `normalizeFindingKey` via an alias map of unambiguous directional synonyms (`high-cpu` → `cpu-high`, `high-memory` → `memory-high`, `high-disk` → `disk-high`) so deduplication and deterministic verification meet on one key, and the `patrol_report_finding` key guidance (`internal/ai/tools/tools_patrol.go`) teaches the canonical vocabulary; semantically distinct keys (`pbs-job-failed`, `node-offline`) must not be aliased onto verifier keys whose resource model they do not match, the assessment-recovery contract where the overall-health "Recent Patrol errors" coverage factor in `summarizeRecentPatrolCoverage` suppresses the score penalty once three consecutive trailing successful full Patrol runs exist at the most-recent end of the recent-runs window — so the grade reflects current reality after a Patrol-affecting bug is fixed rather than dragging stale failures forward for the ~9 hours it takes scheduled runs to age them out of the trailing-10 ratio, the orphan-tool-call-repair contract where `convertToProviderMessages` injects synthetic is_error tool result messages for any `tool_call_id` in an assistant message that has no matching downstream tool result, so a chat session that ended mid-tool-call (network drop, ctx timeout, browser crash) cannot poison its next message with the structural-violation error the provider rejects — the synthetic content is marked is_error=true and explains the interruption so the model can retry the call or proceed without the data, and the patrol-session-bound contract where `ExecutePatrolStream` calls `SessionStore.TrimMessages` after persisting each run's messages to cap the patrol-main session at 200 messages (roughly two recent runs' worth) — without the bound the file grew unbounded at every scheduled run, reaching 16 MB and 3,593 messages within a month and making every `AddMessage` rewrite linearly more expensive; the canonical Patrol forensic log is the `PatrolRunRecord` history surfaced at `/api/ai/patrol/runs`, not the chat-session-shaped file
 2. Keep AI runtime and shared API proof routing aligned in `registry.json`
 3. Preserve explicit coverage for chat, Patrol, remediation, and cost-control behavior when AI runtime changes. Interactive Assistant and Patrol tool selection must remain model-owned: Pulse may provide governed context, tools, approval state, resource-resolution facts, safety policy, and neutral resource-scoped action history, but it must not add prompt-keyword routers, expected-tool retries, auto-recovery tool calls, keyword-matched prior-fix suggestions, or Pulse-authored remediation/finding fallbacks that choose the next investigative or corrective action for the model.
    Assistant FSM gates remain safety boundaries after the model chooses a tool:
@@ -1917,6 +2839,9 @@ deriving an older display status from `workflowStatusHistory`.
    metadata, while manual run requests, scheduled ticks, and scoped
    alert/anomaly runs must fail or skip before LLM execution when the selected
    Patrol model/provider is known not-ready.
+   Readiness checks may retain stable machine IDs such as `configuration`, but
+   human-facing labels in the settings payload must frame the operator boundary
+   as Patrol mode rather than Patrol configuration.
    Monitor-only Patrol autonomy saves are part of the same runtime gate:
    when the safe-remediation extension or entitlement is unavailable, both the
    browser state owner and `internal/api/ai_handlers.go` must clear stale
@@ -1968,9 +2893,19 @@ deriving an older display status from `workflowStatusHistory`.
    the fact's category/key/value, so the model can attribute and weight what it
    reports instead of stating untraceable facts. Both are omitted when empty.
    When the shared registry blocks a control tool in read-only mode, its
-   operator guidance must point to Assistant & Patrol settings and the Pulse
-   Assistant Permissions Control mode, not legacy Pulse Assistant settings
-   paths.
+   operator guidance must point to Pulse Intelligence > Provider & Models
+   settings and the Pulse Assistant Permissions Control mode, not legacy Pulse
+   Assistant settings paths.
+   Runtime status, preflight, settings-persistence, profile-suggestion, and
+   remediation-impact messages must preserve the same product boundary:
+   use Pulse Assistant only for the first-party in-app Assistant runtime itself,
+   Provider & Models for the shared provider/model settings surface, and Pulse
+   Intelligence for the shared Assistant/Patrol/agent substrate rather than
+   reviving the legacy generic `Pulse AI` label or `Pulse Assistant settings`
+   copy. Pulse Intelligence external-agent setup copy may point to Patrol mode,
+   but it must frame the first step as setting how autonomous Patrol should be
+   before connected agents request work; it must not present connected-agent
+   setup as a separate operations-loop, MCP-readiness, or feature-unlock model.
 9. Keep self-hosted Patrol messaging aligned with the v6 GA product contract:
    ordinary self-hosted installs use BYOK or local providers, and the runtime
    must not surface retired managed-model credits, trial prompts, account-backed
@@ -1978,24 +2913,24 @@ deriving an older display status from `workflowStatusHistory`.
    The shared app shell must also keep `/cloud` and `/cloud/signup` out of
    ordinary self-hosted public routes so Cloud acquisition cannot reappear as a
    proxy for retired hosted-model or AI quickstart activation.
-   The public AI overview must likewise use productized context language such
+   The public Pulse Intelligence overview must likewise use productized context language such
    as alert history, Patrol runs, and resource timelines instead of presenting
    `incident memory` as a standalone feature. It must also describe Patrol
    baselines, trends, correlations, forecasts, and deterministic signals as
    model-bound evidence/context rather than Pulse-authored intelligence or
    fallback finding creation.
 10. Keep discovery-analysis prompt bounds and response budgets aligned across
-   `internal/ai/service.go` and the shared service-discovery prompt builders:
-   the runtime must reserve enough output tokens for structured discovery JSON,
-   and discovery prompts must cap fact/path/port fan-out explicitly instead of
-   relying on providers to truncate oversized infrastructure inventories.
-   That same runtime-owned command-target boundary must resolve hostnames
-   through `internal/unifiedresources/hostname_equivalence.go`.
-   `internal/ai/tools/internal_routing.go`,
-   `internal/ai/tools/tools_control.go`, and adjacent AI command helpers may
-   match a short host against its FQDN, but they must not broaden that
-   fallback into a generic short-name collapse that would make two distinct
-   FQDNs with the same short host look interchangeable.
+    `internal/ai/service.go` and the shared service-discovery prompt builders:
+    the runtime must reserve enough output tokens for structured discovery JSON,
+    and discovery prompts must cap fact/path/port fan-out explicitly instead of
+    relying on providers to truncate oversized infrastructure inventories.
+    That same runtime-owned command-target boundary must resolve hostnames
+    through `internal/unifiedresources/hostname_equivalence.go`.
+    `internal/ai/tools/internal_routing.go`,
+    `internal/ai/tools/tools_control.go`, and adjacent AI command helpers may
+    match a short host against its FQDN, but they must not broaden that
+    fallback into a generic short-name collapse that would make two distinct
+    FQDNs with the same short host look interchangeable.
 11. Keep AI runtime transport compatibility separate from operator-facing
     product copy. Existing Patrol payload fields such as `fixed_count`,
     `auto_fix_model`, and `patrol_auto_fix` may remain stable wire/API names,
@@ -2130,7 +3065,7 @@ deriving an older display status from `workflowStatusHistory`.
     container-restart, container-stop, k8s-rollout-restart, plus the
     Proxmox VM lifecycle classes proxmox-vm-reboot, proxmox-vm-stop,
     proxmox-vm-start, proxmox-vm-shutdown and the matching pct-driven
-    proxmox-ct-* container lifecycle classes) and return hand-authored
+    proxmox-ct-\* container lifecycle classes) and return hand-authored
     operational copy: what the command actually touches, how Pulse will
     read back success. The additions append onto the default
     safety/verification arrays rather than replacing them, so the
@@ -2231,8 +3166,8 @@ deriving an older display status from `workflowStatusHistory`.
     whole-surface review sessions even when their bounded action references
     name individual findings; the session list must not infer a
     `patrol_finding` identity from those action references once metadata is
-    present. Patrol configuration failure handoffs remain
-    `patrol_configuration_failure` sessions and may expose only the safe
+    present. Patrol mode save-failure handoffs remain
+    `patrol_configuration_failure` sessions for compatibility and may expose only the safe
     runtime-failure boolean needed for browser presentation. Run-specific
     fields stay reserved for `patrol_run` handoffs, while hidden model context,
     command payloads, preflight output, and action results remain
@@ -2283,11 +3218,11 @@ deriving an older display status from `workflowStatusHistory`.
     does not yet carry the latest approval ID. Those references are review
     context only: they must not include raw command text, must not grant
     approval or execution authority, and must route any requested action back
-    through the governed approval/remediation flow. Patrol provides the
+    through the governed approval and fix flow. Patrol provides the
     configured LLM with observed finding context, evidence, policy posture, and
-    governed action state; the LLM owns diagnosis and remediation reasoning.
+    governed action state; the LLM owns diagnosis and fix reasoning.
     Operator-visible handoffs must not describe Patrol as having already
-    authored the correct remediation. The finding briefing may carry only
+    authored the correct fix. The finding briefing may carry only
     factual governed action artifact metadata from those same structured
     references after live-approval recovery, including safe current status,
     request/expiry timestamps, approval policy, action plan identity, plan
@@ -2402,6 +3337,62 @@ deriving an older display status from `workflowStatusHistory`.
     named by their source rather than as generic dashboard briefs.
 
 ## Current State
+
+The canonical findings store must present one active Patrol issue per real
+problem. When the model reports an equivalent active sibling under a different
+finding ID, key, or severity for the same resource, `internal/ai/findings.go`
+must merge it into the existing active finding before it reaches
+`/api/ai/patrol/findings`, keep the highest observed severity for the merged
+issue, increment recurrence, and record a bounded duplicate-merge lifecycle
+event instead of creating a second operator-facing row. Distinct symptoms on
+the same resource, such as CPU pressure and memory pressure, must remain
+separate findings. Verification is
+`go test ./internal/ai -run 'TestFindingsStore'` plus
+`go test ./internal/ai -run 'TestPatrolService_GetAllFindings|TestPatrolService_GetFindingsForResource|TestPatrolService_GetAllFindingsIncludingResolved'`.
+
+Public Pulse Intelligence overview, safety, and onboarding copy now use the
+same visible Patrol mode labels as the product: `Watch only`,
+`Ask before changes`, `Auto-fix safe issues`, and `Policy autopilot`. The
+legacy `Only watch`, `Fix safe issues`, and `Full control` names may remain
+only as historical context or compatibility implementation details, not as customer-facing Patrol mode labels.
+
+Assistant provider-readiness repair actions now use the canonical Pulse
+Intelligence > Provider & Models route
+`/settings/pulse-intelligence/provider`. The legacy `/settings/system-ai`
+route remains a compatibility alias for old deep links, not a href emitted by
+new Assistant provider-repair actions.
+
+Rejected Patrol investigation-fix approvals are terminal governed-action
+decisions in the AI runtime. `/api/ai/approvals/{id}/deny` must persist the
+approval-store denial, record a rejected unified action-audit decision when the
+approval carries a governed action plan, and move the owning finding to
+`fix_rejected` so Assistant handoffs, Patrol summaries, and external agent
+adapters see the declined fix as explicit loop state rather than a disappeared
+pending approval.
+
+Legacy Assistant provider-tool declarations for manifest-backed Patrol finding
+lifecycle tools now consume the manifest-owned raw input schemas through
+`agentcapabilities.ProviderInputSchemaFromRaw`. The native Assistant runtime
+may keep first-party model-facing descriptions, but it must not re-declare
+required arguments such as `resolution_note` or dismissal `note` when the
+canonical Pulse Intelligence manifest and API contract mark those fields
+optional.
+Legacy native Assistant utility provider aliases for `run_command`, `fetch_url`,
+and `set_resource_url`, plus their provider JSON schemas, are owned by
+`agentcapabilities.LegacyAssistantUtilityProviderTools`. The older native
+Assistant service may continue to expose those compatibility aliases while the
+execution migration proceeds, but it must consume the shared provider projection
+and shared argument constants rather than carrying inline schema maps or local
+tool-input string keys.
+Native Assistant registry tools that operate on Patrol finding lifecycle state
+must also consume the same `agentcapabilities` argument vocabulary for
+`finding_id`, `resolution_note`, `reason`, and `note` instead of repeating
+local field-name strings in their provider schema or execution maps.
+
+Anthropic runtime provider execution is API-key backed only. Legacy Anthropic
+OAuth tokens may remain in encrypted settings solely for disconnect cleanup;
+they do not make Anthropic configured, do not instantiate a provider, do not
+refresh tokens, and cannot send model requests.
 
 The done event carries `context_limit_tokens` (the active model's context
 window from `providers.ContextWindowTokens`) alongside token usage, and the
@@ -2669,13 +3660,13 @@ hidden server log. The referenced OpenCode source at fetched `dev` commit
 `packages/opencode/src/cli/cmd/tui/component/prompt/index.tsx`. Pulse adapts
 that contract at the owning stream boundary: `WorkflowStateData` carries
 `attempt`, `max_attempts`, and `retry_after_ms`, and `AgenticLoop` emits
-  `provider_retry` before sleeping between transient pre-output provider
-  attempts. The frontend active-turn footer and live transcript workflow row
-  render that same typed workflow state immediately as compact attempt/backoff
-  progress, counting down `retry_after_ms` from `started_at` while the turn
-  remains active, so the user sees Pulse moving through a retry instead of
-  staring at an obsolete provider-wait message. Retry workflow states are not
-  held behind workflow-history pacing.
+`provider_retry` before sleeping between transient pre-output provider
+attempts. The frontend active-turn footer and live transcript workflow row
+render that same typed workflow state immediately as compact attempt/backoff
+progress, counting down `retry_after_ms` from `started_at` while the turn
+remains active, so the user sees Pulse moving through a retry instead of
+staring at an obsolete provider-wait message. Retry workflow states are not
+held behind workflow-history pacing.
 
 Assistant workflow progress is also a live typed activity row while a turn is
 in flight, not only hidden footer state. The referenced OpenCode source at
@@ -2693,14 +3684,14 @@ same typed status, and visible assistant content, reasoning, tool,
 approval/question, terminal `done`, and terminal `error` events clear that row.
 The frontend now also keeps a bounded live-only `workflowStatusHistory` for the
 active assistant message so the reducer preserves state continuity while
-  backend preparation, context, and provider-start labels are being replaced. The
-  shared workflow-status presentation helper owns both the transcript row and the
-  active-turn composer footer so the two live surfaces show the latest canonical
-  workflow state immediately. Retry/backoff and stream-idle liveness states cut
-  through pacing because they are current route health, not neutral setup motion.
-  The transcript and footer therefore show current motion while the provider is
-  starting, retrying, or reasoning, but completed answers do not retain stale
-  internal-progress prose.
+backend preparation, context, and provider-start labels are being replaced. The
+shared workflow-status presentation helper owns both the transcript row and the
+active-turn composer footer so the two live surfaces show the latest canonical
+workflow state immediately. Retry/backoff and stream-idle liveness states cut
+through pacing because they are current route health, not neutral setup motion.
+The transcript and footer therefore show current motion while the provider is
+starting, retrying, or reasoning, but completed answers do not retain stale
+internal-progress prose.
 Stream-idle heartbeats are part of that same visible workflow state. When the
 frontend knows the selected provider/model route from the backend workflow event
 or the streaming assistant message, the idle heartbeat must render as
@@ -2754,8 +3745,8 @@ tool metadata updates in `packages/opencode/src/session/tools.ts` lines 54-63,
 while adapting the interaction to Pulse's single active-turn plus queued
 follow-up safety model.
 
-Assistant command access follows the same OpenCode-referenced footer principle:
-commands are reachable from prompt-adjacent chrome, not only from a hidden slash
+Assistant chat actions follow the same OpenCode-referenced footer principle:
+actions are reachable from prompt-adjacent chrome, not only from a hidden slash
 draft. The referenced OpenCode source at fetched `dev` commit
 `e82542b8023a8374f29c23b70ec019c8f256354e` builds the direct command surface in
 `packages/opencode/src/cli/cmd/run/footer.command.tsx` (`RunCommandMenuBody`
@@ -3042,6 +4033,11 @@ usage and spend backing Pulse Assistant and Patrol rather than generic `AI`
 history, and `frontend-modern/src/utils/aiCostPresentation.ts` must own the
 title, empty/loading states, budget note, and reset/export history messaging so
 settings shells and runtime widgets do not fork their own usage wording.
+Usage grouping rows must present product concepts such as Assistant sessions,
+Patrol runs, Discovery runs, or concrete resource labels. Raw target storage
+keys, opaque session identifiers, UUIDs, and values such as
+`assistant_session_title:<id>` are accounting implementation detail and must
+stay out of the operator-facing table.
 That same runtime-facing table ownership applies to the cost dashboard shell:
 `frontend-modern/src/components/AI/AICostDashboard.tsx` owns provider usage,
 budget, and history semantics, but its tabular presentation must compose the
@@ -3249,6 +4245,9 @@ for provider naming, provider health labels, control-level semantics,
 chat drawer title/subtitle, launcher title/aria copy, session-menu labeling,
 discovery hint framing, chat/session empty states, assistant message and
 question-card labels.
+Discovery hint framing must follow the Pulse Intelligence settings IA: use the
+simple `Discovery` label, and explain the concrete service context it unlocks,
+without promoting workload discovery as another first-class product surface.
 Settings and chat surfaces must consume those helpers instead of keeping local
 AI wording or model/provider inference branches.
 Assistant chat must not render Pulse-authored explore pre-pass cards or
@@ -3378,7 +4377,12 @@ handoffs preserve Patrol provenance before later action-audit hydration refreshe
 the current action state. Backend chat refresh of a Patrol finding handoff must
 hydrate the same requester identity directly from the live approval record, so
 Assistant does not depend on browser-authored metadata to distinguish
-Patrol-origin proposals from generic Assistant actions.
+Patrol-origin proposals from generic Assistant actions. Rejected Patrol
+investigation-fix approvals must also enter that shared decision lifecycle:
+`/api/ai/approvals/{id}/deny` records a rejected unified action-audit decision
+when the approval has a governed action plan and moves the owning Patrol
+finding to `fix_rejected`, so a declined fix remains a visible governed loop
+outcome rather than disappearing when the pending approval leaves the queue.
 The same ownership includes the Pulse query tool schema under
 `internal/ai/tools/`: topology-query input names must stay canonical inside
 the AI runtime itself, so new tool arguments such as `max_proxmox_nodes`
@@ -3965,7 +4969,7 @@ legacy managed-credit block conditions remain part of the governed runtime
 contract instead of being inferred later from the last successful patrol
 summary.
 When missing provider configuration blocks Patrol, `blocked_reason` must point
-to Assistant & Patrol provider settings and tool-capable Patrol model
+to Pulse Intelligence > Provider & Models settings and tool-capable Patrol model
 selection.
 That runtime-state contract must be derived from live Patrol runtime inputs,
 not only from the last failed run attempt, and the backend must clear any stale
@@ -3976,6 +4980,12 @@ derive `Health A` or `100/100` from "no active findings" alone when recent
 Patrol evidence is limited to alert-scoped runs or includes recent Patrol run
 errors; the summary must degrade and explain that overall infrastructure health
 is not fully verified until a recent successful full Patrol run exists.
+The backend may keep precise full-run, scoped-run, and verification terms in
+wire fields and internal decisions, but browser-facing summary and handoff copy
+emitted from `internal/ai` should translate that precision into check language:
+recent broad checks, targeted checks, follow-up checks, current issues, and
+verified outcomes. Runtime explanations must not surface activation-loop,
+proof-strip, or scoped/full-run jargon as the ordinary operator vocabulary.
 That coverage explanation must also stay faithful to the actual recent run
 shape. When the most recent verification evidence includes a full Patrol run
 that ended with errors, the health summary must say that a recent full patrol
@@ -4008,17 +5018,21 @@ so the full-run seed/reconcile path must not auto-resolve them as
 `Resource no longer exists in infrastructure` just because `ai-service` is not
 present in the infrastructure snapshot. Those findings stay active until
 Patrol actually succeeds or resolves them for a Patrol-owned reason.
-That success boundary includes provider-backed scoped Patrol runs. A successful
-scoped run proves that Patrol can currently reach the selected provider/model
-and complete tool-backed analysis, so it must clear the synthetic
-`ai-service` runtime failure just as a successful full Patrol run does, without
-loosening ordinary scoped finding reconciliation for infrastructure issues.
+That success boundary includes provider-backed scoped Patrol runs and successful
+Patrol tool-call preflights. A successful scoped run proves that Patrol can
+currently reach the selected provider/model and complete tool-backed analysis;
+a successful preflight with an observed tool call proves the configured
+provider/model currently accepts Patrol's tool-call path. Either must clear the
+synthetic `ai-service` runtime failure just as a successful full Patrol run
+does, without loosening ordinary scoped finding reconciliation for
+infrastructure issues. A soft-warning preflight where the provider responds but
+the model does not emit a tool call is not sufficient recovery evidence.
 Because those findings represent Patrol blindness rather than operator-triaged
 infrastructure noise, the Patrol runtime must also reject manual acknowledge,
 snooze, dismiss, resolve, and suppress actions against synthetic `ai-service`
 runtime findings. The canonical recovery path is to correct Patrol provider
-configuration in Assistant & Patrol settings and let Patrol re-evaluate the
-runtime condition on the next run.
+configuration in Pulse Intelligence > Provider & Models settings and let Patrol
+re-evaluate the runtime condition on the next run.
 The shared findings lifecycle must also treat a regressed issue as a new active
 occurrence. When a resolved finding reappears, `internal/ai/findings.go` must
 clear any stale acknowledgement timestamp from the prior occurrence instead of
@@ -4227,6 +5241,17 @@ after every `loop.ExecuteWithTools` return — success or error,
 since the operator was billed regardless of whether the loop
 produced a clean response. It emits a `cost.UsageEvent` with
 `UseCase="chat"` in the same shape the rest of the runtime uses.
+When a chat turn carries a product-originated finding, resource, handoff,
+action, or structured-mention context, the event may also include the coarse
+`context_scope` classifier so privacy-safe telemetry can count governed-context
+Assistant collaboration without exporting prompts, session IDs, resource IDs,
+finding IDs, command text, or action payloads.
+When the same turn includes accepted model-selected governed tool calls, the
+agentic loop records only the total count on the resulting cost event. That
+count supports Pulse Intelligence adoption telemetry for Assistant
+collaboration while keeping tool names, arguments, results, provider call IDs,
+transcript content, resource IDs, finding IDs, command text, action payloads,
+and session IDs out of persisted/exported telemetry.
 The store is threaded through `chat.Config.CostStore`, wired by
 the router from the per-tenant `AISettingsHandler.GetAIService`
 via `Service.CostStore()`. `ExecutePatrolStream` deliberately

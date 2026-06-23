@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rs/zerolog/log"
 )
 
@@ -304,12 +305,12 @@ func convertToolChoiceToOpenAI(tc *ToolChoice) interface{} {
 	return nil
 }
 
-// Chat sends a chat request to the OpenAI API
-func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse, error) {
-	// Convert messages to OpenAI format
+// convertMessagesToOpenAI converts provider-neutral messages into the
+// OpenAI-compatible chat message shape used by both non-streaming and streaming
+// requests.
+func convertMessagesToOpenAI(req ChatRequest, includeReasoningContent bool) ([]openaiMessage, error) {
 	messages := make([]openaiMessage, 0, len(req.Messages)+1)
 
-	// Add system message if provided
 	if req.System != "" {
 		messages = append(messages, openaiMessage{
 			Role:    "system",
@@ -322,15 +323,12 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 			Role: m.Role,
 		}
 
-		// Handle tool calls in assistant messages
 		if len(m.ToolCalls) > 0 {
-			msg.Content = nil // Content is null when there are tool calls
+			msg.Content = nil
 			if m.Content != "" {
 				msg.Content = m.Content
 			}
-			// DeepSeek reasoning-backed models require the reasoning_content
-			// returned with a tool call to be passed back on the next turn.
-			if c.shouldSendReasoningContent() && m.ReasoningContent != "" {
+			if includeReasoningContent && m.ReasoningContent != "" {
 				msg.ReasoningContent = m.ReasoningContent
 			}
 			for _, tc := range m.ToolCalls {
@@ -348,19 +346,28 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 				})
 			}
 		} else if m.ToolResult != nil {
-			// This is a tool result message
 			msg.Role = "tool"
 			msg.Content = m.ToolResult.Content
 			msg.ToolCallID = m.ToolResult.ToolUseID
 		} else {
 			msg.Content = m.Content
-			// For assistant messages with reasoning content (DeepSeek)
-			if c.shouldSendReasoningContent() && m.ReasoningContent != "" {
+			if includeReasoningContent && m.ReasoningContent != "" {
 				msg.ReasoningContent = m.ReasoningContent
 			}
 		}
 
 		messages = append(messages, msg)
+	}
+
+	return messages, nil
+}
+
+// Chat sends a chat request to the OpenAI API
+func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse, error) {
+	// Convert messages to OpenAI format
+	messages, err := convertMessagesToOpenAI(req, c.shouldSendReasoningContent())
+	if err != nil {
+		return nil, err
 	}
 
 	// Use provided model or fall back to client default
@@ -558,14 +565,10 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	if len(choice.Message.ToolCalls) > 0 {
 		result.StopReason = "tool_use" // Normalize to match Anthropic's format
 		for _, tc := range choice.Message.ToolCalls {
-			var input map[string]interface{}
-			if err := json.Unmarshal([]byte(tc.Function.Arguments), &input); err != nil {
-				input = map[string]interface{}{"raw": tc.Function.Arguments}
-			}
 			result.ToolCalls = append(result.ToolCalls, ToolCall{
 				ID:    tc.ID,
 				Name:  tc.Function.Name,
-				Input: input,
+				Input: agentcapabilities.ProviderToolInputOrRaw(tc.Function.Arguments),
 			})
 		}
 	}
@@ -754,10 +757,7 @@ func finalizeOpenAIStreamToolCalls(builders map[int]*openaiStreamToolCallBuilder
 			continue
 		}
 
-		var input map[string]interface{}
-		if err := json.Unmarshal([]byte(builder.args.String()), &input); err != nil {
-			input = map[string]interface{}{"raw": builder.args.String()}
-		}
+		input := agentcapabilities.ProviderToolInputOrRaw(builder.args.String())
 		toolCalls = append(toolCalls, ToolCall{
 			ID:    builder.id,
 			Name:  builder.name,
@@ -782,54 +782,9 @@ func normalizeOpenAIStreamStopReason(finishReason string, toolCalls []ToolCall) 
 // ChatStream sends a chat request and streams the response via callback
 func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback StreamCallback) error {
 	// Convert messages to OpenAI format (same as Chat)
-	messages := make([]openaiMessage, 0, len(req.Messages)+1)
-
-	if req.System != "" {
-		messages = append(messages, openaiMessage{
-			Role:    "system",
-			Content: req.System,
-		})
-	}
-
-	for _, m := range req.Messages {
-		msg := openaiMessage{
-			Role: m.Role,
-		}
-
-		if len(m.ToolCalls) > 0 {
-			msg.Content = nil
-			if m.Content != "" {
-				msg.Content = m.Content
-			}
-			if c.shouldSendReasoningContent() && m.ReasoningContent != "" {
-				msg.ReasoningContent = m.ReasoningContent
-			}
-			for _, tc := range m.ToolCalls {
-				argsJSON, err := json.Marshal(tc.Input)
-				if err != nil {
-					return fmt.Errorf("failed to marshal tool call input for %s: %w", tc.Name, err)
-				}
-				msg.ToolCalls = append(msg.ToolCalls, openaiToolCall{
-					ID:   tc.ID,
-					Type: "function",
-					Function: openaiToolFunction{
-						Name:      tc.Name,
-						Arguments: string(argsJSON),
-					},
-				})
-			}
-		} else if m.ToolResult != nil {
-			msg.Role = "tool"
-			msg.Content = m.ToolResult.Content
-			msg.ToolCallID = m.ToolResult.ToolUseID
-		} else {
-			msg.Content = m.Content
-			if c.shouldSendReasoningContent() && m.ReasoningContent != "" {
-				msg.ReasoningContent = m.ReasoningContent
-			}
-		}
-
-		messages = append(messages, msg)
+	messages, err := convertMessagesToOpenAI(req, c.shouldSendReasoningContent())
+	if err != nil {
+		return err
 	}
 
 	model := req.Model
@@ -1078,7 +1033,7 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 						},
 					})
 					if rawArgs := builder.args.String(); rawArgs != "" {
-						parsedInput := parseStreamToolInput(rawArgs)
+						parsedInput, _ := agentcapabilities.ParseProviderToolInput(rawArgs)
 						callback(StreamEvent{
 							Type: "tool_progress",
 							Data: ToolProgressEvent{
@@ -1096,7 +1051,7 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 					builder.args.WriteString(tc.Function.Arguments)
 					if builder.name != "" {
 						rawArgs := builder.args.String()
-						parsedInput := parseStreamToolInput(rawArgs)
+						parsedInput, _ := agentcapabilities.ParseProviderToolInput(rawArgs)
 						message := "Receiving tool input."
 						if parsedInput != nil {
 							message = "Prepared tool input."

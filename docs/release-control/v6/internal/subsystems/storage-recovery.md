@@ -76,6 +76,26 @@ token may allow agent reporting for the scoped tenant workspace, but it must not
 grant backup visibility, recovery authority, or storage health privileges; those
 remain governed by the setup-script and source-specific backup API boundaries
 below.
+Operations-loop status wiring in `internal/api/agent_resource_context.go` is
+storage/recovery-adjacent only through the shared action-audit and verification
+projection. Starter counts, contextual Assistant/external-agent collaboration
+counts, Patrol control completed-loop or resolved-loop outcome evidence,
+`patrolControlValueState`, legacy `patrolAutonomy*` compatibility aliases, and
+the operator-readable `progressLabel` on that
+status are API-contract orientation evidence
+for Assistant, Patrol control, the legacy Pro activation entry point, and MCP
+entry points; they must not be treated as recovery coverage, backup
+verification, storage-health proof, recovery-job state, or a reason to surface
+verification stdout, command text, resource IDs, or backup identities. The legacy
+`proActivationOperationsLoopStarterCount` field is entry-point-specific, while
+the legacy completed/resolved/value `proActivation*` fields mirror the same
+Patrol control outcome classifier as compatibility aliases and do not create a
+second storage/recovery signal.
+First-party workflow starter activity recorded through shared `internal/api/`
+handlers, including Pro activation entry-point telemetry for the same
+operations-loop prompt, is likewise API/privacy/commercial activation evidence
+only; storage and recovery surfaces must not treat it as backup readiness,
+restore capability, recovered-state proof, or storage-health verification.
 Proxmox page stale-agent notices are adjacent frontend and agent-lifecycle
 plumbing even though `ProxmoxPageSurface` is a storage/recovery canonical file.
 Those notices may link an operator to scoped agent update commands for
@@ -250,6 +270,12 @@ driver runs. Dry-run-only plans remain planning
 evidence only; storage and recovery surfaces must not present them as
 executable, dispatch them through provider-local restore/remediation paths, or
 bypass the API fail-closed execution gate.
+Storage/recovery consumers of agent-surface action failures must use the
+shared `internal/agentcapabilities` error envelope and
+`agentcapabilities.AgentErrCode*` vocabulary emitted by `internal/api/`; they
+may explain `action_plan_drift`, missing resources, unavailable executors, or
+approval-state failures, but must not mint storage-local error codes or branch
+on handler-local string copies outside the canonical manifest vocabulary.
 Docker / Podman start, stop, and restart actions are adjacent runtime actions,
 not storage or recovery controls: storage/recovery consumers may render their
 redacted action history as context, but must not treat container lifecycle
@@ -294,6 +320,13 @@ state only. A restored prompt or restored message count may help an operator
 continue a protected-item investigation, but it must not become backup coverage
 evidence, recovery freshness, restore entitlement, storage-owner identity,
 approval policy, or a provider-local recovery command handoff.
+Approved Assistant tool execution through `internal/api/router_routes_ai_relay.go`
+is also adjacent API/AI action plumbing for storage/recovery consumers.
+`AssistantToolExecutor` / `ApprovedAssistantToolExecutor` may execute an already
+approved native Assistant tool. MCP remains an external adapter term, not an
+approved-fix execution dependency; neither name grants backup visibility,
+restore authority, storage-owner identity, or a storage-local command
+transport.
 Legacy OpenCode-style Assistant file-change routes under
 `/api/ai/sessions/{id}/diff`, `/revert`, and `/unrevert` are not
 storage/recovery rollback operations. If those routes are called directly, the
@@ -355,6 +388,12 @@ recovery scope, or a storage/recovery-owned secret source.
    the resulting update state if a future settings flow links to recovery
    preparation, but they must not reinterpret agent-token,
    agent-migration-security, or server-update readiness checks as backup
+   readiness. Governed AI action-target normalization in
+   `internal/api/ai_handlers.go` and `internal/api/ai_resource_types.go` is
+   likewise adjacent AI/API ownership: storage and recovery may consume
+   resulting Assistant context if exposed by another surface, but must not
+   treat resource-to-action-target coercion as recovery scope, backup
+   ownership, restore authorization, or storage-provider identity.
    freshness, restore capability, or storage-provider health.
    Shared API-token transport helpers may be consumed by storage/recovery-
    adjacent flows, but `owner_user_id` remains server-authored token identity
@@ -409,6 +448,11 @@ recovery scope, or a storage/recovery-owned secret source.
    surfaces may read it as adjacent operator context but must not derive
    backup, restore, or storage remediation authority from any of its
    counters.
+   Patrol finding lifecycle payloads exposed by shared AI handlers follow
+   that same adjacent boundary: fields such as an operator resolution note are
+   AI-runtime/API-contract vocabulary and persistence context, not backup
+   metadata, restore evidence, storage remediation authority, or a recovery
+   execution contract.
    Shared Patrol autonomy routes may also touch broad `internal/api/` wiring,
    but monitor-mode AI configuration and remediation entitlement responses stay
    AI runtime/API-contract owned and must not become recovery-local policy,
@@ -589,6 +633,18 @@ recovery scope, or a storage/recovery-owned secret source.
    consume the repaired context only as read-only explanation; that repair does
    not create backup visibility, restore authority, storage ownership, or a
    recovery-local endpoint contract.
+   Approved-action tool invocation parsing in `internal/api/router_routes_ai_relay.go`
+   is also adjacent API infrastructure rather than storage/recovery grammar:
+   storage and recovery surfaces may consume governed Pulse tool execution
+   results, but parsing `pulse_*` text invocations, `default_api:` prefixes, and
+   quoted arguments must stay in `internal/agentcapabilities`.
+   Native Assistant workflow-prompt rendering through
+   `POST /api/ai/workflow-prompts/render` is the same kind of adjacent
+   AI-runtime/API-contract transport: storage and recovery may provide context
+   that makes a manifest-owned Assistant starter usable, but the shared
+   `BuildPulseWorkflowPromptFromManifest` render contract, rendered prompt
+   text, prompt argument validation, and starter availability must not become
+   recovery-local route state, restore authority, or backup workflow grammar.
    That same adjacent `internal/api/` boundary also keeps public hosted signup
    commercial-only: storage and recovery surfaces must not infer tenant
    existence, email issuance, or readiness from `/api/public/signup` response
@@ -651,13 +707,23 @@ recovery scope, or a storage/recovery-owned secret source.
     hosted diagnostics do not collapse into false free-tier behavior.
 19. Preserve shipped local security-doc guidance in shared `internal/api/` config/setup helpers so storage- and recovery-adjacent transport surfaces do not reintroduce GitHub `main` security links when the running build already serves its own local security documentation route.
 20. Keep shared `internal/api/` Patrol transport and alert-trigger edits feature-isolated: Patrol-specific recency fields, callback fan-out, or alert-bridge wiring changes must not leak into recovery queries, storage links, or recovery-adjacent install/setup flows unless this contract changes in the same slice.
-    The same adjacency rule applies to AI settings transport in `internal/api/ai_handlers.go`: provider auth state, masked-secret payload fields, provider-test model selection, and safe provider preflight diagnostics remain AI/runtime plus API-contract concerns and must not be absorbed into storage/recovery transport ownership just because those handlers live under the shared backend API tree.
+    The same adjacency rule applies to AI settings transport in `internal/api/ai_handlers.go`: provider auth state, masked-secret payload fields, provider-test model selection, safe provider preflight diagnostics, and legacy Anthropic OAuth cleanup fields remain AI/runtime plus API-contract concerns and must not be absorbed into storage/recovery transport ownership just because those handlers live under the shared backend API tree. Storage/recovery-adjacent consumers may preserve or clear legacy OAuth tokens only through the shared AI settings owner; they must not treat stored OAuth tokens or `auth_method=oauth` as recovery capability, provider readiness, restore authority, or an AI-backed storage support signal.
+    Patrol readiness labels on the same settings payload, including the
+    user-facing Patrol control label for the stable `configuration` check ID,
+    are AI/runtime plus API-contract wording and must not be reinterpreted as
+    backup visibility, restore authority, recovery readiness, or storage-source
+    health.
     The same adjacency rule applies to Pulse Assistant chat SSE progress in
     `internal/api/ai_handler.go`: neutral `workflow_state` transport liveness
     such as `stream_idle`, provider startup, retry, fallback, and
     model-thinking status is Assistant/API progress only, not recovery
     acquisition, restore identity, backup task freshness, storage-provider
     health, or storage/recovery job progress.
+    The native Assistant surface-tool inventory at
+    `GET /api/ai/assistant/surface-tools` follows the same adjacent boundary:
+    storage/recovery surfaces may display Assistant tool availability, but must
+    not treat it as backup visibility, restore authority, recovery readiness,
+    storage-health evidence, or storage/recovery job progress.
     Direct alert-investigation execution controls in `internal/api/ai_handlers.go`
     follow that same split: request-scoped `AutonomousMode:false` and
     `RequireCommandApproval:true` are AI action-governance constraints, not
@@ -767,11 +833,66 @@ recovery scope, or a storage/recovery-owned secret source.
     raw `pulse_*` / `patrol_*` tool-call prose, token accounting text, and
     provider thinking text are not recovery evidence, backup freshness, restore
     eligibility, storage-local approval state, or recovery execution authority.
+    API-facing Assistant chat tool calls projected through
+    `internal/api/chat_service_adapter.go` must stay on the shared
+    `agentcapabilities` provider-call shape; storage and recovery consumers must
+    not reinterpret Assistant transcript tool-call IDs, inputs, output, success
+    flags, or provider continuation metadata as backup coverage, recovery
+    freshness, restore support, or storage-local action authority.
     Searchable Assistant session-list queries on `GET /api/ai/sessions` remain
     the same adjacent browser-safe history navigation projection: storage and
     recovery surfaces may not reinterpret search hits, handoff summaries, or
     message counts as backup coverage, recovery freshness, restore capability,
     or storage-local action authority.
+    The Pulse Intelligence agent capability manifest in
+    `internal/agentcapabilities/manifest.go`
+    follows the same adjacency rule: external-agent tool metadata,
+    action-mode governance, shared external-tool projection helpers, shared
+    schema-envelope helpers, and typed MCP argument schemas may mention
+    storage-adjacent resources, but they are not recovery-point sources,
+    restore authority, storage ownership, or
+    storage/recovery-owned API contracts.
+    Native Pulse Assistant provider seams and native tool-adapter names in
+    shared `internal/api/ai_handler.go`, `internal/api/agent_profiles_tools.go`,
+    `internal/api/router.go`, and `internal/api/router_routes_ai_relay.go`
+    follow that same adjacent boundary. `MCP` remains an external protocol,
+    manifest, and wire-schema term, while the in-app Assistant `ToolAdapter`
+    family is AI/runtime plus API-contract state; storage and recovery may
+    consume the resulting governed context, but must not fork a recovery-local
+    tool transport or reinterpret native Assistant adapter naming as backup
+    coverage, restore support, recovery freshness, or storage-local action
+    authority.
+    Pulse Intelligence operations-loop external-agent readiness in
+    `internal/api/agent_resource_context.go` is likewise adjacent
+    AI-runtime/API-contract state only: storage and recovery surfaces may
+    observe the resulting content-free readiness boolean when explaining a
+    guided investigation, but they must not reinterpret the Pulse MCP token
+    scope check as backup access, restore authority, provider credential
+    readiness, or recovery-job capability.
+    Patrol control completed/resolved outcome evidence exposed through
+    `patrolAutonomy*` compatibility fields, `patrolAutonomyValueState`, and
+    the operator-readable `progressLabel` on that same status projection are
+    derived from API-contract owned Patrol status and the shared
+    `internal/telemetry` count-only classifier without external-agent readiness
+    as an input. The
+    legacy Pro activation starter field is entry-point-specific, while legacy
+    completed/resolved/value `proActivation*` status fields are compatibility
+    aliases only. Storage and
+    recovery may not fork those branch rules or status labels, enrich them with
+    backup or appliance identifiers, or treat MCP readiness, status wording, or
+    any completed/resolved Patrol state as recovery coverage, restore verification, storage health, or
+    recovery-job authority.
+    Assistant runtime identity strings exposed by those shared API handlers
+    follow the same ownership boundary: they must name the first-party surface
+    as Pulse Assistant, not a legacy generic `Pulse AI` runtime, and
+    storage/recovery surfaces may not reinterpret that naming as recovery-local
+    readiness or execution authority.
+    Shared AI settings persistence, Patrol preflight, profile-suggestion, and
+    remediation-impact copy exposed through those same adjacent handlers must
+    keep Pulse Intelligence and Assistant & Patrol naming at the AI/API
+    boundary; storage/recovery surfaces may observe that copy but must not
+    reinterpret it as backup coverage, restore support, recovery freshness, or
+    storage-local action authority.
     The `can_redo` flag on that same session-list projection is only Assistant
     conversation repair state. It must not be interpreted as recovery
     reversibility, restore availability, backup freshness, or any storage-local
@@ -837,6 +958,10 @@ recovery scope, or a storage/recovery-owned secret source.
     the shared workload query state rather than an opaque unified resource id,
     so recovery/storage drill-downs reopen the intended platform-owned
     workload drawer instead of landing on an unselected table state.
+    Non-storage route constants in that same shared helper, including the
+    Patrol control anchor, must stay owned by their product surface and
+    must not be reused as recovery entry points or storage/recovery navigation
+    aliases.
 27. Keep alert-side recovery drill-ins on that same embedded-owner route-state contract. When alert investigation surfaces such as resource-incident panels expose recovery follow-up links for TrueNAS or future API-backed platforms, they must route through an owning platform/runtime destination using canonical recovery query vocabulary instead of freezing alert-local recovery URLs, reviving the retired Recovery aggregate route, or introducing another provider-shaped recovery handoff vocabulary.
 28. Keep VMware onboarding runtime and recovery semantics separate on that same adjacent platform-connections contract. When `internal/api/router.go`, `internal/api/router_routes_registration.go`, or `internal/api/vmware_handlers.go` evolve VMware connection CRUD, poller-owned `poll` / `observed` summary payloads, saved-test refresh, or observed datastore/VM snapshot visibility, storage and recovery may consume the resulting shared context but must not treat those onboarding/runtime payloads as canonical recovery artifacts, restore capability, or recovery-local control transport.
 29. Keep VMware datastore projection on the shared unified-resource and storage-source contracts. When `frontend-modern/src/hooks/useUnifiedResources.ts` or shared `internal/api/router.go` wiring starts surfacing VMware-backed canonical `storage` resources, storage and recovery may expose those datastores through the owned `vmware-vsphere` source/platform vocabulary for inventory, capacity, and handoff flows only; they must not reinterpret that projection as VMware recovery support, restore semantics, or a provider-local protection surface.
@@ -1081,6 +1206,8 @@ recovery scope, or a storage/recovery-owned secret source.
     11a. Letting adjacent workload route-state changes in shared `frontend-modern/src/routing/resourceLinks.ts` perturb recovery parse/build semantics; expanding canonical workload platform scoping must not alter the owned recovery `platform` and `itemType` vocabulary, legacy alias rewrites, or recovery drill-down workspace selection
     11b. Letting adjacent storage route-state additions in shared `frontend-modern/src/routing/resourceLinks.ts` perturb recovery route semantics; expanding canonical storage deep links for unified resources must not reuse recovery-owned query names or alter the owned recovery parse/build contract while those surfaces continue sharing the same route-helper module
     11e. Letting adjacent platform-route additions in shared `frontend-modern/src/routing/resourceLinks.ts` perturb storage or recovery route semantics; adding canonical `/standalone/machines`, `/standalone/availability`, or other platform paths must not reuse storage/recovery query names, alter storage or recovery parse/build behavior, or convert agent-platform membership into storage/recovery ownership
+    11f. Letting adjacent Patrol control starter route state in shared `frontend-modern/src/routing/resourceLinks.ts` perturb storage or recovery route semantics; `patrolControlStarter=patrol_control` is a first-party Patrol control handoff flag only, legacy `operationsLoopStarter=patrol_control`, `operationsLoopStarter=patrol_autonomy`, and `operationsLoopStarter=pulse_pro_activation` are only compatibility aliases, and storage/recovery parse-build contracts must not consume any of them as recovery state, storage focus, platform scope, or proof of backup/recovery posture
+    11g. Letting adjacent Pulse Intelligence external-agent setup anchors in shared `frontend-modern/src/routing/resourceLinks.ts` perturb storage or recovery route semantics; `/settings/pulse-intelligence/assistant#external-agent-setup` is the canonical external-agent setup hash, `/settings/security/api#external-agent-setup` and `/settings/security/api#pulse-mcp-setup` are legacy compatibility hashes, and storage/recovery parse-build contracts must not consume any of them as recovery state, storage focus, platform scope, or proof of backup/recovery posture
 12. Letting protected-inventory protection posture overload recovery-event outcome filtering; the protected inventory protection-state control must drive the route-backed `state` field and local rollup posture filtering, while the recovery events `status` field remains the canonical outcome filter for points, series, and facets transport filters
 13. Letting visible protected-item filters fall out of shared recovery links; protected inventory state such as stale, failed, warning, running, unknown, healthy, and never-succeeded must restore from the canonical recovery URL and rewrite to the owned `state=<value>` route form, with legacy `stale=1` accepted only as compatibility input
 14. Reintroducing stacked full-width recovery tables as the primary desktop layout; the governed recovery surface must expose one primary data region at a time with recovery events as the default workspace and protection coverage as an explicit secondary review so Pulse does not collapse back into a single-platform backup screen
@@ -1094,6 +1221,70 @@ recovery scope, or a storage/recovery-owned secret source.
 ## Completion Obligations
 
 1. Update this contract when canonical storage or recovery entry points move. Routes added under the shared `internal/api/` extension point that are clearly outside storage/recovery ownership (for example `POST /api/ai/patrol/preflight`, the `patrol_preflight` snapshot field added to `/api/settings/ai`, the auto-trigger preflight dispatch on settings save, the startup-seed dispatch in `NewAISettingsHandler`, and the cached-preflight integration into the Patrol `tools` readiness check — all owned by ai-runtime) do not extend this subsystem's contract; they live in their owning subsystem.
+   Content-free Pulse Intelligence telemetry rollups under shared
+   `internal/api/` are also adjacent-only. Storage and recovery may consume
+   underlying recovery artifacts, action outcomes, or Patrol context through
+   their owned surfaces, but anonymous action-plan, approval,
+   approved-action-decision, rejected-action-decision, external-agent,
+   Assistant, or Patrol usage counters are not backup inventory, restore
+   capability, recovery freshness, or storage ownership evidence.
+   External-agent activity may be counted for narrow tokens that satisfy the
+   called manifest capability scope, including read-only context calls. That
+   keeps MCP collaboration measurable, but storage and recovery must not treat
+   the resulting counter as evidence that a backup, restore, dataset, or
+   storage endpoint was read or mutated.
+   Approved action decision telemetry may use shared action lifecycle evidence
+   or approved approval records, but the exported rollup remains an anonymous
+   approve/reject journey counter. Storage and recovery must not reinterpret
+   that counter as proof that a backup, restore, dataset, storage appliance, or
+   recovery endpoint was approved, changed, inspected, or verified.
+   Approved execution attempt telemetry may be backed by shared action
+   lifecycle events, including refused-before-dispatch failures, but the
+   exported rollup remains an anonymous operations-loop counter. Storage and
+   recovery must not reinterpret that counter as proof that a backup, restore,
+   dataset, storage appliance, or recovery endpoint was changed or verified.
+   Approved action success telemetry may use the same governed audit stream
+   only as a content-free count of approved actions that completed
+   successfully. The approved execution counter remains attempt-based, and the
+   success counter must not export resource identifiers, actor identifiers,
+   command text, command output, verification details, backup scope, restore
+   proof, or storage appliance state.
+   Rejected action decision telemetry may use the same governed audit stream
+   only as a content-free count of actions rejected before execution. It must
+   not be treated as backup denial, restore denial, storage policy state, or
+   proof that a recovery target was inspected or changed.
+   The external-agent recent-use counter is backed by content-free authenticated
+   agent/MCP capability activity for manifest-capable API tokens; storage and
+   recovery must not reinterpret it as proof that a backup, restore, dataset,
+   or recovery endpoint was used.
+   The MCP adapter recent-use counter is likewise only adapter-origin
+   collaboration telemetry for `pulse-mcp` requests. Storage and recovery may
+   use the resulting reports for aggregate Pulse Intelligence adoption, but
+   must not treat that bit as evidence that a backup, restore, dataset, storage
+   appliance, or recovery endpoint was read, mutated, or verified.
+   The operations-loop status projection is also adjacent-only. Its content-free
+   stage, next-action, Patrol evidence, contextual collaboration, pending
+approval, governed action, verified outcome, and optional token-backed MCP
+readiness fields may describe Pulse Intelligence activation progress, but storage and
+recovery must not treat them as backup coverage, restore readiness, storage
+health verification, appliance access, dataset access, API-token authority
+for recovery paths, or recovery mutation proof.
+If an aggregate active Patrol finding or pending approval outranks older
+completed/resolved loop proof in that projection, that precedence remains only
+current operator orientation; it is not backup freshness, restore authority, or
+storage-local remediation proof.
+Operations-loop workflow starter request counts are even narrower: they are
+content-free markers that a native Assistant surface rendered, a first-party
+Patrol control handoff started, a legacy Pro activation entry-point handoff
+started, or a Pulse MCP surface rendered the manifest-owned
+`pulse_operations_loop` starter. The aggregate Patrol control starter count may
+include native Patrol, legacy Patrol autonomy, and legacy Pro activation starts,
+while `proActivationOperationsLoopStarterCount` remains the legacy entry-point
+count. Storage and recovery may observe those aggregate activation reports, but
+must not treat starter
+   access as backup coverage, recovery freshness, restore readiness, storage
+   health verification, dataset access, appliance access, or evidence that any
+   recovery endpoint was used.
 2. Keep recovery store/runtime changes aligned with the storage and recovery frontend proofs in `registry.json`
 3. Tighten guardrails when legacy storage or recovery presentation paths are removed
 4. Preserve the dependency split: API payload ownership stays in `api-contracts`, settings shell ownership stays in `frontend-primitives`, and canonical resource truth stays in `unified-resources`
@@ -1104,6 +1295,10 @@ recovery scope, or a storage/recovery-owned secret source.
    must keep that logic on the canonical
    `internal/unifiedresources/hostname_equivalence.go` contract instead of
    widening it into a broad short-name collapse across distinct FQDNs.
+   Approved-action replay through `internal/api/router_routes_ai_relay.go`
+   is likewise API/AI-owned transport: storage and recovery may consume the
+   resulting incident context, but must not define storage-local approval
+   argument keys or bypass the shared `internal/agentcapabilities` helper.
 5. Keep recovery history table width budgeting derived from the canonical column specs in `frontend-modern/src/utils/recoveryTablePresentation.ts`, not from raw visible-column counts, so normalized subject labels and optional column sets cannot drift the right-edge badges and controls off-screen
 6. Keep at least one browser-level desktop recovery proof in the governed `recovery-product-surface` policy so right-edge column visibility and wrapper-fit regressions are caught at rendered layout time instead of only through unit-level width math
 7. Keep the retired dashboard route from becoming a passive no-resources
@@ -1180,19 +1375,26 @@ recovery scope, or a storage/recovery-owned secret source.
     payload must not include local commercial funnel summaries or
     infrastructure-onboarding analytics, so recovery-adjacent diagnostics do
     not inherit commerce telemetry, cross-tenant leakage, or hosted/local
-    semantic drift through the shared backend route.
+    semantic drift through the shared backend route. Pulse Assistant runtime
+    status in that shared payload must remain native Assistant availability
+    (`assistantRuntimeConnected`), not MCP transport state, and storage/recovery
+    consumers must not reinterpret it as backup coverage, recovery readiness,
+    or storage-local action authority.
 16. Keep storage summary interaction scoped through the same canonical IDs.
 17. Keep adjacent AI settings persistence vendor-neutral on the shared
     `internal/api/` boundary. When storage- or recovery-adjacent hosted flows
     load or save AI settings through shared helpers, any historical hosted
     quickstart model IDs must be cleared before adjacent surfaces read or
-    re-emit that state.
+    re-emit that state. Legacy Anthropic OAuth tokens follow the same shared-owner rule: adjacent storage/recovery code may not use them as provider configuration and must leave cleanup to the AI settings contract.
 17a. Keep adjacent AI paid-control state entitlement-effective on that shared
     `internal/api/` boundary. Storage- and recovery-adjacent flows may preserve
     stored Assistant or Patrol preferences in config, but they must not treat
     stored autonomous, auto-remediation, or alert-triggered analysis settings
     as active restore, recovery, or support capability unless the shared AI
     runtime entitlement clamp exposes them as currently effective.
+    AI settings control-refresh callbacks in `internal/api/ai_handlers.go` are
+    likewise native Assistant tool-visibility plumbing, not MCP transport
+    state and not storage/recovery execution authority.
     When operators hover or focus pools versus physical disks, the storage
     summary must reuse one resolved active-series ID across card state and
     chart highlighting so pool-only cards demote cleanly during disk focus and
@@ -1283,6 +1485,13 @@ recovery scope, or a storage/recovery-owned secret source.
 
 ## Current State
 
+Denied Patrol investigation-fix approvals passing through shared
+`internal/api/` handlers are adjacent AI-runtime/action-governance state only.
+The `fix_rejected` finding outcome means an operator declined a proposed Patrol
+fix before execution; it must not become protection state, recovery-point
+state, backup verification state, or storage/recovery-local remediation
+semantics.
+
 Default-org token scoping and notification-settings fan-out on shared
 `internal/api/` handlers are likewise adjacent only: they are
 api-contract/security owned and create no storage, recovery-point, or
@@ -1362,11 +1571,25 @@ or storage/recovery freshness evidence. The verification projection on
 recover from /api/actions/{id} after a reconnect — the event
 carries a copy, not the original, so the durable record remains
 the canonical source.
+Storage/recovery consumers must treat the event vocabulary as a shared
+API/AI-owned contract from `internal/agentcapabilities`. Event names and
+transport markers may be used to distinguish doorbells from keepalives, but
+storage/recovery must not define local event-name registries or infer recovery
+freshness from `stream.connected` or `heartbeat`.
 
 The agent capabilities manifest at `/api/agent/capabilities` is
 read-only and stateless — no persistence is involved. The manifest
-is hand-authored in `internal/api/agent_capabilities.go`; storage
-flows are not affected.
+is hand-authored in `internal/agentcapabilities/manifest.go` and served by
+the API handler; storage flows are not affected.
+Its action mode and approval policy metadata are API/AI-owned governance
+posture for agent tool selection. Storage and recovery may observe that
+metadata when agents explain available tools, but must not reinterpret it as
+backup ownership, restore capability, recovery freshness, or storage-local
+action authority.
+Manifest `inputSchema` metadata is likewise an API-owned agent argument
+contract. It may help an external agent call action or finding lifecycle tools,
+or replace operator-state, but it does not introduce storage/recovery
+persistence, restore authority, or backup-specific mutation semantics.
 When that manifest exposes provisioning tools over `/api/discover`
 and `/api/config/nodes`, storage and recovery may observe the resulting
 configured sources and backup evidence only after the canonical node
@@ -1386,6 +1609,16 @@ clients on error (now the agent-stable envelope rather than the
 platform-wide `APIError` shape). Recovery posture is identical:
 when the action audit store rehydrates on startup, the action
 endpoints recover the same lifecycle records they always did.
+
+The Patrol finding lifecycle endpoints advertised in the agent
+capabilities manifest (`acknowledge_finding`, `snooze_finding`,
+`dismiss_finding`, `resolve_finding`) follow the same storage boundary:
+their agent-facing stable error envelope is an API/AI-runtime wire
+contract only and is shared through `internal/agentcapabilities`.
+Successful calls still mutate the existing Patrol finding store, unified
+finding store, and learning feedback store exactly as the UI path does; no
+MCP-specific, agent-specific, or recovery-specific persistence is introduced
+by the manifest error-code declarations or by the shared error envelope.
 
 The agent-consumable bundled context endpoint
 `/api/agent/resource-context/{id}` reads the same durable
@@ -1411,6 +1644,34 @@ is identical to the per-resource bundle: when the unified-resources
 store and the approval store rehydrate on startup, the fleet view
 recovers the same situated picture without any fleet-specific
 rehydration step.
+
+The Patrol-control status endpoint at
+`/api/agent/patrol-control/status` introduces no new persistence. The legacy
+`/api/agent/operations-loop/status` URL remains a compatibility alias. It reads the
+registry, active findings, pending approval counts, recent action-audit records,
+and recent action lifecycle events over the existing evidence window, then
+returns only aggregate stage state and counts. Lifecycle events may rehydrate a
+recent approval or rejection for a plan created before the window, but the
+projection still resolves the event back to the canonical action audit before
+counting governance or verification; approved and rejected decision counts stay
+separate so a rejected-only decision can complete the no-execution branch
+without being mistaken for verified remediation. The four-step operator rollup
+follows the same adjacent-only evidence boundary: governance step counts may
+reflect pending approvals or later decision evidence, active aggregate Patrol
+findings may keep the next action on current operator work, the Assistant step
+count may reflect contextual collaboration, and verification step counts may
+reflect verified outcomes or terminal rejected decisions. Optional MCP readiness
+stays in `externalAgentReady`, but storage and recovery must not treat those
+counts or readiness as backup freshness, restore authority, or storage-local
+remediation proof. The approved-success telemetry predicate follows that same
+boundary: execution success alone is not verified outcome proof unless the
+approved action also carries `VerificationOutcome.Status=verified` or a
+canonical verification result that ran and succeeded, and storage/recovery
+surfaces must not use those Patrol-control values as backup, restore, or
+protected-state evidence. Recovery posture is therefore identical to the underlying
+stores: once unified resources, findings, approvals, action audits, and
+lifecycle events have rehydrated, the status projection is available without an
+Patrol-control specific recovery artifact.
 
 The agent capabilities manifest at `/api/agent/capabilities` is
 hand-authored static data. There is no persistence to recover —
@@ -1500,6 +1761,20 @@ fields and nullable mode/kind metadata before presenting canonical item labels,
 while storage detail drawers and filter controls must route summary series IDs,
 source tones, and disk metrics through the shared storage helpers instead of
 reconstructing them from local table state.
+Storage and recovery may depend on the adjacent Patrol-control status
+projection staying content-free, including its Patrol control starter count,
+completed/resolved loop counts, `patrolControlValueState`, legacy
+`patrolAutonomy*` aliases, and legacy `proActivation*` compatibility fields
+when shared API helpers are touched. The legacy Pro activation starter field is
+entry-point-specific, while the legacy completed/resolved/value fields mirror
+Patrol control values. Those values are classified by the shared
+`internal/telemetry` Patrol control proof helper and are not recovery
+verification, storage health, backup coverage, restore readiness, or
+action-outcome proof, and storage/recovery surfaces must not use them to imply a
+protected or resolved state. Approved-success telemetry is likewise
+Patrol-control proof only when the action has verified post-action evidence;
+successful command completion without canonical verification remains outside
+storage/recovery readiness.
 Storage and recovery's adjacent `internal/api/` contract must also preserve
 the product-facing remediation vocabulary used by shared API denials. When
 storage/recovery-adjacent browser sessions encounter AI or Patrol remediation
@@ -2682,6 +2957,10 @@ and onboarding analytics remain outside the shared diagnostics payload, so
 recovery-adjacent diagnostics surfaces can safely share the backend route
 without inheriting commerce telemetry, cross-tenant leakage, or hosted/local
 semantic drift.
+That same shared diagnostics payload may expose native Pulse Assistant runtime
+availability as `assistantRuntimeConnected`, but storage/recovery consumers
+must not revive MCP diagnostic fields or treat Assistant runtime availability
+as backup freshness, restore capability, or storage-local execution authority.
 That same shared `internal/api/` dependency now also assumes auth persistence
 compatibility stays on an explicit migration/import boundary: legacy
 raw-token `sessions.json` and `csrf_tokens.json` files may load for upgrade

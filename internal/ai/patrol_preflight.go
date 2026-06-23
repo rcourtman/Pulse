@@ -118,8 +118,8 @@ func (s *Service) RunPatrolToolPreflight(ctx context.Context, providerName, mode
 
 	if cfg == nil {
 		result.Cause = PatrolFailureCauseSettingsPersistence
-		result.Title = "Pulse Patrol: Assistant settings unavailable"
-		result.Summary = "Pulse Assistant settings could not be loaded"
+		result.Title = "Pulse Patrol: Assistant & Patrol settings unavailable"
+		result.Summary = "Assistant & Patrol settings could not be loaded"
 		result.Recommendation = "Confirm Pulse settings persistence is healthy, then re-run preflight."
 		result.DurationMs = time.Since(started).Milliseconds()
 		s.recordPatrolPreflight(result, time.Now())
@@ -216,6 +216,7 @@ func (s *Service) RunPatrolToolPreflight(ctx context.Context, providerName, mode
 		result.Title = "Pulse Patrol: Preflight succeeded"
 		result.Summary = "Provider accepted the preflight request and the model emitted a tool call."
 		s.recordPatrolPreflight(result, time.Now())
+		s.resolvePatrolRuntimeFailureAfterToolPreflight(result)
 		return result
 	}
 
@@ -229,6 +230,17 @@ func (s *Service) RunPatrolToolPreflight(ctx context.Context, providerName, mode
 	result.Recommendation = "Trigger a real Patrol run to confirm tool calling. If that fails, switch to a model with stronger tool-following behaviour."
 	s.recordPatrolPreflight(result, time.Now())
 	return result
+}
+
+func (s *Service) resolvePatrolRuntimeFailureAfterToolPreflight(result PatrolPreflightResult) bool {
+	if s == nil || !result.Success || !result.ToolCallObserved {
+		return false
+	}
+	patrol := s.GetPatrolService()
+	if patrol == nil {
+		return false
+	}
+	return patrol.resolvePatrolRuntimeFailureFinding("patrol_preflight_success")
 }
 
 func applyPatrolPreflightDiagnostic(result *PatrolPreflightResult, err error) {

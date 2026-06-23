@@ -64,7 +64,58 @@ hot_dev_lab_agents_enabled() {
     hot_dev_truthy "${PULSE_DEV_LAB_AGENTS:-false}"
 }
 
+hot_dev_lab_agent_mode_file_enabled() {
+    local mode_file="${HOT_DEV_LAB_MODE_FILE:-}"
+
+    [[ -n "${mode_file}" && -r "${mode_file}" ]] || return 1
+    grep -Eq '^[[:space:]]*PULSE_DEV_LAB_AGENTS[[:space:]]*=[[:space:]]*true[[:space:]]*$' "${mode_file}"
+}
+
+hot_dev_remember_lab_agent_mode() {
+    local mode_file="${HOT_DEV_LAB_MODE_FILE:-}"
+
+    [[ -n "${mode_file}" ]] || return 0
+    mkdir -p "$(dirname "${mode_file}")"
+    {
+        printf '# Managed by Pulse hot-dev. Remove this file or set PULSE_DEV_LAB_AGENTS=false to return to loopback-only dev.\n'
+        printf 'PULSE_DEV_LAB_AGENTS=true\n'
+    } > "${mode_file}"
+}
+
+hot_dev_clear_remembered_lab_agent_mode() {
+    local mode_file="${HOT_DEV_LAB_MODE_FILE:-}"
+
+    [[ -n "${mode_file}" ]] || return 0
+    rm -f "${mode_file}" 2>/dev/null || true
+}
+
+hot_dev_apply_remembered_lab_agent_mode() {
+    if [[ -n "${PULSE_DEV_LAB_AGENTS+x}" ]]; then
+        if hot_dev_lab_agents_enabled; then
+            hot_dev_remember_lab_agent_mode
+        else
+            hot_dev_clear_remembered_lab_agent_mode
+        fi
+        return 0
+    fi
+
+    if [[ -n "${PULSE_DEV_LAN+x}" ]] && ! hot_dev_lan_enabled; then
+        hot_dev_clear_remembered_lab_agent_mode
+        return 0
+    fi
+
+    if hot_dev_lab_agent_mode_file_enabled; then
+        PULSE_DEV_LAB_AGENTS=true
+        export PULSE_DEV_LAB_AGENTS
+        if declare -F log_warn >/dev/null 2>&1; then
+            log_warn "Remembered lab-agent mode is enabled for this workspace. Starting with LAN agent access; set PULSE_DEV_LAB_AGENTS=false once to return to loopback-only dev."
+        fi
+    fi
+}
+
 hot_dev_apply_lab_agent_defaults() {
+    hot_dev_apply_remembered_lab_agent_mode
+
     if ! hot_dev_lab_agents_enabled; then
         return 0
     fi

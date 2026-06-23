@@ -24,9 +24,10 @@ func TestRecordChatTurnCost_RecordsWhenStoreConfigured(t *testing.T) {
 	loop := &AgenticLoop{
 		totalInputTokens:  120,
 		totalOutputTokens: 45,
+		totalToolCalls:    3,
 	}
 
-	svc.recordChatTurnCost(loop, "anthropic:claude-test")
+	svc.recordChatTurnCost(loop, "anthropic:claude-test", sessionHandoffKindResourceContext)
 
 	events := store.ListEvents(1)
 	if len(events) != 1 {
@@ -35,6 +36,12 @@ func TestRecordChatTurnCost_RecordsWhenStoreConfigured(t *testing.T) {
 	ev := events[0]
 	if ev.UseCase != "chat" {
 		t.Errorf("UseCase = %q, want chat", ev.UseCase)
+	}
+	if ev.ContextScope != sessionHandoffKindResourceContext {
+		t.Errorf("ContextScope = %q, want %q", ev.ContextScope, sessionHandoffKindResourceContext)
+	}
+	if ev.ToolCallCount != 3 {
+		t.Errorf("ToolCallCount = %d, want 3", ev.ToolCallCount)
 	}
 	if ev.InputTokens != 120 || ev.OutputTokens != 45 {
 		t.Errorf("tokens = (%d, %d), want (120, 45)", ev.InputTokens, ev.OutputTokens)
@@ -57,7 +64,7 @@ func TestRecordChatTurnCost_NoopWhenStoreNil(t *testing.T) {
 		totalOutputTokens: 50,
 	}
 	// Must not panic.
-	svc.recordChatTurnCost(loop, "anthropic:claude-test")
+	svc.recordChatTurnCost(loop, "anthropic:claude-test", "")
 }
 
 // TestRecordChatTurnCost_NoopWhenZeroTokens verifies the recorder
@@ -71,7 +78,7 @@ func TestRecordChatTurnCost_NoopWhenZeroTokens(t *testing.T) {
 		totalInputTokens:  0,
 		totalOutputTokens: 0,
 	}
-	svc.recordChatTurnCost(loop, "anthropic:claude-test")
+	svc.recordChatTurnCost(loop, "anthropic:claude-test", "")
 
 	if events := store.ListEvents(1); len(events) != 0 {
 		t.Errorf("expected 0 events for zero-token loop, got %d", len(events))
@@ -87,7 +94,7 @@ func TestRecordChatTurnCost_HandlesMalformedModel(t *testing.T) {
 	svc := &Service{costStore: store}
 	loop := &AgenticLoop{totalInputTokens: 10, totalOutputTokens: 5}
 
-	svc.recordChatTurnCost(loop, "bare-model-name")
+	svc.recordChatTurnCost(loop, "bare-model-name", "")
 
 	events := store.ListEvents(1)
 	if len(events) != 1 {
@@ -98,5 +105,83 @@ func TestRecordChatTurnCost_HandlesMalformedModel(t *testing.T) {
 	}
 	if events[0].RequestModel != "bare-model-name" {
 		t.Errorf("RequestModel should be passed through verbatim, got %q", events[0].RequestModel)
+	}
+}
+
+func TestAssistantContextScopeForChatTurn_ClassifiesGovernedContext(t *testing.T) {
+	tests := []struct {
+		name          string
+		req           ExecuteRequest
+		findingID     string
+		context       string
+		resources     []HandoffResource
+		actions       []HandoffAction
+		metadata      HandoffMetadata
+		mentionsFound bool
+		want          string
+	}{
+		{
+			name:      "finding handoff",
+			findingID: "finding-123",
+			want:      sessionHandoffKindPatrolFinding,
+		},
+		{
+			name: "governed action",
+			actions: []HandoffAction{{
+				ActionID: "action-123",
+			}},
+			want: "governed_action",
+		},
+		{
+			name: "patrol run metadata",
+			metadata: HandoffMetadata{
+				Kind:  sessionHandoffKindPatrolRun,
+				RunID: "run-123",
+			},
+			want: sessionHandoffKindPatrolRun,
+		},
+		{
+			name: "resource handoff",
+			resources: []HandoffResource{{
+				ID:   "vm:node:100",
+				Type: "vm",
+			}},
+			want: sessionHandoffKindResourceContext,
+		},
+		{
+			name: "structured mention",
+			req: ExecuteRequest{Mentions: []StructuredMention{{
+				ID:   "vm:node:100",
+				Name: "web-01",
+				Type: "vm",
+			}}},
+			want: sessionHandoffKindResourceContext,
+		},
+		{
+			name:    "scoped context fallback",
+			context: "[Context]\nOperator-selected state",
+			want:    sessionHandoffKindScopedContext,
+		},
+		{
+			name: "plain chat",
+			want: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := assistantContextScopeForChatTurn(
+				tt.req,
+				tt.findingID,
+				tt.context,
+				tt.resources,
+				tt.actions,
+				tt.metadata,
+				tt.mentionsFound,
+			)
+			if got != tt.want {
+				t.Fatalf("scope = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }

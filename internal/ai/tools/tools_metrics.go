@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -15,7 +16,7 @@ import (
 func (e *PulseToolExecutor) registerMetricsTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
-			Name: "pulse_metrics",
+			Name: agentcapabilities.PulseMetricsToolName,
 			Description: `Get performance metrics, baselines, and sensor data.
 
 Types:
@@ -89,9 +90,10 @@ Examples:
 			return exec.executeMetrics(ctx, args)
 		},
 		Governance: ToolGovernance{
-			ActionMode:     ToolActionRead,
-			ApprovalPolicy: "no approval required",
-			Summary:        "Reads performance, sensor, baseline, pattern, and disk-health data without changing state.",
+			ActionMode:      ToolActionRead,
+			ApprovalPolicy:  ToolApprovalScopeOnly,
+			ApprovalSummary: "no approval required",
+			Summary:         "Reads performance, sensor, baseline, pattern, and disk-health data without changing state.",
 		},
 	})
 }

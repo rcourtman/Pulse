@@ -2750,8 +2750,8 @@
             "src/features/patrol/__tests__/patrolInvestigationContextModel.test.ts",
             "src/components/patrol/__tests__/ApprovalSection.test.tsx",
             "src/components/AI/__tests__/FindingsPanel.test.ts",
-            "src/features/patrol/__tests__/PatrolIntelligenceSummary.test.tsx",
             "src/pages/__tests__/AIIntelligence.test.tsx",
+            "src/utils/__tests__/patrolEmptyStatePresentation.test.ts",
             "src/utils/__tests__/patrolPagePresentation.test.ts",
             "src/utils/__tests__/patrolSummaryPresentation.test.ts",
             "src/utils/__tests__/aiChatPresentation.test.ts",
@@ -2858,11 +2858,6 @@
         },
         {
           "repo": "pulse",
-          "path": "frontend-modern/src/features/patrol/__tests__/PatrolIntelligenceSummary.test.tsx",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
           "path": "frontend-modern/src/features/patrol/__tests__/patrolInvestigationContextModel.test.ts",
           "kind": "file"
         },
@@ -2874,6 +2869,11 @@
         {
           "repo": "pulse",
           "path": "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/__tests__/patrolEmptyStatePresentation.test.ts",
           "kind": "file"
         },
         {
@@ -3911,11 +3911,15 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Commercial readiness is coherent for explicit preview, checkout handoff, paid-user activation/recovery, and hosted-mode paths, while default self-hosted app surfaces stay free-first and non-promotional; because v6 is not publicly GA, production public checkout stays on v5 until explicit GA cutover approval, and the production public flip plus release-day rollout execution remain a separate promotion-time follow-up.",
+        "summary": "Commercial readiness is coherent for explicit preview, checkout handoff, paid-user activation/recovery, hosted-mode paths, and the first Pulse Intelligence value-evidence reporting surface, while default self-hosted app surfaces stay free-first and non-promotional; because v6 is not publicly GA, production public checkout stays on v5 until explicit GA cutover approval, and the production public flip plus release-day rollout execution plus the broader governed Patrol control experience remain separate follow-ups.",
         "tracking": [
           {
             "kind": "lane-followup",
             "id": "commercial-ga-promotion-package"
+          },
+          {
+            "kind": "lane-followup",
+            "id": "pulse-intelligence-pro-activation-loop"
           }
         ]
       },
@@ -6974,6 +6978,21 @@
         "L20"
       ],
       "subsystem_ids": []
+    },
+    {
+      "id": "pulse-intelligence-pro-activation-loop",
+      "summary": "Track Pulse Intelligence as the default governed Pro operations experience beyond the current feature floor: a new Pro user should choose what Patrol may handle automatically, then Patrol should watch the infrastructure, investigate real issues, act automatically or ask for approval according to that policy, verify outcomes, and record what happened. Assistant and Pulse MCP must expose the same governed capabilities as contextual and external-agent access paths, but they are not the primary first-party success condition. Pro should record whether completing this Patrol control loop improves activation, retention, and paid conversion. This is L2-owned commercial activation work with explicit dependencies on the L6 Assistant architecture, L20 action governance, and L23 Pulse Intelligence floor.",
+      "owner": "project-owner",
+      "status": "planned",
+      "recorded_at": "2026-06-20",
+      "lane_ids": [
+        "L2"
+      ],
+      "repo_ids": [
+        "pulse",
+        "pulse-pro"
+      ],
+      "subsystem_ids": []
     }
   ],
   "coverage_gaps": [
@@ -7720,7 +7739,7 @@
     },
     {
       "id": "patrol-product-language-ai-boundary",
-      "summary": "Patrol product-language migration boundary audited: customer-facing page titles, nav, route chrome, summary copy, actions, and empty states lead with Patrol/Pulse Patrol/Pulse Assistant. Internal file, store, type, transport, and log identifiers retain the shared AI-runtime boundary. The `/settings/system-ai` panel is the explicit provider/configuration carve-out where AI terminology is reserved; its chrome already leads with 'Assistant & Patrol'. The remaining AgentProfilesPanel 'Ideas' tooltip was product-neutralized to 'Suggest profiles for your estate'.",
+      "summary": "Patrol product-language migration boundary audited: customer-facing page titles, nav, route chrome, summary copy, actions, and empty states lead with Patrol/Pulse Patrol/Pulse Assistant. Internal file, store, type, transport, and log identifiers retain the shared AI-runtime boundary. The `/settings/system-ai` route remains the explicit provider/configuration carve-out; its visible chrome now lives under Pulse Intelligence > Provider & Models rather than generic AI settings. The remaining AgentProfilesPanel 'Ideas' tooltip was product-neutralized to 'Suggest profiles for your estate'.",
       "kind": "architecture",
       "decided_at": "2026-04-17",
       "subsystem_ids": [

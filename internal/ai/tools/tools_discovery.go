@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -13,7 +14,7 @@ import (
 func (e *PulseToolExecutor) registerDiscoveryTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
-			Name:        "pulse_discovery",
+			Name:        agentcapabilities.PulseDiscoveryToolName,
 			Description: `Get or run AI-discovered service details from Pulse-owned resource access. action="get" returns existing discovery and triggers discovery only when missing. action="run" forces a fresh discovery run for a known resource. action="list" searches existing discoveries. Resource details must already be known from the current context or a prior resource lookup.`,
 			InputSchema: InputSchema{
 				Type: "object",
@@ -57,9 +58,10 @@ func (e *PulseToolExecutor) registerDiscoveryTools() {
 			return exec.executeDiscovery(ctx, args)
 		},
 		Governance: ToolGovernance{
-			ActionMode:     ToolActionMixed,
-			ApprovalPolicy: "no approval required; run uses read-only evidence collection and updates the discovery cache",
-			Summary:        "Reads or refreshes discovered service paths, ports, and bind mounts for known resources.",
+			ActionMode:      ToolActionMixed,
+			ApprovalPolicy:  ToolApprovalScopeOnly,
+			ApprovalSummary: "no approval required; run uses read-only evidence collection and updates the discovery cache",
+			Summary:         "Reads or refreshes discovered service paths, ports, and bind mounts for known resources.",
 		},
 	})
 }
@@ -245,7 +247,7 @@ func (e *PulseToolExecutor) normalizeDiscoveryResourceRequest(args map[string]in
 	resourceTypeRaw, _ := args["resource_type"].(string)
 	resourceID, _ := args["resource_id"].(string)
 	targetID, _ := args["target_id"].(string)
-	if isCurrentResourceReference(resourceID) || isCurrentResourceReference(resourceTypeRaw) || isCurrentResourceReference(targetID) {
+	if IsCurrentResourceReference(resourceID) || IsCurrentResourceReference(resourceTypeRaw) || IsCurrentResourceReference(targetID) {
 		resource, err := e.resolveCurrentResource()
 		if err != nil {
 			return discoveryResourceRequest{}, NewErrorResult(err), false

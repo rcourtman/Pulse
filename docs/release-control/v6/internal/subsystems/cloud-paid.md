@@ -20,6 +20,69 @@ agreement, the Pulse Cloud control plane, provider-hosted MSP account
 bootstrap/licensing, hosted tenant lifecycle, and cloud-specific enforcement
 rules.
 
+Pulse Pro commercial Pulse Intelligence value reporting is a cloud-paid proof
+surface. It must compare full-loop, approved-execution-loop, Assistant-loop,
+Assistant-resolved-loop, external-agent-loop, external-agent-resolved-loop,
+Patrol-resolution, resolved-operations-loop, Patrol-guided resolved-loop,
+Patrol-control completed-loop, Patrol-control resolved-loop, paid Patrol-control
+completed-loop, paid Patrol-control resolved-loop, legacy Pro activation
+compatibility mirrors, MCP adapter
+operations-loop, MCP adapter approved-execution-loop, MCP adapter
+resolved-operations-loop, and
+MCP/external-agent capability-class cohorts against the generic Assistant chat
+baseline with activation, retention, paid-rate, free-start conversion, and
+signal-to-paid deltas.
+The Patrol-guided resolved-loop cohort is the first-party completion signal:
+it requires the `pulse_patrol` operations-loop starter marker plus resolved
+operations-loop proof, so Patrol starter interest is not mistaken for a
+completed activation loop.
+The Patrol-control completed-loop cohort is a first-class telemetry signal for
+historical conversion and retention analysis. It requires the Patrol control
+starter or its legacy Pro activation entry-point alias, Patrol issue evidence,
+contextual Assistant or external-agent collaboration, and either a rejected
+governed decision or an approved governed decision with verified outcome proof,
+so a deliberate operator rejection can complete the decision loop without being
+misreported as an approved-and-resolved outcome. Local self-hosted Pro
+operations-status presentation must apply the same distinction through the
+shared operations-loop `patrolControlValueState`, falling back to
+`patrolAutonomyValueState` and then `proActivationValueProofState` only for
+compatibility: `governed_decision_recorded` remains partial decision status
+with a continue path, legacy `verified_needs_mcp` is treated as verified
+first-party Patrol value with MCP readiness left as optional external-agent
+context, and `verified` may be presented as a verified Patrol operations
+outcome or suppress a new starter marker. Paid-plan status rows must describe
+missing or partial Pro action entitlements as Patrol investigation/remediation
+capability, not as generic `Pro operations capability`, so the commercial
+surface tells users which governed Patrol behavior is affected.
+The Patrol-control resolved-loop cohort is a first-class telemetry signal for
+paid Patrol control value, not a report-time intersection of generic starter
+interest and generic resolved-loop proof. Pulse emits it only when a Patrol
+control or legacy Pro activation starter, Patrol issue evidence, contextual
+Assistant or external-agent collaboration, an approved governed decision, and
+verified outcome proof are present, and the license-server value report must
+consume that explicit primary flag.
+The paid Patrol-control completed-loop and resolved-loop cohorts are also
+first-class telemetry signals. Pulse emits them only when the current coarse
+`paid_license` posture coexists with the corresponding Patrol-control
+completed-loop or resolved-loop proof in the same telemetry payload. Legacy Pro
+activation completed/resolved and paid cohort fields may mirror those primary
+Patrol-control values for continuity. The value report must use those explicit
+booleans for paid-rate, retention, and free-to-paid comparisons, and must not
+infer paid Patrol-control value from exact tiers, account links, checkout
+sessions, license IDs, or a report-time join against customer identity.
+Approved-execution-loop
+metrics mean Patrol issue evidence plus Assistant governed-context, direct
+external-agent, or MCP collaboration plus at least one approved governed-action
+attempt; complete-loop metrics mean Patrol issue evidence plus contextual collaboration plus an
+approved or rejected governed-action decision signal. Those metrics must remain
+separate from broader governed-action activity so action plans and approval
+requests are not mistaken for completed operations-loop proof. Capability-class signal-to-paid
+metrics must use the first time that specific capability was observed while
+the install was still free, then count conversion only when paid activation
+happened after that capability signal; paid installs that first use a
+capability after purchase must not be counted as capability-driven conversion
+proof.
+
 Provider-hosted MSP bootstrap output is part of the cloud-paid operator
 contract. It must carry the resolved MSP plan version, plan source, workspace
 limit, and validated provider MSP license id/email so installability proof can
@@ -88,7 +151,7 @@ Stripe-free and avoids a cloud-control-plane report data path across clients.
 27. `internal/cloudcp/entitlements/service.go`
 28. `internal/cloudcp/portal/handlers.go`
 29. `internal/cloudcp/portal/page.go`
-29a. `internal/cloudcp/portal/setup_facts.go`
+    29a. `internal/cloudcp/portal/setup_facts.go`
 30. `internal/cloudcp/public_cloud_signup_handlers.go`
 31. `internal/cloudcp/registry/models.go`
 32. `internal/cloudcp/registry/registry.go`
@@ -97,7 +160,7 @@ Stripe-free and avoids a cloud-control-plane report data path across clients.
 35. `internal/hosted/provisioner.go`
 36. `frontend-modern/src/App.tsx`
 37. `frontend-modern/src/AppLayout.tsx`
-37a. `frontend-modern/src/components/CommercialMigrationBanner.tsx`
+    37a. `frontend-modern/src/components/CommercialMigrationBanner.tsx`
 38. `frontend-modern/src/useAppRuntimeState.ts`
 39. `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`
 40. `frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx`
@@ -129,20 +192,20 @@ Stripe-free and avoids a cloud-control-plane report data path across clients.
 66. `pkg/licensing/testing_helpers.go`
 67. `pkg/licensing/self_hosted_feature_catalog.go`
 68. `frontend-modern/src/utils/selfHostedFeatureCatalog.generated.ts`
-80. `internal/cloudcp/server.go`, `internal/cloudcp/authz.go`, `internal/cloudcp/commercial_identity.go`, `internal/cloudcp/security.go`
-81. `internal/cloudcp/health_monitor.go`, `internal/cloudcp/health_stuck_provisioning.go`, `internal/cloudcp/tenant_state_metrics.go`, `internal/cloudcp/ratelimit.go`
-81a. `internal/cloudcp/proxytrust/client_ip.go`
-82. `internal/cloudcp/hosted_entitlement_handlers.go`, `internal/cloudcp/url_helpers.go`
-83. `internal/cloudcp/admin/handlers.go`, `internal/cloudcp/admin/status.go`, `internal/cloudcp/auditlog/auditlog.go`
-84. `internal/cloudcp/cpmetrics/metrics.go`, `internal/cloudcp/cpsec/nonce.go`, `internal/cloudcp/static_assets.go`, `internal/cloudcp/favicon.svg`
-85. `internal/cloudcp/email/sender.go`, `internal/cloudcp/email/templates.go`
-86. `internal/cloudcp/handoff/handler.go`, `internal/cloudcp/handoff/handoff.go`
-87. `internal/cloudcp/stripe/grace_enforcer.go`, `internal/cloudcp/stripe/helpers.go`, `internal/cloudcp/stripe/reconciler.go`, `internal/cloudcp/stripe/webhook.go`
-88. `internal/hosted/hosted_metrics.go`, `internal/hosted/reaper.go`
-89. `internal/cloudcp/public_msp_signup_handlers.go`
-90. `internal/cloudcp/provider_msp_bootstrap.go`
-91. `internal/cloudcp/provider_msp_backup.go`
-92. `internal/cloudcp/provider_msp_recovery.go`
+69. `internal/cloudcp/server.go`, `internal/cloudcp/authz.go`, `internal/cloudcp/commercial_identity.go`, `internal/cloudcp/security.go`
+70. `internal/cloudcp/health_monitor.go`, `internal/cloudcp/health_stuck_provisioning.go`, `internal/cloudcp/tenant_state_metrics.go`, `internal/cloudcp/ratelimit.go`
+    81a. `internal/cloudcp/proxytrust/client_ip.go`
+71. `internal/cloudcp/hosted_entitlement_handlers.go`, `internal/cloudcp/url_helpers.go`
+72. `internal/cloudcp/admin/handlers.go`, `internal/cloudcp/admin/status.go`, `internal/cloudcp/auditlog/auditlog.go`
+73. `internal/cloudcp/cpmetrics/metrics.go`, `internal/cloudcp/cpsec/nonce.go`, `internal/cloudcp/static_assets.go`, `internal/cloudcp/favicon.svg`
+74. `internal/cloudcp/email/sender.go`, `internal/cloudcp/email/templates.go`
+75. `internal/cloudcp/handoff/handler.go`, `internal/cloudcp/handoff/handoff.go`
+76. `internal/cloudcp/stripe/grace_enforcer.go`, `internal/cloudcp/stripe/helpers.go`, `internal/cloudcp/stripe/reconciler.go`, `internal/cloudcp/stripe/webhook.go`
+77. `internal/hosted/hosted_metrics.go`, `internal/hosted/reaper.go`
+78. `internal/cloudcp/public_msp_signup_handlers.go`
+79. `internal/cloudcp/provider_msp_bootstrap.go`
+80. `internal/cloudcp/provider_msp_backup.go`
+81. `internal/cloudcp/provider_msp_recovery.go`
 
 ## Shared Boundaries
 
@@ -198,94 +261,94 @@ Stripe-free and avoids a cloud-control-plane report data path across clients.
    syntactically valid `/api/public/signup` requests resolve to one uniform
    `202 Accepted` Pulse Account response whether provisioning/email side
    effects ran or were suppressed by owner-email throttling.
-7. `internal/cloudcp/auth/magiclink.go` shared with `security-privacy`: control-plane magic-link HMAC handling is both a Pulse Cloud account-access boundary and a security/privacy token-secrecy boundary.
-8. `internal/cloudcp/auth/magiclink_store.go` shared with `security-privacy`: control-plane magic-link persistence is both a Pulse Cloud account-access boundary and a security/privacy storage-hardening boundary.
-9. `internal/cloudcp/docker/labels.go` shared with `deployment-installability`: hosted tenant Docker labels are both a Pulse Cloud runtime contract boundary and a deployment-installability rollout boundary.
-10. `internal/cloudcp/docker/manager.go` shared with `deployment-installability`: hosted tenant container management is both a Pulse Cloud runtime contract boundary and a deployment-installability rollout boundary.
-   Hosted tenant container creation must also bound Docker `json-file` logs
-   through the control-plane Docker manager so tenant runtime logging cannot
-   fill the live Pulse Cloud host independently of tenant data quotas.
-   Hosted tenant container creation must also stamp tenant identity into the
-   runtime environment: the Docker manager resolves the workspace display name
-   from the tenant registry at container-create time and injects
-   `PULSE_TENANT_NAME` alongside `PULSE_TENANT_ID`, so alert webhook payloads
-   from hosted client runtimes carry a human-readable workspace label instead
-   of falling back to the tenant ID. Display-name changes after creation apply
-   on the next tenant runtime rollout, which recreates the container with
-   freshly resolved environment.
-   Provider-hosted MSP and Pulse-hosted tenant creation must also prepare or
-   fail closed on the configured tenant runtime image before mutating the
-   workspace into a state that expects a live runtime container; readiness
-   checks must surface missing Docker daemon, network, image, and storage
-   prerequisites as operator-facing failures.
-   Hosted checkout and MSP workspace provisioning must also pass the
-   control-plane storage admission guard before tenant/account mutation: root
-   filesystem, tenant data, Docker runtime store, and Docker build-cache
-   thresholds are part of the Cloud paid readiness contract rather than an
-   operator-only cleanup script.
-   The same cloud audit contract must fail on stale proof/canary account rows
-   and paid hosted entitlements whose tenant rows are missing, because either
-   residue can recreate or mask hosted runtime state after a cleanup.
-   Disposable proof-account cleanup must use the control-plane registry as the
-   source of truth rather than ad hoc SQL: account deletion must refuse accounts
-   that still own tenant rows, remove account-owned membership, invitation, and
-   Stripe account metadata in one registry transaction, and leave user identity
-   rows intact unless a separately governed identity-retention rule says
-   otherwise.
-   The live production host must run that cloud audit through the private
-   Pulse Pro operations bundle on a recurring systemd timer, write durable
-   status/log output, and emit Prometheus textfile metrics so a clean GA
-   baseline is continuously monitored rather than manually rediscovered.
-   Provider-hosted MSP runtime isolation must keep client tenant runtimes off
-   the shared provider ingress/support network. The Docker manager must derive
-   a per-client tenant bridge, label it with tenant identity, pin Traefik
-   routing to that tenant bridge, attach only provider support containers
-   selected by provider MSP labels, start the tenant runtime only after those
-   support attachments succeed, prefer the tenant bridge for health checks, and
-   remove tenant bridges when the owning runtime is removed.
-   Tenant runtime containers must also start with the provider-hosted escape
-   hardening defaults owned by the Docker manager: no-new-privileges, dropped
-   Linux capabilities unless explicitly reintroduced by a governed need,
-   Docker's default seccomp profile still active, a read-only root filesystem,
-   and bounded writable tmpfs mounts only for runtime scratch paths. These
-   defaults are part of the client isolation contract, not optional compose
-   decoration.
-   Tenant runtime containers must also start as the rootless Pulse runtime user
-   instead of entering the image's root-owned chown and `su-exec` branch. The
-   Docker manager owns host-side preparation of the tenant data directory,
-   including recursive ownership alignment to the configured tenant UID/GID and
-   strict permissions on tenant key files, so `CapDrop: ["ALL"]` and
-   read-only root filesystems remain compatible with first workspace startup.
-   Client-bound proof must cover the boundary itself: workspace limits must not
-   be raceable past the licensed cap, handoff tokens must not be replayed or
-   retargeted across workspaces, org-bound agent install/report tokens must not
-   write into another client runtime, and rotated-out install tokens must fail
-   immediately.
-   Provider-default report branding is part of the same tenant environment
-   contract: `internal/cloudcp/docker/manager.go` may inject
-   `PULSE_REPORT_PROVIDER_BRAND_DISPLAY_NAME`, logo path/data, and logo format
-   into each tenant container, but it must not collect report data or render
-   PDFs in the control plane. Tenant-local reporting and tenant-local licensing
-   decide whether that configured brand appears.
-   `pulse_hosted_msp` is the Pulse-operated form of the same Stripe-free MSP
-   control-plane family, not the public Pulse-hosted SaaS checkout path. It
-   must share the license-backed MSP plan source, workspace limit policy,
-   disabled public signup and Stripe billing routes, isolated tenant runtime
-   networks, tenant-local report branding, and provider MSP operator commands
-   with `provider_hosted_msp` while preserving its own control-plane mode value
-   for status, backup manifests, and operational audit.
-11. `internal/cloudcp/provider_msp_backup.go` shared with `deployment-installability`: provider-hosted MSP backup is both a cloud-paid license/account/runtime continuity boundary and a deployment-installability recovery artifact boundary.
+9. `internal/cloudcp/auth/magiclink.go` shared with `security-privacy`: control-plane magic-link HMAC handling is both a Pulse Cloud account-access boundary and a security/privacy token-secrecy boundary.
+10. `internal/cloudcp/auth/magiclink_store.go` shared with `security-privacy`: control-plane magic-link persistence is both a Pulse Cloud account-access boundary and a security/privacy storage-hardening boundary.
+11. `internal/cloudcp/docker/labels.go` shared with `deployment-installability`: hosted tenant Docker labels are both a Pulse Cloud runtime contract boundary and a deployment-installability rollout boundary.
+12. `internal/cloudcp/docker/manager.go` shared with `deployment-installability`: hosted tenant container management is both a Pulse Cloud runtime contract boundary and a deployment-installability rollout boundary.
+    Hosted tenant container creation must also bound Docker `json-file` logs
+    through the control-plane Docker manager so tenant runtime logging cannot
+    fill the live Pulse Cloud host independently of tenant data quotas.
+    Hosted tenant container creation must also stamp tenant identity into the
+    runtime environment: the Docker manager resolves the workspace display name
+    from the tenant registry at container-create time and injects
+    `PULSE_TENANT_NAME` alongside `PULSE_TENANT_ID`, so alert webhook payloads
+    from hosted client runtimes carry a human-readable workspace label instead
+    of falling back to the tenant ID. Display-name changes after creation apply
+    on the next tenant runtime rollout, which recreates the container with
+    freshly resolved environment.
+    Provider-hosted MSP and Pulse-hosted tenant creation must also prepare or
+    fail closed on the configured tenant runtime image before mutating the
+    workspace into a state that expects a live runtime container; readiness
+    checks must surface missing Docker daemon, network, image, and storage
+    prerequisites as operator-facing failures.
+    Hosted checkout and MSP workspace provisioning must also pass the
+    control-plane storage admission guard before tenant/account mutation: root
+    filesystem, tenant data, Docker runtime store, and Docker build-cache
+    thresholds are part of the Cloud paid readiness contract rather than an
+    operator-only cleanup script.
+    The same cloud audit contract must fail on stale proof/canary account rows
+    and paid hosted entitlements whose tenant rows are missing, because either
+    residue can recreate or mask hosted runtime state after a cleanup.
+    Disposable proof-account cleanup must use the control-plane registry as the
+    source of truth rather than ad hoc SQL: account deletion must refuse accounts
+    that still own tenant rows, remove account-owned membership, invitation, and
+    Stripe account metadata in one registry transaction, and leave user identity
+    rows intact unless a separately governed identity-retention rule says
+    otherwise.
+    The live production host must run that cloud audit through the private
+    Pulse Pro operations bundle on a recurring systemd timer, write durable
+    status/log output, and emit Prometheus textfile metrics so a clean GA
+    baseline is continuously monitored rather than manually rediscovered.
+    Provider-hosted MSP runtime isolation must keep client tenant runtimes off
+    the shared provider ingress/support network. The Docker manager must derive
+    a per-client tenant bridge, label it with tenant identity, pin Traefik
+    routing to that tenant bridge, attach only provider support containers
+    selected by provider MSP labels, start the tenant runtime only after those
+    support attachments succeed, prefer the tenant bridge for health checks, and
+    remove tenant bridges when the owning runtime is removed.
+    Tenant runtime containers must also start with the provider-hosted escape
+    hardening defaults owned by the Docker manager: no-new-privileges, dropped
+    Linux capabilities unless explicitly reintroduced by a governed need,
+    Docker's default seccomp profile still active, a read-only root filesystem,
+    and bounded writable tmpfs mounts only for runtime scratch paths. These
+    defaults are part of the client isolation contract, not optional compose
+    decoration.
+    Tenant runtime containers must also start as the rootless Pulse runtime user
+    instead of entering the image's root-owned chown and `su-exec` branch. The
+    Docker manager owns host-side preparation of the tenant data directory,
+    including recursive ownership alignment to the configured tenant UID/GID and
+    strict permissions on tenant key files, so `CapDrop: ["ALL"]` and
+    read-only root filesystems remain compatible with first workspace startup.
+    Client-bound proof must cover the boundary itself: workspace limits must not
+    be raceable past the licensed cap, handoff tokens must not be replayed or
+    retargeted across workspaces, org-bound agent install/report tokens must not
+    write into another client runtime, and rotated-out install tokens must fail
+    immediately.
+    Provider-default report branding is part of the same tenant environment
+    contract: `internal/cloudcp/docker/manager.go` may inject
+    `PULSE_REPORT_PROVIDER_BRAND_DISPLAY_NAME`, logo path/data, and logo format
+    into each tenant container, but it must not collect report data or render
+    PDFs in the control plane. Tenant-local reporting and tenant-local licensing
+    decide whether that configured brand appears.
+    `pulse_hosted_msp` is the Pulse-operated form of the same Stripe-free MSP
+    control-plane family, not the public Pulse-hosted SaaS checkout path. It
+    must share the license-backed MSP plan source, workspace limit policy,
+    disabled public signup and Stripe billing routes, isolated tenant runtime
+    networks, tenant-local report branding, and provider MSP operator commands
+    with `provider_hosted_msp` while preserving its own control-plane mode value
+    for status, backup manifests, and operational audit.
+13. `internal/cloudcp/provider_msp_backup.go` shared with `deployment-installability`: provider-hosted MSP backup is both a cloud-paid license/account/runtime continuity boundary and a deployment-installability recovery artifact boundary.
     License-backed provider MSP backups must include the signed MSP license
     file as a recovery artifact while exposing only license metadata in command
     output, restore must recover that license as an explicit operator artifact,
     and the archive must stay Stripe-free so provider-hosted MSP recovery does
     not inherit Pulse-hosted SaaS billing assumptions.
-12. `internal/cloudcp/provider_msp_recovery.go` shared with `deployment-installability`: provider-hosted MSP failed-workspace recovery is both a cloud-paid license/account/runtime continuity boundary and a deployment-installability recovery artifact boundary.
+14. `internal/cloudcp/provider_msp_recovery.go` shared with `deployment-installability`: provider-hosted MSP failed-workspace recovery is both a cloud-paid license/account/runtime continuity boundary and a deployment-installability recovery artifact boundary.
     Provider-hosted MSP recovery must require the signed provider MSP license
     source by default, preserve the client workspace boundary, refuse to start
     from empty tenant data, and mark a workspace active only after the canonical
     tenant-runtime rollout path has produced a healthy runtime.
-13. `internal/cloudcp/tenant_runtime_rollout.go` shared with `deployment-installability`: hosted tenant runtime rollout is both a Pulse Cloud runtime contract boundary and a deployment-installability release-rollout boundary.
+15. `internal/cloudcp/tenant_runtime_rollout.go` shared with `deployment-installability`: hosted tenant runtime rollout is both a Pulse Cloud runtime contract boundary and a deployment-installability release-rollout boundary.
     Hosted tenant runtime reconciliation must treat a registered tenant with
     preserved tenant data but no live Docker runtime as a recoverable managed
     state, not as a terminal skip. The control-plane-owned reconcile path must
@@ -303,7 +366,7 @@ Stripe-free and avoids a cloud-control-plane report data path across clients.
     must print the target-image rollout plan before mutation, `--all` must
     select active tenants only, and apply must still use the canonical
     per-tenant snapshot, health-check, and rollback path. `tenant-runtime
-    reconcile --all` remains contract/routing drift repair for each tenant's
+reconcile --all` remains contract/routing drift repair for each tenant's
     current image line, not an image-line upgrade path.
 
 The real `pulse-pro` license-server legacy checkout issuance, recurring
@@ -323,6 +386,112 @@ site deploys; active paid-feature proof must stay on checkout creation,
 portal-handoff state, pricing/catalog truth, download delivery, and license or
 relay entitlement behavior rather than requiring the removed funnel monitoring
 files.
+Pulse Intelligence paid-value evidence is a separate private admin aggregate,
+not a revival of those retired funnel stores. The `pulse-pro` license server
+may expose `/v1/admin/pulse-intelligence/value` and the matching admin-console
+strip only as coarse install cohorts over anonymous telemetry pings: paid
+install rate, free-to-paid conversion, returning-install retention, and whether
+the full Patrol -> contextual collaboration -> governed action loop, the
+stricter Patrol -> contextual collaboration -> approved execution loop, and
+the approved-action-success and adapter-specific Pulse MCP loop variants are
+active, including the stricter resolved operations loop split by first-party
+Assistant collaboration, external-agent collaboration, and Pulse MCP adapter
+use.
+The same aggregate may expose an `operations_funnel` object that keeps the
+loop proof readable as a staged anonymous cohort sequence: loop configured,
+Patrol activity, Assistant or external-agent collaboration, governed action,
+approved execution, approved action success, Patrol resolution, resolved
+operations loop, Assistant resolved loop, external-agent resolved loop, active
+30-day use, retained installs, Patrol-control completed-loop and resolved-loop
+proof, paid Patrol-control cohorts, and full-loop free-to-paid conversion compared with generic
+Assistant-only chat. That funnel is a projection over the same coarse telemetry
+counters and value cohorts; it must not introduce per-install drilldowns or raw
+commercial account links. Source-specific guided starter cohorts may split the
+same anonymous operations-loop starter count into Assistant, Patrol, primary
+Patrol-control, legacy Pro activation entry-point, and Pulse MCP sources so
+conversion reporting can tell which entry point led to loop entry, but those cohorts
+remain starter evidence only and must not be counted as completed
+operations-loop, approved execution, or resolved-loop proof.
+Patrol-control completed-loop and resolved-loop funnel stages must come from
+the explicit content-free Patrol-control booleans; resolved proof may satisfy
+completed proof, but a rejected terminal completed loop must never be counted as
+resolved proof. Legacy Pro activation completed/resolved booleans may be
+retained only as mirrors for historical cohort continuity.
+The self-hosted Pro plan surface may consume the authenticated, content-free
+`GET /api/agent/operations-loop/status` projection only to choose the primary
+Patrol handoff in the current-plan summary: set Patrol control when no work is
+active, continue unfinished Patrol work, or review a pending governed decision.
+The plan capability details disclosure must stay entitlement/runtime
+diagnostics only. It must not add a `Patrol work`, started,
+decision-recorded, verified, external-agent readiness, or compatibility
+operations-loop status row from Patrol starter/completed/resolved counts,
+legacy `proActivation*` aliases, legacy `patrolAutonomy*` mirrors, shared
+status `nextAction`, or shared status `progressLabel`; those fields are
+Patrol-page context and telemetry, not paid-plan detail copy. The plan surface
+must not expose prompts, accounts, resource names, finding IDs, action IDs,
+commands, token metadata, or any per-install drilldown, and lack of that
+projection must not block entitlement or plan rendering. The visible Pro plan
+card must keep the paid user's first-party task clear: choose Patrol mode and
+let Patrol handle infrastructure work. The first-party commercial copy owns
+the product framing: stale activation-loop, operations-loop, or MCP setup
+progress text from the projection must not become the visible paid CTA when
+the correct next step is Patrol control or Patrol work.
+Commercial, plan, and activation-success copy must use `Choose Patrol mode`
+for the paid operator boundary and frame it as setting how autonomous Patrol
+should be. Self-hosted Community copy should state the features available on
+that install, such as watch-only Patrol, instead of explaining unavailable
+fix classes. Pro plan cards may describe hands-on Patrol modes and verified
+fixes, but they must not revive activation-loop, MCP readiness, or internal
+proof vocabulary as the paid user's default setup story; route-backed anchors,
+telemetry, and compatibility wire fields may retain stable names such as
+`patrol_control` and `patrolControl*`.
+Routine self-hosted Plans and capability-status copy must describe what is
+available on the instance and route recovery as `refresh the plan` or `open
+recovery`; it must not describe normal setup as activation or expose raw
+entitlement-payload wording to the operator.
+That external-agent readiness boolean means the manifest-owned Pulse MCP
+operations-loop contract is available and one non-expired API token covers the
+full published operations-loop scope set; a partial MCP token is not paid value
+proof, missing MCP readiness must not downgrade verified Patrol value, and it
+must not become an activation/setup step on the default plan surface.
+The completed-loop count consumed here is the API-owned terminal-loop proof: it
+requires Patrol control starter evidence, Patrol issue evidence, contextual
+Assistant or external-agent collaboration, and either a rejected governed
+decision or an approved governed decision with verified outcome proof.
+The resolved-loop count consumed here is already the API-owned full-loop proof:
+it requires Patrol control starter evidence, Patrol issue evidence, contextual
+Assistant or external-agent collaboration, an approved governed decision, and a
+verified outcome in the same evidence window.
+The steady-state current-plan action may use that same first-party Patrol
+control projection to label the Patrol handoff as start, continue, or review,
+but it must still route to the Patrol-owned Patrol control anchor rather than
+creating a separate commercial activation state machine. Legacy Pro activation
+evidence alone must leave the action as a fresh Patrol control handoff.
+Start and continue paid Patrol control handoffs from
+`frontend-modern/src/utils/licensePresentation.ts` must compose the
+route-backed Patrol control URL from
+`frontend-modern/src/routing/resourceLinks.ts`; the settings panel must not
+write the starter marker from a local click handler before navigation, and its
+presentation model must not carry a `recordActivity` switch for that handoff.
+Patrol owns consuming that route flag and writing the content-free
+`patrol_control` marker; `patrol_autonomy` and `pulse_pro_activation` remain
+accepted only as legacy route/activity aliases. Once the action has become verified review,
+`licensePresentation.ts` must route to the plain Patrol control anchor and
+keep marker recording disabled.
+When that action has become a completed-loop review, it must not write another
+Patrol control starter marker; starter telemetry remains for start/continue
+entry into the guided journey rather than for post-completion review clicks.
+The value report may also expose a `value_driver_evidence` summary derived only
+from those same anonymous cohort deltas. That summary may state whether the
+available evidence is insufficient, positive on paid conversion, positive on
+activation or retention, or has no positive delta against the generic
+Assistant-only baseline; it must not claim causality, store per-install
+drilldowns, or introduce a second analytics data source outside telemetry
+pings.
+That report must not expose install IDs, customer emails, prompts, finding IDs,
+resource IDs, or action payloads, and generic Assistant-only chat must remain a
+separate cohort so it cannot be counted as proof that the proactive operations
+loop is driving paid value.
 That same public-pricing boundary also owns the machine-readable v6 pricing
 validator and launch checklist in `pulse-pro:scripts/validate_public_pricing_model.py`
 and `pulse-pro:V6_LAUNCH_CHECKLIST.md`. Those operator surfaces must describe
@@ -602,7 +771,27 @@ or other self-hosted uncapped continuity plans.
     actions are cloud-paid behaviors, but their button chrome must compose the
     frontend-primitives `Button` family instead of carrying Pro-license-local
     primary, secondary, or warning action class strings.
-18. Add or change paid relay settings and pairing presentation through `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`, `frontend-modern/src/components/Settings/RelayPairingSection.tsx`, and `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`. The retired Dashboard shell must not be restored to carry a Relay onboarding card or equivalent blanket upsell — relay discovery stays inside its owning settings surface.
+    The self-hosted Pro plan and activation-success surfaces must keep Patrol
+    actions tied to current operator work: set Patrol control when no work is
+    active, open Patrol for current work, or review a pending governed
+    decision. Self-hosted Pro plan status and readiness payloads are support
+    diagnostics: the default Plan surface must keep the current plan and Patrol
+    mode action primary, while capability details render behind a disclosure
+    for troubleshooting unavailable controls or missing capabilities. That
+    disclosure must not duplicate Patrol-page work progress, decisions,
+    verified outcomes, or external-agent setup readiness.
+    Completed verified Patrol outcomes are history/telemetry and must not
+    appear as a default `Patrol history` CTA or a `Patrol work` verified
+    status row in the Plan surface. Frontend presentation models must call
+    this a Patrol control action/status boundary; `operations-loop` wording is
+    only acceptable at backend API or telemetry compatibility edges.
+    The Plan surface may fetch Patrol operator status from the compatibility
+    `/api/agent/operations-loop/status` endpoint only after the current
+    self-hosted plan resolves to a Pro-family tier through
+    `getSelfHostedPlanDefinitionForBillingTier`. Community and Relay plans
+    must render their included capabilities without loading paid Patrol
+    operator-status plumbing.
+17. Add or change paid relay settings and pairing presentation through `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`, `frontend-modern/src/components/Settings/RelayPairingSection.tsx`, and `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`. The retired Dashboard shell must not be restored to carry a Relay onboarding card or equivalent blanket upsell — relay discovery stays inside its owning settings surface.
     Public demo and other read-only presentation policy states must suppress
     relay setup and upsell onboarding instead of inviting pairing or commercial
     action from a governed non-manageable surface.
@@ -613,8 +802,8 @@ or other self-hosted uncapped continuity plans.
     Relay settings and public commercial docs must also keep Remote Access
     positioned as a Relay-and-higher capability, not a Pro-only feature, so the
     Relay tier remains a tangible standalone paid product.
-20. Add contract tests where runtime and pricing need to stay aligned
-21. Add or change hosted browser org-context bootstrap through `frontend-modern/src/App.tsx`, `frontend-modern/src/AppLayout.tsx`, `frontend-modern/src/useAppRuntimeState.ts`, and `frontend-modern/src/utils/apiClient.ts`
+18. Add contract tests where runtime and pricing need to stay aligned
+19. Add or change hosted browser org-context bootstrap through `frontend-modern/src/App.tsx`, `frontend-modern/src/AppLayout.tsx`, `frontend-modern/src/useAppRuntimeState.ts`, and `frontend-modern/src/utils/apiClient.ts`
     That same hosted bootstrap boundary also owns the runtime-capability JSON
     shape that the app shell consumes before it decides whether organization
     chrome and multi-tenant routes exist. `pkg/licensing/entitlement_payload.go`
@@ -637,7 +826,7 @@ or other self-hosted uncapped continuity plans.
     compatibility routes must not revive hosted signup, public Cloud trial,
     pricing, or commercial acquisition surfaces inside the local product
     runtime.
-22. Keep the hosted account portal shell task-first and compact. Section
+20. Keep the hosted account portal shell task-first and compact. Section
     headers, billing action rows, and the maintained portal bundle under
     `internal/cloudcp/portal/` may surface the facts an operator needs, but the
     shell should not spend vertical space on duplicate context-chip strips when
@@ -646,7 +835,7 @@ or other self-hosted uncapped continuity plans.
     the section, but that summary treatment must stay inside the same task
     surface instead of reviving a separate overview panel, summary strip, or
     metric deck ahead of the real workspace list.
-23. Keep monitored-system volume out of the commercial product model.
+21. Keep monitored-system volume out of the commercial product model.
     Recognized self-hosted and hosted v6 tiers must treat legacy
     monitored-system limit, continuity, or `max_monitored_systems` metadata as
     scrub-only compatibility input rather than as support/audit policy or a
@@ -662,12 +851,13 @@ or other self-hosted uncapped continuity plans.
     narrative across the in-app billing shell, Pulse Account handoff, public
     pricing contract, and owned upgrade reasons. Customer-facing self-hosted
     copy must keep the ladder explicit as `Community = monitor`, `Relay = reach
-    Pulse from anywhere plus pair Pulse Mobile for handoff`, and `Pro = investigate root cause, use safe
-    remediation workflows, and retain 90-day history`. Team/admin extras such as
+Pulse from anywhere plus pair Pulse Mobile for handoff`, and `Pro =
+hands-on Patrol modes, issue investigation, verified fixes, and 90-day history`.
+    Team/admin extras such as
     RBAC, SSO, audit logging, reporting, and agent profiles may remain present,
     but they are secondary included value and must not displace that operator
     outcome framing on owned commercial surfaces.
-24. Keep public-demo route bootstrap owned on the adjacent
+22. Keep public-demo route bootstrap owned on the adjacent
     commercial/runtime boundary. `frontend-modern/src/useAppRuntimeState.ts`
     may prewarm shared infrastructure summary caches for route-owned surfaces,
     but public-demo arrival must not front-run a broader infrastructure-summary
@@ -685,25 +875,36 @@ or other self-hosted uncapped continuity plans.
     browser entrypoint must remain only a thin authenticated redirect rather
     than a second public handoff or a route that invites separate commercial
     posture logic.
-25. Keep self-hosted commercial plan copy aligned with the v6 operator-value
+23. Keep self-hosted commercial plan copy aligned with the v6 operator-value
     model instead of mirroring raw entitlement keys. `frontend-modern/src/
-    utils/selfHostedPlans.ts` may still map onto internal capabilities such as
+utils/selfHostedPlans.ts` may still map onto internal capabilities such as
     `ai_patrol`, `ai_alerts`, `ai_autofix`, and `kubernetes_ai`, but the
     customer-facing plan cards, top-summary highlights, and comparison rows
     must lead with the canonical plan story: `Community = monitor`, `Relay =
-    reach Pulse from anywhere plus pair Pulse Mobile for handoff`, and `Pro = root-cause analysis, safe
-    remediation workflows, and longer history`. Team/admin capabilities such as
+reach Pulse from anywhere plus pair Pulse Mobile for handoff`, and `Pro =
+hands-on Patrol modes, issue investigation, verified fixes, and longer history`.
+    Team/admin capabilities such as
     RBAC, audit logging, reporting, and agent profiles may appear as
-    secondary included extras, while platform-specific compatibility keys such
+    secondary included extras. Their customer-facing plan summary label is
+    `admin controls`, not `admin tools`, because Pro is sold as Patrol handling
+    infrastructure within a chosen mode rather than as a bag of operator
+    utilities. Platform-specific compatibility keys such
     as `kubernetes_ai` must not be elevated into a marquee marketed Pro line
-    item on the self-hosted Plans surface. Legacy packaging nouns such as
+    item. Pro comparison and plan-selection copy must frame Patrol around what
+    it may handle automatically, issue investigation, policy-bounded action,
+    verified fixes, and history rather than as an abstract governed operator or
+    a choice about how much control Patrol has.
+    When free-plan copy mentions Patrol, it must describe watch-only/background
+    health checks; investigation, approval-backed fixes, autonomous action,
+    outcome verification, and extended history are Pro value.
+    Legacy packaging nouns such as
     `incident memory`, `scheduled remediations`, and `execution audit trail`
     must likewise stay out of current v6 commercial copy unless Pulse ships a
     first-class product surface that makes those names truthful again. The raw
     entitlement key `ai_autofix` may remain the internal capability identifier,
     but owned plan cards, comparison rows, and upgrade reasons must present it
-    as safe remediation workflows rather than `Patrol Auto-Fix` or other
-    stronger automation-first labels. Pulse Account preview/handoff pricing
+    as Patrol fixing safe issues within the selected Patrol mode rather than
+    as `Patrol Auto-Fix` or an abstract remediation-workflow label. Pulse Account preview/handoff pricing
     copy, public plan docs, and the in-app self-hosted billing shell must share
     that same free-first ladder so release-candidate and public purchase paths
     do not drift into a separate commercial story.
@@ -720,7 +921,7 @@ or other self-hosted uncapped continuity plans.
     also treat `compatibility_only` entries as non-marketed compatibility
     capabilities by returning only the generic pricing destination rather than
     a feature-specific paid upgrade URL.
-26. Keep hosted trial-activation verifier source selection compile-time owned.
+24. Keep hosted trial-activation verifier source selection compile-time owned.
     `pkg/licensing/trial_activation.go`,
     `pkg/licensing/trial_activation_public_key_override_dev.go`, and
     `pkg/licensing/trial_activation_public_key_override_release.go` together
@@ -728,7 +929,7 @@ or other self-hosted uncapped continuity plans.
     builds may keep the local override path, but release builds must resolve
     the verifier from the embedded build-time source of truth instead of
     honoring `PULSE_HOSTED_MODE` or other runtime wiring.
-27. Add or change the Cloud control-plane runtime, public signup lifecycle,
+25. Add or change the Cloud control-plane runtime, public signup lifecycle,
     tenant health/reconciliation, control-plane metrics, email delivery,
     hosted handoff, hosted entitlement refresh, or hosted tenant reaping through
     `internal/cloudcp/` and `internal/hosted/`. Those paths must stay governed
@@ -813,50 +1014,50 @@ or other self-hosted uncapped continuity plans.
    volume telemetry must not become runtime status, entitlement enforcement,
    customer-facing support context, or self-hosted Plans presentation.
 10. Keep organization billing loading placeholders on the shared
-   `SettingsLoadingSkeleton` primitive. Cloud-paid owns billing and usage
-   semantics; frontend-primitives owns the loading skeleton animation, fill
-   tokens, and metric/progress/card placeholder shells.
-10. Keep Stripe webhook idempotency state bounded in the control-plane
-   registry: `internal/cloudcp/registry/registry.go` may retain `stripe_events`
-   rows long enough to suppress duplicate deliveries and reclaim stale
-   in-flight work, but it must prune expired processed or abandoned rows so
-   webhook dedupe does not grow without bound on disk.
-11. Keep the maintained Pulse Account portal bundle source-synced with
-   `internal/cloudcp/portal/frontend/`: any slice that changes the portal
-   frontend hash or emitted manifest must rebuild
-   `internal/cloudcp/portal/dist/build_manifest.json` and keep
-   `internal/cloudcp/portal/frontend_sync_test.go` green in the same change.
-12. Before GA, treat infrastructure monitoring volume as unmetered:
-   monitored systems remain the canonical inventory grouping unit, but paid
-   value must come from optional extras, hosted convenience, business
-   workflow, support, or similar non-core surfaces rather than using
-   monitored-system volume itself as a paid gate.
-   Child-resource volume, including guest capacity, must follow the same
-   self-hosted rule instead of becoming a replacement paid gate for core
-   monitoring.
-   Monitored-system impact-preview copy must follow the same rule: ordinary
-   connection previews may describe count impact and grouping changes, but
-   they must not use capacity-style titles or slash-style quota summaries that
-   imply self-hosted monitoring volume is the product being sold.
-13. Keep v6 billing state uncapped even when persisted state still carries
-   legacy commercial volume-limit keys:
-   `pkg/licensing/models.go`,
-   `pkg/licensing/service.go`,
-   `pkg/licensing/entitlement_payload.go`,
-   `pkg/licensing/billing_state_normalization.go`,
-   `pkg/licensing/database_source.go`,
-   `pulse-pro:license-server/v6_store.go`, and
-   `pulse-pro:license-server/v6_schema.go` must scrub stale
-   `max_monitored_systems` values for Community/free, Relay, Pro, Pro+, Pro
-   Annual, lifetime, eligible grandfathered recurring, Cloud, and MSP plan
-   labels before runtime-capability, entitlement, grant, lease, billing, or
-   browser-facing payloads are built.
-   The same boundary must merge sparse legacy, configured-plan, or manually
-   supplied feature lists with canonical recognized-tier defaults before
-   storage, API response, or grant signing so Lifetime, Pro, Pro+, and
-   grandfathered recurring customers cannot be downgraded to the partial
-   feature list carried by an old JWT or legacy plan row.
-14. Keep self-hosted commercial funnel stage ownership out of the customer
+    `SettingsLoadingSkeleton` primitive. Cloud-paid owns billing and usage
+    semantics; frontend-primitives owns the loading skeleton animation, fill
+    tokens, and metric/progress/card placeholder shells.
+11. Keep Stripe webhook idempotency state bounded in the control-plane
+    registry: `internal/cloudcp/registry/registry.go` may retain `stripe_events`
+    rows long enough to suppress duplicate deliveries and reclaim stale
+    in-flight work, but it must prune expired processed or abandoned rows so
+    webhook dedupe does not grow without bound on disk.
+12. Keep the maintained Pulse Account portal bundle source-synced with
+    `internal/cloudcp/portal/frontend/`: any slice that changes the portal
+    frontend hash or emitted manifest must rebuild
+    `internal/cloudcp/portal/dist/build_manifest.json` and keep
+    `internal/cloudcp/portal/frontend_sync_test.go` green in the same change.
+13. Before GA, treat infrastructure monitoring volume as unmetered:
+    monitored systems remain the canonical inventory grouping unit, but paid
+    value must come from optional extras, hosted convenience, business
+    workflow, support, or similar non-core surfaces rather than using
+    monitored-system volume itself as a paid gate.
+    Child-resource volume, including guest capacity, must follow the same
+    self-hosted rule instead of becoming a replacement paid gate for core
+    monitoring.
+    Monitored-system impact-preview copy must follow the same rule: ordinary
+    connection previews may describe count impact and grouping changes, but
+    they must not use capacity-style titles or slash-style quota summaries that
+    imply self-hosted monitoring volume is the product being sold.
+14. Keep v6 billing state uncapped even when persisted state still carries
+    legacy commercial volume-limit keys:
+    `pkg/licensing/models.go`,
+    `pkg/licensing/service.go`,
+    `pkg/licensing/entitlement_payload.go`,
+    `pkg/licensing/billing_state_normalization.go`,
+    `pkg/licensing/database_source.go`,
+    `pulse-pro:license-server/v6_store.go`, and
+    `pulse-pro:license-server/v6_schema.go` must scrub stale
+    `max_monitored_systems` values for Community/free, Relay, Pro, Pro+, Pro
+    Annual, lifetime, eligible grandfathered recurring, Cloud, and MSP plan
+    labels before runtime-capability, entitlement, grant, lease, billing, or
+    browser-facing payloads are built.
+    The same boundary must merge sparse legacy, configured-plan, or manually
+    supplied feature lists with canonical recognized-tier defaults before
+    storage, API response, or grant signing so Lifetime, Pro, Pro+, and
+    grandfathered recurring customers cannot be downgraded to the partial
+    feature list carried by an old JWT or legacy plan row.
+15. Keep self-hosted commercial funnel stage ownership out of the customer
     product runtime. The customer frontend must not contain `upgradeMetrics`,
     `conversionEvents`, or infrastructure onboarding metrics wrappers or call
     sites at all. In-app `Plans & Billing`, pricing, checkout, paywall, or
@@ -867,7 +1068,7 @@ or other self-hosted uncapped continuity plans.
     Pulse must not infer those portal stages from referrer state, and the
     commercial service must keep those self-hosted handoffs on release track
     `v6` even while the public site remains on `v5` before GA.
-15. Keep retired local commercial funnel reporting out of customer diagnostics,
+16. Keep retired local commercial funnel reporting out of customer diagnostics,
     settings, and product startup: `internal/api/diagnostics.go`,
     `frontend-modern/src/components/Settings/DiagnosticsResultsPanel.tsx`,
     `frontend-modern/src/components/Settings/diagnosticsModel.ts`,
@@ -878,7 +1079,7 @@ or other self-hosted uncapped continuity plans.
     pricing/checkout, upgrade-metrics, or infrastructure-onboarding analytics
     fields, controls, routes, stores, or startup DB artifacts to normal product
     users.
-16. Keep ordinary self-hosted v6 commercial prompts opt-in. Cloud-paid runtime
+17. Keep ordinary self-hosted v6 commercial prompts opt-in. Cloud-paid runtime
     may keep checkout, activation, recovery, and support-only trial plumbing
     available for explicit handoffs and entitled installs, but default
     self-hosted browser surfaces must honor `presentationPolicy.hideUpgrade`
@@ -889,18 +1090,18 @@ or other self-hosted uncapped continuity plans.
     `/api/license/commercial-posture` bootstrap while `presentationPolicy.hideUpgrade`
     is true; explicit self-hosted plan, activation/recovery, and hosted or
     prompt-allowed flows may still refresh the shared posture store.
-17. Keep hosted and trial billing construction separate from retired hosted-AI
+18. Keep hosted and trial billing construction separate from retired hosted-AI
     quickstart inventory: `pkg/licensing/trial_start.go` and hosted
     entitlement refresh paths may preserve historical billing fields for old
     state, but new trial or hosted workspaces must not mint quickstart credits
     or imply a managed-model allowance as part of the commercial contract.
-18. Keep Cloud signup acquisition owned by the Cloud control plane and public
+19. Keep Cloud signup acquisition owned by the Cloud control plane and public
     account surfaces, not by the ordinary self-hosted app shell. The default
     self-hosted frontend must not register unauthenticated `/cloud` or
     `/cloud/signup` routes, and self-hosted pricing fallbacks must route Cloud
     interest to Pulse Account/public Cloud ownership rather than rendering an
     in-product trial or checkout page.
-19. Keep the `unlimited` feature key neutral in shared metadata. It is a
+20. Keep the `unlimited` feature key neutral in shared metadata. It is a
     hosted/MSP capacity-policy marker, not a self-hosted monitoring-volume
     product promise. Runtime and generated feature catalogs must label it as
     hosted capacity policy, keep it hidden from self-hosted plan cards, and
@@ -1681,8 +1882,8 @@ returning to the owned plan state through the runtime-owned activation
 callback. Pulse product routes
 keep ownership of license status, usage, and activation state; `Pulse Account`
 owns the commerce flow itself. That same self-hosted settings surface is
-plan-owned rather than tier-owned: the navigation label is `Plans`, the
-surface title is `Self-hosted plan`, and the canonical plan state must make
+plan-owned rather than tier-owned: the navigation label and surface title are
+`Plans & Billing`, and the canonical plan state must make
 the current tier plus capabilities immediately obvious so existing paid
 upgrades can confirm what their new key enabled without hunting through
 generic billing details. That capability-first summary must stay tier-specific
@@ -1706,6 +1907,31 @@ surface must show an explicit success summary that names the active tier and
 the marquee capabilities now available on this instance, rather than
 falling back to a generic "activated" banner that leaves the user to infer
 what changed from the steady-state billing card alone.
+For active Pulse Pro/Lifetime tiers with the private Pro runtime available,
+both the current-plan summary and the activation-success body must make the
+next setup decision explicit: set Patrol mode, then let Patrol investigate,
+act within that policy, verify outcomes, and keep context/history. Completed
+verified Patrol outcomes are telemetry on this surface, not a reason to replace
+the plan action with a default `Patrol history` CTA; when no active Patrol work
+or pending governed decision exists, the paid-plan action returns to
+`Choose Patrol mode`.
+When the activated entitlement includes the governed Pulse Intelligence
+operations-loop capability, that success summary may hand the user directly to
+Patrol with a "Choose Patrol mode" action. The cloud-paid presentation contract
+must name the action URL and action intent as Patrol-control concepts
+(`PATROL_CONTROL_STARTER_URL` and `patrol_control`) rather than exposing
+operations-loop names in the Plan surface. That action is still
+cloud-paid-owned activation UX, but its destination must use the route-owned
+Patrol control target
+(`/patrol?patrolControlStarter=patrol_control#patrol-control`) so Patrol
+owns starter recording through the shared Pulse Intelligence starter contract.
+The legacy `patrol_autonomy` and `pulse_pro_activation` route and activity
+markers remain compatibility input only, and the shared
+`pulse_operations_loop` telemetry workflow marker may remain behind the Patrol
+control surface. The Plans surface must not create a commercial-only analytics
+counter, must not record prompt text or resource context, and must not treat the
+click as proof that Patrol found an issue, Assistant explained it, a governed
+action was approved, or the outcome was verified.
 That same router-owned billing contract now also includes recovery as a plan
 detail state instead of a fragment alias. The canonical recovery arrival is
 `/settings/system/billing/plan?details=recovery`, while
@@ -1827,7 +2053,7 @@ commercial surface differently.
 That same shared presentation owner also carries the canonical cross-surface
 referral copy used outside the billing shell itself. When infrastructure or
 other adjacent settings surfaces need to point operators toward Plans & Billing
-for billing, license status, or paid feature activation, they must consume the
+for billing, license status, or paid feature access, they must consume the
 settings-owned referral strings from
 `frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts`
 instead of drafting route-local commercial guidance or reaching directly into
@@ -1838,7 +2064,7 @@ is the canonical settings-shell adapter for self-hosted Plans & Billing shell
 framing and referral copy, while
 `frontend-modern/src/utils/licensePresentation.ts` remains the shared
 commercial notice/label owner for activation, trial, purchase, and recovery
-language such as `License or Activation Key`. Hosted settings surfaces must
+language such as `License key`. Hosted settings surfaces must
 not import self-hosted billing framing straight from the generic helper module
 when doing so would reintroduce top-level bundle-init cycles into hosted
 tenant settings routes.
@@ -1886,8 +2112,8 @@ the no-cap monitored-system model as well. `ProLicensePanel.tsx`,
 self-hosted packages as core monitoring included in every self-hosted tier plus
 plan-specific extras: Community stays free for core monitoring, Relay adds
 remote access/Pulse Mobile handoff/push convenience and 14-day history, Pro adds Relay plus
-AI operations, automation, root-cause analysis, safe remediation, advanced
-administration, and 90-day history, while Pro+ remains legacy continuity only.
+hands-on Patrol modes, issue investigation, verified fixes, advanced administration,
+and 90-day history, while Pro+ remains legacy continuity only.
 Cloud/MSP pricing semantics stay separate, and grandfathered v5 continuity copy
 must describe legacy continuity and recorded baselines rather than current
 self-hosted monitored-system caps, capacity, or policy boundaries.
@@ -1921,11 +2147,11 @@ self-hosted plan surface should imply monitored-system volume is a paid tier.
 That same pricing boundary now also owns the shared frontend plan-definition
 models. `frontend-modern/src/utils/cloudPlans.ts` and
 `frontend-modern/src/utils/selfHostedPlans.ts` are the canonical frontend
-sources for cloud and self-hosted plan copy, limits, and comparison metadata,
-while `frontend-modern/src/pages/CloudPricing.tsx`,
+sources for cloud and self-hosted plan copy, limits, and comparison metadata.
+`frontend-modern/src/pages/CloudPricing.tsx`,
 `frontend-modern/src/pages/HostedSignup.tsx`, and the self-hosted billing
-settings surfaces must consume those shared owners instead of redefining
-retail plan facts or counted-unit policy locally.
+settings surfaces must consume those shared plan-definition sources instead of
+redefining retail plan facts or counted-unit policy locally.
 That shared ownership also includes display-ready price semantics. Monthly
 headline price, founding-rate override, compare-at strike-through copy,
 campaign badge copy, and annual summary text must come from the shared
@@ -2012,8 +2238,8 @@ for that feature's owning subsystem — those are user-initiated discovery
 paths, not blanket funnels, and are not required to be removed.
 Public AI and entitlement docs must use the same boundary: Community/Relay may
 describe Patrol background findings with BYOK, while investigation, proposed
-remediation, safe remediation execution, and higher autonomy remain paid
-AI-operations features.
+fixes, governed fix execution, and higher autonomy remain paid AI-operations
+features.
 Those docs should describe moving between available modes, not tell readers to
 "upgrade" as part of an ordinary safety progression.
 That same retired counted-unit boundary also owns the disclosure rule for
