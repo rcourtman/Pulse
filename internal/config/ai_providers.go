@@ -159,6 +159,7 @@ func aiProviderDefinitions() []AIProviderDefinition {
 			APIKeyField:         "zai_api_key",
 			ConfiguredField:     "zai_configured",
 			ClearKeyField:       "clear_zai_key",
+			BaseURLField:        "zai_base_url",
 			RequiresAPIKey:      true,
 			UserConfigurable:    true,
 			ModelsDevProviderID: "zai",

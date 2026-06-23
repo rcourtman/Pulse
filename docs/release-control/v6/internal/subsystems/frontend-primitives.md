@@ -2194,7 +2194,8 @@ the shared primitive rather than a local bordered button group.
 AI settings provider fields are a governed frontend primitive, not a
 provider-local form fork. The shared provider configuration section must render
 provider-specific controls from `aiSettingsModel.ts` `extraFields`, including
-Ollama `keep_alive`, so Assistant and Patrol keep one settings shape across
+Ollama `keep_alive` and the Z.ai custom base URL override, so Assistant and
+Patrol keep one settings shape across
 labeling, help affordances, helper copy, and persistence binding.
 The shared AI model picker owns model route search and presentation for
 Assistant surfaces. External open requests may seed an initial search query,

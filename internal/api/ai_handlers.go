@@ -1685,6 +1685,7 @@ func shouldRestartAIChat(req AISettingsUpdateRequest) bool {
 		req.OllamaPassword != nil ||
 		req.OllamaKeepAlive != nil ||
 		req.OpenAIBaseURL != nil ||
+		req.ZaiBaseURL != nil ||
 		req.ClearAnthropicKey != nil ||
 		req.ClearOpenAIKey != nil ||
 		req.ClearOpenRouterKey != nil ||
@@ -1761,6 +1762,7 @@ func aiSettingsUpdateTouchesPatrolReadiness(req AISettingsUpdateRequest) bool {
 		req.OllamaPassword != nil ||
 		req.OllamaKeepAlive != nil ||
 		req.OpenAIBaseURL != nil ||
+		req.ZaiBaseURL != nil ||
 		req.ClearAnthropicKey != nil ||
 		req.ClearOpenAIKey != nil ||
 		req.ClearOpenRouterKey != nil ||
@@ -2320,6 +2322,7 @@ type AISettingsResponse struct {
 	OllamaPasswordSet    bool                           `json:"ollama_password_set"`       // true if an Ollama password is stored
 	OllamaKeepAlive      string                         `json:"ollama_keep_alive"`         // Ollama keep_alive value; empty uses server default
 	OpenAIBaseURL        string                         `json:"openai_base_url,omitempty"` // Custom OpenAI base URL
+	ZaiBaseURL           string                         `json:"zai_base_url,omitempty"`    // Custom Z.ai base URL (e.g. coding endpoint)
 	ConfiguredProviders  []string                       `json:"configured_providers"`      // List of provider names with credentials
 	Providers            []AIProviderDefinitionResponse `json:"providers"`                 // Canonical provider registry metadata
 	// Cost controls
@@ -2469,6 +2472,7 @@ type AISettingsUpdateRequest struct {
 	OllamaPassword   *string `json:"ollama_password,omitempty"`    // Set Ollama Basic Auth password
 	OllamaKeepAlive  *string `json:"ollama_keep_alive,omitempty"`  // Set Ollama keep_alive; empty uses server default
 	OpenAIBaseURL    *string `json:"openai_base_url,omitempty"`    // Set custom OpenAI base URL
+	ZaiBaseURL       *string `json:"zai_base_url,omitempty"`       // Set custom Z.ai base URL (e.g. coding endpoint)
 	// Clear flags for removing credentials
 	ClearAnthropicKey   *bool `json:"clear_anthropic_key,omitempty"`   // Clear Anthropic API key
 	ClearOpenAIKey      *bool `json:"clear_openai_key,omitempty"`      // Clear OpenAI API key
@@ -2620,6 +2624,7 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		OllamaPasswordSet:      settings.OllamaPassword != "",
 		OllamaKeepAlive:        settings.GetOllamaKeepAlive(),
 		OpenAIBaseURL:          settings.OpenAIBaseURL,
+		ZaiBaseURL:             settings.ZaiBaseURL,
 		ConfiguredProviders:    settings.GetConfiguredProviders(),
 		Providers:              aiProviderDefinitionResponses(settings),
 		CostBudgetUSD30d:       settings.CostBudgetUSD30d,
@@ -2809,6 +2814,9 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 	}
 	if req.OpenAIBaseURL != nil {
 		settings.OpenAIBaseURL = strings.TrimSpace(*req.OpenAIBaseURL)
+	}
+	if req.ZaiBaseURL != nil {
+		settings.ZaiBaseURL = strings.TrimSpace(*req.ZaiBaseURL)
 	}
 
 	if req.Enabled != nil {
@@ -3110,6 +3118,7 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		OllamaPasswordSet:      settings.OllamaPassword != "",
 		OllamaKeepAlive:        settings.GetOllamaKeepAlive(),
 		OpenAIBaseURL:          settings.OpenAIBaseURL,
+		ZaiBaseURL:             settings.ZaiBaseURL,
 		ConfiguredProviders:    settings.GetConfiguredProviders(),
 		Providers:              aiProviderDefinitionResponses(settings),
 		RequestTimeoutSeconds:  settings.RequestTimeoutSeconds,

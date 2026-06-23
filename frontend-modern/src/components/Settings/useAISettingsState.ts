@@ -54,7 +54,7 @@ const AI_SETTINGS_PROVIDER_PAYLOAD_FIELDS: Record<AIProvider, string[]> = {
   openai: ['openai_api_key', 'openai_base_url'],
   openrouter: ['openrouter_api_key'],
   deepseek: ['deepseek_api_key'],
-  zai: ['zai_api_key'],
+  zai: ['zai_api_key', 'zai_base_url'],
   groq: ['groq_api_key'],
   mistral: ['mistral_api_key'],
   cerebras: ['cerebras_api_key'],
@@ -322,6 +322,7 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     ollamaBaseUrl: 'http://localhost:11434',
     ollamaKeepAlive: '30s',
     openaiBaseUrl: '',
+    zaiBaseUrl: '',
     costBudgetUSD30d: '',
     requestTimeoutSeconds: 300,
     controlLevel: 'read_only' as AIControlLevel,
@@ -413,6 +414,7 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
         ollamaBaseUrl: 'http://localhost:11434',
         ollamaKeepAlive: '30s',
         openaiBaseUrl: '',
+        zaiBaseUrl: '',
         costBudgetUSD30d: '',
         requestTimeoutSeconds: 300,
         controlLevel: 'read_only',
@@ -455,6 +457,7 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       ollamaBaseUrl: data.ollama_base_url || 'http://localhost:11434',
       ollamaKeepAlive: data.ollama_keep_alive ?? '30s',
       openaiBaseUrl: data.openai_base_url || '',
+      zaiBaseUrl: data.zai_base_url || '',
       costBudgetUSD30d:
         typeof data.cost_budget_usd_30d === 'number' && data.cost_budget_usd_30d > 0
           ? String(data.cost_budget_usd_30d)
@@ -979,6 +982,9 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       }
       if (form.openaiBaseUrl !== (settings()?.openai_base_url || '')) {
         payload.openai_base_url = form.openaiBaseUrl.trim();
+      }
+      if (form.zaiBaseUrl !== (settings()?.zai_base_url || '')) {
+        payload.zai_base_url = form.zaiBaseUrl.trim();
       }
 
       const rawBudget = form.costBudgetUSD30d.trim();

@@ -43,6 +43,7 @@ type AIConfig struct {
 	DeepSeekAPIKey   string `json:"deepseek_api_key,omitempty"`   // DeepSeek API key
 	GeminiAPIKey     string `json:"gemini_api_key,omitempty"`     // Google Gemini API key
 	ZaiAPIKey        string `json:"zai_api_key,omitempty"`        // Z.ai (Zhipu GLM) API key
+	ZaiBaseURL       string `json:"zai_base_url,omitempty"`       // Custom Z.ai OpenAI-compatible base URL (e.g. coding endpoint)
 	GroqAPIKey       string `json:"groq_api_key,omitempty"`       // Groq API key
 	MistralAPIKey    string `json:"mistral_api_key,omitempty"`    // Mistral API key
 	CerebrasAPIKey   string `json:"cerebras_api_key,omitempty"`   // Cerebras API key
@@ -466,12 +467,14 @@ func (c *AIConfig) GetBaseURLForProvider(provider string) string {
 		if c != nil && c.OllamaBaseURL != "" {
 			return c.OllamaBaseURL
 		}
-		return DefaultOllamaBaseURL
 	case AIProviderOpenAI:
 		if c != nil && c.OpenAIBaseURL != "" {
 			return c.OpenAIBaseURL
 		}
-		return "" // Uses default OpenAI URL
+	case AIProviderZai:
+		if c != nil && c.ZaiBaseURL != "" {
+			return c.ZaiBaseURL
+		}
 	}
 	if def, ok := LookupAIProviderDefinition(provider); ok {
 		return def.DefaultBaseURL

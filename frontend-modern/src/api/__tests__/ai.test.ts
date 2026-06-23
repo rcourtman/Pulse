@@ -33,10 +33,10 @@ describe('AIAPI', () => {
     expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/settings/ai');
 
     apiFetchJSONMock.mockResolvedValueOnce({ configured: true } as any);
-    await AIAPI.updateSettings({ enabled: true });
+    await AIAPI.updateSettings({ enabled: true, zai_base_url: 'https://api.z.ai/api/coding/paas/v4' });
     expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/settings/ai/update', {
       method: 'PUT',
-      body: JSON.stringify({ enabled: true }),
+      body: JSON.stringify({ enabled: true, zai_base_url: 'https://api.z.ai/api/coding/paas/v4' }),
     });
 
     apiFetchJSONMock.mockResolvedValueOnce({ models: [] } as any);

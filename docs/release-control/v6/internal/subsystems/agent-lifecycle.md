@@ -113,7 +113,10 @@ that case means governed actions have a node-agent path; it must not be
 presented as proof that a guest-local agent is installed.
 Agent-facing operations-loop status wiring in `internal/api/router.go` and
 `internal/api/agent_resource_context.go` is lifecycle-adjacent only because it
-shares agent route infrastructure. Workflow starter counts on that endpoint,
+shares agent route infrastructure. Other handlers in `internal/api/` such as
+the AI settings handler (`ai_handlers.go`) carry AI provider configuration
+(for example per-provider base URL overrides) that is ai-runtime config-surface
+and is not agent enrollment, liveness, or lifecycle state. Workflow starter counts on that endpoint,
 contextual Assistant/external-agent collaboration counts inside the Assistant
 step, the content-free Patrol control starter split, and Patrol control
 completed-loop, resolved-loop, or `patrolControlValueState` proof mirrored to

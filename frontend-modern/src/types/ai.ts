@@ -104,6 +104,7 @@ export interface AISettings {
   ollama_base_url: string; // Ollama server URL
   ollama_keep_alive: string; // Ollama keep_alive value; empty uses the server default
   openai_base_url?: string; // Custom OpenAI base URL
+  zai_base_url?: string; // Custom Z.ai base URL (e.g. coding endpoint)
   configured_providers: AIProvider[]; // List of providers with credentials
   providers?: AIProviderDefinition[]; // Server-authored provider registry metadata
 
@@ -179,6 +180,7 @@ export interface AISettingsUpdateRequest {
   ollama_base_url?: string; // Set Ollama server URL
   ollama_keep_alive?: string; // Set Ollama keep_alive; empty uses the server default
   openai_base_url?: string; // Set custom OpenAI base URL
+  zai_base_url?: string; // Set custom Z.ai base URL (e.g. coding endpoint)
   // Clear flags for removing credentials
   clear_anthropic_key?: boolean; // Clear Anthropic API key
   clear_openai_key?: boolean; // Clear OpenAI API key

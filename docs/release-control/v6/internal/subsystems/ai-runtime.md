@@ -114,6 +114,10 @@ factory branches, settings-card literals, or per-provider model-list code. New
 direct chat-compatible providers extend that registry and the shared
 chat-compatible provider client; native transports remain explicit only where
 the protocol is not chat-compatible.
+Provider definitions that declare a BaseURLField (today OpenAI, Ollama, and
+Z.ai) expose a user-overridable endpoint via the AI settings payload; the
+registry default base URL applies when no override is stored, so one provider
+can serve both standard and alternate (e.g. Z.ai coding) endpoint tiers.
 
 ## Canonical Files
 

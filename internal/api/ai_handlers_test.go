@@ -639,6 +639,7 @@ func TestAISettingsHandler_GetAndUpdateSettings_RoundTrip(t *testing.T) {
 			OllamaUsername:  ptr("unai"),
 			OllamaPassword:  ptr("secret"),
 			OllamaKeepAlive: ptr("24h"),
+			ZaiBaseURL:      ptr("https://api.z.ai/api/coding/paas/v4"),
 		})
 		req := newLoopbackRequest(http.MethodPut, "/api/settings/ai", bytes.NewReader(body))
 		rec := httptest.NewRecorder()
@@ -657,6 +658,9 @@ func TestAISettingsHandler_GetAndUpdateSettings_RoundTrip(t *testing.T) {
 		}
 		if resp.OllamaBaseURL != "http://localhost:11434" {
 			t.Fatalf("unexpected ollama base url: %+v", resp)
+		}
+		if resp.ZaiBaseURL != "https://api.z.ai/api/coding/paas/v4" {
+			t.Fatalf("unexpected zai base url: %+v", resp)
 		}
 		if resp.OllamaUsername != "unai" || !resp.OllamaPasswordSet {
 			t.Fatalf("expected ollama auth state in response, got %+v", resp)

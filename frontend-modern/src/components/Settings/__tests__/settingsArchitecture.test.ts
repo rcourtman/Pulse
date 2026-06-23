@@ -673,6 +673,7 @@ describe('settings architecture guardrails', () => {
     expect(aiSettingsModelSource).toContain('extraFields: [');
     expect(aiSettingsModelSource).toContain("inputField: 'ollamaKeepAlive'");
     expect(aiSettingsModelSource).toContain("helpContentId: 'ai.ollama.keepAlive'");
+    expect(aiSettingsModelSource).toContain("inputField: 'zaiBaseUrl'");
     expect(aiProviderConfigurationSectionSource).toContain('<For each={config.extraFields || []}>');
     expect(aiProviderConfigurationSectionSource).toContain(
       'aria-label={`${getAIProviderDisplayName(config.provider)} ${extraField.label}`}',

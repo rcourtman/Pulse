@@ -542,6 +542,7 @@ func TestAIConfig_GetBaseURLForProvider(t *testing.T) {
 	config := AIConfig{
 		OllamaBaseURL: "http://custom:11434",
 		OpenAIBaseURL: "https://custom-openai.com",
+		ZaiBaseURL:    "https://api.z.ai/api/coding/paas/v4",
 	}
 
 	tests := []struct {
@@ -553,7 +554,7 @@ func TestAIConfig_GetBaseURLForProvider(t *testing.T) {
 		{AIProviderOpenRouter, DefaultOpenRouterBaseURL},
 		{AIProviderDeepSeek, DefaultDeepSeekBaseURL},
 		{AIProviderGemini, DefaultGeminiBaseURL},
-		{AIProviderZai, DefaultZaiBaseURL},
+		{AIProviderZai, "https://api.z.ai/api/coding/paas/v4"},
 		{AIProviderGroq, DefaultGroqBaseURL},
 		{AIProviderMistral, DefaultMistralBaseURL},
 		{AIProviderCerebras, DefaultCerebrasBaseURL},
@@ -579,6 +580,9 @@ func TestAIConfig_GetBaseURLForProvider(t *testing.T) {
 		}
 		if url := cfg.GetBaseURLForProvider(AIProviderOpenAI); url != "" {
 			t.Errorf("openai default = %q, want empty", url)
+		}
+		if url := cfg.GetBaseURLForProvider(AIProviderZai); url != DefaultZaiBaseURL {
+			t.Errorf("zai default = %q, want %q", url, DefaultZaiBaseURL)
 		}
 	})
 

@@ -23,6 +23,7 @@ export type AIProviderCredentialsFormState = {
   ollamaBaseUrl: string;
   ollamaKeepAlive: string;
   openaiBaseUrl: string;
+  zaiBaseUrl: string;
 };
 
 export type AIProviderConfig = {
@@ -162,6 +163,15 @@ export const AI_PROVIDER_CONFIGS: AIProviderConfig[] = [
     actionLinkLabel: 'Open docs →',
     actionLinkHref: 'https://docs.z.ai/guides/develop/openai/python',
     helperText: 'Uses https://api.z.ai/api/paas/v4 automatically.',
+    extraFields: [
+      {
+        label: 'Custom Base URL',
+        inputField: 'zaiBaseUrl',
+        placeholder: 'https://api.z.ai/api/coding/paas/v4 (coding plan)',
+        type: 'url',
+        helperText: 'Override for a z.ai coding subscription.',
+      },
+    ],
     clearTitle: 'Clear API key',
   },
   {
