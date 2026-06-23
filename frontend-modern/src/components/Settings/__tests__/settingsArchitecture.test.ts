@@ -663,6 +663,13 @@ describe('settings architecture guardrails', () => {
   });
 
   it('keeps Assistant and Patrol provider-specific fields model-driven', () => {
+    expect(aiSettingsModelSource).toContain("export const AI_PROVIDERS: AIProvider[] = [");
+    for (const provider of ['zai', 'groq', 'mistral', 'cerebras', 'together', 'fireworks']) {
+      expect(aiSettingsModelSource).toContain(`provider: '${provider}'`);
+      expect(aiSettingsStateSource).toContain(`${provider}_api_key`);
+      expect(aiSettingsStateSource).toContain(`clear_${provider}_key`);
+      expect(aiSettingsStateSource).toContain(`${provider}_configured`);
+    }
     expect(aiSettingsModelSource).toContain('extraFields: [');
     expect(aiSettingsModelSource).toContain("inputField: 'ollamaKeepAlive'");
     expect(aiSettingsModelSource).toContain("helpContentId: 'ai.ollama.keepAlive'");

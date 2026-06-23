@@ -224,7 +224,9 @@ describe('AISettings model loading error states', () => {
     expect(screen.getByRole('button', { name: /Save Assistant settings/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'External agents' })).toBeInTheDocument();
     expect(
-      screen.getByText('Optional connector access for Claude Desktop', { exact: false }),
+      screen.getByText('Connect external tools to read Pulse context and request Patrol work.', {
+        exact: false,
+      }),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Show connector setup' })).toBeInTheDocument();
     expect(

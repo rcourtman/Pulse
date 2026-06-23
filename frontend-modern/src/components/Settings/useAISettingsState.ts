@@ -54,6 +54,12 @@ const AI_SETTINGS_PROVIDER_PAYLOAD_FIELDS: Record<AIProvider, string[]> = {
   openai: ['openai_api_key', 'openai_base_url'],
   openrouter: ['openrouter_api_key'],
   deepseek: ['deepseek_api_key'],
+  zai: ['zai_api_key'],
+  groq: ['groq_api_key'],
+  mistral: ['mistral_api_key'],
+  cerebras: ['cerebras_api_key'],
+  together: ['together_api_key'],
+  fireworks: ['fireworks_api_key'],
   gemini: ['gemini_api_key'],
   ollama: ['ollama_base_url', 'ollama_keep_alive'],
 };
@@ -306,6 +312,12 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     openaiApiKey: '',
     openrouterApiKey: '',
     deepseekApiKey: '',
+    zaiApiKey: '',
+    groqApiKey: '',
+    mistralApiKey: '',
+    cerebrasApiKey: '',
+    togetherApiKey: '',
+    fireworksApiKey: '',
     geminiApiKey: '',
     ollamaBaseUrl: 'http://localhost:11434',
     ollamaKeepAlive: '30s',
@@ -345,6 +357,12 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
         current.openai_configured ||
         current.openrouter_configured ||
         current.deepseek_configured ||
+        current.zai_configured ||
+        current.groq_configured ||
+        current.mistral_configured ||
+        current.cerebras_configured ||
+        current.together_configured ||
+        current.fireworks_configured ||
         current.gemini_configured ||
         current.ollama_configured),
     );
@@ -385,6 +403,12 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
         openaiApiKey: '',
         openrouterApiKey: '',
         deepseekApiKey: '',
+        zaiApiKey: '',
+        groqApiKey: '',
+        mistralApiKey: '',
+        cerebrasApiKey: '',
+        togetherApiKey: '',
+        fireworksApiKey: '',
         geminiApiKey: '',
         ollamaBaseUrl: 'http://localhost:11434',
         ollamaKeepAlive: '30s',
@@ -421,6 +445,12 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       openaiApiKey: '',
       openrouterApiKey: '',
       deepseekApiKey: '',
+      zaiApiKey: '',
+      groqApiKey: '',
+      mistralApiKey: '',
+      cerebrasApiKey: '',
+      togetherApiKey: '',
+      fireworksApiKey: '',
       geminiApiKey: '',
       ollamaBaseUrl: data.ollama_base_url || 'http://localhost:11434',
       ollamaKeepAlive: data.ollama_keep_alive ?? '30s',
@@ -442,6 +472,12 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     if (data.openrouter_configured) configured.add('openrouter');
     if (data.deepseek_configured) configured.add('deepseek');
     if (data.gemini_configured) configured.add('gemini');
+    if (data.zai_configured) configured.add('zai');
+    if (data.groq_configured) configured.add('groq');
+    if (data.mistral_configured) configured.add('mistral');
+    if (data.cerebras_configured) configured.add('cerebras');
+    if (data.together_configured) configured.add('together');
+    if (data.fireworks_configured) configured.add('fireworks');
     if (data.ollama_configured) configured.add('ollama');
     if (configured.size === 0) configured.add('anthropic');
     setExpandedProviders(configured);
@@ -702,6 +738,42 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
           return;
         }
         payload.deepseek_api_key = setupApiKey().trim();
+      } else if (setupProvider() === 'zai') {
+        if (!setupApiKey().trim()) {
+          notificationStore.error('Please enter your Z.ai API key');
+          return;
+        }
+        payload.zai_api_key = setupApiKey().trim();
+      } else if (setupProvider() === 'groq') {
+        if (!setupApiKey().trim()) {
+          notificationStore.error('Please enter your Groq API key');
+          return;
+        }
+        payload.groq_api_key = setupApiKey().trim();
+      } else if (setupProvider() === 'mistral') {
+        if (!setupApiKey().trim()) {
+          notificationStore.error('Please enter your Mistral API key');
+          return;
+        }
+        payload.mistral_api_key = setupApiKey().trim();
+      } else if (setupProvider() === 'cerebras') {
+        if (!setupApiKey().trim()) {
+          notificationStore.error('Please enter your Cerebras API key');
+          return;
+        }
+        payload.cerebras_api_key = setupApiKey().trim();
+      } else if (setupProvider() === 'together') {
+        if (!setupApiKey().trim()) {
+          notificationStore.error('Please enter your Together AI API key');
+          return;
+        }
+        payload.together_api_key = setupApiKey().trim();
+      } else if (setupProvider() === 'fireworks') {
+        if (!setupApiKey().trim()) {
+          notificationStore.error('Please enter your Fireworks AI API key');
+          return;
+        }
+        payload.fireworks_api_key = setupApiKey().trim();
       } else if (setupProvider() === 'gemini') {
         if (!setupApiKey().trim()) {
           notificationStore.error('Please enter your Google Gemini API key');
@@ -796,6 +868,12 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
           (modelProvider === 'openai' && form.openaiApiKey.trim()) ||
           (modelProvider === 'openrouter' && form.openrouterApiKey.trim()) ||
           (modelProvider === 'deepseek' && form.deepseekApiKey.trim()) ||
+          (modelProvider === 'zai' && form.zaiApiKey.trim()) ||
+          (modelProvider === 'groq' && form.groqApiKey.trim()) ||
+          (modelProvider === 'mistral' && form.mistralApiKey.trim()) ||
+          (modelProvider === 'cerebras' && form.cerebrasApiKey.trim()) ||
+          (modelProvider === 'together' && form.togetherApiKey.trim()) ||
+          (modelProvider === 'fireworks' && form.fireworksApiKey.trim()) ||
           (modelProvider === 'gemini' && form.geminiApiKey.trim()) ||
           (modelProvider === 'ollama' && form.ollamaBaseUrl.trim());
 
@@ -868,6 +946,24 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       }
       if (form.deepseekApiKey.trim()) {
         payload.deepseek_api_key = form.deepseekApiKey.trim();
+      }
+      if (form.zaiApiKey.trim()) {
+        payload.zai_api_key = form.zaiApiKey.trim();
+      }
+      if (form.groqApiKey.trim()) {
+        payload.groq_api_key = form.groqApiKey.trim();
+      }
+      if (form.mistralApiKey.trim()) {
+        payload.mistral_api_key = form.mistralApiKey.trim();
+      }
+      if (form.cerebrasApiKey.trim()) {
+        payload.cerebras_api_key = form.cerebrasApiKey.trim();
+      }
+      if (form.togetherApiKey.trim()) {
+        payload.together_api_key = form.togetherApiKey.trim();
+      }
+      if (form.fireworksApiKey.trim()) {
+        payload.fireworks_api_key = form.fireworksApiKey.trim();
       }
       if (form.geminiApiKey.trim()) {
         payload.gemini_api_key = form.geminiApiKey.trim();
@@ -1027,6 +1123,12 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       current?.openai_configured,
       current?.openrouter_configured,
       current?.deepseek_configured,
+      current?.zai_configured,
+      current?.groq_configured,
+      current?.mistral_configured,
+      current?.cerebras_configured,
+      current?.together_configured,
+      current?.fireworks_configured,
       current?.gemini_configured,
       current?.ollama_configured,
     ].filter(Boolean).length;
@@ -1055,6 +1157,12 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       if (provider === 'openai') clearPayload.clear_openai_key = true;
       if (provider === 'openrouter') clearPayload.clear_openrouter_key = true;
       if (provider === 'deepseek') clearPayload.clear_deepseek_key = true;
+      if (provider === 'zai') clearPayload.clear_zai_key = true;
+      if (provider === 'groq') clearPayload.clear_groq_key = true;
+      if (provider === 'mistral') clearPayload.clear_mistral_key = true;
+      if (provider === 'cerebras') clearPayload.clear_cerebras_key = true;
+      if (provider === 'together') clearPayload.clear_together_key = true;
+      if (provider === 'fireworks') clearPayload.clear_fireworks_key = true;
       if (provider === 'gemini') clearPayload.clear_gemini_key = true;
       if (provider === 'ollama') clearPayload.clear_ollama_url = true;
 
@@ -1068,6 +1176,12 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       if (provider === 'openai') setForm('openaiApiKey', '');
       if (provider === 'openrouter') setForm('openrouterApiKey', '');
       if (provider === 'deepseek') setForm('deepseekApiKey', '');
+      if (provider === 'zai') setForm('zaiApiKey', '');
+      if (provider === 'groq') setForm('groqApiKey', '');
+      if (provider === 'mistral') setForm('mistralApiKey', '');
+      if (provider === 'cerebras') setForm('cerebrasApiKey', '');
+      if (provider === 'together') setForm('togetherApiKey', '');
+      if (provider === 'fireworks') setForm('fireworksApiKey', '');
       if (provider === 'gemini') setForm('geminiApiKey', '');
       if (provider === 'ollama') setForm('ollamaBaseUrl', '');
 

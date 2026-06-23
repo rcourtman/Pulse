@@ -422,6 +422,7 @@ func TestReconcileStaleFindings_VerificationCapDefersExcessCandidates(t *testing
 	// Distinct resources so the store keeps all four.
 	for i, f := range findings {
 		f.ResourceID = fmt.Sprintf("vm-%d", 100+i)
+		f.ResourceName = fmt.Sprintf("web-%d", i+1)
 	}
 	p := newTestPatrolWithFindings(findings)
 	calls := 0

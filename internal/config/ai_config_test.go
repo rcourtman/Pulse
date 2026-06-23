@@ -144,6 +144,54 @@ func TestAIConfig_IsConfigured(t *testing.T) {
 			expected: true,
 		},
 		{
+			name: "enabled with zai key",
+			config: AIConfig{
+				Enabled:   true,
+				ZaiAPIKey: "sk-zai-123",
+			},
+			expected: true,
+		},
+		{
+			name: "enabled with groq key",
+			config: AIConfig{
+				Enabled:    true,
+				GroqAPIKey: "gsk-123",
+			},
+			expected: true,
+		},
+		{
+			name: "enabled with mistral key",
+			config: AIConfig{
+				Enabled:       true,
+				MistralAPIKey: "mistral-123",
+			},
+			expected: true,
+		},
+		{
+			name: "enabled with cerebras key",
+			config: AIConfig{
+				Enabled:        true,
+				CerebrasAPIKey: "cerebras-123",
+			},
+			expected: true,
+		},
+		{
+			name: "enabled with together key",
+			config: AIConfig{
+				Enabled:        true,
+				TogetherAPIKey: "together-123",
+			},
+			expected: true,
+		},
+		{
+			name: "enabled with fireworks key",
+			config: AIConfig{
+				Enabled:         true,
+				FireworksAPIKey: "fireworks-123",
+			},
+			expected: true,
+		},
+		{
 			name: "enabled with ollama but no URL configured",
 			config: AIConfig{
 				Enabled: true,
@@ -223,6 +271,42 @@ func TestAIConfig_HasProvider(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     "zai configured",
+			config:   AIConfig{ZaiAPIKey: "key"},
+			provider: AIProviderZai,
+			expected: true,
+		},
+		{
+			name:     "groq configured",
+			config:   AIConfig{GroqAPIKey: "key"},
+			provider: AIProviderGroq,
+			expected: true,
+		},
+		{
+			name:     "mistral configured",
+			config:   AIConfig{MistralAPIKey: "key"},
+			provider: AIProviderMistral,
+			expected: true,
+		},
+		{
+			name:     "cerebras configured",
+			config:   AIConfig{CerebrasAPIKey: "key"},
+			provider: AIProviderCerebras,
+			expected: true,
+		},
+		{
+			name:     "together configured",
+			config:   AIConfig{TogetherAPIKey: "key"},
+			provider: AIProviderTogether,
+			expected: true,
+		},
+		{
+			name:     "fireworks configured",
+			config:   AIConfig{FireworksAPIKey: "key"},
+			provider: AIProviderFireworks,
+			expected: true,
+		},
+		{
 			name:     "ollama configured",
 			config:   AIConfig{OllamaBaseURL: "http://localhost:11434"},
 			provider: AIProviderOllama,
@@ -256,6 +340,12 @@ func TestDefaultModelForProvider_UsesCanonicalProviderFallbacks(t *testing.T) {
 		{provider: AIProviderOpenRouter, expected: "openrouter:openai/gpt-4o-mini"},
 		{provider: AIProviderDeepSeek, expected: "deepseek:deepseek-v4-flash"},
 		{provider: AIProviderGemini, expected: "gemini:gemini-1.5-pro"},
+		{provider: AIProviderZai, expected: "zai:glm-5.2"},
+		{provider: AIProviderGroq, expected: "groq:llama-3.3-70b-versatile"},
+		{provider: AIProviderMistral, expected: "mistral:mistral-large-latest"},
+		{provider: AIProviderCerebras, expected: "cerebras:llama-4-scout-17b-16e-instruct"},
+		{provider: AIProviderTogether, expected: "together:meta-llama/Llama-3.3-70B-Instruct-Turbo"},
+		{provider: AIProviderFireworks, expected: "fireworks:accounts/fireworks/models/llama-v3p1-70b-instruct"},
 		{provider: AIProviderOllama, expected: "ollama:llama3.2"},
 		{provider: AIProviderQuickstart, expected: ""},
 		{provider: "unknown", expected: ""},
@@ -267,6 +357,70 @@ func TestDefaultModelForProvider_UsesCanonicalProviderFallbacks(t *testing.T) {
 				t.Fatalf("DefaultModelForProvider(%q) = %q, want %q", tt.provider, got, tt.expected)
 			}
 		})
+	}
+}
+
+func TestAIProviderDefinitions_CanonicalDirectProviderRegistry(t *testing.T) {
+	defs := AIConfigurableProviderDefinitions()
+	gotIDs := make([]string, 0, len(defs))
+	for _, def := range defs {
+		gotIDs = append(gotIDs, def.ID)
+	}
+	wantIDs := []string{
+		AIProviderAnthropic,
+		AIProviderOpenAI,
+		AIProviderOpenRouter,
+		AIProviderDeepSeek,
+		AIProviderGemini,
+		AIProviderZai,
+		AIProviderGroq,
+		AIProviderMistral,
+		AIProviderCerebras,
+		AIProviderTogether,
+		AIProviderFireworks,
+		AIProviderOllama,
+	}
+	if len(gotIDs) != len(wantIDs) {
+		t.Fatalf("AIConfigurableProviderDefinitions returned %d providers %v, want %d %v", len(gotIDs), gotIDs, len(wantIDs), wantIDs)
+	}
+	for i, want := range wantIDs {
+		if gotIDs[i] != want {
+			t.Fatalf("provider order mismatch at %d: got %q in %v, want %q in %v", i, gotIDs[i], gotIDs, want, wantIDs)
+		}
+	}
+
+	for _, provider := range []string{
+		AIProviderOpenRouter,
+		AIProviderDeepSeek,
+		AIProviderZai,
+		AIProviderGroq,
+		AIProviderMistral,
+		AIProviderCerebras,
+		AIProviderTogether,
+		AIProviderFireworks,
+	} {
+		def, ok := LookupAIProviderDefinition(provider)
+		if !ok {
+			t.Fatalf("missing provider definition for %q", provider)
+		}
+		if def.Protocol != AIProviderProtocolOpenAICompatible {
+			t.Fatalf("%s protocol = %q, want %q", provider, def.Protocol, AIProviderProtocolOpenAICompatible)
+		}
+		if def.DefaultBaseURL == "" {
+			t.Fatalf("%s must declare a default base URL", provider)
+		}
+		if def.APIKeyField == "" || def.ConfiguredField == "" || def.ClearKeyField == "" {
+			t.Fatalf("%s must declare API settings fields: %#v", provider, def)
+		}
+	}
+
+	if _, ok := LookupAIProviderDefinition(AIProviderQuickstart); !ok {
+		t.Fatalf("retired quickstart marker should remain known for migration cleanup")
+	}
+	for _, def := range AIConfigurableProviderDefinitions() {
+		if def.ID == AIProviderQuickstart {
+			t.Fatalf("retired quickstart marker must not be user configurable")
+		}
 	}
 }
 
@@ -347,6 +501,12 @@ func TestAIConfig_GetAPIKeyForProvider(t *testing.T) {
 		OpenRouterAPIKey: "openrouter-key",
 		DeepSeekAPIKey:   "deepseek-key",
 		GeminiAPIKey:     "gemini-key",
+		ZaiAPIKey:        "zai-key",
+		GroqAPIKey:       "groq-key",
+		MistralAPIKey:    "mistral-key",
+		CerebrasAPIKey:   "cerebras-key",
+		TogetherAPIKey:   "together-key",
+		FireworksAPIKey:  "fireworks-key",
 	}
 
 	tests := []struct {
@@ -358,6 +518,12 @@ func TestAIConfig_GetAPIKeyForProvider(t *testing.T) {
 		{AIProviderOpenRouter, "openrouter-key"},
 		{AIProviderDeepSeek, "deepseek-key"},
 		{AIProviderGemini, "gemini-key"},
+		{AIProviderZai, "zai-key"},
+		{AIProviderGroq, "groq-key"},
+		{AIProviderMistral, "mistral-key"},
+		{AIProviderCerebras, "cerebras-key"},
+		{AIProviderTogether, "together-key"},
+		{AIProviderFireworks, "fireworks-key"},
 		{AIProviderOllama, ""},
 		{"unknown", ""},
 	}
@@ -387,6 +553,12 @@ func TestAIConfig_GetBaseURLForProvider(t *testing.T) {
 		{AIProviderOpenRouter, DefaultOpenRouterBaseURL},
 		{AIProviderDeepSeek, DefaultDeepSeekBaseURL},
 		{AIProviderGemini, DefaultGeminiBaseURL},
+		{AIProviderZai, DefaultZaiBaseURL},
+		{AIProviderGroq, DefaultGroqBaseURL},
+		{AIProviderMistral, DefaultMistralBaseURL},
+		{AIProviderCerebras, DefaultCerebrasBaseURL},
+		{AIProviderTogether, DefaultTogetherBaseURL},
+		{AIProviderFireworks, DefaultFireworksBaseURL},
 		{AIProviderAnthropic, ""},
 		{"unknown", ""},
 	}
@@ -501,6 +673,12 @@ func TestParseModelString(t *testing.T) {
 		{"ollama:llama3", AIProviderOllama, "llama3"},
 		{"deepseek:deepseek-chat", AIProviderDeepSeek, "deepseek-chat"},
 		{"gemini:gemini-1.5-pro", AIProviderGemini, "gemini-1.5-pro"},
+		{"zai:glm-5.2", AIProviderZai, "glm-5.2"},
+		{"groq:llama-3.3-70b-versatile", AIProviderGroq, "llama-3.3-70b-versatile"},
+		{"mistral:mistral-large-latest", AIProviderMistral, "mistral-large-latest"},
+		{"cerebras:llama-4-scout-17b-16e-instruct", AIProviderCerebras, "llama-4-scout-17b-16e-instruct"},
+		{"together:meta-llama/Llama-3.3-70B-Instruct-Turbo", AIProviderTogether, "meta-llama/Llama-3.3-70B-Instruct-Turbo"},
+		{"fireworks:accounts/fireworks/models/llama-v3p1-70b-instruct", AIProviderFireworks, "accounts/fireworks/models/llama-v3p1-70b-instruct"},
 		// Detection by name
 		{"claude-3-opus", AIProviderAnthropic, "claude-3-opus"},
 		{"gpt-4o", AIProviderOpenAI, "gpt-4o"},

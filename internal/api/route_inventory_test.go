@@ -255,7 +255,10 @@ func sortedKeys(set map[string]struct{}) []string {
 	return keys
 }
 
-var dynamicRouteAllowlist = []string{}
+var dynamicRouteAllowlist = []string{
+	"agentcapabilities.OperationsLoopStatusCompatibilityPath",
+	"agentcapabilities.PatrolControlStatusCapabilityPath",
+}
 
 var publicRouteAllowlist = []string{
 	"/api/health",
@@ -421,8 +424,6 @@ var allRouteAllowlist = []string{
 	"POST /api/maintenance-verifications/{reportId}/review",
 	"/api/agent/resource-context/{id}",
 	"/api/agent/fleet-context",
-	"/api/agent/patrol-control/status",
-	"/api/agent/operations-loop/status",
 	"/api/agent/capabilities",
 	"/api/agent/events",
 	"POST /api/actions/plan",

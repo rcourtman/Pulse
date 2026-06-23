@@ -12,6 +12,12 @@ describe('aiProviderPresentation', () => {
     expect(AI_PROVIDER_DISPLAY_NAMES.openai).toBe('OpenAI');
     expect(getAIProviderDisplayName('anthropic')).toBe('Anthropic');
     expect(getAIProviderDisplayName('gemini')).toBe('Google Gemini');
+    expect(getAIProviderDisplayName('zai')).toBe('Z.ai');
+    expect(getAIProviderDisplayName('groq')).toBe('Groq');
+    expect(getAIProviderDisplayName('mistral')).toBe('Mistral');
+    expect(getAIProviderDisplayName('cerebras')).toBe('Cerebras');
+    expect(getAIProviderDisplayName('together')).toBe('Together AI');
+    expect(getAIProviderDisplayName('fireworks')).toBe('Fireworks AI');
     expect(getAIProviderDisplayName('pulse')).toBe('Pulse');
     expect(getAIProviderDisplayName('custom-provider')).toBe('custom-provider');
   });
@@ -23,7 +29,30 @@ describe('aiProviderPresentation', () => {
     expect(getProviderFromModelId('o4-mini')).toBe('openai');
     expect(getProviderFromModelId('deepseek-r1')).toBe('deepseek');
     expect(getProviderFromModelId('gemini-2.5-pro')).toBe('gemini');
+    expect(getProviderFromModelId('glm-5.2')).toBe('zai');
+    expect(getProviderFromModelId('groq-fast-model')).toBe('groq');
+    expect(getProviderFromModelId('mistral-large-latest')).toBe('mistral');
+    expect(getProviderFromModelId('cerebras/llama')).toBe('cerebras');
     expect(getProviderFromModelId('llama3.1')).toBe('ollama');
+  });
+
+  it('formats direct OpenAI-compatible provider routes with provider labels', () => {
+    expect(formatAIModelRouteLabel('zai:glm-5.2')).toBe('Z.ai: GLM 5.2');
+    expect(formatAIModelRouteLabel('groq:llama-3.3-70b-versatile')).toBe(
+      'Groq: Llama 3.3 70B Versatile',
+    );
+    expect(formatAIModelRouteLabel('mistral:mistral-large-latest')).toBe(
+      'Mistral: Mistral Large Latest',
+    );
+    expect(formatAIModelRouteLabel('cerebras:llama-4-scout-17b-16e-instruct')).toBe(
+      'Cerebras: Llama 4 Scout 17B 16e Instruct',
+    );
+    expect(formatAIModelRouteLabel('together:meta-llama/Llama-3.3-70B-Instruct-Turbo')).toBe(
+      'Together AI: Meta Llama/Llama 3.3 70B Instruct Turbo',
+    );
+    expect(
+      formatAIModelRouteLabel('fireworks:accounts/fireworks/models/llama-v3p1-70b-instruct'),
+    ).toBe('Fireworks AI: Accounts/Fireworks/Models/Llama V3p1 70B Instruct');
   });
 
   it('keeps OpenRouter-routed model labels distinct from direct provider models', () => {

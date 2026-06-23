@@ -1423,7 +1423,14 @@ settings`, and candidate review when discovered sources are waiting. It must
     remediation by parsing raw upstream error strings in the browser. Provider
     setup cards must describe provider families through the current
     backend-owned provider contract; DeepSeek setup copy is the V4 family and
-    must not regress to old V3 or compatibility-alias wording.
+    must not regress to old V3 or compatibility-alias wording. First-class
+    provider cards on `Provider & Models` must remain model-driven through
+    `AI_PROVIDERS`, `AI_PROVIDER_CONFIGS`, and the `useAISettingsState`
+    provider payload mapping: adding direct chat-compatible providers such as
+    Z.ai, Groq, Mistral, Cerebras, Together, or Fireworks extends those shared
+    arrays/maps and the backend registry projection instead of introducing
+    provider-specific JSX branches, local configured-state inference, or
+    browser-owned default endpoint facts.
     Provider connection controls are page-scoped: the global Pulse
     Intelligence enable toggle, provider readiness strip, and Test Connection
     action belong to `Provider & Models`; Patrol, Assistant, and Service Context

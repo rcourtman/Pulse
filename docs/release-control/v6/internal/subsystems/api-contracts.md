@@ -788,6 +788,18 @@ payload shape change when the portal presents compact client rows.
 3. `frontend-modern/src/api/agentCapabilities.ts` shared with `ai-runtime`: the agent capabilities frontend client is both the Pulse Intelligence external-agent manifest consumer and a canonical API payload contract boundary.
 4. `frontend-modern/src/api/agentProfiles.ts` shared with `agent-lifecycle`: the agent profiles frontend client is both an agent lifecycle control surface and a canonical API payload contract boundary.
 5. `frontend-modern/src/api/ai.ts` shared with `ai-runtime`: the AI frontend client is both an AI runtime control surface and a canonical API payload contract boundary.
+   `/api/settings/ai` is the provider-registry projection for Assistant and
+   Patrol runtime configuration. Its `providers` collection exposes
+   non-secret provider metadata from the config-layer registry, including
+   provider id, display name, protocol family, default route, default base URL,
+   credential field names, configured-state field names, clear-key field names,
+   env-var hints, docs URL, gateway flag, and current configured state. The
+   legacy top-level configured booleans may remain for browser compatibility,
+   but new provider additions must update the registry-backed projection and
+   contract tests rather than adding an untyped browser-only provider list.
+   API responses must never echo provider secret values; settings updates may
+   accept credential and clear-key fields, persist trimmed values, and return
+   only configured state.
 6. `frontend-modern/src/api/aiChat.ts` shared with `ai-runtime`: the Assistant chat frontend client is both the first-party Assistant transport surface and a canonical API payload contract boundary.
 7. `frontend-modern/src/api/generated/agentCapabilities.ts` shared with `ai-runtime`: the generated agent capabilities frontend types are both the Pulse Intelligence manifest TypeScript projection and a canonical API payload contract boundary.
 8. `frontend-modern/src/api/nodes.ts` shared with `agent-lifecycle`: the shared Proxmox node client is both an agent lifecycle setup/install control surface and a canonical API payload contract boundary.

@@ -1400,6 +1400,12 @@ func TestContract_AISettingsUpdateProviderResolutionJSONSnapshot(t *testing.T) {
 		"openrouter_configured":false,
 		"deepseek_configured":false,
 		"gemini_configured":false,
+		"zai_configured":false,
+		"groq_configured":false,
+		"mistral_configured":false,
+		"cerebras_configured":false,
+		"together_configured":false,
+		"fireworks_configured":false,
 		"ollama_configured":true,
 		"ollama_base_url":%q,
 		"ollama_password_set":false,
@@ -1429,7 +1435,7 @@ func TestContract_AISettingsUpdateProviderResolutionJSONSnapshot(t *testing.T) {
 	// timestamps and durations that vary per run; strip it from the
 	// snapshot comparison and rely on dedicated preflight tests for its
 	// shape.
-	assertJSONSnapshot(t, rec.Body.Bytes(), want, "patrol_preflight")
+	assertJSONSnapshot(t, rec.Body.Bytes(), want, "patrol_preflight", "providers")
 }
 
 func TestContract_PatrolStatusDoesNotSurfaceQuickstartActivation(t *testing.T) {
@@ -1587,6 +1593,12 @@ func TestContract_AISettingsBYOKOverrideDoesNotExposeQuickstartInventoryJSONSnap
 		"openrouter_configured":false,
 		"deepseek_configured":false,
 		"gemini_configured":false,
+		"zai_configured":false,
+		"groq_configured":false,
+		"mistral_configured":false,
+		"cerebras_configured":false,
+		"together_configured":false,
+		"fireworks_configured":false,
 		"ollama_configured":false,
 		"ollama_base_url":"http://localhost:11434",
 		"ollama_password_set":false,
@@ -1598,7 +1610,131 @@ func TestContract_AISettingsBYOKOverrideDoesNotExposeQuickstartInventoryJSONSnap
 		"patrol_readiness":{"status":"not_ready","ready":false,"cause":"service_unavailable","summary":"Pulse Patrol service is not available.","checks":[{"id":"service","status":"not_ready","cause":"service_unavailable","label":"Patrol service","message":"Pulse Patrol service is not available.","action":"restart_service"}]}
 	}`
 
-	assertJSONSnapshot(t, rec.Body.Bytes(), want)
+	assertJSONSnapshot(t, rec.Body.Bytes(), want, "providers")
+}
+
+func TestContract_AISettingsProviderRegistryMetadata(t *testing.T) {
+	settings := config.NewDefaultAIConfig()
+	settings.OpenAIAPIKey = "sk-test"
+	settings.GroqAPIKey = "gsk-test"
+	settings.OllamaBaseURL = config.DefaultOllamaBaseURL
+
+	defs := aiProviderDefinitionResponses(settings)
+	gotIDs := make([]string, 0, len(defs))
+	byID := make(map[string]AIProviderDefinitionResponse, len(defs))
+	for _, def := range defs {
+		gotIDs = append(gotIDs, def.ID)
+		byID[def.ID] = def
+	}
+
+	wantIDs := []string{
+		"anthropic",
+		"openai",
+		"openrouter",
+		"deepseek",
+		"gemini",
+		"zai",
+		"groq",
+		"mistral",
+		"cerebras",
+		"together",
+		"fireworks",
+		"ollama",
+	}
+	if !reflect.DeepEqual(gotIDs, wantIDs) {
+		t.Fatalf("provider ids = %#v, want %#v", gotIDs, wantIDs)
+	}
+	if _, ok := byID["quickstart"]; ok {
+		t.Fatal("retired quickstart provider must not be user-configurable")
+	}
+
+	cases := map[string]struct {
+		displayName         string
+		apiKeyField         string
+		clearKeyField       string
+		configuredField     string
+		defaultBaseURL      string
+		modelsDevProviderID string
+		configured          bool
+	}{
+		"zai": {
+			displayName:         "Z.ai",
+			apiKeyField:         "zai_api_key",
+			clearKeyField:       "clear_zai_key",
+			configuredField:     "zai_configured",
+			defaultBaseURL:      "https://api.z.ai/api/paas/v4",
+			modelsDevProviderID: "zai",
+		},
+		"groq": {
+			displayName:         "Groq",
+			apiKeyField:         "groq_api_key",
+			clearKeyField:       "clear_groq_key",
+			configuredField:     "groq_configured",
+			defaultBaseURL:      "https://api.groq.com/openai/v1",
+			modelsDevProviderID: "groq",
+			configured:          true,
+		},
+		"mistral": {
+			displayName:         "Mistral",
+			apiKeyField:         "mistral_api_key",
+			clearKeyField:       "clear_mistral_key",
+			configuredField:     "mistral_configured",
+			defaultBaseURL:      "https://api.mistral.ai/v1",
+			modelsDevProviderID: "mistral",
+		},
+		"cerebras": {
+			displayName:         "Cerebras",
+			apiKeyField:         "cerebras_api_key",
+			clearKeyField:       "clear_cerebras_key",
+			configuredField:     "cerebras_configured",
+			defaultBaseURL:      "https://api.cerebras.ai/v1",
+			modelsDevProviderID: "cerebras",
+		},
+		"together": {
+			displayName:         "Together AI",
+			apiKeyField:         "together_api_key",
+			clearKeyField:       "clear_together_key",
+			configuredField:     "together_configured",
+			defaultBaseURL:      "https://api.together.xyz/v1",
+			modelsDevProviderID: "togetherai",
+		},
+		"fireworks": {
+			displayName:         "Fireworks AI",
+			apiKeyField:         "fireworks_api_key",
+			clearKeyField:       "clear_fireworks_key",
+			configuredField:     "fireworks_configured",
+			defaultBaseURL:      "https://api.fireworks.ai/inference/v1",
+			modelsDevProviderID: "fireworks-ai",
+		},
+	}
+	for id, want := range cases {
+		got, ok := byID[id]
+		if !ok {
+			t.Fatalf("provider %q missing from registry response", id)
+		}
+		if got.DisplayName != want.displayName ||
+			got.Protocol != string(config.AIProviderProtocolOpenAICompatible) ||
+			got.APIKeyField != want.apiKeyField ||
+			got.ClearKeyField != want.clearKeyField ||
+			got.ConfiguredField != want.configuredField ||
+			got.DefaultBaseURL != want.defaultBaseURL ||
+			got.ModelsDevProviderID != want.modelsDevProviderID ||
+			!got.RequiresAPIKey ||
+			!got.UserConfigurable ||
+			got.Configured != want.configured {
+			t.Fatalf("provider %s metadata drifted: %#v", id, got)
+		}
+	}
+
+	if !byID["openai"].Configured {
+		t.Fatal("OpenAI provider metadata should reflect configured API key")
+	}
+	if byID["ollama"].RequiresAPIKey {
+		t.Fatal("Ollama provider metadata must not require an API key")
+	}
+	if !byID["ollama"].Configured {
+		t.Fatal("Ollama provider metadata should reflect the default local endpoint")
+	}
 }
 
 func TestContract_ChartMetricPointsPreserveMillisecondPrecision(t *testing.T) {
@@ -3583,6 +3719,12 @@ func TestContract_HostedAISettingsDoesNotAutoBootstrapQuickstartJSONSnapshot(t *
 		"openrouter_configured":false,
 		"deepseek_configured":false,
 		"gemini_configured":false,
+		"zai_configured":false,
+		"groq_configured":false,
+		"mistral_configured":false,
+		"cerebras_configured":false,
+		"together_configured":false,
+		"fireworks_configured":false,
 		"ollama_configured":false,
 		"ollama_base_url":"http://localhost:11434",
 		"ollama_password_set":false,
@@ -3594,7 +3736,7 @@ func TestContract_HostedAISettingsDoesNotAutoBootstrapQuickstartJSONSnapshot(t *
 		"patrol_readiness":{"status":"not_ready","ready":false,"cause":"service_unavailable","summary":"Pulse Patrol service is not available.","checks":[{"id":"service","status":"not_ready","cause":"service_unavailable","label":"Patrol service","message":"Pulse Patrol service is not available.","action":"restart_service"}]}
 	}`
 
-	assertJSONSnapshot(t, rec.Body.Bytes(), want)
+	assertJSONSnapshot(t, rec.Body.Bytes(), want, "providers")
 }
 
 func TestContract_AISettingsRetiredQuickstartAliasJSONSnapshot(t *testing.T) {
@@ -3646,6 +3788,12 @@ func TestContract_AISettingsRetiredQuickstartAliasJSONSnapshot(t *testing.T) {
 		"openrouter_configured":false,
 		"deepseek_configured":false,
 		"gemini_configured":false,
+		"zai_configured":false,
+		"groq_configured":false,
+		"mistral_configured":false,
+		"cerebras_configured":false,
+		"together_configured":false,
+		"fireworks_configured":false,
 		"ollama_configured":false,
 		"ollama_base_url":"http://localhost:11434",
 		"ollama_password_set":false,
@@ -3657,7 +3805,7 @@ func TestContract_AISettingsRetiredQuickstartAliasJSONSnapshot(t *testing.T) {
 		"patrol_readiness":{"status":"not_ready","ready":false,"cause":"service_unavailable","summary":"Pulse Patrol service is not available.","checks":[{"id":"service","status":"not_ready","cause":"service_unavailable","label":"Patrol service","message":"Pulse Patrol service is not available.","action":"restart_service"}]}
 	}`
 
-	assertJSONSnapshot(t, rec.Body.Bytes(), want)
+	assertJSONSnapshot(t, rec.Body.Bytes(), want, "providers")
 	if bytes.Contains(bytes.ToLower(rec.Body.Bytes()), []byte("quickstart")) {
 		t.Fatalf("expected AI settings payload to suppress legacy hosted quickstart aliases, got %s", rec.Body.Bytes())
 	}
@@ -3713,6 +3861,12 @@ func TestContract_AISettingsOllamaAuthJSONSnapshot(t *testing.T) {
 		"openrouter_configured":false,
 		"deepseek_configured":false,
 		"gemini_configured":false,
+		"zai_configured":false,
+		"groq_configured":false,
+		"mistral_configured":false,
+		"cerebras_configured":false,
+		"together_configured":false,
+		"fireworks_configured":false,
 		"ollama_configured":true,
 		"ollama_base_url":"http://ollama.example:11434",
 		"ollama_username":"unai",
@@ -3725,7 +3879,7 @@ func TestContract_AISettingsOllamaAuthJSONSnapshot(t *testing.T) {
 		"patrol_readiness":{"status":"not_ready","ready":false,"cause":"service_unavailable","summary":"Pulse Patrol service is not available.","checks":[{"id":"service","status":"not_ready","cause":"service_unavailable","label":"Patrol service","message":"Pulse Patrol service is not available.","action":"restart_service"}]}
 	}`
 
-	assertJSONSnapshot(t, rec.Body.Bytes(), want)
+	assertJSONSnapshot(t, rec.Body.Bytes(), want, "providers")
 }
 
 func TestContract_VMInventoryExportCSVHeaders(t *testing.T) {
@@ -4275,6 +4429,12 @@ func TestContract_HostedTenantAISettingsDoesNotAutoBootstrapQuickstartJSONSnapsh
 		"openrouter_configured":false,
 		"deepseek_configured":false,
 		"gemini_configured":false,
+		"zai_configured":false,
+		"groq_configured":false,
+		"mistral_configured":false,
+		"cerebras_configured":false,
+		"together_configured":false,
+		"fireworks_configured":false,
 		"ollama_configured":false,
 		"ollama_base_url":"http://localhost:11434",
 		"ollama_password_set":false,
@@ -4286,7 +4446,7 @@ func TestContract_HostedTenantAISettingsDoesNotAutoBootstrapQuickstartJSONSnapsh
 		"patrol_readiness":{"status":"not_ready","ready":false,"cause":"service_unavailable","summary":"Pulse Patrol service is not available.","checks":[{"id":"service","status":"not_ready","cause":"service_unavailable","label":"Patrol service","message":"Pulse Patrol service is not available.","action":"restart_service"}]}
 	}`
 
-	assertJSONSnapshot(t, rec.Body.Bytes(), want)
+	assertJSONSnapshot(t, rec.Body.Bytes(), want, "providers")
 }
 
 func TestContract_StripeWebhookHandlersUseCanonicalRuntimeDataDir(t *testing.T) {

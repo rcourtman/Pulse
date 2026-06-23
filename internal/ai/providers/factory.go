@@ -2,6 +2,7 @@ package providers
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
@@ -35,6 +36,16 @@ func NewForProvider(cfg *config.AIConfig, provider, model string) (Provider, err
 
 	// Get the configured timeout
 	timeout := cfg.GetRequestTimeout()
+	provider = strings.TrimSpace(provider)
+
+	if config.IsOpenAICompatibleProvider(provider) {
+		apiKey := cfg.GetAPIKeyForProvider(provider)
+		if apiKey == "" {
+			return nil, fmt.Errorf("%s API key not configured", config.AIProviderDisplayName(provider))
+		}
+		baseURL := cfg.GetBaseURLForProvider(provider)
+		return NewOpenAICompatibleClient(provider, apiKey, model, baseURL, timeout), nil
+	}
 
 	switch provider {
 	case config.AIProviderAnthropic:
@@ -46,30 +57,6 @@ func NewForProvider(cfg *config.AIConfig, provider, model string) (Provider, err
 			return nil, fmt.Errorf("Anthropic API key not configured")
 		}
 		return NewAnthropicClient(apiKey, model, timeout), nil
-
-	case config.AIProviderOpenAI:
-		apiKey := cfg.GetAPIKeyForProvider(config.AIProviderOpenAI)
-		if apiKey == "" {
-			return nil, fmt.Errorf("OpenAI API key not configured")
-		}
-		baseURL := cfg.GetBaseURLForProvider(config.AIProviderOpenAI)
-		return NewOpenAIClient(apiKey, model, baseURL, timeout), nil
-
-	case config.AIProviderOpenRouter:
-		apiKey := cfg.GetAPIKeyForProvider(config.AIProviderOpenRouter)
-		if apiKey == "" {
-			return nil, fmt.Errorf("OpenRouter API key not configured")
-		}
-		baseURL := cfg.GetBaseURLForProvider(config.AIProviderOpenRouter)
-		return NewOpenAIClient(apiKey, model, baseURL, timeout), nil
-
-	case config.AIProviderDeepSeek:
-		apiKey := cfg.GetAPIKeyForProvider(config.AIProviderDeepSeek)
-		if apiKey == "" {
-			return nil, fmt.Errorf("DeepSeek API key not configured")
-		}
-		baseURL := cfg.GetBaseURLForProvider(config.AIProviderDeepSeek)
-		return NewOpenAIClient(apiKey, model, baseURL, timeout), nil
 
 	case config.AIProviderOllama:
 		baseURL := cfg.GetBaseURLForProvider(config.AIProviderOllama)

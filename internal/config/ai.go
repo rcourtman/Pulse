@@ -42,6 +42,12 @@ type AIConfig struct {
 	OpenRouterAPIKey string `json:"openrouter_api_key,omitempty"` // OpenRouter API key
 	DeepSeekAPIKey   string `json:"deepseek_api_key,omitempty"`   // DeepSeek API key
 	GeminiAPIKey     string `json:"gemini_api_key,omitempty"`     // Google Gemini API key
+	ZaiAPIKey        string `json:"zai_api_key,omitempty"`        // Z.ai (Zhipu GLM) API key
+	GroqAPIKey       string `json:"groq_api_key,omitempty"`       // Groq API key
+	MistralAPIKey    string `json:"mistral_api_key,omitempty"`    // Mistral API key
+	CerebrasAPIKey   string `json:"cerebras_api_key,omitempty"`   // Cerebras API key
+	TogetherAPIKey   string `json:"together_api_key,omitempty"`   // Together AI API key
+	FireworksAPIKey  string `json:"fireworks_api_key,omitempty"`  // Fireworks AI API key
 	OllamaBaseURL    string `json:"ollama_base_url,omitempty"`    // Ollama server URL (default: http://localhost:11434)
 	OllamaUsername   string `json:"ollama_username,omitempty"`    // Optional Basic Auth username for Ollama
 	OllamaPassword   string `json:"ollama_password,omitempty"`    // Optional Basic Auth password for Ollama
@@ -116,6 +122,12 @@ const (
 	AIProviderOllama     = "ollama"
 	AIProviderDeepSeek   = "deepseek"
 	AIProviderGemini     = "gemini"
+	AIProviderZai        = "zai" // Z.ai OpenAI-compatible provider
+	AIProviderGroq       = "groq"
+	AIProviderMistral    = "mistral"
+	AIProviderCerebras   = "cerebras"
+	AIProviderTogether   = "together"
+	AIProviderFireworks  = "fireworks"
 	AIProviderQuickstart = "quickstart" // Retired Pulse-hosted proxy marker retained only for legacy config migration.
 )
 
@@ -156,9 +168,15 @@ const (
 	DefaultAIModelQuickstart = "pulse-hosted"
 	DefaultOllamaBaseURL     = "http://localhost:11434"
 	DefaultOllamaKeepAlive   = "30s"
-	DefaultOpenRouterBaseURL = "https://openrouter.ai/api/v1/chat/completions"
-	DefaultDeepSeekBaseURL   = "https://api.deepseek.com/chat/completions"
+	DefaultOpenRouterBaseURL = "https://openrouter.ai/api/v1"
+	DefaultDeepSeekBaseURL   = "https://api.deepseek.com"
 	DefaultGeminiBaseURL     = "https://generativelanguage.googleapis.com/v1beta"
+	DefaultZaiBaseURL        = "https://api.z.ai/api/paas/v4"
+	DefaultGroqBaseURL       = "https://api.groq.com/openai/v1"
+	DefaultMistralBaseURL    = "https://api.mistral.ai/v1"
+	DefaultCerebrasBaseURL   = "https://api.cerebras.ai/v1"
+	DefaultTogetherBaseURL   = "https://api.together.xyz/v1"
+	DefaultFireworksBaseURL  = "https://api.fireworks.ai/inference/v1"
 )
 
 const (
@@ -330,22 +348,18 @@ func (c *AIConfig) GetOllamaKeepAlive() string {
 // IsConfigured returns true if the AI config has enough info to make API calls
 // For multi-provider setup, returns true if ANY provider is configured
 func (c *AIConfig) IsConfigured() bool {
-	if !c.Enabled {
+	if c == nil || !c.Enabled {
 		return false
 	}
-
-	if c.HasProvider(AIProviderAnthropic) || c.HasProvider(AIProviderOpenAI) ||
-		c.HasProvider(AIProviderOpenRouter) || c.HasProvider(AIProviderDeepSeek) || c.HasProvider(AIProviderOllama) ||
-		c.HasProvider(AIProviderGemini) {
-		return true
-	}
-
-	return false
+	return len(c.GetConfiguredProviders()) > 0
 }
 
 // HasProvider returns true if the specified provider has credentials configured
 func (c *AIConfig) HasProvider(provider string) bool {
-	switch provider {
+	if c == nil {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(provider)) {
 	case AIProviderAnthropic:
 		return c.AnthropicAPIKey != ""
 	case AIProviderOpenAI:
@@ -356,6 +370,18 @@ func (c *AIConfig) HasProvider(provider string) bool {
 		return c.DeepSeekAPIKey != ""
 	case AIProviderGemini:
 		return c.GeminiAPIKey != ""
+	case AIProviderZai:
+		return c.ZaiAPIKey != ""
+	case AIProviderGroq:
+		return c.GroqAPIKey != ""
+	case AIProviderMistral:
+		return c.MistralAPIKey != ""
+	case AIProviderCerebras:
+		return c.CerebrasAPIKey != ""
+	case AIProviderTogether:
+		return c.TogetherAPIKey != ""
+	case AIProviderFireworks:
+		return c.FireworksAPIKey != ""
 	case AIProviderOllama:
 		// Ollama is only "configured" if user has explicitly set a base URL
 		return c.OllamaBaseURL != ""
@@ -366,31 +392,24 @@ func (c *AIConfig) HasProvider(provider string) bool {
 
 // GetConfiguredProviders returns a list of all providers with credentials configured
 func (c *AIConfig) GetConfiguredProviders() []string {
-	var providers []string
-	if c.HasProvider(AIProviderAnthropic) {
-		providers = append(providers, AIProviderAnthropic)
+	if c == nil {
+		return nil
 	}
-	if c.HasProvider(AIProviderOpenAI) {
-		providers = append(providers, AIProviderOpenAI)
+	var configured []string
+	for _, def := range AIConfigurableProviderDefinitions() {
+		if c.HasProvider(def.ID) {
+			configured = append(configured, def.ID)
+		}
 	}
-	if c.HasProvider(AIProviderOpenRouter) {
-		providers = append(providers, AIProviderOpenRouter)
-	}
-	if c.HasProvider(AIProviderDeepSeek) {
-		providers = append(providers, AIProviderDeepSeek)
-	}
-	if c.HasProvider(AIProviderGemini) {
-		providers = append(providers, AIProviderGemini)
-	}
-	if c.HasProvider(AIProviderOllama) {
-		providers = append(providers, AIProviderOllama)
-	}
-	return providers
+	return configured
 }
 
 // GetAPIKeyForProvider returns the API key for the specified provider
 func (c *AIConfig) GetAPIKeyForProvider(provider string) string {
-	switch provider {
+	if c == nil {
+		return ""
+	}
+	switch strings.ToLower(strings.TrimSpace(provider)) {
 	case AIProviderAnthropic:
 		if c.AnthropicAPIKey != "" {
 			return c.AnthropicAPIKey
@@ -411,29 +430,51 @@ func (c *AIConfig) GetAPIKeyForProvider(provider string) string {
 		if c.GeminiAPIKey != "" {
 			return c.GeminiAPIKey
 		}
+	case AIProviderZai:
+		if c.ZaiAPIKey != "" {
+			return c.ZaiAPIKey
+		}
+	case AIProviderGroq:
+		if c.GroqAPIKey != "" {
+			return c.GroqAPIKey
+		}
+	case AIProviderMistral:
+		if c.MistralAPIKey != "" {
+			return c.MistralAPIKey
+		}
+	case AIProviderCerebras:
+		if c.CerebrasAPIKey != "" {
+			return c.CerebrasAPIKey
+		}
+	case AIProviderTogether:
+		if c.TogetherAPIKey != "" {
+			return c.TogetherAPIKey
+		}
+	case AIProviderFireworks:
+		if c.FireworksAPIKey != "" {
+			return c.FireworksAPIKey
+		}
 	}
 	return ""
 }
 
 // GetBaseURLForProvider returns the base URL for the specified provider
 func (c *AIConfig) GetBaseURLForProvider(provider string) string {
+	provider = strings.ToLower(strings.TrimSpace(provider))
 	switch provider {
 	case AIProviderOllama:
-		if c.OllamaBaseURL != "" {
+		if c != nil && c.OllamaBaseURL != "" {
 			return c.OllamaBaseURL
 		}
 		return DefaultOllamaBaseURL
 	case AIProviderOpenAI:
-		if c.OpenAIBaseURL != "" {
+		if c != nil && c.OpenAIBaseURL != "" {
 			return c.OpenAIBaseURL
 		}
 		return "" // Uses default OpenAI URL
-	case AIProviderOpenRouter:
-		return DefaultOpenRouterBaseURL
-	case AIProviderDeepSeek:
-		return DefaultDeepSeekBaseURL
-	case AIProviderGemini:
-		return DefaultGeminiBaseURL
+	}
+	if def, ok := LookupAIProviderDefinition(provider); ok {
+		return def.DefaultBaseURL
 	}
 	return ""
 }
@@ -447,8 +488,10 @@ func (c *AIConfig) IsUsingOAuth() bool {
 // ParseModelString parses a model string in "provider:model-name" format
 // Returns the provider and model name. If no provider prefix, attempts to detect.
 func ParseModelString(model string) (provider, modelName string) {
+	model = strings.TrimSpace(model)
 	// Check for explicit provider prefix
-	for _, p := range []string{AIProviderAnthropic, AIProviderOpenAI, AIProviderOpenRouter, AIProviderDeepSeek, AIProviderGemini, AIProviderOllama, AIProviderQuickstart} {
+	for _, def := range AIProviderDefinitions() {
+		p := def.ID
 		prefix := p + ":"
 		if len(model) > len(prefix) && model[:len(prefix)] == prefix {
 			return p, model[len(prefix):]
@@ -501,24 +544,11 @@ func NormalizeQuickstartModelString(model string) string {
 // DefaultModelForProvider returns the default "provider:model" string for a given provider name.
 // Returns empty string if the provider is unknown.
 func DefaultModelForProvider(provider string) string {
-	switch provider {
-	case AIProviderAnthropic:
-		return FormatModelString(AIProviderAnthropic, "claude-3-5-sonnet-latest")
-	case AIProviderOpenAI:
-		return FormatModelString(AIProviderOpenAI, "gpt-4o")
-	case AIProviderOpenRouter:
-		return FormatModelString(AIProviderOpenRouter, "openai/gpt-4o-mini")
-	case AIProviderDeepSeek:
-		return FormatModelString(AIProviderDeepSeek, DeepSeekModelV4Flash)
-	case AIProviderGemini:
-		return FormatModelString(AIProviderGemini, "gemini-1.5-pro")
-	case AIProviderOllama:
-		return FormatModelString(AIProviderOllama, "llama3.2")
-	case AIProviderQuickstart:
-		return ""
-	default:
+	def, ok := LookupAIProviderDefinition(provider)
+	if !ok || def.DefaultModel == "" || def.Protocol == AIProviderProtocolRetired {
 		return ""
 	}
+	return FormatModelString(def.ID, def.DefaultModel)
 }
 
 // GetModel returns the explicitly configured model, if any.

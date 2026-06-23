@@ -1460,7 +1460,7 @@ func TestHandleChat_RehydratesPatrolRunHandoffContextFromBackend(t *testing.T) {
 			assert.Equal(t, chat.HandoffMetadata{
 				Kind:           "patrol_run",
 				RunID:          "run-runtime-error",
-				RunType:        "Scoped run",
+				RunType:        "Targeted check",
 				RunStatus:      "error",
 				RuntimeFailure: true,
 			}, reqArg.HandoffMetadata)
@@ -1518,12 +1518,12 @@ func TestHandleChat_RehydratesStoredPatrolRunHandoffMetadataForFollowUp(t *testi
 			reqArg := args.Get(1).(chat.ExecuteRequest)
 			assert.Equal(t, "what changed?", reqArg.Prompt)
 			assert.Contains(t, reqArg.HandoffContext, "Run ID: run-stored")
-			assert.Contains(t, reqArg.HandoffContext, "Run Type: Verification check")
+			assert.Contains(t, reqArg.HandoffContext, "Run Type: Follow-up check")
 			assert.Equal(t, []chat.HandoffResource{{ID: "storage-1", Type: "storage"}}, reqArg.HandoffResources)
 			assert.Equal(t, chat.HandoffMetadata{
 				Kind:      "patrol_run",
 				RunID:     "run-stored",
-				RunType:   "Verification check",
+				RunType:   "Follow-up check",
 				RunStatus: "healthy",
 			}, reqArg.HandoffMetadata)
 		})

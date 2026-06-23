@@ -394,7 +394,12 @@ recovery scope, or a storage/recovery-owned secret source.
    resulting Assistant context if exposed by another surface, but must not
    treat resource-to-action-target coercion as recovery scope, backup
    ownership, restore authorization, or storage-provider identity.
-   freshness, restore capability, or storage-provider health.
+   AI provider registry and `/api/settings/ai` credential-shape changes in
+   `internal/api/ai_handlers.go` are adjacent runtime configuration only:
+   provider ids, default model routes, provider endpoints, API-key fields, and
+   configured-state fields must not become backup-source identity, recovery
+   target identity, restore authorization, storage-provider health, or
+   recovery-point metadata.
    Shared API-token transport helpers may be consumed by storage/recovery-
    adjacent flows, but `owner_user_id` remains server-authored token identity
    metadata; storage/recovery extensions must not pass metadata that authors

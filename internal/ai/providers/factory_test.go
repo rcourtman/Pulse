@@ -129,9 +129,8 @@ func TestNewFromConfig_OpenRouterWithAPIKey(t *testing.T) {
 	if provider == nil {
 		t.Fatal("Provider should not be nil")
 	}
-	// OpenRouter uses OpenAI-compatible client
-	if provider.Name() != "openai" {
-		t.Errorf("Expected provider name 'openai' (OpenRouter uses OpenAI client), got '%s'", provider.Name())
+	if provider.Name() != config.AIProviderOpenRouter {
+		t.Errorf("Expected provider name %q, got %q", config.AIProviderOpenRouter, provider.Name())
 	}
 }
 
@@ -176,9 +175,8 @@ func TestNewFromConfig_DeepSeekWithAPIKey(t *testing.T) {
 	if provider == nil {
 		t.Fatal("Provider should not be nil")
 	}
-	// DeepSeek uses OpenAI-compatible client
-	if provider.Name() != "openai" {
-		t.Errorf("Expected provider name 'openai' (DeepSeek uses OpenAI client), got '%s'", provider.Name())
+	if provider.Name() != config.AIProviderDeepSeek {
+		t.Errorf("Expected provider name %q, got %q", config.AIProviderDeepSeek, provider.Name())
 	}
 }
 
@@ -313,9 +311,8 @@ func TestNewForProvider_OpenRouter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
-	// OpenRouter uses OpenAI-compatible client
-	if provider.Name() != "openai" {
-		t.Errorf("Expected provider name 'openai', got '%s'", provider.Name())
+	if provider.Name() != config.AIProviderOpenRouter {
+		t.Errorf("Expected provider name %q, got %q", config.AIProviderOpenRouter, provider.Name())
 	}
 }
 
@@ -338,9 +335,8 @@ func TestNewForProvider_DeepSeek(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
-	// DeepSeek uses OpenAI-compatible client
-	if provider.Name() != "openai" {
-		t.Errorf("Expected provider name 'openai', got '%s'", provider.Name())
+	if provider.Name() != config.AIProviderDeepSeek {
+		t.Errorf("Expected provider name %q, got %q", config.AIProviderDeepSeek, provider.Name())
 	}
 }
 
@@ -351,6 +347,78 @@ func TestNewForProvider_DeepSeekNoAPIKey(t *testing.T) {
 	_, err := NewForProvider(cfg, config.AIProviderDeepSeek, "deepseek-v4-flash")
 	if err == nil {
 		t.Error("Expected error for DeepSeek without API key")
+	}
+}
+
+func TestNewForProvider_OpenAICompatibleRegistryProviders(t *testing.T) {
+	tests := []struct {
+		name      string
+		provider  string
+		model     string
+		configure func(*config.AIConfig)
+	}{
+		{
+			name:     "Z.ai",
+			provider: config.AIProviderZai,
+			model:    "glm-5.2",
+			configure: func(cfg *config.AIConfig) {
+				cfg.ZaiAPIKey = "test-key"
+			},
+		},
+		{
+			name:     "Groq",
+			provider: config.AIProviderGroq,
+			model:    "llama-3.3-70b-versatile",
+			configure: func(cfg *config.AIConfig) {
+				cfg.GroqAPIKey = "test-key"
+			},
+		},
+		{
+			name:     "Mistral",
+			provider: config.AIProviderMistral,
+			model:    "mistral-large-latest",
+			configure: func(cfg *config.AIConfig) {
+				cfg.MistralAPIKey = "test-key"
+			},
+		},
+		{
+			name:     "Cerebras",
+			provider: config.AIProviderCerebras,
+			model:    "llama-4-scout-17b-16e-instruct",
+			configure: func(cfg *config.AIConfig) {
+				cfg.CerebrasAPIKey = "test-key"
+			},
+		},
+		{
+			name:     "Together",
+			provider: config.AIProviderTogether,
+			model:    "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+			configure: func(cfg *config.AIConfig) {
+				cfg.TogetherAPIKey = "test-key"
+			},
+		},
+		{
+			name:     "Fireworks",
+			provider: config.AIProviderFireworks,
+			model:    "accounts/fireworks/models/llama-v3p1-70b-instruct",
+			configure: func(cfg *config.AIConfig) {
+				cfg.FireworksAPIKey = "test-key"
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &config.AIConfig{Enabled: true}
+			tt.configure(cfg)
+			provider, err := NewForProvider(cfg, tt.provider, tt.model)
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+			if provider.Name() != tt.provider {
+				t.Errorf("Expected provider name %q, got %q", tt.provider, provider.Name())
+			}
+		})
 	}
 }
 

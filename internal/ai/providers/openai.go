@@ -37,6 +37,7 @@ const (
 // OpenAIClient implements the Provider interface for OpenAI's API
 // Also works with OpenAI-compatible APIs like DeepSeek
 type OpenAIClient struct {
+	providerName   string
 	apiKey         string
 	model          string
 	baseURL        string
@@ -52,38 +53,26 @@ type OpenAIClient struct {
 // NewOpenAIClient creates a new OpenAI API client
 // timeout is optional - pass 0 to use the default 5 minute timeout
 func NewOpenAIClient(apiKey, model, baseURL string, timeout time.Duration) *OpenAIClient {
+	return NewOpenAICompatibleClient("openai", apiKey, model, baseURL, timeout)
+}
+
+// NewOpenAICompatibleClient creates a client for OpenAI-compatible chat APIs.
+func NewOpenAICompatibleClient(providerName, apiKey, model, baseURL string, timeout time.Duration) *OpenAIClient {
+	providerName = strings.ToLower(strings.TrimSpace(providerName))
+	if providerName == "" {
+		providerName = "openai"
+	}
 	if baseURL == "" {
 		baseURL = openaiAPIURL
 	} else {
-		// Normalize baseURL: ensure it ends with /chat/completions for chat endpoint
-		// Users may provide URLs like "https://openrouter.ai/api/v1" which need the path appended
-		baseURL = strings.TrimSuffix(baseURL, "/")
-		if !strings.HasSuffix(baseURL, "/chat/completions") {
-			// If URL ends with /v1, append /chat/completions
-			// Otherwise append /v1/chat/completions
-			if strings.HasSuffix(baseURL, "/v1") {
-				baseURL = baseURL + "/chat/completions"
-			} else if strings.HasSuffix(baseURL, "/completions") {
-				// URL already has /completions, make it /chat/completions
-				baseURL = strings.TrimSuffix(baseURL, "/completions") + "/chat/completions"
-			} else {
-				// Assume it's a base URL, append full path
-				baseURL = baseURL + "/v1/chat/completions"
-			}
-		}
+		baseURL = normalizeOpenAICompatibleChatURL(baseURL)
 	}
-	// Strip provider prefix if present - the model should be just the model name
-	if strings.HasPrefix(model, "openai:") {
-		model = strings.TrimPrefix(model, "openai:")
-	} else if strings.HasPrefix(model, "openrouter:") {
-		model = strings.TrimPrefix(model, "openrouter:")
-	} else if strings.HasPrefix(model, "deepseek:") {
-		model = strings.TrimPrefix(model, "deepseek:")
-	}
+	model = stripOpenAICompatibleProviderPrefix(providerName, model)
 	if timeout <= 0 {
 		timeout = 300 * time.Second // Default 5 minutes
 	}
 	return &OpenAIClient{
+		providerName:       providerName,
 		apiKey:             apiKey,
 		model:              model,
 		baseURL:            baseURL,
@@ -92,6 +81,60 @@ func NewOpenAIClient(apiKey, model, baseURL string, timeout time.Duration) *Open
 		streamClient:       newOpenAIStreamHTTPClient(timeout),
 		streamChunkTimeout: boundedOpenAIStreamChunkTimeout(timeout),
 	}
+}
+
+func normalizeOpenAICompatibleChatURL(baseURL string) string {
+	baseURL = strings.TrimSpace(baseURL)
+	if baseURL == "" {
+		return openaiAPIURL
+	}
+	trimmed := strings.TrimRight(baseURL, "/")
+	if strings.HasSuffix(trimmed, "/chat/completions") {
+		return trimmed
+	}
+	if strings.HasSuffix(trimmed, "/completions") {
+		return strings.TrimSuffix(trimmed, "/completions") + "/chat/completions"
+	}
+
+	u, err := url.Parse(trimmed)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		if strings.Contains(trimmed, "/") {
+			return trimmed + "/chat/completions"
+		}
+		return trimmed + "/v1/chat/completions"
+	}
+
+	path := strings.TrimRight(u.Path, "/")
+	if path == "" {
+		u.Path = "/v1/chat/completions"
+	} else {
+		u.Path = path + "/chat/completions"
+	}
+	return u.String()
+}
+
+func stripOpenAICompatibleProviderPrefix(providerName, model string) string {
+	model = strings.TrimSpace(model)
+	prefix := strings.ToLower(strings.TrimSpace(providerName)) + ":"
+	if prefix != ":" && strings.HasPrefix(strings.ToLower(model), prefix) {
+		return model[len(prefix):]
+	}
+	for _, knownPrefix := range []string{
+		"openai:",
+		"openrouter:",
+		"deepseek:",
+		"zai:",
+		"groq:",
+		"mistral:",
+		"cerebras:",
+		"together:",
+		"fireworks:",
+	} {
+		if strings.HasPrefix(strings.ToLower(model), knownPrefix) {
+			return model[len(knownPrefix):]
+		}
+	}
+	return model
 }
 
 func newOpenAIStreamHTTPClient(timeout time.Duration) *http.Client {
@@ -167,6 +210,9 @@ func isRetryableOpenAIStreamStatus(statusCode int) bool {
 
 // Name returns the provider name
 func (c *OpenAIClient) Name() string {
+	if strings.TrimSpace(c.providerName) != "" {
+		return c.providerName
+	}
 	return "openai"
 }
 
@@ -254,11 +300,11 @@ type openaiErrorDetail struct {
 
 // isDeepSeek returns true if this client is configured for DeepSeek
 func (c *OpenAIClient) isDeepSeek() bool {
-	return strings.Contains(c.baseURL, "deepseek.com")
+	return c.Name() == "deepseek" || strings.Contains(c.baseURL, "deepseek.com")
 }
 
 func (c *OpenAIClient) isOpenRouter() bool {
-	return strings.Contains(c.baseURL, "openrouter.ai")
+	return c.Name() == "openrouter" || strings.Contains(c.baseURL, "openrouter.ai")
 }
 
 // isDeepSeekReasoner returns true if using DeepSeek's reasoning model
@@ -372,20 +418,13 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 
 	// Use provided model or fall back to client default
 	model := req.Model
-	// Strip provider prefix if present - callers may pass the full "provider:model" string
-	if strings.HasPrefix(model, "openai:") {
-		model = strings.TrimPrefix(model, "openai:")
-	} else if strings.HasPrefix(model, "openrouter:") {
-		model = strings.TrimPrefix(model, "openrouter:")
-	} else if strings.HasPrefix(model, "deepseek:") {
-		model = strings.TrimPrefix(model, "deepseek:")
-	}
+	model = stripOpenAICompatibleProviderPrefix(c.Name(), model)
 	if model == "" {
 		model = c.model
 	}
 
 	// Debug log to trace model issues
-	log.Debug().Str("model", model).Str("req_model", req.Model).Str("c_model", c.model).Str("base_url", c.baseURL).Msg("OpenAI/DeepSeek chat request")
+	log.Debug().Str("provider", c.Name()).Str("model", model).Str("req_model", req.Model).Str("c_model", c.model).Str("base_url", c.baseURL).Msg("OpenAI-compatible chat request")
 
 	// Build request
 	openaiReq := openaiRequest{
@@ -436,7 +475,7 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	}
 
 	// Log actual model being sent (INFO level for visibility)
-	log.Info().Str("model_in_request", openaiReq.Model).Str("base_url", c.baseURL).Msg("sending OpenAI/DeepSeek request")
+	log.Info().Str("provider", c.Name()).Str("model_in_request", openaiReq.Model).Str("base_url", c.baseURL).Msg("sending OpenAI-compatible request")
 
 	body, err := json.Marshal(openaiReq)
 	if err != nil {
@@ -788,13 +827,7 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 	}
 
 	model := req.Model
-	if strings.HasPrefix(model, "openai:") {
-		model = strings.TrimPrefix(model, "openai:")
-	} else if strings.HasPrefix(model, "openrouter:") {
-		model = strings.TrimPrefix(model, "openrouter:")
-	} else if strings.HasPrefix(model, "deepseek:") {
-		model = strings.TrimPrefix(model, "deepseek:")
-	}
+	model = stripOpenAICompatibleProviderPrefix(c.Name(), model)
 	if model == "" {
 		model = c.model
 	}
@@ -1184,6 +1217,25 @@ func (c *OpenAIClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 				Description: strings.TrimSpace(m.Description),
 				CreatedAt:   m.Created,
 				Notable:     cache.IsNotable(notableProviderForOpenRouterModel(m.ID), m.ID, m.Created),
+			})
+			continue
+		}
+
+		if c.Name() != "openai" {
+			modelName := strings.TrimSpace(m.Name)
+			if modelName == "" {
+				modelName = m.ID
+			}
+			description := strings.TrimSpace(m.Description)
+			if description == "" && strings.TrimSpace(m.OwnedBy) != "" {
+				description = strings.TrimSpace(m.OwnedBy)
+			}
+			models = append(models, ModelInfo{
+				ID:          m.ID,
+				Name:        modelName,
+				Description: description,
+				CreatedAt:   m.Created,
+				Notable:     cache.IsNotable(c.Name(), m.ID, m.Created),
 			})
 			continue
 		}

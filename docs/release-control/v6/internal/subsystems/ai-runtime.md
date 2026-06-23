@@ -106,6 +106,14 @@ they may decide which manifest-owned prompt is contextually usable, but display
 labels and rendered prompt text must come from shared manifest metadata and the
 shared backend renderer on
 `POST /api/ai/workflow-prompts/render`.
+AI provider integration is registry-owned. Provider identity, display names,
+protocol family, default model, default base URL, credential fields,
+configured-state fields, clear-key fields, env-var hints, docs links, and
+fallback catalog models belong in the config-layer provider registry, not in
+factory branches, settings-card literals, or per-provider model-list code. New
+direct chat-compatible providers extend that registry and the shared
+chat-compatible provider client; native transports remain explicit only where
+the protocol is not chat-compatible.
 
 ## Canonical Files
 
@@ -115,6 +123,7 @@ shared backend renderer on
    1c. `internal/agentcapabilities/`
    1d. `scripts/generate-pulse-intelligence-docs.go`
 2. `internal/config/ai.go`
+   2a. `internal/config/ai_providers.go`
 3. `internal/api/ai_handler.go`
 4. `internal/api/ai_handlers.go`
 5. `internal/api/ai_hosted_runtime.go`
@@ -1008,7 +1017,18 @@ but status selection must read the current workflow status directly rather than
 deriving an older display status from `workflowStatusHistory`.
 
 1. Add or change chat runtime, Patrol orchestration, findings generation, or remediation behavior through `internal/ai/`
-2. Add or change canonical AI provider config, provider-scoped model selection, or runtime auth/base-URL defaults through `internal/config/ai.go`.
+2. Add or change canonical AI provider config, provider registry metadata, provider-scoped model selection, or runtime auth/base-URL defaults through `internal/config/ai.go` and `internal/config/ai_providers.go`.
+   Direct providers that speak the shared chat-compatible API must use the
+   registry-backed `AIProviderProtocolOpenAICompatible` path and
+   `NewOpenAICompatibleClient` rather than adding new provider-specific factory
+   branches. Per-provider auth fields, configured booleans, clear-key fields,
+   default base URLs, display names, docs links, env-var hints, and fallback
+   model rows must be declared once in `internal/config/ai_providers.go` and
+   projected to `/api/settings/ai`; frontend settings may arrange those
+   provider cards, but must not become the source of truth for provider
+   capability or credential metadata. Provider model-cache keys must include
+   provider identity, auth/base-URL inputs, and credential identity changes
+   without exposing raw secret values.
    Ollama request keep-alive is a provider runtime option owned by this path:
    `internal/config/ai.go` stores the value, `/api/settings/ai` exposes it,
    and `internal/ai/providers/ollama.go` is the only layer that turns it into

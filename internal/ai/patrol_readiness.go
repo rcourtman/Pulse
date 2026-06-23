@@ -66,7 +66,7 @@ func EvaluatePatrolConfigReadiness(cfg *config.AIConfig) PatrolConfigReadiness {
 		return patrolConfigReadiness(provider, model, PatrolReadinessNotReady, PatrolFailureCauseModelNotSelected, "No concrete Patrol model is selected.")
 	}
 	if !cfg.HasProvider(provider) {
-		return patrolConfigReadiness(provider, model, PatrolReadinessNotReady, PatrolFailureCauseModelProviderUnconfigured, fmt.Sprintf("The selected Patrol model uses %s, but that provider is not configured.", provider))
+		return patrolConfigReadiness(provider, model, PatrolReadinessNotReady, PatrolFailureCauseModelProviderUnconfigured, fmt.Sprintf("The selected Patrol model uses %s, but that provider is not configured.", config.AIProviderDisplayName(provider)))
 	}
 
 	status, cause, message := PatrolToolReadinessForModel(provider, model)
@@ -88,13 +88,18 @@ func PatrolToolReadinessForModel(provider, model string) (string, PatrolFailureC
 		strings.Contains(normalizedModel, "reasoner") ||
 		strings.Contains(normalizedModel, "qwq"):
 		return PatrolReadinessNotReady, PatrolFailureCauseModelUnsupportedTools, "The selected Patrol model is a reasoning-only model family that commonly does not emit tool calls. Patrol needs tool calling to inspect resources and create governed findings."
-	case provider == config.AIProviderOpenRouter:
-		return PatrolReadinessWarning, PatrolFailureCauseModelToolSupportUnverified, "OpenRouter routes vary by model and endpoint. Patrol will fail closed if the routed model rejects tools or tool_choice."
+	case providerDefinitionIsGateway(provider):
+		return PatrolReadinessWarning, PatrolFailureCauseModelToolSupportUnverified, fmt.Sprintf("%s routes vary by model and endpoint. Patrol will fail closed if the routed model rejects tools or tool_choice.", config.AIProviderDisplayName(provider))
 	case provider == config.AIProviderOllama:
 		return PatrolReadinessWarning, PatrolFailureCauseModelToolSupportUnverified, "Ollama connectivity alone does not prove tool support. Use an Ollama model that returns tool_calls for Patrol verification."
 	default:
 		return PatrolReadinessReady, PatrolFailureCauseNone, "The selected provider path supports Patrol's tool-backed analysis contract."
 	}
+}
+
+func providerDefinitionIsGateway(provider string) bool {
+	def, ok := config.LookupAIProviderDefinition(provider)
+	return ok && def.Gateway
 }
 
 func patrolDeepSeekToolReadiness(normalizedModel string) (string, PatrolFailureCause, string) {

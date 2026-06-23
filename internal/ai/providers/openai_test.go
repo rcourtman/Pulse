@@ -195,6 +195,55 @@ func TestNewOpenAIClient_BoundsStreamResponseHeaderTimeout(t *testing.T) {
 	assert.Equal(t, 2*time.Second, shortTimeoutClient.streamChunkTimeout)
 }
 
+func TestNewOpenAICompatibleClient_NormalizesProviderBasePaths(t *testing.T) {
+	tests := []struct {
+		name     string
+		provider string
+		baseURL  string
+		wantURL  string
+	}{
+		{
+			name:     "host only appends openai v1 chat path",
+			provider: "openai",
+			baseURL:  "https://api.example.com",
+			wantURL:  "https://api.example.com/v1/chat/completions",
+		},
+		{
+			name:     "v1 path appends chat completions",
+			provider: "groq",
+			baseURL:  "https://api.groq.com/openai/v1",
+			wantURL:  "https://api.groq.com/openai/v1/chat/completions",
+		},
+		{
+			name:     "v4 provider path keeps provider path",
+			provider: "zai",
+			baseURL:  "https://api.z.ai/api/paas/v4",
+			wantURL:  "https://api.z.ai/api/paas/v4/chat/completions",
+		},
+		{
+			name:     "inference path keeps provider path",
+			provider: "fireworks",
+			baseURL:  "https://api.fireworks.ai/inference/v1",
+			wantURL:  "https://api.fireworks.ai/inference/v1/chat/completions",
+		},
+		{
+			name:     "completion endpoint becomes chat completions",
+			provider: "mistral",
+			baseURL:  "https://api.mistral.ai/v1/completions",
+			wantURL:  "https://api.mistral.ai/v1/chat/completions",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := NewOpenAICompatibleClient(tt.provider, "sk-test", tt.provider+":model-id", tt.baseURL, 0)
+			assert.Equal(t, tt.provider, client.Name())
+			assert.Equal(t, tt.wantURL, client.baseURL)
+			assert.Equal(t, "model-id", client.model)
+		})
+	}
+}
+
 func TestOpenAIClient_ChatStream_TimesOutWaitingForFirstStreamChunk(t *testing.T) {
 	body := newBlockingReadCloser()
 	client := NewOpenAIClient("sk-test", "gpt-4", "https://example.invalid/v1", time.Second)

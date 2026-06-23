@@ -4333,7 +4333,7 @@ func (s *Service) ListModelsWithCache(ctx context.Context) ([]providers.ModelInf
 	}
 	s.modelsCache.mu.Unlock()
 
-	providersList := []string{config.AIProviderAnthropic, config.AIProviderOpenAI, config.AIProviderOpenRouter, config.AIProviderDeepSeek, config.AIProviderGemini, config.AIProviderOllama}
+	providersList := cfg.GetConfiguredProviders()
 
 	allCached := true
 
@@ -4456,35 +4456,20 @@ func mergeProviderCatalogFallbackModels(providerName string, models []providers.
 }
 
 func providerCatalogFallbackModels(providerName string) []providers.ModelInfo {
-	switch providerName {
-	case config.AIProviderDeepSeek:
-		return []providers.ModelInfo{
-			{
-				ID:          config.DeepSeekModelV4Flash,
-				Name:        "DeepSeek V4 Flash",
-				Description: "DeepSeek: current V4 Flash direct API model",
-				Notable:     true,
-			},
-			{
-				ID:          config.DeepSeekModelV4Pro,
-				Name:        "DeepSeek V4 Pro",
-				Description: "DeepSeek: current V4 Pro direct API model",
-				Notable:     true,
-			},
-			{
-				ID:          config.DeepSeekModelLegacyChat,
-				Name:        "DeepSeek Chat (legacy alias)",
-				Description: "DeepSeek: legacy alias currently routing to V4 Flash",
-			},
-			{
-				ID:          config.DeepSeekModelLegacyReasoner,
-				Name:        "DeepSeek Reasoner (legacy alias)",
-				Description: "DeepSeek: legacy alias currently routing to V4 Flash",
-			},
-		}
-	default:
+	fallbacks := config.AIProviderFallbackModels(providerName)
+	if len(fallbacks) == 0 {
 		return nil
 	}
+	models := make([]providers.ModelInfo, 0, len(fallbacks))
+	for _, fallback := range fallbacks {
+		models = append(models, providers.ModelInfo{
+			ID:          fallback.ID,
+			Name:        fallback.Name,
+			Description: fallback.Description,
+			Notable:     fallback.Notable,
+		})
+	}
+	return models
 }
 
 func buildModelsCacheKey(cfg *config.AIConfig) string {
@@ -4497,6 +4482,8 @@ func buildModelsCacheKey(cfg *config.AIConfig) string {
 	b.WriteString(strings.Join(cfg.GetConfiguredProviders(), ","))
 	b.WriteString("|auth=")
 	b.WriteString(string(cfg.AuthMethod))
+	b.WriteString("|keys=")
+	b.WriteString(aiCredentialCacheSignature(cfg))
 
 	b.WriteString("|openai_base=")
 	b.WriteString(cfg.OpenAIBaseURL)
@@ -4511,24 +4498,26 @@ func buildModelsCacheKey(cfg *config.AIConfig) string {
 	return b.String()
 }
 
+func aiCredentialCacheSignature(cfg *config.AIConfig) string {
+	if cfg == nil {
+		return ""
+	}
+	var b strings.Builder
+	for _, providerName := range cfg.GetConfiguredProviders() {
+		b.WriteString(providerName)
+		b.WriteString("=")
+		if key := cfg.GetAPIKeyForProvider(providerName); key != "" {
+			sum := sha256.Sum256([]byte(key))
+			b.WriteString(hex.EncodeToString(sum[:]))
+		}
+		b.WriteString(";")
+	}
+	return b.String()
+}
+
 // providerDisplayName returns a user-friendly name for a provider
 func providerDisplayName(provider string) string {
-	switch provider {
-	case config.AIProviderAnthropic:
-		return "Anthropic"
-	case config.AIProviderOpenAI:
-		return "OpenAI"
-	case config.AIProviderOpenRouter:
-		return "OpenRouter"
-	case config.AIProviderDeepSeek:
-		return "DeepSeek"
-	case config.AIProviderGemini:
-		return "Google Gemini"
-	case config.AIProviderOllama:
-		return "Ollama"
-	default:
-		return provider
-	}
+	return config.AIProviderDisplayName(provider)
 }
 
 // Reload reloads the AI configuration (call after settings change)

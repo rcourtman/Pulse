@@ -13,6 +13,12 @@ export type AIProviderCredentialsFormState = {
   openaiApiKey: string;
   openrouterApiKey: string;
   deepseekApiKey: string;
+  zaiApiKey: string;
+  groqApiKey: string;
+  mistralApiKey: string;
+  cerebrasApiKey: string;
+  togetherApiKey: string;
+  fireworksApiKey: string;
   geminiApiKey: string;
   ollamaBaseUrl: string;
   ollamaKeepAlive: string;
@@ -62,6 +68,12 @@ export const AI_PROVIDERS: AIProvider[] = [
   'openrouter',
   'deepseek',
   'gemini',
+  'zai',
+  'groq',
+  'mistral',
+  'cerebras',
+  'together',
+  'fireworks',
   'ollama',
 ];
 
@@ -71,6 +83,12 @@ export const AI_SETUP_PROVIDER_OPTIONS: SelectionCardOption<AIProvider>[] = [
   { value: 'openrouter', title: 'OpenRouter', description: 'Gateway' },
   { value: 'deepseek', title: 'DeepSeek', description: 'V4' },
   { value: 'gemini', title: 'Gemini', description: 'Google' },
+  { value: 'zai', title: 'Z.ai', description: 'GLM' },
+  { value: 'groq', title: 'Groq', description: 'Fast' },
+  { value: 'mistral', title: 'Mistral', description: 'Models' },
+  { value: 'cerebras', title: 'Cerebras', description: 'Inference' },
+  { value: 'together', title: 'Together', description: 'Open models' },
+  { value: 'fireworks', title: 'Fireworks', description: 'Open models' },
   { value: 'ollama', title: 'Ollama', description: 'Local' },
 ];
 
@@ -134,6 +152,84 @@ export const AI_PROVIDER_CONFIGS: AIProviderConfig[] = [
     clearTitle: 'Clear API key',
   },
   {
+    provider: 'zai',
+    title: 'Z.ai',
+    configuredLabel: 'Configured',
+    inputType: 'password',
+    inputField: 'zaiApiKey',
+    placeholder: 'Z.AI API key',
+    configuredPlaceholder: '••••••••••• (configured)',
+    actionLinkLabel: 'Open docs →',
+    actionLinkHref: 'https://docs.z.ai/guides/develop/openai/python',
+    helperText: 'Uses https://api.z.ai/api/paas/v4 automatically.',
+    clearTitle: 'Clear API key',
+  },
+  {
+    provider: 'groq',
+    title: 'Groq',
+    configuredLabel: 'Configured',
+    inputType: 'password',
+    inputField: 'groqApiKey',
+    placeholder: 'gsk_...',
+    configuredPlaceholder: '••••••••••• (configured)',
+    actionLinkLabel: 'Get API key →',
+    actionLinkHref: 'https://console.groq.com/keys',
+    helperText: 'Uses https://api.groq.com/openai/v1 automatically.',
+    clearTitle: 'Clear API key',
+  },
+  {
+    provider: 'mistral',
+    title: 'Mistral',
+    configuredLabel: 'Configured',
+    inputType: 'password',
+    inputField: 'mistralApiKey',
+    placeholder: 'Mistral API key',
+    configuredPlaceholder: '••••••••••• (configured)',
+    actionLinkLabel: 'Get API key →',
+    actionLinkHref: 'https://console.mistral.ai/api-keys',
+    helperText: 'Uses https://api.mistral.ai/v1 automatically.',
+    clearTitle: 'Clear API key',
+  },
+  {
+    provider: 'cerebras',
+    title: 'Cerebras',
+    configuredLabel: 'Configured',
+    inputType: 'password',
+    inputField: 'cerebrasApiKey',
+    placeholder: 'Cerebras API key',
+    configuredPlaceholder: '••••••••••• (configured)',
+    actionLinkLabel: 'Open docs →',
+    actionLinkHref: 'https://inference-docs.cerebras.ai/resources/openai',
+    helperText: 'Uses https://api.cerebras.ai/v1 automatically.',
+    clearTitle: 'Clear API key',
+  },
+  {
+    provider: 'together',
+    title: 'Together AI',
+    configuredLabel: 'Configured',
+    inputType: 'password',
+    inputField: 'togetherApiKey',
+    placeholder: 'Together API key',
+    configuredPlaceholder: '••••••••••• (configured)',
+    actionLinkLabel: 'Get API key →',
+    actionLinkHref: 'https://api.together.ai/settings/api-keys',
+    helperText: 'Uses https://api.together.xyz/v1 automatically.',
+    clearTitle: 'Clear API key',
+  },
+  {
+    provider: 'fireworks',
+    title: 'Fireworks AI',
+    configuredLabel: 'Configured',
+    inputType: 'password',
+    inputField: 'fireworksApiKey',
+    placeholder: 'Fireworks API key',
+    configuredPlaceholder: '••••••••••• (configured)',
+    actionLinkLabel: 'Get API key →',
+    actionLinkHref: 'https://fireworks.ai/account/api-keys',
+    helperText: 'Uses https://api.fireworks.ai/inference/v1 automatically.',
+    clearTitle: 'Clear API key',
+  },
+  {
     provider: 'gemini',
     title: 'Google Gemini',
     configuredLabel: 'Configured',
@@ -175,6 +271,12 @@ export const createInitialProviderHealth = (): Record<AIProvider, ProviderHealth
   openrouter: { status: 'not_configured', message: '' },
   deepseek: { status: 'not_configured', message: '' },
   gemini: { status: 'not_configured', message: '' },
+  zai: { status: 'not_configured', message: '' },
+  groq: { status: 'not_configured', message: '' },
+  mistral: { status: 'not_configured', message: '' },
+  cerebras: { status: 'not_configured', message: '' },
+  together: { status: 'not_configured', message: '' },
+  fireworks: { status: 'not_configured', message: '' },
   ollama: { status: 'not_configured', message: '' },
 });
 
@@ -202,6 +304,18 @@ export function isAIProviderConfigured(
       return settings.deepseek_configured;
     case 'gemini':
       return settings.gemini_configured;
+    case 'zai':
+      return Boolean(settings.zai_configured);
+    case 'groq':
+      return Boolean(settings.groq_configured);
+    case 'mistral':
+      return Boolean(settings.mistral_configured);
+    case 'cerebras':
+      return Boolean(settings.cerebras_configured);
+    case 'together':
+      return Boolean(settings.together_configured);
+    case 'fireworks':
+      return Boolean(settings.fireworks_configured);
     case 'ollama':
       return settings.ollama_configured;
     default:

@@ -41,16 +41,21 @@ func setupAIHandlerWithPatrol(t *testing.T) (*AISettingsHandler, *ai.PatrolServi
 
 func addPatrolFinding(t *testing.T, patrol *ai.PatrolService, id string, detectedAt time.Time) *ai.Finding {
 	t.Helper()
+	return addPatrolFindingForResource(t, patrol, id, detectedAt, "vm-1", "CPU spike")
+}
+
+func addPatrolFindingForResource(t *testing.T, patrol *ai.PatrolService, id string, detectedAt time.Time, resourceID string, title string) *ai.Finding {
+	t.Helper()
 
 	finding := &ai.Finding{
 		ID:           id,
 		Key:          "key-" + id,
 		Severity:     ai.FindingSeverityWarning,
 		Category:     ai.FindingCategoryPerformance,
-		Title:        "CPU spike",
+		Title:        title,
 		Description:  "CPU high",
-		ResourceID:   "vm-1",
-		ResourceName: "vm-1",
+		ResourceID:   resourceID,
+		ResourceName: resourceID,
 		ResourceType: "vm",
 		DetectedAt:   detectedAt,
 		LastSeenAt:   detectedAt,
@@ -889,8 +894,8 @@ func TestHandleGetFindingsHistory_StartTimeFilter(t *testing.T) {
 
 	oldTime := time.Now().Add(-3 * time.Hour)
 	recentTime := time.Now().Add(-30 * time.Minute)
-	addPatrolFinding(t, patrol, "finding-old", oldTime)
-	addPatrolFinding(t, patrol, "finding-recent", recentTime)
+	addPatrolFindingForResource(t, patrol, "finding-old", oldTime, "vm-old", "Old CPU spike")
+	addPatrolFindingForResource(t, patrol, "finding-recent", recentTime, "vm-recent", "Recent CPU spike")
 
 	startTime := time.Now().Add(-1 * time.Hour).UTC().Format(time.RFC3339)
 	req := newLoopbackRequest(http.MethodGet, "/api/ai/patrol/history?start_time="+startTime, nil)

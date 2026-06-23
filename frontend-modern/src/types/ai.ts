@@ -1,8 +1,40 @@
 // AI feature types
 
-export type AIProvider = 'anthropic' | 'openai' | 'openrouter' | 'ollama' | 'deepseek' | 'gemini';
+export type AIProvider =
+  | 'anthropic'
+  | 'openai'
+  | 'openrouter'
+  | 'ollama'
+  | 'deepseek'
+  | 'gemini'
+  | 'zai'
+  | 'groq'
+  | 'mistral'
+  | 'cerebras'
+  | 'together'
+  | 'fireworks';
 export type AuthMethod = 'api_key' | 'oauth';
 export type PatrolReadinessStatus = 'ready' | 'warning' | 'not_ready';
+
+export interface AIProviderDefinition {
+  id: AIProvider | string;
+  display_name: string;
+  description: string;
+  protocol: 'anthropic' | 'openai_compatible' | 'gemini' | 'ollama' | 'retired' | string;
+  default_model?: string;
+  default_base_url?: string;
+  api_key_field?: string;
+  configured_field?: string;
+  clear_key_field?: string;
+  base_url_field?: string;
+  requires_api_key: boolean;
+  user_configurable: boolean;
+  gateway: boolean;
+  configured: boolean;
+  models_dev_provider_id?: string;
+  env_vars: string[];
+  docs_url?: string;
+}
 
 export interface PatrolReadinessCheck {
   id: string;
@@ -62,11 +94,18 @@ export interface AISettings {
   openrouter_configured: boolean; // true if OpenRouter API key is set
   deepseek_configured: boolean; // true if DeepSeek API key is set
   gemini_configured: boolean; // true if Gemini API key is set
+  zai_configured?: boolean; // true if Z.ai (Zhipu) API key is set
+  groq_configured?: boolean; // true if Groq API key is set
+  mistral_configured?: boolean; // true if Mistral API key is set
+  cerebras_configured?: boolean; // true if Cerebras API key is set
+  together_configured?: boolean; // true if Together AI API key is set
+  fireworks_configured?: boolean; // true if Fireworks AI API key is set
   ollama_configured: boolean; // true (always available for attempt)
   ollama_base_url: string; // Ollama server URL
   ollama_keep_alive: string; // Ollama keep_alive value; empty uses the server default
   openai_base_url?: string; // Custom OpenAI base URL
   configured_providers: AIProvider[]; // List of providers with credentials
+  providers?: AIProviderDefinition[]; // Server-authored provider registry metadata
 
   // Cost controls (30-day budget, pro-rated in UI)
   cost_budget_usd_30d?: number;
@@ -131,6 +170,12 @@ export interface AISettingsUpdateRequest {
   openrouter_api_key?: string; // Set OpenRouter API key
   deepseek_api_key?: string; // Set DeepSeek API key
   gemini_api_key?: string; // Set Gemini API key
+  zai_api_key?: string; // Set Z.ai (Zhipu) API key
+  groq_api_key?: string; // Set Groq API key
+  mistral_api_key?: string; // Set Mistral API key
+  cerebras_api_key?: string; // Set Cerebras API key
+  together_api_key?: string; // Set Together AI API key
+  fireworks_api_key?: string; // Set Fireworks AI API key
   ollama_base_url?: string; // Set Ollama server URL
   ollama_keep_alive?: string; // Set Ollama keep_alive; empty uses the server default
   openai_base_url?: string; // Set custom OpenAI base URL
@@ -140,6 +185,12 @@ export interface AISettingsUpdateRequest {
   clear_openrouter_key?: boolean; // Clear OpenRouter API key
   clear_deepseek_key?: boolean; // Clear DeepSeek API key
   clear_gemini_key?: boolean; // Clear Gemini API key
+  clear_zai_key?: boolean; // Clear Z.ai API key
+  clear_groq_key?: boolean; // Clear Groq API key
+  clear_mistral_key?: boolean; // Clear Mistral API key
+  clear_cerebras_key?: boolean; // Clear Cerebras API key
+  clear_together_key?: boolean; // Clear Together AI API key
+  clear_fireworks_key?: boolean; // Clear Fireworks AI API key
   clear_ollama_url?: boolean; // Clear Ollama URL
 
   // Cost controls
@@ -186,6 +237,12 @@ export const PROVIDER_DESCRIPTIONS: Record<AIProvider, string> = {
   ollama: 'Local models via Ollama',
   deepseek: 'DeepSeek V4 models',
   gemini: 'Gemini models from Google',
+  zai: 'GLM models from Z.ai',
+  groq: 'Hosted models from Groq',
+  mistral: 'Mistral models',
+  cerebras: 'Cerebras Inference models',
+  together: 'Together AI hosted models',
+  fireworks: 'Fireworks AI hosted models',
 };
 
 // Conversation history for multi-turn chats

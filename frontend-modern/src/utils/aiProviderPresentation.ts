@@ -6,6 +6,12 @@ export const AI_PROVIDER_DISPLAY_NAMES: Record<string, string> = {
   openrouter: 'OpenRouter',
   deepseek: 'DeepSeek',
   gemini: 'Google Gemini',
+  zai: 'Z.ai',
+  groq: 'Groq',
+  mistral: 'Mistral',
+  cerebras: 'Cerebras',
+  together: 'Together AI',
+  fireworks: 'Fireworks AI',
   ollama: 'Ollama',
   pulse: 'Pulse',
 };
@@ -44,6 +50,18 @@ export function getProviderFromModelId(modelId: string): AIProvider | string {
   }
   if (modelId.includes('gemini')) {
     return 'gemini';
+  }
+  if (modelId.includes('glm')) {
+    return 'zai';
+  }
+  if (modelId.includes('groq')) {
+    return 'groq';
+  }
+  if (modelId.includes('mistral')) {
+    return 'mistral';
+  }
+  if (modelId.includes('cerebras')) {
+    return 'cerebras';
   }
   return 'ollama';
 }
@@ -94,6 +112,7 @@ const MODEL_TOKEN_DISPLAY_NAMES: Record<string, string> = {
   deepseek: 'DeepSeek',
   flash: 'Flash',
   gemini: 'Gemini',
+  glm: 'GLM',
   gpt: 'GPT',
   haiku: 'Haiku',
   instruct: 'Instruct',
@@ -169,15 +188,24 @@ const titleizeModelToken = (token: string): string => {
   if (/^[rv][0-9]/.test(normalized)) {
     return normalized.charAt(0).toUpperCase() + normalized.slice(1);
   }
+  if (/^[0-9]+b$/.test(normalized)) {
+    return normalized.toUpperCase();
+  }
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 };
 
 const titleizeModelRouteId = (modelId: string): string =>
   modelId
-    .split(/[-_\s]+/)
+    .split('/')
+    .map((segment) =>
+      segment
+        .split(/[-_\s]+/)
+        .filter(Boolean)
+        .map(titleizeModelToken)
+        .join(' '),
+    )
     .filter(Boolean)
-    .map(titleizeModelToken)
-    .join(' ');
+    .join('/');
 
 const gatewayFallbackLabel = (model: AIModelRouteLabelInput): string => {
   if (explicitModelNameForLabel(model)) return '';

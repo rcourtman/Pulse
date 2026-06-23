@@ -1673,6 +1673,12 @@ func shouldRestartAIChat(req AISettingsUpdateRequest) bool {
 		req.OpenAIAPIKey != nil ||
 		req.OpenRouterAPIKey != nil ||
 		req.DeepSeekAPIKey != nil ||
+		req.ZaiAPIKey != nil ||
+		req.GroqAPIKey != nil ||
+		req.MistralAPIKey != nil ||
+		req.CerebrasAPIKey != nil ||
+		req.TogetherAPIKey != nil ||
+		req.FireworksAPIKey != nil ||
 		req.GeminiAPIKey != nil ||
 		req.OllamaBaseURL != nil ||
 		req.OllamaUsername != nil ||
@@ -1683,6 +1689,12 @@ func shouldRestartAIChat(req AISettingsUpdateRequest) bool {
 		req.ClearOpenAIKey != nil ||
 		req.ClearOpenRouterKey != nil ||
 		req.ClearDeepSeekKey != nil ||
+		req.ClearZaiKey != nil ||
+		req.ClearGroqKey != nil ||
+		req.ClearMistralKey != nil ||
+		req.ClearCerebrasKey != nil ||
+		req.ClearTogetherKey != nil ||
+		req.ClearFireworksKey != nil ||
 		req.ClearGeminiKey != nil ||
 		req.ClearOllamaURL != nil ||
 		req.ClearOllamaUsername != nil ||
@@ -1737,6 +1749,12 @@ func aiSettingsUpdateTouchesPatrolReadiness(req AISettingsUpdateRequest) bool {
 		req.OpenAIAPIKey != nil ||
 		req.OpenRouterAPIKey != nil ||
 		req.DeepSeekAPIKey != nil ||
+		req.ZaiAPIKey != nil ||
+		req.GroqAPIKey != nil ||
+		req.MistralAPIKey != nil ||
+		req.CerebrasAPIKey != nil ||
+		req.TogetherAPIKey != nil ||
+		req.FireworksAPIKey != nil ||
 		req.GeminiAPIKey != nil ||
 		req.OllamaBaseURL != nil ||
 		req.OllamaUsername != nil ||
@@ -1747,6 +1765,12 @@ func aiSettingsUpdateTouchesPatrolReadiness(req AISettingsUpdateRequest) bool {
 		req.ClearOpenAIKey != nil ||
 		req.ClearOpenRouterKey != nil ||
 		req.ClearDeepSeekKey != nil ||
+		req.ClearZaiKey != nil ||
+		req.ClearGroqKey != nil ||
+		req.ClearMistralKey != nil ||
+		req.ClearCerebrasKey != nil ||
+		req.ClearTogetherKey != nil ||
+		req.ClearFireworksKey != nil ||
 		req.ClearGeminiKey != nil ||
 		req.ClearOllamaURL != nil ||
 		req.ClearOllamaUsername != nil ||
@@ -2279,18 +2303,25 @@ type AISettingsResponse struct {
 	UseProactiveThresholds        bool                  `json:"use_proactive_thresholds"`          // true if patrol warns before thresholds (false = use exact thresholds)
 	AvailableModels               []providers.ModelInfo `json:"available_models"`                  // List of models for current provider
 	// Multi-provider credentials - shows which providers are configured
-	AnthropicConfigured  bool     `json:"anthropic_configured"`      // true if Anthropic API key is set
-	OpenAIConfigured     bool     `json:"openai_configured"`         // true if OpenAI API key is set
-	OpenRouterConfigured bool     `json:"openrouter_configured"`     // true if OpenRouter API key is set
-	DeepSeekConfigured   bool     `json:"deepseek_configured"`       // true if DeepSeek API key is set
-	GeminiConfigured     bool     `json:"gemini_configured"`         // true if Gemini API key is set
-	OllamaConfigured     bool     `json:"ollama_configured"`         // true (always available for attempt)
-	OllamaBaseURL        string   `json:"ollama_base_url"`           // Ollama server URL
-	OllamaUsername       string   `json:"ollama_username,omitempty"` // Optional Basic Auth username for Ollama
-	OllamaPasswordSet    bool     `json:"ollama_password_set"`       // true if an Ollama password is stored
-	OllamaKeepAlive      string   `json:"ollama_keep_alive"`         // Ollama keep_alive value; empty uses server default
-	OpenAIBaseURL        string   `json:"openai_base_url,omitempty"` // Custom OpenAI base URL
-	ConfiguredProviders  []string `json:"configured_providers"`      // List of provider names with credentials
+	AnthropicConfigured  bool                           `json:"anthropic_configured"`      // true if Anthropic API key is set
+	OpenAIConfigured     bool                           `json:"openai_configured"`         // true if OpenAI API key is set
+	OpenRouterConfigured bool                           `json:"openrouter_configured"`     // true if OpenRouter API key is set
+	DeepSeekConfigured   bool                           `json:"deepseek_configured"`       // true if DeepSeek API key is set
+	GeminiConfigured     bool                           `json:"gemini_configured"`         // true if Gemini API key is set
+	ZaiConfigured        bool                           `json:"zai_configured"`            // true if Z.ai (Zhipu) API key is set
+	GroqConfigured       bool                           `json:"groq_configured"`           // true if Groq API key is set
+	MistralConfigured    bool                           `json:"mistral_configured"`        // true if Mistral API key is set
+	CerebrasConfigured   bool                           `json:"cerebras_configured"`       // true if Cerebras API key is set
+	TogetherConfigured   bool                           `json:"together_configured"`       // true if Together AI API key is set
+	FireworksConfigured  bool                           `json:"fireworks_configured"`      // true if Fireworks AI API key is set
+	OllamaConfigured     bool                           `json:"ollama_configured"`         // true (always available for attempt)
+	OllamaBaseURL        string                         `json:"ollama_base_url"`           // Ollama server URL
+	OllamaUsername       string                         `json:"ollama_username,omitempty"` // Optional Basic Auth username for Ollama
+	OllamaPasswordSet    bool                           `json:"ollama_password_set"`       // true if an Ollama password is stored
+	OllamaKeepAlive      string                         `json:"ollama_keep_alive"`         // Ollama keep_alive value; empty uses server default
+	OpenAIBaseURL        string                         `json:"openai_base_url,omitempty"` // Custom OpenAI base URL
+	ConfiguredProviders  []string                       `json:"configured_providers"`      // List of provider names with credentials
+	Providers            []AIProviderDefinitionResponse `json:"providers"`                 // Canonical provider registry metadata
 	// Cost controls
 	CostBudgetUSD30d float64 `json:"cost_budget_usd_30d,omitempty"`
 	// Request timeout (seconds) - for slow hardware running local models
@@ -2308,6 +2339,27 @@ type AISettingsResponse struct {
 	// to re-click Verify Patrol on every page load. nil when preflight
 	// has never run on this service instance.
 	PatrolPreflight *PatrolPreflightSnapshot `json:"patrol_preflight,omitempty"`
+}
+
+// AIProviderDefinitionResponse exposes provider metadata without credentials.
+type AIProviderDefinitionResponse struct {
+	ID                  string   `json:"id"`
+	DisplayName         string   `json:"display_name"`
+	Description         string   `json:"description"`
+	Protocol            string   `json:"protocol"`
+	DefaultModel        string   `json:"default_model,omitempty"`
+	DefaultBaseURL      string   `json:"default_base_url,omitempty"`
+	APIKeyField         string   `json:"api_key_field,omitempty"`
+	ConfiguredField     string   `json:"configured_field,omitempty"`
+	ClearKeyField       string   `json:"clear_key_field,omitempty"`
+	BaseURLField        string   `json:"base_url_field,omitempty"`
+	RequiresAPIKey      bool     `json:"requires_api_key"`
+	UserConfigurable    bool     `json:"user_configurable"`
+	Gateway             bool     `json:"gateway"`
+	Configured          bool     `json:"configured"`
+	ModelsDevProviderID string   `json:"models_dev_provider_id,omitempty"`
+	EnvVars             []string `json:"env_vars"`
+	DocsURL             string   `json:"docs_url,omitempty"`
 }
 
 // PatrolPreflightSnapshot is the API-shaped projection of the cached
@@ -2337,6 +2389,9 @@ func (r AISettingsResponse) NormalizeCollections() AISettingsResponse {
 	if r.ConfiguredProviders == nil {
 		r.ConfiguredProviders = []string{}
 	}
+	if r.Providers == nil {
+		r.Providers = []AIProviderDefinitionResponse{}
+	}
 	if r.ProtectedGuests == nil {
 		r.ProtectedGuests = []string{}
 	}
@@ -2344,6 +2399,36 @@ func (r AISettingsResponse) NormalizeCollections() AISettingsResponse {
 		r.PatrolAlertTriggerTypes = []string{}
 	}
 	return r
+}
+
+func aiProviderDefinitionResponses(settings *config.AIConfig) []AIProviderDefinitionResponse {
+	defs := config.AIProviderDefinitions()
+	responses := make([]AIProviderDefinitionResponse, 0, len(defs))
+	for _, def := range defs {
+		if !def.UserConfigurable {
+			continue
+		}
+		responses = append(responses, AIProviderDefinitionResponse{
+			ID:                  def.ID,
+			DisplayName:         def.DisplayName,
+			Description:         def.Description,
+			Protocol:            string(def.Protocol),
+			DefaultModel:        config.DefaultModelForProvider(def.ID),
+			DefaultBaseURL:      def.DefaultBaseURL,
+			APIKeyField:         def.APIKeyField,
+			ConfiguredField:     def.ConfiguredField,
+			ClearKeyField:       def.ClearKeyField,
+			BaseURLField:        def.BaseURLField,
+			RequiresAPIKey:      def.RequiresAPIKey,
+			UserConfigurable:    def.UserConfigurable,
+			Gateway:             def.Gateway,
+			Configured:          settings != nil && settings.HasProvider(def.ID),
+			ModelsDevProviderID: def.ModelsDevProviderID,
+			EnvVars:             append([]string(nil), def.EnvVars...),
+			DocsURL:             def.DocsURL,
+		})
+	}
+	return responses
 }
 
 // AISettingsUpdateRequest is the request body for PUT /api/settings/ai
@@ -2373,6 +2458,12 @@ type AISettingsUpdateRequest struct {
 	OpenRouterAPIKey *string `json:"openrouter_api_key,omitempty"` // Set OpenRouter API key
 	DeepSeekAPIKey   *string `json:"deepseek_api_key,omitempty"`   // Set DeepSeek API key
 	GeminiAPIKey     *string `json:"gemini_api_key,omitempty"`     // Set Gemini API key
+	ZaiAPIKey        *string `json:"zai_api_key,omitempty"`        // Set Z.ai (Zhipu) API key
+	GroqAPIKey       *string `json:"groq_api_key,omitempty"`       // Set Groq API key
+	MistralAPIKey    *string `json:"mistral_api_key,omitempty"`    // Set Mistral API key
+	CerebrasAPIKey   *string `json:"cerebras_api_key,omitempty"`   // Set Cerebras API key
+	TogetherAPIKey   *string `json:"together_api_key,omitempty"`   // Set Together AI API key
+	FireworksAPIKey  *string `json:"fireworks_api_key,omitempty"`  // Set Fireworks AI API key
 	OllamaBaseURL    *string `json:"ollama_base_url,omitempty"`    // Set Ollama server URL
 	OllamaUsername   *string `json:"ollama_username,omitempty"`    // Set Ollama Basic Auth username
 	OllamaPassword   *string `json:"ollama_password,omitempty"`    // Set Ollama Basic Auth password
@@ -2384,6 +2475,12 @@ type AISettingsUpdateRequest struct {
 	ClearOpenRouterKey  *bool `json:"clear_openrouter_key,omitempty"`  // Clear OpenRouter API key
 	ClearDeepSeekKey    *bool `json:"clear_deepseek_key,omitempty"`    // Clear DeepSeek API key
 	ClearGeminiKey      *bool `json:"clear_gemini_key,omitempty"`      // Clear Gemini API key
+	ClearZaiKey         *bool `json:"clear_zai_key,omitempty"`         // Clear Z.ai (Zhipu) API key
+	ClearGroqKey        *bool `json:"clear_groq_key,omitempty"`        // Clear Groq API key
+	ClearMistralKey     *bool `json:"clear_mistral_key,omitempty"`     // Clear Mistral API key
+	ClearCerebrasKey    *bool `json:"clear_cerebras_key,omitempty"`    // Clear Cerebras API key
+	ClearTogetherKey    *bool `json:"clear_together_key,omitempty"`    // Clear Together AI API key
+	ClearFireworksKey   *bool `json:"clear_fireworks_key,omitempty"`   // Clear Fireworks AI API key
 	ClearOllamaURL      *bool `json:"clear_ollama_url,omitempty"`      // Clear Ollama URL
 	ClearOllamaUsername *bool `json:"clear_ollama_username,omitempty"` // Clear Ollama Basic Auth username
 	ClearOllamaPassword *bool `json:"clear_ollama_password,omitempty"` // Clear Ollama Basic Auth password
@@ -2511,6 +2608,12 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		OpenRouterConfigured:   settings.HasProvider(config.AIProviderOpenRouter),
 		DeepSeekConfigured:     settings.HasProvider(config.AIProviderDeepSeek),
 		GeminiConfigured:       settings.HasProvider(config.AIProviderGemini),
+		ZaiConfigured:          settings.HasProvider(config.AIProviderZai),
+		GroqConfigured:         settings.HasProvider(config.AIProviderGroq),
+		MistralConfigured:      settings.HasProvider(config.AIProviderMistral),
+		CerebrasConfigured:     settings.HasProvider(config.AIProviderCerebras),
+		TogetherConfigured:     settings.HasProvider(config.AIProviderTogether),
+		FireworksConfigured:    settings.HasProvider(config.AIProviderFireworks),
 		OllamaConfigured:       settings.HasProvider(config.AIProviderOllama),
 		OllamaBaseURL:          settings.GetBaseURLForProvider(config.AIProviderOllama),
 		OllamaUsername:         settings.OllamaUsername,
@@ -2518,6 +2621,7 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		OllamaKeepAlive:        settings.GetOllamaKeepAlive(),
 		OpenAIBaseURL:          settings.OpenAIBaseURL,
 		ConfiguredProviders:    settings.GetConfiguredProviders(),
+		Providers:              aiProviderDefinitionResponses(settings),
 		CostBudgetUSD30d:       settings.CostBudgetUSD30d,
 		RequestTimeoutSeconds:  settings.RequestTimeoutSeconds,
 		ControlLevel:           settings.GetEffectiveControlLevel(hasAutoFixFeature),
@@ -2644,6 +2748,36 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		settings.DeepSeekAPIKey = ""
 	} else if req.DeepSeekAPIKey != nil {
 		settings.DeepSeekAPIKey = strings.TrimSpace(*req.DeepSeekAPIKey)
+	}
+	if req.ClearZaiKey != nil && *req.ClearZaiKey {
+		settings.ZaiAPIKey = ""
+	} else if req.ZaiAPIKey != nil {
+		settings.ZaiAPIKey = strings.TrimSpace(*req.ZaiAPIKey)
+	}
+	if req.ClearGroqKey != nil && *req.ClearGroqKey {
+		settings.GroqAPIKey = ""
+	} else if req.GroqAPIKey != nil {
+		settings.GroqAPIKey = strings.TrimSpace(*req.GroqAPIKey)
+	}
+	if req.ClearMistralKey != nil && *req.ClearMistralKey {
+		settings.MistralAPIKey = ""
+	} else if req.MistralAPIKey != nil {
+		settings.MistralAPIKey = strings.TrimSpace(*req.MistralAPIKey)
+	}
+	if req.ClearCerebrasKey != nil && *req.ClearCerebrasKey {
+		settings.CerebrasAPIKey = ""
+	} else if req.CerebrasAPIKey != nil {
+		settings.CerebrasAPIKey = strings.TrimSpace(*req.CerebrasAPIKey)
+	}
+	if req.ClearTogetherKey != nil && *req.ClearTogetherKey {
+		settings.TogetherAPIKey = ""
+	} else if req.TogetherAPIKey != nil {
+		settings.TogetherAPIKey = strings.TrimSpace(*req.TogetherAPIKey)
+	}
+	if req.ClearFireworksKey != nil && *req.ClearFireworksKey {
+		settings.FireworksAPIKey = ""
+	} else if req.FireworksAPIKey != nil {
+		settings.FireworksAPIKey = strings.TrimSpace(*req.FireworksAPIKey)
 	}
 	if req.ClearGeminiKey != nil && *req.ClearGeminiKey {
 		settings.GeminiAPIKey = ""
@@ -2964,6 +3098,12 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		OpenRouterConfigured:   settings.HasProvider(config.AIProviderOpenRouter),
 		DeepSeekConfigured:     settings.HasProvider(config.AIProviderDeepSeek),
 		GeminiConfigured:       settings.HasProvider(config.AIProviderGemini),
+		ZaiConfigured:          settings.HasProvider(config.AIProviderZai),
+		GroqConfigured:         settings.HasProvider(config.AIProviderGroq),
+		MistralConfigured:      settings.HasProvider(config.AIProviderMistral),
+		CerebrasConfigured:     settings.HasProvider(config.AIProviderCerebras),
+		TogetherConfigured:     settings.HasProvider(config.AIProviderTogether),
+		FireworksConfigured:    settings.HasProvider(config.AIProviderFireworks),
 		OllamaConfigured:       settings.HasProvider(config.AIProviderOllama),
 		OllamaBaseURL:          settings.GetBaseURLForProvider(config.AIProviderOllama),
 		OllamaUsername:         settings.OllamaUsername,
@@ -2971,6 +3111,7 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		OllamaKeepAlive:        settings.GetOllamaKeepAlive(),
 		OpenAIBaseURL:          settings.OpenAIBaseURL,
 		ConfiguredProviders:    settings.GetConfiguredProviders(),
+		Providers:              aiProviderDefinitionResponses(settings),
 		RequestTimeoutSeconds:  settings.RequestTimeoutSeconds,
 		ControlLevel:           settings.GetEffectiveControlLevel(hasAutoFixFeature),
 		ProtectedGuests:        settings.GetProtectedGuests(),

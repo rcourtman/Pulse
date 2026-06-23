@@ -623,6 +623,12 @@ instead of lifecycle-local centered icon/text shells.
    they must not treat manifest `workflowPrompts`, rendered prompt bodies, or
    Assistant starter availability as install, enrollment, or fleet-control
    route grammar.
+   AI provider registry and `/api/settings/ai` credential-shape changes in
+   `internal/api/ai_handlers.go` are likewise adjacent AI-runtime/API-contract
+   ownership. Agent lifecycle may depend on the shared authenticated API
+   substrate staying intact, but provider ids, provider default endpoints,
+   model routes, API-key fields, and provider configured state are not agent
+   install, enrollment, reporting, or fleet-control lifecycle inputs.
    The adjacent workflow-starter activity markers on
    `POST /api/ai/workflow-prompts/activity` and
    `POST /api/agent/workflow-prompt-activity` follow that same split:
