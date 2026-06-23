@@ -146,6 +146,7 @@ export const blurFocusedTypeToSearch = (): boolean => {
 
 const handleTypeToSearchKeyDown = (event: KeyboardEvent) => {
   if (event.defaultPrevented) return;
+  if (!event.key) return;
 
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') {
     const match = getActiveEntry((entry) => readEnabled(entry.focusOnShortcut), {
