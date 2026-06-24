@@ -44,6 +44,8 @@ export const AIDiscoveryControlsSection: Component<AIRuntimeControlsSectionProps
         type="button"
         class="w-full min-h-10 sm:min-h-9 px-3 py-2.5 flex items-center justify-between bg-blue-50 dark:bg-blue-900 hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors text-left"
         onClick={() => state.setShowDiscoverySettings(!state.showDiscoverySettings())}
+        aria-expanded={state.showDiscoverySettings()}
+        aria-controls="ai-discovery-controls-panel"
       >
         <div class="flex items-center gap-2">
           <svg
@@ -88,7 +90,10 @@ export const AIDiscoveryControlsSection: Component<AIRuntimeControlsSectionProps
         </svg>
       </button>
       <Show when={state.showDiscoverySettings()}>
-        <div class="px-3 py-3 bg-surface border-t border-border space-y-3">
+        <div
+          id="ai-discovery-controls-panel"
+          class="px-3 py-3 bg-surface border-t border-border space-y-3"
+        >
           <div class="flex items-center justify-between gap-2">
             <label class="text-xs font-medium text-muted flex items-center gap-1.5">
               Enable service context scans

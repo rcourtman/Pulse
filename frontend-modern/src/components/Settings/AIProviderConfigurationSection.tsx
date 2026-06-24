@@ -135,6 +135,8 @@ export const AIProviderConfigurationSection: Component<AIProviderConfigurationSe
                   type="button"
                   class="w-full min-h-10 sm:min-h-9 px-3 py-2.5 flex items-center justify-between bg-surface hover:bg-surface-hover transition-colors"
                   onClick={() => toggleProvider(config.provider)}
+                  aria-expanded={expanded()}
+                  aria-controls={`${config.provider}-provider-panel`}
                 >
                   <div class="flex items-center gap-2">
                     <span class="font-medium text-sm">{config.title}</span>
@@ -166,7 +168,10 @@ export const AIProviderConfigurationSection: Component<AIProviderConfigurationSe
                   </svg>
                 </button>
                 <Show when={expanded()}>
-                  <div class="px-3 py-3 bg-surface-alt border-t border-border space-y-2">
+                  <div
+                    id={`${config.provider}-provider-panel`}
+                    class="px-3 py-3 bg-surface-alt border-t border-border space-y-2"
+                  >
                     <Show when={config.provider === 'ollama'}>
                       <label class="text-xs text-muted inline-flex items-center gap-1">
                         Server URL
