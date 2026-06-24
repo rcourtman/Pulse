@@ -131,8 +131,8 @@ const PatrolSettingsContent: Component<{ state: ReturnType<typeof useAISettingsS
                 when={isPlanLockedPatrol()}
                 fallback="Choose a Patrol mode on the Patrol page. Keep schedule, triggers, and model readiness here."
               >
-                This install runs Watch only. Patrol monitors your infrastructure and reports issues
-                here.
+                This install runs Watch only. Patrol monitors your infrastructure and reports
+                issues.
               </Show>
             </p>
           </div>
