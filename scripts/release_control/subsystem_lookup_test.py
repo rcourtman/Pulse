@@ -14,6 +14,7 @@ RECOVERY_PRODUCT_SURFACE_EXACT_FILES = [
 PATROL_PAGE_AND_STATE_EXACT_FILES = [
     "frontend-modern/src/components/Brand/__tests__/PulsePatrolLogo.test.tsx",
     "frontend-modern/src/features/patrol/__tests__/PatrolIntelligenceHeader.test.ts",
+    "frontend-modern/src/features/patrol/__tests__/patrolControlPresentation.test.ts",
     "frontend-modern/src/features/patrol/__tests__/patrolInvestigationContextModel.test.ts",
     "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
     "frontend-modern/src/stores/__tests__/aiIntelligence.test.ts",

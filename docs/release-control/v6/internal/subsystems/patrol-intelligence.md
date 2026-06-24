@@ -105,7 +105,12 @@ Patrol-specific presentation helpers.
    The free Patrol surface stays a complete, clean monitoring tool with no
    mention of paid Patrol capabilities; Pro discovery belongs in Settings, the
    website/docs, and contextual at-need prompts, not in the daily-use Patrol
-   control surface. The selected mode must remain Watch only and the copy must
+   control surface. The single allowed contextual at-need prompt is the
+   finding-level Pulse Pro investigation handoff: it may appear only in the
+   expanded finding primary-action area, only for plan-locked installs, only on
+   active critical or warning findings, only as one non-salesy capability line,
+   with the upgrade action gated by the upgrade-prompt policy, and never as an
+   ambient matrix, badge, or paid-mode disclosure. The selected mode must remain Watch only and the copy must
    not become a feature-matrix or absence explainer.
    Paid Patrol control handoffs that start or continue the same
    journey must reach Patrol through the route-backed

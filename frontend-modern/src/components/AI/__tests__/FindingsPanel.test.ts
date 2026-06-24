@@ -70,6 +70,14 @@ describe('FindingsPanel assistant handoff', () => {
     expect(findingsPanelSource).toContain('<LoadingSpinner size="md" />');
   });
 
+  it('renders the plan-locked at-need Pulse Pro handoff in the finding primary-action area', () => {
+    expect(findingsPanelSource).toContain('patrolProHandoff?:');
+    expect(findingsPanelSource).toContain('{proHandoff!.detail}');
+    expect(findingsPanelSource).toContain('UpgradeButtonLink');
+    expect(patrolWorkspaceSource).toContain('getPatrolProInvestigationHandoff');
+    expect(patrolWorkspaceSource).toContain('patrolProHandoff=');
+  });
+
   it('routes Patrol investigation records into the Assistant briefing context', () => {
     expect(findingsPanelSource).toContain('buildPatrolAssistantFindingHandoffFromUnifiedFinding');
     expect(findingsPanelSource).toContain('buildPatrolAssistantApprovalBriefingInput');

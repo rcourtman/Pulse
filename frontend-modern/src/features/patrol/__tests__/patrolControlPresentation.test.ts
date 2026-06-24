@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { PatrolAutonomyLevel } from '@/api/patrol';
 import {
+  getPatrolProInvestigationHandoff,
   getPatrolQueueBadgeLabel,
   getPatrolQueueWorkspaceDescription,
   getPatrolReadyWorkDetail,
@@ -124,5 +125,62 @@ describe('patrolControlPresentation', () => {
       'Patrol is paused',
     );
     expect(getPatrolSetupIssueReason({})).toBe('Provider settings need attention');
+  });
+
+  it('surfaces the Pulse Pro at-need handoff only for actionable active findings on plan-locked installs', () => {
+    const destination = { href: '/settings/billing', external: false };
+    const base = {
+      autoFixLocked: true,
+      commercialSurfacesHidden: false,
+      upgradePromptsHidden: false,
+      upgradeDestination: destination,
+    };
+
+    expect(getPatrolProInvestigationHandoff({ ...base, severity: 'critical', status: 'active' }))
+      .toMatchObject({
+        detail: 'Pulse Pro can investigate and fix issues like this.',
+        actionLabel: 'Learn about Pulse Pro',
+        destination,
+      });
+    expect(getPatrolProInvestigationHandoff({ ...base, severity: 'warning', status: 'active' }))
+      .toBeDefined();
+
+    expect(getPatrolProInvestigationHandoff({ ...base, severity: 'info', status: 'active' }))
+      .toBeUndefined();
+    expect(
+      getPatrolProInvestigationHandoff({ ...base, severity: 'critical', status: 'resolved' }),
+    ).toBeUndefined();
+    expect(
+      getPatrolProInvestigationHandoff({
+        ...base,
+        autoFixLocked: false,
+        severity: 'critical',
+        status: 'active',
+      }),
+    ).toBeUndefined();
+    expect(
+      getPatrolProInvestigationHandoff({
+        ...base,
+        commercialSurfacesHidden: true,
+        severity: 'critical',
+        status: 'active',
+      }),
+    ).toBeUndefined();
+  });
+
+  it('keeps the at-need capability line but drops the upgrade action when upgrade prompts are hidden', () => {
+    const handoff = getPatrolProInvestigationHandoff({
+      autoFixLocked: true,
+      commercialSurfacesHidden: false,
+      upgradePromptsHidden: true,
+      upgradeDestination: { href: '/settings/billing', external: false },
+      severity: 'critical',
+      status: 'active',
+    });
+    expect(handoff).toMatchObject({
+      detail: 'Pulse Pro can investigate and fix issues like this.',
+    });
+    expect(handoff).not.toHaveProperty('actionLabel');
+    expect(handoff).not.toHaveProperty('destination');
   });
 });

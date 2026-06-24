@@ -1,5 +1,6 @@
 import type { PatrolAutonomyLevel } from '@/api/patrol';
 import { getPatrolFindingIssueCountLabel } from '@/utils/aiFindingPresentation';
+import type { UpgradeDestination } from '@/utils/upgradeNavigation';
 
 export const PATROL_AUTONOMY_POLICY_PRESENTATION: Record<
   PatrolAutonomyLevel,
@@ -148,4 +149,41 @@ export function getPatrolQueueWorkspaceDescription(
     default:
       return 'Problems Patrol finds appear here.';
   }
+}
+
+const PATROL_PRO_HANDOFF_ACTIONABLE_SEVERITIES = new Set(['critical', 'warning']);
+
+export interface PatrolProInvestigationHandoff {
+  detail: string;
+  actionLabel?: string;
+  destination?: UpgradeDestination;
+}
+
+export interface PatrolProInvestigationHandoffInput {
+  autoFixLocked: boolean;
+  commercialSurfacesHidden: boolean;
+  upgradePromptsHidden: boolean;
+  upgradeDestination: UpgradeDestination;
+  severity?: string;
+  status?: string;
+}
+
+export function getPatrolProInvestigationHandoff(
+  input: PatrolProInvestigationHandoffInput,
+): PatrolProInvestigationHandoff | undefined {
+  if (!input.autoFixLocked) return undefined;
+  if (input.commercialSurfacesHidden) return undefined;
+  if (input.status && input.status !== 'active') return undefined;
+  if (!input.severity || !PATROL_PRO_HANDOFF_ACTIONABLE_SEVERITIES.has(input.severity)) {
+    return undefined;
+  }
+
+  const handoff: PatrolProInvestigationHandoff = {
+    detail: 'Pulse Pro can investigate and fix issues like this.',
+  };
+  if (!input.upgradePromptsHidden) {
+    handoff.actionLabel = 'Learn about Pulse Pro';
+    handoff.destination = input.upgradeDestination;
+  }
+  return handoff;
 }

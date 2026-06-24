@@ -21,6 +21,7 @@ import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { StatusIndicatorBadge } from '@/components/shared/StatusIndicatorBadge';
 import { getPatrolProviderSettingsAction } from '@/utils/patrolRuntimeActions';
 import {
+  getPatrolProInvestigationHandoff,
   getPatrolQueueBadgeLabel,
   getPatrolQueueWorkspaceDescription,
   getPatrolSetupIssueReason,
@@ -32,6 +33,11 @@ import {
   PATROL_WORKSPACE_SETUP_TITLE,
 } from './patrolControlPresentation';
 import type { PatrolIntelligenceState } from './usePatrolIntelligenceState';
+import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
+import {
+  presentationPolicyHidesCommercialSurfaces,
+  presentationPolicyHidesUpgradePrompts,
+} from '@/stores/sessionPresentationPolicy';
 
 export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceState }) {
   const state = props.state;
@@ -237,6 +243,16 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
               runSnapshot={state.selectedRun() ?? undefined}
               showControls={!state.selectedRun()}
               onAssistantHandoff={(finding) => state.handleAssistantFindingHandoff(finding.id)}
+              patrolProHandoff={(finding) =>
+                getPatrolProInvestigationHandoff({
+                  autoFixLocked: state.autoFixLocked(),
+                  commercialSurfacesHidden: presentationPolicyHidesCommercialSurfaces(),
+                  upgradePromptsHidden: presentationPolicyHidesUpgradePrompts(),
+                  upgradeDestination: getUpgradeActionDestination('ai_autofix'),
+                  severity: finding.severity,
+                  status: finding.status,
+                })
+              }
             />
           }
         >

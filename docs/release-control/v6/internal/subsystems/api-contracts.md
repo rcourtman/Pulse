@@ -1767,7 +1767,11 @@ payload shape change when the portal presents compact client rows.
    not render a disabled paid-level matrix, compact Pro badges, or any paid-mode
    disclosure. The free surface stays clean of paid-feature surfacing; Pro
    discovery belongs in Settings, website/docs, and contextual at-need prompts,
-   not in the daily-use control surface, and the selector must still avoid Limits
+   not in the daily-use control surface. The one allowed at-need prompt is a
+   single finding-level Pulse Pro capability line in the expanded finding
+   primary-action area for plan-locked installs on active critical or warning
+   findings, with its upgrade action gated by the upgrade-prompt policy, and the
+   selector must still avoid Limits
    controls, hard-limit matrices, or absent-feature explainers.
    Compact control labels remain understandable decisions such as `Ask first`,
    `Safe auto-fix`, and

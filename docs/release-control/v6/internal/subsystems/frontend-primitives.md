@@ -1336,7 +1336,10 @@ settings`, and candidate review when discovered sources are waiting. It must
     paid-level matrix, compact Pro badges, or any paid-mode disclosure. The free
     Patrol working surface stays clear of paid-feature surfacing entirely; Pro
     discovery belongs in Settings, website/docs, and contextual at-need prompts,
-    not beside the daily-use selector. Visible product copy calls the selector `Patrol mode`; compatibility route and wire identifiers may keep stable names
+    not beside the daily-use selector. The one allowed at-need prompt is a
+    single finding-level Pulse Pro capability line in the expanded finding
+    primary-action area for plan-locked installs on active critical or warning
+    findings, with its upgrade action gated by the upgrade-prompt policy. Visible product copy calls the selector `Patrol mode`; compatibility route and wire identifiers may keep stable names
     such as `patrol_control` and `patrolControl*`. The always-visible Patrol mode selector must stay on
     the selected mode and one plain summary, without a separate `Limits`
     disclosure or hard-limit matrix beside the picker. Shared feature shells must not invent their own Patrol safety

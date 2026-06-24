@@ -4947,6 +4947,7 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/components/Brand/__tests__/PulsePatrolLogo.test.tsx",
+              "frontend-modern/src/features/patrol/__tests__/patrolControlPresentation.test.ts",
               "frontend-modern/src/features/patrol/__tests__/PatrolIntelligenceHeader.test.ts",
               "frontend-modern/src/features/patrol/__tests__/patrolInvestigationContextModel.test.ts",
               "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",

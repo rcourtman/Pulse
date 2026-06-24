@@ -16,6 +16,7 @@ import { Card } from '@/components/shared/Card';
 import { FormSelect } from '@/components/shared/FormSelect';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
+import { UpgradeButtonLink } from '@/components/shared/UpgradeLink';
 import { aiIntelligenceStore, type UnifiedFinding } from '@/stores/aiIntelligence';
 import { notificationStore } from '@/stores/notifications';
 import { aiChatStore } from '@/stores/aiChat';
@@ -41,6 +42,7 @@ import { getSemanticTonePresentation } from '@/utils/semanticTonePresentation';
 import { formatIdentifierLabel } from '@/utils/textPresentation';
 import type { IntelligenceHealthScore } from '@/types/aiIntelligence';
 import { getPatrolFindingsEmptyState } from '@/utils/patrolEmptyStatePresentation';
+import type { UpgradeDestination } from '@/utils/upgradeNavigation';
 import CheckCircleIcon from 'lucide-solid/icons/check-circle';
 import AlertCircleIcon from 'lucide-solid/icons/alert-circle';
 import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
@@ -105,6 +107,9 @@ interface FindingsPanelProps {
   patrolRuns?: PatrolRunRecord[];
   findingsSource?: 'unified' | 'patrol';
   onAssistantHandoff?: (finding: UnifiedFinding) => void;
+  patrolProHandoff?: (
+    finding: UnifiedFinding,
+  ) => { detail: string; actionLabel?: string; destination?: UpgradeDestination } | undefined;
   runSnapshot?: Pick<
     PatrolRunRecord,
     | 'resources_checked'
@@ -1205,6 +1210,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     const relatedFindings = options.relatedFindings ?? [];
     const shouldShowAssistantPrimaryAction = !isPatrolFindingsSource();
     const shouldShowAssistantManageAction = isPatrolFindingsSource() && !primaryAction;
+    const proHandoff = !primaryAction ? props.patrolProHandoff?.(finding) : undefined;
     const shouldShowExpandedManageMenu =
       !primaryAction ||
       manualControls.acknowledge ||
@@ -1418,6 +1424,22 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               </svg>
               {getPrimaryAssistantFindingAction(finding).label}
             </button>
+          </Show>
+          <Show when={proHandoff}>
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="text-muted">{proHandoff!.detail}</span>
+              <Show when={proHandoff!.destination} keyed>
+                {(destination) => (
+                  <UpgradeButtonLink
+                    destination={destination}
+                    size="sm"
+                    mobileFullWidth={false}
+                  >
+                    {proHandoff!.actionLabel}
+                  </UpgradeButtonLink>
+                )}
+              </Show>
+            </div>
           </Show>
 
           <Show when={shouldShowExpandedManageMenu}>
