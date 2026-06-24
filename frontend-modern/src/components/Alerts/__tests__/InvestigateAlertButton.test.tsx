@@ -148,7 +148,7 @@ describe('InvestigateAlertButton', () => {
       render(() => <InvestigateAlertButton alert={makeAlert()} />);
       const button = screen.getByRole('button');
       expect(button).toBeInTheDocument();
-      expect(button).toHaveTextContent('Investigate with Pulse Assistant');
+      expect(button).toHaveTextContent('Ask Pulse Assistant about this alert');
     });
 
     it('renders icon variant without text label', () => {
@@ -221,14 +221,14 @@ describe('InvestigateAlertButton', () => {
       const button = screen.getByRole('button');
       expect(button).toHaveAttribute(
         'title',
-        'Pro required to investigate alerts with Pulse Assistant',
+            'Pro required to ask Pulse Assistant about alerts',
       );
     });
 
     it('shows unlocked title when not licenseLocked', () => {
       render(() => <InvestigateAlertButton alert={makeAlert()} />);
       const button = screen.getByRole('button');
-      expect(button).toHaveAttribute('title', 'Ask Pulse Assistant to investigate this alert');
+      expect(button).toHaveAttribute('title', 'Ask Pulse Assistant about this alert');
     });
 
     it('applies opacity class when locked', () => {
@@ -257,7 +257,7 @@ describe('InvestigateAlertButton', () => {
 
       expect(button).toHaveAttribute(
         'title',
-        'Pulse Assistant alert investigation is not available for this alert',
+        'Pulse Assistant alert help is not available for this alert',
       );
 
       await fireEvent.click(button);
@@ -686,7 +686,7 @@ describe('InvestigateAlertButton', () => {
       const spans = button.querySelectorAll('span');
       expect(spans.length).toBeGreaterThanOrEqual(1);
       // First span is the main label
-      expect(spans[0].textContent).toBe('Investigate with Pulse Assistant');
+      expect(spans[0].textContent).toBe('Ask Pulse Assistant about this alert');
     });
   });
 });

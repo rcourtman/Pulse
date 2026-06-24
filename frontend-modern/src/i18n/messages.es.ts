@@ -12,7 +12,7 @@ export const ES_MESSAGE_OVERRIDES = {
   'alerts.activation.toast.deactivateFailed':
     'No se pudieron desactivar las alertas. Intentalo de nuevo.',
   'alerts.assistant.action.investigate': 'Investigar alerta {alertIdentifier}',
-  'alerts.assistant.button.full': 'Investigar con Pulse Assistant',
+  'alerts.assistant.button.full': 'Preguntar a Pulse Assistant sobre esta alerta',
   'alerts.assistant.button.text': 'Preguntar a Pulse Assistant',
   'alerts.assistant.detail.currentMetric': 'Valor actual {currentValue}; umbral {thresholdValue}',
   'alerts.assistant.detail.message': 'Mensaje: {message}',
@@ -25,16 +25,16 @@ export const ES_MESSAGE_OVERRIDES = {
   'alerts.assistant.level.info': 'Informativa',
   'alerts.assistant.level.warning': 'Advertencia',
   'alerts.assistant.locked.proRequired':
-    'Se requiere Pro para investigar alertas con Pulse Assistant',
+    'Se requiere Pro para preguntar a Pulse Assistant sobre alertas',
   'alerts.assistant.locked.unavailable':
-    'La investigacion de alertas de Pulse Assistant no esta disponible para esta alerta',
+    'La ayuda de Pulse Assistant para alertas no esta disponible para esta alerta',
   'alerts.assistant.safetyNote':
     'Los diagnosticos y la correccion requieren aprobacion del operador.',
   'alerts.assistant.sourceLabel': 'Pulse Alerts',
   'alerts.assistant.statusLabel': '{level} alerta · Activa desde hace {duration}',
   'alerts.assistant.subject': '{level} {alertType} en {resourceName}',
   'alerts.assistant.title': 'Investigacion de alerta adjunta',
-  'alerts.assistant.unlockedTitle': 'Pedir a Pulse Assistant que investigue esta alerta',
+  'alerts.assistant.unlockedTitle': 'Preguntar a Pulse Assistant sobre esta alerta',
   'alerts.nav.ariaLabel': 'Navegacion de alertas',
   'alerts.nav.collapseSidebar': 'Contraer barra lateral',
   'alerts.nav.expandSidebar': 'Expandir barra lateral',

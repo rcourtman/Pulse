@@ -12,7 +12,7 @@ export const DE_MESSAGE_OVERRIDES = {
   'alerts.activation.toast.deactivateFailed':
     'Warnmeldungen konnten nicht deaktiviert werden. Bitte versuchen Sie es erneut.',
   'alerts.assistant.action.investigate': 'Warnmeldung {alertIdentifier} untersuchen',
-  'alerts.assistant.button.full': 'Mit Pulse Assistant untersuchen',
+  'alerts.assistant.button.full': 'Pulse Assistant zu dieser Warnmeldung fragen',
   'alerts.assistant.button.text': 'Pulse Assistant fragen',
   'alerts.assistant.detail.currentMetric':
     'Aktueller Wert {currentValue}; Schwellwert {thresholdValue}',
@@ -26,16 +26,16 @@ export const DE_MESSAGE_OVERRIDES = {
   'alerts.assistant.level.info': 'Info',
   'alerts.assistant.level.warning': 'Warnung',
   'alerts.assistant.locked.proRequired':
-    'Pro erforderlich, um Warnmeldungen mit Pulse Assistant zu untersuchen',
+    'Pro erforderlich, um Pulse Assistant zu Warnmeldungen zu fragen',
   'alerts.assistant.locked.unavailable':
-    'Pulse Assistant-Warnungsanalyse ist fuer diese Warnmeldung nicht verfuegbar',
+    'Pulse Assistant-Warnmeldungshilfe ist fuer diese Warnmeldung nicht verfuegbar',
   'alerts.assistant.safetyNote':
     'Diagnosen und Behebungen erfordern die Freigabe durch einen Operator.',
   'alerts.assistant.sourceLabel': 'Pulse Alerts',
   'alerts.assistant.statusLabel': '{level}-Warnmeldung · Aktiv seit {duration}',
   'alerts.assistant.subject': '{level} {alertType} auf {resourceName}',
   'alerts.assistant.title': 'Warnungsanalyse angehaengt',
-  'alerts.assistant.unlockedTitle': 'Pulse Assistant bitten, diese Warnmeldung zu untersuchen',
+  'alerts.assistant.unlockedTitle': 'Pulse Assistant zu dieser Warnmeldung fragen',
   'alerts.nav.ariaLabel': 'Warnmeldungsnavigation',
   'alerts.nav.collapseSidebar': 'Seitenleiste einklappen',
   'alerts.nav.expandSidebar': 'Seitenleiste ausklappen',
