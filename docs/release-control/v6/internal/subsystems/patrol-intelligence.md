@@ -99,12 +99,17 @@ Patrol-specific presentation helpers.
    must stay short operator choices (`Ask first`, `Safe auto-fix`,
    `Autopilot`) and must not reintroduce Pro-matrix labels such as
    `Ask before changes`, `Auto-fix safe issues`, or `Policy autopilot`.
-   Plan-locked Patrol controls may keep the paid choices visible as disabled
-   buttons; compact Pro badges and a `Plans & Billing` action may appear only
-   when upgrade prompts are allowed. That billing action is a compact handoff
-   beside the mode controls, not a separate upsell panel. The selected mode must
-   remain Watch only and the default copy must not become a feature-matrix or
-   absence explainer.
+   Plan-locked Patrol controls must keep the default (closed) header on the
+   positive Watch-only capability and must not render a default entitlement
+   matrix or disabled paid-mode buttons in that default view. The paid choices
+   may be revealed only through an explicit opt-in disclosure affordance (such
+   as `See what Patrol can do`) beside the mode controls; behind that disclosure
+   the four modes appear with the paid choices disabled, and compact Pro badges
+   plus a `Plans & Billing` action may appear there only when upgrade prompts
+   are allowed. That billing action is a compact handoff inside the disclosure,
+   not a separate default upsell panel. The selected mode must remain Watch only
+   and the default (closed) copy must not become a feature-matrix or absence
+   explainer.
    Paid Patrol control handoffs that start or continue the same
    journey must reach Patrol through the route-backed
    `/patrol?patrolControlStarter=patrol_control#patrol-control` affordance.
@@ -213,9 +218,10 @@ attention`, `approval needed`, `outcome verified`, `no active work`) instead
    status strip.
    Plan-locked Patrol mode copy must present the effective Watch only
    capability as the current product state: Patrol watches resources, detects
-   issues, and records findings. It must not render a default entitlement
-   matrix, disabled paid-mode buttons, or compact Pro badges that tell ordinary
-   free users what this install cannot do. Runtime-locked Pro installs may still
+   issues, and records findings. The default (closed) view must not render a
+   disabled paid-mode matrix or compact Pro badges that tell ordinary free users
+   what this install cannot do; those paid modes may appear only behind an
+   explicit opt-in disclosure affordance. Runtime-locked Pro installs may still
    show explicit blocking copy because the operator already has the entitlement
    and needs the correct runtime.
    User-facing copy names this choice `Patrol mode`; stable route markers,
@@ -372,7 +378,9 @@ attention`, `approval needed`, `outcome verified`, `no active work`) instead
    selected-mode sentence belongs in `patrolControlPresentation.ts`, not inline
    header markup, so the paid operator contract stays testable and does not
    drift into another activation/proof checklist. Plan-locked watch-only installs
-   must not render that boundary as a Pro absence explainer. Watch-only copy in
+   must not render that boundary as a default Pro absence explainer; the paid
+   modes may be revealed only through an explicit opt-in disclosure affordance,
+   never as a default disabled matrix. Watch-only copy in
    `patrolPagePresentation.ts`, `patrolControlPresentation.ts`, and
    `patrolAutonomyAvailability.ts` must describe Watch only in positive,
    capability-first language: Patrol watches infrastructure, records current

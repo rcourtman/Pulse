@@ -1763,12 +1763,14 @@ payload shape change when the portal presents compact client rows.
    and the Patrol findings empty-state behavior, so `0 active findings` only renders as a healthy frontend conclusion when the same governed AI summary contract still reports healthy overall health; degraded or not-fully-verified health predictions must flow through to the Patrol findings surface instead of being replaced by page-local "looks healthy" copy
    and the Patrol control presentation boundary, so the always-visible Patrol
    control selector owns the selected autonomy level, plan-locked installs keep
-   watch-only as the current capability while disabled paid-level buttons may
-   stay visible. Compact Pro badges and a `Plans & Billing` action may appear
-   only when upgrade prompts are allowed; that billing action stays a compact
-   handoff beside the selector rather than a separate upsell panel, and the
-   selector must still avoid Limits controls, hard-limit matrices, or
-   absent-feature explainers.
+   watch-only as the current capability and must not render a default disabled
+   paid-level matrix in the default view. The paid levels may be revealed only
+   through an explicit opt-in disclosure affordance beside the selector, behind
+   which they may appear as disabled buttons, and compact Pro badges and a
+   `Plans & Billing` action may appear there only when upgrade prompts are
+   allowed; that billing action stays a compact handoff rather than a separate
+   upsell panel, and the selector must still avoid Limits controls, hard-limit
+   matrices, or absent-feature explainers.
    Compact control labels remain understandable decisions such as `Ask first`,
    `Safe auto-fix`, and
    `Autopilot` rather than transport shorthand or Pro-matrix labels, the Patrol
