@@ -173,7 +173,7 @@ export const AIProviderRuntimeControlsSection: Component<AIRuntimeControlsSectio
   const { state } = props;
 
   return (
-    <>
+    <div class="grid gap-3 lg:grid-cols-2">
       <div class="flex items-center gap-3 p-3 rounded-md border border-border bg-surface-alt">
         <svg
           class="w-4 h-4 text-muted flex-shrink-0"
@@ -212,48 +212,50 @@ export const AIProviderRuntimeControlsSection: Component<AIRuntimeControlsSectio
         </Show>
       </div>
 
-      <div class="flex items-center gap-3 p-3 rounded-md border border-border bg-surface-alt">
-        <svg
-          class="w-4 h-4 text-muted flex-shrink-0"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+      <div class="flex flex-col gap-1">
+        <div class="flex items-center gap-3 p-3 rounded-md border border-border bg-surface-alt">
+          <svg
+            class="w-4 h-4 text-muted flex-shrink-0"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+          <label class="text-xs font-medium text-base-content">Request Timeout</label>
+          <input
+            type="number"
+            class="w-20 min-h-10 sm:min-h-9 px-2 py-2 text-sm border border-border rounded bg-surface"
+            value={state.form.requestTimeoutSeconds}
+            onInput={(e) => {
+              const value = parseInt(e.currentTarget.value, 10);
+              if (!isNaN(value) && value > 0) {
+                state.setForm('requestTimeoutSeconds', value);
+              }
+            }}
+            min={30}
+            max={3600}
+            step={30}
+            disabled={state.saving()}
           />
-        </svg>
-        <label class="text-xs font-medium text-base-content">Request Timeout</label>
-        <input
-          type="number"
-          class="w-20 min-h-10 sm:min-h-9 px-2 py-2 text-sm border border-border rounded bg-surface"
-          value={state.form.requestTimeoutSeconds}
-          onInput={(e) => {
-            const value = parseInt(e.currentTarget.value, 10);
-            if (!isNaN(value) && value > 0) {
-              state.setForm('requestTimeoutSeconds', value);
-            }
-          }}
-          min={30}
-          max={3600}
-          step={30}
-          disabled={state.saving()}
-        />
-        <span class="text-xs">seconds</span>
-        <Show when={state.form.requestTimeoutSeconds !== 300}>
-          <span class="text-[10px] text-blue-600 dark:text-blue-400">Custom</span>
-        </Show>
-        <Show when={state.form.requestTimeoutSeconds === 300}>
-          <span class="text-[10px] text-muted">default</span>
-        </Show>
+          <span class="text-xs">seconds</span>
+          <Show when={state.form.requestTimeoutSeconds !== 300}>
+            <span class="text-[10px] text-blue-600 dark:text-blue-400">Custom</span>
+          </Show>
+          <Show when={state.form.requestTimeoutSeconds === 300}>
+            <span class="text-[10px] text-muted">default</span>
+          </Show>
+        </div>
+        <p class="text-[10px] text-muted ml-1">
+          Increase for slower Ollama hardware (default: 300s / 5 min)
+        </p>
       </div>
-      <p class="text-[10px] text-muted -mt-4 ml-1">
-        Increase for slower Ollama hardware (default: 300s / 5 min)
-      </p>
-    </>
+    </div>
   );
 };
 

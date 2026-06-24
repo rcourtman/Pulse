@@ -678,16 +678,17 @@ describe('AICostDashboard', () => {
     expect(svgs.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('labels trend cards with the daily average, not a single last point', async () => {
-    // daily_totals fixture: two days, $0.21 each → avg $0.21/day. A last-point
-    // label previously read as the headline and could misleadingly show $0.
+  it('labels the spend trend with a range average that reconciles with the total', async () => {
+    // fixture: $0.42 total over effective_days=30 → ~$0.01/day. The avg must
+    // be total / range days (not an average over active days only), so it no
+    // longer contradicts the headline spend.
     renderDashboard();
     await waitFor(() => {
       expect(screen.getByText('Spend trend')).toBeInTheDocument();
     });
     const spendCard = screen.getByText('Spend trend').closest('.p-3')!;
     expect(spendCard.textContent).toMatch(/avg\/day/);
-    expect(spendCard.textContent).toMatch(/0\.21/);
+    expect(spendCard.textContent).toMatch(/0\.01/);
   });
 
   it('shows the shared daily token empty state when less than 2 daily totals', async () => {

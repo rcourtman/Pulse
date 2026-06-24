@@ -99,6 +99,7 @@ export const AICostDashboard: Component = () => {
   const [loading, setLoading] = createSignal(false);
   const [loadError, setLoadError] = createSignal<string | null>(null);
   const [summary, setSummary] = createSignal<AICostSummary | null>(null);
+  const [showAllModels, setShowAllModels] = createSignal(false);
   let requestSeq = 0;
 
   const anyPricingKnown = createMemo(() => {
@@ -139,19 +140,22 @@ export const AICostDashboard: Component = () => {
   const dailyTokenValues = createMemo(() => dailyTotals().map((d) => d.total_tokens));
   const dailyUSDValues = createMemo(() => dailyTotals().map((d) => d.estimated_usd ?? 0));
 
-  // Trend cards characterise the range by its daily average, not the last
-  // data point. Showing the last point read as "you spent $0 today" when
-  // earlier days in the range carried the actual spend.
-  const avgDailyTokens = createMemo(() => {
-    const values = dailyTokenValues();
-    if (values.length === 0) return null;
-    return Math.round(values.reduce((sum, v) => sum + v, 0) / values.length);
+  // Trend cards average over the selected range (effective_days) so that
+  // avg/day x days reconciles with the headline total. Averaging only the
+  // days that recorded activity previously overstated the run-rate (e.g.
+  // $0.05/day next to a $0.50/30d total that implied $0.02/day).
+  const avgDailyUSD = createMemo(() => {
+    const total = estimatedTotalUSD();
+    const days = summary()?.effective_days;
+    if (total == null || !days || days <= 0) return null;
+    return total / days;
   });
 
-  const avgDailyUSD = createMemo(() => {
-    const values = dailyUSDValues();
-    if (values.length === 0) return null;
-    return values.reduce((sum, v) => sum + v, 0) / values.length;
+  const avgDailyTokens = createMemo(() => {
+    const data = summary();
+    const days = data?.effective_days;
+    if (!data || !days || days <= 0) return null;
+    return Math.round(data.totals.total_tokens / days);
   });
 
   // Surface the real cost driver first: priced models by spend (desc),
@@ -167,6 +171,15 @@ export const AICostDashboard: Component = () => {
       if (aPriced) return (b.estimated_usd ?? 0) - (a.estimated_usd ?? 0);
       return (b.total_tokens ?? 0) - (a.total_tokens ?? 0);
     });
+  });
+
+  // Keep the default view on the rows that carry the cost signal; the long
+  // tail of flat / unpriced rows stays one click away.
+  const VISIBLE_MODEL_ROWS = 10;
+  const visibleProviderModels = createMemo(() => {
+    const all = sortedProviderModels();
+    if (showAllModels() || all.length <= VISIBLE_MODEL_ROWS) return all;
+    return all.slice(0, VISIBLE_MODEL_ROWS);
   });
 
   const formatUSD = (usd: number) => usdFormatter.format(usd);
@@ -551,7 +564,7 @@ export const AICostDashboard: Component = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  <For each={sortedProviderModels()}>
+                  <For each={visibleProviderModels()}>
                     {(pm) => (
                       <TableRow class="border-b border-border-subtle">
                         <TableCell class="py-2 pr-4 font-medium text-base-content">
@@ -582,6 +595,17 @@ export const AICostDashboard: Component = () => {
                   </For>
                 </TableBody>
               </Table>
+              <Show when={sortedProviderModels().length > VISIBLE_MODEL_ROWS}>
+                <button
+                  type="button"
+                  class="self-start text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                  onClick={() => setShowAllModels(!showAllModels())}
+                >
+                  {showAllModels()
+                    ? 'Show less'
+                    : `Show all ${sortedProviderModels().length} models`}
+                </button>
+              </Show>
             </>
           )}
         </Show>
