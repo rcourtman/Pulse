@@ -82,7 +82,9 @@ vi.mock('@/utils/logger', () => ({
 
 vi.mock('@/stores/license', () => ({
   hasFeature: (...args: unknown[]) => hasFeatureMock(...args),
+  getRuntimeCapabilityBlock: () => undefined,
   loadRuntimeCapabilities: (...args: unknown[]) => loadLicenseStatusMock(...args),
+  runtimeCapabilities: () => ({ capabilities: [], runtime: undefined }),
 }));
 
 vi.mock('@/stores/licenseCommercial', () => ({
@@ -95,6 +97,7 @@ vi.mock('@/stores/licenseCommercial', () => ({
 }));
 
 vi.mock('@/stores/sessionPresentationPolicy', () => ({
+  presentationPolicyHidesCommercialSurfaces: () => false,
   presentationPolicyHidesUpgradePrompts: () => presentationPolicyHidesUpgradePromptsMock(),
 }));
 
@@ -293,6 +296,25 @@ describe('AISettings model loading error states', () => {
     expect(screen.queryByRole('button', { name: /Test Connection/i })).not.toBeInTheDocument();
     expect(screen.queryByText('Provider Configuration')).not.toBeInTheDocument();
     expect(screen.queryByText('External agents')).not.toBeInTheDocument();
+  });
+
+  it('describes Watch only for plan-locked installs instead of telling the user to choose a mode', async () => {
+    hasFeatureMock.mockImplementation((feature: string) => feature !== 'ai_autofix');
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      enabled: true,
+      configured: true,
+      patrol_interval_minutes: 180,
+    });
+
+    renderComponent('patrol');
+
+    expect(await screen.findByText('Patrol mode')).toBeInTheDocument();
+    expect(screen.getByText(/This install runs Watch only/i)).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Choose a Patrol mode on the Patrol page/i),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Open Patrol/i })).toBeInTheDocument();
   });
 
   it('saves Patrol trigger settings from Pulse Intelligence Patrol settings', async () => {

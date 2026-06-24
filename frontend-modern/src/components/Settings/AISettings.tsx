@@ -1,4 +1,4 @@
-import { Component, Show } from 'solid-js';
+import { Component, createMemo, Show } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import { AIChatMaintenanceSection } from '@/components/Settings/AIChatMaintenanceSection';
 import { AISettingsDialogs } from '@/components/Settings/AISettingsDialogs';
@@ -19,6 +19,13 @@ import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
 import { PATROL_PATH } from '@/routing/resourceLinks';
+import { getPatrolAutonomyAvailabilityPresentation } from '@/features/patrol/patrolAutonomyAvailability';
+import { getRuntimeCapabilityBlock, hasFeature, runtimeCapabilities } from '@/stores/license';
+import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
+import {
+  presentationPolicyHidesCommercialSurfaces,
+  presentationPolicyHidesUpgradePrompts,
+} from '@/stores/sessionPresentationPolicy';
 import {
   AI_SETTINGS_PANEL_TITLE,
   getAISettingsLoadingState,
@@ -93,6 +100,17 @@ const PatrolSettingsContent: Component<{ state: ReturnType<typeof useAISettingsS
   props,
 ) => {
   const navigate = useNavigate();
+  const patrolModeAvailability = createMemo(() =>
+    getPatrolAutonomyAvailabilityPresentation({
+      autoFixLocked: !hasFeature('ai_autofix'),
+      commercialSurfacesHidden: presentationPolicyHidesCommercialSurfaces(),
+      upgradePromptsHidden: presentationPolicyHidesUpgradePrompts(),
+      runtimeCapabilityBlock: getRuntimeCapabilityBlock('ai_autofix'),
+      runtime: runtimeCapabilities()?.runtime,
+      planUpgradeDestination: getUpgradeActionDestination('ai_autofix'),
+    }),
+  );
+  const isPlanLockedPatrol = createMemo(() => patrolModeAvailability().kind === 'plan_locked');
   const intervalOptions = [
     { value: 0, label: 'Manual only' },
     { value: 60, label: 'Every hour' },
@@ -109,8 +127,13 @@ const PatrolSettingsContent: Component<{ state: ReturnType<typeof useAISettingsS
           <div>
             <h3 class="text-sm font-semibold text-base-content">Patrol mode</h3>
             <p class="mt-1 text-xs text-muted">
-              Choose a Patrol mode on the Patrol page. Keep schedule, triggers, and model readiness
-              here.
+              <Show
+                when={isPlanLockedPatrol()}
+                fallback="Choose a Patrol mode on the Patrol page. Keep schedule, triggers, and model readiness here."
+              >
+                This install runs Watch only. Patrol monitors your infrastructure and reports issues
+                here.
+              </Show>
             </p>
           </div>
           <button
