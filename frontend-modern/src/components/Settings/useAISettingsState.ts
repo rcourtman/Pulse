@@ -245,6 +245,11 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
   const [expandedProviders, setExpandedProviders] = createSignal<Set<AIProvider>>(
     new Set(['anthropic']),
   );
+  // Tracks whether the initial expand policy has been applied, so later
+  // resetForm calls (after every save) preserve the operator's own
+  // expand/collapse choices instead of clobbering them.
+  const [providersExpandedInitialized, setProvidersExpandedInitialized] =
+    createSignal(false);
 
   const [testingProvider, setTestingProvider] = createSignal<AIProvider | null>(null);
   const [providerTestResult, setProviderTestResult] = createSignal<ProviderTestResult | null>(null);
@@ -482,8 +487,19 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     if (data.together_configured) configured.add('together');
     if (data.fireworks_configured) configured.add('fireworks');
     if (data.ollama_configured) configured.add('ollama');
-    if (configured.size === 0) configured.add('anthropic');
-    setExpandedProviders(configured);
+    // Apply the expand policy only on the first load. Guide first-time
+    // setup by expanding the default provider when nothing is configured
+    // yet; once at least one provider is configured, keep the list
+    // collapsed — the per-provider badges and the health callout already
+    // convey status, and expanding every configured provider just produces
+    // a wall of API-key inputs. Later saves preserve the operator's own
+    // expand/collapse selections.
+    if (!providersExpandedInitialized()) {
+      setProvidersExpandedInitialized(true);
+      setExpandedProviders(
+        configured.size === 0 ? new Set<AIProvider>(['anthropic']) : new Set<AIProvider>(),
+      );
+    }
   };
 
   const loadModels = async () => {

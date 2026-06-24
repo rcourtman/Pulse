@@ -25,8 +25,6 @@ import {
   AI_COST_PANEL_DESCRIPTION,
   AI_COST_PANEL_TITLE,
   AI_COST_PATROL_USE_CASE_LABEL,
-  AI_COST_PROVIDER_MODEL_PAIR_LABEL,
-  AI_COST_TARGET_TABLE_LABEL,
   AI_COST_RESET_HISTORY_LABEL,
   buildAICostExportFilename,
   getAICostBudgetNote,
@@ -37,7 +35,6 @@ import {
   getAICostResetHistoryConfirmationMessage,
   getAICostResetHistoryErrorMessage,
   getAICostResetHistorySuccessMessage,
-  getAICostTargetPresentation,
 } from '@/utils/aiCostPresentation';
 
 const usdFormatter = new Intl.NumberFormat(undefined, {
@@ -142,16 +139,34 @@ export const AICostDashboard: Component = () => {
   const dailyTokenValues = createMemo(() => dailyTotals().map((d) => d.total_tokens));
   const dailyUSDValues = createMemo(() => dailyTotals().map((d) => d.estimated_usd ?? 0));
 
-  const lastDailyTokens = createMemo(() => {
+  // Trend cards characterise the range by its daily average, not the last
+  // data point. Showing the last point read as "you spent $0 today" when
+  // earlier days in the range carried the actual spend.
+  const avgDailyTokens = createMemo(() => {
     const values = dailyTokenValues();
     if (values.length === 0) return null;
-    return values[values.length - 1];
+    return Math.round(values.reduce((sum, v) => sum + v, 0) / values.length);
   });
 
-  const lastDailyUSD = createMemo(() => {
+  const avgDailyUSD = createMemo(() => {
     const values = dailyUSDValues();
     if (values.length === 0) return null;
-    return values[values.length - 1];
+    return values.reduce((sum, v) => sum + v, 0) / values.length;
+  });
+
+  // Surface the real cost driver first: priced models by spend (desc),
+  // then unpriced models by tokens (desc) so the rows the operator can
+  // actually act on aren't buried under flat / unknown rows.
+  const sortedProviderModels = createMemo(() => {
+    const data = summary();
+    if (!data) return [];
+    return [...data.provider_models].sort((a, b) => {
+      const aPriced = a.pricing_known ? 1 : 0;
+      const bPriced = b.pricing_known ? 1 : 0;
+      if (aPriced !== bPriced) return bPriced - aPriced;
+      if (aPriced) return (b.estimated_usd ?? 0) - (a.estimated_usd ?? 0);
+      return (b.total_tokens ?? 0) - (a.total_tokens ?? 0);
+    });
   });
 
   const formatUSD = (usd: number) => usdFormatter.format(usd);
@@ -377,7 +392,7 @@ export const AICostDashboard: Component = () => {
         <Show when={summary()}>
           {(data) => (
             <>
-              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div class="p-3 rounded-md bg-surface-alt border border-border">
                   <div class="text-xs text-muted">Estimated spend</div>
                   <div class="text-lg font-semibold text-base-content">
@@ -388,22 +403,27 @@ export const AICostDashboard: Component = () => {
                       {formatUSD(estimatedTotalUSD() ?? 0)}
                     </Show>
                   </div>
+                  <div class="text-[11px] text-muted mt-0.5">over {data().effective_days} days</div>
                 </div>
                 <div class="p-3 rounded-md bg-surface-alt border border-border">
-                  <div class="text-xs text-muted">Total tokens</div>
-                  <div class="text-lg font-semibold text-base-content">
-                    {formatNumber(data().totals.total_tokens)}
+                  <div class="text-xs text-muted">{AI_COST_BUDGET_LABEL}</div>
+                  <div class="text-lg font-semibold text-base-content mt-0.5">
+                    <Show
+                      when={parsedBudgetUSD30d() != null}
+                      fallback={<span class="text-muted" aria-hidden="true">—</span>}
+                    >
+                      {formatUSD(parsedBudgetUSD30d() ?? 0)}
+                    </Show>
                   </div>
-                </div>
-                <div class="p-3 rounded-md bg-surface-alt border border-border">
-                  <div class="text-xs text-muted">{AI_COST_PROVIDER_MODEL_PAIR_LABEL}</div>
-                  <div class="text-lg font-semibold text-base-content">
-                    {formatNumber(data().provider_models.length)}
+                  <div class="text-[11px] text-muted mt-0.5">
+                    <Show when={budgetForRange() != null} fallback={<span>No budget set</span>}>
+                      {getAICostBudgetNote(days())} {formatUSD(budgetForRange() ?? 0)}
+                    </Show>
                   </div>
                 </div>
               </div>
 
-              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div class="p-3 rounded-md bg-surface-alt border border-border">
                   <div class="text-xs text-muted">{AI_COST_ASSISTANT_USE_CASE_LABEL}</div>
                   <div class="text-sm font-semibold text-base-content">
@@ -426,35 +446,18 @@ export const AICostDashboard: Component = () => {
                     </Show>
                   </div>
                 </div>
-                <div class="p-3 rounded-md bg-surface-alt border border-border">
-                  <div class="text-xs text-muted">{AI_COST_BUDGET_LABEL}</div>
-                  <div class="text-sm font-semibold text-base-content mt-1">
-                    <Show
-                      when={parsedBudgetUSD30d() != null}
-                      fallback={<span class="text-muted" aria-hidden="true">—</span>}
-                    >
-                      {formatUSD(parsedBudgetUSD30d() ?? 0)}
-                    </Show>
-                  </div>
-                  <div class="text-[11px] text-muted mt-1">
-                    {getAICostBudgetNote(days())}{' '}
-                    <Show when={budgetForRange() != null} fallback={<span>—</span>}>
-                      {formatUSD(budgetForRange() ?? 0)}
-                    </Show>
-                  </div>
-                </div>
               </div>
 
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div class="p-3 rounded-md bg-surface-alt border border-border">
                   <div class="flex items-center justify-between">
-                    <div class="text-xs text-muted">Daily estimated USD</div>
+                    <div class="text-xs text-muted">Spend trend</div>
                     <div class="text-xs text-muted">
                       <Show
-                        when={anyPricingKnown() && lastDailyUSD() != null}
+                        when={anyPricingKnown() && avgDailyUSD() != null}
                         fallback={<span>—</span>}
                       >
-                        {formatUSD(lastDailyUSD() ?? 0)}
+                        {formatUSD(avgDailyUSD() ?? 0)} avg/day
                       </Show>
                     </div>
                   </div>
@@ -471,10 +474,10 @@ export const AICostDashboard: Component = () => {
                 </div>
                 <div class="p-3 rounded-md bg-surface-alt border border-border">
                   <div class="flex items-center justify-between">
-                    <div class="text-xs text-muted">Daily total tokens</div>
+                    <div class="text-xs text-muted">Token trend</div>
                     <div class="text-xs text-muted">
-                      <Show when={lastDailyTokens() != null} fallback={<span>—</span>}>
-                        {formatNumber(lastDailyTokens() ?? 0)}
+                      <Show when={avgDailyTokens() != null} fallback={<span>—</span>}>
+                        {formatNumber(avgDailyTokens() ?? 0)} avg/day
                       </Show>
                     </div>
                   </div>
@@ -494,19 +497,9 @@ export const AICostDashboard: Component = () => {
               <div class="text-xs text-muted">
                 USD is an estimate based on public list prices. It may differ from billing.
                 <Show when={unpricedProviderModels().length > 0}>
-                  <span class="ml-2">
-                    Estimated spend is partial. Pricing is unknown for{' '}
-                    {unpricedProviderModels()
-                      .slice(0, 6)
-                      .map(
-                        (pm) =>
-                          `${getAIProviderDisplayName(pm.provider) || pm.provider}/${pm.model}`,
-                      )
-                      .join(', ')}
-                    <Show when={unpricedProviderModels().length > 6}>
-                      <span> (+{unpricedProviderModels().length - 6} more)</span>
-                    </Show>
-                    .
+                  <span class="ml-2" title={`Pricing unknown for:\n${unpricedProviderModels().map((pm) => `${getAIProviderDisplayName(pm.provider) || pm.provider}/${pm.model}`).join('\n')}`}>
+                    Estimated spend is partial — {unpricedProviderModels().length} model
+                    {unpricedProviderModels().length === 1 ? '' : 's'} have unknown pricing.
                   </span>
                 </Show>
                 <Show when={summary()?.pricing_as_of}>
@@ -546,56 +539,6 @@ export const AICostDashboard: Component = () => {
                 </div>
               </div>
 
-              <Show when={(data().targets?.length ?? 0) > 0}>
-                <Table class="min-w-full text-sm">
-                  <TableHeader class="text-xs text-muted uppercase tracking-wide">
-                    <TableRow class="border-b border-border">
-                      <TableHead class="text-left py-2 pr-4">
-                        {AI_COST_TARGET_TABLE_LABEL}
-                      </TableHead>
-                      <TableHead class="text-right py-2 px-2">Est. USD</TableHead>
-                      <TableHead class="text-right py-2 px-2">Calls</TableHead>
-                      <TableHead class="text-right py-2 px-2">Tokens</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    <For each={data().targets}>
-                      {(t) => {
-                        const target = getAICostTargetPresentation(t);
-                        return (
-                          <TableRow class="border-b border-border-subtle">
-                            <TableCell class="py-2 pr-4 text-base-content">
-                              <span class="font-medium">{target.label}</span>
-                              <Show when={target.detail}>
-                                <span class="block text-xs text-muted">{target.detail}</span>
-                              </Show>
-                            </TableCell>
-                            <TableCell class="py-2 px-2 text-right text-base-content">
-                              <Show
-                                when={t.pricing_known}
-                                fallback={
-                                  <span class="text-muted" aria-hidden="true">
-                                    —
-                                  </span>
-                                }
-                              >
-                                {formatUSD(t.estimated_usd ?? 0)}
-                              </Show>
-                            </TableCell>
-                            <TableCell class="py-2 px-2 text-right text-base-content">
-                              {formatNumber(t.calls)}
-                            </TableCell>
-                            <TableCell class="py-2 px-2 text-right text-base-content">
-                              {formatNumber(t.total_tokens)}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      }}
-                    </For>
-                  </TableBody>
-                </Table>
-              </Show>
-
               <Table class="min-w-full text-sm">
                 <TableHeader class="text-xs text-muted uppercase tracking-wide">
                   <TableRow class="border-b border-border">
@@ -608,7 +551,7 @@ export const AICostDashboard: Component = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  <For each={data().provider_models}>
+                  <For each={sortedProviderModels()}>
                     {(pm) => (
                       <TableRow class="border-b border-border-subtle">
                         <TableCell class="py-2 pr-4 font-medium text-base-content">

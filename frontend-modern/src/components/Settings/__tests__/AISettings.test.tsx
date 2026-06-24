@@ -867,6 +867,9 @@ describe('AISettings Ollama provider options', () => {
 
     renderComponent();
 
+    // Configured providers start collapsed; open the Ollama accordion to edit
+    // its advanced options, the same way an operator would.
+    fireEvent.click(await screen.findByRole('button', { name: /ollama/i }));
     fireEvent.input(await screen.findByLabelText('Ollama Keep Alive'), {
       target: { value: '24h' },
     });

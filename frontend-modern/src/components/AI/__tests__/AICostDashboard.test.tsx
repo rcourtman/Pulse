@@ -190,26 +190,6 @@ describe('AICostDashboard', () => {
 
   // ---- summary cards ----
 
-  it('displays total tokens', async () => {
-    renderDashboard();
-    await waitFor(() => {
-      expect(screen.getByText('Total tokens')).toBeInTheDocument();
-    });
-    // 60000 formatted — appears in summary card and provider table, so use getAllByText
-    const matches = screen.getAllByText('60,000');
-    expect(matches.length).toBeGreaterThanOrEqual(1);
-  });
-
-  it('displays model/provider pair count', async () => {
-    renderDashboard();
-    await waitFor(() => {
-      expect(screen.getByText('Provider/model pairs')).toBeInTheDocument();
-    });
-    // Verify the count is rendered in the same card container
-    const pairCard = screen.getByText('Provider/model pairs').closest('.p-3')!;
-    expect(pairCard.textContent).toContain('1');
-  });
-
   it('displays estimated spend in USD', async () => {
     renderDashboard();
     await waitFor(() => {
@@ -419,47 +399,11 @@ describe('AICostDashboard', () => {
       }),
     );
     renderDashboard();
-    await waitFor(() => {
-      expect(screen.getByText(/Pricing is unknown for/)).toBeInTheDocument();
-    });
-    expect(screen.getByText(/Ollama\/llama3/)).toBeInTheDocument();
-  });
-
-  // ---- targets table ----
-
-  it('renders target table when targets are present', async () => {
-    getCostSummaryMock.mockResolvedValue(
-      baseSummary({
-        targets: [
-          {
-            target_type: 'assistant_session_title',
-            target_id: '7f5941d9-a503-416d-b84e-5a46c9e1e11f',
-            calls: 5,
-            input_tokens: 10000,
-            output_tokens: 2000,
-            total_tokens: 12000,
-            estimated_usd: 0.08,
-            pricing_known: true,
-          },
-        ],
-      }),
-    );
-    renderDashboard();
-    await waitFor(() => {
-      expect(screen.getByText('Usage by task')).toBeInTheDocument();
-    });
-    expect(screen.getByText('Assistant sessions')).toBeInTheDocument();
-    expect(screen.queryByText(/assistant_session_title/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/7f5941d9/)).not.toBeInTheDocument();
-    expect(screen.getByText('12,000')).toBeInTheDocument();
-  });
-
-  it('does not render target table when no targets', async () => {
-    renderDashboard();
-    await waitFor(() => {
-      expect(screen.getByText('Estimated spend')).toBeInTheDocument();
-    });
-    expect(screen.queryByText('Usage by task')).not.toBeInTheDocument();
+    const note = await screen.findByText(/unknown pricing/);
+    expect(note.textContent).toMatch(/partial/);
+    // The full unpriced-model list is carried in a hover tooltip so the
+    // visible flow stays concise.
+    expect(note.getAttribute('title')).toContain('Ollama/llama3');
   });
 
   // ---- error states ----
@@ -726,12 +670,24 @@ describe('AICostDashboard', () => {
   it('shows daily trend sparklines when multiple daily totals exist', async () => {
     renderDashboard();
     await waitFor(() => {
-      expect(screen.getByText('Daily estimated USD')).toBeInTheDocument();
-      expect(screen.getByText('Daily total tokens')).toBeInTheDocument();
+      expect(screen.getByText('Spend trend')).toBeInTheDocument();
+      expect(screen.getByText('Token trend')).toBeInTheDocument();
     });
     // With 2 daily totals, sparklines should render (SVGs present)
     const svgs = document.querySelectorAll('svg');
     expect(svgs.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('labels trend cards with the daily average, not a single last point', async () => {
+    // daily_totals fixture: two days, $0.21 each → avg $0.21/day. A last-point
+    // label previously read as the headline and could misleadingly show $0.
+    renderDashboard();
+    await waitFor(() => {
+      expect(screen.getByText('Spend trend')).toBeInTheDocument();
+    });
+    const spendCard = screen.getByText('Spend trend').closest('.p-3')!;
+    expect(spendCard.textContent).toMatch(/avg\/day/);
+    expect(spendCard.textContent).toMatch(/0\.21/);
   });
 
   it('shows the shared daily token empty state when less than 2 daily totals', async () => {
