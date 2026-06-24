@@ -8022,7 +8022,7 @@
     },
     {
       "id": "patrol-plan-locked-mode-discovery",
-      "summary": "Resolved the patrol-intelligence contract conflict over plan-locked Patrol mode discoverability: plan-locked (free) installs keep a positive Watch-only default header and must not render a default disabled paid-mode matrix or default Pro badges, but the four Patrol modes may be revealed through an explicit opt-in disclosure affordance (such as 'See what Patrol can do') beside the mode controls, with paid modes disabled and compact Pro badges plus a 'Plans & Billing' handoff appearing there only when upgrade prompts are allowed. Runtime-locked Pro installs may still show explicit blocking copy. This reconciles the prior permissive and prohibitive contract statements.",
+      "summary": "Resolved the patrol-intelligence contract conflict over plan-locked Patrol mode discoverability in favor of a clean free product: plan-locked (free) Patrol working surfaces must not surface paid modes, disabled paid-mode buttons, compact Pro badges, or any paid-mode disclosure. The free Patrol surface stays a complete monitoring tool with no mention of paid Patrol capabilities; Pro discovery belongs in Settings, the website/docs, and contextual at-need prompts, not in the daily-use control surface. This drops the prior permissive carve-out and the interim opt-in disclosure approach entirely. Runtime-locked Pro installs may still show explicit blocking copy because the operator already holds the entitlement.",
       "kind": "contract",
       "decided_at": "2026-06-24",
       "subsystem_ids": [

@@ -91,7 +91,7 @@ describe('PatrolIntelligenceHeader', () => {
     expect(headerSource).not.toContain('Refresh Patrol');
   });
 
-  it('makes Patrol mode a simple four-level choice with paid modes disabled when locked', () => {
+  it('makes Patrol mode a simple four-level choice without rendering plan-locked paid modes', () => {
     expect(PATROL_AUTONOMY_POLICY_PRESENTATION).toEqual({
       monitor: {
         label: 'Watch only',
@@ -286,25 +286,5 @@ describe('PatrolIntelligenceHeader', () => {
     expect(headerSource).not.toContain('trust.currently_active');
     expect(headerSource).not.toContain('trust.regressed_at_least_once');
     expect(headerSource).not.toContain('trust.fix_verified');
-  });
-
-  it('reveals plan-locked paid modes through an opt-in disclosure, not a default matrix', () => {
-    // The default plan-locked header stays on positive Watch-only copy and does
-    // not render a disabled paid-mode matrix. Operators discover the four modes
-    // only by opening an explicit affordance.
-    expect(headerSource).toContain('modeDiscoveryOpen');
-    expect(headerSource).toContain('setModeDiscoveryOpen');
-    expect(headerSource).toContain('showModeDiscoveryAffordance');
-    expect(headerSource).toContain(
-      "state.autoFixLocked() && autonomyAvailability().kind === 'plan_locked'",
-    );
-    expect(headerSource).toContain('<Show when={showModeDiscoveryAffordance()}>');
-    expect(headerSource).toContain('aria-expanded={modeDiscoveryOpen()}');
-    expect(headerSource).toContain('See what Patrol can do');
-    expect(headerSource).toContain('Hide Patrol modes');
-    // The disclosed modes reuse the canonical four-level selector so paid modes
-    // stay disabled and Pro-badged by the same lockedPaidMode logic.
-    expect(headerSource).toContain('<Show when={modeDiscoveryOpen()}>');
-    expect(headerSource).toContain('ariaLabel="Patrol modes"');
   });
 });

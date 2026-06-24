@@ -1,4 +1,4 @@
-import { createMemo, createSignal, Show } from 'solid-js';
+import { createMemo, Show } from 'solid-js';
 import { A } from '@solidjs/router';
 import PlayIcon from 'lucide-solid/icons/play';
 import SettingsIcon from 'lucide-solid/icons/settings';
@@ -128,7 +128,6 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
   );
   const upgradePromptsHidden = createMemo(() => presentationPolicyHidesUpgradePrompts());
   const commercialSurfacesHidden = createMemo(() => presentationPolicyHidesCommercialSurfaces());
-  const [modeDiscoveryOpen, setModeDiscoveryOpen] = createSignal(false);
   const canChooseAutonomyLevel = createMemo(() => !state.autoFixLocked());
   const autonomyAvailability = createMemo(() =>
     getPatrolAutonomyAvailabilityPresentation({
@@ -157,9 +156,6 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
   );
   const shouldShowAutonomyActionColumn = createMemo(
     () => shouldShowAutonomyOptions() || showAutonomyPlanBillingAction(),
-  );
-  const showModeDiscoveryAffordance = createMemo(
-    () => state.autoFixLocked() && autonomyAvailability().kind === 'plan_locked',
   );
   const showAutonomyAvailabilityPrompt = createMemo(
     () =>
@@ -269,29 +265,6 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
               <DownloadIcon class="h-4 w-4" />
               {autonomyAvailability().actionLabel}
             </UpgradeButtonLink>
-          </Show>
-        </div>
-      </Show>
-      <Show when={showModeDiscoveryAffordance()}>
-        <div class="mt-1">
-          <button
-            type="button"
-            onClick={() => setModeDiscoveryOpen((open) => !open)}
-            aria-expanded={modeDiscoveryOpen()}
-            class="text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-          >
-            {modeDiscoveryOpen() ? 'Hide Patrol modes' : 'See what Patrol can do'}
-          </button>
-          <Show when={modeDiscoveryOpen()}>
-            <FilterButtonGroup
-              ariaLabel="Patrol modes"
-              class="mt-2 w-full"
-              disabled={!state.patrolEnabledLocal()}
-              options={autonomyLevelOptions()}
-              value={effectiveAutonomyLevel()}
-              onChange={(level) => state.handleAutonomyChange(level)}
-              variant="segmented"
-            />
           </Show>
         </div>
       </Show>

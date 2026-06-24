@@ -1331,12 +1331,12 @@ settings`, and candidate review when discovered sources are waiting. It must
     API names remain hidden from operators and compact controls do not collapse
     into unexplained shorthand. Patrol run-history rows must lead with what
     Patrol did or could not do before exposing trigger, token, tool-call, or raw
-    trace details. Plan-locked Patrol controls must keep the default watch-only
-    surface positive and must not render a default Pro-absence explainer or a
-    default disabled paid-level matrix. The paid levels may be revealed only
-    through an explicit opt-in disclosure affordance beside the selector, behind
-    which they may appear as disabled buttons, badged as Pro, with one compact
-    `Plans & Billing` handoff, only when upgrade prompts are allowed. Visible product copy calls the selector `Patrol mode`; compatibility route and wire identifiers may keep stable names
+    trace details. Plan-locked Patrol controls must keep the free watch-only
+    surface clean and must not render a Pro-absence explainer, a disabled
+    paid-level matrix, compact Pro badges, or any paid-mode disclosure. The free
+    Patrol working surface stays clear of paid-feature surfacing entirely; Pro
+    discovery belongs in Settings, website/docs, and contextual at-need prompts,
+    not beside the daily-use selector. Visible product copy calls the selector `Patrol mode`; compatibility route and wire identifiers may keep stable names
     such as `patrol_control` and `patrolControl*`. The always-visible Patrol mode selector must stay on
     the selected mode and one plain summary, without a separate `Limits`
     disclosure or hard-limit matrix beside the picker. Shared feature shells must not invent their own Patrol safety
