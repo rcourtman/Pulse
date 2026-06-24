@@ -82,8 +82,16 @@ func (b *baseAgentHandlers) broadcastState(ctx context.Context) {
 		return
 	}
 
-	state := monitor.BuildFrontendState()
 	orgID := GetOrgID(ctx)
+	if orgID != "" {
+		if b.wsHub.GetTenantClientCount(orgID) == 0 {
+			return
+		}
+	} else if b.wsHub.GetClientCount() == 0 {
+		return
+	}
+
+	state := monitor.BuildFrontendState()
 	if orgID != "" {
 		go b.wsHub.BroadcastStateToTenant(orgID, state)
 		return

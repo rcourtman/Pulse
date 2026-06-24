@@ -1907,6 +1907,9 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 				Int("pbsBackups", len(state.Backups.PBS)).
 				Int("physicalDisks", len(state.PhysicalDisks)).
 				Msg("Broadcasting state update (ticker)")
+			if !stateBroadcasterHasSubscribers(wsHub, m.GetOrgID()) {
+				continue
+			}
 			frontendState := m.buildBroadcastFrontendStateFromSnapshot(state)
 			// Use tenant-aware broadcast method
 			m.broadcastState(wsHub, frontendState)
@@ -3859,6 +3862,28 @@ type stateBroadcaster interface {
 	BroadcastStateToTenant(orgID string, state interface{})
 }
 
+type stateSubscriberCounter interface {
+	GetClientCount() int
+	GetTenantClientCount(orgID string) int
+}
+
+func stateBroadcasterHasSubscribers(hub stateBroadcaster, orgID string) bool {
+	if isNilStateBroadcaster(hub) {
+		return false
+	}
+
+	counter, ok := hub.(stateSubscriberCounter)
+	if !ok {
+		return true
+	}
+
+	orgID = strings.TrimSpace(orgID)
+	if orgID != "" {
+		return counter.GetTenantClientCount(orgID) > 0
+	}
+	return counter.GetClientCount() > 0
+}
+
 // broadcastState broadcasts state to WebSocket clients.
 // Monitors with an explicit org ID (including "default") are tenant-scoped.
 // Legacy monitors without an org ID broadcast globally.
@@ -3868,6 +3893,9 @@ func (m *Monitor) broadcastState(hub stateBroadcaster, frontendState interface{}
 	}
 
 	orgID := strings.TrimSpace(m.GetOrgID())
+	if !stateBroadcasterHasSubscribers(hub, orgID) {
+		return
+	}
 	if orgID != "" {
 		hub.BroadcastStateToTenant(orgID, frontendState)
 	} else {
@@ -3941,7 +3969,7 @@ func (m *Monitor) SetMockMode(enable bool) error {
 	hub := m.wsHub
 	m.mu.RUnlock()
 
-	if hub != nil {
+	if hub != nil && stateBroadcasterHasSubscribers(hub, m.GetOrgID()) {
 		frontendState := m.buildBroadcastFrontendStateFromSnapshot(m.GetState())
 		// Use tenant-aware broadcast method
 		m.broadcastState(hub, frontendState)

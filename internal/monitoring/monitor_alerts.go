@@ -278,6 +278,9 @@ func (m *Monitor) broadcastStateUpdate() {
 	if hub == nil {
 		return
 	}
+	if !stateBroadcasterHasSubscribers(hub, m.GetOrgID()) {
+		return
+	}
 
 	frontendState := m.BuildBroadcastFrontendState()
 	// Use tenant-aware broadcast method

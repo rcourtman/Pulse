@@ -618,18 +618,7 @@ func (h *Hub) Run() {
 
 		case client := <-h.unregister:
 			h.mu.Lock()
-			if _, ok := h.clients[client]; ok {
-				delete(h.clients, client)
-				// Also remove from tenant map
-				if client.orgID != "" && h.clientsByTenant[client.orgID] != nil {
-					delete(h.clientsByTenant[client.orgID], client)
-					// Clean up empty tenant maps
-					if len(h.clientsByTenant[client.orgID]) == 0 {
-						delete(h.clientsByTenant, client.orgID)
-					}
-				}
-				client.closed.Store(true) // Mark closed before closing channel to prevent sends
-				close(client.send)
+			if h.removeClientLocked(client) {
 				h.mu.Unlock()
 				log.Info().Str("client", client.id).Str("org_id", client.orgID).Msg("webSocket client disconnected")
 			} else {
@@ -637,25 +626,7 @@ func (h *Hub) Run() {
 			}
 
 		case message := <-h.broadcast:
-			h.mu.RLock()
-			clients := make([]*Client, 0, len(h.clients))
-			for client := range h.clients {
-				clients = append(clients, client)
-			}
-			h.mu.RUnlock()
-
-			for _, client := range clients {
-				if !client.safeSend(message) {
-					// Client closed or buffer full - remove if still registered
-					h.mu.Lock()
-					if _, stillPresent := h.clients[client]; stillPresent {
-						delete(h.clients, client)
-						client.closed.Store(true)
-						close(client.send)
-					}
-					h.mu.Unlock()
-				}
-			}
+			h.dispatchToClients(message, "Client send channel full, dropping broadcast message and closing connection")
 
 		case <-pingTicker.C:
 			h.sendPing()
@@ -665,10 +636,19 @@ func (h *Hub) Run() {
 			// Close all client connections
 			h.mu.Lock()
 			for client := range h.clients {
-				client.closed.Store(true)
-				close(client.send)
+				if !client.closed.Swap(true) {
+					close(client.send)
+				}
+			}
+			for _, tenantClients := range h.clientsByTenant {
+				for client := range tenantClients {
+					if !client.closed.Swap(true) {
+						close(client.send)
+					}
+				}
 			}
 			h.clients = make(map[*Client]bool)
+			h.clientsByTenant = make(map[string]map[*Client]bool)
 			h.mu.Unlock()
 			return
 		}
@@ -865,6 +845,48 @@ func normalizeOrgID(orgID string) string {
 	return orgID
 }
 
+// removeClientLocked removes a client from every hub index and closes the send
+// channel once. h.mu must be held by the caller.
+func (h *Hub) removeClientLocked(client *Client) bool {
+	if client == nil {
+		return false
+	}
+
+	removed := false
+	if _, ok := h.clients[client]; ok {
+		delete(h.clients, client)
+		removed = true
+	}
+
+	if client.orgID != "" {
+		if tenantClients := h.clientsByTenant[client.orgID]; tenantClients != nil {
+			if _, ok := tenantClients[client]; ok {
+				delete(tenantClients, client)
+				removed = true
+				if len(tenantClients) == 0 {
+					delete(h.clientsByTenant, client.orgID)
+				}
+			}
+		}
+	} else {
+		for orgID, tenantClients := range h.clientsByTenant {
+			if _, ok := tenantClients[client]; ok {
+				delete(tenantClients, client)
+				removed = true
+				if len(tenantClients) == 0 {
+					delete(h.clientsByTenant, orgID)
+				}
+			}
+		}
+	}
+
+	if removed && !client.closed.Swap(true) {
+		close(client.send)
+	}
+
+	return removed
+}
+
 // dispatchToClients fan-outs a marshaled payload to all clients, dropping any that
 // cannot keep up to prevent unbounded buffering.
 func (h *Hub) dispatchToClients(data []byte, dropLog string) {
@@ -877,12 +899,8 @@ func (h *Hub) dispatchToClients(data []byte, dropLog string) {
 
 	for _, client := range clients {
 		if !client.safeSend(data) {
-			// Client closed or buffer full - remove if still registered
 			h.mu.Lock()
-			if _, stillPresent := h.clients[client]; stillPresent {
-				delete(h.clients, client)
-				client.closed.Store(true)
-				close(client.send)
+			if h.removeClientLocked(client) {
 				log.Warn().Str("client", client.id).Msg(dropLog)
 			}
 			h.mu.Unlock()
@@ -1080,15 +1098,8 @@ func (h *Hub) dispatchToTenantClients(orgID string, data []byte, dropLog string)
 
 	for _, client := range clients {
 		if !client.safeSend(data) {
-			// Client closed or buffer full - remove if still registered
 			h.mu.Lock()
-			if _, stillPresent := h.clients[client]; stillPresent {
-				delete(h.clients, client)
-				if h.clientsByTenant[client.orgID] != nil {
-					delete(h.clientsByTenant[client.orgID], client)
-				}
-				client.closed.Store(true)
-				close(client.send)
+			if h.removeClientLocked(client) {
 				log.Warn().Str("client", client.id).Str("org_id", client.orgID).Msg(dropLog)
 			}
 			h.mu.Unlock()

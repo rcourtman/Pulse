@@ -119,6 +119,14 @@ func (h *AlertHandlers) broadcastStateForContext(ctx context.Context) {
 	}
 
 	orgID := GetOrgID(ctx)
+	if orgID != "" {
+		if h.wsHub.GetTenantClientCount(orgID) == 0 {
+			return
+		}
+	} else if h.wsHub.GetClientCount() == 0 {
+		return
+	}
+
 	frontendState := h.getMonitor(ctx).BuildFrontendState()
 	if orgID != "" {
 		h.wsHub.BroadcastStateToTenant(orgID, frontendState)

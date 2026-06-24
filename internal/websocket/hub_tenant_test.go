@@ -120,3 +120,61 @@ func TestHub_DispatchToTenantClients(t *testing.T) {
 		// Success
 	}
 }
+
+func TestHub_GlobalDropRemovesClientFromTenantIndex(t *testing.T) {
+	hub := NewHub(nil)
+	go hub.Run()
+	t.Cleanup(hub.Stop)
+
+	client := registerTenantTestClient(t, hub, "client-full", "org1")
+	for i := 0; i < cap(client.send); i++ {
+		client.send <- []byte("queued")
+	}
+
+	hub.dispatchToClients([]byte("drop"), "Dropping full client")
+
+	hub.mu.RLock()
+	_, inClients := hub.clients[client]
+	tenantClients := hub.clientsByTenant["org1"]
+	_, inTenant := tenantClients[client]
+	hub.mu.RUnlock()
+
+	if inClients {
+		t.Fatal("full client remained in flat registry after global drop")
+	}
+	if inTenant || len(tenantClients) != 0 {
+		t.Fatal("full client remained in tenant registry after global drop")
+	}
+	if !client.closed.Load() {
+		t.Fatal("full client was not marked closed after global drop")
+	}
+}
+
+func TestHub_TenantDropClearsStaleTenantOnlyClient(t *testing.T) {
+	hub := NewHub(nil)
+	client := &Client{
+		hub:   hub,
+		id:    "tenant-only-full",
+		orgID: "org1",
+		send:  make(chan []byte, 1),
+	}
+	client.send <- []byte("queued")
+
+	hub.mu.Lock()
+	hub.clientsByTenant["org1"] = map[*Client]bool{client: true}
+	hub.mu.Unlock()
+
+	hub.dispatchToTenantClients("org1", []byte("drop"), "Dropping stale tenant client")
+
+	hub.mu.RLock()
+	tenantClients := hub.clientsByTenant["org1"]
+	_, inTenant := tenantClients[client]
+	hub.mu.RUnlock()
+
+	if inTenant || len(tenantClients) != 0 {
+		t.Fatal("stale tenant-only client remained in tenant registry after tenant drop")
+	}
+	if !client.closed.Load() {
+		t.Fatal("stale tenant-only client was not marked closed after tenant drop")
+	}
+}
