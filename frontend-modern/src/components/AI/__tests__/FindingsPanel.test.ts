@@ -946,6 +946,20 @@ describe('aiFindingPresentation', () => {
       expect(patrolWorkspaceSource).not.toContain('findingsBadgePresentation().toneClasses');
     });
 
+    it('surfaces work-type composition in the workspace description', () => {
+      expect(aiFindingPresentationSource).toContain(
+        'export function classifyPatrolFindingWorkType',
+      );
+      expect(aiFindingPresentationSource).toContain(
+        'export function getPatrolWorkTypeComposition',
+      );
+      expect(aiFindingPresentationSource).toContain(
+        'getPatrolWorkTypeCompositionClause',
+      );
+      expect(patrolWorkspaceSource).toContain('getPatrolWorkTypeComposition');
+      expect(patrolWorkspaceSource).toContain('workTypeComposition');
+    });
+
     it('does not stack a default detected loop-state badge on active findings', () => {
       expect(findingsPanelSource).toContain('const shouldShowLoopStateBadge = () =>');
       expect(findingsPanelSource).toContain('!isPatrolFindingsSource()');

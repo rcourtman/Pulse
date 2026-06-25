@@ -130,6 +130,46 @@ describe('patrolControlPresentation', () => {
     );
   });
 
+  it('includes work-type composition in the description when notable types exist', () => {
+    expect(
+      getPatrolQueueWorkspaceDescription({
+        autonomyLevel: 'monitor',
+        findingCount: 3,
+        affectedResourceCount: 2,
+        workTypeComposition: {
+          total: 3,
+          approval: 1,
+          failed: 0,
+          inProgress: 0,
+          recurring: 1,
+          newIssues: 1,
+        },
+      }),
+    ).toBe(
+      'Patrol found 3 issues on 2 affected resources — 1 needs approval, 1 recurring. Open a row to review evidence and record the outcome.',
+    );
+  });
+
+  it('omits the composition clause when all findings are new', () => {
+    expect(
+      getPatrolQueueWorkspaceDescription({
+        autonomyLevel: 'monitor',
+        findingCount: 2,
+        affectedResourceCount: 2,
+        workTypeComposition: {
+          total: 2,
+          approval: 0,
+          failed: 0,
+          inProgress: 0,
+          recurring: 0,
+          newIssues: 2,
+        },
+      }),
+    ).toBe(
+      'Patrol found 2 issues on 2 affected resources. Open a row to review evidence and record the outcome.',
+    );
+  });
+
   it('keeps setup-only issue reasons short and actionable', () => {
     expect(
       getPatrolSetupIssueReason({

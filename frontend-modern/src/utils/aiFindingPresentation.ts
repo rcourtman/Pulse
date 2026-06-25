@@ -559,6 +559,105 @@ export function buildPatrolFindingDisplayGroups<
   return groups;
 }
 
+export type PatrolFindingWorkType = 'approval' | 'failed' | 'in_progress' | 'recurring' | 'new';
+
+const isFailedFixOutcome = (outcome: string | undefined): boolean =>
+  outcome === 'fix_failed' ||
+  outcome === 'fix_verification_failed' ||
+  outcome === 'cannot_fix' ||
+  outcome === 'timed_out';
+
+export function classifyPatrolFindingWorkType(
+  finding: Pick<
+    UnifiedFinding,
+    'status' | 'investigationStatus' | 'investigationOutcome' | 'regressionCount' | 'timesRaised'
+  >,
+): PatrolFindingWorkType {
+  if (finding.status !== 'active') return 'new';
+
+  if (finding.investigationOutcome === 'fix_queued') return 'approval';
+
+  if (isFailedFixOutcome(finding.investigationOutcome)) return 'failed';
+
+  if (
+    finding.investigationStatus === 'running' ||
+    finding.investigationOutcome === 'fix_executed'
+  ) {
+    return 'in_progress';
+  }
+
+  if ((finding.regressionCount ?? 0) > 0 || (finding.timesRaised ?? 0) > 1) {
+    return 'recurring';
+  }
+
+  return 'new';
+}
+
+export interface PatrolWorkTypeComposition {
+  total: number;
+  approval: number;
+  failed: number;
+  inProgress: number;
+  recurring: number;
+  newIssues: number;
+}
+
+export function getPatrolWorkTypeComposition<
+  TFinding extends Pick<
+    UnifiedFinding,
+    'status' | 'investigationStatus' | 'investigationOutcome' | 'regressionCount' | 'timesRaised'
+  >,
+>(findings: readonly TFinding[]): PatrolWorkTypeComposition {
+  const composition: PatrolWorkTypeComposition = {
+    total: findings.length,
+    approval: 0,
+    failed: 0,
+    inProgress: 0,
+    recurring: 0,
+    newIssues: 0,
+  };
+  for (const finding of findings) {
+    switch (classifyPatrolFindingWorkType(finding)) {
+      case 'approval':
+        composition.approval++;
+        break;
+      case 'failed':
+        composition.failed++;
+        break;
+      case 'in_progress':
+        composition.inProgress++;
+        break;
+      case 'recurring':
+        composition.recurring++;
+        break;
+      case 'new':
+        composition.newIssues++;
+        break;
+    }
+  }
+  return composition;
+}
+
+export function getPatrolWorkTypeCompositionClause(
+  composition: PatrolWorkTypeComposition,
+): string {
+  const parts: string[] = [];
+  if (composition.approval > 0) {
+    parts.push(`${composition.approval} need${composition.approval === 1 ? 's' : ''} approval`);
+  }
+  if (composition.failed > 0) {
+    parts.push(`${composition.failed} failed fix${composition.failed === 1 ? '' : 'es'}`);
+  }
+  if (composition.inProgress > 0) {
+    parts.push(`${composition.inProgress} in progress`);
+  }
+  if (composition.recurring > 0) {
+    parts.push(`${composition.recurring} recurring`);
+  }
+  if (parts.length === 0) return '';
+  return ` — ${parts.join(', ')}`;
+}
+
 export const getPatrolFindingIssueCountLabel = (count: number): string => {
   const normalized = Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : 0;
   if (normalized === 1) {

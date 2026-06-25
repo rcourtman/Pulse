@@ -1,5 +1,9 @@
 import type { PatrolAutonomyLevel } from '@/api/patrol';
-import { getPatrolFindingIssueCountLabel } from '@/utils/aiFindingPresentation';
+import {
+  getPatrolFindingIssueCountLabel,
+  getPatrolWorkTypeCompositionClause,
+} from '@/utils/aiFindingPresentation';
+import type { PatrolWorkTypeComposition } from '@/utils/aiFindingPresentation';
 import type { UpgradeDestination } from '@/utils/upgradeNavigation';
 
 export const PATROL_AUTONOMY_POLICY_PRESENTATION: Record<
@@ -50,6 +54,7 @@ interface PatrolControlCopyInput {
 interface PatrolQueueCountInput {
   affectedResourceCount?: number;
   findingCount?: number;
+  workTypeComposition?: PatrolWorkTypeComposition;
 }
 
 interface PatrolSetupIssueReasonInput {
@@ -146,10 +151,13 @@ export function getPatrolQueueWorkspaceDescription(
   const findingCount = normalizeCount(input.findingCount);
   const affectedResourceCount = normalizeCount(input.affectedResourceCount);
   if (findingCount > 0 && affectedResourceCount > 0) {
+    const compositionClause = input.workTypeComposition
+      ? getPatrolWorkTypeCompositionClause(input.workTypeComposition)
+      : '';
     return `Patrol found ${getPatrolFindingIssueCountLabel(findingCount)} on ${formatCount(
       affectedResourceCount,
       'affected resource',
-    )}. ${getPatrolQueueActionDetail(input)}`;
+    )}${compositionClause}. ${getPatrolQueueActionDetail(input)}`;
   }
 
   if (input.autonomyLocked) {

@@ -7,6 +7,7 @@ import {
   getFindingTitlePresentation,
   buildPatrolFindingDisplayGroups,
   getPatrolFindingsBadgePresentation,
+  getPatrolWorkTypeComposition,
   isPatrolRuntimeFinding,
 } from '@/utils/aiFindingPresentation';
 import { formatRelativeTime } from '@/utils/format';
@@ -50,6 +51,9 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
     () => state.findingsTabBadgeCount() ?? state.findingsTabBadgeFindings().length,
   );
   const queueAffectedResourceCount = createMemo(() => queueDisplayGroups().length);
+  const workTypeComposition = createMemo(() =>
+    getPatrolWorkTypeComposition(state.findingsTabBadgeFindings()),
+  );
   const queueBadgeLabel = createMemo(() =>
     getPatrolQueueBadgeLabel({
       affectedResourceCount: queueAffectedResourceCount(),
@@ -90,6 +94,7 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
               autonomyLocked: state.autoFixLocked(),
               affectedResourceCount: queueAffectedResourceCount(),
               findingCount: queueIssueCount(),
+              workTypeComposition: workTypeComposition(),
             });
   const openHistory = () => {
     state.setActiveTab('history');
