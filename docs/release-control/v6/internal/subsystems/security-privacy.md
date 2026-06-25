@@ -150,13 +150,13 @@ controls as normal product settings.
 17. `internal/cloudcp/auth/magiclink_store.go` shared with `cloud-paid`: control-plane magic-link persistence is both a Pulse Cloud account-access boundary and a security/privacy storage-hardening boundary.
 ## Extension Points
 
-Catalog edits in `frontend-modern/src/i18n/` that add Patrol-trigger copy (such
-as an alert's "Have Patrol investigate" action) must stay non-disclosing: the
-manual Patrol trigger carries resource identity only — resource ids plus alert
-identifier/type — and injects no operator briefing, command, prompt, or
-remediation payload into the model beyond the existing scoped-investigation
-context, so it adds no new disclosure surface and the existing resource-policy
-redaction still governs any model-bound context.
+Catalog edits in `frontend-modern/src/i18n/` that add or promote Patrol-trigger
+copy (such as an alert's primary "Have Patrol investigate" action) must stay
+non-disclosing: the manual Patrol trigger carries resource identity only —
+resource ids plus alert identifier/type — and injects no operator briefing,
+command, prompt, or remediation payload into the model beyond the existing
+scoped-investigation context, so it adds no new disclosure surface and the
+existing resource-policy redaction still governs any model-bound context.
 
 1. Change privacy disclosures, usage-data vocabulary, or outbound-data guarantees through `docs/PRIVACY.md`, `frontend-modern/public/docs/PRIVACY.md`, `internal/telemetry/telemetry.go`, and `pkg/server/telemetry_pulse_intelligence.go` together.
    Pulse Intelligence external-agent/MCP telemetry may expose only content-free

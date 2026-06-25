@@ -269,6 +269,8 @@ describe('i18n foundation', () => {
       expect(I18N_MESSAGES[locale]['alerts.assistant.locked.proRequired']).toContain('Pro');
       expect(I18N_MESSAGES[locale]['alerts.assistant.patrol.menuLabel']).toBeTruthy();
       expect(I18N_MESSAGES[locale]['alerts.assistant.patrol.menuLabel']).toContain('Patrol');
+      expect(I18N_MESSAGES[locale]['alerts.assistant.patrol.title']).toContain('Patrol');
+      expect(I18N_MESSAGES[locale]['alerts.assistant.explain.menuLabel']).toContain('Assistant');
       expect(
         t(
           'alerts.assistant.action.investigate',

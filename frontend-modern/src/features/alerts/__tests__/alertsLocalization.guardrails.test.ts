@@ -44,8 +44,12 @@ const migratedAlertsOverviewCopy = [
   'Ask Pulse Assistant',
   'Pro required to ask Pulse Assistant about alerts',
   'More AI actions for this alert',
+  'More alert actions',
+  'Explain with Assistant',
+  'Use this alert as read-only context',
   'Have Patrol investigate',
   'Run a targeted Patrol check on this resource',
+  'Have Patrol investigate this alert',
   'Alert investigation attached',
   'Diagnostics and remediation require operator approval',
   'No incident timeline available',
@@ -68,6 +72,8 @@ describe('alerts overview localization guardrails', () => {
     expect(statsCardsSource).toContain('getAlertOverviewStatsLabels');
     expect(acknowledgementStateSource).toContain('getAlertOverviewAcknowledgedNotification');
     expect(investigateButtonSource).toContain('alerts.assistant.button.full');
+    expect(investigateButtonSource).toContain('alerts.assistant.explain.menuLabel');
+    expect(investigateButtonSource).toContain('alerts.assistant.patrol.title');
     expect(assistantHandoffSource).toContain('alerts.assistant.subject');
     expect(incidentTimelineSource).toContain('getAlertTimelineNotePlaceholder');
     expect(incidentFiltersSource).toContain('getAlertTimelineEventTypeLabel');

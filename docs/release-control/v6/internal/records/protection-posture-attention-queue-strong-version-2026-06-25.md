@@ -112,6 +112,10 @@ loop, and routes the operator from real findings/evidence to safe action.
   navigation. The visible destination remains `Patrol`; the count is secondary
   current-work signaling driven by active Patrol findings and live Patrol
   approvals, not a renamed `Needs Attention` route or a generic Home queue.
+- 2026-06-25: Made resource-backed alert investigation action-first. Active
+  alert cards now lead with `Have Patrol investigate`, which starts the scoped
+  manual Patrol check, while Assistant stays available as the secondary
+  read-only explanation path with the alert context attached.
 
 ## Evidence
 

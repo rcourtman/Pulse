@@ -1,6 +1,7 @@
 import { Show, createEffect, createSignal, onCleanup } from 'solid-js';
 import ChevronDownIcon from 'lucide-solid/icons/chevron-down';
 import ShieldCheckIcon from 'lucide-solid/icons/shield-check';
+import SparklesIcon from 'lucide-solid/icons/sparkles';
 import { aiChatStore } from '@/stores/aiChat';
 import { notificationStore } from '@/stores/notifications';
 import { triggerPatrolRun } from '@/api/patrol';
@@ -21,19 +22,19 @@ interface InvestigateAlertButtonProps {
   licenseLocked?: boolean;
   /**
    * When true (and the alert has a resource), the text/full variants render as
-   * a split AI button: the primary action still opens Pulse Assistant (the
-   * context-only explanation surface), and a small menu offers to run a manual
-   * targeted Patrol check scoped to this alert's resource. The icon variant is
+   * a split investigation button: the primary action runs a manual targeted
+   * Patrol check scoped to this alert's resource, while a small menu keeps
+   * Pulse Assistant available for context-only explanation. The icon variant is
    * single-purpose regardless.
    */
   patrolOption?: boolean;
 }
 
 /**
- * "Ask AI" button for one-click alert investigation.
- * The primary action opens Pulse Assistant with alert context attached
- * (context-only, per the alerts Assistant handoff contract). When patrolOption
- * is set, a split menu also offers a manual targeted Patrol check.
+ * Investigation button for one-click alert follow-up.
+ * Plain Assistant opens remain context-only. On alert cards that opt into
+ * Patrol routing, resource-backed alerts make Patrol the primary doer and keep
+ * Assistant as the secondary explanation path.
  * Hidden entirely when AI is not configured.
  */
 export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
@@ -47,7 +48,6 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
     canShowUpgradePrompt()
       ? t('alerts.assistant.locked.proRequired')
       : t('alerts.assistant.locked.unavailable');
-  const buttonTitle = () => (isLocked() ? lockedTitle() : t('alerts.assistant.unlockedTitle'));
   // Don't render if AI is not enabled
   if (aiChatStore.enabled !== true) {
     return null;
@@ -57,6 +57,13 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
     props.patrolOption === true &&
     !isLocked() &&
     !!(props.alert.resourceId || '').trim();
+  const usesPatrolPrimary = () => showPatrolOption() && props.variant !== 'icon';
+  const buttonTitle = () =>
+    isLocked()
+      ? lockedTitle()
+      : usesPatrolPrimary()
+        ? t('alerts.assistant.patrol.title')
+        : t('alerts.assistant.unlockedTitle');
 
   const closeMenu = () => setMenuOpen(false);
 
@@ -80,18 +87,7 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
     });
   });
 
-  const handleClick = (e: MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    closeMenu();
-    if (isLocked()) {
-      if (!canShowUpgradePrompt()) {
-        return;
-      }
-      openUpgradeDestination(getUpgradeActionDestination('ai_alerts'));
-      return;
-    }
-
+  const openAssistant = () => {
     const handoff = buildAlertAssistantHandoff({
       alert: props.alert,
       resourceType: props.resourceType,
@@ -101,16 +97,7 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
     aiChatStore.open(handoff.context);
   };
 
-  const handleToggleMenu = (e: MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    setMenuOpen((value) => !value);
-  };
-
-  const handleTriggerPatrol = async (e: MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    closeMenu();
+  const startPatrolInvestigation = async () => {
     const resourceId = (props.alert.resourceId || '').trim();
     if (!resourceId) {
       notificationStore.warning(t('alerts.assistant.patrol.noResource'));
@@ -138,6 +125,39 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
     }
   };
 
+  const handleClick = (e: MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    closeMenu();
+    if (isLocked()) {
+      if (!canShowUpgradePrompt()) {
+        return;
+      }
+      openUpgradeDestination(getUpgradeActionDestination('ai_alerts'));
+      return;
+    }
+
+    if (usesPatrolPrimary()) {
+      void startPatrolInvestigation();
+      return;
+    }
+
+    openAssistant();
+  };
+
+  const handleToggleMenu = (e: MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setMenuOpen((value) => !value);
+  };
+
+  const handleOpenAssistant = (e: MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    closeMenu();
+    openAssistant();
+  };
+
   const sizeClasses = {
     sm: 'w-6 h-6 text-xs',
     md: 'w-8 h-8 text-sm',
@@ -150,10 +170,7 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
     disabled:opacity-50 disabled:cursor-not-allowed
   `;
 
-  // Shared split-menu affordance rendered alongside the primary button when
-  // patrolOption is active. The primary action stays "open Assistant"; this
-  // only exposes the manual targeted Patrol alternative.
-  const PatrolSplit = (splitClass: string, iconClass: string) => (
+  const SecondaryActionMenu = (splitClass: string, iconClass: string) => (
     <Show when={showPatrolOption()}>
       <button
         type="button"
@@ -174,13 +191,13 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
           <button
             type="button"
             role="menuitem"
-            onClick={handleTriggerPatrol}
+            onClick={handleOpenAssistant}
             class="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-base-content hover:bg-surface-hover"
           >
-            <ShieldCheckIcon class="h-4 w-4 flex-shrink-0 text-blue-600 dark:text-blue-400" />
+            <SparklesIcon class="h-4 w-4 flex-shrink-0 text-blue-600 dark:text-blue-400" />
             <span class="flex flex-col">
-              <span class="font-medium">{t('alerts.assistant.patrol.menuLabel')}</span>
-              <span class="text-[10px] text-muted">{t('alerts.assistant.patrol.menuHint')}</span>
+              <span class="font-medium">{t('alerts.assistant.explain.menuLabel')}</span>
+              <span class="text-[10px] text-muted">{t('alerts.assistant.explain.menuHint')}</span>
             </span>
           </button>
         </div>
@@ -247,17 +264,28 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
           title={buttonTitle()}
           aria-disabled={isLocked()}
         >
-          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
-            />
-          </svg>
-          <span class="text-xs font-medium">{t('alerts.assistant.button.text')}</span>
+          <Show
+            when={usesPatrolPrimary()}
+            fallback={
+              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+                />
+              </svg>
+            }
+          >
+            <ShieldCheckIcon class="h-3.5 w-3.5 flex-shrink-0" />
+          </Show>
+          <span class="text-xs font-medium">
+            {usesPatrolPrimary()
+              ? t('alerts.assistant.patrol.menuLabel')
+              : t('alerts.assistant.button.text')}
+          </span>
         </button>
-        {PatrolSplit(
+        {SecondaryActionMenu(
           `px-1.5 py-1 rounded-l-none border border-border border-l-0 bg-surface hover:bg-surface-hover text-blue-600 dark:text-blue-400 ${
             isLocked() ? 'opacity-60 cursor-not-allowed' : ''
           }`,
@@ -287,20 +315,31 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
         title={buttonTitle()}
         aria-disabled={isLocked()}
       >
-        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
-          />
-        </svg>
-        <span>{t('alerts.assistant.button.full')}</span>
+        <Show
+          when={usesPatrolPrimary()}
+          fallback={
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+              />
+            </svg>
+          }
+        >
+          <ShieldCheckIcon class="h-4 w-4 flex-shrink-0" />
+        </Show>
+        <span>
+          {usesPatrolPrimary()
+            ? t('alerts.assistant.patrol.menuLabel')
+            : t('alerts.assistant.button.full')}
+        </span>
         <Show when={isHovered() && !showPatrolOption()}>
           <span class="text-xs opacity-80">→</span>
         </Show>
       </button>
-      {PatrolSplit(
+      {SecondaryActionMenu(
         `px-2 py-1.5 rounded-l-none bg-blue-600 hover:bg-blue-700 text-white border-l border-blue-500/60 ${
           isLocked() ? 'opacity-60 cursor-not-allowed hover:bg-blue-600' : ''
         }`,

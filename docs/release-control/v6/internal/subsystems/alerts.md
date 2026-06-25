@@ -123,19 +123,20 @@ inline SVG shells in alert-owned runtime components.
    `frontend-modern/src/stores/alertsActivation.ts` so browser display colors
    consume the same configured alert thresholds and override identity chain as
    the alert runtime instead of hard-coded per-surface thresholds.
-7. Add or change unlocked Pulse Assistant alert investigation handoffs through
+7. Add or change alert investigation handoffs through
    `frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx` and
-   `frontend-modern/src/components/Alerts/alertAssistantHandoffModel.ts`;
-   these handoffs must preserve alert context, force request-scoped approval
-   mode, send bounded model-only handoff context plus structured resource
-   references through the shared Assistant chat transport, and render a compact
-   Alerts-owned briefing in the Assistant drawer without transferring raw
-   command payloads or synthesizing, pre-filling, or auto-submitting a chat
-   prompt. The same button may additionally offer a manual scoped Patrol
-   trigger (for example a "Have Patrol investigate" menu action); that option is
-   a Patrol trigger governed by the `ai-runtime` manual Patrol route contract,
-   not an Assistant handoff, and must stay distinct from the context-only
-   Assistant open path above.
+   `frontend-modern/src/components/Alerts/alertAssistantHandoffModel.ts`.
+   On resource-backed active alert cards, Patrol is the primary doer: the
+   visible primary action must run a manual scoped Patrol trigger such as
+   "Have Patrol investigate" through the `ai-runtime` manual Patrol route
+   contract. Pulse Assistant remains a secondary context-only explanation path:
+   Assistant handoffs must preserve alert context, force request-scoped
+   approval mode, send bounded model-only handoff context plus structured
+   resource references through the shared Assistant chat transport, and render a
+   compact Alerts-owned briefing in the Assistant drawer without transferring
+   raw command payloads or synthesizing, pre-filling, or auto-submitting a chat
+   prompt. The Patrol trigger and the context-only Assistant open path must stay
+   distinct.
 8. Add or change Pulse Assistant incident timeline handoffs through
    `frontend-modern/src/components/Alerts/IncidentAssistantHandoffButton.tsx`
    and `frontend-modern/src/components/Alerts/incidentAssistantHandoffModel.ts`;

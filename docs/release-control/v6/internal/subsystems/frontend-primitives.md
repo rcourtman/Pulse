@@ -204,8 +204,9 @@ Settings > General; individual surfaces must consume that shared preference
 instead of creating local language toggles. Customer-facing shell, navigation,
 settings, first-run, empty-state, and alert copy may be localized through this
 catalog — including the alert-to-Patrol action surface ("Have Patrol
-investigate" and its targeted-check menu hint) that sits alongside the
-Assistant handoff strings — but
+investigate" and its targeted-check menu hint) that is primary on
+resource-backed active alert cards, plus the secondary Assistant explanation
+handoff strings — but
 machine-facing values must remain stable: commands, environment variables, API
 fields, config keys, log lines, error codes, hostnames, resource names, product
 identifiers, and vendor object names stay untranslated unless the owning

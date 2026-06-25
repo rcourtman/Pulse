@@ -717,10 +717,11 @@ describe('InvestigateAlertButton', () => {
 });
 
 describe('InvestigateAlertButton patrolOption', () => {
-  it('renders a split menu toggle alongside the primary action (text variant)', () => {
+  it('renders Patrol as the primary action with an Assistant explanation menu', () => {
     render(() => <InvestigateAlertButton alert={makeAlert()} variant="text" patrolOption />);
     expect(screen.getAllByRole('button')).toHaveLength(2);
-    const toggle = screen.getByRole('button', { name: 'More AI actions for this alert' });
+    expect(screen.getByRole('button', { name: /Have Patrol investigate/i })).toBeInTheDocument();
+    const toggle = screen.getByRole('button', { name: 'More alert actions' });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
   });
 
@@ -742,7 +743,7 @@ describe('InvestigateAlertButton patrolOption', () => {
     expect(screen.getAllByRole('button')).toHaveLength(1);
   });
 
-  it('triggers a scoped patrol run from the menu item', async () => {
+  it('triggers a scoped Patrol run from the primary action', async () => {
     const alert = makeAlert({
       id: 'alert-9',
       type: 'cpu',
@@ -751,11 +752,7 @@ describe('InvestigateAlertButton patrolOption', () => {
     });
     render(() => <InvestigateAlertButton alert={alert} variant="text" patrolOption />);
 
-    const toggle = screen.getByRole('button', { name: 'More AI actions for this alert' });
-    await fireEvent.click(toggle);
-
-    const item = await screen.findByRole('menuitem', { name: /Have Patrol investigate/i });
-    await fireEvent.click(item);
+    await fireEvent.click(screen.getByRole('button', { name: /Have Patrol investigate/i }));
 
     await waitFor(() => {
       expect(triggerPatrolRunMock).toHaveBeenCalledWith({
@@ -770,14 +767,24 @@ describe('InvestigateAlertButton patrolOption', () => {
     });
   });
 
-  it('does not open the Assistant when the Patrol item is chosen', async () => {
+  it('does not open the Assistant when the Patrol primary action is chosen', async () => {
     const alert = makeAlert({ resourceId: 'vm-101' });
     render(() => <InvestigateAlertButton alert={alert} variant="text" patrolOption />);
 
-    await fireEvent.click(screen.getByRole('button', { name: 'More AI actions for this alert' }));
-    await fireEvent.click(await screen.findByRole('menuitem'));
+    await fireEvent.click(screen.getByRole('button', { name: /Have Patrol investigate/i }));
 
     await waitFor(() => expect(triggerPatrolRunMock).toHaveBeenCalled());
     expect(openMock).not.toHaveBeenCalled();
+  });
+
+  it('opens the Assistant only from the secondary explanation item', async () => {
+    const alert = makeAlert({ resourceId: 'vm-101' });
+    render(() => <InvestigateAlertButton alert={alert} variant="text" patrolOption />);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'More alert actions' }));
+    await fireEvent.click(await screen.findByRole('menuitem', { name: /Explain with Assistant/i }));
+
+    expect(openMock).toHaveBeenCalledTimes(1);
+    expect(triggerPatrolRunMock).not.toHaveBeenCalled();
   });
 });
