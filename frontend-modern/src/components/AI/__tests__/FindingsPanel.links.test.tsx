@@ -465,6 +465,8 @@ describe('FindingsPanel resource links', () => {
         description:
           'The Unraid array on Tower is running without parity protection while capacity is high.',
         impact: 'A disk failure before parity is rebuilt could cause unrecoverable data loss.',
+        recommendation:
+          'Verify the parity check is progressing and let it complete before making array changes.',
         detectedAt: '2026-03-30T11:00:00Z',
         lastSeenAt: '2026-03-30T11:05:00Z',
         status: 'active',
@@ -531,6 +533,12 @@ describe('FindingsPanel resource links', () => {
         'The Unraid array on Tower is running without parity protection while capacity is high.',
       ),
     ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Verify the parity check is progressing and let it complete before making array changes.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Recommended next step:')).toBeInTheDocument();
   });
 
   it('can render Patrol findings from the direct Patrol source', async () => {
