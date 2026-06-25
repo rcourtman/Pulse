@@ -118,6 +118,7 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
             }
             variant="text"
             size="sm"
+            patrolOption
           />
         </div>
       </div>

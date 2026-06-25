@@ -586,6 +586,14 @@ instead of lifecycle-local centered icon/text shells.
 
 ## Extension Points
 
+Manual scoped Patrol work that reaches `internal/api/ai_handlers.go` (such as an
+alert-initiated targeted Patrol check via `POST /api/ai/patrol/run`) is
+investigation-only over agent-reporting resources: it must not alter agent
+lifecycle, registration, token binding, reporting contracts, or install-command
+identity. The scoped Patrol request carries resource identity only and reuses
+the existing Patrol scoped engine, so it adds no agent lifecycle control
+surface and no new `internal/api/` lifecycle handler.
+
 1. Add or change install-command generation, canonical /api/auto-register behavior, or installer download behavior through the owned `internal/api/` files above.
    Canonical `/api/auto-register` auth is split by intent: when the setup-token
    bootstrap path succeeds, lifecycle clients must complete registration with

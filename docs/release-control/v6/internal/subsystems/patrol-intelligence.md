@@ -330,6 +330,12 @@ attention`, `approval needed`, `outcome verified`, `no active work`) instead
    terminology where needed for cadence, audit, or API stability, but the
    default page must not ask ordinary operators to learn those internal proof
    distinctions before they can decide what to do next.
+   A manual scoped Patrol request — such as an alert's "Have Patrol
+   investigate" action — is one of those Targeted checks, not a new run kind:
+   it must reuse the same scoped engine, run record, and run-history vocabulary
+   as automatic alert-triggered work (governed by the `ai-runtime` manual Patrol
+   route contract), so the operator still sees a `Targeted check` rather than a
+   route-specific label.
    Active Patrol finding expansion must stay action-led: description, impact,
    recurrence summary, primary action, Assistant handoff, approval, and manual
    controls are acceptable default content, but raw lifecycle telemetry belongs

@@ -438,6 +438,18 @@ component-local required-scope list.
 
 ## Extension Points
 
+The manual Patrol route is an extension boundary for scoped work. `POST
+/api/ai/patrol/run` (`HandleForcePatrol`) accepts an optional scope body
+(`resource_ids` and/or `resource_types`, plus optional `alert_identifier`,
+`alert_type`, and `context`) to run a manual Targeted check through the same
+`TriggerScopedPatrol` engine and scoped run record as automatic alert-triggered
+work; with no body it keeps the fleet-wide Patrol check. The scoped path must
+reuse the existing scoped engine rather than adding a parallel trigger route,
+honour the same Patrol readiness gate as a full run, bypass the full-run
+cadence gate (targeted checks never consume a manual full-run allowance), and
+carry resource identity only — no command, prompt, or remediation payload —
+while the route keeps requiring admin plus `ai:execute` scope for both shapes.
+
 Pulse Intelligence presents Patrol as the primary first-party operations
 surface. Pulse Assistant is the in-app contextual explanation, approval-card,
 governed-action, verification, and handoff access path over Patrol work.
@@ -5031,6 +5043,19 @@ full-patrol cadence gates. Community-tier or other full-run limits must key
 off completed full sweeps only; recent scoped or verification activity may
 advance `last_activity_at`, but it must not block a manual full Patrol request
 as if a scheduled estate-wide sweep already happened.
+The manual Patrol route carries that same scoped/full distinction. `POST
+/api/ai/patrol/run` (`internal/api/ai_handlers.go` `HandleForcePatrol`) accepts
+an optional scope body — `resource_ids` and/or `resource_types`, optionally with
+`alert_identifier`, `alert_type`, and `context`. With a scope it runs a manual
+Targeted check through the same scoped engine (`TriggerScopedPatrol`) and run
+record (`Type: "scoped"`) as automatic alert-triggered work, not a new
+investigation path; without a body it keeps the legacy fleet-wide Patrol check
+behaviour. A manual scoped run must reuse the existing scoped engine rather
+than adding a parallel trigger route, must honour the same Patrol readiness gate
+as a full run, and must bypass the full-run cadence gate because targeted
+checks never consume an operator's manual full-run allowance. The request must
+carry resource identity only — no command, prompt, or remediation payload — and
+the route must keep requiring admin plus `ai:execute` scope for both shapes.
 The Patrol startup scheduler must preserve that coverage guarantee as well:
 `internal/ai/patrol_run.go` may skip the startup full patrol only when recent
 run history already includes a successful full Patrol run, not merely because

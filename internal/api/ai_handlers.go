@@ -5672,6 +5672,54 @@ func patrolFindingsLimitFromQuery(query url.Values, includeResolved bool) int {
 	return limit
 }
 
+// manualScopedPatrolRequest is the optional body for POST /api/ai/patrol/run.
+// When resource_ids or resource_types are present, the run is scoped to those
+// resources as a manual Targeted check over the same scoped engine the
+// automatic alert path uses, instead of a fleet-wide Patrol check.
+type manualScopedPatrolRequest struct {
+	ResourceIDs     []string `json:"resource_ids,omitempty"`
+	ResourceTypes   []string `json:"resource_types,omitempty"`
+	AlertIdentifier string   `json:"alert_identifier,omitempty"`
+	AlertType       string   `json:"alert_type,omitempty"`
+	Context         string   `json:"context,omitempty"`
+}
+
+// buildManualScopedPatrolScope maps an optional scoped-run request body to a
+// manual PatrolScope. It returns hasScope=false when no resource ids or types
+// remain after trimming, so the caller falls back to a full fleet run.
+func buildManualScopedPatrolScope(req manualScopedPatrolRequest) (ai.PatrolScope, bool) {
+	resourceIDs := make([]string, 0, len(req.ResourceIDs))
+	for _, id := range req.ResourceIDs {
+		if trimmed := strings.TrimSpace(id); trimmed != "" {
+			resourceIDs = append(resourceIDs, trimmed)
+		}
+	}
+	resourceTypes := make([]string, 0, len(req.ResourceTypes))
+	for _, t := range req.ResourceTypes {
+		if trimmed := strings.TrimSpace(t); trimmed != "" {
+			resourceTypes = append(resourceTypes, trimmed)
+		}
+	}
+	if len(resourceIDs) == 0 && len(resourceTypes) == 0 {
+		return ai.PatrolScope{}, false
+	}
+	scope := ai.PatrolScope{
+		ResourceIDs:     resourceIDs,
+		ResourceTypes:   resourceTypes,
+		Depth:           ai.PatrolDepthQuick,
+		Reason:          ai.TriggerReasonManual,
+		AlertIdentifier: strings.TrimSpace(req.AlertIdentifier),
+	}
+	scope.Context = "Manual targeted check"
+	if alertType := strings.TrimSpace(req.AlertType); alertType != "" {
+		scope.Context = "Manual targeted check for alert: " + alertType
+	}
+	if ctx := strings.TrimSpace(req.Context); ctx != "" {
+		scope.Context = ctx
+	}
+	return scope, true
+}
+
 // HandleForcePatrol triggers an immediate patrol run (POST /api/ai/patrol/run)
 func (h *AISettingsHandler) HandleForcePatrol(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -5697,6 +5745,27 @@ func (h *AISettingsHandler) HandleForcePatrol(w http.ResponseWriter, r *http.Req
 	}
 	if readiness := aiService.PatrolRuntimeReadiness(); !readiness.Ready {
 		writePatrolReadinessNotReadyResponse(w, http.StatusConflict, readiness)
+		return
+	}
+
+	// Optional scope: resource_ids/resource_types turn this into a manual
+	// Targeted check over the same scoped engine the automatic alert path uses,
+	// instead of a fleet-wide Patrol check. An empty or absent body keeps the
+	// legacy full-run behaviour. Scoped runs bypass the full-run cadence gate
+	// (consistent with automatic scoped runs) but still honour readiness above.
+	var scopedReq manualScopedPatrolRequest
+	if r.Body != nil {
+		_ = json.NewDecoder(r.Body).Decode(&scopedReq)
+	}
+	if scope, hasScope := buildManualScopedPatrolScope(scopedReq); hasScope {
+		go patrol.TriggerScopedPatrol(context.WithoutCancel(r.Context()), scope)
+		response := map[string]interface{}{
+			"success": true,
+			"message": "Triggered targeted Patrol check",
+		}
+		if err := utils.WriteJSONResponse(w, response); err != nil {
+			log.Error().Err(err).Msg("Failed to write scoped patrol response")
+		}
 		return
 	}
 

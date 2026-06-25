@@ -1013,3 +1013,118 @@ func TestHandleForcePatrol_CommunityTierIgnoresRecentScopedActivityForFullPatrol
 		t.Fatalf("expected community force patrol to ignore scoped-only activity, got %s", rec.Body.String())
 	}
 }
+
+func TestBuildManualScopedPatrolScope(t *testing.T) {
+	cases := []struct {
+		name   string
+		req    manualScopedPatrolRequest
+		wantOK bool
+		check  func(*testing.T, ai.PatrolScope)
+	}{
+		{
+			name:   "empty body falls back to full run",
+			req:    manualScopedPatrolRequest{},
+			wantOK: false,
+		},
+		{
+			name:   "whitespace-only ids fall back to full run",
+			req:    manualScopedPatrolRequest{ResourceIDs: []string{"  "}},
+			wantOK: false,
+		},
+		{
+			name:   "resource ids build a manual quick scope",
+			req:    manualScopedPatrolRequest{ResourceIDs: []string{"vm-101", " vm-102 "}, AlertIdentifier: "alert-1", AlertType: "cpu"},
+			wantOK: true,
+			check: func(t *testing.T, s ai.PatrolScope) {
+				t.Helper()
+				if s.Reason != ai.TriggerReasonManual {
+					t.Errorf("reason = %q, want manual", s.Reason)
+				}
+				if s.Depth != ai.PatrolDepthQuick {
+					t.Errorf("depth = %v, want quick", s.Depth)
+				}
+				if len(s.ResourceIDs) != 2 || s.ResourceIDs[0] != "vm-101" || s.ResourceIDs[1] != "vm-102" {
+					t.Errorf("resource ids = %v", s.ResourceIDs)
+				}
+				if s.AlertIdentifier != "alert-1" {
+					t.Errorf("alert identifier = %q", s.AlertIdentifier)
+				}
+				if !strings.Contains(s.Context, "cpu") {
+					t.Errorf("context = %q, want alert type", s.Context)
+				}
+			},
+		},
+		{
+			name:   "resource types only still scopes",
+			req:    manualScopedPatrolRequest{ResourceTypes: []string{"vm"}},
+			wantOK: true,
+			check: func(t *testing.T, s ai.PatrolScope) {
+				t.Helper()
+				if len(s.ResourceTypes) != 1 || s.ResourceTypes[0] != "vm" {
+					t.Errorf("resource types = %v", s.ResourceTypes)
+				}
+			},
+		},
+		{
+			name:   "explicit context overrides synthesized copy",
+			req:    manualScopedPatrolRequest{ResourceIDs: []string{"vm-1"}, Context: "operator note"},
+			wantOK: true,
+			check: func(t *testing.T, s ai.PatrolScope) {
+				t.Helper()
+				if s.Context != "operator note" {
+					t.Errorf("context = %q, want operator note", s.Context)
+				}
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			scope, ok := buildManualScopedPatrolScope(tc.req)
+			if ok != tc.wantOK {
+				t.Fatalf("hasScope = %v, want %v", ok, tc.wantOK)
+			}
+			if !ok {
+				return
+			}
+			tc.check(t, scope)
+		})
+	}
+}
+
+func TestHandleForcePatrol_ScopedRequestBypassesFullRunCadenceGate(t *testing.T) {
+	handler, patrol, _, _ := setupAIHandlerWithPatrol(t)
+	seedReadyAnthropicPatrolRuntime(t, handler)
+	handler.defaultAIService.SetLicenseChecker(communityLicenseChecker{})
+
+	// A recent full patrol puts Community tier inside the 1/hour full-run gate,
+	// so a fleet-wide request would be rate-limited.
+	setUnexportedField(t, patrol, "lastFullPatrol", time.Now().Add(-10*time.Minute))
+
+	// Scoped request: must succeed despite the full-run cadence window.
+	scopedReq := newLoopbackRequest(
+		http.MethodPost,
+		"/api/ai/patrol/run",
+		bytes.NewReader([]byte(`{"resource_ids":["vm-101"],"alert_identifier":"alert-1","alert_type":"cpu"}`)),
+	)
+	scopedRec := httptest.NewRecorder()
+	handler.HandleForcePatrol(scopedRec, scopedReq)
+
+	if scopedRec.Code != http.StatusOK {
+		t.Fatalf("scoped status = %d, want 200: %s", scopedRec.Code, scopedRec.Body.String())
+	}
+	if !strings.Contains(scopedRec.Body.String(), "targeted Patrol check") {
+		t.Fatalf("scoped response = %s, want targeted Patrol check message", scopedRec.Body.String())
+	}
+
+	// Contrast: an empty body (full run) on the same recent-full state is gated.
+	fullReq := newLoopbackRequest(http.MethodPost, "/api/ai/patrol/run", nil)
+	fullRec := httptest.NewRecorder()
+	handler.HandleForcePatrol(fullRec, fullReq)
+
+	if fullRec.Code != http.StatusTooManyRequests {
+		t.Fatalf("full status = %d, want 429 rate limited: %s", fullRec.Code, fullRec.Body.String())
+	}
+	if !strings.Contains(fullRec.Body.String(), "patrol_rate_limited") {
+		t.Fatalf("full response = %s, want patrol_rate_limited", fullRec.Body.String())
+	}
+}

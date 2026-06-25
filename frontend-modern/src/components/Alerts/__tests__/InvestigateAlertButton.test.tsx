@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { DEFAULT_LOCALE, setActiveLocale } from '@/i18n';
 import type { Alert } from '@/types/api';
 import { getPublicPricingUrl } from '@/utils/pricingHandoff';
@@ -16,6 +16,8 @@ const {
   getUpgradeActionDestinationMock,
   getUpgradeActionUrlOrFallbackMock,
   presentationPolicyHidesUpgradePromptsMock,
+  triggerPatrolRunMock,
+  notificationStoreMock,
 } = vi.hoisted(() => {
   const openMock = vi.fn();
   const openUpgradeDestinationMock = vi.fn();
@@ -29,6 +31,13 @@ const {
     enabled: true as boolean | null,
     open: (...args: unknown[]) => openMock(...args),
   };
+  const triggerPatrolRunMock = vi.fn();
+  const notificationStoreMock = {
+    success: vi.fn(),
+    error: vi.fn(),
+    warning: vi.fn(),
+    info: vi.fn(),
+  };
   return {
     openMock,
     openUpgradeDestinationMock,
@@ -37,6 +46,8 @@ const {
     getUpgradeActionDestinationMock,
     getUpgradeActionUrlOrFallbackMock,
     presentationPolicyHidesUpgradePromptsMock,
+    triggerPatrolRunMock,
+    notificationStoreMock,
   };
 });
 
@@ -59,6 +70,14 @@ vi.mock('@/components/shared/useUpgradeNavigation', () => ({
 
 vi.mock('@/utils/alertFormatters', () => ({
   formatAlertValue: (...args: unknown[]) => formatAlertValueMock(...(args as [number, string])),
+}));
+
+vi.mock('@/api/patrol', () => ({
+  triggerPatrolRun: (...args: unknown[]) => triggerPatrolRunMock(...(args as [unknown])),
+}));
+
+vi.mock('@/stores/notifications', () => ({
+  notificationStore: notificationStoreMock,
 }));
 
 // Import component AFTER mocks are set up
@@ -125,6 +144,12 @@ beforeEach(() => {
   });
   getUpgradeActionUrlOrFallbackMock.mockReturnValue(getPublicPricingUrl('ai_alerts'));
   vi.spyOn(window, 'open').mockImplementation(() => null);
+  triggerPatrolRunMock.mockReset();
+  triggerPatrolRunMock.mockResolvedValue({ success: true, message: 'Triggered targeted Patrol check' });
+  notificationStoreMock.success.mockReset();
+  notificationStoreMock.error.mockReset();
+  notificationStoreMock.warning.mockReset();
+  notificationStoreMock.info.mockReset();
 });
 
 // ---------------------------------------------------------------------------
@@ -688,5 +713,71 @@ describe('InvestigateAlertButton', () => {
       // First span is the main label
       expect(spans[0].textContent).toBe('Ask Pulse Assistant about this alert');
     });
+  });
+});
+
+describe('InvestigateAlertButton patrolOption', () => {
+  it('renders a split menu toggle alongside the primary action (text variant)', () => {
+    render(() => <InvestigateAlertButton alert={makeAlert()} variant="text" patrolOption />);
+    expect(screen.getAllByRole('button')).toHaveLength(2);
+    const toggle = screen.getByRole('button', { name: 'More AI actions for this alert' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('omits the split when the alert has no resource', () => {
+    const alert = makeAlert({ resourceId: '' });
+    render(() => <InvestigateAlertButton alert={alert} variant="text" patrolOption />);
+    expect(screen.getAllByRole('button')).toHaveLength(1);
+  });
+
+  it('omits the split when license-locked', () => {
+    render(() => (
+      <InvestigateAlertButton alert={makeAlert()} variant="text" patrolOption licenseLocked />
+    ));
+    expect(screen.getAllByRole('button')).toHaveLength(1);
+  });
+
+  it('keeps the icon variant single-purpose even with patrolOption', () => {
+    render(() => <InvestigateAlertButton alert={makeAlert()} variant="icon" patrolOption />);
+    expect(screen.getAllByRole('button')).toHaveLength(1);
+  });
+
+  it('triggers a scoped patrol run from the menu item', async () => {
+    const alert = makeAlert({
+      id: 'alert-9',
+      type: 'cpu',
+      resourceId: 'vm-101',
+      resourceName: 'test-vm',
+    });
+    render(() => <InvestigateAlertButton alert={alert} variant="text" patrolOption />);
+
+    const toggle = screen.getByRole('button', { name: 'More AI actions for this alert' });
+    await fireEvent.click(toggle);
+
+    const item = await screen.findByRole('menuitem', { name: /Have Patrol investigate/i });
+    await fireEvent.click(item);
+
+    await waitFor(() => {
+      expect(triggerPatrolRunMock).toHaveBeenCalledWith({
+        resource_ids: ['vm-101'],
+        alert_identifier: 'alert-9',
+        alert_type: 'cpu',
+        context: 'Manual targeted check from alert: cpu',
+      });
+    });
+    await waitFor(() => {
+      expect(notificationStoreMock.success).toHaveBeenCalledWith('Patrol is investigating test-vm');
+    });
+  });
+
+  it('does not open the Assistant when the Patrol item is chosen', async () => {
+    const alert = makeAlert({ resourceId: 'vm-101' });
+    render(() => <InvestigateAlertButton alert={alert} variant="text" patrolOption />);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'More AI actions for this alert' }));
+    await fireEvent.click(await screen.findByRole('menuitem'));
+
+    await waitFor(() => expect(triggerPatrolRunMock).toHaveBeenCalled());
+    expect(openMock).not.toHaveBeenCalled();
   });
 });

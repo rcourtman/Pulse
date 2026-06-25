@@ -267,6 +267,8 @@ describe('i18n foundation', () => {
       expect(I18N_MESSAGES[locale]['alerts.assistant.button.full']).toContain('Pulse Assistant');
       expect(I18N_MESSAGES[locale]['alerts.assistant.sourceLabel']).toBe('Pulse Alerts');
       expect(I18N_MESSAGES[locale]['alerts.assistant.locked.proRequired']).toContain('Pro');
+      expect(I18N_MESSAGES[locale]['alerts.assistant.patrol.menuLabel']).toBeTruthy();
+      expect(I18N_MESSAGES[locale]['alerts.assistant.patrol.menuLabel']).toContain('Patrol');
       expect(
         t(
           'alerts.assistant.action.investigate',

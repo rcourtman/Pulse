@@ -131,7 +131,11 @@ inline SVG shells in alert-owned runtime components.
    references through the shared Assistant chat transport, and render a compact
    Alerts-owned briefing in the Assistant drawer without transferring raw
    command payloads or synthesizing, pre-filling, or auto-submitting a chat
-   prompt.
+   prompt. The same button may additionally offer a manual scoped Patrol
+   trigger (for example a "Have Patrol investigate" menu action); that option is
+   a Patrol trigger governed by the `ai-runtime` manual Patrol route contract,
+   not an Assistant handoff, and must stay distinct from the context-only
+   Assistant open path above.
 8. Add or change Pulse Assistant incident timeline handoffs through
    `frontend-modern/src/components/Alerts/IncidentAssistantHandoffButton.tsx`
    and `frontend-modern/src/components/Alerts/incidentAssistantHandoffModel.ts`;

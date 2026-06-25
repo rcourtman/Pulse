@@ -81,7 +81,10 @@ storage/recovery-adjacent only through the shared action-audit and verification
 projection. Sibling handlers in `internal/api/` such as the AI settings handler
 (`ai_handlers.go`) carry AI provider configuration (for example per-provider
 base URL overrides) that is ai-runtime config-surface, not storage or recovery
-state. Starter counts, contextual Assistant/external-agent collaboration
+state; a manual scoped Patrol check routed through this handler is
+investigate-only as well (it may analyze storage resources but invokes no
+backup, restore, SMART, or recovery operation, and carries resource identity
+only). Starter counts, contextual Assistant/external-agent collaboration
 counts, Patrol control completed-loop or resolved-loop outcome evidence,
 `patrolControlValueState`, legacy `patrolAutonomy*` compatibility aliases, and
 the operator-readable `progressLabel` on that

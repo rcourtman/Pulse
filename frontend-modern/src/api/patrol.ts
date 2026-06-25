@@ -730,11 +730,39 @@ export interface PatrolStreamEvent {
 }
 
 /**
- * Trigger a manual patrol run
+ * Optional scope for a manual patrol run.
+ *
+ * When resource_ids or resource_types are present, POST /api/ai/patrol/run
+ * starts a manual Targeted check over the same scoped engine the automatic
+ * alert path uses, instead of a fleet-wide Patrol check. A scoped run bypasses
+ * the full-run cadence gate but still honours Patrol readiness.
  */
-export async function triggerPatrolRun(): Promise<{ success: boolean; message: string }> {
+export interface PatrolRunScope {
+  resource_ids?: string[];
+  resource_types?: string[];
+  alert_identifier?: string;
+  alert_type?: string;
+  context?: string;
+}
+
+/**
+ * Trigger a manual patrol run.
+ *
+ * Without a scope this starts a fleet-wide Patrol check (the legacy Run
+ * Patrol behaviour). Pass a scope to run a manual Targeted check scoped to
+ * specific resources — e.g. a single alert's resource.
+ */
+export async function triggerPatrolRun(
+  scope?: PatrolRunScope,
+): Promise<{ success: boolean; message: string }> {
+  const hasScope =
+    !!scope &&
+    ((scope.resource_ids?.length ?? 0) > 0 || (scope.resource_types?.length ?? 0) > 0);
   return apiFetchJSON('/api/ai/patrol/run', {
     method: 'POST',
+    ...(hasScope
+      ? { body: JSON.stringify(scope), headers: { 'Content-Type': 'application/json' } }
+      : {}),
   });
 }
 

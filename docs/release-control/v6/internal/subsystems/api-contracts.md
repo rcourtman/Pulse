@@ -814,6 +814,11 @@ payload shape change when the portal presents compact client rows.
     `/api/ai/patrol/run` must use the `patrol_readiness_not_ready` error taxonomy
     when it rejects a known-bad Patrol runtime configuration. Bounded `status`,
     `cause`, `provider`, and `model` details are the canonical transport shape.
+    When the request body carries `resource_ids` or `resource_types`,
+    `/api/ai/patrol/run` runs a manual targeted Patrol check scoped to those
+    resources (reusing the scoped engine and scoped run record, bypassing the
+    full-run cadence gate); an empty body keeps the fleet-wide run. The scoped
+    body carries resource identity only — no command or remediation payload.
     Patrol may demote the shared model catalog behind an explicit advanced UI
     action, but it must still source selectable model routes from the shared AI
     runtime catalog/settings payloads rather than introducing a Patrol-local
