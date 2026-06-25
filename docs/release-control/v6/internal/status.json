@@ -1,6 +1,6 @@
 {
   "version": "6.0",
-  "updated_at": "2026-06-12",
+  "updated_at": "2026-06-25",
   "scope": {
     "active_repos": [
       "pulse",
@@ -7232,6 +7232,53 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "protection-posture-attention-queue",
+      "summary": "Pulse now has a durable strong-version product direction, but the current lane map does not yet model the simple user-facing shape as one governed surface: Home should answer whether the estate is protected, Needs Attention should be the primary action queue, Explore should preserve dashboard browsing, Assistant should explain the selected thing, and Patrol should remain the engine underneath. Without an explicit lane-expansion record, work can drift into local Patrol renames, generic Assistant polish, or an inbox that feels dead in steady state instead of proving calm-day protection posture.",
+      "owner": "project-owner",
+      "status": "planned",
+      "recorded_at": "2026-06-25",
+      "lane_ids": [
+        "L6",
+        "L8",
+        "L13",
+        "L20",
+        "L22",
+        "L23"
+      ],
+      "subsystem_ids": [
+        "ai-runtime",
+        "api-contracts",
+        "frontend-primitives",
+        "monitoring",
+        "patrol-intelligence",
+        "unified-resources"
+      ],
+      "proposed_resolution": "lane-expansion",
+      "coverage_impact": 12,
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/AI.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/protection-posture-attention-queue-strong-version-2026-06-25.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/pulse-intelligence-proactive-operations-lane-2026-05-08.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "candidate_lanes": [
@@ -7255,6 +7302,33 @@
       "subsystem_ids": [
         "cloud-paid",
         "frontend-primitives"
+      ]
+    },
+    {
+      "id": "protection-posture-attention-queue",
+      "name": "Protection Posture And Attention Queue",
+      "summary": "Promote the strong-version operator workbench into a governed lane expansion covering calm-day Home protection posture, the primary Needs Attention action queue, dashboard Explore boundaries, contextual Assistant demotion, Patrol as the underlying engine, explicit autonomy/trust scaffolding, and browser proof for both active-work and calm-day states.",
+      "status": "planned",
+      "recorded_at": "2026-06-25",
+      "target_id": "v6-product-lane-expansion",
+      "current_lane_ids": [
+        "L6",
+        "L8",
+        "L13",
+        "L20",
+        "L22",
+        "L23"
+      ],
+      "coverage_gap_ids": [
+        "protection-posture-attention-queue"
+      ],
+      "subsystem_ids": [
+        "ai-runtime",
+        "api-contracts",
+        "frontend-primitives",
+        "monitoring",
+        "patrol-intelligence",
+        "unified-resources"
       ]
     }
   ],

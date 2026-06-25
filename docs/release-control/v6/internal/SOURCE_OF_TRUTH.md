@@ -1,6 +1,6 @@
 # Pulse v6 Source Of Truth
 
-Last updated: 2026-06-12
+Last updated: 2026-06-25
 Status: ACTIVE
 
 This file is the stable human governance layer for the active v6 release
@@ -126,6 +126,16 @@ infrastructure.
 Pulse should win by giving operators one coherent place to monitor,
 investigate, and safely act across mixed estates rather than by accumulating
 opportunistic platform-specific surfaces.
+The strong user-facing shape is a protection posture plus action queue, not an
+AI chat destination: Home answers "Am I protected?", Needs Attention answers
+"What needs me?", Explore/dashboard surfaces remain for browsing, Assistant is
+contextual explanation for the selected thing, and Patrol is the engine under
+the surface. This direction must stay simple enough for a new operator to
+understand without learning internal terms such as Intelligence, Patrol runs,
+handoffs, workflow starters, or findings lifecycle before they can act.
+Steady-state value is part of the product truth: a calm estate should show
+coverage, freshness, drift, connectivity, and verification posture rather than
+feeling empty or dead.
 Ordinary self-hosted Pulse v6 must stay free-first: core monitoring, discovered
 resource breadth, and BYOK Patrol should not be weakened, capacity-metered, or
 used as default in-app paid-service pressure. Paid value should be explicit and
