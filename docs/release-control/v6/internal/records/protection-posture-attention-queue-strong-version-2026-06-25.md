@@ -108,6 +108,10 @@ loop, and routes the operator from real findings/evidence to safe action.
   useful row-level step by Patrol mode: review evidence in Watch only, approve
   changes in Ask first, inspect safe fixes or automatic actions in higher
   modes, and review verification results without adding a separate proof strip.
+- 2026-06-25: Added a shell-level Patrol open-work count for desktop and mobile
+  navigation. The visible destination remains `Patrol`; the count is secondary
+  current-work signaling driven by active Patrol findings and live Patrol
+  approvals, not a renamed `Needs Attention` route or a generic Home queue.
 
 ## Evidence
 

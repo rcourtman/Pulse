@@ -386,6 +386,20 @@ function getFindingsNeedingAttentionFor(findings: UnifiedFinding[]) {
   );
 }
 
+function getPatrolOpenWorkCount(): number {
+  const activeFindingIds = new Set(
+    patrolFindings()
+      .filter((finding) => finding.status === 'active')
+      .map((finding) => finding.id),
+  );
+  for (const approval of getLivePatrolPendingApprovals()) {
+    if (approval.targetId) {
+      activeFindingIds.add(approval.targetId);
+    }
+  }
+  return activeFindingIds.size;
+}
+
 // ============================================
 // Circuit Breaker
 // ============================================
@@ -654,6 +668,9 @@ export const aiIntelligenceStore = {
   },
   get patrolNeedsAttentionCount() {
     return this.patrolFindingsNeedingAttention.length;
+  },
+  get patrolOpenWorkCount() {
+    return getPatrolOpenWorkCount();
   },
 
   async loadPendingApprovals() {

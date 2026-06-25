@@ -597,6 +597,11 @@ generic: `AppLayout.tsx` and the command palette may expose a compact launcher,
 but that launcher must attach current-view context before opening the drawer
 and label the action around the current monitoring, Patrol, Alerts, or Settings
 view.
+The app shell may surface Patrol current-work pressure as a secondary count on
+the `Patrol` navigation tab, but it must not rename that tab to `Needs
+Attention`, create a Home-like action queue, or route the operator away from the
+Patrol route. Desktop and mobile accessible names should combine the stable
+`Patrol` label with concise open-work count context when a count is present.
 
 SSO provider settings changes must preserve the shared Community-tier action
 path: SAML and OIDC provider creation stay on the same settings-shell control

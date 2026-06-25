@@ -268,6 +268,13 @@ finding or approval is handled. Browser presentation labels the route `Patrol`
 and may label the default queue `Open work`, but those labels are chrome over
 this existing status/finding/approval contract; they are not new API fields,
 prompt payloads, or alternate current-work schemas.
+Shell navigation may derive a content-free `Patrol` open-work count from the
+existing Patrol findings endpoint plus live investigation-fix approvals,
+de-duplicated by finding/approval target id. That shell count is not a new API
+route or status field, must not include finding IDs, approval IDs, resource
+names, commands, prompt text, or model output in visible chrome, and must not
+replace the detail-owning Patrol findings, approval, run-history, or status
+routes.
 The authenticated `GET /api/agent/patrol-control/status` projection exposes the same content-free starter evidence as count-only fields
 (`operationsLoopStarterCount`, `assistantOperationsLoopStarterCount`,
 `patrolOperationsLoopStarterCount`,

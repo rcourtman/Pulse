@@ -30,6 +30,11 @@ contracts. The subsystem also owns AI orchestration, runtime cost control,
 shared AI transport surfaces, and browser-visible Assistant transcript actions
 that define what visible operator/model text can leave the transcript without
 exposing hidden provider/tool metadata.
+App-shell Patrol chrome may expose only content-free current-work pressure, such
+as an open-work count on the stable `Patrol` tab, from Patrol-owned findings and
+approval read models. It must not rename the destination, create a second
+findings queue, expose finding or approval identity in shell chrome, or turn
+platform pages into Patrol summaries.
 When backend Patrol summaries or Assistant handoffs expose run coverage to the
 browser, they translate internal full-run, scoped-run, and verification
 precision into plain operator check language rather than activation-loop,

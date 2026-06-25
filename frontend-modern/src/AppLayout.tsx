@@ -41,6 +41,7 @@ import {
 import { getKioskModePreference, setKioskMode } from '@/utils/url';
 import { updateStore } from '@/stores/updates';
 import { aiChatStore } from '@/stores/aiChat';
+import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import { isPro } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { getAssistantPageContext } from '@/utils/assistantPageContext';
@@ -60,11 +61,12 @@ const AI_CHAT_LAUNCHER_BUTTON_CLASS =
   'fixed right-4 bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] z-40 flex h-11 w-11 items-center justify-center rounded-full border border-border bg-surface text-blue-600 shadow-lg transition-colors duration-200 hover:bg-surface-hover hover:text-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:text-blue-400 dark:hover:text-blue-300 lg:right-0 lg:top-1/2 lg:bottom-auto lg:h-auto lg:w-auto lg:min-h-9 lg:min-w-10 lg:-translate-y-1/2 lg:rounded-l-lg lg:rounded-r-none lg:border-r-0 lg:px-2.5 lg:py-2.5 lg:shadow-none';
 
 function getDesktopUtilityTabAriaLabel(tab: UtilityTab): string {
-  if (tab.id === 'alerts') {
-    const count = tab.count ?? 0;
-    if (count > 0) {
+  const count = tab.count ?? 0;
+  if (count > 0) {
+    if (tab.id === 'alerts') {
       return `${count} ${tab.label}`;
     }
+    return `${tab.label}: ${tab.countLabel ?? `${count} items`}`;
   }
   return tab.label;
 }
@@ -315,6 +317,12 @@ export function AppLayout(props: AppLayoutProps) {
   const getActiveTabDesktop = () => getActiveTabForPath(location.pathname);
   const getActiveTabMobile = () => getActiveTabForPath(location.pathname);
   const assistantPageContext = createMemo(() => getAssistantPageContext(location.pathname));
+  const patrolOpenWorkCount = createMemo(() => aiIntelligenceStore.patrolOpenWorkCount);
+  const patrolOpenWorkCountLabel = createMemo(() => {
+    const count = patrolOpenWorkCount();
+    if (count <= 0) return undefined;
+    return `${count} open work ${count === 1 ? 'item' : 'items'}`;
+  });
 
   // Platform/runtime nav is resource-admitted. A platform or runtime lens only
   // appears when the support manifest says the surface is supported and the
@@ -433,7 +441,8 @@ export function AppLayout(props: AppLayoutProps) {
         route: '/patrol',
         tooltip: 'Review Patrol checks, findings, and approvals',
         badge: null,
-        count: undefined,
+        count: patrolOpenWorkCount() > 0 ? patrolOpenWorkCount() : undefined,
+        countLabel: patrolOpenWorkCountLabel(),
         breakdown: undefined,
         icon: PulsePatrolLogo,
       },
@@ -778,12 +787,12 @@ export function AppLayout(props: AppLayoutProps) {
                       <span class="flex items-center gap-1">
                         <span class="hidden xs:inline">{tab.label}</span>
                         <span class="xs:hidden">{tab.label.charAt(0)}</span>
-                        {tab.id === 'alerts' &&
-                          (() => {
-                            const total = tab.count ?? 0;
-                            if (total <= 0) {
-                              return null;
-                            }
+                        {(() => {
+                          const total = tab.count ?? 0;
+                          if (total <= 0) {
+                            return null;
+                          }
+                          if (tab.id === 'alerts') {
                             return (
                               <span class="inline-flex items-center gap-1">
                                 {tab.breakdown && tab.breakdown.critical > 0 && (
@@ -798,7 +807,13 @@ export function AppLayout(props: AppLayoutProps) {
                                 )}
                               </span>
                             );
-                          })()}
+                          }
+                          return (
+                            <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-semibold text-amber-900 dark:text-amber-100 bg-amber-200 dark:bg-amber-500 rounded-full">
+                              {total}
+                            </span>
+                          );
+                        })()}
                       </span>
                       <Show when={tab.badge === 'update'}>
                         <span class="ml-1 flex items-center">

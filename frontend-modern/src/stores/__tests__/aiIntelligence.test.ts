@@ -143,6 +143,106 @@ describe('aiIntelligenceStore', () => {
     });
   });
 
+  it('counts open Patrol work from active findings and live Patrol approvals once', async () => {
+    vi.mocked(getPatrolFindings).mockResolvedValueOnce([
+      {
+        id: 'finding-active',
+        severity: 'warning',
+        category: 'reliability',
+        resource_id: 'instance:node:100',
+        resource_name: 'node-100',
+        resource_type: 'host',
+        title: 'Active Patrol issue',
+        description: 'Patrol found an active issue.',
+        detected_at: '2026-03-01T00:00:00Z',
+        last_seen_at: '2026-03-01T00:05:00Z',
+        auto_resolved: false,
+        times_raised: 1,
+        suppressed: false,
+        investigation_attempts: 0,
+      },
+      {
+        id: 'finding-approval',
+        severity: 'warning',
+        category: 'reliability',
+        resource_id: 'instance:node:101',
+        resource_name: 'node-101',
+        resource_type: 'host',
+        title: 'Queued Patrol fix',
+        description: 'Patrol needs approval.',
+        detected_at: '2026-03-01T00:00:00Z',
+        last_seen_at: '2026-03-01T00:05:00Z',
+        auto_resolved: false,
+        times_raised: 1,
+        suppressed: false,
+        investigation_attempts: 0,
+      },
+      {
+        id: 'finding-resolved',
+        severity: 'info',
+        category: 'reliability',
+        resource_id: 'instance:node:102',
+        resource_name: 'node-102',
+        resource_type: 'host',
+        title: 'Resolved Patrol issue',
+        description: 'Patrol already handled this issue.',
+        detected_at: '2026-03-01T00:00:00Z',
+        last_seen_at: '2026-03-01T00:05:00Z',
+        resolved_at: '2026-03-01T00:10:00Z',
+        auto_resolved: true,
+        times_raised: 1,
+        suppressed: false,
+        investigation_attempts: 1,
+      },
+    ]);
+    vi.mocked(AIAPI.getPendingApprovals).mockResolvedValueOnce([
+      {
+        id: 'approval-existing-finding',
+        toolId: 'investigation_fix',
+        command: 'systemctl restart pulse-agent',
+        targetType: 'host',
+        targetId: 'finding-approval',
+        targetName: 'node-101',
+        context: 'Restart the agent',
+        riskLevel: 'medium',
+        status: 'pending',
+        requestedAt: '2026-03-01T00:01:00Z',
+        expiresAt: approvalExpiryInMinutes(6),
+      },
+      {
+        id: 'approval-not-yet-loaded',
+        toolId: 'investigation_fix',
+        command: 'systemctl restart another-service',
+        targetType: 'host',
+        targetId: 'finding-approval-only',
+        targetName: 'node-103',
+        context: 'Restart another service',
+        riskLevel: 'medium',
+        status: 'pending',
+        requestedAt: '2026-03-01T00:01:00Z',
+        expiresAt: approvalExpiryInMinutes(6),
+      },
+      {
+        id: 'assistant-approval',
+        toolId: 'run_command',
+        command: 'apt upgrade',
+        targetType: 'host',
+        targetId: 'host-1',
+        targetName: 'node-1',
+        context: 'Assistant chat command',
+        riskLevel: 'high',
+        status: 'pending',
+        requestedAt: '2026-03-01T00:01:00Z',
+        expiresAt: approvalExpiryInMinutes(6),
+      },
+    ]);
+
+    await aiIntelligenceStore.loadPatrolFindings();
+    await aiIntelligenceStore.loadPendingApprovals();
+
+    expect(aiIntelligenceStore.patrolOpenWorkCount).toBe(3);
+  });
+
   it('promotes auto_resolved to camelCase autoResolved on the unified-finding store record', async () => {
     // The store-level UnifiedFinding is what render code reads when it asks
     // "who closed this loop?" If the normalizer drops auto_resolved, the

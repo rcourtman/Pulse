@@ -822,7 +822,10 @@ or other self-hosted uncapped continuity plans.
     counts rather than duplicating branded SVG titles. The Patrol-owned utility
     destination remains `Patrol` over the same `/patrol` route; it must not
     alter hosted org bootstrap, entitlement loading, or commercial posture
-    loading.
+    loading. A Patrol open-work badge in that shell may consume only the
+    existing Patrol findings and live-approval read model after authentication;
+    it must not read hosted billing state, trigger commercial-posture loading,
+    affect organization visibility, or become an upgrade/acquisition cue.
     The same AppLayout shell may contextualize the closed Pulse Assistant
     launcher around the current monitoring, Patrol, Alerts, or Settings route,
     but that launcher must remain a local product affordance. It must not read

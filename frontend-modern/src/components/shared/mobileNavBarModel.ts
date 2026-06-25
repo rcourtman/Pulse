@@ -22,6 +22,7 @@ export type MobileNavBarUtilityTab = {
   tooltip: string;
   badge: 'update' | 'pro' | null;
   count: number | undefined;
+  countLabel?: string;
   breakdown: { warning: number; critical: number } | undefined;
   icon: MobileNavBarIcon;
 };
@@ -91,7 +92,12 @@ export function getMobileNavAlertBadgeCounts(
 
 export function getMobileNavTabAriaLabel(tab: MobileNavBarUtilityTab): string {
   const badges = getMobileNavAlertBadgeCounts(tab);
-  if (!badges) return tab.label;
+  if (!badges) {
+    if (tab.count && tab.count > 0) {
+      return `${tab.label}: ${tab.countLabel ?? `${tab.count} items`}`;
+    }
+    return tab.label;
+  }
   const parts: string[] = [];
   if (badges.critical > 0) {
     parts.push(`${badges.critical} critical`);

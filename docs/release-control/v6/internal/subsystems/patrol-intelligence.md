@@ -62,6 +62,11 @@ Open work descriptions are Patrol-owned operator guidance. They may mention the
 visible next step, approvals, and verification results when those words help the
 operator understand what to do next, but they must not become a separate proof
 strip, backend accounting summary, or generic all-mode capability sentence.
+Shell-level Patrol open-work counts are also Patrol-owned read-model
+projections. They may de-duplicate active Patrol findings and live Patrol
+approval targets so the stable `Patrol` tab shows that work exists, but they
+must not become a second queue model, a renamed `Needs Attention` destination,
+or historical proof/counting for resolved-only work.
 
 1. Add or change Patrol page orchestration through `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`, keep `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts` as the canonical investigation-context derivation owner, keep `frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx` as the feature shell, keep the Patrol-owned section files under `frontend-modern/src/features/patrol/` as the heavy render owners, keep `frontend-modern/src/pages/AIIntelligence.tsx` as the route shell, keep `frontend-modern/src/stores/aiIntelligenceSummaryModel.ts` as the canonical AI summary normalization owner, and update `frontend-modern/src/stores/aiIntelligence.ts` together
    The default Patrol workspace is the current-issues list. It must not add a

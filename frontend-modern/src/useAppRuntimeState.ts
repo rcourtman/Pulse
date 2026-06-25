@@ -26,6 +26,7 @@ import { eventBus } from '@/stores/events';
 import { showToast } from '@/utils/toast';
 import { updateStore } from '@/stores/updates';
 import { useAlertsActivation } from '@/stores/alertsActivation';
+import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import {
   applyThemeClass,
   computeIsDark,
@@ -478,6 +479,24 @@ export const useAppRuntimeState = () => {
     if (!ready) {
       alertsInitialized = false;
     }
+  });
+
+  createEffect(() => {
+    const ready = !isLoading() && !needsAuth();
+    if (!ready) return;
+
+    const refreshPatrolOpenWork = () => {
+      void Promise.allSettled([
+        aiIntelligenceStore.loadPatrolFindings(),
+        aiIntelligenceStore.loadPendingApprovals(),
+      ]);
+    };
+
+    refreshPatrolOpenWork();
+    const interval = window.setInterval(refreshPatrolOpenWork, 30000);
+    onCleanup(() => {
+      window.clearInterval(interval);
+    });
   });
 
   createEffect(() => {

@@ -8,9 +8,22 @@ import { aiChatStore } from '@/stores/aiChat';
 
 HTMLElement.prototype.scrollIntoView = vi.fn();
 
+const aiIntelligenceMockState = vi.hoisted(() => ({
+  patrolOpenWorkCount: 0,
+}));
+
+vi.mock('@/stores/aiIntelligence', () => ({
+  aiIntelligenceStore: {
+    get patrolOpenWorkCount() {
+      return aiIntelligenceMockState.patrolOpenWorkCount;
+    },
+  },
+}));
+
 describe('AppLayout navigation icons', () => {
   beforeEach(() => {
     window.history.replaceState({}, '', '/settings/infrastructure');
+    aiIntelligenceMockState.patrolOpenWorkCount = 0;
     aiChatStore.close();
     aiChatStore.setEnabled(true);
   });
@@ -117,6 +130,30 @@ describe('AppLayout navigation icons', () => {
     expect(mobilePatrolTab.querySelector('svg')).toBeTruthy();
 
     expect(container).toHaveTextContent('Infrastructure body');
+  });
+
+  it('surfaces Patrol open work as a count without renaming Patrol', () => {
+    aiIntelligenceMockState.patrolOpenWorkCount = 2;
+    renderLayout();
+
+    const desktopNav = screen.getByRole('tablist', { name: 'Primary navigation' });
+    const systemGroup = desktopNav.querySelector('[aria-label="System"]');
+    expect(systemGroup).toBeTruthy();
+
+    const desktopPatrolTab = within(systemGroup as HTMLElement).getByRole('tab', {
+      name: 'Patrol: 2 open work items',
+    });
+    expect(desktopPatrolTab).toHaveTextContent('Patrol');
+    expect(desktopPatrolTab).toHaveTextContent('2');
+    expect(within(systemGroup as HTMLElement).queryByText('Needs Attention')).toBeNull();
+
+    const mobileTablist = screen.getByRole('tablist', { name: 'Mobile navigation' });
+    const mobilePatrolTab = within(mobileTablist).getByRole('button', {
+      name: 'Patrol: 2 open work items',
+    });
+    expect(mobilePatrolTab).toHaveTextContent('Patrol');
+    expect(mobilePatrolTab).toHaveTextContent('2');
+    expect(within(mobileTablist).queryByText('Needs Attention')).toBeNull();
   });
 
   it('shows platform and runtime lens tabs with supported infrastructure evidence', () => {

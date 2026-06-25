@@ -550,6 +550,12 @@ dashboard-specific overview, trend, or summary transport.
     `/patrol` is canonical and retired `/ai` browser entry points must stay
     unregistered rather than mounting a second Patrol shell or duplicate app
     bootstrap work.
+    The shell-level Patrol open-work badge may refresh active Patrol findings
+    and live approvals from `frontend-modern/src/useAppRuntimeState.ts` after
+    authentication on a bounded 30-second interval, but it must stay on those
+    existing content-safe endpoints, avoid resolved-history expansion, avoid
+    resource or chart hydration, and avoid adding another route preload or
+    commercial/bootstrap fetch to ordinary monitoring sessions.
     The same rule now applies to the retired `/operations` surface:
     `/operations/*` browser entry points must stay unregistered rather than
     mounting a second diagnostics/reporting shell or paying extra bootstrap

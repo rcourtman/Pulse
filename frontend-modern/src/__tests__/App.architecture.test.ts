@@ -284,6 +284,9 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain("route: '/patrol',");
     expect(appLayoutSource).toContain("label: 'Patrol'");
     expect(appLayoutSource).toContain("tooltip: 'Review Patrol checks, findings, and approvals'");
+    expect(appLayoutSource).toContain('const patrolOpenWorkCount = createMemo(');
+    expect(appLayoutSource).toContain('countLabel: patrolOpenWorkCountLabel()');
+    expect(appLayoutSource).not.toContain("label: 'Needs Attention'");
     expect(appLayoutSource).not.toContain("route: '/operations',");
     expect(appLayoutSource).not.toContain('props.connected()');
     expect(appLayoutSource).toContain('const utilityTabs = createMemo(() =>');
@@ -379,6 +382,9 @@ describe('App architecture', () => {
       'if (isPreAuthLoginBootstrapPath(window.location.pathname) && !hasLocalAuthBootstrapHint()) {',
     );
     expect(appRuntimeStateSource).toContain('aiChatStore.setEnabled(');
+    expect(appRuntimeStateSource).toContain('aiIntelligenceStore.loadPatrolFindings()');
+    expect(appRuntimeStateSource).toContain('aiIntelligenceStore.loadPendingApprovals()');
+    expect(appRuntimeStateSource).toContain('window.setInterval(refreshPatrolOpenWork, 30000)');
     expect(appRuntimeStateSource).toContain(
       "eventBus.on('theme_changed', handleRemoteThemeChange);",
     );

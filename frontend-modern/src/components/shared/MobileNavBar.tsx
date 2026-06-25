@@ -63,6 +63,8 @@ export function MobileNavBar(props: MobileNavBarProps) {
             <For each={mobileNav.orderedUtilityTabs()}>
               {(tab) => {
                 const alertBadges = () => getMobileNavAlertBadgeCounts(tab);
+                const genericCount = () =>
+                  tab.id === 'alerts' || !tab.count || tab.count <= 0 ? null : tab.count;
                 const Icon = tab.icon;
 
                 return (
@@ -96,6 +98,16 @@ export function MobileNavBar(props: MobileNavBarProps) {
                                 {badges().warning}
                               </span>
                             </Show>
+                          </span>
+                        )}
+                      </Show>
+                      <Show when={genericCount()}>
+                        {(count) => (
+                          <span
+                            aria-hidden="true"
+                            class="absolute -right-2 -top-1 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-amber-200 px-1 text-[10px] font-semibold text-amber-900"
+                          >
+                            {count()}
                           </span>
                         )}
                       </Show>

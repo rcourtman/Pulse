@@ -83,6 +83,40 @@ describe('MobileNavBar', () => {
     expect(within(navList).queryByRole('button', { name: 'Pulse Patrol Patrol' })).toBeNull();
   });
 
+  it('renders Patrol open-work counts without renaming the mobile tab', () => {
+    render(() => (
+      <MobileNavBar
+        activeTab={() => 'ai'}
+        primaryTabs={() => []}
+        utilityTabs={() => [
+          {
+            id: 'ai',
+            label: 'Patrol',
+            route: '/patrol',
+            tooltip: 'Review Patrol checks, findings, and approvals',
+            badge: null,
+            count: 2,
+            countLabel: '2 open work items',
+            breakdown: undefined,
+            icon: PatrolIcon,
+          },
+        ]}
+        onPrimaryClick={() => {}}
+        onUtilityClick={() => {}}
+      />
+    ));
+
+    const navList = screen.getByRole('tablist', { name: 'Mobile navigation' });
+    const patrolButton = within(navList).getByRole('button', {
+      name: 'Patrol: 2 open work items',
+    });
+
+    expect(patrolButton).toHaveAttribute('data-tab-id', 'ai');
+    expect(within(patrolButton).getByText('Patrol')).toBeInTheDocument();
+    expect(within(patrolButton).getByText('2')).toBeInTheDocument();
+    expect(within(navList).queryByText('Needs Attention')).toBeNull();
+  });
+
   it('allows inactive platform tabs to render without an active mobile tab', () => {
     const { container } = render(() => (
       <MobileNavBar
