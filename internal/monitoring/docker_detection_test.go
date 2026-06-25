@@ -821,10 +821,11 @@ func TestContainerNeedsDockerCheck(t *testing.T) {
 	}
 
 	tests := []struct {
-		name       string
-		container  models.Container
-		previous   map[string]models.Container
-		wantReason string
+		name                string
+		container           models.Container
+		previous            map[string]models.Container
+		checkerConfiguredAt time.Time
+		wantReason          string
 	}{
 		{
 			name:       "new container",
@@ -871,6 +872,21 @@ func TestContainerNeedsDockerCheck(t *testing.T) {
 			wantReason: "negative_cache_expired",
 		},
 		{
+			name:      "recheck negative docker result from previous checker generation",
+			container: models.Container{ID: "ct-1", Status: "running", Uptime: 7200},
+			previous: map[string]models.Container{
+				"ct-1": {
+					ID:              "ct-1",
+					Status:          "running",
+					Uptime:          3600,
+					HasDocker:       false,
+					DockerCheckedAt: time.Now().Add(-time.Minute),
+				},
+			},
+			checkerConfiguredAt: time.Now(),
+			wantReason:          "checker_reconfigured",
+		},
+		{
 			name:      "keep fresh negative docker result",
 			container: models.Container{ID: "ct-1", Status: "running", Uptime: 7200},
 			previous: map[string]models.Container{
@@ -910,7 +926,7 @@ func TestContainerNeedsDockerCheck(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			reason := monitor.containerNeedsDockerCheck(tt.container, tt.previous)
+			reason := monitor.containerNeedsDockerCheck(tt.container, tt.previous, tt.checkerConfiguredAt)
 			if reason != tt.wantReason {
 				t.Errorf("Expected reason %q, got %q", tt.wantReason, reason)
 			}

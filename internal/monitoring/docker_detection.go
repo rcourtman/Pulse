@@ -66,6 +66,7 @@ type containerDockerResult struct {
 func (m *Monitor) CheckContainersForDocker(ctx context.Context, containers []models.Container) []models.Container {
 	m.mu.RLock()
 	checker := m.dockerChecker
+	checkerConfiguredAt := m.dockerCheckerConfiguredAt
 	m.mu.RUnlock()
 
 	if checker == nil {
@@ -91,7 +92,7 @@ func (m *Monitor) CheckContainersForDocker(ctx context.Context, containers []mod
 		}
 
 		// Check if this container needs Docker detection
-		reason := m.containerNeedsDockerCheck(ct, previousContainers)
+		reason := m.containerNeedsDockerCheck(ct, previousContainers, checkerConfiguredAt)
 		if reason != "" {
 			needsCheck = append(needsCheck, containerDockerCheck{
 				index:     i,
@@ -148,7 +149,7 @@ func (m *Monitor) CheckContainersForDocker(ctx context.Context, containers []mod
 
 // containerNeedsDockerCheck determines if a running container needs Docker checking.
 // Returns the reason for checking, or empty string if no check is needed.
-func (m *Monitor) containerNeedsDockerCheck(ct models.Container, previousContainers map[string]models.Container) string {
+func (m *Monitor) containerNeedsDockerCheck(ct models.Container, previousContainers map[string]models.Container, checkerConfiguredAt time.Time) string {
 	prev, existed := previousContainers[ct.ID]
 
 	// New container - never seen before
@@ -159,6 +160,10 @@ func (m *Monitor) containerNeedsDockerCheck(ct models.Container, previousContain
 	// Never been checked
 	if prev.DockerCheckedAt.IsZero() {
 		return "first_check"
+	}
+
+	if !prev.HasDocker && !checkerConfiguredAt.IsZero() && prev.DockerCheckedAt.Before(checkerConfiguredAt) {
+		return "checker_reconfigured"
 	}
 
 	// Negative Docker checks can be transient during agent command enrollment,
@@ -1136,8 +1141,10 @@ func (m *Monitor) SetDockerChecker(checker DockerChecker) {
 	defer m.mu.Unlock()
 	m.dockerChecker = checker
 	if checker != nil {
+		m.dockerCheckerConfiguredAt = time.Now()
 		log.Info().Msg("Docker detection enabled for LXC containers")
 	} else {
+		m.dockerCheckerConfiguredAt = time.Time{}
 		log.Info().Msg("Docker detection disabled for LXC containers")
 	}
 }

@@ -202,7 +202,11 @@ truth for live infrastructure data.
    host-side `pct` / `lxc-attach` failures are probe errors and must not be
    converted into cached `HasDocker=false` results. Negative Docker detections
    may be rechecked on a short cadence so command enrollment, daemon startup,
-   or transient Proxmox access failures do not hide later inventory.
+   or transient Proxmox access failures do not hide later inventory. Negative
+   detections from before the current Docker checker configuration must be
+   rechecked after monitor/router startup, so explicit guest Docker inventory
+   can repopulate immediately after backend restarts instead of waiting for the
+   normal negative-cache cadence.
 15. Add or change mock-mode Discovery context through the canonical mock
     fixture graph. Mock Discovery records must be derived from the same authored
     state graph as mock nodes, guests, Docker hosts, containers, and Kubernetes

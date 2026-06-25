@@ -1014,28 +1014,29 @@ type Monitor struct {
 	guestMetadataHoldDuration  time.Duration
 	guestAgentWorkSlots        chan struct{}
 	// Configurable guest agent timeouts (refs #592)
-	guestAgentFSInfoTimeout  time.Duration
-	guestAgentNetworkTimeout time.Duration
-	guestAgentOSInfoTimeout  time.Duration
-	guestAgentVersionTimeout time.Duration
-	guestAgentRetries        int
-	guestAgentVMBudget       time.Duration
-	executor                 PollExecutor
-	breakerBaseRetry         time.Duration
-	breakerMaxDelay          time.Duration
-	breakerHalfOpenWindow    time.Duration
-	instanceInfoCache        map[string]*instanceInfo
-	pollStatusMap            map[string]*pollStatus
-	dlqInsightMap            map[string]*dlqInsight
-	nodeLastOnline           map[string]time.Time           // Track last time each node was seen online (for grace period)
-	nodePendingUpdatesCache  map[string]pendingUpdatesCache // Cache pending updates per node (checked every 30 min)
-	resourceStore            ResourceStoreInterface         // Optional unified resource store for polling optimization
-	supplementalProviders    map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider
-	recoveryManager          *recoverymanager.Manager // Optional recovery store manager for backup rollups
-	mockMetricsCancel        context.CancelFunc
-	mockMetricsWg            sync.WaitGroup
-	dockerChecker            DockerChecker            // Optional Docker checker for LXC containers
-	dockerInventoryCollector DockerInventoryCollector // Optional Docker inventory collector for LXC containers
+	guestAgentFSInfoTimeout   time.Duration
+	guestAgentNetworkTimeout  time.Duration
+	guestAgentOSInfoTimeout   time.Duration
+	guestAgentVersionTimeout  time.Duration
+	guestAgentRetries         int
+	guestAgentVMBudget        time.Duration
+	executor                  PollExecutor
+	breakerBaseRetry          time.Duration
+	breakerMaxDelay           time.Duration
+	breakerHalfOpenWindow     time.Duration
+	instanceInfoCache         map[string]*instanceInfo
+	pollStatusMap             map[string]*pollStatus
+	dlqInsightMap             map[string]*dlqInsight
+	nodeLastOnline            map[string]time.Time           // Track last time each node was seen online (for grace period)
+	nodePendingUpdatesCache   map[string]pendingUpdatesCache // Cache pending updates per node (checked every 30 min)
+	resourceStore             ResourceStoreInterface         // Optional unified resource store for polling optimization
+	supplementalProviders     map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider
+	recoveryManager           *recoverymanager.Manager // Optional recovery store manager for backup rollups
+	mockMetricsCancel         context.CancelFunc
+	mockMetricsWg             sync.WaitGroup
+	dockerChecker             DockerChecker            // Optional Docker checker for LXC containers
+	dockerCheckerConfiguredAt time.Time                // Last time the Docker checker was configured
+	dockerInventoryCollector  DockerInventoryCollector // Optional Docker inventory collector for LXC containers
 	// Agent profile cache to avoid disk I/O on every report (refs #1094)
 	agentProfileCacheMu sync.RWMutex
 	agentProfileCache   *agentProfileCacheEntry

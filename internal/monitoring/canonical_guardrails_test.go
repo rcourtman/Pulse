@@ -910,6 +910,8 @@ func TestProxmoxGuestDockerInventoryUsesCanonicalReportIngestPath(t *testing.T) 
 			"type DockerInventoryCollector interface {",
 			"proxmoxGuestDockerSocketMarker",
 			"proxmoxGuestDockerNegativeRecheckAfter",
+			"dockerCheckerConfiguredAt",
+			"checker_reconfigured",
 			"func (m *Monitor) CollectProxmoxGuestDockerInventory(ctx context.Context, containers []models.Container) {",
 			"m.hasOnlineHostAgentForContainer(ct.ID)",
 			"m.ApplyDockerReport(report, nil)",
@@ -943,6 +945,45 @@ func TestProxmoxGuestDockerInventoryUsesCanonicalReportIngestPath(t *testing.T) 
 		if file == "docker_detection.go" && strings.Contains(source, "&& echo yes || echo no") {
 			t.Fatalf("%s must not mask host-side pct exec failures with a host-shell echo fallback", file)
 		}
+	}
+}
+
+func TestProxmoxGuestDockerDetectionRechecksNegativeCacheAfterCheckerSetup(t *testing.T) {
+	configuredAt := time.Now()
+	monitor := &Monitor{}
+	container := models.Container{
+		ID:     "pve-a:node-a:101",
+		VMID:   101,
+		Name:   "docker-lxc",
+		Node:   "node-a",
+		Status: "running",
+		Uptime: 7200,
+	}
+
+	reason := monitor.containerNeedsDockerCheck(container, map[string]models.Container{
+		container.ID: {
+			ID:              container.ID,
+			Status:          "running",
+			Uptime:          3600,
+			HasDocker:       false,
+			DockerCheckedAt: configuredAt.Add(-time.Minute),
+		},
+	}, configuredAt)
+	if reason != "checker_reconfigured" {
+		t.Fatalf("reason = %q, want checker_reconfigured", reason)
+	}
+
+	reason = monitor.containerNeedsDockerCheck(container, map[string]models.Container{
+		container.ID: {
+			ID:              container.ID,
+			Status:          "running",
+			Uptime:          3600,
+			HasDocker:       false,
+			DockerCheckedAt: configuredAt.Add(time.Minute),
+		},
+	}, configuredAt)
+	if reason != "" {
+		t.Fatalf("fresh negative cache reason = %q, want empty", reason)
 	}
 }
 
