@@ -52,7 +52,7 @@ const surfaceContract = {
     id: 'pulse_patrol',
     label: 'Pulse Patrol',
     description:
-      'Patrol is the first-party operations surface: it watches, investigates, acts within the chosen Patrol mode, verifies outcomes, and records what happened.',
+      'Patrol is the first-party operations surface: it checks infrastructure, investigates issues, follows the chosen Patrol mode before acting, verifies outcomes, and records what happened.',
   },
   operatorSurfaces: [
     {
@@ -519,7 +519,7 @@ describe('agent capabilities API client', () => {
     ]);
     expect(entries.map((entry) => entry.description)).toEqual([
       'Canonical context, governed actions, safety gates, approval state, action audit, and verification.',
-      'Patrol is the first-party operations surface: it watches, investigates, acts within the chosen Patrol mode, verifies outcomes, and records what happened.',
+      'Patrol is the first-party operations surface: it checks infrastructure, investigates issues, follows the chosen Patrol mode before acting, verifies outcomes, and records what happened.',
       'The contextual explanation, approval, and handoff surface for Patrol findings, governed actions, verification, and operator questions.',
       'The external-agent adapter.',
     ]);

@@ -3,13 +3,13 @@ import type { PatrolAutonomyLevel } from '@/api/patrol';
 export const PATROL_PAGE_TITLE = 'Patrol';
 
 export const PATROL_PAGE_WATCH_ONLY_DESCRIPTION =
-  'Patrol watches infrastructure and shows current issues.';
+  'Patrol checks your infrastructure and shows current issues.';
 
 export const PATROL_PAGE_MONITOR_DESCRIPTION =
-  'Watch only: Patrol reports issues without making changes.';
+  'Watch only: Patrol checks and reports issues without making changes.';
 
 export const PATROL_PAGE_DESCRIPTION =
-  'Patrol watches, investigates, acts within your chosen mode, verifies outcomes, and records what happened.';
+  'Patrol checks your infrastructure, explains what it found, follows your mode before acting, and records the result.';
 export const PATROL_PAGE_TITLE_TOOLTIP = PATROL_PAGE_DESCRIPTION;
 
 export interface PatrolPageHeaderMetaInput {

@@ -36,7 +36,7 @@ const MODEL_OVERRIDE_CONFIG: Record<
   patrol: {
     formKey: 'patrolModel',
     label: 'Patrol model',
-    description: 'Used when Patrol watches, investigates, and verifies work.',
+    description: 'Used when Patrol checks, investigates, and verifies work.',
     ariaLabel: 'Patrol model identifier',
     title: 'Select Patrol model',
   },

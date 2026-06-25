@@ -90,9 +90,9 @@ Patrol-specific presentation helpers.
    failure: `usePatrolIntelligenceState.ts` must fail soft, keep the Patrol
    workspace visible, and let `PatrolIntelligenceBanners.tsx` show one short
    stale-data retry banner without leaking raw transport errors.
-   Watch-only and locked-control copy must describe Patrol as watching
+   Watch-only and locked-control copy must describe Patrol as checking
    infrastructure and showing current issues, while the selected Watch only
-   mode must describe the capability positively, such as Patrol watching
+   mode must describe the capability positively, such as Patrol checking
    infrastructure and reporting issues only.
    It must not frame the free/monitor boundary as evidence recording,
    proof collection, or a disabled version of remediation. Paid mode labels
@@ -223,7 +223,7 @@ attention`, `approval needed`, `outcome verified`, `no active work`) instead
    mode, and Open work label visible instead of reintroducing a generic
    status strip.
    Plan-locked Patrol mode copy must present the effective Watch only
-   capability as the current product state: Patrol watches resources, detects
+   capability as the current product state: Patrol checks resources, detects
    issues, and records findings. The free Patrol working surface must not render
    a disabled paid-mode matrix, compact Pro badges, or any paid-mode disclosure;
    it stays clean of paid-feature surfacing entirely. Runtime-locked Pro installs may still
@@ -394,7 +394,7 @@ attention`, `approval needed`, `outcome verified`, `no active work`) instead
    discovery belongs outside the daily-use Patrol surface. Watch-only copy in
    `patrolPagePresentation.ts`, `patrolControlPresentation.ts`, and
    `patrolAutonomyAvailability.ts` must describe Watch only in positive,
-   capability-first language: Patrol watches infrastructure, records current
+   capability-first language: Patrol checks infrastructure, records current
    issues, or records issues as it finds them. They must not repeat the same
    sentence across the header and mode control, repeatedly restate
    infrastructure-unchanged caveats in the default view, or imply Patrol's main

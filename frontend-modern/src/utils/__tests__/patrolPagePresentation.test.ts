@@ -15,24 +15,24 @@ describe('patrolPagePresentation', () => {
     // users learn the full operations-loop model.
     expect(PATROL_PAGE_TITLE).toBe('Patrol');
     expect(PATROL_PAGE_DESCRIPTION).toBe(
-      'Patrol watches, investigates, acts within your chosen mode, verifies outcomes, and records what happened.',
+      'Patrol checks your infrastructure, explains what it found, follows your mode before acting, and records the result.',
     );
     expect(PATROL_PAGE_TITLE_TOOLTIP).toBe(PATROL_PAGE_DESCRIPTION);
     expect(getPatrolPageHeaderMeta()).toEqual({
       title: 'Patrol',
       description:
-        'Patrol watches, investigates, acts within your chosen mode, verifies outcomes, and records what happened.',
+        'Patrol checks your infrastructure, explains what it found, follows your mode before acting, and records the result.',
       titleTooltip:
-        'Patrol watches, investigates, acts within your chosen mode, verifies outcomes, and records what happened.',
+        'Patrol checks your infrastructure, explains what it found, follows your mode before acting, and records the result.',
     });
   });
 
   it('separates locked watch-only capability from Pro Watch only mode', () => {
     expect(PATROL_PAGE_WATCH_ONLY_DESCRIPTION).toBe(
-      'Patrol watches infrastructure and shows current issues.',
+      'Patrol checks your infrastructure and shows current issues.',
     );
     expect(PATROL_PAGE_MONITOR_DESCRIPTION).toBe(
-      'Watch only: Patrol reports issues without making changes.',
+      'Watch only: Patrol checks and reports issues without making changes.',
     );
     expect(getPatrolPageHeaderMeta({ autonomyLocked: true })).toEqual({
       title: 'Patrol',

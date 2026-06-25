@@ -42,7 +42,7 @@ class AIRuntimeDocsPolicyTest(unittest.TestCase):
         )
         self.assertIn("Patrol as the primary built-in operator", normalized_content)
         self.assertIn(
-            "Pulse Patrol**: Patrol is the first-party operations surface: it watches, investigates, acts within the chosen Patrol mode, verifies outcomes, and records what happened.",
+            "Pulse Patrol**: Patrol is the first-party operations surface: it checks infrastructure, investigates issues, follows the chosen Patrol mode before acting, verifies outcomes, and records what happened.",
             normalized_content,
         )
         self.assertIn(

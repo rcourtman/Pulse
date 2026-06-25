@@ -3689,7 +3689,7 @@ describe('frontend resource type boundaries', () => {
     expect(runHistoryPanelSource).toContain('getRunHistoryEmptyState');
     expect(runHistoryPanelSource).toContain('getRunHistoryLoadingState');
     expect(runHistoryPanelSource).not.toContain(
-      'No patrol runs yet. Trigger a run to populate history.',
+      'No Patrol checks yet. Run Patrol to start history.',
     );
     expect(runHistoryPanelSource).not.toContain('Loading run history…');
     expect(runToolCallTraceSource).toContain('getToolCallsLoadingState');

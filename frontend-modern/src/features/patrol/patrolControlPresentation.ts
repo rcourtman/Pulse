@@ -8,7 +8,7 @@ export const PATROL_AUTONOMY_POLICY_PRESENTATION: Record<
 > = {
   monitor: {
     label: 'Watch only',
-    detail: 'Patrol reports issues without making changes.',
+    detail: 'Patrol checks and reports issues without making changes.',
     compactLabel: 'Watch only',
   },
   approval: {
@@ -29,7 +29,7 @@ export const PATROL_AUTONOMY_POLICY_PRESENTATION: Record<
   },
 };
 
-export const PATROL_WORKSPACE_HISTORY_DESCRIPTION = 'Past Patrol checks.';
+export const PATROL_WORKSPACE_HISTORY_DESCRIPTION = 'Past checks and what Patrol recorded.';
 
 export const PATROL_WORKSPACE_RUN_RECORD_DESCRIPTION = 'What Patrol found during this run.';
 
@@ -98,19 +98,19 @@ export function getPatrolSetupIssueReason(input: PatrolSetupIssueReasonInput): s
 
 export function getPatrolReadyWorkDetail(input: PatrolControlCopyInput): string {
   if (input.autonomyLocked) {
-    return 'Patrol is ready to check infrastructure and show issues.';
+    return 'Patrol is ready to check infrastructure and list current issues.';
   }
 
   switch (input.autonomyLevel) {
     case 'approval':
-      return 'Patrol is ready to watch and investigate. You approve every change.';
+      return 'Patrol is ready to check, investigate, and ask before any change.';
     case 'assisted':
-      return 'Patrol is ready to watch, investigate, and handle safe fixes when policy allows it.';
+      return 'Patrol is ready to check, investigate, and fix safe issues when policy allows it.';
     case 'full':
-      return 'Patrol is ready to watch, investigate, and act automatically within your policy.';
+      return 'Patrol is ready to check, investigate, and act automatically within your policy.';
     case 'monitor':
     default:
-      return 'Patrol is ready to check infrastructure and show issues.';
+      return 'Patrol is ready to check infrastructure and list current issues.';
   }
 }
 
@@ -128,26 +128,26 @@ export function getPatrolQueueWorkspaceDescription(
   const findingCount = normalizeCount(input.findingCount);
   const affectedResourceCount = normalizeCount(input.affectedResourceCount);
   if (findingCount > 0 && affectedResourceCount > 0) {
-    return `${getPatrolFindingIssueCountLabel(findingCount)} on ${formatCount(
+    return `Patrol found ${getPatrolFindingIssueCountLabel(findingCount)} on ${formatCount(
       affectedResourceCount,
       'affected resource',
     )}.`;
   }
 
   if (input.autonomyLocked) {
-    return 'Issues Patrol finds that need you appear here.';
+    return 'Patrol lists current issues here after each check.';
   }
 
   switch (input.autonomyLevel) {
     case 'approval':
-      return 'Investigations and approval requests that need you appear here.';
+      return 'Patrol lists investigations and approval requests here.';
     case 'assisted':
-      return 'Issues Patrol is handling appear here. Approval requests appear when needed.';
+      return 'Patrol lists issues it is handling here and asks when approval is needed.';
     case 'full':
-      return 'Issues Patrol is handling appear here. Approval requests appear when policy requires them.';
+      return 'Patrol lists issues it is handling here and asks when policy requires approval.';
     case 'monitor':
     default:
-      return 'Issues Patrol finds that need you appear here.';
+      return 'Patrol lists current issues here after each check.';
   }
 }
 

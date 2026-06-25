@@ -992,6 +992,9 @@ describe('settings architecture guardrails', () => {
     );
     expect(aiModelSelectionSectionSource).not.toContain('approved fix execution');
     expect(aiModelSelectionSectionSource).toContain("label: 'Patrol model'");
+    expect(aiModelSelectionSectionSource).toContain(
+      'Used when Patrol checks, investigates, and verifies work.',
+    );
     expect(aiModelSelectionSectionSource).toContain("label: 'Service context model'");
     expect(aiModelSelectionSectionSource).toContain('export const AIModelOverrideField');
     expect(aiSettingsSource).toContain(

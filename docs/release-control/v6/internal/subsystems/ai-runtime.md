@@ -21,9 +21,9 @@
 
 Own the Pulse Intelligence Core: canonical context, governed actions, safety
 gates, approval state, action audit, and verification. That core backs Pulse
-Patrol as the primary built-in operator that watches, investigates, acts within
-the chosen Patrol mode, verifies outcomes, and records what happened. Pulse
-Assistant is the contextual
+Patrol as the primary built-in operator that checks infrastructure, investigates
+issues, follows the chosen Patrol mode before acting, verifies outcomes, and
+records what happened. Pulse Assistant is the contextual
 explanation, approval, and handoff access path over that same work, while the
 Pulse MCP adapter is the external-agent access path over canonical API
 contracts. The subsystem also owns AI orchestration, runtime cost control,

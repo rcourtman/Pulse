@@ -15883,7 +15883,7 @@ func TestContract_PulseIntelligenceOverviewPinsPatrolPrimaryCore(t *testing.T) {
 		"Canonical context, governed actions, safety gates, approval state, action audit, and verification",
 		"Patrol as the primary built-in operator",
 		"Assistant plus MCP as access paths",
-		"Patrol is the first-party operations surface: it watches, investigates, acts within the chosen Patrol mode, verifies outcomes, and records what happened",
+		"Patrol is the first-party operations surface: it checks infrastructure, investigates issues, follows the chosen Patrol mode before acting, verifies outcomes, and records what happened",
 		"Pulse Assistant",
 		"Pulse MCP",
 		"contextual explanation, approval, and handoff surface for Patrol findings",

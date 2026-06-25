@@ -23,7 +23,7 @@ describe('patrolEmptyStatePresentation', () => {
 
   it('returns the patrol run history empty state', () => {
     expect(getRunHistoryEmptyState()).toEqual({
-      text: 'No patrol runs yet. Trigger a run to populate history.',
+      text: 'No Patrol checks yet. Run Patrol to start history.',
     });
     expect(runHistoryPanelSource).toContain('@/components/shared/EmptyState');
     expect(runHistoryPanelSource).toContain('variant="panel"');
@@ -70,7 +70,7 @@ describe('patrolEmptyStatePresentation', () => {
       }),
     ).toEqual({
       title: 'Check needed',
-      body: 'Run Patrol to check everything and update open issues.',
+      body: 'Run Patrol to check everything and refresh open work.',
       tone: 'warning',
     });
   });
@@ -94,7 +94,7 @@ describe('patrolEmptyStatePresentation', () => {
       }),
     ).toEqual({
       title: 'Check needed',
-      body: 'Run Patrol to check everything and update open issues.',
+      body: 'Run Patrol to check everything and refresh open work.',
       tone: 'warning',
     });
   });
@@ -121,7 +121,7 @@ describe('patrolEmptyStatePresentation', () => {
       }),
     ).toEqual({
       title: 'Patrol needs review',
-      body: 'No active findings are listed, but Patrol health is degraded.',
+      body: 'No current issues are listed, but Patrol health needs review.',
       tone: 'error',
     });
   });
@@ -156,7 +156,7 @@ describe('patrolEmptyStatePresentation', () => {
       }),
     ).toEqual({
       title: 'Patrol is checking now',
-      body: 'The current run will add work here if Patrol finds issues or needs approval.',
+      body: 'If Patrol finds an issue or needs approval, it will add it here.',
       tone: 'info',
     });
   });
@@ -176,7 +176,7 @@ describe('patrolEmptyStatePresentation', () => {
       }),
     ).toEqual({
       title: 'No current issues',
-      body: 'Run Patrol any time to check again.',
+      body: 'No action needed from the latest Patrol check. Run Patrol any time to check again.',
       tone: 'success',
     });
   });
@@ -197,7 +197,7 @@ describe('patrolEmptyStatePresentation', () => {
       }),
     ).toEqual({
       title: 'No current issues',
-      body: 'Past issues are in History.',
+      body: 'Past issues are in History if you need the record.',
       tone: 'info',
     });
   });

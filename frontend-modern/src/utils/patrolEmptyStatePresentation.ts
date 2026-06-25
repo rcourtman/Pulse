@@ -30,7 +30,7 @@ export function getInvestigationMessagesState(loading: boolean, hasMessages: boo
 
 export function getRunHistoryEmptyState() {
   return {
-    text: 'No patrol runs yet. Trigger a run to populate history.',
+    text: 'No Patrol checks yet. Run Patrol to start history.',
   } as const;
 }
 
@@ -71,18 +71,19 @@ type PatrolRunSnapshotEmptyStateArgs = Pick<
   | 'error_count'
 >;
 
-const HEALTHY_PATROL_EMPTY_STATE_BODY = 'Run Patrol any time to check again.';
+const HEALTHY_PATROL_EMPTY_STATE_BODY =
+  'No action needed from the latest Patrol check. Run Patrol any time to check again.';
 const DEGRADED_COVERAGE_EMPTY_STATE_BODY =
-  'Run Patrol to check everything and update open issues.';
+  'Run Patrol to check everything and refresh open work.';
 const DEGRADED_HEALTH_EMPTY_STATE_BODY =
-  'No active findings are listed, but Patrol health is degraded.';
-const HISTORICAL_REGRESSION_EMPTY_STATE_BODY = 'Past issues are in History.';
+  'No current issues are listed, but Patrol health needs review.';
+const HISTORICAL_REGRESSION_EMPTY_STATE_BODY = 'Past issues are in History if you need the record.';
 const PATROL_QUEUE_CLEAR_TITLE = 'No current issues';
 const PATROL_QUEUE_RECHECK_TITLE = 'Check needed';
 const PATROL_QUEUE_REVIEW_TITLE = 'Patrol needs review';
 const PATROL_QUEUE_RUNNING_TITLE = 'Patrol is checking now';
 const PATROL_QUEUE_RUNNING_BODY =
-  'The current run will add work here if Patrol finds issues or needs approval.';
+  'If Patrol finds an issue or needs approval, it will add it here.';
 
 function getHealthDegradedTone(overallHealth: IntelligenceHealthScore): SemanticTone {
   return overallHealth.grade === 'D' || overallHealth.grade === 'F' ? 'error' : 'warning';

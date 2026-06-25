@@ -617,7 +617,7 @@ var canonicalManifest = Manifest{
 		ProactiveEngine: SurfaceContractComponent{
 			ID:          "pulse_patrol",
 			Label:       "Pulse Patrol",
-			Description: "Patrol is the first-party operations surface: it watches, investigates, acts within the chosen Patrol mode, verifies outcomes, and records what happened.",
+			Description: "Patrol is the first-party operations surface: it checks infrastructure, investigates issues, follows the chosen Patrol mode before acting, verifies outcomes, and records what happened.",
 		},
 		OperatorSurfaces: []OperatorSurfaceContract{
 			{

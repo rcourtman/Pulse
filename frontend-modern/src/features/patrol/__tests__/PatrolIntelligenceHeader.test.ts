@@ -95,7 +95,7 @@ describe('PatrolIntelligenceHeader', () => {
     expect(PATROL_AUTONOMY_POLICY_PRESENTATION).toEqual({
       monitor: {
         label: 'Watch only',
-        detail: 'Patrol reports issues without making changes.',
+        detail: 'Patrol checks and reports issues without making changes.',
         compactLabel: 'Watch only',
       },
       approval: {

@@ -74,6 +74,6 @@ describe('PatrolIntelligenceWorkspace trust strip', () => {
     expect(workspaceSource).toContain('!state.selectedRun()');
     expect(PATROL_WORKSPACE_RUN_RECORD_TITLE).toBe('Check details');
     expect(PATROL_WORKSPACE_RUN_RECORD_DESCRIPTION).toBe('What Patrol found during this run.');
-    expect(PATROL_WORKSPACE_HISTORY_DESCRIPTION).toBe('Past Patrol checks.');
+    expect(PATROL_WORKSPACE_HISTORY_DESCRIPTION).toBe('Past checks and what Patrol recorded.');
   });
 });

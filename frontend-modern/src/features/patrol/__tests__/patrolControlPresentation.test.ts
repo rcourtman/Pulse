@@ -16,7 +16,7 @@ describe('patrolControlPresentation', () => {
     expect(PATROL_AUTONOMY_POLICY_PRESENTATION).toEqual({
       monitor: {
         label: 'Watch only',
-        detail: 'Patrol reports issues without making changes.',
+        detail: 'Patrol checks and reports issues without making changes.',
         compactLabel: 'Watch only',
       },
       approval: {
@@ -41,23 +41,23 @@ describe('patrolControlPresentation', () => {
   it.each([
     [
       'monitor',
-      'Patrol is ready to check infrastructure and show issues.',
-      'Issues Patrol finds that need you appear here.',
+      'Patrol is ready to check infrastructure and list current issues.',
+      'Patrol lists current issues here after each check.',
     ],
     [
       'approval',
-      'Patrol is ready to watch and investigate. You approve every change.',
-      'Investigations and approval requests that need you appear here.',
+      'Patrol is ready to check, investigate, and ask before any change.',
+      'Patrol lists investigations and approval requests here.',
     ],
     [
       'assisted',
-      'Patrol is ready to watch, investigate, and handle safe fixes when policy allows it.',
-      'Issues Patrol is handling appear here. Approval requests appear when needed.',
+      'Patrol is ready to check, investigate, and fix safe issues when policy allows it.',
+      'Patrol lists issues it is handling here and asks when approval is needed.',
     ],
     [
       'full',
-      'Patrol is ready to watch, investigate, and act automatically within your policy.',
-      'Issues Patrol is handling appear here. Approval requests appear when policy requires them.',
+      'Patrol is ready to check, investigate, and act automatically within your policy.',
+      'Patrol lists issues it is handling here and asks when policy requires approval.',
     ],
   ] satisfies Array<[PatrolAutonomyLevel, string, string]>)(
     'describes %s mode without generic control-level wording',
@@ -70,14 +70,14 @@ describe('patrolControlPresentation', () => {
 
   it('does not advertise investigation or fixes while Patrol mode is locked', () => {
     expect(getPatrolReadyWorkDetail({ autonomyLevel: 'full', autonomyLocked: true })).toBe(
-      'Patrol is ready to check infrastructure and show issues.',
+      'Patrol is ready to check infrastructure and list current issues.',
     );
     expect(
       getPatrolQueueWorkspaceDescription({
         autonomyLevel: 'full',
         autonomyLocked: true,
       }),
-    ).toBe('Issues Patrol finds that need you appear here.');
+    ).toBe('Patrol lists current issues here after each check.');
   });
 
   it('summarizes the open queue by affected resource instead of raw findings', () => {
@@ -98,14 +98,14 @@ describe('patrolControlPresentation', () => {
         findingCount: 2,
         affectedResourceCount: 1,
       }),
-    ).toBe('2 issues on 1 affected resource.');
+    ).toBe('Patrol found 2 issues on 1 affected resource.');
     expect(
       getPatrolQueueWorkspaceDescription({
         autonomyLevel: 'approval',
         findingCount: 1,
         affectedResourceCount: 1,
       }),
-    ).toBe('1 issue on 1 affected resource.');
+    ).toBe('Patrol found 1 issue on 1 affected resource.');
   });
 
   it('keeps setup-only issue reasons short and actionable', () => {

@@ -635,11 +635,11 @@ describe('AIIntelligence entitlement gating', () => {
     });
 
     expect(
-      screen.getByText('Patrol watches infrastructure and shows current issues.'),
+      screen.getByText('Patrol checks your infrastructure and shows current issues.'),
     ).toBeInTheDocument();
     expect(
       screen.queryByText(
-        'Patrol watches, investigates, acts within the mode you choose, verifies outcomes, and records what happened.',
+        'Patrol checks your infrastructure, explains what it found, follows your mode before acting, and records the result.',
       ),
     ).not.toBeInTheDocument();
     const patrolControlAnchor = document.getElementById(PATROL_CONTROL_ANCHOR);
@@ -650,7 +650,7 @@ describe('AIIntelligence entitlement gating', () => {
     expect(patrolControl.getByText('Patrol mode')).toBeInTheDocument();
     expect(patrolControl.getAllByText('Watch only').length).toBeGreaterThan(0);
     expect(
-      patrolControl.getByText('Patrol reports issues without making changes.'),
+      patrolControl.getByText('Patrol checks and reports issues without making changes.'),
     ).toBeInTheDocument();
     expect(patrolControl.queryByRole('button', { name: 'Limits' })).not.toBeInTheDocument();
     expect(patrolControl.queryByRole('button', { name: 'Ask first' })).toBeNull();
@@ -671,7 +671,9 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.queryByRole('link', { name: 'View plans' })).not.toBeInTheDocument();
     expect(operationsLoopAnchor?.parentElement).toBe(patrolControlAnchor);
     expect(screen.queryByTestId('patrol-current-work')).not.toBeInTheDocument();
-    expect(screen.getByText('Issues Patrol finds that need you appear here.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Patrol lists current issues here after each check.'),
+    ).toBeInTheDocument();
     expect(
       screen.queryByText('Issues Patrol found. Infrastructure stays unchanged.'),
     ).not.toBeInTheDocument();
@@ -1195,7 +1197,9 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.getByRole('button', { name: 'Ask first' })).not.toBeDisabled();
     expect(screen.getByRole('button', { name: 'Safe auto-fix' })).not.toBeDisabled();
     expect(screen.getByRole('button', { name: 'Autopilot' })).not.toBeDisabled();
-    expect(screen.getByText('Patrol reports issues without making changes.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Patrol checks and reports issues without making changes.'),
+    ).toBeInTheDocument();
     expect(screen.queryByText('Patrol handles')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Limits' })).not.toBeInTheDocument();
     expect(screen.queryByText('Hard limits')).not.toBeInTheDocument();
@@ -1876,7 +1880,7 @@ describe('AIIntelligence entitlement gating', () => {
     expect(patrolControl.getByText('Patrol mode')).toBeInTheDocument();
     expect(patrolControl.getAllByText('Watch only').length).toBeGreaterThan(0);
     expect(
-      patrolControl.getByText('Patrol reports issues without making changes.'),
+      patrolControl.getByText('Patrol checks and reports issues without making changes.'),
     ).toBeInTheDocument();
     expect(patrolControl.getByRole('button', { name: 'Ask first' })).not.toBeDisabled();
     expect(patrolControl.getByRole('button', { name: 'Safe auto-fix' })).not.toBeDisabled();

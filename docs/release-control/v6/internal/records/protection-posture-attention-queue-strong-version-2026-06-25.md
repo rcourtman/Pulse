@@ -93,6 +93,11 @@ loop, and routes the operator from real findings/evidence to safe action.
   command palette, shortcut copy, Patrol page title, and focused tests. Browser
   proof confirmed authenticated `/` lands on `/proxmox/overview`, while
   `/patrol` shows the `Patrol` title and heading on desktop and mobile.
+- 2026-06-25: Simplified Patrol copy across the page header, mode control,
+  current-work summary, empty states, Settings model selector, and agent
+  surface manifest so Patrol consistently reads as the checking loop: check
+  infrastructure, list current issues, ask according to Patrol mode, verify,
+  and record the result.
 
 ## Evidence
 

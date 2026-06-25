@@ -912,8 +912,8 @@ payload shape change when the portal presents compact client rows.
     `/api/agent/capabilities.mcpAdapter`, not component-local constants.
     The default setup copy must frame connected agents as optional access to
     Pulse context and Patrol work, keep Patrol as the built-in operator that
-    watches, acts within Patrol mode, asks when approval is required, verifies
-    outcomes, and records history, and say external agents use that same
+    checks infrastructure, follows Patrol mode before acting, asks when approval
+    is required, verifies outcomes, and records history, and say external agents use that same
     boundary. It must not use "Use Pulse MCP only" or "outside client" copy, and
     it must not describe external-agent setup as a separate operator journey.
     The Patrol control handoff belongs to the Patrol control route; API Access
@@ -1760,9 +1760,9 @@ payload shape change when the portal presents compact client rows.
    alone
    and the Patrol status presentation boundary, so trigger/scheduling status
    from Patrol status APIs stays in the header/control surface instead of being
-   repeated as default status chrome, watch-only presentation says Patrol watches
+   repeated as default status chrome, watch-only presentation says Patrol checks
    infrastructure and shows current issues while the selected Watch only mode
-   describes the capability positively, such as Patrol watching infrastructure
+   describes the capability positively, such as Patrol checking infrastructure
    and reporting issues only, avoiding repeated header/control
    sentences, `Will not` policy-list wording, secondary Limits disclosures, or repeated
    infrastructure-unchanged caveats, and the browser-visible label stays
@@ -1975,7 +1975,7 @@ payload shape change when the portal presents compact client rows.
    policy rather than changing the compatibility API boundary; setup-only
    readiness may hide those run/configuration affordances, but the visible
    Patrol mode selector remains the primary policy boundary during setup
-   and the Patrol mode presentation boundary, so `frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx` routes active Patrol findings into the Patrol-owned findings workflow, renders the first-party loop as watch/investigate/act-under-policy/verify/record, uses `Patrol mode` as the human-facing name for the governed autonomy selector while preserving `patrol_control`, `patrolControl*`, and `patrol_autonomy` only for compatibility route and wire identifiers, and demotes Assistant and external-agent readiness out of the primary operator loop without introducing a new API request shape, frontend-authored tool route, serialized remediation plan, or page-local MCP setup contract; direct single-finding CTAs must derive from existing finding-presentation helpers and canonical routes such as the Patrol provider-settings route, selected findings, approvals, and history rows may still open contextual Assistant handoffs through their governed owners, the user-facing `Patrol` route title and `Open work` queue title must remain presentation labels over the same current-work status contract rather than new payload states, setup-only Patrol runtime failures must use existing finding/runtime fields to render the Patrol-owned `Fix Patrol setup` framing, a dedicated setup task, and one direct `Open Provider & Models` action while suppressing the readiness banner, generic issue-row chips, filter chrome, and run-history action chrome that would compete with provider setup, but recent changes, correlations, and policy-coverage payloads must not render as a generic first-party Details/evidence console on the Patrol page, and raw finding lifecycle telemetry must be reserved for explicit all/resolved/history or selected-run review states instead of default active current-issue expansion
+   and the Patrol mode presentation boundary, so `frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx` routes active Patrol findings into the Patrol-owned findings workflow, renders the first-party loop as check/investigate/act-under-policy/verify/record, uses `Patrol mode` as the human-facing name for the governed autonomy selector while preserving `patrol_control`, `patrolControl*`, and `patrol_autonomy` only for compatibility route and wire identifiers, and demotes Assistant and external-agent readiness out of the primary operator loop without introducing a new API request shape, frontend-authored tool route, serialized remediation plan, or page-local MCP setup contract; direct single-finding CTAs must derive from existing finding-presentation helpers and canonical routes such as the Patrol provider-settings route, selected findings, approvals, and history rows may still open contextual Assistant handoffs through their governed owners, the user-facing `Patrol` route title and `Open work` queue title must remain presentation labels over the same current-work status contract rather than new payload states, setup-only Patrol runtime failures must use existing finding/runtime fields to render the Patrol-owned `Fix Patrol setup` framing, a dedicated setup task, and one direct `Open Provider & Models` action while suppressing the readiness banner, generic issue-row chips, filter chrome, and run-history action chrome that would compete with provider setup, but recent changes, correlations, and policy-coverage payloads must not render as a generic first-party Details/evidence console on the Patrol page, and raw finding lifecycle telemetry must be reserved for explicit all/resolved/history or selected-run review states instead of default active current-issue expansion
    The Patrol page may consume server-authored readiness and preflight-backed
    status, but it must translate that transport state into `Patrol setup issue`
    or `Patrol setup warning`, provider/model context, and the canonical
