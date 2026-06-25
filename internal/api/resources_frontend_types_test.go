@@ -234,6 +234,11 @@ func TestParseResourceTypesNodeAlias(t *testing.T) {
 			unified.ResourceTypeAgent: {},
 			unified.ResourceTypeVM:    {},
 		}},
+		{name: "url encoded csv from browser query builder", input: "agent%2Cdocker-host%2Capp-container", want: map[unified.ResourceType]struct{}{
+			unified.ResourceTypeAgent:        {},
+			"docker-host":                    {},
+			unified.ResourceTypeAppContainer: {},
+		}},
 		// Mixed case — splitCSV lowercases tokens
 		{name: "mixed case NoDe,VM", input: "NoDe,VM", want: map[unified.ResourceType]struct{}{
 			unified.ResourceTypeAgent: {},
@@ -454,6 +459,33 @@ func TestResourceListUsesCanonicalContractTypes(t *testing.T) {
 	}
 	if dockerResp.Data[0].MetricsTarget == nil || dockerResp.Data[0].MetricsTarget.ResourceType != "docker-host" {
 		t.Fatalf("expected docker-host metrics target, got %+v", dockerResp.Data[0].MetricsTarget)
+	}
+
+	// Browser URL builders encode comma-separated filters as %2C. The REST
+	// boundary must treat that as the same canonical type list so platform
+	// pages do not drop Docker hosts when using URLSearchParams.
+	encodedDockerRec := httptest.NewRecorder()
+	encodedDockerReq := httptest.NewRequest(http.MethodGet, "/api/resources?type=agent%2Cdocker-host&page=1&limit=100", nil)
+	h.HandleListResources(encodedDockerRec, encodedDockerReq)
+
+	if encodedDockerRec.Code != http.StatusOK {
+		t.Fatalf("encoded docker-host status = %d, body=%s", encodedDockerRec.Code, encodedDockerRec.Body.String())
+	}
+
+	var encodedDockerResp ResourcesResponse
+	if err := json.NewDecoder(encodedDockerRec.Body).Decode(&encodedDockerResp); err != nil {
+		t.Fatalf("decode encoded docker-host response: %v", err)
+	}
+
+	encodedTypeSet := make(map[unified.ResourceType]int)
+	for _, r := range encodedDockerResp.Data {
+		encodedTypeSet[r.Type]++
+	}
+	if encodedTypeSet["agent"] != 2 {
+		t.Fatalf("encoded type filter agent count = %d, want 2 (types=%v)", encodedTypeSet["agent"], encodedTypeSet)
+	}
+	if encodedTypeSet["docker-host"] != 1 {
+		t.Fatalf("encoded type filter docker-host count = %d, want 1 (types=%v)", encodedTypeSet["docker-host"], encodedTypeSet)
 	}
 
 	// Test 3: Verify ByType aggregation uses canonical contract names.

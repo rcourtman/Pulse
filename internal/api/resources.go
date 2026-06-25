@@ -2498,6 +2498,7 @@ func pmgHostname(pmg *unified.PMGData) string {
 }
 
 func splitCSV(raw string) []string {
+	raw = strings.NewReplacer("%2c", ",", "%2C", ",").Replace(raw)
 	parts := strings.Split(raw, ",")
 	out := make([]string, 0, len(parts))
 	for _, part := range parts {

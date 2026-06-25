@@ -801,6 +801,11 @@ surface and no new `internal/api/` lifecycle handler.
    order instead of inheriting map order or page-local re-sorts, so install
    and runtime hydration do not present one resource ordering at first load and
    a different ordering after the first live refresh.
+   Those same resource-list reads must preserve browser-encoded comma-separated
+   `/api/resources` type filters. Lifecycle-adjacent consumers that request
+   agent or Docker host resource rows through standard query builders must
+   receive the same canonical resource set as literal comma filters instead of
+   treating `%2C` as part of a resource type token.
    Those lifecycle-adjacent reads may observe resource API
    `policyPosture` aggregation as read-only data-governance context, but they
    must not reinterpret sensitivity, routing, or redaction counts as install

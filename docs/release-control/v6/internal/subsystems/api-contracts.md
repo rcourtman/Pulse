@@ -1072,6 +1072,9 @@ payload shape change when the portal presents compact client rows.
 59. `internal/agentcapabilities/types.go` shared with `ai-runtime`: the agent capabilities manifest wire type, manifest-owned external-adapter surface tool contract field, capability display title and structured output schema fields, approval-policy vocabulary, capability governance normalization, and tool-governance descriptor shape are both the canonical API payload contract and the AI runtime projection contract for Pulse Assistant and MCP-facing agent tools.
 60. `internal/agentcapabilities/workflow_prompt.go` shared with `ai-runtime`: the Pulse Intelligence workflow prompt catalogue, manifest-owned `workflowPrompts` projection, MCP prompt title projection, presentation kind hints, shared resource-context and finding argument vocabulary, Patrol issue-handling capability gating, argument validation, and manifest-gated shared prompt rendering rules are both the AI runtime starter contract for Assistant-compatible surfaces and the canonical API/agent prompt projection contract for MCP-facing clients.
 61. `internal/api/access_control_handlers.go` shared with `organization-settings`: RBAC role and user-assignment handlers are both an organization settings control surface and a canonical API payload contract boundary.
+    The `/api/resources` type filter also treats URL-encoded comma separators
+    (`%2C`) the same as literal comma-separated type lists, because frontend
+    consumers build these requests through standard URL query encoders.
     The shared node setup boundary above owns the guided/manual setup split
     for PVE/PBS consumers: API Inventory and Host Telemetry Agent setup modes
     are auto-registration paths, while Token ID/Value fields, Test Connection,

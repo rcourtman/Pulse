@@ -564,6 +564,11 @@ recovery scope, or a storage/recovery-owned secret source.
    state payload must publish the same canonical resource types and display
    labels as `/api/resources` so storage and recovery do not momentarily switch
    between legacy and canonical infrastructure identities within one session.
+   Adjacent list surfaces that build `/api/resources` queries with standard
+   browser encoders must also treat `%2C` separators the same as literal
+   comma-separated type filters, so storage and recovery consumers do not lose
+   canonical Docker host, agent, or workload rows when sharing the unified
+   resource endpoint.
    That same adjacent API boundary now also owns SSO outbound discovery and metadata fetch trust: storage- and recovery-adjacent surfaces may share `internal/api/sso_outbound.go`, `internal/api/saml_service.go`, and `internal/api/oidc_service.go`, but they must not fork separate metadata/discovery HTTP clients, redirect policies, or credential-file read rules when they depend on shared backend auth helpers.
    That same adjacent security-status boundary now also owns paid prompt
    suppression for storage/recovery-adjacent primitives. History and recovery

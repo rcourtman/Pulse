@@ -11979,6 +11979,53 @@ func TestContract_ResourceListUsesDeterministicNameTieBreakers(t *testing.T) {
 	}
 }
 
+func TestContract_ResourceListAcceptsBrowserEncodedTypeCSV(t *testing.T) {
+	now := time.Date(2026, 4, 12, 0, 0, 0, 0, time.UTC)
+	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot: models.StateSnapshot{LastUpdate: now},
+		resources: []unifiedresources.Resource{
+			{ID: "agent-delly", Type: unifiedresources.ResourceTypeAgent, Name: "delly", Status: unifiedresources.StatusOnline, LastSeen: now},
+			{ID: "docker-host-frigate", Type: "docker-host", Name: "frigate", Status: unifiedresources.StatusOnline, LastSeen: now},
+			{ID: "container-frigate", Type: unifiedresources.ResourceTypeAppContainer, Name: "frigate", Status: unifiedresources.StatusOnline, LastSeen: now},
+			{ID: "vm-ignored", Type: unifiedresources.ResourceTypeVM, Name: "ignored-vm", Status: unifiedresources.StatusOnline, LastSeen: now},
+		},
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=agent%2Cdocker-host%2Capp-container&page=1&limit=100", nil)
+	h.HandleListResources(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp ResourcesResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	gotTypes := make(map[unifiedresources.ResourceType]int)
+	for _, resource := range resp.Data {
+		gotTypes[resource.Type]++
+	}
+	if len(resp.Data) != 3 {
+		t.Fatalf("expected 3 encoded-filtered resources, got %d (types=%v)", len(resp.Data), gotTypes)
+	}
+	for _, typ := range []unifiedresources.ResourceType{
+		unifiedresources.ResourceTypeAgent,
+		"docker-host",
+		unifiedresources.ResourceTypeAppContainer,
+	} {
+		if gotTypes[typ] != 1 {
+			t.Fatalf("encoded type filter count for %q = %d, want 1 (types=%v)", typ, gotTypes[typ], gotTypes)
+		}
+	}
+	if gotTypes[unifiedresources.ResourceTypeVM] != 0 {
+		t.Fatalf("encoded type filter leaked VM resources: %v", gotTypes)
+	}
+}
+
 func TestContract_StateAndResourceListShareCanonicalMockResourceContract(t *testing.T) {
 	setMockModeForTest(t, true)
 

@@ -512,6 +512,10 @@ container inventory table.
     runtime workload belongs to both Docker and an owning infrastructure
     platform.
 16. `internal/api/resources.go` shared with `api-contracts`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
+    `/api/resources` type filters must accept URL-encoded comma-separated lists
+    from browser query builders exactly like literal comma separators, so Docker
+    / Podman runtime pages do not lose `docker-host` inventory while requesting
+    canonical resource types.
     App-container Discovery targets are part of that shared payload contract.
     Backend resources must expose frontend-facing `resourceType=app-container`
     with the reporting Docker/Podman agent id and the stable container name as

@@ -307,6 +307,29 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
+  it('keeps comma-separated type filters in the browser-encoded resource query shape', async () => {
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources({
+        query: 'type=agent,docker-host,app-container',
+        cacheKey: 'docker-overview-contract',
+      });
+    });
+
+    await flushAsync();
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    expect(apiFetchMock).toHaveBeenNthCalledWith(
+      1,
+      '/api/resources?type=agent%2Cdocker-host%2Capp-container&page=1&limit=100',
+      { cache: 'no-store' },
+    );
+    await waitForResourceCount(() => result!.resources().length);
+
+    dispose();
+  });
+
   it('prefers websocket initial hydration over an immediate REST fetch for dashboard snapshots', async () => {
     setWsConnected(false);
     setWsInitialDataReceived(false);
