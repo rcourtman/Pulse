@@ -333,6 +333,10 @@ regression protection.
    Workloads source-health messaging must derive from the canonical
    `/api/connections` ledger through
    `frontend-modern/src/components/Workloads/workloadInventorySourceIssues.ts`.
+   Platform-owned embedded Workloads surfaces must scope those source-health
+   issues to the forced platform before rendering an empty inventory state, and
+   the remediation action must route to the canonical infrastructure workspace
+   without adding per-source fetches or route-local source probes.
    Connection-ledger refreshes on the Workloads page are steady-state health
    probes, not route-loading authority: after the Workloads shell has mounted,
    those refreshes must retain the last rendered table state and must not trip

@@ -757,6 +757,12 @@ fingerprint runtime clients. `pkg/tlsutil/fingerprint.go` may support
 certificate-fingerprint capture and verification for self-signed deployments,
 but every mode must still set an explicit minimum TLS version instead of
 silently inheriting whatever older protocol floor the host runtime would allow.
+The same shared client transport must not leak local infrastructure API
+requests through inherited environment proxies: loopback, private, link-local,
+CGNAT/Tailscale, mDNS/local, and single-label infrastructure hosts are direct
+connections by default, while public endpoints may still honor the operator's
+proxy environment. Proxy-bypass changes for this path require targeted TLS
+client tests plus adjacent Proxmox, PBS, and PMG client coverage.
 That same rule also applies inside shipped security guidance itself:
 `SECURITY.md` and the synced `frontend-modern/public/docs/SECURITY.md` copy may
 not bounce the operator back to GitHub `main` for section references that the

@@ -4,6 +4,7 @@ import { formatConnectionErrorMessage } from '@/utils/connectionErrorPresentatio
 export interface WorkloadInventorySourceIssue {
   id: string;
   name: string;
+  type: ConnectionType;
   typeLabel: string;
   state: ConnectionState;
   stateLabel: string;
@@ -150,6 +151,7 @@ export const buildWorkloadInventorySourceIssues = (
       return {
         id: connection.id,
         name: connection.name,
+        type: connection.type,
         typeLabel,
         state: connection.state,
         stateLabel: stateLabelFor(connection),

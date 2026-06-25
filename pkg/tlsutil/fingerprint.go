@@ -116,6 +116,45 @@ func FingerprintVerifier(fingerprint string) *tls.Config {
 	}
 }
 
+func shouldBypassProxyForTargetHost(host string) bool {
+	normalized := strings.Trim(strings.ToLower(strings.TrimSpace(host)), "[]")
+	if normalized == "" {
+		return false
+	}
+
+	if normalized == "localhost" ||
+		strings.HasSuffix(normalized, ".localhost") ||
+		strings.HasSuffix(normalized, ".local") {
+		return true
+	}
+
+	if ip := net.ParseIP(normalized); ip != nil {
+		return ip.IsLoopback() ||
+			ip.IsPrivate() ||
+			ip.IsLinkLocalUnicast() ||
+			ip.IsLinkLocalMulticast() ||
+			ip.IsUnspecified() ||
+			isCarrierGradeNAT(ip)
+	}
+
+	return !strings.Contains(normalized, ".")
+}
+
+func isCarrierGradeNAT(ip net.IP) bool {
+	ip4 := ip.To4()
+	if ip4 == nil {
+		return false
+	}
+	return ip4[0] == 100 && ip4[1] >= 64 && ip4[1] <= 127
+}
+
+func proxyFromEnvironmentBypassingLocalInfrastructure(req *http.Request) (*url.URL, error) {
+	if req != nil && req.URL != nil && shouldBypassProxyForTargetHost(req.URL.Hostname()) {
+		return nil, nil
+	}
+	return http.ProxyFromEnvironment(req)
+}
+
 // CreateHTTPClient creates an HTTP client with appropriate TLS configuration
 func CreateHTTPClient(verifySSL bool, fingerprint string) *http.Client {
 	return CreateHTTPClientWithTimeout(verifySSL, fingerprint, 60*time.Second)
@@ -124,7 +163,7 @@ func CreateHTTPClient(verifySSL bool, fingerprint string) *http.Client {
 // CreateHTTPClientWithTimeout creates an HTTP client with appropriate TLS configuration and custom timeout
 func CreateHTTPClientWithTimeout(verifySSL bool, fingerprint string, timeout time.Duration) *http.Client {
 	transport := &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
+		Proxy: proxyFromEnvironmentBypassingLocalInfrastructure,
 		// Performance optimizations for concurrent requests
 		MaxIdleConns:        100, // Increase from default 2
 		MaxIdleConnsPerHost: 20,  // Increase from default 2

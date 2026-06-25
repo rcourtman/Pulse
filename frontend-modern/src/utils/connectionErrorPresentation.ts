@@ -73,6 +73,11 @@ const HUMANIZED_PATTERNS: { match: RegExp; headline: string; hint: string | null
     hint: AUTH_HINT,
   },
   {
+    match: /access violation/i,
+    headline: 'Connection blocked',
+    hint: 'The request was blocked before Pulse could read inventory. Check proxy, firewall, or network policy settings.',
+  },
+  {
     match: /\b403\b|forbidden|permission denied/i,
     headline: 'Permission denied',
     hint: 'The credentials connected, but the user/token lacks the required role.',

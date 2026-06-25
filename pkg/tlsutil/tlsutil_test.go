@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -249,6 +250,52 @@ func TestCreateHTTPClient_TransportSettings(t *testing.T) {
 	}
 	if transport.TLSHandshakeTimeout != 10*time.Second {
 		t.Errorf("TLSHandshakeTimeout = %v, want 10s", transport.TLSHandshakeTimeout)
+	}
+}
+
+func TestShouldBypassProxyForTargetHost(t *testing.T) {
+	tests := []struct {
+		name string
+		host string
+		want bool
+	}{
+		{name: "single label Proxmox host", host: "delly", want: true},
+		{name: "localhost", host: "localhost", want: true},
+		{name: "mDNS local", host: "pve.local", want: true},
+		{name: "loopback IPv4", host: "127.0.0.1", want: true},
+		{name: "loopback IPv6", host: "::1", want: true},
+		{name: "RFC1918 IPv4", host: "192.168.0.5", want: true},
+		{name: "Tailscale CGNAT IPv4", host: "100.127.165.127", want: true},
+		{name: "public IPv4", host: "203.0.113.10", want: false},
+		{name: "public DNS name", host: "pve.example.com", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := shouldBypassProxyForTargetHost(tt.host); got != tt.want {
+				t.Fatalf("shouldBypassProxyForTargetHost(%q) = %v, want %v", tt.host, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestProxyFromEnvironmentBypassingLocalInfrastructure(t *testing.T) {
+	t.Setenv("HTTP_PROXY", "http://proxy.example:8080")
+	t.Setenv("HTTPS_PROXY", "http://proxy.example:8080")
+	t.Setenv("NO_PROXY", "")
+
+	localReq := &http.Request{URL: &url.URL{Scheme: "https", Host: "192.168.0.5:8006"}}
+	if proxyURL, err := proxyFromEnvironmentBypassingLocalInfrastructure(localReq); err != nil || proxyURL != nil {
+		t.Fatalf("local proxy = %v, err = %v; want direct", proxyURL, err)
+	}
+
+	publicReq := &http.Request{URL: &url.URL{Scheme: "https", Host: "pve.example.com:8006"}}
+	proxyURL, err := proxyFromEnvironmentBypassingLocalInfrastructure(publicReq)
+	if err != nil {
+		t.Fatalf("public proxy lookup failed: %v", err)
+	}
+	if proxyURL == nil || proxyURL.String() != "http://proxy.example:8080" {
+		t.Fatalf("public proxy = %v, want http://proxy.example:8080", proxyURL)
 	}
 }
 

@@ -58,6 +58,14 @@ describe('humanizeConnectionError', () => {
     expect(result?.headline).toBe('Permission denied');
   });
 
+  it('classifies access violations as blocked connections', () => {
+    const result = humanizeConnectionError(
+      'poll_nodes failed on delly: Get "https://delly:8006/api2/json/nodes": Access violation',
+    );
+    expect(result?.headline).toBe('Connection blocked');
+    expect(result?.hint).toMatch(/proxy/i);
+  });
+
   it('falls back to a cleaned message for unknown errors', () => {
     const result = humanizeConnectionError(
       'poll_nodes failed on delly: Get "https://example.com/foo": something genuinely novel',

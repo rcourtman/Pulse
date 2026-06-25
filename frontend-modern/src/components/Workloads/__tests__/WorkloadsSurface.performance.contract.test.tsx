@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { createSignal, onCleanup, onMount } from 'solid-js';
+import { Route, Router } from '@solidjs/router';
 import type { Resource } from '@/types/resource';
 import { WorkloadsSurface } from '../WorkloadsSurface';
 import workloadsSource from '../WorkloadsSurface.tsx?raw';
@@ -67,6 +68,7 @@ import {
 import { getKubernetesContextKey } from '../workloadTopology';
 import { filterResources } from '@/components/Infrastructure/infrastructureSelectors';
 import { getCanonicalWorkloadId, normalizeWorkloadViewModeParam } from '@/utils/workloads';
+import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 
 // Stub ResizeObserver for jsdom
 if (typeof globalThis.ResizeObserver === 'undefined') {
@@ -496,6 +498,7 @@ describe('Workloads performance contract', () => {
     navigateSpy.mockReset();
     connectionsApiMocks.list.mockReset();
     connectionsApiMocks.list.mockResolvedValue({ connections: [], systems: [] });
+    resetCreateNonSuspendingQueryCacheForTest();
     guestRowMountCount = 0;
     guestRowUnmountCount = 0;
     wsConnected = true;
@@ -554,6 +557,100 @@ describe('Workloads performance contract', () => {
 
       expect(document.body).not.toHaveTextContent('Loading view...');
       expect(document.body).not.toHaveTextContent('Loading...');
+    });
+
+    it('surfaces blocked Proxmox inventory sources when the platform workloads table is empty', () => {
+      render(() => (
+        <Router>
+          <Route
+            path="/"
+            component={() => (
+              <WorkloadsSurface
+                vms={[]}
+                containers={[]}
+                nodes={[]}
+                useWorkloads
+                forcedPlatform="proxmox-pve"
+                emptyStateTitle="No Proxmox workloads"
+                emptyStateDescription="Proxmox VMs and LXCs appear here when inventory is available."
+                state={
+                  {
+                    setClearSurfaceRootRef: vi.fn(),
+                    kioskMode: () => false,
+                    surfaceConnected: () => true,
+                    surfaceInitialDataReceived: () => true,
+                    allGuests: () => [],
+                    filteredGuests: () => [],
+                    search: () => '',
+                    viewMode: () => 'all',
+                    statusMode: () => 'all',
+                    hostFilterConfig: () => undefined,
+                    platformFilterConfig: () => undefined,
+                    namespaceFilterConfig: () => undefined,
+                    containerRuntimeFilterConfig: () => undefined,
+                    workloadsGuestsEmptyState: () => ({
+                      title: 'No guests found',
+                      description: 'No guests match your current filters',
+                    }),
+                    workloadsNoInventoryState: () => ({
+                      title: 'No workload inventory available',
+                      description:
+                        'Pulse has infrastructure sources, but no VM, container, or pod inventory is available right now. Review source credentials, permissions, and collection status in Settings → Infrastructure.',
+                      actionLabel: 'Review infrastructure sources',
+                    }),
+                    workloadInventoryIssues: () => [
+                      {
+                        id: 'pve:delly',
+                        name: 'delly',
+                        type: 'pve',
+                        typeLabel: 'Proxmox VE',
+                        state: 'unreachable',
+                        stateLabel: 'Source unreachable',
+                        coverageLabel: 'VMs and containers',
+                        description:
+                          'Pulse has VMs and containers enabled for delly, but the Proxmox VE API is unreachable.',
+                        detail:
+                          'Connection blocked. The request was blocked before Pulse could read inventory. Check proxy, firewall, or network policy settings.',
+                      },
+                      {
+                        id: 'docker:tower',
+                        name: 'Tower',
+                        type: 'docker',
+                        typeLabel: 'Docker',
+                        state: 'unreachable',
+                        stateLabel: 'Source unreachable',
+                        coverageLabel: 'containers',
+                        description:
+                          'Pulse has containers enabled for Tower, but the Docker API is unreachable.',
+                      },
+                    ],
+                  } as any
+                }
+              />
+            )}
+          />
+        </Router>
+      ));
+
+      expect(screen.getByTestId('workload-inventory-source-issues')).toBeInTheDocument();
+      expect(screen.getByText('No workload inventory available')).toBeInTheDocument();
+      expect(screen.queryByText('No Proxmox workloads')).not.toBeInTheDocument();
+      expect(screen.getByText('Source unreachable: delly')).toBeInTheDocument();
+      expect(screen.queryByText('Source unreachable: Tower')).not.toBeInTheDocument();
+      expect(
+        screen.getByText(
+          'Pulse has VMs and containers enabled for delly, but the Proxmox VE API is unreachable.',
+        ),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          'Connection blocked. The request was blocked before Pulse could read inventory. Check proxy, firewall, or network policy settings.',
+        ),
+      ).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Review infrastructure sources' })).toHaveAttribute(
+        'href',
+        '/settings/infrastructure',
+      );
     });
 
     it('opens workload row drawers inline without route navigation', async () => {

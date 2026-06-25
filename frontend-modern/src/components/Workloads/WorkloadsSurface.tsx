@@ -1,10 +1,13 @@
-import { Show } from 'solid-js';
+import { For, Show, createMemo } from 'solid-js';
 
+import { buildInfrastructureWorkspacePath } from '@/components/Settings/infrastructureWorkspaceModel';
 import { EmptyState } from '@/components/shared/EmptyState';
+import { ButtonLink } from '@/components/shared/Button';
 import { TableCard } from '@/components/shared/TableCard';
 import { WorkloadsFilter } from './WorkloadsFilter';
 import { DEFAULT_WORKLOADS_VIEW_MODE, hasActiveWorkloadsFilters } from './workloadsFilterModel';
 import { WorkloadsTable } from './WorkloadsTable';
+import type { WorkloadInventorySourceIssue } from './workloadInventorySourceIssues';
 import {
   useWorkloadsState,
   type WorkloadsState,
@@ -18,8 +21,60 @@ interface WorkloadsSurfaceComponentProps extends WorkloadsSurfaceProps {
   state?: WorkloadsState;
 }
 
+type TableOnlyEmptyState = {
+  title: string;
+  description: string;
+  actionLabel?: string;
+};
+
+const PLATFORM_ISSUE_TYPES: Record<string, readonly WorkloadInventorySourceIssue['type'][]> = {
+  docker: ['docker'],
+  kubernetes: ['kubernetes'],
+  'proxmox-pve': ['pve'],
+  'vmware-vsphere': ['vmware'],
+};
+
+function WorkloadInventoryIssueList(props: { issues: readonly WorkloadInventorySourceIssue[] }) {
+  return (
+    <div
+      class="w-full max-w-2xl border-t border-border pt-3 text-left"
+      data-testid="workload-inventory-source-issues"
+    >
+      <ul class="divide-y divide-border">
+        <For each={props.issues}>
+          {(issue) => (
+            <li class="py-3">
+              <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div class="min-w-0 space-y-1">
+                  <p class="text-sm font-semibold text-base-content">
+                    {issue.stateLabel}: {issue.name}
+                  </p>
+                  <p class="text-sm leading-6 text-muted">{issue.description}</p>
+                  <Show when={issue.detail}>
+                    <p class="text-xs leading-5 text-muted">{issue.detail}</p>
+                  </Show>
+                </div>
+                <span class="shrink-0 rounded bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-200">
+                  {issue.coverageLabel}
+                </span>
+              </div>
+            </li>
+          )}
+        </For>
+      </ul>
+    </div>
+  );
+}
+
 export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
   const state = props.state ?? useWorkloadsState(props);
+  const visibleInventoryIssues = createMemo(() => {
+    const issues = state.workloadInventoryIssues?.() ?? [];
+    const forcedPlatform = props.forcedPlatform?.trim().toLowerCase();
+    const platformIssueTypes = forcedPlatform ? PLATFORM_ISSUE_TYPES[forcedPlatform] : undefined;
+    if (!platformIssueTypes) return issues;
+    return issues.filter((issue) => platformIssueTypes.includes(issue.type));
+  });
   const tableOnlyFiltersActive = () =>
     hasActiveWorkloadsFilters({
       search: state.search(),
@@ -30,9 +85,18 @@ export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
       namespaceFilterValue: state.namespaceFilterConfig()?.value,
       containerRuntimeFilterValue: state.containerRuntimeFilterConfig()?.value,
     });
-  const tableOnlyEmptyState = () => {
+  const tableOnlyEmptyState = createMemo<TableOnlyEmptyState>(() => {
     if (tableOnlyFiltersActive()) {
       return state.workloadsGuestsEmptyState();
+    }
+
+    if (visibleInventoryIssues().length > 0) {
+      return state.workloadsNoInventoryState?.() ?? {
+        title: 'No workload inventory available',
+        description:
+          'Pulse has infrastructure sources, but no VM, container, or pod inventory is available right now.',
+        actionLabel: 'Review infrastructure sources',
+      };
     }
 
     return {
@@ -40,7 +104,7 @@ export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
       description:
         props.emptyStateDescription ?? 'Workloads appear here when inventory is available.',
     };
-  };
+  });
 
   return (
     <div ref={state.setClearSurfaceRootRef} class="space-y-3" data-testid="workloads-page">
@@ -159,6 +223,24 @@ export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
               <EmptyState
                 title={tableOnlyEmptyState().title}
                 description={tableOnlyEmptyState().description}
+                tone={visibleInventoryIssues().length > 0 ? 'warning' : 'default'}
+                align={visibleInventoryIssues().length > 0 ? 'left' : 'center'}
+                actions={
+                  <>
+                    <Show when={visibleInventoryIssues().length > 0}>
+                      <WorkloadInventoryIssueList issues={visibleInventoryIssues()} />
+                    </Show>
+                    <Show when={tableOnlyEmptyState().actionLabel}>
+                      <ButtonLink
+                        href={buildInfrastructureWorkspacePath()}
+                        variant="secondary"
+                        size="sm"
+                      >
+                        {tableOnlyEmptyState().actionLabel}
+                      </ButtonLink>
+                    </Show>
+                  </>
+                }
               />
             </div>
           </TableCard>
