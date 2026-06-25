@@ -221,10 +221,10 @@ describe('ProxmoxBackupsTable', () => {
     await screen.findAllByText('pbs-docker');
 
     expect(proxmoxBackupsTableSource).toContain(
-      "import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';",
+      "import { FilterSegmentedControl } from '@/components/shared/FilterToolbar';",
     );
-    expect(proxmoxBackupsTableSource).toContain('<FilterButtonGroup');
-    expect(proxmoxBackupsTableSource).toContain('variant="segmented"');
+    expect(proxmoxBackupsTableSource).toContain('<FilterSegmentedControl');
+    expect(proxmoxBackupsTableSource).not.toContain('variant="segmented"');
     expect(proxmoxBackupsTableSource).not.toContain('const viewButtonClass');
     expect(proxmoxBackupsTableSource).not.toContain(
       'inline-flex items-center gap-1 rounded-md border border-border bg-surface p-1',

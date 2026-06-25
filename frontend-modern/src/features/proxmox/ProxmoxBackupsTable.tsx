@@ -4,7 +4,7 @@ import CalendarIcon from 'lucide-solid/icons/calendar';
 import ShieldCheckIcon from 'lucide-solid/icons/shield-check';
 import { useSearchParams } from '@solidjs/router';
 import { FilterBar, type FilterDef, type FilterSelectOption } from '@/components/shared/FilterBar';
-import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
+import { FilterSegmentedControl } from '@/components/shared/FilterToolbar';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { apiFetch } from '@/utils/apiClient';
 import {
@@ -65,11 +65,6 @@ import { ProxmoxRecoverableTable } from './ProxmoxRecoverableTable';
 // feed for "what ran when", and a guest coverage table for "what is protected".
 
 type BackupView = 'date' | 'coverage';
-
-const BACKUP_VIEW_OPTIONS: FilterOption<BackupView>[] = [
-  { value: 'date', label: 'By date', compactLabel: 'Date', icon: CalendarIcon },
-  { value: 'coverage', label: 'Coverage', icon: ShieldCheckIcon },
-];
 
 async function fetchPVEBackups(): Promise<PVEBackupsPayload> {
   const response = await apiFetch('/api/backups/pve');
@@ -527,13 +522,32 @@ export const ProxmoxBackupsTable: Component<{
             />
           </Show>
 
-          <FilterButtonGroup
-            options={BACKUP_VIEW_OPTIONS}
+          <FilterSegmentedControl
+            aria-label="Backups view"
             value={view()}
-            onChange={setView}
-            ariaLabel="Backups view"
-            variant="segmented"
-            class="inline-flex w-fit"
+            onChange={(value) => setView(value as BackupView)}
+            options={[
+              {
+                value: 'date',
+                title: 'Backups by date',
+                label: (
+                  <>
+                    <CalendarIcon class="h-3 w-3" />
+                    By date
+                  </>
+                ),
+              },
+              {
+                value: 'coverage',
+                title: 'Backups by workload coverage',
+                label: (
+                  <>
+                    <ShieldCheckIcon class="h-3 w-3" />
+                    Coverage
+                  </>
+                ),
+              },
+            ]}
           />
 
           <Show when={view() === 'date' && recoveryModel().recoverableArtifacts.length > 0}>
