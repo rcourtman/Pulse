@@ -456,7 +456,7 @@ func (m *Monitor) fetchPVENodes(ctx context.Context, instanceName string, instan
 	return nodes, client, nil
 }
 
-func (m *Monitor) refreshPVETagColors(ctx context.Context, client PVEClientInterface) {
+func (m *Monitor) refreshPVETagColors(ctx context.Context, instanceName string, client PVEClientInterface) {
 	type clusterOptionsGetter interface {
 		GetClusterOptions(ctx context.Context) (*proxmox.ClusterOptions, error)
 	}
@@ -470,9 +470,11 @@ func (m *Monitor) refreshPVETagColors(ctx context.Context, client PVEClientInter
 	if err != nil || opts == nil {
 		return
 	}
-	if colors := proxmox.ParseTagColorMap(opts.TagStyle); len(colors) > 0 {
-		m.state.MergeTagColors(colors)
-	}
+	tagStyle := proxmox.ParseTagStyle(opts.TagStyle)
+	m.state.MergePVETagStyle(instanceName, models.PVETagStyle{
+		Colors:        tagStyle.Colors,
+		CaseSensitive: tagStyle.CaseSensitive,
+	})
 }
 
 func (m *Monitor) updatePVEConnectionHealth(ctx context.Context, instanceName string, client PVEClientInterface) string {
@@ -1142,7 +1144,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		return
 	}
 	client = updatedClient
-	m.refreshPVETagColors(ctx, client)
+	m.refreshPVETagColors(ctx, instanceName, client)
 
 	// Check if client is a ClusterClient to determine health status
 	connectionHealthStr := m.updatePVEConnectionHealth(ctx, instanceName, client)

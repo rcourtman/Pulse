@@ -149,6 +149,7 @@ export function createWebSocketStore(url: string) {
     recentlyResolved: [],
     lastUpdate: 0,
     pveTagColors: {},
+    pveTagStyles: {},
     // Unified resources for cross-platform monitoring
     resources: [],
   });
@@ -466,6 +467,9 @@ export function createWebSocketStore(url: string) {
               if (message.data.stats !== undefined) setState('stats', message.data.stats);
               if (message.data.pveTagColors !== undefined) {
                 setState('pveTagColors', message.data.pveTagColors ?? {});
+              }
+              if (message.data.pveTagStyles !== undefined) {
+                setState('pveTagStyles', message.data.pveTagStyles ?? {});
               }
               // Handle unified resources
               if (message.data.resources !== undefined) {

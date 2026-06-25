@@ -33,6 +33,12 @@ func TestStateSnapshotToFrontend_UsesConcreteStateContract(t *testing.T) {
 		LastUpdate:                   now,
 		TemperatureMonitoringEnabled: true,
 		PVETagColors:                 map[string]string{"production": "#ff0000"},
+		PVETagStyles: map[string]PVETagStyle{
+			"pve-a": {
+				Colors:        map[string]string{"Production": "#00ff00"},
+				CaseSensitive: true,
+			},
+		},
 	}.ToFrontend()
 
 	if len(frontend.Metrics) != 1 || frontend.Metrics[0].ID != "node-1" {
@@ -46,6 +52,9 @@ func TestStateSnapshotToFrontend_UsesConcreteStateContract(t *testing.T) {
 	}
 	if frontend.PVETagColors["production"] != "#ff0000" {
 		t.Fatalf("expected PVE tag colors to survive frontend conversion, got %#v", frontend.PVETagColors)
+	}
+	if frontend.PVETagStyles["pve-a"].Colors["Production"] != "#00ff00" || !frontend.PVETagStyles["pve-a"].CaseSensitive {
+		t.Fatalf("expected PVE tag styles to survive frontend conversion, got %#v", frontend.PVETagStyles)
 	}
 
 	encoded, err := json.Marshal(frontend)
@@ -75,6 +84,11 @@ func TestStateSnapshotToFrontend_UsesConcreteStateContract(t *testing.T) {
 	}
 	if tagColors, ok := payload["pveTagColors"].(map[string]any); !ok || tagColors["production"] != "#ff0000" {
 		t.Fatalf("expected pveTagColors to serialize as an object, got %T (%v)", payload["pveTagColors"], payload["pveTagColors"])
+	}
+	if tagStyles, ok := payload["pveTagStyles"].(map[string]any); !ok {
+		t.Fatalf("expected pveTagStyles to serialize as an object, got %T (%v)", payload["pveTagStyles"], payload["pveTagStyles"])
+	} else if pveA, ok := tagStyles["pve-a"].(map[string]any); !ok || pveA["caseSensitive"] != true {
+		t.Fatalf("expected pve-a tag style to serialize with caseSensitive=true, got %T (%v)", tagStyles["pve-a"], tagStyles["pve-a"])
 	}
 }
 

@@ -84,8 +84,12 @@ vi.mock('../StackedMemoryBar', () => ({
 }));
 
 vi.mock('@/components/shared/TagBadges', () => ({
-  TagBadges: (props: { tags: string[] }) => (
-    <div data-testid="tag-badges" data-count={props.tags.length} />
+  TagBadges: (props: { tags: string[]; sourceInstance?: string }) => (
+    <div
+      data-testid="tag-badges"
+      data-count={props.tags.length}
+      data-source-instance={props.sourceInstance}
+    />
   ),
 }));
 
@@ -388,11 +392,12 @@ describe('GuestRow', () => {
 
     it('shows tags when in visibleColumnIds', () => {
       renderGuestRow({
-        guest: makeGuest({ tags: ['prod', 'web'] }),
+        guest: makeGuest({ instance: 'pve-a', tags: ['prod', 'web'] }),
         visibleColumnIds: ['name', 'tags'],
       });
       const badges = screen.getByTestId('tag-badges');
       expect(badges.dataset.count).toBe('2');
+      expect(badges.dataset.sourceInstance).toBe('pve-a');
     });
   });
 

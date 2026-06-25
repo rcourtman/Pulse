@@ -46,6 +46,7 @@ const createNoopWebSocketStore = (): ReturnType<typeof createWebSocketStore> => 
     recentlyResolved: [],
     lastUpdate: 0,
     pveTagColors: {},
+    pveTagStyles: {},
     resources: [],
   });
 

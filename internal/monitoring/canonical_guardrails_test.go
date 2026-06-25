@@ -74,6 +74,30 @@ func TestNoGetStateResourceArrayRegression(t *testing.T) {
 	}
 }
 
+func TestPVETagStyleRefreshStaysPerInstance(t *testing.T) {
+	data, err := os.ReadFile("monitor_pve.go")
+	if err != nil {
+		t.Fatalf("failed to read monitor_pve.go: %v", err)
+	}
+	source := string(data)
+
+	for _, snippet := range []string{
+		"func (m *Monitor) refreshPVETagColors(ctx context.Context, instanceName string, client PVEClientInterface)",
+		"tagStyle := proxmox.ParseTagStyle(opts.TagStyle)",
+		"m.state.MergePVETagStyle(instanceName, models.PVETagStyle{",
+	} {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("monitor_pve.go must contain %q", snippet)
+		}
+	}
+	if strings.Contains(source, "ParseTagColorMap(opts.TagStyle)") {
+		t.Fatal("PVE tag refresh must preserve case-sensitive style metadata, not only the legacy color map")
+	}
+	if strings.Contains(source, "m.state.MergeTagColors(") {
+		t.Fatal("PVE tag refresh must merge style by instance so cleared color maps do not leave stale aggregate colors")
+	}
+}
+
 func TestBroadcastResourceDiskIOUsesUnifiedResourceMetrics(t *testing.T) {
 	hasDiskIO, readRate, writeRate := monitorDiskIOMetricInput(&unifiedresources.ResourceMetrics{
 		DiskRead:  &unifiedresources.MetricValue{Value: 4096.4, Unit: "bytes/s", Source: unifiedresources.SourceAgent},

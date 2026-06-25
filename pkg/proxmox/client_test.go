@@ -183,9 +183,17 @@ func TestParseTagColorMap(t *testing.T) {
 		},
 		{
 			name:     "ignores invalid color tokens",
-			tagStyle: "color-map=good:00ff00;bad:zzzzzz;also-bad:12345",
+			tagStyle: "color-map=good:00ff00;bad:zzzzzz;also-bad:12345;too-short:abc;too-long:12345678",
 			expected: map[string]string{
 				"good": "#00ff00",
+			},
+		},
+		{
+			name:     "preserves tag case when Proxmox case-sensitive mode is enabled",
+			tagStyle: "case-sensitive=1,color-map=Production:000000:FFFFFF;production:ffaa00:101010",
+			expected: map[string]string{
+				"Production": "#000000",
+				"production": "#ffaa00",
 			},
 		},
 	}
@@ -196,6 +204,17 @@ func TestParseTagColorMap(t *testing.T) {
 				t.Fatalf("ParseTagColorMap() = %#v, want %#v", got, tc.expected)
 			}
 		})
+	}
+}
+
+func TestParseTagStyle(t *testing.T) {
+	got := ParseTagStyle("shape=full,case-sensitive=1,color-map=Production:000000:FFFFFF")
+
+	if !got.CaseSensitive {
+		t.Fatal("expected case-sensitive tag style")
+	}
+	if !reflect.DeepEqual(got.Colors, map[string]string{"Production": "#000000"}) {
+		t.Fatalf("colors = %#v, want Production override", got.Colors)
 	}
 }
 

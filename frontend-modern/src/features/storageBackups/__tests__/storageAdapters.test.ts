@@ -24,6 +24,7 @@ const baseState = (overrides: Partial<State> = {}): State => ({
   resources: [],
   ...overrides,
   pveTagColors: overrides.pveTagColors ?? {},
+  pveTagStyles: overrides.pveTagStyles ?? {},
 });
 
 const makeResourceStorage = (overrides: Partial<Resource> = {}): Resource =>

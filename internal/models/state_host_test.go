@@ -198,6 +198,42 @@ func TestSetConnectionHealth(t *testing.T) {
 	}
 }
 
+func TestPVETagStyleSnapshotRebuildsAggregateByInstance(t *testing.T) {
+	state := NewState()
+
+	state.MergePVETagStyle("pve-a", PVETagStyle{
+		Colors: map[string]string{
+			"Production": "#00ff00",
+		},
+		CaseSensitive: true,
+	})
+	state.MergePVETagStyle("pve-b", PVETagStyle{
+		Colors: map[string]string{
+			"Backup": "#112233",
+		},
+	})
+
+	snapshot := state.GetSnapshot()
+	if got := snapshot.PVETagStyles["pve-a"].Colors["Production"]; got != "#00ff00" {
+		t.Fatalf("expected pve-a tag style to preserve case-sensitive color, got %q", got)
+	}
+	if !snapshot.PVETagStyles["pve-a"].CaseSensitive {
+		t.Fatal("expected pve-a tag style to preserve case-sensitive flag")
+	}
+	if got := snapshot.PVETagStyles["pve-b"].Colors["backup"]; got != "#112233" {
+		t.Fatalf("expected pve-b tag style to normalize non-case-sensitive tag, got %q", got)
+	}
+
+	state.MergePVETagStyle("pve-a", PVETagStyle{})
+	snapshot = state.GetSnapshot()
+	if _, ok := snapshot.PVETagColors["Production"]; ok {
+		t.Fatalf("expected stale pve-a aggregate color to be removed, got %#v", snapshot.PVETagColors)
+	}
+	if got := snapshot.PVETagColors["backup"]; got != "#112233" {
+		t.Fatalf("expected pve-b aggregate color to remain, got %q", got)
+	}
+}
+
 func TestRemoveConnectionHealth(t *testing.T) {
 	state := NewState()
 

@@ -27,8 +27,14 @@ export interface State {
   lastUpdate: number;
   temperatureMonitoringEnabled?: boolean;
   pveTagColors: Record<string, string>;
+  pveTagStyles?: Record<string, PVETagStyle>;
   // Unified resources (canonical resource model)
   resources: Resource[];
+}
+
+export interface PVETagStyle {
+  colors: Record<string, string>;
+  caseSensitive: boolean;
 }
 
 export interface ConnectedInfrastructureSurface {

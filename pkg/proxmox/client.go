@@ -2254,6 +2254,13 @@ type ClusterOptions struct {
 	TagStyle string `json:"tag-style,omitempty"`
 }
 
+// TagStyle captures the Proxmox tag presentation settings Pulse needs to
+// reproduce Proxmox tag colors in other surfaces.
+type TagStyle struct {
+	Colors        map[string]string
+	CaseSensitive bool
+}
+
 // GetClusterOptions fetches datacenter-level options such as tag color config.
 func (c *Client) GetClusterOptions(ctx context.Context) (*ClusterOptions, error) {
 	resp, err := c.get(ctx, "/cluster/options")
@@ -2271,37 +2278,63 @@ func (c *Client) GetClusterOptions(ctx context.Context) (*ClusterOptions, error)
 	return &result.Data, nil
 }
 
-// ParseTagColorMap parses a Proxmox tag-style string and returns a map of
-// lowercase tag name to "#rrggbb" hex color string.
-// Example input: "color-map=production:ff0000;staging:ffaa00,ordering=config"
-func ParseTagColorMap(tagStyle string) map[string]string {
-	colors := make(map[string]string)
+// ParseTagStyle parses Proxmox's tag-style property string and returns the
+// presentation settings needed for tag color rendering.
+func ParseTagStyle(tagStyle string) TagStyle {
+	style := TagStyle{
+		Colors: make(map[string]string),
+	}
+
+	properties := make(map[string]string)
 	for _, part := range strings.Split(tagStyle, ",") {
 		part = strings.TrimSpace(part)
-		if !strings.HasPrefix(part, "color-map=") {
+		if part == "" {
 			continue
 		}
-		for _, pair := range strings.Split(strings.TrimPrefix(part, "color-map="), ";") {
-			fields := strings.Split(pair, ":")
-			if len(fields) < 2 {
-				continue
-			}
-			tag := strings.ToLower(strings.TrimSpace(fields[0]))
-			hex := strings.TrimSpace(fields[1])
-			hex = strings.TrimPrefix(hex, "#")
-			if tag == "" || !isHexColorToken(hex) {
-				continue
-			}
-			colors[tag] = "#" + strings.ToLower(hex)
+		key, value, ok := strings.Cut(part, "=")
+		if !ok {
+			continue
 		}
+		properties[strings.TrimSpace(key)] = strings.TrimSpace(value)
 	}
-	return colors
+
+	style.CaseSensitive = properties["case-sensitive"] == "1"
+	parseTagColorMapInto(style.Colors, properties["color-map"], style.CaseSensitive)
+	return style
+}
+
+// ParseTagColorMap parses a Proxmox tag-style string and returns a map of tag
+// name to "#rrggbb" hex color string. The keys are lowercase unless the
+// Proxmox tag-style enables case-sensitive tags.
+// Example input: "color-map=production:ff0000;staging:ffaa00,ordering=config"
+func ParseTagColorMap(tagStyle string) map[string]string {
+	return ParseTagStyle(tagStyle).Colors
+}
+
+func parseTagColorMapInto(colors map[string]string, colorMap string, caseSensitive bool) {
+	if colors == nil {
+		return
+	}
+	for _, pair := range strings.Split(colorMap, ";") {
+		fields := strings.Split(pair, ":")
+		if len(fields) < 2 {
+			continue
+		}
+		tag := strings.TrimSpace(fields[0])
+		if !caseSensitive {
+			tag = strings.ToLower(tag)
+		}
+		hex := strings.TrimSpace(fields[1])
+		hex = strings.TrimPrefix(hex, "#")
+		if tag == "" || !isHexColorToken(hex) {
+			continue
+		}
+		colors[tag] = "#" + strings.ToLower(hex)
+	}
 }
 
 func isHexColorToken(value string) bool {
-	switch len(value) {
-	case 3, 6, 8:
-	default:
+	if len(value) != 6 {
 		return false
 	}
 

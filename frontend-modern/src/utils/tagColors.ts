@@ -4,13 +4,18 @@ interface TagColorStyle {
   border: string;
 }
 
-function stringToRGB(tag: string): [number, number, number] {
+interface TagColorOptions {
+  caseSensitive?: boolean;
+}
+
+function stringToRGB(tag: string, options: TagColorOptions = {}): [number, number, number] {
   let hash = 0;
   if (!tag) {
     return [255, 255, 255];
   }
 
-  const value = `${tag.toLowerCase()}prox`;
+  const normalizedTag = options.caseSensitive ? tag : tag.toLowerCase();
+  const value = `${normalizedTag}prox`;
   for (let i = 0; i < value.length; i++) {
     hash = value.charCodeAt(i) + ((hash << 5) - hash);
     hash &= hash;
@@ -79,9 +84,10 @@ export function getTagColorWithSpecial(
   tag: string,
   _isDarkMode: boolean,
   colorMap?: Record<string, string>,
+  options: TagColorOptions = {},
 ): TagColorStyle {
-  const lowerTag = tag.toLowerCase();
-  const proxmoxHex = colorMap?.[lowerTag];
+  const colorKey = options.caseSensitive ? tag : tag.toLowerCase();
+  const proxmoxHex = colorMap?.[colorKey];
   if (proxmoxHex) {
     const rgb = parseHexColor(proxmoxHex);
     if (rgb) {
@@ -89,5 +95,5 @@ export function getTagColorWithSpecial(
     }
   }
 
-  return buildStyleFromRGB(stringToRGB(tag));
+  return buildStyleFromRGB(stringToRGB(tag, options));
 }

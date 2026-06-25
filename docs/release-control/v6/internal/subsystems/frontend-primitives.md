@@ -2727,6 +2727,12 @@ That same owner now also holds the CSP-safe tag-dot rendering contract: tag
 color and active-state emphasis must travel through SVG fill/stroke attributes
 or stable classes, not inline `background-color`, `box-shadow`, or other
 `style=` mutations that break the hosted demo CSP.
+TagBadges also owns Proxmox tag color fidelity. When a caller supplies a
+source instance, the primitive must read that instance's `pveTagStyles` entry
+before the legacy aggregate `pveTagColors` map, and it must honor the Proxmox
+`caseSensitive` flag for both override lookup and deterministic fallback color
+generation. Feature rows may pass instance identity into the primitive, but
+they must not rebuild Proxmox color-map lookup locally.
 `frontend-modern/src/components/Settings/OperationsPanel.tsx` is now also the
 canonical shared settings wrapper for operations-style panels such as
 diagnostics, reporting, and system logs. Those surfaces must extend that owner

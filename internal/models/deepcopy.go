@@ -56,6 +56,24 @@ func cloneStringMap(src map[string]string) map[string]string {
 	return dest
 }
 
+func clonePVETagStyles(src map[string]PVETagStyle) map[string]PVETagStyle {
+	if len(src) == 0 {
+		return nil
+	}
+	dest := make(map[string]PVETagStyle, len(src))
+	for instance, style := range src {
+		colors := cloneStringMap(style.Colors)
+		if colors == nil {
+			colors = map[string]string{}
+		}
+		dest[instance] = PVETagStyle{
+			Colors:        colors,
+			CaseSensitive: style.CaseSensitive,
+		}
+	}
+	return dest
+}
+
 func cloneStringFloat64Map(src map[string]float64) map[string]float64 {
 	if len(src) == 0 {
 		return nil

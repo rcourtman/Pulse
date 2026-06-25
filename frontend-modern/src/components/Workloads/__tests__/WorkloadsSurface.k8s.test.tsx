@@ -27,6 +27,7 @@ const mockWebSocketState: State = {
   activeAlerts: [],
   recentlyResolved: [],
   pveTagColors: {},
+  pveTagStyles: {},
   lastUpdate: 0,
   resources: [],
   temperatureMonitoringEnabled: false,

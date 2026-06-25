@@ -609,6 +609,7 @@ export function GuestRow(props: GuestRowProps) {
               <TagBadges
                 tags={Array.isArray(props.guest.tags) ? props.guest.tags : []}
                 maxVisible={0}
+                sourceInstance={props.guest.instance}
                 onTagClick={props.onTagClick}
                 activeSearch={props.activeSearch}
               />

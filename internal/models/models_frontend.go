@@ -894,15 +894,16 @@ type ReplicationJobFrontend struct {
 
 // StateFrontend represents the state with frontend-friendly field names
 type StateFrontend struct {
-	ActiveAlerts                 []Alert           `json:"activeAlerts"`                 // Active alerts
-	RecentlyResolved             []ResolvedAlert   `json:"recentlyResolved"`             // Recently resolved alerts
-	Metrics                      []Metric          `json:"metrics"`                      // Time-series metrics
-	Performance                  Performance       `json:"performance"`                  // Polling/runtime performance
-	ConnectionHealth             map[string]bool   `json:"connectionHealth"`             // Keep as is
-	Stats                        Stats             `json:"stats"`                        // Runtime statistics
-	LastUpdate                   int64             `json:"lastUpdate"`                   // Unix timestamp
-	TemperatureMonitoringEnabled bool              `json:"temperatureMonitoringEnabled"` // Global temperature monitoring setting
-	PVETagColors                 map[string]string `json:"pveTagColors"`                 // Tag name -> "#rrggbb" from Proxmox datacenter config
+	ActiveAlerts                 []Alert                `json:"activeAlerts"`                 // Active alerts
+	RecentlyResolved             []ResolvedAlert        `json:"recentlyResolved"`             // Recently resolved alerts
+	Metrics                      []Metric               `json:"metrics"`                      // Time-series metrics
+	Performance                  Performance            `json:"performance"`                  // Polling/runtime performance
+	ConnectionHealth             map[string]bool        `json:"connectionHealth"`             // Keep as is
+	Stats                        Stats                  `json:"stats"`                        // Runtime statistics
+	LastUpdate                   int64                  `json:"lastUpdate"`                   // Unix timestamp
+	TemperatureMonitoringEnabled bool                   `json:"temperatureMonitoringEnabled"` // Global temperature monitoring setting
+	PVETagColors                 map[string]string      `json:"pveTagColors"`                 // Tag name -> "#rrggbb" from Proxmox datacenter config
+	PVETagStyles                 map[string]PVETagStyle `json:"pveTagStyles"`                 // PVE instance -> Proxmox tag style
 	// Unified resources - the new way to access all monitored entities
 	Resources               []ResourceFrontend                    `json:"resources"`
 	ConnectedInfrastructure []ConnectedInfrastructureItemFrontend `json:"connectedInfrastructure"`
@@ -931,6 +932,9 @@ func (s StateFrontend) NormalizeCollections() StateFrontend {
 	}
 	if s.PVETagColors == nil {
 		s.PVETagColors = map[string]string{}
+	}
+	if s.PVETagStyles == nil {
+		s.PVETagStyles = map[string]PVETagStyle{}
 	}
 	if s.Performance.APICallDuration == nil {
 		s.Performance.APICallDuration = map[string]float64{}

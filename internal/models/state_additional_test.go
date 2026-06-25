@@ -27,6 +27,41 @@ func TestStateClearAllDockerHosts(t *testing.T) {
 	}
 }
 
+func TestStateMergePVETagStyleReplacesInstanceStyle(t *testing.T) {
+	state := NewState()
+
+	state.MergePVETagStyle("pve-a", PVETagStyle{
+		Colors:        map[string]string{"Production": "#00ff00"},
+		CaseSensitive: true,
+	})
+	state.MergePVETagStyle("pve-b", PVETagStyle{
+		Colors: map[string]string{"backup": "#112233"},
+	})
+
+	snapshot := state.GetSnapshot()
+	if got := snapshot.PVETagStyles["pve-a"].Colors["Production"]; got != "#00ff00" {
+		t.Fatalf("pve-a Production color = %q, want #00ff00", got)
+	}
+	if !snapshot.PVETagStyles["pve-a"].CaseSensitive {
+		t.Fatal("expected pve-a style to preserve case-sensitive mode")
+	}
+	if got := snapshot.PVETagColors["backup"]; got != "#112233" {
+		t.Fatalf("aggregate backup color = %q, want #112233", got)
+	}
+
+	state.MergePVETagStyle("pve-a", PVETagStyle{})
+	snapshot = state.GetSnapshot()
+	if _, ok := snapshot.PVETagStyles["pve-a"].Colors["Production"]; ok {
+		t.Fatalf("expected pve-a Production color to be removed, got %#v", snapshot.PVETagStyles["pve-a"])
+	}
+	if _, ok := snapshot.PVETagColors["Production"]; ok {
+		t.Fatalf("expected aggregate Production color to be removed, got %#v", snapshot.PVETagColors)
+	}
+	if got := snapshot.PVETagColors["backup"]; got != "#112233" {
+		t.Fatalf("aggregate backup color after replacement = %q, want #112233", got)
+	}
+}
+
 func TestStateKubernetesClusterLifecycle(t *testing.T) {
 	state := &State{}
 

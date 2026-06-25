@@ -48,6 +48,30 @@ describe('tagColors', () => {
       });
     });
 
+    it('uses exact tag keys and fallback hashing when Proxmox case-sensitive mode is enabled', () => {
+      expect(
+        getTagColorWithSpecial(
+          'Production',
+          false,
+          {
+            Production: '#112233',
+            production: '#445566',
+          },
+          { caseSensitive: true },
+        ),
+      ).toEqual({
+        bg: 'rgb(17, 34, 51)',
+        text: '#ffffff',
+        border: 'rgb(17, 34, 51)',
+      });
+
+      expect(getTagColorWithSpecial('STAGING', false, {}, { caseSensitive: true })).toEqual({
+        bg: 'rgb(80.70000000000002, 212.3, 244.5)',
+        text: '#000000',
+        border: 'rgb(80.70000000000002, 212.3, 244.5)',
+      });
+    });
+
     it('falls back to generated colors when proxmox color is invalid', () => {
       expect(
         getTagColorWithSpecial('backup', false, {

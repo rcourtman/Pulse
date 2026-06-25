@@ -35,6 +35,7 @@ type StateSnapshot struct {
 	LastUpdate                   time.Time                  `json:"lastUpdate"`
 	TemperatureMonitoringEnabled bool                       `json:"temperatureMonitoringEnabled"`
 	PVETagColors                 map[string]string          `json:"pveTagColors,omitempty"`
+	PVETagStyles                 map[string]PVETagStyle     `json:"pveTagStyles,omitempty"`
 }
 
 // EmptyStateSnapshot returns a normalized zero-value snapshot for runtime
@@ -153,6 +154,9 @@ func (s *StateSnapshot) NormalizeCollections() {
 	if s.PVETagColors == nil {
 		s.PVETagColors = map[string]string{}
 	}
+	if s.PVETagStyles == nil {
+		s.PVETagStyles = map[string]PVETagStyle{}
+	}
 	s.Performance = s.Performance.NormalizeCollections()
 }
 
@@ -192,6 +196,7 @@ func (s StateSnapshot) Clone() StateSnapshot {
 		LastUpdate:                   s.LastUpdate,
 		TemperatureMonitoringEnabled: s.TemperatureMonitoringEnabled,
 		PVETagColors:                 cloneStringMap(s.PVETagColors),
+		PVETagStyles:                 clonePVETagStyles(s.PVETagStyles),
 	}
 	for key, healthy := range s.ConnectionHealth {
 		snapshot.ConnectionHealth[key] = healthy
@@ -243,6 +248,7 @@ func (s *State) GetSnapshot() StateSnapshot {
 		LastUpdate:                   s.LastUpdate,
 		TemperatureMonitoringEnabled: s.TemperatureMonitoringEnabled,
 		PVETagColors:                 cloneStringMap(s.PVETagColors),
+		PVETagStyles:                 clonePVETagStyles(s.PVETagStyles),
 	}
 
 	snapshot.NormalizeCollections()
@@ -591,5 +597,6 @@ func (s StateSnapshot) ToFrontend() StateFrontend {
 	frontend.LastUpdate = s.LastUpdate.Unix() * 1000 // JavaScript timestamp
 	frontend.TemperatureMonitoringEnabled = s.TemperatureMonitoringEnabled
 	frontend.PVETagColors = cloneStringMap(s.PVETagColors)
+	frontend.PVETagStyles = clonePVETagStyles(s.PVETagStyles)
 	return frontend.NormalizeCollections()
 }

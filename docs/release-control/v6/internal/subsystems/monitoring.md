@@ -591,6 +591,13 @@ publish those resources from the same canonical unified snapshot that
 raw store-only inventory for broadcast. Otherwise cold hydrate and later
 registry-backed refreshes can swap the operator-visible infrastructure set
 under one running session.
+The same state-publication owner also carries Proxmox tag presentation. PVE
+polling must fetch datacenter `tag-style` through `/cluster/options`, parse the
+color map and `case-sensitive` flag per configured Proxmox instance, and merge
+that into `models.State.PVETagStyles` before websocket/API publication. Clearing
+a Proxmox color map must replace that instance's stored style with an empty
+style and rebuild the legacy aggregate `PVETagColors`; stale colors from a
+previous poll must not survive as if they still came from Proxmox.
 That websocket publication boundary must also treat an absent hub as an absent
 broadcast channel in both direct nil and typed-nil forms. Tenant-scoped
 background monitors can start in headless test or maintenance runtimes before a

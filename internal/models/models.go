@@ -45,6 +45,13 @@ type State struct {
 	LastUpdate                   time.Time                  `json:"lastUpdate"`
 	TemperatureMonitoringEnabled bool                       `json:"temperatureMonitoringEnabled"`
 	PVETagColors                 map[string]string          `json:"pveTagColors,omitempty"`
+	PVETagStyles                 map[string]PVETagStyle     `json:"pveTagStyles,omitempty"`
+}
+
+// PVETagStyle is the frontend-facing Proxmox tag style for one PVE instance.
+type PVETagStyle struct {
+	Colors        map[string]string `json:"colors"`
+	CaseSensitive bool              `json:"caseSensitive"`
 }
 
 var (
@@ -2963,6 +2970,7 @@ func NewState() *State {
 		ActiveAlerts:     make([]Alert, 0),
 		RecentlyResolved: make([]ResolvedAlert, 0),
 		PVETagColors:     make(map[string]string),
+		PVETagStyles:     make(map[string]PVETagStyle),
 		Performance:      Performance{}.NormalizeCollections(),
 		LastUpdate:       time.Now(),
 	}
@@ -2983,6 +2991,55 @@ func (s *State) MergeTagColors(colors map[string]string) {
 	}
 	for tag, color := range colors {
 		s.PVETagColors[strings.ToLower(strings.TrimSpace(tag))] = strings.TrimSpace(color)
+	}
+	s.LastUpdate = time.Now()
+}
+
+// MergePVETagStyle merges the Proxmox tag style for one PVE instance into the
+// shared state while preserving the legacy aggregate color map.
+func (s *State) MergePVETagStyle(instance string, style PVETagStyle) {
+	instance = strings.TrimSpace(instance)
+	if instance == "" && len(style.Colors) == 0 && !style.CaseSensitive {
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.PVETagColors == nil {
+		s.PVETagColors = make(map[string]string, len(style.Colors))
+	}
+	if s.PVETagStyles == nil {
+		s.PVETagStyles = make(map[string]PVETagStyle)
+	}
+
+	normalizedColors := make(map[string]string, len(style.Colors))
+	for tag, color := range style.Colors {
+		tag = strings.TrimSpace(tag)
+		if tag == "" {
+			continue
+		}
+		if !style.CaseSensitive {
+			tag = strings.ToLower(tag)
+		}
+		color = strings.TrimSpace(color)
+		normalizedColors[tag] = color
+	}
+
+	if instance != "" {
+		s.PVETagStyles[instance] = PVETagStyle{
+			Colors:        normalizedColors,
+			CaseSensitive: style.CaseSensitive,
+		}
+		s.PVETagColors = make(map[string]string)
+		for _, instanceStyle := range s.PVETagStyles {
+			for tag, color := range instanceStyle.Colors {
+				s.PVETagColors[tag] = color
+			}
+		}
+	} else {
+		for tag, color := range normalizedColors {
+			s.PVETagColors[tag] = color
+		}
 	}
 	s.LastUpdate = time.Now()
 }

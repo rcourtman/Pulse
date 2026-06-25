@@ -3,11 +3,14 @@ import { getTagColorWithSpecial } from '@/utils/tagColors';
 import { useDarkMode } from '@/contexts/appRuntime';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 import { getGlobalWebSocketStore } from '@/stores/websocket-global';
+import type { PVETagStyle } from '@/types/api';
 
 interface TagBadgesProps {
   tags?: string[];
   maxVisible?: number;
   isDarkMode?: boolean;
+  sourceInstance?: string;
+  pveTagStyle?: PVETagStyle;
   onTagClick?: (tag: string) => void;
   activeSearch?: string;
 }
@@ -18,13 +21,20 @@ export const TagBadges: Component<TagBadgesProps> = (props) => {
   const darkModeSignal = useDarkMode();
   const isDark = () => props.isDarkMode ?? darkModeSignal();
   const ws = getGlobalWebSocketStore();
-  const pveTagColors = () => ws.state.pveTagColors;
+  const instanceTagStyle = () =>
+    props.sourceInstance ? ws.state.pveTagStyles?.[props.sourceInstance] : undefined;
+  const pveTagStyle = () => props.pveTagStyle ?? instanceTagStyle();
+  const pveTagColors = () => pveTagStyle()?.colors ?? ws.state.pveTagColors;
+  const pveTagCaseSensitive = () => pveTagStyle()?.caseSensitive ?? false;
 
   const visibleTags = () => props.tags?.slice(0, maxVisible()) || [];
   const hiddenTags = () => props.tags?.slice(maxVisible()) || [];
 
   const TagDot: Component<{ tag: string }> = (dotProps) => {
-    const colors = () => getTagColorWithSpecial(dotProps.tag, isDark(), pveTagColors());
+    const colors = () =>
+      getTagColorWithSpecial(dotProps.tag, isDark(), pveTagColors(), {
+        caseSensitive: pveTagCaseSensitive(),
+      });
     const isActive = () => props.activeSearch?.includes(`tags:${dotProps.tag}`) || false;
     const ringClass = () =>
       isActive() ? (isDark() ? 'text-white/90' : 'text-black/80') : 'text-transparent';

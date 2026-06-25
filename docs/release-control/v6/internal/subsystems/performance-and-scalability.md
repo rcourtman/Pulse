@@ -1250,6 +1250,11 @@ That shell now also routes tag-dot rendering through the shared
 keeping a workload-local badge helper. Future guest-row tag presentation
 changes must extend through that shared owner rather than reintroducing a
 workload-only tag-badge variant.
+Guest rows may pass the already-loaded `WorkloadGuest.instance` value into that
+primitive so per-instance Proxmox tag styles render correctly, but the workload
+hot path must not add tag-color API calls, websocket lookups beyond the shared
+store read inside `TagBadges`, per-row color-map normalization, or scans across
+other workloads just to color a tag dot.
 The Workloads guest drawer now follows that same ownership rule: the shell
 stays in `frontend-modern/src/components/Workloads/GuestDrawer.tsx`, the
 overview card surface lives in
