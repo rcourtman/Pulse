@@ -823,6 +823,11 @@ or other self-hosted uncapped continuity plans.
     destination remains `Patrol` over the same `/patrol` route; it must not
     alter hosted org bootstrap, entitlement loading, or commercial posture
     loading.
+    The same AppLayout shell may contextualize the closed Pulse Assistant
+    launcher around the current monitoring, Patrol, Alerts, or Settings route,
+    but that launcher must remain a local product affordance. It must not read
+    hosted billing state, alter org bootstrap, or become a commercial
+    activation prompt while attaching current-view Assistant context.
     Retired operator top-level route compatibility in
     `frontend-modern/src/App.tsx` must stay inside authenticated app-owned
     surfaces such as Infrastructure, Workloads, Storage, and Recovery. Those

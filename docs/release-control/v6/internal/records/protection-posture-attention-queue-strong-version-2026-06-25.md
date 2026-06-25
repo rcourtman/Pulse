@@ -98,6 +98,12 @@ loop, and routes the operator from real findings/evidence to safe action.
   surface manifest so Patrol consistently reads as the checking loop: check
   infrastructure, list current issues, ask according to Patrol mode, verify,
   and record the result.
+- 2026-06-25: Demoted the shared Assistant shell entry from a generic chat
+  opener to contextual help. The floating launcher and command palette now use
+  the current route to label the action as "Ask about <view>" and open Assistant
+  with factual `pulse-view` context attached. Browser proof covered desktop
+  `/proxmox/overview` launcher, Assistant context strip, command palette first
+  action, and the mobile launcher.
 
 ## Evidence
 

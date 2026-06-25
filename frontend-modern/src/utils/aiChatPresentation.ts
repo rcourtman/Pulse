@@ -4,7 +4,7 @@ export const AI_CHAT_DRAWER_TITLE = 'Pulse Assistant';
 export const AI_CHAT_DRAWER_SUBTITLE =
   'Observed context, provider-backed reasoning, and governed actions.';
 export const AI_CHAT_COLLAPSE_TITLE = 'Collapse Pulse Assistant';
-export const AI_CHAT_LAUNCHER_ARIA_LABEL = 'Expand Pulse Assistant';
+export const AI_CHAT_LAUNCHER_ARIA_LABEL = 'Ask Pulse Assistant about this view';
 export const AI_CHAT_SESSION_MENU_TITLE = 'Pulse Assistant sessions';
 export const AI_CHAT_CLOSE_LABEL = 'Close Pulse Assistant';
 export const AI_CHAT_NEW_SESSION_SHORT_LABEL = 'New';
@@ -85,10 +85,10 @@ export interface AIChatProviderReadinessPresentation {
 
 export function getAIChatLauncherTitle(contextName?: unknown) {
   if (typeof contextName === 'string' && contextName.trim().length > 0) {
-    return `Open Pulse Assistant for ${contextName}`;
+    return `Ask Pulse Assistant about ${contextName}`;
   }
 
-  return 'Open Pulse Assistant';
+  return 'Ask Pulse Assistant about this view';
 }
 
 export function getAIChatProviderReadinessPresentation(args: {

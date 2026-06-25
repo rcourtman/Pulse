@@ -41,21 +41,31 @@ export type CommandPaletteAssistantActions = {
   redo: () => void;
 };
 
+export type CommandPaletteAssistantOpenPresentation = {
+  description: string;
+  label: string;
+};
+
 export function buildCommandPaletteCommands(options: {
   paths: CommandPaletteCommandPaths;
   platformVisibility: PlatformNavigationVisibility;
   navigate: (path: string) => void;
   assistantActions?: CommandPaletteAssistantActions;
+  assistantOpenPresentation?: CommandPaletteAssistantOpenPresentation;
 }): CommandPaletteModalCommand[] {
   const commands: CommandPaletteModalCommand[] = [];
 
   if (options.assistantActions) {
+    const assistantOpenPresentation = options.assistantOpenPresentation ?? {
+      label: 'Ask about this view',
+      description: 'Use the current Pulse view as context',
+    };
     commands.push(
       {
         id: 'assistant-open',
-        label: 'Open Pulse Assistant',
-        description: 'Chat with Pulse about this infrastructure',
-        keywords: ['assistant', 'ai', 'chat', 'ask', 'pulse'],
+        label: assistantOpenPresentation.label,
+        description: assistantOpenPresentation.description,
+        keywords: ['assistant', 'ai', 'chat', 'ask', 'pulse', 'view', 'context'],
         action: options.assistantActions.open,
       },
       {

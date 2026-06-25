@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { State } from '@/types/api';
@@ -171,7 +171,7 @@ describe('AppLayout navigation icons', () => {
   it('keeps the assistant launcher clear of the mobile navigation breakpoint', () => {
     renderLayout();
 
-    const launcher = screen.getByRole('button', { name: 'Expand Pulse Assistant' });
+    const launcher = screen.getByRole('button', { name: 'Ask Pulse Assistant about Settings' });
     const launcherClass = launcher.getAttribute('class') ?? '';
 
     expect(launcherClass).toContain('right-4');
@@ -181,5 +181,33 @@ describe('AppLayout navigation icons', () => {
     expect(launcherClass).toContain('lg:top-1/2');
     expect(launcherClass).toContain('lg:bottom-auto');
     expect(launcherClass).not.toContain('sm:top-1/2');
+  });
+
+  it('opens Assistant with the current route attached', async () => {
+    const openAssistant = vi.spyOn(aiChatStore, 'open').mockImplementation(() => {});
+    renderLayout();
+
+    await fireEvent.click(
+      screen.getByRole('button', { name: 'Ask Pulse Assistant about Settings' }),
+    );
+
+    await waitFor(() => {
+      expect(openAssistant).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targetType: 'pulse-view',
+          targetId: '/settings/infrastructure',
+          context: expect.objectContaining({
+            name: 'Settings',
+            route: '/settings/infrastructure',
+            surface: 'settings',
+          }),
+          briefing: expect.objectContaining({
+            sourceLabel: 'Current view',
+            title: 'Settings attached',
+            statusLabel: 'Context only',
+          }),
+        }),
+      );
+    });
   });
 });

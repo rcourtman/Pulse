@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
 import type { Resource } from '@/types/resource';
@@ -12,6 +12,7 @@ const navigateMock = vi.fn();
 
 vi.mock('@solidjs/router', () => ({
   useNavigate: () => navigateMock,
+  useLocation: () => ({ pathname: window.location.pathname }),
 }));
 
 vi.mock('@/components/shared/Dialog', () => ({
@@ -49,6 +50,10 @@ describe('CommandPaletteModal', () => {
     cleanup();
     navigateMock.mockReset();
     vi.restoreAllMocks();
+  });
+
+  beforeEach(() => {
+    window.history.replaceState({}, '', '/proxmox/overview');
   });
 
   it('keeps the command palette on shell, runtime, and model owners', () => {
@@ -105,7 +110,7 @@ describe('CommandPaletteModal', () => {
       />
     ));
 
-    expect(screen.getByText('Open Pulse Assistant')).toBeInTheDocument();
+    expect(screen.getByText('Ask about Proxmox')).toBeInTheDocument();
     expect(screen.getByText('Show Assistant commands')).toBeInTheDocument();
     expect(screen.getByText('New Assistant session')).toBeInTheDocument();
     expect(screen.getByText('Switch Assistant session')).toBeInTheDocument();
@@ -133,7 +138,7 @@ describe('CommandPaletteModal', () => {
     expect(screen.getByText('/vmware/networks')).toBeInTheDocument();
 
     const commandLabels = screen.getAllByRole('option').map((button) => button.textContent ?? '');
-    expect(commandLabels.findIndex((label) => label.includes('Open Pulse Assistant'))).toBe(0);
+    expect(commandLabels.findIndex((label) => label.includes('Ask about Proxmox'))).toBe(0);
     expect(commandLabels.findIndex((label) => label.includes('Go to Proxmox'))).toBeLessThan(
       commandLabels.findIndex((label) => label.includes('Go to Machines')),
     );
@@ -152,7 +157,7 @@ describe('CommandPaletteModal', () => {
     ));
 
     const input = screen.getByPlaceholderText('Type a command or search...');
-    expect(screen.getByRole('option', { name: /Open Pulse Assistant/ })).toHaveAttribute(
+    expect(screen.getByRole('option', { name: /Ask about Proxmox/ })).toHaveAttribute(
       'aria-selected',
       'true',
     );
@@ -236,7 +241,7 @@ describe('CommandPaletteModal', () => {
 
     await fireEvent.keyDown(input, { key: 'Home' });
 
-    expect(screen.getByRole('option', { name: /Open Pulse Assistant/ })).toHaveAttribute(
+    expect(screen.getByRole('option', { name: /Ask about Proxmox/ })).toHaveAttribute(
       'aria-selected',
       'true',
     );
@@ -344,7 +349,7 @@ describe('CommandPaletteModal', () => {
     });
   });
 
-  it('opens Pulse Assistant from the command palette after closing the palette', async () => {
+  it('opens Pulse Assistant with current view context after closing the palette', async () => {
     const onClose = vi.fn();
     const openAssistant = vi.spyOn(aiChatStore, 'open').mockImplementation(() => {});
     render(() => (
@@ -355,11 +360,26 @@ describe('CommandPaletteModal', () => {
       />
     ));
 
-    await fireEvent.click(screen.getByText('Open Pulse Assistant'));
+    await fireEvent.click(screen.getByText('Ask about Proxmox'));
 
     expect(onClose).toHaveBeenCalledTimes(1);
     await waitFor(() => {
-      expect(openAssistant).toHaveBeenCalledWith();
+      expect(openAssistant).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targetType: 'pulse-view',
+          targetId: '/proxmox/overview',
+          context: expect.objectContaining({
+            name: 'Proxmox',
+            route: '/proxmox/overview',
+            surface: 'proxmox',
+          }),
+          briefing: expect.objectContaining({
+            sourceLabel: 'Current view',
+            title: 'Proxmox attached',
+            statusLabel: 'Context only',
+          }),
+        }),
+      );
     });
   });
 

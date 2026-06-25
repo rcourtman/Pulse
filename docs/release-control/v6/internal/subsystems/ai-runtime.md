@@ -141,18 +141,19 @@ can serve both standard and alternate (e.g. Z.ai coding) endpoint tiers.
 11. `frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx`
 12. `frontend-modern/src/components/AI/Chat/`
 13. `frontend-modern/src/utils/aiChatPresentation.ts`
-14. `frontend-modern/src/utils/aiControlLevelPresentation.ts`
-15. `frontend-modern/src/utils/aiCostPresentation.ts`
-16. `frontend-modern/src/utils/aiProviderHealthPresentation.ts`
-17. `frontend-modern/src/utils/aiProviderPresentation.ts`
-18. `frontend-modern/src/utils/textPresentation.ts`
-19. `frontend-modern/src/stores/aiRuntimeState.ts`
-20. `frontend-modern/src/stores/aiChat.ts`
-21. `docs/AI.md`
-22. `pkg/aicontracts/investigation.go`
-23. `pkg/aicontracts/orchestrator_deps.go`
-24. `pkg/aicontracts/fix_execution.go`
-25. `pkg/extensions/ai_autofix.go`
+14. `frontend-modern/src/utils/assistantPageContext.ts`
+15. `frontend-modern/src/utils/aiControlLevelPresentation.ts`
+16. `frontend-modern/src/utils/aiCostPresentation.ts`
+17. `frontend-modern/src/utils/aiProviderHealthPresentation.ts`
+18. `frontend-modern/src/utils/aiProviderPresentation.ts`
+19. `frontend-modern/src/utils/textPresentation.ts`
+20. `frontend-modern/src/stores/aiRuntimeState.ts`
+21. `frontend-modern/src/stores/aiChat.ts`
+22. `docs/AI.md`
+23. `pkg/aicontracts/investigation.go`
+24. `pkg/aicontracts/orchestrator_deps.go`
+25. `pkg/aicontracts/fix_execution.go`
+26. `pkg/extensions/ai_autofix.go`
 
 ## Shared Boundaries
 
@@ -2538,7 +2539,7 @@ query...`, and `Reading storage...` before streamed tool arguments are
    require an explicit `allow_broad_scope` request from a dedicated rule
    management surface.
 5. Add or change AI usage/cost dashboard presentation through `frontend-modern/src/components/AI/AICostDashboard.tsx` and `frontend-modern/src/utils/aiCostPresentation.ts`
-6. Add or change AI provider, control-level, or chat/session presentation through `frontend-modern/src/components/AI/Chat/`, `frontend-modern/src/utils/aiProviderPresentation.ts`, `frontend-modern/src/utils/aiProviderHealthPresentation.ts`, `frontend-modern/src/utils/aiControlLevelPresentation.ts`, and `frontend-modern/src/utils/aiChatPresentation.ts`
+6. Add or change AI provider, control-level, or chat/session presentation through `frontend-modern/src/components/AI/Chat/`, `frontend-modern/src/utils/aiProviderPresentation.ts`, `frontend-modern/src/utils/aiProviderHealthPresentation.ts`, `frontend-modern/src/utils/aiControlLevelPresentation.ts`, `frontend-modern/src/utils/assistantPageContext.ts`, and `frontend-modern/src/utils/aiChatPresentation.ts`
    AI provider/model presentation must preserve the model transport route when
    the selected provider is a gateway. OpenRouter-routed model IDs such as
    `openrouter:deepseek/...` must render with an explicit `via OpenRouter`
@@ -2568,6 +2569,12 @@ query...`, and `Reading storage...` before streamed tool arguments are
    the body explains that enabling it gives Assistant real service, version,
    and command context instead of generic guidance. The hint must not
    reintroduce the old `Workload Discovery` label as a separate product concept.
+   Authenticated shell Assistant launches must use
+   `frontend-modern/src/utils/assistantPageContext.ts` to attach factual
+   current-route context before the drawer opens. That helper may identify the
+   current platform, Patrol, Alerts, Settings, or unknown Pulse view and provide
+   neutral briefing metadata, but it must not synthesize a prompt, require a
+   tool choice, or turn Assistant back into the primary operations front door.
    Assistant route and control chrome belongs with the prompt surface, not the
    drawer title row. The referenced OpenCode source at commit
    `9ed17da55ab1f7360cc0e01075f763e27fa899e9`

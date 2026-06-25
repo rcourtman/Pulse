@@ -91,16 +91,14 @@ describe('aiChatPresentation', () => {
     expect(AI_CHAT_REDO_LAST_TURN_LOADING_MESSAGE).toBe('Assistant is still working');
     expect(AI_CHAT_REDO_LAST_TURN_ERROR_MESSAGE).toBe('Failed to redo Assistant turn');
     expect(AI_CHAT_REDO_LAST_TURN_SUCCESS_MESSAGE).toBe('Assistant turn restored');
-    expect(AI_CHAT_LAUNCHER_ARIA_LABEL).toBe('Expand Pulse Assistant');
+    expect(AI_CHAT_LAUNCHER_ARIA_LABEL).toBe('Ask Pulse Assistant about this view');
     expect(AI_CHAT_CLOSE_LABEL).toBe('Close Pulse Assistant');
     expect(AI_CHAT_SESSION_MENU_TITLE).toBe('Pulse Assistant sessions');
     expect(AI_CHAT_AUTONOMOUS_WARNING_DISMISS_LABEL).toBe('Dismiss chat actions warning');
     expect(AI_CHAT_DISCOVERY_HINT_DISMISS_LABEL).toBe('Dismiss discovery context warning');
     expect(AI_CHAT_CONTROL_MODE_LABEL).toBe('Assistant chat action mode');
     expect(AI_CHAT_CONTROL_MODE_MENU_LABEL).toBe('Assistant chat action options');
-    expect(AI_CHAT_SWITCH_TO_APPROVAL_LABEL).toBe(
-      'Switch Assistant chat actions to Ask first',
-    );
+    expect(AI_CHAT_SWITCH_TO_APPROVAL_LABEL).toBe('Switch Assistant chat actions to Ask first');
     expect(AI_CHAT_COMMAND_HELP_TITLE).toBe('Assistant commands');
     expect(AI_CHAT_COMMAND_HELP_BUTTON_LABEL).toBe('Open Assistant commands');
     expect(AI_CHAT_COMMAND_HELP_CLOSE_LABEL).toBe('Close Assistant commands');
@@ -125,8 +123,8 @@ describe('aiChatPresentation', () => {
   });
 
   it('builds canonical launcher titles without implying a keyboard shortcut', () => {
-    expect(getAIChatLauncherTitle()).toBe('Open Pulse Assistant');
-    expect(getAIChatLauncherTitle('Core Fabric')).toBe('Open Pulse Assistant for Core Fabric');
+    expect(getAIChatLauncherTitle()).toBe('Ask Pulse Assistant about this view');
+    expect(getAIChatLauncherTitle('Core Fabric')).toBe('Ask Pulse Assistant about Core Fabric');
     expect(getAIChatLauncherTitle()).not.toContain('⌘K');
   });
 

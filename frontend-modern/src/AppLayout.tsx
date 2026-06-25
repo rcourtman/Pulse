@@ -43,7 +43,7 @@ import { updateStore } from '@/stores/updates';
 import { aiChatStore } from '@/stores/aiChat';
 import { isPro } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
-import { AI_CHAT_LAUNCHER_ARIA_LABEL, getAIChatLauncherTitle } from '@/utils/aiChatPresentation';
+import { getAssistantPageContext } from '@/utils/assistantPageContext';
 import type { AppConnectionStatus } from '@/useAppRuntimeState';
 import { buildInfrastructureWorkspacePath } from '@/components/Settings/infrastructureWorkspaceModel';
 
@@ -314,6 +314,7 @@ export function AppLayout(props: AppLayoutProps) {
 
   const getActiveTabDesktop = () => getActiveTabForPath(location.pathname);
   const getActiveTabMobile = () => getActiveTabForPath(location.pathname);
+  const assistantPageContext = createMemo(() => getAssistantPageContext(location.pathname));
 
   // Platform/runtime nav is resource-admitted. A platform or runtime lens only
   // appears when the support manifest says the surface is supported and the
@@ -889,10 +890,10 @@ export function AppLayout(props: AppLayoutProps) {
       >
         <button
           type="button"
-          onClick={() => aiChatStore.toggle()}
+          onClick={() => aiChatStore.open(assistantPageContext().context)}
           class={AI_CHAT_LAUNCHER_BUTTON_CLASS}
-          title={getAIChatLauncherTitle(aiChatStore.context.context?.name)}
-          aria-label={AI_CHAT_LAUNCHER_ARIA_LABEL}
+          title={assistantPageContext().title}
+          aria-label={assistantPageContext().ariaLabel}
         >
           <SparklesIcon class="h-5 w-5 flex-shrink-0" />
         </button>

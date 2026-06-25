@@ -1,4 +1,4 @@
-import { useNavigate } from '@solidjs/router';
+import { useLocation, useNavigate } from '@solidjs/router';
 import { createEffect, createMemo, createSignal } from 'solid-js';
 import {
   buildDockerPath,
@@ -9,6 +9,7 @@ import {
   buildVmwarePath,
 } from '@/routing/resourceLinks';
 import { aiChatStore, type AIChatCommandRequestAction } from '@/stores/aiChat';
+import { getAssistantPageContext } from '@/utils/assistantPageContext';
 import {
   buildCommandPaletteCommands,
   filterCommandPaletteCommands,
@@ -24,9 +25,11 @@ const runAfterPaletteSelection = (action: () => void) => {
 
 export function useCommandPaletteState(props: CommandPaletteModalProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [query, setQuery] = createSignal('');
   const [inputRef, setInputRef] = createSignal<HTMLInputElement>();
   const [selectedIndex, setSelectedIndex] = createSignal(0);
+  const assistantPageContext = createMemo(() => getAssistantPageContext(location.pathname));
 
   const requestAssistantCommand = (action: AIChatCommandRequestAction) => {
     runAfterPaletteSelection(() => aiChatStore.requestCommand(action));
@@ -46,8 +49,13 @@ export function useCommandPaletteState(props: CommandPaletteModalProps) {
       },
       platformVisibility: props.platformVisibility(),
       navigate,
+      assistantOpenPresentation: {
+        label: assistantPageContext().commandLabel,
+        description: assistantPageContext().commandDescription,
+      },
       assistantActions: {
-        open: () => runAfterPaletteSelection(() => aiChatStore.open()),
+        open: () =>
+          runAfterPaletteSelection(() => aiChatStore.open(assistantPageContext().context)),
         help: () => requestAssistantCommand('help'),
         newSession: () => requestAssistantCommand('new'),
         sessions: () => requestAssistantCommand('sessions'),

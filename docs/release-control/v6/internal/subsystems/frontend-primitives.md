@@ -592,6 +592,12 @@ AGENT_SURFACE_ID_PULSE_MCP)` and `getAgentSurfaceToolPosturePresentation`,
 
 ## Extension Points
 
+Assistant shell entry changes must keep Assistant contextual rather than
+generic: `AppLayout.tsx` and the command palette may expose a compact launcher,
+but that launcher must attach current-view context before opening the drawer
+and label the action around the current monitoring, Patrol, Alerts, or Settings
+view.
+
 SSO provider settings changes must preserve the shared Community-tier action
 path: SAML and OIDC provider creation stay on the same settings-shell control
 surface, while paid-plan copy and compatibility feature probes stay out of the
@@ -3368,6 +3374,13 @@ logic. New session, session picker, model picker, Undo, and Redo commands must
 flow through the shared `frontend-modern/src/stores/aiChat.ts` command request
 contract so the drawer owns disabled/loading state, prompt restoration, and
 notifications while the palette remains only a searchable command surface.
+The command-palette Assistant open command is also contextual shell routing:
+`frontend-modern/src/components/shared/useCommandPaletteState.ts` must derive
+current-view context through `frontend-modern/src/utils/assistantPageContext.ts`
+and pass that context into `aiChatStore.open(...)`, while
+`frontend-modern/src/components/shared/commandPaletteModel.ts` owns the
+corresponding `Ask about <view>` label. It must not fall back to an empty
+generic Assistant open action.
 The shared search field now follows that same owner split.
 `frontend-modern/src/components/shared/SearchField.tsx` stays the render shell,
 `frontend-modern/src/components/shared/useSearchFieldState.ts` owns focused-
@@ -4703,6 +4716,13 @@ handoff, that same drawer shell must keep the empty conversation state aligned
 with the attached briefing as neutral `Context attached` copy instead of
 rendering generic cluster/system starter prompts or feature-authored suggested
 prompt chips below the source-owned context.
+The global Assistant launcher and the command-palette Assistant open command
+follow the same contextual rule. They must derive current-view context through
+`frontend-modern/src/utils/assistantPageContext.ts`, label the action as asking
+about the current monitoring, Patrol, alerts, or settings view, and open the
+drawer with that `pulse-view` context attached. They must not call
+`aiChatStore.toggle()` or `aiChatStore.open()` without context from the
+authenticated shell, because that reintroduces a generic Assistant front door.
 Shared table, disclosure, and form primitives must also stay explicitly typed
 at the browser edge. Summary rows may memoize repeated pending-update reads,
 shared buttons must preserve discriminated disclosure props, toggle and a11y
