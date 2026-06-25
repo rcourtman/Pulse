@@ -3805,11 +3805,10 @@ was clarified on 2026-05-25 and 2026-06-25 through `frontend-modern/src/App.tsx`
 `frontend-modern/src/AppLayout.tsx`: the top of the app may expose canonical
 platform pages (Proxmox, Kubernetes, TrueNAS, vSphere) plus the
 Docker / Podman container-runtime lens (shown as Docker in the shell), aggregate
-platform-owned Workloads / Storage / Recovery sub-surfaces, Alerts,
-Needs Attention, and Settings. `Needs Attention` is the visible destination for
-Patrol-owned operator work; it must still route through the canonical `/patrol`
-surface and must not create a second Assistant, Patrol, or Intelligence route
-namespace.
+platform-owned Workloads / Storage / Recovery sub-surfaces, Alerts, Patrol, and
+Settings. `Patrol` is the visible destination for Patrol-owned operator work; it
+must route through the canonical `/patrol` surface and must not create a second
+Assistant or Intelligence route namespace.
 Provider/runtime destinations must pass the shared support-and-resource-
 evidence gate before they appear in navigation, command palette entries,
 keyboard shortcuts, or landing fallbacks. Aggregate workspace tabs are retired

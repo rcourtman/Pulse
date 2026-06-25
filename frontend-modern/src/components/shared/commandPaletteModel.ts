@@ -243,7 +243,7 @@ export function buildCommandPaletteCommands(options: {
     },
     {
       id: 'nav-patrol',
-      label: 'Go to Needs Attention',
+      label: 'Go to Patrol',
       description: '/patrol',
       shortcut: 'g r',
       keywords: ['needs attention', 'patrol', 'findings', 'ai', 'verification'],

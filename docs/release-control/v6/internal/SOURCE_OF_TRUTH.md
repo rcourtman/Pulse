@@ -76,19 +76,19 @@ This file must not contain:
 9. `docs/release-control/v6/internal/subsystems/registry.schema.json`
    Machine-readable contract for the subsystem registry shape.
 10. `docs/release-control/v6/internal/subsystems/*.md`
-   Per-subsystem contracts: truth, extension points, forbidden paths, and
-   completion obligations.
+    Per-subsystem contracts: truth, extension points, forbidden paths, and
+    completion obligations.
 11. `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`
-   Canonical stable-versus-prerelease promotion rules, rollout criteria, and rollback
-   expectations for v6 and later release lines.
+    Canonical stable-versus-prerelease promotion rules, rollout criteria, and rollback
+    expectations for v6 and later release lines.
 12. `docs/release-control/v6/internal/V5_MAINTENANCE_SUPPORT_POLICY.md`
-   Canonical v5 maintenance-only support policy, release-line rules, and GA
-   notice requirements for the v6 cutover.
+    Canonical v5 maintenance-only support policy, release-line rules, and GA
+    notice requirements for the v6 cutover.
 13. `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`
-   Canonical human record shape for the non-publish RC-to-GA rehearsal run.
+    Canonical human record shape for the non-publish RC-to-GA rehearsal run.
 14. `docs/release-control/v6/internal/PLATFORM_SUPPORT_MODEL.md`
-   Canonical first-class platform, ingestion-mode, resource-projection, and
-   support-floor model for Pulse v6.
+    Canonical first-class platform, ingestion-mode, resource-projection, and
+    support-floor model for Pulse v6.
 
 These machine files remain canonical, but agents should not ingest them in full
 by default when a smaller derived command answers the question. Prefer
@@ -126,13 +126,15 @@ infrastructure.
 Pulse should win by giving operators one coherent place to monitor,
 investigate, and safely act across mixed estates rather than by accumulating
 opportunistic platform-specific surfaces.
-The strong user-facing shape is a protection posture plus action queue, not an
-AI chat destination: Home answers "Am I protected?", Needs Attention answers
-"What needs me?", Explore/dashboard surfaces remain for browsing, Assistant is
-contextual explanation for the selected thing, and Patrol is the engine under
-the surface. This direction must stay simple enough for a new operator to
-understand without learning internal terms such as Intelligence, Patrol runs,
-handoffs, workflow starters, or findings lifecycle before they can act.
+The strong user-facing shape is monitor-first with contextual action, not an AI
+chat destination and not a generic Home front door: platform/dashboard surfaces
+open directly for browsing the estate, Patrol remains the visible checking-loop
+destination for findings and approvals, Assistant is contextual explanation for
+the selected thing, and posture/coverage summaries appear in context rather
+than replacing the monitoring landing path. This direction must stay simple
+enough for a new operator to understand without learning internal terms such as
+Intelligence, handoffs, workflow starters, or findings lifecycle before they
+can act.
 Steady-state value is part of the product truth: a calm estate should show
 coverage, freshness, drift, connectivity, and verification posture rather than
 feeling empty or dead.
@@ -469,36 +471,36 @@ Assertion design rules:
 7. Stable or GA promotion for v6 must come from an exercised RC and stay
    blocked until the RC-to-GA promotion gate is cleared and the published v5
    maintenance-policy notice is ready.
-7. v6 and later releases use a promotion model, not a direct broad-rollout
+8. v6 and later releases use a promotion model, not a direct broad-rollout
    model.
    `stable` must receive only promoted, already-validated builds, `rc` is the
    opt-in preview channel, and unattended auto-update exposure remains
    `stable`-only unless a new channel policy is explicitly adopted.
-8. Once v6 reaches stable or GA, v5 enters a 90-day maintenance-only window:
+9. Once v6 reaches stable or GA, v5 enters a 90-day maintenance-only window:
    critical security issues, critical correctness/data-loss issues, and safe
    migration blockers only. The exact end-of-support date must be published in
    the GA release notice. After that window, v5 is unsupported.
-9. Paid Pulse Pro v5 customers keep their existing recurring price through the
-   v6 pricing change until they cancel. Renewal and entitlement continuity
-   must preserve that grandfathered price state; any return after cancellation
-   must use current v6 pricing.
-10. Pulse Mobile does not need desktop parity to stop blocking the v6 prerelease line.
+10. Paid Pulse Pro v5 customers keep their existing recurring price through the
+    v6 pricing change until they cancel. Renewal and entitlement continuity
+    must preserve that grandfathered price state; any return after cancellation
+    must use current v6 pricing.
+11. Pulse Mobile does not need desktop parity to stop blocking the v6 prerelease line.
     The mobile usefulness floor for prerelease is narrower: preserve at least one
     trusted paired instance across relaunches, expose relay/runtime state
     clearly in the main shell, fail closed into a recoverable disconnected
     state on stale or revoked access, and keep live approvals useful and
     recoverable. Broader parity and expansion remain post-prerelease scope.
-11. The minimum required update set for canonical work is a floor, not a lane
+12. The minimum required update set for canonical work is a floor, not a lane
     closure rule. Agents should push the current lane to a coherent,
     defensible stop point and complete the next obvious same-lane work when it
     is necessary for trustworthy results, then normalize any remaining valid
     gap instead of calling the lane done by default.
-12. Unified-resource change history is the canonical durable backend timeline.
+13. Unified-resource change history is the canonical durable backend timeline.
     Alert incident memory may retain investigation-local notes, analysis,
     commands, runbooks, and alert lifecycle breadcrumbs, but it must remain a
     derived incident projection rather than a competing source of truth for
     durable resource history.
-13. Pulse v6 GA is feature-complete relative to the prerelease issue set.
+14. Pulse v6 GA is feature-complete relative to the prerelease issue set.
     Stable or GA must remain blocked until every known RC-era user-visible
     issue intended for v6 is fixed in the candidate, proven invalid with
     evidence, or conservatively superseded with the original problem resolved
@@ -636,25 +638,25 @@ claim stays blocked until live proof passes.
    assistant read behavior. If those proofs do not hold, implementation
    should stop at governance rather than shipping an inflated support claim.
 10. Execution sequence:
-   VMware phase-1 execution should follow
-   `docs/release-control/v6/internal/VMWARE_VSPHERE_PHASE1_EXECUTION_PLAN.md`
-   as the concrete slice order and stop/go contract for the first admitted
-   VMware support floor.
+    VMware phase-1 execution should follow
+    `docs/release-control/v6/internal/VMWARE_VSPHERE_PHASE1_EXECUTION_PLAN.md`
+    as the concrete slice order and stop/go contract for the first admitted
+    VMware support floor.
 11. Projection contract:
-   VMware phase-1 projection should also follow
-   `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_RESOURCE_PROJECTION_SPEC.md`
-   as the canonical source, identity, topology, alert-mapping, and
-   non-projection boundary for phase-1 VMware resources.
+    VMware phase-1 projection should also follow
+    `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_RESOURCE_PROJECTION_SPEC.md`
+    as the canonical source, identity, topology, alert-mapping, and
+    non-projection boundary for phase-1 VMware resources.
 12. Alerts and Assistant contract:
-   VMware phase-1 alerts and Assistant work should also follow
-   `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_ALERTS_AND_ASSISTANT_SPEC.md`
-   as the canonical shared-alert, shared-timeline, Assistant-read, and
-   Assistant-control-exclusion boundary for the VMware phase-1 floor.
+    VMware phase-1 alerts and Assistant work should also follow
+    `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_ALERTS_AND_ASSISTANT_SPEC.md`
+    as the canonical shared-alert, shared-timeline, Assistant-read, and
+    Assistant-control-exclusion boundary for the VMware phase-1 floor.
 13. Backend API/runtime contract:
-   VMware phase-1 backend API/runtime work should also follow
-   `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_API_RUNTIME_SPEC.md`
-   as the canonical public API-boundary, session-ownership, provider-health,
-   and negative-space contract for the VMware phase-1 floor.
+    VMware phase-1 backend API/runtime work should also follow
+    `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_API_RUNTIME_SPEC.md`
+    as the canonical public API-boundary, session-ownership, provider-health,
+    and negative-space contract for the VMware phase-1 floor.
 
 ## Cross-Repo Contracts
 

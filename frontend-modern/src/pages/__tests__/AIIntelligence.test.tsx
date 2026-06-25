@@ -618,12 +618,10 @@ describe('AIIntelligence entitlement gating', () => {
     render(() => <AIIntelligence />);
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Needs Attention' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Patrol' })).toBeInTheDocument();
     });
 
-    expect(
-      screen.queryByRole('heading', { name: 'Pulse Patrol Needs Attention' }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Pulse Patrol Patrol' })).not.toBeInTheDocument();
     expect(screen.getByTestId('pulse-patrol-logo')).toHaveAttribute('aria-hidden', 'true');
   });
 
@@ -633,7 +631,7 @@ describe('AIIntelligence entitlement gating', () => {
     render(() => <AIIntelligence />);
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Needs Attention' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Patrol' })).toBeInTheDocument();
     });
 
     expect(
@@ -876,7 +874,7 @@ describe('AIIntelligence entitlement gating', () => {
     render(() => <AIIntelligence />);
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Needs Attention' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Patrol' })).toBeInTheDocument();
     });
     expect(screen.queryByText('Patrol setup issue')).not.toBeInTheDocument();
     expect(screen.queryByText('Patrol setup warning')).not.toBeInTheDocument();
@@ -980,7 +978,7 @@ describe('AIIntelligence entitlement gating', () => {
     render(() => <AIIntelligence />);
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Needs Attention' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Patrol' })).toBeInTheDocument();
     });
     expect(screen.queryByRole('button', { name: 'Details' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Hide details' })).not.toBeInTheDocument();
@@ -1167,7 +1165,7 @@ describe('AIIntelligence entitlement gating', () => {
     render(() => <AIIntelligence />);
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Needs Attention' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Patrol' })).toBeInTheDocument();
     });
     await waitFor(() => {
       expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/models');
@@ -1282,7 +1280,7 @@ describe('AIIntelligence entitlement gating', () => {
       expect(getPatrolRunHistoryMock.mock.calls.length).toBeGreaterThan(
         runHistoryCallsBeforeModeChange,
       );
-      expect(screen.getByRole('heading', { name: 'Needs Attention' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Patrol' })).toBeInTheDocument();
       expect(screen.queryByTestId('patrol-current-work')).not.toBeInTheDocument();
       expect(screen.queryByText('Patrol ready')).not.toBeInTheDocument();
       expect(screen.queryByText(/Run Patrol now to look for issues/)).not.toBeInTheDocument();
@@ -1358,7 +1356,7 @@ describe('AIIntelligence entitlement gating', () => {
 
     await waitFor(() => {
       expect(getPatrolStatusMock).toHaveBeenCalled();
-      expect(screen.getByRole('heading', { name: 'Needs Attention' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Patrol' })).toBeInTheDocument();
     });
 
     expect(screen.queryByText('Patrol status')).not.toBeInTheDocument();
@@ -1383,7 +1381,7 @@ describe('AIIntelligence entitlement gating', () => {
     ));
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Needs Attention' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Patrol' })).toBeInTheDocument();
       expect(screen.getByText('Open work')).toBeInTheDocument();
     });
 
@@ -1402,7 +1400,7 @@ describe('AIIntelligence entitlement gating', () => {
     ));
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Needs Attention' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Patrol' })).toBeInTheDocument();
       expect(screen.getByText('Patrol could not refresh')).toBeInTheDocument();
       expect(screen.getByText('Open work')).toBeInTheDocument();
     });
@@ -2211,7 +2209,7 @@ describe('AIIntelligence entitlement gating', () => {
 
     await waitFor(() => {
       expect(getPatrolRunHistoryMock).toHaveBeenCalled();
-      expect(screen.getByRole('heading', { name: 'Needs Attention' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Patrol' })).toBeInTheDocument();
     });
 
     expect(screen.queryByText(/No active issues · health score 100\/100/)).not.toBeInTheDocument();

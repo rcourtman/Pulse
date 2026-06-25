@@ -185,10 +185,11 @@ attention`, `approval needed`, `outcome verified`, `no active work`) instead
    unexplained `95/100` telemetry.
    The Patrol workspace must default to current operator work: current findings,
    active investigations, approval decisions, and selected finding snapshots.
-   The route and page title must lead with `Needs Attention`, and the default
-   workspace title underneath it must be `Open work` so the page does not repeat
-   the same accessible heading while still answering what needs the operator
-   now. Patrol remains the underlying watch/investigate/act/verify engine. The
+   The route and page title must lead with `Patrol`, because operators
+   understand Patrol as the recurring checking loop. The default workspace title
+   underneath it may use `Open work` so the page can explain current findings
+   and approvals without renaming the destination. Patrol remains the
+   watch/investigate/act/verify engine. The
    exception is a
    setup-only Patrol runtime failure: that state must use the `Fix Patrol setup`
    title and setup description while rendering a dedicated setup task instead of
@@ -481,7 +482,7 @@ attention`, `approval needed`, `outcome verified`, `no active work`) instead
    with recent snapshots and keep older runs behind an explicit expansion, while
    preserving full forensic access for operators who deliberately open it.
    Individual run entries must read as an operator action record first (`All
-   clear`, `Found N new issues`, `Fixed N issues`, `N issues still open`, or
+clear`, `Found N new issues`, `Fixed N issues`, `N issues still open`, or
    `Patrol needs attention`) with checked-resource coverage as supporting
    detail. Trigger reason, duration, tool-call counts, tokens, triage flags,
    and raw tool traces are forensic context and must stay secondary to what
@@ -522,18 +523,18 @@ attention`, `approval needed`, `outcome verified`, `no active work`) instead
    tool-call observation, or readiness internals belong in Provider & Models
    and backend/test contracts, not in the first-party Patrol operator banner.
 5. Keep customer-facing Patrol naming product-first while preserving the
-   operator-workbench job words: the daily work destination may lead with
-   `Needs Attention`, while summary copy, actions, empty states, and mode
-   controls should keep Patrol or Pulse Patrol as the watch/investigate/act
-   engine rather than generic `AI` branding. Reserve `AI` terminology for
+   operator-workbench job words inside the page: the daily work destination
+   leads with `Patrol`, while summary copy, actions, empty states, and mode
+   controls may describe findings, approvals, and work that needs attention.
+   Reserve `AI` terminology for
    explicit provider/configuration settings, shared runtime internals, or other
    technical capability boundaries where the underlying ownership really is AI
    runtime rather than the Patrol product surface.
 6. Keep Patrol brand icon accessibility contextual: `PulsePatrolLogo` remains
    label-bearing when the icon stands alone, but Patrol headings and actions
-   that already include visible Patrol or Needs Attention text must render the
-   logo as decorative so accessible names do not repeat as `Pulse Patrol Needs
-   Attention` or similar duplicated names.
+   that already include visible Patrol text must render the logo as decorative
+   so accessible names do not repeat as `Pulse Patrol Patrol` or similar
+   duplicated names.
 7. Keep Patrol remediation copy operator-safe even while legacy transport
    fields retain `auto_fix` naming for compatibility: header autonomy controls,
    Pro-locked helper text, investigation outcome labels, and run-history badges

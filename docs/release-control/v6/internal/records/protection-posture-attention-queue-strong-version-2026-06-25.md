@@ -1,14 +1,16 @@
-# Protection Posture And Attention Queue Strong Version - 2026-06-25
+# Monitor-First Patrol Workbench Strong Version - 2026-06-25
 
 ## Decision
 
-Pulse should present as an operator workbench for mixed private infrastructure,
-not as an AI assistant. The simple user model is:
+Pulse should present as a monitor-first operator workbench for mixed private
+infrastructure, not as an AI assistant and not as a summary page that delays
+monitoring. The simple user model is:
 
-1. Home answers "Am I protected?"
-2. Needs Attention answers "What needs me?"
-3. Explore/dashboard surfaces answer "Let me look around."
-4. Assistant answers "Help me understand this specific thing."
+1. Monitoring pages answer "Show me my estate now."
+2. Patrol answers "What did the checking loop find, and what should I do?"
+3. Assistant answers "Help me understand this specific thing."
+4. Coverage/posture summaries answer "Am I protected?" only when the operator
+   explicitly opens that posture view or contextual expansion.
 5. Patrol watches, investigates, proposes, acts within policy, verifies, and
    records outcomes underneath those surfaces.
 
@@ -19,17 +21,15 @@ simple, calm-day useful, and action-oriented.
 
 ## North Star
 
-Pulse watches my estate, tells me whether I am protected, and shows only the
-things I need to act on.
+Pulse opens directly into monitoring, keeps Patrol as the understood checking
+loop, and routes the operator from real findings/evidence to safe action.
 
 ## Strong-Version Checklist
 
-- [ ] Home is a calm-day protection posture surface, not a marketing page and
-      not a Patrol status console.
-- [ ] Home shows coverage/freshness posture for backups, agents, alerts,
-      storage, recent changes, approvals, and last verification.
-- [ ] Needs Attention is a first-class primary destination for open work.
-- [ ] Needs Attention groups operator work across findings, approvals, failed
+- [x] Authenticated launch remains monitor-first: do not make a generic Home
+      or posture page the default landing surface.
+- [x] Patrol remains the visible destination name for the checking loop.
+- [ ] Patrol groups operator work across findings, approvals, failed
       checks, stale protection, risky drift, recurring issues, and unresolved
       incidents.
 - [ ] Each item uses plain language: problem, affected thing, why it matters,
@@ -48,9 +48,9 @@ things I need to act on.
 - [ ] Recommendations expose trust scaffolding: evidence, confidence/reason,
       scope or blast radius, proposed action, approval requirement,
       verification result, and attempt history.
-- [ ] Calm-day empty states feel alive and useful: they show protection,
-      freshness, coverage, drift, and verification posture instead of just
-      "nothing here."
+- [ ] Calm-day monitoring and Patrol empty states feel alive and useful: they
+      show protection, freshness, coverage, drift, and verification posture in
+      context instead of just "nothing here."
 - [ ] Mobile and desktop use the same mental model: status/protection first,
       next action second, contextual explanation third.
 - [ ] Settings, docs, command palette, and onboarding stop promoting generic
@@ -72,24 +72,27 @@ things I need to act on.
 
 1. Capture the product target in governance and tests so context compaction
    cannot erase it.
-2. Reframe existing Patrol/current-work copy toward Needs Attention language
-   without breaking the current L23 floor.
-3. Build the calm-day Home posture model and wire it to real runtime data.
-4. Promote Needs Attention as the primary work queue.
+2. Keep Patrol as the visible checking-loop destination while clarifying open
+   findings, approvals, and verification state inside the page.
+3. Preserve monitor-first launch behavior and avoid a generic Home front door.
+4. Add calm-day posture only as contextual monitoring/Patrol evidence, not as
+   the default landing page.
 5. Demote generic Assistant entry points to contextual explain/review actions.
 6. Tighten trust scaffolding and autonomy presentation across the queue.
 7. Validate in browser across desktop/mobile active-work and calm-day states.
 
 ## Progress
 
-- 2026-06-25: The existing Patrol route, browser title, utility nav item,
-  command palette entry, and keyboard shortcut copy now lead with
-  `Needs Attention`. The inner work queue uses `Open work` to avoid repeating
-  the page title, while Patrol remains visible as the engine in mode, run,
-  history, and settings controls. Browser proof covered the active-work state
-  on desktop and mobile. This completes the first UI naming slice only; it does
-  not complete the Home posture model, full cross-source queue, Assistant
-  demotion, or calm-day validation.
+- 2026-06-25: Product correction: do not make Home the primary landing page,
+  and do not rename the Patrol destination to `Needs Attention`. Users already
+  understand Patrol as the checking loop. The route, browser title, shell nav,
+  command palette, and shortcut copy should lead with `Patrol`; `Open work`,
+  findings, approvals, and "needs attention" remain page/status language inside
+  Patrol where they explain the work.
+- 2026-06-25: Implemented the correction in the desktop shell, mobile shell,
+  command palette, shortcut copy, Patrol page title, and focused tests. Browser
+  proof confirmed authenticated `/` lands on `/proxmox/overview`, while
+  `/patrol` shows the `Patrol` title and heading on desktop and mobile.
 
 ## Evidence
 
@@ -104,9 +107,10 @@ things I need to act on.
 
 ## Residuals
 
-- The first implementation slice does not implement the new Home posture model
-  or the full cross-source Needs Attention queue.
-- The exact nav labels remain product decisions, but the job names are fixed:
-  protected posture, needs attention, and exploration.
+- Cross-source current-work grouping remains useful, but it belongs inside
+  Patrol or contextual monitoring surfaces rather than a renamed top-level
+  destination.
+- Calm-day posture still needs a deliberately contextual design pass before it
+  should be added to monitoring or Patrol.
 - The status coverage gap `protection-posture-attention-queue` tracks the
   remaining product-surface work.

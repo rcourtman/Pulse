@@ -282,8 +282,8 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain("const blockedPrefixes = ['/settings', '/patrol'];");
     expect(appLayoutSource).not.toContain("'/operations', '/patrol', '/ai'");
     expect(appLayoutSource).toContain("route: '/patrol',");
-    expect(appLayoutSource).toContain("label: 'Needs Attention'");
-    expect(appLayoutSource).toContain("tooltip: 'Review issues and approvals that need action'");
+    expect(appLayoutSource).toContain("label: 'Patrol'");
+    expect(appLayoutSource).toContain("tooltip: 'Review Patrol checks, findings, and approvals'");
     expect(appLayoutSource).not.toContain("route: '/operations',");
     expect(appLayoutSource).not.toContain('props.connected()');
     expect(appLayoutSource).toContain('const utilityTabs = createMemo(() =>');

@@ -62,7 +62,7 @@ describe('MobileNavBar', () => {
         utilityTabs={() => [
           {
             id: 'ai',
-            label: 'Needs Attention',
+            label: 'Patrol',
             route: '/patrol',
             tooltip: 'Continuous verification',
             badge: null,
@@ -77,12 +77,10 @@ describe('MobileNavBar', () => {
     ));
 
     const navList = screen.getByRole('tablist', { name: 'Mobile navigation' });
-    const patrolButton = within(navList).getByRole('button', { name: 'Needs Attention' });
+    const patrolButton = within(navList).getByRole('button', { name: 'Patrol' });
 
     expect(patrolButton).toHaveAttribute('data-tab-id', 'ai');
-    expect(
-      within(navList).queryByRole('button', { name: 'Pulse Patrol Needs Attention' }),
-    ).toBeNull();
+    expect(within(navList).queryByRole('button', { name: 'Pulse Patrol Patrol' })).toBeNull();
   });
 
   it('allows inactive platform tabs to render without an active mobile tab', () => {

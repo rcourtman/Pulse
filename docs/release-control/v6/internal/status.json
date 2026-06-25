@@ -7235,7 +7235,7 @@
     },
     {
       "id": "protection-posture-attention-queue",
-      "summary": "Pulse now has a durable strong-version product direction, but the current lane map does not yet model the simple user-facing shape as one governed surface: Home should answer whether the estate is protected, Needs Attention should be the primary action queue, Explore should preserve dashboard browsing, Assistant should explain the selected thing, and Patrol should remain the engine underneath. Without an explicit lane-expansion record, work can drift into local Patrol renames, generic Assistant polish, or an inbox that feels dead in steady state instead of proving calm-day protection posture.",
+      "summary": "Pulse now has a durable strong-version product direction, but the current lane map does not yet model the simple user-facing shape as one governed surface: authenticated launch stays monitor-first on platform and dashboard surfaces, Patrol remains the named checking-loop destination for findings, approvals, and explain-act-verify work, Assistant explains selected context, and protection posture or coverage signals appear in the relevant monitor and Patrol contexts instead of a generic Home front door. Without an explicit lane-expansion record, work can drift into Home-first surfaces, Patrol renames, generic Assistant polish, or read-only object-browser copies instead of proving simple monitor-first operations.",
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-06-25",
@@ -7306,8 +7306,8 @@
     },
     {
       "id": "protection-posture-attention-queue",
-      "name": "Protection Posture And Attention Queue",
-      "summary": "Promote the strong-version operator workbench into a governed lane expansion covering calm-day Home protection posture, the primary Needs Attention action queue, dashboard Explore boundaries, contextual Assistant demotion, Patrol as the underlying engine, explicit autonomy/trust scaffolding, and browser proof for both active-work and calm-day states.",
+      "name": "Monitor-First Patrol Workbench",
+      "summary": "Promote the corrected strong-version operator workbench into a governed lane expansion covering monitor-first launch, Patrol as the visible checking-loop surface, contextual Assistant demotion, safe action and verification flows, calm-day coverage posture in context, dashboard Explore boundaries, explicit autonomy and trust scaffolding, and browser proof for both active-work and calm-day states.",
       "status": "planned",
       "recorded_at": "2026-06-25",
       "target_id": "v6-product-lane-expansion",

@@ -1,6 +1,6 @@
 import type { PatrolAutonomyLevel } from '@/api/patrol';
 
-export const PATROL_PAGE_TITLE = 'Needs Attention';
+export const PATROL_PAGE_TITLE = 'Patrol';
 
 export const PATROL_PAGE_WATCH_ONLY_DESCRIPTION =
   'Patrol watches infrastructure and shows current issues.';

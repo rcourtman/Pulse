@@ -210,7 +210,7 @@ export function AppLayout(props: AppLayoutProps) {
     vmware: 'vSphere',
     standalone: 'Machines',
     alerts: 'Alerts',
-    ai: 'Needs Attention',
+    ai: 'Patrol',
     settings: 'Settings',
   };
   createEffect(() => {
@@ -428,9 +428,9 @@ export function AppLayout(props: AppLayoutProps) {
       },
       {
         id: 'ai',
-        label: 'Needs Attention',
+        label: 'Patrol',
         route: '/patrol',
-        tooltip: 'Review issues and approvals that need action',
+        tooltip: 'Review Patrol checks, findings, and approvals',
         badge: null,
         count: undefined,
         breakdown: undefined,
