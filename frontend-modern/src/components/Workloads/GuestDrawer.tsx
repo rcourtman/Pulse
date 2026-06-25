@@ -150,7 +150,6 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
           backupPresentation={backupPresentation()}
           diskThresholds={diskThresholds()}
           discoveryIdentifiedSummary={discoveryIdentifiedSummary()}
-          discoveryReadinessPresentation={discoveryReadinessPresentation()}
           hasWorkloadActionAgent={hasWorkloadActionAgent()}
           showInGuestAgentInstallCue={showInGuestAgentInstallCue()}
           webInterfaceTargetLabel={webInterfaceTargetLabel()}

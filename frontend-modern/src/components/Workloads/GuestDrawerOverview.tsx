@@ -5,11 +5,9 @@ import BoxIcon from 'lucide-solid/icons/box';
 import { formatDiscoveryAge } from '@/api/discovery';
 import { buildInfrastructureOnboardingPath } from '@/components/Settings/infrastructureWorkspaceModel';
 import { DiscoveryProvenanceMarker } from '@/components/shared/DiscoveryProvenanceMarker';
-import { DiscoveryReadinessBadge } from '@/components/shared/DiscoveryReadinessBadge';
 import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
 import type { DiscoveryIdentifiedSummary } from '@/utils/discoveryPresentation';
-import type { DiscoveryReadinessPresentation } from '@/utils/resourceDiscoveryReadiness';
 import { formatBytes, formatUptime } from '@/utils/format';
 import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 
@@ -49,7 +47,6 @@ interface GuestDrawerOverviewProps {
   } | null;
   diskThresholds?: MetricDisplayThresholds | null;
   discoveryIdentifiedSummary?: DiscoveryIdentifiedSummary | null;
-  discoveryReadinessPresentation?: DiscoveryReadinessPresentation | null;
   webInterfaceTargetLabel: string;
   workloadActionAgentTitle: string;
 }
@@ -68,9 +65,6 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
                   </h3>
                   <DiscoveryProvenanceMarker />
                 </div>
-                <span class="shrink-0 text-[10px] font-medium text-muted">
-                  {summary().confidencePercent}
-                </span>
               </div>
               <div class="space-y-1.5 text-[11px]">
                 <div class="flex items-center justify-between gap-2">
@@ -118,43 +112,12 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
                     <span class="font-medium text-base-content">{summary().portCount}</span>
                   </div>
                 </Show>
-                <Show when={summary().cliAccess}>
-                  <div
-                    class="text-[10px] text-muted truncate font-mono"
-                    title={summary().cliAccess}
-                  >
-                    {summary().cliAccess}
-                  </div>
-                </Show>
                 <div class="flex flex-wrap gap-1 pt-1 text-[10px] text-muted">
                   <span>{summary().sourceLabel}</span>
                   <Show when={summary().observedAt}>
                     <span>· {formatDiscoveryAge(summary().observedAt!)}</span>
                   </Show>
                 </div>
-              </div>
-            </InfoCardFrame>
-          )}
-        </Show>
-        <Show when={props.discoveryReadinessPresentation}>
-          {(presentation) => (
-            <InfoCardFrame>
-              <div class="flex items-center justify-between gap-2 mb-2">
-                <h3 class="truncate text-[11px] font-medium uppercase tracking-wide text-base-content">
-                  AI Context
-                </h3>
-                <DiscoveryReadinessBadge presentation={presentation()} compact />
-              </div>
-              <div class="space-y-1.5 text-[11px]">
-                <div class="flex items-center justify-between gap-2">
-                  <span class="text-muted">Discovery</span>
-                  <span class="font-medium text-base-content truncate ml-2">
-                    {presentation().shortLabel}
-                  </span>
-                </div>
-                <Show when={presentation().detail}>
-                  <p class="text-[10px] leading-4 text-muted">{presentation().detail}</p>
-                </Show>
               </div>
             </InfoCardFrame>
           )}

@@ -373,10 +373,8 @@ describe('GuestDrawer', () => {
       expect(screen.getByText('Homepage Dashboard')).toBeInTheDocument();
       expect(screen.getByText('web_server')).toBeInTheDocument();
       expect(screen.getByText('0.9.0')).toBeInTheDocument();
-      expect(screen.getByText('95%')).toBeInTheDocument();
       expect(screen.getByLabelText(getDiscoveryProvenanceTitle())).toBeInTheDocument();
       expect(screen.getAllByText('http://192.0.2.10:3000').length).toBeGreaterThan(0);
-      expect(screen.getByText('docker exec -it homepage /bin/sh')).toBeInTheDocument();
       expect(screen.getByTestId('url-suggested')).toHaveTextContent('http://192.0.2.10:3000');
       expect(screen.getByTestId('url-suggested-reason')).toHaveTextContent('Detected 3000/tcp');
     });
