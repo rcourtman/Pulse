@@ -205,6 +205,11 @@ func (m *Monitor) enrichContainerMetadata(ctx context.Context, client PVEClientI
 		if osName := extractContainerOSType(configData); osName != "" {
 			container.OSName = osName
 		}
+		// Extract onboot (autostart) setting so the alert engine can
+		// suppress powered-off alerts for guests not configured to autostart.
+		if onBoot := parseProxmoxOnBoot(configData); onBoot != nil {
+			container.OnBoot = onBoot
+		}
 		// Detect OCI containers (Proxmox VE 9.1+)
 		// Method 1: Check ostemplate for OCI registry patterns
 		if osTemplate := extractContainerOSTemplate(configData); osTemplate != "" {

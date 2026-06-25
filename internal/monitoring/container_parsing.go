@@ -491,6 +491,32 @@ func extractContainerOSType(config map[string]interface{}) string {
 	return ostype
 }
 
+// parseProxmoxOnBoot extracts the onboot (autostart) setting from a Proxmox
+// guest config map. Returns nil when the key is absent or unrecognised so
+// callers can distinguish "explicitly off" from "unknown".
+func parseProxmoxOnBoot(config map[string]interface{}) *bool {
+	if len(config) == 0 {
+		return nil
+	}
+	raw, ok := config["onboot"]
+	if !ok || raw == nil {
+		return nil
+	}
+	s := strings.TrimSpace(fmt.Sprint(raw))
+	if s == "" {
+		return nil
+	}
+	if s == "1" || strings.EqualFold(s, "yes") || strings.EqualFold(s, "true") {
+		v := true
+		return &v
+	}
+	if s == "0" || strings.EqualFold(s, "no") || strings.EqualFold(s, "false") {
+		v := false
+		return &v
+	}
+	return nil
+}
+
 // extractContainerOSTemplate extracts the ostemplate value from container config.
 // This is the template used to create the container, which may be an LXC template
 // or an OCI image reference (Proxmox VE 9.1+).

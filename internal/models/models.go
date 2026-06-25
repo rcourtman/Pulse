@@ -160,6 +160,7 @@ type VM struct {
 	DiskWrite         int64                   `json:"diskWrite"`
 	Uptime            int64                   `json:"uptime"`
 	Template          bool                    `json:"template"`
+	OnBoot            *bool                   `json:"onBoot,omitempty"`
 	LastBackup        time.Time               `json:"lastBackup,omitempty"`
 	Tags              []string                `json:"tags,omitempty"`
 	Lock              string                  `json:"lock,omitempty"`
@@ -206,6 +207,7 @@ type Container struct {
 	DiskWrite         int64                   `json:"diskWrite"`
 	Uptime            int64                   `json:"uptime"`
 	Template          bool                    `json:"template"`
+	OnBoot            *bool                   `json:"onBoot,omitempty"`
 	LastBackup        time.Time               `json:"lastBackup,omitempty"`
 	Tags              []string                `json:"tags,omitempty"`
 	Lock              string                  `json:"lock,omitempty"`

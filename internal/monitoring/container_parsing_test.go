@@ -1953,3 +1953,45 @@ func TestIsOCITemplate(t *testing.T) {
 		})
 	}
 }
+
+func TestParseProxmoxOnBoot(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		config  map[string]interface{}
+		wantNil bool
+		wantVal bool
+	}{
+		{name: "nil config", config: nil, wantNil: true},
+		{name: "empty config", config: map[string]interface{}{}, wantNil: true},
+		{name: "missing key", config: map[string]interface{}{"ostype": "debian"}, wantNil: true},
+		{name: "onboot 1 (string)", config: map[string]interface{}{"onboot": "1"}, wantVal: true},
+		{name: "onboot 0 (string)", config: map[string]interface{}{"onboot": "0"}, wantVal: false},
+		{name: "onboot true", config: map[string]interface{}{"onboot": "true"}, wantVal: true},
+		{name: "onboot false", config: map[string]interface{}{"onboot": "false"}, wantVal: false},
+		{name: "onboot yes", config: map[string]interface{}{"onboot": "yes"}, wantVal: true},
+		{name: "onboot no", config: map[string]interface{}{"onboot": "no"}, wantVal: false},
+		{name: "onboot unrecognised", config: map[string]interface{}{"onboot": "maybe"}, wantNil: true},
+		{name: "onboot empty string", config: map[string]interface{}{"onboot": ""}, wantNil: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := parseProxmoxOnBoot(tt.config)
+			if tt.wantNil {
+				if got != nil {
+					t.Errorf("parseProxmoxOnBoot() = %v, want nil", *got)
+				}
+				return
+			}
+			if got == nil {
+				t.Fatalf("parseProxmoxOnBoot() = nil, want %v", tt.wantVal)
+			}
+			if *got != tt.wantVal {
+				t.Errorf("parseProxmoxOnBoot() = %v, want %v", *got, tt.wantVal)
+			}
+		})
+	}
+}

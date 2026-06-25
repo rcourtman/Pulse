@@ -32,8 +32,9 @@ type guestSnapshot struct {
 	NetworkIn  int64
 	NetworkOut int64
 
-	Disks []models.Disk
-	Tags  []string
+	Disks  []models.Disk
+	Tags   []string
+	OnBoot *bool
 }
 
 func emptyGuestSnapshot() guestSnapshot {
@@ -106,6 +107,7 @@ func guestSnapshotFromVM(vm models.VM) guestSnapshot {
 		NetworkOut: vm.NetworkOut,
 		Disks:      append([]models.Disk(nil), vm.Disks...),
 		Tags:       append([]string(nil), vm.Tags...),
+		OnBoot:     vm.OnBoot,
 	}.normalizeCollections()
 }
 
@@ -127,6 +129,7 @@ func guestSnapshotFromContainer(container models.Container) guestSnapshot {
 		NetworkOut: container.NetworkOut,
 		Disks:      append([]models.Disk(nil), container.Disks...),
 		Tags:       append([]string(nil), container.Tags...),
+		OnBoot:     container.OnBoot,
 	}.normalizeCollections()
 }
 

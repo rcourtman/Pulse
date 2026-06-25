@@ -34,6 +34,7 @@ type vmBuildState struct {
 	osVersion         string
 	agentVersion      string
 	detailedStatus    *proxmox.VMStatus
+	onBoot            *bool
 }
 
 func (m *Monitor) applyVMStatusDetails(
@@ -285,6 +286,7 @@ func (m *Monitor) buildVMFromClusterResource(
 	if res.Status != "running" {
 		state.memorySource = "powered-off"
 		state.memUsed = 0
+		state.onBoot = m.fetchVMOnBoot(ctx, client, res.Node, res.VMID)
 	}
 
 	memFree := uint64(0)
@@ -370,6 +372,7 @@ func (m *Monitor) buildVMFromClusterResource(
 		DiskWrite:         max(0, int64(diskWriteRate)),
 		Uptime:            int64(res.Uptime),
 		Template:          res.Template == 1,
+		OnBoot:            state.onBoot,
 		LastSeen:          sampleTime,
 	}
 
@@ -391,6 +394,29 @@ func (m *Monitor) buildVMFromClusterResource(
 	}
 
 	return vm, state.guestRaw, state.memorySource, snapshotNotes, sampleTime, true
+}
+
+// fetchVMOnBoot retrieves the onboot (autostart) setting for a stopped VM by
+// fetching its config. Returns nil when the config is unavailable or the
+// onboot key is absent, so callers can distinguish "explicitly off" from
+// "unknown". Uses a type assertion because PVEClientInterface does not include
+// GetVMConfig (it is only on the concrete client, matching the pattern in
+// guest_config.go).
+func (m *Monitor) fetchVMOnBoot(ctx context.Context, client PVEClientInterface, node string, vmid int) *bool {
+	type vmConfigClient interface {
+		GetVMConfig(ctx context.Context, node string, vmid int) (map[string]interface{}, error)
+	}
+	vmClient, ok := client.(vmConfigClient)
+	if !ok {
+		return nil
+	}
+	configCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	configData, err := vmClient.GetVMConfig(configCtx, node, vmid)
+	if err != nil || len(configData) == 0 {
+		return nil
+	}
+	return parseProxmoxOnBoot(configData)
 }
 
 type vmFSInfoSummary struct {

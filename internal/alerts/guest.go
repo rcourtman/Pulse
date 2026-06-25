@@ -221,6 +221,14 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 				delete(m.offlineConfirmations, guestID)
 				m.mu.Unlock()
 				m.clearAlert(canonicalPoweredStateStateID(guestID))
+			} else if snapshot.OnBoot != nil && !*snapshot.OnBoot {
+				// Guest is explicitly not configured to autostart (onboot=0).
+				// Being stopped is the expected state — suppress the alert.
+				m.mu.Lock()
+				delete(m.offlineConfirmations, guestID)
+				m.mu.Unlock()
+				m.clearAlert(canonicalPoweredStateStateID(guestID))
+				m.clearGuestPoweredOffAlert(guestID, name)
 			} else {
 				m.mu.RLock()
 				thresholds := m.getGuestThresholds(guest, guestID)

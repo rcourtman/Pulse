@@ -373,6 +373,56 @@ func TestAlertCharacterizationDisableConnectivitySuppressesPoweredOffButNotMetri
 	assertAlertPresent(t, m, canonicalMetricStateID(resourceID, "cpu"))
 }
 
+func TestAlertCharacterizationOnBootFalseSuppressesPoweredOffAlert(t *testing.T) {
+	resourceID := BuildGuestKey("pve1", "node1", 101)
+	cfg := characterizationBaseConfig()
+	m := newCharacterizationManager(t, cfg)
+
+	off := false
+	stopped := testVM(resourceID, 101, "app01", "node1", "pve1", "stopped", 0)
+	stopped.OnBoot = &off
+
+	m.CheckGuest(stopped, "pve1")
+	m.CheckGuest(stopped, "pve1")
+
+	assertAlertMissing(t, m, "guest-powered-off-"+resourceID)
+
+	m.mu.RLock()
+	_, hasConfirmations := m.offlineConfirmations[resourceID]
+	m.mu.RUnlock()
+	if hasConfirmations {
+		t.Fatalf("expected no powered-off tracking for guest with onboot=false")
+	}
+}
+
+func TestAlertCharacterizationOnBootTrueStillGeneratesPoweredOffAlert(t *testing.T) {
+	resourceID := BuildGuestKey("pve1", "node1", 101)
+	cfg := characterizationBaseConfig()
+	m := newCharacterizationManager(t, cfg)
+
+	on := true
+	stopped := testVM(resourceID, 101, "app01", "node1", "pve1", "stopped", 0)
+	stopped.OnBoot = &on
+
+	m.CheckGuest(stopped, "pve1")
+	m.CheckGuest(stopped, "pve1")
+
+	assertAlertPresent(t, m, "guest-powered-off-"+resourceID)
+}
+
+func TestAlertCharacterizationOnBootNilPreservesCurrentBehavior(t *testing.T) {
+	resourceID := BuildGuestKey("pve1", "node1", 101)
+	cfg := characterizationBaseConfig()
+	m := newCharacterizationManager(t, cfg)
+
+	stopped := testVM(resourceID, 101, "app01", "node1", "pve1", "stopped", 0)
+
+	m.CheckGuest(stopped, "pve1")
+	m.CheckGuest(stopped, "pve1")
+
+	assertAlertPresent(t, m, "guest-powered-off-"+resourceID)
+}
+
 func TestAlertCharacterizationReevaluatesAlertsWhenConfigChanges(t *testing.T) {
 	resourceID := BuildGuestKey("pve1", "node1", 101)
 	alertID := canonicalMetricStateID(resourceID, "cpu")
