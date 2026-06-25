@@ -219,7 +219,7 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
                 onClick={() => state.setSelectedRun(null)}
                 class="w-fit shrink-0 text-xs font-medium text-blue-700 hover:underline dark:text-blue-300"
               >
-                Show current work
+                Show open work
               </button>
             </div>
           )}
@@ -259,9 +259,7 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
           <div class="rounded-md border border-border bg-surface-alt p-4">
             <div class="flex flex-wrap items-start justify-between gap-3">
               <div class="min-w-0 max-w-2xl">
-                <h3 class="text-sm font-semibold text-base-content">
-                  Provider needs attention
-                </h3>
+                <h3 class="text-sm font-semibold text-base-content">Provider needs attention</h3>
                 <p class="mt-2 text-xs text-muted">Issue: {setupReason()}</p>
               </div>
               <ButtonLink href={setupAction.href} variant="primary" size="sm" class="gap-1.5">

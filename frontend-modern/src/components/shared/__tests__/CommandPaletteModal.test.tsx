@@ -126,6 +126,8 @@ describe('CommandPaletteModal', () => {
     expect(screen.queryByText('/storage')).not.toBeInTheDocument();
     expect(screen.queryByText('Go to Recovery')).not.toBeInTheDocument();
     expect(screen.queryByText('/recovery')).not.toBeInTheDocument();
+    expect(screen.getByText('Go to Needs Attention')).toBeInTheDocument();
+    expect(screen.queryByText('Go to Patrol')).not.toBeInTheDocument();
     expect(screen.getByText('Go to vSphere')).toBeInTheDocument();
     expect(screen.getByText('Go to vSphere Networks')).toBeInTheDocument();
     expect(screen.getByText('/vmware/networks')).toBeInTheDocument();

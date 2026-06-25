@@ -243,10 +243,10 @@ export function buildCommandPaletteCommands(options: {
     },
     {
       id: 'nav-patrol',
-      label: 'Go to Patrol',
+      label: 'Go to Needs Attention',
       description: '/patrol',
       shortcut: 'g r',
-      keywords: ['patrol', 'findings', 'ai', 'verification'],
+      keywords: ['needs attention', 'patrol', 'findings', 'ai', 'verification'],
       action: () => options.navigate('/patrol'),
     },
     {

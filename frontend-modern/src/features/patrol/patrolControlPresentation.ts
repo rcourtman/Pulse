@@ -38,7 +38,7 @@ export const PATROL_WORKSPACE_SETUP_TITLE = 'Fix provider';
 export const PATROL_WORKSPACE_SETUP_DESCRIPTION =
   'Open Provider & Models, then run Patrol from this page.';
 
-export const PATROL_WORKSPACE_QUEUE_TITLE = 'Current work';
+export const PATROL_WORKSPACE_QUEUE_TITLE = 'Open work';
 
 export const PATROL_WORKSPACE_RUN_RECORD_TITLE = 'Check details';
 
@@ -135,19 +135,19 @@ export function getPatrolQueueWorkspaceDescription(
   }
 
   if (input.autonomyLocked) {
-    return 'Problems Patrol finds appear here.';
+    return 'Issues Patrol finds that need you appear here.';
   }
 
   switch (input.autonomyLevel) {
     case 'approval':
-      return 'Investigations and approval requests appear here.';
+      return 'Investigations and approval requests that need you appear here.';
     case 'assisted':
       return 'Issues Patrol is handling appear here. Approval requests appear when needed.';
     case 'full':
       return 'Issues Patrol is handling appear here. Approval requests appear when policy requires them.';
     case 'monitor':
     default:
-      return 'Problems Patrol finds appear here.';
+      return 'Issues Patrol finds that need you appear here.';
   }
 }
 

@@ -80,6 +80,17 @@ things I need to act on.
 6. Tighten trust scaffolding and autonomy presentation across the queue.
 7. Validate in browser across desktop/mobile active-work and calm-day states.
 
+## Progress
+
+- 2026-06-25: The existing Patrol route, browser title, utility nav item,
+  command palette entry, and keyboard shortcut copy now lead with
+  `Needs Attention`. The inner work queue uses `Open work` to avoid repeating
+  the page title, while Patrol remains visible as the engine in mode, run,
+  history, and settings controls. Browser proof covered the active-work state
+  on desktop and mobile. This completes the first UI naming slice only; it does
+  not complete the Home posture model, full cross-source queue, Assistant
+  demotion, or calm-day validation.
+
 ## Evidence
 
 - GitHub issue #1234 asks for centralized management of Patrol finding notes
@@ -93,7 +104,8 @@ things I need to act on.
 
 ## Residuals
 
-- This record does not implement the new Home or Needs Attention surfaces.
+- The first implementation slice does not implement the new Home posture model
+  or the full cross-source Needs Attention queue.
 - The exact nav labels remain product decisions, but the job names are fixed:
   protected posture, needs attention, and exploration.
 - The status coverage gap `protection-posture-attention-queue` tracks the

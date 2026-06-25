@@ -42,12 +42,12 @@ describe('patrolControlPresentation', () => {
     [
       'monitor',
       'Patrol is ready to check infrastructure and show issues.',
-      'Problems Patrol finds appear here.',
+      'Issues Patrol finds that need you appear here.',
     ],
     [
       'approval',
       'Patrol is ready to watch and investigate. You approve every change.',
-      'Investigations and approval requests appear here.',
+      'Investigations and approval requests that need you appear here.',
     ],
     [
       'assisted',
@@ -62,7 +62,7 @@ describe('patrolControlPresentation', () => {
   ] satisfies Array<[PatrolAutonomyLevel, string, string]>)(
     'describes %s mode without generic control-level wording',
     (autonomyLevel, currentWorkDetail, workspaceDescription) => {
-      expect(PATROL_WORKSPACE_QUEUE_TITLE).toBe('Current work');
+      expect(PATROL_WORKSPACE_QUEUE_TITLE).toBe('Open work');
       expect(getPatrolReadyWorkDetail({ autonomyLevel })).toBe(currentWorkDetail);
       expect(getPatrolQueueWorkspaceDescription({ autonomyLevel })).toBe(workspaceDescription);
     },
@@ -77,7 +77,7 @@ describe('patrolControlPresentation', () => {
         autonomyLevel: 'full',
         autonomyLocked: true,
       }),
-    ).toBe('Problems Patrol finds appear here.');
+    ).toBe('Issues Patrol finds that need you appear here.');
   });
 
   it('summarizes the open queue by affected resource instead of raw findings', () => {
@@ -136,17 +136,20 @@ describe('patrolControlPresentation', () => {
       upgradeDestination: destination,
     };
 
-    expect(getPatrolProInvestigationHandoff({ ...base, severity: 'critical', status: 'active' }))
-      .toMatchObject({
-        detail: 'Pulse Pro can investigate and fix issues like this.',
-        actionLabel: 'Learn about Pulse Pro',
-        destination,
-      });
-    expect(getPatrolProInvestigationHandoff({ ...base, severity: 'warning', status: 'active' }))
-      .toBeDefined();
+    expect(
+      getPatrolProInvestigationHandoff({ ...base, severity: 'critical', status: 'active' }),
+    ).toMatchObject({
+      detail: 'Pulse Pro can investigate and fix issues like this.',
+      actionLabel: 'Learn about Pulse Pro',
+      destination,
+    });
+    expect(
+      getPatrolProInvestigationHandoff({ ...base, severity: 'warning', status: 'active' }),
+    ).toBeDefined();
 
-    expect(getPatrolProInvestigationHandoff({ ...base, severity: 'info', status: 'active' }))
-      .toBeUndefined();
+    expect(
+      getPatrolProInvestigationHandoff({ ...base, severity: 'info', status: 'active' }),
+    ).toBeUndefined();
     expect(
       getPatrolProInvestigationHandoff({ ...base, severity: 'critical', status: 'resolved' }),
     ).toBeUndefined();

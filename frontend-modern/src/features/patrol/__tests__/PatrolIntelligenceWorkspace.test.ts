@@ -18,7 +18,7 @@ const workspaceSource = readFileSync(
 
 describe('PatrolIntelligenceWorkspace trust strip', () => {
   it('does not render a standalone Trust strip above the workspace tabs', () => {
-    // Current work and deliberate history review own operator-facing trust state.
+    // Needs Attention and deliberate history review own operator-facing trust state.
     // The workspace should not add another standalone counter strip.
     expect(workspaceSource).not.toContain('state.patrolStatus()?.trust');
     expect(workspaceSource).not.toContain('aria-label="Patrol trust summary"');
@@ -55,7 +55,7 @@ describe('PatrolIntelligenceWorkspace trust strip', () => {
     expect(workspaceSource).toContain('Boolean(queueBadgeLabel())');
     expect(workspaceSource).toContain('{queueBadgeLabel()}');
     const removedAllModeCopy =
-      'Current work Patrol can ' +
+      'Open work Patrol can ' +
       'watch, investigate, ask you to approve, or record under your Patrol mode.';
     expect(workspaceSource).not.toContain(removedAllModeCopy);
     expect(workspaceSource).toContain('Provider needs attention');
@@ -67,9 +67,9 @@ describe('PatrolIntelligenceWorkspace trust strip', () => {
     expect(PATROL_WORKSPACE_SETUP_DESCRIPTION).toBe(
       'Open Provider & Models, then run Patrol from this page.',
     );
-    expect(PATROL_WORKSPACE_QUEUE_TITLE).toBe('Current work');
+    expect(PATROL_WORKSPACE_QUEUE_TITLE).toBe('Open work');
     expect(workspaceSource).not.toContain('Current Patrol findings');
-    expect(workspaceSource).toContain('Show current work');
+    expect(workspaceSource).toContain('Show open work');
     expect(workspaceSource).not.toContain('Show open issues');
     expect(workspaceSource).toContain('!state.selectedRun()');
     expect(PATROL_WORKSPACE_RUN_RECORD_TITLE).toBe('Check details');

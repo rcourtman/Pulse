@@ -185,8 +185,11 @@ attention`, `approval needed`, `outcome verified`, `no active work`) instead
    unexplained `95/100` telemetry.
    The Patrol workspace must default to current operator work: current findings,
    active investigations, approval decisions, and selected finding snapshots.
-   Its default visible title must be `Current work`, because that is the
-   plain user-facing answer to what Patrol is handling or asking about now. The exception is a
+   The route and page title must lead with `Needs Attention`, and the default
+   workspace title underneath it must be `Open work` so the page does not repeat
+   the same accessible heading while still answering what needs the operator
+   now. Patrol remains the underlying watch/investigate/act/verify engine. The
+   exception is a
    setup-only Patrol runtime failure: that state must use the `Fix Patrol setup`
    title and setup description while rendering a dedicated setup task instead of
    the generic finding row. When the list is empty, Patrol-owned empty-state copy
@@ -204,7 +207,7 @@ attention`, `approval needed`, `outcome verified`, `no active work`) instead
    separate raw evidence console. Degraded health or historical recurrence alone
    must not surface a page-level forensic context block.
    The default Patrol surface must stay simple: the header, control selector,
-   and current-work workspace own the ordinary operator state. Patrol must not
+   and Open work workspace own the ordinary operator state. Patrol must not
    render a separate always-visible status/activity/health strip just to prove
    the loop exists. Actionable runtime, setup, or coverage failures may still
    surface as concise warnings, and detailed status/trust/history evidence
@@ -216,7 +219,7 @@ attention`, `approval needed`, `outcome verified`, `no active work`) instead
    endlessly animated spinner that competes with the actual Run Patrol action.
    The Patrol page must still remain understandable when the broader
    intelligence summary is missing or slow: keep the page title, selected Patrol
-   mode, and current-work label visible instead of reintroducing a generic
+   mode, and Open work label visible instead of reintroducing a generic
    status strip.
    Plan-locked Patrol mode copy must present the effective Watch only
    capability as the current product state: Patrol watches resources, detects
@@ -518,16 +521,19 @@ attention`, `approval needed`, `outcome verified`, `no active work`) instead
    `Open Provider & Models` action. Raw diagnostic terms such as preflight,
    tool-call observation, or readiness internals belong in Provider & Models
    and backend/test contracts, not in the first-party Patrol operator banner.
-5. Keep customer-facing Patrol naming product-first: page titles, route chrome,
-   summary copy, actions, and empty states should lead with `Patrol` or
-   `Pulse Patrol` rather than generic `AI` branding. Reserve `AI` terminology
-   for explicit provider/configuration settings, shared runtime internals, or
-   other technical capability boundaries where the underlying ownership really
-   is AI runtime rather than the Patrol product surface.
+5. Keep customer-facing Patrol naming product-first while preserving the
+   operator-workbench job words: the daily work destination may lead with
+   `Needs Attention`, while summary copy, actions, empty states, and mode
+   controls should keep Patrol or Pulse Patrol as the watch/investigate/act
+   engine rather than generic `AI` branding. Reserve `AI` terminology for
+   explicit provider/configuration settings, shared runtime internals, or other
+   technical capability boundaries where the underlying ownership really is AI
+   runtime rather than the Patrol product surface.
 6. Keep Patrol brand icon accessibility contextual: `PulsePatrolLogo` remains
    label-bearing when the icon stands alone, but Patrol headings and actions
-   that already include visible Patrol text must render the logo as decorative
-   so accessible names do not repeat as `Pulse Patrol Patrol`.
+   that already include visible Patrol or Needs Attention text must render the
+   logo as decorative so accessible names do not repeat as `Pulse Patrol Needs
+   Attention` or similar duplicated names.
 7. Keep Patrol remediation copy operator-safe even while legacy transport
    fields retain `auto_fix` naming for compatibility: header autonomy controls,
    Pro-locked helper text, investigation outcome labels, and run-history badges

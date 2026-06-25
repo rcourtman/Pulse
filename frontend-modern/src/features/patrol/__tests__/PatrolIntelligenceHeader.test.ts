@@ -279,7 +279,7 @@ describe('PatrolIntelligenceHeader', () => {
   });
 
   it('keeps trust counters out of the page header chrome', () => {
-    // Current work and deliberate history review own trust
+    // Needs Attention and deliberate history review own trust
     // state. The header should stay focused on title, recency, and controls.
     expect(headerSource).not.toContain('aria-label="Patrol trust summary header"');
     expect(headerSource).not.toContain('state.patrolStatus()?.trust');

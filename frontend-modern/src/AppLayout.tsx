@@ -210,7 +210,7 @@ export function AppLayout(props: AppLayoutProps) {
     vmware: 'vSphere',
     standalone: 'Machines',
     alerts: 'Alerts',
-    ai: 'Patrol',
+    ai: 'Needs Attention',
     settings: 'Settings',
   };
   createEffect(() => {
@@ -234,9 +234,7 @@ export function AppLayout(props: AppLayoutProps) {
     standalone: ROOT_STANDALONE_PATH,
   };
   const primaryWorkspacePath = createMemo(() => {
-    const navId = selectFirstVisiblePrimaryPlatformNavigationId(
-      platformNavigationVisibility(),
-    );
+    const navId = selectFirstVisiblePrimaryPlatformNavigationId(platformNavigationVisibility());
     return navId ? primaryInfrastructureRouteById[navId] : ROOT_ALERTS_PATH;
   });
 
@@ -430,9 +428,9 @@ export function AppLayout(props: AppLayoutProps) {
       },
       {
         id: 'ai',
-        label: 'Patrol',
+        label: 'Needs Attention',
         route: '/patrol',
-        tooltip: 'Continuous verification and actionable findings',
+        tooltip: 'Review issues and approvals that need action',
         badge: null,
         count: undefined,
         breakdown: undefined,

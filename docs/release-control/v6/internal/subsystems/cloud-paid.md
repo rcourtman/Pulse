@@ -819,7 +819,10 @@ or other self-hosted uncapped continuity plans.
     App-shell navigation rendered by `frontend-modern/src/AppLayout.tsx` must
     also keep decorative icon titles out of tab accessible names, so hosted and
     self-hosted chrome announce the canonical tab label plus meaningful badge
-    counts rather than duplicating branded SVG titles.
+    counts rather than duplicating branded SVG titles. Renaming the Patrol-owned
+    utility destination to `Needs Attention` is shell chrome over the same
+    `/patrol` route; it must not alter hosted org bootstrap, entitlement loading,
+    or commercial posture loading.
     Retired operator top-level route compatibility in
     `frontend-modern/src/App.tsx` must stay inside authenticated app-owned
     surfaces such as Infrastructure, Workloads, Storage, and Recovery. Those
@@ -969,6 +972,9 @@ hands-on Patrol modes, issue investigation, verified fixes, and longer history`.
     `standalone` route/id, is not a new commercial usage unit: hosted and paid
     surfaces continue to meter the governed monitored-system grouping result
     rather than counting primary navigation destinations.
+    The user-facing `Needs Attention` utility tab is likewise not a commercial
+    plan or usage unit; it remains the Patrol-owned daily work entrypoint over
+    current findings, approvals, and verification state.
     Landing behavior for paid and hosted shells must also defer to the
     frontend-primitives-owned provider-first landing contract instead of
     defining a cloud-paid-specific order.
