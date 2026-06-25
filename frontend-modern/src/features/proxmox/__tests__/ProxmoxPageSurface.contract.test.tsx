@@ -93,10 +93,6 @@ vi.mock('../ProxmoxBackupsTable', () => ({
   ProxmoxBackupsTable: () => <div data-testid="backups-table" />,
 }));
 
-vi.mock('../ProxmoxOverviewCoverageStrip', () => ({
-  ProxmoxOverviewCoverageStrip: () => <div data-testid="overview-coverage-strip" />,
-}));
-
 vi.mock('../ProxmoxCephTable', () => ({
   ProxmoxCephTable: () => <div data-testid="ceph-table" />,
 }));

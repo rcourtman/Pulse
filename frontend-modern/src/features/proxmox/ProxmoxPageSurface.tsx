@@ -39,7 +39,6 @@ import { ProxmoxBackupsTable } from './ProxmoxBackupsTable';
 import { ProxmoxCephTable } from './ProxmoxCephTable';
 import { ProxmoxMailGatewayTable } from './ProxmoxMailGatewayTable';
 import { ProxmoxNodesTable } from './ProxmoxNodesTable';
-import { ProxmoxOverviewCoverageStrip } from './ProxmoxOverviewCoverageStrip';
 import { ProxmoxReplicationTable, fetchReplicationJobs } from './ProxmoxReplicationTable';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import { updateStore } from '@/stores/updates';
@@ -292,9 +291,6 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
 
   return (
     <div class="space-y-4">
-      <Show when={props.model().summary.guestCount > 0}>
-        <ProxmoxOverviewCoverageStrip workloads={props.model().guests} />
-      </Show>
       <Show when={showSharedFilterToolbar()}>
         <div data-summary-clear-ignore>
           <WorkloadsFilter
