@@ -2,7 +2,7 @@ import { Component, For, JSX, Show, splitProps } from 'solid-js';
 import BarChartIcon from 'lucide-solid/icons/bar-chart';
 import ListFilterIcon from 'lucide-solid/icons/list-filter';
 import { FormSelect } from './FormSelect';
-import { FilterButtonGroup, type FilterOption } from './FilterButtonGroup';
+import { FilterButtonGroup, type FilterButtonGroupOptionTone, type FilterOption } from './FilterButtonGroup';
 
 export const filterToolbarShellClass = '';
 export const filterToolbarRowClass = 'flex flex-wrap items-center gap-2 text-xs text-muted';
@@ -190,6 +190,7 @@ export interface FilterSegmentOption {
   ariaLabel?: string;
   leading?: JSX.Element;
   disabled?: boolean;
+  tone?: FilterButtonGroupOptionTone;
 }
 
 export const COMPACT_FILTER_TOGGLE_MAX_OPTIONS = 5;
@@ -204,10 +205,11 @@ interface FilterSegmentedControlProps extends Omit<JSX.HTMLAttributes<HTMLDivEle
   onChange: (value: string) => void;
   options: FilterSegmentOption[];
   label?: JSX.Element;
+  disabled?: boolean;
 }
 
 export const FilterSegmentedControl: Component<FilterSegmentedControlProps> = (props) => {
-  const [local, divProps] = splitProps(props, ['value', 'onChange', 'options', 'label', 'class']);
+  const [local, divProps] = splitProps(props, ['value', 'onChange', 'options', 'label', 'class', 'disabled']);
   const options = (): FilterOption<string>[] =>
     local.options.map((option) => ({
       value: option.value,
@@ -219,6 +221,7 @@ export const FilterSegmentedControl: Component<FilterSegmentedControlProps> = (p
       title: option.title,
       ariaLabel: option.ariaLabel,
       disabled: option.disabled,
+      tone: option.tone,
     }));
 
   return (
@@ -230,6 +233,7 @@ export const FilterSegmentedControl: Component<FilterSegmentedControlProps> = (p
       onChange={local.onChange}
       ariaLabel={divProps['aria-label'] as string | undefined}
       variant="compact"
+      disabled={local.disabled}
       options={options()}
     />
   );

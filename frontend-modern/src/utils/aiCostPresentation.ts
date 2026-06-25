@@ -1,5 +1,3 @@
-import { segmentedButtonClass } from '@/utils/segmentedButton';
-
 export const AI_COST_PANEL_TITLE = 'Provider Usage & Spend';
 export const AI_COST_PANEL_DESCRIPTION =
   'Token usage and estimated spend across providers backing Pulse Assistant and Patrol.';
@@ -54,10 +52,6 @@ export function buildAICostExportFilename(
   now = new Date(),
 ) {
   return `pulse-provider-usage-${now.toISOString().split('T')[0]}-${rangeDays}d.${format}`;
-}
-
-export function getAICostRangeButtonClass(selected: boolean, disabled = false): string {
-  return `min-h-10 sm:min-h-9 min-w-10 border px-2.5 py-2 text-sm ${segmentedButtonClass(selected, disabled)}`;
 }
 
 export interface AICostTargetPresentationInput {

@@ -16,7 +16,6 @@ import {
   getAICostExportHistoryErrorMessage,
   getAICostLoadingState,
   getAICostRefreshErrorMessage,
-  getAICostRangeButtonClass,
   getAICostResetHistoryConfirmationMessage,
   getAICostResetHistoryErrorMessage,
   getAICostResetHistorySuccessMessage,
@@ -24,12 +23,6 @@ import {
 } from '@/utils/aiCostPresentation';
 
 describe('aiCostPresentation', () => {
-  it('returns canonical AI cost range button classes', () => {
-    expect(getAICostRangeButtonClass(true)).toContain('inline-flex items-center');
-    expect(getAICostRangeButtonClass(true)).toContain('bg-surface');
-    expect(getAICostRangeButtonClass(false, true)).toContain('cursor-not-allowed');
-  });
-
   it('exports canonical AI cost presentation copy', () => {
     expect(AI_COST_PANEL_TITLE).toBe('Provider Usage & Spend');
     expect(AI_COST_PANEL_DESCRIPTION).toBe(

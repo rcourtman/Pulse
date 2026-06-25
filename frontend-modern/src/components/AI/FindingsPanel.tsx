@@ -37,7 +37,7 @@ import { createSuppressionRuleFromFinding, reinvestigateFinding } from '@/api/pa
 import type { PatrolRunRecord, PatrolRuntimeState } from '@/api/patrol';
 import { formatRelativeTime } from '@/utils/format';
 import { getFindingAlertIdentifier, hasTriggeringAlert } from '@/utils/findingAlertIdentity';
-import { segmentedButtonClass } from '@/utils/segmentedButton';
+import { FilterSegmentedControl, type FilterSegmentOption } from '@/components/shared/FilterToolbar';
 import { getSemanticTonePresentation } from '@/utils/semanticTonePresentation';
 import { formatIdentifierLabel } from '@/utils/textPresentation';
 import type { IntelligenceHealthScore } from '@/types/aiIntelligence';
@@ -89,12 +89,20 @@ const FINDING_ROW_BADGE_PROPS = {
   shape: 'rounded',
 } as const;
 
+export type FindingsPanelFilter =
+  | 'all'
+  | 'active'
+  | 'resolved'
+  | 'approvals'
+  | 'attention'
+  | 'overdue';
+
 interface FindingsPanelProps {
   resourceId?: string;
   showResolved?: boolean;
   maxItems?: number;
   onFindingClick?: (finding: UnifiedFinding) => void;
-  filterOverride?: 'all' | 'active' | 'resolved' | 'approvals' | 'attention' | 'overdue';
+  filterOverride?: FindingsPanelFilter;
   filterFindingIds?: string[];
   showControls?: boolean;
   scopeResourceIds?: string[];
@@ -144,9 +152,7 @@ function getFindingSuppressionRuleScope(finding: UnifiedFinding) {
 
 export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   const location = useLocation();
-  const [filter, setFilter] = createSignal<
-    'all' | 'active' | 'resolved' | 'approvals' | 'attention' | 'overdue'
-  >(props.filterOverride ?? 'active');
+  const [filter, setFilter] = createSignal<FindingsPanelFilter>(props.filterOverride ?? 'active');
   const [sortBy, setSortBy] = createSignal<'severity' | 'time'>('severity');
   const [expandedId, setExpandedId] = createSignal<string | null>(null);
   const [actionLoading, setActionLoading] = createSignal<string | null>(null);
@@ -447,6 +453,26 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     return buildPatrolFindingDisplayGroups(findings);
   });
   const filterOptions = createMemo(() => buildFindingFilterOptions(filterCounts()));
+  const filterSegments = createMemo<FilterSegmentOption[]>(() => {
+    const segments: FilterSegmentOption[] = filterOptions().map((option) => ({
+      value: option.value,
+      tone: option.tone,
+      label: (
+        <>
+          {option.label}
+          <Show when={typeof option.count === 'number'}>{` (${option.count})`}</Show>
+        </>
+      ),
+    }));
+    if (overdueCount() > 0) {
+      segments.push({
+        value: 'overdue',
+        tone: 'warning',
+        label: <>Overdue commitments ({overdueCount()})</>,
+      });
+    }
+    return segments;
+  });
   const emptyStateCopy = createMemo(() => {
     // 'overdue' is a FindingsPanel-local extension to the shared
     // FindingsFilter union. The empty state for that case is rendered
@@ -1826,37 +1852,12 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       {/* Controls */}
       <Show when={showFilterControls()}>
         <div class="flex items-center justify-between">
-          <div class="flex text-xs">
-            <For each={filterOptions()}>
-              {(option, index) => {
-                const isFirst = () => index() === 0;
-                const isLast = () => index() === filterOptions().length - 1 && overdueCount() === 0;
-                return (
-                  <button
-                    type="button"
-                    onClick={() => setFilter(option.value)}
-                    class={`px-2 py-1 border ${
-                      isFirst() ? 'rounded-l border-r-0' : isLast() ? 'rounded-r' : 'border-r-0'
-                    } ${segmentedButtonClass(filter() === option.value, false, option.tone ?? 'default')}`}
-                  >
-                    {option.label}
-                    <Show when={typeof option.count === 'number'}>{` (${option.count})`}</Show>
-                  </button>
-                );
-              }}
-            </For>
-            <Show when={overdueCount() > 0}>
-              <button
-                type="button"
-                data-testid="findings-panel-filter-overdue"
-                onClick={() => setFilter('overdue')}
-                class={`px-2 py-1 border rounded-r ${segmentedButtonClass(filter() === 'overdue', false, 'warning')}`}
-                title="Will-fix-later commitments past their remind deadline"
-              >
-                Overdue commitments ({overdueCount()})
-              </button>
-            </Show>
-          </div>
+          <FilterSegmentedControl
+            aria-label="Filter findings"
+            value={filter()}
+            onChange={(value) => setFilter(value as FindingsPanelFilter)}
+            options={filterSegments()}
+          />
           <Show when={patrolFindingDisplayGroups().length > 1}>
             <FormSelect
               label="Sort findings"

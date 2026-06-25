@@ -173,7 +173,7 @@ describe('FindingsPanel overdue commitments filter', () => {
     await waitFor(() => expect(mockState.loadPatrolFindings).toHaveBeenCalled());
 
     // The Overdue chip appears in the filter bar.
-    const overdueChip = screen.getByTestId('findings-panel-filter-overdue');
+    const overdueChip = screen.getByRole('button', { name: /overdue commitments/i });
     expect(overdueChip).toHaveTextContent(/Overdue commitments \(1\)/);
     fireEvent.click(overdueChip);
 
@@ -200,7 +200,9 @@ describe('FindingsPanel overdue commitments filter', () => {
     render(() => <FindingsPanel findingsSource="patrol" />);
 
     await waitFor(() => expect(mockState.loadPatrolFindings).toHaveBeenCalled());
-    expect(screen.queryByTestId('findings-panel-filter-overdue')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /overdue commitments/i }),
+    ).not.toBeInTheDocument();
   });
 
   it('honors filterOverride="overdue" so callers can land directly on the filter', async () => {

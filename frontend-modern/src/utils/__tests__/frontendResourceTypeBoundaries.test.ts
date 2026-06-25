@@ -3753,7 +3753,8 @@ describe('frontend resource type boundaries', () => {
     expect(thresholdSliderPresentationSource).toContain(
       'export function getThresholdSliderFillClass',
     );
-    expect(aiCostDashboardSource).toContain('getAICostRangeButtonClass');
+    expect(aiCostDashboardSource).toContain('FilterSegmentedControl');
+    expect(aiCostDashboardSource).not.toContain('getAICostRangeButtonClass');
     expect(aiCostDashboardSource).toContain('getAICostLoadingState');
     expect(aiCostDashboardSource).toContain('AI_COST_PANEL_TITLE');
     expect(aiCostDashboardSource).toContain('AI_COST_PANEL_DESCRIPTION');

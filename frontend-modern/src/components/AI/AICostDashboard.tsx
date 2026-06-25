@@ -9,6 +9,7 @@ import {
   TableCell,
 } from '@/components/shared/Table';
 import { SectionHeader } from '@/components/shared/SectionHeader';
+import { FilterSegmentedControl } from '@/components/shared/FilterToolbar';
 import { AIAPI } from '@/api/ai';
 import { aiRuntimeSettings, loadAIRuntimeSettings } from '@/stores/aiRuntimeState';
 import { formatNumber } from '@/utils/format';
@@ -31,7 +32,6 @@ import {
   getAICostExportHistoryErrorMessage,
   getAICostLoadingState,
   getAICostRefreshErrorMessage,
-  getAICostRangeButtonClass,
   getAICostResetHistoryConfirmationMessage,
   getAICostResetHistoryErrorMessage,
   getAICostResetHistorySuccessMessage,
@@ -312,48 +312,19 @@ export const AICostDashboard: Component = () => {
           <Show when={loading()}>
             <div class="text-xs text-muted">Loading…</div>
           </Show>
-          <div class="flex items-center gap-1">
-            <button
-              type="button"
-              disabled={loading()}
-              onClick={() => handleRangeClick(1)}
-              class={getAICostRangeButtonClass(days() === 1, loading())}
-            >
-              1d
-            </button>
-            <button
-              type="button"
-              disabled={loading()}
-              onClick={() => handleRangeClick(7)}
-              class={getAICostRangeButtonClass(days() === 7, loading())}
-            >
-              7d
-            </button>
-            <button
-              type="button"
-              disabled={loading()}
-              onClick={() => handleRangeClick(30)}
-              class={getAICostRangeButtonClass(days() === 30, loading())}
-            >
-              30d
-            </button>
-            <button
-              type="button"
-              disabled={loading()}
-              onClick={() => handleRangeClick(90)}
-              class={getAICostRangeButtonClass(days() === 90, loading())}
-            >
-              90d
-            </button>
-            <button
-              type="button"
-              disabled={loading()}
-              onClick={() => handleRangeClick(365)}
-              class={getAICostRangeButtonClass(days() === 365, loading())}
-            >
-              1y
-            </button>
-          </div>
+          <FilterSegmentedControl
+            aria-label="Cost range"
+            value={String(days())}
+            disabled={loading()}
+            onChange={(value) => handleRangeClick(Number(value))}
+            options={[
+              { value: '1', label: '1d' },
+              { value: '7', label: '7d' },
+              { value: '30', label: '30d' },
+              { value: '90', label: '90d' },
+              { value: '365', label: '1y' },
+            ]}
+          />
         </div>
       </div>
 
