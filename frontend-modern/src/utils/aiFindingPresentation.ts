@@ -658,6 +658,35 @@ export function getPatrolWorkTypeCompositionClause(
   return ` — ${parts.join(', ')}`;
 }
 
+export interface PatrolActionableStatePresentation {
+  label: string;
+  tone: MetadataBadgeTone;
+}
+
+export function getPatrolFindingActionableState(
+  finding: Pick<UnifiedFinding, 'status' | 'investigationStatus' | 'investigationOutcome'>,
+): PatrolActionableStatePresentation | undefined {
+  if (finding.status !== 'active') return undefined;
+
+  if (finding.investigationOutcome === 'fix_queued') {
+    return { label: 'Approval required', tone: 'warning' };
+  }
+
+  if (isFailedFixOutcome(finding.investigationOutcome)) {
+    return { label: 'Fix failed', tone: 'danger' };
+  }
+
+  if (finding.investigationStatus === 'running') {
+    return { label: 'Investigating', tone: 'info' };
+  }
+
+  if (finding.investigationOutcome === 'fix_executed') {
+    return { label: 'Verifying fix', tone: 'info' };
+  }
+
+  return undefined;
+}
+
 export const getPatrolFindingIssueCountLabel = (count: number): string => {
   const normalized = Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : 0;
   if (normalized === 1) {

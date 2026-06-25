@@ -960,6 +960,12 @@ describe('aiFindingPresentation', () => {
       expect(patrolWorkspaceSource).toContain('workTypeComposition');
     });
 
+    it('shows contract-sanctioned actionable state badges on collapsed Patrol rows', () => {
+      expect(findingsPanelSource).toContain('getPatrolFindingActionableState');
+      expect(findingsPanelSource).toContain('patrolActionableState');
+      expect(findingsPanelSource).toContain('isPatrolFindingsSource() && patrolActionableState()');
+    });
+
     it('does not stack a default detected loop-state badge on active findings', () => {
       expect(findingsPanelSource).toContain('const shouldShowLoopStateBadge = () =>');
       expect(findingsPanelSource).toContain('!isPatrolFindingsSource()');

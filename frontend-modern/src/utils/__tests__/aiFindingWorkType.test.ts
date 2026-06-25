@@ -4,8 +4,8 @@ import {
   classifyPatrolFindingWorkType,
   getPatrolWorkTypeComposition,
   getPatrolWorkTypeCompositionClause,
+  getPatrolFindingActionableState,
 } from '@/utils/aiFindingPresentation';
-import type { UnifiedFinding } from '@/stores/aiIntelligence';
 
 type ClassifyInput = Parameters<typeof classifyPatrolFindingWorkType>[0];
 
@@ -176,5 +176,46 @@ describe('getPatrolWorkTypeCompositionClause', () => {
         newIssues: 1,
       }),
     ).toBe(' — 1 needs approval, 1 failed fix, 2 recurring');
+  });
+});
+
+describe('getPatrolFindingActionableState', () => {
+  it('returns undefined for a plain new finding', () => {
+    expect(getPatrolFindingActionableState(makeFinding())).toBeUndefined();
+  });
+
+  it('returns approval required for fix_queued', () => {
+    expect(
+      getPatrolFindingActionableState(makeFinding({ investigationOutcome: 'fix_queued' })),
+    ).toEqual({ label: 'Approval required', tone: 'warning' });
+  });
+
+  it.each(['fix_failed', 'fix_verification_failed', 'cannot_fix', 'timed_out'] as const)(
+    'returns fix failed for %s',
+    (outcome) => {
+      expect(getPatrolFindingActionableState(makeFinding({ investigationOutcome: outcome }))).toEqual(
+        { label: 'Fix failed', tone: 'danger' },
+      );
+    },
+  );
+
+  it('returns investigating for a running investigation', () => {
+    expect(
+      getPatrolFindingActionableState(makeFinding({ investigationStatus: 'running' })),
+    ).toEqual({ label: 'Investigating', tone: 'info' });
+  });
+
+  it('returns verifying fix for fix_executed', () => {
+    expect(
+      getPatrolFindingActionableState(makeFinding({ investigationOutcome: 'fix_executed' })),
+    ).toEqual({ label: 'Verifying fix', tone: 'info' });
+  });
+
+  it('returns undefined for non-active findings', () => {
+    expect(
+      getPatrolFindingActionableState(
+        makeFinding({ status: 'resolved', investigationOutcome: 'fix_queued' }),
+      ),
+    ).toBeUndefined();
   });
 });

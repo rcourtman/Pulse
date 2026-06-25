@@ -7336,11 +7336,11 @@
     {
       "id": "opencode-coverage-gap-protection-posture-attention-queue",
       "agent_id": "opencode",
-      "summary": "Patrol workspace work-type grouping: classify findings by actionable type and surface composition in the workspace header",
+      "summary": "Patrol row-level actionable state labels: translate hidden investigation state into plain-language badges on collapsed Patrol finding rows",
       "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-06-25T22:11:19Z",
-      "heartbeat_at": "2026-06-25T22:11:19Z",
-      "expires_at": "2026-06-26T00:11:19Z",
+      "claimed_at": "2026-06-25T22:24:34Z",
+      "heartbeat_at": "2026-06-25T22:24:34Z",
+      "expires_at": "2026-06-26T00:24:34Z",
       "work_item": {
         "kind": "coverage-gap",
         "id": "protection-posture-attention-queue"

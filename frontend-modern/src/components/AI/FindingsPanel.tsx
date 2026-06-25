@@ -80,6 +80,7 @@ import {
   getInvestigationStatusLabel,
   getInvestigationOutcomeSortOrder,
   getInvestigationStatusBadgeTone,
+  getPatrolFindingActionableState,
 } from '@/utils/aiFindingPresentation';
 import { copyToClipboard } from '@/utils/clipboard';
 
@@ -884,6 +885,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     const rowPrimaryAction = getFindingPrimaryActionPresentation(finding);
     const patrolWorkflow = () =>
       getFindingPatrolWorkflowPresentation(finding, aiIntelligenceStore.patrolPendingApprovals);
+    const patrolActionableState = () => getPatrolFindingActionableState(finding);
     const collapsedApprovalAction = () => {
       const workflow = patrolWorkflow();
       return workflow?.stage === 'approval' ? workflow : undefined;
@@ -976,6 +978,19 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               >
                 {severityPresentation.label}
               </MetadataBadge>
+              {/* Patrol actionable state — plain-language translation of
+                  investigation state that the contract allows on the
+                  collapsed Patrol row (approval required, investigating,
+                  verifying fix, fix failed). Raw investigation-status and
+                  investigation-outcome badges stay hidden for Patrol
+                  findings; this badge surfaces the operator-facing meaning. */}
+              <Show when={isPatrolFindingsSource() && patrolActionableState()}>
+                {(state) => (
+                  <MetadataBadge {...FINDING_ROW_BADGE_PROPS} tone={state().tone}>
+                    {state().label}
+                  </MetadataBadge>
+                )}
+              </Show>
               {/* Alert-triggered badge */}
               <Show when={hasTriggeringAlert(finding)}>
                 <MetadataBadge
