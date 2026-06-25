@@ -74,6 +74,24 @@ function formatCount(count: number, singular: string, plural = `${singular}s`): 
   return `${count} ${count === 1 ? singular : plural}`;
 }
 
+function getPatrolQueueActionDetail(input: PatrolControlCopyInput): string {
+  if (input.autonomyLocked) {
+    return 'Open a row to review evidence and record the outcome.';
+  }
+
+  switch (input.autonomyLevel) {
+    case 'approval':
+      return 'Open a row to review evidence, approve any change, and verify the outcome.';
+    case 'assisted':
+      return 'Open a row to see safe fixes, approval requests, and verification.';
+    case 'full':
+      return 'Open a row to see automatic actions, policy approvals, and verification.';
+    case 'monitor':
+    default:
+      return 'Open a row to review evidence and record the outcome.';
+  }
+}
+
 export function getPatrolSetupIssueReason(input: PatrolSetupIssueReasonInput): string {
   const setupFindingTitle = normalizeText(input.setupFindingTitle);
   if (setupFindingTitle) return setupFindingTitle;
@@ -131,23 +149,23 @@ export function getPatrolQueueWorkspaceDescription(
     return `Patrol found ${getPatrolFindingIssueCountLabel(findingCount)} on ${formatCount(
       affectedResourceCount,
       'affected resource',
-    )}.`;
+    )}. ${getPatrolQueueActionDetail(input)}`;
   }
 
   if (input.autonomyLocked) {
-    return 'Patrol lists current issues here after each check.';
+    return 'Patrol lists current issues here after each check. History keeps past outcomes.';
   }
 
   switch (input.autonomyLevel) {
     case 'approval':
-      return 'Patrol lists investigations and approval requests here.';
+      return 'Patrol lists investigations, approvals, and verification results here.';
     case 'assisted':
-      return 'Patrol lists issues it is handling here and asks when approval is needed.';
+      return 'Patrol lists issues it can fix, approvals it needs, and verification results here.';
     case 'full':
-      return 'Patrol lists issues it is handling here and asks when policy requires approval.';
+      return 'Patrol lists automatic work, policy approvals, and verification results here.';
     case 'monitor':
     default:
-      return 'Patrol lists current issues here after each check.';
+      return 'Patrol lists current issues here after each check. History keeps past outcomes.';
   }
 }
 

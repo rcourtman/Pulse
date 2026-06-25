@@ -104,6 +104,10 @@ loop, and routes the operator from real findings/evidence to safe action.
   with factual `pulse-view` context attached. Browser proof covered desktop
   `/proxmox/overview` launcher, Assistant context strip, command palette first
   action, and the mobile launcher.
+- 2026-06-25: Clarified Patrol's Open work description so it explains the next
+  useful row-level step by Patrol mode: review evidence in Watch only, approve
+  changes in Ask first, inspect safe fixes or automatic actions in higher
+  modes, and review verification results without adding a separate proof strip.
 
 ## Evidence
 

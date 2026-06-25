@@ -42,22 +42,22 @@ describe('patrolControlPresentation', () => {
     [
       'monitor',
       'Patrol is ready to check infrastructure and list current issues.',
-      'Patrol lists current issues here after each check.',
+      'Patrol lists current issues here after each check. History keeps past outcomes.',
     ],
     [
       'approval',
       'Patrol is ready to check, investigate, and ask before any change.',
-      'Patrol lists investigations and approval requests here.',
+      'Patrol lists investigations, approvals, and verification results here.',
     ],
     [
       'assisted',
       'Patrol is ready to check, investigate, and fix safe issues when policy allows it.',
-      'Patrol lists issues it is handling here and asks when approval is needed.',
+      'Patrol lists issues it can fix, approvals it needs, and verification results here.',
     ],
     [
       'full',
       'Patrol is ready to check, investigate, and act automatically within your policy.',
-      'Patrol lists issues it is handling here and asks when policy requires approval.',
+      'Patrol lists automatic work, policy approvals, and verification results here.',
     ],
   ] satisfies Array<[PatrolAutonomyLevel, string, string]>)(
     'describes %s mode without generic control-level wording',
@@ -77,7 +77,7 @@ describe('patrolControlPresentation', () => {
         autonomyLevel: 'full',
         autonomyLocked: true,
       }),
-    ).toBe('Patrol lists current issues here after each check.');
+    ).toBe('Patrol lists current issues here after each check. History keeps past outcomes.');
   });
 
   it('summarizes the open queue by affected resource instead of raw findings', () => {
@@ -98,14 +98,36 @@ describe('patrolControlPresentation', () => {
         findingCount: 2,
         affectedResourceCount: 1,
       }),
-    ).toBe('Patrol found 2 issues on 1 affected resource.');
+    ).toBe(
+      'Patrol found 2 issues on 1 affected resource. Open a row to review evidence and record the outcome.',
+    );
     expect(
       getPatrolQueueWorkspaceDescription({
         autonomyLevel: 'approval',
         findingCount: 1,
         affectedResourceCount: 1,
       }),
-    ).toBe('Patrol found 1 issue on 1 affected resource.');
+    ).toBe(
+      'Patrol found 1 issue on 1 affected resource. Open a row to review evidence, approve any change, and verify the outcome.',
+    );
+    expect(
+      getPatrolQueueWorkspaceDescription({
+        autonomyLevel: 'assisted',
+        findingCount: 2,
+        affectedResourceCount: 2,
+      }),
+    ).toBe(
+      'Patrol found 2 issues on 2 affected resources. Open a row to see safe fixes, approval requests, and verification.',
+    );
+    expect(
+      getPatrolQueueWorkspaceDescription({
+        autonomyLevel: 'full',
+        findingCount: 3,
+        affectedResourceCount: 2,
+      }),
+    ).toBe(
+      'Patrol found 3 issues on 2 affected resources. Open a row to see automatic actions, policy approvals, and verification.',
+    );
   });
 
   it('keeps setup-only issue reasons short and actionable', () => {

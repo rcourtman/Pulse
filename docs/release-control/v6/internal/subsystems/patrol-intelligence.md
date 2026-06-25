@@ -58,6 +58,11 @@ Patrol-specific presentation helpers.
 
 ## Extension Points
 
+Open work descriptions are Patrol-owned operator guidance. They may mention the
+visible next step, approvals, and verification results when those words help the
+operator understand what to do next, but they must not become a separate proof
+strip, backend accounting summary, or generic all-mode capability sentence.
+
 1. Add or change Patrol page orchestration through `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`, keep `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts` as the canonical investigation-context derivation owner, keep `frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx` as the feature shell, keep the Patrol-owned section files under `frontend-modern/src/features/patrol/` as the heavy render owners, keep `frontend-modern/src/pages/AIIntelligence.tsx` as the route shell, keep `frontend-modern/src/stores/aiIntelligenceSummaryModel.ts` as the canonical AI summary normalization owner, and update `frontend-modern/src/stores/aiIntelligence.ts` together
    The default Patrol workspace is the current-issues list. It must not add a
    second proof strip that restates the same finding, approval, or setup
@@ -294,8 +299,10 @@ attention`, `approval needed`, `outcome verified`, `no active work`) instead
    sentence. Watch-only installs must not advertise investigation, approvals, or
    fixes in the default findings copy. The default workspace description should
    tell the operator what Patrol-found problems will appear there and what
-   Patrol may do under the selected mode; it must not describe internal
-   queue mechanics, activation proof, or verification accounting.
+   Patrol may do under the selected mode, including whether the next row-level
+   step is evidence review, approval, automatic action review, or verification
+   result review; it must not describe internal queue mechanics, activation
+   proof, or verification accounting.
 2. Add or change Patrol findings, approvals, investigation, status-bar, or run-history presentation through `frontend-modern/src/components/AI/FindingsPanel.tsx` and `frontend-modern/src/components/patrol/`
    Patrol owns run-history labels, counts, status variants, and domain copy, but
    visible run-history, status-bar, and runtime-summary state badges must

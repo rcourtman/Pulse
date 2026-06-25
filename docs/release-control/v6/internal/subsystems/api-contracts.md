@@ -1460,6 +1460,11 @@ payload shape change when the portal presents compact client rows.
 
 ## Extension Points
 
+Patrol Open work copy in the browser may clarify row-level evidence, approval,
+automatic-action, and verification-result review as presentation over existing
+Patrol finding/run/status payloads. Such copy changes do not by themselves add
+a new API state machine, queue contract, or verification-accounting field.
+
 0. Parallel platform/resource handler families share their flow logic instead
    of per-platform copies. `internal/api/platform_connection_shared.go` owns
    the platform connection update flow (locate by trimmed ID, decode with
