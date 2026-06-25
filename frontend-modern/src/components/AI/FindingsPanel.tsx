@@ -33,7 +33,7 @@ import {
 } from '@/features/patrol/patrolInvestigationContextModel';
 import { InvestigationSection, ApprovalSection } from '@/components/patrol';
 import { AIAPI, type RemediationPlan } from '@/api/ai';
-import { createSuppressionRuleFromFinding } from '@/api/patrol';
+import { createSuppressionRuleFromFinding, reinvestigateFinding } from '@/api/patrol';
 import type { PatrolRunRecord, PatrolRuntimeState } from '@/api/patrol';
 import { formatRelativeTime } from '@/utils/format';
 import { getFindingAlertIdentifier, hasTriggeringAlert } from '@/utils/findingAlertIdentity';
@@ -606,6 +606,34 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       notificationStore.success(`Finding snoozed for ${durationHours}h`);
     } else {
       notificationStore.error('Failed to snooze finding');
+    }
+  };
+
+  // Start (or re-start) Patrol's investigation of a finding. This is the
+  // forward path for an un-investigated finding on the Patrol surface, where
+  // the Assistant primary action is intentionally suppressed: it moves the
+  // row from a triage dead-end into the detect → investigate → propose →
+  // approve → verify loop, reusing the existing reinvestigate endpoint.
+  const handleInvestigate = async (finding: UnifiedFinding, e: Event) => {
+    e.stopPropagation();
+    setActionLoading(finding.id);
+    try {
+      const result = await reinvestigateFinding(finding.id);
+      setActionLoading(null);
+      if (result.success) {
+        notificationStore.success('Patrol is investigating this finding');
+        void Promise.all([
+          aiIntelligenceStore.loadFindings(),
+          aiIntelligenceStore.loadPatrolFindings(),
+        ]);
+      } else {
+        notificationStore.warning(result.message || 'Failed to start investigation');
+      }
+    } catch (err) {
+      setActionLoading(null);
+      notificationStore.error(
+        err instanceof Error ? err.message : 'Failed to start investigation',
+      );
     }
   };
 
@@ -1423,6 +1451,28 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 />
               </svg>
               {getPrimaryAssistantFindingAction(finding).label}
+            </button>
+          </Show>
+          <Show
+            when={
+              !primaryAction &&
+              !shouldShowAssistantPrimaryAction &&
+              finding.status === 'active' &&
+              !finding.investigationStatus &&
+              !finding.investigationOutcome &&
+              !finding.lastInvestigatedAt &&
+              !!props.runtimeState?.autonomy_level &&
+              props.runtimeState.autonomy_level !== 'monitor'
+            }
+          >
+            <button
+              type="button"
+              onClick={(e) => handleInvestigate(finding, e)}
+              disabled={actionLoading() === finding.id}
+              class="inline-flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+              title="Have Patrol investigate this finding"
+            >
+              {actionLoading() === finding.id ? 'Investigating…' : 'Investigate'}
             </button>
           </Show>
           <Show when={proHandoff}>

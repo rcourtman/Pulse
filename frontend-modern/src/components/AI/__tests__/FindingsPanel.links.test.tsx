@@ -596,3 +596,55 @@ describe('FindingsPanel resource links', () => {
     ).toBeInTheDocument();
   });
 });
+
+describe('FindingsPanel investigate action gating', () => {
+  beforeEach(() => {
+    mockState.patrolFindings = [
+      {
+        id: 'finding-provider-issue',
+        source: 'ai-patrol',
+        resourceId: 'instance:node:100',
+        resourceName: 'vm-100',
+        resourceType: 'vm',
+        alertIdentifier: 'instance:node:100::patrol/provider',
+        category: 'reliability',
+        severity: 'warning',
+        title: 'Provider connection issue',
+        description: 'Pulse Patrol could not complete provider analysis.',
+        impact: 'Patrol cannot analyze infrastructure until provider setup is fixed.',
+        detectedAt: '2026-03-30T11:00:00Z',
+        lastSeenAt: '2026-03-30T11:05:00Z',
+        status: 'active',
+      },
+    ];
+  });
+
+  const expandRow = () =>
+    fireEvent.click(
+      screen.getByRole('button', { name: 'View details for Provider connection issue' }),
+    );
+
+  it('shows an Investigate action above Watch-only mode on an un-investigated patrol finding', async () => {
+    render(() => (
+      <FindingsPanel
+        findingsSource="patrol"
+        runtimeState={{ autonomy_level: 'approval' } as any}
+      />
+    ));
+    await waitFor(() => expect(mockState.loadPatrolFindings).toHaveBeenCalled());
+    expandRow();
+    expect(screen.getByRole('button', { name: /Investigate/ })).toBeInTheDocument();
+  });
+
+  it('hides the Investigate action in Watch-only (monitor) mode', async () => {
+    render(() => (
+      <FindingsPanel
+        findingsSource="patrol"
+        runtimeState={{ autonomy_level: 'monitor' } as any}
+      />
+    ));
+    await waitFor(() => expect(mockState.loadPatrolFindings).toHaveBeenCalled());
+    expandRow();
+    expect(screen.queryByRole('button', { name: /^Investigate$/ })).toBeNull();
+  });
+});
