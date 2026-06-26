@@ -162,8 +162,19 @@ func (m *Manager) SyncStorageAlertsForInstance(instanceName string, storages []m
 		if strings.Contains(alert.ResourceID, "-ceph-pool-") {
 			continue
 		}
-		if _, exists := validResourceIDs[strings.TrimSpace(alert.ResourceID)]; exists {
+		resourceID := strings.TrimSpace(alert.ResourceID)
+		if _, exists := validResourceIDs[resourceID]; exists {
 			continue
+		}
+		// Health assessment alerts (ZFS pool/device) carry a composite
+		// spec resource ID that extends the base storage ID with
+		// "/zfs-pool:…".  Match those by checking whether the prefix
+		// before the first "/" is a valid storage ID so they are not
+		// erroneously cleared every poll cycle.
+		if idx := strings.Index(resourceID, "/"); idx > 0 {
+			if _, exists := validResourceIDs[resourceID[:idx]]; exists {
+				continue
+			}
 		}
 		m.clearAlertNoLock(alertID)
 	}

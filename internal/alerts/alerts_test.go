@@ -17409,6 +17409,95 @@ func TestSyncStorageAlertsForInstance(t *testing.T) {
 			t.Fatal("expected ceph pool alert to be preserved (managed by the ceph poll path, not this sweep)")
 		}
 	})
+
+	t.Run("preserves zfs alerts with composite spec resource ids", func(t *testing.T) {
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		// ZFS health assessment alerts carry a composite spec resource ID
+		// (storage.ID + "/zfs-pool:<name>") because the alert's ResourceID
+		// is set from params.Spec.ResourceID, not the plain storage.ID.
+		// Without prefix matching these would be cleared every poll cycle,
+		// causing alert flapping.
+		poolStateKey := "inst1-node1-rpool/zfs-pool:rpool::inst1-node1-rpool/zfs-pool:rpool-state"
+		m.activeAlerts[poolStateKey] = &Alert{
+			ID:             poolStateKey,
+			Type:           "zfs-pool-state",
+			ResourceID:     "inst1-node1-rpool/zfs-pool:rpool",
+			Instance:       "inst1",
+			CanonicalState: poolStateKey,
+		}
+		poolErrorsKey := "inst1-node1-rpool/zfs-pool:rpool::inst1-node1-rpool/zfs-pool:rpool-errors"
+		m.activeAlerts[poolErrorsKey] = &Alert{
+			ID:             poolErrorsKey,
+			Type:           "zfs-pool-errors",
+			ResourceID:     "inst1-node1-rpool/zfs-pool:rpool",
+			Instance:       "inst1",
+			CanonicalState: poolErrorsKey,
+		}
+		deviceKey := "inst1-node1-rpool/zfs-pool:rpool/device:sda::inst1-node1-rpool/zfs-pool:rpool/device:sda-health"
+		m.activeAlerts[deviceKey] = &Alert{
+			ID:             deviceKey,
+			Type:           "zfs-device",
+			ResourceID:     "inst1-node1-rpool/zfs-pool:rpool/device:sda",
+			Instance:       "inst1",
+			CanonicalState: deviceKey,
+		}
+		m.mu.Unlock()
+
+		m.SyncStorageAlertsForInstance("inst1", []models.Storage{
+			{
+				ID:       "inst1-node1-rpool",
+				Name:     "rpool",
+				Instance: "inst1",
+				ZFSPool: &models.ZFSPool{
+					Name: "rpool",
+					Devices: []models.ZFSDevice{
+						{Name: "sda", State: "ONLINE"},
+					},
+				},
+			},
+		})
+
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+
+		if _, exists := m.activeAlerts[poolStateKey]; !exists {
+			t.Fatal("expected zfs-pool-state alert with composite resource ID to be preserved")
+		}
+		if _, exists := m.activeAlerts[poolErrorsKey]; !exists {
+			t.Fatal("expected zfs-pool-errors alert with composite resource ID to be preserved")
+		}
+		if _, exists := m.activeAlerts[deviceKey]; !exists {
+			t.Fatal("expected zfs-device alert with composite resource ID to be preserved")
+		}
+	})
+
+	t.Run("clears zfs alerts when storage is removed", func(t *testing.T) {
+		m := newTestManager(t)
+
+		m.mu.Lock()
+		poolErrorsKey := "inst1-node1-gonepool/zfs-pool:gone::inst1-node1-gonepool/zfs-pool:gone-errors"
+		m.activeAlerts[poolErrorsKey] = &Alert{
+			ID:             poolErrorsKey,
+			Type:           "zfs-pool-errors",
+			ResourceID:     "inst1-node1-gonepool/zfs-pool:gone",
+			Instance:       "inst1",
+			CanonicalState: poolErrorsKey,
+		}
+		m.mu.Unlock()
+
+		m.SyncStorageAlertsForInstance("inst1", []models.Storage{
+			{ID: "inst1-node1-rpool", Name: "rpool", Instance: "inst1"},
+		})
+
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+
+		if _, exists := m.activeAlerts[poolErrorsKey]; exists {
+			t.Fatal("expected zfs-pool-errors alert for removed storage to be cleared")
+		}
+	})
 }
 
 func TestDispatchAlert(t *testing.T) {
