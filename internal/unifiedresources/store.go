@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -105,6 +106,8 @@ type SQLiteResourceStore struct {
 	identityPinMu    sync.Mutex
 	identityPinCache []ResourceIdentityPin
 	identityPinFresh bool
+
+	retentionStop chan struct{}
 }
 
 const (
@@ -169,6 +172,7 @@ func NewSQLiteResourceStore(dataDir, orgID string) (*SQLiteResourceStore, error)
 		}
 		return nil, wrappedInitErr
 	}
+	store.retentionStop = store.startRetentionLoop()
 	return store, nil
 }
 
@@ -877,7 +881,70 @@ func (s *SQLiteResourceStore) GetExclusions() (exclusions []ResourceExclusion, e
 	return exclusions, nil
 }
 
+const (
+	resourceChangesRetention = 30 * 24 * time.Hour
+	actionAuditsRetention    = 90 * 24 * time.Hour
+	retentionInterval        = 6 * time.Hour
+)
+
+// startRetentionLoop launches a background goroutine that periodically
+// prunes old rows from resource_changes and action_audits. Without this,
+// these append-only tables grow without bound (GitHub issue #1496).
+// Returns a stop channel; closing it signals the goroutine to exit.
+func (s *SQLiteResourceStore) startRetentionLoop() chan struct{} {
+	stop := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(retentionInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-ticker.C:
+				s.pruneOldRecords()
+			}
+		}
+	}()
+	return stop
+}
+
+func (s *SQLiteResourceStore) pruneOldRecords() {
+	now := time.Now()
+	changesCutoff := now.Add(-resourceChangesRetention)
+	auditsCutoff := now.Add(-actionAuditsRetention)
+
+	var totalDeleted int64
+
+	res, err := s.db.Exec(
+		`DELETE FROM resource_changes WHERE observed_at < ? OR observed_at IS NULL`,
+		changesCutoff.UTC().Format("2006-01-02T15:04:05Z"),
+	)
+	if err != nil {
+		log.Printf("unifiedresources: failed to prune resource_changes: %v", err)
+	} else if affected, _ := res.RowsAffected(); affected > 0 {
+		totalDeleted += affected
+	}
+
+	res, err = s.db.Exec(
+		`DELETE FROM action_audits WHERE created_at < ?`,
+		auditsCutoff.UTC().Format("2006-01-02T15:04:05Z"),
+	)
+	if err != nil {
+		log.Printf("unifiedresources: failed to prune action_audits: %v", err)
+	} else if affected, _ := res.RowsAffected(); affected > 0 {
+		totalDeleted += affected
+	}
+
+	if totalDeleted > 0 {
+		log.Printf("unifiedresources: pruned %d old records (changes<%s, audits<%s)",
+			totalDeleted, changesCutoff.Format("2006-01-02"), auditsCutoff.Format("2006-01-02"))
+	}
+}
+
 func (s *SQLiteResourceStore) Close() error {
+	if s.retentionStop != nil {
+		close(s.retentionStop)
+	}
 	if s.db != nil {
 		if err := s.db.Close(); err != nil {
 			return fmt.Errorf("close resources db %q: %w", s.dbPath, err)

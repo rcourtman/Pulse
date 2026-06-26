@@ -2391,3 +2391,84 @@ func TestResourceChangeReadsMergeCanonicalIDEras(t *testing.T) {
 		})
 	}
 }
+
+func TestPruneOldRecords_DeletesExpiredChangesAndAudits(t *testing.T) {
+	store := newTestStore(t)
+
+	old := time.Now().Add(-120 * 24 * time.Hour)
+	recent := time.Now().Add(-1 * time.Hour)
+
+	changes := []ResourceChange{
+		{
+			ID:         "change-old",
+			ObservedAt: old,
+			ResourceID: "vm:100",
+			Kind:       ChangeStateTransition,
+			SourceType: SourcePulseDiff,
+			Confidence: ConfidenceHigh,
+		},
+		{
+			ID:         "change-recent",
+			ObservedAt: recent,
+			ResourceID: "vm:100",
+			Kind:       ChangeStateTransition,
+			SourceType: SourcePulseDiff,
+			Confidence: ConfidenceHigh,
+		},
+	}
+	for _, ch := range changes {
+		if err := store.RecordChange(ch); err != nil {
+			t.Fatalf("RecordChange(%s): %v", ch.ID, err)
+		}
+	}
+
+	audits := []ActionAuditRecord{
+		{
+			ID:        "audit-old",
+			CreatedAt: old,
+			UpdatedAt: old,
+			State:     ActionStateCompleted,
+			Request: ActionRequest{
+				RequestID:      "req-old",
+				ResourceID:     "vm:100",
+				CapabilityName: "restart",
+				RequestedBy:    "agent:test",
+			},
+		},
+		{
+			ID:        "audit-recent",
+			CreatedAt: recent,
+			UpdatedAt: recent,
+			State:     ActionStateCompleted,
+			Request: ActionRequest{
+				RequestID:      "req-recent",
+				ResourceID:     "vm:100",
+				CapabilityName: "restart",
+				RequestedBy:    "agent:test",
+			},
+		},
+	}
+	for _, a := range audits {
+		if err := store.RecordActionAudit(a); err != nil {
+			t.Fatalf("RecordActionAudit(%s): %v", a.ID, err)
+		}
+	}
+
+	store.pruneOldRecords()
+
+	remaining, err := store.GetRecentChanges("vm:100", time.Time{}, 0)
+	if err != nil {
+		t.Fatalf("GetRecentChanges after prune: %v", err)
+	}
+	if len(remaining) != 1 || remaining[0].ID != "change-recent" {
+		t.Fatalf("expected only change-recent to survive, got %d: %+v", len(remaining), remaining)
+	}
+
+	auditResults, err := store.GetActionAudits("", time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("GetActionAudits after prune: %v", err)
+	}
+	if len(auditResults) != 1 || auditResults[0].ID != "audit-recent" {
+		t.Fatalf("expected only audit-recent to survive, got %d: %+v", len(auditResults), auditResults)
+	}
+}
