@@ -2,7 +2,7 @@ import { Show, lazy, createSignal, createEffect, createMemo, onCleanup, onMount 
 import type { JSX } from 'solid-js';
 import { Router, Route, useNavigate, useLocation } from '@solidjs/router';
 import { ToastContainer } from './components/Toast/Toast';
-import { ErrorBoundary } from './components/ErrorBoundary';
+import { ErrorBoundary, RouteErrorBoundary } from './components/ErrorBoundary';
 import { SecurityWarning } from './components/SecurityWarning';
 import { Login } from './components/Login';
 import { logger } from './utils/logger';
@@ -483,7 +483,9 @@ function App() {
                             showOrgSwitcher={runtime.showOrgSwitcher}
                             onSwitchOrg={runtime.handleOrgSwitch}
                           >
-                            {props.children}
+                            <RouteErrorBoundary>
+                              {props.children}
+                            </RouteErrorBoundary>
                           </AppLayout>
                         </div>
                         {/* AI Panel - slides in from right, pushes content.

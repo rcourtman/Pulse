@@ -84,6 +84,43 @@ export const ErrorBoundary: Component<ErrorBoundaryProps> = (props) => {
   );
 };
 
+// Route-level error boundary — keeps the app shell (sidebar, header, nav) intact
+// when a page component crashes. Renders inline within the content area.
+export const RouteErrorBoundary: Component<{ children: JSX.Element }> = (props) => {
+  return (
+    <ErrorBoundary
+      fallback={(_error, reset) => (
+        <div class="flex min-h-[60vh] items-center justify-center p-4">
+          <div class="max-w-md w-full bg-surface rounded-md shadow-sm p-6">
+            <div class="flex items-center mb-4">
+              <AlertTriangleIcon class="mr-3 h-10 w-10 text-red-500" aria-hidden="true" />
+              <SectionHeader
+                title="This page couldn't load"
+                description="An unexpected error occurred"
+                size="md"
+                titleClass="text-base-content"
+                descriptionClass="text-sm text-muted"
+              />
+            </div>
+            <CalloutCard
+              tone="danger"
+              scale="compact"
+              padding="sm"
+              class="mb-4"
+              description="Try again, or navigate to another page using the sidebar."
+            />
+            <Button onClick={reset} variant="primary" size="md" class="w-full">
+              Try Again
+            </Button>
+          </div>
+        </div>
+      )}
+    >
+      {props.children}
+    </ErrorBoundary>
+  );
+};
+
 // Component-specific error boundary with more context
 export const ComponentErrorBoundary: Component<{
   name: string;
