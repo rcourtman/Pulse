@@ -164,11 +164,6 @@ export function createWebSocketStore(url: string) {
 
   let alertsEnabled = isAlertsActivationEnabled();
   let lastActiveAlertsPayload: Record<string, Alert> = {};
-  const handleAlertsActivation = (event: Event) => {
-    const detail = (event as CustomEvent<ActivationStateType | null>).detail;
-    alertsEnabled = detail === 'active';
-    applyActiveAlerts(alertsEnabled ? lastActiveAlertsPayload : {});
-  };
 
   const clearPendingAckTimeout = (alertIdentifier: string) => {
     const timeout = pendingAckTimeouts.get(alertIdentifier);
@@ -708,7 +703,7 @@ export function createWebSocketStore(url: string) {
     window.clearTimeout(reconnectTimeout);
     window.clearInterval(heartbeatInterval);
     if (typeof window !== 'undefined') {
-      window.removeEventListener(ALERTS_ACTIVATION_EVENT, handleAlertsActivation);
+      window.removeEventListener(ALERTS_ACTIVATION_EVENT, handleAlertsActivationEvent);
     }
     if (ws) {
       ws.close(1000, 'Component unmounting');
