@@ -4633,3 +4633,100 @@ func TestRegistryAvailabilityLinkAttachesFacetToKnownResource(t *testing.T) {
 		t.Fatalf("expected availability facet probe-1 on host, got %+v", host.Availability)
 	}
 }
+
+func TestChooseStatusAvailabilityDoesNotOverrideHigherPriority(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Now().UTC()
+
+	rr.IngestRecords(SourceProxmox, []IngestRecord{{
+		SourceID: "delly:minipc:135",
+		Resource: Resource{
+			Type: ResourceTypeSystemContainer, Name: "grafana",
+			Status: StatusOnline, LastSeen: now,
+		},
+		Identity: ResourceIdentity{IPAddresses: []string{"192.0.2.130"}},
+	}})
+
+	container := rr.ListByType(ResourceTypeSystemContainer)[0]
+
+	rr.IngestRecords(SourceAvailability, []IngestRecord{{
+		SourceID: "probe-grafana",
+		Resource: Resource{
+			Type: ResourceTypeNetworkEndpoint, Name: "probe-grafana",
+			Status: StatusOffline, LastSeen: now,
+			Sources: []DataSource{SourceAvailability},
+			Availability: &AvailabilityData{
+				TargetID: "probe-grafana", LinkedResourceID: container.ID,
+				Address: "192.0.2.130", Protocol: "http", Port: 3000,
+				Enabled: true, Available: false, ConsecutiveFailures: 3,
+				FailureThreshold: 2,
+			},
+		},
+		Identity: ResourceIdentity{IPAddresses: []string{"192.0.2.130"}},
+	}})
+
+	got, ok := rr.Get(container.ID)
+	if !ok {
+		t.Fatal("resource not found after availability ingest")
+	}
+	if got.Status != StatusOnline {
+		t.Fatalf("availability source (offline) should not override proxmox (online); got %s", got.Status)
+	}
+	if got.Availability == nil || got.Availability.Available != false {
+		t.Fatalf("availability facet should record unavailable, got %+v", got.Availability)
+	}
+}
+
+func TestMarkStaleRecomputesFromRemainingFreshSources(t *testing.T) {
+	rr := NewRegistry(nil)
+	oldNow := time.Now().UTC().Add(-5 * time.Minute)
+	recentNow := time.Now().UTC()
+
+	rr.IngestRecords(SourceProxmox, []IngestRecord{{
+		SourceID: "delly:delly",
+		Resource: Resource{
+			Type: ResourceTypeAgent, Name: "delly",
+			Status: StatusOnline, LastSeen: oldNow,
+		},
+		Identity: ResourceIdentity{MachineID: "delly"},
+	}})
+	host := rr.ListByType(ResourceTypeAgent)[0]
+
+	rr.IngestRecords(SourceAvailability, []IngestRecord{{
+		SourceID: "probe-delly",
+		Resource: Resource{
+			Type: ResourceTypeNetworkEndpoint, Name: "probe-delly",
+			Status: StatusOnline, LastSeen: recentNow,
+			Sources: []DataSource{SourceAvailability},
+			Availability: &AvailabilityData{
+				TargetID: "probe-delly", LinkedResourceID: host.ID,
+				Address: "192.0.2.5", Protocol: "tcp", Port: 8006,
+				Enabled: true, Available: true,
+			},
+		},
+		Identity: ResourceIdentity{IPAddresses: []string{"192.0.2.5"}},
+	}})
+
+	check, ok := rr.Get(host.ID)
+	if !ok || check.Status != StatusOnline {
+		t.Fatalf("expected online before stale, got %s", check.Status)
+	}
+
+	rr.MarkStale(recentNow, nil)
+
+	got, ok := rr.Get(host.ID)
+	if !ok {
+		t.Fatal("resource not found after MarkStale")
+	}
+	proxmoxStatus := got.SourceStatus[SourceProxmox]
+	if proxmoxStatus.Status != "stale" {
+		t.Fatalf("expected proxmox source to be stale, got %s", proxmoxStatus.Status)
+	}
+	availStatus := got.SourceStatus[SourceAvailability]
+	if availStatus.Status != "online" {
+		t.Fatalf("expected availability source to still be fresh/online, got %s", availStatus.Status)
+	}
+	if got.Status != StatusOnline {
+		t.Fatalf("status should be recomputed from remaining fresh availability source; got %s, want online", got.Status)
+	}
+}

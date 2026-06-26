@@ -1305,8 +1305,13 @@ func (rr *ResourceRegistry) markStaleLocked(now time.Time, thresholds map[DataSo
 				staleFound = true
 			}
 		}
-		if staleFound && resource.Status == StatusOnline {
-			resource.Status = StatusWarning
+		if staleFound {
+			recomputed := aggregateStatus(resource)
+			if recomputed != StatusUnknown {
+				resource.Status = recomputed
+			} else if resource.Status == StatusOnline {
+				resource.Status = StatusWarning
+			}
 		}
 	}
 }
@@ -4155,9 +4160,6 @@ func sourcePriority(source DataSource) int {
 
 func chooseStatus(existing ResourceStatus, incoming ResourceStatus, source DataSource) ResourceStatus {
 	if existing == "" || existing == StatusUnknown {
-		return incoming
-	}
-	if source == SourceAvailability {
 		return incoming
 	}
 	if sourcePriority(source) >= sourcePriority(SourceAgent) {
