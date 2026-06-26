@@ -1,5 +1,9 @@
 import type { VM, Container, DockerContainerUpdateStatus } from './api';
-import type { ResourceDiscoveryReadiness, ResourceDiscoveryTarget } from './resource';
+import type {
+  ResourceAvailabilityMeta,
+  ResourceDiscoveryReadiness,
+  ResourceDiscoveryTarget,
+} from './resource';
 
 export type WorkloadType = 'vm' | 'system-container' | 'app-container' | 'pod';
 export type WorkloadContainerViewMode = 'container' | 'system-container' | 'app-container';
@@ -47,4 +51,6 @@ export type WorkloadGuest = (VM | Container) & {
     datacenterName?: string;
     clusterName?: string;
   };
+  /** Availability probe facet from the unified resource model. */
+  availability?: ResourceAvailabilityMeta;
 };

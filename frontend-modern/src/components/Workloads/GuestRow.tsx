@@ -6,6 +6,7 @@ import { formatUptime, formatSpeed, getShortImageName } from '@/utils/format';
 import { StackedDiskBar } from './StackedDiskBar';
 import { StackedMemoryBar } from './StackedMemoryBar';
 import {
+  AvailabilityProbeCell,
   BackupIndicator,
   BackupStatusCell,
   InfoTooltipCell,
@@ -93,6 +94,7 @@ export function GuestRow(props: GuestRowProps) {
     supportsBackup,
     typeInfo,
     workloadType,
+    availabilityPresentation,
   } = useGuestRowState(props);
 
   const cpuPercent = createMemo(() => (props.guest.cpu || 0) * 100);
@@ -222,6 +224,9 @@ export function GuestRow(props: GuestRowProps) {
                     <BoxIcon class="h-3 w-3" aria-hidden="true" />
                     <span class="tabular-nums">{props.nestedWorkloadContext?.count}</span>
                   </span>
+                </Show>
+                <Show when={availabilityPresentation()}>
+                  {(ap) => <AvailabilityProbeCell presentation={ap()} />}
                 </Show>
               </div>
             </div>
@@ -617,22 +622,21 @@ export function GuestRow(props: GuestRowProps) {
           </td>
         </Show>
 
-        {/* OS */}
+        {/* OS / System — availability probe protocol badge lives here per canonical platform table contract */}
         <Show when={isColVisible('os')}>
           <td class="px-1.5 sm:px-2 py-0.5 align-middle">
-            <div class="flex justify-center">
+            <div class="flex items-center justify-center gap-1">
               <Show
                 when={hasOsInfo()}
                 fallback={
                   <Show
                     when={ociImage()}
                     fallback={
-                      <span class="text-xs text-slate-400" aria-hidden="true">
-                        —
-                      </span>
+                      <Show when={availabilityPresentation()}>
+                        {(ap) => <AvailabilityProbeCell presentation={ap()} />}
+                      </Show>
                     }
                   >
-                    {/* For OCI containers without guest agent, show image name in OS column */}
                     <span
                       class="text-xs text-cyan-600 dark:text-cyan-400 truncate max-w-[100px]"
                       title={`OCI Image: ${ociImage()}`}
@@ -647,6 +651,9 @@ export function GuestRow(props: GuestRowProps) {
                   osVersion={osVersion()}
                   agentVersion={agentVersion()}
                 />
+              </Show>
+              <Show when={availabilityPresentation()}>
+                {(ap) => <AvailabilityProbeCell presentation={ap()} />}
               </Show>
             </div>
           </td>

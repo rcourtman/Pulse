@@ -1390,7 +1390,7 @@ describe('Workloads performance contract', () => {
       expect(guestRowStateSource).not.toContain('rowStyle');
       expect(guestRowStateSource).not.toContain('box-shadow');
       expect(guestRowStateSource).toContain('getWorkloadTypeBadge');
-      expect(guestRowCellsSource).toContain('export { BackupIndicator');
+      expect(guestRowCellsSource).toContain('export { AvailabilityProbeCell');
       expect(guestRowCellsSource).toContain('function NetworkInfoCell(');
       expect(guestRowCellsSource).toContain('function OSInfoCell(');
       expect(guestRowCellsSource).toContain('useTooltip');

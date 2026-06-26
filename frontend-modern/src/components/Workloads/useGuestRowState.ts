@@ -17,6 +17,7 @@ import {
   resolveWorkloadType,
 } from '@/utils/workloads';
 import { getDiscoveryReadinessPresentation } from '@/utils/resourceDiscoveryReadiness';
+import { getAvailabilityProbePresentation } from '@/utils/availabilityProbePresentation';
 import { getWorkloadTypeBadge } from '@/components/shared/workloadTypeBadges';
 
 import {
@@ -275,6 +276,16 @@ export function useGuestRowState(props: GuestRowProps) {
     isDockerManagedAppContainer(props.guest) ? getWorkloadDockerHostId(props.guest) : '',
   );
 
+  const availabilityPresentation = createMemo(() =>
+    getAvailabilityProbePresentation({
+      type: props.guest.type as never,
+      platformType: (props.guest.platformType ?? '') as never,
+      status: props.guest.status as never,
+      availability: props.guest.availability,
+      platformData: { availability: props.guest.availability },
+    }),
+  );
+
   return {
     appContainerRuntimeBadge,
     cpuAnomaly,
@@ -326,5 +337,6 @@ export function useGuestRowState(props: GuestRowProps) {
     clusterName,
     agentVersion,
     rowClass,
+    availabilityPresentation,
   };
 }

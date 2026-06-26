@@ -5,6 +5,7 @@ import { useTooltip } from '@/hooks/useTooltip';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import type { GuestNetworkInterface } from '@/types/api';
 import { formatBytes, formatRelativeTime, getBackupInfo, type BackupInfo } from '@/utils/format';
+import type { AvailabilityProbePresentation } from '@/utils/availabilityProbePresentation';
 import {
   getWorkloadsGuestBackupStatusPresentation,
   getWorkloadsGuestBackupTooltip,
@@ -404,4 +405,48 @@ function InfoTooltipCell(props: { value: string; tooltip: string; type: string }
   );
 }
 
-export { BackupIndicator, BackupStatusCell, InfoTooltipCell, NetworkInfoCell, OSInfoCell };
+function AvailabilityProbeCell(props: {
+  presentation: AvailabilityProbePresentation;
+}) {
+  const tip = useTooltip();
+  const p = createMemo(() => props.presentation);
+
+  const protocolLabel = createMemo(() => {
+    const method = p().methodLabel;
+    const spaceIdx = method.indexOf(' ');
+    return spaceIdx > 0 ? method.slice(0, spaceIdx) : method;
+  });
+
+  return (
+    <>
+      <span
+        class={`inline-flex items-center gap-1 rounded px-1 py-0.5 text-[9px] font-semibold leading-none whitespace-nowrap ${p().toneClassName}`}
+        onMouseEnter={tip.onMouseEnter}
+        onMouseLeave={tip.onMouseLeave}
+      >
+        {protocolLabel()}
+        <span
+          class={`inline-block h-1.5 w-1.5 rounded-full ${
+            p().toneClassName.includes('emerald')
+              ? 'bg-emerald-500'
+              : p().toneClassName.includes('red')
+                ? 'bg-red-500'
+                : p().toneClassName.includes('amber')
+                  ? 'bg-amber-500'
+                  : 'bg-slate-400'
+          }`}
+        />
+      </span>
+      <TooltipPortal when={tip.show()} x={tip.pos().x} y={tip.pos().y}>
+        <div class="min-w-[140px] max-w-[260px]">
+          <div class="font-medium mb-1 text-slate-300 border-b border-border pb-1">
+            Availability Probe
+          </div>
+          <div class="py-0.5 text-xs text-base-content">{p().detailLabel}</div>
+        </div>
+      </TooltipPortal>
+    </>
+  );
+}
+
+export { AvailabilityProbeCell, BackupIndicator, BackupStatusCell, InfoTooltipCell, NetworkInfoCell, OSInfoCell };
