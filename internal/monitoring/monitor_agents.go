@@ -2321,7 +2321,12 @@ func isLegacyUnraidEmptySlot(disk agentshost.UnraidDisk, normalizedStatus string
 		disk.SizeBytes == 0
 }
 
-func hostDiskIOMetricResourceID(host models.Host, io models.DiskIO) string {
+type proxmoxDiskMatch struct {
+	device   string
+	metricID string
+}
+
+func hostDiskIOMetricResourceID(host models.Host, io models.DiskIO, proxmoxDisks []proxmoxDiskMatch) string {
 	device := normalizeHostDiskDevice(io.Device)
 	if device == "" {
 		return ""
@@ -2336,20 +2341,34 @@ func hostDiskIOMetricResourceID(host models.Host, io models.DiskIO) string {
 		}
 	}
 
-	return ""
+	for _, pd := range proxmoxDisks {
+		if pd.device == "" || pd.metricID == "" {
+			continue
+		}
+		if strings.EqualFold(pd.device, device) {
+			return pd.metricID
+		}
+	}
+
+	return fmt.Sprintf("%s:%s", strings.TrimSpace(host.ID), device)
 }
 
 func (m *Monitor) writeHostPhysicalDiskIOMetrics(host models.Host, now time.Time) {
 	if shouldSkipNativeMockStateMetricWrites() || (m.metricsHistory == nil && m.metricsStore == nil) {
 		return
 	}
-	if len(host.DiskIO) == 0 || len(host.Sensors.SMART) == 0 {
+	if len(host.DiskIO) == 0 {
 		return
+	}
+
+	var proxmoxDisks []proxmoxDiskMatch
+	if host.LinkedNodeID != "" {
+		proxmoxDisks = m.proxmoxPhysicalDiskMatchesForLinkedNode(host.LinkedNodeID)
 	}
 
 	seenResourceIDs := make(map[string]struct{}, len(host.DiskIO))
 	for _, io := range host.DiskIO {
-		resourceID := hostDiskIOMetricResourceID(host, io)
+		resourceID := hostDiskIOMetricResourceID(host, io, proxmoxDisks)
 		if resourceID == "" {
 			continue
 		}
@@ -2392,6 +2411,39 @@ func (m *Monitor) writeHostPhysicalDiskIOMetrics(host models.Host, now time.Time
 			}
 		}
 	}
+}
+
+func (m *Monitor) proxmoxPhysicalDiskMatchesForLinkedNode(linkedNodeID string) []proxmoxDiskMatch {
+	if linkedNodeID == "" {
+		return nil
+	}
+	readState := m.GetUnifiedReadStateOrSnapshot()
+	if readState == nil {
+		return nil
+	}
+	var matches []proxmoxDiskMatch
+	for _, disk := range readState.PhysicalDisks() {
+		instance := strings.TrimSpace(disk.Instance())
+		node := strings.TrimSpace(disk.Node())
+		var diskLinkedID string
+		if instance == "" {
+			diskLinkedID = node
+		} else {
+			diskLinkedID = fmt.Sprintf("%s-%s", instance, node)
+		}
+		if diskLinkedID != linkedNodeID {
+			continue
+		}
+		metricID := strings.TrimSpace(disk.MetricResourceID())
+		if metricID == "" {
+			continue
+		}
+		matches = append(matches, proxmoxDiskMatch{
+			device:   normalizeHostDiskDevice(disk.DevPath()),
+			metricID: metricID,
+		})
+	}
+	return matches
 }
 
 // applyClusterSensors stores temperature data collected from Proxmox cluster

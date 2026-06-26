@@ -1841,6 +1841,126 @@ func TestApplyHostReportPersistsPhysicalDiskIOMetricsForAgentDisks(t *testing.T)
 	}
 }
 
+func TestApplyHostReportPersistsDiskIOMetricsWithoutSMART(t *testing.T) {
+	t.Helper()
+
+	storeCfg := metrics.DefaultConfig(t.TempDir())
+	storeCfg.WriteBufferSize = 1
+	store, err := metrics.NewStore(storeCfg)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	defer store.Close()
+
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+		rateTracker:       NewRateTracker(),
+		metricsHistory:    NewMetricsHistory(1000, 24*time.Hour),
+		metricsStore:      store,
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	baseReport := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:              "agent-pve3",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentshost.HostInfo{
+			ID:        "host-pve3",
+			Hostname:  "pve3",
+			MachineID: "machine-pve3",
+		},
+		Metrics: agentshost.Metrics{
+			Memory: agentshost.MemoryMetric{TotalBytes: 1024, UsedBytes: 512, FreeBytes: 512, Usage: 50},
+		},
+		DiskIO: []agentshost.DiskIO{
+			{
+				Device:     "sda",
+				ReadBytes:  1_000_000,
+				WriteBytes: 2_000_000,
+				ReadOps:    100,
+				WriteOps:   200,
+				IOTime:     10_000,
+			},
+		},
+		Timestamp: time.Now().UTC(),
+	}
+
+	if _, err := monitor.ApplyHostReport(baseReport, nil); err != nil {
+		t.Fatalf("ApplyHostReport initial: %v", err)
+	}
+
+	nextReport := baseReport
+	nextReport.Timestamp = baseReport.Timestamp.Add(30 * time.Second)
+	nextReport.DiskIO = []agentshost.DiskIO{
+		{
+			Device:     "sda",
+			ReadBytes:  4_000_000,
+			WriteBytes: 5_000_000,
+			ReadOps:    250,
+			WriteOps:   350,
+			IOTime:     22_000,
+		},
+	}
+
+	if _, err := monitor.ApplyHostReport(nextReport, nil); err != nil {
+		t.Fatalf("ApplyHostReport second: %v", err)
+	}
+	store.Flush()
+
+	fallbackID := "host-pve3:sda"
+
+	readPoints := waitForStoredDiskMetric(t, store, fallbackID, "diskread")
+	writePoints := waitForStoredDiskMetric(t, store, fallbackID, "diskwrite")
+	busyPoints := waitForStoredDiskMetric(t, store, fallbackID, "disk")
+
+	if got := readPoints[len(readPoints)-1].Value; got <= 0 {
+		t.Fatalf("expected persisted diskread rate > 0 without SMART, got %+v", readPoints)
+	}
+	if got := writePoints[len(writePoints)-1].Value; got <= 0 {
+		t.Fatalf("expected persisted diskwrite rate > 0 without SMART, got %+v", writePoints)
+	}
+	if got := busyPoints[len(busyPoints)-1].Value; got <= 0 || got > 100 {
+		t.Fatalf("expected persisted disk busy percent within (0,100] without SMART, got %+v", busyPoints)
+	}
+}
+
+func TestHostDiskIOMetricResourceIDFallbacks(t *testing.T) {
+	host := models.Host{
+		ID: "myhost",
+		Sensors: models.HostSensorSummary{
+			SMART: []models.HostDiskSMART{
+				{Device: "/dev/nvme0n1", Serial: "NVME-SERIAL-123"},
+			},
+		},
+	}
+
+	io := models.DiskIO{Device: "nvme0n1"}
+
+	got := hostDiskIOMetricResourceID(host, io, nil)
+	if got != "NVME-SERIAL-123" {
+		t.Fatalf("SMART match: expected NVME-SERIAL-123, got %q", got)
+	}
+
+	ioNoSMART := models.DiskIO{Device: "sda"}
+	got = hostDiskIOMetricResourceID(host, ioNoSMART, nil)
+	if got != "myhost:sda" {
+		t.Fatalf("no SMART, no proxmox: expected myhost:sda, got %q", got)
+	}
+
+	proxmoxDisks := []proxmoxDiskMatch{
+		{device: "sda", metricID: "SATA-SERIAL-456"},
+	}
+	got = hostDiskIOMetricResourceID(host, ioNoSMART, proxmoxDisks)
+	if got != "SATA-SERIAL-456" {
+		t.Fatalf("proxmox fallback: expected SATA-SERIAL-456, got %q", got)
+	}
+}
+
 func TestApplyHostReportSkipsMetricsAndSMARTWritesInMockMode(t *testing.T) {
 	previous := mock.IsMockEnabled()
 	mustSetMockEnabled(t, true)
