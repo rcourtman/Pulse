@@ -400,7 +400,7 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
               <DiskList
                 disks={props.guest.disks || []}
                 diskStatusReason={
-                  isGuestDrawerVM(props.guest) ? (props.guest as any).diskStatusReason : undefined
+                  isGuestDrawerVM(props.guest) ? props.guest.diskStatusReason : undefined
                 }
                 thresholds={props.diskThresholds}
               />

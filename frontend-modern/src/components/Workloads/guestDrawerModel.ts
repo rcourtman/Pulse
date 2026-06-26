@@ -1,4 +1,5 @@
 import type { WorkloadGuest } from '@/types/workloads';
+import type { VM } from '@/types/api';
 import type {
   AggregatedMetricPoint,
   HistoryTimeRange,
@@ -53,7 +54,7 @@ export interface GuestDrawerBackupPresentation {
   dateLabel: string;
 }
 
-export const isGuestDrawerVM = (guest: Guest): boolean => resolveWorkloadType(guest) === 'vm';
+export const isGuestDrawerVM = (guest: Guest): guest is VM => resolveWorkloadType(guest) === 'vm';
 
 // Fallback current-value metrics for the guest drawer's history charts.
 // Mirrors `getNodeDrawerHistoryFallbackMetrics` — supplies a single
