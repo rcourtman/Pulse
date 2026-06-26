@@ -109,16 +109,18 @@ export function hasMeaningfulDiscoveryContext(
     discovery.facts.some((fact) => isMeaningfulDiscoveryFact(fact));
   const hasPaths = configPathCount + dataPathCount + logPathCount > 0;
   const hasSuggestedUrl = Boolean(normalizeDiscoverySuggestedUrl(discovery.suggested_url));
+  const hasSuggestedProbe = Boolean(discovery.suggested_availability_probe);
 
   return Boolean(
     isMeaningfulDiscoveryText(discovery.service_name) ||
-    isMeaningfulDiscoveryText(discovery.service_type) ||
-    isMeaningfulDiscoveryText(discovery.service_version) ||
-    isMeaningfulDiscoveryText(discovery.category) ||
-    portCount > 0 ||
-    hasFacts ||
-    hasPaths ||
-    hasSuggestedUrl,
+      isMeaningfulDiscoveryText(discovery.service_type) ||
+      isMeaningfulDiscoveryText(discovery.service_version) ||
+      isMeaningfulDiscoveryText(discovery.category) ||
+      portCount > 0 ||
+      hasFacts ||
+      hasPaths ||
+      hasSuggestedUrl ||
+      hasSuggestedProbe,
   );
 }
 
