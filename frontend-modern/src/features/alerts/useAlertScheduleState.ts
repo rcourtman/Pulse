@@ -254,9 +254,10 @@ export function useAlertScheduleState(props: UseAlertScheduleStateProps) {
   };
 
   const setGroupingWindow = (rawValue: string) => {
+    const parsed = Number.parseInt(rawValue, 10);
     props.setGrouping({
       ...props.grouping(),
-      window: Number.parseInt(rawValue, 10),
+      window: Number.isNaN(parsed) ? props.grouping().window : parsed,
     });
     markUnsaved();
   };

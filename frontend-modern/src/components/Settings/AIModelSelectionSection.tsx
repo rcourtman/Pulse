@@ -126,7 +126,8 @@ export const PatrolPreflightControl: Component<{ state: AISettingsState }> = (co
   };
 
   const formatDuration = (ms: number) => {
-    if (ms < 1000) return `${ms}ms`;
+    if (!Number.isFinite(ms) || ms < 0) return '-';
+    if (ms < 1000) return `${Math.round(ms)}ms`;
     return `${(ms / 1000).toFixed(1)}s`;
   };
 
