@@ -363,6 +363,42 @@ export const getPreferredInfrastructureDisplayName = (resource: Resource): strin
   getPreferredResourceHostname(resource) ||
   getPrimaryResourceIdentity(resource);
 
+const IPV4_PATTERN = /^\d{1,3}(\.\d{1,3}){3}$/;
+
+const isRfc1918Private = (ip: string): boolean => {
+  if (!IPV4_PATTERN.test(ip)) return false;
+  const [a, b] = ip.split('.').map(Number);
+  return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+};
+
+/**
+ * Pick the best LAN IPv4 from a resource's identity, preferring RFC 1918
+ * private addresses over Tailscale (100.64/10) or IPv6.
+ */
+export const getPreferredResourceIP = (resource: Resource): string | undefined => {
+  const ips = resource.identity?.ips ?? [];
+  if (ips.length === 0) return undefined;
+  const lanIp = ips.find((ip) => isRfc1918Private(ip));
+  if (lanIp) return lanIp;
+  const ipv4 = ips.find((ip) => IPV4_PATTERN.test(ip));
+  return ipv4;
+};
+
+/**
+ * When a management URL uses a bare hostname (e.g. "https://pi:8006") that a
+ * browser may not resolve, substitute the resource's known LAN IP.
+ */
+export const resolveGuestUrlWithIdentity = (url: string, resource: Resource): string => {
+  if (!url) return url;
+  const match = url.match(/^(https?:\/\/)([^:/]+)(:\d+)?(\/.*)?$/i);
+  if (!match) return url;
+  const [, protocol, hostname, port, path = ''] = match;
+  if (IPV4_PATTERN.test(hostname) || hostname.includes(':')) return url;
+  if (hostname.includes('.')) return url;
+  const ip = getPreferredResourceIP(resource);
+  return ip ? `${protocol}${ip}${port || ''}${path}` : url;
+};
+
 export const getPreferredWorkloadsAgentHint = (resource: Resource): string | undefined => {
   const platformData = getPlatformDataRecord(resource);
   const proxmox = platformData?.proxmox as Record<string, unknown> | undefined;

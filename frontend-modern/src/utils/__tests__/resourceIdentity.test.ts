@@ -15,10 +15,12 @@ import {
   getPreferredResourceDisplayName,
   getPreferredInfrastructureDisplayName,
   getPreferredResourceHostname,
+  getPreferredResourceIP,
   getPreferredWorkloadsAgentHint,
   getPrimaryResourceIdentity,
   getPrimaryResourceIdentityRows,
   getResourceIdentityAliases,
+  resolveGuestUrlWithIdentity,
   shouldShowResourcePlatformId,
 } from '@/utils/resourceIdentity';
 import type { Agent, Node } from '@/types/api';
@@ -567,5 +569,62 @@ describe('resourceIdentity', () => {
         ),
       ).toBe('prod-eu');
     }
+  });
+
+  describe('getPreferredResourceIP', () => {
+    it('returns undefined when no identity IPs', () => {
+      expect(getPreferredResourceIP(makeResource())).toBeUndefined();
+    });
+
+    it('prefers RFC 1918 private IPv4 over Tailscale and IPv6', () => {
+      const resource = makeResource({
+        identity: {
+          ips: ['100.109.215.65', 'fd7a:115c:a1e0::f35:d741', 'fe80::1bf2:7ef4:cd4b:8d71', '192.168.0.2'],
+        },
+      });
+      expect(getPreferredResourceIP(resource)).toBe('192.168.0.2');
+    });
+
+    it('falls back to any IPv4 when no RFC 1918 address', () => {
+      const resource = makeResource({
+        identity: { ips: ['100.64.0.1', 'fe80::1'] },
+      });
+      expect(getPreferredResourceIP(resource)).toBe('100.64.0.1');
+    });
+  });
+
+  describe('resolveGuestUrlWithIdentity', () => {
+    it('replaces bare hostname with LAN IP', () => {
+      const resource = makeResource({
+        identity: { ips: ['100.109.215.65', '192.168.0.2'] },
+      });
+      expect(resolveGuestUrlWithIdentity('https://pi:8006', resource)).toBe(
+        'https://192.168.0.2:8006',
+      );
+    });
+
+    it('keeps URL that already uses an IP', () => {
+      const resource = makeResource({ identity: { ips: ['192.168.0.2'] } });
+      expect(resolveGuestUrlWithIdentity('https://192.168.0.5:8006', resource)).toBe(
+        'https://192.168.0.5:8006',
+      );
+    });
+
+    it('keeps URL with FQDN hostname', () => {
+      const resource = makeResource({ identity: { ips: ['192.168.0.2'] } });
+      expect(resolveGuestUrlWithIdentity('https://delly.local:8006', resource)).toBe(
+        'https://delly.local:8006',
+      );
+    });
+
+    it('returns original URL when no identity IPs available', () => {
+      expect(resolveGuestUrlWithIdentity('https://pi:8006', makeResource())).toBe(
+        'https://pi:8006',
+      );
+    });
+
+    it('handles empty URL', () => {
+      expect(resolveGuestUrlWithIdentity('', makeResource())).toBe('');
+    });
   });
 });

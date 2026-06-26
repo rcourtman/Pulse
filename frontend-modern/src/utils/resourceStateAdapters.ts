@@ -29,6 +29,7 @@ import {
   getPreferredInfrastructureDisplayName,
   getPreferredResourceClusterName,
   getPreferredResourceHostname,
+  resolveGuestUrlWithIdentity,
 } from '@/utils/resourceIdentity';
 import {
   normalizeSourcePlatformScopes,
@@ -934,11 +935,14 @@ export const nodeFromResource = (resource: Resource): Node | null => {
     host: name || preferredHostLabel,
     // proxmox.guestUrl is the operator-set link override and proxmox.host the
     // PVE API connection URL; `host` above stays a hostname label for display.
-    guestURL:
+    guestURL: resolveGuestUrlWithIdentity(
       asString(proxmox?.guestUrl) ||
-      asString((resource as unknown as Record<string, unknown>).customURL) ||
-      asString((resource as unknown as Record<string, unknown>).customUrl) ||
-      asString(proxmox?.host),
+        asString((resource as unknown as Record<string, unknown>).customURL) ||
+        asString((resource as unknown as Record<string, unknown>).customUrl) ||
+        asString(proxmox?.host) ||
+        '',
+      resource,
+    ),
     status: resource.status || 'unknown',
     type: resource.type,
     cpu: resource.cpu?.current ?? 0,
