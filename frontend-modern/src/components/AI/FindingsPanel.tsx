@@ -34,7 +34,7 @@ import {
 import { InvestigationSection, ApprovalSection } from '@/components/patrol';
 import { AIAPI, type RemediationPlan } from '@/api/ai';
 import { createSuppressionRuleFromFinding, reinvestigateFinding } from '@/api/patrol';
-import type { PatrolRunRecord, PatrolRuntimeState } from '@/api/patrol';
+import type { PatrolRunRecord, PatrolRuntimeState, PatrolAutonomyLevel } from '@/api/patrol';
 import { formatRelativeTime } from '@/utils/format';
 import { getFindingAlertIdentifier, hasTriggeringAlert } from '@/utils/findingAlertIdentity';
 import { FilterSegmentedControl, type FilterSegmentOption } from '@/components/shared/FilterToolbar';
@@ -110,6 +110,7 @@ interface FindingsPanelProps {
   scopeResourceTypes?: string[];
   showScopeWarnings?: boolean;
   runtimeState?: PatrolRuntimeState;
+  autonomyLevel?: PatrolAutonomyLevel;
   blockedReason?: string;
   overallHealth?: IntelligenceHealthScore;
   historicalRegressionCount?: number;
@@ -1508,8 +1509,8 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               !finding.investigationStatus &&
               !finding.investigationOutcome &&
               !finding.lastInvestigatedAt &&
-              !!props.runtimeState?.autonomy_level &&
-              props.runtimeState.autonomy_level !== 'monitor'
+              !!props.autonomyLevel &&
+              props.autonomyLevel !== 'monitor'
             }
           >
             <button

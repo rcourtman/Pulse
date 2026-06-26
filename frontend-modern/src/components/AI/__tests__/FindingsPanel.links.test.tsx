@@ -636,7 +636,7 @@ describe('FindingsPanel investigate action gating', () => {
     render(() => (
       <FindingsPanel
         findingsSource="patrol"
-        runtimeState={{ autonomy_level: 'approval' } as any}
+        autonomyLevel="approval"
       />
     ));
     await waitFor(() => expect(mockState.loadPatrolFindings).toHaveBeenCalled());
@@ -648,7 +648,7 @@ describe('FindingsPanel investigate action gating', () => {
     render(() => (
       <FindingsPanel
         findingsSource="patrol"
-        runtimeState={{ autonomy_level: 'monitor' } as any}
+        autonomyLevel="monitor"
       />
     ));
     await waitFor(() => expect(mockState.loadPatrolFindings).toHaveBeenCalled());

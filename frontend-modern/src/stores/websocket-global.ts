@@ -82,7 +82,7 @@ const bindGlobalShutdownHandler = () => {
   window.__pulseWsShutdownBound = true;
 };
 
-export function getGlobalWebSocketStore() {
+export function getGlobalWebSocketStore(): ReturnType<typeof createWebSocketStore> {
   if (!window.__pulseWsStore) {
     if (isJSDOMTestRuntime()) {
       window.__pulseWsStore = createNoopWebSocketStore();
@@ -97,5 +97,5 @@ export function getGlobalWebSocketStore() {
     bindGlobalShutdownHandler();
   }
 
-  return window.__pulseWsStore;
+  return window.__pulseWsStore!;
 }

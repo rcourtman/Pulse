@@ -18,7 +18,11 @@ import {
   getPreferredResourceKubernetesContext,
 } from '@/utils/resourceIdentity';
 import type { WorkloadGuest } from '@/types/workloads';
-import type { ResourceDiscoveryReadiness, ResourceDiscoveryTarget } from '@/types/resource';
+import type {
+  ResourceAvailabilityMeta,
+  ResourceDiscoveryReadiness,
+  ResourceDiscoveryTarget,
+} from '@/types/resource';
 
 const WORKLOADS_URL = '/api/resources?type=vm,system-container,app-container,pod';
 const WORKLOADS_PAGE_LIMIT = 200;
@@ -149,6 +153,7 @@ type APIResource = {
     hostname?: string;
   };
   discoveryReadiness?: ResourceDiscoveryReadiness;
+  availability?: ResourceAvailabilityMeta;
 };
 
 type APIListResponse = {
@@ -561,6 +566,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
             clusterName: resource.vmware.clusterName,
           }
         : undefined,
+    availability: resource.availability as ResourceAvailabilityMeta | undefined,
   };
 };
 
