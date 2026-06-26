@@ -482,6 +482,7 @@ export const useAppRuntimeState = () => {
   });
 
   createEffect(() => {
+    activeOrgID();
     const ready = !isLoading() && !needsAuth();
     if (!ready) return;
 
