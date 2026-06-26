@@ -210,6 +210,28 @@ func cloneRestrictedTransport(tlsConfig *tls.Config) *http.Transport {
 	return clone
 }
 
+// restrictedRoundTripper wraps an underlying transport and validates the
+// request URL hostname against the restricted outbound policy before
+// forwarding. This provides defense-in-depth that works even when an HTTP
+// proxy is configured: the proxy handles the actual connection, but the
+// target host is still validated here so that SSRF targets (e.g. cloud
+// metadata service addresses) cannot be reached through the proxy.
+type restrictedRoundTripper struct {
+	base http.RoundTripper
+	opts RestrictedOutboundHTTPOptions
+}
+
+func (r *restrictedRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	host := req.URL.Hostname()
+	if host == "" {
+		return nil, fmt.Errorf("URL hostname is required")
+	}
+	if _, err := resolvePermittedOutboundIP(req.Context(), host, r.opts); err != nil {
+		return nil, err
+	}
+	return r.base.RoundTrip(req)
+}
+
 // NewRestrictedOutboundHTTPClient returns an HTTP client that validates redirects and pins direct outbound dials
 // to the first permitted resolved IP for the requested host.
 func NewRestrictedOutboundHTTPClient(timeout time.Duration, opts RestrictedOutboundHTTPOptions) *http.Client {
@@ -230,7 +252,7 @@ func NewRestrictedOutboundHTTPClient(timeout time.Duration, opts RestrictedOutbo
 	}
 
 	client := &http.Client{
-		Transport:     transport,
+		Transport:     &restrictedRoundTripper{base: transport, opts: opts},
 		CheckRedirect: sameOriginRedirectPolicy(opts),
 	}
 	if timeout > 0 {
