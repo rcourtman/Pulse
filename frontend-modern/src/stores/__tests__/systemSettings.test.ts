@@ -83,10 +83,8 @@ describe('systemSettings store', () => {
     expect(privacyDoc).toContain('rows older than **90 days** are purged automatically');
     expect(privacyDoc).toContain('uses client IP addresses transiently for abuse/rate limiting');
     expect(privacyDoc).toContain('Reset ID');
-    expect(privacyDoc).toContain('Pulse Intelligence Patrol mode decision 30d');
-    expect(privacyDoc).toContain('Pulse Intelligence paid Patrol mode resolved issue 30d');
-    expect(privacyDoc).not.toContain('operations loop');
-    expect(privacyDoc).not.toContain('Pro activation');
+    expect(privacyDoc).toContain('Pulse Intelligence Patrol control completed operations loop 30d');
+    expect(privacyDoc).toContain('Pulse Intelligence Patrol control paid resolved operations loop 30d');
     expect(privacyDoc).not.toContain('completed-work proof');
     expect(privacyDoc).not.toContain('resolved-work proof');
     expect(privacyDoc).not.toContain('governed-operation proof');
