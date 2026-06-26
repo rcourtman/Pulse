@@ -10,6 +10,7 @@ import {
   type DisplayMetricType,
   resolveMetricDisplayThresholds,
 } from '@/utils/metricThresholds';
+import { eventBus } from './events';
 
 // Create signals for activation state
 const [config, setConfig] = createSignal<AlertConfig | null>(null);
@@ -145,6 +146,14 @@ const getMetricThresholds = (
 ) => {
   return resolveMetricDisplayThresholds(config(), scope, metric, resourceIds);
 };
+
+eventBus.on('org_switched', () => {
+  setConfig(null);
+  applyActivationState(null);
+  setActiveAlerts([]);
+  setLastError(null);
+  setIsLoading(false);
+});
 
 // Export the store
 export const useAlertsActivation = () => ({
