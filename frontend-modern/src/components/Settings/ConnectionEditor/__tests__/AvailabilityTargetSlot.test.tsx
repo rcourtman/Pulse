@@ -14,6 +14,12 @@ vi.mock('@/api/availabilityTargets', () => ({
   },
 }));
 
+vi.mock('@/hooks/useResources', () => ({
+  useResources: () => ({
+    resources: () => [],
+  }),
+}));
+
 const mockedCreate = vi.mocked(AvailabilityTargetsAPI.create);
 
 describe('AvailabilityTargetSlot', () => {

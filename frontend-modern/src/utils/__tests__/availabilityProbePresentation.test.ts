@@ -141,7 +141,7 @@ describe('availabilityProbePresentation', () => {
       makeAvailabilityResource({
         id: 'vm:100',
         type: 'vm',
-        platformType: 'proxmox',
+        platformType: 'proxmox-pve',
         platformId: 'proxmox-ve',
         sourceType: 'agent',
         status: 'online',

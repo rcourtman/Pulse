@@ -1,4 +1,4 @@
-import { Component, Show, createSignal, onMount } from 'solid-js';
+import { Component, For, Show, createMemo, createSignal, onMount } from 'solid-js';
 import { Button } from '@/components/shared/Button';
 import { CalloutCard } from '@/components/shared/CalloutCard';
 import {
@@ -23,6 +23,11 @@ import {
   availabilityPresetById,
   type AvailabilityTargetPresetID,
 } from '../availabilityTargetPresets';
+import { useResources } from '@/hooks/useResources';
+import { getSourcePlatformLabel } from '@/utils/sourcePlatforms';
+import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
+import { getResourceTypeLabel } from '@/utils/resourceTypePresentation';
+import type { Resource } from '@/types/resource';
 
 interface AvailabilityForm {
   id: string;
@@ -121,6 +126,35 @@ const initialPresetForTargetKind = (
   targetKind === 'machine' ? 'ping-machine' : CUSTOM_AVAILABILITY_PRESET_ID;
 
 export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (props) => {
+  const { resources } = useResources();
+
+  const linkableResources = createMemo<Resource[]>(() =>
+    resources().filter((r) => r.type !== 'network-endpoint'),
+  );
+
+  const groupedLinkableResources = createMemo(() => {
+    const groups = new Map<string, Resource[]>();
+    for (const r of linkableResources()) {
+      const platform = r.platformType || 'generic';
+      const list = groups.get(platform);
+      if (list) {
+        list.push(r);
+      } else {
+        groups.set(platform, [r]);
+      }
+    }
+    for (const list of groups.values()) {
+      list.sort((a, b) =>
+        getPreferredInfrastructureDisplayName(a).localeCompare(
+          getPreferredInfrastructureDisplayName(b),
+        ),
+      );
+    }
+    return [...groups.entries()].sort((a, b) =>
+      getSourcePlatformLabel(a[0]).localeCompare(getSourcePlatformLabel(b[0])),
+    );
+  });
+
   const [form, setForm] = createSignal<AvailabilityForm>(
     newAvailabilityForm(props.initialTargetKind),
   );
@@ -132,6 +166,12 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
   const [testing, setTesting] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
   const [testResult, setTestResult] = createSignal<AvailabilityTestResponse | null>(null);
+
+  const linkedResourceMissing = createMemo(() => {
+    const id = form().linkedResourceId.trim();
+    if (!id) return false;
+    return !linkableResources().some((r) => r.id === id);
+  });
 
   const updateForm = (patch: Partial<AvailabilityForm>, preservePreset = false) => {
     setForm((current) => ({ ...current, ...patch }));
@@ -308,19 +348,39 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
                 : 'Use a full URL or a hostname. HTTP statuses below 500 count as reachable.'}
           </span>
         </label>
-        <label class={`${formField} sm:col-span-2`}>
-          <span class={formLabel}>Link to resource (optional)</span>
-          <input
-            class={formControl}
-            value={form().linkedResourceId}
-            onInput={(event) => updateForm({ linkedResourceId: event.currentTarget.value })}
-            placeholder="auto-detect by IP"
-          />
-          <span class={formHelpText}>
-            Link this check to a known resource so its status appears on that
-            resource's row. Leave empty to auto-detect by IP address.
-          </span>
-        </label>
+        <FormSelect
+          label="Link to resource (optional)"
+          value={form().linkedResourceId}
+          onChange={(event) =>
+            updateForm({ linkedResourceId: event.currentTarget.value })
+          }
+          fieldClass="sm:col-span-2"
+          help="Link this check to a known resource so its status appears on that resource's row. Leave empty to auto-detect by IP address."
+        >
+          <option value="">Auto-detect by IP (recommended)</option>
+          <Show when={linkedResourceMissing()}>
+            <option value={form().linkedResourceId}>
+              {form().linkedResourceId} (not currently discovered)
+            </option>
+          </Show>
+          <For each={groupedLinkableResources()}>
+            {([platform, items]) => (
+              <optgroup label={getSourcePlatformLabel(platform)}>
+                <For each={items}>
+                  {(resource) => {
+                    const typeLabel = getResourceTypeLabel(resource.type);
+                    return (
+                      <option value={resource.id}>
+                        {getPreferredInfrastructureDisplayName(resource)}
+                        {typeLabel ? ` (${typeLabel})` : ''}
+                      </option>
+                    );
+                  }}
+                </For>
+              </optgroup>
+            )}
+          </For>
+        </FormSelect>
         <Show when={form().protocol !== 'icmp'}>
           <label class={formField}>
             <span class={formLabel}>Port</span>
