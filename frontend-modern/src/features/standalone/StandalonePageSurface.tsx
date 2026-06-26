@@ -94,11 +94,6 @@ export function StandalonePageSurface() {
     }
   });
 
-  createEffect(() => {
-    const tab = STANDALONE_TAB_SPECS.find((t) => t.id === activeTab());
-    document.title = `${tab?.label ?? 'Machines'} · Pulse`;
-  });
-
   return (
     <div data-testid="standalone-page" class="space-y-4">
       <PlatformSectionTabs

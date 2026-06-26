@@ -56,6 +56,12 @@ const ROOT_VMWARE_PATH = buildVmwarePath();
 const ROOT_STANDALONE_PATH = buildStandalonePath();
 const ROOT_INFRASTRUCTURE_SETTINGS_PATH = buildInfrastructureWorkspacePath();
 const ROOT_ALERTS_PATH = '/alerts';
+
+function resolveStandaloneSubTabTitle(pathname: string): string {
+  const normalized = pathname.replace(/\/+$/, '');
+  if (normalized === buildStandalonePath('availability')) return 'Availability checks';
+  return 'Machines';
+}
 const NAV_TAB_ICON_CLASS = 'w-4 h-4 shrink-0';
 const AI_CHAT_LAUNCHER_BUTTON_CLASS =
   'fixed right-4 bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] z-40 flex h-11 w-11 items-center justify-center rounded-full border border-border bg-surface text-blue-600 shadow-lg transition-colors duration-200 hover:bg-surface-hover hover:text-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:text-blue-400 dark:hover:text-blue-300 lg:right-0 lg:top-1/2 lg:bottom-auto lg:h-auto lg:w-auto lg:min-h-9 lg:min-w-10 lg:-translate-y-1/2 lg:rounded-l-lg lg:rounded-r-none lg:border-r-0 lg:px-2.5 lg:py-2.5 lg:shadow-none';
@@ -217,7 +223,19 @@ export function AppLayout(props: AppLayoutProps) {
   };
   createEffect(() => {
     const active = getActiveTabForPath(location.pathname);
-    document.title = active ? `${tabTitleByActive[active]} · Pulse` : 'Pulse';
+    if (!active) {
+      document.title = 'Pulse';
+      return;
+    }
+    // The standalone (Machines) section has sub-tabs with their own labels.
+    // Show the sub-tab title when one is active so the browser tab reflects
+    // the actual page (e.g. "Availability checks" not "Machines").
+    if (active === 'standalone') {
+      const subTab = resolveStandaloneSubTabTitle(location.pathname);
+      document.title = `${subTab} · Pulse`;
+      return;
+    }
+    document.title = `${tabTitleByActive[active]} · Pulse`;
   });
 
   const toggleKioskMode = () => {
