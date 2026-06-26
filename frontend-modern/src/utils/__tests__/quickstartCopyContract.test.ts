@@ -62,7 +62,7 @@ describe('quickstart copy contract', () => {
     const ai = readRepoFile('docs/AI.md');
 
     expect(ai).toContain('the configured LLM owns diagnosis');
-    expect(ai).toContain('Pulse supplies context, tools, safety gates, approval state, and audit trails');
+    expect(ai).toContain('Pulse supplies context, capabilities, safety gates, approval state, and audit trails');
     expect(ai).toContain('Pulse does not convert them into Pulse-authored findings');
 
     expect(ai).not.toContain("learns what's normal");

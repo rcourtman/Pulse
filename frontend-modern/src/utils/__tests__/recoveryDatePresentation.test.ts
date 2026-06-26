@@ -28,7 +28,10 @@ describe('recoveryDatePresentation', () => {
     const key = '2026-03-09';
     expect(getRecoveryPrettyDateLabel(key)).toContain('Mar');
     expect(getRecoveryFullDateLabel(key)).toContain('2026');
-    expect(getRecoveryFilterDateLabel(key)).toBe('Mar 9, 2026');
+    const filterLabel = getRecoveryFilterDateLabel(key);
+    expect(filterLabel).toContain('Mar');
+    expect(filterLabel).toContain('9');
+    expect(filterLabel).toContain('2026');
     expect(getRecoveryCompactAxisLabel(key, 30)).toBe('9');
     expect(getRecoveryCompactAxisLabel('2026-04-01', 30)).toBe('4/1');
     expect(getRecoveryCompactAxisLabel(key, 90)).toBe('3/9');

@@ -407,7 +407,6 @@ describe('shared primitive guardrails', () => {
       'src/components/Settings/ResourcePicker.tsx',
       'src/components/Settings/ReportingPanel.tsx',
       'src/features/patrol/PatrolIntelligenceHeader.tsx',
-      'src/features/proxmox/ProxmoxBackupsTable.tsx',
     ]);
     expect(registeredRule?.forbiddenPatterns).toEqual(
       expect.arrayContaining([
@@ -500,9 +499,8 @@ describe('shared primitive guardrails', () => {
     expect(patrolIntelligenceHeaderSource).not.toContain(
       'flex-1 py-1.5 px-2 text-xs font-semibold rounded-md transition-all duration-200',
     );
-    expect(proxmoxBackupsTableSource).toContain('FilterButtonGroup');
-    expect(proxmoxBackupsTableSource).toContain('variant="segmented"');
-    expect(proxmoxBackupsTableSource).toContain('BACKUP_VIEW_OPTIONS');
+    expect(proxmoxBackupsTableSource).toContain('FilterSegmentedControl');
+    expect(proxmoxBackupsTableSource).not.toContain('FilterButtonGroup');
     expect(proxmoxBackupsTableSource).not.toContain('const viewButtonClass');
     expect(proxmoxBackupsTableSource).not.toContain(
       'inline-flex items-center gap-1 rounded-md border border-border bg-surface p-1',

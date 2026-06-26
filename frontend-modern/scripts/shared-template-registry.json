@@ -3046,8 +3046,7 @@
         { "path": "src/components/Settings/GeneralSettingsPanel.tsx" },
         { "path": "src/components/Settings/ResourcePicker.tsx" },
         { "path": "src/components/Settings/ReportingPanel.tsx" },
-        { "path": "src/features/patrol/PatrolIntelligenceHeader.tsx" },
-        { "path": "src/features/proxmox/ProxmoxBackupsTable.tsx" }
+        { "path": "src/features/patrol/PatrolIntelligenceHeader.tsx" }
       ],
       "forbiddenPatterns": [
         {
