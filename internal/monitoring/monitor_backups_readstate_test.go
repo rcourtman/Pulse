@@ -225,7 +225,9 @@ func TestMonitorPollGuestSnapshots_RefreshesStaleCanonicalStoreForClusterGuest(t
 		}},
 	}
 
-	m.pollGuestSnapshots(context.Background(), "homelab", client)
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	m.pollGuestSnapshots(ctx, "homelab", client)
 
 	if client.snapshotCalls == 0 {
 		t.Fatal("expected guest snapshot polling to use fresh clustered guest state")
