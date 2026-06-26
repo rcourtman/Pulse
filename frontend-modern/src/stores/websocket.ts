@@ -702,6 +702,8 @@ export function createWebSocketStore(url: string) {
     window.clearTimeout(reconnectDelayTimeout);
     window.clearTimeout(reconnectTimeout);
     window.clearInterval(heartbeatInterval);
+    pendingAckTimeouts.forEach((t) => window.clearTimeout(t));
+    pendingAckTimeouts.clear();
     if (typeof window !== 'undefined') {
       window.removeEventListener(ALERTS_ACTIVATION_EVENT, handleAlertsActivationEvent);
     }
@@ -863,6 +865,7 @@ export function createWebSocketStore(url: string) {
           // Safety valve: if we never hear back from the server (e.g., request failed silently),
           // clear the pending flag after a generous timeout so we eventually resync with reality.
           const pendingTimeout = window.setTimeout(() => {
+            if (isDisposed) return;
             if (pendingAckChanges.has(alertIdentifier)) {
               logger.warn(`Clearing stale pending ack change for alert ${alertIdentifier}`);
               clearPendingAck(alertIdentifier);
