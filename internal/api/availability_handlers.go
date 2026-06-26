@@ -251,9 +251,13 @@ func (h *AvailabilityHandlers) testTarget(w http.ResponseWriter, r *http.Request
 	}
 	start := time.Now()
 	err := monitoring.ProbeAvailabilityTarget(r.Context(), target)
+	latencyMs := time.Since(start).Milliseconds()
+	if err == nil && latencyMs == 0 {
+		latencyMs = 1
+	}
 	response := availabilityTestResponse{
 		Success:       err == nil,
-		LatencyMillis: time.Since(start).Milliseconds(),
+		LatencyMillis: latencyMs,
 	}
 	if err != nil {
 		response.Error = err.Error()

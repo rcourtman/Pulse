@@ -270,7 +270,11 @@ func (m *Monitor) setAvailabilityStatus(target config.AvailabilityTarget, checke
 	}
 	status := availabilityStatusFromTarget(target)
 	status.LastChecked = checkedAt
-	status.LatencyMillis = latency.Milliseconds()
+	latencyMs := latency.Milliseconds()
+	if probeErr == nil && latencyMs == 0 {
+		latencyMs = 1
+	}
+	status.LatencyMillis = latencyMs
 	if probeErr == nil {
 		status.Available = true
 		status.LastSuccess = checkedAt
