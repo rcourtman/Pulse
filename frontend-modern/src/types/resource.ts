@@ -1343,6 +1343,7 @@ export interface ResourceVMwareMeta {
 
 export interface ResourceAvailabilityMeta {
   targetId?: string;
+  linkedResourceId?: string;
   name?: string;
   targetKind?: 'machine' | 'service' | 'device' | string;
   address?: string;

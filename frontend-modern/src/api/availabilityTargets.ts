@@ -29,6 +29,7 @@ export interface AvailabilityTarget {
   protocol: AvailabilityProbeProtocol;
   port?: number;
   path?: string;
+  linkedResourceId?: string;
   enabled: boolean;
   pollIntervalSeconds?: number;
   timeoutMillis?: number;

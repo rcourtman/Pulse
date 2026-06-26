@@ -32,6 +32,7 @@ interface AvailabilityForm {
   protocol: AvailabilityProbeProtocol;
   port: string;
   path: string;
+  linkedResourceId: string;
   enabled: boolean;
   pollIntervalSeconds: string;
   timeoutMillis: string;
@@ -62,6 +63,7 @@ const newAvailabilityForm = (
   protocol: 'icmp',
   port: '',
   path: '',
+  linkedResourceId: '',
   enabled: true,
   pollIntervalSeconds: '60',
   timeoutMillis: '2000',
@@ -76,6 +78,7 @@ const formFromTarget = (target: AvailabilityTarget): AvailabilityForm => ({
   protocol: target.protocol ?? 'icmp',
   port: target.port ? String(target.port) : '',
   path: target.path ?? '',
+  linkedResourceId: target.linkedResourceId ?? '',
   enabled: target.enabled ?? true,
   pollIntervalSeconds: String(target.pollIntervalSeconds ?? 60),
   timeoutMillis: String(target.timeoutMillis ?? 2000),
@@ -97,6 +100,7 @@ const payloadFromForm = (form: AvailabilityForm): AvailabilityTarget => {
     protocol: form.protocol,
     port: form.protocol === 'icmp' ? undefined : port,
     path: form.protocol === 'http' ? form.path.trim() : undefined,
+    linkedResourceId: form.linkedResourceId.trim() || undefined,
     enabled: form.enabled,
     pollIntervalSeconds: parsePositiveInt(form.pollIntervalSeconds),
     timeoutMillis: parsePositiveInt(form.timeoutMillis),
@@ -302,6 +306,19 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
               : form().protocol === 'tcp'
                 ? 'Use a hostname or IP address and the port to open.'
                 : 'Use a full URL or a hostname. HTTP statuses below 500 count as reachable.'}
+          </span>
+        </label>
+        <label class={`${formField} sm:col-span-2`}>
+          <span class={formLabel}>Link to resource (optional)</span>
+          <input
+            class={formControl}
+            value={form().linkedResourceId}
+            onInput={(event) => updateForm({ linkedResourceId: event.currentTarget.value })}
+            placeholder="auto-detect by IP"
+          />
+          <span class={formHelpText}>
+            Link this check to a known resource so its status appears on that
+            resource's row. Leave empty to auto-detect by IP address.
           </span>
         </label>
         <Show when={form().protocol !== 'icmp'}>

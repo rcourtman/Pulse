@@ -1519,6 +1519,7 @@ type TrueNASShare struct {
 // AvailabilityData contains agentless endpoint probe metadata for a resource.
 type AvailabilityData struct {
 	TargetID            string    `json:"targetId,omitempty"`
+	LinkedResourceID    string    `json:"linkedResourceId,omitempty"`
 	Name                string    `json:"name,omitempty"`
 	TargetKind          string    `json:"targetKind,omitempty"`
 	Address             string    `json:"address,omitempty"`

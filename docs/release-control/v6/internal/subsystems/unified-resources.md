@@ -1451,14 +1451,26 @@ Agentless availability checks are now canonical resources rather than
 connection-only status rows. `SourceAvailability` emits `network-endpoint`
 records with the saved target id, probe address, protocol, cadence, last check,
 failure count, and threshold in `AvailabilityData`. Registry merge policy must
-preserve that payload and incident state without trying to fold endpoints into
-hosts, VMs, or storage resources solely because an address matches.
+preserve that payload and incident state. An availability record attaches as a
+facet onto a known resource when (a) the target carries an explicit
+`LinkedResourceID` referencing a resource already in the registry, or (b) the
+probe address unambiguously matches exactly one known resource by IP through
+`FindCandidates` with reason `ip` or `hostname+ip` (confidence at or above the
+merge threshold). Fuzzy hostname-only correlation (reason `hostname`, confidence
+below threshold) must not attach. When attached, the known resource inherits
+the `AvailabilityData` facet and `SourceAvailability` in its source list, and
+no standalone `network-endpoint` is minted. When no link resolves, the record
+falls back to a standalone `network-endpoint` as before. A second probe must
+not overwrite a facet already attached by a different target; the second probe
+stays standalone in that case.
 Frontend resource adapters must preserve that same availability identity on
 both REST and realtime paths: a thin `network-endpoint` update with
 availability data is still `platformType=availability`, `sourceType=api`, and
 must not regress to a generic platform badge in infrastructure rows or drawers.
 Infrastructure row presentation must also consume that availability payload as
-operator evidence, not only as badge identity. `network-endpoint` rows should
+operator evidence, not only as badge identity. Any resource row carrying an
+`AvailabilityData` facet—whether a standalone `network-endpoint` or a known
+guest that inherited the facet through explicit link or IP correlation—must
 surface one visible probe readout from either the top-level availability field
 or the live-state `platformData.availability` mirror: the System column uses
 the probe protocol as the compact identity badge (`ICMP`, `TCP`, or `HTTP`),

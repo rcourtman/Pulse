@@ -1203,6 +1203,12 @@ recovery scope, or a storage/recovery-owned secret source.
     disk cache, ZFS ARC sizing, storage-tier health, or capacity-planning
     evidence; disk and pool truth stays on the canonical storage and
     physical-disk resources.
+    `internal/unifiedresources/types.go` also carries `AvailabilityData`
+    (probe protocol, address, latency, failure state) as a resource facet for
+    agentless monitoring. Storage and recovery must not treat that availability
+    facet as protection status, backup health, or recovery readiness; an
+    unreachable probe on a storage resource is monitoring evidence, not a
+    backup or recovery failure.
 
 ## Forbidden Paths
 
@@ -1233,6 +1239,7 @@ recovery scope, or a storage/recovery-owned secret source.
 18. Letting the recovery details panel lead with transport-shaped payloads; operator-facing details must summarize outcome, artifact, target, restore readiness, and readable metadata labels first, while raw JSON and provider-specific keys stay behind an explicitly technical disclosure.
 19. Letting protection coverage navigation bypass the canonical recovery workspace and route-state owner; coverage actions may focus stale inventory, attention inventory, or all protected items, but they must not mutate local-only filter state or revive passive posture-counter cards as the navigation owner.
 20. Letting storage or recovery surfaces invoke retired self-hosted trial acquisition; `POST /api/license/trial/start` and `/auth/trial-activate` must stay closed on the ordinary self-hosted router, and storage/recovery-adjacent billing or support handoffs must not treat trial activation as recovery identity, restore proof, or backup transport state.
+21. Treating an `AvailabilityData` facet on a storage resource as backup, protection, or recovery evidence; an agentless probe attached to a NAS, PBS, or datastore resource is monitoring reachability, not backup success, snapshot health, or restore readiness. Storage and recovery must read protection status from the canonical backup and storage resources, not from the availability probe facet.
 
 ## Completion Obligations
 

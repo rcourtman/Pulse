@@ -1433,12 +1433,14 @@ blocking `local-only`/`restricted` posture; non-blocking `sensitive` +
 `local-first` and redaction-only metadata belongs in Data Handling, detail, and
 AI/governance surfaces instead of spending default row visual budget.
 Agentless availability evidence belongs on that same bounded row path.
-Infrastructure `network-endpoint` rows may replace otherwise empty host metric
-slots with one compact inline target/result readout, while the System column
-owns the protocol identity badge (`ICMP`, `TCP`, or `HTTP`). Recent check
-timing, latency history, and fuller failure context may stay in bounded
-tooltip or drawer detail, but the table must not duplicate the same probe
-protocol and result text across the resource identity cell and metric cells.
+Any resource row carrying an `AvailabilityData` facet—whether a standalone
+`network-endpoint` or a known guest that inherited the facet through explicit
+link or IP correlation—may replace otherwise empty host metric slots with one
+compact inline target/result readout, while the System column owns the
+protocol identity badge (`ICMP`, `TCP`, or `HTTP`). Recent check timing,
+latency history, and fuller failure context may stay in bounded tooltip or
+drawer detail, but the table must not duplicate the same probe protocol and
+result text across the resource identity cell and metric cells.
 That text must derive from the existing resource payload and shared
 presentation helper instead of adding a per-row fetch, extra hydration pass, or
 unbounded badge stack.

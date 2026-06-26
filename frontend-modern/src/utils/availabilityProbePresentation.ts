@@ -121,10 +121,7 @@ export const getAvailabilityProbePresentation = (
     | ResourceAvailabilityMeta
     | undefined;
   const availability = resource.availability ?? platformAvailability;
-  if (
-    !availability ||
-    (resource.type !== 'network-endpoint' && resource.platformType !== 'availability')
-  ) {
+  if (!availability) {
     return null;
   }
 

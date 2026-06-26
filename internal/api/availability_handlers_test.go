@@ -229,3 +229,64 @@ func availabilityRequestBody(t *testing.T, target config.AvailabilityTarget) *by
 	}
 	return bytes.NewReader(payload)
 }
+
+func TestAvailabilityTargetLinkedResourceIDRoundTrip(t *testing.T) {
+	persistence := config.NewConfigPersistence(t.TempDir())
+	handler := NewAvailabilityHandlers(
+		func(_ context.Context) *config.ConfigPersistence { return persistence },
+		nil,
+	)
+
+	createBody := availabilityRequestBody(t, config.AvailabilityTarget{
+		Name:             "Energy monitor",
+		Address:          "device.local",
+		Protocol:         config.AvailabilityProbeICMP,
+		Enabled:          true,
+		PollIntervalSecs: 30,
+		TimeoutMillis:    1000,
+		FailureThreshold: 2,
+		LinkedResourceID: "agent-test-123",
+	})
+	createReq := httptest.NewRequest(http.MethodPost, "/api/availability-targets", createBody)
+	createRec := httptest.NewRecorder()
+	handler.HandleAdd(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("HandleAdd status = %d, body=%s", createRec.Code, createRec.Body.String())
+	}
+
+	var created config.AvailabilityTarget
+	if err := json.NewDecoder(createRec.Body).Decode(&created); err != nil {
+		t.Fatalf("decode created target: %v", err)
+	}
+	if created.LinkedResourceID != "agent-test-123" {
+		t.Fatalf("LinkedResourceID = %q, want %q", created.LinkedResourceID, "agent-test-123")
+	}
+
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/api/availability-targets/"+created.ID, nil)
+	deleteRec := httptest.NewRecorder()
+	handler.HandleDelete(deleteRec, deleteReq)
+
+	createBodyNoID := availabilityRequestBody(t, config.AvailabilityTarget{
+		Name:             "Energy monitor 2",
+		Address:          "device2.local",
+		Protocol:         config.AvailabilityProbeICMP,
+		Enabled:          true,
+		PollIntervalSecs: 30,
+		TimeoutMillis:    1000,
+		FailureThreshold: 2,
+	})
+	createReqNoID := httptest.NewRequest(http.MethodPost, "/api/availability-targets", createBodyNoID)
+	createRecNoID := httptest.NewRecorder()
+	handler.HandleAdd(createRecNoID, createReqNoID)
+	if createRecNoID.Code != http.StatusCreated {
+		t.Fatalf("HandleAdd status = %d, body=%s", createRecNoID.Code, createRecNoID.Body.String())
+	}
+
+	var createdNoID config.AvailabilityTarget
+	if err := json.NewDecoder(createRecNoID.Body).Decode(&createdNoID); err != nil {
+		t.Fatalf("decode created target: %v", err)
+	}
+	if createdNoID.LinkedResourceID != "" {
+		t.Fatalf("LinkedResourceID = %q, want empty string", createdNoID.LinkedResourceID)
+	}
+}

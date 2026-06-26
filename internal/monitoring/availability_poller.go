@@ -452,6 +452,7 @@ func availabilityResourceFromTarget(target config.AvailabilityTarget, status Ava
 	resourceStatus := availabilityResourceStatus(target, status)
 	data := &unifiedresources.AvailabilityData{
 		TargetID:            target.ID,
+		LinkedResourceID:    strings.TrimSpace(target.LinkedResourceID),
 		Name:                target.DisplayName(),
 		TargetKind:          string(target.TargetKind),
 		Address:             target.Address,

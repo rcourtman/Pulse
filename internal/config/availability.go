@@ -45,6 +45,7 @@ type AvailabilityTarget struct {
 	PollIntervalSecs int                       `json:"pollIntervalSeconds,omitempty"`
 	TimeoutMillis    int                       `json:"timeoutMillis,omitempty"`
 	FailureThreshold int                       `json:"failureThreshold,omitempty"`
+	LinkedResourceID string                    `json:"linkedResourceId,omitempty"`
 }
 
 // NewAvailabilityTarget returns a new target with generated ID and defaults.
@@ -207,6 +208,7 @@ func NormalizeAvailabilityTarget(target AvailabilityTarget) AvailabilityTarget {
 		target.Address = normalizeAvailabilityAddress(target.Address)
 	}
 	target.Path = strings.TrimSpace(target.Path)
+	target.LinkedResourceID = strings.TrimSpace(target.LinkedResourceID)
 	target.ApplyDefaults()
 	return target
 }

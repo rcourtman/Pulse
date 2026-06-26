@@ -367,6 +367,38 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(getAllByText('7 ms')).toHaveLength(1);
     });
 
+    it('renders availability badge for agent resources with ICMP protocol', async () => {
+      const resources = [
+        makeResource(1, {
+          type: 'agent',
+          platformType: 'agent',
+          sourceType: 'agent',
+          platformData: {
+            sources: ['agent'],
+            availability: {
+              protocol: 'icmp',
+              available: true,
+              latencyMillis: 5,
+              lastChecked: new Date().toISOString(),
+            },
+          },
+        }),
+      ];
+
+      const { container } = render(() => (
+        <UnifiedResourceTable
+          resources={resources}
+          expandedResourceId={null}
+          onExpandedResourceChange={vi.fn()}
+          groupingMode="flat"
+        />
+      ));
+
+      await waitFor(() => {
+        expect(container.textContent).toContain('ICMP');
+      });
+    });
+
     it('adapts host columns from the measured table surface width instead of the window width', async () => {
       const resources = [
         makeResource(1, {

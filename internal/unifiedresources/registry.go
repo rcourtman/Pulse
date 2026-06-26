@@ -2249,6 +2249,23 @@ func (rr *ResourceRegistry) ingest(source DataSource, sourceID string, resource 
 		}
 	}
 
+	// Agentless availability probes attach as a facet on the known resource
+	// they monitor instead of minting a parallel network-endpoint. An explicit
+	// linkedResourceId wins; otherwise an exact, unique IP match may attach.
+	// Lossy hostname-only correlation is intentionally avoided to prevent
+	// ambiguous one-sided merges, and the link is refused when it would
+	// overwrite a different target's already-attached facet or fold one probe
+	// into another.
+	if source == SourceAvailability && resource.Type == ResourceTypeNetworkEndpoint {
+		if linked := rr.resolveAvailabilityLink(resource); linked != "" {
+			if existing := rr.resources[linked]; existing != nil {
+				rr.mergeInto(existing, resource, source)
+				rr.bySource[source][sourceID] = existing.ID
+				return existing.ID
+			}
+		}
+	}
+
 	candidateID := rr.sourceSpecificID(resource.Type, source, sourceID)
 
 	if resource.Type == ResourceTypeAgent || resource.Type == ResourceTypePhysicalDisk {
@@ -2381,6 +2398,78 @@ func (rr *ResourceRegistry) resolveLinkedResource(source DataSource, sourceID st
 		}
 	}
 	return ""
+}
+
+// resolveAvailabilityLink attaches an agentless availability probe to the
+// known resource it monitors, instead of minting a parallel
+// network-endpoint. An explicit linkedResourceId wins unambiguously;
+// otherwise the probe address may attach on an exact, unique IP overlap.
+// Lossy hostname-only correlation is intentionally avoided, and the link is
+// refused when it would overwrite a different target's already-attached
+// availability facet or fold one probe into another.
+func (rr *ResourceRegistry) resolveAvailabilityLink(resource Resource) string {
+	if resource.Availability == nil {
+		return ""
+	}
+
+	if linkedID := strings.TrimSpace(resource.Availability.LinkedResourceID); linkedID != "" {
+		existing := rr.resources[linkedID]
+		if existing != nil && !isAvailabilityOwnedResource(*existing) && availabilityFacetCompatible(existing, resource) {
+			return linkedID
+		}
+	}
+
+	matchID := ""
+	for _, candidate := range rr.matcher.FindCandidates(resource.Identity) {
+		if candidate.Reason != "ip" && candidate.Reason != "hostname+ip" {
+			continue
+		}
+		existing := rr.resources[candidate.ID]
+		if existing == nil || isAvailabilityOwnedResource(*existing) {
+			continue
+		}
+		if !availabilityFacetCompatible(existing, resource) {
+			continue
+		}
+		if matchID != "" && matchID != candidate.ID {
+			return ""
+		}
+		matchID = candidate.ID
+	}
+	return matchID
+}
+
+// isAvailabilityOwnedResource reports whether a resource is itself an
+// agentless availability endpoint (a standalone network-endpoint, or any
+// resource sourced only from availability), which probes must never fold into.
+func isAvailabilityOwnedResource(r Resource) bool {
+	if r.Type == ResourceTypeNetworkEndpoint {
+		return true
+	}
+	if len(r.Sources) == 0 {
+		return false
+	}
+	for _, s := range r.Sources {
+		if s != SourceAvailability {
+			return false
+		}
+	}
+	return true
+}
+
+// availabilityFacetCompatible reports whether an existing resource can accept
+// the incoming availability facet without silently overwriting a different
+// target's already-attached probe.
+func availabilityFacetCompatible(existing *Resource, incoming Resource) bool {
+	if existing == nil || existing.Availability == nil {
+		return true
+	}
+	current := strings.TrimSpace(existing.Availability.TargetID)
+	if current == "" {
+		return true
+	}
+	incomingID := strings.TrimSpace(incoming.Availability.TargetID)
+	return incomingID == "" || incomingID == current
 }
 
 func (rr *ResourceRegistry) findCorroboratedOneSidedProxmoxLink(

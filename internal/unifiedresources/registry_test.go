@@ -4601,3 +4601,35 @@ func TestIngestStorageRoutesPBSPollerEntriesToPBSSource(t *testing.T) {
 		t.Fatalf("PVE-reported pbs-typed storage Sources = %v, want [%s]", pveStorage.Sources, SourceProxmox)
 	}
 }
+
+func TestRegistryAvailabilityLinkAttachesFacetToKnownResource(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Now().UTC()
+	rr.IngestRecords(SourceAgent, []IngestRecord{{
+		SourceID: "host-1",
+		Resource: Resource{Type: ResourceTypeAgent, Name: "host-1", Status: StatusOnline, LastSeen: now},
+		Identity: ResourceIdentity{MachineID: "machine-1"},
+	}})
+	hostID := rr.ListByType(ResourceTypeAgent)[0].ID
+
+	rr.IngestRecords(SourceAvailability, []IngestRecord{{
+		SourceID: "probe-1",
+		Resource: Resource{
+			Type: ResourceTypeNetworkEndpoint, Name: "probe-1", Status: StatusOnline, LastSeen: now,
+			Sources: []DataSource{SourceAvailability},
+			Availability: &AvailabilityData{
+				TargetID: "probe-1", LinkedResourceID: hostID, Address: "192.0.2.10",
+				Protocol: "icmp", Enabled: true, Available: true,
+			},
+		},
+		Identity: ResourceIdentity{IPAddresses: []string{"192.0.2.10"}},
+	}})
+
+	if got := rr.ListByType(ResourceTypeNetworkEndpoint); len(got) != 0 {
+		t.Fatalf("expected 0 standalone network endpoints, got %d", len(got))
+	}
+	host, ok := rr.Get(hostID)
+	if !ok || host.Availability == nil || host.Availability.TargetID != "probe-1" {
+		t.Fatalf("expected availability facet probe-1 on host, got %+v", host.Availability)
+	}
+}

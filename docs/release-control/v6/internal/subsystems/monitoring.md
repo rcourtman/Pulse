@@ -390,6 +390,11 @@ load from the config persistence boundary, schedule through
 the default low-overhead check, while TCP and HTTP are canonical fallbacks for
 devices or runtimes where ICMP is unavailable or the useful signal is a port or
 web interface.
+Supplemental records carry the saved target's optional `LinkedResourceID`
+forward into `AvailabilityData` so the unified-resource registry can attach
+the probe facet onto the referenced resource. Monitoring does not perform the
+attach decision itself; it only forwards the link hint for the registry to
+resolve.
 Availability target kind is monitoring-owned runtime metadata, not a frontend
 guess. Saved targets carry the bounded `targetKind` values `machine`, `service`,
 and `device`; monitoring must preserve that value in probe status, supplemental

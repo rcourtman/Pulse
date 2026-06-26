@@ -133,4 +133,31 @@ describe('availabilityProbePresentation', () => {
     expect(presentation?.detailLabel).toContain('HTTP /status - 503');
     expect(presentation?.detailLabel).toContain('http probe returned 503 Service Unavailable');
   });
+
+  it('returns a presentation for a non-endpoint resource carrying an availability facet', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(new Date('2026-05-06T13:00:20Z').getTime());
+
+    const presentation = getAvailabilityProbePresentation(
+      makeAvailabilityResource({
+        id: 'vm:100',
+        type: 'vm',
+        platformType: 'proxmox',
+        platformId: 'proxmox-ve',
+        sourceType: 'agent',
+        status: 'online',
+        availability: {
+          protocol: 'icmp',
+          available: true,
+          latencyMillis: 3,
+          lastChecked: '2026-05-06T13:00:18Z',
+        },
+        platformData: {},
+      }),
+    );
+
+    expect(presentation).not.toBeNull();
+    expect(presentation?.methodLabel).toBe('ICMP');
+    expect(presentation?.resultLabel).toBe('3 ms');
+    expect(presentation?.toneClassName).toContain('emerald');
+  });
 });

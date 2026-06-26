@@ -993,6 +993,12 @@ payload shape change when the portal presents compact client rows.
     Mock mode must expose authored availability targets through those same
     list, saved-test, and connections-ledger payloads so demo endpoints exercise
     the canonical API contract rather than a frontend-only fixture.
+    Availability target payloads carry an optional `linkedResourceId` field
+    that, when set to a known resource id, requests the unified-resource
+    registry to attach the probe facet onto that resource instead of minting
+    a standalone `network-endpoint`. The field is advisory: the registry
+    still applies IP-correlation when no explicit link is provided, and a
+    link that would overwrite a different target's facet is ignored.
 20. `frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx` shared with `agent-lifecycle`: the node setup authentication section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
 21. `frontend-modern/src/components/Settings/NodeModalBasicInfoSection.tsx` shared with `agent-lifecycle`: the node setup basic-info section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
 22. `frontend-modern/src/components/Settings/nodeModalModel.ts` shared with `agent-lifecycle`: the pure node setup modal model is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.

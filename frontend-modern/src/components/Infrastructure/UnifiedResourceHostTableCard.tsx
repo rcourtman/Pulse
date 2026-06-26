@@ -428,6 +428,16 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                                   </span>
                                 )}
                               </Show>
+                              <Show when={availabilityProbe()}>
+                                {(probe) => (
+                                  <span
+                                    class={`hidden shrink-0 whitespace-nowrap rounded px-1 text-[9px] font-medium lg:inline ${probe().toneClassName}`}
+                                    title={probe().detailLabel}
+                                  >
+                                    {probe().methodLabel}
+                                  </span>
+                                )}
+                              </Show>
                               <Show when={shouldShowResourceAlternateName(resource)}>
                                 <span class="hidden min-w-0 max-w-[28%] shrink truncate text-[9px] text-muted lg:inline">
                                   ({resource.name})
