@@ -136,4 +136,28 @@ describe('useAlertOverviewState', () => {
 
     expect(result.filteredAlerts().map((alert) => alert.id)).toEqual(['alpha', 'mid', 'zeta']);
   });
+
+  it('counts alerts with missing startTime in total24h', () => {
+    const now = Date.now();
+    const [activeAlerts] = createSignal<Record<string, Alert>>({
+      recent: makeAlert('recent', new Date(now - 60_000).toISOString()),
+      missing: { ...makeAlert('missing', ''), startTime: undefined as unknown as string },
+      invalid: { ...makeAlert('invalid', 'bad-date'), startTime: 'not-a-date' },
+      old: makeAlert('old', new Date(now - 3 * 86_400_000).toISOString()),
+    });
+
+    const { result } = renderHook(() =>
+      useAlertOverviewState({
+        activeAlerts,
+        overrides: () => [],
+        showAcknowledged: () => true,
+        updateAlert: vi.fn(),
+      }),
+    );
+
+    const stats = result.alertStats();
+    expect(stats.active).toBe(4);
+    expect(stats.total24h).toBe(3);
+    expect(stats.acknowledged).toBe(0);
+  });
 });

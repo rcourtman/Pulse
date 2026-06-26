@@ -39,7 +39,9 @@ export function useAlertOverviewState(props: UseAlertOverviewStateProps) {
       active: alerts.filter((alert) => !alert.acknowledged).length,
       acknowledged: alerts.filter((alert) => alert.acknowledged).length,
       total24h: alerts.filter((alert) => {
-        const age = tick() - new Date(alert.startTime).getTime();
+        const ts = new Date(alert.startTime).getTime();
+        if (Number.isNaN(ts)) return true;
+        const age = tick() - ts;
         return age >= 0 && age < 86_400_000;
       }).length,
       overrides: props.overrides().length,
