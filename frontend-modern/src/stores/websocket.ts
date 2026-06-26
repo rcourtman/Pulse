@@ -572,7 +572,7 @@ export function createWebSocketStore(url: string) {
           logger.info('WebSocket connection established');
         } else if (message.type === 'alert') {
           // Individual alerts now handled via state sync
-          logger.warn('New alert received (will sync with next state update)', message.data);
+          logger.debug('New alert received (will sync with next state update)', message.data);
         } else if (message.type === 'alertResolved') {
           // Individual alert resolution now handled via state sync
           logger.info('Alert resolved (will sync with next state update)', {

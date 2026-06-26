@@ -1,5 +1,5 @@
 import { createWebSocketStore } from './websocket';
-import { createSignal } from 'solid-js';
+import { createSignal, createRoot } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { getPulseWebSocketUrl } from '@/utils/url';
 import type { Alert, ResolvedAlert, State } from '@/types/api';
@@ -91,7 +91,9 @@ export function getGlobalWebSocketStore() {
 
     const wsUrl = getPulseWebSocketUrl();
 
-    window.__pulseWsStore = createWebSocketStore(wsUrl);
+    createRoot(() => {
+      window.__pulseWsStore = createWebSocketStore(wsUrl);
+    });
     bindGlobalShutdownHandler();
   }
 
