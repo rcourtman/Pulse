@@ -59,6 +59,31 @@ func SuggestAvailabilityProbe(discovery *ResourceDiscovery, hostIP string) *Avai
 		}
 	}
 
+	// 3. Fallback: try hostname/name against the defaults maps.
+	// This covers containers where the deep scan hasn't populated ServiceType yet.
+	hostnameNormalized := normalizeServiceTypeForLookup(discovery.Hostname)
+	if hostnameNormalized != "" && hostnameNormalized != normalized {
+		if defaults, matched, ok := lookupWebServiceDefault(hostnameNormalized); ok {
+			return &AvailabilityProbeSuggestion{
+				Protocol:    defaults.Protocol,
+				Address:     hostIP,
+				Port:        defaults.Port,
+				Path:        defaults.Path,
+				ServiceName: pickServiceName(discovery, matched),
+				Reason:      fmt.Sprintf("hostname match: %s", matched),
+			}
+		}
+		if port, matched, ok := lookupTCPServiceDefault(hostnameNormalized); ok {
+			return &AvailabilityProbeSuggestion{
+				Protocol:    "tcp",
+				Address:     hostIP,
+				Port:        port,
+				ServiceName: pickServiceName(discovery, matched),
+				Reason:      fmt.Sprintf("hostname tcp match: %s", matched),
+			}
+		}
+	}
+
 	return nil
 }
 

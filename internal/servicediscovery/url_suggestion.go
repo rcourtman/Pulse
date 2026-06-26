@@ -42,6 +42,8 @@ var webServiceDefaults = map[string]webServiceDefault{
 	"domoticz":       {8080, "http", ""},
 	"node-red":       {1880, "http", ""},
 	"nodered":        {1880, "http", ""},
+	"zigbee2mqtt":    {8080, "http", ""},
+	"ntfy":           {80, "http", ""},
 
 	// Monitoring
 	"grafana":     {3000, "http", ""},

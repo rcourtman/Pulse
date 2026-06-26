@@ -411,8 +411,9 @@ func (s *Service) SetAIAnalyzer(analyzer AIAnalyzer) {
 // When set, getSnapshot() uses ReadState to build infrastructure snapshots.
 func (s *Service) SetReadState(rs unifiedresources.ReadState) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.readState = rs
+	s.mu.Unlock()
+	go s.backfillAvailabilitySuggestions(context.Background())
 }
 
 // Start begins the background discovery service.
@@ -588,6 +589,7 @@ func (s *Service) runDiscoveryLoop(ctx context.Context, stopCh <-chan struct{}, 
 
 	s.collectFingerprints(ctx)
 	s.runAutomaticDiscoveryRefresh(ctx)
+	s.backfillAvailabilitySuggestions(ctx)
 
 	s.mu.RLock()
 	currentInterval := s.interval
@@ -602,6 +604,7 @@ func (s *Service) runDiscoveryLoop(ctx context.Context, stopCh <-chan struct{}, 
 		case <-ticker.C:
 			s.collectFingerprints(ctx)
 			s.runAutomaticDiscoveryRefresh(ctx)
+			s.backfillAvailabilitySuggestions(ctx)
 		case newInterval := <-s.intervalCh:
 			// Interval changed - reset the ticker
 			newInterval = normalizeDiscoveryInterval(newInterval)
@@ -2289,19 +2292,18 @@ func (s *Service) getResourceExternalIP(req DiscoveryRequest) string {
 	switch req.ResourceType {
 	case ResourceTypeSystemContainer:
 		for _, c := range snap.Containers {
-			if fmt.Sprintf("%d", c.VMID) == req.ResourceID && c.Node == requestTargetID {
+			if fmt.Sprintf("%d", c.VMID) == req.ResourceID {
 				if len(c.IPAddresses) > 0 {
 					return c.IPAddresses[0]
 				}
 				if candidate := firstResourceHostnameCandidate(req.ResourceID, requestTargetID, c.Name, req.Hostname); candidate != "" {
 					return candidate
 				}
-				return ""
 			}
 		}
 	case ResourceTypeVM:
 		for _, vm := range snap.VMs {
-			if fmt.Sprintf("%d", vm.VMID) == req.ResourceID && vm.Node == requestTargetID {
+			if fmt.Sprintf("%d", vm.VMID) == req.ResourceID {
 				if len(vm.IPAddresses) > 0 {
 					return vm.IPAddresses[0]
 				}
@@ -3167,6 +3169,85 @@ func (s *Service) refreshSuggestedAvailabilityProbeFromState(d *ResourceDiscover
 	}
 	d.SuggestedAvailabilityProbe = suggestion
 	return true
+}
+
+func (s *Service) backfillAvailabilitySuggestions(ctx context.Context) {
+	if ctx == nil || ctx.Err() != nil {
+		return
+	}
+	if !s.hasStateAccess() || s.store == nil {
+		return
+	}
+
+	discoveries, err := s.store.List()
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to list discoveries for availability suggestion backfill")
+		return
+	}
+	if len(discoveries) == 0 {
+		return
+	}
+
+	const maxEmptyRetries = 6
+	initialDelay := 10 * time.Second
+
+	for attempt := 0; attempt < maxEmptyRetries; attempt++ {
+		snap, ok := s.getSnapshot()
+		if !ok {
+			return
+		}
+		hasInfra := len(snap.Containers) > 0 || len(snap.VMs) > 0 || len(snap.DockerHosts) > 0
+		if hasInfra || attempt == maxEmptyRetries-1 {
+			if !hasInfra {
+				log.Warn().Msg("backfill: state snapshot still empty after retries; proceeding with best effort")
+			}
+			break
+		}
+		log.Info().Dur("delay", initialDelay).Int("attempt", attempt+1).Msg("backfill: state snapshot empty, waiting for monitor data")
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(initialDelay):
+		}
+		initialDelay *= 2
+	}
+
+	log.Info().Int("discoveries", len(discoveries)).Msg("backfill: processing discoveries")
+	updated := 0
+	for _, d := range discoveries {
+		if ctx.Err() != nil {
+			break
+		}
+		if d.SuggestedAvailabilityProbe != nil {
+			continue
+		}
+
+		resourceType, targetID, resourceID, err := ParseResourceID(d.ID)
+		if err != nil {
+			continue
+		}
+
+		req := DiscoveryRequest{
+			ResourceType: resourceType,
+			ResourceID:   resourceID,
+			TargetID:     targetID,
+		}
+
+		externalIP := s.getResourceExternalIP(req)
+		suggestion := SuggestAvailabilityProbe(d, externalIP)
+		if suggestion != nil {
+			d.SuggestedAvailabilityProbe = suggestion
+			if err := s.store.Save(d); err != nil {
+				log.Warn().Err(err).Str("id", d.ID).Msg("Failed to save backfilled availability suggestion")
+			} else {
+				updated++
+			}
+		}
+	}
+
+	if updated > 0 {
+		log.Info().Int("count", updated).Msg("Backfilled availability probe suggestions")
+	}
 }
 
 // lookupHostnameFromState finds the hostname/name for a resource from state
