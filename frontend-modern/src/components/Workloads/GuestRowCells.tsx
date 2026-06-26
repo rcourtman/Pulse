@@ -410,28 +410,23 @@ function AvailabilityProbeCell(props: {
 }) {
   const p = createMemo(() => props.presentation);
 
-  const protocolLabel = createMemo(() => {
-    const method = p().methodLabel;
-    const spaceIdx = method.indexOf(' ');
-    return spaceIdx > 0 ? method.slice(0, spaceIdx) : method;
-  });
-
-  const dotClass = createMemo(() => {
-    const tone = p().toneClassName;
-    if (tone.includes('emerald')) return 'bg-emerald-500';
-    if (tone.includes('red')) return 'bg-red-500';
-    if (tone.includes('amber')) return 'bg-amber-500';
-    return 'bg-slate-400';
+  const badgeText = createMemo(() => {
+    const result = p().resultLabel;
+    if (/^\d+\s*ms$/.test(result)) return result.replace(/\s/, '');
+    if (result === 'reachable') return 'up';
+    if (result === 'not checked') return '';
+    return result;
   });
 
   return (
-    <span
-      class={`inline-flex items-center gap-1 rounded px-1 py-0.5 text-[9px] font-semibold leading-none whitespace-nowrap ${p().toneClassName}`}
-      title={p().rowLabel}
-    >
-      {protocolLabel()}
-      <span class={`inline-block h-1.5 w-1.5 rounded-full ${dotClass()}`} />
-    </span>
+    <Show when={badgeText()}>
+      <span
+        class={`inline-flex items-center rounded px-1 py-0.5 text-[9px] font-semibold leading-none whitespace-nowrap ${p().toneClassName}`}
+        title={p().rowLabel}
+      >
+        {badgeText()}
+      </span>
+    </Show>
   );
 }
 
