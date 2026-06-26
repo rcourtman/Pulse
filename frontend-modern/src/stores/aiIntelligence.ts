@@ -40,6 +40,7 @@ import { logger } from '@/utils/logger';
 import type { CorrelationsResponse, IntelligenceSummary } from '@/types/aiIntelligence';
 import { normalizeIntelligenceSummary } from './aiIntelligenceSummaryModel';
 import { presentationPolicyIsDemoMode } from './sessionPresentationPolicy';
+import { eventBus } from './events';
 
 // ============================================
 // Enum validation helpers
@@ -424,6 +425,28 @@ const [intelligenceSummary, setIntelligenceSummary] = createSignal<IntelligenceS
 // ============================================
 
 const [correlations, setCorrelations] = createSignal<CorrelationsResponse | null>(null);
+
+// ============================================
+// Org Switch Reset
+// ============================================
+
+eventBus.on('org_switched', () => {
+  setUnifiedFindings([]);
+  setFindingsLoading(false);
+  setFindingsError(null);
+  setPatrolFindings([]);
+  setPatrolFindingsLoading(false);
+  setPatrolFindingsError(null);
+  patrolFindingsIncludeResolvedPreference = false;
+  setRemediationPlans([]);
+  setPlansLoading(false);
+  setPlansError(null);
+  setPendingApprovalsWithExpiryTracking([]);
+  setApprovalsError(null);
+  setCircuitBreakerStatus(null);
+  setIntelligenceSummary(null);
+  setCorrelations(null);
+});
 
 // ============================================
 // Store API
