@@ -4518,15 +4518,13 @@ func (r *Router) handleHealth(w http.ResponseWriter, req *http.Request) {
 	}
 
 	monitorHealthy := r.monitor != nil
-	schedulerHealthy := false
-	if monitorHealthy {
-		// Liveness probes are watchdog-polled and must stay minimal: the
-		// full SchedulerHealth refreshes provider caches under the monitor's
-		// write lock on every call, which this endpoint only needed for the
-		// dead-letter count. DeadLetterCount touches only the queue's own
-		// short-lived mutex.
-		schedulerHealthy = r.monitor.DeadLetterCount() == 0
-	}
+	// The scheduler is healthy when the monitor is running. Individual
+	// tasks that are dead-lettered (e.g. an unreachable node) are normal
+	// operational events tracked via the scheduler health endpoint, not a
+	// sign that the scheduler itself is broken. Gating the health check
+	// on DeadLetterCount()==0 causes false 503s whenever any single node
+	// goes down.
+	schedulerHealthy := monitorHealthy
 
 	statusCode := http.StatusOK
 	status := "healthy"
