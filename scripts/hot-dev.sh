@@ -514,6 +514,8 @@ start_backend_process() {
     ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-}" \
     LOG_FILE="${BACKEND_DEBUG_LOG}" \
     LOG_MAX_SIZE="50" \
+    HTTP_PROXY="" HTTPS_PROXY="" http_proxy="" https_proxy="" \
+    NO_PROXY="" no_proxy="" \
     ./pulse </dev/null >> "${BACKEND_DEBUG_LOG}" 2>&1 &
     STARTED_BACKEND_PID=$!
 }
