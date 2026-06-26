@@ -2068,7 +2068,7 @@ func TestAlertLifecycleCanonicalChangesRemainWritable(t *testing.T) {
 	}
 	monitor.SetResourceStore(unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store)))
 
-	startedAt := time.Date(2026, 3, 20, 9, 0, 0, 0, time.UTC)
+	startedAt := time.Now().UTC().Add(-1 * time.Hour)
 	alert := &alerts.Alert{
 		ID:         "alert-guardrail-1",
 		Type:       "cpu",
