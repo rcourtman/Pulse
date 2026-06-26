@@ -3836,6 +3836,15 @@ func (r *Router) reloadSystemSettings() {
 	}
 }
 
+// ReloadSystemSettings re-applies persisted system settings to the router
+// and all notification managers. This must be called after a monitor reload
+// (which recreates the notification manager) to restore instance-wide
+// settings like the webhook private CIDR allowlist that live inside the
+// notification manager's runtime state.
+func (r *Router) ReloadSystemSettings() {
+	r.reloadSystemSettings()
+}
+
 // ServeHTTP implements http.Handler
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// Prevent path traversal attacks

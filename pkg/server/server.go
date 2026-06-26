@@ -409,6 +409,11 @@ func Run(ctx context.Context, version string) error {
 			if cfg := reloadableMonitor.GetConfig(); cfg != nil {
 				router.SetConfig(cfg)
 			}
+			// Re-apply system settings (e.g. webhook private CIDR allowlist)
+			// to the freshly recreated notification manager. Without this,
+			// instance-wide settings stored inside the notification manager
+			// are lost on every monitor reload triggered by auto-registration.
+			router.ReloadSystemSettings()
 		}
 		return nil
 	}
