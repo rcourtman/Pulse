@@ -492,15 +492,17 @@ func extractContainerOSType(config map[string]interface{}) string {
 }
 
 // parseProxmoxOnBoot extracts the onboot (autostart) setting from a Proxmox
-// guest config map. Returns nil when the key is absent or unrecognised so
-// callers can distinguish "explicitly off" from "unknown".
+// guest config map. Returns nil only when the config is empty/unavailable or
+// the value is unrecognised. When the onboot key is absent from a valid config,
+// returns false because Proxmox's default is "do not start on boot".
 func parseProxmoxOnBoot(config map[string]interface{}) *bool {
 	if len(config) == 0 {
 		return nil
 	}
 	raw, ok := config["onboot"]
 	if !ok || raw == nil {
-		return nil
+		v := false
+		return &v
 	}
 	s := strings.TrimSpace(fmt.Sprint(raw))
 	if s == "" {

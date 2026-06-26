@@ -1965,7 +1965,7 @@ func TestParseProxmoxOnBoot(t *testing.T) {
 	}{
 		{name: "nil config", config: nil, wantNil: true},
 		{name: "empty config", config: map[string]interface{}{}, wantNil: true},
-		{name: "missing key", config: map[string]interface{}{"ostype": "debian"}, wantNil: true},
+		{name: "missing key", config: map[string]interface{}{"ostype": "debian"}, wantVal: false},
 		{name: "onboot 1 (string)", config: map[string]interface{}{"onboot": "1"}, wantVal: true},
 		{name: "onboot 0 (string)", config: map[string]interface{}{"onboot": "0"}, wantVal: false},
 		{name: "onboot true", config: map[string]interface{}{"onboot": "true"}, wantVal: true},

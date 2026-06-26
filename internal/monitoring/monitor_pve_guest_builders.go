@@ -397,9 +397,9 @@ func (m *Monitor) buildVMFromClusterResource(
 }
 
 // fetchVMOnBoot retrieves the onboot (autostart) setting for a stopped VM by
-// fetching its config. Returns nil when the config is unavailable or the
-// onboot key is absent, so callers can distinguish "explicitly off" from
-// "unknown". Uses a type assertion because PVEClientInterface does not include
+// fetching its config. Returns nil only when the config is unavailable or the
+// value is unrecognised. When onboot is absent from a valid config, returns
+// false because Proxmox's default is "do not start on boot". Uses a type assertion because PVEClientInterface does not include
 // GetVMConfig (it is only on the concrete client, matching the pattern in
 // guest_config.go).
 func (m *Monitor) fetchVMOnBoot(ctx context.Context, client PVEClientInterface, node string, vmid int) *bool {
