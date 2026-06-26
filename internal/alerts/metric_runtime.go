@@ -325,7 +325,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 			applyCanonicalIdentity(alert, canonicalSpecID, string(alertspecs.AlertSpecKindMetricThreshold))
 
 			// Set level based on how much over threshold
-			if value >= threshold.Trigger+10 {
+			if value >= computeCriticalThreshold(threshold.Trigger, metricType) {
 				alert.Level = AlertLevelCritical
 			}
 
@@ -431,7 +431,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 
 			// Update level if needed
 			oldLevel := existingAlert.Level
-			if value >= threshold.Trigger+10 {
+			if value >= computeCriticalThreshold(threshold.Trigger, metricType) {
 				existingAlert.Level = AlertLevelCritical
 			} else {
 				existingAlert.Level = AlertLevelWarning

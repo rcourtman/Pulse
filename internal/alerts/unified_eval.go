@@ -301,6 +301,29 @@ func unifiedStorageUsageResourceType(typeKey string) bool {
 	}
 }
 
+// isPercentageMetric returns true for metrics whose values are bounded 0–100.
+// The critical threshold for these must stay below 100 or escalation will never fire.
+func isPercentageMetric(metricType string) bool {
+	switch metricType {
+	case "cpu", "memory", "disk", "usage":
+		return true
+	default:
+		return false
+	}
+}
+
+// computeCriticalThreshold derives the critical (severity-escalation) threshold
+// from the trigger value. For percentage metrics (0–100 range) the result is
+// capped at 99 so that critical escalation remains reachable when the trigger
+// is set high (e.g. trigger 95 → critical 99, not 105).
+func computeCriticalThreshold(trigger float64, metricType string) float64 {
+	critical := trigger + 10
+	if isPercentageMetric(metricType) && critical > 99 {
+		return 99
+	}
+	return critical
+}
+
 func buildCanonicalMetricSpec(resourceID, title string, resourceType unifiedresources.ResourceType, metricType string, threshold *HysteresisThreshold) (alertspecs.ResourceAlertSpec, error) {
 	spec := alertspecs.ResourceAlertSpec{
 		ID:           canonicalMetricSpecID(resourceID, metricType),
@@ -323,7 +346,7 @@ func buildCanonicalMetricSpec(resourceID, title string, resourceType unifiedreso
 			recovery := threshold.Clear
 			spec.MetricThreshold.Recovery = &recovery
 		}
-		critical := threshold.Trigger + 10
+		critical := computeCriticalThreshold(threshold.Trigger, metricType)
 		spec.MetricThreshold.Critical = &critical
 	}
 
