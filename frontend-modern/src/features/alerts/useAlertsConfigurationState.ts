@@ -45,8 +45,13 @@ export interface AlertsConfigurationSurfaceProps {
 
 export function useAlertsConfigurationState(props: AlertsConfigurationSurfaceProps) {
   const [isReloadingConfig, setIsReloadingConfig] = createSignal(false);
+  const [suppressDirtyFlag, setSuppressDirtyFlag] = createSignal(false);
+  const guardedSetHasUnsavedChanges = (value: boolean) => {
+    if (value && suppressDirtyFlag()) return;
+    props.setHasUnsavedChanges(value);
+  };
   const configurationSnapshotState = useAlertsConfigurationSnapshotState({
-    setHasUnsavedChanges: props.setHasUnsavedChanges,
+    setHasUnsavedChanges: guardedSetHasUnsavedChanges,
   });
   const destinationsState = useAlertDestinationsState({ activeTab: props.activeTab });
   const overridesState = useAlertOverridesState({
@@ -59,6 +64,7 @@ export function useAlertsConfigurationState(props: AlertsConfigurationSurfacePro
 
   const loadAlertConfiguration = async (options: { notify?: boolean } = {}) => {
     setIsReloadingConfig(true);
+    setSuppressDirtyFlag(true);
     props.setHasUnsavedChanges(false);
     destinationsState.resetDestinations();
     configurationSnapshotState.applyConfigurationSnapshot(createDefaultAlertsConfigurationSnapshot());
@@ -81,6 +87,7 @@ export function useAlertsConfigurationState(props: AlertsConfigurationSurfacePro
       }
     } finally {
       setIsReloadingConfig(false);
+      queueMicrotask(() => setSuppressDirtyFlag(false));
     }
   };
 
@@ -115,6 +122,7 @@ export function useAlertsConfigurationState(props: AlertsConfigurationSurfacePro
 
   return {
     isReloadingConfig,
+    guardedSetHasUnsavedChanges,
     isLoadingDestinations: destinationsState.isLoadingDestinations,
     destConfigLoadError: destinationsState.destConfigLoadError,
     overrides: overridesState.overrides,

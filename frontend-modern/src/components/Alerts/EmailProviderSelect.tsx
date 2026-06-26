@@ -197,6 +197,7 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
             onInput={(e) => props.onChange({ ...props.config, username: e.currentTarget.value })}
             placeholder={getAlertEmailUsernamePlaceholder(props.config.provider)}
             class={controlClass('px-2 py-1.5')}
+            autocomplete="off"
           />
         </div>
 
@@ -211,6 +212,7 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
             onInput={(e) => props.onChange({ ...props.config, password: e.currentTarget.value })}
             placeholder={ALERT_EMAIL_PASSWORD_PLACEHOLDER}
             class={controlClass('px-2 py-1.5')}
+            autocomplete="new-password"
           />
         </div>
       </div>

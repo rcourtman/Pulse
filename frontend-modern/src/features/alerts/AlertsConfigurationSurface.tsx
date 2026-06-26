@@ -144,7 +144,7 @@ export function AlertsConfigurationSurface(props: AlertsConfigurationSurfaceProp
           pmgThresholds={state.pmgThresholds}
           setPMGThresholds={state.setPMGThresholds}
           activeAlerts={props.activeAlerts}
-          setHasUnsavedChanges={props.setHasUnsavedChanges}
+          setHasUnsavedChanges={state.guardedSetHasUnsavedChanges}
           removeAlerts={props.removeAlerts}
           disableAllNodes={state.disableAllNodes}
           setDisableAllNodes={state.setDisableAllNodes}
@@ -209,7 +209,7 @@ export function AlertsConfigurationSurface(props: AlertsConfigurationSurfaceProp
 
       <Show when={props.activeTab() === 'destinations'}>
         <DestinationsTab
-          setHasUnsavedChanges={props.setHasUnsavedChanges}
+          setHasUnsavedChanges={state.guardedSetHasUnsavedChanges}
           emailConfig={state.emailConfig}
           setEmailConfig={state.setEmailConfig}
           appriseConfig={state.appriseConfig}
@@ -223,7 +223,7 @@ export function AlertsConfigurationSurface(props: AlertsConfigurationSurfaceProp
 
       <Show when={props.activeTab() === 'schedule'}>
         <ScheduleTab
-          setHasUnsavedChanges={props.setHasUnsavedChanges}
+          setHasUnsavedChanges={state.guardedSetHasUnsavedChanges}
           quietHours={state.scheduleQuietHours}
           setQuietHours={state.setScheduleQuietHours}
           cooldown={state.scheduleCooldown}
