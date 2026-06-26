@@ -408,7 +408,6 @@ function InfoTooltipCell(props: { value: string; tooltip: string; type: string }
 function AvailabilityProbeCell(props: {
   presentation: AvailabilityProbePresentation;
 }) {
-  const tip = useTooltip();
   const p = createMemo(() => props.presentation);
 
   const protocolLabel = createMemo(() => {
@@ -417,35 +416,22 @@ function AvailabilityProbeCell(props: {
     return spaceIdx > 0 ? method.slice(0, spaceIdx) : method;
   });
 
+  const dotClass = createMemo(() => {
+    const tone = p().toneClassName;
+    if (tone.includes('emerald')) return 'bg-emerald-500';
+    if (tone.includes('red')) return 'bg-red-500';
+    if (tone.includes('amber')) return 'bg-amber-500';
+    return 'bg-slate-400';
+  });
+
   return (
-    <>
-      <span
-        class={`inline-flex items-center gap-1 rounded px-1 py-0.5 text-[9px] font-semibold leading-none whitespace-nowrap ${p().toneClassName}`}
-        onMouseEnter={tip.onMouseEnter}
-        onMouseLeave={tip.onMouseLeave}
-      >
-        {protocolLabel()}
-        <span
-          class={`inline-block h-1.5 w-1.5 rounded-full ${
-            p().toneClassName.includes('emerald')
-              ? 'bg-emerald-500'
-              : p().toneClassName.includes('red')
-                ? 'bg-red-500'
-                : p().toneClassName.includes('amber')
-                  ? 'bg-amber-500'
-                  : 'bg-slate-400'
-          }`}
-        />
-      </span>
-      <TooltipPortal when={tip.show()} x={tip.pos().x} y={tip.pos().y}>
-        <div class="min-w-[140px] max-w-[260px]">
-          <div class="font-medium mb-1 text-slate-300 border-b border-border pb-1">
-            Availability Probe
-          </div>
-          <div class="py-0.5 text-xs text-base-content">{p().detailLabel}</div>
-        </div>
-      </TooltipPortal>
-    </>
+    <span
+      class={`inline-flex items-center gap-1 rounded px-1 py-0.5 text-[9px] font-semibold leading-none whitespace-nowrap ${p().toneClassName}`}
+      title={p().rowLabel}
+    >
+      {protocolLabel()}
+      <span class={`inline-block h-1.5 w-1.5 rounded-full ${dotClass()}`} />
+    </span>
   );
 }
 

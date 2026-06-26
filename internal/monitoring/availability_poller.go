@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net"
 	"net/http"
@@ -317,7 +318,7 @@ func ProbeAvailabilityTarget(ctx context.Context, target config.AvailabilityTarg
 		return probeICMP(probeCtx, target)
 	case config.AvailabilityProbeTCP:
 		return probeTCP(probeCtx, target)
-	case config.AvailabilityProbeHTTP:
+	case config.AvailabilityProbeHTTP, config.AvailabilityProbeHTTPS:
 		return probeHTTP(probeCtx, target, timeout)
 	default:
 		return fmt.Errorf("unsupported availability protocol %q", target.Protocol)
@@ -371,16 +372,51 @@ func probeTCP(ctx context.Context, target config.AvailabilityTarget) error {
 	if host == "" {
 		return fmt.Errorf("tcp availability target host is required")
 	}
+	addr := net.JoinHostPort(host, strconv.Itoa(target.Port))
+
 	dialer := net.Dialer{}
-	conn, err := dialer.DialContext(ctx, "tcp", net.JoinHostPort(host, strconv.Itoa(target.Port)))
-	if err != nil {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return ctxErr
-		}
+	conn, err := dialer.DialContext(ctx, "tcp", addr)
+	if err == nil {
+		conn.Close()
+		return nil
+	}
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return ctxErr
+	}
+
+	return probeTCPViaSystem(ctx, host, target.Port, target.EffectiveTimeoutMillis())
+}
+
+func probeTCPViaSystem(ctx context.Context, host string, port, timeoutMillis int) error {
+	timeoutSecs := (timeoutMillis + 999) / 1000
+	if timeoutSecs < 1 {
+		timeoutSecs = 1
+	}
+	portStr := strconv.Itoa(port)
+
+	var args []string
+	if runtime.GOOS == "darwin" {
+		args = []string{"-z", "-G", strconv.Itoa(timeoutSecs), host, portStr}
+	} else {
+		args = []string{"-z", "-w", strconv.Itoa(timeoutSecs), host, portStr}
+	}
+
+	cmd := exec.CommandContext(ctx, "nc", args...)
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		return nil
+	}
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return ctxErr
+	}
+	details := strings.TrimSpace(string(output))
+	if details == "" {
 		return fmt.Errorf("tcp probe failed: %w", err)
 	}
-	_ = conn.Close()
-	return nil
+	if len(details) > 240 {
+		details = details[:240]
+	}
+	return fmt.Errorf("tcp probe failed: %s", details)
 }
 
 func probeHTTP(ctx context.Context, target config.AvailabilityTarget, timeout time.Duration) error {
@@ -388,26 +424,69 @@ func probeHTTP(ctx context.Context, target config.AvailabilityTarget, timeout ti
 	if err != nil {
 		return err
 	}
-	client := http.Client{Timeout: timeout}
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	client := http.Client{Timeout: timeout, Transport: transport}
 	req, err := http.NewRequestWithContext(ctx, http.MethodHead, u.String(), nil)
 	if err != nil {
 		return fmt.Errorf("build http availability request: %w", err)
 	}
 	req.Header.Set("User-Agent", "Pulse availability probe")
 	resp, err := client.Do(req)
+	if err == nil {
+		defer resp.Body.Close()
+		if resp.StatusCode == http.StatusMethodNotAllowed {
+			return probeHTTPGet(ctx, client, u.String())
+		}
+		if resp.StatusCode >= http.StatusInternalServerError {
+			return fmt.Errorf("http probe returned %s", resp.Status)
+		}
+		return nil
+	}
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return ctxErr
+	}
+
+	return probeHTTPViaSystem(ctx, u.String(), target.EffectiveTimeoutMillis())
+}
+
+func probeHTTPViaSystem(ctx context.Context, rawURL string, timeoutMillis int) error {
+	timeoutSecs := (timeoutMillis + 999) / 1000
+	if timeoutSecs < 1 {
+		timeoutSecs = 1
+	}
+	timeoutStr := strconv.Itoa(timeoutSecs)
+
+	args := []string{
+		"-s", "-o", "/dev/null",
+		"-w", "%{http_code}",
+		"--connect-timeout", timeoutStr,
+		"--max-time", timeoutStr,
+		"-k",
+		rawURL,
+	}
+
+	cmd := exec.CommandContext(ctx, "curl", args...)
+	output, err := cmd.CombinedOutput()
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return ctxErr
 		}
-		return fmt.Errorf("http probe failed: %w", err)
+		details := strings.TrimSpace(string(output))
+		if len(details) > 240 {
+			details = details[:240]
+		}
+		if details == "" {
+			return fmt.Errorf("http probe failed: %w", err)
+		}
+		return fmt.Errorf("http probe failed: %s", details)
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusMethodNotAllowed {
-		return probeHTTPGet(ctx, client, u.String())
-	}
-	if resp.StatusCode >= http.StatusInternalServerError {
-		return fmt.Errorf("http probe returned %s", resp.Status)
+	statusCode := strings.TrimSpace(string(output))
+	code, _ := strconv.Atoi(statusCode)
+	if code >= 500 {
+		return fmt.Errorf("http probe returned status %s", statusCode)
 	}
 	return nil
 }

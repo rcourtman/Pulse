@@ -18,9 +18,10 @@ const (
 type AvailabilityProbeProtocol string
 
 const (
-	AvailabilityProbeICMP AvailabilityProbeProtocol = "icmp"
-	AvailabilityProbeTCP  AvailabilityProbeProtocol = "tcp"
-	AvailabilityProbeHTTP AvailabilityProbeProtocol = "http"
+	AvailabilityProbeICMP  AvailabilityProbeProtocol = "icmp"
+	AvailabilityProbeTCP   AvailabilityProbeProtocol = "tcp"
+	AvailabilityProbeHTTP  AvailabilityProbeProtocol = "http"
+	AvailabilityProbeHTTPS AvailabilityProbeProtocol = "https"
 )
 
 type AvailabilityTargetKind string
@@ -135,7 +136,7 @@ func (t AvailabilityTarget) Validate() error {
 		if t.Port <= 0 || t.Port > 65535 {
 			return fmt.Errorf("tcp availability targets require a valid port")
 		}
-	case AvailabilityProbeHTTP:
+	case AvailabilityProbeHTTP, AvailabilityProbeHTTPS:
 		if t.Port < 0 || t.Port > 65535 {
 			return fmt.Errorf("http availability target port must be valid")
 		}
@@ -151,7 +152,7 @@ func (t AvailabilityTarget) Validate() error {
 	if t.FailureThreshold > 0 && t.FailureThreshold > 10 {
 		return fmt.Errorf("availability failure threshold must be 10 or less")
 	}
-	if t.Protocol == AvailabilityProbeHTTP {
+	if t.Protocol == AvailabilityProbeHTTP || t.Protocol == AvailabilityProbeHTTPS {
 		if _, err := t.HTTPURL(); err != nil {
 			return err
 		}
@@ -173,7 +174,11 @@ func (t AvailabilityTarget) HTTPURL() (*url.URL, error) {
 		return nil, fmt.Errorf("availability target address is required")
 	}
 	if !strings.Contains(raw, "://") {
-		raw = "http://" + raw
+		if t.Protocol == AvailabilityProbeHTTPS {
+			raw = "https://" + raw
+		} else {
+			raw = "http://" + raw
+		}
 	}
 	u, err := url.Parse(raw)
 	if err != nil {
@@ -202,7 +207,7 @@ func NormalizeAvailabilityTarget(target AvailabilityTarget) AvailabilityTarget {
 	target.Name = strings.TrimSpace(target.Name)
 	target.TargetKind = AvailabilityTargetKind(strings.ToLower(strings.TrimSpace(string(target.TargetKind))))
 	target.Protocol = AvailabilityProbeProtocol(strings.ToLower(strings.TrimSpace(string(target.Protocol))))
-	if target.Protocol == AvailabilityProbeHTTP {
+	if target.Protocol == AvailabilityProbeHTTP || target.Protocol == AvailabilityProbeHTTPS {
 		target.Address = strings.TrimSpace(target.Address)
 	} else {
 		target.Address = normalizeAvailabilityAddress(target.Address)
