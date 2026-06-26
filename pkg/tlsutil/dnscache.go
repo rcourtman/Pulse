@@ -3,6 +3,7 @@ package tlsutil
 import (
 	"context"
 	"net"
+	"runtime"
 	"sync"
 	"time"
 
@@ -66,7 +67,9 @@ func SetDNSCacheTTL(ttl time.Duration) {
 		Msg("DNS cache TTL configured")
 }
 
-// DialContextWithCache is a DialContext function that uses the DNS cache
+// DialContextWithCache is a DialContext function that uses the DNS cache.
+// On macOS, connections to RFC 1918 addresses are routed through a subprocess
+// (nc) to bypass VPN/NECP routing captures that affect the host process.
 func DialContextWithCache(ctx context.Context, network, address string) (net.Conn, error) {
 	resolver := GetDNSResolver()
 
@@ -89,6 +92,16 @@ func DialContextWithCache(ctx context.Context, network, address string) (net.Con
 		}
 	}
 
+	resolvedIP := net.ParseIP(ips[0])
+	resolvedAddr := net.JoinHostPort(ips[0], port)
+
+	// On macOS, route local-network connections through a subprocess to bypass
+	// Tailscale NECP routing captures that prevent the host process from
+	// reaching RFC 1918 addresses directly.
+	if runtime.GOOS == "darwin" && isPrivateNonVPN(resolvedIP) {
+		return dialViaSubprocess(ctx, network, resolvedAddr)
+	}
+
 	// Create a dialer with the resolved IP
 	dialer := &net.Dialer{
 		Timeout:   10 * time.Second,
@@ -96,5 +109,21 @@ func DialContextWithCache(ctx context.Context, network, address string) (net.Con
 	}
 
 	// Dial with the resolved IP address
-	return dialer.DialContext(ctx, network, net.JoinHostPort(ips[0], port))
+	return dialer.DialContext(ctx, network, resolvedAddr)
+}
+
+// isPrivateNonVPN returns true for RFC 1918 private IPv4 addresses, excluding
+// the Tailscale CGNAT range 100.64.0.0/10 so those connections still route
+// through the Tailscale tunnel.
+func isPrivateNonVPN(ip net.IP) bool {
+	ip4 := ip.To4()
+	if ip4 == nil {
+		return false
+	}
+	if ip4[0] == 100 && ip4[1] >= 64 && ip4[1] <= 127 {
+		return false
+	}
+	return ip4[0] == 10 ||
+		(ip4[0] == 172 && ip4[1] >= 16 && ip4[1] <= 31) ||
+		(ip4[0] == 192 && ip4[1] == 168)
 }
