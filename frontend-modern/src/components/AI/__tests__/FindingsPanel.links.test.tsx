@@ -467,6 +467,8 @@ describe('FindingsPanel resource links', () => {
         impact: 'A disk failure before parity is rebuilt could cause unrecoverable data loss.',
         recommendation:
           'Verify the parity check is progressing and let it complete before making array changes.',
+        evidence:
+          'Checked array status via Unraid API: parity_status=check, capacity=85.9%, disk2=95.8%.',
         detectedAt: '2026-03-30T11:00:00Z',
         lastSeenAt: '2026-03-30T11:05:00Z',
         status: 'active',
@@ -539,6 +541,12 @@ describe('FindingsPanel resource links', () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByText('Recommended next step:')).toBeInTheDocument();
+    expect(screen.getByText('What Pulse checked:')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Checked array status via Unraid API: parity_status=check, capacity=85.9%, disk2=95.8%.',
+      ),
+    ).toBeInTheDocument();
   });
 
   it('can render Patrol findings from the direct Patrol source', async () => {

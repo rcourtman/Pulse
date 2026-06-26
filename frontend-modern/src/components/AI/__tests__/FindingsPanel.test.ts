@@ -367,6 +367,16 @@ describe('FindingsPanel assistant handoff', () => {
     expect(findingsPanelSource).not.toContain('>Recommendation:</span>');
   });
 
+  it('renders the What Pulse checked line from finding.evidence in the expanded card', () => {
+    // The expanded finding card must surface Finding.Evidence so the
+    // operator can see what data or checks led to this finding — not just
+    // the conclusion. This is trust scaffolding: the user can verify that
+    // Pulse actually checked something relevant before acting.
+    expect(findingsPanelSource).toContain('Show when={finding.evidence}');
+    expect(findingsPanelSource).toContain('>What Pulse checked:</span>');
+    expect(findingsPanelSource).toContain('{finding.evidence}');
+  });
+
   it('keeps active Patrol lifecycle history out of the default issue expansion', () => {
     // Current issues should answer "what needs doing" first. Raw lifecycle
     // history is still available when the operator chooses all/resolved history

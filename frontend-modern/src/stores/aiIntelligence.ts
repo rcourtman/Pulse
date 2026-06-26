@@ -146,6 +146,7 @@ export interface UnifiedFinding {
   impact?: string;
   previousResolvedFixSummary?: string;
   recommendation?: string;
+  evidence?: string;
   detectedAt: string;
   lastSeenAt?: string;
   resolvedAt?: string;
@@ -230,6 +231,7 @@ function normalizeUnifiedFindingRecord(item: UnifiedFindingRecord, now: number):
     impact: item.impact,
     previousResolvedFixSummary: item.previous_resolved_fix_summary,
     recommendation: item.recommendation,
+    evidence: item.evidence,
     detectedAt: item.detected_at,
     lastSeenAt: item.last_seen_at || item.detected_at,
     resolvedAt: item.resolved_at,
@@ -272,6 +274,7 @@ function normalizePatrolFindingRecord(item: PatrolFinding, now: number): Unified
     impact: item.impact,
     previousResolvedFixSummary: item.previous_resolved_fix_summary,
     recommendation: item.recommendation,
+    evidence: item.evidence,
     detectedAt: item.detected_at,
     lastSeenAt: item.last_seen_at || item.detected_at,
     resolvedAt: item.resolved_at,
