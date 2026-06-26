@@ -2,7 +2,7 @@ import { apiFetchJSON } from '@/utils/apiClient';
 
 const AVAILABILITY_TARGETS_PATH = '/api/availability-targets';
 
-export type AvailabilityProbeProtocol = 'icmp' | 'tcp' | 'http';
+export type AvailabilityProbeProtocol = 'icmp' | 'tcp' | 'http' | 'https';
 export type AvailabilityTargetKind = 'machine' | 'service' | 'device';
 
 export interface AvailabilityProbeStatus {

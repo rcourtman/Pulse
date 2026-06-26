@@ -169,6 +169,25 @@ type ResourceDiscovery struct {
 	SuggestedURLSourceCode   string `json:"suggested_url_source_code,omitempty"`
 	SuggestedURLSourceDetail string `json:"suggested_url_source_detail,omitempty"`
 	SuggestedURLDiagnostic   string `json:"suggested_url_diagnostic,omitempty"`
+
+	// Auto-suggested availability probe derived from the discovered service type
+	// and known default ports. When approved by the user this becomes a canonical
+	// availability target via POST /api/availability-targets.
+	SuggestedAvailabilityProbe *AvailabilityProbeSuggestion `json:"suggested_availability_probe,omitempty"`
+}
+
+// AvailabilityProbeSuggestion represents a suggested availability probe
+// configuration derived from discovery data. The suggestion feed is read-only;
+// the user approves it into the canonical availability target store via the
+// existing POST /api/availability-targets API. There is no second management
+// surface.
+type AvailabilityProbeSuggestion struct {
+	Protocol    string `json:"protocol"` // "http", "https", "tcp"
+	Address     string `json:"address"`  // IP or hostname
+	Port        int    `json:"port,omitempty"`
+	Path        string `json:"path,omitempty"`
+	ServiceName string `json:"service_name"` // Human-readable service name for display
+	Reason      string `json:"reason"`       // Why this suggestion was generated
 }
 
 // DiscoveryFact represents a single discovered fact about a resource.

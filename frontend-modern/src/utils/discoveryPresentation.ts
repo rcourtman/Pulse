@@ -1,4 +1,4 @@
-import type { DiscoveryFact, ResourceDiscovery } from '@/types/discovery';
+import type { AvailabilityProbeSuggestion, DiscoveryFact, ResourceDiscovery } from '@/types/discovery';
 import {
   getInfrastructureSettingsLocationLabel,
   getInfrastructureSettingsTarget,
@@ -24,6 +24,7 @@ export interface DiscoveryIdentifiedSummary {
   suggestedUrlReasonTitle?: string;
   suggestedUrlDiagnostic?: string;
   hasEndpointCandidate: boolean;
+  suggestedAvailabilityProbe?: AvailabilityProbeSuggestion;
 }
 
 const OBSERVED_SOURCE_LABEL = 'Observed by Discovery';
@@ -168,6 +169,7 @@ export function getDiscoveryIdentifiedSummary(
     suggestedUrlReasonTitle: suggestedUrlReason.title || undefined,
     suggestedUrlDiagnostic: discovery.suggested_url_diagnostic?.trim() || undefined,
     hasEndpointCandidate: Boolean(suggestedUrl),
+    suggestedAvailabilityProbe: discovery.suggested_availability_probe ?? undefined,
   };
 }
 

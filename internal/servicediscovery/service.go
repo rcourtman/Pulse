@@ -1379,8 +1379,9 @@ func (s *Service) discoverDockerContainers(ctx context.Context, hosts []DockerHo
 					discovery = s.enhanceWithDeepScan(ctx, discovery, host)
 				}
 
-				// Suggest web interface URL using Docker host hostname
+				// Suggest web interface URL and availability probe using Docker host hostname
 				discovery.SuggestedURL = SuggestWebURL(discovery, host.Hostname)
+				discovery.SuggestedAvailabilityProbe = SuggestAvailabilityProbe(discovery, host.Hostname)
 
 				if err := s.store.Save(discovery); err != nil {
 					log.Warn().Err(err).Str("id", id).Msg("failed to save discovery")
@@ -1983,6 +1984,10 @@ func (s *Service) DiscoverResource(ctx context.Context, req DiscoveryRequest) (*
 						Msg("Unable to infer suggested URL")
 				}
 			}
+		}
+		// Suggest availability probe using the same external IP
+		if externalIP != "" {
+			discovery.SuggestedAvailabilityProbe = SuggestAvailabilityProbe(discovery, externalIP)
 		}
 	}
 	discovery.SuggestedURLSourceCode = urlSuggestionSourceCode
@@ -3103,6 +3108,9 @@ func (s *Service) upgradeCLIAccessIfNeeded(d *ResourceDiscovery) {
 	if s.refreshSuggestedURLFromState(d, req) {
 		upgraded = true
 	}
+	if s.refreshSuggestedAvailabilityProbeFromState(d, req) {
+		upgraded = true
+	}
 
 	_ = upgraded // Suppress unused variable warning if logging is disabled
 }
@@ -3143,6 +3151,22 @@ func (s *Service) refreshSuggestedURLFromState(d *ResourceDiscovery, req Discove
 		changed = true
 	}
 	return changed
+}
+
+func (s *Service) refreshSuggestedAvailabilityProbeFromState(d *ResourceDiscovery, req DiscoveryRequest) bool {
+	if d == nil || d.SuggestedAvailabilityProbe != nil || !s.hasStateAccess() {
+		return false
+	}
+	externalIP := s.getResourceExternalIP(req)
+	if externalIP == "" {
+		return false
+	}
+	suggestion := SuggestAvailabilityProbe(d, externalIP)
+	if suggestion == nil {
+		return false
+	}
+	d.SuggestedAvailabilityProbe = suggestion
+	return true
 }
 
 // lookupHostnameFromState finds the hostname/name for a resource from state

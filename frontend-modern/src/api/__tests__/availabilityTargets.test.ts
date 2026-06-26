@@ -63,4 +63,21 @@ describe('AvailabilityTargetsAPI', () => {
       },
     );
   });
+
+  it('accepts https protocol for secure web services', async () => {
+    const target: AvailabilityTarget = {
+      id: '',
+      name: 'Proxmox VE',
+      address: '192.0.2.5',
+      protocol: 'https',
+      port: 8006,
+      enabled: true,
+    };
+    mockedApiFetchJSON.mockResolvedValueOnce(target);
+    await AvailabilityTargetsAPI.create(target);
+    expect(mockedApiFetchJSON).toHaveBeenCalledWith('/api/availability-targets', {
+      method: 'POST',
+      body: JSON.stringify(target),
+    });
+  });
 });

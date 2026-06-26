@@ -222,6 +222,38 @@ describe('discoveryPresentation', () => {
       suggestedUrlReasonTitle: 'Detected web port: detected 3000/tcp',
       suggestedUrlDiagnostic: undefined,
       hasEndpointCandidate: true,
+      suggestedAvailabilityProbe: undefined,
+    });
+  });
+
+  it('extracts suggested availability probe from discovery data', () => {
+    const summary = getDiscoveryIdentifiedSummary({
+      id: 'system-container:node:124',
+      resource_type: 'system-container',
+      resource_id: '124',
+      target_id: 'node',
+      service_name: 'Grafana',
+      service_type: 'grafana',
+      confidence: 0.9,
+      ports: [{ port: 3000, protocol: 'tcp', process: 'grafana', address: '0.0.0.0' }],
+      facts: [{ category: 'service', key: 'status', value: 'running', source: 'systemd', confidence: 1, discovered_at: '2026-06-01T00:00:00Z' }],
+      config_paths: [],
+      data_paths: [],
+      log_paths: [],
+      suggested_availability_probe: {
+        protocol: 'http',
+        address: '192.0.2.10',
+        port: 3000,
+        service_name: 'Grafana',
+        reason: 'service default: grafana',
+      },
+    } as unknown as ResourceDiscovery);
+    expect(summary?.suggestedAvailabilityProbe).toEqual({
+      protocol: 'http',
+      address: '192.0.2.10',
+      port: 3000,
+      service_name: 'Grafana',
+      reason: 'service default: grafana',
     });
   });
 

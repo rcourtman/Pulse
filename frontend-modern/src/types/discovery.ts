@@ -96,6 +96,16 @@ export interface ResourceDiscovery {
   suggested_url_source_code?: string;
   suggested_url_source_detail?: string;
   suggested_url_diagnostic?: string;
+  suggested_availability_probe?: AvailabilityProbeSuggestion;
+}
+
+export interface AvailabilityProbeSuggestion {
+  protocol: string;
+  address: string;
+  port?: number;
+  path?: string;
+  service_name: string;
+  reason: string;
 }
 
 export interface DiscoverySummary {
