@@ -1314,6 +1314,25 @@ func TestUserFriendlyActivationError_NoGoErrorChainSyntax(t *testing.T) {
 			},
 		},
 		{
+			name: "missing license public key",
+			err:  fmt.Errorf("validate license: %w: signature verification required", license.ErrNoPublicKey),
+			check: func(t *testing.T, msg string) {
+				lower := strings.ToLower(msg)
+				if strings.Contains(lower, "temporarily unavailable") || strings.Contains(lower, "try again later") {
+					t.Errorf("message misclassifies local build configuration as transient outage: %q", msg)
+				}
+				if !strings.Contains(lower, "official pulse release tarball") {
+					t.Errorf("message should direct tarball installs back to official release artifacts: %q", msg)
+				}
+				if !strings.Contains(lower, "published docker image") {
+					t.Errorf("message should direct container installs back to published Docker images: %q", msg)
+				}
+				if !strings.Contains(lower, "same license key") {
+					t.Errorf("message should reassure the customer that the key can be reused: %q", msg)
+				}
+			},
+		},
+		{
 			name: "invalid license",
 			err:  license.ErrInvalidLicense,
 			check: func(t *testing.T, msg string) {

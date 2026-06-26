@@ -7078,6 +7078,32 @@ func TestContract_EntitlementUsageSnapshotWaitsForSettledSupplementalInventory(t
 	}
 }
 
+func TestContract_MissingLicensePublicKeyActivationErrorGuidesLocalBuilds(t *testing.T) {
+	msg := userFriendlyActivationError(fmt.Errorf("validate license: %w: signature verification required", pkglicensing.ErrNoPublicKey))
+	lower := strings.ToLower(msg)
+
+	for _, want := range []string{
+		"official pulse release tarball",
+		"published docker image",
+		"same license key",
+	} {
+		if !strings.Contains(lower, want) {
+			t.Fatalf("activation error %q does not contain %q", msg, want)
+		}
+	}
+
+	for _, forbidden := range []string{
+		"temporarily unavailable",
+		"try again later",
+		"validate license:",
+		"signature verification",
+	} {
+		if strings.Contains(lower, forbidden) {
+			t.Fatalf("activation error %q contains misleading/internal text %q", msg, forbidden)
+		}
+	}
+}
+
 func TestContract_LegacyMigrationFallbackStaysUncappedJSONSnapshot(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
 	const expectedClientVersion = "6.0.0-rc.1"

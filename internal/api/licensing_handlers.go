@@ -924,7 +924,7 @@ func userFriendlyActivationError(err error) string {
 	case errors.Is(err, errExpiredLicenseSentinel):
 		return "This license has expired. Contact support for renewal options."
 	case errors.Is(err, errNoPublicKeySentinel):
-		return "License verification is temporarily unavailable. Please try again later."
+		return "This Pulse build cannot verify Pro licenses because it was built without the license validation key. Use the official Pulse release tarball or published Docker image, then activate the same license key again."
 	}
 
 	// License server errors from the activation key flow.
