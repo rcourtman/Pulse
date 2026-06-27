@@ -129,11 +129,17 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
       return;
     }
 
-    if (isEditableTarget(e.target)) {
+    const key = e.key.toLowerCase();
+
+    if ((e.metaKey || e.ctrlKey) && key === 'k') {
+      e.preventDefault();
+      openCommandPalette();
       return;
     }
 
-    const key = e.key.toLowerCase();
+    if (isEditableTarget(e.target)) {
+      return;
+    }
 
     if (key === 'g' && !awaitingSecondKey() && !e.metaKey && !e.ctrlKey && !e.altKey) {
       if (!e.repeat) {
