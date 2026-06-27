@@ -69,7 +69,7 @@ func (m *Monitor) resolveNodeMemory(
 	usedRRDAvailableFallback := false
 	rrdMemUsedFallback := false
 
-	if effectiveAvailable == 0 && missingCacheMetrics {
+	if missingCacheMetrics {
 		if metrics, err := m.getNodeRRDMetrics(ctx, client, nodeName); err == nil {
 			haveRRDMetrics = true
 			rrdMetrics = metrics

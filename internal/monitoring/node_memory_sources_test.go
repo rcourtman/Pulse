@@ -64,6 +64,22 @@ func TestResolveNodeMemoryCharacterization(t *testing.T) {
 			wantUsed:      6 * gib,
 			wantRawSource: "rrd-memused",
 		},
+		{
+			name: "node status has only free so rrd memavailable is preferred over total-minus-free",
+			memory: &proxmox.MemoryStatus{
+				Total: 8 * gib,
+				Used:  7 * gib,
+				Free:  1 * gib,
+			},
+			rrdPoints: []proxmox.NodeRRDPoint{{
+				MemTotal:     floatPtr(float64(8 * gib)),
+				MemAvailable: floatPtr(float64(4 * gib)),
+			}},
+			wantSource:    "rrd-memavailable",
+			wantFallback:  "rrd-memavailable",
+			wantUsed:      4 * gib,
+			wantRawSource: "rrd-memavailable",
+		},
 	}
 
 	for _, tt := range tests {

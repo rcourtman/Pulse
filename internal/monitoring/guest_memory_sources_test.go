@@ -6,6 +6,100 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
+func TestDeriveGuestMemInfoAvailable(t *testing.T) {
+	kb := uint64(1024)
+	miB := uint64(1024 * 1024)
+	giB := uint64(1024 * 1024 * 1024)
+
+	tests := []struct {
+		name          string
+		memInfo       *proxmox.VMMemInfo
+		wantAvailable uint64
+		wantSource    string
+	}{
+		{
+			name: "uses available field when present",
+			memInfo: &proxmox.VMMemInfo{
+				Total:     8 * giB,
+				Used:      6 * giB,
+				Free:      2 * giB,
+				Available: 4 * giB,
+				Buffers:   500 * miB,
+				Cached:    1 * giB,
+			},
+			wantAvailable: 4 * giB,
+			wantSource:    "available-field",
+		},
+		{
+			name: "derives from free+buffers+cached when available missing",
+			memInfo: &proxmox.VMMemInfo{
+				Total:   8 * giB,
+				Used:    5 * giB,
+				Free:    2 * giB,
+				Buffers: 500 * miB,
+				Cached:  1 * giB,
+			},
+			wantAvailable: 2*giB + 500*miB + 1*giB,
+			wantSource:    "derived-free-buffers-cached",
+		},
+		{
+			name: "returns zero when only free is available (no cache metrics)",
+			memInfo: &proxmox.VMMemInfo{
+				Total: 7796964 * kb,
+				Used:  7352140 * kb,
+				Free:  444824 * kb,
+			},
+			wantAvailable: 0,
+			wantSource:    "",
+		},
+		{
+			name: "returns availableFromUsed when used excludes cache despite missing cache metrics",
+			memInfo: &proxmox.VMMemInfo{
+				Total: 8 * giB,
+				Used:  3 * giB,
+				Free:  1 * giB,
+			},
+			wantAvailable: 5 * giB,
+			wantSource:    "derived-total-minus-used",
+		},
+		{
+			name: "returns zero when only total and used with used equal to total minus free",
+			memInfo: &proxmox.VMMemInfo{
+				Total: 8 * giB,
+				Used:  7 * giB,
+			},
+			wantAvailable: 1 * giB,
+			wantSource:    "derived-total-minus-used",
+		},
+		{
+			name: "returns zero for empty meminfo",
+			memInfo: &proxmox.VMMemInfo{
+				Total: 8 * giB,
+			},
+			wantAvailable: 0,
+			wantSource:    "",
+		},
+		{
+			name:          "nil meminfo returns zero",
+			memInfo:       nil,
+			wantAvailable: 0,
+			wantSource:    "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotAvailable, gotSource := deriveGuestMemInfoAvailable(tt.memInfo, nil)
+			if gotAvailable != tt.wantAvailable {
+				t.Fatalf("available = %d, want %d", gotAvailable, tt.wantAvailable)
+			}
+			if gotSource != tt.wantSource {
+				t.Fatalf("source = %q, want %q", gotSource, tt.wantSource)
+			}
+		})
+	}
+}
+
 func TestSelectGuestLowTrustUsedMemory(t *testing.T) {
 	giB := uint64(1024 * 1024 * 1024)
 

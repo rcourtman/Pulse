@@ -73,6 +73,9 @@ func deriveGuestMemInfoAvailable(memInfo *proxmox.VMMemInfo, guestRaw *VMMemoryR
 				}
 			}
 		}
+		if missingCacheMetrics {
+			return 0, ""
+		}
 		return componentAvailable, "derived-free-buffers-cached"
 	default:
 		if availableFromUsed > 0 && missingCacheMetrics {
