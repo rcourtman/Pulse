@@ -99,7 +99,10 @@ func (a *AgenticLoop) executeQuestionTool(ctx context.Context, sessionID string,
 				"question_id": questionID,
 				"answers":     answers,
 			}
-			out, _ := json.Marshal(payload)
+			out, err := json.Marshal(payload)
+			if err != nil {
+				return fmt.Sprintf("Error: failed to encode answers: %v", err), true
+			}
 			return string(out), false
 		case <-ticker.C:
 			a.mu.Lock()
