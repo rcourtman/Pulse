@@ -42,6 +42,7 @@ import { getSemanticTonePresentation } from '@/utils/semanticTonePresentation';
 import { formatIdentifierLabel } from '@/utils/textPresentation';
 import type { IntelligenceHealthScore } from '@/types/aiIntelligence';
 import { getPatrolFindingsEmptyState } from '@/utils/patrolEmptyStatePresentation';
+import { presentCapacityForecast } from '@/utils/patrolCapacityForecastPresentation';
 import type { UpgradeDestination } from '@/utils/upgradeNavigation';
 import CheckCircleIcon from 'lucide-solid/icons/check-circle';
 import AlertCircleIcon from 'lucide-solid/icons/alert-circle';
@@ -97,6 +98,19 @@ export type FindingsPanelFilter =
   | 'approvals'
   | 'attention'
   | 'overdue';
+
+function capacityForecastToneClass(
+  tone: 'critical' | 'warning' | 'info',
+): string {
+  switch (tone) {
+    case 'critical':
+      return 'text-red-700 dark:text-red-300';
+    case 'warning':
+      return 'text-amber-700 dark:text-amber-300';
+    default:
+      return 'text-sky-700 dark:text-sky-300';
+  }
+}
 
 interface FindingsPanelProps {
   resourceId?: string;
@@ -1296,6 +1310,20 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           </div>
         </Show>
         <p class="text-sm text-muted">{finding.description}</p>
+        <Show when={presentCapacityForecast(finding.capacityForecast)}>
+          {(fc) => (
+            <p
+              class={`mt-2 text-sm ${capacityForecastToneClass(fc().tone)}`}
+              title="Patrol computed this trend from recent utilization history."
+            >
+              <span class="font-medium">{fc().direction}</span>
+              <span class="text-muted font-normal">
+                {' '}
+                · {fc().detail} · {fc().current}
+              </span>
+            </p>
+          )}
+        </Show>
         <Show when={finding.impact}>
           <p class="text-sm text-base-content mt-2">
             <span class="font-medium">Impact:</span> {finding.impact}

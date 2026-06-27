@@ -70,6 +70,18 @@ describe('FindingsPanel assistant handoff', () => {
     expect(findingsPanelSource).toContain('<LoadingSpinner size="md" />');
   });
 
+  it('renders the deterministic capacity-forecast urgency line in expanded finding detail', () => {
+    // capacity_forecast is a backend-computed fact, not model prose. The panel
+    // must project it through presentCapacityForecast so the operator sees a
+    // deterministic "Filling up / Stable · days-to-full · % used" line rather
+    // than relying on the model-authored description for urgency.
+    expect(findingsPanelSource).toContain(
+      "from '@/utils/patrolCapacityForecastPresentation'",
+    );
+    expect(findingsPanelSource).toContain('presentCapacityForecast(finding.capacityForecast)');
+    expect(findingsPanelSource).toContain('capacityForecastToneClass');
+  });
+
   it('renders the plan-locked at-need Pulse Pro handoff in the finding primary-action area', () => {
     expect(findingsPanelSource).toContain('patrolProHandoff?:');
     expect(findingsPanelSource).toContain('{proHandoff!.detail}');

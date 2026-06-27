@@ -90,6 +90,70 @@ func (p *PatrolService) recordFinding(f *Finding) bool {
 	return isNew
 }
 
+// stampCapacityForecasts joins the deterministic capacity forecasts computed
+// during a run onto matching active findings. This makes the trend/eta a
+// first-class structured signal on the finding instead of relying on the
+// model to optionally mention it in prose. When several metrics forecast the
+// same resource, the most urgent (soonest to fill) wins. No-op without
+// forecasts or a findings store.
+func (p *PatrolService) stampCapacityForecasts(forecasts []seedForecast) {
+	resources := 0
+	for _, sf := range forecasts {
+		if strings.TrimSpace(sf.resourceID) != "" {
+			resources++
+		}
+	}
+	log.Info().
+		Int("forecasts", len(forecasts)).
+		Int("resources", resources).
+		Msg("AI Patrol: Capacity forecasts available for stamping")
+
+	if p == nil || p.findings == nil || len(forecasts) == 0 {
+		return
+	}
+	best := make(map[string]CapacityForecast, len(forecasts))
+	for _, sf := range forecasts {
+		rid := strings.TrimSpace(sf.resourceID)
+		if rid == "" {
+			continue
+		}
+		want := CapacityForecast{
+			Metric:      sf.metric,
+			CurrentPct:  sf.current,
+			DailyChange: sf.dailyChange,
+			DaysToFull:  sf.daysToFull,
+		}
+		if cur, ok := best[rid]; !ok || forecastMoreUrgent(want, cur) {
+			best[rid] = want
+		}
+	}
+	if len(best) == 0 {
+		return
+	}
+	changed := p.findings.StampCapacityForecasts(best)
+	log.Info().
+		Int("forecasts", len(forecasts)).
+		Int("resources", len(best)).
+		Int("stamped", changed).
+		Msg("AI Patrol: Stamped capacity forecasts onto findings")
+}
+
+// forecastMoreUrgent reports whether forecast a is more urgent than b: a
+// filling (positive days-to-full) estimate beats a stable/declining one, and
+// among filling estimates the soonest wins. Among non-filling estimates the
+// faster-rising one wins as a tiebreaker.
+func forecastMoreUrgent(a, b CapacityForecast) bool {
+	aFilling := a.DaysToFull > 0
+	bFilling := b.DaysToFull > 0
+	if aFilling != bFilling {
+		return aFilling
+	}
+	if aFilling {
+		return a.DaysToFull < b.DaysToFull
+	}
+	return a.DailyChange > b.DailyChange
+}
+
 // RejectManualActionForRuntimeFinding fails closed when a manual lifecycle action targets
 // a Patrol-owned runtime finding such as the synthetic ai-service provider/runtime error.
 func (p *PatrolService) RejectManualActionForRuntimeFinding(findingID string, action string) error {

@@ -65,6 +65,24 @@ export interface Finding {
   }>;
   regression_count?: number;
   last_regression_at?: string;
+  // Deterministic capacity forecast (trend/eta) computed by Patrol
+  // independently of the model-authored prose body. Surfaced as a first-class
+  // urgency signal. Present only for capacity-relevant findings whose resource
+  // has enough utilization history to compute a trend.
+  capacity_forecast?: CapacityForecast;
+}
+
+/**
+ * CapacityForecast is a deterministic, backend-computed capacity trend for a
+ * finding's resource. Unlike the model-authored prose (description/impact/
+ * recommendation), this is a computed fact and is the operator's primary
+ * urgency signal: "fills in ~N days at +X%/day".
+ */
+export interface CapacityForecast {
+  metric?: string; // e.g. 'storage', 'disk'
+  current_pct: number; // current utilization %
+  daily_change: number; // avg % change per day (negative = declining)
+  days_to_full: number; // days to 100% at current rate; -1 if stable/declining
 }
 
 export type InvestigationStatus =

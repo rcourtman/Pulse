@@ -432,6 +432,45 @@ describe('patrol api', () => {
     expect(findings[0]?.dismissed_reason).toBe('will_fix_later');
     expect(findings[0]?.remind_at).toBe('2026-05-16T10:00:00Z');
   });
+
+  it('round-trips the deterministic capacity_forecast block on patrol findings', async () => {
+    // capacity_forecast is a backend-computed fact (days-to-full, current %,
+    // daily change) that the surface renders as the operator's primary urgency
+    // signal instead of the model-authored prose. The TS client must mirror it
+    // verbatim so the deterministic reading reaches the panel unchanged.
+    const filling: PatrolFinding = {
+      id: 'finding-forecast',
+      severity: 'warning',
+      category: 'capacity',
+      resource_id: 'storage-tower',
+      resource_name: 'Tower Array',
+      resource_type: 'storage',
+      title: 'Storage pool Tower Array at 86% usage',
+      description: 'Pool is filling.',
+      detected_at: '2026-05-09T10:00:00Z',
+      last_seen_at: '2026-05-09T10:05:00Z',
+      auto_resolved: false,
+      times_raised: 1,
+      suppressed: false,
+      investigation_attempts: 0,
+      capacity_forecast: {
+        metric: 'storage',
+        current_pct: 86,
+        daily_change: 1.4,
+        days_to_full: 10,
+      },
+    };
+    apiFetchJSONMock.mockResolvedValueOnce([filling] as any);
+
+    const findings = await getPatrolFindings();
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.capacity_forecast).toEqual({
+      metric: 'storage',
+      current_pct: 86,
+      daily_change: 1.4,
+      days_to_full: 10,
+    });
+  });
 });
 
 describe('triggerPatrolRun scope body', () => {

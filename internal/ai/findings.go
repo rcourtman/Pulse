@@ -156,6 +156,21 @@ const maxFindingLifecycleEvents = 50
 // (marshal-mirror pattern); merging them would change the public literal API.
 // TestFindingJSONMirrorStaysInSync enforces the mirror.
 //
+// CapacityForecast is a deterministic, backend-computed capacity trend
+// attached to a finding when its resource is trending toward exhaustion.
+// Unlike the model-authored prose body (Description/Impact/Recommendation),
+// this is a computed fact (linear regression over recent utilization
+// samples) and gives the operator a first-class urgency signal independent
+// of whether the model chose to mention it: "fills in ~N days at +X%/day".
+// Populated by Patrol at run time from the deterministic forecast layer and
+// joined onto the finding by resource ID; nil when no trend applies.
+type CapacityForecast struct {
+	Metric      string  `json:"metric,omitempty"` // e.g. "storage", "disk"
+	CurrentPct  float64 `json:"current_pct"`      // current utilization %
+	DailyChange float64 `json:"daily_change"`     // avg % change per day (negative = declining)
+	DaysToFull  int     `json:"days_to_full"`     // days to 100% at current rate; -1 if stable/declining
+}
+
 //nolint:dupl // deliberate marshal-mirror twin of findingJSON
 type Finding struct {
 	ID           string          `json:"id"`
@@ -219,6 +234,11 @@ type Finding struct {
 	Lifecycle              []FindingLifecycleEvent          `json:"lifecycle,omitempty"`                // Bounded, append-only lifecycle log
 	RegressionCount        int                              `json:"regression_count,omitempty"`         // Times the issue reappeared after resolution
 	LastRegressionAt       *time.Time                       `json:"last_regression_at,omitempty"`       // Timestamp of most recent regression
+	// CapacityForecast is the deterministic capacity trend for this finding's
+	// resource (when applicable). Computed by Patrol independently of the
+	// model prose and surfaced as a first-class urgency signal. Nil when no
+	// trend applies or the finding predates forecast stamping.
+	CapacityForecast *CapacityForecast `json:"capacity_forecast,omitempty"`
 }
 
 // findingJSON is the marshal mirror of Finding: identical fields, but
@@ -268,6 +288,7 @@ type findingJSON struct {
 	Lifecycle                  []FindingLifecycleEvent          `json:"lifecycle,omitempty"`
 	RegressionCount            int                              `json:"regression_count,omitempty"`
 	LastRegressionAt           *time.Time                       `json:"last_regression_at,omitempty"`
+	CapacityForecast           *CapacityForecast                `json:"capacity_forecast,omitempty"`
 }
 
 func (f Finding) MarshalJSON() ([]byte, error) {
@@ -313,6 +334,7 @@ func (f Finding) MarshalJSON() ([]byte, error) {
 		Lifecycle:                  f.Lifecycle,
 		RegressionCount:            f.RegressionCount,
 		LastRegressionAt:           f.LastRegressionAt,
+		CapacityForecast:           f.CapacityForecast,
 	})
 }
 
@@ -363,6 +385,7 @@ func (f *Finding) UnmarshalJSON(data []byte) error {
 		Lifecycle:                  payload.Lifecycle,
 		RegressionCount:            payload.RegressionCount,
 		LastRegressionAt:           payload.LastRegressionAt,
+		CapacityForecast:           payload.CapacityForecast,
 	}
 	return nil
 }
@@ -2238,6 +2261,62 @@ func (s *FindingsStore) SetUserNote(id, note string) bool {
 	s.mu.Unlock()
 	s.scheduleSave()
 	return true
+}
+
+// StampCapacityForecasts attaches the given deterministic capacity forecasts
+// to matching active findings, joined by resource ID. A forecast applies to a
+// finding when the finding concerns capacity on that resource (capacity
+// category, or a storage/disk resource). The forecast is recomputed every run,
+// so this is per-run data maintenance, not operator history: no lifecycle
+// event is recorded and findings already holding an equal forecast are skipped
+// to avoid spurious saves. Returns the number of findings updated.
+func (s *FindingsStore) StampCapacityForecasts(byResource map[string]CapacityForecast) int {
+	if s == nil || len(byResource) == 0 {
+		return 0
+	}
+	s.mu.Lock()
+	changed := 0
+	for _, f := range s.findings {
+		if f == nil || !f.IsActive() {
+			continue
+		}
+		fc, ok := byResource[f.ResourceID]
+		if !ok {
+			continue
+		}
+		if !capacityForecastAppliesTo(f) {
+			continue
+		}
+		if f.CapacityForecast != nil && *f.CapacityForecast == fc {
+			continue
+		}
+		fcCopy := fc
+		f.CapacityForecast = &fcCopy
+		changed++
+	}
+	s.mu.Unlock()
+	if changed > 0 {
+		s.scheduleSave()
+	}
+	return changed
+}
+
+// capacityForecastAppliesTo reports whether a deterministic capacity forecast
+// is meaningful for this finding: a capacity finding, or any finding on a
+// storage/disk resource where utilization trend is directly relevant.
+func capacityForecastAppliesTo(f *Finding) bool {
+	if f == nil {
+		return false
+	}
+	if f.Category == FindingCategoryCapacity {
+		return true
+	}
+	switch f.ResourceType {
+	case "storage", "physical_disk":
+		return true
+	default:
+		return false
+	}
 }
 
 // UpdateInvestigationOutcome updates the investigation outcome on a finding

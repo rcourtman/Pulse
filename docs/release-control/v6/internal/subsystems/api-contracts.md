@@ -837,6 +837,13 @@ payload shape change when the portal presents compact client rows.
     `/api/ai/patrol/runs` records may expose bounded `source` provenance so demo
     evidence can be separated from live runtime assessment state without
     changing the stable run payload shape.
+    The Patrol findings payload carries `capacity_forecast` as a structured
+    deterministic field (`current_pct`, `daily_change`, `days_to_full`) on
+    capacity-relevant findings whose resource has enough utilization history to
+    compute a trend. The frontend client must mirror it verbatim so the
+    deterministic urgency reading reaches the surface unchanged; it must not be
+    synthesized, inferred, or overridden client-side, and a missing forecast
+    must mean "no recorded history to compute one," not a default urgency.
     The Patrol status payload's `trigger_status` object is the canonical
     transport for alert/anomaly trigger queue and mode facts. Patrol summary UI
     may present that state as factual trigger-mode context, but it must not infer

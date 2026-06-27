@@ -360,6 +360,51 @@ describe('aiIntelligenceStore', () => {
     });
   });
 
+  it('promotes capacity_forecast on patrol findings to camelCase capacityForecast', async () => {
+    // capacity_forecast is the deterministic urgency signal (days-to-full,
+    // current %, daily change). The store-level UnifiedFinding is what the
+    // findings panel reads; if the normalizer drops capacity_forecast, the
+    // deterministic urgency line can never render and the operator only sees
+    // the model's prose. Pin the wiring through both the patrol-direct and
+    // unified-finding paths.
+    vi.mocked(getPatrolFindings).mockResolvedValueOnce([
+      {
+        id: 'patrol-finding-forecast',
+        severity: 'warning',
+        category: 'capacity',
+        resource_id: 'storage-tower',
+        resource_name: 'Tower Array',
+        resource_type: 'storage',
+        title: 'Storage pool Tower Array at 86% usage',
+        description: 'Pool is filling.',
+        detected_at: '2026-05-09T10:00:00Z',
+        last_seen_at: '2026-05-09T10:05:00Z',
+        auto_resolved: false,
+        times_raised: 1,
+        suppressed: false,
+        investigation_attempts: 0,
+        capacity_forecast: {
+          metric: 'storage',
+          current_pct: 86,
+          daily_change: 1.4,
+          days_to_full: 10,
+        },
+      },
+    ]);
+
+    await aiIntelligenceStore.loadPatrolFindings();
+    expect(aiIntelligenceStore.patrolFindings).toHaveLength(1);
+    expect(aiIntelligenceStore.patrolFindings[0]).toMatchObject({
+      id: 'patrol-finding-forecast',
+      capacityForecast: {
+        metric: 'storage',
+        current_pct: 86,
+        daily_change: 1.4,
+        days_to_full: 10,
+      },
+    });
+  });
+
   it('loads the canonical intelligence summary', async () => {
     vi.mocked(AIAPI.getIntelligenceSummary).mockResolvedValueOnce({
       timestamp: '2026-03-01T00:00:00Z',

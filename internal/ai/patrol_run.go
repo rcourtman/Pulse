@@ -483,6 +483,11 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 				runStats.runtimeResolved = p.resolvePatrolRuntimeFailureFinding("full_patrol_success")
 			}
 
+			// Attach the deterministic capacity forecasts computed this run to
+			// matching findings, so the surface shows a first-class urgency
+			// signal (trend/eta) instead of relying on model prose.
+			p.stampCapacityForecasts(aiResult.Forecasts)
+
 			// Findings are already recorded via patrol_report_finding tool calls.
 			// Track stats from the collected findings.
 			for _, f := range aiResult.Findings {

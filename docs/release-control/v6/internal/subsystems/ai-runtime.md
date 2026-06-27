@@ -55,6 +55,19 @@ generic usage/capacity finding for the same normalized storage identity are one
 operator issue, while distinct backup, health, and pool-vs-device findings
 remain separate. This consolidation belongs in the finding store, not the
 frontend row renderer.
+Capacity forecasts (days-to-full, current utilization, daily change rate) are
+computed deterministically by linear regression over a resource's utilization
+history and must persist as structured data on the Finding
+(`capacity_forecast`), stamped by the finding store after a successful Patrol
+analysis via `StampCapacityForecasts`. That structured field is the canonical
+operator urgency source for capacity-relevant findings; the model-authored
+description must never be treated as the urgency signal when a deterministic
+forecast is present. A forecast requires the resource's utilization to be
+ingested as a time-series in metrics history; resources without recorded
+history cannot produce a forecast and must report its absence honestly rather
+than fabricate one, and stable-high (>=80%) pools with no clear fill trend must
+carry the deterministic "no fill trend" reading so the model's speculation
+cannot override the verified trend.
 
 The public Pulse Intelligence overview is a projection of those runtime
 contracts, not a second Assistant tool inventory. It must point readers at the

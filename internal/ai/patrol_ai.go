@@ -40,6 +40,12 @@ type AIAnalysisResult struct {
 	ReportedIDs      []string         // Finding IDs reported (created/re-reported) this run
 	ResolvedIDs      []string         // Finding IDs explicitly resolved by LLM this run
 	SeededFindingIDs []string         // Finding IDs that were presented in seed context
+	// Forecasts are the deterministic capacity forecasts computed this run,
+	// stamped onto matching findings so the surface shows a first-class
+	// urgency signal instead of relying on model prose. Carried as the
+	// in-package seed type so the resource ID is available for the join; the
+	// persisted CapacityForecast (without resource ID) is built at stamp time.
+	Forecasts []seedForecast
 }
 
 const (
@@ -642,6 +648,7 @@ func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRunti
 		ReportedIDs:      adapter.getReportedFindingIDs(),
 		ResolvedIDs:      adapter.getResolvedIDs(),
 		SeededFindingIDs: seededFindingIDs,
+		Forecasts:        triageResult.Intel.forecasts,
 	}, nil
 }
 
@@ -1533,7 +1540,14 @@ func (p *PatrolService) seedPrecomputeIntelligenceState(snap patrolRuntimeState,
 		}
 	}
 
-	// Capacity forecasts
+	// Capacity forecasts. A forecast is kept when the resource is trending
+	// toward exhaustion (DaysToFull > 0) OR when utilization is already
+	// elevated (>= 80%) even if flat/declining — in the high-but-stable case
+	// the deterministic "no fill trend" reading is still more trustworthy than
+	// leaving the operator with the model's speculation, and it stamps the
+	// finding with a verified capacity signal. Low, stable utilization is
+	// ignored so calm resources do not add noise.
+	const elevatedUsagePct = 80.0
 	if mh != nil {
 		addForecast := func(resourceID, resourceName, metricName string, points []MetricPoint, currentValue float64) {
 			if len(points) < 5 {
@@ -1544,17 +1558,23 @@ func (p *PatrolService) seedPrecomputeIntelligenceState(snap patrolRuntimeState,
 				samples[i] = pt.Value
 			}
 			trend := baseline.CalculateTrend(samples, currentValue)
-			if trend != nil && trend.DaysToFull > 0 && trend.DaysToFull <= 30 {
-				intel.forecasts = append(intel.forecasts, seedForecast{
-					name:        resourceName,
-					resourceID:  resourceID,
-					metric:      metricName,
-					severity:    trend.Severity,
-					daysToFull:  trend.DaysToFull,
-					dailyChange: trend.DailyChange,
-					current:     currentValue,
-				})
+			if trend == nil {
+				return
 			}
+			filling := trend.DaysToFull > 0 && trend.DaysToFull <= 30
+			elevated := currentValue >= elevatedUsagePct
+			if !filling && !elevated {
+				return
+			}
+			intel.forecasts = append(intel.forecasts, seedForecast{
+				name:        resourceName,
+				resourceID:  resourceID,
+				metric:      metricName,
+				severity:    trend.Severity,
+				daysToFull:  trend.DaysToFull,
+				dailyChange: trend.DailyChange,
+				current:     currentValue,
+			})
 		}
 		for _, n := range nodeSources {
 			if pts := mh.GetNodeMetrics(n.id, "memory", 48*time.Hour); len(pts) >= 5 {
@@ -1616,10 +1636,14 @@ func (p *PatrolService) seedPrecomputeIntelligenceState(snap patrolRuntimeState,
 		}
 	}
 
-	// Determine if infrastructure is quiet
+	// Determine if infrastructure is quiet. Only forecasts that are actually
+	// filling (daysToFull > 0) count as a warning; stable/declining forecasts
+	// carry an elevated-usage readout but are not themselves a fill warning, so
+	// they must not mark the whole estate non-quiet. (daysToFull is -1 for
+	// stable/declining trends, which would otherwise satisfy a bare <= 30.)
 	hasWarningForecasts := false
 	for _, f := range intel.forecasts {
-		if f.daysToFull <= 30 {
+		if f.daysToFull > 0 && f.daysToFull <= 30 {
 			hasWarningForecasts = true
 			break
 		}
@@ -3232,8 +3256,13 @@ func (p *PatrolService) seedIntelligenceContext(intel seedIntelligence, now time
 	if len(intel.forecasts) > 0 {
 		sb.WriteString("# Capacity Forecasts\n")
 		for _, f := range intel.forecasts {
-			sb.WriteString(fmt.Sprintf("- [%s] %s %s: full in ~%d days (current: %.0f%%, growing +%.1f%%/day)\n",
-				f.severity, f.name, f.metric, f.daysToFull, f.current, f.dailyChange))
+			if f.daysToFull > 0 {
+				sb.WriteString(fmt.Sprintf("- [%s] %s %s: full in ~%d days (current: %.0f%%, growing +%.1f%%/day)\n",
+					f.severity, f.name, f.metric, f.daysToFull, f.current, f.dailyChange))
+			} else {
+				sb.WriteString(fmt.Sprintf("- [%s] %s %s: %.0f%% used, no fill trend (%+.1f%%/day)\n",
+					f.severity, f.name, f.metric, f.current, f.dailyChange))
+			}
 		}
 		sb.WriteString("\n")
 	}

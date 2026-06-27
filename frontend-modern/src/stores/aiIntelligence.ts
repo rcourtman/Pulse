@@ -18,6 +18,7 @@ import {
   setFindingNote,
   getPatrolFindings,
   type Finding as PatrolFinding,
+  type CapacityForecast,
 } from '@/api/patrol';
 import type {
   RemediationPlan,
@@ -197,6 +198,10 @@ export interface UnifiedFinding {
   timesRaised?: number;
   regressionCount?: number;
   lastRegressionAt?: string;
+  // Deterministic capacity forecast (trend/eta), computed by Patrol
+  // independently of the model prose. Surfaced as a first-class urgency
+  // signal on capacity-relevant findings.
+  capacityForecast?: CapacityForecast;
 }
 
 const [unifiedFindings, setUnifiedFindings] = createSignal<UnifiedFinding[]>([]);
@@ -299,6 +304,7 @@ function normalizePatrolFindingRecord(item: PatrolFinding, now: number): Unified
     timesRaised: item.times_raised || 0,
     regressionCount: item.regression_count || 0,
     lastRegressionAt: item.last_regression_at || undefined,
+    capacityForecast: item.capacity_forecast,
   };
 }
 

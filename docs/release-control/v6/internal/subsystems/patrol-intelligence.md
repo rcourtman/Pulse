@@ -735,9 +735,18 @@ clear`, `Found N new issues`, `Fixed N issues`, `N issues still open`, or
    operators see "what worked last time" inline without having to
    open Assistant. The summary lives on the finding shell
    (`UnifiedFinding`/`Finding`), not on the per-record investigation
-   presentation; the Patrol-owned investigation-context model must not
-   absorb it into impact, verification, or rollback (those represent
-   the current investigation, not history).
+    presentation; the Patrol-owned investigation-context model must not
+    absorb it into impact, verification, or rollback (those represent
+    the current investigation, not history).
+    `FindingsPanel.tsx` also renders the deterministic `capacityForecast`
+    urgency line on the expanded finding card, projected through
+    `presentCapacityForecast` (`patrolCapacityForecastPresentation`). That line
+    is the operator's primary capacity-urgency signal: it states direction
+    (Filling up / Stable / Declining), days-to-full, daily change rate, and
+    current utilization from the backend-computed forecast, and it must take
+    precedence over the model-authored description whenever a forecast is
+    present. The panel must not invent, smooth, or client-side infer a forecast;
+    a missing forecast simply means no urgency line renders.
    The Patrol page must not render a standalone Trust strip above the
    Findings/Runs tab bar or a parallel header trust line. The primary
    Patrol assessment readout is the default owner for current operator
