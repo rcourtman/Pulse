@@ -94,10 +94,15 @@ export const AgentIntegrationsPanel: Component = () => {
     () => surfaceContractEntries().length > 0 || hasManifestInventory(),
   );
 
+  let copySnippetTimer: ReturnType<typeof setTimeout> | undefined;
   const handleCopySnippet = (snippet: string) => {
     setCopied(snippet);
-    window.setTimeout(() => setCopied(null), 2000);
+    if (copySnippetTimer) clearTimeout(copySnippetTimer);
+    copySnippetTimer = setTimeout(() => setCopied(null), 2000);
   };
+  onCleanup(() => {
+    if (copySnippetTimer) clearTimeout(copySnippetTimer);
+  });
 
   const readRouteHash = () => (typeof window === 'undefined' ? '' : window.location.hash);
 
