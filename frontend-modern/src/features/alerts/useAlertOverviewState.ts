@@ -5,6 +5,21 @@ import type { Alert } from '@/types/api';
 import type { Override } from './types';
 import { useAlertAcknowledgementState } from './useAlertAcknowledgementState';
 
+export interface AlertGroup {
+  key: string;
+  primary: Alert;
+  related: Alert[];
+}
+
+export function computeAlertGroupKey(alert: Alert): string {
+  const rid = alert.resourceId ?? '';
+  const segments = rid.split('/');
+  if (segments.length > 2) {
+    return segments.slice(0, -1).join('/');
+  }
+  return rid;
+}
+
 export interface UseAlertOverviewStateProps {
   activeAlerts: Accessor<Record<string, Alert>>;
   overrides: Accessor<Override[]>;
@@ -66,9 +81,29 @@ export function useAlertOverviewState(props: UseAlertOverviewStateProps) {
       }),
   );
 
+  const groupedAlerts = createMemo<AlertGroup[]>(() => {
+    const sorted = filteredAlerts();
+    const groups = new Map<string, Alert[]>();
+    for (const alert of sorted) {
+      const key = computeAlertGroupKey(alert);
+      const existing = groups.get(key);
+      if (existing) {
+        existing.push(alert);
+      } else {
+        groups.set(key, [alert]);
+      }
+    }
+    const result: AlertGroup[] = [];
+    for (const [key, alerts] of groups) {
+      result.push({ key, primary: alerts[0], related: alerts.slice(1) });
+    }
+    return result;
+  });
+
   return {
     alertStats,
     filteredAlerts,
+    groupedAlerts,
     unacknowledgedAlerts,
     processingAlerts,
     bulkAckProcessing,

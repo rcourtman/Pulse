@@ -12,6 +12,7 @@ import {
 } from '@/utils/alertOverviewPresentation';
 
 import { AlertOverviewAlertCard } from './AlertOverviewAlertCard';
+import { useAlertGroupExpansion } from './useAlertGroupExpansion';
 import type { AlertIncidentTimelineState } from './useAlertIncidentTimelineState';
 import type { AlertOverviewState } from './useAlertOverviewState';
 
@@ -25,6 +26,7 @@ interface AlertOverviewActiveAlertsSectionProps {
 }
 
 export function AlertOverviewActiveAlertsSection(props: AlertOverviewActiveAlertsSectionProps) {
+  const { isGroupExpanded, toggleGroup } = useAlertGroupExpansion();
   return (
     <div>
       <SectionHeader title={getAlertOverviewActiveSectionTitle()} size="md" class="mb-3" />
@@ -116,13 +118,41 @@ export function AlertOverviewActiveAlertsSection(props: AlertOverviewActiveAlert
               {getAlertListEmptyState(props.showAcknowledged)}
             </div>
           </Show>
-          <For each={props.state.filteredAlerts()}>
-            {(alert) => (
-              <AlertOverviewAlertCard
-                alert={alert}
-                state={props.state}
-                timelineState={props.timelineState}
-              />
+          <For each={props.state.groupedAlerts()}>
+            {(group) => (
+              <div>
+                <AlertOverviewAlertCard
+                  alert={group.primary}
+                  state={props.state}
+                  timelineState={props.timelineState}
+                />
+                <Show when={group.related.length > 0}>
+                  <div class="ml-4 border-l-2 border-border pl-3 mt-1">
+                    <button
+                      type="button"
+                      class="text-xs text-muted hover:text-base-content transition-colors py-1"
+                      onClick={() => toggleGroup(group.key)}
+                    >
+                      {isGroupExpanded(group.key)
+                        ? 'Hide'
+                        : `+${group.related.length} related`}
+                    </button>
+                    <Show when={isGroupExpanded(group.key)}>
+                      <div class="space-y-2 mt-1">
+                        <For each={group.related}>
+                          {(alert) => (
+                            <AlertOverviewAlertCard
+                              alert={alert}
+                              state={props.state}
+                              timelineState={props.timelineState}
+                            />
+                          )}
+                        </For>
+                      </div>
+                    </Show>
+                  </div>
+                </Show>
+              </div>
             )}
           </For>
         </div>

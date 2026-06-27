@@ -31,6 +31,7 @@ const ALLOWLIST = new Set([
   'src/components/Storage/storageSourceOptions.ts',
   'src/components/Storage/useStorageExpansionState.ts',
   'src/components/Storage/useStorageResourceHighlight.ts',
+  'src/features/alerts/useAlertGroupExpansion.ts',
   'src/components/Infrastructure/resourceBadges.ts',
   'src/components/Settings/reportingResourceTypes.ts',
   'src/utils/canonicalResourceTypes.ts',
