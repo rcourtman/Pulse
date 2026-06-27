@@ -98,17 +98,24 @@ func BuildMetricsTarget(resource Resource, sourceTargets []SourceTarget) *Metric
 			return &MetricsTarget{ResourceType: "storage", ResourceID: st.SourceID}
 		}
 	case ResourceTypePhysicalDisk:
+		// The agent source must win over platform sources for physical
+		// disks: SMART/temperature metrics are written by the host agent
+		// under the agent's disk source ID (HostSMARTDiskSourceID in
+		// monitor_agents.go). Proxmox API does not expose detailed SMART
+		// data, so preferring its source ID here would point store readers
+		// at a key nothing writes and disk metrics would appear empty
+		// (GitHub issue #1487).
+		if st, ok := bySource[SourceAgent]; ok {
+			if resourceID := PhysicalDiskMetaMetricID(resource.PhysicalDisk, st.SourceID); resourceID != "" {
+				return &MetricsTarget{ResourceType: "disk", ResourceID: resourceID}
+			}
+		}
 		if st, ok := bySource[SourceProxmox]; ok {
 			if resourceID := PhysicalDiskMetaMetricID(resource.PhysicalDisk, st.SourceID); resourceID != "" {
 				return &MetricsTarget{ResourceType: "disk", ResourceID: resourceID}
 			}
 		}
 		if st, ok := bySource[SourceTrueNAS]; ok {
-			if resourceID := PhysicalDiskMetaMetricID(resource.PhysicalDisk, st.SourceID); resourceID != "" {
-				return &MetricsTarget{ResourceType: "disk", ResourceID: resourceID}
-			}
-		}
-		if st, ok := bySource[SourceAgent]; ok {
 			if resourceID := PhysicalDiskMetaMetricID(resource.PhysicalDisk, st.SourceID); resourceID != "" {
 				return &MetricsTarget{ResourceType: "disk", ResourceID: resourceID}
 			}

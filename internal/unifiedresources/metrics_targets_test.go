@@ -372,6 +372,59 @@ func TestBuildMetricsTarget_UsesCanonicalPhysicalDiskMetricIDForTrueNAS(t *testi
 	}
 }
 
+func TestBuildMetricsTarget_AgentSourceWinsForPhysicalDiskMetrics(t *testing.T) {
+	// When a Proxmox node has an agent, the agent writes SMART/temperature
+	// metrics under its own disk source ID. The metrics target must resolve
+	// to the agent source ID, not the Proxmox source ID, or store readers
+	// query a key nothing writes and disk metrics appear empty (#1487).
+	// Without a serial, the source-specific fallback ID differs between
+	// sources, so source priority determines which key is returned.
+	target := BuildMetricsTarget(
+		Resource{
+			Type: ResourceTypePhysicalDisk,
+			PhysicalDisk: &PhysicalDiskMeta{
+				DiskType: "nvme",
+			},
+		},
+		[]SourceTarget{
+			{Source: SourceProxmox, SourceID: "pve-node:nvme0n1"},
+			{Source: SourceAgent, SourceID: "agent-uuid:nvme0n1"},
+		},
+	)
+	if target == nil {
+		t.Fatal("BuildMetricsTarget() returned nil")
+	}
+	if target.ResourceType != "disk" {
+		t.Fatalf("ResourceType = %q, want disk", target.ResourceType)
+	}
+	if target.ResourceID != "agent-uuid:nvme0n1" {
+		t.Fatalf("ResourceID = %q, want agent-uuid:nvme0n1 (agent source must win for physical disk SMART metrics)", target.ResourceID)
+	}
+}
+
+func TestBuildMetricsTarget_PhysicalDiskSerialWinsOverAllSources(t *testing.T) {
+	// When the disk has a serial number, it becomes the metric ID
+	// regardless of source, so the priority order doesn't matter.
+	target := BuildMetricsTarget(
+		Resource{
+			Type: ResourceTypePhysicalDisk,
+			PhysicalDisk: &PhysicalDiskMeta{
+				Serial: "SAMSUNG-SSD-870-500GB",
+			},
+		},
+		[]SourceTarget{
+			{Source: SourceProxmox, SourceID: "pve-node:sda"},
+			{Source: SourceAgent, SourceID: "agent-uuid:sda"},
+		},
+	)
+	if target == nil {
+		t.Fatal("BuildMetricsTarget() returned nil")
+	}
+	if target.ResourceID != "SAMSUNG-SSD-870-500GB" {
+		t.Fatalf("ResourceID = %q, want SAMSUNG-SSD-870-500GB (serial should be used as canonical ID)", target.ResourceID)
+	}
+}
+
 func TestBuildMetricsTarget_UsesCanonicalAppMetricIDForTrueNAS(t *testing.T) {
 	target := BuildMetricsTarget(
 		Resource{
