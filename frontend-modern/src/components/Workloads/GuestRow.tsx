@@ -225,9 +225,6 @@ export function GuestRow(props: GuestRowProps) {
                     <span class="tabular-nums">{props.nestedWorkloadContext?.count}</span>
                   </span>
                 </Show>
-                <Show when={availabilityPresentation()}>
-                  {(ap) => <AvailabilityProbeCell presentation={ap()} />}
-                </Show>
               </div>
             </div>
 
@@ -241,6 +238,15 @@ export function GuestRow(props: GuestRowProps) {
             </Show>
           </div>
         </td>
+
+        {/* Availability */}
+        <Show when={isColVisible('availability')}>
+          <td class="px-1.5 sm:px-2 py-0.5 align-middle text-center" data-workload-col="availability">
+            <Show when={availabilityPresentation()}>
+              {(ap) => <AvailabilityProbeCell presentation={ap()} />}
+            </Show>
+          </td>
+        </Show>
 
         {/* Runtime */}
         <Show when={isColVisible('runtime')}>
@@ -622,21 +628,14 @@ export function GuestRow(props: GuestRowProps) {
           </td>
         </Show>
 
-        {/* OS / System — availability probe protocol badge lives here per canonical platform table contract */}
+        {/* OS / System */}
         <Show when={isColVisible('os')}>
           <td class="px-1.5 sm:px-2 py-0.5 align-middle">
             <div class="flex items-center justify-center gap-1">
               <Show
                 when={hasOsInfo()}
                 fallback={
-                  <Show
-                    when={ociImage()}
-                    fallback={
-                      <Show when={availabilityPresentation()}>
-                        {(ap) => <AvailabilityProbeCell presentation={ap()} />}
-                      </Show>
-                    }
-                  >
+                  <Show when={ociImage()}>
                     <span
                       class="text-xs text-cyan-600 dark:text-cyan-400 truncate max-w-[100px]"
                       title={`OCI Image: ${ociImage()}`}
@@ -651,9 +650,6 @@ export function GuestRow(props: GuestRowProps) {
                   osVersion={osVersion()}
                   agentVersion={agentVersion()}
                 />
-              </Show>
-              <Show when={availabilityPresentation()}>
-                {(ap) => <AvailabilityProbeCell presentation={ap()} />}
               </Show>
             </div>
           </td>

@@ -26,6 +26,7 @@ const WORKLOAD_TABLE_LAYOUT_ORDER: Record<WorkloadTableLayoutMode, number> = {
 
 const WORKLOAD_COLUMN_MIN_LAYOUT: Record<string, WorkloadTableLayoutMode> = {
   name: 'mobile',
+  availability: 'mobile',
   runtime: 'tablet',
   cpu: 'mobile',
   memory: 'mobile',
@@ -166,6 +167,14 @@ export const GUEST_COLUMNS: ColumnDef[] = [
     maxWidth: '220px',
     sortKey: 'name',
     kind: 'name',
+  },
+  {
+    id: 'availability',
+    label: 'Avail',
+    width: '56px',
+    minWidth: '48px',
+    maxWidth: '64px',
+    kind: 'badge',
   },
   {
     id: 'runtime',
@@ -511,6 +520,7 @@ export const getWorkloadVisibleColumnsForLayout = (
 export const VIEW_MODE_COLUMNS: Record<ViewMode, Set<string> | null> = {
   all: new Set([
     'name',
+    'availability',
     'type',
     'info',
     'cpu',
@@ -528,6 +538,7 @@ export const VIEW_MODE_COLUMNS: Record<ViewMode, Set<string> | null> = {
   ]),
   vm: new Set([
     'name',
+    'availability',
     'vmid',
     'cpu',
     'memory',
@@ -544,6 +555,7 @@ export const VIEW_MODE_COLUMNS: Record<ViewMode, Set<string> | null> = {
   ]),
   'system-container': new Set([
     'name',
+    'availability',
     'vmid',
     'cpu',
     'memory',
@@ -560,6 +572,7 @@ export const VIEW_MODE_COLUMNS: Record<ViewMode, Set<string> | null> = {
   ]),
   container: new Set([
     'name',
+    'availability',
     'runtime',
     'type',
     'info',
@@ -581,6 +594,7 @@ export const VIEW_MODE_COLUMNS: Record<ViewMode, Set<string> | null> = {
   ]),
   'app-container': new Set([
     'name',
+    'availability',
     'runtime',
     'cpu',
     'memory',
