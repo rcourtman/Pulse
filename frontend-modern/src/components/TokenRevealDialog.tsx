@@ -11,6 +11,7 @@ import { useTokenRevealState, dismissTokenReveal } from '@/stores/tokenReveal';
 export const TokenRevealDialog: Component = () => {
   const state = useTokenRevealState();
   const [copied, setCopied] = createSignal(false);
+  let copiedTimer: ReturnType<typeof setTimeout> | undefined;
 
   const handleDismiss = () => {
     dismissTokenReveal();
@@ -22,11 +23,16 @@ export const TokenRevealDialog: Component = () => {
     if (success) {
       setCopied(true);
       showSuccess('Token copied to clipboard');
-      setTimeout(() => setCopied(false), 2000);
+      if (copiedTimer) clearTimeout(copiedTimer);
+      copiedTimer = setTimeout(() => setCopied(false), 2000);
     } else {
       showError('Failed to copy token');
     }
   };
+
+  onCleanup(() => {
+    if (copiedTimer) clearTimeout(copiedTimer);
+  });
 
   createEffect(() => {
     const current = state();

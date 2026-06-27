@@ -28,6 +28,7 @@ const INFRASTRUCTURE_WORKSPACE_PATH = buildInfrastructureWorkspacePath();
 
 export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
   const [copied, setCopied] = createSignal<'password' | 'admin-token' | null>(null);
+  let copiedTimer: ReturnType<typeof setTimeout> | undefined;
   const [showCredentials, setShowCredentials] = createSignal(true);
   const [connectedSystems, setConnectedSystems] = createSignal<
     ReturnType<typeof buildSetupCompletionConnectedSystems>
@@ -94,9 +95,14 @@ export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
     const success = await copyToClipboard(value);
     if (success) {
       setCopied(type);
-      setTimeout(() => setCopied(null), 2000);
+      if (copiedTimer) clearTimeout(copiedTimer);
+      copiedTimer = setTimeout(() => setCopied(null), 2000);
     }
   };
+
+  onCleanup(() => {
+    if (copiedTimer) clearTimeout(copiedTimer);
+  });
 
   const downloadCredentials = () => {
     const baseUrl = getPulseBaseUrl();

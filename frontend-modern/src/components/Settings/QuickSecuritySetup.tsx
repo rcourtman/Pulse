@@ -1,4 +1,4 @@
-import { Component, createSignal, Show } from 'solid-js';
+import { Component, createSignal, Show, onCleanup } from 'solid-js';
 import { showSuccess, showError } from '@/utils/toast';
 import { copyToClipboard } from '@/utils/clipboard';
 import { clearAuth as clearApiClientAuth, apiFetchJSON } from '@/utils/apiClient';
@@ -28,6 +28,11 @@ export const QuickSecuritySetup: Component<QuickSecuritySetupProps> = (props) =>
   const [customUsername, setCustomUsername] = createSignal(props.defaultUsername ?? 'admin');
   const [customPassword, setCustomPassword] = createSignal('');
   const [confirmPassword, setConfirmPassword] = createSignal('');
+  let copiedTimer: ReturnType<typeof setTimeout> | undefined;
+
+  onCleanup(() => {
+    if (copiedTimer) clearTimeout(copiedTimer);
+  });
 
   const generatePassword = (length: number = 16): string => {
     // Avoid special chars that could cause issues with URLs or shell commands
@@ -52,7 +57,8 @@ export const QuickSecuritySetup: Component<QuickSecuritySetupProps> = (props) =>
     const success = await copyToClipboard(text);
     if (success) {
       setCopied(type);
-      setTimeout(() => setCopied(null), 2000);
+      if (copiedTimer) clearTimeout(copiedTimer);
+      copiedTimer = setTimeout(() => setCopied(null), 2000);
     } else {
       showError('Failed to copy to clipboard');
     }

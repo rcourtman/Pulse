@@ -1,4 +1,4 @@
-import { Component, createMemo, createSignal, onMount, Show } from 'solid-js';
+import { Component, createMemo, createSignal, onMount, onCleanup, Show } from 'solid-js';
 import { t } from '@/i18n';
 import { showError, showSuccess } from '@/utils/toast';
 import { apiFetch, apiFetchJSON } from '@/utils/apiClient';
@@ -21,12 +21,18 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
   const [lxcCtid, setLxcCtid] = createSignal('');
   const [dockerContainerName, setDockerContainerName] = createSignal('');
   const [copied, setCopied] = createSignal(false);
+  let copiedTimer: ReturnType<typeof setTimeout> | undefined;
+
+  onCleanup(() => {
+    if (copiedTimer) clearTimeout(copiedTimer);
+  });
 
   const copyCommand = async () => {
     const copied = await copyToClipboard(getTokenCommand());
     if (copied) {
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      if (copiedTimer) clearTimeout(copiedTimer);
+      copiedTimer = setTimeout(() => setCopied(false), 2000);
       showSuccess(t('setup.welcome.success.commandCopied'));
     } else {
       showError(t('setup.welcome.error.copyCommandFailed'));

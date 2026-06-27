@@ -1,4 +1,4 @@
-import { Show, createSignal, createEffect, createMemo, For } from 'solid-js';
+import { Show, createSignal, createEffect, createMemo, For, onCleanup } from 'solid-js';
 import { updateStore } from '@/stores/updates';
 import { UpdatesAPI, type UpdatePlan } from '@/api/updates';
 import { UpdateConfirmationModal } from './UpdateConfirmationModal';
@@ -13,6 +13,11 @@ export function UpdateBanner() {
   const [isApplying, setIsApplying] = createSignal(false);
   const [copiedIndex, setCopiedIndex] = createSignal<number | null>(null);
   let latestPlanRequestID = 0;
+  let copiedTimer: ReturnType<typeof setTimeout> | undefined;
+
+  onCleanup(() => {
+    if (copiedTimer) clearTimeout(copiedTimer);
+  });
 
   // Fetch update plan when update info is available
   createEffect(() => {
@@ -74,7 +79,8 @@ export function UpdateBanner() {
       return;
     }
     setCopiedIndex(index);
-    setTimeout(() => setCopiedIndex(null), 2000);
+    if (copiedTimer) clearTimeout(copiedTimer);
+    copiedTimer = setTimeout(() => setCopiedIndex(null), 2000);
   };
 
   // Get deployment type message
