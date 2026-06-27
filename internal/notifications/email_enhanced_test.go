@@ -138,7 +138,7 @@ func TestSendViaProvider_ProviderUsernameDefaults(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			config := EmailProviderConfig{
 				EmailConfig: EmailConfig{
-					SMTPHost: "invalid.host.test", // Will fail to connect
+					SMTPHost: "invalid.host.test",
 					SMTPPort: 587,
 					Username: tt.initialUsername,
 					Password: "test",
@@ -149,12 +149,12 @@ func TestSendViaProvider_ProviderUsernameDefaults(t *testing.T) {
 				AuthRequired: true,
 			}
 
-			manager := NewEnhancedEmailManager(config)
-			// Call sendViaProvider - it will fail on connection, but will have set username
-			_ = manager.sendViaProvider([]byte("test"))
-
-			if manager.config.Username != tt.expectedUsername {
-				t.Errorf("expected username %q, got %q", tt.expectedUsername, manager.config.Username)
+			got := resolveProviderUsername(config)
+			if got != tt.expectedUsername {
+				t.Errorf("expected username %q, got %q", tt.expectedUsername, got)
+			}
+			if config.Username != tt.initialUsername {
+				t.Errorf("config was mutated: expected %q, got %q", tt.initialUsername, config.Username)
 			}
 		})
 	}
@@ -174,12 +174,12 @@ func TestSendViaProvider_PostmarkUsernameFromPassword(t *testing.T) {
 		AuthRequired: true,
 	}
 
-	manager := NewEnhancedEmailManager(config)
-	_ = manager.sendViaProvider([]byte("test"))
-
-	// Postmark copies password to username when username is empty
-	if manager.config.Username != "postmark-api-token" {
-		t.Errorf("expected username to be set from password, got %q", manager.config.Username)
+	got := resolveProviderUsername(config)
+	if got != "postmark-api-token" {
+		t.Errorf("expected username to be set from password, got %q", got)
+	}
+	if config.Username != "" {
+		t.Errorf("config was mutated: expected empty, got %q", config.Username)
 	}
 }
 

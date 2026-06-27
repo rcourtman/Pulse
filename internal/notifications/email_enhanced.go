@@ -237,30 +237,43 @@ func buildMultipartEmailMessage(addresses resolvedEmailAddresses, subject, htmlB
 // and returns the best smtp.Auth to use. Prefers PLAIN, falls back to LOGIN.
 // Returns nil if auth is not configured.
 func (e *EnhancedEmailManager) negotiateAuth(client *smtp.Client) (smtp.Auth, error) {
-	if !e.config.AuthRequired || e.config.Username == "" || e.config.Password == "" {
+	username := resolveProviderUsername(e.config)
+	if !e.config.AuthRequired || username == "" || e.config.Password == "" {
 		return nil, nil
 	}
 
-	// Check what the server advertises after EHLO.
-	// Extension returns (ok bool, params string).
 	hasAuth, mechanismsRaw := client.Extension("AUTH")
 	mechanisms := strings.ToUpper(mechanismsRaw)
 
 	if strings.Contains(mechanisms, "PLAIN") {
-		return &plainAuth{"", e.config.Username, e.config.Password}, nil
+		return &plainAuth{"", username, e.config.Password}, nil
 	}
 	if strings.Contains(mechanisms, "LOGIN") {
-		return LoginAuth(e.config.Username, e.config.Password), nil
+		return LoginAuth(username, e.config.Password), nil
 	}
 
-	// Server didn't advertise AUTH at all — try PLAIN as a default since
-	// it's the most widely supported. This handles servers that don't
-	// properly advertise their capabilities.
 	if !hasAuth || mechanisms == "" {
-		return &plainAuth{"", e.config.Username, e.config.Password}, nil
+		return &plainAuth{"", username, e.config.Password}, nil
 	}
 
 	return nil, fmt.Errorf("server advertises AUTH mechanisms [%s] but none are supported (PLAIN, LOGIN)", mechanisms)
+}
+
+func resolveProviderUsername(config EmailProviderConfig) string {
+	if config.Username != "" {
+		return config.Username
+	}
+	switch config.Provider {
+	case "SendGrid":
+		return "apikey"
+	case "Postmark":
+		return config.Password
+	case "SparkPost":
+		return "SMTP_Injection"
+	case "Resend":
+		return "resend"
+	}
+	return ""
 }
 
 // EnhancedEmailManager extends email functionality with provider support
@@ -391,29 +404,8 @@ func (e *EnhancedEmailManager) sendViaProvider(msg []byte) error {
 func (e *EnhancedEmailManager) sendViaProviderWithAddresses(msg []byte, addresses resolvedEmailAddresses) error {
 	addr := net.JoinHostPort(e.config.SMTPHost, strconv.Itoa(e.config.SMTPPort))
 
-	// Special handling for specific providers
-	switch e.config.Provider {
-	case "SendGrid":
-		// SendGrid uses "apikey" as username
-		if e.config.Username == "" {
-			e.config.Username = "apikey"
-		}
-	case "Postmark":
-		// Postmark uses API token for both username and password
-		if e.config.Password != "" && e.config.Username == "" {
-			e.config.Username = e.config.Password
-		}
-	case "SparkPost":
-		// SparkPost uses specific username
-		if e.config.Username == "" {
-			e.config.Username = "SMTP_Injection"
-		}
-	case "Resend":
-		// Resend uses "resend" as username
-		if e.config.Username == "" {
-			e.config.Username = "resend"
-		}
-	}
+	// Provider-specific usernames are resolved in negotiateAuth without
+	// mutating the shared config struct.
 
 	// Send with TLS configuration — auth is negotiated after connection
 	if e.config.TLS || e.config.SMTPPort == 465 {
