@@ -128,15 +128,31 @@ export function AlertOverviewActiveAlertsSection(props: AlertOverviewActiveAlert
                 />
                 <Show when={group.related.length > 0}>
                   <div class="ml-4 border-l-2 border-border pl-3 mt-1">
-                    <button
-                      type="button"
-                      class="text-xs text-muted hover:text-base-content transition-colors py-1"
-                      onClick={() => toggleGroup(group.key)}
-                    >
-                      {isGroupExpanded(group.key)
-                        ? 'Hide'
-                        : `+${group.related.length} related`}
-                    </button>
+                    <div class="flex items-center gap-3 py-1">
+                      <button
+                        type="button"
+                        class="text-xs text-muted hover:text-base-content transition-colors"
+                        onClick={() => toggleGroup(group.key)}
+                      >
+                        {isGroupExpanded(group.key)
+                          ? 'Hide'
+                          : `+${group.related.length} related`}
+                      </button>
+                      <Show when={[group.primary, ...group.related].some((a) => !a.acknowledged)}>
+                        <button
+                          type="button"
+                          class="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                          onClick={() => {
+                            void props.state.handleGroupAcknowledge([
+                              group.primary,
+                              ...group.related,
+                            ]);
+                          }}
+                        >
+                          Ack all ({group.related.length + 1})
+                        </button>
+                      </Show>
+                    </div>
                     <Show when={isGroupExpanded(group.key)}>
                       <div class="space-y-2 mt-1">
                         <For each={group.related}>

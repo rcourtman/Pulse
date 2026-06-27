@@ -184,6 +184,41 @@ export function useAlertAcknowledgementState(props: UseAlertAcknowledgementState
     }
   };
 
+  const handleGroupAcknowledge = async (alerts: Alert[]) => {
+    const pending = alerts.filter((alert) => {
+      const id = getCanonicalAlertId(alert);
+      return !effectiveAlerts().find((e) => getCanonicalAlertId(e) === id)?.acknowledged;
+    });
+    if (pending.length === 0) return;
+
+    const identifiers = pending.map((alert) => getCanonicalAlertId(alert));
+    const groupProcessing = new Set(identifiers);
+    setProcessingAlerts((previous) => new Set([...previous, ...groupProcessing]));
+
+    try {
+      const result = await AlertsAPI.bulkAcknowledge(identifiers);
+      const acknowledgedAt = new Date().toISOString();
+      const successes = result.results.filter((entry) => entry.success);
+
+      successes.forEach((entry) => {
+        applyAlertUpdate(entry.alertIdentifier, {
+          acknowledged: true,
+          ackTime: acknowledgedAt,
+          ackUser: undefined,
+        });
+      });
+
+      if (successes.length > 0) {
+        notificationStore.success(getAlertOverviewBulkAcknowledgedNotification(successes.length));
+      }
+    } catch (error) {
+      logger.error('Group acknowledge failed', error);
+      notificationStore.error(getAlertOverviewBulkAcknowledgeGenericFailureNotification());
+    } finally {
+      groupProcessing.forEach((id) => releaseAlertProcessing(id));
+    }
+  };
+
   return {
     effectiveAlerts,
     unacknowledgedAlerts,
@@ -191,5 +226,6 @@ export function useAlertAcknowledgementState(props: UseAlertAcknowledgementState
     bulkAckProcessing,
     handleAlertAcknowledgement,
     handleBulkAcknowledge,
+    handleGroupAcknowledge,
   };
 }

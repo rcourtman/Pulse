@@ -38,6 +38,7 @@ export function useAlertOverviewState(props: UseAlertOverviewStateProps) {
     bulkAckProcessing,
     handleAlertAcknowledgement,
     handleBulkAcknowledge,
+    handleGroupAcknowledge,
   } = useAlertAcknowledgementState({
     alerts: activeAlerts,
     updateAlert: props.updateAlert,
@@ -109,6 +110,7 @@ export function useAlertOverviewState(props: UseAlertOverviewStateProps) {
     bulkAckProcessing,
     handleAlertAcknowledgement,
     handleBulkAcknowledge,
+    handleGroupAcknowledge,
   };
 }
 
