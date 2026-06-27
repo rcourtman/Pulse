@@ -61,9 +61,9 @@ return in RC7.
 ### Does self-hosted v6 still cap monitored systems?
 
 No for current public self-hosted plans. Community, Relay, and Pro include core
-monitoring. Paid value remains explicit through Relay convenience, Pulse Mobile
-handoff, push delivery, longer history, AI operations, automation, support,
-Cloud, MSP, and commercial account surfaces.
+monitoring. Paid value remains explicit through Relay convenience,
+Pulse Mobile pairing for handoff, push delivery, longer history, AI operations,
+automation, support, Cloud, MSP, and commercial account surfaces.
 
 Current shorthand: Community, Relay, and Pro have core monitoring included;
 paid value is explicit service, history, support, automation, and hosted

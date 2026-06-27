@@ -820,6 +820,54 @@ Companion drill:
   A token can outlive revocation, exceed assigned scope, or detach from the
   intended user/org identity.
 
+## Gate: `commercial-support-operations-canonical-case`
+
+- Why this is risky:
+  Support operations can touch customer identity, invoices, Stripe
+  subscriptions, local licenses, license transfers, configuration review, and
+  diagnostics. If operators resolve those records through ad hoc email,
+  Stripe, or license matching, a support action can disclose customer data,
+  cancel the wrong subscription, transfer the wrong license, or retain secrets
+  from diagnostics.
+- Primary runtime surfaces:
+  `pulse-pro/landing-page/manage.html`
+  `pulse-pro/license-server/admin_support.go`
+  `pulse-pro/license-server/admin_support_test.go`
+  `pulse-pro/license-server/main.go`
+  `pulse-pro/license-server/support_cases.go`
+  `pulse-pro/license-server/support_cases_test.go`
+- Automated proof:
+  `cd /Volumes/Development/pulse/repos/pulse-pro && go test ./license-server -run 'Test(AdminSupport|SupportCase)' -count=1`
+- Manual scenario:
+  1. Start from a customer support request that includes an email address and
+     at least one commercial identifier such as invoice number, subscription
+     ID, license ID, license-transfer target, configuration detail, or
+     diagnostics payload.
+  2. Resolve the case through the Pulse Pro support/admin surface, not by
+     manually correlating Gmail, Stripe, and license records.
+  3. Confirm exact customer-email matches can expose only the intended support
+     decision, while same-domain or mismatched requester details require
+     identity review before invoice, cancellation, or license-transfer action.
+  4. Confirm duplicate invoice numbers, mismatched subscription IDs, unknown
+     support emails, self-transfers, and secret-bearing messages fail closed
+     without consuming verification codes or mutating customer state.
+  5. Confirm diagnostics are redacted before storage and admin review, support
+     case status changes are audited, and approved license-transfer or
+     subscription-cancel actions are written through the canonical support case
+     path.
+- Pass when:
+  Support staff can resolve customer, invoice, subscription, local license,
+  license-transfer, configuration-review, and diagnostics-review cases through
+  the canonical Pulse Pro support systems with exact identity decisions,
+  redacted diagnostics, and audited mutations.
+- Latest exercised record:
+  `docs/release-control/v6/internal/status.json`
+- Block release if:
+  Any data-protection-sensitive support action still depends on ad hoc
+  Gmail-to-Stripe or Gmail-to-license matching, or if support case resolution
+  can expose invoice/license data, consume verification, or mutate Stripe or
+  license state before the canonical case decision allows it.
+
 ## Gate Ownership Rule
 
 Update these machine-visible gate states in `docs/release-control/v6/internal/status.json`

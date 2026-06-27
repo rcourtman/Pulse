@@ -19,13 +19,14 @@ prerelease channel for another evaluation pass.
 ## Commit coverage audit
 
 The changelog is audited against every feature/runtime commit in the exact
-candidate range:
+validation-risk range. A later packet-only refresh may be the workflow dispatch
+head; the validation range below is the code-backed release-risk range.
 
 - `v6.0.0-rc.6`: `c25e95cb2b071551df95c8add62773905ba0628b`
-- candidate head: `5c2e465cde2f6202ef76fcdb6874555a8636a583`
-- range: `v6.0.0-rc.6..5c2e465cde2f6202ef76fcdb6874555a8636a583`
-- commit count: `934`
-- changed scope: `1961` files, `236190` insertions, `46825` deletions
+- validation-risk commit: `55204cde9b93004fb04850b638de38ac3abaa27e`
+- range: `v6.0.0-rc.6..55204cde9b93004fb04850b638de38ac3abaa27e`
+- commit count: `940`
+- changed scope: `1966` files, `236770` insertions, `46839` deletions
 
 Those commits are grouped here by operator-visible behavior and release risk
 instead of listed one by one.
@@ -87,6 +88,8 @@ instead of listed one by one.
 
 - The self-hosted free-first commercial posture remains the default: current
   public self-hosted plans include core monitoring.
+- Relay value remains framed around secure remote access to the Pulse web UI,
+  Pulse Mobile pairing for handoff, push notifications, and longer history.
 - Cloud, account, billing, support, migration, and entitlement copy were aligned
   with the current v6 commercial model.
 - Provider MSP gained control-plane mode, install artifacts, preflight/status
@@ -102,6 +105,9 @@ instead of listed one by one.
 - Workflow action pins, Go toolchain selection, release dry-run, release asset
   validation, release promotion policy support, installer smoke tests, Docker
   and Helm publication paths, and update readiness checks were tightened.
+- RC7 Docker install defaults now pin the governed `6.0.0-rc.7` image in both
+  the repo-root Compose sample and Docker bootstrap installer fallback, while
+  keeping stable-promotion proof guarded against leftover prerelease defaults.
 - Installer scripts gained additional update resilience, Windows agent install
   coverage, root install tests, uninstall sensor-proxy support, and bundled
   agent installer fail-closed behavior.

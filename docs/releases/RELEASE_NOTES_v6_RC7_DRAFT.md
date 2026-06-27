@@ -84,8 +84,8 @@ making those pages denser, calmer, and more consistent:
 
 The self-hosted free-first posture carries through: core monitoring is included
 on current public self-hosted plans, and paid value is explicit through Relay,
-mobile handoff, support, history, AI operations, automation, Cloud, MSP, and
-account surfaces.
+Pulse Mobile pairing for handoff, support, history, AI operations, automation,
+Cloud, MSP, and account surfaces.
 
 RC7 also carries provider MSP control-plane install, preflight, status, proof,
 backup, recovery, token-rotation, and isolation work. Cloud and account copy,
@@ -120,13 +120,20 @@ health filters.
 ## Validation
 
 This packet is audited against the commit range from the published
-`v6.0.0-rc.6` tag through the current candidate head:
+`v6.0.0-rc.6` tag through the validation-risk commit. A later packet-only
+refresh may be the workflow dispatch head; the validation range below is the
+code-backed release-risk range.
 
 - `v6.0.0-rc.6`: `c25e95cb2b071551df95c8add62773905ba0628b`
-- candidate head: `5c2e465cde2f6202ef76fcdb6874555a8636a583`
-- range: `v6.0.0-rc.6..5c2e465cde2f6202ef76fcdb6874555a8636a583`
-- commit count: `934`
-- changed scope: `1961` files, `236190` insertions, `46825` deletions
+- validation-risk commit: `55204cde9b93004fb04850b638de38ac3abaa27e`
+- range: `v6.0.0-rc.6..55204cde9b93004fb04850b638de38ac3abaa27e`
+- commit count: `940`
+- changed scope: `1966` files, `236770` insertions, `46839` deletions
+
+The final validation-risk correction pins the repo-root Docker Compose default
+and `scripts/install-docker.sh` fallback to `6.0.0-rc.7`, and keeps the stable
+promotion guard version-aware so future `6.0.0` promotion still rejects stale
+prerelease Docker defaults.
 
 ## Retest plan
 
@@ -161,6 +168,7 @@ This packet is audited against the commit range from the published
 - `docs/release-control/v6/internal/subsystems/patrol-intelligence.md`
 - `docs/release-control/v6/internal/subsystems/ai-runtime.md`
 - `docs/release-control/v6/internal/subsystems/frontend-primitives.md`
+- `docs/release-control/v6/internal/records/documentation-currentness-and-legacy-cleanup-v6-rc7-packet-2026-06-27.md`
 - `frontend-modern/src/features/platformPage/columnAlignment.ts`
 - `.github/workflows/create-release.yml`
 - `.github/workflows/release-dry-run.yml`
