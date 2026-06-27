@@ -277,6 +277,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 		if dn := m.resolveNodeDisplayName(existingAlert.Instance, existingAlert.Node); dn != "" {
 			existingAlert.NodeDisplayName = dn
 		}
+		existingAlert.Message = message
 		if opts != nil && opts.Message != "" {
 			existingAlert.Message = opts.Message
 		}
