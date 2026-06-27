@@ -69,14 +69,14 @@ describe('DiscoveryTab', () => {
     expect(await screen.findByRole('button', { name: 'Run Discovery Now' })).toBeInTheDocument();
   });
 
-  it('does not fetch discovery data when AI discovery is disabled', async () => {
+  it('does not fetch discovery data when service context is disabled', async () => {
     vi.mocked(AIAPI.getSettings).mockResolvedValue(aiSettingsWithDiscovery(false));
 
     render(() => (
       <DiscoveryTab resourceType="agent" agentId="agent-1" resourceId="agent-1" hostname="pve1" />
     ));
 
-    expect(await screen.findByText('AI Discovery Disabled')).toBeInTheDocument();
+    expect(await screen.findByText('Service Context Disabled')).toBeInTheDocument();
     expect(discoveryApi.getDiscovery).not.toHaveBeenCalled();
     expect(discoveryApi.getDiscoveryInfo).not.toHaveBeenCalled();
     expect(discoveryApi.getConnectedAgents).not.toHaveBeenCalled();
@@ -182,7 +182,9 @@ describe('DiscoveryTab', () => {
     expect(await screen.findByText('Service not identified')).toBeInTheDocument();
     // The abstention reason must be surfaced, and it must NOT tell the user to
     // enable a command toggle that is already on.
-    expect(screen.getByText(/Pulse Commands are enabled, but the host agent returned no results/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Pulse Commands are enabled, but the host agent returned no results/i),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/Enable "Pulse Commands"/i)).toBeNull();
     const infraLink = screen.getByRole('link', { name: 'Settings → Infrastructure' });
     expect(infraLink).toHaveAttribute('href', '/settings/infrastructure');
