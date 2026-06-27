@@ -284,3 +284,43 @@ func TestClearConnectionDegradedAlert(t *testing.T) {
 		}
 	})
 }
+
+func TestConnectionAlertReFireCooldown(t *testing.T) {
+	t.Run("re-fire within cooldown does not create duplicate history entry", func(t *testing.T) {
+		m := newTestManager(t)
+		snap := platformConnectionSnapshot("conn-cooldown", "Delly PVE", ConnectionStateUnreachable)
+		snap.StateReason = "context deadline exceeded"
+		alertID := canonicalDiscreteStateStateID(snap.ID, connectionDegradedStateKey)
+
+		m.CheckConnection(snap)
+		m.CheckConnection(snap)
+		m.CheckConnection(snap)
+		originalAlert := testRequireActiveAlert(t, m, alertID)
+		originalStart := originalAlert.StartTime
+
+		historyAfterFire := len(m.historyManager.GetAllHistory(1000))
+
+		snap.State = ConnectionStateActive
+		m.CheckConnection(snap)
+		m.CheckConnection(snap)
+		m.CheckConnection(snap)
+		if testHasActiveAlert(t, m, alertID) {
+			t.Fatal("expected alert to clear after recovery")
+		}
+
+		snap.State = ConnectionStateUnreachable
+		m.CheckConnection(snap)
+		m.CheckConnection(snap)
+		m.CheckConnection(snap)
+		reactivated := testRequireActiveAlert(t, m, alertID)
+
+		historyAfterReFire := len(m.historyManager.GetAllHistory(1000))
+		if historyAfterReFire != historyAfterFire {
+			t.Errorf("expected %d history entries after re-fire (same as after initial fire), got %d", historyAfterFire, historyAfterReFire)
+		}
+
+		if !reactivated.StartTime.Equal(originalStart) {
+			t.Errorf("expected reactivated alert to preserve original StartTime %v, got %v", originalStart, reactivated.StartTime)
+		}
+	})
+}

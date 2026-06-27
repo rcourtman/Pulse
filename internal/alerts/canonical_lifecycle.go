@@ -401,6 +401,27 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 			return result, true
 		}
 
+		if resolved, ok := m.getResolvedAlertNoLock(storageKey); ok && resolved != nil && resolved.Alert != nil {
+			if resolved.ResolvedTime.After(time.Now().Add(-5 * time.Minute)) {
+				if !resolved.Alert.StartTime.IsZero() {
+					alert.StartTime = resolved.Alert.StartTime
+				}
+				m.removeResolvedAlertUnlocked(storageKey)
+				if params.AddToHistory {
+					m.historyManager.UpdateAlertLastSeenForAlert(alert, alert.LastSeen)
+				}
+				log.Debug().
+					Str("alertID", storageKey).
+					Time("resolvedAt", resolved.ResolvedTime).
+					Msg("Alert re-fired within cooldown, reactivated without new history entry")
+				if params.RateLimit && !m.checkRateLimit(trackingKey) {
+					return result, true
+				}
+				m.dispatchAlert(alert, params.DispatchAsync)
+				return result, true
+			}
+		}
+
 		if params.AddToHistory {
 			m.historyManager.AddAlert(*alert)
 		}
