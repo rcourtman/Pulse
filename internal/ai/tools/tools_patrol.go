@@ -60,16 +60,20 @@ Returns: {"ok": true, "finding_id": "...", "is_new": true/false} on success.`,
 						Description: "Detailed description of the issue found",
 					},
 					"impact": {
-						Type:        "string",
-						Description: "Operator-facing consequence-if-ignored statement: what specifically happens, and to which workloads or jobs, if the operator does nothing. Concrete operational consequences only — do not echo severity or category. Leave empty if the consequence is genuinely unknown rather than fabricating one.",
+						Type: "string",
+						Description: "Operator-facing consequence if ignored: what happens to which workloads, jobs, or data if the operator does nothing. " +
+							"Base this on the data you gathered, not on the severity level. Most infrastructure issues have knowable consequences — " +
+							"provide this whenever the data supports it. Omit only if the consequence is truly unknowable from available information.",
 					},
 					"recommendation": {
 						Type:        "string",
-						Description: "Specific actionable recommendation for the operator",
+						Description: "Specific, actionable next step the operator should take. Include verification steps where possible.",
 					},
 					"evidence": {
-						Type:        "string",
-						Description: "Specific data/metrics/commands that support this finding",
+						Type: "string",
+						Description: "Specific data points, metric values, command outputs, or tool results that led to this finding. " +
+							"This is the trust anchor: the operator uses it to verify your conclusion independently. " +
+							"Always include the key evidence — if you gathered enough data to create this finding, you have evidence to report.",
 					},
 				},
 				Required: []string{"key", "severity", "category", "resource_id", "resource_name", "resource_type", "title", "description"},

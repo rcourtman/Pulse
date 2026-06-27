@@ -268,6 +268,23 @@ func TestGetPatrolSystemPrompt_ModeSwitch(t *testing.T) {
 	}
 }
 
+func TestGetPatrolSystemPrompt_IncludesTrustScaffoldingGuidance(t *testing.T) {
+	svc := &Service{cfg: &config.AIConfig{PatrolAutonomyLevel: config.PatrolAutonomyMonitor}}
+	ps := NewPatrolService(svc, nil)
+	prompt := ps.getPatrolSystemPrompt()
+
+	required := []string{
+		"Authoring Impact",
+		"Authoring Evidence",
+		"trust anchor",
+	}
+	for _, want := range required {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("patrol system prompt missing %q", want)
+		}
+	}
+}
+
 func TestRunAIAnalysis_EarlyErrors(t *testing.T) {
 	t.Run("nil service", func(t *testing.T) {
 		ps := NewPatrolService(nil, nil)

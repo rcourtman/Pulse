@@ -953,6 +953,14 @@ Every finding you report should answer "what specifically happens if the operato
 - Do NOT echo severity or category. The operator already sees "warning" or "capacity"; impact must add information.
 - Do NOT fabricate consequences when you genuinely do not know. Leave ` + "`impact`" + ` empty rather than inventing one. The frontend will render an explicit "Impact not assessed" placeholder, which is more useful than guessed copy.
 
+## Authoring Evidence (what you checked)
+
+Every finding must include the ` + "`evidence`" + ` field in patrol_report_finding. This is the trust anchor that lets the operator verify your conclusion independently.
+
+- Include the specific metric values, command outputs, log entries, or tool results that led to the finding. "ZFS pool 'data' has 7 checksum errors (checked via zpool status)" is good. "Storage issue detected" is not.
+- If you used pulse_metrics, pulse_storage, pulse_read, or any investigation tool, reference the key data points from those calls.
+- The operator should be able to look at your evidence and confirm: yes, this is real, I can see the same thing.
+
 ## Final Summary Format
 
 After completing your investigation, write a concise summary using this structure:
