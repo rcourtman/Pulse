@@ -91,7 +91,7 @@ func parseUnraidStatusOutput(output string) (*agentshost.UnraidStorage, error) {
 	storage := &agentshost.UnraidStorage{
 		ArrayState:   strings.ToUpper(strings.TrimSpace(fields["mdState"])),
 		ArrayStarted: strings.EqualFold(strings.TrimSpace(fields["mdState"]), "STARTED"),
-		SyncAction:   normalizeUnraidSyncAction(fields["mdResyncAction"]),
+		SyncAction:   unraidSyncAction(fields),
 		SyncProgress: unraidSyncProgress(fields),
 		SyncErrors:   parseUnraidInt64Field(fields, "mdResyncCorr"),
 		NumProtected: parseUnraidIntField(fields, "mdNumProtected"),
@@ -469,6 +469,20 @@ func normalizeUnraidSyncAction(action string) string {
 	default:
 		return action
 	}
+}
+
+// unraidSyncAction returns the active sync action only when a resync is
+// actually running. Unraid's mdResyncAction field can retain its last value
+// after the sync is canceled (e.g., "check" stays set even after the parity
+// check is stopped). The mdResync/mdResyncPos field is the authoritative
+// indicator: it is 0 when no resync is running and non-zero (the current
+// position) when one is active.
+func unraidSyncAction(fields map[string]string) string {
+	pos := parseFirstInt64(fields["mdResyncPos"], fields["mdResync"])
+	if pos <= 0 {
+		return ""
+	}
+	return normalizeUnraidSyncAction(fields["mdResyncAction"])
 }
 
 func unraidSyncProgress(fields map[string]string) float64 {

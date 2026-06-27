@@ -63,6 +63,64 @@ rdevStatus.2=DISK_DSBL
 	}
 }
 
+func TestParseUnraidStatusOutputStaleSyncAction(t *testing.T) {
+	tests := []struct {
+		name           string
+		output         string
+		wantSyncAction string
+	}{
+		{
+			name: "sync active reports action",
+			output: `
+mdState=STARTED
+mdResyncAction=check
+mdResyncPos=500
+mdResyncSize=1000
+`,
+			wantSyncAction: "check",
+		},
+		{
+			name: "stale action cleared when position is zero",
+			output: `
+mdState=STARTED
+mdResyncAction=check
+mdResyncPos=0
+mdResyncSize=0
+`,
+			wantSyncAction: "",
+		},
+		{
+			name: "stale action cleared when position fields absent",
+			output: `
+mdState=STARTED
+mdResyncAction=check
+`,
+			wantSyncAction: "",
+		},
+		{
+			name: "idle action always empty",
+			output: `
+mdState=STARTED
+mdResyncAction=idle
+mdResyncPos=500
+`,
+			wantSyncAction: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			storage, err := parseUnraidStatusOutput(tt.output)
+			if err != nil {
+				t.Fatalf("parseUnraidStatusOutput() error = %v", err)
+			}
+			if storage.SyncAction != tt.wantSyncAction {
+				t.Errorf("SyncAction = %q, want %q", storage.SyncAction, tt.wantSyncAction)
+			}
+		})
+	}
+}
+
 func TestParseUnraidStatusOutputSkipsEmptyNoPresentSlots(t *testing.T) {
 	output := `
 mdState=STARTED
