@@ -796,6 +796,10 @@ compose image default and the standalone installer fallback constant. A draft
 release workflow failure caused by stale Docker image pins is a release-packet
 blocker until the defaults, tests, and evidence record are refreshed from the
 new branch head.
+For the active `v6.0.0-rc.7` cut, the repo-root compose default and
+`scripts/install-docker.sh` fallback must both pin `6.0.0-rc.7`; the stable
+promotion guard remains in force by rejecting leftover `-rc.` defaults only
+when the governed `VERSION` is a stable release.
 
 `internal/updates/` is the live deployment and upgrade planner. It owns
 deployment-type detection, update-plan generation, adapter selection, server
