@@ -35,15 +35,17 @@ export function useAlertOverviewState(props: UseAlertOverviewStateProps) {
 
   const alertStats = createMemo(() => {
     const alerts = effectiveAlerts();
+    const recent = alerts.filter((alert) => {
+      const ts = new Date(alert.startTime).getTime();
+      if (Number.isNaN(ts)) return true;
+      const age = tick() - ts;
+      return age >= 0 && age < 86_400_000;
+    });
     return {
       active: alerts.filter((alert) => !alert.acknowledged).length,
       acknowledged: alerts.filter((alert) => alert.acknowledged).length,
-      total24h: alerts.filter((alert) => {
-        const ts = new Date(alert.startTime).getTime();
-        if (Number.isNaN(ts)) return true;
-        const age = tick() - ts;
-        return age >= 0 && age < 86_400_000;
-      }).length,
+      total24h: recent.length,
+      critical24h: recent.filter((alert) => alert.level === 'critical').length,
       overrides: props.overrides().length,
     };
   });
@@ -55,10 +57,11 @@ export function useAlertOverviewState(props: UseAlertOverviewStateProps) {
         if (a.acknowledged !== b.acknowledged) {
           return a.acknowledged ? 1 : -1;
         }
+        const severityRank = (level: string) => (level === 'critical' ? 0 : 1);
+        const severityDiff = severityRank(a.level) - severityRank(b.level);
+        if (severityDiff !== 0) return severityDiff;
         const timeDiff = new Date(b.startTime).getTime() - new Date(a.startTime).getTime();
         if (timeDiff !== 0) return timeDiff;
-        // Stable id tiebreaker: alerts fired in the same polling cycle share a
-        // startTime and would otherwise scramble visually on re-render (#1218).
         return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
       }),
   );

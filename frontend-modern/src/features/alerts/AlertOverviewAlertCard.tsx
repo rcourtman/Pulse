@@ -67,6 +67,19 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
                 {props.alert.resourceName}
               </span>
               <span class="text-xs text-muted">({alertTypeDisplayLabel(props.alert.type)})</span>
+              <Show when={!props.alert.acknowledged}>
+                <span
+                  class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+                  classList={{
+                    'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300':
+                      props.alert.level === 'critical',
+                    'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-300':
+                      props.alert.level !== 'critical',
+                  }}
+                >
+                  {props.alert.level === 'critical' ? 'Critical' : 'Warning'}
+                </span>
+              </Show>
               <Show when={props.alert.node}>
                 <span class="text-xs text-muted">
                   {getAlertOverviewNodeLabel(props.alert.nodeDisplayName || props.alert.node)}
@@ -79,9 +92,19 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
               </Show>
             </div>
             <p class="text-sm text-base-content mt-1 break-words">{props.alert.message}</p>
-            <p class={getAlertOverviewStartedAtClass()}>
-              {getAlertOverviewStartedAtLabel(new Date(props.alert.startTime).toLocaleString())}
-            </p>
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1">
+              <p class={getAlertOverviewStartedAtClass()}>
+                {getAlertOverviewStartedAtLabel(new Date(props.alert.startTime).toLocaleString())}
+              </p>
+              <Show when={props.alert.threshold > 0}>
+                <span class="text-xs text-muted">
+                  limit: {props.alert.threshold}
+                  {props.alert.type === 'temperature' || props.alert.type === 'diskTemperature'
+                    ? '°C'
+                    : '%'}
+                </span>
+              </Show>
+            </div>
           </div>
         </div>
         <div class="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-3 sm:mt-0 sm:ml-4 self-end sm:self-start justify-end">

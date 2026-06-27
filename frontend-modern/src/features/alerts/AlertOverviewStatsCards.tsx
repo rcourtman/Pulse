@@ -1,3 +1,5 @@
+import { Show } from 'solid-js';
+
 import { Card } from '@/components/shared/Card';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { Table, TableBody, TableCell, TableRow } from '@/components/shared/Table';
@@ -43,6 +45,11 @@ export function AlertOverviewStatsCards(props: AlertOverviewStatsCardsProps) {
             <TableCell class={labelCellClass}>{labels().last24Hours}</TableCell>
             <TableCell class={valueCellClass} data-testid="alert-overview-stat-value">
               {props.state.alertStats().total24h}
+              <Show when={props.state.alertStats().critical24h > 0}>
+                <span class="ml-1.5 text-[10px] font-normal text-red-600 dark:text-red-400">
+                  {props.state.alertStats().critical24h} critical
+                </span>
+              </Show>
             </TableCell>
           </TableRow>
           <TableRow>
