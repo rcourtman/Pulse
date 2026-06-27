@@ -338,7 +338,7 @@ export const ProxmoxNodesTable: Component<{
               };
               const pendingUpdates = () => drawerNode()?.pendingUpdates ?? 0;
               const alertStyles = createMemo(() =>
-                getAlertStyles(node.id, activeAlerts, alertsEnabled()),
+                getAlertStyles(node.id, activeAlerts, alertsEnabled(), node.name),
               );
               const alertAccentTone = createMemo<
                 'critical' | 'warning' | 'acknowledged' | undefined

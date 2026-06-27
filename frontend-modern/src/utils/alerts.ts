@@ -16,18 +16,24 @@ const noAlertStyles = {
   hasAcknowledgedOnlyAlert: false,
 };
 
-// Get alert highlighting styles based on active alerts for a resource
+// Get alert highlighting styles based on active alerts for a resource.
+// When nodeMatch is provided, also includes alerts whose `node` field matches
+// (covers storage/topology/disk alerts that belong to a node but have a
+// different resourceId than the node itself).
 export const getAlertStyles = (
   resourceId: string,
   activeAlerts: Record<string, Alert>,
   alertsEnabled: boolean | undefined = isAlertsActivationEnabled(),
+  nodeMatch?: string,
 ) => {
   if (!alertsEnabled) {
     return noAlertStyles;
   }
 
   const alertsForResource = Object.values(activeAlerts).filter(
-    (alert) => alert.resourceId === resourceId,
+    (alert) =>
+      alert.resourceId === resourceId ||
+      (nodeMatch !== undefined && alert.node === nodeMatch),
   );
 
   const unacknowledgedAlerts = alertsForResource.filter((alert) => !alert.acknowledged);
