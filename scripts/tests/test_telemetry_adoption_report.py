@@ -1532,7 +1532,7 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
                 self.assertIn("Pulse Intelligence Assistant context AI calls 30d", content)
                 self.assertIn("approved action success", content)
                 self.assertIn("rejected action decisions", content)
-                self.assertIn("Patrol-control completed-work proof", content)
+                self.assertIn("completed Patrol control work", content)
                 self.assertIn("observed free-to-paid movement", content)
                 self.assertIn(
                     "Pulse Intelligence agent/MCP route in the current 30-day telemetry window",
