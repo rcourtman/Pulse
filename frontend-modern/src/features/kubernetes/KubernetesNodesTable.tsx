@@ -4,6 +4,9 @@ import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { asTrimmedString } from '@/utils/stringUtils';
+import { getAlertStyles } from '@/utils/alerts';
+import { useWebSocket } from '@/contexts/appRuntime';
+import { useAlertsActivation } from '@/stores/alertsActivation';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
@@ -60,6 +63,9 @@ export const KubernetesNodesTable: Component<{
   title?: string;
   showToolbar?: boolean;
 }> = (props) => {
+  const { activeAlerts } = useWebSocket();
+  const alertsActivation = useAlertsActivation();
+  const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
     initialStatus: 'all' as KubernetesResourceStatusFilter,
@@ -202,10 +208,20 @@ export const KubernetesNodesTable: Component<{
                     const canRenderMetrics = () => indicator().variant !== 'muted';
                     const detailRowId = () => drawer.detailRowId(node);
                     const isExpanded = () => drawer.isExpanded(node);
+                    const nodeAlertStyles = createMemo(() =>
+                      getAlertStyles(node.id, activeAlerts, alertsEnabled(), name()),
+                    );
+                    const nodeAlertBg = () => {
+                      const s = nodeAlertStyles();
+                      if (!s.hasUnacknowledgedAlert) return '';
+                      return s.severity === 'critical'
+                        ? 'bg-red-50 dark:bg-red-950'
+                        : 'bg-yellow-50 dark:bg-yellow-950';
+                    };
                     return (
                       <>
                         <TableRow
-                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
+                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs ${nodeAlertBg()}`}
                           aria-controls={isExpanded() ? detailRowId() : undefined}
                           aria-expanded={isExpanded() ? 'true' : 'false'}
                           data-kubernetes-node-row={node.id}

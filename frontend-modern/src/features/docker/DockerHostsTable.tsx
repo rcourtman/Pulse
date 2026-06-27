@@ -7,6 +7,9 @@ import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
+import { getAlertStyles } from '@/utils/alerts';
+import { useWebSocket } from '@/contexts/appRuntime';
+import { useAlertsActivation } from '@/stores/alertsActivation';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { normalizeDiskArray } from '@/utils/format';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
@@ -86,6 +89,9 @@ export const DockerHostsTable: Component<{
   title?: string;
   showToolbar?: boolean;
 }> = (props) => {
+  const { activeAlerts } = useWebSocket();
+  const alertsActivation = useAlertsActivation();
+  const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
     initialStatus: 'all' as DockerResourceStatusFilter,
@@ -250,11 +256,21 @@ export const DockerHostsTable: Component<{
                       event.preventDefault();
                       toggleDrawer();
                     };
+                    const hostAlertStyles = createMemo(() =>
+                      getAlertStyles(host.id, activeAlerts, alertsEnabled(), name()),
+                    );
+                    const hostAlertBg = () => {
+                      const s = hostAlertStyles();
+                      if (!s.hasUnacknowledgedAlert) return '';
+                      return s.severity === 'critical'
+                        ? 'bg-red-50 dark:bg-red-950'
+                        : 'bg-yellow-50 dark:bg-yellow-950';
+                    };
                     return (
                       <>
                         <TableRow
                           class={`cursor-pointer text-[11px] outline-none sm:text-xs ${
-                            isSelected() ? 'bg-surface-hover' : ''
+                            isSelected() ? 'bg-surface-hover' : hostAlertBg()
                           } focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-1 focus-visible:ring-offset-surface`}
                           aria-controls={isSelected() ? detailRowId() : undefined}
                           aria-expanded={isSelected() ? 'true' : 'false'}

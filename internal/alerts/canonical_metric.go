@@ -2,6 +2,7 @@ package alerts
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
@@ -44,20 +45,44 @@ func metricClearThreshold(spec *alertspecs.MetricThresholdSpec, threshold *Hyste
 	return 0
 }
 
+func resourceTypeLabel(resourceType string) string {
+	switch strings.TrimSpace(resourceType) {
+	case "agent-disk":
+		return "Disk"
+	case "agent":
+		return "Agent"
+	case "node":
+		return "Node"
+	case "guest":
+		return "Guest"
+	case "storage":
+		return "Storage"
+	case "pbs":
+		return "PBS"
+	case "pmg":
+		return "PMG"
+	case "":
+		return "Resource"
+	default:
+		return resourceType
+	}
+}
+
 func metricAlertMessage(resourceType, metricType string, value float64, opts *metricOptions) (string, string) {
 	if opts != nil && opts.Message != "" {
 		return opts.Message, ""
 	}
 
+	label := resourceTypeLabel(resourceType)
 	switch metricType {
-	case "usage":
-		return resourceType + " at " + formatMetricValue(value, "%"), "%"
+	case "usage", "disk":
+		return label + " at " + formatMetricValue(value, "%"), "%"
 	case "diskRead", "diskWrite", "networkIn", "networkOut":
-		return resourceType + " " + metricType + " at " + formatMetricValue(value, " MB/s"), "MB/s"
+		return label + " " + metricType + " at " + formatMetricValue(value, " MB/s"), "MB/s"
 	case "temperature", "disk_temperature", "diskTemperature":
-		return resourceType + " " + metricType + " at " + formatMetricValue(value, "°C"), "°C"
+		return label + " " + metricType + " at " + formatMetricValue(value, "°C"), "°C"
 	default:
-		return resourceType + " " + metricType + " at " + formatMetricValue(value, "%"), ""
+		return label + " " + metricType + " at " + formatMetricValue(value, "%"), ""
 	}
 }
 

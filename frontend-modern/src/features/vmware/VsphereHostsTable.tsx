@@ -4,6 +4,9 @@ import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
+import { getAlertStyles } from '@/utils/alerts';
+import { useWebSocket } from '@/contexts/appRuntime';
+import { useAlertsActivation } from '@/stores/alertsActivation';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { formatVmwareClusterServices } from '@/utils/vmwareDisplay';
 import {
@@ -58,6 +61,9 @@ export const VsphereHostsTable: Component<{
   title?: string;
   showToolbar?: boolean;
 }> = (props) => {
+  const { activeAlerts } = useWebSocket();
+  const alertsActivation = useAlertsActivation();
+  const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
   const tableState = createPlatformTableFilterState({
     resources: () => props.hosts,
     initialStatus: 'all' as PlatformResourceStatusFilter,
@@ -217,10 +223,20 @@ export const VsphereHostsTable: Component<{
                     const canRenderMetrics = () => indicator().variant !== 'muted';
                     const detailRowId = () => drawer.detailRowId(host);
                     const isExpanded = () => drawer.isExpanded(host);
+                    const hostAlertStyles = createMemo(() =>
+                      getAlertStyles(host.id, activeAlerts, alertsEnabled(), name()),
+                    );
+                    const hostAlertBg = () => {
+                      const s = hostAlertStyles();
+                      if (!s.hasUnacknowledgedAlert) return '';
+                      return s.severity === 'critical'
+                        ? 'bg-red-50 dark:bg-red-950'
+                        : 'bg-yellow-50 dark:bg-yellow-950';
+                    };
                     return (
                       <>
                         <TableRow
-                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
+                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs ${hostAlertBg()}`}
                           aria-controls={isExpanded() ? detailRowId() : undefined}
                           aria-expanded={isExpanded() ? 'true' : 'false'}
                           data-vsphere-host-row={host.id}

@@ -15,6 +15,13 @@ vi.mock('@/components/shared/responsive', () => ({
   ),
 }));
 
+vi.mock('@/contexts/appRuntime', () => ({
+  useWebSocket: () => ({ activeAlerts: {} as Record<string, never> }),
+}));
+vi.mock('@/stores/alertsActivation', () => ({
+  useAlertsActivation: () => ({ activationState: () => 'active' }),
+}));
+
 vi.mock('@/components/Workloads/StackedMemoryBar', () => ({
   StackedMemoryBar: (props: { used: number; total: number; percentOnly?: number }) => (
     <div

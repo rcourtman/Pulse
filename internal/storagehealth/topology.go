@@ -229,9 +229,9 @@ func AssessUnraidStorage(storage models.HostUnraidStorage) Assessment {
 	}
 
 	if action := strings.TrimSpace(storage.SyncAction); action != "" {
-		summary := fmt.Sprintf("Unraid array is running %s", action)
+		summary := fmt.Sprintf("array %s in progress", action)
 		if storage.SyncProgress > 0 {
-			summary = fmt.Sprintf("Unraid array is running %s (%.0f%%)", action, storage.SyncProgress)
+			summary = fmt.Sprintf("array %s in progress (%.0f%%)", action, storage.SyncProgress)
 		}
 		addReason("unraid_sync_active", RiskWarning, summary)
 	}

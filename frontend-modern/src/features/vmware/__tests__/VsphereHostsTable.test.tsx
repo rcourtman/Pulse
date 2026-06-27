@@ -9,6 +9,13 @@ vi.mock('@/components/shared/responsive', () => ({
   ResponsiveMetricCell: () => <div data-testid="responsive-metric-cell" />,
 }));
 
+vi.mock('@/contexts/appRuntime', () => ({
+  useWebSocket: () => ({ activeAlerts: {} as Record<string, never> }),
+}));
+vi.mock('@/stores/alertsActivation', () => ({
+  useAlertsActivation: () => ({ activationState: () => 'active' }),
+}));
+
 import { VsphereHostsTable } from '@/features/vmware/VsphereHostsTable';
 import type { Resource } from '@/types/resource';
 

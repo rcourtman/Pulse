@@ -4,6 +4,9 @@ import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
+import { getAlertStyles } from '@/utils/alerts';
+import { useWebSocket } from '@/contexts/appRuntime';
+import { useAlertsActivation } from '@/stores/alertsActivation';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
@@ -86,6 +89,9 @@ export const TrueNASSystemsTable: Component<{
   title?: string;
   showToolbar?: boolean;
 }> = (props) => {
+  const { activeAlerts } = useWebSocket();
+  const alertsActivation = useAlertsActivation();
+  const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
   const tableState = createPlatformTableFilterState({
     resources: () => props.systems,
     initialStatus: 'all' as PlatformResourceStatusFilter,
@@ -225,10 +231,20 @@ export const TrueNASSystemsTable: Component<{
                     const canRenderMetrics = () => indicator().variant !== 'muted';
                     const detailRowId = () => drawer.detailRowId(system);
                     const isExpanded = () => drawer.isExpanded(system);
+                    const sysAlertStyles = createMemo(() =>
+                      getAlertStyles(system.id, activeAlerts, alertsEnabled(), name()),
+                    );
+                    const sysAlertBg = () => {
+                      const s = sysAlertStyles();
+                      if (!s.hasUnacknowledgedAlert) return '';
+                      return s.severity === 'critical'
+                        ? 'bg-red-50 dark:bg-red-950'
+                        : 'bg-yellow-50 dark:bg-yellow-950';
+                    };
                     return (
                       <>
                         <TableRow
-                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
+                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs ${sysAlertBg()}`}
                           aria-controls={isExpanded() ? detailRowId() : undefined}
                           aria-expanded={isExpanded() ? 'true' : 'false'}
                           data-truenas-system-row={system.id}

@@ -39,6 +39,16 @@ vi.mock('@/components/Workloads/StackedDiskBar', () => ({
   StackedDiskBar: () => <div data-testid="stacked-disk-bar" />,
 }));
 
+vi.mock('@/contexts/appRuntime', () => ({
+  useWebSocket: () => ({ activeAlerts: {} as Record<string, never> }),
+}));
+vi.mock('@/stores/alertsActivation', () => ({
+  useAlertsActivation: () => ({
+    activationState: () => 'active',
+    getMetricThresholds: () => ({}),
+  }),
+}));
+
 const makeResource = ({
   id,
   type,
