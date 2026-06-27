@@ -1142,6 +1142,7 @@ func (h *AISettingsHandler) HandleGetUnifiedFindings(w http.ResponseWriter, r *h
 		Node            string     `json:"node,omitempty"`
 		Title           string     `json:"title"`
 		Description     string     `json:"description"`
+		Impact          string     `json:"impact,omitempty"`
 		Recommendation  string     `json:"recommendation,omitempty"`
 		Evidence        string     `json:"evidence,omitempty"`
 		AlertIdentifier string     `json:"alert_identifier,omitempty"`
@@ -1229,6 +1230,7 @@ func (h *AISettingsHandler) HandleGetUnifiedFindings(w http.ResponseWriter, r *h
 			Node:                   f.Node,
 			Title:                  f.Title,
 			Description:            f.Description,
+			Impact:                 f.Impact,
 			Recommendation:         f.Recommendation,
 			Evidence:               f.Evidence,
 			AlertIdentifier:        f.AlertIdentifier,

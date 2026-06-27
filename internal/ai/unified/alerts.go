@@ -331,29 +331,50 @@ func DefaultAlertToFindingConfig() AlertToFindingConfig {
 	return AlertToFindingConfig{
 		DefaultCategory: CategoryPerformance,
 		TypeCategoryMap: map[string]UnifiedCategory{
-			"cpu":              CategoryPerformance,
-			"memory":           CategoryPerformance,
-			"disk":             CategoryCapacity,
-			"diskRead":         CategoryPerformance,
-			"diskWrite":        CategoryPerformance,
-			"networkIn":        CategoryPerformance,
-			"networkOut":       CategoryPerformance,
-			"usage":            CategoryCapacity,
-			"storage":          CategoryCapacity,
-			"temperature":      CategoryReliability,
-			"diskTemperature":  CategoryReliability,
-			"offline":          CategoryConnectivity,
-			"nodeOffline":      CategoryConnectivity,
-			"poweredOff":       CategoryReliability,
-			"backup":           CategoryBackup,
-			"backupMissing":    CategoryBackup,
-			"backupStale":      CategoryBackup,
-			"snapshot":         CategoryBackup,
-			"snapshotAge":      CategoryBackup,
-			"snapshotSize":     CategoryCapacity,
-			"restartLoop":      CategoryReliability,
-			"oom":              CategoryReliability,
-			"imageUpdateAvail": CategoryConfiguration,
+			"cpu":                           CategoryPerformance,
+			"memory":                        CategoryPerformance,
+			"disk":                          CategoryCapacity,
+			"diskRead":                      CategoryPerformance,
+			"diskWrite":                     CategoryPerformance,
+			"networkIn":                     CategoryPerformance,
+			"networkOut":                    CategoryPerformance,
+			"usage":                         CategoryCapacity,
+			"storage":                       CategoryCapacity,
+			"temperature":                   CategoryReliability,
+			"diskTemperature":               CategoryReliability,
+			"offline":                       CategoryConnectivity,
+			"nodeOffline":                   CategoryConnectivity,
+			"host-offline":                  CategoryConnectivity,
+			"docker-host-offline":           CategoryConnectivity,
+			"connectivity":                  CategoryConnectivity,
+			"poweredOff":                    CategoryReliability,
+			"powered-off":                   CategoryReliability,
+			"backup":                        CategoryBackup,
+			"backupMissing":                 CategoryBackup,
+			"backupStale":                   CategoryBackup,
+			"backup-age":                    CategoryBackup,
+			"snapshot":                      CategoryBackup,
+			"snapshotAge":                   CategoryBackup,
+			"snapshot-age":                  CategoryBackup,
+			"snapshotSize":                  CategoryCapacity,
+			"restartLoop":                   CategoryReliability,
+			"oom":                           CategoryReliability,
+			"imageUpdateAvail":              CategoryConfiguration,
+			"docker-container-update":       CategoryConfiguration,
+			"zfs-pool-state":                CategoryReliability,
+			"zfs-pool-errors":               CategoryReliability,
+			"zfs-device":                    CategoryReliability,
+			"storage-topology":              CategoryCapacity,
+			"disk-health":                   CategoryReliability,
+			"disk-wearout":                  CategoryReliability,
+			"raid":                          CategoryReliability,
+			"docker-container-health":       CategoryReliability,
+			"docker-container-memory-limit": CategoryReliability,
+			"docker-container-oom-kill":     CategoryReliability,
+			"docker-container-restart-loop": CategoryReliability,
+			"docker-container-state":        CategoryReliability,
+			"docker-service-health":         CategoryReliability,
+			"message-age":                   CategoryReliability,
 		},
 	}
 }
@@ -1270,18 +1291,48 @@ func generateImpact(alertType string) string {
 	switch alertType {
 	case "cpu":
 		return "Workloads on this resource slow down or queue requests; sustained pressure can stall services and propagate latency to dependent workloads."
-	case "memory":
+	case "memory", "docker-container-memory-limit":
 		return "Memory pressure can trigger OOM kills or swap thrashing, terminating processes or stalling the host until pressure clears."
 	case "disk":
 		return "Writes will start failing when the disk fills, which can corrupt running workloads and stop logging, monitoring, and backup jobs."
+	case "diskRead", "diskWrite":
+		return "Sustained I/O pressure causes workloads to queue and stall, propagating latency to dependent services."
+	case "networkIn", "networkOut":
+		return "Network saturation causes packet loss and latency, slowing or timing out dependent connections."
 	case "usage", "storage":
 		return "Storage writes will start failing when capacity is exhausted, blocking new data, snapshots, and backup retention."
-	case "temperature":
+	case "temperature", "diskTemperature":
 		return "Sustained heat throttles performance and shortens hardware life; in critical ranges the system can shut down or fail unexpectedly."
-	case "offline", "nodeOffline":
+	case "offline", "nodeOffline", "host-offline", "docker-host-offline", "connectivity":
 		return "Workloads on this resource are unreachable; backups, scheduled jobs, and dependent services on this host stop until it returns."
-	case "poweredOff":
+	case "poweredOff", "powered-off":
 		return "Nothing on this resource is running, so any workload, backup, or dependent service it provides is unavailable."
+	case "zfs-pool-state", "zfs-pool-errors":
+		return "Pool errors indicate data integrity risk; uncorrected errors can lead to silent data corruption or total pool failure."
+	case "zfs-device":
+		return "A faulted or degraded device risks pool failure; if redundancy is already lost, data on this pool is at risk."
+	case "storage-topology":
+		return "Misconfigured storage topology can cause unexpected capacity exhaustion, unbalanced wear, or lost redundancy."
+	case "disk-health", "disk-wearout":
+		return "Failing or worn disks risk data loss; if the disk fails before replacement, data on it may be unrecoverable."
+	case "raid":
+		return "A degraded RAID array has reduced or no redundancy; a second disk failure before rebuild completes can cause permanent data loss."
+	case "backup", "backupMissing", "backupStale", "backup-age":
+		return "Without recent backups, data lost to failure or corruption cannot be recovered to a known-good state."
+	case "snapshot", "snapshotAge", "snapshot-age":
+		return "Old snapshots lose restore value as they drift further from current data; recovery points become stale."
+	case "snapshotSize":
+		return "Large snapshots consume pool capacity and can block new writes when space is exhausted."
+	case "oom", "docker-container-oom-kill":
+		return "Out-of-memory kills terminate processes without warning, causing data loss or service disruption."
+	case "restartLoop", "docker-container-restart-loop":
+		return "A restart loop means the workload cannot reach a stable state; dependent services cycle in and out of availability."
+	case "imageUpdateAvail", "docker-container-update":
+		return "Pending updates may include security patches; unpatched images accumulate known vulnerabilities over time."
+	case "docker-container-health", "docker-service-health", "docker-container-state":
+		return "An unhealthy container or service cannot serve its function; dependent workloads may fail or degrade."
+	case "message-age":
+		return "Stale monitoring data means current status is unknown; issues may have developed without detection."
 	default:
 		return ""
 	}

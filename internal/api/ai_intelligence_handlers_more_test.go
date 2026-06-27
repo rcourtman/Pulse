@@ -212,6 +212,7 @@ func TestHandleGetUnifiedFindings_WithStore(t *testing.T) {
 		ResourceType:    "vm",
 		Title:           "CPU high",
 		Description:     "cpu usage high",
+		Impact:          "Workloads on this resource slow down or queue requests.",
 		AlertIdentifier: "instance:node:100::metric/cpu",
 		InvestigationRecord: &aicontracts.InvestigationRecord{
 			ID:        "investigation-1",
@@ -263,6 +264,9 @@ func TestHandleGetUnifiedFindings_WithStore(t *testing.T) {
 	}
 	if _, ok := finding["correlated_ids"]; !ok {
 		t.Fatalf("expected correlated_ids to be present, got %#v", finding)
+	}
+	if finding["impact"] != "Workloads on this resource slow down or queue requests." {
+		t.Fatalf("expected impact in response, got %#v", finding["impact"])
 	}
 	if _, ok := finding["lifecycle"]; !ok {
 		t.Fatalf("expected lifecycle to be present, got %#v", finding)
