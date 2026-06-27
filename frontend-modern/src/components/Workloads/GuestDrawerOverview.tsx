@@ -11,6 +11,7 @@ import type { DiscoveryIdentifiedSummary } from '@/utils/discoveryPresentation';
 import { formatBytes, formatUptime } from '@/utils/format';
 import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 
+import { AvailabilityProbeStatusCard } from './AvailabilityProbeStatusCard';
 import { AvailabilityProbeSuggestionCard } from './AvailabilityProbeSuggestionCard';
 import { DiskList } from './DiskList';
 import { getGuestDrawerMemoryRows, isGuestDrawerVM } from './guestDrawerModel';
@@ -473,6 +474,11 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
           suggestedUrlReasonTitle={props.discoveryIdentifiedSummary?.suggestedUrlReasonTitle}
           suggestedUrlDiagnostic={props.discoveryIdentifiedSummary?.suggestedUrlDiagnostic}
         />
+        <Show when={props.guest.availability}>
+          <div class="mt-3 max-w-sm">
+            <AvailabilityProbeStatusCard availability={props.guest.availability!} />
+          </div>
+        </Show>
         <Show when={props.discoveryIdentifiedSummary?.suggestedAvailabilityProbe && !props.guest.availability}>
           <div class="mt-3 max-w-sm">
             <AvailabilityProbeSuggestionCard
