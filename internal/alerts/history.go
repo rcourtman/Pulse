@@ -292,6 +292,7 @@ func (hm *HistoryManager) loadHistory() error {
 
 	// Clean old entries immediately
 	hm.cleanOldEntries()
+	hm.deduplicateHistory()
 	return nil
 }
 
@@ -495,6 +496,7 @@ func (hm *HistoryManager) cleanupRoutine() {
 	select {
 	case <-startupDelay.C:
 		hm.cleanOldEntries()
+		hm.deduplicateHistory()
 	case <-hm.stopChan:
 		return
 	}
@@ -503,6 +505,7 @@ func (hm *HistoryManager) cleanupRoutine() {
 		select {
 		case <-ticker.C:
 			hm.cleanOldEntries()
+			hm.deduplicateHistory()
 		case <-hm.stopChan:
 			return
 		}
@@ -532,6 +535,57 @@ func (hm *HistoryManager) cleanOldEntries() {
 			Int("removed", removed).
 			Int("remaining", len(newHistory)).
 			Msg("cleaned old alert history entries")
+	}
+}
+
+// historyDedupWindow is the maximum gap between consecutive same-alert entries
+// for them to be considered duplicates of one continuous incident.
+const historyDedupWindow = 5 * time.Minute
+
+// deduplicateHistory collapses consecutive entries for the same alert identity
+// where the gap between entries is shorter than the dedup window. This removes
+// flapping/re-fire noise where a bug or polling pattern caused the same alert
+// to be recorded many times in quick succession. The surviving entry keeps the
+// earliest timestamp and the latest LastSeen.
+func (hm *HistoryManager) deduplicateHistory() {
+	hm.mu.Lock()
+	defer hm.mu.Unlock()
+
+	if len(hm.history) < 2 {
+		return
+	}
+
+	deduped := make([]HistoryEntry, 0, len(hm.history))
+	lastIdxByKey := make(map[string]int)
+	lastTimeByKey := make(map[string]time.Time)
+	removed := 0
+
+	for _, entry := range hm.history {
+		key := historyIdentityKey(&entry.Alert)
+
+		if lastTime, ok := lastTimeByKey[key]; ok {
+			if entry.Timestamp.Sub(lastTime) <= historyDedupWindow {
+				idx := lastIdxByKey[key]
+				if entry.Alert.LastSeen.After(deduped[idx].Alert.LastSeen) {
+					deduped[idx].Alert.LastSeen = entry.Alert.LastSeen
+				}
+				lastTimeByKey[key] = entry.Timestamp
+				removed++
+				continue
+			}
+		}
+
+		deduped = append(deduped, entry)
+		lastIdxByKey[key] = len(deduped) - 1
+		lastTimeByKey[key] = entry.Timestamp
+	}
+
+	if removed > 0 {
+		hm.history = deduped
+		log.Info().
+			Int("removed", removed).
+			Int("remaining", len(deduped)).
+			Msg("deduplicated alert history entries")
 	}
 }
 
