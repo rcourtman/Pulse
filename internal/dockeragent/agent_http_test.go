@@ -600,7 +600,7 @@ func TestHandleCommand(t *testing.T) {
 		}
 	})
 
-	t.Run("check updates command ack error", func(t *testing.T) {
+	t.Run("check updates command ack error does not propagate", func(t *testing.T) {
 		registryChecker := NewRegistryChecker(zerolog.Nop())
 		registryChecker.MarkChecked()
 		registryChecker.cacheDigest("cached-key", "sha256:cached")
@@ -610,13 +610,14 @@ func TestHandleCommand(t *testing.T) {
 			hostID:          "host1",
 			registryChecker: registryChecker,
 		}
+		t.Cleanup(func() { _ = agent.Close() })
 
 		err := agent.handleCheckUpdatesCommand(context.Background(), TargetConfig{URL: "http://example.com/\x7f", Token: "token"}, agentsdocker.Command{
 			ID:   "cmd4",
 			Type: agentsdocker.CommandTypeCheckUpdates,
 		})
-		if err == nil || !strings.Contains(err.Error(), "send check updates acknowledgement") {
-			t.Fatalf("expected check-updates ack error, got %v", err)
+		if err != nil {
+			t.Fatalf("expected nil error on ack failure, got: %v", err)
 		}
 
 		registryChecker.mu.RLock()

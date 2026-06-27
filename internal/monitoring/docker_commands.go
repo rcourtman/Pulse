@@ -400,11 +400,16 @@ func (m *Monitor) getDockerCommandPayload(hostID string) (map[string]any, *model
 		return nil, nil
 	}
 
-	// Update dispatch metadata
-	if cmd.status.Status == DockerCommandStatusQueued {
-		cmd.markDispatched()
-		m.state.SetDockerHostCommand(hostID, &cmd.status)
+	// Only return the command on the first dispatch (queued → dispatched).
+	// Re-sending an already-dispatched command causes the agent to re-execute
+	// it on every report cycle until the ack succeeds, creating an infinite
+	// loop when the ack HTTP call fails (issue #1504).
+	if cmd.status.Status != DockerCommandStatusQueued {
+		return nil, nil
 	}
+
+	cmd.markDispatched()
+	m.state.SetDockerHostCommand(hostID, &cmd.status)
 
 	statusCopy := cmd.status
 	return cmd.payload, &statusCopy

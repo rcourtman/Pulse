@@ -891,7 +891,7 @@ func TestGetDockerCommandPayload(t *testing.T) {
 		}
 	})
 
-	t.Run("already dispatched command is not re-marked", func(t *testing.T) {
+	t.Run("already dispatched command is not re-sent", func(t *testing.T) {
 		t.Parallel()
 
 		monitor := newTestMonitorForCommands(t)
@@ -910,39 +910,24 @@ func TestGetDockerCommandPayload(t *testing.T) {
 			t.Fatalf("queue stop command: %v", err)
 		}
 
-		// First fetch - marks as dispatched
+		// First fetch - marks as dispatched and returns status
 		_, status1 := monitor.getDockerCommandPayload(host.ID)
 		if status1 == nil {
 			t.Fatal("expected status from first fetch")
 		}
-		firstDispatchedAt := status1.DispatchedAt
-		firstUpdatedAt := status1.UpdatedAt
-
-		// Small delay to ensure time would change if re-marked
-		time.Sleep(time.Millisecond)
-
-		// Second fetch - should NOT re-mark
-		_, status2 := monitor.getDockerCommandPayload(host.ID)
-		if status2 == nil {
-			t.Fatal("expected status from second fetch")
+		if status1.Status != DockerCommandStatusDispatched {
+			t.Fatalf("expected dispatched status, got %q", status1.Status)
 		}
 
-		// DispatchedAt should be the same
-		if status2.DispatchedAt == nil {
-			t.Fatal("expected DispatchedAt to still be set")
+		// Second fetch - should return nil. The command was already delivered
+		// in the first dispatch response; re-sending it causes the agent to
+		// re-execute the command on every report cycle (issue #1504).
+		payload2, status2 := monitor.getDockerCommandPayload(host.ID)
+		if payload2 != nil {
+			t.Fatalf("expected nil payload from second fetch, got %v", payload2)
 		}
-		if !status2.DispatchedAt.Equal(*firstDispatchedAt) {
-			t.Fatalf("DispatchedAt changed: first=%v, second=%v", *firstDispatchedAt, *status2.DispatchedAt)
-		}
-
-		// UpdatedAt should be the same (not re-updated)
-		if !status2.UpdatedAt.Equal(firstUpdatedAt) {
-			t.Fatalf("UpdatedAt changed: first=%v, second=%v", firstUpdatedAt, status2.UpdatedAt)
-		}
-
-		// Status should still be dispatched
-		if status2.Status != DockerCommandStatusDispatched {
-			t.Fatalf("expected dispatched status, got %q", status2.Status)
+		if status2 != nil {
+			t.Fatalf("expected nil status from second fetch, got %+v", status2)
 		}
 	})
 

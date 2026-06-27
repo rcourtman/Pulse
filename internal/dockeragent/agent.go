@@ -939,9 +939,16 @@ func (a *Agent) handleCheckUpdatesCommand(ctx context.Context, target TargetConf
 		a.registryChecker.ForceCheck()
 	}
 
-	// Send intermediate completion ack
+	// Send intermediate completion ack. Don't propagate the error — the
+	// report was already delivered successfully. Propagating causes the
+	// report to be buffered and retried, which re-fetches the same command
+	// and creates a loop (issue #1504).
 	if err := a.sendCommandAck(ctx, target, command.ID, agentsdocker.CommandStatusCompleted, "Registry cache cleared; checking for updates on next report cycle"); err != nil {
-		return fmt.Errorf("send check updates acknowledgement: %w", err)
+		a.logger.Warn().
+			Err(err).
+			Str("commandID", command.ID).
+			Str("target", target.URL).
+			Msg("Failed to send check updates acknowledgement")
 	}
 
 	// Trigger an immediate collection cycle to report updates.
