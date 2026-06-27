@@ -800,10 +800,12 @@ For the active `v6.0.0-rc.7` cut, the repo-root compose default and
 `scripts/install-docker.sh` fallback must both pin `6.0.0-rc.7`; the stable
 promotion guard remains in force by rejecting leftover `-rc.` defaults only
 when the governed `VERSION` is a stable release.
-The RC7 packet refresh records `55204cde9b93004fb04850b638de38ac3abaa27e`
-as the validation-risk commit for that correction; later metadata-only packet
-refreshes may be the workflow dispatch head only when they do not change the
-code-backed release-risk range.
+The RC7 packet refresh records `fc10de9b5477613316473267b72b05b6b2b7aaff`
+as the current validation-risk commit. That head includes the earlier
+Docker-default correction plus the follow-on capacity-forecast and Patrol
+history hardening commits. Later metadata-only packet refreshes may be the
+workflow dispatch head only when they do not change the code-backed
+release-risk range.
 
 `internal/updates/` is the live deployment and upgrade planner. It owns
 deployment-type detection, update-plan generation, adapter selection, server

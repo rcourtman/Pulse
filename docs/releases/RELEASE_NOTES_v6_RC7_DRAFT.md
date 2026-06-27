@@ -27,6 +27,8 @@ prerelease before any stable v6 promotion:
 
 - Assistant and Patrol were reshaped around monitor-first operations, contextual
   investigation, live progress, and safer action handoff.
+- Deterministic capacity forecasts now surface as finding signals, use the
+  metrics-target history ID, and sanitize Patrol runtime failures in history.
 - Availability checks now attach back to the known resource they monitor instead
   of always appearing as disconnected network endpoints.
 - Discovery gained service-context readiness and availability probe suggestion
@@ -54,6 +56,10 @@ tool-output previews, transcript export, cleaner error recovery, contextual
 resource targeting, and stricter output hygiene. The goal for RC7 testing is
 to confirm that Assistant helps explain and act on selected context without
 becoming the primary destination.
+
+Patrol also gained capacity-forecast signal coverage in this candidate. Forecast
+findings now resolve history through the metrics target used by the resource,
+and runtime failures are sanitized before they appear in run history.
 
 ### Availability checks as resource facets
 
@@ -125,14 +131,17 @@ refresh may be the workflow dispatch head; the validation range below is the
 code-backed release-risk range.
 
 - `v6.0.0-rc.6`: `c25e95cb2b071551df95c8add62773905ba0628b`
-- validation-risk commit: `55204cde9b93004fb04850b638de38ac3abaa27e`
-- range: `v6.0.0-rc.6..55204cde9b93004fb04850b638de38ac3abaa27e`
-- commit count: `940`
-- changed scope: `1966` files, `236770` insertions, `46839` deletions
+- validation-risk commit: `fc10de9b5477613316473267b72b05b6b2b7aaff`
+- range: `v6.0.0-rc.6..fc10de9b5477613316473267b72b05b6b2b7aaff`
+- commit count: `975`
+- changed scope: `1997` files, `239625` insertions, `47030` deletions
 
-The final validation-risk correction pins the repo-root Docker Compose default
-and `scripts/install-docker.sh` fallback to `6.0.0-rc.7`, and keeps the stable
-promotion guard version-aware so future `6.0.0` promotion still rejects stale
+The final validation-risk commits add deterministic capacity-forecast finding
+signals, correct capacity-history lookup to use the metrics target ID, and
+sanitize Patrol runtime failures in history. The earlier RC7 installability
+correction also remains in scope: repo-root Docker Compose and
+`scripts/install-docker.sh` default to `6.0.0-rc.7`, while the stable promotion
+guard stays version-aware so future `6.0.0` promotion still rejects stale
 prerelease Docker defaults.
 
 ## Retest plan
@@ -141,7 +150,8 @@ prerelease Docker defaults.
    prerelease channel is explicitly selected.
 2. Validate rollback to v5.1.35 with `./scripts/install.sh --version v5.1.35`.
 3. Exercise Patrol from alert investigation through finding expansion,
-   approval, verification, and resolved-state handling.
+   capacity forecast evidence, approval, verification, and resolved-state
+   handling.
 4. Exercise Assistant on selected resources, failed providers, queued
    follow-ups, tool progress, and recovery after interruption.
 5. Confirm availability checks attach to known Proxmox, Docker, Kubernetes, and

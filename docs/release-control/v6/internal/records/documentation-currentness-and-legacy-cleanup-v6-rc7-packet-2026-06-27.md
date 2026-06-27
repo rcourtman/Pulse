@@ -4,11 +4,11 @@
 
 - From tag: `v6.0.0-rc.6`
 - From commit: `c25e95cb2b071551df95c8add62773905ba0628b`
-- To validation-risk commit: `55204cde9b93004fb04850b638de38ac3abaa27e`
-- Git range: `v6.0.0-rc.6..55204cde9b93004fb04850b638de38ac3abaa27e`
-- Commit count: `940`
+- To validation-risk commit: `fc10de9b5477613316473267b72b05b6b2b7aaff`
+- Git range: `v6.0.0-rc.6..fc10de9b5477613316473267b72b05b6b2b7aaff`
+- Commit count: `975`
 - Date span in the range: `2026-05-27` through `2026-06-27`
-- Changed scope: `1966` files, `236770` insertions, `46839` deletions
+- Changed scope: `1997` files, `239625` insertions, `47030` deletions
 
 The final release workflow dispatch may use a later metadata-only packet
 refresh commit. That refresh is not counted as a new validation-risk commit
@@ -32,6 +32,12 @@ stable-promotion guard version-aware: prerelease defaults are valid only when
 the governed `VERSION` is prerelease, and leftover `-rc.` defaults remain a
 blocker when the governed `VERSION` is stable.
 
+The 2026-06-28 packet refresh moves the validation-risk head from the earlier
+Docker-default correction to the current code-backed branch head. The newly
+included commits surface deterministic capacity forecasts as finding signals,
+query capacity forecast history through the metrics target ID, and sanitize
+Patrol runtime failures in history.
+
 No public issue comment, retitle, closure, release publication, or customer
 message was made as part of this packet update.
 
@@ -49,3 +55,8 @@ message was made as part of this packet update.
     bundle-size check, and script smoke tests passed
   - `Go unit tests` failed on stale `6.0.0` Docker install defaults before the
     RC7 Docker-default correction
+- Release packet head refresh:
+  - validation-risk commit
+    `fc10de9b5477613316473267b72b05b6b2b7aaff`
+  - `975` commits from `v6.0.0-rc.6`
+  - `1997` files changed, `239625` insertions, `47030` deletions

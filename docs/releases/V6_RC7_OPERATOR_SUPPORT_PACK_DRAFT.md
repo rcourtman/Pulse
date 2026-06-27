@@ -37,6 +37,9 @@ lets operators test the current branch head without treating it as stable v6.
 
 - Patrol is more clearly the checking-loop surface for alerts, findings,
   approvals, and verification.
+- Deterministic capacity forecasts can appear as finding signals, with history
+  looked up through the metrics target and runtime failures sanitized in Patrol
+  history.
 - Assistant is more contextual, shows live progress, handles provider failures
   better, previews tool output, and recovers failed turns more cleanly.
 - Availability checks can attach to the resource they monitor instead of
@@ -110,6 +113,13 @@ Collect the alert ID, related resource ID, finding ID, Patrol run ID, and the
 expanded finding evidence. Alert investigation should route into Patrol with
 the selected breach context.
 
+### What if a capacity forecast finding has missing or wrong history?
+
+Collect the resource ID, metrics target ID if visible, forecast finding ID,
+Patrol run ID, and the relevant metrics-history response. RC7 should query
+capacity history through the resource's metrics target instead of assuming the
+canonical resource ID is the history key.
+
 ### What if `/api/actions/{id}/execute` returns `plan_drift:` or `resource_remediation_locked:`?
 
 That is expected fail-closed behavior:
@@ -182,6 +192,8 @@ Escalate without asking the user to keep experimenting when the report involves:
   to the wrong principal
 - action execution proceeding after dry-run or plan-hash validation failed
 - Patrol or Assistant acting on the wrong resource
+- capacity forecast findings showing unsanitized runtime failure details or
+  querying the wrong metrics history target
 - availability checks attaching to the wrong resource
 - provider MSP tenant data crossing tenant boundaries
 - monitoring or reporting stopping entirely after upgrade

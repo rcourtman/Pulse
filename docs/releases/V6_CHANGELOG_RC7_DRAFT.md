@@ -23,10 +23,10 @@ validation-risk range. A later packet-only refresh may be the workflow dispatch
 head; the validation range below is the code-backed release-risk range.
 
 - `v6.0.0-rc.6`: `c25e95cb2b071551df95c8add62773905ba0628b`
-- validation-risk commit: `55204cde9b93004fb04850b638de38ac3abaa27e`
-- range: `v6.0.0-rc.6..55204cde9b93004fb04850b638de38ac3abaa27e`
-- commit count: `940`
-- changed scope: `1966` files, `236770` insertions, `46839` deletions
+- validation-risk commit: `fc10de9b5477613316473267b72b05b6b2b7aaff`
+- range: `v6.0.0-rc.6..fc10de9b5477613316473267b72b05b6b2b7aaff`
+- commit count: `975`
+- changed scope: `1997` files, `239625` insertions, `47030` deletions
 
 Those commits are grouped here by operator-visible behavior and release risk
 instead of listed one by one.
@@ -41,6 +41,9 @@ instead of listed one by one.
   and clearer evidence under "What Pulse checked".
 - Patrol run history, approval sections, finding lifecycle, and verification
   handling received additional proof and UI consistency work.
+- Deterministic capacity forecasts can now surface as first-class finding
+  signals, query history through the metrics target ID, and keep Patrol runtime
+  failure details sanitized in history.
 - Free/self-hosted Patrol surfaces stay clean of default paid-feature pressure;
   plan-locked modes are disclosed deliberately.
 
@@ -124,6 +127,8 @@ instead of listed one by one.
 - Unified resource identities, sightings, relationship presentation, retention,
   availability linking, canonical IDs, and top-level system projections were
   tightened.
+- Capacity forecast findings now use deterministic inputs and the correct
+  metrics-target history path.
 - WebSocket lifecycle, alerts activation state, notification scheduling, and
   monitor reload behavior received correctness fixes.
 
@@ -143,6 +148,8 @@ instead of listed one by one.
 - Upgrade from v5 stable and from earlier RCs, especially `rc.2` trust-root
   continuity.
 - Patrol and Assistant with real alert/finding/resource context.
+- Deterministic capacity forecast findings and history queries on resources
+  whose metrics target differs from their canonical resource ID.
 - Availability facet attachment on real mixed-estate resources.
 - Provider MSP and Cloud proof environments.
 - Self-hosted commercial continuity and paid-license migration.
