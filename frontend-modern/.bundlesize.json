@@ -1,59 +1,56 @@
 {
   "$comment": "Frontend bundle size baseline. Run 'npm run check:bundlesize' to validate. To update: run 'node scripts/check-bundle-size.mjs --update-baseline' after vite build.",
   "version": 1,
-  "generated": "2026-06-14",
+  "generated": "2026-06-27",
   "defaultThresholdPercent": 15,
   "chunks": {
     "index": {
-      "baselineGzip": 105021
-    },
-    "Alerts": {
-      "baselineGzip": 88311
+      "baselineGzip": 118699
     },
     "sharedPlatformPage": {
-      "baselineGzip": 87771
+      "baselineGzip": 92026
+    },
+    "Alerts": {
+      "baselineGzip": 89365
     },
     "Settings": {
-      "baselineGzip": 75500
+      "baselineGzip": 83729
     },
     "InfrastructureWorkspace": {
-      "baselineGzip": 73414
+      "baselineGzip": 73395
     },
     "Proxmox": {
-      "baselineGzip": 67144
+      "baselineGzip": 67186
     },
     "Chat": {
-      "baselineGzip": 63676
+      "baselineGzip": 65286
     },
     "WorkloadsSurface": {
-      "baselineGzip": 52750
+      "baselineGzip": 54472
     },
     "AIIntelligence": {
-      "baselineGzip": 50280
+      "baselineGzip": 41151
     },
     "vendor-ai": {
       "baselineGzip": 21151
     },
     "Docker": {
-      "baselineGzip": 20862
+      "baselineGzip": 20864
     },
     "vendor-solid": {
       "baselineGzip": 17398
     },
     "Standalone": {
-      "baselineGzip": 17009
+      "baselineGzip": 16384
     },
     "Kubernetes": {
-      "baselineGzip": 13756
+      "baselineGzip": 13765
     },
     "vendor-highlight": {
       "baselineGzip": 13742
     },
     "TrueNAS": {
-      "baselineGzip": 13490
-    },
-    "APIAccessPanel": {
-      "baselineGzip": 10773
+      "baselineGzip": 13494
     },
     "vendor-icons": {
       "baselineGzip": 10755
@@ -61,70 +58,70 @@
     "vendor": {
       "baselineGzip": 9857
     },
-    "AuditLogPanel": {
-      "baselineGzip": 8696
+    "aiControlLevelPresentation": {
+      "baselineGzip": 9638
     },
     "ReportingPanel": {
-      "baselineGzip": 8561
+      "baselineGzip": 8554
+    },
+    "AuditLogPanel": {
+      "baselineGzip": 8523
     },
     "Vmware": {
-      "baselineGzip": 8491
+      "baselineGzip": 8517
     },
     "messages.de": {
-      "baselineGzip": 8043
+      "baselineGzip": 8430
+    },
+    "APIAccessPanel": {
+      "baselineGzip": 8359
     },
     "messages.es": {
-      "baselineGzip": 7835
+      "baselineGzip": 8257
     },
     "FormTextarea": {
-      "baselineGzip": 7693
-    },
-    "aiChat": {
-      "baselineGzip": 7689
+      "baselineGzip": 7696
     },
     "UpdatesSettingsPanel": {
-      "baselineGzip": 7293
+      "baselineGzip": 7252
     },
-    "FilterBar": {
-      "baselineGzip": 6293
+    "AvailabilitySettingsPanel": {
+      "baselineGzip": 6065
+    },
+    "DrawerDiskListCard": {
+      "baselineGzip": 5799
     },
     "SecurityAuthPanel": {
       "baselineGzip": 5797
     },
-    "DrawerDiskListCard": {
-      "baselineGzip": 5796
-    },
-    "AvailabilitySettingsPanel": {
-      "baselineGzip": 5631
+    "FilterBar": {
+      "baselineGzip": 5620
     },
     "DiagnosticsPanel": {
-      "baselineGzip": 5565
+      "baselineGzip": 5576
     },
     "useUnifiedResources": {
-      "baselineGzip": 5536
+      "baselineGzip": 5541
     },
     "SetupWizard": {
       "baselineGzip": 5521
     },
     "HelpIcon": {
-      "baselineGzip": 5500
-    },
-    "ResourceChangeSummary": {
-      "baselineGzip": 5500
+      "baselineGzip": 5502
     },
     "OrganizationSharingPanel": {
-      "baselineGzip": 5182
+      "baselineGzip": 5186
     },
     "truenasPageModel": {
-      "baselineGzip": 5157
+      "baselineGzip": 5154
     }
   },
   "totals": {
     "js": {
-      "baselineGzip": 1061883
+      "baselineGzip": 1079008
     },
     "css": {
-      "baselineGzip": 25895
+      "baselineGzip": 25667
     }
   }
 }
