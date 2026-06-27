@@ -5,6 +5,7 @@ import type { Alert } from '@/types/api';
 
 vi.mock('@solidjs/router', () => ({
   useLocation: () => ({ hash: '', pathname: '/alerts', search: '', query: {} }),
+  A: (props: Record<string, unknown>) => props.children,
 }));
 
 vi.mock('@/api/alerts', () => ({

@@ -1,4 +1,5 @@
 import { Show } from 'solid-js';
+import { A } from '@solidjs/router';
 
 import { InvestigateAlertButton } from '@/components/Alerts/InvestigateAlertButton';
 import { IncidentTimelinePanel } from '@/components/Alerts/IncidentTimelinePanel';
@@ -36,6 +37,17 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
       props.state.processingAlerts().has(alertKey()),
     );
 
+  const resourceLink = (): string => {
+    const rid = props.alert.resourceId ?? '';
+    const resourceType = typeof props.alert.metadata?.resourceType === 'string'
+      ? props.alert.metadata.resourceType as string
+      : '';
+    if (rid.startsWith('agent:') || resourceType === 'agent') return '/machines';
+    if (rid.includes('docker') || resourceType === 'docker-container' || resourceType === 'docker-host') return '/docker/overview';
+    if (resourceType === 'kubernetes' || resourceType.startsWith('k8s-')) return '/kubernetes/overview';
+    return '/proxmox/overview';
+  };
+
   return (
     <div id={`alert-${alertKey()}`} class={alertCardPresentation().cardClassName}>
       <div class="flex flex-col sm:flex-row sm:items-start">
@@ -63,9 +75,13 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
           </div>
           <div class="flex-1 min-w-0">
             <div class="flex flex-wrap items-center gap-2">
-              <span class={alertCardPresentation().resourceClassName}>
+              <A
+                href={resourceLink()}
+                class={`${alertCardPresentation().resourceClassName} hover:underline cursor-pointer`}
+                title="View resource"
+              >
                 {props.alert.resourceName}
-              </span>
+              </A>
               <span class="text-xs text-muted">({alertTypeDisplayLabel(props.alert.type)})</span>
               <Show when={!props.alert.acknowledged}>
                 <span
