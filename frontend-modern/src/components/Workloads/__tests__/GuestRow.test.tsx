@@ -885,7 +885,7 @@ describe('GUEST_COLUMNS', () => {
   it('has the expected number of columns', () => {
     // name, runtime, type, info, vmid, cpu, memory, disk, ip, uptime, node,
     // image, namespace, context, aiContext, backup, tags, os, netIo, diskIo, update
-    expect(GUEST_COLUMNS.length).toBe(21);
+    expect(GUEST_COLUMNS.length).toBe(22);
   });
 
   it('has name as the first column', () => {
@@ -899,7 +899,7 @@ describe('GUEST_COLUMNS', () => {
 
   it('keeps Docker I/O and update headers aligned with the rendered row cells', () => {
     const columnIds = GUEST_COLUMNS.map((column) => column.id);
-    expect(columnIds.slice(0, 2)).toEqual(['name', 'runtime']);
+    expect(columnIds.slice(0, 3)).toEqual(['name', 'availability', 'runtime']);
     const dockerTailStart = columnIds.indexOf('netIo');
     expect(columnIds.slice(dockerTailStart)).toEqual(['netIo', 'diskIo', 'update']);
   });
@@ -965,6 +965,7 @@ describe('GUEST_COLUMNS', () => {
 
     expect(tabletColumns.map((column) => column.id)).toEqual([
       'name',
+      'availability',
       'type',
       'info',
       'cpu',
@@ -973,6 +974,7 @@ describe('GUEST_COLUMNS', () => {
     ]);
     expect(compactColumns.map((column) => column.id)).toEqual([
       'name',
+      'availability',
       'type',
       'info',
       'cpu',
