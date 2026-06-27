@@ -148,6 +148,7 @@ export interface UnifiedFinding {
   previousResolvedFixSummary?: string;
   recommendation?: string;
   evidence?: string;
+  aiConfidence?: number;
   detectedAt: string;
   lastSeenAt?: string;
   resolvedAt?: string;
@@ -233,6 +234,7 @@ function normalizeUnifiedFindingRecord(item: UnifiedFindingRecord, now: number):
     previousResolvedFixSummary: item.previous_resolved_fix_summary,
     recommendation: item.recommendation,
     evidence: item.evidence,
+    aiConfidence: item.ai_confidence,
     detectedAt: item.detected_at,
     lastSeenAt: item.last_seen_at || item.detected_at,
     resolvedAt: item.resolved_at,

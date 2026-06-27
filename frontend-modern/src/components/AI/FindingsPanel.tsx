@@ -1313,6 +1313,18 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             {finding.recommendation}
           </p>
         </Show>
+        <Show when={finding.aiConfidence && finding.aiConfidence > 0}>
+          <p class="text-xs text-muted mt-1">
+            <span class="font-medium">Pulse confidence:</span>{' '}
+            {finding.aiConfidence! >= 0.8
+              ? 'High'
+              : finding.aiConfidence! >= 0.5
+                ? 'Moderate'
+                : 'Low'}
+            {' ('}
+            {Math.round(finding.aiConfidence! * 100)}%)
+          </p>
+        </Show>
         <Show when={finding.previousResolvedFixSummary}>
           <p class="text-sm text-base-content mt-2 px-2 py-1 rounded border border-emerald-200 bg-emerald-50/40 dark:border-emerald-800 dark:bg-emerald-950/30">
             <span class="font-medium text-emerald-800 dark:text-emerald-300">
