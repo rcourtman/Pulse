@@ -95,6 +95,32 @@ func TestNewSQLiteResourceStore_RejectsInvalidOrgID(t *testing.T) {
 	}
 }
 
+func TestNewSQLiteResourceStore_RecoversFromCorruptedDB(t *testing.T) {
+	dataDir := t.TempDir()
+
+	store, err := NewSQLiteResourceStore(dataDir, "default")
+	if err != nil {
+		t.Fatalf("initial store: %v", err)
+	}
+	store.Close()
+
+	dbPath := filepath.Join(dataDir, "resources", "unified_resources.db")
+	if err := os.WriteFile(dbPath, []byte("this is not a valid sqlite database"), 0o600); err != nil {
+		t.Fatalf("corrupt database: %v", err)
+	}
+
+	recovered, err := NewSQLiteResourceStore(dataDir, "default")
+	if err != nil {
+		t.Fatalf("expected recovery from corrupted db, got error: %v", err)
+	}
+	defer recovered.Close()
+
+	matches, err := filepath.Glob(dbPath + ".corrupted.*")
+	if err != nil || len(matches) == 0 {
+		t.Fatal("expected corrupted database to be backed up")
+	}
+}
+
 func TestNewSQLiteResourceStore_MigratesLegacyStore(t *testing.T) {
 	dataDir := t.TempDir()
 	orgID := "org.a"

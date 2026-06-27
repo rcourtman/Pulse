@@ -164,16 +164,79 @@ func NewSQLiteResourceStore(dataDir, orgID string) (*SQLiteResourceStore, error)
 	store := &SQLiteResourceStore{db: db, dbPath: path}
 	if err := store.initSchema(); err != nil {
 		wrappedInitErr := fmt.Errorf("initialize resource store schema for %q: %w", path, err)
+		if !isCorruptionError(err) {
+			if closeErr := db.Close(); closeErr != nil {
+				return nil, errors.Join(
+					wrappedInitErr,
+					fmt.Errorf("close resources db %q after init failure: %w", path, closeErr),
+				)
+			}
+			return nil, wrappedInitErr
+		}
+
+		log.Printf("[WARN] unified_resources: database %q appears corrupted (%v); backing up and recreating", path, err)
 		if closeErr := db.Close(); closeErr != nil {
 			return nil, errors.Join(
 				wrappedInitErr,
-				fmt.Errorf("close resources db %q after init failure: %w", path, closeErr),
+				fmt.Errorf("close corrupted resources db %q: %w", path, closeErr),
 			)
 		}
-		return nil, wrappedInitErr
+
+		if backupErr := backupCorruptedDB(path); backupErr != nil {
+			return nil, errors.Join(wrappedInitErr, fmt.Errorf("backup corrupted db %q: %w", path, backupErr))
+		}
+
+		db, err = sql.Open("sqlite", dsn)
+		if err != nil {
+			return nil, fmt.Errorf("reopen resources db after corruption recovery: %w", err)
+		}
+		db.SetMaxOpenConns(1)
+		db.SetMaxIdleConns(1)
+		db.SetConnMaxLifetime(0)
+
+		store = &SQLiteResourceStore{db: db, dbPath: path}
+		if err := store.initSchema(); err != nil {
+			if closeErr := db.Close(); closeErr != nil {
+				return nil, errors.Join(
+					fmt.Errorf("initialize resource store schema for %q after recovery: %w", path, err),
+					fmt.Errorf("close resources db %q after post-recovery init failure: %w", path, closeErr),
+				)
+			}
+			return nil, fmt.Errorf("initialize resource store schema for %q after recovery: %w", path, err)
+		}
+		log.Printf("[INFO] unified_resources: database %q recreated successfully after corruption recovery", path)
 	}
 	store.retentionStop = store.startRetentionLoop()
 	return store, nil
+}
+
+// isCorruptionError reports whether the init error indicates a corrupted
+// database that warrants a delete-and-recreate recovery.
+func isCorruptionError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "malformed") ||
+		strings.Contains(msg, "database disk image") ||
+		strings.Contains(msg, "file is not a database") ||
+		strings.Contains(msg, "database is not a database")
+}
+
+// backupCorruptedDB renames the corrupted database and its sidecar files
+// (WAL, SHM) to *.corrupted so a fresh database can be created in their place.
+func backupCorruptedDB(path string) error {
+	suffix := fmt.Sprintf(".corrupted.%d", time.Now().Unix())
+	sidecars := []string{path, path + "-wal", path + "-shm"}
+	for _, f := range sidecars {
+		if _, err := os.Stat(f); err != nil {
+			continue
+		}
+		if err := os.Rename(f, f+suffix); err != nil {
+			return fmt.Errorf("rename %q: %w", f, err)
+		}
+	}
+	return nil
 }
 
 func normalizeOrgID(orgID string) (string, error) {
