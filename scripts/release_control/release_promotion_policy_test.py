@@ -274,9 +274,11 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
 
     def test_version_file_matches_current_rc_packet(self) -> None:
         current_version = read("VERSION").strip()
+        release_index = read("docs/RELEASE_NOTES.md")
         if current_version == "6.0.0":
             release_notes = read("docs/releases/RELEASE_NOTES_v6.md")
             changelog = read("docs/releases/V6_CHANGELOG.md")
+            self.assertIn("prepared stable v6 release packet", release_index)
             self.assertIn(f"Pulse v{current_version} Release Notes", release_notes)
             self.assertIn(f"`v{current_version}`", release_notes)
             self.assertIn(f"Pulse v{current_version}", changelog)
@@ -292,6 +294,11 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
             changelog = read(changelog_path)
             operator_pack = read(operator_pack_path)
 
+            self.assertIn(f"current in-repo v6 `rc.{current_version.rsplit('.', 1)[1]}` draft packet", release_index)
+            self.assertIn(release_notes_path, release_index)
+            self.assertIn(changelog_path, release_index)
+            self.assertIn(operator_pack_path, release_index)
+            self.assertNotIn("current stable v6 release packet", release_index)
             self.assertIn(f"Pulse v{current_version} Draft Release Notes", release_notes)
             self.assertIn(f"`v{current_version}`", release_notes)
             self.assertIn(f"Pulse v{current_version} Draft Changelog", changelog)
@@ -739,7 +746,15 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         blocked = read("docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-blocked-2026-04-04.md")
         current_version = read("VERSION").strip()
         active_target_id = read_json("docs/release-control/control_plane.json")["active_target_id"]
-        self.assertIn(f"VERSION={current_version}", blocked)
+        if current_version == "6.0.0":
+            self.assertIn(f"VERSION={current_version}", blocked)
+        else:
+            self.assertIsNotNone(
+                rc_packet_paths_for_version(current_version),
+                f"VERSION={current_version} does not match the 6.0.0-rc.N pattern",
+            )
+            self.assertIn("VERSION=6.0.0", blocked)
+            self.assertNotIn(f"VERSION={current_version}", blocked)
         self.assertIn("artifact-owned candidate stable tag", blocked)
         self.assertIn("artifact-owned promotion channel", blocked)
         self.assertIn("artifact-owned promoted prerelease tag", blocked)
@@ -756,6 +771,8 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         matrix = read("docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md")
         self.assertIn(promotion_metadata_envelope(), normalize_ws(matrix))
         expected = blocked_record.build_blocked_record(record_date="2026-04-04")
+        if current_version != "6.0.0":
+            return
         if blocked != expected:
             record_path = REPO_ROOT / "docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-blocked-2026-04-04.md"
             if os.environ.get("BLESS_GOVERNANCE_FIXTURES") == "1":

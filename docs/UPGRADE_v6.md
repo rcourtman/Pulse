@@ -2,10 +2,17 @@
 
 This guide covers practical upgrade steps for existing Pulse installs moving to v6.
 
-For current stable release notes and rollout references, see:
+For the current v6 prerelease packet and rollout references, see:
 
-- `docs/releases/RELEASE_NOTES_v6.md`
-- `docs/releases/V6_CHANGELOG.md`
+- `docs/releases/RELEASE_NOTES_v6_RC7_DRAFT.md`
+- `docs/releases/V6_CHANGELOG_RC7_DRAFT.md`
+- `docs/releases/V6_RC7_OPERATOR_SUPPORT_PACK_DRAFT.md`
+
+The prepared stable v6 packet remains in `docs/releases/RELEASE_NOTES_v6.md`
+and `docs/releases/V6_CHANGELOG.md`, but the published GitHub release is the
+authority for what users can install as stable. Until the stable `v6.0.0`
+release exists, treat v6 as prerelease and keep v5.1.35 as the stable rollback
+target.
 
 ## Before You Upgrade
 
@@ -115,17 +122,20 @@ servers.
 
 ### Can I keep Pulse v5 stable while I test Pulse v6?
 
-Pulse v5 entered maintenance-only support on `2026-06-04` and remains eligible
-only for critical maintenance fixes until `2026-09-02`.
+Pulse v5.1.35 remains the current stable line while RC7 is evaluated.
 
-If you want extra caution, use a staging or otherwise controlled upgrade first
-and keep a rollback path available, but v6 is now the supported stable line.
+Use a staging or otherwise controlled upgrade first and keep a rollback path
+available. For RC7, the stable rollback command is:
+
+```bash
+./scripts/install.sh --version v5.1.35
+```
 
 ## Migration Notes (v6)
 
 ### Unified Navigation (Bookmarks and Deep Links)
 
-Pulse v6.0.0-rc.6 and later ship with the platform-shaped top-level
+Pulse v6.0.0-rc.6 and later prereleases ship with the platform-shaped top-level
 navigation existing v5 operators already know: Proxmox, Docker, Kubernetes,
 TrueNAS, vSphere, Machines, Alerts, Patrol, and Settings.
 

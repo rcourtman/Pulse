@@ -477,10 +477,15 @@ TLS floor in the dynamic config.
    operator support packet must describe that same candidate instead of leaving
    the branch on a newer version string while the in-repo packet still speaks
    for an older RC.
-   Later corrective RCs such as `rc.3`, `rc.4`, `rc.5`, and `rc.6` must also carry the live stable
-   rollback target and any prerelease trust-root continuity caveat in the
+   Later corrective RCs such as `rc.3`, `rc.4`, `rc.5`, `rc.6`, and `rc.7`
+   must also carry the live stable rollback target and any prerelease
+   trust-root continuity caveat in the
    current release notes, changelog, operator support pack, upgrade guide, and
    release-control evidence record before the release workflow is dispatched.
+   The `rc.7` prerelease packet keeps v6 on the opt-in prerelease channel,
+   records the current stable rollback target as `v5.1.35`, and must take
+   precedence over prepared stable `v6.0.0` packet wording until an actual
+   stable GitHub release exists.
    When a draft packet is updated after the candidate tag or draft release has
    already been prepared, the packet must record an exact previous-RC to
    current-candidate commit coverage audit, include any new artifact
