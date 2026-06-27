@@ -3,6 +3,9 @@ package ai
 import (
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func TestStampCapacityForecasts_AttachesToCapacityFindingByResourceID(t *testing.T) {
@@ -174,4 +177,69 @@ func mustForecastMap(seeds []seedForecast) map[string]CapacityForecast {
 		}
 	}
 	return out
+}
+
+func TestSeedPrecompute_StorageForecastQueriesMetricsTargetID(t *testing.T) {
+	now := time.Now()
+	ps := NewPatrolService(nil, nil)
+
+	// Metrics history is recorded under the metrics-target ID
+	// ("storage-metrics"), which differs from the canonical resource ID
+	// ("storage-canonical"). Before the fix the forecast queried the
+	// canonical ID and found nothing, leaving the feature dormant for every
+	// storage type whose metrics target diverges from its canonical ID.
+	series := func(start float64) []models.MetricPoint {
+		return []models.MetricPoint{
+			{Value: start, Timestamp: now.Add(-5 * time.Hour)},
+			{Value: start + 2, Timestamp: now.Add(-4 * time.Hour)},
+			{Value: start + 4, Timestamp: now.Add(-3 * time.Hour)},
+			{Value: start + 6, Timestamp: now.Add(-2 * time.Hour)},
+			{Value: start + 8, Timestamp: now.Add(-1 * time.Hour)},
+		}
+	}
+	mh := &precomputeMetricsHistoryProvider{
+		storage: map[string][]models.MetricPoint{
+			"storage-metrics:usage": series(80),
+		},
+	}
+	ps.SetMetricsHistoryProvider(mh)
+
+	used := int64(850)
+	total := int64(1000)
+	pool := unifiedresources.Resource{
+		ID:   "storage-canonical",
+		Name: "test-pool",
+		Type: unifiedresources.ResourceTypeStorage,
+		MetricsTarget: &unifiedresources.MetricsTarget{
+			ResourceType: "storage",
+			ResourceID:   "storage-metrics",
+		},
+		Storage: &unifiedresources.StorageMeta{Type: "lvm"},
+		Metrics: &unifiedresources.ResourceMetrics{
+			Disk: &unifiedresources.MetricValue{
+				Used: &used, Total: &total, Percent: 85,
+			},
+		},
+	}
+
+	snap := patrolRuntimeState{
+		unifiedResourceProvider: &mockUnifiedResourceProvider{
+			getByTypeFunc: func(rt unifiedresources.ResourceType) []unifiedresources.Resource {
+				if rt == unifiedresources.ResourceTypeStorage {
+					return []unifiedresources.Resource{pool}
+				}
+				return nil
+			},
+		},
+	}
+
+	intel := ps.seedPrecomputeIntelligenceState(snap, nil, now)
+	if len(intel.forecasts) == 0 {
+		t.Fatalf("expected a capacity forecast queried via the metrics-target ID, got none")
+	}
+	// The forecast resourceID must stay canonical so StampCapacityForecasts
+	// can still match it to findings keyed by canonical resource ID.
+	if intel.forecasts[0].resourceID != "storage-canonical" {
+		t.Fatalf("forecast resourceID = %q, want canonical storage-canonical", intel.forecasts[0].resourceID)
+	}
 }

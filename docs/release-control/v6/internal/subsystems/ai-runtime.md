@@ -67,7 +67,13 @@ ingested as a time-series in metrics history; resources without recorded
 history cannot produce a forecast and must report its absence honestly rather
 than fabricate one, and stable-high (>=80%) pools with no clear fill trend must
 carry the deterministic "no fill trend" reading so the model's speculation
-cannot override the verified trend.
+cannot override the verified trend. The forecast must query utilization
+history under the resource's metrics-target ID (the same key the monitoring
+layer records under, exposed as `StoragePoolView.SourceID()`), not the
+canonical resource ID; the two diverge for most storage sources, so querying
+the canonical ID silently leaves the feature dormant. The forecast's own
+`resourceID` stays canonical so it can still be stamped onto findings keyed by
+canonical resource ID.
 
 The public Pulse Intelligence overview is a projection of those runtime
 contracts, not a second Assistant tool inventory. It must point readers at the

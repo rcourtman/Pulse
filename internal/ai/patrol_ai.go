@@ -1593,7 +1593,11 @@ func (p *PatrolService) seedPrecomputeIntelligenceState(snap patrolRuntimeState,
 			}
 		}
 		for _, s := range storageSources {
-			allMetrics := mh.GetAllStorageMetrics(s.id, 48*time.Hour)
+			queryID := s.metricsID
+			if strings.TrimSpace(queryID) == "" {
+				queryID = s.id
+			}
+			allMetrics := mh.GetAllStorageMetrics(queryID, 48*time.Hour)
 			if pts, ok := allMetrics["usage"]; ok && len(pts) >= 5 {
 				addForecast(s.id, s.name, "usage", pts, s.usagePercent)
 			}
@@ -1739,12 +1743,12 @@ type patrolAppContainerRow struct {
 }
 
 type patrolStoragePoolRow struct {
-	id, name, stype, node, status string
-	used, total                   int64
-	hasBytes                      bool
-	usage                         float64
-	zfsRead, zfsWrite, zfsCksum   int64
-	hasZFSErrors                  bool
+	id, metricsID, name, stype, node, status string
+	used, total                              int64
+	hasBytes                                 bool
+	usage                                    float64
+	zfsRead, zfsWrite, zfsCksum              int64
+	hasZFSErrors                             bool
 }
 
 type patrolPhysicalDiskRow struct {
@@ -1771,8 +1775,8 @@ type patrolPrecomputeGuestSource struct {
 }
 
 type patrolPrecomputeStorageSource struct {
-	id, name     string
-	usagePercent float64
+	id, metricsID, name string
+	usagePercent        float64
 }
 
 type patrolConnectionHealthEntry struct {
@@ -2124,6 +2128,7 @@ func patrolStoragePoolRows(snap patrolRuntimeState, scopedSet map[string]bool) [
 
 			rows = append(rows, patrolStoragePoolRow{
 				id:           spv.ID(),
+				metricsID:    spv.SourceID(),
 				name:         name,
 				stype:        stype,
 				node:         node,
@@ -2200,8 +2205,14 @@ func patrolStoragePoolRows(snap patrolRuntimeState, scopedSet map[string]bool) [
 			zfsCksum := r.Storage.ZFSChecksumErrors
 			hasZFSErrors := r.Storage.IsZFS && (zfsRead > 0 || zfsWrite > 0 || zfsCksum > 0)
 
+			metricsID := r.ID
+			if r.MetricsTarget != nil && strings.TrimSpace(r.MetricsTarget.ResourceID) != "" {
+				metricsID = strings.TrimSpace(r.MetricsTarget.ResourceID)
+			}
+
 			rows = append(rows, patrolStoragePoolRow{
 				id:           r.ID,
+				metricsID:    metricsID,
 				name:         name,
 				stype:        stype,
 				node:         node,
@@ -2368,6 +2379,7 @@ func patrolPrecomputeStorageSources(snap patrolRuntimeState, scopedSet map[strin
 	for _, s := range storageRows {
 		rows = append(rows, patrolPrecomputeStorageSource{
 			id:           s.id,
+			metricsID:    s.metricsID,
 			name:         s.name,
 			usagePercent: s.usage,
 		})
