@@ -221,6 +221,22 @@ describe('patrolFormat', () => {
       );
     });
 
+    it('classifies wrapped provider stream stalls without leaking runtime internals', () => {
+      const summary = formatPatrolRuntimeFailureSummary({
+        errorSummary: 'Provider analysis error',
+        errorDetail:
+          'agentic patrol failed: provider error: stream read error: stream chunk timed out after 12s',
+        errorCount: 1,
+      });
+
+      expect(summary).toBe(
+        'Provider connection failed. Check provider reachability before retrying Patrol.',
+      );
+      expect(summary).not.toContain('agentic patrol');
+      expect(summary).not.toContain('stream read error');
+      expect(summary).not.toContain('stream chunk');
+    });
+
     it('redacts unknown provider details defensively', () => {
       const detail = formatPatrolRuntimeFailureDetail(
         'provider returned Authorization: Bearer sk-live-secret and url https://example.invalid/path?token=abc for user_abc123',

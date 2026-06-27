@@ -203,6 +203,29 @@ describe('patrolRunPresentation', () => {
     expect(
       getPatrolRunOperatorRecordPresentation({
         auto_fix_count: 0,
+        duration_ms: 120_000,
+        effective_scope_resource_ids: [],
+        error_count: 1,
+        error_detail:
+          'agentic patrol failed: provider error: stream read error: stream chunk timed out after 12s',
+        error_summary: 'Provider analysis error',
+        existing_findings: 0,
+        finding_ids: ['runtime-provider'],
+        new_findings: 0,
+        resources_checked: 66,
+        resolved_findings: 0,
+        scope_resource_ids: [],
+        status: 'error',
+      }),
+    ).toEqual({
+      headline: 'Patrol needs attention',
+      detail:
+        'Checked 66 resources in 2m. Runtime issue: Provider connection failed. Check provider reachability before retrying Patrol.',
+    });
+
+    expect(
+      getPatrolRunOperatorRecordPresentation({
+        auto_fix_count: 0,
         duration_ms: 60_000,
         effective_scope_resource_ids: [],
         error_count: 0,

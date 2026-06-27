@@ -7387,21 +7387,7 @@
       ]
     }
   ],
-  "work_claims": [
-    {
-      "id": "codex-candidate-lane-availability-as-resource-facet",
-      "agent_id": "codex",
-      "summary": "Attach agentless availability checks as a facet on the known resource they monitor (explicit link + unique address correlation + network-endpoint fallback) and surface the facet on the platform resource row per the bounded-row contract.",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-06-26T10:12:44Z",
-      "heartbeat_at": "2026-06-26T10:12:44Z",
-      "expires_at": "2026-06-26T14:12:44Z",
-      "work_item": {
-        "kind": "candidate-lane",
-        "id": "availability-as-resource-facet"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [

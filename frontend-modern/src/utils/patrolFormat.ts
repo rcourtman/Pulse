@@ -135,11 +135,22 @@ export function formatPatrolRuntimeFailureDetail(text: string | undefined): stri
     lower.includes('connection refused') ||
     lower.includes('no such host') ||
     lower.includes('i/o timeout') ||
+    lower.includes('timed out') ||
     lower.includes('context deadline exceeded') ||
+    lower.includes('stream read error') ||
+    lower.includes('stream chunk') ||
     lower.includes('timeout') ||
     lower.includes('returned status 5')
   ) {
     return 'Provider connection failed. Check provider reachability before retrying Patrol.';
+  }
+  if (
+    lower === 'provider analysis error' ||
+    lower === 'agentic patrol failed' ||
+    lower.startsWith('provider analysis error: agentic patrol failed') ||
+    lower.startsWith('agentic patrol failed: provider error')
+  ) {
+    return 'Provider analysis failed. Check Provider & Models before retrying Patrol.';
   }
 
   return raw
@@ -162,6 +173,12 @@ export function formatPatrolRuntimeFailureSummary(input: {
   const summary = formatPatrolRuntimeFailureDetail(input.errorSummary);
   const detail = formatPatrolRuntimeFailureDetail(input.errorDetail);
   if (summary && detail && summary !== detail) {
+    if (
+      summary.toLowerCase().startsWith('provider analysis failed') &&
+      detail.toLowerCase().startsWith('provider ')
+    ) {
+      return detail;
+    }
     if (
       summary.toLowerCase() === 'provider connection issue' &&
       detail.toLowerCase().startsWith('provider connection failed')
