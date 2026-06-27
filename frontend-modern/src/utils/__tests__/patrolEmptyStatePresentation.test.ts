@@ -89,7 +89,7 @@ describe('patrolEmptyStatePresentation', () => {
             status: 'error',
             error_count: 1,
             resources_checked: 72,
-          } as PatrolRunRecord,
+        } as unknown as PatrolRunRecord,
         ],
       }),
     ).toEqual({
@@ -240,5 +240,52 @@ describe('patrolEmptyStatePresentation', () => {
       body: 'This older Patrol run has no finding record, so Patrol cannot show its issue list.',
       tone: 'warning',
     });
+  });
+
+  it('includes latest-run coverage context in the healthy empty state body', () => {
+    const result = getPatrolFindingsEmptyState({
+      filter: 'active',
+      overallHealth: {
+        score: 100,
+        grade: 'A',
+        trend: 'stable',
+        factors: [],
+        prediction: 'Infrastructure is healthy with no significant issues detected.',
+      },
+      runtimeState: 'active',
+      runs: [
+        {
+          id: 'run-1',
+          started_at: '2026-06-27T10:00:00Z',
+          status: 'no_issues',
+          error_count: 0,
+          resources_checked: 42,
+          scope_resource_ids: [],
+          effective_scope_resource_ids: [],
+          finding_ids: [],
+        } as unknown as PatrolRunRecord,
+      ],
+    });
+    expect(result.title).toBe('No current issues');
+    expect(result.body).toContain('Checked 42 resources');
+    expect(result.body).toContain('No action needed');
+    expect(result.tone).toBe('success');
+  });
+
+  it('omits coverage context when no runs are available', () => {
+    const result = getPatrolFindingsEmptyState({
+      filter: 'active',
+      overallHealth: {
+        score: 100,
+        grade: 'A',
+        trend: 'stable',
+        factors: [],
+        prediction: 'Infrastructure is healthy with no significant issues detected.',
+      },
+      runtimeState: 'active',
+    });
+    expect(result.body).toBe(
+      'No action needed from the latest Patrol check. Run Patrol any time to check again.',
+    );
   });
 });

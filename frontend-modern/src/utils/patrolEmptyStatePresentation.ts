@@ -142,6 +142,20 @@ function hasHistoricalRegressions(count: number | undefined): boolean {
   return typeof count === 'number' && Number.isFinite(count) && count > 0;
 }
 
+function getLatestRunCoverageContext(
+  runs: PatrolRunRecord[] | undefined,
+): string | undefined {
+  if (!runs || runs.length === 0) {
+    return undefined;
+  }
+  const latestRun = runs[0];
+  const coverageSummary = getPatrolRunCoverageSummary(latestRun);
+  if (!coverageSummary) {
+    return undefined;
+  }
+  return `${coverageSummary}.`;
+}
+
 function getPatrolRunSnapshotEmptyState(
   run: PatrolRunSnapshotEmptyStateArgs,
 ): PatrolFindingsEmptyStateCopy {
@@ -237,9 +251,12 @@ export function getPatrolFindingsEmptyState(args: {
     };
   }
 
+  const coverageContext = getLatestRunCoverageContext(args.runs);
   return {
     title: PATROL_QUEUE_CLEAR_TITLE,
-    body: HEALTHY_PATROL_EMPTY_STATE_BODY,
+    body: coverageContext
+      ? `${coverageContext} ${HEALTHY_PATROL_EMPTY_STATE_BODY}`
+      : HEALTHY_PATROL_EMPTY_STATE_BODY,
     tone: 'success',
   };
 }
