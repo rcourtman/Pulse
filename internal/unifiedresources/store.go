@@ -150,6 +150,7 @@ func NewSQLiteResourceStore(dataDir, orgID string) (*SQLiteResourceStore, error)
 			"synchronous(NORMAL)",
 			"foreign_keys(ON)",
 			"cache_size(-64000)",
+			"auto_vacuum(INCREMENTAL)",
 		},
 	}.Encode()
 
@@ -206,6 +207,7 @@ func NewSQLiteResourceStore(dataDir, orgID string) (*SQLiteResourceStore, error)
 		}
 		log.Printf("[INFO] unified_resources: database %q recreated successfully after corruption recovery", path)
 	}
+	store.migrateAutoVacuum()
 	store.retentionStop = store.startRetentionLoop()
 	return store, nil
 }
@@ -947,22 +949,87 @@ func (s *SQLiteResourceStore) GetExclusions() (exclusions []ResourceExclusion, e
 const (
 	resourceChangesRetention = 30 * 24 * time.Hour
 	actionAuditsRetention    = 90 * 24 * time.Hour
-	retentionInterval        = 6 * time.Hour
+	actionLifecycleRetention = 90 * 24 * time.Hour
+	exportAuditsRetention    = 90 * 24 * time.Hour
+	loopReportsRetention     = 30 * 24 * time.Hour
+	retentionInterval        = 1 * time.Hour
+	initialRetentionDelay    = 30 * time.Second
+	maxUnifiedReclaimPages   = 50000
 )
 
+// migrateAutoVacuum ensures the database uses incremental auto-vacuum so that
+// deleted-row pages can be returned to the OS via PRAGMA incremental_vacuum.
+// For databases created before auto_vacuum(INCREMENTAL) was in the DSN, a
+// one-time VACUUM restructures the file. Without this, retention deletes rows
+// but the file never shrinks (GitHub issue #1496).
+func (s *SQLiteResourceStore) migrateAutoVacuum() {
+	var mode int
+	if err := s.db.QueryRow("PRAGMA auto_vacuum").Scan(&mode); err != nil {
+		log.Printf("unifiedresources: failed to check auto_vacuum mode: %v", err)
+		return
+	}
+	if mode == 2 {
+		return
+	}
+
+	log.Printf("[INFO] unified_resources: converting database to incremental auto-vacuum (one-time migration)")
+	start := time.Now()
+
+	if _, err := s.db.Exec("PRAGMA auto_vacuum = INCREMENTAL"); err != nil {
+		log.Printf("unifiedresources: failed to set auto_vacuum mode: %v", err)
+		return
+	}
+	if _, err := s.db.Exec("VACUUM"); err != nil {
+		log.Printf("unifiedresources: auto-vacuum migration VACUUM failed (will retry next restart): %v", err)
+		return
+	}
+
+	log.Printf("[INFO] unified_resources: auto-vacuum migration complete in %s", time.Since(start).Round(time.Millisecond))
+}
+
+// reclaimFreePages returns freed pages to the OS. auto_vacuum is INCREMENTAL,
+// so deleted-row pages sit on the freelist until reclaimed here. Capped at
+// maxReclaimPages per cycle so a large backlog drains over several hourly
+// cycles instead of holding the write lock for minutes at once.
+func (s *SQLiteResourceStore) reclaimFreePages() {
+	var freelist int64
+	if err := s.db.QueryRow(`PRAGMA freelist_count`).Scan(&freelist); err != nil {
+		log.Printf("unifiedresources: failed to read freelist_count: %v", err)
+		return
+	}
+	if freelist == 0 {
+		return
+	}
+	pages := freelist
+	if pages > maxUnifiedReclaimPages {
+		pages = maxUnifiedReclaimPages
+	}
+	if _, err := s.db.Exec(fmt.Sprintf(`PRAGMA incremental_vacuum(%d)`, pages)); err != nil {
+		log.Printf("unifiedresources: incremental vacuum failed: %v", err)
+	}
+	if _, err := s.db.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
+		log.Printf("unifiedresources: WAL checkpoint failed: %v", err)
+	}
+}
+
 // startRetentionLoop launches a background goroutine that periodically
-// prunes old rows from resource_changes and action_audits. Without this,
-// these append-only tables grow without bound (GitHub issue #1496).
+// prunes old rows from append-only tables and reclaims freed space.
+// Without this, resource_changes, action_audits, and related tables grow
+// without bound and the database file never shrinks (GitHub issue #1496).
 // Returns a stop channel; closing it signals the goroutine to exit.
 func (s *SQLiteResourceStore) startRetentionLoop() chan struct{} {
 	stop := make(chan struct{})
 	go func() {
+		initial := time.NewTimer(initialRetentionDelay)
+		defer initial.Stop()
 		ticker := time.NewTicker(retentionInterval)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-stop:
 				return
+			case <-initial.C:
+				s.pruneOldRecords()
 			case <-ticker.C:
 				s.pruneOldRecords()
 			}
@@ -975,12 +1042,16 @@ func (s *SQLiteResourceStore) pruneOldRecords() {
 	now := time.Now()
 	changesCutoff := now.Add(-resourceChangesRetention)
 	auditsCutoff := now.Add(-actionAuditsRetention)
+	lifecycleCutoff := now.Add(-actionLifecycleRetention)
+	exportCutoff := now.Add(-exportAuditsRetention)
+	loopReportsCutoff := now.Add(-loopReportsRetention)
 
+	tsFmt := "2006-01-02T15:04:05Z"
 	var totalDeleted int64
 
 	res, err := s.db.Exec(
 		`DELETE FROM resource_changes WHERE observed_at < ? OR observed_at IS NULL`,
-		changesCutoff.UTC().Format("2006-01-02T15:04:05Z"),
+		changesCutoff.UTC().Format(tsFmt),
 	)
 	if err != nil {
 		log.Printf("unifiedresources: failed to prune resource_changes: %v", err)
@@ -990,7 +1061,7 @@ func (s *SQLiteResourceStore) pruneOldRecords() {
 
 	res, err = s.db.Exec(
 		`DELETE FROM action_audits WHERE created_at < ?`,
-		auditsCutoff.UTC().Format("2006-01-02T15:04:05Z"),
+		auditsCutoff.UTC().Format(tsFmt),
 	)
 	if err != nil {
 		log.Printf("unifiedresources: failed to prune action_audits: %v", err)
@@ -998,10 +1069,47 @@ func (s *SQLiteResourceStore) pruneOldRecords() {
 		totalDeleted += affected
 	}
 
-	if totalDeleted > 0 {
-		log.Printf("unifiedresources: pruned %d old records (changes<%s, audits<%s)",
-			totalDeleted, changesCutoff.Format("2006-01-02"), auditsCutoff.Format("2006-01-02"))
+	res, err = s.db.Exec(
+		`DELETE FROM action_lifecycle_events WHERE timestamp < ?`,
+		lifecycleCutoff.UTC().Format(tsFmt),
+	)
+	if err != nil {
+		log.Printf("unifiedresources: failed to prune action_lifecycle_events: %v", err)
+	} else if affected, _ := res.RowsAffected(); affected > 0 {
+		totalDeleted += affected
 	}
+
+	res, err = s.db.Exec(
+		`DELETE FROM export_audits WHERE timestamp < ?`,
+		exportCutoff.UTC().Format(tsFmt),
+	)
+	if err != nil {
+		log.Printf("unifiedresources: failed to prune export_audits: %v", err)
+	} else if affected, _ := res.RowsAffected(); affected > 0 {
+		totalDeleted += affected
+	}
+
+	res, err = s.db.Exec(
+		`DELETE FROM loop_reports WHERE started_at < ?`,
+		loopReportsCutoff.UTC().Format(tsFmt),
+	)
+	if err != nil {
+		log.Printf("unifiedresources: failed to prune loop_reports: %v", err)
+	} else if affected, _ := res.RowsAffected(); affected > 0 {
+		totalDeleted += affected
+	}
+
+	if totalDeleted > 0 {
+		log.Printf("unifiedresources: pruned %d old records (changes<%s, audits<%s, lifecycle<%s, exports<%s, loop_reports<%s)",
+			totalDeleted,
+			changesCutoff.Format("2006-01-02"),
+			auditsCutoff.Format("2006-01-02"),
+			lifecycleCutoff.Format("2006-01-02"),
+			exportCutoff.Format("2006-01-02"),
+			loopReportsCutoff.Format("2006-01-02"))
+	}
+
+	s.reclaimFreePages()
 }
 
 func (s *SQLiteResourceStore) Close() error {
