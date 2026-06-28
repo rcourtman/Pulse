@@ -1310,12 +1310,16 @@ That same public-demo boundary also owns the governed `pulse-pro` operational
 path for the live v6 preview. `pulse-pro/.github/workflows/deploy-v6-preview-demo.yml`
 is the canonical operator entrypoint, and it must drive
 `pulse-pro/scripts/bootstrap-v6-demo-preview.sh` as the canonical preview
-runtime bootstrap/update path.
+runtime bootstrap/update path. The cost-contained default is the
+`pulse-v6-preview.service` instance on `pulse-relay` behind the
+`v6-demo.pulserelay.pro` Caddy route; the old dedicated
+`pulse-v6-preview` Droplet remains a hibernated snapshot and is only a rebuild
+or isolation option.
 `pulse-pro/scripts/audit_v6_preview_demo.sh` is the canonical public smoke
-proof. The bootstrap must fail closed unless the dedicated preview host is
+proof. The bootstrap must fail closed unless the target preview host is
 already the live public target and that public smoke audit passes; any
-`--skip-public-audit` escape hatch is only for pre-cutover replacement-host
-staging, never an ordinary live refresh.
+`--skip-public-audit` escape hatch is only for pre-cutover host staging or
+deliberate Caddy/DNS maintenance, never an ordinary live refresh.
 That same licensing/browser boundary now also owns authenticated commercial
 posture bootstrap and the prohibition on non-billing entitlement reads.
 `frontend-modern/src/useAppRuntimeState.ts` is the canonical authenticated

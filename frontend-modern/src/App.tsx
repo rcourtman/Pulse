@@ -76,6 +76,11 @@ function isPublicRoutePath(pathname: string): boolean {
   return pathname === '/pricing' || pathname === '/preview/setup-complete';
 }
 
+function isWorkspaceEntryRoutePath(pathname: string): boolean {
+  const normalizedPath = pathname.replace(/\/+$/, '') || '/';
+  return normalizedPath === '/' || normalizedPath === '/login' || normalizedPath === '/infrastructure';
+}
+
 const AlertsPage = lazy(() =>
   import('./pages/Alerts').then((module) => ({ default: module.Alerts })),
 );
@@ -276,8 +281,7 @@ function App() {
 
     createEffect(() => {
       if (runtime.isLoading() || runtime.needsAuth() || isPublicRoute()) return;
-      const normalizedPath = location.pathname.replace(/\/+$/, '') || '/';
-      if (normalizedPath !== '/' && normalizedPath !== '/login') return;
+      if (!isWorkspaceEntryRoutePath(location.pathname)) return;
       if (!platformNavigationResolved()) return;
       navigate(
         getDefaultWorkspaceRoute(platformNavigationVisibility(), hasSettingsAccess()),
@@ -537,6 +541,7 @@ function App() {
       <Route path="/preview/setup-complete" component={SetupCompletionPreviewPage} />
       <Route path="/login" component={RuntimeHomePage} />
       <Route path="/" component={RuntimeHomePage} />
+      <Route path="/infrastructure" component={RuntimeHomePage} />
       <Route path={PROXMOX_PATH} component={ProxmoxPage} />
       <Route path={`${PROXMOX_PATH}/*`} component={ProxmoxPage} />
       <Route path={DOCKER_PATH} component={DockerPage} />

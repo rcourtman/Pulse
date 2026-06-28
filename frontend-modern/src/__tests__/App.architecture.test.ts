@@ -137,6 +137,11 @@ describe('App architecture', () => {
     expect(appSource).toContain("import RuntimeHomePage from '@/pages/RuntimeHome';");
     expect(appSource).toContain('<Route path="/login" component={RuntimeHomePage} />');
     expect(appSource).toContain('<Route path="/" component={RuntimeHomePage} />');
+    expect(appSource).toContain('<Route path="/infrastructure" component={RuntimeHomePage} />');
+    expect(appSource).toContain('function isWorkspaceEntryRoutePath(pathname: string): boolean');
+    expect(appSource).toContain(
+      "return normalizedPath === '/' || normalizedPath === '/login' || normalizedPath === '/infrastructure';",
+    );
     expect(appSource).toContain(
       '<Route path={`${ROOT_PATROL_PATH}/*`} component={AIIntelligencePage} />',
     );
