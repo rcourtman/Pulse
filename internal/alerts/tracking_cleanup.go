@@ -223,16 +223,7 @@ func (m *Manager) cleanupStaleMaps() {
 	}
 
 	if staleResolved > 0 {
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Error().Interface("panic", r).Msg("panic in SaveActiveAlerts goroutine (stale cleanup)")
-				}
-			}()
-			if err := m.SaveActiveAlerts(); err != nil {
-				log.Error().Err(err).Msg("failed to save active alerts after stale cleanup")
-			}
-		}()
+		m.saveActiveAlertsAsync("stale cleanup")
 		log.Info().
 			Int("count", staleResolved).
 			Msg("Auto-resolved stale alerts")

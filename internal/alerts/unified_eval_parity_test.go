@@ -2,7 +2,6 @@ package alerts
 
 import (
 	"testing"
-	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
@@ -11,14 +10,8 @@ func newUnifiedEvalParityManager(t *testing.T) *Manager {
 	t.Helper()
 	m := NewManagerWithDataDir(t.TempDir())
 
-	// Stop background workers to avoid post-test writes into temp dirs.
 	t.Cleanup(func() {
-		if m.historyManager != nil {
-			m.historyManager.Stop()
-		}
-		closeSignalChannel(m.escalationStop)
-		closeSignalChannel(m.cleanupStop)
-		time.Sleep(10 * time.Millisecond)
+		m.Stop()
 	})
 
 	return m

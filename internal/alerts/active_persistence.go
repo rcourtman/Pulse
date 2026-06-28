@@ -14,15 +14,30 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func asyncSaveActiveAlerts(reason string, save func() error) {
+func (m *Manager) saveActiveAlertsAsync(context string) {
+	m.stopMu.RLock()
+	if m.stopping {
+		m.stopMu.RUnlock()
+		return
+	}
+	m.workerWG.Add(1)
+	m.stopMu.RUnlock()
+
 	go func() {
+		defer m.workerWG.Done()
 		defer func() {
 			if r := recover(); r != nil {
-				log.Error().Interface("panic", r).Str("reason", reason).Msg("panic in SaveActiveAlerts goroutine")
+				log.Error().
+					Interface("panic", r).
+					Str("context", context).
+					Msg("Panic in SaveActiveAlerts goroutine")
 			}
 		}()
-		if err := save(); err != nil {
-			log.Error().Err(err).Str("reason", reason).Msg("failed to save active alerts")
+		if err := m.SaveActiveAlerts(); err != nil {
+			log.Error().
+				Err(err).
+				Str("context", context).
+				Msg("Failed to save active alerts")
 		}
 	}()
 }
@@ -105,25 +120,6 @@ func (m *Manager) SaveActiveAlerts() error {
 
 	log.Debug().Int("count", len(alerts)).Msg("saved active alerts to disk")
 	return nil
-}
-
-func (m *Manager) saveActiveAlertsAsync(context string) {
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				log.Error().
-					Interface("panic", r).
-					Str("context", context).
-					Msg("Panic in SaveActiveAlerts goroutine")
-			}
-		}()
-		if err := m.SaveActiveAlerts(); err != nil {
-			log.Error().
-				Err(err).
-				Str("context", context).
-				Msg("Failed to save active alerts")
-		}
-	}()
 }
 
 // LoadActiveAlerts restores active alerts from disk.

@@ -1,22 +1,23 @@
 package alerts
 
 import (
-	"time"
-
 	"github.com/rs/zerolog/log"
 )
 
 // Stop stops the alert manager and saves history
 func (m *Manager) Stop() {
 	m.stopOnce.Do(func() {
+		m.stopMu.Lock()
+		m.stopping = true
 		closeSignalChannel(m.escalationStop)
 		closeSignalChannel(m.cleanupStop)
+		m.stopMu.Unlock()
+
+		m.workerWG.Wait()
+
 		if m.historyManager != nil {
 			m.historyManager.Stop()
 		}
-
-		// Give background goroutines time to exit cleanly
-		time.Sleep(100 * time.Millisecond)
 
 		// Save active alerts before stopping
 		if err := m.SaveActiveAlerts(); err != nil {

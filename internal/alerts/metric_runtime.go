@@ -175,7 +175,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 	migratedAlertIdentity := false
 	defer func() {
 		if migratedAlertIdentity {
-			asyncSaveActiveAlerts("guest metric node move", m.SaveActiveAlerts)
+			m.saveActiveAlertsAsync("guest metric node move")
 		}
 	}()
 	defer m.mu.Unlock()
@@ -342,17 +342,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 			m.recentAlerts[trackingKey] = alert
 			m.historyManager.AddAlert(*alert)
 
-			// Save active alerts after adding new one
-			go func() {
-				defer func() {
-					if r := recover(); r != nil {
-						log.Error().Interface("panic", r).Msg("panic in SaveActiveAlerts goroutine")
-					}
-				}()
-				if err := m.SaveActiveAlerts(); err != nil {
-					log.Error().Err(err).Msg("failed to save active alerts after creation")
-				}
-			}()
+			m.saveActiveAlertsAsync("metric create")
 
 			log.Warn().
 				Str("alertID", alertID).
@@ -505,17 +495,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 				// Remove from active alerts
 				m.removeActiveAlertNoLock(alertID)
 
-				// Save active alerts after resolution
-				go func() {
-					defer func() {
-						if r := recover(); r != nil {
-							log.Error().Interface("panic", r).Msg("panic in SaveActiveAlerts goroutine (resolution)")
-						}
-					}()
-					if err := m.SaveActiveAlerts(); err != nil {
-						log.Error().Err(err).Msg("failed to save active alerts after resolution")
-					}
-				}()
+				m.saveActiveAlertsAsync("metric resolution")
 
 				// Add to recently resolved while preventing lock-order inversions
 				m.addRecentlyResolvedWithPrimaryLock(resolvedAlert)

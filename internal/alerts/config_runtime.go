@@ -538,16 +538,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 	}
 
 	if len(alertsToResolve) > 0 {
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Error().Interface("panic", r).Msg("panic in SaveActiveAlerts goroutine (config update)")
-				}
-			}()
-			if err := m.SaveActiveAlerts(); err != nil {
-				log.Error().Err(err).Msg("failed to save active alerts after config update")
-			}
-		}()
+		m.saveActiveAlertsAsync("config update")
 	}
 }
 

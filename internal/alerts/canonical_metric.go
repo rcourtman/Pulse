@@ -113,7 +113,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 	migratedAlertIdentity := false
 	defer func() {
 		if migratedAlertIdentity {
-			asyncSaveActiveAlerts("canonical guest metric node move", m.SaveActiveAlerts)
+			m.saveActiveAlertsAsync("canonical guest metric node move")
 		}
 	}()
 	defer m.mu.Unlock()
@@ -237,7 +237,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 			m.recentAlerts[trackingKey] = alert
 			m.historyManager.AddAlert(*alert)
 
-			asyncSaveActiveAlerts("canonical metric create", m.SaveActiveAlerts)
+			m.saveActiveAlertsAsync("canonical metric create")
 
 			if alertForAICallback := m.getAlertForAICallback(); alertForAICallback != nil {
 				alertCopy := cloneAlertForOutput(alert)
@@ -315,7 +315,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 			ResolvedTime: observedAt,
 		}
 		m.removeActiveAlertNoLock(storageKey)
-		asyncSaveActiveAlerts("canonical metric resolution", m.SaveActiveAlerts)
+		m.saveActiveAlertsAsync("canonical metric resolution")
 		m.addRecentlyResolvedWithPrimaryLock(resolvedAlert)
 		m.safeCallResolvedAlertCallback(existingAlert, storageKey, true)
 	}

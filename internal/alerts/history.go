@@ -54,6 +54,7 @@ type HistoryManager struct {
 	saveInterval time.Duration
 	stopChan     chan struct{}
 	saveTicker   *time.Ticker
+	workerWG     sync.WaitGroup
 	callbacks    []AlertCallback // Called when alerts are added
 }
 
@@ -118,7 +119,11 @@ func NewHistoryManager(dataDir string) *HistoryManager {
 	hm.startPeriodicSave()
 
 	// Start cleanup routine
-	go hm.cleanupRoutine()
+	hm.workerWG.Add(1)
+	go func() {
+		defer hm.workerWG.Done()
+		hm.cleanupRoutine()
+	}()
 
 	return hm
 }
@@ -462,7 +467,9 @@ func syncDir(dirPath string) error {
 func (hm *HistoryManager) startPeriodicSave() {
 	hm.saveTicker = time.NewTicker(hm.saveInterval)
 
+	hm.workerWG.Add(1)
 	go func() {
+		defer hm.workerWG.Done()
 		for {
 			select {
 			case <-hm.saveTicker.C:
@@ -642,6 +649,8 @@ func (hm *HistoryManager) Stop() {
 		if hm.saveTicker != nil {
 			hm.saveTicker.Stop()
 		}
+
+		hm.workerWG.Wait()
 
 		// Save one final time
 		if err := hm.saveHistory(); err != nil {

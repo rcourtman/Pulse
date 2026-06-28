@@ -310,16 +310,7 @@ func (m *Manager) CleanupAlertsForNodes(existingNodes map[string]bool) {
 
 	if removedCount > 0 {
 		log.Debug().Int("removed", removedCount).Int("remaining", len(m.activeAlerts)).Msg("cleaned up alerts for non-existent nodes")
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Error().Interface("panic", r).Msg("panic in SaveActiveAlerts goroutine (cleanup)")
-				}
-			}()
-			if err := m.SaveActiveAlerts(); err != nil {
-				log.Error().Err(err).Msg("failed to save alerts after cleanup")
-			}
-		}()
+		m.saveActiveAlertsAsync("node cleanup")
 	} else {
 		log.Debug().Msg("no alerts needed cleanup")
 	}
@@ -358,14 +349,5 @@ func (m *Manager) ClearActiveAlerts() {
 
 	log.Info().Msg("cleared all active and pending alerts")
 
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				log.Error().Interface("panic", r).Msg("panic in SaveActiveAlerts goroutine (clear)")
-			}
-		}()
-		if err := m.SaveActiveAlerts(); err != nil {
-			log.Error().Err(err).Msg("failed to persist cleared alerts")
-		}
-	}()
+	m.saveActiveAlertsAsync("clear active alerts")
 }

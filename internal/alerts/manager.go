@@ -86,6 +86,9 @@ type Manager struct {
 	quietHoursLoc *time.Location
 	now           func() time.Time
 	stopOnce      sync.Once
+	stopMu        sync.RWMutex
+	stopping      bool
+	workerWG      sync.WaitGroup
 }
 
 type ackRecord struct {
@@ -151,14 +154,20 @@ func NewManagerWithDataDir(dataDir string) *Manager {
 		log.Error().Err(err).Msg("failed to load active alerts")
 	}
 
-	// Start escalation checker
-	go m.escalationChecker()
-
-	// Start periodic save of active alerts
-	go m.periodicSaveAlerts()
-
-	// Start periodic cleanup of stale tracking map entries
-	go m.trackingMapCleanup()
+	// Start background workers.
+	m.workerWG.Add(3)
+	go func() {
+		defer m.workerWG.Done()
+		m.escalationChecker()
+	}()
+	go func() {
+		defer m.workerWG.Done()
+		m.periodicSaveAlerts()
+	}()
+	go func() {
+		defer m.workerWG.Done()
+		m.trackingMapCleanup()
+	}()
 
 	return m
 }

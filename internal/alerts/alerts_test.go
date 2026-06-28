@@ -101,28 +101,8 @@ func newTestManager(t *testing.T) *Manager {
 	m := NewManager()
 
 	// Restore env var and release mutex when test completes.
-	// We also stop the history manager's background goroutines (but not the
-	// full manager Stop which includes a 100ms sleep) to prevent writes to
-	// the temp directory after the test completes.
 	t.Cleanup(func() {
-		// Stop the history manager to halt background save routines
-		m.historyManager.Stop()
-		// Close escalation channel to stop that goroutine too
-		select {
-		case <-m.escalationStop:
-			// Already closed
-		default:
-			close(m.escalationStop)
-		}
-		// Close cleanup channel
-		select {
-		case <-m.cleanupStop:
-			// Already closed
-		default:
-			close(m.cleanupStop)
-		}
-		// Brief pause to let goroutines finish any in-flight operations
-		time.Sleep(10 * time.Millisecond)
+		m.Stop()
 
 		if hadOld {
 			os.Setenv("PULSE_DATA_DIR", oldVal)

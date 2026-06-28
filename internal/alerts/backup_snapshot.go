@@ -525,7 +525,7 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 			},
 		})
 		if result.Transition != nil && result.Transition.Kind == alertspecs.EvaluationTransitionActivated {
-			asyncSaveActiveAlerts("snapshot", m.SaveActiveAlerts)
+			m.saveActiveAlertsAsync("snapshot")
 		}
 	}
 
@@ -913,7 +913,7 @@ func (m *Manager) CheckBackupsWithInventory(
 			},
 		})
 		if result.Transition != nil && result.Transition.Kind == alertspecs.EvaluationTransitionActivated {
-			asyncSaveActiveAlerts("backup", m.SaveActiveAlerts)
+			m.saveActiveAlertsAsync("backup")
 		}
 	}
 
