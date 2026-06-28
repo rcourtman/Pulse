@@ -370,6 +370,105 @@ func TestCheckMetricMigratesGuestAlertAcrossNodeMove(t *testing.T) {
 	}
 }
 
+func TestCheckMetricMigratesGuestDiskAlertAcrossNodeMove(t *testing.T) {
+	manager := newTestManager(t)
+	manager.ClearActiveAlerts()
+
+	oldResourceID := BuildGuestKey("pve1", "node1", 101) + "-disk-root-scsi0"
+	newResourceID := BuildGuestKey("pve1", "node2", 101) + "-disk-root-scsi0"
+	oldAlertID := oldResourceID + "-disk"
+	newAlertID := newResourceID + "-disk"
+	start := time.Now().Add(-10 * time.Minute)
+
+	alert := &Alert{
+		ID:           oldAlertID,
+		Type:         "disk",
+		Level:        AlertLevelWarning,
+		ResourceID:   oldResourceID,
+		ResourceName: "vm101",
+		Node:         "node1",
+		Instance:     "pve1",
+		Message:      "VM disk at 95%",
+		Value:        95,
+		Threshold:    90,
+		StartTime:    start,
+		LastSeen:     start.Add(5 * time.Minute),
+	}
+
+	manager.mu.Lock()
+	manager.activeAlerts[oldAlertID] = alert
+	manager.historyManager.AddAlert(*alert)
+	manager.mu.Unlock()
+
+	manager.checkMetric(newResourceID, "vm101", "node2", "pve1", "VM", "disk", 96, &HysteresisThreshold{Trigger: 90, Clear: 85}, nil)
+
+	manager.mu.RLock()
+	migrated, exists := manager.activeAlerts[newAlertID]
+	_, oldExists := manager.activeAlerts[oldAlertID]
+	manager.mu.RUnlock()
+
+	if oldExists {
+		t.Fatal("expected old node-scoped per-disk alert to be removed")
+	}
+	if !exists {
+		t.Fatal("expected per-disk alert to migrate to the current node-scoped ID")
+	}
+	if migrated.ResourceID != newResourceID || migrated.StartTime != start {
+		t.Fatalf("unexpected migrated disk alert: %#v", migrated)
+	}
+}
+
+func TestCheckMetricDoesNotMigrateGuestDiskAlertAcrossGuestIdentity(t *testing.T) {
+	manager := newTestManager(t)
+	manager.ClearActiveAlerts()
+
+	oldResourceID := BuildGuestKey("proxmox2", "proxmox2", 107) + "-disk-local-lvm-vm-107-disk-0"
+	newResourceID := BuildGuestKey("proxmox2", "proxmox2", 108) + "-disk-local-lvm-vm-108-disk-0"
+	oldAlertID := oldResourceID + "-disk"
+	newAlertID := newResourceID + "-disk"
+	start := time.Now().Add(-10 * time.Minute)
+
+	alert := &Alert{
+		ID:           oldAlertID,
+		Type:         "disk",
+		Level:        AlertLevelWarning,
+		ResourceID:   oldResourceID,
+		ResourceName: "wireguard",
+		Node:         "proxmox2",
+		Instance:     "proxmox2",
+		Message:      "wireguard disk at 92.5%",
+		Value:        92.5,
+		Threshold:    90,
+		StartTime:    start,
+		LastSeen:     start.Add(5 * time.Minute),
+	}
+
+	manager.mu.Lock()
+	manager.activeAlerts[oldAlertID] = alert
+	manager.historyManager.AddAlert(*alert)
+	manager.mu.Unlock()
+
+	manager.checkMetric(newResourceID, "pulse", "proxmox2", "proxmox2", "VM", "disk", 63.6, &HysteresisThreshold{Trigger: 90, Clear: 85}, nil)
+
+	manager.mu.RLock()
+	preserved, oldExists := manager.activeAlerts[oldAlertID]
+	_, newExists := manager.activeAlerts[newAlertID]
+	manager.mu.RUnlock()
+
+	if !oldExists {
+		t.Fatal("expected guest 107 disk alert to stay on guest 107")
+	}
+	if preserved.ResourceID != oldResourceID || preserved.ResourceName != "wireguard" {
+		t.Fatalf("guest 107 alert was mutated: %#v", preserved)
+	}
+	if newExists {
+		t.Fatal("did not expect a guest 108 disk alert to be created")
+	}
+	if resolved := manager.GetResolvedAlert(newAlertID); resolved != nil {
+		t.Fatalf("did not expect guest 108 resolved alert after evaluating guest 108 below threshold: %#v", resolved)
+	}
+}
+
 func TestCheckMetricResolvesGuestAlertAfterNodeMove(t *testing.T) {
 	manager := newTestManager(t)
 	manager.ClearActiveAlerts()

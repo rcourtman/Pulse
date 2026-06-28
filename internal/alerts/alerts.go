@@ -5686,25 +5686,52 @@ func isGuestMetricResourceType(resourceType string) bool {
 	}
 }
 
-func parseGuestAlertVMID(resourceID string) (int, bool) {
+type guestMetricAlertIdentity struct {
+	vmid   int
+	suffix string
+}
+
+func parseGuestMetricAlertIdentity(resourceID string) (guestMetricAlertIdentity, bool) {
 	resourceID = strings.TrimSpace(resourceID)
 	if resourceID == "" {
-		return 0, false
+		return guestMetricAlertIdentity{}, false
 	}
 
 	if idx := strings.LastIndex(resourceID, ":"); idx >= 0 && idx < len(resourceID)-1 {
-		if vmid, err := strconv.Atoi(resourceID[idx+1:]); err == nil {
-			return vmid, true
+		segment := resourceID[idx+1:]
+		digitCount := 0
+		for digitCount < len(segment) && segment[digitCount] >= '0' && segment[digitCount] <= '9' {
+			digitCount++
 		}
+		if digitCount == 0 {
+			return guestMetricAlertIdentity{}, false
+		}
+		suffix := segment[digitCount:]
+		if suffix != "" && !strings.HasPrefix(suffix, "-") {
+			return guestMetricAlertIdentity{}, false
+		}
+		vmid, err := strconv.Atoi(segment[:digitCount])
+		if err != nil || vmid <= 0 {
+			return guestMetricAlertIdentity{}, false
+		}
+		return guestMetricAlertIdentity{vmid: vmid, suffix: suffix}, true
 	}
 
 	if idx := strings.LastIndex(resourceID, "-"); idx >= 0 && idx < len(resourceID)-1 {
 		if vmid, err := strconv.Atoi(resourceID[idx+1:]); err == nil {
-			return vmid, true
+			return guestMetricAlertIdentity{vmid: vmid}, true
 		}
 	}
 
-	return 0, false
+	return guestMetricAlertIdentity{}, false
+}
+
+func parseGuestAlertVMID(resourceID string) (int, bool) {
+	identity, ok := parseGuestMetricAlertIdentity(resourceID)
+	if !ok {
+		return 0, false
+	}
+	return identity.vmid, true
 }
 
 func storageOverrideLookupKeys(storage models.Storage) []string {
@@ -7416,7 +7443,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 }
 
 func (m *Manager) migrateGuestMetricAlertNoLock(alertID, resourceID, resourceName, node, instance, metricType string) *Alert {
-	currentVMID, ok := parseGuestAlertVMID(resourceID)
+	currentIdentity, ok := parseGuestMetricAlertIdentity(resourceID)
 	if !ok {
 		return nil
 	}
@@ -7433,8 +7460,8 @@ func (m *Manager) migrateGuestMetricAlertNoLock(alertID, resourceID, resourceNam
 			continue
 		}
 
-		alertVMID, ok := parseGuestAlertVMID(alert.ResourceID)
-		if !ok || alertVMID != currentVMID {
+		alertIdentity, ok := parseGuestMetricAlertIdentity(alert.ResourceID)
+		if !ok || alertIdentity != currentIdentity {
 			continue
 		}
 
