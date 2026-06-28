@@ -948,6 +948,60 @@ func TestCheckGuestPerDiskCleansUpRemovedDiskAlerts(t *testing.T) {
 	}
 }
 
+func TestCheckGuestDiskAlertMigrationDoesNotCrossGuestIdentity(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	oldResourceID := BuildGuestKey("proxmox2", "proxmox2", 107) + "-disk-local-lvm-vm-107-disk-0"
+	newResourceID := BuildGuestKey("proxmox2", "proxmox2", 108) + "-disk-local-lvm-vm-108-disk-0"
+	oldAlertID := canonicalMetricStateID(oldResourceID, "disk")
+	newAlertID := canonicalMetricStateID(newResourceID, "disk")
+	start := time.Now().Add(-10 * time.Minute)
+
+	alert := &Alert{
+		ID:              oldAlertID,
+		Type:            "disk",
+		Level:           AlertLevelWarning,
+		ResourceID:      oldResourceID,
+		CanonicalSpecID: canonicalMetricSpecID(oldResourceID, "disk"),
+		CanonicalKind:   string(alertspecs.AlertSpecKindMetricThreshold),
+		CanonicalState:  oldAlertID,
+		ResourceName:    "wireguard",
+		Node:            "proxmox2",
+		Instance:        "proxmox2",
+		Message:         "wireguard disk at 92.5%",
+		Value:           92.5,
+		Threshold:       90,
+		StartTime:       start,
+		LastSeen:        start.Add(5 * time.Minute),
+	}
+
+	m.mu.Lock()
+	m.activeAlerts[oldAlertID] = alert
+	m.historyManager.AddAlert(*alert)
+	m.mu.Unlock()
+
+	m.checkMetric(newResourceID, "pulse", "proxmox2", "proxmox2", "vm", "disk", 63.6, &HysteresisThreshold{Trigger: 90, Clear: 85}, nil)
+
+	m.mu.RLock()
+	preserved, oldExists := testLookupActiveAlert(t, m, oldAlertID)
+	_, newExists := testLookupActiveAlert(t, m, newAlertID)
+	m.mu.RUnlock()
+
+	if !oldExists {
+		t.Fatal("expected guest 107 disk alert to stay on guest 107")
+	}
+	if preserved.ResourceID != oldResourceID || preserved.ResourceName != "wireguard" {
+		t.Fatalf("guest 107 alert was mutated: %#v", preserved)
+	}
+	if newExists {
+		t.Fatal("did not expect a guest 108 disk alert to be created")
+	}
+	if resolved := m.GetResolvedAlert(newAlertID); resolved != nil {
+		t.Fatalf("did not expect guest 108 resolved alert after evaluating guest 108 below threshold: %#v", resolved)
+	}
+}
+
 func TestCheckGuestClearsPerDiskAlertsWhenGuestStops(t *testing.T) {
 	m := newTestManager(t)
 	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
