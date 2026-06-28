@@ -1,9 +1,11 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it } from 'vitest';
+import { syncSessionPresentationPolicy } from '@/stores/sessionPresentationPolicy';
 import { PlatformOutdatedAgentNotice } from './PlatformOutdatedAgentNotice';
 
 afterEach(() => {
   cleanup();
+  syncSessionPresentationPolicy(null);
 });
 
 describe('PlatformOutdatedAgentNotice', () => {
@@ -63,6 +65,31 @@ describe('PlatformOutdatedAgentNotice', () => {
     expect(screen.getByTestId('platform-outdated-agent-notice')).toHaveTextContent(
       'delly is running an older Pulse agent (v5.1.34). Update it to v6.0.0-rc.6 for the latest agent-contributed platform detail on this host.',
     );
+  });
+
+  it('hides agent upgrade commands when the session presentation policy hides upgrade prompts', () => {
+    syncSessionPresentationPolicy({
+      presentationPolicy: {
+        demoMode: true,
+        readOnly: true,
+        hideCommercial: true,
+        hideUpgrade: true,
+      },
+    });
+
+    render(() => (
+      <PlatformOutdatedAgentNotice
+        hosts={[{ name: 'West Production A', version: 'v5.1.34' }]}
+        targetVersion="v6.0.0-rc.7"
+        missingLabel="agent-contributed Proxmox node detail and command support"
+        copyVariant="latest-detail"
+        actionHref="/settings/infrastructure?agentUpdates=1"
+        actionLabel="Open agent upgrade commands"
+      />
+    ));
+
+    expect(screen.queryByTestId('platform-outdated-agent-notice')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Open agent upgrade commands' })).toBeNull();
   });
 
   it('can describe stale in-guest agents on VMs without host copy', () => {

@@ -4833,6 +4833,12 @@ describe('shared primitive guardrails', () => {
       expect(source).not.toContain('rounded-lg border border-amber-300 bg-amber-50');
       expect(source).not.toContain('text-amber-900 underline-offset-2');
     }
+    expect(platformOutdatedAgentNoticeSource).toContain(
+      "import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';",
+    );
+    expect(platformOutdatedAgentNoticeSource).toContain(
+      'const visible = createMemo(() => count() > 0 && !presentationPolicyIsReadOnly());',
+    );
   });
 
   it('routes dismissible demo notices through InlineNotice banner primitives', () => {

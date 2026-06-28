@@ -1,6 +1,7 @@
 import { Show, createMemo } from 'solid-js';
 import { AlertTriangle, ArrowRight } from 'lucide-solid';
 import { InlineNotice } from '@/components/shared/InlineNotice';
+import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
 import type { OutdatedAgentHost } from './agentVersion';
 
 type PlatformOutdatedAgentNoticeProps = {
@@ -31,6 +32,7 @@ export function PlatformOutdatedAgentNotice(props: PlatformOutdatedAgentNoticePr
   const actionLabel = createMemo(() => props.actionLabel || 'Open Infrastructure settings');
   const subjectSingular = createMemo(() => props.subjectSingular || 'host');
   const subjectPlural = createMemo(() => props.subjectPlural || 'hosts');
+  const visible = createMemo(() => count() > 0 && !presentationPolicyIsReadOnly());
 
   const message = createMemo(() => {
     const target = props.targetVersion ? ` to ${props.targetVersion}` : '';
@@ -49,7 +51,7 @@ export function PlatformOutdatedAgentNotice(props: PlatformOutdatedAgentNoticePr
   });
 
   return (
-    <Show when={count() > 0}>
+    <Show when={visible()}>
       <InlineNotice
         role="status"
         data-testid="platform-outdated-agent-notice"

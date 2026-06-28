@@ -2462,6 +2462,11 @@ payload, but the browser-owned shared primitive is now the resolved
 monitored-system warning banners, dashboard upsells, Patrol upgrade CTAs,
 history-lock paywalls, and other public-demo commercial affordances when the
 browser is rendering a public demo runtime.
+Platform stale-agent notices are also command-style upgrade affordances:
+`frontend-modern/src/features/platformPage/PlatformOutdatedAgentNotice.tsx`
+must stay hidden while the resolved presentation policy marks the session
+read-only, including public demo mode, even though the same notice remains
+available for ordinary customer installs that report outdated agents.
 That same shared settings-shell boundary also owns demo-mode organization
 suppression. `frontend-modern/src/components/Settings/settingsNavigationModel.ts`,
 `frontend-modern/src/components/Settings/settingsNavCatalog.ts`,
