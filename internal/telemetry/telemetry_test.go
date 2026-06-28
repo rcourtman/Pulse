@@ -575,6 +575,39 @@ func TestApplyUpdateTelemetrySnapshotSummarizesHistory(t *testing.T) {
 	}
 }
 
+func TestApplyUpdateTelemetrySnapshotDoesNotExposeRawFailureText(t *testing.T) {
+	history, err := updates.NewUpdateHistory(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewUpdateHistory: %v", err)
+	}
+	now := time.Date(2026, 6, 28, 14, 0, 0, 0, time.UTC)
+	if _, err := history.CreateEntry(context.Background(), updates.UpdateHistoryEntry{
+		EventID:   "recent-sensitive-failure",
+		Timestamp: now.Add(-time.Minute),
+		Action:    "update",
+		Status:    updates.StatusFailed,
+		Error: &updates.UpdateError{
+			Code:    "UPSTREAM_503",
+			Message: "failed for https://updates.example.test/private/build?token=secret",
+			Details: "/home/alice/pulse/update.log contained local command output",
+		},
+	}); err != nil {
+		t.Fatalf("CreateEntry: %v", err)
+	}
+
+	var snap Snapshot
+	ApplyUpdateTelemetrySnapshot(&snap, history, now)
+
+	if snap.UpdateLastFailureCategory != "unknown" {
+		t.Fatalf("UpdateLastFailureCategory = %q, want unknown", snap.UpdateLastFailureCategory)
+	}
+	for _, disallowed := range []string{"https://", "updates.example", "/home/alice", "token=", "command output"} {
+		if strings.Contains(snap.UpdateLastFailureCategory, disallowed) {
+			t.Fatalf("UpdateLastFailureCategory leaked raw failure text %q in %q", disallowed, snap.UpdateLastFailureCategory)
+		}
+	}
+}
+
 func TestPulseIntelligenceTelemetryFieldsAreDisclosed(t *testing.T) {
 	pingType := reflect.TypeOf(Ping{})
 	fieldLabels := make([]string, 0)
