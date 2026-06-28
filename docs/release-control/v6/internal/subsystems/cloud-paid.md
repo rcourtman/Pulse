@@ -826,6 +826,13 @@ or other self-hosted uncapped continuity plans.
     existing Patrol findings and live-approval read model after authentication;
     it must not read hosted billing state, trigger commercial-posture loading,
     affect organization visibility, or become an upgrade/acquisition cue.
+    The same primary platform navigation must remember the last in-tab route
+    state per platform, including query and hash, so route-owned filters such
+    as Proxmox workload status survive switching to another platform tab and
+    back. That memory is chrome route state only: it must validate the route
+    still belongs to the selected platform before reuse and must not become
+    hosted org bootstrap, entitlement, billing, acquisition, or cross-platform
+    query state.
     The same AppLayout shell may contextualize the closed Pulse Assistant
     launcher around the current monitoring, Patrol, Alerts, or Settings route,
     but that launcher must remain a local product affordance. It must not read

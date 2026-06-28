@@ -31,6 +31,12 @@ import { logger } from '@/utils/logger';
 import { getActiveTabForPath } from '@/routing/navigation';
 import { preloadRouteModule } from '@/routing/routePreload';
 import {
+  DOCKER_PATH,
+  KUBERNETES_PATH,
+  PROXMOX_PATH,
+  STANDALONE_PATH,
+  TRUENAS_PATH,
+  VMWARE_PATH,
   buildDockerPath,
   buildKubernetesPath,
   buildProxmoxPath,
@@ -56,11 +62,53 @@ const ROOT_VMWARE_PATH = buildVmwarePath();
 const ROOT_STANDALONE_PATH = buildStandalonePath();
 const ROOT_INFRASTRUCTURE_SETTINGS_PATH = buildInfrastructureWorkspacePath();
 const ROOT_ALERTS_PATH = '/alerts';
+const PRIMARY_ROUTE_PREFIX_BY_ID: Record<PrimaryPlatformNavId, string> = {
+  proxmox: PROXMOX_PATH,
+  docker: DOCKER_PATH,
+  kubernetes: KUBERNETES_PATH,
+  truenas: TRUENAS_PATH,
+  vmware: VMWARE_PATH,
+  standalone: STANDALONE_PATH,
+};
+type PrimaryRouteMemory = Partial<Record<PrimaryPlatformNavId, string>>;
+let primaryRouteMemory: PrimaryRouteMemory = {};
 
 function resolveStandaloneSubTabTitle(pathname: string): string {
   const normalized = pathname.replace(/\/+$/, '');
   if (normalized === buildStandalonePath('availability')) return 'Availability checks';
   return 'Machines';
+}
+
+function routeBelongsToPrimaryTab(route: string, tabId: PrimaryPlatformNavId): boolean {
+  const prefix = PRIMARY_ROUTE_PREFIX_BY_ID[tabId];
+  const pathname = route.split(/[?#]/, 1)[0]?.replace(/\/+$/, '') || '/';
+  return pathname === prefix || pathname.startsWith(`${prefix}/`);
+}
+
+function isPrimaryPlatformNavId(tabId: string | null | undefined): tabId is PrimaryPlatformNavId {
+  return Boolean(tabId && tabId in PRIMARY_ROUTE_PREFIX_BY_ID);
+}
+
+function currentPrimaryRoute(pathname: string, search: string, hash: string): string {
+  return `${pathname}${search}${hash}`;
+}
+
+function resolvePrimaryNavigationRoute(
+  tab: PrimaryTab,
+  routeMemory: PrimaryRouteMemory,
+): string {
+  if (!tab.enabled) {
+    return tab.settingsRoute;
+  }
+  const remembered = routeMemory[tab.id as PrimaryPlatformNavId];
+  if (remembered && routeBelongsToPrimaryTab(remembered, tab.id as PrimaryPlatformNavId)) {
+    return remembered;
+  }
+  return tab.route;
+}
+
+export function resetPrimaryNavigationRouteMemory() {
+  primaryRouteMemory = {};
 }
 const NAV_TAB_ICON_CLASS = 'w-4 h-4 shrink-0';
 const AI_CHAT_LAUNCHER_BUTTON_CLASS =
@@ -256,6 +304,15 @@ export function AppLayout(props: AppLayoutProps) {
   const primaryWorkspacePath = createMemo(() => {
     const navId = selectFirstVisiblePrimaryPlatformNavigationId(platformNavigationVisibility());
     return navId ? primaryInfrastructureRouteById[navId] : ROOT_ALERTS_PATH;
+  });
+
+  createEffect(() => {
+    const activeTab = getActiveTabForPath(location.pathname);
+    if (!isPrimaryPlatformNavId(activeTab)) return;
+    const route = currentPrimaryRoute(location.pathname, location.search, location.hash);
+    if (!routeBelongsToPrimaryTab(route, activeTab)) return;
+    if (primaryRouteMemory[activeTab] === route) return;
+    primaryRouteMemory = { ...primaryRouteMemory, [activeTab]: route };
   });
 
   createEffect(() => {
@@ -483,7 +540,7 @@ export function AppLayout(props: AppLayoutProps) {
   });
 
   const handlePrimaryClick = (tab: PrimaryTab) => {
-    const targetRoute = tab.enabled ? tab.route : tab.settingsRoute;
+    const targetRoute = resolvePrimaryNavigationRoute(tab, primaryRouteMemory);
     void (async () => {
       try {
         await preloadRouteModule(targetRoute);
@@ -521,10 +578,7 @@ export function AppLayout(props: AppLayoutProps) {
   };
 
   const getPrimaryTargetRoute = (tab: PrimaryTab) => {
-    if (tab.enabled) {
-      return tab.route;
-    }
-    return tab.settingsRoute;
+    return resolvePrimaryNavigationRoute(tab, primaryRouteMemory);
   };
 
   const renderPrimaryNavigationTab = (tab: PrimaryTab) => {

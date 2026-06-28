@@ -237,6 +237,12 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain('settingsRoute: ROOT_INFRASTRUCTURE_SETTINGS_PATH');
     expect(appLayoutSource).not.toContain("settingsRoute: '/settings/workloads");
     expect(appLayoutSource).not.toContain("settingsRoute: '/settings/infrastructure/platforms");
+    expect(appLayoutSource).toContain('type PrimaryRouteMemory = Partial');
+    expect(appLayoutSource).toContain('let primaryRouteMemory: PrimaryRouteMemory = {};');
+    expect(appLayoutSource).toContain('function resolvePrimaryNavigationRoute(');
+    expect(appLayoutSource).toContain('routeBelongsToPrimaryTab(remembered');
+    expect(appLayoutSource).not.toContain('primaryRouteMemory[props.activeOrgID');
+    expect(appLayoutSource).not.toContain('primaryRouteMemory[activeOrgID');
     expect(appLayoutSource).toContain('<OrgSwitcher');
     expect(appLayoutSource).toContain('const status = () => props.connectionStatus();');
     expect(appLayoutSource).toContain(

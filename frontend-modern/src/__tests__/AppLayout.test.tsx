@@ -3,10 +3,11 @@ import { Route, Router } from '@solidjs/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { State } from '@/types/api';
 import type { Resource } from '@/types/resource';
-import { AppLayout } from '@/AppLayout';
+import { AppLayout, resetPrimaryNavigationRouteMemory } from '@/AppLayout';
 import { aiChatStore } from '@/stores/aiChat';
 
 HTMLElement.prototype.scrollIntoView = vi.fn();
+window.scrollTo = vi.fn();
 
 const aiIntelligenceMockState = vi.hoisted(() => ({
   patrolOpenWorkCount: 0,
@@ -20,9 +21,14 @@ vi.mock('@/stores/aiIntelligence', () => ({
   },
 }));
 
+vi.mock('@/routing/routePreload', () => ({
+  preloadRouteModule: vi.fn(() => Promise.resolve()),
+}));
+
 describe('AppLayout navigation icons', () => {
   beforeEach(() => {
     window.history.replaceState({}, '', '/settings/infrastructure');
+    resetPrimaryNavigationRouteMemory();
     aiIntelligenceMockState.patrolOpenWorkCount = 0;
     aiChatStore.close();
     aiChatStore.setEnabled(true);
@@ -48,51 +54,65 @@ describe('AppLayout navigation icons', () => {
       ...overrides,
     }) as Resource;
 
-  const renderLayout = (resources: Resource[] = []) =>
-    render(() => (
+  const renderLayout = (resources: Resource[] = [], initialPath = '/settings/infrastructure') => {
+    window.history.replaceState({}, '', initialPath);
+    const LayoutRoute = () => (
+      <AppLayout
+        connectionStatus={() => ({
+          kind: 'connected',
+          label: 'Connected',
+          detail: 'Backend and live data stream are connected.',
+          tone: 'healthy',
+        })}
+        lastUpdateText={() => ''}
+        versionInfo={() =>
+          ({
+            version: '6.0.0-rc.2',
+            channel: 'rc',
+            isDevelopment: false,
+            isDocker: false,
+          }) as never
+        }
+        hasAuth={() => true}
+        needsAuth={() => false}
+        proxyAuthInfo={() => null}
+        handleLogout={() => {}}
+        state={() =>
+          ({
+            activeAlerts: [{ id: 'alert-1', level: 'warning', acknowledged: false }],
+            resources,
+          }) as unknown as State
+        }
+        tokenScopes={() => ['settings:read']}
+        organizations={() => []}
+        activeOrgID={() => 'default'}
+        orgsLoading={() => false}
+        showOrgSwitcher={() => false}
+        onSwitchOrg={() => {}}
+      >
+        <div>Infrastructure body</div>
+      </AppLayout>
+    );
+    return render(() => (
       <Router>
-        <Route
-          path="/settings/infrastructure"
-          component={() => (
-            <AppLayout
-              connectionStatus={() => ({
-                kind: 'connected',
-                label: 'Connected',
-                detail: 'Backend and live data stream are connected.',
-                tone: 'healthy',
-              })}
-              lastUpdateText={() => ''}
-              versionInfo={() =>
-                ({
-                  version: '6.0.0-rc.2',
-                  channel: 'rc',
-                  isDevelopment: false,
-                  isDocker: false,
-                }) as never
-              }
-              hasAuth={() => true}
-              needsAuth={() => false}
-              proxyAuthInfo={() => null}
-              handleLogout={() => {}}
-              state={() =>
-                ({
-                  activeAlerts: [{ id: 'alert-1', level: 'warning', acknowledged: false }],
-                  resources,
-                }) as unknown as State
-              }
-              tokenScopes={() => ['settings:read']}
-              organizations={() => []}
-              activeOrgID={() => 'default'}
-              orgsLoading={() => false}
-              showOrgSwitcher={() => false}
-              onSwitchOrg={() => {}}
-            >
-              <div>Infrastructure body</div>
-            </AppLayout>
-          )}
-        />
+        <Route path="/settings/infrastructure" component={LayoutRoute} />
+        <Route path="/proxmox/overview" component={LayoutRoute} />
+        <Route path="/docker/overview" component={LayoutRoute} />
       </Router>
     ));
+  };
+
+  const getInfrastructureTab = (name: string) => {
+    const desktopNav = screen.getByRole('tablist', { name: 'Primary navigation' });
+    const infrastructureGroup = desktopNav.querySelector('[aria-label="Infrastructure"]');
+    expect(infrastructureGroup).toBeTruthy();
+    return within(infrastructureGroup as HTMLElement).getByRole('tab', { name });
+  };
+
+  const platformResources = () => [
+    makeResource({ id: 'pve-1', type: 'agent', platformType: 'proxmox-pve' }),
+    makeResource({ id: 'docker-1', type: 'docker-host', platformType: 'docker' }),
+  ];
 
   it('renders fresh utility icons for both desktop and mobile navigation trees', () => {
     const { container } = renderLayout();
@@ -191,6 +211,48 @@ describe('AppLayout navigation icons', () => {
     expect(
       within(infrastructureGroup as HTMLElement).getByRole('tab', { name: 'vSphere' }),
     ).toBeTruthy();
+  });
+
+  it('restores the previous Proxmox route state when returning from another platform tab', async () => {
+    renderLayout(platformResources(), '/proxmox/overview?status=running');
+
+    await fireEvent.click(getInfrastructureTab('Docker'));
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/docker/overview');
+      expect(window.location.search).toBe('');
+    });
+
+    await fireEvent.click(getInfrastructureTab('Proxmox'));
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/proxmox/overview');
+      expect(window.location.search).toBe('?status=running');
+    });
+  });
+
+  it('keeps remembered route state scoped to the platform tab that owns it', async () => {
+    renderLayout(platformResources(), '/docker/overview?host=docker-1');
+
+    await fireEvent.click(getInfrastructureTab('Proxmox'));
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/proxmox/overview');
+      expect(window.location.search).toBe('');
+    });
+
+    await fireEvent.click(getInfrastructureTab('Docker'));
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/docker/overview');
+      expect(window.location.search).toBe('?host=docker-1');
+    });
+  });
+
+  it('uses the canonical platform root route when there is no remembered route state', async () => {
+    renderLayout(platformResources(), '/settings/infrastructure');
+
+    await fireEvent.click(getInfrastructureTab('Proxmox'));
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/proxmox/overview');
+      expect(window.location.search).toBe('');
+    });
   });
 
   it('keeps connected brand motion on the logo while the wordmark stays static', () => {

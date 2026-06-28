@@ -3429,6 +3429,12 @@ Intelligence > Provider & Models route
 route remains a compatibility alias for old deep links, not a href emitted by
 new Assistant provider-repair actions.
 
+Primary platform route memory in `frontend-modern/src/AppLayout.tsx` may
+preserve platform-local query state such as workload filters, but that memory
+remains navigation chrome only. It must not fork Assistant drawer state, Patrol
+utility route state, prompt context, resource reads, commercial posture, or
+cross-platform query parameters.
+
 Rejected Patrol investigation-fix approvals are terminal governed-action
 decisions in the AI runtime. `/api/ai/approvals/{id}/deny` must persist the
 approval-store denial, record a rejected unified action-audit decision when the
