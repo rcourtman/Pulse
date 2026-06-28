@@ -424,6 +424,8 @@ func TestDefaultRunCommandOutputRejectsOversizedOutput(t *testing.T) {
 }
 
 func TestCollectLocalNoDevices(t *testing.T) {
+	forceLinuxLSBLKFallback(t)
+
 	origRun := smartRunCommandOutput
 	t.Cleanup(func() { smartRunCommandOutput = origRun })
 
