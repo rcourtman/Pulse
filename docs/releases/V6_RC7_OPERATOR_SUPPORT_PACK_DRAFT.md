@@ -51,6 +51,9 @@ lets operators test the current branch head without treating it as stable v6.
   Alerts, and Settings.
 - Provider MSP, Cloud, commercial continuity, installer, update, and release
   proof paths were hardened.
+- Fresh supported Debian, Ubuntu, and Proxmox installs bootstrap the
+  `openssh-client` package before signed release archive verification, so
+  missing `ssh-keygen` on a minimal host should not block the server installer.
 - Security and correctness fixes landed across outbound HTTP, webhooks, audit
   logging, tenant boundaries, metrics, alerts, and unified resources.
 
@@ -161,7 +164,8 @@ posting.
    public self-hosted plans and no default trial pressure in normal self-hosted
    surfaces.
 13. Re-test install, update, Docker, Helm, preview demo, and release asset
-   workflows before broader retesting.
+   workflows before broader retesting, including the published `install.sh`
+   path on a minimal Debian-style host or container.
 
 ## Ask for these details
 
@@ -186,6 +190,8 @@ When a user reports an `rc.7` problem, ask for:
 Escalate without asking the user to keep experimenting when the report involves:
 
 - failed install or failed upgrade with no recovery path
+- `ssh-keygen is required to verify signed Pulse release assets` on a fresh
+  supported Debian, Ubuntu, or Proxmox server install
 - stable install path unexpectedly landing on a v6 prerelease
 - duplicate or missing agent identity after a v5-to-v6 upgrade
 - hosted, checkout, magic-link, SSO, webhook, token, or tenant access granted

@@ -10,7 +10,10 @@ governed `v6.0.0-rc.7` prerelease exists._
 platform-shaped top-level navigation restored in `rc.6`, but it carries a much
 larger post-RC6 branch delta across Assistant, Patrol, availability checks,
 platform-table consistency, provider MSP, commercial continuity, release
-tooling, installers, security hardening, and monitoring correctness.
+tooling, installers, security hardening, and monitoring correctness. The final
+installability fix also keeps signed release verification working on minimal
+fresh Debian/Ubuntu/Proxmox hosts by bootstrapping the package that provides
+`ssh-keygen`.
 
 The branch also contains earlier `v6.0.0` stable-promotion packet work. RC7
 supersedes that operationally by keeping the next public v6 artifact on the
@@ -23,10 +26,10 @@ validation-risk range. A later packet-only refresh may be the workflow dispatch
 head; the validation range below is the code-backed release-risk range.
 
 - `v6.0.0-rc.6`: `c25e95cb2b071551df95c8add62773905ba0628b`
-- validation-risk commit: `fc10de9b5477613316473267b72b05b6b2b7aaff`
-- range: `v6.0.0-rc.6..fc10de9b5477613316473267b72b05b6b2b7aaff`
-- commit count: `975`
-- changed scope: `1997` files, `239625` insertions, `47030` deletions
+- validation-risk commit: `d796928969b0b557ef5ed2d48e0e6f5e5a197df3`
+- range: `v6.0.0-rc.6..d796928969b0b557ef5ed2d48e0e6f5e5a197df3`
+- commit count: `979`
+- changed scope: `2003` files, `239767` insertions, `47168` deletions
 
 Those commits are grouped here by operator-visible behavior and release risk
 instead of listed one by one.
@@ -111,6 +114,10 @@ instead of listed one by one.
 - RC7 Docker install defaults now pin the governed `6.0.0-rc.7` image in both
   the repo-root Compose sample and Docker bootstrap installer fallback, while
   keeping stable-promotion proof guarded against leftover prerelease defaults.
+- The root server installer now installs `ca-certificates` and
+  `openssh-client` before signed release archive verification, so fresh
+  supported hosts do not fail only because `ssh-keygen` was absent before Pulse
+  installation began.
 - Installer scripts gained additional update resilience, Windows agent install
   coverage, root install tests, uninstall sensor-proxy support, and bundled
   agent installer fail-closed behavior.
@@ -144,7 +151,8 @@ instead of listed one by one.
 
 - Release dry run and draft release workflow on `pulse/v6-release`.
 - Release assets, checksums, signatures, Docker image, Helm smoke, and preview
-  demo routing.
+  demo routing, including the published `install.sh` smoke on a minimal
+  Debian-style systemd container.
 - Upgrade from v5 stable and from earlier RCs, especially `rc.2` trust-root
   continuity.
 - Patrol and Assistant with real alert/finding/resource context.

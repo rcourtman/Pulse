@@ -38,7 +38,8 @@ prerelease before any stable v6 promotion:
 - Platform surfaces kept the v5-shaped navigation, but gained substantial
   table, drawer, filter, and action consistency work.
 - The release and install pipeline has newer branch-policy, workflow-pin,
-  installer, update, and proof hardening than the shipped RC6 packet.
+  installer, update, and proof hardening than the shipped RC6 packet, including
+  fresh-host dependency bootstrap for signed server-installer verification.
 
 ## What changed since `rc.6`
 
@@ -111,6 +112,8 @@ Notable release-readiness changes since RC6 include:
 - patched Go toolchain wiring for v6 release builds
 - release dry-run and promotion policy guardrail updates
 - release asset validation and installer smoke improvements
+- root server installer bootstrap of `ca-certificates` and `openssh-client`
+  before signed release archive verification
 - audit log, webhook, tenant, token, and bootstrap handling fixes
 
 ### Monitoring and correctness fixes
@@ -131,18 +134,20 @@ refresh may be the workflow dispatch head; the validation range below is the
 code-backed release-risk range.
 
 - `v6.0.0-rc.6`: `c25e95cb2b071551df95c8add62773905ba0628b`
-- validation-risk commit: `fc10de9b5477613316473267b72b05b6b2b7aaff`
-- range: `v6.0.0-rc.6..fc10de9b5477613316473267b72b05b6b2b7aaff`
-- commit count: `975`
-- changed scope: `1997` files, `239625` insertions, `47030` deletions
+- validation-risk commit: `d796928969b0b557ef5ed2d48e0e6f5e5a197df3`
+- range: `v6.0.0-rc.6..d796928969b0b557ef5ed2d48e0e6f5e5a197df3`
+- commit count: `979`
+- changed scope: `2003` files, `239767` insertions, `47168` deletions
 
 The final validation-risk commits add deterministic capacity-forecast finding
 signals, correct capacity-history lookup to use the metrics target ID, and
-sanitize Patrol runtime failures in history. The earlier RC7 installability
-correction also remains in scope: repo-root Docker Compose and
-`scripts/install-docker.sh` default to `6.0.0-rc.7`, while the stable promotion
-guard stays version-aware so future `6.0.0` promotion still rejects stale
-prerelease Docker defaults.
+sanitize Patrol runtime failures in history. The release-validation fixes after
+that head harden hostagent no-device CI proof, alert shutdown/save lifecycle
+proof, and the published server installer smoke: repo-root Docker Compose and
+`scripts/install-docker.sh` default to `6.0.0-rc.7`, the stable promotion guard
+stays version-aware so future `6.0.0` promotion still rejects stale prerelease
+Docker defaults, and fresh Debian/Ubuntu/Proxmox installs bootstrap
+`openssh-client` before signature verification.
 
 ## Retest plan
 
@@ -160,8 +165,9 @@ prerelease Docker defaults.
    discoveries.
 7. Walk Proxmox, Docker, Kubernetes, TrueNAS, vSphere, Machines, Alerts, Patrol,
    and Settings in-browser with real or representative data.
-8. Re-test release assets, checksums, signatures, installer scripts, Docker
-   images, Helm smoke, and preview demo routing before publishing broadly.
+8. Re-test release assets, checksums, signatures, installer scripts on a fresh
+   minimal Debian/Ubuntu-style host, Docker images, Helm smoke, and preview
+   demo routing before publishing broadly.
 9. Re-test provider MSP and Cloud control-plane flows only against the governed
    staging or proof environments.
 10. Verify self-hosted commercial posture: no monitored-system cap on current
