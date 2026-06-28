@@ -2720,10 +2720,12 @@ install_dependencies() {
     print_info "Installing dependencies..."
     
     apt-get update -qq >/dev/null 2>&1
-    # Install essential dependencies plus jq for reliable JSON handling
-    apt-get install -y -qq curl wget jq >/dev/null 2>&1 || {
-        # If jq fails to install, just install the essentials
-        apt-get install -y -qq curl wget >/dev/null 2>&1
+    # Install essential dependencies plus jq for reliable JSON handling.
+    # openssh-client provides ssh-keygen, which signed release verification
+    # requires before installing downloaded or local release archives.
+    apt-get install -y -qq curl wget ca-certificates openssh-client jq >/dev/null 2>&1 || {
+        # If jq fails to install, keep the installer-critical dependencies.
+        apt-get install -y -qq curl wget ca-certificates openssh-client >/dev/null 2>&1
     }
 }
 

@@ -315,6 +315,13 @@ TLS floor in the dynamic config.
    `scripts/validate-release.sh` at build time and re-verified by
    `install-sh-smoke.yml` against the served asset.
 3. Add or change root server installer, shell installer, Docker bootstrap installer, Windows installer, container-agent installer, repo-root compose defaults, or auto-update script behavior through `install.sh`, `scripts/install.sh`, `scripts/install-docker.sh`, `scripts/install.ps1`, `scripts/install-container-agent.sh`, `docker-compose.yml`, and `scripts/pulse-auto-update.sh`
+   The root `install.sh` server installer owns its fresh-host dependency
+   bootstrap for supported Debian, Ubuntu, and Proxmox targets. It must install
+   `curl`, `wget`, `ca-certificates`, and `openssh-client` before installing
+   release archives, with `jq` as an optional reliability dependency; release
+   signature verification depends on `ssh-keygen` from `openssh-client` and
+   must not fail on a minimal supported host solely because that package was
+   absent before installation started.
    The top-level `install.sh` asset published on GitHub Releases must be the
    root Pulse SERVER installer (the LXC / systemd / Proxmox VE installer that
    accepts `--version vX.Y.Z`, `--rc`, `--stable`, and friends). The rendered

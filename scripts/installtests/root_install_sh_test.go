@@ -89,6 +89,25 @@ func TestRootInstallScriptArchiveSupportContract(t *testing.T) {
 	}
 }
 
+func TestRootInstallScriptInstallsSignatureVerificationDependencies(t *testing.T) {
+	content, err := os.ReadFile(filepath.Join("..", "..", "install.sh"))
+	if err != nil {
+		t.Fatalf("read root install.sh: %v", err)
+	}
+
+	script := string(content)
+	required := []string{
+		`apt-get install -y -qq curl wget ca-certificates openssh-client jq`,
+		`apt-get install -y -qq curl wget ca-certificates openssh-client`,
+		`ssh-keygen is required to verify signed Pulse release assets.`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("install.sh missing signature verification dependency contract: %s", needle)
+		}
+	}
+}
+
 func TestRootInstallScriptInfersPrivateProArchiveVersion(t *testing.T) {
 	script := `
 		set -euo pipefail
