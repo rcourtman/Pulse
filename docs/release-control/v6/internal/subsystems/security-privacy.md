@@ -613,6 +613,15 @@ alerts. Those counts may describe scale and feature adoption, but they must not
 include hostnames, resource IDs, infrastructure identifiers, credentials,
 prompts, chat messages, command text, action output, token values, or personal
 information.
+That same anonymous telemetry floor now also permits content-free update
+funnel counters derived from local update history inside the same rotating
+30-day telemetry window: update attempts, successful updates, failed or
+rolled-back updates, and the latest coarse failure category. The category may
+identify only the governed class (`download`, `signature`, `checksum`,
+`disk_space`, `extract`, `backup`, `apply`, `restart`, `rolled_back`,
+`cancelled`, or `unknown`). It must not export raw updater error text,
+download URLs, command output, log lines, paths, hostnames, release asset URLs,
+checksums, signatures, or operator-entered values.
 That same anonymous telemetry floor now also permits only content-free Pulse
 Patrol control and governed Pulse Intelligence operations adoption flags and
 counters inside the same rotating 30-day telemetry window:
@@ -659,8 +668,9 @@ without issue-backed Patrol evidence and a real decision/outcome signal.
 The public privacy disclosure table is the operator-facing inventory for that
 same payload. `docs/PRIVACY.md` and
 `frontend-modern/public/docs/PRIVACY.md` must name every
-`pulse_intelligence_*` field exported by `internal/telemetry.Ping` using Patrol
-control and governed-operation vocabulary, including source-specific Assistant,
+`update_*` and `pulse_intelligence_*` field exported by
+`internal/telemetry.Ping` using update-funnel, Patrol control, and
+governed-operation vocabulary, including source-specific Assistant,
 direct external-agent, and `pulse-mcp` governed-operation booleans, workflow
 starter counts including primary Patrol control and legacy Pro entry-point counts,
 Patrol-control completed/resolved booleans, paid Patrol-control cohort booleans,

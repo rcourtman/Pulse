@@ -9,6 +9,15 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// ApplyUpdateTelemetrySnapshot adds router-owned, content-free update funnel
+// counters to the anonymous telemetry snapshot.
+func (r *Router) ApplyUpdateTelemetrySnapshot(s *telemetry.Snapshot, now time.Time) {
+	if r == nil || s == nil {
+		return
+	}
+	telemetry.ApplyUpdateTelemetrySnapshot(s, r.updateHistory, now)
+}
+
 // GetPulseIntelligenceActionTelemetry returns count-only action-governance
 // telemetry for the anonymous Pulse Intelligence loop. It deliberately drops
 // command text, approval actors/reasons, action outputs, and resource IDs.

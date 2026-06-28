@@ -51,6 +51,10 @@ export interface TelemetryPingPreview {
   multi_tenant: boolean;
   paid_license: boolean;
   has_api_tokens: boolean;
+  update_attempts_30d: number;
+  update_successes_30d: number;
+  update_failures_30d: number;
+  update_last_failure_category?: string;
   pulse_intelligence_loop_configured: boolean;
   pulse_intelligence_loop_active_30d: boolean;
   pulse_intelligence_complete_operations_loop_30d: boolean;

@@ -137,6 +137,13 @@ proof that an agent install, update, registration, profile rollout, or fleet
 command completed. External-agent/MCP readiness is optional collaboration
 setup for agents outside the app, not a first-party Patrol control completion
 gate and not a lifecycle setup stage.
+Server update funnel telemetry is lifecycle-adjacent only. The updater's local
+history may feed anonymous 30-day attempt, success, failure, and coarse failure
+category counters, but those counters are adoption analytics, not proof that a
+particular agent update, profile rollout, host command, registration, or fleet
+operation succeeded. Lifecycle surfaces must keep reading update readiness and
+continuity from the updater, installer, connection ledger, and agent runtime
+state instead of inferring it from anonymous telemetry.
 
 1. `frontend-modern/src/api/agentProfiles.ts` shared with `api-contracts`: the agent profiles frontend client is both an agent lifecycle control surface and a canonical API payload contract boundary.
 2. `frontend-modern/src/api/nodes.ts` shared with `api-contracts`: the shared Proxmox node client is both an agent lifecycle setup/install control surface and a canonical API payload contract boundary.

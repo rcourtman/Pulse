@@ -3687,7 +3687,12 @@ published-release truth from raw build strings.
 That same preview contract now includes the complete anonymous telemetry
 payload shape, including aggregate self-hosted adoption counters for monitored
 platforms, workloads, storage, and availability targets plus coarse feature
-booleans and content-free Patrol, Assistant, and external-agent usage counters.
+booleans, content-free update funnel counters, and content-free Patrol,
+Assistant, and external-agent usage counters. Update funnel fields may expose
+only 30-day attempt, success, and failure counts plus one coarse latest failure
+category; browser preview and outbound ping payloads must not expose updater
+logs, raw errors, download URLs, local paths, command output, checksums,
+signatures, or hostnames.
 The frontend `TelemetryPingPreview` type in
 `frontend-modern/src/api/settings.ts` must mirror every browser-visible JSON
 field from `internal/telemetry.Ping`, including the resolved operations-loop,

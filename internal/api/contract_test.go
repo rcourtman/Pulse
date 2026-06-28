@@ -41,6 +41,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
+	"github.com/rcourtman/pulse-go-rewrite/internal/telemetry"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
@@ -15010,6 +15011,65 @@ func TestContract_ExternalAgentActivityUsesRouteSpecificMarkers(t *testing.T) {
 	}
 	if strings.Contains(telemetrySrc, "requiredScopes := agentcapabilities.CanonicalManifest().RequiredScopes") {
 		t.Error("Pulse Intelligence external-agent readiness telemetry must not require every manifest scope")
+	}
+}
+
+// TestContract_UpdateFunnelTelemetryStaysContentFree pins the server-owned
+// update funnel telemetry path. Update history may feed anonymous adoption
+// analysis, but only as aggregate 30-day counts and a coarse failure category,
+// and the operator preview type must expose the same JSON fields.
+func TestContract_UpdateFunnelTelemetryStaysContentFree(t *testing.T) {
+	pingType := reflect.TypeOf(telemetry.Ping{})
+	for _, field := range []string{
+		`UpdateAttempts30d:update_attempts_30d`,
+		`UpdateSuccesses30d:update_successes_30d`,
+		`UpdateFailures30d:update_failures_30d`,
+		`UpdateLastFailureCategory:update_last_failure_category,omitempty`,
+	} {
+		name, tag, _ := strings.Cut(field, ":")
+		sf, ok := pingType.FieldByName(name)
+		if !ok {
+			t.Fatalf("telemetry.Ping missing %s", name)
+		}
+		if got := sf.Tag.Get("json"); got != tag {
+			t.Fatalf("telemetry.Ping.%s json tag = %q, want %q", name, got, tag)
+		}
+	}
+
+	serverSource, err := os.ReadFile(filepath.Join("..", "..", "pkg", "server", "server.go"))
+	if err != nil {
+		t.Fatalf("read server.go: %v", err)
+	}
+	if !strings.Contains(string(serverSource), "router.ApplyUpdateTelemetrySnapshot(&snap, now)") {
+		t.Error("server telemetry snapshot must route update-history rollups through Router.ApplyUpdateTelemetrySnapshot before preview/send")
+	}
+
+	routerSource, err := os.ReadFile("telemetry_pulse_intelligence.go")
+	if err != nil {
+		t.Fatalf("read telemetry_pulse_intelligence.go: %v", err)
+	}
+	for _, fragment := range []string{
+		"func (r *Router) ApplyUpdateTelemetrySnapshot(s *telemetry.Snapshot, now time.Time)",
+		"telemetry.ApplyUpdateTelemetrySnapshot(s, r.updateHistory, now)",
+	} {
+		if !strings.Contains(string(routerSource), fragment) {
+			t.Errorf("router-owned update telemetry boundary missing %s", fragment)
+		}
+	}
+
+	settingsSource, err := os.ReadFile(filepath.Join("..", "..", "frontend-modern", "src", "api", "settings.ts"))
+	if err != nil {
+		t.Fatalf("read frontend settings API type: %v", err)
+	}
+	for _, fragment := range []string{
+		"update_attempts_30d: number;",
+		"update_successes_30d: number;",
+		"update_failures_30d: number;",
+		"update_last_failure_category?: string;",
+	} {
+		if !strings.Contains(string(settingsSource), fragment) {
+			t.Errorf("TelemetryPingPreview must mirror update funnel field %s", fragment)
+		}
 	}
 }
 

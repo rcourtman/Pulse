@@ -16,6 +16,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 )
 
 func TestGetOrCreateInstallID_CreatesNew(t *testing.T) {
@@ -351,6 +352,10 @@ func TestApplySnapshot(t *testing.T) {
 			ActiveAlerts:                    2,
 			PaidLicense:                     true,
 			HasAPITokens:                    true,
+			UpdateAttempts30d:               4,
+			UpdateSuccesses30d:              2,
+			UpdateFailures30d:               1,
+			UpdateLastFailureCategory:       "download",
 			PulseIntelligenceLoopConfigured: true,
 			PulseIntelligenceLoopActive30d:  true,
 			PulseIntelligenceCompleteOperationsLoop30d:                     true,
@@ -442,6 +447,10 @@ func TestApplySnapshot(t *testing.T) {
 	if !ping.HasAPITokens {
 		t.Fatal("HasAPITokens should be true")
 	}
+	if ping.UpdateAttempts30d != 4 || ping.UpdateSuccesses30d != 2 || ping.UpdateFailures30d != 1 ||
+		ping.UpdateLastFailureCategory != "download" {
+		t.Fatalf("update telemetry counters not applied: %#v", ping)
+	}
 	if !ping.PulseIntelligenceLoopConfigured || !ping.PulseIntelligenceLoopActive30d ||
 		!ping.PulseIntelligenceCompleteOperationsLoop30d ||
 		!ping.PulseIntelligenceApprovedExecutionLoop30d ||
@@ -503,6 +512,66 @@ func TestApplySnapshot(t *testing.T) {
 		ping.PulseIntelligenceExternalAgentFindingRequests30d != 5 ||
 		ping.PulseIntelligenceExternalAgentActionRequests30d != 4 {
 		t.Fatalf("Pulse Intelligence external-agent class counters not applied: %#v", ping)
+	}
+}
+
+func TestApplyUpdateTelemetrySnapshotSummarizesHistory(t *testing.T) {
+	history, err := updates.NewUpdateHistory(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewUpdateHistory: %v", err)
+	}
+	now := time.Date(2026, 6, 28, 14, 0, 0, 0, time.UTC)
+	ctx := context.Background()
+	entries := []updates.UpdateHistoryEntry{
+		{
+			EventID:   "old-success",
+			Timestamp: now.Add(-(installIDRotationWindow + time.Hour)),
+			Action:    "update",
+			Status:    updates.StatusSuccess,
+		},
+		{
+			EventID:   "recent-success",
+			Timestamp: now.Add(-2 * time.Hour),
+			Action:    "update",
+			Status:    updates.StatusSuccess,
+		},
+		{
+			EventID:   "recent-failed-download",
+			Timestamp: now.Add(-time.Hour),
+			Action:    "update",
+			Status:    updates.StatusFailed,
+			Error: &updates.UpdateError{
+				Message: "failed to download update: upstream timed out",
+				Details: "raw details stay local",
+			},
+		},
+		{
+			EventID:   "recent-check",
+			Timestamp: now.Add(-30 * time.Minute),
+			Action:    "check",
+			Status:    updates.StatusSuccess,
+		},
+	}
+	for _, entry := range entries {
+		if _, err := history.CreateEntry(ctx, entry); err != nil {
+			t.Fatalf("CreateEntry(%s): %v", entry.EventID, err)
+		}
+	}
+
+	var snap Snapshot
+	ApplyUpdateTelemetrySnapshot(&snap, history, now)
+
+	if snap.UpdateAttempts30d != 2 {
+		t.Fatalf("UpdateAttempts30d = %d, want 2", snap.UpdateAttempts30d)
+	}
+	if snap.UpdateSuccesses30d != 1 {
+		t.Fatalf("UpdateSuccesses30d = %d, want 1", snap.UpdateSuccesses30d)
+	}
+	if snap.UpdateFailures30d != 1 {
+		t.Fatalf("UpdateFailures30d = %d, want 1", snap.UpdateFailures30d)
+	}
+	if snap.UpdateLastFailureCategory != "download" {
+		t.Fatalf("UpdateLastFailureCategory = %q, want download", snap.UpdateLastFailureCategory)
 	}
 }
 

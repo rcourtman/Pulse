@@ -80,6 +80,10 @@ Every field is listed below with the reason it exists — nothing else leaves yo
 | Multi-tenant | `true`/`false` | See whether multi-tenant/runtime-org features are being used |
 | Paid license | `true`/`false` | Distinguish free from paid posture without sending the exact commercial tier |
 | Has API tokens | `true`/`false` | See whether token-based automation/integration is being used without sending token counts |
+| Update attempts 30d | `2` | Count update attempts recorded in the current 30-day telemetry window without sending download URLs, logs, or command output |
+| Update successes 30d | `1` | Count successful update attempts in the current 30-day telemetry window |
+| Update failures 30d | `1` | Count failed or rolled-back update attempts in the current 30-day telemetry window without sending raw errors, logs, URLs, or command output |
+| Update last failure category | `download` | Send only a coarse category for the latest update failure, such as `download`, `signature`, `checksum`, `disk_space`, `extract`, `backup`, `apply`, `restart`, `rolled_back`, or `unknown` |
 | Pulse Intelligence loop configured | `true`/`false` | See whether Assistant, Patrol, governed actions, or external-agent access is configured so adoption can be measured without sending configuration details |
 | Pulse Intelligence loop active 30d | `true`/`false` | See whether Assistant, Patrol, external-agent, or governed-action activity occurred in the current 30-day telemetry window |
 | Pulse Intelligence complete operations loop 30d | `true`/`false` | See whether Patrol issue activity reached an approved or rejected governed-action decision without sending prompts, findings, resource identifiers, command text, or action output |

@@ -28,6 +28,7 @@
 //   - Whether multi-tenant mode is enabled
 //   - Whether a paid license is active
 //   - Whether any API tokens are configured
+//   - Coarse update funnel counters and last failure category over the current install-ID rotation window
 //   - Patrol, Assistant, and external-agent usage counters over the current install-ID rotation window:
 //     configured/active/governed-action/approved-execution/resolved-loop state,
 //     Patrol control completed-loop and resolved-loop proof reported through
@@ -63,6 +64,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -165,6 +167,11 @@ type Ping struct {
 	MultiTenant          bool `json:"multi_tenant"`
 	PaidLicense          bool `json:"paid_license"`
 	HasAPITokens         bool `json:"has_api_tokens"`
+	UpdateAttempts30d    int  `json:"update_attempts_30d"`
+	UpdateSuccesses30d   int  `json:"update_successes_30d"`
+	UpdateFailures30d    int  `json:"update_failures_30d"`
+	// Last coarse update failure category; never raw error text.
+	UpdateLastFailureCategory string `json:"update_last_failure_category,omitempty"`
 
 	// Pulse Intelligence usage (30-day counts/booleans — no prompts, commands, outputs, resource IDs, or token values)
 	PulseIntelligenceLoopConfigured                                bool `json:"pulse_intelligence_loop_configured"`
@@ -263,6 +270,10 @@ type Snapshot struct {
 	MultiTenant                                                    bool
 	PaidLicense                                                    bool
 	HasAPITokens                                                   bool
+	UpdateAttempts30d                                              int
+	UpdateSuccesses30d                                             int
+	UpdateFailures30d                                              int
+	UpdateLastFailureCategory                                      string
 	PulseIntelligenceLoopConfigured                                bool
 	PulseIntelligenceLoopActive30d                                 bool
 	PulseIntelligenceCompleteOperationsLoop30d                     bool
@@ -332,6 +343,74 @@ type PulseIntelligenceActionSnapshot struct {
 	ApprovedActionDecisions30d int
 	ApprovedActionAttempts30d  int
 	ApprovedActionSuccesses30d int
+}
+
+// ApplyUpdateTelemetrySnapshot adds content-free update funnel counters from
+// local update history. It reports only aggregate counts and one coarse failure
+// category over the install-ID rotation window.
+func ApplyUpdateTelemetrySnapshot(s *Snapshot, history *updates.UpdateHistory, now time.Time) {
+	if s == nil || history == nil {
+		return
+	}
+	if now.IsZero() {
+		now = time.Now()
+	}
+	since := now.UTC().Add(-installIDRotationWindow)
+	entries := history.ListEntries(updates.HistoryFilter{Action: "update"})
+	var lastFailure *updates.UpdateHistoryEntry
+	for i := range entries {
+		entry := entries[i]
+		if entry.Timestamp.IsZero() || entry.Timestamp.UTC().Before(since) {
+			continue
+		}
+		s.UpdateAttempts30d++
+		switch entry.Status {
+		case updates.StatusSuccess:
+			s.UpdateSuccesses30d++
+		case updates.StatusFailed, updates.StatusRolledBack:
+			s.UpdateFailures30d++
+			if lastFailure == nil || entry.Timestamp.After(lastFailure.Timestamp) {
+				candidate := entry
+				lastFailure = &candidate
+			}
+		}
+	}
+	if lastFailure != nil {
+		s.UpdateLastFailureCategory = classifyUpdateFailureCategory(*lastFailure)
+	}
+}
+
+func classifyUpdateFailureCategory(entry updates.UpdateHistoryEntry) string {
+	switch entry.Status {
+	case updates.StatusRolledBack:
+		return "rolled_back"
+	case updates.StatusCancelled:
+		return "cancelled"
+	}
+	text := ""
+	if entry.Error != nil {
+		text = strings.ToLower(strings.TrimSpace(entry.Error.Code + " " + entry.Error.Message + " " + entry.Error.Details))
+	}
+	switch {
+	case strings.Contains(text, "signature"):
+		return "signature"
+	case strings.Contains(text, "checksum"):
+		return "checksum"
+	case strings.Contains(text, "download"):
+		return "download"
+	case strings.Contains(text, "disk space") || strings.Contains(text, "insufficient disk"):
+		return "disk_space"
+	case strings.Contains(text, "extract") || strings.Contains(text, "archive"):
+		return "extract"
+	case strings.Contains(text, "backup"):
+		return "backup"
+	case strings.Contains(text, "apply"):
+		return "apply"
+	case strings.Contains(text, "restart"):
+		return "restart"
+	default:
+		return "unknown"
+	}
 }
 
 const (
@@ -691,6 +770,10 @@ func applySnapshot(base Ping, fn SnapshotFunc) Ping {
 	ping.MultiTenant = s.MultiTenant
 	ping.PaidLicense = s.PaidLicense
 	ping.HasAPITokens = s.HasAPITokens
+	ping.UpdateAttempts30d = s.UpdateAttempts30d
+	ping.UpdateSuccesses30d = s.UpdateSuccesses30d
+	ping.UpdateFailures30d = s.UpdateFailures30d
+	ping.UpdateLastFailureCategory = s.UpdateLastFailureCategory
 	ping.PulseIntelligenceLoopConfigured = s.PulseIntelligenceLoopConfigured
 	ping.PulseIntelligenceLoopActive30d = s.PulseIntelligenceLoopActive30d
 	ping.PulseIntelligenceCompleteOperationsLoop30d = s.PulseIntelligenceCompleteOperationsLoop30d

@@ -1251,6 +1251,12 @@ recovery scope, or a storage/recovery-owned secret source.
    approved-action-decision, rejected-action-decision, external-agent,
    Assistant, or Patrol usage counters are not backup inventory, restore
    capability, recovery freshness, or storage ownership evidence.
+   Content-free update funnel counters under shared `internal/api/` are also
+   adjacent-only. Update attempts, successes, failures, rolled-back counts, and
+   coarse failure categories are release-adoption evidence, not backup
+   coverage, storage-health proof, restore readiness, recovery-job state, or
+   evidence that any storage or recovery endpoint was read, changed, or
+   verified.
    External-agent activity may be counted for narrow tokens that satisfy the
    called manifest capability scope, including read-only context calls. That
    keeps MCP collaboration measurable, but storage and recovery must not treat
