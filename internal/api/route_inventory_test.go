@@ -289,6 +289,7 @@ var allRouteAllowlist = []string{
 	"/api/health",
 	"/api/monitoring/scheduler/health",
 	"/api/state",
+	"/api/state/summary",
 	"/api/logs/stream",
 	"/api/logs/download",
 	"/api/logs/level",

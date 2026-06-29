@@ -68,6 +68,39 @@ Check if Pulse is running.
 `GET /api/state`
 Returns the complete state of your infrastructure (Nodes, VMs, Containers, Storage, Alerts). This is the main endpoint used by the dashboard.
 
+### State Summary
+`GET /api/state/summary`
+Returns a small, stable summary for external dashboards and status widgets. Requires authentication and `monitoring:read` for API tokens.
+
+The response contains rollup counts only. It does not include full resource lists, hostnames, URLs, labels, mounts, ports, logs, or discovery details.
+
+Example response:
+```json
+{
+  "version": 1,
+  "lastUpdate": 1710000000,
+  "coverage": {
+    "proxmox": { "nodes": 1, "vms": 2, "containers": 1, "storage": 2, "cephClusters": 1, "physicalDisks": 2 },
+    "docker": { "hosts": 1, "containers": 2, "services": 1, "tasks": 1 },
+    "kubernetes": { "clusters": 1, "nodes": 2, "pods": 2, "deployments": 1 },
+    "hostAgents": { "hosts": 1, "sensors": 3, "raidArrays": 1, "smartDisks": 1 },
+    "backup": {
+      "pbsInstances": 1,
+      "pbsBackups": 1,
+      "pmgInstances": 1,
+      "pmgBackups": 1,
+      "pveBackupTasks": 1,
+      "pveStorageBackups": 1,
+      "pveGuestSnapshots": 1,
+      "replicationJobs": 1
+    }
+  },
+  "health": { "total": 23, "up": 14, "degraded": 4, "down": 5, "unknown": 0 },
+  "alerts": { "active": 3, "critical": 1, "warning": 1, "info": 1, "acknowledged": 1, "recentlyResolved": 1 },
+  "connectionHealth": { "total": 2, "healthy": 1, "unhealthy": 1, "unknown": 0 }
+}
+```
+
 ### Simple Stats (HTML)
 `GET /simple-stats`
 Lightweight HTML status page for quick checks.

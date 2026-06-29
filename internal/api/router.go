@@ -295,6 +295,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/health", r.handleHealth)
 	r.mux.HandleFunc("/api/monitoring/scheduler/health", RequireAuth(r.config, r.handleSchedulerHealth))
 	r.mux.HandleFunc("/api/state", r.handleState)
+	r.mux.HandleFunc("/api/state/summary", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleStateSummary)))
 
 	// Log management routes
 	r.mux.HandleFunc("/api/logs/stream", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.logHandlers.HandleStreamLogs)))
