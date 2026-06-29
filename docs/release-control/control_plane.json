@@ -6,7 +6,7 @@
   "control_plane_doc": "docs/release-control/internal/CONTROL_PLANE.md",
   "control_plane_schema": "docs/release-control/control_plane.schema.json",
   "active_profile_id": "v6",
-  "active_target_id": "v6-product-lane-expansion",
+  "active_target_id": "v6-ga-promotion",
   "legacy_release_lines": [
     {
       "version_prefix": "5.1.",
@@ -54,15 +54,16 @@
       "id": "v6-ga-promotion",
       "profile_id": "v6",
       "kind": "release",
-      "status": "completed",
-      "summary": "Promote Pulse v6 from a validated, actually shipped RC to governed GA with exercised promotion proof, rollback clarity, and only GA-blocking decisions remaining.",
-      "completion_rule": "release_ready"
+      "status": "active",
+      "summary": "Execute Pulse v6 GA from the RC7 soak candidate unless telemetry or newly reported RC7 issues expose a release blocker; readiness gates are already cleared, so remaining work is release-day execution, public cutover approval, and final artifact publication rather than another default RC.",
+      "completion_rule": "manual",
+      "proof_scope": "none"
     },
     {
       "id": "v6-product-lane-expansion",
       "profile_id": "v6",
       "kind": "feature",
-      "status": "active",
+      "status": "planned",
       "summary": "Promote proactive Pulse Intelligence, policy-aware data governance, resource-change intelligence, action-governance, fleet-governance, agent-operable infrastructure onboarding, continuous discovery reconciliation, and agent-ready operations contract proof only after the monitoring-first RC target is satisfied and the broader surfaced product case is proven; Patrol is the detection and investigation engine, Assistant is the contextual explanation, approval, and governed action surface, and agent-ready proof is API/CLI-first with MCP only as an adapter over canonical contracts.",
       "completion_rule": "manual",
       "proof_scope": "none"

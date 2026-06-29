@@ -570,8 +570,9 @@ func TestReleaseControlPlaneFilesExist(t *testing.T) {
 		"\"stable_branch\": \"pulse/v6-release\"",
 		"\"completion_rule\": \"rc_ready\"",
 		"\"completion_rule\": \"manual\"",
-		"\"completion_rule\": \"release_ready\"",
 		"\"proof_scope\": \"none\"",
+		"release-day execution",
+		"newly reported RC7 issues",
 	})
 
 	var controlPlane map[string]any
