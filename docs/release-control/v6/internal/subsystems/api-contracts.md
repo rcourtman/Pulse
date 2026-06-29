@@ -994,6 +994,11 @@ payload shape change when the portal presents compact client rows.
     frontend-primitives' `CalloutCard` for shared settings callout chrome;
     API contracts own the target CRUD/test payload semantics and endpoint
     routing, not local colored alert shells.
+    Availability target protocol vocabulary is canonicalized at the API/config
+    boundary: clients may submit `ping` as a user-facing alias for the ICMP
+    check, but saved targets, API reads, probe status, connections rows, and
+    unified-resource availability facets must continue to use the canonical
+    `icmp` value.
     Connections ledger rows with type
     `availability` must route management handoffs, pause, remove, and test
     actions to those availability-target endpoints and must not reuse node,

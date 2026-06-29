@@ -91,6 +91,52 @@ func TestAvailabilityHandlersCRUDPersistsTargets(t *testing.T) {
 	}
 }
 
+func TestAvailabilityHandlersCreateNormalizesPingAlias(t *testing.T) {
+	persistence := config.NewConfigPersistence(t.TempDir())
+	handler := NewAvailabilityHandlers(
+		func(_ context.Context) *config.ConfigPersistence { return persistence },
+		nil,
+	)
+
+	createBody := availabilityRequestBody(t, config.AvailabilityTarget{
+		Name:             "Garage sensor",
+		Address:          "https://garage-sensor.local/status",
+		Protocol:         config.AvailabilityProbeProtocol("ping"),
+		Enabled:          true,
+		PollIntervalSecs: 30,
+		TimeoutMillis:    1000,
+		FailureThreshold: 2,
+	})
+	createReq := httptest.NewRequest(http.MethodPost, "/api/availability-targets", createBody)
+	createRec := httptest.NewRecorder()
+	handler.HandleAdd(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("HandleAdd status = %d, body=%s", createRec.Code, createRec.Body.String())
+	}
+
+	var created config.AvailabilityTarget
+	if err := json.NewDecoder(createRec.Body).Decode(&created); err != nil {
+		t.Fatalf("decode created target: %v", err)
+	}
+	if created.Protocol != config.AvailabilityProbeICMP {
+		t.Fatalf("created Protocol = %q, want %q", created.Protocol, config.AvailabilityProbeICMP)
+	}
+	if created.Address != "garage-sensor.local" {
+		t.Fatalf("created Address = %q, want garage-sensor.local", created.Address)
+	}
+
+	loaded, err := persistence.LoadAvailabilityTargets()
+	if err != nil {
+		t.Fatalf("LoadAvailabilityTargets() error = %v", err)
+	}
+	if len(loaded) != 1 {
+		t.Fatalf("LoadAvailabilityTargets() length = %d, want 1", len(loaded))
+	}
+	if loaded[0].Protocol != config.AvailabilityProbeICMP {
+		t.Fatalf("persisted Protocol = %q, want %q", loaded[0].Protocol, config.AvailabilityProbeICMP)
+	}
+}
+
 func TestAvailabilityHandlersTestSavedTarget(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)

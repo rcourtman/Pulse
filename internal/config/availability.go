@@ -22,6 +22,8 @@ const (
 	AvailabilityProbeTCP   AvailabilityProbeProtocol = "tcp"
 	AvailabilityProbeHTTP  AvailabilityProbeProtocol = "http"
 	AvailabilityProbeHTTPS AvailabilityProbeProtocol = "https"
+
+	availabilityProbePingAlias AvailabilityProbeProtocol = "ping"
 )
 
 type AvailabilityTargetKind string
@@ -71,6 +73,8 @@ func (t *AvailabilityTarget) ApplyDefaults() {
 	}
 	if strings.TrimSpace(string(t.Protocol)) == "" {
 		t.Protocol = AvailabilityProbeICMP
+	} else {
+		t.Protocol = normalizeAvailabilityProbeProtocol(t.Protocol)
 	}
 	if strings.TrimSpace(string(t.TargetKind)) == "" {
 		t.TargetKind = AvailabilityTargetService
@@ -127,7 +131,8 @@ func (t AvailabilityTarget) Validate() error {
 	default:
 		return fmt.Errorf("unsupported availability target kind %q", t.TargetKind)
 	}
-	switch t.Protocol {
+	protocol := normalizeAvailabilityProbeProtocol(t.Protocol)
+	switch protocol {
 	case AvailabilityProbeICMP:
 		if t.Port != 0 {
 			return fmt.Errorf("icmp availability targets must not set a port")
@@ -152,7 +157,7 @@ func (t AvailabilityTarget) Validate() error {
 	if t.FailureThreshold > 0 && t.FailureThreshold > 10 {
 		return fmt.Errorf("availability failure threshold must be 10 or less")
 	}
-	if t.Protocol == AvailabilityProbeHTTP || t.Protocol == AvailabilityProbeHTTPS {
+	if protocol == AvailabilityProbeHTTP || protocol == AvailabilityProbeHTTPS {
 		if _, err := t.HTTPURL(); err != nil {
 			return err
 		}
@@ -206,7 +211,7 @@ func NormalizeAvailabilityTarget(target AvailabilityTarget) AvailabilityTarget {
 	target.ID = strings.TrimSpace(target.ID)
 	target.Name = strings.TrimSpace(target.Name)
 	target.TargetKind = AvailabilityTargetKind(strings.ToLower(strings.TrimSpace(string(target.TargetKind))))
-	target.Protocol = AvailabilityProbeProtocol(strings.ToLower(strings.TrimSpace(string(target.Protocol))))
+	target.Protocol = normalizeAvailabilityProbeProtocol(target.Protocol)
 	if target.Protocol == AvailabilityProbeHTTP || target.Protocol == AvailabilityProbeHTTPS {
 		target.Address = strings.TrimSpace(target.Address)
 	} else {
@@ -216,6 +221,14 @@ func NormalizeAvailabilityTarget(target AvailabilityTarget) AvailabilityTarget {
 	target.LinkedResourceID = strings.TrimSpace(target.LinkedResourceID)
 	target.ApplyDefaults()
 	return target
+}
+
+func normalizeAvailabilityProbeProtocol(protocol AvailabilityProbeProtocol) AvailabilityProbeProtocol {
+	normalized := AvailabilityProbeProtocol(strings.ToLower(strings.TrimSpace(string(protocol))))
+	if normalized == availabilityProbePingAlias {
+		return AvailabilityProbeICMP
+	}
+	return normalized
 }
 
 func normalizeAvailabilityAddress(raw string) string {

@@ -1264,6 +1264,52 @@ These routes manage Docker / Podman telemetry and container actions reported by 
 
 ---
 
+## Availability Checks
+
+Agentless availability checks monitor endpoint-only devices and services with
+ICMP ping, TCP port, HTTP, or HTTPS probes. They are managed from
+**Settings -> Monitoring -> Availability checks** and are also exposed through
+the API for automation.
+
+### Target Management
+
+- `GET /api/availability-targets` (`settings:read`) - List configured targets and latest probe status.
+- `POST /api/availability-targets` (`settings:write`) - Add a target.
+- `PUT /api/availability-targets/{id}` (`settings:write`) - Update a target.
+- `DELETE /api/availability-targets/{id}` (`settings:write`) - Remove a target.
+- `POST /api/availability-targets/test` (`settings:write`) - Test an unsaved target.
+- `POST /api/availability-targets/{id}/test` (`settings:write`) - Test a saved target.
+
+Target payload fields:
+
+- `name` - Display name.
+- `targetKind` - `machine`, `service`, or `device`; defaults to `service`.
+- `address` - Hostname, IP address, or URL.
+- `protocol` - `icmp`, `tcp`, `http`, or `https`. The input alias `ping` is accepted and is stored/returned as canonical `icmp`.
+- `port` - Required for `tcp`, optional for `http`/`https`, and omitted for `icmp`.
+- `path` - Optional HTTP path.
+- `enabled` - Whether the target is scheduled.
+- `pollIntervalSeconds` - Minimum 10 seconds; defaults to 60.
+- `timeoutMillis` - Minimum 250 milliseconds; defaults to 2000.
+- `failureThreshold` - Number of consecutive failures before alerting; defaults to 2.
+- `linkedResourceId` - Optional resource id hint for attaching the probe facet to an existing resource.
+
+Example ping-only target:
+
+```json
+{
+  "name": "Garage temperature sensor",
+  "targetKind": "device",
+  "address": "garage-sensor.local",
+  "protocol": "ping",
+  "enabled": true
+}
+```
+
+The create response and subsequent reads return `"protocol": "icmp"`.
+
+---
+
 ## 🐟 TrueNAS
 
 TrueNAS connection management endpoints for adding, testing, and removing TrueNAS SCALE/CORE instances.

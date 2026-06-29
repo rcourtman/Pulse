@@ -44,6 +44,21 @@ func TestNormalizeAvailabilityTargetReducesICMPAddressToHost(t *testing.T) {
 	}
 }
 
+func TestNormalizeAvailabilityTargetAcceptsPingAlias(t *testing.T) {
+	target := NormalizeAvailabilityTarget(AvailabilityTarget{
+		Address:  " https://device.local:8443/status ",
+		Protocol: AvailabilityProbeProtocol(" Ping "),
+		Enabled:  true,
+	})
+
+	if target.Protocol != AvailabilityProbeICMP {
+		t.Fatalf("Protocol = %q, want %q", target.Protocol, AvailabilityProbeICMP)
+	}
+	if target.Address != "device.local" {
+		t.Fatalf("Address = %q, want device.local", target.Address)
+	}
+}
+
 func TestAvailabilityTargetProbeAddressUsesHTTPHostname(t *testing.T) {
 	target := NormalizeAvailabilityTarget(AvailabilityTarget{
 		Address:  "http://solar-inverter.lab.local/status",
@@ -83,6 +98,19 @@ func TestAvailabilityTargetValidateRejectsTCPWithoutPort(t *testing.T) {
 
 	if err := target.Validate(); err == nil {
 		t.Fatal("Validate() error = nil, want TCP port error")
+	}
+}
+
+func TestAvailabilityTargetValidateAcceptsPingAlias(t *testing.T) {
+	target := AvailabilityTarget{
+		TargetKind: AvailabilityTargetService,
+		Address:    "device.local",
+		Protocol:   AvailabilityProbeProtocol("ping"),
+		Enabled:    true,
+	}
+
+	if err := target.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v, want nil", err)
 	}
 }
 
