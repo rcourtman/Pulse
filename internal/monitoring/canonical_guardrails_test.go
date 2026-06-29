@@ -2389,3 +2389,33 @@ func TestForEachMonitorVisitsAllTenantMonitors(t *testing.T) {
 	nilMTM.ForEachMonitor(func(*Monitor) { t.Fatal("nil receiver must not invoke callback") })
 	mtm.ForEachMonitor(nil)
 }
+
+func TestAgentFleetDoctorStaysReadOnlyProjection(t *testing.T) {
+	source, err := os.ReadFile("agent_fleet_doctor.go")
+	if err != nil {
+		t.Fatalf("read agent_fleet_doctor.go: %v", err)
+	}
+	src := string(source)
+	for _, required := range []string{
+		"GetAgentFleetDiagnostics",
+		"buildAgentFleetSubjects(state)",
+		"agentFleetProfileState()",
+		"LoadProfileDeploymentStatus()",
+	} {
+		if !strings.Contains(src, required) {
+			t.Fatalf("agent fleet doctor must keep read-only projection primitive %q", required)
+		}
+	}
+	for _, forbidden := range []string{
+		"SaveAgentProfiles(",
+		"SaveAgentProfileAssignments(",
+		"SaveProfileDeploymentStatus(",
+		"UpdateHostAgentConfig(",
+		"HandleCommandAck",
+		"Execute",
+	} {
+		if strings.Contains(src, forbidden) {
+			t.Fatalf("agent fleet doctor must stay read-only; found forbidden mutation/execution primitive %q", forbidden)
+		}
+	}
+}

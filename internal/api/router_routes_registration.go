@@ -67,6 +67,7 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 	r.mux.HandleFunc("/api/agents/host/unlink", wrapLegacyHostAlias("/api/agents/host/unlink", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.unifiedAgentHandlers.HandleUnlink))))
 	r.mux.HandleFunc("/api/agents/agent/link", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.unifiedAgentHandlers.HandleLink)))
 	r.mux.HandleFunc("/api/agents/host/link", wrapLegacyHostAlias("/api/agents/host/link", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.unifiedAgentHandlers.HandleLink))))
+	r.mux.HandleFunc("/api/agents/diagnostics", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.handleAgentFleetDiagnostics)))
 	// Unified Agent management routes - config endpoint is accessible by agents (GET) and admins (PATCH)
 	unifiedAgentManagementCore := func(w http.ResponseWriter, req *http.Request) {
 		// Route /api/agents/agent/{id}/config to HandleConfig

@@ -18499,6 +18499,44 @@ func TestContract_AgentFleetContextEndpointSurfacesStableShape(t *testing.T) {
 	}
 }
 
+func TestContract_AgentFleetDiagnosticsEndpointSurfacesStableShape(t *testing.T) {
+	handler, err := os.ReadFile("agent_fleet_doctor.go")
+	if err != nil {
+		t.Fatalf("read agent_fleet_doctor.go: %v", err)
+	}
+	router, err := os.ReadFile("router_routes_registration.go")
+	if err != nil {
+		t.Fatalf("read router_routes_registration.go: %v", err)
+	}
+	monitoringSource, err := os.ReadFile("../monitoring/agent_fleet_doctor.go")
+	if err != nil {
+		t.Fatalf("read monitoring agent_fleet_doctor.go: %v", err)
+	}
+	handlerSrc := string(handler)
+	routerSrc := string(router)
+	monitoringSrc := string(monitoringSource)
+
+	if !strings.Contains(routerSrc, `"/api/agents/diagnostics"`) ||
+		!strings.Contains(routerSrc, `RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.handleAgentFleetDiagnostics))`) {
+		t.Error("agent fleet diagnostics route must remain admin settings:read only")
+	}
+	if !strings.Contains(handlerSrc, "GetAgentFleetDiagnostics(serverVersion, time.Now().UTC())") {
+		t.Error("agent fleet diagnostics handler must delegate to the monitoring-owned read-only producer")
+	}
+	for _, required := range []string{
+		"GeneratedAt   int64                       `json:\"generatedAt\"`",
+		"ServerVersion string                      `json:\"serverVersion,omitempty\"`",
+		"Summary       AgentFleetDiagnosticSummary `json:\"summary\"`",
+		"Agents        []AgentFleetAgentDiagnostic `json:\"agents\"`",
+		"Reasons                []AgentFleetDiagnosticReason `json:\"reasons\"`",
+		"RepairActions          []AgentFleetDiagnosticRepair `json:\"repairActions,omitempty\"`",
+	} {
+		if !strings.Contains(monitoringSrc, required) {
+			t.Errorf("agent fleet diagnostics payload missing stable field %q", required)
+		}
+	}
+}
+
 // TestContract_AgentOperationsLoopStatusEndpointSurfacesStableShape pins the
 // content-safe loop-status wire shape external agents use before choosing
 // fleet, resource, finding, or action tools.

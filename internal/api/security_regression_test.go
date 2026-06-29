@@ -3513,6 +3513,24 @@ func TestDiagnosticsRequireSettingsReadScope(t *testing.T) {
 	}
 }
 
+func TestAgentFleetDiagnosticsRequireSettingsReadScope(t *testing.T) {
+	rawToken := "agent-fleet-diag-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/diagnostics", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for missing settings:read scope, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), config.ScopeSettingsRead) {
+		t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsRead, rec.Body.String())
+	}
+}
+
 func TestDiagnosticsPrepareTokenRequiresSettingsWriteScope(t *testing.T) {
 	rawToken := "diag-write-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)

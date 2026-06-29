@@ -132,6 +132,7 @@ product API routes free of maintainer commercial analytics.
     73a. `internal/agentcapabilities/`
     73b. `pkg/extensions/ai_autofix.go`
 83. `scripts/generate-types.go`
+    83a. `internal/api/agent_fleet_doctor.go`
 
 ## Shared Boundaries
 
@@ -4896,6 +4897,12 @@ reason, and the row must not be considered converged. Top-level
 `remoteControl` may stay as compact presentation compatibility, but it must
 not overstate desired server policy as applied agent runtime truth or collapse
 desired/applied disagreement into one enabled/disabled fact.
+The adjacent Agent Fleet Doctor endpoint, `GET /api/agents/diagnostics`, is a
+read-only admin `settings:read` API for deeper fleet triage. It may summarize
+liveness, version drift, profile deployment drift, missing expected telemetry,
+identity splits, removed-agent blocks, and supported repair handoff hints, but
+it must not mutate configuration, enqueue remote commands, or become the
+canonical `/api/connections` fleet row source.
 That same shared infrastructure-settings boundary also owns install-profile
 semantics surfaced by
 `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`:

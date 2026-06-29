@@ -230,6 +230,13 @@ operator to mint a fresh install token or exposing agent IDs in the copied
 command. Windows stale-agent update commands remain on the existing token-gated
 install transport until the Windows installer owns an equivalent saved-state
 update mode.
+Agent Fleet Doctor diagnostics extend that same read-only lifecycle triage
+surface: `GET /api/agents/diagnostics` may explain stale versions, missing
+reports, profile deployment drift, expected Docker/Kubernetes telemetry gaps,
+identity splits, and removed-agent blocks, and may advertise existing repair
+handoffs such as copy-upgrade-command or allow-reenroll. It must not perform
+the repair, create an action plan, or replace the canonical `/api/connections`
+fleet projection used by Infrastructure.
 
 Agent lifecycle and fleet-operation surfaces may consume
 `POST /api/actions/plan` for resource capability planning, but the action plan

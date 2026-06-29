@@ -1154,6 +1154,10 @@ See [UNIFIED_AGENT.md](UNIFIED_AGENT.md) for installation instructions.
 `GET /api/agent/version`
 Returns the current server version for agent update checks.
 
+### Agent Fleet Diagnostics
+`GET /api/agents/diagnostics` (admin, `settings:read`)
+Returns read-only fleet triage for reported host, Docker / Podman, and Kubernetes agents, including liveness, version drift, profile deployment drift, identity-split evidence, and supported repair handoff hints. It does not enqueue remote actions.
+
 ### Unified Agent Installer Script
 `GET /install.sh`
 Serves the universal `install.sh` used to install `pulse-agent` on target machines.

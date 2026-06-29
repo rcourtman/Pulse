@@ -301,6 +301,13 @@ truth for live infrastructure data.
     fields locally. Monitoring must preserve those objects as native cluster
     inventory instead of flattening them into pods, deployments, or generic
     networking, storage, configuration, or controller rows.
+    Agent Fleet Doctor diagnostics must derive from the current monitoring
+    `StateSnapshot`, agent-profile assignments, and profile deployment
+    acknowledgements only. `internal/monitoring/agent_fleet_doctor.go` may
+    explain liveness, version drift, identity splits, expected telemetry gaps,
+    and profile drift, but it must remain read-only and must not become a
+    separate collector, repair executor, or replacement for the canonical
+    `/api/connections` fleet projection.
 19. Add or change unified-resource alert synchronization through
     `internal/monitoring/monitor_alert_sync.go` and the alerts subsystem
     contract together. Monitoring may pass the current unified-resource snapshot
