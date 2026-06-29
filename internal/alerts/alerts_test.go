@@ -1078,7 +1078,7 @@ func TestCheckBackupsRespectsOverrides(t *testing.T) {
 		"100": {guestsByKey[key]},
 	}
 
-	// 1. Verify warning alert is created with defaults
+	// 1. Verify warning alert uses defaults
 	m.CheckBackups(storageBackups, nil, nil, guestsByKey, guestsByVMID, nil)
 	m.mu.RLock()
 	alert, exists := m.activeAlerts["backup-age-"+sanitizeAlertKey(key)]
@@ -14419,13 +14419,7 @@ func TestCheckGuest(t *testing.T) {
 
 		m.mu.RLock()
 		// Check that alert for high disk was created
-		var foundDiskAlert bool
-		for alertID := range m.activeAlerts {
-			if strings.Contains(alertID, "vm100-disk-") {
-				foundDiskAlert = true
-				break
-			}
-		}
+		_, foundDiskAlert := m.activeAlerts[guestDiskResourceID("vm100", "root")+"-disk"]
 		m.mu.RUnlock()
 
 		if !foundDiskAlert {
@@ -14457,13 +14451,7 @@ func TestCheckGuest(t *testing.T) {
 		m.CheckGuest(vm, "pve1")
 
 		m.mu.RLock()
-		var foundDiskAlert bool
-		for alertID := range m.activeAlerts {
-			if strings.Contains(alertID, "vm100-disk-") {
-				foundDiskAlert = true
-				break
-			}
-		}
+		_, foundDiskAlert := m.activeAlerts[guestDiskResourceID("vm100", "root")+"-disk"]
 		m.mu.RUnlock()
 
 		if foundDiskAlert {
@@ -14495,13 +14483,7 @@ func TestCheckGuest(t *testing.T) {
 		m.CheckGuest(vm, "pve1")
 
 		m.mu.RLock()
-		var foundDiskAlert bool
-		for alertID := range m.activeAlerts {
-			if strings.Contains(alertID, "vm100-disk-") {
-				foundDiskAlert = true
-				break
-			}
-		}
+		_, foundDiskAlert := m.activeAlerts[guestDiskResourceID("vm100", "root")+"-disk"]
 		m.mu.RUnlock()
 
 		if foundDiskAlert {
@@ -14685,13 +14667,7 @@ func TestCheckGuest(t *testing.T) {
 		m.CheckGuest(vm, "pve1")
 
 		m.mu.RLock()
-		var foundDiskAlert bool
-		for alertID := range m.activeAlerts {
-			if strings.Contains(alertID, "vm100-disk-") {
-				foundDiskAlert = true
-				break
-			}
-		}
+		_, foundDiskAlert := m.activeAlerts[guestDiskResourceID("vm100", "sda1")+"-disk"]
 		m.mu.RUnlock()
 
 		if !foundDiskAlert {
@@ -14723,13 +14699,7 @@ func TestCheckGuest(t *testing.T) {
 		m.CheckGuest(vm, "pve1")
 
 		m.mu.RLock()
-		var foundDiskAlert bool
-		for alertID := range m.activeAlerts {
-			if strings.Contains(alertID, "vm100-disk-") {
-				foundDiskAlert = true
-				break
-			}
-		}
+		_, foundDiskAlert := m.activeAlerts[guestDiskResourceID("vm100", "disk-1")+"-disk"]
 		m.mu.RUnlock()
 
 		if !foundDiskAlert {

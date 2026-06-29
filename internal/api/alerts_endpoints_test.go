@@ -136,7 +136,25 @@ func TestAlertsEndpoints(t *testing.T) {
 		}
 	})
 
-	// 6. Clear alert history
+	// 6. Get alert noise report
+	t.Run("GetAlertNoiseReport", func(t *testing.T) {
+		res, err := http.Get(srv.server.URL + "/api/alerts/noise")
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		defer res.Body.Close()
+
+		if res.StatusCode != http.StatusOK {
+			t.Errorf("status code = %d, want %d", res.StatusCode, http.StatusOK)
+		}
+
+		var report alerts.AlertNoiseReport
+		if err := json.NewDecoder(res.Body).Decode(&report); err != nil {
+			t.Fatalf("decode failed: %v", err)
+		}
+	})
+
+	// 7. Clear alert history
 	t.Run("ClearAlertHistory", func(t *testing.T) {
 		// HandleAlerts expects DELETE on /history
 		req, err := http.NewRequest(http.MethodDelete, srv.server.URL+"/api/alerts/history", nil)

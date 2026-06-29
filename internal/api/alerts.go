@@ -34,6 +34,7 @@ type AlertManager interface {
 	ClearAlert(id string) bool
 	GetAlertHistory(limit int) []alerts.Alert
 	GetAlertHistorySince(since time.Time, limit int) []alerts.Alert
+	AuditAlertNoise(since time.Time, historyLimit int) alerts.AlertNoiseReport
 }
 
 // ConfigPersistence defines the interface for saving configuration.
@@ -449,6 +450,61 @@ func (h *AlertHandlers) GetAlertHistory(w http.ResponseWriter, r *http.Request) 
 
 	if err := utils.WriteJSONResponse(w, filtered); err != nil {
 		log.Error().Err(err).Msg("Failed to write alert history response")
+	}
+}
+
+// GetAlertNoiseReport returns a read-only report of alert identity churn and
+// duplicate active identities for auditor UI and diagnostics.
+func (h *AlertHandlers) GetAlertNoiseReport(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+
+	historyLimit := 1000
+	limitStr := query.Get("historyLimit")
+	if limitStr == "" {
+		limitStr = query.Get("limit")
+	}
+	if limitStr != "" {
+		l, err := strconv.Atoi(limitStr)
+		switch {
+		case err != nil:
+			http.Error(w, "historyLimit must be an integer", http.StatusBadRequest)
+			return
+		case l < 0:
+			http.Error(w, "historyLimit must be non-negative", http.StatusBadRequest)
+			return
+		case l == 0:
+			historyLimit = 0
+		case l > 10000:
+			log.Warn().Int("historyLimit", l).Msg("Alert noise historyLimit exceeds maximum, capping at 10000")
+			historyLimit = 10000
+		default:
+			historyLimit = l
+		}
+	}
+
+	since := time.Time{}
+	sinceStr := query.Get("since")
+	if sinceStr == "" {
+		sinceStr = query.Get("startTime")
+	}
+	if sinceStr != "" {
+		parsed, err := time.Parse(time.RFC3339, sinceStr)
+		if err != nil {
+			http.Error(w, "invalid since parameter", http.StatusBadRequest)
+			return
+		}
+		since = parsed
+	}
+
+	monitor := h.getMonitor(r.Context())
+	if monitor == nil {
+		http.Error(w, "monitor is not initialized", http.StatusServiceUnavailable)
+		return
+	}
+
+	report := monitor.GetAlertManager().AuditAlertNoise(since, historyLimit)
+	if err := utils.WriteJSONResponse(w, report); err != nil {
+		log.Error().Err(err).Msg("Failed to write alert noise report response")
 	}
 }
 
@@ -1100,6 +1156,11 @@ func (h *AlertHandlers) HandleAlerts(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.GetAlertHistory(w, r)
+	case path == "noise" && r.Method == http.MethodGet:
+		if !ensureScope(w, r, config.ScopeMonitoringRead) {
+			return
+		}
+		h.GetAlertNoiseReport(w, r)
 	case path == "incidents" && r.Method == http.MethodGet:
 		if !ensureScope(w, r, config.ScopeMonitoringRead) {
 			return

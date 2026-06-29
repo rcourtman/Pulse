@@ -2595,14 +2595,7 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 				label = fmt.Sprintf("Disk %d", idx+1)
 			}
 
-			keySource := label
-			if disk.Device != "" && !strings.EqualFold(disk.Device, label) {
-				keySource = fmt.Sprintf("%s-%s", label, disk.Device)
-			}
-			sanitizedKey := sanitizeAlertKey(keySource)
-			if sanitizedKey == "" {
-				sanitizedKey = fmt.Sprintf("disk-%d", idx+1)
-			}
+			sanitizedKey, identitySource := guestDiskAlertKey(disk, idx)
 
 			// Avoid duplicate checks if two disks resolve to the same key
 			if _, exists := seenDisks[sanitizedKey]; exists {
@@ -2610,8 +2603,7 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 			}
 			seenDisks[sanitizedKey] = struct{}{}
 
-			perDiskResourceID := fmt.Sprintf("%s-disk-%s", guestID, sanitizedKey)
-			seenDisks[perDiskResourceID] = struct{}{}
+			perDiskResourceID := guestDiskResourceID(guestID, sanitizedKey)
 			message := fmt.Sprintf("%s disk (%s) at %.1f%%", guestType, label, disk.Usage)
 
 			log.Debug().
@@ -2623,14 +2615,17 @@ func (m *Manager) CheckGuest(guest interface{}, instanceName string) {
 				Msg("Evaluating individual disk for alert thresholds")
 
 			metadata := map[string]interface{}{
-				"mountpoint": disk.Mountpoint,
-				"device":     disk.Device,
-				"diskType":   disk.Type,
-				"totalBytes": disk.Total,
-				"usedBytes":  disk.Used,
-				"freeBytes":  disk.Free,
-				"diskIndex":  idx,
-				"label":      label,
+				"mountpoint":     disk.Mountpoint,
+				"device":         disk.Device,
+				"diskType":       disk.Type,
+				"totalBytes":     disk.Total,
+				"usedBytes":      disk.Used,
+				"freeBytes":      disk.Free,
+				"diskIndex":      idx,
+				"label":          label,
+				"diskKey":        sanitizedKey,
+				"identityKey":    perDiskResourceID,
+				"identitySource": identitySource,
 			}
 
 			m.checkMetric(perDiskResourceID, name, node, instanceName, guestType, "disk", disk.Usage, thresholds.Disk, &metricOptions{
@@ -3601,7 +3596,7 @@ func (m *Manager) clearGuestMetricAlerts(guestID string, metrics ...string) int 
 		allowedMetrics[metric] = struct{}{}
 	}
 
-	perDiskPrefix := fmt.Sprintf("%s-disk-", guestID)
+	currentIdent, hasCurrentIdent := parseCanonicalGuestKey(guestID)
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -3611,7 +3606,11 @@ func (m *Manager) clearGuestMetricAlerts(guestID string, metrics ...string) int 
 		if alert == nil || alert.Type == "powered-off" {
 			continue
 		}
-		if alert.ResourceID != guestID && !strings.HasPrefix(alert.ResourceID, perDiskPrefix) {
+		isGuestMetric := alert.ResourceID == guestID
+		if !isGuestMetric {
+			isGuestMetric = m.guestDiskAlertBelongsToGuestNoLock(alert, guestID, currentIdent, hasCurrentIdent)
+		}
+		if !isGuestMetric {
 			continue
 		}
 		if len(allowedMetrics) > 0 {
@@ -3631,7 +3630,7 @@ func (m *Manager) cleanupGuestDiskAlerts(guestID string, seen map[string]struct{
 		return 0
 	}
 
-	prefix := fmt.Sprintf("%s-disk-", guestID)
+	currentIdent, hasCurrentIdent := parseCanonicalGuestKey(guestID)
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -3641,10 +3640,17 @@ func (m *Manager) cleanupGuestDiskAlerts(guestID string, seen map[string]struct{
 		if alert == nil {
 			continue
 		}
-		if !strings.HasPrefix(alert.ResourceID, prefix) {
+		if !m.guestDiskAlertBelongsToGuestNoLock(alert, guestID, currentIdent, hasCurrentIdent) {
 			continue
 		}
 		if seen != nil {
+			parsed, _ := parseGuestMetricResourceIdentity(alert.ResourceID)
+			diskKey, hasDiskKey := guestDiskKeyForAlert(alert, parsed)
+			if hasDiskKey {
+				if _, exists := seen[diskKey]; exists {
+					continue
+				}
+			}
 			if _, exists := seen[alert.ResourceID]; exists {
 				continue
 			}
@@ -3654,6 +3660,23 @@ func (m *Manager) cleanupGuestDiskAlerts(guestID string, seen map[string]struct{
 	}
 
 	return cleared
+}
+
+func (m *Manager) guestDiskAlertBelongsToGuestNoLock(alert *Alert, guestID string, currentIdent guestOverrideIdentity, hasCurrentIdent bool) bool {
+	if alert == nil || alert.Type != "disk" {
+		return false
+	}
+	if strings.HasPrefix(alert.ResourceID, guestID+"/disk:") || strings.HasPrefix(alert.ResourceID, guestID+"-disk-") {
+		return true
+	}
+	if !hasCurrentIdent {
+		return false
+	}
+	alertIdent, ok := parseGuestMetricResourceIdentity(alert.ResourceID)
+	if !ok || !alertIdent.hasDisk || alertIdent.vmid != currentIdent.vmid {
+		return false
+	}
+	return strings.TrimSpace(alert.Instance) == currentIdent.instance
 }
 
 func (m *Manager) clearVendorManagedHostRAIDAlerts(host models.Host) {
@@ -5626,10 +5649,60 @@ func isGuestMetricResourceType(resourceType string) bool {
 	}
 }
 
-func parseGuestAlertVMID(resourceID string) (int, bool) {
+type guestMetricResourceIdentity struct {
+	vmid    int
+	diskKey string
+	hasDisk bool
+}
+
+func parseGuestMetricResourceIdentity(resourceID string) (guestMetricResourceIdentity, bool) {
 	resourceID = strings.TrimSpace(resourceID)
 	if resourceID == "" {
-		return 0, false
+		return guestMetricResourceIdentity{}, false
+	}
+
+	if base, diskKey, ok := splitGuestDiskResourceID(resourceID); ok {
+		if vmid, ok := parseGuestBaseVMID(base); ok {
+			return guestMetricResourceIdentity{
+				vmid:    vmid,
+				diskKey: sanitizeAlertKey(diskKey),
+				hasDisk: true,
+			}, true
+		}
+		return guestMetricResourceIdentity{}, false
+	}
+
+	if vmid, ok := parseGuestBaseVMID(resourceID); ok {
+		return guestMetricResourceIdentity{vmid: vmid}, true
+	}
+
+	return guestMetricResourceIdentity{}, false
+}
+
+func splitGuestDiskResourceID(resourceID string) (string, string, bool) {
+	if idx := strings.Index(resourceID, "/disk:"); idx >= 0 {
+		base := strings.TrimSpace(resourceID[:idx])
+		diskKey := strings.TrimSpace(resourceID[idx+len("/disk:"):])
+		if base != "" && diskKey != "" {
+			return base, diskKey, true
+		}
+		return "", "", false
+	}
+
+	if idx := strings.LastIndex(resourceID, "-disk-"); idx >= 0 {
+		base := strings.TrimSpace(resourceID[:idx])
+		diskKey := strings.TrimSpace(resourceID[idx+len("-disk-"):])
+		if base != "" && diskKey != "" {
+			return base, diskKey, true
+		}
+	}
+
+	return "", "", false
+}
+
+func parseGuestBaseVMID(resourceID string) (int, bool) {
+	if ident, ok := parseCanonicalGuestKey(resourceID); ok {
+		return ident.vmid, true
 	}
 
 	if idx := strings.LastIndex(resourceID, ":"); idx >= 0 && idx < len(resourceID)-1 {
@@ -5645,6 +5718,88 @@ func parseGuestAlertVMID(resourceID string) (int, bool) {
 	}
 
 	return 0, false
+}
+
+func parseGuestAlertVMID(resourceID string) (int, bool) {
+	ident, ok := parseGuestMetricResourceIdentity(resourceID)
+	return ident.vmid, ok
+}
+
+func guestDiskAlertKey(disk models.Disk, idx int) (string, string) {
+	if mountpoint := strings.TrimSpace(disk.Mountpoint); mountpoint != "" {
+		return sanitizeAlertKey(mountpoint), "mountpoint"
+	}
+	if device := strings.TrimSpace(disk.Device); device != "" {
+		return sanitizeAlertKey(device), "device"
+	}
+	return sanitizeAlertKey(fmt.Sprintf("Disk %d", idx+1)), "index"
+}
+
+func guestDiskResourceID(guestID, diskKey string) string {
+	guestID = strings.TrimSpace(guestID)
+	diskKey = sanitizeAlertKey(diskKey)
+	if diskKey == "" {
+		diskKey = "disk"
+	}
+	return fmt.Sprintf("%s/disk:%s", guestID, diskKey)
+}
+
+func canonicalGuestDiskKeyFromMetadata(metadata map[string]interface{}) (string, bool) {
+	if len(metadata) == 0 {
+		return "", false
+	}
+
+	stringValue := func(key string) string {
+		if value, ok := metadata[key].(string); ok {
+			return strings.TrimSpace(value)
+		}
+		return ""
+	}
+
+	for _, key := range []string{"diskKey", "mountpoint", "device", "label"} {
+		if value := stringValue(key); value != "" {
+			return sanitizeAlertKey(value), true
+		}
+	}
+
+	if idxValue, ok := metadata["diskIndex"]; ok {
+		switch v := idxValue.(type) {
+		case int:
+			return sanitizeAlertKey(fmt.Sprintf("Disk %d", v+1)), true
+		case int64:
+			return sanitizeAlertKey(fmt.Sprintf("Disk %d", v+1)), true
+		case float64:
+			if v >= 0 && math.Trunc(v) == v {
+				return sanitizeAlertKey(fmt.Sprintf("Disk %.0f", v+1)), true
+			}
+		}
+	}
+
+	return "", false
+}
+
+func guestDiskKeyForAlert(alert *Alert, parsed guestMetricResourceIdentity) (string, bool) {
+	if alert != nil {
+		if diskKey, ok := canonicalGuestDiskKeyFromMetadata(alert.Metadata); ok && diskKey != "" {
+			return diskKey, true
+		}
+	}
+	if parsed.hasDisk && parsed.diskKey != "" {
+		return parsed.diskKey, true
+	}
+	return "", false
+}
+
+func guestDiskKeyForCurrentMetric(parsed guestMetricResourceIdentity, opts *metricOptions) (string, bool) {
+	if opts != nil {
+		if diskKey, ok := canonicalGuestDiskKeyFromMetadata(opts.Metadata); ok && diskKey != "" {
+			return diskKey, true
+		}
+	}
+	if parsed.hasDisk && parsed.diskKey != "" {
+		return parsed.diskKey, true
+	}
+	return "", false
 }
 
 func storageOverrideLookupKeys(storage models.Storage) []string {
@@ -7003,7 +7158,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 	existingAlert, exists := m.activeAlerts[alertID]
 	migratedAlertIdentity := false
 	if !exists && isGuestMetricResourceType(resourceType) {
-		if migrated := m.migrateGuestMetricAlertNoLock(alertID, resourceID, resourceName, node, instance, metricType); migrated != nil {
+		if migrated := m.migrateGuestMetricAlertNoLock(alertID, resourceID, resourceName, node, instance, metricType, opts); migrated != nil {
 			existingAlert = migrated
 			exists = true
 			migratedAlertIdentity = true
@@ -7345,12 +7500,13 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 	}
 }
 
-func (m *Manager) migrateGuestMetricAlertNoLock(alertID, resourceID, resourceName, node, instance, metricType string) *Alert {
-	currentVMID, ok := parseGuestAlertVMID(resourceID)
+func (m *Manager) migrateGuestMetricAlertNoLock(alertID, resourceID, resourceName, node, instance, metricType string, opts *metricOptions) *Alert {
+	currentIdentity, ok := parseGuestMetricResourceIdentity(resourceID)
 	if !ok {
 		return nil
 	}
 
+	currentDiskKey, currentHasDiskKey := guestDiskKeyForCurrentMetric(currentIdentity, opts)
 	normalizedInstance := strings.TrimSpace(instance)
 	for existingID, alert := range m.activeAlerts {
 		if existingID == alertID || alert == nil {
@@ -7363,9 +7519,18 @@ func (m *Manager) migrateGuestMetricAlertNoLock(alertID, resourceID, resourceNam
 			continue
 		}
 
-		alertVMID, ok := parseGuestAlertVMID(alert.ResourceID)
-		if !ok || alertVMID != currentVMID {
+		existingIdentity, ok := parseGuestMetricResourceIdentity(alert.ResourceID)
+		if !ok || existingIdentity.vmid != currentIdentity.vmid {
 			continue
+		}
+		if metricType == "disk" {
+			existingDiskKey, existingHasDiskKey := guestDiskKeyForAlert(alert, existingIdentity)
+			if existingHasDiskKey != currentHasDiskKey {
+				continue
+			}
+			if existingHasDiskKey && existingDiskKey != currentDiskKey {
+				continue
+			}
 		}
 
 		oldAlertID := alert.ID

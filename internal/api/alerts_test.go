@@ -72,6 +72,11 @@ func (m *MockAlertManager) GetAlertHistorySince(since time.Time, limit int) []al
 	return args.Get(0).([]alerts.Alert)
 }
 
+func (m *MockAlertManager) AuditAlertNoise(since time.Time, historyLimit int) alerts.AlertNoiseReport {
+	args := m.Called(since, historyLimit)
+	return args.Get(0).(alerts.AlertNoiseReport)
+}
+
 type MockAlertMonitor struct {
 	testifymock.Mock
 }
@@ -310,6 +315,88 @@ func TestGetAlertHistory(t *testing.T) {
 	assert.Len(t, resp, 1)
 }
 
+func TestGetAlertNoiseReport(t *testing.T) {
+	mockMonitor := new(MockAlertMonitor)
+	mockManager := new(MockAlertManager)
+	mockMonitor.On("GetAlertManager").Return(mockManager)
+	h := NewAlertHandlers(nil, mockMonitor, nil)
+
+	since := time.Date(2026, 6, 29, 12, 0, 0, 0, time.UTC)
+	report := alerts.AlertNoiseReport{
+		WindowStart:  since,
+		ActiveCount:  2,
+		HistoryCount: 5,
+		Findings: []alerts.AlertNoiseFinding{
+			{
+				Kind: alerts.AlertNoiseFindingIdentityChurn,
+				Identity: alerts.AlertNoiseIdentity{
+					Key:    "guest:cluster:301/disk:root::disk",
+					Source: "guest.disk",
+				},
+				AlertIDs:    []string{"old-disk", "new-disk"},
+				ResourceIDs: []string{"old", "new"},
+				Count:       2,
+			},
+		},
+	}
+	mockManager.On("AuditAlertNoise", since, 250).Return(report).Once()
+
+	req := httptest.NewRequest("GET", "/api/alerts/noise?since="+since.Format(time.RFC3339)+"&historyLimit=250", nil)
+	w := httptest.NewRecorder()
+	h.GetAlertNoiseReport(w, req)
+
+	assert.Equal(t, 200, w.Code)
+	var resp alerts.AlertNoiseReport
+	json.NewDecoder(w.Body).Decode(&resp)
+	assert.Equal(t, 2, resp.ActiveCount)
+	assert.Equal(t, 5, resp.HistoryCount)
+	if assert.Len(t, resp.Findings, 1) {
+		assert.Equal(t, alerts.AlertNoiseFindingIdentityChurn, resp.Findings[0].Kind)
+		assert.Equal(t, "guest:cluster:301/disk:root::disk", resp.Findings[0].Identity.Key)
+	}
+	mockManager.AssertExpectations(t)
+}
+
+func TestGetAlertNoiseReportDefaults(t *testing.T) {
+	mockMonitor := new(MockAlertMonitor)
+	mockManager := new(MockAlertManager)
+	mockMonitor.On("GetAlertManager").Return(mockManager)
+	h := NewAlertHandlers(nil, mockMonitor, nil)
+
+	mockManager.On("AuditAlertNoise", time.Time{}, 1000).Return(alerts.AlertNoiseReport{HistoryCount: 3}).Once()
+
+	req := httptest.NewRequest("GET", "/api/alerts/noise", nil)
+	w := httptest.NewRecorder()
+	h.GetAlertNoiseReport(w, req)
+
+	assert.Equal(t, 200, w.Code)
+	var resp alerts.AlertNoiseReport
+	json.NewDecoder(w.Body).Decode(&resp)
+	assert.Equal(t, 3, resp.HistoryCount)
+	mockManager.AssertExpectations(t)
+}
+
+func TestGetAlertNoiseReportRejectsInvalidQuery(t *testing.T) {
+	mockMonitor := new(MockAlertMonitor)
+	mockManager := new(MockAlertManager)
+	mockMonitor.On("GetAlertManager").Return(mockManager)
+	h := NewAlertHandlers(nil, mockMonitor, nil)
+
+	tests := []string{
+		"/api/alerts/noise?historyLimit=-1",
+		"/api/alerts/noise?historyLimit=abc",
+		"/api/alerts/noise?since=not-a-time",
+	}
+
+	for _, target := range tests {
+		req := httptest.NewRequest("GET", target, nil)
+		w := httptest.NewRecorder()
+		h.GetAlertNoiseReport(w, req)
+		assert.Equal(t, 400, w.Code, target)
+	}
+	mockManager.AssertNotCalled(t, "AuditAlertNoise", testifymock.Anything, testifymock.Anything)
+}
+
 func TestUnacknowledgeAlert(t *testing.T) {
 	mockMonitor := new(MockAlertMonitor)
 	mockManager := new(MockAlertManager)
@@ -450,6 +537,9 @@ func TestHandleAlerts(t *testing.T) {
 		{"GET", "/api/alerts/active", func() { mockManager.On("GetActiveAlerts").Return([]alerts.Alert{}).Once() }},
 		{"GET", "/api/alerts/history", func() {
 			mockManager.On("GetAlertHistory", mock.MatchedBy(func(int) bool { return true })).Return([]alerts.Alert{}).Once()
+		}},
+		{"GET", "/api/alerts/noise", func() {
+			mockManager.On("AuditAlertNoise", time.Time{}, 1000).Return(alerts.AlertNoiseReport{}).Once()
 		}},
 		{"GET", "/api/alerts/incidents?alert_id=a1", func() {
 			mockMonitor.On("GetIncidentStore").Return(memory.NewIncidentStore(memory.IncidentStoreConfig{})).Once()
