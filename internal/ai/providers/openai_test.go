@@ -945,21 +945,24 @@ func TestNewOpenAIClient_StripsOpenRouterPrefix(t *testing.T) {
 }
 
 func TestOpenAIClient_ListModels(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"data": []map[string]interface{}{
-				{"id": "gpt-4", "object": "model", "created": 1234567890, "owned_by": "openai"},
-				{"id": "gpt-3.5-turbo", "object": "model", "created": 1234567890, "owned_by": "openai"},
-				{"id": "claude-3", "object": "model", "created": 1234567890, "owned_by": "anthropic"},
-			},
-		})
-	}))
-	defer server.Close()
-
-	client := NewOpenAIClient("sk-test", "gpt-4", server.URL, 0)
+	client := NewOpenAIClient("sk-test", "gpt-4", "https://api.openai.com/v1", 0)
+	client.client = &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			assert.Equal(t, "https://api.openai.com/v1/models", r.URL.String())
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body: io.NopCloser(strings.NewReader(`{
+					"data": [
+						{"id": "gpt-4", "object": "model", "created": 1234567890, "owned_by": "openai"},
+						{"id": "gpt-3.5-turbo", "object": "model", "created": 1234567890, "owned_by": "openai"},
+						{"id": "claude-3", "object": "model", "created": 1234567890, "owned_by": "anthropic"}
+					]
+				}`)),
+				Request: r,
+			}, nil
+		}),
+	}
 
 	models, err := client.ListModels(context.Background())
 	require.NoError(t, err)
@@ -967,6 +970,37 @@ func TestOpenAIClient_ListModels(t *testing.T) {
 	assert.Len(t, models, 2)
 	assert.Equal(t, "gpt-4", models[0].ID)
 	assert.Equal(t, "gpt-3.5-turbo", models[1].ID)
+}
+
+func TestOpenAIClient_ListModels_CustomBaseURLReturnsCatalog(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/v1/models", r.URL.Path)
+		assert.Equal(t, "Bearer sk-test", r.Header.Get("Authorization"))
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"data": []map[string]interface{}{
+				{"id": "qwen2.5-coder:32b", "name": "Qwen Coder 32B", "description": "local coding model", "created": 1234567890},
+				{"id": "llama3.3:70b", "object": "model", "created": 1234567891, "owned_by": "custom-lab"},
+				{"id": "gpt-4-compatible", "object": "model", "created": 1234567892},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := NewOpenAIClient("sk-test", "qwen2.5-coder:32b", server.URL, 0)
+
+	models, err := client.ListModels(context.Background())
+	require.NoError(t, err)
+
+	require.Len(t, models, 3)
+	assert.Equal(t, "qwen2.5-coder:32b", models[0].ID)
+	assert.Equal(t, "Qwen Coder 32B", models[0].Name)
+	assert.Equal(t, "local coding model", models[0].Description)
+	assert.Equal(t, "llama3.3:70b", models[1].ID)
+	assert.Equal(t, "custom-lab", models[1].Description)
+	assert.Equal(t, "gpt-4-compatible", models[2].ID)
 }
 
 func TestOpenAIClient_ListModels_OpenRouterReturnsCatalog(t *testing.T) {

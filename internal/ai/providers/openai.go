@@ -307,6 +307,17 @@ func (c *OpenAIClient) isOpenRouter() bool {
 	return c.Name() == "openrouter" || strings.Contains(c.baseURL, "openrouter.ai")
 }
 
+func (c *OpenAIClient) usesOfficialOpenAIEndpoint() bool {
+	if c.Name() != "openai" {
+		return false
+	}
+	u, err := url.Parse(c.baseURL)
+	if err != nil || u.Host == "" {
+		return true
+	}
+	return strings.EqualFold(u.Hostname(), "api.openai.com")
+}
+
 // isDeepSeekReasoner returns true if using DeepSeek's reasoning model
 func (c *OpenAIClient) isDeepSeekReasoner() bool {
 	return c.isDeepSeek() && strings.Contains(c.model, "reasoner")
@@ -1222,6 +1233,25 @@ func (c *OpenAIClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 		}
 
 		if c.Name() != "openai" {
+			modelName := strings.TrimSpace(m.Name)
+			if modelName == "" {
+				modelName = m.ID
+			}
+			description := strings.TrimSpace(m.Description)
+			if description == "" && strings.TrimSpace(m.OwnedBy) != "" {
+				description = strings.TrimSpace(m.OwnedBy)
+			}
+			models = append(models, ModelInfo{
+				ID:          m.ID,
+				Name:        modelName,
+				Description: description,
+				CreatedAt:   m.Created,
+				Notable:     cache.IsNotable(c.Name(), m.ID, m.Created),
+			})
+			continue
+		}
+
+		if !c.usesOfficialOpenAIEndpoint() {
 			modelName := strings.TrimSpace(m.Name)
 			if modelName == "" {
 				modelName = m.ID
