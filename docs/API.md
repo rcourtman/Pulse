@@ -68,6 +68,27 @@ Check if Pulse is running.
 `GET /api/state`
 Returns the complete state of your infrastructure (Nodes, VMs, Containers, Storage, Alerts). This is the main endpoint used by the dashboard.
 
+`GET /api/state/summary`
+Returns a lightweight integration summary for external dashboards and checks. Requires `monitoring:read`.
+
+```json
+{
+  "activeAlerts": 1,
+  "nodes": 2,
+  "vms": 8,
+  "containers": 12,
+  "dockerHosts": [
+    {
+      "name": "Docker Host",
+      "containers": 5,
+      "uptimeSeconds": 86400,
+      "cpuUsagePercent": 12.5
+    }
+  ],
+  "lastUpdate": "2026-05-24T10:11:12Z"
+}
+```
+
 ### Simple Stats (HTML)
 `GET /simple-stats`
 Lightweight HTML status page for quick checks.

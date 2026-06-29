@@ -162,6 +162,19 @@ func TestRouter_HandleStateSummary(t *testing.T) {
 		assert.Equal(t, int64(3600), summary.DockerHosts[0].UptimeSeconds)
 		assert.Equal(t, 12.5, summary.DockerHosts[0].CPUUsagePercent)
 	}
+
+	if rec.Body.Len() >= 5*1024 {
+		t.Fatalf("expected /api/state/summary body under 5 KiB, got %d bytes", rec.Body.Len())
+	}
+
+	var payload map[string]any
+	err = json.Unmarshal(rec.Body.Bytes(), &payload)
+	assert.NoError(t, err)
+	for _, key := range []string{"resources", "metrics", "performance", "stats", "connectedInfrastructure", "pveTagStyles", "pveTagColors"} {
+		if _, ok := payload[key]; ok {
+			t.Fatalf("expected %q to be omitted from /api/state/summary payload", key)
+		}
+	}
 }
 
 func TestBuildStateSummaryCountsSnapshotResources(t *testing.T) {

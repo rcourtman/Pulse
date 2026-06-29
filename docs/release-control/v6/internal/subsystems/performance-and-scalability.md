@@ -532,6 +532,11 @@ dashboard-specific overview, trend, or summary transport.
     `/api/state` and paying an avoidable `401`; once a local-login hint exists
     or the operator is on a protected route, that shared state probe remains
     the canonical runtime detector.
+    External dashboards and scripts that only need fleet counters must use
+    `/api/state/summary`, not the full `/api/state` hydrate. That summary route
+    must remain bounded to aggregate counts and Docker host rollups, with no
+    resource arrays, metrics history, connected-infrastructure list, or chart
+    payloads added to the response.
     That same app-shell performance boundary treats global commercial banners as
     non-hot-path UI. Retired self-hosted trial or managed-model acquisition
     surfaces must not be reintroduced into `frontend-modern/src/App.tsx` as
