@@ -1,6 +1,68 @@
 import type { State, Performance, Stats, DockerHostCommand, HostLookupResponse } from '@/types/api';
 import { apiFetch, apiFetchJSON } from '@/utils/apiClient';
 
+export interface AgentFleetDiagnostics {
+  generatedAt: number;
+  serverVersion?: string;
+  summary: AgentFleetDiagnosticSummary;
+  agents: AgentFleetAgentDiagnostic[];
+}
+
+export interface AgentFleetDiagnosticSummary {
+  total: number;
+  healthy: number;
+  warning: number;
+  critical: number;
+  removed: number;
+}
+
+export interface AgentFleetAgentDiagnostic {
+  rowKey: string;
+  id: string;
+  agentId?: string;
+  name: string;
+  hostname?: string;
+  types: Array<'host' | 'docker' | 'kubernetes'>;
+  status: 'healthy' | 'warning' | 'critical' | 'removed';
+  rawStatus?: string;
+  lastSeen?: number;
+  intervalSeconds?: number;
+  version?: string;
+  profileId?: string;
+  profileName?: string;
+  profileVersion?: number;
+  deployedProfileVersion?: number;
+  reasons: AgentFleetDiagnosticReason[];
+  repairActions?: AgentFleetDiagnosticRepair[];
+}
+
+export interface AgentFleetDiagnosticReason {
+  code: string;
+  severity: 'healthy' | 'warning' | 'critical' | 'removed';
+  message: string;
+  evidence?: string[];
+}
+
+export interface AgentFleetDiagnosticRepair {
+  code: string;
+  label: string;
+  description: string;
+  supported: boolean;
+  scope?: string;
+}
+
+const emptyAgentFleetDiagnostics = (): AgentFleetDiagnostics => ({
+  generatedAt: Date.now(),
+  summary: {
+    total: 0,
+    healthy: 0,
+    warning: 0,
+    critical: 0,
+    removed: 0,
+  },
+  agents: [],
+});
+
 export class MonitoringAPI {
   private static baseUrl = '/api';
 
@@ -14,6 +76,11 @@ export class MonitoringAPI {
 
   static async getStats(): Promise<Stats> {
     return apiFetchJSON(`${this.baseUrl}/stats`);
+  }
+
+  static async getAgentFleetDiagnostics(): Promise<AgentFleetDiagnostics> {
+    const diagnostics = await apiFetchJSON<AgentFleetDiagnostics>(`${this.baseUrl}/agents/diagnostics`);
+    return diagnostics || emptyAgentFleetDiagnostics();
   }
 
   static async exportDiagnostics(): Promise<Blob> {

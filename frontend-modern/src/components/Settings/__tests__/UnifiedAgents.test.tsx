@@ -30,6 +30,7 @@ const clipboardSpy = vi.fn();
 const fetchMock = vi.fn();
 const listProfilesMock = vi.fn();
 const listAssignmentsMock = vi.fn();
+const getAgentDiagnosticsMock = vi.fn();
 
 vi.mock('@/App', () => ({
   useWebSocket: () => mockWsStore,
@@ -40,6 +41,7 @@ vi.mock('@/api/monitoring', () => ({
     lookupHost: (...args: unknown[]) => lookupMock(...args),
     deleteHostAgent: (...args: unknown[]) => deleteHostAgentMock(...args),
     deleteDockerHost: (...args: unknown[]) => deleteDockerHostMock(...args),
+    getAgentFleetDiagnostics: (...args: unknown[]) => getAgentDiagnosticsMock(...args),
   },
 }));
 
@@ -176,6 +178,7 @@ beforeEach(() => {
   notificationInfoMock.mockReset();
   listProfilesMock.mockReset();
   listAssignmentsMock.mockReset();
+  getAgentDiagnosticsMock.mockReset();
   clipboardSpy.mockReset().mockResolvedValue(undefined);
   fetchMock.mockReset();
   fetchMock.mockResolvedValue(
@@ -189,6 +192,12 @@ beforeEach(() => {
 
   listProfilesMock.mockResolvedValue([]);
   listAssignmentsMock.mockResolvedValue([]);
+  getAgentDiagnosticsMock.mockResolvedValue({
+    generatedAt: Date.now(),
+    serverVersion: '6.2.0',
+    summary: { total: 0, healthy: 0, warning: 0, critical: 0, removed: 0 },
+    agents: [],
+  });
 });
 
 afterEach(() => {
@@ -463,6 +472,114 @@ describe('UnifiedAgents managed agents table', () => {
     fireEvent.change(typeSelect, { target: { value: 'kubernetes' } });
 
     expect(screen.getByText('K8s Alpha')).toBeInTheDocument();
+  });
+
+  it('shows fleet doctor reasons and unsupported repair notes', async () => {
+    const host = createHost({ hostname: 'docker-node.local', displayName: 'Docker Node' });
+    getAgentDiagnosticsMock.mockResolvedValue({
+      generatedAt: Date.now(),
+      serverVersion: '6.2.0',
+      summary: { total: 1, healthy: 0, warning: 0, critical: 1, removed: 0 },
+      agents: [
+        {
+          rowKey: 'agent-host-1',
+          id: 'host-1',
+          agentId: 'host-1',
+          name: 'Docker Node',
+          hostname: 'docker-node.local',
+          types: ['host'],
+          status: 'critical',
+          rawStatus: 'online',
+          version: '6.2.0',
+          reasons: [
+            {
+              code: 'docker_expected_missing',
+              severity: 'critical',
+              message: 'The assigned profile enables Docker monitoring, but no Docker host telemetry is reporting for this agent.',
+              evidence: [
+                'Profile key enable_docker=true',
+                'Local causes can include missing Docker socket access, installing on the wrong host, or Docker mode being disabled',
+              ],
+            },
+          ],
+          repairActions: [],
+        },
+      ],
+    });
+
+    setupComponent([host]);
+
+    await waitFor(() => {
+      expect(screen.getByText('Agent Fleet Doctor')).toBeInTheDocument();
+    });
+    expect(screen.getByText('1 critical')).toBeInTheDocument();
+    expect(screen.getByText(/no Docker host telemetry is reporting/i)).toBeInTheDocument();
+
+    const toggle = screen.getByRole('button', { name: /details for Docker Node/i });
+    fireEvent.click(toggle);
+
+    const detailsRow = document.getElementById('agent-details-agent-host-1');
+    expect(detailsRow).not.toBeNull();
+    const details = within(detailsRow as HTMLElement);
+    expect(details.getByText('Profile key enable_docker=true')).toBeInTheDocument();
+    expect(details.getByText(/No safe remote repair is supported/i)).toBeInTheDocument();
+  });
+
+  it('exposes the supported upgrade command for stale agents', async () => {
+    const host = createHost({ hostname: 'stale-node.local', displayName: 'Stale Node', agentVersion: '6.1.0' });
+    getAgentDiagnosticsMock.mockResolvedValue({
+      generatedAt: Date.now(),
+      serverVersion: '6.2.0',
+      summary: { total: 1, healthy: 0, warning: 1, critical: 0, removed: 0 },
+      agents: [
+        {
+          rowKey: 'agent-host-1',
+          id: 'host-1',
+          agentId: 'host-1',
+          name: 'Stale Node',
+          hostname: 'stale-node.local',
+          types: ['host'],
+          status: 'warning',
+          rawStatus: 'online',
+          version: '6.1.0',
+          reasons: [
+            {
+              code: 'agent_version_stale',
+              severity: 'warning',
+              message: 'Agent version 6.1.0 is older than the Pulse server version 6.2.0.',
+              evidence: ['Agent version: 6.1.0', 'Server version: 6.2.0'],
+            },
+          ],
+          repairActions: [
+            {
+              code: 'copy_upgrade_command',
+              label: 'Copy upgrade command',
+              description: 'Uses the existing installer command from Settings -> Agents; no remote command is queued.',
+              supported: true,
+              scope: 'local_admin_shell',
+            },
+          ],
+        },
+      ],
+    });
+
+    setupComponent([host]);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Agent version 6.1.0 is older/i)).toBeInTheDocument();
+    });
+
+    const toggle = screen.getByRole('button', { name: /details for Stale Node/i });
+    fireEvent.click(toggle);
+
+    const detailsRow = document.getElementById('agent-details-agent-host-1');
+    expect(detailsRow).not.toBeNull();
+    const details = within(detailsRow as HTMLElement);
+    fireEvent.click(details.getByRole('button', { name: 'Copy' }));
+
+    await waitFor(() => {
+      expect(clipboardSpy).toHaveBeenCalledWith(expect.stringContaining('/install.sh'));
+    });
   });
 });
 

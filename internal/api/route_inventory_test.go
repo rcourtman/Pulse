@@ -300,6 +300,7 @@ var allRouteAllowlist = []string{
 	"/api/agents/host/uninstall",
 	"/api/agents/host/unlink",
 	"/api/agents/host/link",
+	"/api/agents/diagnostics",
 	"/api/agents/host/",
 	"/api/agents/docker/commands/",
 	"/api/agents/docker/hosts/",

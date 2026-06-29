@@ -7,7 +7,7 @@ import Server from 'lucide-solid/icons/server';
 import Users from 'lucide-solid/icons/users';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import { formatRelativeTime, formatAbsoluteTime } from '@/utils/format';
-import { MonitoringAPI } from '@/api/monitoring';
+import { MonitoringAPI, type AgentFleetAgentDiagnostic, type AgentFleetDiagnosticReason, type AgentFleetDiagnosticRepair } from '@/api/monitoring';
 import { AgentProfilesAPI, type AgentProfile, type AgentProfileAssignment } from '@/api/agentProfiles';
 import { HostMetadataAPI } from '@/api/hostMetadata';
 import { DockerMetadataAPI } from '@/api/dockerMetadata';
@@ -53,6 +53,7 @@ type UnifiedAgentRow = {
     linkedNodeId?: string;
     commandsEnabled?: boolean;
     agentId?: string;
+    diagnostic?: AgentFleetAgentDiagnostic;
     scope: {
         label: string;
         detail?: string;
@@ -173,6 +174,7 @@ export const UnifiedAgents: Component = () => {
     const [customAgentUrl, setCustomAgentUrl] = createSignal('');
     const [profiles, setProfiles] = createSignal<AgentProfile[]>([]);
     const [assignments, setAssignments] = createSignal<AgentProfileAssignment[]>([]);
+    const [agentDiagnostics, setAgentDiagnostics] = createSignal<{ summary: { total: number; healthy: number; warning: number; critical: number; removed: number }; serverVersion?: string; agents: AgentFleetAgentDiagnostic[] } | null>(null);
     // Track pending command config changes: hostId -> { desired value, timestamp }
     const [pendingCommandConfig, setPendingCommandConfig] = createSignal<Record<string, { enabled: boolean; timestamp: number }>>({});
     const [pendingScopeUpdates, setPendingScopeUpdates] = createSignal<Record<string, boolean>>({});
@@ -213,6 +215,60 @@ export const UnifiedAgents: Component = () => {
         return value === 'online' || value === 'running' || value === 'healthy';
     };
 
+    const diagnosticStatusLabel = (status: AgentFleetAgentDiagnostic['status'] | undefined) => {
+        switch (status) {
+            case 'critical':
+                return 'Critical';
+            case 'warning':
+                return 'Needs attention';
+            case 'removed':
+                return 'Removed';
+            case 'healthy':
+                return 'Healthy';
+            default:
+                return 'Unknown';
+        }
+    };
+
+    const diagnosticBadgeClass = (status: AgentFleetAgentDiagnostic['status'] | undefined) => {
+        switch (status) {
+            case 'critical':
+                return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200';
+            case 'warning':
+                return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200';
+            case 'removed':
+                return 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
+            case 'healthy':
+                return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
+            default:
+                return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+        }
+    };
+
+    const reasonAccentClass = (severity: AgentFleetDiagnosticReason['severity']) => {
+        if (severity === 'critical') {
+            return 'border-red-200 bg-red-50 text-red-900 dark:border-red-800 dark:bg-red-900/20 dark:text-red-100';
+        }
+        if (severity === 'warning' || severity === 'removed') {
+            return 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-100';
+        }
+        return 'border-green-200 bg-green-50 text-green-900 dark:border-green-800 dark:bg-green-900/20 dark:text-green-100';
+    };
+
+    const repairSupported = (actions: AgentFleetDiagnosticRepair[] | undefined) => {
+        return Boolean(actions?.some(action => action.supported));
+    };
+
+    const fetchAgentDiagnostics = async () => {
+        try {
+            const data = await MonitoringAPI.getAgentFleetDiagnostics();
+            setAgentDiagnostics(data);
+        } catch (err) {
+            logger.debug('Failed to load agent fleet diagnostics', err);
+            setAgentDiagnostics(null);
+        }
+    };
+
     onMount(() => {
         if (typeof window === 'undefined') {
             return;
@@ -246,6 +302,7 @@ export const UnifiedAgents: Component = () => {
             }
         };
         fetchAgentProfiles();
+        void fetchAgentDiagnostics();
     });
 
     const requiresToken = () => {
@@ -501,6 +558,22 @@ export const UnifiedAgents: Component = () => {
         return map;
     });
 
+    const diagnosticByKey = createMemo(() => {
+        const map = new Map<string, AgentFleetAgentDiagnostic>();
+        for (const diagnostic of agentDiagnostics()?.agents || []) {
+            map.set(diagnostic.rowKey, diagnostic);
+            map.set(`id:${diagnostic.id}`, diagnostic);
+            if (diagnostic.agentId) {
+                map.set(`agent:${diagnostic.agentId}`, diagnostic);
+            }
+        }
+        return map;
+    });
+
+    const getDiagnosticFor = (rowKey: string, id: string, agentId?: string) => {
+        return diagnosticByKey().get(rowKey) || diagnosticByKey().get(`id:${id}`) || (agentId ? diagnosticByKey().get(`agent:${agentId}`) : undefined);
+    };
+
     const getScopeInfo = (agentId: string | undefined) => {
         if (!agentId) {
             return { label: 'N/A', detail: '', category: 'na' as const };
@@ -645,13 +718,15 @@ export const UnifiedAgents: Component = () => {
             const resolvedAgentId = agent.agentId || agent.id;
             const scopeInfo = getScopeInfo(resolvedAgentId);
             const name = agent.displayName || agent.hostname;
-            const searchText = [name, agent.hostname, agent.id, resolvedAgentId]
+            const rowKey = `agent-${agent.id}`;
+            const diagnostic = getDiagnosticFor(rowKey, agent.id, resolvedAgentId);
+            const searchText = [name, agent.hostname, agent.id, resolvedAgentId, ...(diagnostic?.reasons?.map(reason => reason.message) || [])]
                 .filter(Boolean)
                 .join(' ')
                 .toLowerCase();
 
             rows.push({
-                rowKey: `agent-${agent.id}`,
+                rowKey,
                 id: agent.id,
                 name,
                 hostname: agent.hostname,
@@ -665,6 +740,7 @@ export const UnifiedAgents: Component = () => {
                 linkedNodeId: agent.linkedNodeId,
                 commandsEnabled: agent.commandsEnabled,
                 agentId: resolvedAgentId,
+                diagnostic,
                 scope: scopeInfo,
                 searchText,
             });
@@ -672,8 +748,10 @@ export const UnifiedAgents: Component = () => {
 
         kubernetesClusters().forEach(cluster => {
             const name = cluster.customDisplayName || cluster.displayName || cluster.name || cluster.id;
+            const rowKey = `k8s-${cluster.id}`;
+            const diagnostic = getDiagnosticFor(rowKey, cluster.id, cluster.agentId);
             rows.push({
-                rowKey: `k8s-${cluster.id}`,
+                rowKey,
                 id: cluster.id,
                 name,
                 types: ['kubernetes'],
@@ -682,8 +760,9 @@ export const UnifiedAgents: Component = () => {
                 lastSeen: cluster.lastSeen,
                 version: cluster.version || cluster.agentVersion,
                 agentId: cluster.agentId,
+                diagnostic,
                 scope: getScopeInfo(undefined),
-                searchText: [name, cluster.name, cluster.displayName, cluster.id, cluster.server, cluster.context]
+                searchText: [name, cluster.name, cluster.displayName, cluster.id, cluster.server, cluster.context, ...(diagnostic?.reasons?.map(reason => reason.message) || [])]
                     .filter(Boolean)
                     .join(' ')
                     .toLowerCase(),
@@ -697,8 +776,10 @@ export const UnifiedAgents: Component = () => {
 
         removedDockerHosts().forEach(host => {
             const name = host.displayName || host.hostname || host.id;
+            const rowKey = `removed-docker-${host.id}`;
+            const diagnostic = getDiagnosticFor(rowKey, host.id);
             rows.push({
-                rowKey: `removed-docker-${host.id}`,
+                rowKey,
                 id: host.id,
                 name,
                 hostname: host.hostname,
@@ -706,15 +787,18 @@ export const UnifiedAgents: Component = () => {
                 types: ['docker'],
                 status: 'removed',
                 removedAt: host.removedAt,
+                diagnostic,
                 scope: getScopeInfo(undefined),
-                searchText: [name, host.hostname, host.id].filter(Boolean).join(' ').toLowerCase(),
+                searchText: [name, host.hostname, host.id, ...(diagnostic?.reasons?.map(reason => reason.message) || [])].filter(Boolean).join(' ').toLowerCase(),
             });
         });
 
         removedHosts().forEach(host => {
             const name = host.displayName || host.hostname || host.id;
+            const rowKey = `removed-host-${host.id}`;
+            const diagnostic = getDiagnosticFor(rowKey, host.id);
             rows.push({
-                rowKey: `removed-host-${host.id}`,
+                rowKey,
                 id: host.id,
                 name,
                 hostname: host.hostname,
@@ -722,22 +806,26 @@ export const UnifiedAgents: Component = () => {
                 types: ['host'],
                 status: 'removed',
                 removedAt: host.removedAt,
+                diagnostic,
                 scope: getScopeInfo(undefined),
-                searchText: [name, host.hostname, host.id].filter(Boolean).join(' ').toLowerCase(),
+                searchText: [name, host.hostname, host.id, ...(diagnostic?.reasons?.map(reason => reason.message) || [])].filter(Boolean).join(' ').toLowerCase(),
             });
         });
 
         removedKubernetesClusters().forEach(cluster => {
             const name = cluster.displayName || cluster.name || cluster.id;
+            const rowKey = `removed-k8s-${cluster.id}`;
+            const diagnostic = getDiagnosticFor(rowKey, cluster.id);
             rows.push({
-                rowKey: `removed-k8s-${cluster.id}`,
+                rowKey,
                 id: cluster.id,
                 name,
                 types: ['kubernetes'],
                 status: 'removed',
                 removedAt: cluster.removedAt,
+                diagnostic,
                 scope: getScopeInfo(undefined),
-                searchText: [name, cluster.name, cluster.id].filter(Boolean).join(' ').toLowerCase(),
+                searchText: [name, cluster.name, cluster.id, ...(diagnostic?.reasons?.map(reason => reason.message) || [])].filter(Boolean).join(' ').toLowerCase(),
             });
         });
 
@@ -1512,6 +1600,40 @@ export const UnifiedAgents: Component = () => {
                     </div>
                 </Show>
 
+                <Show when={agentDiagnostics()}>
+                    {(diagnostics) => (
+                        <div class="rounded-lg border border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-900/40">
+                            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div>
+                                    <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Agent Fleet Doctor</h4>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">
+                                        Read-only diagnosis from reported agent state, server version, and profile deployment state.
+                                    </p>
+                                </div>
+                                <div class="flex flex-wrap items-center gap-2 text-xs">
+                                    <span class="rounded-full bg-green-100 px-2 py-0.5 font-medium text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                                        {diagnostics().summary.healthy} healthy
+                                    </span>
+                                    <span class="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
+                                        {diagnostics().summary.warning} warning
+                                    </span>
+                                    <span class="rounded-full bg-red-100 px-2 py-0.5 font-medium text-red-800 dark:bg-red-900/30 dark:text-red-200">
+                                        {diagnostics().summary.critical} critical
+                                    </span>
+                                    <span class="rounded-full bg-gray-100 px-2 py-0.5 font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                                        {diagnostics().summary.removed} removed
+                                    </span>
+                                </div>
+                            </div>
+                            <Show when={diagnostics().serverVersion}>
+                                <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                    Server version used for stale-agent checks: <span class="font-mono text-gray-700 dark:text-gray-200">{diagnostics().serverVersion}</span>
+                                </p>
+                            </Show>
+                        </div>
+                    )}
+                </Show>
+
                 <div class="flex flex-wrap items-end gap-3">
                     <div class="space-y-1">
                         <label for="agent-filter-type" class="text-xs font-medium text-gray-600 dark:text-gray-400">Type</label>
@@ -1615,6 +1737,9 @@ export const UnifiedAgents: Component = () => {
                                     const assignment = () => resolvedAgentId ? assignmentByAgent().get(resolvedAgentId) : undefined;
                                     const isScopeUpdating = () => resolvedAgentId ? Boolean(pendingScopeUpdates()[resolvedAgentId]) : false;
                                     const agentName = row.displayName || row.hostname || row.name;
+                                    const diagnostic = () => row.diagnostic;
+                                    const reasons = () => diagnostic()?.reasons || [];
+                                    const repairActions = () => diagnostic()?.repairActions || [];
                                     const typeBadgeClass = (type: UnifiedAgentType) => {
                                         if (type === 'host') {
                                             return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300';
@@ -1624,15 +1749,11 @@ export const UnifiedAgents: Component = () => {
                                         }
                                         return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300';
                                     };
-                                    const statusBadgeClass = () => {
-                                        if (isRemoved()) {
-                                            return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200';
-                                        }
-                                        if (connectedFromStatus(row.healthStatus)) {
-                                            return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
-                                        }
-                                        return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
-                                    };
+                                    const statusBadgeClass = () => diagnostic()
+                                        ? diagnosticBadgeClass(diagnostic()?.status)
+                                        : connectedFromStatus(row.healthStatus)
+                                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                                            : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
                                     const lastSeenLabel = () => {
                                         if (isRemoved()) {
                                             return row.removedAt ? `Removed ${formatRelativeTime(row.removedAt)}` : 'Removed';
@@ -1685,9 +1806,21 @@ export const UnifiedAgents: Component = () => {
                                                     </div>
                                                 </td>
                                                 <td class="whitespace-nowrap px-4 py-3 text-sm">
-                                                    <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusBadgeClass()}`}>
-                                                        {isRemoved() ? 'Removed' : row.healthStatus || 'unknown'}
-                                                    </span>
+                                                    <div class="max-w-[320px] space-y-1">
+                                                        <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusBadgeClass()}`}>
+                                                            {diagnostic() ? diagnosticStatusLabel(diagnostic()?.status) : isRemoved() ? 'Removed' : row.healthStatus || 'unknown'}
+                                                        </span>
+                                                        <Show when={!isRemoved() && row.healthStatus}>
+                                                            <div class="text-[11px] text-gray-500 dark:text-gray-400">Agent: {row.healthStatus}</div>
+                                                        </Show>
+                                                        <Show when={reasons()[0]}>
+                                                            {(reason) => (
+                                                                <div class="whitespace-normal text-xs leading-snug text-gray-600 dark:text-gray-300">
+                                                                    {reason().message}
+                                                                </div>
+                                                            )}
+                                                        </Show>
+                                                    </div>
                                                 </td>
                                                 <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
                                                     <Show when={isActive() && !isKubernetes() && resolvedAgentId} fallback={
@@ -1854,6 +1987,79 @@ export const UnifiedAgents: Component = () => {
                                                                 <Show when={row.linkedNodeId}>
                                                                     <div class="text-xs text-gray-500 dark:text-gray-400">
                                                                         Linked node ID: <span class="font-mono text-gray-700 dark:text-gray-200">{row.linkedNodeId}</span>
+                                                                    </div>
+                                                                </Show>
+                                                                <Show when={diagnostic()}>
+                                                                    <div class="rounded-lg border border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-900/30">
+                                                                        <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+                                                                            <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                                                                                Agent Fleet Doctor
+                                                                            </div>
+                                                                            <span class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${diagnosticBadgeClass(diagnostic()?.status)}`}>
+                                                                                {diagnosticStatusLabel(diagnostic()?.status)}
+                                                                            </span>
+                                                                        </div>
+                                                                        <Show when={reasons().length > 0} fallback={
+                                                                            <p class="text-xs text-gray-600 dark:text-gray-400">
+                                                                                No unhealthy findings from the current diagnostic snapshot.
+                                                                            </p>
+                                                                        }>
+                                                                            <div class="space-y-2">
+                                                                                <For each={reasons()}>
+                                                                                    {(reason) => (
+                                                                                        <div class={`rounded-md border px-3 py-2 text-xs ${reasonAccentClass(reason.severity)}`}>
+                                                                                            <div class="font-medium">{reason.message}</div>
+                                                                                            <Show when={reason.evidence?.length}>
+                                                                                                <ul class="mt-1 list-disc space-y-0.5 pl-4 opacity-90">
+                                                                                                    <For each={reason.evidence || []}>
+                                                                                                        {(item) => <li>{item}</li>}
+                                                                                                    </For>
+                                                                                                </ul>
+                                                                                            </Show>
+                                                                                        </div>
+                                                                                    )}
+                                                                                </For>
+                                                                            </div>
+                                                                        </Show>
+                                                                        <Show when={repairActions().length > 0}>
+                                                                            <div class="mt-3 space-y-2">
+                                                                                <For each={repairActions()}>
+                                                                                    {(action) => (
+                                                                                        <div class="flex flex-col gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-300 sm:flex-row sm:items-center sm:justify-between">
+                                                                                            <div>
+                                                                                                <div class="font-medium text-gray-800 dark:text-gray-100">{action.label}</div>
+                                                                                                <div>{action.description}</div>
+                                                                                            </div>
+                                                                                            <Show when={action.supported && action.code === 'copy_upgrade_command'} fallback={
+                                                                                                <span class="text-[11px] text-gray-500 dark:text-gray-400">
+                                                                                                    {action.supported ? 'Supported' : 'Manual repair only'}
+                                                                                                </span>
+                                                                                            }>
+                                                                                                <button
+                                                                                                    type="button"
+                                                                                                    onClick={async () => {
+                                                                                                        const success = await copyToClipboard(getUpgradeCommand(row.hostname || row.name));
+                                                                                                        if (success) {
+                                                                                                            notificationStore.success('Upgrade command copied');
+                                                                                                        } else {
+                                                                                                            notificationStore.error('Failed to copy');
+                                                                                                        }
+                                                                                                    }}
+                                                                                                    class="self-start rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+                                                                                                >
+                                                                                                    Copy
+                                                                                                </button>
+                                                                                            </Show>
+                                                                                        </div>
+                                                                                    )}
+                                                                                </For>
+                                                                            </div>
+                                                                        </Show>
+                                                                        <Show when={reasons().length > 0 && !repairSupported(repairActions())}>
+                                                                            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                                                                No safe remote repair is supported for this finding from Pulse. Fix it on the agent host or with the existing settings actions shown in this row.
+                                                                            </p>
+                                                                        </Show>
                                                                     </div>
                                                                 </Show>
                                                                 <Show when={row.status === 'active' && row.types.includes('host')}>

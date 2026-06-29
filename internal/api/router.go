@@ -318,6 +318,7 @@ func (r *Router) setupRoutes() {
 	// SECURITY: Use settings:write (not just host_manage) to prevent compromised host tokens from manipulating other hosts
 	r.mux.HandleFunc("/api/agents/host/unlink", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.hostAgentHandlers.HandleUnlink)))
 	r.mux.HandleFunc("/api/agents/host/link", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.hostAgentHandlers.HandleLink)))
+	r.mux.HandleFunc("/api/agents/diagnostics", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.handleAgentFleetDiagnostics)))
 	// Host agent management routes - config endpoint is accessible by agents (GET) and admins (PATCH)
 	r.mux.HandleFunc("/api/agents/host/", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
 		// Route /api/agents/host/{id}/config to HandleConfig
