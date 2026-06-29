@@ -53,7 +53,7 @@ func NewFromConfig(cfg *config.AIConfig) (Provider, error) {
 		return NewOpenAIClient(cfg.APIKey, cfg.GetModel(), cfg.GetBaseURL(), timeout), nil
 
 	case config.AIProviderOllama:
-		return NewOllamaClient(cfg.GetModel(), cfg.GetBaseURL(), cfg.OllamaUsername, cfg.OllamaPassword, timeout), nil
+		return NewOllamaClientWithKeepAlive(cfg.GetModel(), cfg.GetBaseURL(), cfg.OllamaUsername, cfg.OllamaPassword, timeout, cfg.GetOllamaKeepAlive()), nil
 
 	case config.AIProviderDeepSeek:
 		if cfg.APIKey == "" {
@@ -119,7 +119,7 @@ func NewForProvider(cfg *config.AIConfig, provider, model string) (Provider, err
 
 	case config.AIProviderOllama:
 		baseURL := cfg.GetBaseURLForProvider(config.AIProviderOllama)
-		return NewOllamaClient(model, baseURL, cfg.OllamaUsername, cfg.OllamaPassword, timeout), nil
+		return NewOllamaClientWithKeepAlive(model, baseURL, cfg.OllamaUsername, cfg.OllamaPassword, timeout, cfg.GetOllamaKeepAlive()), nil
 
 	case config.AIProviderGemini:
 		apiKey := cfg.GetAPIKeyForProvider(config.AIProviderGemini)

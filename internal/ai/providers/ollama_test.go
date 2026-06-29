@@ -65,6 +65,30 @@ func TestOllamaClient_ChatStream_Success(t *testing.T) {
 	assert.True(t, done)
 }
 
+func TestOllamaClient_ChatStream_IncludesNumericKeepAlive(t *testing.T) {
+	mockResponse := `{"model":"llama3","message":{"role":"assistant","content":"ok"},"done":false}
+{"model":"llama3","message":{"role":"assistant","content":""},"done":true}
+`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req ollamaRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		assert.True(t, req.Stream)
+		assert.Equal(t, float64(0), req.KeepAlive)
+
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(mockResponse))
+	}))
+	defer server.Close()
+
+	client := NewOllamaClientWithKeepAlive("llama3", server.URL, "", "", 0, "0")
+	err := client.ChatStream(context.Background(), ChatRequest{
+		Messages: []Message{{Role: "user", Content: "Hi"}},
+	}, func(event StreamEvent) {})
+
+	require.NoError(t, err)
+}
+
 func TestOllamaClient_ChatStream_ToolCall(t *testing.T) {
 	// Mock Ollama Tool Call Streaming (NDJSON)
 	// Note: Ollama sends tool calls in the message object, often in one chunk or accumulated.
@@ -208,6 +232,33 @@ func TestOllamaClient_Chat_Success(t *testing.T) {
 	assert.Equal(t, "get_time", resp.ToolCalls[0].Name)
 	assert.Equal(t, 2, resp.InputTokens)
 	assert.Equal(t, 3, resp.OutputTokens)
+}
+
+func TestOllamaClient_Chat_IncludesKeepAliveDuration(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req ollamaRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		assert.False(t, req.Stream)
+		assert.Equal(t, "24h", req.KeepAlive)
+
+		_ = json.NewEncoder(w).Encode(ollamaResponse{
+			Model: "llama3",
+			Message: ollamaMessageResp{
+				Role:    "assistant",
+				Content: "Hello",
+			},
+			DoneReason: "stop",
+		})
+	}))
+	defer server.Close()
+
+	client := NewOllamaClientWithKeepAlive("llama3", server.URL, "", "", 0, "24h")
+	resp, err := client.Chat(context.Background(), ChatRequest{
+		Messages: []Message{{Role: "user", Content: "Hi"}},
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, "Hello", resp.Content)
 }
 
 func TestOllamaClient_TestConnection(t *testing.T) {

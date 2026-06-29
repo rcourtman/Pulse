@@ -42,6 +42,7 @@ export interface AISettings {
   ollama_base_url: string; // Ollama server URL
   ollama_username?: string; // Optional Basic Auth username for Ollama
   ollama_password_set?: boolean; // true if an Ollama password is stored
+  ollama_keep_alive?: string; // Optional Ollama keep_alive value
   openai_base_url?: string; // Custom OpenAI base URL
   configured_providers: AIProvider[]; // List of providers with credentials
 
@@ -86,6 +87,7 @@ export interface AISettingsUpdateRequest {
   ollama_base_url?: string; // Set Ollama server URL
   ollama_username?: string; // Set Ollama Basic Auth username
   ollama_password?: string; // Set Ollama Basic Auth password
+  ollama_keep_alive?: string; // Set Ollama keep_alive (duration or seconds)
   openai_base_url?: string; // Set custom OpenAI base URL
   // Clear flags for removing credentials
   clear_anthropic_key?: boolean; // Clear Anthropic API key

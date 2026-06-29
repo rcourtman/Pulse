@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -17,6 +18,7 @@ type OllamaClient struct {
 	baseURL      string
 	username     string
 	password     string
+	keepAlive    string
 	client       *http.Client // For non-streaming requests (has overall timeout)
 	streamClient *http.Client // For streaming requests (no overall timeout — relies on context)
 }
@@ -24,6 +26,11 @@ type OllamaClient struct {
 // NewOllamaClient creates a new Ollama API client
 // timeout is optional - pass 0 to use the default 5 minute timeout
 func NewOllamaClient(model, baseURL, username, password string, timeout time.Duration) *OllamaClient {
+	return NewOllamaClientWithKeepAlive(model, baseURL, username, password, timeout, "")
+}
+
+// NewOllamaClientWithKeepAlive creates an Ollama API client with an optional keep_alive request value.
+func NewOllamaClientWithKeepAlive(model, baseURL, username, password string, timeout time.Duration, keepAlive string) *OllamaClient {
 	if baseURL == "" {
 		baseURL = "http://localhost:11434"
 	}
@@ -36,10 +43,11 @@ func NewOllamaClient(model, baseURL, username, password string, timeout time.Dur
 		timeout = 300 * time.Second // Default 5 minutes
 	}
 	return &OllamaClient{
-		model:    model,
-		baseURL:  baseURL,
-		username: username,
-		password: password,
+		model:     model,
+		baseURL:   baseURL,
+		username:  username,
+		password:  password,
+		keepAlive: strings.TrimSpace(keepAlive),
 		client: &http.Client{
 			Timeout: timeout,
 		},
@@ -68,11 +76,12 @@ func (c *OllamaClient) Name() string {
 
 // ollamaRequest is the request body for the Ollama API
 type ollamaRequest struct {
-	Model    string          `json:"model"`
-	Messages []ollamaMessage `json:"messages"`
-	Stream   bool            `json:"stream"`
-	Options  *ollamaOptions  `json:"options,omitempty"`
-	Tools    []ollamaTool    `json:"tools,omitempty"` // Tool definitions for function calling
+	Model     string          `json:"model"`
+	Messages  []ollamaMessage `json:"messages"`
+	Stream    bool            `json:"stream"`
+	Options   *ollamaOptions  `json:"options,omitempty"`
+	Tools     []ollamaTool    `json:"tools,omitempty"`      // Tool definitions for function calling
+	KeepAlive interface{}     `json:"keep_alive,omitempty"` // string duration or numeric seconds, per Ollama API
 }
 
 type ollamaMessage struct {
@@ -107,6 +116,17 @@ type ollamaToolFunction struct {
 type ollamaOptions struct {
 	NumPredict  int     `json:"num_predict,omitempty"`
 	Temperature float64 `json:"temperature,omitempty"`
+}
+
+func ollamaKeepAliveJSONValue(value string) interface{} {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	if seconds, err := strconv.ParseInt(value, 10, 64); err == nil {
+		return seconds
+	}
+	return value
 }
 
 // ollamaResponse is the response from the Ollama API
@@ -183,6 +203,9 @@ func (c *OllamaClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 		Model:    model,
 		Messages: messages,
 		Stream:   false, // Non-streaming for now
+	}
+	if keepAlive := ollamaKeepAliveJSONValue(c.keepAlive); keepAlive != nil {
+		ollamaReq.KeepAlive = keepAlive
 	}
 
 	// Convert tools to Ollama format
@@ -352,6 +375,9 @@ func (c *OllamaClient) ChatStream(ctx context.Context, req ChatRequest, callback
 		Model:    model,
 		Messages: messages,
 		Stream:   true, // Enable streaming
+	}
+	if keepAlive := ollamaKeepAliveJSONValue(c.keepAlive); keepAlive != nil {
+		ollamaReq.KeepAlive = keepAlive
 	}
 
 	// Handle tools with tool_choice support (same as non-streaming)

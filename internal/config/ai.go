@@ -1,6 +1,8 @@
 package config
 
 import (
+	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -37,6 +39,7 @@ type AIConfig struct {
 	OllamaBaseURL   string `json:"ollama_base_url,omitempty"`   // Ollama server URL (default: http://localhost:11434)
 	OllamaUsername  string `json:"ollama_username,omitempty"`   // Optional Basic Auth username for Ollama
 	OllamaPassword  string `json:"ollama_password,omitempty"`   // Optional Basic Auth password for Ollama
+	OllamaKeepAlive string `json:"ollama_keep_alive,omitempty"` // Optional Ollama keep_alive value (duration like 10m/24h, or seconds like 3600/0/-1)
 	OpenAIBaseURL   string `json:"openai_base_url,omitempty"`   // Custom OpenAI-compatible base URL (optional)
 
 	// OAuth fields for Claude Pro/Max subscription authentication
@@ -290,6 +293,34 @@ func (c *AIConfig) GetBaseURLForProvider(provider string) string {
 		return DefaultGeminiBaseURL
 	}
 	return ""
+}
+
+// NormalizeOllamaKeepAlive validates the value Ollama accepts for keep_alive.
+// Ollama accepts duration strings (for example "10m" or "24h") and numeric
+// seconds, including 0 to unload after a response and negative values to keep
+// the model loaded indefinitely.
+func NormalizeOllamaKeepAlive(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", nil
+	}
+	if _, err := strconv.ParseInt(value, 10, 64); err == nil {
+		return value, nil
+	}
+	if _, err := time.ParseDuration(value); err == nil {
+		return value, nil
+	}
+	return "", fmt.Errorf("ollama_keep_alive must be empty, seconds like 3600/0/-1, or a duration like 10m/24h")
+}
+
+// GetOllamaKeepAlive returns the validated Ollama keep_alive setting.
+// Invalid persisted values are ignored so a hand-edited config cannot break AI startup.
+func (c *AIConfig) GetOllamaKeepAlive() string {
+	value, err := NormalizeOllamaKeepAlive(c.OllamaKeepAlive)
+	if err != nil {
+		return ""
+	}
+	return value
 }
 
 // IsUsingOAuth returns true if OAuth authentication is configured for Anthropic

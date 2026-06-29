@@ -350,6 +350,52 @@ func TestAIConfig_GetBaseURLForProvider(t *testing.T) {
 	})
 }
 
+func TestNormalizeOllamaKeepAlive(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    string
+		wantErr bool
+	}{
+		{name: "empty", input: "", want: ""},
+		{name: "trimmed empty", input: "   ", want: ""},
+		{name: "duration minutes", input: " 10m ", want: "10m"},
+		{name: "duration hours", input: "24h", want: "24h"},
+		{name: "numeric seconds", input: "3600", want: "3600"},
+		{name: "zero unload", input: "0", want: "0"},
+		{name: "negative keep loaded", input: "-1", want: "-1"},
+		{name: "invalid word", input: "forever", wantErr: true},
+		{name: "invalid bare decimal", input: "1.5", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NormalizeOllamaKeepAlive(tt.input)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("NormalizeOllamaKeepAlive(%q) returned nil error", tt.input)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("NormalizeOllamaKeepAlive(%q) error = %v", tt.input, err)
+			}
+			if got != tt.want {
+				t.Fatalf("NormalizeOllamaKeepAlive(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestAIConfig_GetOllamaKeepAlive(t *testing.T) {
+	if got := (&AIConfig{OllamaKeepAlive: " 24h "}).GetOllamaKeepAlive(); got != "24h" {
+		t.Fatalf("GetOllamaKeepAlive() = %q, want 24h", got)
+	}
+	if got := (&AIConfig{OllamaKeepAlive: "forever"}).GetOllamaKeepAlive(); got != "" {
+		t.Fatalf("invalid GetOllamaKeepAlive() = %q, want empty", got)
+	}
+}
+
 func TestAIConfig_IsUsingOAuth(t *testing.T) {
 	tests := []struct {
 		name     string

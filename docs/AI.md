@@ -299,6 +299,10 @@ Configure in the UI: **Settings → System → AI Assistant**
 - **Ollama** (self-hosted, with tool/function calling support and optional Basic Auth for reverse-proxied endpoints)
 - **OpenAI-compatible base URL** (for providers that implement the OpenAI API shape)
 
+### Local Provider Tuning
+
+Ollama exposes a **Keep Alive** setting in the AI provider configuration. Leave it empty to use Ollama defaults, set a duration such as `10m` or `24h` to reduce local model cold starts, set numeric seconds such as `3600`, set `0` to unload after each response, or set a negative value such as `-1` to keep the model loaded.
+
 ### Models
 
 Pulse uses model identifiers in the form: `provider:model-name`

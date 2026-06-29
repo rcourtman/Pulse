@@ -7,6 +7,25 @@ const [licenseStatus, setLicenseStatus] = createSignal<LicenseStatus | null>(nul
 const [loading, setLoading] = createSignal(false);
 const [loaded, setLoaded] = createSignal(false);
 
+function normalizeFeatures(features: unknown): string[] {
+    if (Array.isArray(features)) {
+        return features.filter((feature): feature is string => typeof feature === 'string' && feature.length > 0);
+    }
+    if (features && typeof features === 'object') {
+        return Object.entries(features as Record<string, unknown>)
+            .filter(([, enabled]) => enabled === true)
+            .map(([feature]) => feature);
+    }
+    return [];
+}
+
+function normalizeStatus(status: LicenseStatus): LicenseStatus {
+    return {
+        ...status,
+        features: normalizeFeatures((status as { features?: unknown }).features),
+    };
+}
+
 /**
  * Load the license status from the server.
  */
@@ -15,7 +34,7 @@ export async function loadLicenseStatus(force = false): Promise<void> {
 
     setLoading(true);
     try {
-        const status = await LicenseAPI.getStatus();
+        const status = normalizeStatus(await LicenseAPI.getStatus());
         setLicenseStatus(status);
         setLoaded(true);
         logger.debug('[licenseStore] License status loaded', { tier: status.tier, valid: status.valid });
@@ -50,7 +69,7 @@ export const isPro = createMemo(() => {
 export function hasFeature(feature: string): boolean {
     const current = licenseStatus();
     if (!current) return false;
-    return current.features.includes(feature);
+    return normalizeFeatures(current.features).includes(feature);
 }
 
 /**

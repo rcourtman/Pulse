@@ -43,6 +43,16 @@ describe('AIAPI', () => {
     expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/models');
   });
 
+  it('serializes Ollama keepalive settings', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({ configured: true } as any);
+    await AIAPI.updateSettings({ ollama_keep_alive: '24h' });
+
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/settings/ai/update', {
+      method: 'PUT',
+      body: JSON.stringify({ ollama_keep_alive: '24h' }),
+    });
+  });
+
   it('includes query parameters for cost endpoints', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({} as any);
     await AIAPI.getCostSummary();

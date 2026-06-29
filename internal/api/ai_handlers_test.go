@@ -59,12 +59,13 @@ func TestAISettingsHandler_GetAndUpdateSettings_RoundTrip(t *testing.T) {
 	// Update settings to enable AI via Ollama.
 	{
 		body, _ := json.Marshal(AISettingsUpdateRequest{
-			Enabled:        ptr(true),
-			Provider:       ptr("ollama"),
-			Model:          ptr("ollama:llama3"),
-			OllamaBaseURL:  ptr("http://localhost:11434"),
-			OllamaUsername: ptr("unai"),
-			OllamaPassword: ptr("secret"),
+			Enabled:         ptr(true),
+			Provider:        ptr("ollama"),
+			Model:           ptr("ollama:llama3"),
+			OllamaBaseURL:   ptr("http://localhost:11434"),
+			OllamaUsername:  ptr("unai"),
+			OllamaPassword:  ptr("secret"),
+			OllamaKeepAlive: ptr("24h"),
 		})
 		req := httptest.NewRequest(http.MethodPut, "/api/settings/ai", bytes.NewReader(body))
 		rec := httptest.NewRecorder()
@@ -86,6 +87,9 @@ func TestAISettingsHandler_GetAndUpdateSettings_RoundTrip(t *testing.T) {
 		}
 		if resp.OllamaUsername != "unai" || !resp.OllamaPasswordSet {
 			t.Fatalf("expected ollama auth state in response, got %+v", resp)
+		}
+		if resp.OllamaKeepAlive != "24h" {
+			t.Fatalf("expected ollama keep alive in response, got %+v", resp)
 		}
 	}
 
@@ -109,7 +113,30 @@ func TestAISettingsHandler_GetAndUpdateSettings_RoundTrip(t *testing.T) {
 		if resp.OllamaUsername != "unai" || !resp.OllamaPasswordSet {
 			t.Fatalf("expected persisted ollama auth state, got %+v", resp)
 		}
+		if resp.OllamaKeepAlive != "24h" {
+			t.Fatalf("expected persisted ollama keep alive, got %+v", resp)
+		}
 	}
+}
+
+func TestAISettingsHandler_UpdateSettingsRejectsInvalidOllamaKeepAlive(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	body, _ := json.Marshal(AISettingsUpdateRequest{
+		OllamaKeepAlive: ptr("forever"),
+	})
+	req := httptest.NewRequest(http.MethodPut, "/api/settings/ai", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.HandleUpdateAISettings(rec, req)
+
+	require.Equal(t, http.StatusBadRequest, rec.Code, rec.Body.String())
+	require.Contains(t, rec.Body.String(), "ollama_keep_alive")
 }
 
 func TestAISettingsHandler_ListModels_Ollama(t *testing.T) {
@@ -1279,6 +1306,11 @@ func TestShouldRestartAIChat(t *testing.T) {
 		{
 			name: "credential clear restarts chat",
 			req:  AISettingsUpdateRequest{ClearOpenAIKey: ptr(true)},
+			want: true,
+		},
+		{
+			name: "ollama keepalive change restarts chat",
+			req:  AISettingsUpdateRequest{OllamaKeepAlive: ptr("24h")},
 			want: true,
 		},
 		{

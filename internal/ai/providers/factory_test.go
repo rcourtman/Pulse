@@ -327,7 +327,8 @@ func TestNewForProvider_DeepSeekNoAPIKey(t *testing.T) {
 
 func TestNewForProvider_Ollama(t *testing.T) {
 	cfg := &config.AIConfig{
-		Enabled: true,
+		Enabled:         true,
+		OllamaKeepAlive: "24h",
 	}
 	provider, err := NewForProvider(cfg, config.AIProviderOllama, "llama2")
 	if err != nil {
@@ -335,6 +336,13 @@ func TestNewForProvider_Ollama(t *testing.T) {
 	}
 	if provider.Name() != "ollama" {
 		t.Errorf("Expected provider name 'ollama', got '%s'", provider.Name())
+	}
+	ollama, ok := provider.(*OllamaClient)
+	if !ok {
+		t.Fatalf("Expected *OllamaClient, got %T", provider)
+	}
+	if ollama.keepAlive != "24h" {
+		t.Fatalf("Expected keepAlive 24h, got %q", ollama.keepAlive)
 	}
 }
 

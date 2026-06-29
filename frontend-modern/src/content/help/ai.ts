@@ -40,6 +40,22 @@ export const aiHelpContent: HelpContent[] = [
     addedInVersion: 'v4.5.0',
   },
   {
+    id: 'ai.ollama.keepAlive',
+    title: 'Ollama Keep Alive',
+    description:
+      'Control how long Ollama keeps a model loaded after a response.\n\n' +
+      'Use a duration such as 10m or 24h to reduce cold starts on local hardware. ' +
+      'Use seconds such as 3600 if you prefer numeric values. Use 0 to unload the model after each response, or -1 to keep it loaded indefinitely.\n\n' +
+      'Leave empty to use Ollama\'s default behavior.',
+    examples: [
+      '10m (keep loaded for 10 minutes)',
+      '24h (keep loaded for one day)',
+      '0 (unload after each response)',
+      '-1 (keep loaded)',
+    ],
+    addedInVersion: 'v4.5.0',
+  },
+  {
     id: 'ai.providers.overview',
     title: 'Provider Configuration',
     description:
@@ -50,7 +66,7 @@ export const aiHelpContent: HelpContent[] = [
       '- Alert investigation assistance\n\n' +
       'You can configure multiple providers and Pulse will use the primary provider ' +
       'with fallback to others if unavailable.',
-    related: ['ai.openai.baseUrl', 'ai.ollama.baseUrl'],
+    related: ['ai.openai.baseUrl', 'ai.ollama.baseUrl', 'ai.ollama.keepAlive'],
     addedInVersion: 'v4.0.0',
   },
 ];

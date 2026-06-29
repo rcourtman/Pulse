@@ -48,6 +48,28 @@ function isModelProviderConfigured(modelId: string, settings: AISettingsType | n
   return isProviderConfigured(provider, settings);
 }
 
+function providerSetupAction(provider: string): string {
+  switch (provider) {
+    case 'ollama':
+      return 'configure the Ollama server URL';
+    case 'openai':
+      return 'add an API key and verify the Custom Base URL';
+    case 'anthropic':
+    case 'deepseek':
+    case 'gemini':
+      return `add an API key for ${PROVIDER_DISPLAY_NAMES[provider] || provider}`;
+    default:
+      return `configure ${PROVIDER_DISPLAY_NAMES[provider] || provider}`;
+  }
+}
+
+function isValidOllamaKeepAlive(value: string): boolean {
+  const trimmed = value.trim();
+  if (trimmed === '') return true;
+  if (/^-?\d+$/.test(trimmed)) return true;
+  return /^-?(?:\d+(?:\.\d+)?(?:ns|us|ms|s|m|h))+$/.test(trimmed);
+}
+
 export const AISettings: Component = () => {
   const navigate = useNavigate();
   const [settings, setSettings] = createSignal<AISettingsType | null>(null);
@@ -120,6 +142,7 @@ export const AISettings: Component = () => {
     ollamaBaseUrl: 'http://localhost:11434',
     ollamaUsername: '',
     ollamaPassword: '',
+    ollamaKeepAlive: '',
     clearOllamaPassword: false,
     openaiBaseUrl: '',
     // Cost controls
@@ -158,6 +181,7 @@ export const AISettings: Component = () => {
         ollamaBaseUrl: 'http://localhost:11434',
         ollamaUsername: '',
         ollamaPassword: '',
+        ollamaKeepAlive: '',
         clearOllamaPassword: false,
         openaiBaseUrl: '',
         costBudgetUSD30d: '',
@@ -192,6 +216,7 @@ export const AISettings: Component = () => {
       ollamaBaseUrl: data.ollama_base_url || 'http://localhost:11434',
       ollamaUsername: data.ollama_username || '',
       ollamaPassword: '',
+      ollamaKeepAlive: data.ollama_keep_alive || '',
       clearOllamaPassword: false,
       openaiBaseUrl: data.openai_base_url || '',
       costBudgetUSD30d:
@@ -439,7 +464,7 @@ export const AISettings: Component = () => {
         if (!isAddingCredential) {
           notificationStore.error(
             `Cannot save: Model "${selectedModel}" requires ${PROVIDER_DISPLAY_NAMES[modelProvider] || modelProvider} to be configured. ` +
-            `Please add an API key for ${PROVIDER_DISPLAY_NAMES[modelProvider] || modelProvider} or select a different model.`
+            `Please ${providerSetupAction(modelProvider)} or select a different model.`
           );
           return;
         }
@@ -449,6 +474,11 @@ export const AISettings: Component = () => {
     // Validate patrol interval (must be 0 or >= 10)
     if (form.patrolIntervalMinutes > 0 && form.patrolIntervalMinutes < 10) {
       notificationStore.error('Patrol interval must be at least 10 minutes (or 0 to disable)');
+      return;
+    }
+
+    if (!isValidOllamaKeepAlive(form.ollamaKeepAlive)) {
+      notificationStore.error('Ollama Keep Alive must be empty, seconds such as 3600, 0, or -1, or a duration such as 10m or 24h.');
       return;
     }
 
@@ -527,6 +557,10 @@ export const AISettings: Component = () => {
         payload.ollama_password = form.ollamaPassword;
       } else if (form.clearOllamaPassword) {
         payload.clear_ollama_password = true;
+      }
+      const ollamaKeepAlive = form.ollamaKeepAlive.trim();
+      if (ollamaKeepAlive !== (settings()?.ollama_keep_alive || '')) {
+        payload.ollama_keep_alive = ollamaKeepAlive;
       }
       if (form.openaiBaseUrl !== (settings()?.openai_base_url || '')) {
         payload.openai_base_url = form.openaiBaseUrl.trim();
@@ -656,7 +690,7 @@ export const AISettings: Component = () => {
 
     setSaving(true);
     try {
-      const clearPayload: Record<string, boolean> = {};
+      const clearPayload: Record<string, unknown> = {};
       if (provider === 'anthropic') clearPayload.clear_anthropic_key = true;
       if (provider === 'openai') clearPayload.clear_openai_key = true;
       if (provider === 'deepseek') clearPayload.clear_deepseek_key = true;
@@ -665,6 +699,7 @@ export const AISettings: Component = () => {
         clearPayload.clear_ollama_url = true;
         clearPayload.clear_ollama_username = true;
         clearPayload.clear_ollama_password = true;
+        clearPayload.ollama_keep_alive = '';
       }
 
       await AIAPI.updateSettings(clearPayload);
@@ -682,6 +717,7 @@ export const AISettings: Component = () => {
         setForm('ollamaBaseUrl', '');
         setForm('ollamaUsername', '');
         setForm('ollamaPassword', '');
+        setForm('ollamaKeepAlive', '');
         setForm('clearOllamaPassword', false);
       }
 
@@ -878,7 +914,7 @@ export const AISettings: Component = () => {
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                     </svg>
                     This model requires {PROVIDER_DISPLAY_NAMES[getProviderFromModelId(form.model)] || getProviderFromModelId(form.model)} to be configured.
-                    Add an API key below or select a different model.
+                    Please {providerSetupAction(getProviderFromModelId(form.model))} below or select a different model.
                   </p>
                 </Show>
               </div>
@@ -1326,6 +1362,23 @@ export const AISettings: Component = () => {
                             class={controlClass()}
                             disabled={saving()}
                           />
+                        </div>
+                        <div class="space-y-1">
+                          <label class="text-xs text-gray-600 dark:text-gray-400 inline-flex items-center gap-1">
+                            Keep Alive
+                            <HelpIcon contentId="ai.ollama.keepAlive" size="xs" />
+                          </label>
+                          <input
+                            type="text"
+                            value={form.ollamaKeepAlive}
+                            onInput={(e) => setForm('ollamaKeepAlive', e.currentTarget.value)}
+                            placeholder="Default (Ollama decides)"
+                            class={controlClass()}
+                            disabled={saving()}
+                          />
+                          <p class="text-[11px] text-gray-500">
+                            Use 10m or 24h to keep models warm, 0 to unload after each response, or -1 to keep loaded.
+                          </p>
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
                           <div class="space-y-1">

@@ -741,6 +741,7 @@ func shouldRestartAIChat(req AISettingsUpdateRequest) bool {
 		req.OllamaBaseURL != nil ||
 		req.OllamaUsername != nil ||
 		req.OllamaPassword != nil ||
+		req.OllamaKeepAlive != nil ||
 		req.OpenAIBaseURL != nil ||
 		req.ClearAnthropicKey != nil ||
 		req.ClearOpenAIKey != nil ||
@@ -1027,16 +1028,17 @@ type AISettingsResponse struct {
 	UseProactiveThresholds bool                  `json:"use_proactive_thresholds"` // true if patrol warns before thresholds (false = use exact thresholds)
 	AvailableModels        []providers.ModelInfo `json:"available_models"`         // List of models for current provider
 	// Multi-provider credentials - shows which providers are configured
-	AnthropicConfigured bool     `json:"anthropic_configured"`      // true if Anthropic API key or OAuth is set
-	OpenAIConfigured    bool     `json:"openai_configured"`         // true if OpenAI API key is set
-	DeepSeekConfigured  bool     `json:"deepseek_configured"`       // true if DeepSeek API key is set
-	GeminiConfigured    bool     `json:"gemini_configured"`         // true if Gemini API key is set
-	OllamaConfigured    bool     `json:"ollama_configured"`         // true (always available for attempt)
-	OllamaBaseURL       string   `json:"ollama_base_url"`           // Ollama server URL
-	OllamaUsername      string   `json:"ollama_username,omitempty"` // Optional Basic Auth username for Ollama
-	OllamaPasswordSet   bool     `json:"ollama_password_set"`       // true if an Ollama password is stored
-	OpenAIBaseURL       string   `json:"openai_base_url,omitempty"` // Custom OpenAI base URL
-	ConfiguredProviders []string `json:"configured_providers"`      // List of provider names with credentials
+	AnthropicConfigured bool     `json:"anthropic_configured"`        // true if Anthropic API key or OAuth is set
+	OpenAIConfigured    bool     `json:"openai_configured"`           // true if OpenAI API key is set
+	DeepSeekConfigured  bool     `json:"deepseek_configured"`         // true if DeepSeek API key is set
+	GeminiConfigured    bool     `json:"gemini_configured"`           // true if Gemini API key is set
+	OllamaConfigured    bool     `json:"ollama_configured"`           // true (always available for attempt)
+	OllamaBaseURL       string   `json:"ollama_base_url"`             // Ollama server URL
+	OllamaUsername      string   `json:"ollama_username,omitempty"`   // Optional Basic Auth username for Ollama
+	OllamaPasswordSet   bool     `json:"ollama_password_set"`         // true if an Ollama password is stored
+	OllamaKeepAlive     string   `json:"ollama_keep_alive,omitempty"` // Optional Ollama keep_alive value
+	OpenAIBaseURL       string   `json:"openai_base_url,omitempty"`   // Custom OpenAI base URL
+	ConfiguredProviders []string `json:"configured_providers"`        // List of provider names with credentials
 	// Cost controls
 	CostBudgetUSD30d float64 `json:"cost_budget_usd_30d,omitempty"`
 	// Request timeout (seconds) - for slow hardware running local models
@@ -1077,6 +1079,7 @@ type AISettingsUpdateRequest struct {
 	OllamaBaseURL   *string `json:"ollama_base_url,omitempty"`   // Set Ollama server URL
 	OllamaUsername  *string `json:"ollama_username,omitempty"`   // Set Ollama Basic Auth username
 	OllamaPassword  *string `json:"ollama_password,omitempty"`   // Set Ollama Basic Auth password
+	OllamaKeepAlive *string `json:"ollama_keep_alive,omitempty"` // Set Ollama keep_alive (duration or seconds)
 	OpenAIBaseURL   *string `json:"openai_base_url,omitempty"`   // Set custom OpenAI base URL
 	// Clear flags for removing credentials
 	ClearAnthropicKey   *bool `json:"clear_anthropic_key,omitempty"`   // Clear Anthropic API key
@@ -1158,6 +1161,7 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		OllamaBaseURL:          settings.GetBaseURLForProvider(config.AIProviderOllama),
 		OllamaUsername:         settings.OllamaUsername,
 		OllamaPasswordSet:      settings.OllamaPassword != "",
+		OllamaKeepAlive:        settings.GetOllamaKeepAlive(),
 		OpenAIBaseURL:          settings.OpenAIBaseURL,
 		ConfiguredProviders:    settings.GetConfiguredProviders(),
 		CostBudgetUSD30d:       settings.CostBudgetUSD30d,
@@ -1342,6 +1346,14 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		settings.OllamaPassword = ""
 	} else if req.OllamaPassword != nil {
 		settings.OllamaPassword = *req.OllamaPassword
+	}
+	if req.OllamaKeepAlive != nil {
+		keepAlive, err := config.NormalizeOllamaKeepAlive(*req.OllamaKeepAlive)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		settings.OllamaKeepAlive = keepAlive
 	}
 	if req.OpenAIBaseURL != nil {
 		settings.OpenAIBaseURL = strings.TrimSpace(*req.OpenAIBaseURL)
@@ -1587,6 +1599,7 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		OllamaBaseURL:          settings.GetBaseURLForProvider(config.AIProviderOllama),
 		OllamaUsername:         settings.OllamaUsername,
 		OllamaPasswordSet:      settings.OllamaPassword != "",
+		OllamaKeepAlive:        settings.GetOllamaKeepAlive(),
 		OpenAIBaseURL:          settings.OpenAIBaseURL,
 		ConfiguredProviders:    settings.GetConfiguredProviders(),
 		RequestTimeoutSeconds:  settings.RequestTimeoutSeconds,
