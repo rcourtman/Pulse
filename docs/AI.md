@@ -104,7 +104,7 @@ Patrol doesn't rely solely on LLM judgment. It parses tool call outputs and fire
 
 | Signal Type | Trigger | Default Threshold |
 |------------|---------|-------------------|
-| `smart_failure` | SMART health status not OK/PASSED | N/A |
+| `smart_failure` | SMART health status not OK/PASSED, or critical SMART counters such as pending sectors, offline uncorrectable sectors, or NVMe media errors | N/A |
 | `high_cpu` | Average CPU usage | 70% |
 | `high_memory` | Average memory usage | 80% |
 | `high_disk` | Storage pool usage | 75% (warning), 95% (critical) |
@@ -126,7 +126,7 @@ Thresholds can be configured via alert settings to match user-defined values.
 | **Storage issues** | Critical | PBS datastore errors, ZFS pool degraded |
 | **Ceph problems** | Warning/Critical | Degraded OSDs, unhealthy PGs |
 | **Kubernetes issues** | Warning | Pods stuck in Pending/CrashLoopBackOff |
-| **SMART failures** | Critical | Disk health check failed |
+| **SMART failures** | Critical | Disk health check failed, pending sectors, offline uncorrectable sectors, or NVMe media errors |
 
 ### What Patrol Ignores (by design)
 

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
@@ -218,6 +219,66 @@ func TestHandleMetricsHistory_UsesStoreAllMetrics(t *testing.T) {
 	metricsMap, ok := payload["metrics"].(map[string]interface{})
 	if !ok || metricsMap["cpu"] == nil {
 		t.Fatalf("expected cpu metrics in response, got %#v", payload["metrics"])
+	}
+}
+
+func TestHandleMetricsHistory_DiskCanonicalIDFallsBackToLegacySerialStore(t *testing.T) {
+	monitor, _, _ := newTestMonitor(t)
+	state := models.NewState()
+	state.UpdatePhysicalDisks("inst", []models.PhysicalDisk{{
+		ID:          "inst-node1-wwn-0x5002538f12345678",
+		Instance:    "inst",
+		Node:        "node1",
+		DevPath:     "/dev/sda",
+		Serial:      "SER123",
+		WWN:         "0x5002538f12345678",
+		Type:        "sata",
+		Health:      "PASSED",
+		Temperature: 37,
+		LastChecked: time.Now(),
+	}})
+	setUnexportedField(t, monitor, "state", state)
+
+	store, err := metrics.NewStore(metrics.DefaultConfig(t.TempDir()))
+	if err != nil {
+		t.Fatalf("metrics.NewStore error: %v", err)
+	}
+	defer store.Close()
+
+	store.WriteBatchSync([]metrics.WriteMetric{{
+		ResourceType: "disk",
+		ResourceID:   "SER123",
+		MetricType:   "smart_temp",
+		Value:        37.0,
+		Timestamp:    time.Now(),
+		Tier:         metrics.TierRaw,
+	}})
+
+	setUnexportedField(t, monitor, "metricsStore", store)
+	router := &Router{monitor: monitor}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/metrics-store/history?resourceType=disk&resourceId=inst-node1-wwn-0x5002538f12345678&metric=smart_temp&range=1h", nil)
+	rec := httptest.NewRecorder()
+
+	router.handleMetricsHistory(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	var payload map[string]interface{}
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if payload["source"] != "store" {
+		t.Fatalf("expected source store, got %#v", payload["source"])
+	}
+	points, ok := payload["points"].([]interface{})
+	if !ok || len(points) != 1 {
+		t.Fatalf("expected one legacy serial-backed point, got %#v", payload["points"])
+	}
+	point, ok := points[0].(map[string]interface{})
+	if !ok || point["value"] != 37.0 {
+		t.Fatalf("expected smart_temp value 37, got %#v", points[0])
 	}
 }
 

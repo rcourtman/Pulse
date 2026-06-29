@@ -5,6 +5,7 @@ import { formatTemperature } from '@/utils/temperature';
 import type { PhysicalDisk } from '@/types/api';
 import { useWebSocket } from '@/App';
 import { DiskDetail } from './DiskDetail';
+import { hasSmartWarning, smartWarningTitle } from './smartEvidence';
 
 /** Format power-on hours into human-readable form (e.g., "2.3y", "140d", "5h"). */
 function formatPowerOnHours(hours: number): string {
@@ -15,16 +16,6 @@ function formatPowerOnHours(hours: number): string {
     return `${Math.round(hours / 24)}d`;
   }
   return `${hours}h`;
-}
-
-/** Returns true if any critical SMART counters are non-zero. */
-function hasSmartWarning(disk: PhysicalDisk): boolean {
-  const attrs = disk.smartAttributes;
-  if (!attrs) return false;
-  if (attrs.reallocatedSectors && attrs.reallocatedSectors > 0) return true;
-  if (attrs.pendingSectors && attrs.pendingSectors > 0) return true;
-  if (attrs.mediaErrors && attrs.mediaErrors > 0) return true;
-  return false;
 }
 
 interface DiskListProps {
@@ -224,7 +215,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                   {(disk) => {
                     const health = getHealthStatus(disk);
                     const isSelected = () => selectedDisk()?.id === disk.id;
-                    const warning = hasSmartWarning(disk);
+                    const warning = hasSmartWarning(disk.smartAttributes);
 
                     return (
                       <>
@@ -280,7 +271,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                               {health.text}
                             </span>
                             <Show when={warning}>
-                              <span class="ml-1 text-yellow-500 dark:text-yellow-400" title="SMART warning: critical counters non-zero">
+                              <span class="ml-1 text-yellow-500 dark:text-yellow-400" title={smartWarningTitle(disk.smartAttributes)}>
                                 &#9888;
                               </span>
                             </Show>

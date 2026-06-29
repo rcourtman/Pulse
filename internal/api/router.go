@@ -51,6 +51,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
+	pkgmetrics "github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rs/zerolog/log"
 )
 
@@ -6006,6 +6007,70 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		return nil
 	}
 
+	usableDiskHardwareMetricID := func(value string) string {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			return ""
+		}
+
+		normalized := strings.ToLower(trimmed)
+		var builder strings.Builder
+		builder.Grow(len(normalized))
+		lastSeparator := false
+		for _, r := range normalized {
+			switch {
+			case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+				builder.WriteRune(r)
+				lastSeparator = false
+			default:
+				if !lastSeparator {
+					builder.WriteByte('-')
+					lastSeparator = true
+				}
+			}
+		}
+
+		switch strings.Trim(builder.String(), "-") {
+		case "", "n-a", "na", "none", "null", "unknown", "not-available", "not-applicable":
+			return ""
+		default:
+			return trimmed
+		}
+	}
+
+	diskMetricStoreIDs := func(id string) []string {
+		seen := make(map[string]struct{})
+		ids := make([]string, 0, 3)
+		appendID := func(candidate string) {
+			candidate = strings.TrimSpace(candidate)
+			if candidate == "" {
+				return
+			}
+			if _, ok := seen[candidate]; ok {
+				return
+			}
+			seen[candidate] = struct{}{}
+			ids = append(ids, candidate)
+		}
+		appendHardwareID := func(candidate string) {
+			if usable := usableDiskHardwareMetricID(candidate); usable != "" {
+				appendID(usable)
+			}
+		}
+
+		appendID(id)
+		if resourceType != "disk" {
+			return ids
+		}
+
+		if disk := findDisk(id); disk != nil {
+			appendID(disk.ID)
+			appendHardwareID(disk.Serial)
+			appendHardwareID(disk.WWN)
+		}
+		return ids
+	}
+
 	liveMetricPoints := func(resourceType, resourceID string) map[string]monitoring.MetricPoint {
 		now := time.Now()
 		points := make(map[string]monitoring.MetricPoint)
@@ -6335,10 +6400,36 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 
 	var response interface{}
 
+	queryStoreMetric := func(metric string) ([]pkgmetrics.MetricPoint, error) {
+		for _, candidateID := range diskMetricStoreIDs(resourceID) {
+			points, err := store.Query(resourceType, candidateID, metric, start, end, stepSecs)
+			if err != nil {
+				return nil, err
+			}
+			if len(points) > 0 {
+				return points, nil
+			}
+		}
+		return nil, nil
+	}
+
+	queryStoreAllMetrics := func() (map[string][]pkgmetrics.MetricPoint, error) {
+		for _, candidateID := range diskMetricStoreIDs(resourceID) {
+			metricsMap, err := store.QueryAll(resourceType, candidateID, start, end, stepSecs)
+			if err != nil {
+				return nil, err
+			}
+			if len(metricsMap) > 0 {
+				return metricsMap, nil
+			}
+		}
+		return nil, nil
+	}
+
 	if metricType != "" {
 		source := historySourceStore
 		// Query single metric type
-		points, err := store.Query(resourceType, resourceID, metricType, start, end, stepSecs)
+		points, err := queryStoreMetric(metricType)
 		if err != nil {
 			log.Error().Err(err).
 				Str("resourceType", resourceType).
@@ -6397,7 +6488,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 	} else {
 		source := historySourceStore
 		// Query all metrics for this resource
-		metricsMap, err := store.QueryAll(resourceType, resourceID, start, end, stepSecs)
+		metricsMap, err := queryStoreAllMetrics()
 		if err != nil {
 			log.Error().Err(err).
 				Str("resourceType", resourceType).

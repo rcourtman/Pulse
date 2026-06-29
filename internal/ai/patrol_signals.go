@@ -137,15 +137,34 @@ func detectSignalsFromToolCall(tc *ToolCallRecord, thresholds SignalThresholds) 
 
 // --- Storage signals ---
 
+type smartAttributeCounters struct {
+	ReallocatedSectors   *int64 `json:"reallocatedSectors"`
+	PendingSectors       *int64 `json:"pendingSectors"`
+	OfflineUncorrectable *int64 `json:"offlineUncorrectable"`
+	UDMACRCErrors        *int64 `json:"udmaCrcErrors"`
+	MediaErrors          *int64 `json:"mediaErrors"`
+}
+
+type smartDiskSignalData struct {
+	ID                   string                 `json:"id"`
+	Device               string                 `json:"device"`
+	DevPath              string                 `json:"dev_path"`
+	Health               string                 `json:"health"`
+	Model                string                 `json:"model"`
+	Serial               string                 `json:"serial"`
+	Node                 string                 `json:"node"`
+	Attributes           smartAttributeCounters `json:"attributes"`
+	SmartAttributes      smartAttributeCounters `json:"smart_attributes"`
+	SmartAttributesCamel smartAttributeCounters `json:"smartAttributes"`
+}
+
 // storageDiskHealth is the minimal struct for parsing disk_health tool output.
 type storageDiskHealth struct {
-	Disks []struct {
-		Device string `json:"device"`
-		Health string `json:"health"`
-		Model  string `json:"model"`
-		Serial string `json:"serial"`
-		Node   string `json:"node"`
-	} `json:"disks"`
+	Disks []smartDiskSignalData `json:"disks"`
+	Hosts []struct {
+		Hostname string                `json:"hostname"`
+		SMART    []smartDiskSignalData `json:"smart"`
+	} `json:"hosts"`
 	Node string `json:"node"`
 }
 
@@ -259,35 +278,134 @@ func detectSMARTFailures(tc *ToolCallRecord) []DetectedSignal {
 
 	node := data.Node
 	for _, disk := range data.Disks {
-		health := strings.ToUpper(strings.TrimSpace(disk.Health))
-		if health == "" || health == "UNKNOWN" || health == "PASSED" || health == "OK" {
-			continue
+		if signal, ok := smartDiskSignal(tc, disk, node); ok {
+			signals = append(signals, signal)
 		}
-
-		diskNode := disk.Node
-		if diskNode == "" {
-			diskNode = node
+	}
+	for _, host := range data.Hosts {
+		for _, disk := range host.SMART {
+			if signal, ok := smartDiskSignal(tc, disk, host.Hostname); ok {
+				signals = append(signals, signal)
+			}
 		}
-
-		resourceID := diskNode
-		if resourceID == "" {
-			resourceID = disk.Device
-		}
-
-		signals = append(signals, DetectedSignal{
-			SignalType:        SignalSMARTFailure,
-			ResourceID:        resourceID,
-			ResourceName:      disk.Device,
-			ResourceType:      "node",
-			SuggestedSeverity: "critical",
-			Category:          string(FindingCategoryReliability),
-			Summary:           "SMART health check: " + health + " for " + disk.Device,
-			Evidence:          truncateEvidence(tc.Output),
-			ToolCallID:        tc.ID,
-		})
 	}
 
 	return signals
+}
+
+func smartDiskSignal(tc *ToolCallRecord, disk smartDiskSignalData, fallbackNode string) (DetectedSignal, bool) {
+	health := strings.ToUpper(strings.TrimSpace(disk.Health))
+	healthIssue := health != "" && health != "UNKNOWN" && health != "PASSED" && health != "OK"
+
+	attrParts, hasCriticalAttrs := smartAttributeIssueParts(disk.mergedAttributes())
+	if !healthIssue && len(attrParts) == 0 {
+		return DetectedSignal{}, false
+	}
+
+	resourceID, resourceName, resourceType := smartDiskResource(disk, fallbackNode)
+	severity := "warning"
+	if healthIssue || hasCriticalAttrs {
+		severity = "critical"
+	}
+
+	var summary string
+	switch {
+	case healthIssue && len(attrParts) > 0:
+		summary = fmt.Sprintf("SMART health check: %s for %s; counters: %s", health, resourceName, strings.Join(attrParts, ", "))
+	case healthIssue:
+		summary = fmt.Sprintf("SMART health check: %s for %s", health, resourceName)
+	default:
+		summary = fmt.Sprintf("SMART counters indicate disk risk for %s: %s", resourceName, strings.Join(attrParts, ", "))
+	}
+
+	return DetectedSignal{
+		SignalType:        SignalSMARTFailure,
+		ResourceID:        resourceID,
+		ResourceName:      resourceName,
+		ResourceType:      resourceType,
+		SuggestedSeverity: severity,
+		Category:          string(FindingCategoryReliability),
+		Summary:           summary,
+		Evidence:          truncateEvidence(tc.Output),
+		ToolCallID:        tc.ID,
+	}, true
+}
+
+func (d smartDiskSignalData) mergedAttributes() smartAttributeCounters {
+	merged := smartAttributeCounters{}
+	merge := func(attrs smartAttributeCounters) {
+		if merged.ReallocatedSectors == nil {
+			merged.ReallocatedSectors = attrs.ReallocatedSectors
+		}
+		if merged.PendingSectors == nil {
+			merged.PendingSectors = attrs.PendingSectors
+		}
+		if merged.OfflineUncorrectable == nil {
+			merged.OfflineUncorrectable = attrs.OfflineUncorrectable
+		}
+		if merged.UDMACRCErrors == nil {
+			merged.UDMACRCErrors = attrs.UDMACRCErrors
+		}
+		if merged.MediaErrors == nil {
+			merged.MediaErrors = attrs.MediaErrors
+		}
+	}
+	merge(d.Attributes)
+	merge(d.SmartAttributes)
+	merge(d.SmartAttributesCamel)
+	return merged
+}
+
+func smartAttributeIssueParts(attrs smartAttributeCounters) ([]string, bool) {
+	var parts []string
+	hasCritical := false
+	appendCounter := func(label string, value *int64, critical bool) {
+		if value == nil || *value <= 0 {
+			return
+		}
+		parts = append(parts, fmt.Sprintf("%s=%d", label, *value))
+		if critical {
+			hasCritical = true
+		}
+	}
+
+	appendCounter("reallocated sectors", attrs.ReallocatedSectors, false)
+	appendCounter("pending sectors", attrs.PendingSectors, true)
+	appendCounter("offline uncorrectable", attrs.OfflineUncorrectable, true)
+	appendCounter("UDMA CRC errors", attrs.UDMACRCErrors, false)
+	appendCounter("media errors", attrs.MediaErrors, true)
+	return parts, hasCritical
+}
+
+func smartDiskResource(disk smartDiskSignalData, fallbackNode string) (resourceID, resourceName, resourceType string) {
+	resourceName = strings.TrimSpace(disk.Device)
+	if resourceName == "" {
+		resourceName = strings.TrimSpace(disk.DevPath)
+	}
+	if resourceName == "" {
+		resourceName = strings.TrimSpace(disk.Model)
+	}
+	if resourceName == "" {
+		resourceName = strings.TrimSpace(disk.ID)
+	}
+	if resourceName == "" {
+		resourceName = "disk"
+	}
+
+	resourceID = strings.TrimSpace(disk.ID)
+	resourceType = "disk"
+	if resourceID == "" {
+		node := strings.TrimSpace(disk.Node)
+		if node == "" {
+			node = strings.TrimSpace(fallbackNode)
+		}
+		resourceID = node
+		resourceType = "node"
+	}
+	if resourceID == "" {
+		resourceID = resourceName
+	}
+	return resourceID, resourceName, resourceType
 }
 
 func detectHighDiskUsage(tc *ToolCallRecord, thresholds SignalThresholds) []DetectedSignal {
@@ -618,8 +736,15 @@ type metricsPerformance struct {
 	MemPercent float64 `json:"mem_percent"`
 }
 
+type metricsPhysicalDisks struct {
+	Disks []smartDiskSignalData `json:"disks"`
+}
+
 func detectMetricsSignals(tc *ToolCallRecord, thresholds SignalThresholds) []DetectedSignal {
 	inputType := extractInputType(tc.Input)
+	if inputType == "disks" {
+		return detectPhysicalDiskMetricSignals(tc)
+	}
 	if inputType != "performance" && inputType != "" {
 		return nil
 	}
@@ -685,6 +810,28 @@ func detectMetricsSignals(tc *ToolCallRecord, thresholds SignalThresholds) []Det
 		}
 	}
 
+	if inputType == "" {
+		signals = append(signals, detectPhysicalDiskMetricSignals(tc)...)
+	}
+
+	return signals
+}
+
+func detectPhysicalDiskMetricSignals(tc *ToolCallRecord) []DetectedSignal {
+	var data metricsPhysicalDisks
+	if err := json.Unmarshal([]byte(tc.Output), &data); err != nil {
+		if !tryParseEmbeddedJSON(tc.Output, &data) {
+			log.Debug().Err(err).Str("tool", tc.ToolName).Msg("patrol_signals: failed to parse physical disks output")
+			return nil
+		}
+	}
+
+	var signals []DetectedSignal
+	for _, disk := range data.Disks {
+		if signal, ok := smartDiskSignal(tc, disk, disk.Node); ok {
+			signals = append(signals, signal)
+		}
+	}
 	return signals
 }
 

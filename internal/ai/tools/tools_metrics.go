@@ -618,6 +618,9 @@ func (e *PulseToolExecutor) executeListPhysicalDisks(_ context.Context, args map
 			Used:        disk.Used,
 			LastChecked: disk.LastChecked,
 		}
+		if disk.SmartAttributes != nil {
+			summary.SmartAttributes = disk.SmartAttributes
+		}
 
 		// Only include optional fields if they have meaningful values
 		if disk.Wearout >= 0 {

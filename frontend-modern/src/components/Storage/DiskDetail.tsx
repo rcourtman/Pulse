@@ -213,6 +213,57 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
                 />
               </div>
             </Show>
+            <Show when={!isNvme() && attrs()?.pendingSectors != null}>
+              <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                <HistoryChart
+                  resourceType="disk"
+                  resourceId={resId()!}
+                  metric="smart_pending_sectors"
+                  label="Pending Sectors"
+                  unit="sectors"
+                  height={120}
+                  color="#ef4444"
+                  range={chartRange()}
+                  hideSelector={true}
+                  compact={true}
+                  hideLock={true}
+                />
+              </div>
+            </Show>
+            <Show when={!isNvme() && attrs()?.offlineUncorrectable != null}>
+              <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                <HistoryChart
+                  resourceType="disk"
+                  resourceId={resId()!}
+                  metric="smart_offline_uncorrectable"
+                  label="Offline Uncorrectable"
+                  unit="sectors"
+                  height={120}
+                  color="#dc2626"
+                  range={chartRange()}
+                  hideSelector={true}
+                  compact={true}
+                  hideLock={true}
+                />
+              </div>
+            </Show>
+            <Show when={!isNvme() && attrs()?.udmaCrcErrors != null}>
+              <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                <HistoryChart
+                  resourceType="disk"
+                  resourceId={resId()!}
+                  metric="smart_crc_errors"
+                  label="CRC Errors"
+                  unit="errors"
+                  height={120}
+                  color="#f97316"
+                  range={chartRange()}
+                  hideSelector={true}
+                  compact={true}
+                  hideLock={true}
+                />
+              </div>
+            </Show>
 
             {/* NVMe charts */}
             <Show when={isNvme() && attrs()?.percentageUsed != null}>
@@ -242,6 +293,40 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
                   unit="%"
                   height={120}
                   color="#10b981"
+                  range={chartRange()}
+                  hideSelector={true}
+                  compact={true}
+                  hideLock={true}
+                />
+              </div>
+            </Show>
+            <Show when={isNvme() && attrs()?.mediaErrors != null}>
+              <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                <HistoryChart
+                  resourceType="disk"
+                  resourceId={resId()!}
+                  metric="smart_media_errors"
+                  label="Media Errors"
+                  unit="errors"
+                  height={120}
+                  color="#ef4444"
+                  range={chartRange()}
+                  hideSelector={true}
+                  compact={true}
+                  hideLock={true}
+                />
+              </div>
+            </Show>
+            <Show when={isNvme() && attrs()?.unsafeShutdowns != null}>
+              <div class="rounded border border-gray-200 bg-white/70 p-3 shadow-sm dark:border-gray-600/70 dark:bg-gray-900/30">
+                <HistoryChart
+                  resourceType="disk"
+                  resourceId={resId()!}
+                  metric="smart_unsafe_shutdowns"
+                  label="Unsafe Shutdowns"
+                  unit="events"
+                  height={120}
+                  color="#64748b"
                   range={chartRange()}
                   hideSelector={true}
                   compact={true}

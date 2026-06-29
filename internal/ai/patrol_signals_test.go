@@ -2,6 +2,7 @@ package ai
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 )
@@ -68,6 +69,90 @@ func TestDetectSignals_SMARTPassedNoSignal(t *testing.T) {
 	signals := DetectSignals(toolCalls, DefaultSignalThresholds())
 	if len(signals) != 0 {
 		t.Fatalf("expected 0 signals for healthy disks, got %d", len(signals))
+	}
+}
+
+func TestDetectSignals_PhysicalDisksSMARTAttributes(t *testing.T) {
+	output, _ := json.Marshal(map[string]interface{}{
+		"disks": []map[string]interface{}{
+			{
+				"id":       "inst-node1-wwn-0x5002538f12345678",
+				"node":     "node1",
+				"dev_path": "/dev/sda",
+				"health":   "PASSED",
+				"smart_attributes": map[string]interface{}{
+					"pendingSectors": 2,
+				},
+			},
+		},
+	})
+
+	toolCalls := []ToolCallRecord{
+		{
+			ID:       "tc1",
+			ToolName: "pulse_metrics",
+			Input:    `{"type":"disks"}`,
+			Output:   string(output),
+			Success:  true,
+		},
+	}
+
+	signals := DetectSignals(toolCalls, DefaultSignalThresholds())
+	if len(signals) != 1 {
+		t.Fatalf("expected 1 signal for SMART counters, got %d", len(signals))
+	}
+	s := signals[0]
+	if s.SignalType != SignalSMARTFailure {
+		t.Fatalf("expected SMART signal, got %s", s.SignalType)
+	}
+	if s.ResourceID != "inst-node1-wwn-0x5002538f12345678" || s.ResourceType != "disk" {
+		t.Fatalf("expected disk-scoped resource, got %#v", s)
+	}
+	if s.SuggestedSeverity != "critical" {
+		t.Fatalf("expected critical severity for pending sectors, got %#v", s)
+	}
+	if !strings.Contains(s.Summary, "pending sectors=2") {
+		t.Fatalf("expected SMART counter evidence in summary, got %q", s.Summary)
+	}
+}
+
+func TestDetectSignals_DiskHealthHostSMARTAttributes(t *testing.T) {
+	output, _ := json.Marshal(map[string]interface{}{
+		"hosts": []map[string]interface{}{
+			{
+				"hostname": "pve1",
+				"smart": []map[string]interface{}{
+					{
+						"device": "/dev/nvme0n1",
+						"health": "PASSED",
+						"attributes": map[string]interface{}{
+							"mediaErrors": 3,
+						},
+					},
+				},
+			},
+		},
+	})
+
+	toolCalls := []ToolCallRecord{
+		{
+			ID:       "tc1",
+			ToolName: "pulse_storage",
+			Input:    `{"type":"disk_health"}`,
+			Output:   string(output),
+			Success:  true,
+		},
+	}
+
+	signals := DetectSignals(toolCalls, DefaultSignalThresholds())
+	if len(signals) != 1 {
+		t.Fatalf("expected 1 signal for host SMART counters, got %d", len(signals))
+	}
+	if signals[0].ResourceID != "pve1" || signals[0].ResourceName != "/dev/nvme0n1" {
+		t.Fatalf("expected host/device resource fallback, got %#v", signals[0])
+	}
+	if !strings.Contains(signals[0].Summary, "media errors=3") {
+		t.Fatalf("expected media error evidence in summary, got %q", signals[0].Summary)
 	}
 }
 

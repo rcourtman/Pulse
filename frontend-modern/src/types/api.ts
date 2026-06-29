@@ -932,9 +932,28 @@ export interface PhysicalDisk {
   smartAttributes?: SMARTAttributes;
 }
 
-/** Returns the best resource ID for disk metrics queries (serial preferred, WWN fallback). */
+/** Returns the canonical resource ID for disk metrics queries. */
 export function diskResourceId(disk: PhysicalDisk): string | null {
-  return disk.serial || disk.wwn || null;
+  const usable = (value?: string): string | null => {
+    const trimmed = value?.trim();
+    if (!trimmed) return null;
+
+    const normalized = trimmed
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    if (
+      !normalized ||
+      ['n-a', 'na', 'none', 'null', 'unknown', 'not-available', 'not-applicable'].includes(
+        normalized,
+      )
+    ) {
+      return null;
+    }
+    return trimmed;
+  };
+
+  return usable(disk.id) || usable(disk.serial) || usable(disk.wwn) || null;
 }
 
 export interface CPUInfo {

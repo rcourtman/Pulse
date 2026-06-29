@@ -1,6 +1,10 @@
 package tools
 
-import "time"
+import (
+	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+)
 
 // MetricPoint represents a single metric data point
 type MetricPoint struct {
@@ -570,10 +574,11 @@ type HostDiskHealth struct {
 
 // SMARTDiskSummary is a summarized SMART disk
 type SMARTDiskSummary struct {
-	Device      string `json:"device"`
-	Model       string `json:"model"`
-	Health      string `json:"health"`
-	Temperature int    `json:"temperature,omitempty"`
+	Device      string                  `json:"device"`
+	Model       string                  `json:"model"`
+	Health      string                  `json:"health"`
+	Temperature int                     `json:"temperature,omitempty"`
+	Attributes  *models.SMARTAttributes `json:"attributes,omitempty"`
 }
 
 // RAIDArraySummary is a summarized RAID array
@@ -1097,21 +1102,22 @@ type PhysicalDisksResponse struct {
 
 // PhysicalDiskSummary summarizes a physical disk with SMART health info
 type PhysicalDiskSummary struct {
-	ID          string    `json:"id"`
-	Node        string    `json:"node"`
-	Instance    string    `json:"instance"`
-	DevPath     string    `json:"dev_path"`
-	Model       string    `json:"model,omitempty"`
-	Serial      string    `json:"serial,omitempty"`
-	WWN         string    `json:"wwn,omitempty"`
-	Type        string    `json:"type"` // nvme, sata, sas
-	SizeBytes   int64     `json:"size_bytes"`
-	Health      string    `json:"health"`                           // PASSED, FAILED, UNKNOWN
-	Wearout     *int      `json:"ssd_life_remaining_pct,omitempty"` // 100=new/healthy, 0=end of life; nil when unavailable
-	Temperature *int      `json:"temperature,omitempty"`            // Celsius, nil when unavailable
-	RPM         *int      `json:"rpm,omitempty"`                    // 0 for SSDs, nil when unavailable
-	Used        string    `json:"used,omitempty"`
-	LastChecked time.Time `json:"last_checked,omitempty"`
+	ID              string                  `json:"id"`
+	Node            string                  `json:"node"`
+	Instance        string                  `json:"instance"`
+	DevPath         string                  `json:"dev_path"`
+	Model           string                  `json:"model,omitempty"`
+	Serial          string                  `json:"serial,omitempty"`
+	WWN             string                  `json:"wwn,omitempty"`
+	Type            string                  `json:"type"` // nvme, sata, sas
+	SizeBytes       int64                   `json:"size_bytes"`
+	Health          string                  `json:"health"`                           // PASSED, FAILED, UNKNOWN
+	Wearout         *int                    `json:"ssd_life_remaining_pct,omitempty"` // 100=new/healthy, 0=end of life; nil when unavailable
+	Temperature     *int                    `json:"temperature,omitempty"`            // Celsius, nil when unavailable
+	RPM             *int                    `json:"rpm,omitempty"`                    // 0 for SSDs, nil when unavailable
+	Used            string                  `json:"used,omitempty"`
+	SmartAttributes *models.SMARTAttributes `json:"smart_attributes,omitempty"`
+	LastChecked     time.Time               `json:"last_checked,omitempty"`
 }
 
 // ========== Host RAID Types ==========

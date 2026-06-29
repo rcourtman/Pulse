@@ -983,7 +983,7 @@ func TestCollectDeviceSMARTWWN(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result.WWN != "5-abc-1234" {
+	if result.WWN != "0x5000abc000001234" {
 		t.Fatalf("unexpected WWN: %q", result.WWN)
 	}
 }

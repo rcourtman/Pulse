@@ -121,7 +121,17 @@ type smartctlJSON struct {
 		MediaErrors     int64 `json:"media_errors"`
 		PowerCycles     int64 `json:"power_cycles"`
 	} `json:"nvme_smart_health_information_log"`
-	PowerMode string `json:"power_mode"`
+	NVMeNamespaces []nvmeNamespaceJSON `json:"nvme_namespaces"`
+	PowerMode      string              `json:"power_mode"`
+}
+
+type nvmeNamespaceJSON struct {
+	EUI64 nvmeEUI64JSON `json:"eui64"`
+}
+
+type nvmeEUI64JSON struct {
+	OUI   uint64 `json:"oui"`
+	ExtID uint64 `json:"ext_id"`
 }
 
 type smartTextFallback struct {
@@ -131,6 +141,7 @@ type smartTextFallback struct {
 	Health      string
 	Temperature int
 	Standby     bool
+	Attributes  *SMARTAttributes
 }
 
 var (
@@ -918,6 +929,8 @@ func parseSMARTOutput(output []byte, target smartctlTarget) (*DiskSMART, error) 
 
 	if smartData.WWN.NAA != 0 {
 		result.WWN = formatWWN(smartData.WWN.NAA, smartData.WWN.OUI, smartData.WWN.ID)
+	} else if eui64 := firstNVMeEUI64(smartData.NVMeNamespaces); eui64 != "" {
+		result.WWN = eui64
 	}
 
 	if smartData.Temperature.Current > 0 {
@@ -946,8 +959,9 @@ func parseSMARTOutput(output []byte, target smartctlTarget) (*DiskSMART, error) 
 		}
 	}
 
-	applySMARTTextFallback(result, parseSMARTTextFallback(strings.Join(smartData.Smartctl.Output, "\n")))
-	result.Attributes = parseSMARTAttributes(&smartData, result.Type)
+	textFallback := parseSMARTTextFallback(strings.Join(smartData.Smartctl.Output, "\n"))
+	applySMARTTextFallback(result, textFallback)
+	result.Attributes = mergeSMARTAttributes(parseSMARTAttributes(&smartData, result.Type), textFallback.Attributes)
 	if result.Health == "" && result.Temperature == 0 && result.Attributes == nil && !result.Standby {
 		return nil, errSMARTDataUnavailable
 	}
@@ -965,6 +979,7 @@ func parseSMARTTextOutput(text string, target smartctlTarget) (*DiskSMART, error
 		Temperature: fallback.Temperature,
 		Health:      fallback.Health,
 		Standby:     fallback.Standby,
+		Attributes:  fallback.Attributes,
 		LastUpdated: timeNow(),
 	}
 	if result.Type == "" {
@@ -978,6 +993,15 @@ func parseSMARTTextOutput(text string, target smartctlTarget) (*DiskSMART, error
 		return nil, errSMARTDataUnavailable
 	}
 	return result, nil
+}
+
+func firstNVMeEUI64(namespaces []nvmeNamespaceJSON) string {
+	for _, namespace := range namespaces {
+		if formatted := formatNVMeEUI64(namespace.EUI64.OUI, namespace.EUI64.ExtID); formatted != "" {
+			return formatted
+		}
+	}
+	return ""
 }
 
 func applySMARTTextFallback(result *DiskSMART, fallback smartTextFallback) {
@@ -1035,12 +1059,18 @@ func parseSMARTTextFallback(text string) smartTextFallback {
 			}
 		case strings.Contains(lower, "transport protocol:") && strings.Contains(lower, "nvme"):
 			fallback.Type = "nvme"
+		case strings.Contains(lower, "nvme log"):
+			fallback.Type = "nvme"
 		case strings.Contains(lower, "transport protocol:") && strings.Contains(lower, "sas"):
 			fallback.Type = "sas"
 		case strings.Contains(lower, "sata version is:") || strings.Contains(lower, "ata version is:"):
 			if fallback.Type == "" {
 				fallback.Type = "sata"
 			}
+		}
+
+		if attrs, ok := parseSMARTTextAttributeLine(line); ok {
+			fallback.Attributes = mergeSMARTAttributes(fallback.Attributes, attrs)
 		}
 
 		if fallback.Temperature == 0 {
@@ -1064,6 +1094,169 @@ func parseSMARTTextFallback(text string) smartTextFallback {
 		}
 	}
 	return fallback
+}
+
+func parseSMARTTextAttributeLine(line string) (*SMARTAttributes, bool) {
+	if attrs, ok := parseNVMeSMARTTextAttributeLine(line); ok {
+		return attrs, true
+	}
+	return parseATASMARTTextAttributeLine(line)
+}
+
+func parseNVMeSMARTTextAttributeLine(line string) (*SMARTAttributes, bool) {
+	lower := strings.ToLower(strings.TrimSpace(line))
+	if !strings.Contains(lower, ":") {
+		return nil, false
+	}
+
+	value, ok := parseSMARTTextColonNumber(line)
+	if !ok {
+		return nil, false
+	}
+
+	attrs := &SMARTAttributes{}
+	switch {
+	case strings.HasPrefix(lower, "power on hours"):
+		attrs.PowerOnHours = &value
+	case strings.HasPrefix(lower, "power cycles"):
+		attrs.PowerCycles = &value
+	case strings.HasPrefix(lower, "percentage used"):
+		v := int(value)
+		attrs.PercentageUsed = &v
+	case strings.HasPrefix(lower, "available spare"):
+		v := int(value)
+		attrs.AvailableSpare = &v
+	case strings.HasPrefix(lower, "media and data integrity errors"), strings.HasPrefix(lower, "media errors"):
+		attrs.MediaErrors = &value
+	case strings.HasPrefix(lower, "unsafe shutdowns"):
+		attrs.UnsafeShutdowns = &value
+	default:
+		return nil, false
+	}
+	return attrs, true
+}
+
+func parseATASMARTTextAttributeLine(line string) (*SMARTAttributes, bool) {
+	fields := strings.Fields(line)
+	if len(fields) < 2 {
+		return nil, false
+	}
+
+	id, err := strconv.Atoi(fields[0])
+	if err != nil {
+		return nil, false
+	}
+
+	rawText := fields[len(fields)-1]
+	if len(fields) >= 10 {
+		rawText = strings.Join(fields[9:], " ")
+	}
+	rawValue, ok := parseSMARTTextLeadingNumber(rawText)
+	if !ok {
+		return nil, false
+	}
+	raw := parseRawValue(rawText, rawValue)
+
+	attrs := &SMARTAttributes{}
+	switch id {
+	case 5:
+		attrs.ReallocatedSectors = &raw
+	case 9:
+		attrs.PowerOnHours = &raw
+	case 12:
+		attrs.PowerCycles = &raw
+	case 197:
+		attrs.PendingSectors = &raw
+	case 198:
+		attrs.OfflineUncorrectable = &raw
+	case 199:
+		attrs.UDMACRCErrors = &raw
+	default:
+		return nil, false
+	}
+	return attrs, true
+}
+
+func parseSMARTTextColonNumber(line string) (int64, bool) {
+	idx := strings.Index(line, ":")
+	if idx < 0 || idx == len(line)-1 {
+		return 0, false
+	}
+	return parseSMARTTextLeadingNumber(line[idx+1:])
+}
+
+func parseSMARTTextLeadingNumber(text string) (int64, bool) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return 0, false
+	}
+
+	var b strings.Builder
+	started := false
+	for _, r := range text {
+		switch {
+		case r >= '0' && r <= '9':
+			started = true
+			b.WriteRune(r)
+		case r == ',' && started:
+			continue
+		default:
+			if started {
+				value, err := strconv.ParseInt(b.String(), 10, 64)
+				return value, err == nil
+			}
+			if r != ' ' && r != '\t' {
+				return 0, false
+			}
+		}
+	}
+
+	if !started {
+		return 0, false
+	}
+	value, err := strconv.ParseInt(b.String(), 10, 64)
+	return value, err == nil
+}
+
+func mergeSMARTAttributes(primary, fallback *SMARTAttributes) *SMARTAttributes {
+	if primary == nil {
+		return fallback
+	}
+	if fallback == nil {
+		return primary
+	}
+
+	if primary.PowerOnHours == nil {
+		primary.PowerOnHours = fallback.PowerOnHours
+	}
+	if primary.PowerCycles == nil {
+		primary.PowerCycles = fallback.PowerCycles
+	}
+	if primary.ReallocatedSectors == nil {
+		primary.ReallocatedSectors = fallback.ReallocatedSectors
+	}
+	if primary.PendingSectors == nil {
+		primary.PendingSectors = fallback.PendingSectors
+	}
+	if primary.OfflineUncorrectable == nil {
+		primary.OfflineUncorrectable = fallback.OfflineUncorrectable
+	}
+	if primary.UDMACRCErrors == nil {
+		primary.UDMACRCErrors = fallback.UDMACRCErrors
+	}
+	if primary.PercentageUsed == nil {
+		primary.PercentageUsed = fallback.PercentageUsed
+	}
+	if primary.AvailableSpare == nil {
+		primary.AvailableSpare = fallback.AvailableSpare
+	}
+	if primary.MediaErrors == nil {
+		primary.MediaErrors = fallback.MediaErrors
+	}
+	if primary.UnsafeShutdowns == nil {
+		primary.UnsafeShutdowns = fallback.UnsafeShutdowns
+	}
+	return primary
 }
 
 func parseSMARTHealthText(line string) string {
@@ -1152,13 +1345,13 @@ func parseRawValue(rawString string, rawValue int64) int64 {
 		return rawValue
 	}
 	end := 0
-	for end < len(s) && s[end] >= '0' && s[end] <= '9' {
+	for end < len(s) && ((s[end] >= '0' && s[end] <= '9') || s[end] == ',') {
 		end++
 	}
 	if end == 0 {
 		return rawValue
 	}
-	v, err := strconv.ParseInt(s[:end], 10, 64)
+	v, err := strconv.ParseInt(strings.ReplaceAll(s[:end], ",", ""), 10, 64)
 	if err != nil {
 		return rawValue
 	}
@@ -1185,10 +1378,35 @@ func detectDiskType(data smartctlJSON) string {
 	}
 }
 
-// formatWWN formats WWN components into a standard string.
+// formatWWN formats smartctl's WWN components into Linux by-id style hex.
 func formatWWN(naa, oui, id uint64) string {
-	// Format as hex string: naa-oui-id
-	return strconv.FormatUint(naa, 16) + "-" +
-		strconv.FormatUint(oui, 16) + "-" +
-		strconv.FormatUint(id, 16)
+	if naa == 0 {
+		return ""
+	}
+
+	idHex := strconv.FormatUint(id, 16)
+	if len(idHex) < 9 {
+		idHex = strings.Repeat("0", 9-len(idHex)) + idHex
+	}
+	ouiHex := strconv.FormatUint(oui, 16)
+	if len(ouiHex) < 6 {
+		ouiHex = strings.Repeat("0", 6-len(ouiHex)) + ouiHex
+	}
+	return "0x" + strconv.FormatUint(naa, 16) + ouiHex + idHex
+}
+
+func formatNVMeEUI64(oui, extID uint64) string {
+	if oui == 0 && extID == 0 {
+		return ""
+	}
+
+	ouiHex := strconv.FormatUint(oui, 16)
+	if len(ouiHex) < 6 {
+		ouiHex = strings.Repeat("0", 6-len(ouiHex)) + ouiHex
+	}
+	extHex := strconv.FormatUint(extID, 16)
+	if len(extHex) < 10 {
+		extHex = strings.Repeat("0", 10-len(extHex)) + extHex
+	}
+	return "eui." + ouiHex + extHex
 }

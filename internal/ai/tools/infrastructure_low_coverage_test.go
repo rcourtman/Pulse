@@ -238,6 +238,7 @@ func TestExecuteGetDiskIOStats(t *testing.T) {
 func TestExecuteListPhysicalDisks(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now()
+	pending := int64(2)
 	state := models.StateSnapshot{
 		PhysicalDisks: []models.PhysicalDisk{
 			{
@@ -255,6 +256,9 @@ func TestExecuteListPhysicalDisks(t *testing.T) {
 				Temperature: 30,
 				RPM:         7200,
 				Used:        "used",
+				SmartAttributes: &models.SMARTAttributes{
+					PendingSectors: &pending,
+				},
 				LastChecked: now,
 			},
 		},
@@ -270,6 +274,9 @@ func TestExecuteListPhysicalDisks(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &resp))
 	require.Len(t, resp.Disks, 1)
 	assert.Equal(t, "disk1", resp.Disks[0].ID)
+	require.NotNil(t, resp.Disks[0].SmartAttributes)
+	require.NotNil(t, resp.Disks[0].SmartAttributes.PendingSectors)
+	assert.Equal(t, int64(2), *resp.Disks[0].SmartAttributes.PendingSectors)
 }
 
 func TestExecuteGetResourceDisks(t *testing.T) {

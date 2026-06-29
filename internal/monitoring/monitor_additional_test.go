@@ -301,6 +301,253 @@ func TestBuildPhysicalDisksForNodeOmitsExcludedDisksAndClearsAlerts(t *testing.T
 	}
 }
 
+func TestBuildPhysicalDisksForNodeUsesStableIdentityBeforeDevPath(t *testing.T) {
+	monitor := &Monitor{}
+	collectedAt := time.Date(2026, 6, 29, 12, 0, 0, 0, time.UTC)
+
+	first := monitor.buildPhysicalDisksForNode(
+		"inst",
+		"node1",
+		[]proxmox.Disk{{
+			DevPath: "/dev/sda",
+			Model:   "Samsung SSD",
+			Serial:  "S3XYZ123",
+			WWN:     "0x5002538f12345678",
+			Type:    "sata",
+			Health:  "PASSED",
+			Wearout: 95,
+		}},
+		nil,
+		collectedAt,
+	)
+	second := monitor.buildPhysicalDisksForNode(
+		"inst",
+		"node1",
+		[]proxmox.Disk{{
+			DevPath: "/dev/sdb",
+			Model:   "Samsung SSD",
+			Serial:  "S3XYZ123",
+			WWN:     "0x5002538f12345678",
+			Type:    "sata",
+			Health:  "PASSED",
+			Wearout: 95,
+		}},
+		nil,
+		collectedAt.Add(time.Minute),
+	)
+
+	if len(first) != 1 || len(second) != 1 {
+		t.Fatalf("expected one disk from each poll, got %d and %d", len(first), len(second))
+	}
+	if first[0].ID != second[0].ID {
+		t.Fatalf("expected stable ID across devpath change, got %q then %q", first[0].ID, second[0].ID)
+	}
+	if first[0].ID != "inst-node1-wwn-0x5002538f12345678" {
+		t.Fatalf("expected WWN-backed disk ID, got %q", first[0].ID)
+	}
+}
+
+func TestPhysicalDiskIDFallsBackWhenControllerIdentityIsPlaceholder(t *testing.T) {
+	got := physicalDiskID("inst", "node1", proxmox.Disk{
+		DevPath: "/dev/sdc",
+		Serial:  "N/A",
+		WWN:     "unknown",
+	})
+	if got != "inst-node1-dev-sdc" {
+		t.Fatalf("expected devpath fallback for placeholder serial/wwn, got %q", got)
+	}
+}
+
+func TestPhysicalDiskIDCanonicalizesWWNRepresentation(t *testing.T) {
+	plain := physicalDiskID("inst", "node1", proxmox.Disk{
+		DevPath: "/dev/sda",
+		WWN:     "5002538f12345678",
+	})
+	prefixed := physicalDiskID("inst", "node1", proxmox.Disk{
+		DevPath: "/dev/sdb",
+		WWN:     "wwn-0x5002538f12345678",
+	})
+
+	if plain != "inst-node1-wwn-0x5002538f12345678" {
+		t.Fatalf("expected canonical WWN-backed ID, got %q", plain)
+	}
+	if prefixed != plain {
+		t.Fatalf("expected equivalent WWN forms to produce the same ID, got %q and %q", plain, prefixed)
+	}
+}
+
+func TestPhysicalDiskWWNMatchesCanonicalFormsAndSkipsPlaceholders(t *testing.T) {
+	if !physicalDiskWWNMatches("0x5002538f12345678", "wwn-0x5002538f12345678") {
+		t.Fatalf("expected equivalent WWN forms to match")
+	}
+	if !physicalDiskWWNMatches("00005002538f12345678", "5002538f12345678") {
+		t.Fatalf("expected leading-zero WWN forms to match")
+	}
+	if !physicalDiskWWNMatches("eui.0025388211b67f9f", "0x0025388211b67f9f") {
+		t.Fatalf("expected NVMe EUI64 and hex WWN forms to match")
+	}
+	if physicalDiskWWNMatches("unknown", "unknown") {
+		t.Fatalf("placeholder WWNs must not match")
+	}
+}
+
+func TestPhysicalDiskMetricResourceIDSkipsPlaceholderIdentity(t *testing.T) {
+	got := physicalDiskMetricResourceID(models.PhysicalDisk{
+		ID:       "inst-node1-dev-sdc",
+		Instance: "inst",
+		Node:     "node1",
+		DevPath:  "/dev/sdc",
+		Serial:   "N/A",
+		WWN:      "unknown",
+	})
+	if got != "inst-node1-dev-sdc" {
+		t.Fatalf("expected metric resource ID to fall back to disk ID, got %q", got)
+	}
+}
+
+func TestPhysicalDiskMetricResourceIDSkipsPlaceholderDiskID(t *testing.T) {
+	got := physicalDiskMetricResourceID(models.PhysicalDisk{
+		ID:     "unknown",
+		Serial: "S3XYZ123",
+		WWN:    "0x5002538f12345678",
+	})
+	if got != "S3XYZ123" {
+		t.Fatalf("expected placeholder disk ID to fall back to serial, got %q", got)
+	}
+}
+
+func TestPhysicalDiskMetricResourceIDPrefersCanonicalDiskID(t *testing.T) {
+	got := physicalDiskMetricResourceID(models.PhysicalDisk{
+		ID:     "inst-node1-wwn-0x5002538f12345678",
+		Serial: "S3XYZ123",
+		WWN:    "0x5002538f12345678",
+	})
+	if got != "inst-node1-wwn-0x5002538f12345678" {
+		t.Fatalf("expected canonical disk ID for metrics, got %q", got)
+	}
+}
+
+func TestMergeNVMeTempsIntoDisksSkipsPlaceholderIdentityMatches(t *testing.T) {
+	disks := []models.PhysicalDisk{{
+		Node:    "node1",
+		DevPath: "/dev/sda",
+		Serial:  "N/A",
+		WWN:     "unknown",
+	}}
+	nodes := []models.Node{{
+		Name: "node1",
+		Temperature: &models.Temperature{
+			Available: true,
+			SMART: []models.DiskTemp{{
+				Device:      "/dev/sdb",
+				Serial:      "n/a",
+				WWN:         "UNKNOWN",
+				Temperature: 44,
+			}},
+		},
+	}}
+
+	merged := mergeNVMeTempsIntoDisks(disks, nodes)
+	if len(merged) != 1 {
+		t.Fatalf("expected 1 merged disk, got %#v", merged)
+	}
+	if merged[0].Temperature != 0 {
+		t.Fatalf("placeholder serial/WWN must not merge SMART temperature from another device, got %#v", merged[0])
+	}
+}
+
+func TestMergeHostAgentSMARTIntoDisksSkipsPlaceholderIdentityMatches(t *testing.T) {
+	disks := []models.PhysicalDisk{{
+		ID:       "inst-node1-dev-sda",
+		Node:     "node1",
+		Instance: "inst",
+		DevPath:  "/dev/sda",
+		Serial:   "N/A",
+		WWN:      "unknown",
+		Health:   "UNKNOWN",
+		Wearout:  -1,
+	}}
+	nodes := []models.Node{{
+		Name:              "node1",
+		Instance:          "inst",
+		LinkedHostAgentID: "host-1",
+	}}
+	hosts := []models.Host{{
+		ID: "host-1",
+		Sensors: models.HostSensorSummary{
+			SMART: []models.HostDiskSMART{{
+				Device:      "/dev/sdb",
+				Serial:      "n/a",
+				WWN:         "UNKNOWN",
+				Temperature: 44,
+				Health:      "FAILED",
+			}},
+		},
+	}}
+
+	merged := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts)
+	if len(merged) != 1 {
+		t.Fatalf("expected 1 merged disk, got %#v", merged)
+	}
+	if merged[0].Temperature != 0 || merged[0].Health != "UNKNOWN" {
+		t.Fatalf("placeholder serial/WWN must not merge host SMART evidence from another device, got %#v", merged[0])
+	}
+}
+
+func TestMergeHostAgentSMARTIntoDisksBackfillsIdentityFromDeviceMatch(t *testing.T) {
+	disks := []models.PhysicalDisk{{
+		ID:       "inst-node1-dev-sda",
+		Node:     "node1",
+		Instance: "inst",
+		DevPath:  "/dev/sda",
+		Serial:   "N/A",
+		WWN:      "unknown",
+		Health:   "UNKNOWN",
+		Wearout:  -1,
+	}}
+	nodes := []models.Node{{
+		Name:              "node1",
+		Instance:          "inst",
+		LinkedHostAgentID: "host-1",
+	}}
+	used := 12
+	hosts := []models.Host{{
+		ID: "host-1",
+		Sensors: models.HostSensorSummary{
+			SMART: []models.HostDiskSMART{{
+				Device:      "/dev/sda",
+				Model:       "Samsung SSD",
+				Serial:      "S3XYZ123",
+				WWN:         "0x5002538f12345678",
+				Type:        "sata",
+				Temperature: 39,
+				Health:      "PASSED",
+				Attributes: &models.SMARTAttributes{
+					PercentageUsed: &used,
+				},
+			}},
+		},
+	}}
+
+	merged := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts)
+	if len(merged) != 1 {
+		t.Fatalf("expected 1 merged disk, got %#v", merged)
+	}
+	disk := merged[0]
+	if disk.ID != "inst-node1-wwn-0x5002538f12345678" {
+		t.Fatalf("expected SMART-backed stable disk ID, got %q", disk.ID)
+	}
+	if disk.Serial != "S3XYZ123" || disk.WWN != "0x5002538f12345678" {
+		t.Fatalf("expected SMART identity to backfill missing Proxmox identity, got %#v", disk)
+	}
+	if disk.Model != "Samsung SSD" || disk.Type != "sata" {
+		t.Fatalf("expected SMART model/type to fill missing disk fields, got %#v", disk)
+	}
+	if disk.Temperature != 39 || disk.Health != "PASSED" || disk.Wearout != 88 {
+		t.Fatalf("expected SMART health evidence to merge, got %#v", disk)
+	}
+}
+
 func TestBuildClusterClientEndpoints_FallsBackToMainHostWhenOnlyBaseFingerprintExists(t *testing.T) {
 	pve := config.PVEInstance{
 		Name:        "cluster-a",

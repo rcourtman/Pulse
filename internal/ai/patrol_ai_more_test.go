@@ -605,11 +605,69 @@ func TestSeedHealthAndAlerts_NoIssues(t *testing.T) {
 	}
 
 	out := ps.seedHealthAndAlerts(state, nil, cfg, now)
-	if !strings.Contains(out, "All 1 disks healthy") {
-		t.Fatalf("expected healthy disk summary, got: %s", out)
+	if !strings.Contains(out, "No disk issues detected across 1 disks; SMART health is unknown for 1 disk(s).") {
+		t.Fatalf("expected unknown SMART evidence summary, got: %s", out)
+	}
+	if strings.Contains(out, "SMART PASSED") {
+		t.Fatalf("unknown SMART health must not be reported as passed, got: %s", out)
 	}
 	if !strings.Contains(out, "All 2 instances connected") {
 		t.Fatalf("expected all connections summary, got: %s", out)
+	}
+}
+
+func TestSeedHealthAndAlerts_AllDisksPassed(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	cfg := DefaultPatrolConfig()
+	now := time.Now()
+
+	state := models.StateSnapshot{
+		PhysicalDisks: []models.PhysicalDisk{
+			{
+				Node:        "node-1",
+				DevPath:     "/dev/sda",
+				Model:       "disk",
+				Health:      "PASSED",
+				Wearout:     100,
+				Temperature: 40,
+			},
+		},
+	}
+
+	out := ps.seedHealthAndAlerts(state, nil, cfg, now)
+	if !strings.Contains(out, "All 1 disks healthy (SMART PASSED/OK).") {
+		t.Fatalf("expected passed SMART summary, got: %s", out)
+	}
+}
+
+func TestSeedHealthAndAlerts_SMARTAttributeIssue(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	cfg := DefaultPatrolConfig()
+	now := time.Now()
+	pending := int64(2)
+
+	state := models.StateSnapshot{
+		PhysicalDisks: []models.PhysicalDisk{
+			{
+				Node:        "node-1",
+				DevPath:     "/dev/sda",
+				Model:       "disk",
+				Health:      "PASSED",
+				Wearout:     100,
+				Temperature: 40,
+				SmartAttributes: &models.SMARTAttributes{
+					PendingSectors: &pending,
+				},
+			},
+		},
+	}
+
+	out := ps.seedHealthAndAlerts(state, nil, cfg, now)
+	if strings.Contains(out, "All 1 disks healthy") {
+		t.Fatalf("SMART counter evidence must not be summarized as all healthy, got: %s", out)
+	}
+	if !strings.Contains(out, "SMART Evidence") || !strings.Contains(out, "pending sectors=2") {
+		t.Fatalf("expected SMART counter evidence in disk health table, got: %s", out)
 	}
 }
 

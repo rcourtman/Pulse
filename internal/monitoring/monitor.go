@@ -176,6 +176,146 @@ func normalizeSMARTDeviceIdentifier(device string) string {
 	return strings.TrimPrefix(normalized, "/dev/")
 }
 
+func sanitizePhysicalDiskIDPart(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return ""
+	}
+
+	var builder strings.Builder
+	builder.Grow(len(value))
+	lastSeparator := false
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			builder.WriteRune(r)
+			lastSeparator = false
+		default:
+			if !lastSeparator {
+				builder.WriteByte('-')
+				lastSeparator = true
+			}
+		}
+	}
+
+	return strings.Trim(builder.String(), "-")
+}
+
+func stablePhysicalDiskIdentityValue(value string) string {
+	sanitized := sanitizePhysicalDiskIDPart(value)
+	switch sanitized {
+	case "", "n-a", "na", "none", "null", "unknown", "not-available", "not-applicable":
+		return ""
+	}
+	return sanitized
+}
+
+func physicalDiskIdentityMatches(left, right string) bool {
+	left = stablePhysicalDiskIdentityValue(left)
+	right = stablePhysicalDiskIdentityValue(right)
+	return left != "" && left == right
+}
+
+func physicalDiskWWNMatchKey(value string) string {
+	if stablePhysicalDiskIdentityValue(value) == "" {
+		return ""
+	}
+
+	value = strings.ToLower(strings.TrimSpace(value))
+	for {
+		trimmed := value
+		for _, prefix := range []string{"wwn-", "eui.", "naa.", "0x"} {
+			trimmed = strings.TrimPrefix(trimmed, prefix)
+		}
+		if trimmed == value {
+			break
+		}
+		value = trimmed
+	}
+
+	var builder strings.Builder
+	builder.Grow(len(value))
+	for _, r := range value {
+		switch {
+		case r >= '0' && r <= '9', r >= 'a' && r <= 'f':
+			builder.WriteRune(r)
+		}
+	}
+
+	key := strings.TrimLeft(builder.String(), "0")
+	if len(key) < 8 {
+		return ""
+	}
+	return key
+}
+
+func physicalDiskWWNMatches(left, right string) bool {
+	if physicalDiskIdentityMatches(left, right) {
+		return true
+	}
+
+	left = physicalDiskWWNMatchKey(left)
+	right = physicalDiskWWNMatchKey(right)
+	return left != "" && left == right
+}
+
+func stablePhysicalDiskWWNValue(value string) string {
+	if key := physicalDiskWWNMatchKey(value); key != "" {
+		return "0x" + key
+	}
+	return stablePhysicalDiskIdentityValue(value)
+}
+
+func physicalDiskStableIdentity(disk proxmox.Disk) (kind, value string) {
+	if wwn := stablePhysicalDiskWWNValue(disk.WWN); wwn != "" {
+		return "wwn", wwn
+	}
+	if serial := stablePhysicalDiskIdentityValue(disk.Serial); serial != "" {
+		return "serial", serial
+	}
+	if dev := stablePhysicalDiskIdentityValue(normalizeSMARTDeviceIdentifier(disk.DevPath)); dev != "" {
+		return "dev", dev
+	}
+	return "dev", "unknown"
+}
+
+func physicalDiskID(inst, nodeName string, disk proxmox.Disk) string {
+	kind, value := physicalDiskStableIdentity(disk)
+	instPart := sanitizePhysicalDiskIDPart(inst)
+	if instPart == "" {
+		instPart = "unknown-instance"
+	}
+	nodePart := sanitizePhysicalDiskIDPart(nodeName)
+	if nodePart == "" {
+		nodePart = "unknown-node"
+	}
+	return fmt.Sprintf("%s-%s-%s-%s", instPart, nodePart, kind, value)
+}
+
+func refreshPhysicalDiskID(disk *models.PhysicalDisk) {
+	if disk == nil {
+		return
+	}
+	disk.ID = physicalDiskID(disk.Instance, disk.Node, proxmox.Disk{
+		DevPath: disk.DevPath,
+		Serial:  disk.Serial,
+		WWN:     disk.WWN,
+	})
+}
+
+func physicalDiskMetricResourceID(disk models.PhysicalDisk) string {
+	if id := strings.TrimSpace(disk.ID); stablePhysicalDiskIdentityValue(id) != "" {
+		return id
+	}
+	if serial := strings.TrimSpace(disk.Serial); stablePhysicalDiskIdentityValue(serial) != "" {
+		return serial
+	}
+	if wwn := strings.TrimSpace(disk.WWN); stablePhysicalDiskIdentityValue(wwn) != "" {
+		return wwn
+	}
+	return fmt.Sprintf("%s-%s-%s", disk.Instance, disk.Node, strings.ReplaceAll(disk.DevPath, "/", "-"))
+}
+
 func mergeNVMeTempsIntoDisks(disks []models.PhysicalDisk, nodes []models.Node) []models.PhysicalDisk {
 	if len(disks) == 0 || len(nodes) == 0 {
 		return disks
@@ -254,9 +394,9 @@ func mergeNVMeTempsIntoDisks(disks []models.PhysicalDisk, nodes []models.Node) [
 		}
 
 		// Try to match by WWN (most reliable)
-		if updated[i].WWN != "" {
+		if stablePhysicalDiskIdentityValue(updated[i].WWN) != "" {
 			for _, temp := range smartTemps {
-				if temp.WWN != "" && strings.EqualFold(temp.WWN, updated[i].WWN) {
+				if physicalDiskWWNMatches(temp.WWN, updated[i].WWN) {
 					if temp.Temperature > 0 && !temp.StandbySkipped {
 						updated[i].Temperature = temp.Temperature
 						log.Debug().
@@ -271,9 +411,9 @@ func mergeNVMeTempsIntoDisks(disks []models.PhysicalDisk, nodes []models.Node) [
 		}
 
 		// Fall back to serial number match (case-insensitive)
-		if updated[i].Serial != "" && updated[i].Temperature == 0 {
+		if stablePhysicalDiskIdentityValue(updated[i].Serial) != "" && updated[i].Temperature == 0 {
 			for _, temp := range smartTemps {
-				if temp.Serial != "" && strings.EqualFold(temp.Serial, updated[i].Serial) {
+				if physicalDiskIdentityMatches(temp.Serial, updated[i].Serial) {
 					if temp.Temperature > 0 && !temp.StandbySkipped {
 						updated[i].Temperature = temp.Temperature
 						log.Debug().
@@ -394,9 +534,9 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 		var matched *models.HostDiskSMART
 
 		// Try to match by WWN (most reliable)
-		if updated[i].WWN != "" {
+		if stablePhysicalDiskIdentityValue(updated[i].WWN) != "" {
 			for j := range smartData {
-				if smartData[j].WWN != "" && strings.EqualFold(smartData[j].WWN, updated[i].WWN) {
+				if physicalDiskWWNMatches(smartData[j].WWN, updated[i].WWN) {
 					matched = &smartData[j]
 					break
 				}
@@ -404,9 +544,9 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 		}
 
 		// Fall back to serial number match
-		if matched == nil && updated[i].Serial != "" {
+		if matched == nil && stablePhysicalDiskIdentityValue(updated[i].Serial) != "" {
 			for j := range smartData {
-				if smartData[j].Serial != "" && strings.EqualFold(smartData[j].Serial, updated[i].Serial) {
+				if physicalDiskIdentityMatches(smartData[j].Serial, updated[i].Serial) {
 					matched = &smartData[j]
 					break
 				}
@@ -428,6 +568,8 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 		if matched == nil || matched.Standby {
 			continue
 		}
+
+		mergeHostAgentSMARTIdentity(&updated[i], *matched)
 
 		// Merge temperature if not already set
 		if updated[i].Temperature == 0 && matched.Temperature > 0 {
@@ -454,6 +596,35 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 	}
 
 	return updated
+}
+
+func mergeHostAgentSMARTIdentity(disk *models.PhysicalDisk, smart models.HostDiskSMART) {
+	if disk == nil {
+		return
+	}
+
+	identityChanged := false
+	if stablePhysicalDiskIdentityValue(disk.Serial) == "" {
+		if serial := strings.TrimSpace(smart.Serial); stablePhysicalDiskIdentityValue(serial) != "" {
+			disk.Serial = serial
+			identityChanged = true
+		}
+	}
+	if stablePhysicalDiskIdentityValue(disk.WWN) == "" {
+		if wwn := strings.TrimSpace(smart.WWN); stablePhysicalDiskIdentityValue(wwn) != "" {
+			disk.WWN = wwn
+			identityChanged = true
+		}
+	}
+	if strings.TrimSpace(disk.Model) == "" && strings.TrimSpace(smart.Model) != "" {
+		disk.Model = strings.TrimSpace(smart.Model)
+	}
+	if strings.TrimSpace(disk.Type) == "" && strings.TrimSpace(smart.Type) != "" {
+		disk.Type = strings.TrimSpace(smart.Type)
+	}
+	if identityChanged {
+		refreshPhysicalDiskID(disk)
+	}
 }
 
 func deriveWearoutFromSMARTAttributes(attrs *models.SMARTAttributes) int {
@@ -509,7 +680,7 @@ func (m *Monitor) buildPhysicalDisksForNode(inst, nodeName string, disks []proxm
 			continue
 		}
 
-		diskID := fmt.Sprintf("%s-%s-%s", inst, nodeName, strings.ReplaceAll(disk.DevPath, "/", "-"))
+		diskID := physicalDiskID(inst, nodeName, disk)
 		physicalDisks = append(physicalDisks, models.PhysicalDisk{
 			ID:          diskID,
 			Node:        nodeName,
@@ -555,14 +726,7 @@ func (m *Monitor) buildPhysicalDisksForNode(inst, nodeName string, disks []proxm
 
 // writeSMARTMetrics writes SMART attribute metrics to the persistent metrics store for a single disk.
 func (m *Monitor) writeSMARTMetrics(disk models.PhysicalDisk, now time.Time) {
-	// Determine resource ID: serial (preferred) → WWN → composite fallback
-	resourceID := disk.Serial
-	if resourceID == "" {
-		resourceID = disk.WWN
-	}
-	if resourceID == "" {
-		resourceID = fmt.Sprintf("%s-%s-%s", disk.Instance, disk.Node, strings.ReplaceAll(disk.DevPath, "/", "-"))
-	}
+	resourceID := physicalDiskMetricResourceID(disk)
 
 	// Temperature (always write if > 0)
 	if disk.Temperature > 0 {

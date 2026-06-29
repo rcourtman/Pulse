@@ -2233,10 +2233,14 @@ func (p *PatrolService) seedHealthAndAlerts(state models.StateSnapshot, scopedSe
 	// --- Disk Health ---
 	if len(state.PhysicalDisks) > 0 {
 		hasIssues := false
+		unknownHealth := 0
 		for _, d := range state.PhysicalDisks {
 			health := strings.ToUpper(strings.TrimSpace(d.Health))
+			if health == "" || health == "UNKNOWN" {
+				unknownHealth++
+			}
 			healthIssue := health != "" && health != "UNKNOWN" && health != "PASSED" && health != "OK"
-			if healthIssue || (d.Wearout > 0 && d.Wearout < 20) || d.Temperature > 55 {
+			if healthIssue || (d.Wearout > 0 && d.Wearout < 20) || d.Temperature > 55 || len(physicalDiskSMARTIssueParts(d.SmartAttributes)) > 0 {
 				hasIssues = true
 				break
 			}
@@ -2244,10 +2248,14 @@ func (p *PatrolService) seedHealthAndAlerts(state models.StateSnapshot, scopedSe
 
 		sb.WriteString("# Disk Health\n")
 		if !hasIssues {
-			sb.WriteString(fmt.Sprintf("All %d disks healthy (SMART PASSED).\n", len(state.PhysicalDisks)))
+			if unknownHealth > 0 {
+				sb.WriteString(fmt.Sprintf("No disk issues detected across %d disks; SMART health is unknown for %d disk(s).\n", len(state.PhysicalDisks), unknownHealth))
+			} else {
+				sb.WriteString(fmt.Sprintf("All %d disks healthy (SMART PASSED/OK).\n", len(state.PhysicalDisks)))
+			}
 		} else {
-			sb.WriteString("| Node | Device | Model | Health | SSD Life Remaining (100%=new) | Temp |\n")
-			sb.WriteString("|------|--------|-------|--------|-------------------------------|------|\n")
+			sb.WriteString("| Node | Device | Model | Health | SSD Life Remaining (100%=new) | Temp | SMART Evidence |\n")
+			sb.WriteString("|------|--------|-------|--------|-------------------------------|------|----------------|\n")
 			for _, d := range state.PhysicalDisks {
 				wearout := "—"
 				if d.Wearout >= 0 {
@@ -2257,8 +2265,12 @@ func (p *PatrolService) seedHealthAndAlerts(state models.StateSnapshot, scopedSe
 				if d.Temperature > 0 {
 					temp = fmt.Sprintf("%d°C", d.Temperature)
 				}
-				sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s | %s |\n",
-					d.Node, d.DevPath, d.Model, d.Health, wearout, temp))
+				smartEvidence := "—"
+				if parts := physicalDiskSMARTIssueParts(d.SmartAttributes); len(parts) > 0 {
+					smartEvidence = strings.Join(parts, ", ")
+				}
+				sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s | %s | %s |\n",
+					d.Node, d.DevPath, d.Model, d.Health, wearout, temp, smartEvidence))
 			}
 		}
 		sb.WriteString("\n")
@@ -2325,6 +2337,26 @@ func (p *PatrolService) seedHealthAndAlerts(state models.StateSnapshot, scopedSe
 	}
 
 	return sb.String()
+}
+
+func physicalDiskSMARTIssueParts(attrs *models.SMARTAttributes) []string {
+	if attrs == nil {
+		return nil
+	}
+
+	var parts []string
+	appendCounter := func(label string, value *int64) {
+		if value != nil && *value > 0 {
+			parts = append(parts, fmt.Sprintf("%s=%d", label, *value))
+		}
+	}
+
+	appendCounter("reallocated sectors", attrs.ReallocatedSectors)
+	appendCounter("pending sectors", attrs.PendingSectors)
+	appendCounter("offline uncorrectable", attrs.OfflineUncorrectable)
+	appendCounter("UDMA CRC errors", attrs.UDMACRCErrors)
+	appendCounter("media errors", attrs.MediaErrors)
+	return parts
 }
 
 // seedIntelligenceContext builds the anomalies, forecasts, predictions, changes, and correlations sections.

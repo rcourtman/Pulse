@@ -347,6 +347,7 @@ func (e *PulseToolExecutor) executeGetDiskHealth(_ context.Context, _ map[string
 					Model:       disk.Model,
 					Health:      disk.Health,
 					Temperature: disk.Temperature,
+					Attributes:  disk.Attributes,
 				})
 			}
 

@@ -117,6 +117,17 @@ func normalizeHostAgentNodeName(name string) string {
 	return normalized
 }
 
+func hostAgentSMARTDevicePath(device string) string {
+	device = strings.TrimSpace(device)
+	if device == "" {
+		return ""
+	}
+	if strings.HasPrefix(device, "/dev/") {
+		return device
+	}
+	return "/dev/" + device
+}
+
 // convertHostSensorsToTemperature converts HostSensorSummary to the Temperature model.
 // The host agent reports temperatures in a flat map with keys like:
 // - "cpu_package" -> CPU package temperature
@@ -251,7 +262,7 @@ func convertHostSensorsToTemperature(sensors models.HostSensorSummary, lastSeen 
 				continue
 			}
 			temp.SMART = append(temp.SMART, models.DiskTemp{
-				Device:      "/dev/" + disk.Device,
+				Device:      hostAgentSMARTDevicePath(disk.Device),
 				Serial:      disk.Serial,
 				WWN:         disk.WWN,
 				Model:       disk.Model,

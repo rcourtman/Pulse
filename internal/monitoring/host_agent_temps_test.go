@@ -99,6 +99,26 @@ func TestConvertHostSensorsToTemperature_SMARTOnly(t *testing.T) {
 	}
 }
 
+func TestConvertHostSensorsToTemperature_SMARTAbsoluteDevicePath(t *testing.T) {
+	sensors := models.HostSensorSummary{
+		SMART: []models.HostDiskSMART{
+			{Device: "/dev/sda", Temperature: 36, Serial: "ABC123"},
+		},
+	}
+
+	result := convertHostSensorsToTemperature(sensors, time.Now())
+
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	if len(result.SMART) != 1 {
+		t.Fatalf("expected 1 SMART disk, got %d", len(result.SMART))
+	}
+	if result.SMART[0].Device != "/dev/sda" {
+		t.Fatalf("expected /dev/sda without duplicate prefix, got %q", result.SMART[0].Device)
+	}
+}
+
 func TestConvertHostSensorsToTemperature_GPU(t *testing.T) {
 	sensors := models.HostSensorSummary{
 		TemperatureCelsius: map[string]float64{

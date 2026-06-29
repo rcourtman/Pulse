@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -15,8 +16,17 @@ func TestExecuteGetDiskHealth(t *testing.T) {
 		ControlLevel:       ControlLevelReadOnly,
 	})
 
+	mediaErrors := int64(3)
 	expectedHosts := []models.Host{
-		{ID: "host1", Hostname: "node1", DisplayName: "Node 1"},
+		{ID: "host1", Hostname: "node1", DisplayName: "Node 1", Sensors: models.HostSensorSummary{
+			SMART: []models.HostDiskSMART{{
+				Device: "/dev/nvme0n1",
+				Health: "PASSED",
+				Attributes: &models.SMARTAttributes{
+					MediaErrors: &mediaErrors,
+				},
+			}},
+		}},
 	}
 	diskHealthProv.On("GetHosts").Return(expectedHosts)
 
@@ -26,6 +36,14 @@ func TestExecuteGetDiskHealth(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	assert.False(t, result.IsError)
+
+	var response DiskHealthResponse
+	assert.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &response))
+	if assert.Len(t, response.Hosts, 1) && assert.Len(t, response.Hosts[0].SMART, 1) {
+		if assert.NotNil(t, response.Hosts[0].SMART[0].Attributes) && assert.NotNil(t, response.Hosts[0].SMART[0].Attributes.MediaErrors) {
+			assert.Equal(t, int64(3), *response.Hosts[0].SMART[0].Attributes.MediaErrors)
+		}
+	}
 }
 
 func TestExecuteGetTemperatures(t *testing.T) {
