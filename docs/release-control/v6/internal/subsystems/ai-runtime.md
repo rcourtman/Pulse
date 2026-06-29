@@ -1058,6 +1058,14 @@ but status selection must read the current workflow status directly rather than
 deriving an older display status from `workflowStatusHistory`.
 
 1. Add or change chat runtime, Patrol orchestration, findings generation, or remediation behavior through `internal/ai/`
+   Patrol deterministic disk-health evidence changes in
+   `internal/ai/patrol_signals.go` and `internal/ai/patrol_ai.go` must read
+   SMART health, normalized SMART counters, and canonical physical-disk identity
+   from storage and metrics tool payloads without treating missing or unknown
+   SMART health as `PASSED`. Non-zero pending-sector, offline-uncorrectable,
+   media-error, and related SMART counters must remain model-facing reliability
+   evidence even when the headline health field is `PASSED`, so Patrol does not
+   summarize a disk as healthy while deterministic counters indicate disk risk.
 2. Add or change canonical AI provider config, provider registry metadata, provider-scoped model selection, or runtime auth/base-URL defaults through `internal/config/ai.go` and `internal/config/ai_providers.go`.
    Direct providers that speak the shared chat-compatible API must use the
    registry-backed `AIProviderProtocolOpenAICompatible` path and

@@ -223,9 +223,9 @@ PULSE_DISK_EXCLUDE=/mnt/backup,*pbs*,/media/external
 - Prefix: `/mnt/ext*` - matches paths starting with `/mnt/ext`
 - Contains: `*pbs*` - matches paths containing `pbs`
 
-## S.M.A.R.T. Disk Temperatures
+## S.M.A.R.T. Disk Health
 
-The agent can report S.M.A.R.T. disk temperatures when running in Agent mode. This requires:
+The agent can report S.M.A.R.T. disk temperatures, health status, identity, and normalized health counters when running in Agent mode. This requires:
 
 1. **smartmontools** installed on the host:
    ```bash
@@ -243,7 +243,7 @@ The agent can report S.M.A.R.T. disk temperatures when running in Agent mode. Th
 
 **Notes:**
 - Disks in standby mode are reported as such (no temperature) to avoid waking them
-- S.M.A.R.T. data is collected alongside other host metrics
+- S.M.A.R.T. data is collected alongside other host metrics and can enrich the Physical Disks view with temperature, stable disk identity, power-on hours, SSD life, pending sectors, media errors, and related counters
 - If `smartctl` is not available, S.M.A.R.T. monitoring is silently skipped
 - **Disk exclusions** (`--disk-exclude` / `PULSE_DISK_EXCLUDE`) also apply to S.M.A.R.T. monitoring.
   Use patterns like `sda`, `/dev/sdb`, `nvme*`, or `*cache*` to exclude specific block devices.

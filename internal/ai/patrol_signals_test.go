@@ -2,6 +2,7 @@ package ai
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 )
@@ -67,6 +68,107 @@ func TestDetectSignals_SMARTPassedNoSignal(t *testing.T) {
 	signals := DetectSignals(toolCalls, DefaultSignalThresholds())
 	if len(signals) != 0 {
 		t.Fatalf("expected 0 signals for healthy disks, got %d", len(signals))
+	}
+}
+
+func TestDetectSignals_SMARTAttributeCountersCreateSignal(t *testing.T) {
+	output, _ := json.Marshal(map[string]interface{}{
+		"node": "pve1",
+		"disks": []map[string]interface{}{
+			{
+				"id":     "physical-disk-1",
+				"device": "/dev/sdc",
+				"health": "PASSED",
+				"attributes": map[string]interface{}{
+					"pendingSectors":       2,
+					"offlineUncorrectable": 1,
+				},
+			},
+		},
+	})
+
+	toolCalls := []ToolCallRecord{
+		{
+			ID:       "tc-smart-attrs",
+			ToolName: "pulse_storage",
+			Input:    `{"type":"disk_health","node":"pve1"}`,
+			Output:   string(output),
+			Success:  true,
+		},
+	}
+
+	signals := DetectSignals(toolCalls, DefaultSignalThresholds())
+	if len(signals) != 1 {
+		t.Fatalf("expected 1 SMART counter signal, got %d", len(signals))
+	}
+	s := signals[0]
+	if s.ResourceID != "physical-disk-1" || s.ResourceType != "disk" {
+		t.Fatalf("expected physical disk resource identity, got id=%q type=%q", s.ResourceID, s.ResourceType)
+	}
+	if s.SuggestedSeverity != "critical" {
+		t.Fatalf("expected critical severity from pending/offline counters, got %q", s.SuggestedSeverity)
+	}
+	if !strings.Contains(s.Summary, "pending sectors=2") || !strings.Contains(s.Summary, "offline uncorrectable=1") {
+		t.Fatalf("expected SMART counter evidence in summary, got %q", s.Summary)
+	}
+}
+
+func TestDetectSignals_SMARTHostPayloadAndMetricsDisks(t *testing.T) {
+	storageOutput, _ := json.Marshal(map[string]interface{}{
+		"hosts": []map[string]interface{}{
+			{
+				"hostname": "pve-host",
+				"smart": []map[string]interface{}{
+					{
+						"device": "/dev/sdd",
+						"health": "PASSED",
+						"smartAttributes": map[string]interface{}{
+							"udmaCrcErrors": 4,
+						},
+					},
+				},
+			},
+		},
+	})
+	metricsOutput, _ := json.Marshal(map[string]interface{}{
+		"disks": []map[string]interface{}{
+			{
+				"id":     "disk-nvme",
+				"device": "/dev/nvme0n1",
+				"health": "PASSED",
+				"smart_attributes": map[string]interface{}{
+					"mediaErrors": 1,
+				},
+			},
+		},
+	})
+
+	toolCalls := []ToolCallRecord{
+		{
+			ID:       "tc-storage-smart",
+			ToolName: "pulse_storage",
+			Input:    `{"type":"disk_health"}`,
+			Output:   string(storageOutput),
+			Success:  true,
+		},
+		{
+			ID:       "tc-metrics-disks",
+			ToolName: "pulse_metrics",
+			Input:    `{"type":"disks"}`,
+			Output:   string(metricsOutput),
+			Success:  true,
+		},
+	}
+
+	signals := DetectSignals(toolCalls, DefaultSignalThresholds())
+	if len(signals) != 2 {
+		t.Fatalf("expected 2 SMART counter signals, got %d: %+v", len(signals), signals)
+	}
+	if signals[0].ResourceID != "pve-host" || signals[0].SuggestedSeverity != "warning" {
+		t.Fatalf("expected host fallback warning for CRC-only evidence, got %+v", signals[0])
+	}
+	if signals[1].ResourceID != "disk-nvme" || signals[1].SuggestedSeverity != "critical" {
+		t.Fatalf("expected disk critical media-error evidence, got %+v", signals[1])
 	}
 }
 

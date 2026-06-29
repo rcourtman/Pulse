@@ -873,11 +873,88 @@ func TestSeedHealthAndAlerts_NoIssues(t *testing.T) {
 	}
 
 	out := ps.seedHealthAndAlertsState(patrolRuntimeStateForTest(ps, state), nil, cfg, now)
-	if !strings.Contains(out, "All 1 disks healthy") {
+	if !strings.Contains(out, "All 1 disks healthy (SMART PASSED/OK).") {
 		t.Fatalf("expected healthy disk summary, got: %s", out)
 	}
 	if !strings.Contains(out, "All 2 instances connected") {
 		t.Fatalf("expected all connections summary, got: %s", out)
+	}
+}
+
+func TestSeedHealthAndAlerts_UnknownDiskHealthDoesNotClaimSMARTPassed(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	cfg := DefaultPatrolConfig()
+	now := time.Now()
+
+	ps.SetUnifiedResourceProvider(&mockUnifiedResourceProvider{
+		getByTypeFunc: func(t unifiedresources.ResourceType) []unifiedresources.Resource {
+			if t != unifiedresources.ResourceTypePhysicalDisk {
+				return nil
+			}
+			return []unifiedresources.Resource{
+				{
+					Name:       "disk",
+					Type:       unifiedresources.ResourceTypePhysicalDisk,
+					ParentName: "node-1",
+					Status:     unifiedresources.StatusOnline,
+					PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+						DevPath:     "/dev/sda",
+						Model:       "disk",
+						Health:      "UNKNOWN",
+						Wearout:     100,
+						Temperature: 40,
+					},
+				},
+			}
+		},
+	})
+
+	out := ps.seedHealthAndAlertsState(patrolRuntimeStateForTest(ps, models.StateSnapshot{}), nil, cfg, now)
+	if !strings.Contains(out, "No disk issues detected across 1 disks; SMART health is unknown for 1 disk(s).") {
+		t.Fatalf("expected unknown SMART health summary, got: %s", out)
+	}
+	if strings.Contains(out, "SMART PASSED") {
+		t.Fatalf("unknown SMART health must not be reported as passed, got: %s", out)
+	}
+}
+
+func TestSeedHealthAndAlerts_SMARTAttributeIssue(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	cfg := DefaultPatrolConfig()
+	now := time.Now()
+
+	ps.SetUnifiedResourceProvider(&mockUnifiedResourceProvider{
+		getByTypeFunc: func(t unifiedresources.ResourceType) []unifiedresources.Resource {
+			if t != unifiedresources.ResourceTypePhysicalDisk {
+				return nil
+			}
+			return []unifiedresources.Resource{
+				{
+					Name:       "disk",
+					Type:       unifiedresources.ResourceTypePhysicalDisk,
+					ParentName: "node-1",
+					Status:     unifiedresources.StatusOnline,
+					PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
+						DevPath:     "/dev/sda",
+						Model:       "disk",
+						Health:      "PASSED",
+						Wearout:     100,
+						Temperature: 40,
+						SMART: &unifiedresources.SMARTMeta{
+							PendingSectors: 2,
+						},
+					},
+				},
+			}
+		},
+	})
+
+	out := ps.seedHealthAndAlertsState(patrolRuntimeStateForTest(ps, models.StateSnapshot{}), nil, cfg, now)
+	if strings.Contains(out, "All 1 disks healthy") {
+		t.Fatalf("SMART counter evidence must not be summarized as all healthy, got: %s", out)
+	}
+	if !strings.Contains(out, "SMART Evidence") || !strings.Contains(out, "pending sectors=2") {
+		t.Fatalf("expected SMART counter evidence in disk health table, got: %s", out)
 	}
 }
 

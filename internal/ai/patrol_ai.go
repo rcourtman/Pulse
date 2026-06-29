@@ -1757,6 +1757,7 @@ type patrolPhysicalDiskRow struct {
 	devPath, model           string
 	health, status           string
 	wearout, temperature     int
+	smartEvidence            []string
 }
 
 type patrolPrecomputeNodeSource struct {
@@ -2286,17 +2287,18 @@ func patrolPhysicalDiskRows(snap patrolRuntimeState, scopedSet map[string]bool) 
 			}
 
 			rows = append(rows, patrolPhysicalDiskRow{
-				id:          r.ID,
-				name:        name,
-				node:        strings.TrimSpace(r.ParentName),
-				diskType:    strings.TrimSpace(r.PhysicalDisk.DiskType),
-				sizeBytes:   r.PhysicalDisk.SizeBytes,
-				devPath:     strings.TrimSpace(r.PhysicalDisk.DevPath),
-				model:       strings.TrimSpace(r.PhysicalDisk.Model),
-				health:      health,
-				status:      status,
-				wearout:     r.PhysicalDisk.Wearout,
-				temperature: r.PhysicalDisk.Temperature,
+				id:            r.ID,
+				name:          name,
+				node:          strings.TrimSpace(r.ParentName),
+				diskType:      strings.TrimSpace(r.PhysicalDisk.DiskType),
+				sizeBytes:     r.PhysicalDisk.SizeBytes,
+				devPath:       strings.TrimSpace(r.PhysicalDisk.DevPath),
+				model:         strings.TrimSpace(r.PhysicalDisk.Model),
+				health:        health,
+				status:        status,
+				wearout:       r.PhysicalDisk.Wearout,
+				temperature:   r.PhysicalDisk.Temperature,
+				smartEvidence: unifiedPhysicalDiskSMARTIssueParts(r.PhysicalDisk.SMART),
 			})
 		}
 		return rows
@@ -2326,20 +2328,79 @@ func patrolPhysicalDiskRows(snap patrolRuntimeState, scopedSet map[string]bool) 
 		}
 
 		rows = append(rows, patrolPhysicalDiskRow{
-			id:          d.ID,
-			name:        name,
-			node:        strings.TrimSpace(d.Node),
-			diskType:    strings.TrimSpace(d.Type),
-			sizeBytes:   d.Size,
-			devPath:     strings.TrimSpace(d.DevPath),
-			model:       strings.TrimSpace(d.Model),
-			health:      health,
-			status:      status,
-			wearout:     d.Wearout,
-			temperature: d.Temperature,
+			id:            d.ID,
+			name:          name,
+			node:          strings.TrimSpace(d.Node),
+			diskType:      strings.TrimSpace(d.Type),
+			sizeBytes:     d.Size,
+			devPath:       strings.TrimSpace(d.DevPath),
+			model:         strings.TrimSpace(d.Model),
+			health:        health,
+			status:        status,
+			wearout:       d.Wearout,
+			temperature:   d.Temperature,
+			smartEvidence: modelPhysicalDiskSMARTIssueParts(d.SmartAttributes),
 		})
 	}
 	return rows
+}
+
+func patrolPhysicalDiskHealthIssue(row patrolPhysicalDiskRow) bool {
+	health := strings.TrimSpace(row.health)
+	healthIssue := health != "" &&
+		!strings.EqualFold(health, "PASSED") &&
+		!strings.EqualFold(health, "UNKNOWN") &&
+		!strings.EqualFold(health, "OK")
+	return healthIssue ||
+		(row.wearout > 0 && row.wearout < 20) ||
+		row.temperature > 55 ||
+		len(row.smartEvidence) > 0
+}
+
+func patrolPhysicalDiskSummaryIssue(row patrolPhysicalDiskRow) bool {
+	return patrolPhysicalDiskHealthIssue(row) || strings.ToLower(strings.TrimSpace(row.status)) != "online"
+}
+
+func modelPhysicalDiskSMARTIssueParts(attrs *models.SMARTAttributes) []string {
+	if attrs == nil {
+		return nil
+	}
+
+	var parts []string
+	appendSMARTInt64Issue(&parts, "reallocated sectors", attrs.ReallocatedSectors)
+	appendSMARTInt64Issue(&parts, "pending sectors", attrs.PendingSectors)
+	appendSMARTInt64Issue(&parts, "offline uncorrectable", attrs.OfflineUncorrectable)
+	appendSMARTInt64Issue(&parts, "UDMA CRC errors", attrs.UDMACRCErrors)
+	appendSMARTInt64Issue(&parts, "media errors", attrs.MediaErrors)
+	return parts
+}
+
+func unifiedPhysicalDiskSMARTIssueParts(attrs *unifiedresources.SMARTMeta) []string {
+	if attrs == nil {
+		return nil
+	}
+
+	var parts []string
+	appendSMARTInt64ValueIssue(&parts, "reallocated sectors", attrs.ReallocatedSectors)
+	appendSMARTInt64ValueIssue(&parts, "pending sectors", attrs.PendingSectors)
+	appendSMARTInt64ValueIssue(&parts, "offline uncorrectable", attrs.OfflineUncorrectable)
+	appendSMARTInt64ValueIssue(&parts, "UDMA CRC errors", attrs.UDMACRCErrors)
+	appendSMARTInt64ValueIssue(&parts, "media errors", attrs.MediaErrors)
+	return parts
+}
+
+func appendSMARTInt64Issue(parts *[]string, label string, value *int64) {
+	if value == nil {
+		return
+	}
+	appendSMARTInt64ValueIssue(parts, label, *value)
+}
+
+func appendSMARTInt64ValueIssue(parts *[]string, label string, value int64) {
+	if value <= 0 {
+		return
+	}
+	*parts = append(*parts, fmt.Sprintf("%s=%d", label, value))
 }
 
 func patrolPrecomputeNodeSources(snap patrolRuntimeState, scopedSet map[string]bool) []patrolPrecomputeNodeSource {
@@ -2618,7 +2679,7 @@ func (p *PatrolService) seedResourceInventoryState(snap patrolRuntimeState, scop
 				if len(diskRows) > 0 {
 					diskIssues := 0
 					for _, row := range diskRows {
-						if (!strings.EqualFold(row.health, "PASSED") && !strings.EqualFold(row.health, "UNKNOWN") && !strings.EqualFold(row.health, "OK") && row.health != "") || row.status != "online" {
+						if patrolPhysicalDiskSummaryIssue(row) {
 							diskIssues++
 						}
 					}
@@ -2868,12 +2929,24 @@ func (p *PatrolService) seedResourceInventorySummaryState(snap patrolRuntimeStat
 			diskIssues := []string{}
 			for _, row := range diskRows {
 				statusCounts[strings.ToLower(strings.TrimSpace(row.status))]++
-				if (!strings.EqualFold(row.health, "PASSED") && !strings.EqualFold(row.health, "UNKNOWN") && !strings.EqualFold(row.health, "OK") && row.health != "") || row.status != "online" {
+				if patrolPhysicalDiskSummaryIssue(row) {
 					name := row.devPath
 					if name == "" {
 						name = row.name
 					}
-					diskIssues = append(diskIssues, fmt.Sprintf("%s (%s)", name, row.health))
+					issue := strings.TrimSpace(row.health)
+					if issue == "" {
+						issue = "UNKNOWN"
+					}
+					if len(row.smartEvidence) > 0 {
+						evidence := strings.Join(row.smartEvidence, ", ")
+						if strings.EqualFold(issue, "PASSED") || strings.EqualFold(issue, "OK") || strings.EqualFold(issue, "UNKNOWN") {
+							issue = evidence
+						} else {
+							issue = issue + "; " + evidence
+						}
+					}
+					diskIssues = append(diskIssues, fmt.Sprintf("%s (%s)", name, issue))
 				}
 			}
 
@@ -3109,50 +3182,63 @@ func (p *PatrolService) seedHealthAndAlertsState(snap patrolRuntimeState, scoped
 	}
 
 	// --- Disk Health ---
-	diskURP := snap.unifiedResourceProvider
-	if diskURP != nil {
-		diskResources := diskURP.GetByType(unifiedresources.ResourceTypePhysicalDisk)
-		if len(diskResources) > 0 {
-			hasIssues := false
-			for _, r := range diskResources {
-				if r.PhysicalDisk == nil {
-					continue
-				}
-				d := r.PhysicalDisk
-				if (d.Health != "PASSED" && d.Health != "UNKNOWN" && d.Health != "OK" && d.Health != "") || (d.Wearout > 0 && d.Wearout < 20) || d.Temperature > 55 {
-					hasIssues = true
-					break
-				}
+	diskRows := patrolPhysicalDiskRows(snap, scopedSet)
+	if len(diskRows) > 0 {
+		hasIssues := false
+		unknownHealth := 0
+		for _, row := range diskRows {
+			health := strings.TrimSpace(row.health)
+			if health == "" || strings.EqualFold(health, "UNKNOWN") {
+				unknownHealth++
 			}
-			sb.WriteString("# Disk Health\n")
-			if !hasIssues {
-				sb.WriteString(fmt.Sprintf("All %d disks healthy (SMART PASSED).\n", len(diskResources)))
-			} else {
-				sb.WriteString("| Node | Device | Model | Health | Wearout | Temp |\n")
-				sb.WriteString("|------|--------|-------|--------|---------|------|\n")
-				for _, r := range diskResources {
-					if r.PhysicalDisk == nil {
-						continue
-					}
-					d := r.PhysicalDisk
-					node := r.ParentName
-					if node == "" && len(r.Identity.Hostnames) > 0 {
-						node = r.Identity.Hostnames[0]
-					}
-					wearout := "—"
-					if d.Wearout >= 0 {
-						wearout = fmt.Sprintf("%d%%", d.Wearout)
-					}
-					temp := "—"
-					if d.Temperature > 0 {
-						temp = fmt.Sprintf("%d°C", d.Temperature)
-					}
-					sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s | %s |\n",
-						node, d.DevPath, d.Model, d.Health, wearout, temp))
-				}
+			if patrolPhysicalDiskHealthIssue(row) {
+				hasIssues = true
 			}
-			sb.WriteString("\n")
 		}
+		sb.WriteString("# Disk Health\n")
+		if !hasIssues {
+			if unknownHealth > 0 {
+				sb.WriteString(fmt.Sprintf("No disk issues detected across %d disks; SMART health is unknown for %d disk(s).\n", len(diskRows), unknownHealth))
+			} else {
+				sb.WriteString(fmt.Sprintf("All %d disks healthy (SMART PASSED/OK).\n", len(diskRows)))
+			}
+		} else {
+			sb.WriteString("| Node | Device | Model | Health | Wearout | Temp | SMART Evidence |\n")
+			sb.WriteString("|------|--------|-------|--------|---------|------|----------------|\n")
+			for _, row := range diskRows {
+				node := row.node
+				if node == "" {
+					node = "—"
+				}
+				device := row.devPath
+				if device == "" {
+					device = row.name
+				}
+				model := row.model
+				if model == "" {
+					model = "—"
+				}
+				health := row.health
+				if health == "" {
+					health = "UNKNOWN"
+				}
+				wearout := "—"
+				if row.wearout >= 0 {
+					wearout = fmt.Sprintf("%d%%", row.wearout)
+				}
+				temp := "—"
+				if row.temperature > 0 {
+					temp = fmt.Sprintf("%d°C", row.temperature)
+				}
+				smartEvidence := "—"
+				if len(row.smartEvidence) > 0 {
+					smartEvidence = strings.Join(row.smartEvidence, ", ")
+				}
+				sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s | %s | %s |\n",
+					node, device, model, health, wearout, temp, smartEvidence))
+			}
+		}
+		sb.WriteString("\n")
 	}
 
 	// --- Active Alerts ---

@@ -100,6 +100,14 @@ class AIRuntimeDocsPolicyTest(unittest.TestCase):
         self.assertIn("go run ./cmd/eval -scenario resource-context", content)
         self.assertIn("EVAL_RESOURCE_CONTEXT_FORBIDDEN", content)
         self.assertIn("Pulse does not convert them into Pulse-authored findings", content)
+        self.assertIn(
+            "critical SMART counters such as pending sectors, offline uncorrectable sectors, or NVMe media errors",
+            normalized_content,
+        )
+        self.assertIn(
+            "Disk health check failed, pending sectors, offline uncorrectable sectors, or NVMe media errors",
+            normalized_content,
+        )
         self.assertNotIn("Anthropic** (API key or OAuth)", content)
         self.assertNotIn("Anthropic API key or OAuth", content)
         self.assertNotIn("successful remediations (incident memory)", content)
