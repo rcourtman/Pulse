@@ -243,7 +243,11 @@ truth for live infrastructure data.
     TrueNAS storage and alert inventory follow native query methods first:
     pools use `pool.query`, datasets use `pool.dataset.query`, disks use
     `disk.query` with pool join options, and alerts use `alert.list`, with
-    legacy REST allowed only as compatibility fallback.
+    legacy REST allowed only as compatibility fallback. Unhealthy pool state
+    from `pool.query` must emit a provider-native `zfs_pool_state` incident on
+    the canonical pool resource when `alert.list` does not already provide a
+    warning or critical pool alert for that same pool, so pool degradation does
+    not depend on the TrueNAS appliance's own email or alert-delivery setup.
     TrueNAS VMs and network shares follow the same provider-owned inventory
     boundary: `vm.query` data publishes native `TrueNASData.VM` on canonical
     `vm` resources, while SMB/NFS share data from `sharing.smb.query` and

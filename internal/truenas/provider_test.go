@@ -214,6 +214,96 @@ func TestProviderRefreshUpdatesLastSnapshot(t *testing.T) {
 	}
 }
 
+func TestProviderRecordsSynthesizesIncidentFromUnhealthyPoolStatus(t *testing.T) {
+	collectedAt := time.Date(2026, 6, 29, 12, 0, 0, 0, time.UTC)
+	records := FixtureRecords(FixtureSnapshot{
+		CollectedAt: collectedAt,
+		System: SystemInfo{
+			Hostname: "truenas-main",
+			Healthy:  true,
+		},
+		Pools: []Pool{{
+			ID:         "pool-tank",
+			Name:       "tank",
+			Status:     "DEGRADED",
+			TotalBytes: 1000,
+			UsedBytes:  400,
+			FreeBytes:  600,
+		}},
+	})
+
+	record := requirePoolRecord(t, records, "tank")
+	if record.Resource.Status != unifiedresources.StatusWarning {
+		t.Fatalf("pool status = %q, want warning", record.Resource.Status)
+	}
+	if len(record.Resource.Incidents) != 1 {
+		t.Fatalf("expected one synthesized pool incident, got %+v", record.Resource.Incidents)
+	}
+	incident := record.Resource.Incidents[0]
+	if incident.Code != "zfs_pool_state" {
+		t.Fatalf("incident code = %q, want zfs_pool_state", incident.Code)
+	}
+	if incident.NativeID != "pool:tank:state" {
+		t.Fatalf("incident native id = %q, want pool:tank:state", incident.NativeID)
+	}
+	if incident.Source != "pool.query" {
+		t.Fatalf("incident source = %q, want pool.query", incident.Source)
+	}
+	if incident.Severity != storagehealth.RiskWarning {
+		t.Fatalf("incident severity = %q, want warning", incident.Severity)
+	}
+	if incident.Summary != "ZFS pool tank is DEGRADED" {
+		t.Fatalf("incident summary = %q", incident.Summary)
+	}
+	if !incident.StartedAt.Equal(collectedAt) {
+		t.Fatalf("incident started at = %s, want %s", incident.StartedAt, collectedAt)
+	}
+}
+
+func TestProviderRecordsDoesNotDuplicateNativePoolAlert(t *testing.T) {
+	alertTime := time.Date(2026, 6, 29, 11, 30, 0, 0, time.UTC)
+	records := FixtureRecords(FixtureSnapshot{
+		CollectedAt: time.Date(2026, 6, 29, 12, 0, 0, 0, time.UTC),
+		System: SystemInfo{
+			Hostname: "truenas-main",
+			Healthy:  true,
+		},
+		Pools: []Pool{{
+			ID:         "pool-tank",
+			Name:       "tank",
+			Status:     "DEGRADED",
+			TotalBytes: 1000,
+			UsedBytes:  400,
+			FreeBytes:  600,
+		}},
+		Alerts: []Alert{{
+			ID:       "native-pool-alert",
+			Level:    "WARNING",
+			Source:   "VolumeStatus",
+			Message:  "Pool tank is DEGRADED: one member is faulted.",
+			Datetime: alertTime,
+		}},
+	})
+
+	record := requirePoolRecord(t, records, "tank")
+	if len(record.Resource.Incidents) != 1 {
+		t.Fatalf("expected one native pool incident, got %+v", record.Resource.Incidents)
+	}
+	incident := record.Resource.Incidents[0]
+	if incident.Code != "truenas_volume_status" {
+		t.Fatalf("incident code = %q, want truenas_volume_status", incident.Code)
+	}
+	if incident.NativeID != "native-pool-alert" {
+		t.Fatalf("incident native id = %q, want native-pool-alert", incident.NativeID)
+	}
+	if incident.Source != "VolumeStatus" {
+		t.Fatalf("incident source = %q, want VolumeStatus", incident.Source)
+	}
+	if !incident.StartedAt.Equal(alertTime) {
+		t.Fatalf("incident started at = %s, want %s", incident.StartedAt, alertTime)
+	}
+}
+
 func TestProviderControlAppUsesFetcherAndRefreshesSnapshot(t *testing.T) {
 	fixtures := DefaultFixtures()
 	for i := range fixtures.Apps {

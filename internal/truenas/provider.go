@@ -456,7 +456,7 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, now func() time.Time)
 	systemAssessment := assessSystemStorage(snapshot)
 	systemRisk := unifiedresources.StorageRiskFromAssessment(systemAssessment)
 	_, protectionReduced, rebuildInProgress, protectionSummary, rebuildSummary := unifiedresources.StorageRiskSemantics(systemRisk)
-	systemIncidents, poolIncidents, diskIncidents := buildIncidentAssignments(snapshot)
+	systemIncidents, poolIncidents, diskIncidents := buildIncidentAssignments(snapshot, collectedAt)
 	records := make([]unifiedresources.IngestRecord, 0, 1+len(snapshot.Pools)+len(snapshot.Datasets)+len(snapshot.Apps)+len(snapshot.VMs)+len(snapshot.Shares)+len(snapshot.Disks))
 
 	totalCapacity, totalUsed := aggregatePoolUsage(snapshot.Pools)
@@ -997,7 +997,7 @@ func enrichAppStatsFromPreviousSnapshot(current *FixtureSnapshot, previous *Fixt
 	}
 }
 
-func buildIncidentAssignments(snapshot *FixtureSnapshot) ([]unifiedresources.ResourceIncident, map[string][]unifiedresources.ResourceIncident, map[string][]unifiedresources.ResourceIncident) {
+func buildIncidentAssignments(snapshot *FixtureSnapshot, observedAt time.Time) ([]unifiedresources.ResourceIncident, map[string][]unifiedresources.ResourceIncident, map[string][]unifiedresources.ResourceIncident) {
 	systemIncidents := make([]unifiedresources.ResourceIncident, 0)
 	poolIncidents := make(map[string][]unifiedresources.ResourceIncident)
 	diskIncidents := make(map[string][]unifiedresources.ResourceIncident)
@@ -1015,6 +1015,7 @@ func buildIncidentAssignments(snapshot *FixtureSnapshot) ([]unifiedresources.Res
 		diskPools[diskName] = poolName
 	}
 
+	nativePoolAlertSeen := make(map[string]struct{}, len(snapshot.Alerts))
 	for _, alert := range snapshot.Alerts {
 		if alert.Dismissed {
 			continue
@@ -1027,6 +1028,9 @@ func buildIncidentAssignments(snapshot *FixtureSnapshot) ([]unifiedresources.Res
 
 		if poolName := poolNameFromAlert(alert); poolName != "" {
 			poolIncidents[poolName] = append(poolIncidents[poolName], incident)
+			if incident.Severity == storagehealth.RiskWarning || incident.Severity == storagehealth.RiskCritical {
+				nativePoolAlertSeen[poolName] = struct{}{}
+			}
 		}
 
 		if diskName := diskNameFromAlert(alert); diskName != "" {
@@ -1035,6 +1039,22 @@ func buildIncidentAssignments(snapshot *FixtureSnapshot) ([]unifiedresources.Res
 				poolIncidents[poolName] = append(poolIncidents[poolName], incident)
 			}
 		}
+	}
+
+	for _, pool := range snapshot.Pools {
+		poolName := strings.TrimSpace(pool.Name)
+		if poolName == "" {
+			continue
+		}
+		if _, exists := nativePoolAlertSeen[poolName]; exists {
+			continue
+		}
+		incident, ok := incidentFromPoolStatus(pool, observedAt)
+		if !ok {
+			continue
+		}
+		systemIncidents = append(systemIncidents, incident)
+		poolIncidents[poolName] = append(poolIncidents[poolName], incident)
 	}
 
 	return systemIncidents, poolIncidents, diskIncidents
@@ -1069,6 +1089,44 @@ func incidentFromAlert(alert Alert) (unifiedresources.ResourceIncident, bool) {
 		Summary:   strings.TrimSpace(alert.Message),
 		StartedAt: alert.Datetime,
 	}, true
+}
+
+func incidentFromPoolStatus(pool Pool, observedAt time.Time) (unifiedresources.ResourceIncident, bool) {
+	assessment := assessPool(pool)
+	if assessment.Level != storagehealth.RiskWarning && assessment.Level != storagehealth.RiskCritical {
+		return unifiedresources.ResourceIncident{}, false
+	}
+	reason, ok := primaryIncidentReason(assessment, "zfs_pool_state")
+	if !ok {
+		return unifiedresources.ResourceIncident{}, false
+	}
+
+	poolName := strings.TrimSpace(pool.Name)
+	if poolName == "" {
+		return unifiedresources.ResourceIncident{}, false
+	}
+	return unifiedresources.ResourceIncident{
+		Provider:  "truenas",
+		NativeID:  "pool:" + poolName + ":state",
+		Code:      reason.Code,
+		Severity:  reason.Severity,
+		Source:    "pool.query",
+		Summary:   reason.Summary,
+		StartedAt: observedAt,
+	}, true
+}
+
+func primaryIncidentReason(assessment storagehealth.Assessment, code string) (storagehealth.Reason, bool) {
+	code = strings.TrimSpace(code)
+	for _, reason := range assessment.Reasons {
+		if strings.TrimSpace(reason.Code) == code {
+			return reason, true
+		}
+	}
+	if len(assessment.Reasons) == 0 {
+		return storagehealth.Reason{}, false
+	}
+	return assessment.Reasons[0], true
 }
 
 func severityFromAlertLevel(level string) (storagehealth.RiskLevel, bool) {
