@@ -853,7 +853,43 @@ describe('AISettings OpenRouter flow', () => {
 
     await waitFor(() => {
       expect(testProviderMock).toHaveBeenCalledTimes(1);
-      expect(testProviderMock).toHaveBeenCalledWith('openrouter');
+      expect(testProviderMock).toHaveBeenCalledWith(
+        'openrouter',
+        'openrouter:openai/gpt-4o-mini',
+      );
+    });
+  });
+
+  it('tests the pending model selection instead of the previously saved provider model', async () => {
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      configured: true,
+      enabled: true,
+      model: 'openrouter:openai/gpt-4o-mini',
+      openrouter_configured: true,
+      configured_providers: ['openrouter'],
+    });
+    getModelsMock.mockResolvedValue({ models: [] });
+
+    renderComponent();
+
+    await waitFor(() => {
+      expect(testProviderMock).toHaveBeenCalled();
+    });
+
+    testProviderMock.mockClear();
+    fireEvent.input(screen.getByLabelText('Default model identifier'), {
+      target: { value: 'openrouter:anthropic/claude-sonnet-4' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /openrouter/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Test$/ }));
+
+    await waitFor(() => {
+      expect(testProviderMock).toHaveBeenCalledTimes(1);
+      expect(testProviderMock).toHaveBeenCalledWith(
+        'openrouter',
+        'openrouter:anthropic/claude-sonnet-4',
+      );
     });
   });
 });
@@ -953,7 +989,10 @@ describe('AISettings provider save failure context', () => {
     renderComponent();
 
     await waitFor(() => {
-      expect(testProviderMock).toHaveBeenCalledWith('openrouter');
+      expect(testProviderMock).toHaveBeenCalledWith(
+        'openrouter',
+        'openrouter:deepseek/deepseek-r1',
+      );
     });
 
     fireEvent.click(screen.getByRole('button', { name: /Save provider settings/i }));
@@ -1039,7 +1078,10 @@ describe('AISettings provider save failure context', () => {
     renderComponent();
 
     await waitFor(() => {
-      expect(testProviderMock).toHaveBeenCalledWith('openrouter');
+      expect(testProviderMock).toHaveBeenCalledWith(
+        'openrouter',
+        'openrouter:deepseek/deepseek-r1',
+      );
     });
 
     fireEvent.click(screen.getByRole('button', { name: /Save provider settings/i }));

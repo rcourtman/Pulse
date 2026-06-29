@@ -553,6 +553,15 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     return `${session.title || 'Untitled'} - ${session.message_count} msgs - ${dateLabel} ${timeLabel}`;
   };
 
+  const selectedModelForProviderTest = (provider: AIProvider): string | undefined =>
+    compactUnique([
+      form.patrolModel,
+      form.chatModel,
+      form.discoveryModel,
+      form.autoFixModel,
+      form.model,
+    ]).find((model) => getProviderFromModelId(model) === provider);
+
   const handleCloseSetupModal = () => {
     setShowSetupModal(false);
     setSetupApiKey('');
@@ -567,7 +576,7 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     opts: { notify?: boolean; storeManualResult?: boolean } = {},
   ): Promise<ProviderTestResult> => {
     try {
-      const result = await AIAPI.testProvider(provider);
+      const result = await AIAPI.testProvider(provider, selectedModelForProviderTest(provider));
       const message = getProviderTestDiagnosticMessage(result);
       const normalizedResult: ProviderTestResult = {
         provider,
