@@ -252,6 +252,8 @@ func TestOpenAIClient_ListModels_OfficialEndpointStillFiltersNonChatModels(t *te
 
 func TestOpenAIClient_ListModels_CustomEndpointIncludesNonOpenAIModelNames(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/custom-openai/v1/models", r.URL.Path)
+		assert.Equal(t, "Bearer sk-test", r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 
@@ -274,6 +276,49 @@ func TestOpenAIClient_ListModels_CustomEndpointIncludesNonOpenAIModelNames(t *te
 	assert.Equal(t, "llama3-8b", models[0].ID)
 	assert.Equal(t, "qwen3.5-27b", models[1].ID)
 	assert.Equal(t, "gemma-3-4b", models[2].ID)
+}
+
+func TestOpenAIClient_Chat_CustomCompatibleBaseURLRequestOptions(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/compat/v1/chat/completions", r.URL.Path)
+		assert.Equal(t, "Bearer sk-compatible", r.Header.Get("Authorization"))
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+
+		var req openaiRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		assert.Equal(t, "vendor/qwen3-32b", req.Model)
+		assert.Equal(t, 256, req.MaxCompletionTokens)
+		assert.Equal(t, 0.2, req.Temperature)
+
+		_ = json.NewEncoder(w).Encode(openaiResponse{
+			ID:    "chatcmpl-custom",
+			Model: "vendor/qwen3-32b",
+			Choices: []openaiChoice{
+				{
+					Message:      openaiRespMsg{Role: "assistant", Content: "ok"},
+					FinishReason: "stop",
+				},
+			},
+			Usage: openaiUsage{PromptTokens: 4, CompletionTokens: 2},
+		})
+	}))
+	defer server.Close()
+
+	client := NewOpenAIClient("sk-compatible", "openai:vendor/qwen3-32b", server.URL+"/compat/v1", 0)
+	resp, err := client.Chat(context.Background(), ChatRequest{
+		Model:       "openai:vendor/qwen3-32b",
+		MaxTokens:   256,
+		Temperature: 0.2,
+		Messages: []Message{
+			{Role: "user", Content: "hello"},
+		},
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, "ok", resp.Content)
+	assert.Equal(t, "vendor/qwen3-32b", resp.Model)
+	assert.Equal(t, 4, resp.InputTokens)
+	assert.Equal(t, 2, resp.OutputTokens)
 }
 
 func TestOpenAIClient_Chat_Success(t *testing.T) {

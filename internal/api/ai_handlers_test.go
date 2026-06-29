@@ -203,6 +203,90 @@ func TestAISettingsHandler_ListModels_Ollama(t *testing.T) {
 	}
 }
 
+func TestAISettingsHandler_OpenAICompatibleBaseURLRoundTripAndModelDiagnostics(t *testing.T) {
+	t.Parallel()
+
+	const apiKey = "sk-compatible-test-key"
+	openAICompatible := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/compat/v1/models" {
+			t.Fatalf("unexpected model discovery path %s", r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer "+apiKey {
+			t.Fatalf("unexpected authorization header %q", got)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]any{
+				{"id": "local/qwen3-32b", "object": "model", "created": 1234567890, "owned_by": "local"},
+			},
+		})
+	}))
+	defer openAICompatible.Close()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	updateBody, _ := json.Marshal(AISettingsUpdateRequest{
+		Enabled:       ptr(true),
+		Provider:      ptr(config.AIProviderOpenAI),
+		Model:         ptr("openai:local/qwen3-32b"),
+		OpenAIAPIKey:  ptr(apiKey),
+		OpenAIBaseURL: ptr(openAICompatible.URL + "/compat/v1"),
+	})
+	updateReq := httptest.NewRequest(http.MethodPut, "/api/settings/ai", bytes.NewReader(updateBody))
+	updateRec := httptest.NewRecorder()
+	handler.HandleUpdateAISettings(updateRec, updateReq)
+
+	require.Equal(t, http.StatusOK, updateRec.Code, updateRec.Body.String())
+	require.NotContains(t, updateRec.Body.String(), apiKey)
+
+	var settingsResp AISettingsResponse
+	require.NoError(t, json.Unmarshal(updateRec.Body.Bytes(), &settingsResp))
+	require.True(t, settingsResp.Enabled)
+	require.True(t, settingsResp.OpenAIConfigured)
+	require.Equal(t, openAICompatible.URL+"/compat/v1", settingsResp.OpenAIBaseURL)
+
+	getReq := httptest.NewRequest(http.MethodGet, "/api/settings/ai", nil)
+	getRec := httptest.NewRecorder()
+	handler.HandleGetAISettings(getRec, getReq)
+	require.Equal(t, http.StatusOK, getRec.Code, getRec.Body.String())
+	require.NotContains(t, getRec.Body.String(), apiKey)
+
+	var persistedResp AISettingsResponse
+	require.NoError(t, json.Unmarshal(getRec.Body.Bytes(), &persistedResp))
+	require.Equal(t, settingsResp.OpenAIBaseURL, persistedResp.OpenAIBaseURL)
+	require.True(t, persistedResp.OpenAIConfigured)
+
+	modelReq := httptest.NewRequest(http.MethodGet, "/api/ai/models", nil)
+	modelRec := httptest.NewRecorder()
+	handler.HandleListModels(modelRec, modelReq)
+
+	require.Equal(t, http.StatusOK, modelRec.Code, modelRec.Body.String())
+	require.NotContains(t, modelRec.Body.String(), apiKey)
+
+	var modelsResp struct {
+		Models []struct {
+			ID       string `json:"id"`
+			Name     string `json:"name"`
+			Provider string `json:"provider"`
+		} `json:"models"`
+		Diagnostics []struct {
+			Provider   string `json:"provider"`
+			Status     string `json:"status"`
+			ModelCount int    `json:"model_count"`
+		} `json:"diagnostics"`
+	}
+	require.NoError(t, json.Unmarshal(modelRec.Body.Bytes(), &modelsResp))
+	require.Len(t, modelsResp.Models, 1)
+	require.Equal(t, "openai:local/qwen3-32b", modelsResp.Models[0].ID)
+	require.Equal(t, config.AIProviderOpenAI, modelsResp.Models[0].Provider)
+	require.Len(t, modelsResp.Diagnostics, 1)
+	require.Equal(t, config.AIProviderOpenAI, modelsResp.Diagnostics[0].Provider)
+	require.Equal(t, "ready", modelsResp.Diagnostics[0].Status)
+	require.Equal(t, 1, modelsResp.Diagnostics[0].ModelCount)
+}
+
 func TestAISettingsHandler_Execute_Ollama(t *testing.T) {
 	t.Parallel()
 

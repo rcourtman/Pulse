@@ -53,6 +53,29 @@ describe('AIAPI', () => {
     });
   });
 
+  it('returns model diagnostics from getModels', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({
+      models: [{ id: 'openai:local/qwen3', name: 'local/qwen3', provider: 'openai' }],
+      diagnostics: [{
+        provider: 'openai',
+        status: 'ready',
+        message: 'OpenAI returned 1 model.',
+        model_count: 1,
+        cached: false,
+      }],
+    } as any);
+
+    const result = await AIAPI.getModels();
+
+    expect(result.diagnostics).toEqual([{
+      provider: 'openai',
+      status: 'ready',
+      message: 'OpenAI returned 1 model.',
+      model_count: 1,
+      cached: false,
+    }]);
+  });
+
   it('includes query parameters for cost endpoints', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({} as any);
     await AIAPI.getCostSummary();

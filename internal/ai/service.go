@@ -189,11 +189,30 @@ type providerModelsEntry struct {
 	models []providers.ModelInfo
 }
 
+// ProviderModelDiagnostic describes model discovery readiness for one configured provider.
+type ProviderModelDiagnostic struct {
+	Provider   string `json:"provider"`
+	Status     string `json:"status"` // ready, cached, empty, error
+	Message    string `json:"message,omitempty"`
+	ModelCount int    `json:"model_count"`
+	Cached     bool   `json:"cached"`
+}
+
 type modelsCache struct {
 	mu        sync.RWMutex
 	key       string
 	providers map[string]providerModelsEntry
 	ttl       time.Duration
+}
+
+var providerDiagnosticRedactions = []struct {
+	re   *regexp.Regexp
+	with string
+}{
+	{regexp.MustCompile(`(?i)Bearer\s+[A-Za-z0-9._~+/=-]+`), "Bearer REDACTED"},
+	{regexp.MustCompile(`(?i)(api[_-]?key|token|secret|password)["'\s:=]+[A-Za-z0-9._~+/=-]+`), "${1}=REDACTED"},
+	{regexp.MustCompile(`sk-ant-[A-Za-z0-9._-]{6,}`), "REDACTED"},
+	{regexp.MustCompile(`sk-[A-Za-z0-9._-]{6,}`), "REDACTED"},
 }
 
 // NewService creates a new AI service
@@ -3783,17 +3802,22 @@ func (s *Service) TestConnection(ctx context.Context) error {
 // ListModels fetches available models from ALL configured AI providers
 // Returns a unified list with models prefixed by provider name
 func (s *Service) ListModels(ctx context.Context) ([]providers.ModelInfo, error) {
-	models, _, err := s.ListModelsWithCache(ctx)
+	models, _, _, err := s.ListModelsWithDiagnostics(ctx)
 	return models, err
 }
 
 func (s *Service) ListModelsWithCache(ctx context.Context) ([]providers.ModelInfo, bool, error) {
+	models, cached, _, err := s.ListModelsWithDiagnostics(ctx)
+	return models, cached, err
+}
+
+func (s *Service) ListModelsWithDiagnostics(ctx context.Context) ([]providers.ModelInfo, bool, []ProviderModelDiagnostic, error) {
 	cfg, err := s.persistence.LoadAIConfig()
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to load Pulse Assistant config: %w", err)
+		return nil, false, nil, fmt.Errorf("failed to load Pulse Assistant config: %w", err)
 	}
 	if cfg == nil {
-		return nil, false, fmt.Errorf("Pulse Assistant not configured")
+		return nil, false, nil, fmt.Errorf("Pulse Assistant not configured")
 	}
 
 	cacheKey := buildModelsCacheKey(cfg)
@@ -3809,6 +3833,7 @@ func (s *Service) ListModelsWithCache(ctx context.Context) ([]providers.ModelInf
 	providersList := []string{config.AIProviderAnthropic, config.AIProviderOpenAI, config.AIProviderDeepSeek, config.AIProviderGemini, config.AIProviderOllama}
 
 	allCached := true
+	diagnostics := make([]ProviderModelDiagnostic, 0, len(cfg.GetConfiguredProviders()))
 
 	for _, providerName := range providersList {
 		if !cfg.HasProvider(providerName) {
@@ -3822,6 +3847,13 @@ func (s *Service) ListModelsWithCache(ctx context.Context) ([]providers.ModelInf
 		s.modelsCache.mu.RUnlock()
 
 		if valid {
+			diagnostics = append(diagnostics, ProviderModelDiagnostic{
+				Provider:   providerName,
+				Status:     "cached",
+				Message:    fmt.Sprintf("%s model list is cached.", providerDisplayName(providerName)),
+				ModelCount: len(entry.models),
+				Cached:     true,
+			})
 			continue
 		}
 
@@ -3830,14 +3862,26 @@ func (s *Service) ListModelsWithCache(ctx context.Context) ([]providers.ModelInf
 		// Create provider
 		provider, err := providers.NewForProvider(cfg, providerName, "")
 		if err != nil {
-			log.Debug().Err(err).Str("provider", providerName).Msg("Skipping provider - not configured")
+			message := providerModelDiagnosticMessage(providerName, "create", err)
+			diagnostics = append(diagnostics, ProviderModelDiagnostic{
+				Provider: providerName,
+				Status:   "error",
+				Message:  message,
+			})
+			log.Debug().Str("provider", providerName).Str("error", message).Msg("Skipping provider model discovery")
 			continue
 		}
 
 		// Fetch models from this provider
 		models, err := provider.ListModels(ctx)
 		if err != nil {
-			log.Warn().Err(err).Str("provider", providerName).Msg("Failed to fetch models from provider")
+			message := providerModelDiagnosticMessage(providerName, "list", err)
+			diagnostics = append(diagnostics, ProviderModelDiagnostic{
+				Provider: providerName,
+				Status:   "error",
+				Message:  message,
+			})
+			log.Warn().Str("provider", providerName).Str("error", message).Msg("Failed to fetch models from provider")
 			// Keep stale entry (don't overwrite or delete) — the provider's
 			// previous models remain visible until a successful fetch replaces them.
 			continue
@@ -3862,6 +3906,19 @@ func (s *Service) ListModelsWithCache(ctx context.Context) ([]providers.ModelInf
 			models: prefixed,
 		}
 		s.modelsCache.mu.Unlock()
+
+		status := "ready"
+		message := fmt.Sprintf("%s returned %d model%s.", providerDisplayName(providerName), len(prefixed), pluralSuffix(len(prefixed)))
+		if len(prefixed) == 0 {
+			status = "empty"
+			message = providerEmptyModelsMessage(providerName)
+		}
+		diagnostics = append(diagnostics, ProviderModelDiagnostic{
+			Provider:   providerName,
+			Status:     status,
+			Message:    message,
+			ModelCount: len(prefixed),
+		})
 	}
 
 	// Aggregate results in stable provider order
@@ -3874,7 +3931,71 @@ func (s *Service) ListModelsWithCache(ctx context.Context) ([]providers.ModelInf
 	}
 	s.modelsCache.mu.RUnlock()
 
-	return allModels, allCached, nil
+	return allModels, allCached, diagnostics, nil
+}
+
+func pluralSuffix(count int) string {
+	if count == 1 {
+		return ""
+	}
+	return "s"
+}
+
+func providerEmptyModelsMessage(providerName string) string {
+	switch providerName {
+	case config.AIProviderOpenAI:
+		return "OpenAI-compatible endpoint responded but returned no models. Check that the custom base URL exposes a /v1/models-compatible response."
+	case config.AIProviderOllama:
+		return "Ollama is reachable but returned no pulled models. Pull a model with ollama pull, then refresh the model list."
+	default:
+		return fmt.Sprintf("%s responded but returned no models.", providerDisplayName(providerName))
+	}
+}
+
+func providerModelDiagnosticMessage(providerName, stage string, err error) string {
+	errText := sanitizeProviderDiagnosticError(err)
+	action := fmt.Sprintf("%s model discovery failed.", providerDisplayName(providerName))
+	if stage == "create" {
+		action = fmt.Sprintf("%s is configured but the provider client could not be created.", providerDisplayName(providerName))
+	}
+
+	switch providerName {
+	case config.AIProviderOpenAI:
+		action += " Check the API key and Custom Base URL. Custom endpoints must support the OpenAI /v1/models shape."
+	case config.AIProviderOllama:
+		action += " Check the Server URL, Basic Auth settings, and that Ollama is reachable from the Pulse server."
+	case config.AIProviderDeepSeek:
+		action += " Check the DeepSeek API key and provider availability."
+	case config.AIProviderGemini:
+		action += " Check the Gemini API key and provider availability."
+	case config.AIProviderAnthropic:
+		action += " Check the Anthropic API key and provider availability."
+	}
+
+	if errText == "" {
+		return action
+	}
+	return action + " Last error: " + errText
+}
+
+func sanitizeProviderDiagnosticError(err error) string {
+	if err == nil {
+		return ""
+	}
+	msg := strings.TrimSpace(err.Error())
+	if msg == "" {
+		return ""
+	}
+
+	for _, replacement := range providerDiagnosticRedactions {
+		msg = replacement.re.ReplaceAllString(msg, replacement.with)
+	}
+
+	const maxDiagnosticErrorLen = 320
+	if len(msg) > maxDiagnosticErrorLen {
+		msg = msg[:maxDiagnosticErrorLen] + "..."
+	}
+	return msg
 }
 
 func buildModelsCacheKey(cfg *config.AIConfig) string {
@@ -3919,6 +4040,11 @@ func (s *Service) Reload() error {
 	if err := s.LoadConfig(); err != nil {
 		return err
 	}
+
+	s.modelsCache.mu.Lock()
+	s.modelsCache.key = ""
+	s.modelsCache.providers = make(map[string]providerModelsEntry)
+	s.modelsCache.mu.Unlock()
 
 	// Also reload the chat service so patrol picks up model/provider changes
 	s.mu.RLock()

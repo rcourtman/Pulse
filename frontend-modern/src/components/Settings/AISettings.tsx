@@ -11,7 +11,7 @@ import { logger } from '@/utils/logger';
 import { AIAPI } from '@/api/ai';
 import { AIChatAPI, type ChatSession, type FileChange } from '@/api/aiChat';
 import { hasFeature, loadLicenseStatus } from '@/stores/license';
-import type { AISettings as AISettingsType, AIProvider, AuthMethod, ModelInfo } from '@/types/ai';
+import type { AISettings as AISettingsType, AIProvider, AuthMethod, ModelInfo, ProviderModelDiagnostic } from '@/types/ai';
 import { normalizeChatSessions } from '@/components/Settings/aiSettingsChatSessions';
 import { PROVIDER_DISPLAY_NAMES, getProviderFromModelId, groupModelsByProvider } from '@/utils/aiModels';
 
@@ -80,6 +80,8 @@ export const AISettings: Component = () => {
   // Dynamic model list from provider API
   const [availableModels, setAvailableModels] = createSignal<ModelInfo[]>([]);
   const [modelsLoading, setModelsLoading] = createSignal(false);
+  const [modelDiagnostics, setModelDiagnostics] = createSignal<ProviderModelDiagnostic[]>([]);
+  const [modelsError, setModelsError] = createSignal('');
 
   const [chatSessions, setChatSessions] = createSignal<ChatSession[]>([]);
   const [chatSessionsLoading, setChatSessionsLoading] = createSignal(false);
@@ -245,18 +247,29 @@ export const AISettings: Component = () => {
   // Load available models from the provider's API
   const loadModels = async () => {
     setModelsLoading(true);
+    setModelsError('');
     try {
       const result = await AIAPI.getModels();
-      if (result.models && result.models.length > 0) {
-        setAvailableModels(result.models);
-      }
+      setAvailableModels(result.models || []);
+      setModelDiagnostics(result.diagnostics || []);
+      setModelsError(result.error || '');
     } catch (e) {
-      // Silently fail - user can still type model names manually
       logger.debug('[AISettings] Failed to load models from API:', e);
+      setModelDiagnostics([]);
+      setModelsError(e instanceof Error ? e.message : 'Could not refresh model list.');
     } finally {
       setModelsLoading(false);
     }
   };
+
+  const visibleModelDiagnostics = createMemo(() =>
+    modelDiagnostics().filter((diagnostic) => diagnostic.status === 'error' || diagnostic.status === 'empty')
+  );
+
+  const diagnosticTextClass = (status: ProviderModelDiagnostic['status']) =>
+    status === 'error'
+      ? 'text-red-600 dark:text-red-400'
+      : 'text-amber-600 dark:text-amber-400';
 
   const loadChatSessions = async () => {
     setChatSessionsLoading(true);
@@ -916,6 +929,25 @@ export const AISettings: Component = () => {
                     This model requires {PROVIDER_DISPLAY_NAMES[getProviderFromModelId(form.model)] || getProviderFromModelId(form.model)} to be configured.
                     Please {providerSetupAction(getProviderFromModelId(form.model))} below or select a different model.
                   </p>
+                </Show>
+                <Show when={modelsError()}>
+                  <p class="text-xs text-red-600 dark:text-red-400 mt-1">
+                    Model discovery failed before provider checks completed: {modelsError()}
+                  </p>
+                </Show>
+                <Show when={visibleModelDiagnostics().length > 0}>
+                  <div class="mt-2 space-y-1">
+                    <For each={visibleModelDiagnostics()}>
+                      {(diagnostic) => (
+                        <p class={`text-xs ${diagnosticTextClass(diagnostic.status)}`}>
+                          <span class="font-medium">
+                            {PROVIDER_DISPLAY_NAMES[diagnostic.provider] || diagnostic.provider}
+                          </span>
+                          : {diagnostic.message || 'Model discovery needs attention.'}
+                        </p>
+                      )}
+                    </For>
+                  </div>
                 </Show>
               </div>
 

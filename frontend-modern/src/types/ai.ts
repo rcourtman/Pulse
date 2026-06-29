@@ -12,6 +12,21 @@ export interface ModelInfo {
   provider?: AIProvider;
 }
 
+export interface ProviderModelDiagnostic {
+  provider: AIProvider;
+  status: 'ready' | 'cached' | 'empty' | 'error';
+  message?: string;
+  model_count: number;
+  cached: boolean;
+}
+
+export interface AIModelsResponse {
+  models: ModelInfo[];
+  error?: string;
+  cached?: boolean;
+  diagnostics?: ProviderModelDiagnostic[];
+}
+
 export interface AISettings {
   enabled: boolean;
   provider: AIProvider; // DEPRECATED: legacy single provider

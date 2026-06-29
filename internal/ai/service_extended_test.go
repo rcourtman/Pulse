@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -2381,6 +2383,62 @@ func TestService_ListModelsWithCache_ProviderErrors(t *testing.T) {
 	}
 	if cached {
 		t.Error("Expected no cache hit")
+	}
+}
+
+func TestService_ListModelsWithDiagnostics_RedactsProviderErrors(t *testing.T) {
+	const apiKey = "sk-test-secret-123456"
+	const leakedBearer = "Bearer sk-other-secret-789"
+
+	modelsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/custom/v1/models" {
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer "+apiKey {
+			t.Fatalf("unexpected authorization header %q", got)
+		}
+		w.WriteHeader(http.StatusUnauthorized)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error": map[string]any{
+				"message": "invalid api_key " + apiKey + " and " + leakedBearer,
+			},
+		})
+	}))
+	defer modelsServer.Close()
+
+	tmpDir := t.TempDir()
+	persistence := config.NewConfigPersistence(tmpDir)
+	if err := persistence.SaveAIConfig(config.AIConfig{
+		Enabled:       true,
+		OpenAIAPIKey:  apiKey,
+		OpenAIBaseURL: modelsServer.URL + "/custom/v1",
+	}); err != nil {
+		t.Fatalf("SaveAIConfig: %v", err)
+	}
+
+	svc := NewService(persistence, nil)
+	models, cached, diagnostics, err := svc.ListModelsWithDiagnostics(context.Background())
+	if err != nil {
+		t.Fatalf("ListModelsWithDiagnostics failed: %v", err)
+	}
+	if cached {
+		t.Fatal("expected live model discovery attempt")
+	}
+	if len(models) != 0 {
+		t.Fatalf("expected no models after provider error, got %+v", models)
+	}
+	if len(diagnostics) != 1 {
+		t.Fatalf("expected one diagnostic, got %+v", diagnostics)
+	}
+	diag := diagnostics[0]
+	if diag.Provider != config.AIProviderOpenAI || diag.Status != "error" {
+		t.Fatalf("unexpected diagnostic: %+v", diag)
+	}
+	if !strings.Contains(diag.Message, "Custom Base URL") || !strings.Contains(diag.Message, "/v1/models") {
+		t.Fatalf("diagnostic is not actionable enough: %q", diag.Message)
+	}
+	if strings.Contains(diag.Message, apiKey) || strings.Contains(diag.Message, "sk-other-secret") {
+		t.Fatalf("diagnostic leaked token-shaped data: %q", diag.Message)
 	}
 }
 

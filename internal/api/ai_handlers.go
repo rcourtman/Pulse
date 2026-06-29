@@ -1780,13 +1780,22 @@ func (h *AISettingsHandler) HandleListModels(w http.ResponseWriter, r *http.Requ
 		Provider    string `json:"provider,omitempty"`
 	}
 
-	type Response struct {
-		Models []ModelInfo `json:"models"`
-		Error  string      `json:"error,omitempty"`
-		Cached bool        `json:"cached"`
+	type ProviderDiagnostic struct {
+		Provider   string `json:"provider"`
+		Status     string `json:"status"`
+		Message    string `json:"message,omitempty"`
+		ModelCount int    `json:"model_count"`
+		Cached     bool   `json:"cached"`
 	}
 
-	models, cached, err := h.GetAIService(r.Context()).ListModelsWithCache(ctx)
+	type Response struct {
+		Models      []ModelInfo          `json:"models"`
+		Error       string               `json:"error,omitempty"`
+		Cached      bool                 `json:"cached"`
+		Diagnostics []ProviderDiagnostic `json:"diagnostics,omitempty"`
+	}
+
+	models, cached, diagnostics, err := h.GetAIService(r.Context()).ListModelsWithDiagnostics(ctx)
 	if err != nil {
 		// Return error but don't fail the request - frontend can show a fallback
 		resp := Response{
@@ -1816,11 +1825,23 @@ func (h *AISettingsHandler) HandleListModels(w http.ResponseWriter, r *http.Requ
 		})
 	}
 
+	responseDiagnostics := make([]ProviderDiagnostic, 0, len(diagnostics))
+	for _, diagnostic := range diagnostics {
+		responseDiagnostics = append(responseDiagnostics, ProviderDiagnostic{
+			Provider:   diagnostic.Provider,
+			Status:     diagnostic.Status,
+			Message:    diagnostic.Message,
+			ModelCount: diagnostic.ModelCount,
+			Cached:     diagnostic.Cached,
+		})
+	}
+
 	log.Debug().Int("total", len(responseModels)).Int("notable", notableCount).Msg("Returning AI models")
 
 	resp := Response{
-		Models: responseModels,
-		Cached: cached,
+		Models:      responseModels,
+		Cached:      cached,
+		Diagnostics: responseDiagnostics,
 	}
 
 	if err := utils.WriteJSONResponse(w, resp); err != nil {

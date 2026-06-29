@@ -7,7 +7,7 @@ import type {
   AIExecuteResponse,
   AIStreamEvent,
   AICostSummary,
-  ModelInfo,
+  AIModelsResponse,
 } from '@/types/ai';
 import type {
   AnomaliesResponse,
@@ -45,8 +45,8 @@ export class AIAPI {
   }
 
   // Get available models from the AI provider
-  static async getModels(): Promise<{ models: ModelInfo[]; error?: string }> {
-    return apiFetchJSON(`${this.baseUrl}/ai/models`) as Promise<{ models: ModelInfo[]; error?: string }>;
+  static async getModels(): Promise<AIModelsResponse> {
+    return apiFetchJSON(`${this.baseUrl}/ai/models`) as Promise<AIModelsResponse>;
   }
 
   // Get AI cost/usage summary
