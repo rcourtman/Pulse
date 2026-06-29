@@ -1536,6 +1536,12 @@ likewise adjacent only: the webhook `signingSecret` payload field and its
 masking semantics are notifications/API-contract owned and create no storage,
 recovery-point, or backup-surface semantics.
 
+Alert delivery diagnosis on shared `internal/api/alerts.go` is likewise
+adjacent only: `/api/alerts/delivery-diagnosis` exposes alerts/API-contract
+read-only notification-policy evidence and creates no storage health,
+recovery-point, backup verification, restore authorization, or provider
+coverage semantics.
+
 Kubernetes pod metadata decoded by `frontend-modern/src/hooks/useUnifiedResources.ts`
 is shared inventory context for storage/recovery handoffs only; Pod phase,
 container readiness, owner, image, and restart fields do not become protection

@@ -19022,3 +19022,236 @@ func TestDefaultAlertConfigUsesIndependentBackupAlertOrphanedPointer(t *testing.
 		t.Fatal("mutating one default config changed another default config")
 	}
 }
+
+func TestDiagnoseAlertDeliveryReady(t *testing.T) {
+	manager, now := newDeliveryDiagnosisManager(t)
+	alert := addDeliveryDiagnosisAlert(manager, &Alert{
+		ID:           "alert-ready",
+		Type:         "cpu",
+		Level:        AlertLevelWarning,
+		ResourceID:   "node-1",
+		ResourceName: "node-1",
+		StartTime:    now.Add(-10 * time.Minute),
+	})
+
+	diagnosis, ok := manager.DiagnoseAlertDelivery(alert.ID)
+	if !ok {
+		t.Fatal("expected active alert diagnosis")
+	}
+	if diagnosis.Status != AlertDeliveryStatusWouldSend {
+		t.Fatalf("Status = %q, want %q", diagnosis.Status, AlertDeliveryStatusWouldSend)
+	}
+	if diagnosis.Reason != AlertDeliveryReasonReady {
+		t.Fatalf("Reason = %q, want %q", diagnosis.Reason, AlertDeliveryReasonReady)
+	}
+	if diagnosis.TrackingKey == "" {
+		t.Fatal("expected tracking key")
+	}
+	if diagnosis.RecentAlertsInHour != 0 {
+		t.Fatalf("RecentAlertsInHour = %d, want 0", diagnosis.RecentAlertsInHour)
+	}
+}
+
+func TestDiagnoseAlertDeliverySuppressesAcknowledged(t *testing.T) {
+	manager, now := newDeliveryDiagnosisManager(t)
+	alert := addDeliveryDiagnosisAlert(manager, &Alert{
+		ID:           "alert-acked",
+		Type:         "memory",
+		Level:        AlertLevelCritical,
+		ResourceID:   "node-1",
+		ResourceName: "node-1",
+		StartTime:    now.Add(-10 * time.Minute),
+		Acknowledged: true,
+	})
+
+	diagnosis, ok := manager.DiagnoseAlertDelivery(alert.ID)
+	if !ok {
+		t.Fatal("expected active alert diagnosis")
+	}
+	if diagnosis.Status != AlertDeliveryStatusSuppressed {
+		t.Fatalf("Status = %q, want %q", diagnosis.Status, AlertDeliveryStatusSuppressed)
+	}
+	if diagnosis.Reason != AlertDeliveryReasonAcknowledged {
+		t.Fatalf("Reason = %q, want %q", diagnosis.Reason, AlertDeliveryReasonAcknowledged)
+	}
+}
+
+func TestDiagnoseAlertDeliveryDefersQuietHours(t *testing.T) {
+	manager, now := newDeliveryDiagnosisManager(t)
+	cfg := manager.GetConfig()
+	cfg.Schedule.QuietHours.Enabled = true
+	cfg.Schedule.QuietHours.Timezone = "UTC"
+	cfg.Schedule.QuietHours.Start = "00:00"
+	cfg.Schedule.QuietHours.End = "23:59"
+	cfg.Schedule.QuietHours.Days = map[string]bool{"monday": true}
+	cfg.Schedule.QuietHours.Suppress.Performance = true
+	manager.UpdateConfig(cfg)
+	manager.now = func() time.Time { return now }
+
+	alert := addDeliveryDiagnosisAlert(manager, &Alert{
+		ID:           "alert-quiet",
+		Type:         "cpu",
+		Level:        AlertLevelCritical,
+		ResourceID:   "node-1",
+		ResourceName: "node-1",
+		StartTime:    now.Add(-10 * time.Minute),
+	})
+
+	diagnosis, ok := manager.DiagnoseAlertDelivery(alert.ID)
+	if !ok {
+		t.Fatal("expected active alert diagnosis")
+	}
+	if diagnosis.Status != AlertDeliveryStatusDeferred {
+		t.Fatalf("Status = %q, want %q", diagnosis.Status, AlertDeliveryStatusDeferred)
+	}
+	wantReason := AlertDeliveryReasonQuietHours + ":performance"
+	if diagnosis.Reason != wantReason {
+		t.Fatalf("Reason = %q, want %q", diagnosis.Reason, wantReason)
+	}
+	if diagnosis.QuietHoursReplayAt == nil {
+		t.Fatal("expected quiet-hours replay time")
+	}
+}
+
+func TestDiagnoseAlertDeliverySuppressesCooldown(t *testing.T) {
+	manager, now := newDeliveryDiagnosisManager(t)
+	lastNotified := now.Add(-2 * time.Minute)
+	alert := addDeliveryDiagnosisAlert(manager, &Alert{
+		ID:           "alert-cooldown",
+		Type:         "cpu",
+		Level:        AlertLevelWarning,
+		ResourceID:   "node-1",
+		ResourceName: "node-1",
+		StartTime:    now.Add(-10 * time.Minute),
+		LastNotified: &lastNotified,
+	})
+
+	diagnosis, ok := manager.DiagnoseAlertDelivery(alert.ID)
+	if !ok {
+		t.Fatal("expected active alert diagnosis")
+	}
+	if diagnosis.Status != AlertDeliveryStatusSuppressed {
+		t.Fatalf("Status = %q, want %q", diagnosis.Status, AlertDeliveryStatusSuppressed)
+	}
+	if diagnosis.Reason != AlertDeliveryReasonCooldown {
+		t.Fatalf("Reason = %q, want %q", diagnosis.Reason, AlertDeliveryReasonCooldown)
+	}
+	if diagnosis.NextEligibleAt == nil || !diagnosis.NextEligibleAt.Equal(lastNotified.Add(5*time.Minute)) {
+		t.Fatalf("NextEligibleAt = %v, want %v", diagnosis.NextEligibleAt, lastNotified.Add(5*time.Minute))
+	}
+}
+
+func TestDiagnoseAlertDeliverySuppressesRateLimitWithoutMutating(t *testing.T) {
+	manager, now := newDeliveryDiagnosisManager(t)
+	cfg := manager.GetConfig()
+	cfg.Schedule.MaxAlertsHour = 1
+	manager.UpdateConfig(cfg)
+	manager.now = func() time.Time { return now }
+
+	alert := addDeliveryDiagnosisAlert(manager, &Alert{
+		ID:           "alert-rate-limit",
+		Type:         "cpu",
+		Level:        AlertLevelWarning,
+		ResourceID:   "node-1",
+		ResourceName: "node-1",
+		StartTime:    now.Add(-10 * time.Minute),
+	})
+	trackingKey := canonicalTrackingKeyForAlert(alert)
+	manager.mu.Lock()
+	manager.alertRateLimit[trackingKey] = []time.Time{now.Add(-30 * time.Minute)}
+	manager.mu.Unlock()
+
+	diagnosis, ok := manager.DiagnoseAlertDelivery(alert.ID)
+	if !ok {
+		t.Fatal("expected active alert diagnosis")
+	}
+	if diagnosis.Status != AlertDeliveryStatusSuppressed {
+		t.Fatalf("Status = %q, want %q", diagnosis.Status, AlertDeliveryStatusSuppressed)
+	}
+	if diagnosis.Reason != AlertDeliveryReasonRateLimited {
+		t.Fatalf("Reason = %q, want %q", diagnosis.Reason, AlertDeliveryReasonRateLimited)
+	}
+	if diagnosis.RecentAlertsInHour != 1 {
+		t.Fatalf("RecentAlertsInHour = %d, want 1", diagnosis.RecentAlertsInHour)
+	}
+
+	manager.mu.Lock()
+	defer manager.mu.Unlock()
+	if got := len(manager.alertRateLimit[trackingKey]); got != 1 {
+		t.Fatalf("diagnosis mutated alertRateLimit length to %d, want 1", got)
+	}
+}
+
+func TestDiagnoseAlertDeliverySuppressesFlappingWithoutMutatingRateLimit(t *testing.T) {
+	manager, now := newDeliveryDiagnosisManager(t)
+	alert := addDeliveryDiagnosisAlert(manager, &Alert{
+		ID:           "alert-flapping",
+		Type:         "cpu",
+		Level:        AlertLevelWarning,
+		ResourceID:   "node-1",
+		ResourceName: "node-1",
+		StartTime:    now.Add(-10 * time.Minute),
+	})
+	trackingKey := canonicalTrackingKeyForAlert(alert)
+	suppressedUntil := now.Add(15 * time.Minute)
+	manager.mu.Lock()
+	manager.flappingHistory[trackingKey] = []time.Time{now.Add(-2 * time.Minute), now.Add(-time.Minute)}
+	manager.flappingActive[trackingKey] = true
+	manager.suppressedUntil[trackingKey] = suppressedUntil
+	manager.alertRateLimit[trackingKey] = []time.Time{now.Add(-30 * time.Minute)}
+	manager.mu.Unlock()
+
+	diagnosis, ok := manager.DiagnoseAlertDelivery(alert.ID)
+	if !ok {
+		t.Fatal("expected active alert diagnosis")
+	}
+	if diagnosis.Status != AlertDeliveryStatusSuppressed {
+		t.Fatalf("Status = %q, want %q", diagnosis.Status, AlertDeliveryStatusSuppressed)
+	}
+	if diagnosis.Reason != AlertDeliveryReasonFlapping {
+		t.Fatalf("Reason = %q, want %q", diagnosis.Reason, AlertDeliveryReasonFlapping)
+	}
+	if diagnosis.SuppressedUntil == nil || !diagnosis.SuppressedUntil.Equal(suppressedUntil) {
+		t.Fatalf("SuppressedUntil = %v, want %v", diagnosis.SuppressedUntil, suppressedUntil)
+	}
+	if diagnosis.RecentAlertsInHour != 1 {
+		t.Fatalf("RecentAlertsInHour = %d, want 1", diagnosis.RecentAlertsInHour)
+	}
+
+	manager.mu.Lock()
+	defer manager.mu.Unlock()
+	if got := len(manager.alertRateLimit[trackingKey]); got != 1 {
+		t.Fatalf("diagnosis mutated alertRateLimit length to %d, want 1", got)
+	}
+}
+
+func newDeliveryDiagnosisManager(t *testing.T) (*Manager, time.Time) {
+	t.Helper()
+
+	manager := NewManager()
+	t.Cleanup(manager.Stop)
+
+	now := time.Date(2026, 6, 29, 12, 0, 0, 0, time.UTC)
+	manager.now = func() time.Time { return now }
+
+	cfg := manager.GetConfig()
+	cfg.Enabled = true
+	cfg.ActivationState = ActivationActive
+	cfg.Schedule.Cooldown = 5
+	cfg.Schedule.MaxAlertsHour = 10
+	cfg.FlappingEnabled = true
+	cfg.FlappingThreshold = 3
+	cfg.FlappingWindowSeconds = 300
+	cfg.FlappingCooldownMinutes = 15
+	manager.UpdateConfig(cfg)
+	manager.now = func() time.Time { return now }
+
+	return manager, now
+}
+
+func addDeliveryDiagnosisAlert(manager *Manager, alert *Alert) *Alert {
+	manager.mu.Lock()
+	defer manager.mu.Unlock()
+	manager.activeAlerts[alert.ID] = alert
+	return alert
+}

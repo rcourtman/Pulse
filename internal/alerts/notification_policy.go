@@ -20,6 +20,54 @@ const (
 	MetadataQuietHoursReplayAt = "quietHoursReplayAt"
 )
 
+const (
+	AlertDeliveryStatusWouldSend  = "would_send"
+	AlertDeliveryStatusDeferred   = "deferred"
+	AlertDeliveryStatusSuppressed = "suppressed"
+
+	AlertDeliveryReasonReady                 = "ready"
+	AlertDeliveryReasonAcknowledged          = "acknowledged"
+	AlertDeliveryReasonNotificationsDisabled = "notifications_disabled"
+	AlertDeliveryReasonNotificationsInactive = "notifications_inactive"
+	AlertDeliveryReasonSuppressionWindow     = "suppression_window"
+	AlertDeliveryReasonFlapping              = "flapping"
+	AlertDeliveryReasonRateLimited           = "rate_limited"
+	AlertDeliveryReasonCooldown              = "cooldown"
+	AlertDeliveryReasonQuietHours            = "quiet_hours"
+	AlertDeliveryReasonMonitorOnly           = "monitor_only"
+)
+
+// AlertDeliveryDiagnosis is a read-only projection of the alert manager's
+// current delivery policy for one active alert. It is intentionally
+// non-mutating: it does not dispatch callbacks or advance flapping/rate-limit
+// counters.
+type AlertDeliveryDiagnosis struct {
+	AlertIdentifier         string     `json:"alertIdentifier"`
+	AlertID                 string     `json:"alertId"`
+	TrackingKey             string     `json:"trackingKey"`
+	Status                  string     `json:"status"`
+	Reason                  string     `json:"reason"`
+	Message                 string     `json:"message"`
+	AlertType               string     `json:"alertType"`
+	Level                   AlertLevel `json:"level"`
+	ResourceID              string     `json:"resourceId,omitempty"`
+	ResourceName            string     `json:"resourceName,omitempty"`
+	Node                    string     `json:"node,omitempty"`
+	NotificationsEnabled    bool       `json:"notificationsEnabled"`
+	ActivationState         string     `json:"activationState"`
+	CooldownMinutes         int        `json:"cooldownMinutes"`
+	MaxAlertsHour           int        `json:"maxAlertsHour"`
+	RecentAlertsInHour      int        `json:"recentAlertsInHour"`
+	FlappingActive          bool       `json:"flappingActive"`
+	FlappingHistoryInWindow int        `json:"flappingHistoryInWindow"`
+	FlappingThreshold       int        `json:"flappingThreshold"`
+	FlappingWindowSeconds   int        `json:"flappingWindowSeconds"`
+	LastNotified            *time.Time `json:"lastNotified,omitempty"`
+	NextEligibleAt          *time.Time `json:"nextEligibleAt,omitempty"`
+	QuietHoursReplayAt      *time.Time `json:"quietHoursReplayAt,omitempty"`
+	SuppressedUntil         *time.Time `json:"suppressedUntil,omitempty"`
+}
+
 // checkFlappingLocked detects alert flapping and returns whether the alert
 // should be suppressed and whether this call is the first transition into
 // the flapping state for the current cooldown window. justTransitioned is
@@ -566,6 +614,170 @@ func (m *Manager) shouldNotifyAfterCooldown(alert *Alert) bool {
 	timeSinceLastNotification := time.Since(*alert.LastNotified)
 
 	return timeSinceLastNotification >= cooldownDuration
+}
+
+// DiagnoseAlertDelivery reports the current notification policy outcome for
+// one active alert without sending a notification or updating any delivery
+// tracking maps.
+func (m *Manager) DiagnoseAlertDelivery(alertIdentifier string) (AlertDeliveryDiagnosis, bool) {
+	diagnosis := AlertDeliveryDiagnosis{
+		AlertIdentifier: strings.TrimSpace(alertIdentifier),
+		Status:          AlertDeliveryStatusSuppressed,
+		Reason:          "not_found",
+	}
+	if m == nil || diagnosis.AlertIdentifier == "" {
+		return diagnosis, false
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	alert, exists := m.getActiveAlertNoLock(diagnosis.AlertIdentifier)
+	if !exists || alert == nil {
+		return diagnosis, false
+	}
+
+	now := m.policyNow()
+	trackingKey := canonicalTrackingKeyForAlert(alert)
+	diagnosis.AlertID = alert.ID
+	diagnosis.TrackingKey = trackingKey
+	diagnosis.AlertType = alert.Type
+	diagnosis.Level = alert.Level
+	diagnosis.ResourceID = alert.ResourceID
+	diagnosis.ResourceName = alert.ResourceName
+	diagnosis.Node = alert.Node
+	diagnosis.NotificationsEnabled = m.config.Enabled && m.config.ActivationState == ActivationActive
+	diagnosis.ActivationState = string(m.config.ActivationState)
+	diagnosis.CooldownMinutes = m.config.Schedule.Cooldown
+	diagnosis.MaxAlertsHour = m.config.Schedule.MaxAlertsHour
+	diagnosis.FlappingThreshold = m.config.FlappingThreshold
+	diagnosis.FlappingWindowSeconds = m.config.FlappingWindowSeconds
+	if alert.LastNotified != nil {
+		lastNotified := *alert.LastNotified
+		diagnosis.LastNotified = &lastNotified
+	}
+
+	diagnosis.FlappingActive, diagnosis.FlappingHistoryInWindow, diagnosis.SuppressedUntil = m.flappingSnapshotLocked(trackingKey, now)
+	diagnosis.RecentAlertsInHour = m.rateLimitCountLocked(trackingKey, now)
+
+	switch {
+	case alert.Acknowledged:
+		diagnosis.setSuppressed(AlertDeliveryReasonAcknowledged, "Alert is acknowledged, so firing notifications are suppressed.")
+	case !m.config.Enabled:
+		diagnosis.setSuppressed(AlertDeliveryReasonNotificationsDisabled, "Alert notifications are disabled in the alert configuration.")
+	case m.config.ActivationState != ActivationActive:
+		diagnosis.setSuppressed(AlertDeliveryReasonNotificationsInactive, "Alert notifications are not active yet.")
+	case diagnosis.SuppressedUntil != nil && diagnosis.SuppressedUntil.After(now):
+		reason := AlertDeliveryReasonSuppressionWindow
+		message := "Alert delivery is inside an active suppression window."
+		if diagnosis.FlappingActive {
+			reason = AlertDeliveryReasonFlapping
+			message = "Alert delivery is suppressed because this alert is flapping."
+		}
+		diagnosis.setSuppressed(reason, message)
+	case m.rateLimitExceededLocked(diagnosis.RecentAlertsInHour):
+		diagnosis.setSuppressed(AlertDeliveryReasonRateLimited, "Alert delivery has reached the configured per-hour rate limit.")
+	case alert.LastNotified != nil && !m.cooldownAllowsDeliveryLocked(alert, now):
+		diagnosis.setSuppressed(AlertDeliveryReasonCooldown, "Alert delivery is waiting for the configured re-notification cooldown.")
+		if next := m.nextCooldownEligibleAtLocked(alert); next != nil {
+			diagnosis.NextEligibleAt = next
+		}
+	case func() bool {
+		suppressed, reason := m.shouldSuppressNotification(alert)
+		if !suppressed {
+			return false
+		}
+		replayAt := m.quietHoursReplayAt()
+		diagnosis.QuietHoursReplayAt = &replayAt
+		if reason != "" {
+			diagnosis.Reason = AlertDeliveryReasonQuietHours + ":" + reason
+		} else {
+			diagnosis.Reason = AlertDeliveryReasonQuietHours
+		}
+		diagnosis.Status = AlertDeliveryStatusDeferred
+		diagnosis.Message = "Alert delivery is deferred by quiet-hours policy and will be replayed later."
+		return true
+	}():
+	case isMonitorOnlyAlert(alert):
+		diagnosis.setSuppressed(AlertDeliveryReasonMonitorOnly, "Alert is marked monitor-only, so it stays visible without notification delivery.")
+	default:
+		diagnosis.Status = AlertDeliveryStatusWouldSend
+		diagnosis.Reason = AlertDeliveryReasonReady
+		diagnosis.Message = "Alert delivery is currently eligible for notification delivery."
+	}
+
+	return diagnosis, true
+}
+
+func (d *AlertDeliveryDiagnosis) setSuppressed(reason, message string) {
+	d.Status = AlertDeliveryStatusSuppressed
+	d.Reason = reason
+	d.Message = message
+}
+
+func (m *Manager) policyNow() time.Time {
+	if m != nil && m.now != nil {
+		return m.now()
+	}
+	return time.Now()
+}
+
+func (m *Manager) flappingSnapshotLocked(trackingKey string, now time.Time) (bool, int, *time.Time) {
+	if trackingKey == "" || !m.config.FlappingEnabled {
+		return false, 0, nil
+	}
+
+	windowDuration := time.Duration(m.config.FlappingWindowSeconds) * time.Second
+	validCount := 0
+	for _, t := range m.flappingHistory[trackingKey] {
+		if now.Sub(t) <= windowDuration {
+			validCount++
+		}
+	}
+
+	var suppressedUntil *time.Time
+	if until, ok := m.suppressedUntil[trackingKey]; ok {
+		u := until
+		suppressedUntil = &u
+	}
+
+	return m.flappingActive[trackingKey], validCount, suppressedUntil
+}
+
+func (m *Manager) rateLimitCountLocked(trackingKey string, now time.Time) int {
+	if trackingKey == "" || m.config.Schedule.MaxAlertsHour <= 0 {
+		return 0
+	}
+	cutoff := now.Add(-1 * time.Hour)
+	recentCount := 0
+	for _, t := range m.alertRateLimit[trackingKey] {
+		if t.After(cutoff) {
+			recentCount++
+		}
+	}
+	return recentCount
+}
+
+func (m *Manager) rateLimitExceededLocked(recentCount int) bool {
+	return m.config.Schedule.MaxAlertsHour > 0 && recentCount >= m.config.Schedule.MaxAlertsHour
+}
+
+func (m *Manager) cooldownAllowsDeliveryLocked(alert *Alert, now time.Time) bool {
+	if alert == nil || alert.LastNotified == nil {
+		return true
+	}
+	if m.config.Schedule.Cooldown <= 0 {
+		return false
+	}
+	return !now.Before(alert.LastNotified.Add(time.Duration(m.config.Schedule.Cooldown) * time.Minute))
+}
+
+func (m *Manager) nextCooldownEligibleAtLocked(alert *Alert) *time.Time {
+	if alert == nil || alert.LastNotified == nil || m.config.Schedule.Cooldown <= 0 {
+		return nil
+	}
+	next := alert.LastNotified.Add(time.Duration(m.config.Schedule.Cooldown) * time.Minute)
+	return &next
 }
 
 func (m *Manager) allowNotificationByRateLimit(trackingKey string, alert *Alert, reason string) bool {

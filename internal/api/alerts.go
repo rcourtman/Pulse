@@ -27,6 +27,7 @@ type AlertManager interface {
 	GetConfig() alerts.AlertConfig
 	UpdateConfig(alerts.AlertConfig)
 	GetActiveAlerts() []alerts.Alert
+	DiagnoseAlertDelivery(alertIdentifier string) (alerts.AlertDeliveryDiagnosis, bool)
 	NotifyExistingAlert(id string)
 	ClearAlertHistory() error
 	UnacknowledgeAlert(id string) error
@@ -290,6 +291,50 @@ func (h *AlertHandlers) GetActiveAlerts(w http.ResponseWriter, r *http.Request) 
 
 	if err := utils.WriteJSONResponse(w, alerts); err != nil {
 		log.Error().Err(err).Msg("Failed to write active alerts response")
+	}
+}
+
+// GetAlertDeliveryDiagnosis explains current notification delivery policy for
+// one active alert without sending a notification or mutating delivery state.
+func (h *AlertHandlers) GetAlertDeliveryDiagnosis(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	alertIdentifier := strings.TrimSpace(r.URL.Query().Get("alertIdentifier"))
+	if alertIdentifier == "" {
+		alertIdentifier = strings.TrimSpace(r.URL.Query().Get("id"))
+	}
+	if alertIdentifier == "" {
+		http.Error(w, "alertIdentifier is required", http.StatusBadRequest)
+		return
+	}
+	if !validateAlertIdentifier(alertIdentifier) {
+		http.Error(w, "Invalid alert identifier", http.StatusBadRequest)
+		return
+	}
+
+	monitor := h.getMonitor(r.Context())
+	if monitor == nil {
+		http.Error(w, "monitor is not initialized", http.StatusServiceUnavailable)
+		return
+	}
+
+	manager := monitor.GetAlertManager()
+	if manager == nil {
+		http.Error(w, "alert manager is not initialized", http.StatusServiceUnavailable)
+		return
+	}
+
+	diagnosis, exists := manager.DiagnoseAlertDelivery(alertIdentifier)
+	if !exists {
+		http.Error(w, "alert not found", http.StatusNotFound)
+		return
+	}
+
+	if err := utils.WriteJSONResponse(w, diagnosis); err != nil {
+		log.Error().Err(err).Msg("Failed to write alert delivery diagnosis response")
 	}
 }
 
@@ -1011,6 +1056,11 @@ func (h *AlertHandlers) HandleAlerts(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.GetActiveAlerts(w, r)
+	case path == "delivery-diagnosis" && r.Method == http.MethodGet:
+		if !ensureScope(w, r, config.ScopeMonitoringRead) {
+			return
+		}
+		h.GetAlertDeliveryDiagnosis(w, r)
 	case path == "history" && r.Method == http.MethodGet:
 		if !ensureScope(w, r, config.ScopeMonitoringRead) {
 			return

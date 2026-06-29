@@ -65,6 +65,73 @@ type resourceContractSnapshot struct {
 	Type string
 }
 
+func TestContract_AlertDeliveryDiagnosisRouteIsReadOnlyMonitoringRead(t *testing.T) {
+	source, err := os.ReadFile("alerts.go")
+	if err != nil {
+		t.Fatalf("read alerts.go: %v", err)
+	}
+	src := string(source)
+
+	required := []string{
+		`case path == "delivery-diagnosis" && r.Method == http.MethodGet:`,
+		`ensureScope(w, r, config.ScopeMonitoringRead)`,
+		`h.GetAlertDeliveryDiagnosis(w, r)`,
+		`manager.DiagnoseAlertDelivery(alertIdentifier)`,
+	}
+	for _, snippet := range required {
+		if !strings.Contains(src, snippet) {
+			t.Fatalf("alert delivery diagnosis route contract missing %q", snippet)
+		}
+	}
+}
+
+func TestContract_AlertDeliveryDiagnosisPayloadShape(t *testing.T) {
+	replayAt := time.Date(2026, 6, 29, 12, 30, 0, 0, time.UTC)
+	diagnosis := alerts.AlertDeliveryDiagnosis{
+		AlertIdentifier:         "canonical:a1",
+		AlertID:                 "a1",
+		TrackingKey:             "node/a1/cpu",
+		Status:                  alerts.AlertDeliveryStatusDeferred,
+		Reason:                  alerts.AlertDeliveryReasonQuietHours + ":performance",
+		Message:                 "Alert delivery is deferred by quiet-hours policy and will be replayed later.",
+		AlertType:               "cpu",
+		Level:                   alerts.AlertLevelCritical,
+		ResourceID:              "node-1",
+		ResourceName:            "node-1",
+		NotificationsEnabled:    true,
+		ActivationState:         string(alerts.ActivationActive),
+		CooldownMinutes:         5,
+		MaxAlertsHour:           10,
+		RecentAlertsInHour:      2,
+		FlappingActive:          false,
+		FlappingHistoryInWindow: 1,
+		FlappingThreshold:       3,
+		FlappingWindowSeconds:   300,
+		QuietHoursReplayAt:      &replayAt,
+	}
+
+	payload, err := json.Marshal(diagnosis)
+	if err != nil {
+		t.Fatalf("marshal alert delivery diagnosis: %v", err)
+	}
+	body := string(payload)
+	for _, field := range []string{
+		`"alertIdentifier":"canonical:a1"`,
+		`"trackingKey":"node/a1/cpu"`,
+		`"status":"deferred"`,
+		`"reason":"quiet_hours:performance"`,
+		`"notificationsEnabled":true`,
+		`"cooldownMinutes":5`,
+		`"recentAlertsInHour":2`,
+		`"flappingHistoryInWindow":1`,
+		`"quietHoursReplayAt":"2026-06-29T12:30:00Z"`,
+	} {
+		if !strings.Contains(body, field) {
+			t.Fatalf("alert delivery diagnosis payload missing %s in %s", field, body)
+		}
+	}
+}
+
 func TestContract_PMGInstancesEndpointUsesUnifiedReadStatePayload(t *testing.T) {
 	now := time.Now().UTC()
 	source := models.PMGInstance{

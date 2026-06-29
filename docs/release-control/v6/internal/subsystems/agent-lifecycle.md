@@ -1513,6 +1513,12 @@ list representation, and masked-echo preservation on update are
 notifications/API-contract owned and grant no agent install, enrollment,
 setup-token, or fleet command authority.
 
+Alert delivery diagnosis on shared `internal/api/alerts.go` is likewise
+adjacent only: `/api/alerts/delivery-diagnosis` is alerts/API-contract owned
+read-only notification-policy evidence and must not be interpreted as agent
+enrollment, agent liveness, install progress, setup-token authority, or fleet
+repair eligibility.
+
 The router projection-builder (`internal/api/router.go`) that wires
 the operator-state provider into the findings runtime now also
 populates `NeverAutoRemediate` on the projection. The investigation

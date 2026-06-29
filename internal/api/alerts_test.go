@@ -75,6 +75,11 @@ func (m *MockAlertManager) GetActiveAlerts() []alerts.Alert {
 	return args.Get(0).([]alerts.Alert)
 }
 
+func (m *MockAlertManager) DiagnoseAlertDelivery(alertIdentifier string) (alerts.AlertDeliveryDiagnosis, bool) {
+	args := m.Called(alertIdentifier)
+	return args.Get(0).(alerts.AlertDeliveryDiagnosis), args.Bool(1)
+}
+
 func (m *MockAlertManager) NotifyExistingAlert(id string) {
 	m.Called(id)
 }
@@ -295,6 +300,69 @@ func TestGetActiveAlerts(t *testing.T) {
 	_ = json.NewDecoder(w.Body).Decode(&resp)
 	assert.Len(t, resp, 1)
 	assert.Equal(t, "a1", resp[0].ID)
+}
+
+func TestGetAlertDeliveryDiagnosis(t *testing.T) {
+	mockMonitor := new(MockAlertMonitor)
+	mockManager := new(MockAlertManager)
+	mockMonitor.On("GetAlertManager").Return(mockManager)
+
+	h := NewAlertHandlers(nil, mockMonitor, nil)
+
+	expected := alerts.AlertDeliveryDiagnosis{
+		AlertIdentifier:      "canonical:a1",
+		AlertID:              "a1",
+		TrackingKey:          "node/a1/cpu",
+		Status:               alerts.AlertDeliveryStatusDeferred,
+		Reason:               alerts.AlertDeliveryReasonQuietHours + ":performance",
+		Message:              "Alert delivery is deferred by quiet-hours policy and will be replayed later.",
+		NotificationsEnabled: true,
+		ActivationState:      string(alerts.ActivationActive),
+	}
+	mockManager.On("DiagnoseAlertDelivery", "canonical:a1").Return(expected, true)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/alerts/delivery-diagnosis?alertIdentifier=canonical:a1", nil)
+	w := httptest.NewRecorder()
+
+	h.GetAlertDeliveryDiagnosis(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp alerts.AlertDeliveryDiagnosis
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	assert.Equal(t, expected.AlertIdentifier, resp.AlertIdentifier)
+	assert.Equal(t, expected.Status, resp.Status)
+	assert.Equal(t, expected.Reason, resp.Reason)
+	assert.Equal(t, expected.TrackingKey, resp.TrackingKey)
+}
+
+func TestGetAlertDeliveryDiagnosisRejectsMissingIdentifier(t *testing.T) {
+	h := NewAlertHandlers(nil, new(MockAlertMonitor), nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/alerts/delivery-diagnosis", nil)
+	w := httptest.NewRecorder()
+
+	h.GetAlertDeliveryDiagnosis(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "alertIdentifier is required")
+}
+
+func TestGetAlertDeliveryDiagnosisNotFound(t *testing.T) {
+	mockMonitor := new(MockAlertMonitor)
+	mockManager := new(MockAlertManager)
+	mockMonitor.On("GetAlertManager").Return(mockManager)
+	mockManager.On("DiagnoseAlertDelivery", "missing").Return(alerts.AlertDeliveryDiagnosis{}, false)
+
+	h := NewAlertHandlers(nil, mockMonitor, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/alerts/delivery-diagnosis?alertIdentifier=missing", nil)
+	w := httptest.NewRecorder()
+
+	h.GetAlertDeliveryDiagnosis(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
 func TestValidateAlertIdentifier(t *testing.T) {
@@ -629,6 +697,13 @@ func TestHandleAlerts(t *testing.T) {
 
 	routes := []route{
 		{"GET", "/api/alerts/active", func() { mockManager.On("GetActiveAlerts").Return([]alerts.Alert{}).Once() }},
+		{"GET", "/api/alerts/delivery-diagnosis?alertIdentifier=a1", func() {
+			mockManager.On("DiagnoseAlertDelivery", "a1").Return(alerts.AlertDeliveryDiagnosis{
+				AlertIdentifier: "a1",
+				Status:          alerts.AlertDeliveryStatusWouldSend,
+				Reason:          alerts.AlertDeliveryReasonReady,
+			}, true).Once()
+		}},
 		{"GET", "/api/alerts/history", func() {
 			mockManager.On("GetAlertHistory", mock.MatchedBy(func(int) bool { return true })).Return([]alerts.Alert{}).Once()
 		}},

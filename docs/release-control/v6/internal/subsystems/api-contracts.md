@@ -2965,6 +2965,15 @@ a new API state machine, queue contract, or verification-accounting field.
 
 ## Current State
 
+Alert delivery diagnosis is a read-only monitoring API contract.
+`GET /api/alerts/delivery-diagnosis?alertIdentifier=<id>` returns the alert
+manager's current delivery-policy projection for one active alert, including
+`status` (`would_send`, `deferred`, or `suppressed`), `reason`, canonical
+`trackingKey`, activation/notification state, cooldown timing, quiet-hours
+replay timing, recent rate-limit counts, and flapping suppression evidence. The
+route requires `monitoring:read`, returns `404` for unknown active alerts, and
+must not send notifications or mutate delivery tracking state.
+
 Manifest-backed Patrol finding lifecycle schemas are the API source of truth
 for Assistant provider-tool optionality as well as MCP/API discovery. Legacy
 Assistant runtime paths may project those schemas into provider-tool JSON, but

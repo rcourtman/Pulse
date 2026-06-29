@@ -382,6 +382,11 @@ suppression, monitor-only notification suppression, cooldown decisions, and
 per-alert rate limiting; future notification-gating changes should extend that
 policy owner rather than burying new checks inside metric or resource-specific
 evaluators.
+The same policy owner also exposes the read-only alert delivery diagnosis
+projection used by `/api/alerts/delivery-diagnosis`; that projection may explain
+current gating state, quiet-hours replay timing, cooldown timing, rate-limit
+counts, and flapping suppression, but it must not dispatch callbacks or mutate
+flapping/rate-limit tracking maps.
 The same dispatch policy owns firing-notification evidence on active alerts:
 any alert that passes notification suppression and enters the fired callback
 fan-out must carry `LastNotified` before the callback clone is emitted. Resolved
