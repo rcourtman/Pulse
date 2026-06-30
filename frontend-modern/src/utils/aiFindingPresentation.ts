@@ -683,6 +683,7 @@ export type PatrolFindingRowScaffoldItemId =
   | 'next-step'
   | 'problem'
   | 'verification'
+  | 'workflow'
   | 'why';
 
 export interface PatrolFindingRowScaffoldItem {
@@ -750,6 +751,31 @@ function getPatrolFindingVerificationSummary(
   }
 
   return 'No fix has run yet.';
+}
+
+function getPatrolFindingWorkflowSummary(
+  workflow: FindingPatrolWorkflowPresentation | undefined,
+): string {
+  if (!workflow) {
+    return 'Review evidence, decide the next action, and verify any outcome before closing.';
+  }
+
+  switch (workflow.stage) {
+    case 'approval':
+      return workflow.label === 'Approve or reject'
+        ? 'Review evidence first; no change runs until the proposed fix is approved, then Patrol verifies the outcome.'
+        : 'Recover the queued fix before any action can run, then verify the outcome after a decision.';
+    case 'verification':
+      return 'The governed action ran; review follow-up evidence before closing the issue.';
+    case 'attention':
+      return 'Review the blocked or failed step before approving another change or resolving manually.';
+    case 'investigating':
+      return 'Patrol is explaining the issue and preparing the next decision point.';
+    case 'recorded':
+      return 'Patrol recorded the outcome; use history if you need the completed trail.';
+    case 'paused':
+      return 'Patrol will return this issue to the workflow when the reminder expires.';
+  }
 }
 
 const getNonEmptyPresentationText = (
@@ -826,6 +852,11 @@ export function getPatrolFindingRowScaffold(
           finding.evidence,
           'Patrol recorded this from the current check.',
         ),
+      },
+      {
+        id: 'workflow',
+        label: 'Safe workflow',
+        value: getPatrolFindingWorkflowSummary(workflow),
       },
       {
         id: 'next-step',

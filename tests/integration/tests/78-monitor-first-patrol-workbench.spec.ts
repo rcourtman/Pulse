@@ -626,6 +626,7 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
     await expect(issueSummary.getByText("Affected")).toBeVisible();
     await expect(issueSummary.getByText("Why it matters")).toBeVisible();
     await expect(issueSummary.getByText("What Pulse checked")).toBeVisible();
+    await expect(issueSummary.getByText("Safe workflow")).toBeVisible();
     await expect(issueSummary.getByText("Recommended next step")).toBeVisible();
     await expect(issueSummary.getByText("Verification")).toBeVisible();
     await expect(
@@ -640,6 +641,11 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
     await expect(
       issueSummary.getByText(
         "CPU stayed above the configured warning threshold during the scheduled Patrol check.",
+      ),
+    ).toBeVisible();
+    await expect(
+      issueSummary.getByText(
+        "Review evidence first; no change runs until the proposed fix is approved, then Patrol verifies the outcome.",
       ),
     ).toBeVisible();
     await expect(

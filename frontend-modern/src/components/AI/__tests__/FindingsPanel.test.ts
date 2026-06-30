@@ -996,8 +996,10 @@ describe('aiFindingPresentation', () => {
       expect(aiFindingPresentationSource).toContain("label: 'Affected'");
       expect(aiFindingPresentationSource).toContain("label: 'Why it matters'");
       expect(aiFindingPresentationSource).toContain("label: 'What Pulse checked'");
+      expect(aiFindingPresentationSource).toContain("label: 'Safe workflow'");
       expect(aiFindingPresentationSource).toContain("label: 'Recommended next step'");
       expect(aiFindingPresentationSource).toContain("label: 'Verification'");
+      expect(aiFindingPresentationSource).toContain('getPatrolFindingWorkflowSummary');
       expect(findingsPanelSource).not.toContain('Patrol trust summary');
       expect(findingsPanelSource).not.toContain('Patrol proof strip');
     });

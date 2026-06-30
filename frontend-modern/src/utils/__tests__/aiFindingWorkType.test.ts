@@ -132,6 +132,11 @@ describe('getPatrolFindingRowScaffold', () => {
         value: 'CPU stayed above the configured warning threshold during the scheduled Patrol check.',
       },
       {
+        id: 'workflow',
+        label: 'Safe workflow',
+        value: 'Review evidence, decide the next action, and verify any outcome before closing.',
+      },
+      {
         id: 'next-step',
         label: 'Recommended next step',
         value: 'Review the host load and move or stop noisy workloads before approving a fix.',
@@ -174,9 +179,39 @@ describe('getPatrolFindingRowScaffold', () => {
         Date.parse('2026-06-30T08:07:00Z'),
       )?.items,
     ).toContainEqual({
+      id: 'workflow',
+      label: 'Safe workflow',
+      value:
+        'Review evidence first; no change runs until the proposed fix is approved, then Patrol verifies the outcome.',
+    });
+    expect(
+      getPatrolFindingRowScaffold(
+        makeRowScaffoldFinding({
+          investigationStatus: 'needs_attention',
+          investigationOutcome: 'fix_queued',
+        }),
+        approvals,
+        Date.parse('2026-06-30T08:07:00Z'),
+      )?.items,
+    ).toContainEqual({
       id: 'verification',
       label: 'Verification',
       value: 'Waiting for approval before any fix runs.',
+    });
+  });
+
+  it('keeps executed fixes on the verification step before closure', () => {
+    expect(
+      getPatrolFindingRowScaffold(
+        makeRowScaffoldFinding({
+          investigationStatus: 'completed',
+          investigationOutcome: 'fix_executed',
+        }),
+      )?.items,
+    ).toContainEqual({
+      id: 'workflow',
+      label: 'Safe workflow',
+      value: 'The governed action ran; review follow-up evidence before closing the issue.',
     });
   });
 

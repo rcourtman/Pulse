@@ -77,9 +77,9 @@ or historical proof/counting for resolved-only work.
    Assistant handoffs, approvals, verification, and manual controls. A
    compact row-owned issue scaffold may translate the same finding, approval,
    and workflow fields into problem, affected resource, consequence, checked
-   evidence, next step, and verification state, but it must stay attached to
-   the active issue row and must not become a separate proof, trust, or status
-   strip. Because a
+   evidence, safe workflow step, next step, and verification state, but it must
+   stay attached to the active issue row and must not become a separate proof,
+   trust, or status strip. Because a
    contextual Assistant handoff from that workflow is still a first-party Patrol
    starter for the same governed journey, it must record content-free workflow
    prompt activity through the shared marker route with the `pulse_patrol`
