@@ -1352,34 +1352,32 @@ export const AgentsMachinesTable: Component<{
       }
     >
       <div class="space-y-3">
-        <div class="flex flex-wrap items-center gap-2">
-          <div class="min-w-[280px] flex-1">
-            <PlatformTableToolbar
-              search={tableState.search}
-              onSearchChange={tableState.setSearch}
-              searchPlaceholder="Search machines"
-              searchHistory={{
-                storageKey: STORAGE_KEYS.MACHINES_SEARCH_HISTORY,
-                emptyMessage: 'Machine searches you run will appear here.',
-              }}
-              searchTips={AGENT_MACHINE_SEARCH_TIPS}
-              status={tableState.status()}
-              onStatusChange={tableState.setStatus}
-              statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
-              visible={tableState.visible()}
-              total={tableState.total()}
-              rowNoun="machines"
-              hasActiveFilters={tableState.hasActiveFilters()}
-              onResetFilters={tableState.resetFilters}
+        <PlatformTableToolbar
+          search={tableState.search}
+          onSearchChange={tableState.setSearch}
+          searchPlaceholder="Search machines"
+          searchHistory={{
+            storageKey: STORAGE_KEYS.MACHINES_SEARCH_HISTORY,
+            emptyMessage: 'Machine searches you run will appear here.',
+          }}
+          searchTips={AGENT_MACHINE_SEARCH_TIPS}
+          status={tableState.status()}
+          onStatusChange={tableState.setStatus}
+          statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
+          visible={tableState.visible()}
+          total={tableState.total()}
+          rowNoun="machines"
+          hasActiveFilters={tableState.hasActiveFilters()}
+          onResetFilters={tableState.resetFilters}
+          viewOptionsTrailing={
+            <ColumnPicker
+              columns={columnVisibility.availableToggles()}
+              isHidden={columnVisibility.isHiddenByUser}
+              onToggle={columnVisibility.toggle}
+              onReset={columnVisibility.resetToDefaults}
             />
-          </div>
-          <ColumnPicker
-            columns={columnVisibility.availableToggles()}
-            isHidden={columnVisibility.isHiddenByUser}
-            onToggle={columnVisibility.toggle}
-            onReset={columnVisibility.resetToDefaults}
-          />
-        </div>
+          }
+        />
 
         <Show
           when={tableState.filtered().length > 0}

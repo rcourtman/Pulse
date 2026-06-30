@@ -12,6 +12,7 @@ import {
   PlatformTablePercentValue,
   PlatformTableRelativeTimeValue,
   PlatformTableTemperatureValue,
+  PlatformTableToolbar,
   createPlatformTableFilterState,
   formatPlatformTableBytesValue,
   formatPlatformTableCountRatioValue,
@@ -232,6 +233,31 @@ describe('filterPlatformResources', () => {
         dispose();
       }
     });
+  });
+});
+
+describe('PlatformTableToolbar', () => {
+  it('keeps table view options inside the shared filter toolbar with the row counter', () => {
+    render(() =>
+      PlatformTableToolbar({
+        search: () => '',
+        onSearchChange: () => undefined,
+        searchPlaceholder: 'Search rows',
+        status: 'all',
+        onStatusChange: () => undefined,
+        statusOptions: [{ value: 'all', label: 'All' }],
+        visible: 2,
+        total: 3,
+        rowNoun: 'rows',
+        viewOptionsTrailing: 'Columns',
+      }),
+    );
+
+    const columnsLabel = screen.getByText('Columns');
+    const filterBar = columnsLabel.closest('.filter-bar');
+
+    expect(filterBar).not.toBeNull();
+    expect(filterBar).toContainElement(screen.getByText('2 of 3 rows'));
   });
 });
 

@@ -786,6 +786,7 @@ export function PlatformTableToolbar<T extends string | number>(props: {
   // chips behind "+ Filter".
   filters?: FilterDef[];
   savedViewsKey?: string;
+  viewOptionsTrailing?: JSX.Element;
 }) {
   const { isMobile } = useBreakpoint();
 
@@ -837,11 +838,14 @@ export function PlatformTableToolbar<T extends string | number>(props: {
       filters={allFilters}
       savedViewsKey={props.savedViewsKey}
       viewOptionsTrailing={
-        <PlatformResourceCounter
-          visible={props.visible}
-          total={props.total}
-          rowNoun={props.rowNoun}
-        />
+        <>
+          {props.viewOptionsTrailing}
+          <PlatformResourceCounter
+            visible={props.visible}
+            total={props.total}
+            rowNoun={props.rowNoun}
+          />
+        </>
       }
       showClearAll={() => Boolean(props.hasActiveFilters && props.onResetFilters)}
       onClearAll={props.onResetFilters}

@@ -123,6 +123,24 @@ afterEach(() => {
 });
 
 describe('AgentsMachinesTable', () => {
+  it('keeps the column picker inside the shared machine filter toolbar', () => {
+    render(() => (
+      <AgentsMachinesTable
+        resources={[resource({ id: 'tower', name: 'Tower' })]}
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+      />
+    ));
+
+    const search = screen.getByPlaceholderText('Search machines');
+    const columnsButton = screen.getByTitle('Choose which columns to display');
+    const filterBar = columnsButton.closest('.filter-bar');
+
+    expect(filterBar).not.toBeNull();
+    expect(filterBar).toContainElement(search);
+  });
+
   it('surfaces machine-native monitoring columns for agent machines', async () => {
     render(() => (
       <AgentsMachinesTable
