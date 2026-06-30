@@ -154,6 +154,52 @@ describe('resourceDetailMappers', () => {
         },
       ]);
     });
+
+    it('surfaces host power, fan, and additional sensor rows', () => {
+      const rows = buildTemperatureRows({
+        temperatureCelsius: {
+          cpu_package: 41,
+        },
+        additional: {
+          vrm_temp: 55.6,
+        },
+        fanRpm: {
+          chassis_fan: 1199.6,
+        },
+        powerWatts: {
+          cpu_package: 82.4,
+          dram: 13.2,
+        },
+      });
+
+      expect(rows).toEqual([
+        {
+          label: 'Package',
+          value: '41°C',
+          valueTitle: '41.0°C',
+        },
+        {
+          label: 'VRM Temp',
+          value: '56°C',
+          valueTitle: '55.6°C',
+        },
+        {
+          label: 'Chassis Fan',
+          value: '1,200 RPM',
+          valueTitle: 'Chassis Fan 1,200 RPM',
+        },
+        {
+          label: 'CPU Package Power',
+          value: '82.4 W',
+          valueTitle: 'CPU Package Power 82.4 W',
+        },
+        {
+          label: 'DRAM Power',
+          value: '13.2 W',
+          valueTitle: 'DRAM Power 13.2 W',
+        },
+      ]);
+    });
   });
 
   describe('toNodeFromProxmox', () => {

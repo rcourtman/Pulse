@@ -807,6 +807,12 @@ drawer-only rule. The mapper may render typed GPU sensor values already present
 on the selected resource payload, but it must not add GPU-specific history
 reads, per-row polling, browser-side `nvidia-smi` assumptions, or table-wide
 aggregation work.
+Host-agent fan RPM, additional thermal readings, and power wattage rows in
+`resourceDetailMappers.ts` follow the same drawer-only rule. The mapper may
+render those sensor values already present on the selected resource payload,
+but it must not add host powercap reads, sensor-specific history reads,
+per-row polling, browser-side command assumptions, or table-wide aggregation
+work.
 The Proxmox node drawer overview should follow the existing guest drawer
 compact detail-card pattern and expose node-specific context such as platform,
 kernel, hardware, raw capacity, telemetry, and thermal facts rather than

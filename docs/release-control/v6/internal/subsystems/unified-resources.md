@@ -327,6 +327,13 @@ readings through clone, merge, transport, and frontend decode paths, but those
 readings remain descriptive host context. Unified-resource consumers must not
 promote GPU sensors into separate hardware resources, lifecycle state, workload
 identity, or history targets beyond direct numeric temperature compatibility.
+Host-agent wattage follows that same canonical sensor route.
+`HostSensorMeta.powerWatts` may carry named power readings through clone,
+merge, transport, and frontend decode paths, but those readings remain
+descriptive host context. Unified-resource consumers must not promote power
+sensors into separate hardware resources, lifecycle state, workload identity,
+storage health, alert metrics, or history targets without a separate governed
+metric contract.
 Metric bar fallbacks follow that split as well: unified-resource consumers own
 which CPU or memory value is selected, plus any source-specific fallback reason
 such as outdated standalone agent telemetry, while platform tables must use

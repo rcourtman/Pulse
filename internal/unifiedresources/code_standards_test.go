@@ -2225,6 +2225,24 @@ func TestCloneHostSensorMetaKeepsGPUSensorsIsolated(t *testing.T) {
 	}
 }
 
+func TestCloneHostSensorMetaKeepsPowerSensorsIsolated(t *testing.T) {
+	source := &HostSensorMeta{
+		PowerWatts: map[string]float64{
+			"cpu_package": 82.4,
+			"dram":        13.2,
+		},
+	}
+
+	clone := cloneHostSensorMeta(source)
+	if clone == nil {
+		t.Fatal("expected host sensor clone")
+	}
+	source.PowerWatts["cpu_package"] = 1
+	if got := clone.PowerWatts["cpu_package"]; got != 82.4 {
+		t.Fatalf("power sensor clone = %.1f, want 82.4", got)
+	}
+}
+
 func TestCloneVMwareDataKeepsNestedRuntimeDetailsIsolated(t *testing.T) {
 	repoRoot := filepath.Join("..", "..")
 	clonePath := filepath.Join(repoRoot, "internal", "unifiedresources", "clone.go")

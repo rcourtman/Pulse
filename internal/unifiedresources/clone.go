@@ -688,6 +688,7 @@ func cloneHostSensorMeta(in *HostSensorMeta) *HostSensorMeta {
 	out := *in
 	out.TemperatureCelsius = cloneStringFloat64Map(in.TemperatureCelsius)
 	out.FanRPM = cloneStringFloat64Map(in.FanRPM)
+	out.PowerWatts = cloneStringFloat64Map(in.PowerWatts)
 	out.Additional = cloneStringFloat64Map(in.Additional)
 	out.GPU = cloneHostGPUSensors(in.GPU)
 	out.ThermalState = cloneHostThermalState(in.ThermalState)

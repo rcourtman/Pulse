@@ -749,6 +749,7 @@ func (h HostFrontend) NormalizeCollections() HostFrontend {
 type HostSensorSummaryFrontend struct {
 	TemperatureCelsius map[string]float64      `json:"temperatureCelsius"`
 	FanRPM             map[string]float64      `json:"fanRpm"`
+	PowerWatts         map[string]float64      `json:"powerWatts"`
 	Additional         map[string]float64      `json:"additional"`
 	GPU                []HostGPUSensorFrontend `json:"gpu"`
 	ThermalState       *HostThermalState       `json:"thermalState,omitempty"`
@@ -770,6 +771,9 @@ func (s HostSensorSummaryFrontend) NormalizeCollections() HostSensorSummaryFront
 	}
 	if s.FanRPM == nil {
 		s.FanRPM = map[string]float64{}
+	}
+	if s.PowerWatts == nil {
+		s.PowerWatts = map[string]float64{}
 	}
 	if s.Additional == nil {
 		s.Additional = map[string]float64{}

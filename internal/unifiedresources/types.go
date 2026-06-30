@@ -534,6 +534,7 @@ type SMARTMeta struct {
 type HostSensorMeta struct {
 	TemperatureCelsius map[string]float64 `json:"temperatureCelsius,omitempty"`
 	FanRPM             map[string]float64 `json:"fanRpm,omitempty"`
+	PowerWatts         map[string]float64 `json:"powerWatts,omitempty"`
 	Additional         map[string]float64 `json:"additional,omitempty"`
 	GPU                []HostGPUSensor    `json:"gpu,omitempty"`
 	ThermalState       *HostThermalState  `json:"thermalState,omitempty"`

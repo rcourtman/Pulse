@@ -3076,7 +3076,12 @@ temperature, utilization, used VRAM, and total VRAM. Backend API payloads and
 `frontend-modern/src/types/api.ts` must preserve that optional collection
 without making it a required compatibility field, and clients must keep it as
 descriptive host telemetry rather than a separate resource or process/workload
-inventory contract.
+identity or inventory contract.
+Host sensor summaries may also carry named power readings in `powerWatts`.
+Backend API payloads and `frontend-modern/src/types/api.ts` must preserve that
+optional map without making it a required compatibility field, and clients must
+keep it as descriptive host telemetry rather than a temperature metric,
+resource identity, alert metric, or storage/recovery signal.
 
 `aicontracts.Finding` (the shape Patrol hands the investigation
 orchestrator) carries optional `OperatorContext` and

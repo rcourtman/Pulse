@@ -1936,6 +1936,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		Sensors: models.HostSensorSummary{
 			TemperatureCelsius: cloneStringFloatMap(report.Sensors.TemperatureCelsius),
 			FanRPM:             cloneStringFloatMap(report.Sensors.FanRPM),
+			PowerWatts:         cloneStringFloatMap(report.Sensors.PowerWatts),
 			Additional:         cloneStringFloatMap(report.Sensors.Additional),
 			GPU:                convertAgentGPUToModels(report.Sensors.GPU),
 			ThermalState:       convertAgentThermalStateToModels(report.Sensors.ThermalState),
@@ -2477,6 +2478,7 @@ func (m *Monitor) applyClusterSensors(entries []agentshost.ClusterNodeSensors, r
 			sensors: models.HostSensorSummary{
 				TemperatureCelsius: cloneStringFloatMap(entry.Sensors.TemperatureCelsius),
 				FanRPM:             cloneStringFloatMap(entry.Sensors.FanRPM),
+				PowerWatts:         cloneStringFloatMap(entry.Sensors.PowerWatts),
 				Additional:         cloneStringFloatMap(entry.Sensors.Additional),
 				ThermalState:       convertAgentThermalStateToModels(entry.Sensors.ThermalState),
 			},

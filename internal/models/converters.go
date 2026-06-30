@@ -839,7 +839,7 @@ func (s DockerSwarmInfo) ToFrontend() DockerSwarmFrontend {
 }
 
 func hostSensorSummaryToFrontend(src HostSensorSummary) *HostSensorSummaryFrontend {
-	if len(src.TemperatureCelsius) == 0 && len(src.FanRPM) == 0 && len(src.Additional) == 0 && len(src.GPU) == 0 && src.ThermalState == nil && len(src.SMART) == 0 {
+	if len(src.TemperatureCelsius) == 0 && len(src.FanRPM) == 0 && len(src.PowerWatts) == 0 && len(src.Additional) == 0 && len(src.GPU) == 0 && src.ThermalState == nil && len(src.SMART) == 0 {
 		return nil
 	}
 
@@ -849,6 +849,9 @@ func hostSensorSummaryToFrontend(src HostSensorSummary) *HostSensorSummaryFronte
 	}
 	if len(src.FanRPM) > 0 {
 		dest.FanRPM = copyStringFloatMap(src.FanRPM)
+	}
+	if len(src.PowerWatts) > 0 {
+		dest.PowerWatts = copyStringFloatMap(src.PowerWatts)
 	}
 	if len(src.Additional) > 0 {
 		dest.Additional = copyStringFloatMap(src.Additional)

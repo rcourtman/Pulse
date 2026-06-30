@@ -168,7 +168,7 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 	storageAssessments := make([]storagehealth.Assessment, 0, len(host.RAID)+1)
 
 	// Populate sensors
-	if len(host.Sensors.TemperatureCelsius) > 0 || len(host.Sensors.FanRPM) > 0 || len(host.Sensors.Additional) > 0 || len(host.Sensors.GPU) > 0 || host.Sensors.ThermalState != nil || len(host.Sensors.SMART) > 0 {
+	if len(host.Sensors.TemperatureCelsius) > 0 || len(host.Sensors.FanRPM) > 0 || len(host.Sensors.PowerWatts) > 0 || len(host.Sensors.Additional) > 0 || len(host.Sensors.GPU) > 0 || host.Sensors.ThermalState != nil || len(host.Sensors.SMART) > 0 {
 		sensorMeta := &HostSensorMeta{}
 		if len(host.Sensors.TemperatureCelsius) > 0 {
 			sensorMeta.TemperatureCelsius = make(map[string]float64, len(host.Sensors.TemperatureCelsius))
@@ -180,6 +180,12 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 			sensorMeta.FanRPM = make(map[string]float64, len(host.Sensors.FanRPM))
 			for k, v := range host.Sensors.FanRPM {
 				sensorMeta.FanRPM[k] = v
+			}
+		}
+		if len(host.Sensors.PowerWatts) > 0 {
+			sensorMeta.PowerWatts = make(map[string]float64, len(host.Sensors.PowerWatts))
+			for k, v := range host.Sensors.PowerWatts {
+				sensorMeta.PowerWatts[k] = v
 			}
 		}
 		if len(host.Sensors.Additional) > 0 {

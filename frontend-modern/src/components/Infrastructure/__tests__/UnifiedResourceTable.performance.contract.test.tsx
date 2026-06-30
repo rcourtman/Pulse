@@ -628,6 +628,34 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(resourceDetailMappersSource).not.toContain('fetch(');
     });
 
+    it('keeps power and fan detail rows bounded to the selected resource payload', () => {
+      expect(
+        buildTemperatureRows({
+          additional: { vrm_temp: 55.6 },
+          fanRpm: { chassis_fan: 1199.6 },
+          powerWatts: { cpu_package: 82.4 },
+        }),
+      ).toEqual([
+        {
+          label: 'VRM Temp',
+          value: '56°C',
+          valueTitle: '55.6°C',
+        },
+        {
+          label: 'Chassis Fan',
+          value: '1,200 RPM',
+          valueTitle: 'Chassis Fan 1,200 RPM',
+        },
+        {
+          label: 'CPU Package Power',
+          value: '82.4 W',
+          valueTitle: 'CPU Package Power 82.4 W',
+        },
+      ]);
+      expect(resourceDetailMappersSource).not.toContain('powercap');
+      expect(resourceDetailMappersSource).not.toContain('fetch(');
+    });
+
     it('keeps hot-path table state and windowing in the shared table state owner', () => {
       expect(unifiedResourceTableSource).toContain('useUnifiedResourceTableState');
       expect(unifiedResourceTableSource).toContain('UnifiedResourceHostTableCard');

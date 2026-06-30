@@ -612,6 +612,13 @@ func TestHostSensorSummaryToFrontend(t *testing.T) {
 			nilCheck: false,
 		},
 		{
+			name: "with power watts",
+			input: HostSensorSummary{
+				PowerWatts: map[string]float64{"cpu_package": 82.4},
+			},
+			nilCheck: false,
+		},
+		{
 			name: "with additional",
 			input: HostSensorSummary{
 				Additional: map[string]float64{"voltage": 12.0},
@@ -642,6 +649,12 @@ func TestHostSensorSummaryToFrontend(t *testing.T) {
 			}
 			if result == nil {
 				t.Error("hostSensorSummaryToFrontend should not return nil for non-empty sensors")
+			}
+			if len(tc.input.PowerWatts) > 0 {
+				result.PowerWatts["cpu_package"] = 1
+				if tc.input.PowerWatts["cpu_package"] != 82.4 {
+					t.Fatal("frontend power sensors should not share map with source")
+				}
 			}
 			if tc.input.ThermalState != nil {
 				if result.ThermalState == nil || result.ThermalState.Pressure != tc.input.ThermalState.Pressure {

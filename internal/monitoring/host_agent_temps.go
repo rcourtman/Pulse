@@ -120,6 +120,7 @@ func convertUnifiedHostSensorsToTemperature(sensors *unifiedresources.HostSensor
 	return convertHostSensorsToTemperature(models.HostSensorSummary{
 		TemperatureCelsius: cloneStringFloatMap(sensors.TemperatureCelsius),
 		FanRPM:             cloneStringFloatMap(sensors.FanRPM),
+		PowerWatts:         cloneStringFloatMap(sensors.PowerWatts),
 		Additional:         cloneStringFloatMap(sensors.Additional),
 		GPU:                convertUnifiedHostGPU(sensors.GPU),
 		SMART:              convertUnifiedHostSMART(sensors.SMART),

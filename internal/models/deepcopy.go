@@ -246,6 +246,7 @@ func cloneHostSensorSummary(src HostSensorSummary) HostSensorSummary {
 	return HostSensorSummary{
 		TemperatureCelsius: cloneStringFloat64Map(src.TemperatureCelsius),
 		FanRPM:             cloneStringFloat64Map(src.FanRPM),
+		PowerWatts:         cloneStringFloat64Map(src.PowerWatts),
 		Additional:         cloneStringFloat64Map(src.Additional),
 		GPU:                cloneHostGPUSensors(src.GPU),
 		ThermalState:       cloneHostThermalState(src.ThermalState),

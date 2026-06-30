@@ -1756,6 +1756,56 @@ func TestApplyHostReportPreservesGPUSensorSummary(t *testing.T) {
 	}
 }
 
+func TestApplyHostReportPreservesPowerSensorSummary(t *testing.T) {
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+		rateTracker:       NewRateTracker(),
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:              "agent-power",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentshost.HostInfo{
+			ID:        "machine-power",
+			Hostname:  "power-node",
+			MachineID: "machine-power",
+		},
+		Metrics: agentshost.Metrics{
+			Memory: agentshost.MemoryMetric{TotalBytes: 1024, UsedBytes: 512, FreeBytes: 512, Usage: 50},
+		},
+		Sensors: agentshost.Sensors{
+			PowerWatts: map[string]float64{"cpu_package": 82.4, "dram": 13.2},
+		},
+		Timestamp: time.Now().UTC(),
+	}
+
+	host, err := monitor.ApplyHostReport(report, nil)
+	if err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+	if got := host.Sensors.PowerWatts["cpu_package"]; got != 82.4 {
+		t.Fatalf("host power sensor = %.1f, want 82.4", got)
+	}
+	report.Sensors.PowerWatts["cpu_package"] = 1
+	if got := host.Sensors.PowerWatts["cpu_package"]; got != 82.4 {
+		t.Fatalf("host power sensors share report map, got %.1f want 82.4", got)
+	}
+
+	projected := hostSensorsFromReadStateView(&unifiedresources.HostSensorMeta{
+		PowerWatts: map[string]float64{"cpu_package": 82.4},
+	})
+	if got := projected.PowerWatts["cpu_package"]; got != 82.4 {
+		t.Fatalf("read-state power projection = %.1f, want 82.4", got)
+	}
+}
+
 func TestApplyHostReportPersistsSMARTMetricsForAgentDisksWithFallbackID(t *testing.T) {
 	t.Helper()
 

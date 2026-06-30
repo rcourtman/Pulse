@@ -3377,6 +3377,12 @@ func hostSensorsFromReadStateView(sensors *unifiedresources.HostSensorMeta) mode
 			out.FanRPM[k] = v
 		}
 	}
+	if len(sensors.PowerWatts) > 0 {
+		out.PowerWatts = make(map[string]float64, len(sensors.PowerWatts))
+		for k, v := range sensors.PowerWatts {
+			out.PowerWatts[k] = v
+		}
+	}
 	if len(sensors.Additional) > 0 {
 		out.Additional = make(map[string]float64, len(sensors.Additional))
 		for k, v := range sensors.Additional {

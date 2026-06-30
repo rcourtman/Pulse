@@ -483,6 +483,7 @@ export interface HostNetworkInterface {
 export interface HostSensorSummary {
   temperatureCelsius?: Record<string, number>;
   fanRpm?: Record<string, number>;
+  powerWatts?: Record<string, number>;
   additional?: Record<string, number>;
   gpu?: HostGPUSensor[];
   thermalState?: HostThermalState;

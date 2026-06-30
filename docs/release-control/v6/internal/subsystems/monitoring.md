@@ -610,6 +610,11 @@ and VRAM readings from agent reports through models, read-state projection, and
 frontend conversion, while still using only real Celsius readings for
 `agent.temperature` or `metric=temperature` and without promoting GPU workload
 or process inventory into monitoring state.
+Host-agent power sensor summaries follow the same descriptive-host-telemetry
+path. Monitoring must preserve `sensors.powerWatts` readings from agent reports
+through models, read-state projection, and frontend conversion without
+promoting wattage into temperature history, resource lifecycle, storage health,
+or alert metrics unless a separate governed contract adds that metric.
 That same monitoring owner also owns canonical unified-resource publication on
 `/api/state` and the websocket `state.resources` hydrate path. Monitoring must
 publish those resources from the same canonical unified snapshot that

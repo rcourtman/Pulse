@@ -325,6 +325,25 @@ export const formatSensorName = (name: string) => {
   return titleCaseDelimitedLabel(clean);
 };
 
+const formatSensorHardwareName = (name: string) => {
+  return titleCaseDelimitedLabel(name)
+    .replace(/\bCpu\b/g, 'CPU')
+    .replace(/\bDram\b/g, 'DRAM')
+    .replace(/\bGpu\b/g, 'GPU')
+    .replace(/\bVram\b/g, 'VRAM')
+    .replace(/\bVrm\b/g, 'VRM');
+};
+
+const formatPowerSensorLabel = (name: string) => {
+  const label = formatSensorHardwareName(name);
+  return /\b(power|watts?|wattage)\b/i.test(label) ? label : `${label} Power`;
+};
+
+const formatFanSensorLabel = (name: string) => {
+  const label = formatSensorHardwareName(name);
+  return /\bfan\b/i.test(label) ? label : `${label} Fan`;
+};
+
 const formatGPUStatsLabel = (id: string | undefined, index: number): string => {
   const trimmed = (id || '').trim();
   return trimmed ? `GPU ${trimmed}` : `GPU ${index + 1}`;
@@ -353,12 +372,24 @@ const formatGPUStatsValue = (gpu: NonNullable<HostSensorSummary['gpu']>[number])
   return parts.join(' · ');
 };
 
+const formatPowerWatts = (value: number) => {
+  if (!Number.isFinite(value)) return '';
+  if (Math.abs(value) >= 100) return `${Math.round(value).toLocaleString()} W`;
+  return `${value.toFixed(1)} W`;
+};
+
+const formatFanRPM = (value: number) => {
+  if (!Number.isFinite(value)) return '';
+  return `${Math.round(Math.max(0, value)).toLocaleString()} RPM`;
+};
+
 const buildTypedGPUTemperatureKeys = (gpus?: HostSensorSummary['gpu']) => {
   const keys = new Set<string>();
   gpus?.forEach((gpu) => {
     const id = (gpu.id || '').trim();
     if (!id) return;
-    if (typeof gpu.temperatureCelsius !== 'number' || !Number.isFinite(gpu.temperatureCelsius)) return;
+    if (typeof gpu.temperatureCelsius !== 'number' || !Number.isFinite(gpu.temperatureCelsius))
+      return;
     keys.add(`gpu_nvidia_${id}`);
   });
   return keys;
@@ -406,6 +437,7 @@ export const buildTemperatureRows = (sensors?: HostSensorSummary) => {
   if (temps) {
     const entries = Object.entries(temps)
       .filter(([name]) => !typedGPUTemperatureKeys.has(name))
+      .filter(([, temp]) => Number.isFinite(temp))
       .sort(([a], [b]) => a.localeCompare(b));
     entries.forEach(([name, temp]) => {
       rows.push({
@@ -414,6 +446,53 @@ export const buildTemperatureRows = (sensors?: HostSensorSummary) => {
         valueTitle: `${temp.toFixed(1)}°C`,
       });
     });
+  }
+
+  const additional = sensors?.additional;
+  if (additional) {
+    Object.entries(additional)
+      .filter(([, value]) => Number.isFinite(value))
+      .sort(([a], [b]) => a.localeCompare(b))
+      .forEach(([name, value]) => {
+        const label = formatSensorHardwareName(name);
+        rows.push({
+          label,
+          value: formatTemperature(value),
+          valueTitle: `${value.toFixed(1)}°C`,
+        });
+      });
+  }
+
+  const fans = sensors?.fanRpm;
+  if (fans) {
+    Object.entries(fans)
+      .map(([name, value]) => [name, formatFanRPM(value)] as const)
+      .filter(([, value]) => value)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .forEach(([name, value]) => {
+        const label = formatFanSensorLabel(name);
+        rows.push({
+          label,
+          value,
+          valueTitle: `${label} ${value}`,
+        });
+      });
+  }
+
+  const power = sensors?.powerWatts;
+  if (power) {
+    Object.entries(power)
+      .map(([name, value]) => [name, formatPowerWatts(value)] as const)
+      .filter(([, value]) => value)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .forEach(([name, value]) => {
+        const label = formatPowerSensorLabel(name);
+        rows.push({
+          label,
+          value,
+          valueTitle: `${label} ${value}`,
+        });
+      });
   }
 
   const smart = sensors?.smart;

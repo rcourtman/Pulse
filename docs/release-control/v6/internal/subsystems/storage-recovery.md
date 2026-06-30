@@ -1978,6 +1978,11 @@ That same boundary applies to typed GPU host sensor metadata carried through
 readings may appear as descriptive host context, but storage and recovery must
 not reinterpret those values as disk cache, storage-tier health, backup
 freshness, restore evidence, or protection readiness.
+That same boundary applies to host-agent `powerWatts` metadata carried through
+`internal/unifiedresources/types.go`: wattage readings may appear as
+descriptive host context, but storage and recovery must not reinterpret those
+values as disk cache, storage-tier health, backup freshness, restore evidence,
+power-protection evidence, or protection readiness.
 
 Storage and recovery still consume the shared unified-resource contract, but
 they do not own the timeline store itself. The canonical resource-change

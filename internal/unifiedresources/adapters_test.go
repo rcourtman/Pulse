@@ -602,6 +602,32 @@ func TestResourceFromHostProjectsTypedGPUSensors(t *testing.T) {
 	}
 }
 
+func TestResourceFromHostProjectsPowerSensors(t *testing.T) {
+	host := models.Host{
+		ID:       "power-host",
+		Hostname: "power-node",
+		Platform: "linux",
+		Status:   "online",
+		Sensors: models.HostSensorSummary{
+			PowerWatts: map[string]float64{
+				"cpu_package": 82.4,
+				"dram":        13.2,
+			},
+		},
+	}
+
+	resource, _ := resourceFromHost(host)
+	if resource.Agent == nil || resource.Agent.Sensors == nil {
+		t.Fatalf("expected agent sensor payload, got %+v", resource.Agent)
+	}
+	if got := resource.Agent.Sensors.PowerWatts["cpu_package"]; got != 82.4 {
+		t.Fatalf("power sensor = %.1f, want 82.4", got)
+	}
+	if resource.Agent.Temperature != nil || len(resource.Agent.Sensors.TemperatureCelsius) != 0 {
+		t.Fatalf("power-only sensors must not create Celsius values: agent=%+v sensors=%+v", resource.Agent.Temperature, resource.Agent.Sensors)
+	}
+}
+
 func TestResourceFromVMPreservesProxmoxPool(t *testing.T) {
 	vm := models.VM{
 		ID:       "cluster-a:pve-a:101",

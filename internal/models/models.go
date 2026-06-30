@@ -353,6 +353,7 @@ func (i HostNetworkInterface) NormalizeCollections() HostNetworkInterface {
 type HostSensorSummary struct {
 	TemperatureCelsius map[string]float64 `json:"temperatureCelsius,omitempty"`
 	FanRPM             map[string]float64 `json:"fanRpm,omitempty"`
+	PowerWatts         map[string]float64 `json:"powerWatts,omitempty"`
 	Additional         map[string]float64 `json:"additional,omitempty"`
 	GPU                []HostGPUSensor    `json:"gpu,omitempty"`
 	ThermalState       *HostThermalState  `json:"thermalState,omitempty"`
@@ -383,6 +384,9 @@ func (s HostSensorSummary) NormalizeCollections() HostSensorSummary {
 	}
 	if s.FanRPM == nil {
 		s.FanRPM = map[string]float64{}
+	}
+	if s.PowerWatts == nil {
+		s.PowerWatts = map[string]float64{}
 	}
 	if s.Additional == nil {
 		s.Additional = map[string]float64{}
