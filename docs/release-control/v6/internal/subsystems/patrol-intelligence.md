@@ -102,11 +102,11 @@ or historical proof/counting for resolved-only work.
    history, and finding composition, but it must stay contextual to Patrol's
    empty queue and must not render on monitor-first launch pages, become a Home
    summary, or promote trust/history counters into current work.
-   Monitor-context coverage posture is a separate presentation boundary. It may
-   appear on a specific monitor overview, such as Proxmox, only after the same
-   current-work, failed-check, setup, running-check, and overdue-schedule gates
-   have ruled out Patrol work. It must use monitor-context labels, point active
-   work back to Patrol, omit drift/trust proof counters, and must not reuse the
+   Monitor-context coverage posture is a separate presentation boundary, but it
+   must not render as a generic proof strip on Proxmox overview or other
+   monitor-first launch pages. A future monitor-specific Patrol affordance must
+   be scoped to an operator action or selected Patrol context, point active work
+   back to Patrol, omit drift/trust proof counters, and must not reuse the
    `Patrol protection posture` list as a launch-page strip or generic Home
    summary.
    Runtime/setup findings are still active Patrol work, but setup-only runtime

@@ -1930,12 +1930,14 @@ a new API state machine, queue contract, or verification-accounting field.
 	   and the Patrol verification summary derived from run history, so the page also states whether recent Patrol evidence came from a successful full patrol or only from scoped/erroring runs instead of leaving verification scope implicit
    and the same-day activity-mix explanation derived from that governed run history, so when a recent full patrol is followed by alert-triggered or anomaly-triggered scoped work the verification surface can explain the mix directly instead of reconstructing it from page-local timing heuristics
    and the Patrol status recency split, so `last_patrol_at` remains reserved for completed full Patrol sweeps while scoped runs and verification checks advance `last_activity_at` without claiming a fresh full-estate verification pass
-   and the monitor-context Patrol coverage posture boundary, so specific
-   monitor overviews may consume API-owned Patrol status, latest run history,
-   current findings, and pending approvals as semantic input for a compact
-   coverage/schedule signal, but they must not add a new payload, infer
-   resource-specific proof from global Patrol counters, or duplicate the Patrol
-   queue/empty-work contract on generic dashboard or Home surfaces
+   and the monitor-context Patrol coverage posture boundary, so Proxmox
+   overview and other monitor-first launch pages must not consume API-owned
+   Patrol status, latest run history, current findings, or pending approvals as
+   a generic coverage/schedule proof strip. Future scoped monitor affordances
+   may reuse those API signals only from an operator action or selected Patrol
+   context, without adding a new payload, inferring resource-specific proof from
+   global Patrol counters, or duplicating the Patrol queue/empty-work contract on
+   generic dashboard or Home surfaces
    and the Patrol Assistant handoff model, so frontend handoff prompts pass
    current finding context, safe action posture, and resource references as
    bounded request metadata while leaving tool selection and remediation

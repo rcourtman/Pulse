@@ -1392,10 +1392,12 @@ settings`, and candidate review when discovered sources are waiting. It must
     checks, setup failures, and overdue scheduled protection are ruled out; it
     must stay subordinate to the empty queue and must not become a generic Home,
     dashboard, trust, or proof strip. Monitor-context Patrol coverage posture
-    may use the same compact list and badge primitives on a specific platform
-    overview when it is attached to that monitor surface, but it must use
-    distinct monitor labels and must not become a nested card, generic
-    dashboard strip, trust summary, or duplicate Patrol empty-work list. The
+    must not use the shared compact list and badge primitives as a generic
+    Proxmox overview or monitor-first launch-page proof strip. A future scoped
+    monitor affordance may use these primitives only when it is attached to an
+    operator action or selected Patrol context, uses distinct monitor labels,
+    and does not become a nested card, generic dashboard strip, trust summary,
+    or duplicate Patrol empty-work list. The
     Patrol schedule and model drawer is part of that shared
     feature-presentation boundary: it must stay viewport-bounded, expose an
     accessible dialog label, keep the four-level control policy on the default

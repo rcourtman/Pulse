@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, render, screen } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Resource } from '@/types/resource';
 import { ProxmoxPageSurface } from '../ProxmoxPageSurface';
@@ -6,20 +6,6 @@ import { ProxmoxPageSurface } from '../ProxmoxPageSurface';
 const mockUseUnifiedResources = vi.fn();
 const mockPathname = vi.hoisted(() => vi.fn(() => '/proxmox/overview'));
 const mockVersionInfo = vi.hoisted(() => vi.fn());
-const mockGetPatrolStatus = vi.hoisted(() => vi.fn());
-const mockGetPatrolRunHistory = vi.hoisted(() => vi.fn());
-const mockLoadPatrolFindings = vi.hoisted(() => vi.fn());
-const mockLoadPendingApprovals = vi.hoisted(() => vi.fn());
-const mockPatrolState = vi.hoisted(() => ({
-  findings: [] as Array<{
-    investigationOutcome?: string;
-    investigationStatus?: string;
-    regressionCount?: number;
-    status: string;
-    timesRaised?: number;
-  }>,
-  pendingApprovalCount: 0,
-}));
 
 const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'>): Resource =>
   ({
@@ -64,24 +50,6 @@ vi.mock('@/stores/updates', () => ({
   updateStore: {
     versionInfo: mockVersionInfo,
   },
-}));
-
-vi.mock('@/stores/aiIntelligence', () => ({
-  aiIntelligenceStore: {
-    get patrolFindings() {
-      return mockPatrolState.findings;
-    },
-    get patrolPendingApprovalCount() {
-      return mockPatrolState.pendingApprovalCount;
-    },
-    loadPatrolFindings: mockLoadPatrolFindings,
-    loadPendingApprovals: mockLoadPendingApprovals,
-  },
-}));
-
-vi.mock('@/api/patrol', () => ({
-  getPatrolStatus: mockGetPatrolStatus,
-  getPatrolRunHistory: mockGetPatrolRunHistory,
 }));
 
 vi.mock('@solidjs/router', async () => {
@@ -157,27 +125,6 @@ describe('ProxmoxPageSurface contract', () => {
   beforeEach(() => {
     mockPathname.mockReturnValue('/proxmox/overview');
     mockVersionInfo.mockReturnValue(null);
-    mockPatrolState.findings = [];
-    mockPatrolState.pendingApprovalCount = 0;
-    mockLoadPatrolFindings.mockResolvedValue(undefined);
-    mockLoadPendingApprovals.mockResolvedValue(undefined);
-    mockGetPatrolStatus.mockResolvedValue({
-      enabled: true,
-      error_count: 0,
-      findings_count: 0,
-      healthy: true,
-      next_patrol_at: '2099-06-30T14:05:00Z',
-      resources_checked: 4,
-      running: false,
-      runtime_state: 'active',
-    });
-    mockGetPatrolRunHistory.mockResolvedValue([
-      {
-        error_count: 0,
-        resources_checked: 4,
-        status: 'healthy',
-      },
-    ]);
   });
 
   afterEach(() => {
@@ -251,7 +198,7 @@ describe('ProxmoxPageSurface contract', () => {
     expect(totals).toHaveTextContent('1 stopped');
   });
 
-  it('renders monitor-context Patrol coverage without using the Patrol empty-work strip', async () => {
+  it('keeps Patrol coverage off the Proxmox overview', () => {
     setResources([
       makeResource({
         id: 'agent:pve-1',
@@ -262,41 +209,20 @@ describe('ProxmoxPageSurface contract', () => {
 
     render(() => <ProxmoxPageSurface />);
 
-    await waitFor(() => expect(mockGetPatrolStatus).toHaveBeenCalled());
-    const posture = await screen.findByRole('list', { name: 'Proxmox Patrol coverage' });
-    expect(mockLoadPatrolFindings).toHaveBeenCalled();
-    expect(mockLoadPendingApprovals).toHaveBeenCalled();
-    expect(posture).toHaveTextContent('Patrol checked 4 resources');
-    expect(posture).toHaveTextContent('No Patrol work waiting');
-    expect(posture).toHaveTextContent('Next check scheduled');
+    expect(screen.getByTestId('nodes-table')).toHaveAttribute('data-rows', '1');
+    expect(screen.queryByRole('list', { name: 'Proxmox Patrol coverage' })).not.toBeInTheDocument();
     expect(screen.queryByText('Protection current')).not.toBeInTheDocument();
     expect(
       screen.queryByRole('list', { name: 'Patrol protection posture' }),
     ).not.toBeInTheDocument();
   });
 
-  it('does not crash when Patrol state refreshes before Proxmox resources hydrate', async () => {
+  it('does not crash while Proxmox resources hydrate', () => {
     setResourcesSnapshot(undefined, true);
 
     render(() => <ProxmoxPageSurface />);
 
     expect(screen.getByTestId('platform-table-loading-state')).toBeInTheDocument();
-    await waitFor(() => expect(mockLoadPatrolFindings).toHaveBeenCalled());
-    expect(screen.queryByRole('list', { name: 'Proxmox Patrol coverage' })).not.toBeInTheDocument();
-  });
-
-  it('does not render monitor-context Patrol coverage when active Patrol work exists', () => {
-    mockPatrolState.findings = [{ status: 'active' }];
-    setResources([
-      makeResource({
-        id: 'agent:pve-1',
-        type: 'agent',
-        proxmox: { nodeName: 'pve-1', clusterName: 'homelab' },
-      }),
-    ]);
-
-    render(() => <ProxmoxPageSurface />);
-
     expect(
       screen.queryByRole('list', { name: 'Proxmox Patrol coverage' }),
     ).not.toBeInTheDocument();

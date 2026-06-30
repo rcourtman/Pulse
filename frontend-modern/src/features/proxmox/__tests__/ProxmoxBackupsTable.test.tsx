@@ -334,10 +334,10 @@ describe('ProxmoxBackupsTable', () => {
     expect(proxmoxPageSurfaceSource).not.toContain('workloads={workloadsState.allGuests');
   });
 
-  it('keeps monitor-context Patrol coverage out of backup evidence surfaces', () => {
-    expect(proxmoxPageSurfaceSource).toContain('getMonitorContextPatrolProtectionPosture');
-    expect(proxmoxPageSurfaceSource).toContain('getPatrolRunHistory(1)');
-    expect(proxmoxPageSurfaceSource).toContain('aria-label="Proxmox Patrol coverage"');
+  it('keeps Patrol coverage out of Proxmox evidence surfaces', () => {
+    expect(proxmoxPageSurfaceSource).not.toContain('getMonitorContextPatrolProtectionPosture');
+    expect(proxmoxPageSurfaceSource).not.toContain('getPatrolRunHistory(1)');
+    expect(proxmoxPageSurfaceSource).not.toContain('aria-label="Proxmox Patrol coverage"');
     expect(proxmoxPageSurfaceSource).not.toContain('aria-label="Patrol protection posture"');
     expect(proxmoxBackupsTableSource).not.toContain('Proxmox Patrol coverage');
   });
