@@ -21,7 +21,8 @@ const relaySettingsPanelSource = Object.values(
 describe('OnboardingAPI', () => {
   it('getQRPayload calls /api/onboarding/qr', () => {
     expect(onboardingSource).toContain("private static baseUrl = '/api/onboarding';");
-    expect(onboardingSource).toContain("apiFetchJSON(this.baseUrl + '/qr')");
+    expect(onboardingSource).toContain("const url = this.baseUrl + '/qr';");
+    expect(onboardingSource).toContain('throw new OnboardingNotReadyError');
   });
 });
 
@@ -41,6 +42,8 @@ describe('Onboarding QR payload contract', () => {
     expect(onboardingSource).toContain('auth_token: string;');
     expect(onboardingSource).toContain('deep_link: string;');
     expect(onboardingSource).toContain('diagnostics?: OnboardingDiagnostic[];');
+    expect(onboardingSource).toContain('export interface OnboardingNotReadyResponse');
+    expect(onboardingSource).toContain('export class OnboardingNotReadyError');
   });
 
   it('keeps relay settings split into shell, runtime, and pairing owners', () => {

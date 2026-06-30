@@ -80,6 +80,12 @@ type cachedWorkloadChartsEntry struct {
 	cachedAt time.Time
 }
 
+type relayRuntimeClient interface {
+	Status() relay.ClientStatus
+	Close()
+	SendPushNotification(relay.PushNotificationPayload) error
+}
+
 // Router handles HTTP routing
 type Router struct {
 	mux                             *http.ServeMux
@@ -163,7 +169,7 @@ type Router struct {
 	workloadsSummaryCharts   map[string]summaryChartsCacheEntry
 	installScriptClient      *http.Client
 	relayMu                  sync.RWMutex
-	relayClient              *relay.Client
+	relayClient              relayRuntimeClient
 	relayCancel              context.CancelFunc
 	lifecycleCtx             context.Context
 	lifecycleCancel          context.CancelFunc

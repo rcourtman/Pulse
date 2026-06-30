@@ -1,9 +1,10 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { OnboardingAPI, type OnboardingQRResponse } from '../onboarding';
-import { apiFetchJSON } from '@/utils/apiClient';
+import { OnboardingAPI, OnboardingNotReadyError, type OnboardingQRResponse } from '../onboarding';
+import { apiErrorFromResponse, apiFetch } from '@/utils/apiClient';
 
 vi.mock('@/utils/apiClient', () => ({
-  apiFetchJSON: vi.fn(),
+  apiErrorFromResponse: vi.fn(),
+  apiFetch: vi.fn(),
 }));
 
 describe('OnboardingAPI', () => {
@@ -21,11 +22,13 @@ describe('OnboardingAPI', () => {
         auth_token: 'token-123',
         deep_link: 'pulse://connect',
       };
-      vi.mocked(apiFetchJSON).mockResolvedValueOnce(mockResponse);
+      vi.mocked(apiFetch).mockResolvedValueOnce(
+        new Response(JSON.stringify(mockResponse), { status: 200 }),
+      );
 
       const result = await OnboardingAPI.getQRPayload();
 
-      expect(apiFetchJSON).toHaveBeenCalledWith('/api/onboarding/qr');
+      expect(apiFetch).toHaveBeenCalledWith('/api/onboarding/qr');
       expect(result).toEqual(mockResponse);
     });
 
@@ -38,13 +41,54 @@ describe('OnboardingAPI', () => {
         auth_token: 'token-123',
         deep_link: 'pulse://connect',
       };
-      vi.mocked(apiFetchJSON).mockResolvedValueOnce(mockResponse);
+      vi.mocked(apiFetch).mockResolvedValueOnce(
+        new Response(JSON.stringify(mockResponse), { status: 200 }),
+      );
 
       await OnboardingAPI.getQRPayload('token-123');
 
-      expect(apiFetchJSON).toHaveBeenCalledWith('/api/onboarding/qr', {
+      expect(apiFetch).toHaveBeenCalledWith('/api/onboarding/qr', {
         headers: { 'X-API-Token': 'token-123' },
       });
+    });
+
+    it('throws readiness diagnostics when the backend refuses an incomplete pairing payload', async () => {
+      const diagnostics = [
+        {
+          code: 'relay_registration_unavailable',
+          severity: 'error' as const,
+          message: 'Remote Access is enabled, but this Pulse instance is not connected yet.',
+          field: 'instance_id',
+        },
+      ];
+      vi.mocked(apiFetch).mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            code: 'onboarding_not_ready',
+            message: 'Pulse Mobile pairing is not ready yet.',
+            diagnostics,
+          }),
+          { status: 409 },
+        ),
+      );
+
+      await expect(OnboardingAPI.getQRPayload('token-123')).rejects.toMatchObject({
+        name: 'OnboardingNotReadyError',
+        code: 'onboarding_not_ready',
+        status: 409,
+        diagnostics,
+      } satisfies Partial<OnboardingNotReadyError>);
+    });
+
+    it('delegates non-readiness failures to the shared API error parser', async () => {
+      const response = new Response('server failed', { status: 500 });
+      const parsedError = new Error('parsed server failure');
+      vi.mocked(apiFetch).mockResolvedValueOnce(response);
+      vi.mocked(apiErrorFromResponse).mockResolvedValueOnce(parsedError);
+
+      await expect(OnboardingAPI.getQRPayload('token-123')).rejects.toBe(parsedError);
+
+      expect(apiErrorFromResponse).toHaveBeenCalledWith(response);
     });
   });
 });

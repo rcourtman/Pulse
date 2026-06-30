@@ -228,6 +228,11 @@ existing resource-policy redaction still governs any model-bound context.
    metadata, or remediation output.
 2. Change security policy, hardening guidance, or supported auth boundaries through `SECURITY.md`.
 3. Change telemetry/privacy settings state handling through `frontend-modern/src/components/Settings/useSystemSettingsState.ts`.
+   Relay runtime access through `internal/api/router.go` must stay behind the
+   existing protected route and API-token gates. Testable router seams may
+   expose relay status to onboarding validation, but they must not broaden
+   Pulse Mobile token scopes, bypass the server-minted credential requirement,
+   or expose relay secrets beyond the existing public onboarding diagnostics.
 4. Change security/auth/token transport behavior through the shared `frontend-modern/src/api/security.ts`, `frontend-modern/src/components/Settings/APITokenManager.tsx`, `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`, `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`, `internal/api/security.go`, `internal/api/security_tokens.go`, and `internal/api/system_settings.go` boundary.
    Release metadata surfaced through `/api/version` remains outside token,
    auth, and privacy state. Adding or changing `agentUpdateTargetVersion`

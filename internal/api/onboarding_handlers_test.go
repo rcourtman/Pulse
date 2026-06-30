@@ -39,6 +39,9 @@ func TestOnboardingQRPayloadStructure(t *testing.T) {
 	if payload.InstanceURL != "https://pulse.example.test" {
 		t.Fatalf("unexpected instance_url: %q", payload.InstanceURL)
 	}
+	if payload.InstanceID != "instance-local" {
+		t.Fatalf("unexpected instance_id: got %q want %q", payload.InstanceID, "instance-local")
+	}
 	if payload.Relay.URL != wantRelayURL {
 		t.Fatalf("unexpected relay URL: got %q want %q", payload.Relay.URL, wantRelayURL)
 	}
@@ -50,6 +53,53 @@ func TestOnboardingQRPayloadStructure(t *testing.T) {
 	}
 	if payload.DeepLink == "" {
 		t.Fatalf("expected deep_link to be populated")
+	}
+}
+
+func TestOnboardingQRRejectsIncompleteRelayRegistration(t *testing.T) {
+	router, rawToken, _ := newOnboardingContractRouter(t)
+	router.relayClient = nil
+
+	req := httptest.NewRequest(http.MethodGet, "https://pulse.example.test/api/onboarding/qr", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+
+	router.handleGetOnboardingQR(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected status 409, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var response onboardingNotReadyResponse
+	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode not-ready response: %v", err)
+	}
+	if response.Code != onboardingNotReadyCode {
+		t.Fatalf("unexpected code: got %q want %q", response.Code, onboardingNotReadyCode)
+	}
+	if !diagnosticCodePresent(response.Diagnostics, "relay_registration_unavailable") {
+		t.Fatalf("expected relay_registration_unavailable diagnostic, got %#v", response.Diagnostics)
+	}
+}
+
+func TestOnboardingQRRejectsMissingMobileToken(t *testing.T) {
+	router, _, _ := newOnboardingContractRouter(t)
+
+	req := httptest.NewRequest(http.MethodGet, "https://pulse.example.test/api/onboarding/qr", nil)
+	rec := httptest.NewRecorder()
+
+	router.handleGetOnboardingQR(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected status 409, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var response onboardingNotReadyResponse
+	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode not-ready response: %v", err)
+	}
+	if !diagnosticCodePresent(response.Diagnostics, "auth_token_missing") {
+		t.Fatalf("expected auth_token_missing diagnostic, got %#v", response.Diagnostics)
 	}
 }
 
@@ -143,6 +193,28 @@ func TestOnboardingDeepLinkFormat(t *testing.T) {
 	}
 	if query.Get("auth_token") != rawToken {
 		t.Fatalf("unexpected deep-link auth_token")
+	}
+}
+
+func TestOnboardingDeepLinkRejectsIncompleteRelayRegistration(t *testing.T) {
+	router, rawToken, _ := newOnboardingContractRouter(t)
+	router.relayClient = nil
+
+	req := httptest.NewRequest(http.MethodGet, "https://pulse.example.test/api/onboarding/deep-link", nil)
+	req.Header.Set("Authorization", "Bearer "+rawToken)
+	rec := httptest.NewRecorder()
+	router.handleGetOnboardingDeepLink(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected status 409, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var response onboardingNotReadyResponse
+	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
+		t.Fatalf("decode not-ready response: %v", err)
+	}
+	if !diagnosticCodePresent(response.Diagnostics, "relay_registration_unavailable") {
+		t.Fatalf("expected relay_registration_unavailable diagnostic, got %#v", response.Diagnostics)
 	}
 }
 
@@ -263,6 +335,12 @@ func newOnboardingContractRouter(t *testing.T) (*Router, string, relay.Config) {
 	router := &Router{
 		config:      cfg,
 		persistence: config.NewConfigPersistence(dataPath),
+		relayClient: fakeRelayRuntimeClient{
+			status: relay.ClientStatus{
+				Connected:  true,
+				InstanceID: "instance-local",
+			},
+		},
 	}
 
 	relayCfg := relay.Config{
@@ -276,6 +354,20 @@ func newOnboardingContractRouter(t *testing.T) (*Router, string, relay.Config) {
 	}
 
 	return router, rawToken, relayCfg
+}
+
+type fakeRelayRuntimeClient struct {
+	status relay.ClientStatus
+}
+
+func (f fakeRelayRuntimeClient) Status() relay.ClientStatus {
+	return f.status
+}
+
+func (f fakeRelayRuntimeClient) Close() {}
+
+func (f fakeRelayRuntimeClient) SendPushNotification(relay.PushNotificationPayload) error {
+	return nil
 }
 
 func diagnosticCodePresent(diagnostics []onboardingDiagnostic, code string) bool {

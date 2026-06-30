@@ -209,6 +209,10 @@ regression protection.
    validate request-body setup tokens, but the router-level public-path check must
    stay O(1) and must not front-run persistence loads, monitor refresh, or other
    teardown/register side effects before the canonical handler owns the request.
+   Test seams around the router's relay runtime client may expose the current
+   relay status to onboarding handlers, but they must remain in-memory
+   interface boundaries and must not add persistence probes, network reconnects,
+   or metrics fan-out to QR/deep-link request handling.
    `/api/config/export` and `/api/config/import` follow the same hot-path rule:
    router auth bypass exists only to let their handlers make route-local auth and
    public-network decisions, and the bypass check must remain a constant-time

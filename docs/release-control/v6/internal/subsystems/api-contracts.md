@@ -136,6 +136,13 @@ product API routes free of maintainer commercial analytics.
 
 ## Shared Boundaries
 
+Mobile onboarding QR/deep-link payload readiness is a shared backend/frontend
+contract. `internal/api/onboarding_handlers.go` owns the `409
+onboarding_not_ready` diagnostic response when Remote Access, relay
+registration, or the dedicated Pulse Mobile credential is incomplete, while
+`frontend-modern/src/api/onboarding.ts` and relay settings consumers may only
+surface those diagnostics and must not synthesize partial pairing payloads.
+
 Assistant chat `workflow_state` events are a shared AI/API payload boundary.
 The backend source of truth is `internal/ai/chat.WorkflowStateData`, generated
 to `frontend-modern/src/api/generated/aiChatEvents.ts` by
@@ -6553,6 +6560,15 @@ also accept the dedicated `relay:mobile:access` scope for
 `/api/onboarding/qr`, `/api/onboarding/validate`, and
 `/api/onboarding/deep-link`, because those payloads are the canonical
 bootstrap surface for the server-minted mobile credential.
+That same onboarding boundary now also owns mobile pairing readiness. The QR
+and deep-link reads in `internal/api/onboarding_handlers.go` must return
+`409 onboarding_not_ready` with structured diagnostics instead of emitting a
+deep link whenever Remote Access is disabled, the relay runtime has not
+reported a connected `instance_id`, or the request lacks the dedicated
+server-minted mobile credential. A successful QR/deep-link response therefore
+continues to mean the payload contains the exact relay registration and token
+material Pulse Mobile can validate, while settings surfaces consume the
+diagnostics for operator-visible readiness copy.
 The shared security token contract now also includes single-record metadata
 reads. `internal/api/security_tokens.go`,
 `internal/api/router_routes_auth_security.go`,

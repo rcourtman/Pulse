@@ -8812,6 +8812,36 @@ func TestContract_OnboardingQRResponseJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_OnboardingNotReadyResponseJSONSnapshot(t *testing.T) {
+	payload := onboardingNotReadyResponse{
+		Code:    onboardingNotReadyCode,
+		Error:   onboardingNotReadyMessage,
+		Message: onboardingNotReadyMessage,
+		Diagnostics: []onboardingDiagnostic{
+			{
+				Code:     "relay_registration_unavailable",
+				Severity: "error",
+				Field:    "instance_id",
+				Message:  "Remote Access is enabled, but this Pulse instance is not connected to the relay yet. Wait for the status to show Connected before generating a mobile pairing code.",
+			},
+		},
+	}
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal onboarding not-ready response: %v", err)
+	}
+
+	const want = `{
+		"code":"onboarding_not_ready",
+		"error":"Pulse Mobile pairing is not ready yet.",
+		"message":"Pulse Mobile pairing is not ready yet.",
+		"diagnostics":[{"code":"relay_registration_unavailable","severity":"error","message":"Remote Access is enabled, but this Pulse instance is not connected to the relay yet. Wait for the status to show Connected before generating a mobile pairing code.","field":"instance_id"}]
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
 func TestContract_HostedRelayConfigResponseJSONSnapshot(t *testing.T) {
 	router, _, instanceHost := newHostedRelayRuntimeTestRouter(t)
 

@@ -215,6 +215,12 @@ Stripe-free and avoids a cloud-control-plane report data path across clients.
    visible banner shell, icon, action slot, and dismiss chrome must compose the
    shared `InlineNotice` primitive instead of carrying local paid-state tone
    classes, raw SVGs, or page-local buttons.
+   Pulse Mobile pairing inside `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`
+   is also a commercial relay surface only for entitlement and operator
+   presentation. When the backend returns `409 onboarding_not_ready`, the
+   settings surface must preserve API-owned diagnostics and clean up the
+   temporary server-minted mobile token; it must not downgrade that response
+   into a generic paid-state prompt or create browser-owned relay credentials.
 2. `frontend-modern/src/components/Settings/MonitoredSystemImpactPreview.tsx` shared with `agent-lifecycle`: the monitored-system impact preview is both a platform-connections lifecycle surface and a canonical cloud-paid monitored-system presentation boundary.
 3. `frontend-modern/src/useAppRuntimeState.ts` shared with `performance-and-scalability`: the authenticated app runtime bootstrap is both a hosted commercial org-context boundary and a protected app-shell performance boundary.
 4. `internal/api/licensing_bridge.go` shared with `api-contracts`: commercial licensing bridge handlers carry both API payload contract and cloud-paid entitlement boundary ownership.

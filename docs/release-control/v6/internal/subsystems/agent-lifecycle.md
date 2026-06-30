@@ -2352,6 +2352,12 @@ deep-link, and validation reads in `internal/api/router_routes_ai_relay.go`
 must accept that `relay:mobile:access` scope directly instead of demanding the
 broader settings-read privilege that the pairing token was never meant to
 carry.
+That same bootstrap dependency assumes the API-owned onboarding readiness
+gate remains authoritative. Lifecycle-adjacent setup must surface the backend
+`409 onboarding_not_ready` diagnostics when relay registration, Remote Access,
+or the dedicated mobile credential is incomplete, rather than generating a
+partial QR/deep-link payload or retrying through broader settings-read
+credentials.
 That same adjacent `internal/api/` reporting surface also keeps lifecycle-
 adjacent automation on the canonical time-window transport contract. Any setup,
 handoff, or scheduled lifecycle flow that triggers performance reports must

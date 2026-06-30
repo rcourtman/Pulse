@@ -19,6 +19,23 @@ const loggerErrorMock = vi.fn();
 const loggerWarnMock = vi.fn();
 const qrToDataUrlMock = vi.fn();
 
+const MockOnboardingNotReadyError = vi.hoisted(
+  () =>
+    class MockOnboardingNotReadyError extends Error {
+      readonly code = 'onboarding_not_ready';
+      readonly status = 409;
+      readonly diagnostics: Array<{ code: string; severity: 'warning' | 'error'; message: string }>;
+
+      constructor(
+        diagnostics: Array<{ code: string; severity: 'warning' | 'error'; message: string }>,
+      ) {
+        super('Pulse Mobile pairing is not ready yet.');
+        this.name = 'OnboardingNotReadyError';
+        this.diagnostics = diagnostics;
+      }
+    },
+);
+
 vi.mock('@/stores/license', () => ({
   hasFeature: (...args: unknown[]) => hasFeatureMock(...args),
   runtimeCapabilitiesLoaded: () => true,
@@ -45,6 +62,7 @@ vi.mock('@/api/relay', () => ({
 }));
 
 vi.mock('@/api/onboarding', () => ({
+  OnboardingNotReadyError: MockOnboardingNotReadyError,
   OnboardingAPI: {
     getQRPayload: (...args: unknown[]) => getQRPayloadMock(...args),
   },
@@ -281,6 +299,35 @@ describe('RelaySettingsPanel runtime', () => {
     });
 
     expect(showErrorMock).toHaveBeenCalledWith('Failed to generate pairing QR code');
+    expect(screen.queryByAltText('Pulse mobile pairing QR code')).not.toBeInTheDocument();
+  });
+
+  it('shows onboarding readiness diagnostics when pairing payload generation is gated', async () => {
+    const diagnosticMessage =
+      'Remote Access is enabled, but this Pulse instance is not connected to the relay yet.';
+    getQRPayloadMock.mockRejectedValueOnce(
+      new MockOnboardingNotReadyError([
+        {
+          code: 'relay_registration_unavailable',
+          severity: 'error',
+          message: diagnosticMessage,
+        },
+      ]),
+    );
+
+    render(() => <RelaySettingsPanel canManage />);
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('wss://relay.example.test/ws/instance')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pair New Device' }));
+
+    await waitFor(() => {
+      expect(deleteTokenMock).toHaveBeenCalledWith('relay-token-1');
+    });
+
+    expect(showErrorMock).toHaveBeenCalledWith(diagnosticMessage);
     expect(screen.queryByAltText('Pulse mobile pairing QR code')).not.toBeInTheDocument();
   });
 

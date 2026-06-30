@@ -63,6 +63,13 @@ state.
 
 ## Extension Points
 
+Mobile onboarding reads exposed through `internal/api/onboarding_handlers.go`
+are storage/recovery-adjacent only as hosted recovery/support handoff
+surfaces. Recovery code may consume the API-owned
+`409 onboarding_not_ready` diagnostics, but it must not construct a partial
+mobile pairing QR/deep-link payload from relay settings when relay
+registration or the dedicated Pulse Mobile credential is incomplete.
+
 Shared command-agent token binding in `internal/api/agent_exec_token_binding.go`
 is API-owned adjacent infrastructure. Storage- and recovery-adjacent setup or
 diagnostics flows may observe the API-owned `bound_agent_id`,
@@ -3621,6 +3628,12 @@ connection-validation reads, so hosted recovery/support flows that hand a
 paired device back into onboarding do not need to escalate the mobile token to
 the broader settings-read privilege just to fetch the canonical bootstrap
 payload.
+Those adjacent reads must also preserve the API-owned readiness semantics:
+when Remote Access is disabled, relay registration has not supplied a connected
+`instance_id`, or the dedicated mobile credential is missing, recovery and
+support surfaces must surface the backend `409 onboarding_not_ready`
+diagnostics rather than constructing a partial mobile pairing payload from
+relay settings or retrying with broader settings credentials.
 That same adjacent `internal/api/` boundary also owns provider-backed recovery
 onboarding. Storage and recovery may consume resulting TrueNAS snapshots and
 replication points, but connection CRUD, masked-secret preservation on update,

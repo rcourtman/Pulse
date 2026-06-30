@@ -5,7 +5,11 @@ import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentat
 import { loadRuntimeCapabilities } from '@/stores/license';
 import { showError, showSuccess } from '@/utils/toast';
 import { RelayAPI, type RelayConfig, type RelayStatus } from '@/api/relay';
-import { OnboardingAPI, type OnboardingQRResponse } from '@/api/onboarding';
+import {
+  OnboardingAPI,
+  OnboardingNotReadyError,
+  type OnboardingQRResponse,
+} from '@/api/onboarding';
 import { SecurityAPI, type APITokenRecord } from '@/api/security';
 import { logger } from '@/utils/logger';
 import {
@@ -82,6 +86,17 @@ export function useRelaySettingsPanelState(props: RelaySettingsPanelProps) {
     } catch (error) {
       logger.warn('[RelaySettings] Failed to inspect relay pairing token lifecycle', error);
     }
+  };
+
+  const pairingGenerationErrorMessage = (error: unknown): string => {
+    if (error instanceof OnboardingNotReadyError) {
+      return (
+        error.diagnostics.find((diagnostic) => diagnostic.severity === 'error')?.message ||
+        error.message ||
+        'Pulse Mobile pairing is not ready yet.'
+      );
+    }
+    return 'Failed to generate pairing QR code';
   };
 
   const loadConfig = async () => {
@@ -216,7 +231,7 @@ export function useRelaySettingsPanelState(props: RelaySettingsPanelProps) {
       setPairingPayload(previousPayload);
       setPairingQRCode(previousQRCode);
       setPairingTokenId(previousTokenId);
-      showError('Failed to generate pairing QR code');
+      showError(pairingGenerationErrorMessage(error));
       logger.error('[RelaySettings] Failed to generate onboarding QR', error);
     } finally {
       setPairingLoading(false);

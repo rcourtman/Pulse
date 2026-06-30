@@ -13,6 +13,8 @@ import (
 )
 
 const onboardingSchemaVersion = "pulse-mobile-onboarding-v1"
+const onboardingNotReadyCode = "onboarding_not_ready"
+const onboardingNotReadyMessage = "Pulse Mobile pairing is not ready yet."
 
 type onboardingRelayDetails struct {
 	Enabled             bool   `json:"enabled"`
@@ -54,6 +56,13 @@ type onboardingDiagnostic struct {
 	Field    string `json:"field,omitempty"`
 	Expected string `json:"expected,omitempty"`
 	Received string `json:"received,omitempty"`
+}
+
+type onboardingNotReadyResponse struct {
+	Code        string                 `json:"code"`
+	Error       string                 `json:"error"`
+	Message     string                 `json:"message"`
+	Diagnostics []onboardingDiagnostic `json:"diagnostics"`
 }
 
 func emptyOnboardingQRResponse() onboardingQRResponse {
@@ -107,6 +116,10 @@ func (r *Router) handleGetOnboardingQR(w http.ResponseWriter, req *http.Request)
 	}
 
 	payload, diagnostics := r.buildOnboardingPayload(req, relayCfg, onboardingAuthTokenFromRequest(req))
+	if hasOnboardingError(diagnostics) {
+		writeOnboardingNotReady(w, diagnostics)
+		return
+	}
 	if len(diagnostics) > 0 {
 		payload.Diagnostics = diagnostics
 	}
@@ -249,6 +262,10 @@ func (r *Router) handleGetOnboardingDeepLink(w http.ResponseWriter, req *http.Re
 	}
 
 	payload, diagnostics := r.buildOnboardingPayload(req, relayCfg, onboardingAuthTokenFromRequest(req))
+	if hasOnboardingError(diagnostics) {
+		writeOnboardingNotReady(w, diagnostics)
+		return
+	}
 	response := onboardingDeepLinkResponse{
 		URL:         payload.DeepLink,
 		Diagnostics: diagnostics,
@@ -280,34 +297,55 @@ func (r *Router) buildOnboardingPayload(req *http.Request, relayCfg *relay.Confi
 		IdentityPublicKey:   strings.TrimSpace(relayCfg.IdentityPublicKey),
 	}.normalizeCollections()
 	payload.AuthToken = authToken
-	payload.DeepLink = buildOnboardingDeepLink(payload)
 
 	diagnostics := make([]onboardingDiagnostic, 0, 4)
 	if !payload.Relay.Enabled {
 		diagnostics = append(diagnostics, onboardingDiagnostic{
 			Code:     "relay_disabled",
-			Severity: "warning",
+			Severity: "error",
 			Field:    "relay.enabled",
-			Message:  "Relay is disabled. Hosted mobile connection will not work until relay is enabled.",
+			Message:  "Remote Access is disabled. Turn on Remote Access and wait for the relay status to show Connected before pairing Pulse Mobile.",
 		})
 	}
 	if payload.InstanceID == "" {
 		diagnostics = append(diagnostics, onboardingDiagnostic{
-			Code:     "instance_id_unavailable",
-			Severity: "warning",
+			Code:     "relay_registration_unavailable",
+			Severity: "error",
 			Field:    "instance_id",
-			Message:  "Relay instance_id is not available until relay registration succeeds.",
+			Message:  "Remote Access is enabled, but this Pulse instance is not connected to the relay yet. Wait for the status to show Connected before generating a mobile pairing code.",
 		})
 	}
 	if payload.AuthToken == "" {
 		diagnostics = append(diagnostics, onboardingDiagnostic{
 			Code:     "auth_token_missing",
-			Severity: "warning",
+			Severity: "error",
 			Field:    "auth_token",
-			Message:  "No API token was provided in the request. Include X-API-Token or Authorization: Bearer for QR bootstrap payloads.",
+			Message:  "A dedicated Pulse Mobile access token is required before generating a pairing code.",
 		})
 	}
+	if !hasOnboardingError(diagnostics) {
+		payload.DeepLink = buildOnboardingDeepLink(payload)
+	}
 	return payload, diagnostics
+}
+
+func writeOnboardingNotReady(w http.ResponseWriter, diagnostics []onboardingDiagnostic) {
+	response := onboardingNotReadyResponse{
+		Code:        onboardingNotReadyCode,
+		Error:       onboardingNotReadyMessage,
+		Message:     onboardingNotReadyMessage,
+		Diagnostics: normalizeOnboardingDiagnostics(diagnostics),
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusConflict)
+	_ = json.NewEncoder(w).Encode(response)
+}
+
+func normalizeOnboardingDiagnostics(diagnostics []onboardingDiagnostic) []onboardingDiagnostic {
+	if diagnostics == nil {
+		return []onboardingDiagnostic{}
+	}
+	return diagnostics
 }
 
 func (r *Router) loadRelayConfigForOnboarding() (*relay.Config, error) {
