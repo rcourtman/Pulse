@@ -84,6 +84,7 @@ const PROXMOX_WORKLOAD_STATUS_OPTIONS: readonly WorkloadsStatusOption[] = [
 
 const ProxmoxIcon = getPlatformIcon('proxmox');
 const proxmoxIcon = () => <ProxmoxIcon class="h-6 w-6 text-slate-400" />;
+const EMPTY_PROXMOX_PAGE_MODEL = buildProxmoxPageModel([]);
 
 interface MonitorPatrolContext {
   latestRun: PatrolRunRecord | null;
@@ -111,7 +112,9 @@ export function ProxmoxPageSurface() {
     cacheKey: 'proxmox-workspace',
     initialHydration: 'prefer-ws-then-rest',
   });
-  const model = createMemo(() => buildProxmoxPageModel(resources()));
+  const model = createMemo(() =>
+    buildProxmoxPageModel(Array.isArray(resources()) ? resources() : []),
+  );
   // Replication jobs come straight from /api/replication/jobs (they bypass
   // the unified-resource pipeline), so the surface owns the fetch: the job
   // count gates the Replication tab and the same data feeds the table.
@@ -287,6 +290,7 @@ interface ProxmoxOverviewProps {
 }
 
 function ProxmoxOverview(props: ProxmoxOverviewProps) {
+  const currentModel = createMemo(() => props.model?.() ?? EMPTY_PROXMOX_PAGE_MODEL);
   const workloadsState = useWorkloadsState({
     vms: [],
     containers: [],
@@ -315,8 +319,8 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
   );
   const filteredNodes = createMemo(() =>
     filterProxmoxNodesForSearch(
-      props.model().pveNodes,
-      props.model().guests,
+      currentModel().pveNodes,
+      currentModel().guests,
       workloadsState.search(),
     ),
   );
@@ -327,7 +331,7 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
     getMonitorContextPatrolProtectionPosture({
       findingCount: activePatrolFindings().length,
       latestRun: props.patrolContext()?.latestRun ?? null,
-      monitoredResourceCount: props.model().resources.length,
+      monitoredResourceCount: currentModel().resources.length,
       patrolStatus: props.patrolContext()?.status ?? null,
       pendingApprovalCount: aiIntelligenceStore.patrolPendingApprovalCount,
       workTypeComposition: getPatrolWorkTypeComposition(activePatrolFindings()),
@@ -399,7 +403,7 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
       </Show>
       <ProxmoxNodesTable
         nodes={filteredNodes()}
-        guests={props.model().guests}
+        guests={currentModel().guests}
         metricDisplayMode={props.metricDisplayMode}
         metricHistoryRange={props.metricHistoryRange}
         emptyIcon={<ProxmoxIcon class="h-6 w-6 text-slate-400" />}
@@ -423,26 +427,26 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
       />
       {/* v5 dashboard closed with a running/stopped totals strip; the counts
           are platform-wide, matching the status-chip vocabulary above. */}
-      <Show when={props.model().summary.guestCount > 0}>
+      <Show when={currentModel().summary.guestCount > 0}>
         <div
           class="flex items-center gap-2 rounded border border-border bg-surface-alt px-2 py-1 text-xs text-muted"
           data-testid="proxmox-guest-totals"
         >
           <span class="flex items-center gap-1.5">
             <StatusDot size="xs" variant="success" ariaHidden />
-            {props.model().summary.runningGuestCount} running
+            {currentModel().summary.runningGuestCount} running
           </span>
-          <Show when={props.model().summary.degradedGuestCount > 0}>
+          <Show when={currentModel().summary.degradedGuestCount > 0}>
             <span aria-hidden="true">|</span>
             <span class="flex items-center gap-1.5">
               <StatusDot size="xs" variant="warning" ariaHidden />
-              {props.model().summary.degradedGuestCount} attention
+              {currentModel().summary.degradedGuestCount} attention
             </span>
           </Show>
           <span aria-hidden="true">|</span>
           <span class="flex items-center gap-1.5">
             <StatusDot size="xs" variant="danger" ariaHidden />
-            {props.model().summary.stoppedGuestCount} stopped
+            {currentModel().summary.stoppedGuestCount} stopped
           </span>
         </div>
       </Show>

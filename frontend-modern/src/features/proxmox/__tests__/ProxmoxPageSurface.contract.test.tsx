@@ -43,6 +43,15 @@ const setResources = (resources: Resource[]) => {
   });
 };
 
+const setResourcesSnapshot = (resources: Resource[] | undefined, loading = false) => {
+  mockUseUnifiedResources.mockReturnValue({
+    resources: () => resources as Resource[],
+    loading: () => loading,
+    error: () => null,
+    refetch: vi.fn(),
+  });
+};
+
 vi.mock('@/hooks/useUnifiedResources', () => ({
   useUnifiedResources: (...args: unknown[]) => mockUseUnifiedResources(...args),
 }));
@@ -264,6 +273,16 @@ describe('ProxmoxPageSurface contract', () => {
     expect(
       screen.queryByRole('list', { name: 'Patrol protection posture' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('does not crash when Patrol state refreshes before Proxmox resources hydrate', async () => {
+    setResourcesSnapshot(undefined, true);
+
+    render(() => <ProxmoxPageSurface />);
+
+    expect(screen.getByTestId('platform-table-loading-state')).toBeInTheDocument();
+    await waitFor(() => expect(mockLoadPatrolFindings).toHaveBeenCalled());
+    expect(screen.queryByRole('list', { name: 'Proxmox Patrol coverage' })).not.toBeInTheDocument();
   });
 
   it('does not render monitor-context Patrol coverage when active Patrol work exists', () => {
