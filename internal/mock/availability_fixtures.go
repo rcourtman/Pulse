@@ -32,6 +32,7 @@ type AvailabilityTargetFixture struct {
 	ID               string
 	Name             string
 	TargetKind       string
+	LinkedResourceID string
 	Address          string
 	Protocol         string
 	Port             int
@@ -68,6 +69,7 @@ func normalizeAvailabilityTargetFixture(target AvailabilityTargetFixture) Availa
 	if target.TargetKind == "" {
 		target.TargetKind = mockAvailabilityTargetService
 	}
+	target.LinkedResourceID = strings.TrimSpace(target.LinkedResourceID)
 	target.Protocol = strings.ToLower(strings.TrimSpace(target.Protocol))
 	if target.Protocol == "" {
 		target.Protocol = mockAvailabilityProbeICMP
@@ -141,6 +143,44 @@ func normalizeAvailabilityFixtureAddress(raw string) string {
 func defaultAvailabilityFixtures(now time.Time) []AvailabilityFixture {
 	base := normalizeAvailabilityFixtureTime(now)
 	return []AvailabilityFixture{
+		{
+			Target: normalizeAvailabilityTargetFixture(AvailabilityTargetFixture{
+				ID:               "mock-availability-docker-frontend-service",
+				Name:             "Frontend Swarm service",
+				TargetKind:       mockAvailabilityTargetService,
+				LinkedResourceID: "mock-swarm-cluster-1:service:svc-frontend-0",
+				Address:          "https://frontend.demo.pulse.local",
+				Protocol:         mockAvailabilityProbeHTTP,
+				Path:             "/health",
+				Enabled:          true,
+				PollIntervalSecs: 30,
+				TimeoutMillis:    1500,
+				FailureThreshold: 2,
+			}),
+			Available:     true,
+			LastChecked:   base.Add(-9 * time.Second),
+			LastSuccess:   base.Add(-9 * time.Second),
+			LatencyMillis: 9,
+		},
+		{
+			Target: normalizeAvailabilityTargetFixture(AvailabilityTargetFixture{
+				ID:               "mock-availability-k8s-checkout-api",
+				Name:             "Checkout API service",
+				TargetKind:       mockAvailabilityTargetService,
+				LinkedResourceID: "k8s-production-1:service:k8s-production-1-svc-checkout-api",
+				Address:          "checkout-api.services.svc.cluster.local",
+				Protocol:         mockAvailabilityProbeTCP,
+				Port:             8080,
+				Enabled:          true,
+				PollIntervalSecs: 30,
+				TimeoutMillis:    1500,
+				FailureThreshold: 2,
+			}),
+			Available:     true,
+			LastChecked:   base.Add(-6 * time.Second),
+			LastSuccess:   base.Add(-6 * time.Second),
+			LatencyMillis: 5,
+		},
 		{
 			Target: normalizeAvailabilityTargetFixture(AvailabilityTargetFixture{
 				ID:               "mock-availability-ups",
@@ -288,6 +328,7 @@ func availabilityFixtureRecord(fixture AvailabilityFixture, now time.Time) (unif
 	}
 	data := &unifiedresources.AvailabilityData{
 		TargetID:            target.ID,
+		LinkedResourceID:    target.LinkedResourceID,
 		Name:                target.displayName(),
 		TargetKind:          target.TargetKind,
 		Address:             target.Address,

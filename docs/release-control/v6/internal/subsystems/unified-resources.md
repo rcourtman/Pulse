@@ -1466,16 +1466,18 @@ records with the saved target id, probe address, protocol, cadence, last check,
 failure count, and threshold in `AvailabilityData`. Registry merge policy must
 preserve that payload and incident state. An availability record attaches as a
 facet onto a known resource when (a) the target carries an explicit
-`LinkedResourceID` referencing a resource already in the registry, or (b) the
+`LinkedResourceID` that resolves to a resource already in the registry by exact
+resource id, unique source id, or unique canonical identity alias, or (b) the
 probe address unambiguously matches exactly one known resource by IP through
 `FindCandidates` with reason `ip` or `hostname+ip` (confidence at or above the
 merge threshold). Fuzzy hostname-only correlation (reason `hostname`, confidence
-below threshold) must not attach. When attached, the known resource inherits
-the `AvailabilityData` facet and `SourceAvailability` in its source list, and
-no standalone `network-endpoint` is minted. When no link resolves, the record
-falls back to a standalone `network-endpoint` as before. A second probe must
-not overwrite a facet already attached by a different target; the second probe
-stays standalone in that case.
+below threshold), ambiguous source/canonical references, and references to
+availability-owned resources must not attach. When attached, the known resource
+inherits the `AvailabilityData` facet and `SourceAvailability` in its source
+list, and no standalone `network-endpoint` is minted. When no link resolves, the
+record falls back to a standalone `network-endpoint` as before. A second probe
+must not overwrite a facet already attached by a different target; the second
+probe stays standalone in that case.
 Frontend resource adapters must preserve that same availability identity on
 both REST and realtime paths: a thin `network-endpoint` update with
 availability data is still `platformType=availability`, `sourceType=api`, and
@@ -1788,7 +1790,11 @@ Agentless availability fixtures join that same graph-owned seed contract:
 mock UPS, MQTT, ESPHome, HTTP, and controller endpoints must project as
 `SourceAvailability` `network-endpoint` resources with real availability
 payloads, incidents, and source status rather than as generic host rows or
-settings-only sample data.
+settings-only sample data. Mock service availability fixtures must use
+`LinkedResourceID` source references when the target service row is produced by
+the same graph, so service ping evidence lands as an `AvailabilityData` facet on
+the Docker or Kubernetes service instead of creating a disconnected duplicate
+endpoint.
 Callers should therefore consume `CurrentFixtureGraph()` and graph-owned
 projections rather than reintroducing platform-only or state-only mock helper
 exports.

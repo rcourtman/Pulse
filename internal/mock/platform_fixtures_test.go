@@ -226,6 +226,71 @@ func TestFixtureGraphProjectsAvailabilityFixturesAsNetworkEndpoints(t *testing.T
 	}
 }
 
+func TestFixtureGraphAttachesServiceAvailabilityFixturesToServiceResources(t *testing.T) {
+	now := time.Date(2026, time.May, 6, 12, 0, 0, 0, time.UTC)
+
+	graph := buildFixtureGraph(DefaultConfig, now)
+	resources, _ := graph.UnifiedResourceSnapshot()
+
+	var dockerService *unifiedresources.Resource
+	var kubernetesService *unifiedresources.Resource
+	for i := range resources {
+		availability := resources[i].Availability
+		if availability == nil {
+			continue
+		}
+		switch availability.TargetID {
+		case "mock-availability-docker-frontend-service":
+			dockerService = &resources[i]
+		case "mock-availability-k8s-checkout-api":
+			kubernetesService = &resources[i]
+		}
+		if resources[i].Type == unifiedresources.ResourceTypeNetworkEndpoint &&
+			(availability.TargetID == "mock-availability-docker-frontend-service" ||
+				availability.TargetID == "mock-availability-k8s-checkout-api") {
+			t.Fatalf("service availability target %q stayed as standalone network endpoint", availability.TargetID)
+		}
+	}
+
+	if dockerService == nil {
+		t.Fatal("expected Docker service availability facet on curated mock service")
+	}
+	if dockerService.Type != unifiedresources.ResourceTypeDockerService {
+		t.Fatalf("Docker service availability attached to %q, want docker-service", dockerService.Type)
+	}
+	if dockerService.Docker == nil || dockerService.Docker.ServiceID != "svc-frontend-0" {
+		t.Fatalf("Docker service metadata = %+v, want service id svc-frontend-0", dockerService.Docker)
+	}
+	if dockerService.Availability.TargetKind != "service" ||
+		dockerService.Availability.Protocol != "http" ||
+		dockerService.Availability.Path != "/health" ||
+		dockerService.Availability.LatencyMillis != 9 {
+		t.Fatalf("unexpected Docker service availability facet: %+v", dockerService.Availability)
+	}
+	if !slices.Contains(dockerService.Sources, unifiedresources.SourceAvailability) {
+		t.Fatalf("expected Docker service sources to include availability, got %+v", dockerService.Sources)
+	}
+
+	if kubernetesService == nil {
+		t.Fatal("expected Kubernetes service availability facet on curated mock service")
+	}
+	if kubernetesService.Type != unifiedresources.ResourceTypeK8sService {
+		t.Fatalf("Kubernetes service availability attached to %q, want k8s-service", kubernetesService.Type)
+	}
+	if kubernetesService.Name != "checkout-api" {
+		t.Fatalf("Kubernetes service name = %q, want checkout-api", kubernetesService.Name)
+	}
+	if kubernetesService.Availability.TargetKind != "service" ||
+		kubernetesService.Availability.Protocol != "tcp" ||
+		kubernetesService.Availability.Port != 8080 ||
+		kubernetesService.Availability.LatencyMillis != 5 {
+		t.Fatalf("unexpected Kubernetes service availability facet: %+v", kubernetesService.Availability)
+	}
+	if !slices.Contains(kubernetesService.Sources, unifiedresources.SourceAvailability) {
+		t.Fatalf("expected Kubernetes service sources to include availability, got %+v", kubernetesService.Sources)
+	}
+}
+
 func TestBuildFixtureGraphRebasesPlatformFixtureTimestampsForDemoRuntime(t *testing.T) {
 	now := time.Date(2026, time.March, 31, 17, 30, 0, 0, time.UTC)
 

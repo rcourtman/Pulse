@@ -103,6 +103,52 @@ func TestResourceRegistry_GetByReferenceResolvesSourceIDAndCanonicalAlias(t *tes
 	}
 }
 
+func TestResourceRegistryAvailabilityLinkedResourceResolvesSourceReference(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Now().UTC()
+	const serviceSourceID = "swarm-1:service:svc-api"
+	rr.IngestRecords(SourceDocker, []IngestRecord{{
+		SourceID: serviceSourceID,
+		Resource: Resource{
+			Type:     ResourceTypeDockerService,
+			Name:     "api",
+			Status:   StatusOnline,
+			LastSeen: now,
+		},
+		Identity: ResourceIdentity{Hostnames: []string{"api"}},
+	}})
+
+	rr.IngestRecords(SourceAvailability, []IngestRecord{
+		availabilityProbeRecord("probe-service", "api.example.test", &AvailabilityData{
+			LinkedResourceID: serviceSourceID,
+			Address:          "api.example.test",
+			Protocol:         "tcp",
+			Port:             8443,
+			TargetKind:       "service",
+			Enabled:          true,
+			Available:        true,
+		}),
+	})
+
+	if got := rr.ListByType(ResourceTypeNetworkEndpoint); len(got) != 0 {
+		t.Fatalf("expected source-referenced probe to attach (0 endpoints), got %d", len(got))
+	}
+	services := rr.ListByType(ResourceTypeDockerService)
+	if len(services) != 1 {
+		t.Fatalf("expected 1 docker service, got %d", len(services))
+	}
+	service := services[0]
+	if service.Availability == nil || service.Availability.TargetID != "probe-service" {
+		t.Fatalf("expected availability facet probe-service on docker service, got %+v", service.Availability)
+	}
+	if service.Availability.LinkedResourceID != serviceSourceID {
+		t.Fatalf("linkedResourceId = %q, want %q", service.Availability.LinkedResourceID, serviceSourceID)
+	}
+	if !hasDataSource(service.Sources, SourceAvailability) {
+		t.Fatalf("expected docker service sources to include availability, got %v", service.Sources)
+	}
+}
+
 func TestResourceRegistry_ListByType(t *testing.T) {
 	rr := NewRegistry(nil)
 

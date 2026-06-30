@@ -2418,9 +2418,8 @@ func (rr *ResourceRegistry) resolveAvailabilityLink(resource Resource) string {
 	}
 
 	if linkedID := strings.TrimSpace(resource.Availability.LinkedResourceID); linkedID != "" {
-		existing := rr.resources[linkedID]
-		if existing != nil && !isAvailabilityOwnedResource(*existing) && availabilityFacetCompatible(existing, resource) {
-			return linkedID
+		if resolved := rr.resolveAvailabilityLinkedResource(linkedID, resource); resolved != "" {
+			return resolved
 		}
 	}
 
@@ -2442,6 +2441,33 @@ func (rr *ResourceRegistry) resolveAvailabilityLink(resource Resource) string {
 		matchID = candidate.ID
 	}
 	return matchID
+}
+
+func (rr *ResourceRegistry) resolveAvailabilityLinkedResource(ref string, incoming Resource) string {
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return ""
+	}
+
+	exactID := CanonicalResourceID(ref)
+	if existing := rr.resources[exactID]; existing != nil {
+		if !isAvailabilityOwnedResource(*existing) && availabilityFacetCompatible(existing, incoming) {
+			return exactID
+		}
+		return ""
+	}
+
+	for _, candidateID := range uniqueTrimmed(
+		rr.uniqueSourceResourceIDLocked(ref),
+		rr.uniqueCanonicalIdentityResourceIDLocked(ref),
+	) {
+		existing := rr.resources[candidateID]
+		if existing != nil && !isAvailabilityOwnedResource(*existing) && availabilityFacetCompatible(existing, incoming) {
+			return candidateID
+		}
+	}
+
+	return ""
 }
 
 // isAvailabilityOwnedResource reports whether a resource is itself an
