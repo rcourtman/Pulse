@@ -1038,22 +1038,23 @@ func (a *Agent) collectTemperatures(ctx context.Context) agentshost.Sensors {
 	jsonOutput, err := a.collector.SensorsLocal(ctx)
 	if err != nil {
 		a.logger.Debug().Err(err).Msg("Failed to collect sensor data (lm-sensors may not be installed)")
-		return agentshost.Sensors{}
+		return a.collectNVIDIATemperatureSensors(ctx)
 	}
 
 	// Parse the sensor output
 	tempData, err := a.collector.SensorsParse(jsonOutput)
 	if err != nil {
 		a.logger.Debug().Err(err).Msg("Failed to parse sensor data")
-		return agentshost.Sensors{}
+		return a.collectNVIDIATemperatureSensors(ctx)
 	}
 
 	if !tempData.Available {
 		a.logger.Debug().Msg("No temperature sensors available on this system")
-		return agentshost.Sensors{}
+		return a.collectNVIDIATemperatureSensors(ctx)
 	}
 
 	result := convertTemperatureDataToSensors(tempData)
+	a.mergeNVIDIATemperatures(ctx, &result)
 
 	// Collect power consumption data (Intel RAPL, etc.)
 	if powerData, err := a.collector.SensorsPower(ctx); err == nil && powerData != nil && powerData.Available {

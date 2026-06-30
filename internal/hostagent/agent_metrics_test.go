@@ -449,6 +449,64 @@ func TestBuildReportIncludesDarwinThermalState(t *testing.T) {
 	}
 }
 
+func TestBuildReportIncludesNVIDIASMITemperaturesWhenLMSensorsUnavailable(t *testing.T) {
+	mc := &mockCollector{
+		goos:  "linux",
+		nowFn: func() time.Time { return time.Date(2026, 6, 30, 8, 0, 0, 0, time.UTC) },
+		hostInfoFn: func(ctx context.Context) (*gohost.InfoStat, error) {
+			return &gohost.InfoStat{
+				Hostname: "gpu-node",
+				OS:       "linux",
+				Platform: "ubuntu",
+				HostID:   "gpu-node-id",
+			}, nil
+		},
+		hostUptimeFn: func(context.Context) (uint64, error) {
+			return 7200, nil
+		},
+		metricsFn: func(context.Context, []string) (hostmetrics.Snapshot, error) {
+			return hostmetrics.Snapshot{}, nil
+		},
+		sensorsLocalFn: func(context.Context) (string, error) {
+			return "", errors.New("lm-sensors unavailable")
+		},
+		lookPathFn: func(file string) (string, error) {
+			if file == "nvidia-smi" {
+				return "/usr/bin/nvidia-smi", nil
+			}
+			return "", os.ErrNotExist
+		},
+		commandCombinedOutputFn: func(_ context.Context, name string, arg ...string) (string, error) {
+			if name != "/usr/bin/nvidia-smi" {
+				t.Fatalf("command name = %q, want /usr/bin/nvidia-smi", name)
+			}
+			if len(arg) != 2 || arg[0] != "--query-gpu=index,name,temperature.gpu" || arg[1] != "--format=csv,noheader,nounits" {
+				t.Fatalf("command args = %#v, want NVIDIA temperature query", arg)
+			}
+			return "0, NVIDIA GeForce RTX 4090, 63\n", nil
+		},
+	}
+
+	agent, err := New(Config{
+		AgentID:   "gpu-agent",
+		APIToken:  "token",
+		LogLevel:  -1,
+		Collector: mc,
+	})
+	if err != nil {
+		t.Fatalf("New() failed: %v", err)
+	}
+
+	report, err := agent.buildReport(context.Background())
+	if err != nil {
+		t.Fatalf("buildReport failed: %v", err)
+	}
+
+	if report.Sensors.TemperatureCelsius["gpu_nvidia_0"] != 63 {
+		t.Fatalf("NVIDIA GPU temp = %v, want 63", report.Sensors.TemperatureCelsius["gpu_nvidia_0"])
+	}
+}
+
 func TestBuildReportUsesResolvedNASOSIdentity(t *testing.T) {
 	fixedTime := time.Date(2026, time.April, 15, 12, 0, 0, 0, time.UTC)
 

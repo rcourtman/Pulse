@@ -3,6 +3,8 @@ package hostagent
 import (
 	"context"
 	"errors"
+	"os"
+	"os/exec"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/sensors"
@@ -55,6 +57,70 @@ func TestAgent_collectTemperatures_MapsKeys(t *testing.T) {
 	}
 }
 
+func TestAgent_collectTemperatures_MergesNVIDIASMITemperatures(t *testing.T) {
+	mc := &mockCollector{
+		goos:           "linux",
+		sensorsLocalFn: func(context.Context) (string, error) { return "{}", nil },
+		sensorsParseFn: func(string) (*sensors.TemperatureData, error) {
+			return &sensors.TemperatureData{
+				Available:  true,
+				CPUPackage: 55.5,
+			}, nil
+		},
+		lookPathFn: func(file string) (string, error) {
+			if file != "nvidia-smi" {
+				t.Fatalf("look path file = %q, want nvidia-smi", file)
+			}
+			return "/usr/bin/nvidia-smi", nil
+		},
+		commandCombinedOutputFn: func(_ context.Context, name string, arg ...string) (string, error) {
+			if name != "/usr/bin/nvidia-smi" {
+				t.Fatalf("command name = %q, want /usr/bin/nvidia-smi", name)
+			}
+			if len(arg) != 2 || arg[0] != "--query-gpu=index,name,temperature.gpu" || arg[1] != "--format=csv,noheader,nounits" {
+				t.Fatalf("command args = %#v, want NVIDIA temperature query", arg)
+			}
+			return "0, NVIDIA GeForce RTX 4090, 61\n", nil
+		},
+	}
+
+	a := &Agent{logger: zerolog.Nop(), collector: mc}
+
+	got := a.collectTemperatures(context.Background())
+	if got.TemperatureCelsius["cpu_package"] != 55.5 {
+		t.Fatalf("cpu package temp = %v, want 55.5", got.TemperatureCelsius["cpu_package"])
+	}
+	if got.TemperatureCelsius["gpu_nvidia_0"] != 61 {
+		t.Fatalf("NVIDIA GPU temp = %v, want 61", got.TemperatureCelsius["gpu_nvidia_0"])
+	}
+}
+
+func TestAgent_collectTemperatures_UsesNVIDIASMIWhenLMSensorsUnavailable(t *testing.T) {
+	mc := &mockCollector{
+		goos:           "linux",
+		sensorsLocalFn: func(context.Context) (string, error) { return "", errors.New("no sensors") },
+		lookPathFn: func(file string) (string, error) {
+			if file != "nvidia-smi" {
+				t.Fatalf("look path file = %q, want nvidia-smi", file)
+			}
+			return "/usr/bin/nvidia-smi", nil
+		},
+		commandCombinedOutputFn: func(context.Context, string, ...string) (string, error) {
+			return "0, NVIDIA RTX A6000, 58\n", nil
+		},
+	}
+
+	a := &Agent{logger: zerolog.Nop(), collector: mc}
+
+	got := a.collectTemperatures(context.Background())
+	if len(got.TemperatureCelsius) != 1 {
+		t.Fatalf("temperature keys = %d, want 1; got %v", len(got.TemperatureCelsius), got.TemperatureCelsius)
+	}
+	if got.TemperatureCelsius["gpu_nvidia_0"] != 58 {
+		t.Fatalf("NVIDIA GPU temp = %v, want 58", got.TemperatureCelsius["gpu_nvidia_0"])
+	}
+}
+
 func TestAgent_collectTemperatures_BestEffortFailuresReturnEmpty(t *testing.T) {
 	mc := &mockCollector{goos: "linux"}
 	a := &Agent{logger: zerolog.Nop(), collector: mc}
@@ -73,6 +139,61 @@ func TestAgent_collectTemperatures_BestEffortFailuresReturnEmpty(t *testing.T) {
 	mc.sensorsParseFn = func(string) (*sensors.TemperatureData, error) { return &sensors.TemperatureData{Available: false}, nil }
 	if got := a.collectTemperatures(context.Background()); len(got.TemperatureCelsius) != 0 {
 		t.Fatalf("expected empty sensors when unavailable, got %#v", got.TemperatureCelsius)
+	}
+}
+
+func TestParseNVIDIASMITemperatures(t *testing.T) {
+	input := `0, NVIDIA GeForce RTX 4090, 47
+1, "NVIDIA, RTX A6000", N/A
+2, NVIDIA Tesla T4, 58 C
+0000:65:00.0, NVIDIA H100, 64`
+
+	got, err := parseNVIDIASMITemperatures(input)
+	if err != nil {
+		t.Fatalf("parseNVIDIASMITemperatures returned error: %v", err)
+	}
+
+	want := map[string]float64{
+		"gpu_nvidia_0":            47,
+		"gpu_nvidia_2":            58,
+		"gpu_nvidia_0000_65_00_0": 64,
+	}
+	if len(got) != len(want) {
+		t.Fatalf("temperature keys = %d, want %d; got %v", len(got), len(want), got)
+	}
+	for key, wantTemp := range want {
+		if gotTemp := got[key]; gotTemp != wantTemp {
+			t.Fatalf("%s = %v, want %v", key, gotTemp, wantTemp)
+		}
+	}
+}
+
+func TestParseNVIDIASMITemperatures_NoUsableRows(t *testing.T) {
+	got, err := parseNVIDIASMITemperatures("0, NVIDIA RTX, N/A\nbad row\n")
+	if err != nil {
+		t.Fatalf("parseNVIDIASMITemperatures returned error: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("expected nil temps, got %v", got)
+	}
+}
+
+func TestAgent_queryNVIDIASMITemperatures_CommandNotInstalled(t *testing.T) {
+	for _, lookPathErr := range []error{os.ErrNotExist, exec.ErrNotFound} {
+		mc := &mockCollector{
+			lookPathFn: func(string) (string, error) {
+				return "", lookPathErr
+			},
+		}
+		a := &Agent{logger: zerolog.Nop(), collector: mc}
+
+		got, err := a.queryNVIDIASMITemperatures(context.Background())
+		if err != nil {
+			t.Fatalf("queryNVIDIASMITemperatures returned error for %v: %v", lookPathErr, err)
+		}
+		if got != nil {
+			t.Fatalf("expected nil temps for %v, got %v", lookPathErr, got)
+		}
 	}
 }
 
