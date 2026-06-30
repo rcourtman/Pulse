@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import appSource from '@/App.tsx?raw';
 import appLayoutSource from '@/AppLayout.tsx?raw';
 import appRuntimeContextSource from '@/contexts/appRuntime.ts?raw';
+import runtimeHomeSource from '@/pages/RuntimeHome.tsx?raw';
 import routePreloadSource from '@/routing/routePreload.ts?raw';
 import appRuntimeStateSource from '@/useAppRuntimeState.ts?raw';
 
@@ -439,5 +440,33 @@ describe('App architecture', () => {
     expect(appRuntimeContextSource).toContain(
       'export const DarkModeContext = createContext<() => boolean>();',
     );
+  });
+
+  it('keeps dashboard and Explore boundaries out of the runtime home shell', () => {
+    const shellEntrySources = [
+      { name: 'App.tsx', source: appSource },
+      { name: 'AppLayout.tsx', source: appLayoutSource },
+      { name: 'RuntimeHome.tsx', source: runtimeHomeSource },
+      { name: 'routePreload.ts', source: routePreloadSource },
+    ];
+
+    for (const { name, source } of shellEntrySources) {
+      expect(source, name).not.toContain('/dashboard');
+      expect(source, name).not.toContain("'/explore'");
+      expect(source, name).not.toContain('"/explore"');
+      expect(source, name).not.toContain('DashboardPage');
+      expect(source, name).not.toContain('ExplorePage');
+      expect(source, name).not.toContain('getPatrolProtectionPosture');
+      expect(source, name).not.toContain('getMonitorContextPatrolProtectionPosture');
+      expect(source, name).not.toContain('Patrol protection posture');
+      expect(source, name).not.toContain('Proxmox Patrol coverage');
+      expect(source, name).not.toContain('Protection current');
+    }
+
+    expect(runtimeHomeSource).toContain('runtimeHome.openingWorkspace');
+    expect(runtimeHomeSource).not.toContain('aiIntelligenceStore');
+    expect(runtimeHomeSource).not.toContain('patrolOpenWork');
+    expect(appLayoutSource).toContain("label: 'Patrol'");
+    expect(appLayoutSource).toContain('countLabel: patrolOpenWorkCountLabel()');
   });
 });

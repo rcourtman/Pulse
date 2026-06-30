@@ -53,4 +53,22 @@ describe('assistantPageContext', () => {
       surface: 'unknown',
     });
   });
+
+  it('does not revive retired dashboard or Explore surfaces as Assistant context', () => {
+    const retiredRoutes = ['/dashboard', '/dashboard/explore', '/explore', '/home'];
+
+    for (const route of retiredRoutes) {
+      const presentation = getAssistantPageContext(route);
+
+      expect(presentation.ariaLabel).toBe('Ask Pulse Assistant about this view');
+      expect(presentation.commandLabel).toBe('Ask about this view');
+      expect(presentation.context.targetId).toBe(route);
+      expect(presentation.context.context).toMatchObject({
+        name: 'Current view',
+        route,
+        surface: 'unknown',
+      });
+      expect(presentation.context.briefing?.title).toBe('Current view attached');
+    }
+  });
 });
