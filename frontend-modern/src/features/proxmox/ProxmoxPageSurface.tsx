@@ -1,6 +1,7 @@
 import { useLocation } from '@solidjs/router';
-import { Show, createMemo, createResource, type Accessor } from 'solid-js';
+import { For, Show, createMemo, createResource, type Accessor } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
+import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import StorageSurface from '@/components/Storage/Storage';
 import { WorkloadsFilter } from '@/components/Workloads/WorkloadsFilter';
 import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
@@ -42,6 +43,15 @@ import { ProxmoxNodesTable } from './ProxmoxNodesTable';
 import { ProxmoxReplicationTable, fetchReplicationJobs } from './ProxmoxReplicationTable';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import { updateStore } from '@/stores/updates';
+import { aiIntelligenceStore } from '@/stores/aiIntelligence';
+import { getPatrolWorkTypeComposition } from '@/utils/aiFindingPresentation';
+import {
+  getPatrolRunHistory,
+  getPatrolStatus,
+  type PatrolRunRecord,
+  type PatrolStatus,
+} from '@/api/patrol';
+import { getMonitorContextPatrolProtectionPosture } from '@/features/patrol/patrolControlPresentation';
 import {
   PROXMOX_TAB_SPECS,
   buildProxmoxPageModel,
@@ -75,6 +85,25 @@ const PROXMOX_WORKLOAD_STATUS_OPTIONS: readonly WorkloadsStatusOption[] = [
 const ProxmoxIcon = getPlatformIcon('proxmox');
 const proxmoxIcon = () => <ProxmoxIcon class="h-6 w-6 text-slate-400" />;
 
+interface MonitorPatrolContext {
+  latestRun: PatrolRunRecord | null;
+  status: PatrolStatus | null;
+}
+
+async function loadMonitorPatrolContext(): Promise<MonitorPatrolContext> {
+  const [, , statusResult, historyResult] = await Promise.allSettled([
+    aiIntelligenceStore.loadPatrolFindings(),
+    aiIntelligenceStore.loadPendingApprovals(),
+    getPatrolStatus(),
+    getPatrolRunHistory(1),
+  ]);
+
+  return {
+    status: statusResult.status === 'fulfilled' ? statusResult.value : null,
+    latestRun: historyResult.status === 'fulfilled' ? (historyResult.value[0] ?? null) : null,
+  };
+}
+
 export function ProxmoxPageSurface() {
   const location = useLocation();
   const { resources, loading, error, refetch } = useUnifiedResources({
@@ -89,6 +118,7 @@ export function ProxmoxPageSurface() {
   // Reading an errored resource throws, hence the `.error` guards.
   const [replicationJobs, { refetch: refetchReplicationJobs }] =
     createResource(fetchReplicationJobs);
+  const [monitorPatrolContext] = createResource(loadMonitorPatrolContext);
   const replicationJobCount = createMemo(() =>
     replicationJobs.error ? 0 : (replicationJobs() ?? []).length,
   );
@@ -196,6 +226,7 @@ export function ProxmoxPageSurface() {
                 setMetricDisplayMode={setMetricDisplayMode}
                 metricHistoryRange={metricHistoryRange}
                 setMetricHistoryRange={setMetricHistoryRange}
+                patrolContext={monitorPatrolContext}
               />
             </Show>
             <Show when={activeTab() === 'storage'}>
@@ -252,6 +283,7 @@ interface ProxmoxOverviewProps {
   setMetricDisplayMode: (value: WorkloadsMetricDisplayMode) => void;
   metricHistoryRange: Accessor<WorkloadTableMetricHistoryRange>;
   setMetricHistoryRange: (value: WorkloadTableMetricHistoryRange) => void;
+  patrolContext: Accessor<MonitorPatrolContext | undefined>;
 }
 
 function ProxmoxOverview(props: ProxmoxOverviewProps) {
@@ -287,6 +319,19 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
       props.model().guests,
       workloadsState.search(),
     ),
+  );
+  const activePatrolFindings = createMemo(() =>
+    aiIntelligenceStore.patrolFindings.filter((finding) => finding.status === 'active'),
+  );
+  const monitorPatrolPosture = createMemo(() =>
+    getMonitorContextPatrolProtectionPosture({
+      findingCount: activePatrolFindings().length,
+      latestRun: props.patrolContext()?.latestRun ?? null,
+      monitoredResourceCount: props.model().resources.length,
+      patrolStatus: props.patrolContext()?.status ?? null,
+      pendingApprovalCount: aiIntelligenceStore.patrolPendingApprovalCount,
+      workTypeComposition: getPatrolWorkTypeComposition(activePatrolFindings()),
+    }),
   );
 
   return (
@@ -327,6 +372,29 @@ function ProxmoxOverview(props: ProxmoxOverviewProps) {
             }
             onClearPinnedSelection={workloadsState.clearPinnedSummaryScope}
           />
+        </div>
+      </Show>
+      <Show when={monitorPatrolPosture().length > 0}>
+        <div
+          role="list"
+          aria-label="Proxmox Patrol coverage"
+          class="grid gap-2 sm:grid-cols-2 xl:grid-cols-3"
+        >
+          <For each={monitorPatrolPosture()}>
+            {(item) => (
+              <div
+                role="listitem"
+                class="rounded-md border border-border-subtle bg-surface-alt/50 px-3 py-2"
+              >
+                <div class="flex min-w-0 flex-wrap items-center gap-2">
+                  <MetadataBadge tone={item.tone} size="xs" shape="rounded">
+                    {item.label}
+                  </MetadataBadge>
+                </div>
+                <p class="mt-1 text-xs leading-5 text-muted">{item.detail}</p>
+              </div>
+            )}
+          </For>
         </div>
       </Show>
       <ProxmoxNodesTable

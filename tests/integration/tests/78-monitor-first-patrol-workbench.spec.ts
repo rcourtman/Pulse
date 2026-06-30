@@ -504,11 +504,14 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
       0,
     );
     await expect(
+      page.getByRole("list", { name: "Proxmox Patrol coverage" }),
+    ).toHaveCount(0);
+    await expect(
       page.getByRole("heading", { name: /^Pulse Assistant$/ }),
     ).toHaveCount(0);
   });
 
-  test("calm-day Patrol posture stays inside Patrol context after infrastructure launch", async ({
+  test("calm-day Patrol coverage stays contextual after infrastructure launch", async ({
     page,
   }, testInfo) => {
     test.skip(
@@ -533,6 +536,19 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
     await expect(
       page.getByRole("list", { name: "Patrol protection posture" }),
     ).toHaveCount(0);
+    const monitorPatrolCoverage = page.getByRole("list", {
+      name: "Proxmox Patrol coverage",
+    });
+    await expect(monitorPatrolCoverage).toBeVisible();
+    await expect(
+      monitorPatrolCoverage.getByText("Patrol checked 1 resource"),
+    ).toBeVisible();
+    await expect(
+      monitorPatrolCoverage.getByText("No Patrol work waiting"),
+    ).toBeVisible();
+    await expect(
+      monitorPatrolCoverage.getByText("Next check scheduled"),
+    ).toBeVisible();
 
     await page.getByRole("tab", { name: "Patrol" }).click();
     await expect(page).toHaveURL(/\/patrol$/);
@@ -580,6 +596,9 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
     await expect(page.getByText("Latest check needs review")).toHaveCount(0);
     await expect(page.getByText("1 approval waiting")).toHaveCount(0);
     await expect(page.getByText("Protection current")).toHaveCount(0);
+    await expect(
+      page.getByRole("list", { name: "Proxmox Patrol coverage" }),
+    ).toHaveCount(0);
     await expect(page.getByText("What Pulse checked")).toHaveCount(0);
 
     await page.getByRole("tab", { name: /Patrol/ }).click();

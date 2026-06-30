@@ -5,6 +5,7 @@ import {
   getPatrolProInvestigationHandoff,
   getPatrolQueueBadgeLabel,
   getPatrolQueueWorkspaceDescription,
+  getMonitorContextPatrolProtectionPosture,
   getPatrolReadyWorkDetail,
   getPatrolSetupIssueReason,
   getPatrolWorkspaceProtectionPosture,
@@ -414,6 +415,103 @@ describe('patrolControlPresentation', () => {
           running: false,
           runtime_state: 'active',
         },
+      }),
+    ).toEqual([]);
+  });
+
+  it('surfaces monitor-context posture without reusing the Patrol empty-work labels', () => {
+    expect(
+      getMonitorContextPatrolProtectionPosture({
+        findingCount: 0,
+        latestRun: {
+          error_count: 0,
+          resources_checked: 4,
+          status: 'healthy',
+        },
+        monitoredResourceCount: 4,
+        nowMs: Date.parse('2026-06-30T13:00:00Z'),
+        patrolStatus: {
+          enabled: true,
+          error_count: 0,
+          findings_count: 0,
+          healthy: true,
+          next_patrol_at: '2026-06-30T14:05:00Z',
+          resources_checked: 4,
+          running: false,
+          runtime_state: 'active',
+        },
+        pendingApprovalCount: 0,
+        workTypeComposition: {
+          total: 0,
+          approval: 0,
+          failed: 0,
+          inProgress: 0,
+          recurring: 0,
+          newIssues: 0,
+        },
+      }),
+    ).toEqual([
+      {
+        detail: 'Latest Patrol evidence is available while you review this monitor view.',
+        id: 'coverage',
+        label: 'Patrol checked 4 resources',
+        tone: 'success',
+      },
+      {
+        detail: 'Current Patrol findings and approvals stay in Patrol; none are waiting now.',
+        id: 'open-work',
+        label: 'No Patrol work waiting',
+        tone: 'success',
+      },
+      {
+        detail: 'Patrol is scheduled to check monitored resources again.',
+        id: 'schedule',
+        label: 'Next check scheduled',
+        tone: 'info',
+      },
+    ]);
+  });
+
+  it('does not surface monitor-context posture without monitor resources or when Patrol has work', () => {
+    const baseInput = {
+      latestRun: {
+        error_count: 0,
+        resources_checked: 4,
+        status: 'healthy',
+      },
+      nowMs: Date.parse('2026-06-30T13:00:00Z'),
+      patrolStatus: {
+        enabled: true,
+        error_count: 0,
+        findings_count: 0,
+        healthy: true,
+        next_patrol_at: '2026-06-30T14:05:00Z',
+        resources_checked: 4,
+        running: false,
+        runtime_state: 'active',
+      },
+    } as const;
+
+    expect(
+      getMonitorContextPatrolProtectionPosture({
+        ...baseInput,
+        monitoredResourceCount: 0,
+      }),
+    ).toEqual([]);
+
+    expect(
+      getMonitorContextPatrolProtectionPosture({
+        ...baseInput,
+        findingCount: 1,
+        monitoredResourceCount: 4,
+      }),
+    ).toEqual([]);
+
+    expect(
+      getMonitorContextPatrolProtectionPosture({
+        ...baseInput,
+        monitoredResourceCount: 4,
+        pendingApprovalCount: 1,
       }),
     ).toEqual([]);
   });

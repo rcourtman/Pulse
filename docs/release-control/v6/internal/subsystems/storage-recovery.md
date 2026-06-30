@@ -110,6 +110,13 @@ interpreted as backup visibility, recovery readiness, restore capability, or a
 storage/recovery-owned command path. Suppressing those notices when the API has
 no deployable agent update target is likewise lifecycle/frontend behavior and
 does not change Proxmox backup or recovery evidence.
+Proxmox overview Patrol coverage posture is also adjacent monitor/Patrol
+context, not storage/recovery evidence. `ProxmoxPageSurface` may render a
+compact monitor-context Patrol coverage list from Patrol status, latest run,
+current findings, and approvals when no current Patrol work or failed/stale
+Patrol check exists, but that list must not be treated as backup coverage,
+restore readiness, PBS verification/protection proof, or a replacement for the
+Proxmox Backups tab and workload Backup column.
 Proxmox backup inventory loading and load-failure chrome is likewise a
 frontend-primitives dependency. `ProxmoxBackupsTable` owns the backup API
 queries, recovery model, filters, coverage split, and backup-specific error

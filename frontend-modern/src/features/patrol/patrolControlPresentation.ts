@@ -73,6 +73,13 @@ export interface PatrolWorkspaceProtectionPostureSummary {
   tone: MetadataBadgeTone;
 }
 
+export interface MonitorContextPatrolPostureSummary {
+  detail: string;
+  id: 'coverage' | 'open-work' | 'schedule';
+  label: string;
+  tone: MetadataBadgeTone;
+}
+
 interface PatrolWorkspaceWorkGroupsInput {
   latestRun?: Pick<PatrolRunRecord, 'error_count' | 'resources_checked' | 'status'> | null;
   nowMs?: number;
@@ -106,6 +113,10 @@ interface PatrolWorkspaceProtectionPostureInput {
   > | null;
   pendingApprovalCount?: number;
   workTypeComposition?: PatrolWorkTypeComposition;
+}
+
+interface MonitorContextPatrolPostureInput extends PatrolWorkspaceProtectionPostureInput {
+  monitoredResourceCount?: number;
 }
 
 interface PatrolSetupIssueReasonInput {
@@ -178,6 +189,11 @@ function getPatrolCoverageLabel(
   }
 
   return undefined;
+}
+
+function formatMonitorCoverageLabel(coverageLabel: string | undefined): string {
+  if (!coverageLabel) return 'Patrol coverage needs refresh';
+  return `Patrol ${coverageLabel.charAt(0).toLowerCase()}${coverageLabel.slice(1)}`;
 }
 
 function getPatrolQueueActionDetail(input: PatrolControlCopyInput): string {
@@ -454,6 +470,64 @@ export function getPatrolWorkspaceProtectionPosture(
   });
 
   return posture;
+}
+
+export function getMonitorContextPatrolProtectionPosture(
+  input: MonitorContextPatrolPostureInput,
+): MonitorContextPatrolPostureSummary[] {
+  if (normalizeCount(input.monitoredResourceCount) <= 0) {
+    return [];
+  }
+
+  const patrolPosture = getPatrolWorkspaceProtectionPosture(input);
+  if (patrolPosture.length === 0) {
+    return [];
+  }
+
+  const patrolStatus = input.patrolStatus ?? null;
+  const healthyTone: MetadataBadgeTone = patrolStatus?.healthy === false ? 'warning' : 'success';
+  const coverageLabel = getPatrolCoverageLabel(input.latestRun ?? null, patrolStatus);
+  const summaries: MonitorContextPatrolPostureSummary[] = [
+    {
+      id: 'coverage',
+      label: formatMonitorCoverageLabel(coverageLabel),
+      detail: coverageLabel
+        ? 'Latest Patrol evidence is available while you review this monitor view.'
+        : 'Run Patrol to refresh current coverage for monitored resources.',
+      tone: coverageLabel ? healthyTone : 'warning',
+    },
+    {
+      id: 'open-work',
+      label: 'No Patrol work waiting',
+      detail: 'Current Patrol findings and approvals stay in Patrol; none are waiting now.',
+      tone: healthyTone,
+    },
+  ];
+
+  if (patrolStatus?.enabled === false) {
+    summaries.push({
+      id: 'schedule',
+      label: 'Scheduled checks paused',
+      detail: 'Run Patrol manually or enable scheduled checks to keep coverage fresh.',
+      tone: 'warning',
+    });
+  } else if (patrolStatus?.next_patrol_at) {
+    summaries.push({
+      id: 'schedule',
+      label: 'Next check scheduled',
+      detail: 'Patrol is scheduled to check monitored resources again.',
+      tone: 'info',
+    });
+  } else {
+    summaries.push({
+      id: 'schedule',
+      label: 'Ready to run Patrol',
+      detail: 'Run Patrol from the Patrol page any time to refresh coverage.',
+      tone: 'info',
+    });
+  }
+
+  return summaries;
 }
 
 const PATROL_PRO_HANDOFF_ACTIONABLE_SEVERITIES = new Set(['critical', 'warning']);

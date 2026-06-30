@@ -133,6 +133,11 @@ loop, and routes the operator from real findings/evidence to safe action.
   evidence, next step, and verification state from existing finding, approval,
   and workflow fields. The scaffold stays attached to the issue row and does
   not create a separate proof, trust, or status strip.
+- 2026-06-30: Added Proxmox overview monitor-context Patrol coverage posture.
+  It appears only when Patrol has no current work, failed/latest check,
+  running check, setup failure, overdue schedule, or pending approval; uses
+  monitor-context labels; and keeps the Patrol empty-work `Patrol protection
+  posture` list inside Patrol.
 
 ## Evidence
 
@@ -150,8 +155,8 @@ loop, and routes the operator from real findings/evidence to safe action.
 - Cross-source current-work grouping remains useful, but it belongs inside
   Patrol or contextual monitoring surfaces rather than a renamed top-level
   destination.
-- Calm-day posture now has a Patrol-side empty-work shape; monitoring-context
-  posture still needs a separate contextual pass before any monitor page should
-  show protection or coverage summaries.
+- Proxmox now has a monitor-context coverage posture. Additional monitor
+  surfaces should reuse the same Patrol gating and monitor-label boundary
+  before showing coverage or protection summaries.
 - The status coverage gap `protection-posture-attention-queue` tracks the
   remaining product-surface work.
