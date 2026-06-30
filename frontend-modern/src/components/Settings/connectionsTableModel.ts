@@ -202,7 +202,7 @@ const SOURCE_PRESENTATION: Record<InfrastructureSourceKind, InfrastructureSource
   api: {
     label: 'API',
     badgeClassName:
-      'inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700 dark:bg-slate-800/60 dark:text-slate-200',
+      'inline-flex items-center rounded-full bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-base-content',
     title: 'Data collected via the platform API',
   },
   agent: {

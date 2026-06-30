@@ -3,6 +3,7 @@ import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import PricingHandoff from '@/pages/PricingHandoff';
 import pricingHandoffSource from '@/pages/PricingHandoff.tsx?raw';
+import { DEFAULT_LOCALE, loadLocaleCatalog, setActiveLocale } from '@/i18n';
 import {
   getSelfHostedPurchaseStartUrl,
   SELF_HOSTED_PRO_BILLING_PLAN_ROUTE,
@@ -22,11 +23,13 @@ vi.mock('@/utils/pricingHandoff', async () => {
 describe('PricingHandoff', () => {
   beforeEach(() => {
     handoffToExternalPricingMock.mockReset();
+    setActiveLocale(DEFAULT_LOCALE);
     window.scrollTo = vi.fn();
   });
 
   afterEach(() => {
     cleanup();
+    setActiveLocale(DEFAULT_LOCALE);
     window.history.replaceState({}, '', '/');
   });
 
@@ -51,6 +54,30 @@ describe('PricingHandoff', () => {
       screen.getByRole('heading', { name: 'Redirecting to Pulse Account' }),
     ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /continue to Pulse Account/i })).toHaveAttribute(
+      'href',
+      expectedDestination,
+    );
+  });
+
+  it('localizes the Pulse Account handoff without translating the destination name', async () => {
+    await loadLocaleCatalog('de');
+    setActiveLocale('de');
+    window.history.replaceState({}, '', '/pricing?feature=unknown_pro_feature');
+    const expectedDestination = getSelfHostedPurchaseStartUrl(
+      'unknown_pro_feature',
+      new URLSearchParams('feature=unknown_pro_feature'),
+    );
+
+    render(() => (
+      <Router>
+        <Route path="/pricing" component={PricingHandoff} />
+      </Router>
+    ));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Weiterleitung zu Pulse Account' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'weiter zu Pulse Account' })).toHaveAttribute(
       'href',
       expectedDestination,
     );

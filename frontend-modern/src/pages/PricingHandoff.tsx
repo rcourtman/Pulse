@@ -7,6 +7,7 @@ import {
   isExternalPricingDestination,
   isSelfHostedPurchaseStartDestination,
 } from '@/utils/pricingHandoff';
+import { t } from '@/i18n';
 
 export default function PricingHandoff() {
   const location = useLocation();
@@ -16,11 +17,15 @@ export default function PricingHandoff() {
     isSelfHostedPurchaseStartDestination(destination()),
   );
   const pulseAccountDestination = createMemo(() => selfHostedPurchaseStartDestination());
-  const handoffLabel = createMemo(() =>
-    pulseAccountDestination() ? 'Pulse Account' : 'pricing',
+  const handoffTitle = createMemo(() =>
+    pulseAccountDestination()
+      ? t('pricing.handoff.title.pulseAccount')
+      : t('pricing.handoff.title.publicPricing'),
   );
   const handoffLinkLabel = createMemo(() =>
-    pulseAccountDestination() ? 'continue to Pulse Account' : 'continue to the public pricing site',
+    pulseAccountDestination()
+      ? t('pricing.handoff.link.pulseAccount')
+      : t('pricing.handoff.link.publicPricing'),
   );
 
   onMount(() => {
@@ -37,14 +42,14 @@ export default function PricingHandoff() {
       <div class="flex min-h-[50vh] items-center justify-center">
         <div class="max-w-xl space-y-2 text-center">
           <PageHeader
-            title={<>Redirecting to {handoffLabel()}</>}
+            title={handoffTitle()}
             description={
               <>
-                If the handoff does not start automatically,{' '}
+                {t('pricing.handoff.description.beforeLink')}{' '}
                 <a href={destination()} class="text-blue-600 hover:underline dark:text-blue-400">
                   {handoffLinkLabel()}
                 </a>
-                .
+                {t('pricing.handoff.description.afterLink')}
               </>
             }
             descriptionVisibility="always"

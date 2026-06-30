@@ -1,6 +1,12 @@
 import type { I18nCatalog } from './messages';
 
 export const DE_MESSAGE_OVERRIDES = {
+  'pricing.handoff.description.afterLink': '.',
+  'pricing.handoff.description.beforeLink': 'Wenn die Weiterleitung nicht automatisch startet,',
+  'pricing.handoff.link.publicPricing': 'weiter zur oeffentlichen Preisseite',
+  'pricing.handoff.link.pulseAccount': 'weiter zu Pulse Account',
+  'pricing.handoff.title.publicPricing': 'Weiterleitung zu den Preisen',
+  'pricing.handoff.title.pulseAccount': 'Weiterleitung zu Pulse Account',
   'alerts.activation.label.enabled': 'Warnmeldungen aktiviert',
   'alerts.activation.label.disabled': 'Warnmeldungen deaktiviert',
   'alerts.activation.toast.activated':
@@ -40,7 +46,8 @@ export const DE_MESSAGE_OVERRIDES = {
   'alerts.assistant.explain.menuHint': 'Diese Warnmeldung als reinen Kontext verwenden',
   'alerts.assistant.patrol.chevron': 'Weitere Aktionen fuer diese Warnmeldung',
   'alerts.assistant.patrol.menuLabel': 'Patrol ermitteln lassen',
-  'alerts.assistant.patrol.menuHint': 'Eine gezielte Patrol-Pruefung fuer diese Ressource ausfuehren',
+  'alerts.assistant.patrol.menuHint':
+    'Eine gezielte Patrol-Pruefung fuer diese Ressource ausfuehren',
   'alerts.assistant.patrol.title': 'Patrol diese Warnmeldung untersuchen lassen',
   'alerts.assistant.patrol.triggered': 'Patrol untersucht {resourceName}',
   'alerts.assistant.patrol.noResource': 'Diese Warnmeldung hat keine zu untersuchende Ressource',
@@ -394,8 +401,7 @@ export const DE_MESSAGE_OVERRIDES = {
   'settings.header.systemAiPatrol.description':
     'Legen Sie fest, wann Patrol laeuft, was Patrol startet und welches Modell verwendet wird.',
   'settings.header.systemAiPatrol.title': 'Patrol',
-  'settings.header.systemBilling.description':
-    'Plan, Lizenz und Patrol-Modus fuer diese Instanz.',
+  'settings.header.systemBilling.description': 'Plan, Lizenz und Patrol-Modus fuer diese Instanz.',
   'settings.header.systemBilling.title': 'Plaene & Abrechnung',
   'settings.header.systemGeneral.description':
     'Verwalten Sie Darstellung, Layout und Standard-Monitoring-Takt.',

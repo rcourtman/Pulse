@@ -1990,6 +1990,7 @@
         "frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx",
         "frontend-modern/src/components/Settings/APITokenManager.tsx",
         "frontend-modern/src/components/Settings/apiTokenManagerModel.ts",
+        "frontend-modern/src/components/Settings/availabilitySettingsModel.ts",
         "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx",
         "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx",
         "frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx",
@@ -2390,6 +2391,7 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/api/__tests__/availabilityTargets.test.ts",
+              "frontend-modern/src/components/Settings/__tests__/availabilitySettingsModel.test.ts",
               "frontend-modern/src/components/Settings/__tests__/AvailabilitySettingsPanel.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
               "frontend-modern/src/components/Settings/ConnectionEditor/__tests__/AvailabilityTargetSlot.test.tsx",
@@ -3775,9 +3777,11 @@
         "frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx",
         "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx",
         "frontend-modern/src/hooks/createNonSuspendingQuery.ts",
+        "frontend-modern/src/i18n/index.ts",
         "frontend-modern/src/i18n/messages.de.ts",
         "frontend-modern/src/i18n/messages.es.ts",
         "frontend-modern/src/i18n/messages.ts",
+        "frontend-modern/src/i18n/policy.ts",
         "frontend-modern/src/index.css",
         "frontend-modern/src/routing/routePreload.ts",
         "frontend-modern/src/stores/aiChat.ts",
@@ -3951,9 +3955,11 @@
             "label": "localized settings message catalog proof",
             "match_prefixes": [],
             "match_files": [
+              "frontend-modern/src/i18n/index.ts",
               "frontend-modern/src/i18n/messages.de.ts",
               "frontend-modern/src/i18n/messages.es.ts",
-              "frontend-modern/src/i18n/messages.ts"
+              "frontend-modern/src/i18n/messages.ts",
+              "frontend-modern/src/i18n/policy.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],

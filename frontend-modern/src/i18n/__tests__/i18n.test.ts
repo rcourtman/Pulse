@@ -2,12 +2,15 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   ALERTS_OVERVIEW_ALLOWED_IDENTICAL_TRANSLATIONS,
   ALERTS_OVERVIEW_NON_TRANSLATABLE_TOKENS,
+  COMMERCIAL_PRICING_HANDOFF_ALLOWED_IDENTICAL_TRANSLATIONS,
+  COMMERCIAL_PRICING_HANDOFF_NON_TRANSLATABLE_TOKENS,
   DEFAULT_LOCALE,
   FIRST_SESSION_MONITORING_ALLOWED_IDENTICAL_TRANSLATIONS,
   FIRST_SESSION_MONITORING_NON_TRANSLATABLE_TOKENS,
   FIRST_LOCALIZATION_LOCALES,
   LOCALIZATION_FOUNDATION,
   LOCALIZED_ALERTS_OVERVIEW_JOURNEY_KEYS,
+  LOCALIZED_COMMERCIAL_PRICING_HANDOFF_KEYS,
   LOCALIZED_FIRST_SESSION_MONITORING_JOURNEY_KEYS,
   LOCALIZED_SETTINGS_GENERAL_JOURNEY_KEYS,
   NEVER_TRANSLATE_COPY_RULES,
@@ -168,6 +171,9 @@ describe('i18n foundation', () => {
         'systemctl',
       ]),
     );
+    expect(COMMERCIAL_PRICING_HANDOFF_NON_TRANSLATABLE_TOKENS).toEqual(
+      expect.arrayContaining(['Pulse', 'Pulse Account']),
+    );
   });
 
   it('requires explicit first-wave translations for the migrated settings general journey', () => {
@@ -302,6 +308,30 @@ describe('i18n foundation', () => {
           locale,
         ),
       ).toContain('cpu');
+    }
+  });
+
+  it('requires explicit first-wave translations for the migrated commercial pricing handoff', () => {
+    for (const locale of FIRST_LOCALIZATION_LOCALES) {
+      const allowedIdenticalKeys: ReadonlySet<I18nMessageKey> = new Set([
+        ...((COMMERCIAL_PRICING_HANDOFF_ALLOWED_IDENTICAL_TRANSLATIONS[locale] ??
+          []) as readonly I18nMessageKey[]),
+      ]);
+      for (const key of LOCALIZED_COMMERCIAL_PRICING_HANDOFF_KEYS) {
+        expect(I18N_MESSAGES[locale][key], `${locale}:${key}`).toBeTruthy();
+        if (!allowedIdenticalKeys.has(key)) {
+          expect(I18N_MESSAGES[locale][key], `${locale}:${key}`).not.toBe(I18N_MESSAGES.en[key]);
+        }
+      }
+    }
+  });
+
+  it('keeps Pulse Account untranslated in commercial pricing handoff copy', () => {
+    for (const locale of FIRST_LOCALIZATION_LOCALES) {
+      expect(I18N_MESSAGES[locale]['pricing.handoff.title.pulseAccount']).toContain(
+        'Pulse Account',
+      );
+      expect(I18N_MESSAGES[locale]['pricing.handoff.link.pulseAccount']).toContain('Pulse Account');
     }
   });
 });

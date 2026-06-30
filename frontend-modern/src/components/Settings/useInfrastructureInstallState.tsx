@@ -79,9 +79,7 @@ const toLookupResponseFromInfrastructureItem = (
   },
 });
 
-export const useInfrastructureInstallState = (
-  options: InfrastructureInstallStateOptions = {},
-) => {
+export const useInfrastructureInstallState = (options: InfrastructureInstallStateOptions = {}) => {
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -298,12 +296,11 @@ Pulse prepares the first-host install token from setup so you can move straight 
         );
       }
     } finally {
-      if (disposed) {
-        return;
-      }
-      setIsGeneratingToken(false);
-      if (source === 'setup_handoff') {
-        setSetupHandoffAutoTokenPending(false);
+      if (!disposed) {
+        setIsGeneratingToken(false);
+        if (source === 'setup_handoff') {
+          setSetupHandoffAutoTokenPending(false);
+        }
       }
     }
   };
@@ -361,7 +358,9 @@ Pulse prepares the first-host install token from setup so you can move straight 
           return;
         }
 
-        const activeItems = (state.connectedInfrastructure || []).filter(isActiveInfrastructureItem);
+        const activeItems = (state.connectedInfrastructure || []).filter(
+          isActiveInfrastructureItem,
+        );
         if (baselineActiveCount === null) {
           baselineActiveCount = activeItems.length;
         }

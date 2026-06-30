@@ -1,6 +1,12 @@
 import type { I18nCatalog } from './messages';
 
 export const ES_MESSAGE_OVERRIDES = {
+  'pricing.handoff.description.afterLink': '.',
+  'pricing.handoff.description.beforeLink': 'Si la redireccion no comienza automaticamente,',
+  'pricing.handoff.link.publicPricing': 'continua al sitio publico de precios',
+  'pricing.handoff.link.pulseAccount': 'continua a Pulse Account',
+  'pricing.handoff.title.publicPricing': 'Redirigiendo a precios',
+  'pricing.handoff.title.pulseAccount': 'Redirigiendo a Pulse Account',
   'alerts.activation.label.enabled': 'Alertas activadas',
   'alerts.activation.label.disabled': 'Alertas desactivadas',
   'alerts.activation.toast.activated':
@@ -39,7 +45,8 @@ export const ES_MESSAGE_OVERRIDES = {
   'alerts.assistant.explain.menuHint': 'Usar esta alerta como contexto de solo lectura',
   'alerts.assistant.patrol.chevron': 'Mas acciones para esta alerta',
   'alerts.assistant.patrol.menuLabel': 'Pedir a Patrol que investigue',
-  'alerts.assistant.patrol.menuHint': 'Ejecutar una verificacion dirigida de Patrol en este recurso',
+  'alerts.assistant.patrol.menuHint':
+    'Ejecutar una verificacion dirigida de Patrol en este recurso',
   'alerts.assistant.patrol.title': 'Pedir a Patrol que investigue esta alerta',
   'alerts.assistant.patrol.triggered': 'Patrol esta investigando {resourceName}',
   'alerts.assistant.patrol.noResource': 'Esta alerta no tiene un recurso para investigar',

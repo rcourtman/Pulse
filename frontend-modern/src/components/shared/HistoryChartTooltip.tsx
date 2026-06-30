@@ -39,12 +39,12 @@ export const HistoryChartTooltip: Component<HistoryChartTooltipProps> = (props) 
             >
               <div
                 data-history-chart-tooltip="true"
-                class="h-full w-full rounded border border-slate-600 bg-slate-900 px-2 py-1 text-xs text-slate-50 shadow-lg"
+                class="h-full w-full rounded border border-border bg-surface px-2 py-1 text-xs text-base-content shadow-lg"
               >
                 <div class="mb-0.5 text-center font-medium">
                   {new Date(point().timestamp).toLocaleString()}
                 </div>
-                <div class="text-slate-300">
+                <div class="text-muted">
                   {formatHistoryChartTooltipValue(point().value, props.unit)}
                 </div>
               </div>

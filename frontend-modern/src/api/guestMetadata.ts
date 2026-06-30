@@ -1,7 +1,7 @@
 // Guest Metadata API
 import { buildMetadataAPI, type ResourceMetadataRecord } from './metadataClient';
 
-export interface GuestMetadata extends ResourceMetadataRecord {}
+export type GuestMetadata = ResourceMetadataRecord;
 
 const guestMetadataAPI = buildMetadataAPI<GuestMetadata>('/api/guests/metadata');
 

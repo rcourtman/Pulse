@@ -315,6 +315,24 @@ describe('infrastructure operations model', () => {
     expect(installStateSource).toContain('setupHandoffInstallStepActive() &&');
   });
 
+  it('keeps setup-handoff token cleanup from masking API failures', () => {
+    expect(useInfrastructureInstallStateSource).toContain(
+      [
+        '} finally {',
+        '      if (!disposed) {',
+        '        setIsGeneratingToken(false);',
+        "        if (source === 'setup_handoff') {",
+        '          setSetupHandoffAutoTokenPending(false);',
+        '        }',
+        '      }',
+        '    }',
+      ].join('\n'),
+    );
+    expect(useInfrastructureInstallStateSource).not.toMatch(
+      /finally \{[\s\S]*?if \(disposed\) \{[\s\S]*?return;/,
+    );
+  });
+
   it('keeps infrastructure install and operations surfaces free of retired commercial telemetry wrappers', () => {
     for (const source of [
       infrastructureOperationsModelSource,

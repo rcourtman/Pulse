@@ -11,6 +11,7 @@
   "registry_file": "docs/release-control/v6/internal/subsystems/registry.json",
   "dependency_subsystem_ids": [
     "agent-lifecycle",
+    "api-contracts",
     "cloud-paid",
     "storage-recovery"
   ]
@@ -202,8 +203,8 @@ first-wave non-translatable token rules. The active app locale is a shared user
 preference initialized from stored or browser language and exposed through
 Settings > General; individual surfaces must consume that shared preference
 instead of creating local language toggles. Customer-facing shell, navigation,
-settings, first-run, empty-state, and alert copy may be localized through this
-catalog — including the alert-to-Patrol action surface ("Have Patrol
+settings, first-run, empty-state, commercial handoff, and alert copy may be
+localized through this catalog — including the alert-to-Patrol action surface ("Have Patrol
 investigate" and its targeted-check menu hint) that is primary on
 resource-backed active alert cards, plus the secondary Assistant explanation
 handoff strings — but
@@ -236,6 +237,10 @@ alert-owned presentation helpers. Alert IDs, alert types, resource IDs,
 resource names, node names, source messages, event payloads, commands, command
 output, logs, and Assistant model-context labels stay machine-stable and
 untranslated.
+The legacy pricing handoff page may also route its visible redirect title and
+manual-link copy through the catalog, but `Pulse Account`, route paths, feature
+keys, query parameters, public URLs, and purchase-return state remain
+machine-stable and untranslated.
 
 Alert thresholds consume the shared FilterBar primitive and route state, while
 the alerts subsystem owns the resource data and platform-specific threshold
@@ -2970,6 +2975,10 @@ behavior, and whitespace handling. Product surfaces such as Patrol findings
 may own the labels and state-to-tone mapping in their presentation helpers, but
 they must render visible metadata chips through `MetadataBadge` instead of
 recreating local bordered xs spans.
+Neutral and muted badge treatments must use semantic surface/text tokens rather
+than hardcoded gray palettes; non-gray typed tones may retain their state color
+vocabulary so success, warning, danger, info, and platform-adjacent metadata do
+not collapse into visually identical chips.
 Patrol run-history labels follow this state-badge boundary:
 Patrol may derive the status label and typed variant in
 `patrolRunPresentation.ts` or `patrolSummaryPresentation.ts`, but
@@ -3040,6 +3049,9 @@ That tooltip owner now also holds the CSP-safe hover contract: chart tooltips
 must render inside the chart surface with model-owned layout and SVG/attribute
 positioning, not through fixed portals or inline `left`/`top` style attributes
 that violate the public demo CSP.
+Tooltip shell chrome must follow semantic surface, text, and border tokens
+rather than hardcoded dark palette utilities so light and dark themes share one
+primitive-owned contrast contract.
 The shared container update badge now follows that same owner split.
 `frontend-modern/src/components/shared/ContainerUpdateBadge.tsx` stays the
 render surface for the badge, icon, and update button shells,

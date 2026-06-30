@@ -1547,6 +1547,10 @@ a new API state machine, queue contract, or verification-accounting field.
    Machines membership requires Pulse Agent resource evidence. API clients
    must not infer that classification from protocol, hostname, port, or row
    label.
+   The settings-side availability model may choose semantic and state-colored
+   chip classes for the visible target status, but route/query parameters,
+   `targetKind`, and the status payload remain API-owned contract facts rather
+   than CSS-derived state.
 3. Add dedicated contract tests for new stable payloads
    Unified resource type-filter and organization-share resource type additions
    must route through `internal/api/resources.go`, `internal/api/org_handlers.go`,
@@ -2101,6 +2105,9 @@ a new API state machine, queue contract, or verification-accounting field.
 11. Add or change API token scope, assignment, and revocation presentation through `frontend-modern/src/components/Settings/APITokenManager.tsx`, `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`, and `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`
     That same shared token contract also owns audit scope separation: audit event, verification, summary, export, and unified action/export audit reads must require the dedicated `audit:read` scope instead of reusing broader monitoring or settings-read token grants.
 12. Add or change infrastructure operations token generation, lookup, assignment, the pure unified-agent inventory/install model, the split infrastructure install state owner, the split direct-node/discovery infrastructure settings owners, the shared infrastructure-operations state provider/context shell, and install presentation through `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`, `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts`, `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts`, `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`, and `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`. Phase 9 retired the InfrastructureOperationsController shell and the useInfrastructureReportingState reporting path; they must not be reintroduced, and aggregator-backed reporting reads are owned by `frontend-modern/src/components/Settings/useConnectionsLedger.ts` under the frontend-primitives contract.
+    Setup-handoff auto-token cleanup in the shared install state hook may guard
+    state updates after disposal, but it must not return from `finally` or mask
+    token-generation and lookup failures owned by the API contract.
     That same aggregator-backed reporting read may hide passive config or
     rollout handshakes from primary source-manager attention when the API
     reason says only that an agent has not yet reported a comparable applied
@@ -6159,6 +6166,10 @@ status branches in discovery and monitoring clients.
 Agent and guest metadata CRUD clients must now also route through one shared
 metadata client in `frontend-modern/src/api/metadataClient.ts` rather than
 duplicating the same `get/update/delete/list` transport logic in two files.
+The thin agent, docker, and guest metadata TypeScript models remain aliases
+over `ResourceMetadataRecord`; they must not grow empty local interface shells
+or imply a resource-specific wire shape until the backend payload actually
+adds one.
 AI investigation and chat stream clients must now also route through one shared
 SSE JSON event consumer in `frontend-modern/src/api/streaming.ts` rather than
 duplicating reader lifecycle, timeout, chunk parsing, and event decoding logic

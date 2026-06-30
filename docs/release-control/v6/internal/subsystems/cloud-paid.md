@@ -1309,6 +1309,11 @@ and public-pricing fallback truth. The route must not fork a raw top-level
 heading, duplicate destination logic in the page shell, or let commercial
 handoff framing drift away from the same shared browser chrome used by the
 rest of the product.
+The visible redirect title and manual-link copy on that page may use the
+shared frontend i18n catalog for first-wave locale coverage, but the
+destination selection, self-hosted `GET /auth/license-purchase-start` handoff,
+public pricing URL fallback, feature query keys, and purchase-return states
+remain cloud-paid-owned and machine-stable.
 The governed browser proof for that posture lives in
 `tests/integration/tests/53-demo-mode-commercial-boundary.spec.ts` and is
 expected to stay runnable through

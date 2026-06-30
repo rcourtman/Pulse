@@ -1421,6 +1421,9 @@ Agent` secondary handoff against the live setup wizard instead of relying
     path must also auto-create the scoped first-host install token so the
     operator lands on ready-to-copy commands instead of being asked to perform a
     second manual token-generation step immediately after securing the server.
+    The install-state hook may skip UI state updates after the component is
+    disposed, but cleanup must not return from `finally` or mask lifecycle token
+    creation failures.
     Any first-run credentials download generated from that same handoff must
     describe the prepared first-host token path consistently instead of telling
     the operator to generate another install token manually.
@@ -2402,6 +2405,10 @@ That same landing/table contract now also owns collection-method phrasing.
 `InfrastructureSourceManager.tsx` must present the same plain-language subtitle (`via platform API`, `via Pulse Agent`, or `via
 platform API and Pulse Agent`) from the shared ledger contract instead of
 shipping badge-only heuristics that operators have to decode visually.
+Source badge class selection may use semantic gray treatment for API-only rows
+and typed non-gray tones for agent, probe, or combined sources, but the source
+identity remains the API/Agent/Probe label and subtitle from the shared ledger
+contract rather than a color-only cue.
 That same lifecycle-owned platform onboarding boundary must keep API-backed
 provider state operationally useful, not CRUD-only.
 `useTrueNASSettingsPanelState.ts` and `useVMwareSettingsPanelState.ts` must

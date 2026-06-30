@@ -6,6 +6,7 @@ import {
   getAvailabilityTargetAddressLabel,
   getAvailabilityTargetKindLabel,
   getAvailabilityTargetMethodLabel,
+  getAvailabilityTargetStatusClass,
   getAvailabilityTargetStatusLabel,
   getAvailabilityTargetsSummary,
   normalizeAvailabilityTargetKind,
@@ -104,5 +105,23 @@ describe('availabilitySettingsModel', () => {
         }),
       ]),
     ).toBe('1 down · 2 enabled');
+    expect(getAvailabilityTargetStatusClass(target({ enabled: false }))).toBe(
+      'bg-surface-alt text-muted',
+    );
+    expect(getAvailabilityTargetStatusClass(target())).toBe(
+      'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300',
+    );
+    expect(
+      getAvailabilityTargetStatusClass(
+        target({
+          status: { ...target(), targetId: 'mqtt-broker', available: true, latencyMillis: 12 },
+        }),
+      ),
+    ).toBe('bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300');
+    expect(
+      getAvailabilityTargetStatusClass(
+        target({ status: { ...target(), targetId: 'mqtt-broker', available: false } }),
+      ),
+    ).toBe('bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300');
   });
 });

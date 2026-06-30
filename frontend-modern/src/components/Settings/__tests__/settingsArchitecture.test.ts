@@ -42,6 +42,7 @@ import agentProfilesPanelSource from '../AgentProfilesPanel.tsx?raw';
 import infrastructureWorkspaceSource from '../InfrastructureWorkspace.tsx?raw';
 import infrastructureInstallerSectionSource from '../InfrastructureInstallerSection.tsx?raw';
 import infrastructureOperationsModelSource from '../infrastructureOperationsModel.tsx?raw';
+import connectionsTableModelSource from '../connectionsTableModel.ts?raw';
 import infrastructureSourceManagerSource from '../InfrastructureSourceManager.tsx?raw';
 import infrastructureSourcePickerSource from '../InfrastructureSourcePicker.tsx?raw';
 import discoverySettingsFormSource from '../DiscoverySettingsForm.tsx?raw';
@@ -84,6 +85,7 @@ import rbacFeatureGateStateSource from '../useRBACFeatureGateState.ts?raw';
 import reportingStateSource from '../useReportingPanelState.ts?raw';
 import ssoProvidersPanelSource from '../SSOProvidersPanel.tsx?raw';
 import ssoProvidersStateSource from '../useSSOProvidersState.ts?raw';
+import useInfrastructureInstallStateSource from '../useInfrastructureInstallState.tsx?raw';
 import infrastructureOnboardingPresentationSource from '../../../utils/infrastructureOnboardingPresentation.ts?raw';
 import selfHostedBillingPresentationSource from '../selfHostedBillingPresentation.ts?raw';
 import systemSettingsPresentationSource from '../../../utils/systemSettingsPresentation.ts?raw';
@@ -663,7 +665,7 @@ describe('settings architecture guardrails', () => {
   });
 
   it('keeps Assistant and Patrol provider-specific fields model-driven', () => {
-    expect(aiSettingsModelSource).toContain("export const AI_PROVIDERS: AIProvider[] = [");
+    expect(aiSettingsModelSource).toContain('export const AI_PROVIDERS: AIProvider[] = [');
     for (const provider of ['zai', 'groq', 'mistral', 'cerebras', 'together', 'fireworks']) {
       expect(aiSettingsModelSource).toContain(`provider: '${provider}'`);
       expect(aiSettingsStateSource).toContain(`${provider}_api_key`);
@@ -1170,6 +1172,33 @@ describe('settings architecture guardrails', () => {
     expect(useConnectionsLedgerSource).toContain('createNonSuspendingQuery');
     expect(useConnectionsLedgerSource).toContain('pollMs: POLL_INTERVAL_MS');
     expect(useConnectionsLedgerSource).not.toContain('createResource');
+
+    expect(connectionsTableModelSource).toContain(
+      "'inline-flex items-center rounded-full bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-base-content'",
+    );
+    expect(connectionsTableModelSource).toContain(
+      "'inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200'",
+    );
+    expect(connectionsTableModelSource).not.toContain(['bg', 'slate', '100'].join('-'));
+    expect(connectionsTableModelSource).not.toContain(['text', 'slate', '700'].join('-'));
+  });
+
+  it('keeps setup-handoff token cleanup from masking install failures', () => {
+    expect(useInfrastructureInstallStateSource).toContain(
+      [
+        '} finally {',
+        '      if (!disposed) {',
+        '        setIsGeneratingToken(false);',
+        "        if (source === 'setup_handoff') {",
+        '          setSetupHandoffAutoTokenPending(false);',
+        '        }',
+        '      }',
+        '    }',
+      ].join('\n'),
+    );
+    expect(useInfrastructureInstallStateSource).not.toMatch(
+      /finally \{[\s\S]*?if \(disposed\) \{[\s\S]*?return;/,
+    );
   });
 
   it('keeps the detect-first editor and inline credential bodies on the shared editor model', () => {
@@ -1283,7 +1312,9 @@ describe('settings architecture guardrails', () => {
     expect(agentIntegrationsPanelSource).toContain('read Pulse context');
     expect(agentIntegrationsPanelSource).toContain('request Patrol work');
     expect(agentIntegrationsPanelSource).toContain('Patrol mode and scoped tokens control');
-    expect(agentIntegrationsPanelSource).not.toContain('Optional connector access for Claude Desktop');
+    expect(agentIntegrationsPanelSource).not.toContain(
+      'Optional connector access for Claude Desktop',
+    );
     expect(agentIntegrationsPanelSource).not.toContain('Patrol remains the operator');
     expect(agentIntegrationsPanelSource).not.toContain('Connected tools');
     expect(agentIntegrationsPanelSource).toContain('setupOpen');
@@ -1368,7 +1399,9 @@ describe('settings architecture guardrails', () => {
     expect(agentIntegrationsPanelSource).toContain('Install the connector');
     expect(agentIntegrationsPanelSource).toContain('paste the client config');
     expect(agentIntegrationsPanelSource).not.toContain('The installer and');
-    expect(agentIntegrationsPanelSource).not.toContain('on the machine that runs the external tool');
+    expect(agentIntegrationsPanelSource).not.toContain(
+      'on the machine that runs the external tool',
+    );
     expect(agentIntegrationsPanelSource).not.toContain('Install the Pulse MCP bridge');
     expect(agentIntegrationsPanelSource).not.toContain(
       'Use the OpenCode or Claude-style snippet below',

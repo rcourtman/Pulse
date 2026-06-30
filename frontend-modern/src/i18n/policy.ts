@@ -6,6 +6,7 @@ import {
 } from './locales';
 import {
   ALERTS_OVERVIEW_MIGRATED_MESSAGE_KEYS,
+  COMMERCIAL_PRICING_HANDOFF_MIGRATED_MESSAGE_KEYS,
   FIRST_SESSION_MONITORING_MIGRATED_MESSAGE_KEYS,
   SETTINGS_GENERAL_MIGRATED_MESSAGE_KEYS,
   type I18nMessageKey,
@@ -78,6 +79,11 @@ export const ALERTS_OVERVIEW_NON_TRANSLATABLE_TOKENS = [
   'systemctl',
 ] as const;
 
+export const COMMERCIAL_PRICING_HANDOFF_NON_TRANSLATABLE_TOKENS = [
+  'Pulse',
+  'Pulse Account',
+] as const;
+
 export const LOCALIZED_SETTINGS_GENERAL_JOURNEY_KEYS =
   SETTINGS_GENERAL_MIGRATED_MESSAGE_KEYS satisfies readonly I18nMessageKey[];
 
@@ -86,6 +92,9 @@ export const LOCALIZED_FIRST_SESSION_MONITORING_JOURNEY_KEYS =
 
 export const LOCALIZED_ALERTS_OVERVIEW_JOURNEY_KEYS =
   ALERTS_OVERVIEW_MIGRATED_MESSAGE_KEYS satisfies readonly I18nMessageKey[];
+
+export const LOCALIZED_COMMERCIAL_PRICING_HANDOFF_KEYS =
+  COMMERCIAL_PRICING_HANDOFF_MIGRATED_MESSAGE_KEYS satisfies readonly I18nMessageKey[];
 
 export const SETTINGS_GENERAL_ALLOWED_IDENTICAL_TRANSLATIONS = {
   de: ['settings.nav.group.system', 'settings.general.theme.option.system'],
@@ -118,4 +127,9 @@ export const ALERTS_OVERVIEW_ALLOWED_IDENTICAL_TRANSLATIONS = {
     'alerts.timeline.event.aiAnalysis',
     'alerts.timeline.event.runbook',
   ],
+} as const satisfies Partial<Record<SupportedLocale, readonly I18nMessageKey[]>>;
+
+export const COMMERCIAL_PRICING_HANDOFF_ALLOWED_IDENTICAL_TRANSLATIONS = {
+  de: ['pricing.handoff.description.afterLink'],
+  es: ['pricing.handoff.description.afterLink'],
 } as const satisfies Partial<Record<SupportedLocale, readonly I18nMessageKey[]>>;

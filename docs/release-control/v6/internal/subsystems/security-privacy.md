@@ -258,6 +258,10 @@ existing resource-policy redaction still governs any model-bound context.
    boundary when it frames Pro setup as choosing Patrol autonomy; it must not
    alter API Access, authentication, privacy, or token-management terminology in
    the same edit.
+   Commercial pricing handoff localization may share the same catalog boundary
+   only for redirect/manual-link copy and must preserve `Pulse Account`,
+   security/privacy disclosures, token names, API field names, route/query keys,
+   and purchase-return state exactly.
 6. Change operator-facing telemetry/adoption reporting through `scripts/telemetry_adoption_report.py` together with the privacy disclosure whenever release-identity interpretation changes.
 7. Change data-at-rest encryption-key or control-plane magic-link HMAC key and storage-root hardening semantics through `internal/crypto/crypto.go`, `internal/cloudcp/auth/magiclink.go`, `internal/cloudcp/auth/magiclink_store.go`, and `internal/securityutil/secure_storage_dir.go` together so writable-but-not-owned runtime storage mounts stay supported without weakening file-level secrecy.
 8. Change auth-env password normalization, hosted commercial base URL

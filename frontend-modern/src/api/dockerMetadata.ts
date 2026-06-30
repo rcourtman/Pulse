@@ -1,6 +1,6 @@
 import { buildMetadataAPI, type ResourceMetadataRecord } from './metadataClient';
 
-export interface DockerMetadata extends ResourceMetadataRecord {}
+export type DockerMetadata = ResourceMetadataRecord;
 
 const dockerMetadataAPI = buildMetadataAPI<DockerMetadata>('/api/docker/metadata');
 

@@ -1,6 +1,6 @@
 import { buildMetadataAPI, type ResourceMetadataRecord } from './metadataClient';
 
-export interface AgentMetadata extends ResourceMetadataRecord {}
+export type AgentMetadata = ResourceMetadataRecord;
 
 const agentMetadataAPI = buildMetadataAPI<AgentMetadata>('/api/agents/metadata');
 

@@ -940,6 +940,12 @@ describe('shared primitive guardrails', () => {
     expect(tooltipPortalSource).toContain('text-base-content');
     expect(tooltipPortalSource).toContain('border-border');
     expect(tooltipPortalSource).not.toContain("'background-color': 'rgb(15, 23, 42)'");
+    expect(historyChartTooltipSource).toContain('border border-border bg-surface');
+    expect(historyChartTooltipSource).toContain('text-base-content');
+    expect(historyChartTooltipSource).toContain('text-muted');
+    expect(historyChartTooltipSource).not.toContain('border-slate-600');
+    expect(historyChartTooltipSource).not.toContain('bg-slate-900');
+    expect(historyChartTooltipSource).not.toContain(['text', 'slate', '50'].join('-'));
   });
 
   it('keeps shared table card chrome on one canonical header owner', () => {
@@ -2461,6 +2467,9 @@ describe('shared primitive guardrails', () => {
     expect(metadataBadgeSource).toContain('METADATA_BADGE_TONE_CLASSES');
     expect(metadataBadgeSource).toContain('MetadataBadgeAppearance');
     expect(metadataBadgeSource).toContain('getMetadataBadgeClass');
+    expect(metadataBadgeSource).toContain("muted: 'bg-surface-alt text-muted'");
+    expect(metadataBadgeSource).toContain("warning: 'bg-amber-100 text-amber-800");
+    expect(metadataBadgeSource).not.toContain(["muted: 'bg", 'slate', '100'].join('-'));
     expect(organizationBadgesSource).toContain('MetadataBadge');
     expect(organizationBadgesSource).toContain('getOrganizationRoleBadgeTone');
     expect(organizationBadgesSource).toContain('getOrganizationShareStatusBadgeTone');
@@ -4014,9 +4023,7 @@ describe('shared primitive guardrails', () => {
       expect(guard?.allowedPaths ?? []).toHaveLength(0);
       expect(guard?.ignoredPaths).toEqual(['src/components/shared/Button.test.tsx']);
     }
-    expect(aiChatMessageCopyValueGuard?.scopes).toEqual([
-      'src/components/AI/Chat/MessageItem.tsx',
-    ]);
+    expect(aiChatMessageCopyValueGuard?.scopes).toEqual(['src/components/AI/Chat/MessageItem.tsx']);
     expect(aiChatMessageCopyValueGuard?.allPatterns).toEqual([
       'inline-flex h-7 w-7',
       'border border-border-subtle bg-surface text-muted opacity-0 shadow-sm transition-opacity hover:text-base-content',
@@ -4166,7 +4173,7 @@ describe('shared primitive guardrails', () => {
     expect(messageItemSource).toContain('@/components/shared/Button');
     expect(messageItemSource).toContain('ActionIconButton');
     expect(messageItemSource).toContain('CopyValueButton');
-    expect(messageItemSource).not.toContain("lucide-solid/icons/copy");
+    expect(messageItemSource).not.toContain('lucide-solid/icons/copy');
     expect(messageItemSource).not.toContain("lucide-solid/icons/check';");
     expect(messageItemSource).not.toContain(
       'mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-subtle bg-surface text-muted opacity-0 shadow-sm transition-opacity hover:text-base-content',
@@ -4179,7 +4186,7 @@ describe('shared primitive guardrails', () => {
     );
     expect(toolExecutionBlockSource).toContain('@/components/shared/Button');
     expect(toolExecutionBlockSource).toContain('CopyValueButton');
-    expect(toolExecutionBlockSource).not.toContain("lucide-solid/icons/copy");
+    expect(toolExecutionBlockSource).not.toContain('lucide-solid/icons/copy');
     expect(toolExecutionBlockSource).not.toContain("lucide-solid/icons/check';");
     expect(toolExecutionBlockSource).not.toContain(
       'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-border-subtle bg-surface text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500/30',

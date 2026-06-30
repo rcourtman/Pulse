@@ -2,6 +2,12 @@ import type { SupportedLocale } from './locales';
 
 export const EN_MESSAGES = {
   'runtimeHome.openingWorkspace': 'Opening workspace...',
+  'pricing.handoff.description.afterLink': '.',
+  'pricing.handoff.description.beforeLink': 'If the handoff does not start automatically,',
+  'pricing.handoff.link.publicPricing': 'continue to the public pricing site',
+  'pricing.handoff.link.pulseAccount': 'continue to Pulse Account',
+  'pricing.handoff.title.publicPricing': 'Redirecting to pricing',
+  'pricing.handoff.title.pulseAccount': 'Redirecting to Pulse Account',
   'setup.completion.action.addInfrastructure': 'Add infrastructure',
   'setup.completion.action.downloadCredentials': 'Download credentials',
   'setup.completion.action.installAgent': 'Install Pulse Agent',
@@ -512,6 +518,15 @@ export const SETTINGS_GENERAL_MIGRATED_MESSAGE_KEYS = [
   'settings.general.theme.option.light',
   'settings.general.theme.option.system',
   'settings.general.theme.title',
+] as const satisfies readonly I18nMessageKey[];
+
+export const COMMERCIAL_PRICING_HANDOFF_MIGRATED_MESSAGE_KEYS = [
+  'pricing.handoff.description.afterLink',
+  'pricing.handoff.description.beforeLink',
+  'pricing.handoff.link.publicPricing',
+  'pricing.handoff.link.pulseAccount',
+  'pricing.handoff.title.publicPricing',
+  'pricing.handoff.title.pulseAccount',
 ] as const satisfies readonly I18nMessageKey[];
 
 export const FIRST_SESSION_MONITORING_MIGRATED_MESSAGE_KEYS = [

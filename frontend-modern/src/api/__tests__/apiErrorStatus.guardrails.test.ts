@@ -5,6 +5,7 @@ import agentProfilesSource from '@/api/agentProfiles.ts?raw';
 import alertsSource from '@/api/alerts.ts?raw';
 import discoverySource from '@/api/discovery.ts?raw';
 import agentMetadataSource from '@/api/agentMetadata.ts?raw';
+import dockerMetadataSource from '@/api/dockerMetadata.ts?raw';
 import monitoringSource from '@/api/monitoring.ts?raw';
 import notificationsSource from '@/api/notifications.ts?raw';
 import nodesSource from '@/api/nodes.ts?raw';
@@ -31,7 +32,9 @@ describe('API error-status guardrails', () => {
     expect(responseUtilsSource).toContain('export function apiResponseStatus');
     expect(responseUtilsSource).toContain('export function isAPIResponseStatus');
     expect(responseUtilsSource).toContain('export async function assertAPIResponseOK');
-    expect(responseUtilsSource).toContain('export async function assertAPIResponseOKOrAllowedStatus');
+    expect(responseUtilsSource).toContain(
+      'export async function assertAPIResponseOKOrAllowedStatus',
+    );
     expect(responseUtilsSource).toContain('export async function assertAPIResponseOKOrThrowStatus');
     expect(responseUtilsSource).toContain('export async function parseRequiredAPIResponse');
     expect(responseUtilsSource).toContain('export async function parseOptionalAPIResponse');
@@ -142,18 +145,13 @@ describe('API error-status guardrails', () => {
       monitoringSource.match(/assertAPIResponseOKOrThrowStatus\(\s*response,\s*404,/g) ?? [],
     ).toHaveLength(1);
     expect(
-      monitoringSource.match(/const response = await apiFetch\(url,\s*\{\s*method: 'POST',\s*\}\);/g) ??
-        [],
+      monitoringSource.match(
+        /const response = await apiFetch\(url,\s*\{\s*method: 'POST',\s*\}\);/g,
+      ) ?? [],
     ).toHaveLength(1);
-    expect(
-      monitoringSource.match(/return triggerResourceCommand</g) ?? [],
-    ).toHaveLength(3);
-    expect(
-      monitoringSource.match(/await runResourceAction\(url\);/g) ?? [],
-    ).toHaveLength(3);
-    expect(
-      monitoringSource.match(/parseOptionalSuccessAPIResponse</g) ?? [],
-    ).toHaveLength(1);
+    expect(monitoringSource.match(/return triggerResourceCommand</g) ?? []).toHaveLength(3);
+    expect(monitoringSource.match(/await runResourceAction\(url\);/g) ?? []).toHaveLength(3);
+    expect(monitoringSource.match(/parseOptionalSuccessAPIResponse</g) ?? []).toHaveLength(1);
     expect(discoverySource).toContain('assertAPIResponseOK(response,');
     expect(discoverySource).toContain('parseRequiredAPIResponse(');
     expect(discoverySource).toContain('parseRequiredAPIResponseOrNull(');
@@ -173,11 +171,33 @@ describe('API error-status guardrails', () => {
     expect(discoverySource).not.toContain('isAPIResponseStatus(response, 404)');
     expect(discoverySource).not.toContain('readAPIErrorMessage(');
 
-    expect(agentMetadataSource).toContain("buildMetadataAPI<AgentMetadata>('/api/agents/metadata')");
+    expect(agentMetadataSource).toContain(
+      "buildMetadataAPI<AgentMetadata>('/api/agents/metadata')",
+    );
     expect(agentMetadataSource).not.toContain('apiFetchJSON(');
-    expect(guestMetadataSource).toContain("buildMetadataAPI<GuestMetadata>('/api/guests/metadata')");
+    expect(dockerMetadataSource).toContain(
+      "buildMetadataAPI<DockerMetadata>('/api/docker/metadata')",
+    );
+    expect(dockerMetadataSource).not.toContain('apiFetchJSON(');
+    expect(guestMetadataSource).toContain(
+      "buildMetadataAPI<GuestMetadata>('/api/guests/metadata')",
+    );
     expect(guestMetadataSource).not.toContain('apiFetchJSON(');
+  });
 
+  it('keeps thin metadata models as shared record aliases', () => {
+    expect(agentMetadataSource).toContain('export type AgentMetadata = ResourceMetadataRecord;');
+    expect(agentMetadataSource).not.toContain(
+      'export interface AgentMetadata extends ResourceMetadataRecord',
+    );
+    expect(dockerMetadataSource).toContain('export type DockerMetadata = ResourceMetadataRecord;');
+    expect(dockerMetadataSource).not.toContain(
+      'export interface DockerMetadata extends ResourceMetadataRecord',
+    );
+    expect(guestMetadataSource).toContain('export type GuestMetadata = ResourceMetadataRecord;');
+    expect(guestMetadataSource).not.toContain(
+      'export interface GuestMetadata extends ResourceMetadataRecord',
+    );
   });
 
   it('routes canonical collection normalization through responseUtils', () => {
@@ -313,10 +333,10 @@ describe('API error-status guardrails', () => {
     const rawNullLookupPattern =
       /if\s*\(\s*isAPIResponseStatus\(response,\s*404\)\s*\)\s*\{\s*return null;\s*\}/;
     const governedMetadataEntries = runtimeEntries.filter(([path]) =>
-      /\/(?:agentMetadata|guestMetadata)\.ts$/.test(path),
+      /\/(?:agentMetadata|dockerMetadata|guestMetadata)\.ts$/.test(path),
     );
     const rawMetadataCrudPattern =
-      /(?:apiFetchJSON\(|private static baseUrl = '\/api\/(?:agents|guests)\/metadata')/;
+      /(?:apiFetchJSON\(|private static baseUrl = '\/api\/(?:agents|docker|guests)\/metadata')/;
     const governedStreamEntries = runtimeEntries.filter(([path]) =>
       /\/(?:ai|aiChat)\.ts$/.test(path),
     );
@@ -347,8 +367,7 @@ describe('API error-status guardrails', () => {
     const governedFetchJSONFallbackEntries = runtimeEntries.filter(([path]) =>
       /\/(?:ai|agentProfiles)\.ts$/.test(path),
     );
-    const rawFetchJSONStatusFallbackPattern =
-      /isAPIErrorStatus\((?:error|err),\s*(?:402|404)\)/;
+    const rawFetchJSONStatusFallbackPattern = /isAPIErrorStatus\((?:error|err),\s*(?:402|404)\)/;
 
     const heuristicOffenders = runtimeEntries
       .filter(([, source]) => rawStatusHeuristicPattern.test(source))
