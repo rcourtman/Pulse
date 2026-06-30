@@ -1937,6 +1937,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 			TemperatureCelsius: cloneStringFloatMap(report.Sensors.TemperatureCelsius),
 			FanRPM:             cloneStringFloatMap(report.Sensors.FanRPM),
 			Additional:         cloneStringFloatMap(report.Sensors.Additional),
+			GPU:                convertAgentGPUToModels(report.Sensors.GPU),
 			ThermalState:       convertAgentThermalStateToModels(report.Sensors.ThermalState),
 			SMART:              convertAgentSMARTToModels(report.Sensors.SMART),
 		},

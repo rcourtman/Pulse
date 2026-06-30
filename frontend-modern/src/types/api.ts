@@ -484,8 +484,18 @@ export interface HostSensorSummary {
   temperatureCelsius?: Record<string, number>;
   fanRpm?: Record<string, number>;
   additional?: Record<string, number>;
+  gpu?: HostGPUSensor[];
   thermalState?: HostThermalState;
   smart?: HostDiskSMART[]; // S.M.A.R.T. disk data
+}
+
+export interface HostGPUSensor {
+  id?: string;
+  name?: string;
+  temperatureCelsius?: number;
+  utilizationPercent?: number;
+  memoryUsedBytes?: number;
+  memoryTotalBytes?: number;
 }
 
 export interface HostThermalState {

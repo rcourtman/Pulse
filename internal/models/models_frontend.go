@@ -750,8 +750,18 @@ type HostSensorSummaryFrontend struct {
 	TemperatureCelsius map[string]float64      `json:"temperatureCelsius"`
 	FanRPM             map[string]float64      `json:"fanRpm"`
 	Additional         map[string]float64      `json:"additional"`
+	GPU                []HostGPUSensorFrontend `json:"gpu"`
 	ThermalState       *HostThermalState       `json:"thermalState,omitempty"`
 	SMART              []HostDiskSMARTFrontend `json:"smart"` // S.M.A.R.T. disk data
+}
+
+type HostGPUSensorFrontend struct {
+	ID                 string   `json:"id,omitempty"`
+	Name               string   `json:"name,omitempty"`
+	TemperatureCelsius *float64 `json:"temperatureCelsius,omitempty"`
+	UtilizationPercent *float64 `json:"utilizationPercent,omitempty"`
+	MemoryUsedBytes    *int64   `json:"memoryUsedBytes,omitempty"`
+	MemoryTotalBytes   *int64   `json:"memoryTotalBytes,omitempty"`
 }
 
 func (s HostSensorSummaryFrontend) NormalizeCollections() HostSensorSummaryFrontend {
@@ -763,6 +773,9 @@ func (s HostSensorSummaryFrontend) NormalizeCollections() HostSensorSummaryFront
 	}
 	if s.Additional == nil {
 		s.Additional = map[string]float64{}
+	}
+	if s.GPU == nil {
+		s.GPU = []HostGPUSensorFrontend{}
 	}
 	if s.SMART == nil {
 		s.SMART = []HostDiskSMARTFrontend{}

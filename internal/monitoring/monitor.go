@@ -3383,6 +3383,19 @@ func hostSensorsFromReadStateView(sensors *unifiedresources.HostSensorMeta) mode
 			out.Additional[k] = v
 		}
 	}
+	if len(sensors.GPU) > 0 {
+		out.GPU = make([]models.HostGPUSensor, len(sensors.GPU))
+		for i, gpu := range sensors.GPU {
+			out.GPU[i] = models.HostGPUSensor{
+				ID:                 gpu.ID,
+				Name:               gpu.Name,
+				TemperatureCelsius: cloneFloat64Ptr(gpu.TemperatureCelsius),
+				UtilizationPercent: cloneFloat64Ptr(gpu.UtilizationPercent),
+				MemoryUsedBytes:    cloneInt64Ptr(gpu.MemoryUsedBytes),
+				MemoryTotalBytes:   cloneInt64Ptr(gpu.MemoryTotalBytes),
+			}
+		}
+	}
 	if sensors.ThermalState != nil {
 		out.ThermalState = hostThermalStateFromReadStateView(sensors.ThermalState)
 	}

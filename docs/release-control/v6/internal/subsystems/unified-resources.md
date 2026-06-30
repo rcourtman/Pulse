@@ -321,6 +321,12 @@ temperature source. Unified-resource adapters must carry
 may render that pressure as compact status text only when no numeric
 temperature exists, and must not convert pressure into a Celsius metric or
 history target.
+Typed GPU host telemetry follows the same canonical sensor route.
+`HostSensorMeta.gpu` may carry GPU id, name, temperature, utilization, and VRAM
+readings through clone, merge, transport, and frontend decode paths, but those
+readings remain descriptive host context. Unified-resource consumers must not
+promote GPU sensors into separate hardware resources, lifecycle state, workload
+identity, or history targets beyond direct numeric temperature compatibility.
 Metric bar fallbacks follow that split as well: unified-resource consumers own
 which CPU or memory value is selected, plus any source-specific fallback reason
 such as outdated standalone agent telemetry, while platform tables must use

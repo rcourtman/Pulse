@@ -168,7 +168,7 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 	storageAssessments := make([]storagehealth.Assessment, 0, len(host.RAID)+1)
 
 	// Populate sensors
-	if len(host.Sensors.TemperatureCelsius) > 0 || len(host.Sensors.FanRPM) > 0 || len(host.Sensors.Additional) > 0 || host.Sensors.ThermalState != nil || len(host.Sensors.SMART) > 0 {
+	if len(host.Sensors.TemperatureCelsius) > 0 || len(host.Sensors.FanRPM) > 0 || len(host.Sensors.Additional) > 0 || len(host.Sensors.GPU) > 0 || host.Sensors.ThermalState != nil || len(host.Sensors.SMART) > 0 {
 		sensorMeta := &HostSensorMeta{}
 		if len(host.Sensors.TemperatureCelsius) > 0 {
 			sensorMeta.TemperatureCelsius = make(map[string]float64, len(host.Sensors.TemperatureCelsius))
@@ -186,6 +186,19 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 			sensorMeta.Additional = make(map[string]float64, len(host.Sensors.Additional))
 			for k, v := range host.Sensors.Additional {
 				sensorMeta.Additional[k] = v
+			}
+		}
+		if len(host.Sensors.GPU) > 0 {
+			sensorMeta.GPU = make([]HostGPUSensor, len(host.Sensors.GPU))
+			for i, gpu := range host.Sensors.GPU {
+				sensorMeta.GPU[i] = HostGPUSensor{
+					ID:                 gpu.ID,
+					Name:               gpu.Name,
+					TemperatureCelsius: cloneFloat64Ptr(gpu.TemperatureCelsius),
+					UtilizationPercent: cloneFloat64Ptr(gpu.UtilizationPercent),
+					MemoryUsedBytes:    cloneInt64Ptr(gpu.MemoryUsedBytes),
+					MemoryTotalBytes:   cloneInt64Ptr(gpu.MemoryTotalBytes),
+				}
 			}
 		}
 		if host.Sensors.ThermalState != nil {

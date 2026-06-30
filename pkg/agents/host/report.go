@@ -119,8 +119,19 @@ type Sensors struct {
 	FanRPM             map[string]float64 `json:"fanRpm,omitempty"`
 	PowerWatts         map[string]float64 `json:"powerWatts,omitempty"` // Power consumption (e.g., cpu_package, dram)
 	Additional         map[string]float64 `json:"additional,omitempty"`
+	GPU                []GPUSensor        `json:"gpu,omitempty"`
 	ThermalState       *ThermalState      `json:"thermalState,omitempty"`
 	SMART              []DiskSMART        `json:"smart,omitempty"` // S.M.A.R.T. disk data
+}
+
+// GPUSensor captures direct GPU telemetry reported by a local host agent.
+type GPUSensor struct {
+	ID                 string   `json:"id,omitempty"`
+	Name               string   `json:"name,omitempty"`
+	TemperatureCelsius *float64 `json:"temperatureCelsius,omitempty"`
+	UtilizationPercent *float64 `json:"utilizationPercent,omitempty"`
+	MemoryUsedBytes    *int64   `json:"memoryUsedBytes,omitempty"`
+	MemoryTotalBytes   *int64   `json:"memoryTotalBytes,omitempty"`
 }
 
 // ThermalState captures OS-level thermal pressure that is not a direct

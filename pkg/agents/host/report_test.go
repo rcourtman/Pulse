@@ -6,6 +6,14 @@ import (
 	"time"
 )
 
+func float64Ptr(value float64) *float64 {
+	return &value
+}
+
+func int64Ptr(value int64) *int64 {
+	return &value
+}
+
 func TestReport_JSONMarshal(t *testing.T) {
 	report := Report{
 		Agent: AgentInfo{
@@ -197,6 +205,15 @@ func TestSensors_Fields(t *testing.T) {
 		Additional: map[string]float64{
 			"voltage": 12.0,
 		},
+		GPU: []GPUSensor{
+			{
+				ID:                 "0",
+				Name:               "NVIDIA RTX A6000",
+				UtilizationPercent: float64Ptr(42),
+				MemoryUsedBytes:    int64Ptr(8 * 1024 * 1024 * 1024),
+				MemoryTotalBytes:   int64Ptr(48 * 1024 * 1024 * 1024),
+			},
+		},
 		ThermalState: &ThermalState{
 			Source:              "pmset",
 			Pressure:            "nominal",
@@ -213,6 +230,12 @@ func TestSensors_Fields(t *testing.T) {
 	}
 	if sensors.FanRPM["cpu_fan"] != 1200.0 {
 		t.Errorf("cpu_fan RPM = %f, want 1200.0", sensors.FanRPM["cpu_fan"])
+	}
+	if len(sensors.GPU) != 1 {
+		t.Fatalf("GPU count = %d, want 1", len(sensors.GPU))
+	}
+	if sensors.GPU[0].UtilizationPercent == nil || *sensors.GPU[0].UtilizationPercent != 42 {
+		t.Fatalf("GPU utilization = %#v, want 42", sensors.GPU[0].UtilizationPercent)
 	}
 	if sensors.ThermalState == nil || sensors.ThermalState.Pressure != "nominal" {
 		t.Fatalf("ThermalState = %#v, want nominal state", sensors.ThermalState)

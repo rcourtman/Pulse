@@ -11,6 +11,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
@@ -1667,6 +1668,91 @@ func TestApplyHostReportPersistsAgentTemperatureMetric(t *testing.T) {
 	historyPoints := monitor.GetGuestMetrics("agent:"+host.ID, time.Hour)["temperature"]
 	if len(historyPoints) == 0 || historyPoints[len(historyPoints)-1].Value != 62.5 {
 		t.Fatalf("expected in-memory temperature 62.5, got %+v", historyPoints)
+	}
+}
+
+func TestApplyHostReportPreservesGPUSensorSummary(t *testing.T) {
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+		rateTracker:       NewRateTracker(),
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	temperature := 63.0
+	utilization := 7.0
+	usedBytes := int64(2 * 1024 * 1024 * 1024)
+	totalBytes := int64(48 * 1024 * 1024 * 1024)
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:              "agent-gpu",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentshost.HostInfo{
+			ID:        "machine-gpu",
+			Hostname:  "gpu-node",
+			MachineID: "machine-gpu",
+		},
+		Metrics: agentshost.Metrics{
+			Memory: agentshost.MemoryMetric{TotalBytes: 1024, UsedBytes: 512, FreeBytes: 512, Usage: 50},
+		},
+		Sensors: agentshost.Sensors{
+			TemperatureCelsius: map[string]float64{"gpu_nvidia_0": temperature},
+			GPU: []agentshost.GPUSensor{
+				{
+					ID:                 "0",
+					Name:               "NVIDIA RTX A6000",
+					TemperatureCelsius: &temperature,
+					UtilizationPercent: &utilization,
+					MemoryUsedBytes:    &usedBytes,
+					MemoryTotalBytes:   &totalBytes,
+				},
+			},
+		},
+		Timestamp: time.Now().UTC(),
+	}
+
+	host, err := monitor.ApplyHostReport(report, nil)
+	if err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+	if len(host.Sensors.GPU) != 1 {
+		t.Fatalf("host GPU sensors = %+v, want one sensor", host.Sensors.GPU)
+	}
+	gpu := host.Sensors.GPU[0]
+	if gpu.ID != "0" || gpu.Name != "NVIDIA RTX A6000" {
+		t.Fatalf("unexpected GPU identity: %+v", gpu)
+	}
+	if gpu.TemperatureCelsius == nil || *gpu.TemperatureCelsius != temperature {
+		t.Fatalf("GPU temperature = %#v, want %.1f", gpu.TemperatureCelsius, temperature)
+	}
+	if gpu.UtilizationPercent == nil || *gpu.UtilizationPercent != utilization {
+		t.Fatalf("GPU utilization = %#v, want %.1f", gpu.UtilizationPercent, utilization)
+	}
+	if gpu.MemoryUsedBytes == nil || *gpu.MemoryUsedBytes != usedBytes {
+		t.Fatalf("GPU used memory = %#v, want %d", gpu.MemoryUsedBytes, usedBytes)
+	}
+	if host.Sensors.TemperatureCelsius["gpu_nvidia_0"] != temperature {
+		t.Fatalf("legacy GPU temperature compatibility = %+v, want %.1f", host.Sensors.TemperatureCelsius, temperature)
+	}
+
+	projected := hostSensorsFromReadStateView(&unifiedresources.HostSensorMeta{
+		GPU: []unifiedresources.HostGPUSensor{
+			{
+				ID:                 "0",
+				Name:               "NVIDIA RTX A6000",
+				TemperatureCelsius: &temperature,
+				UtilizationPercent: &utilization,
+				MemoryUsedBytes:    &usedBytes,
+				MemoryTotalBytes:   &totalBytes,
+			},
+		},
+	})
+	if len(projected.GPU) != 1 || projected.GPU[0].MemoryTotalBytes == nil || *projected.GPU[0].MemoryTotalBytes != totalBytes {
+		t.Fatalf("read-state GPU projection = %+v, want total VRAM %d", projected.GPU, totalBytes)
 	}
 }
 

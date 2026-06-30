@@ -604,6 +604,12 @@ the shared model conversion helpers must preserve `sensors.thermalState`
 through ingest, read-state projection, and frontend conversion, while leaving
 `agent.temperature` and `metric=temperature` unset unless a real Celsius value
 exists.
+Host-agent GPU sensor summaries follow that same descriptive-host-telemetry
+path. Monitoring must preserve typed GPU id, name, temperature, utilization,
+and VRAM readings from agent reports through models, read-state projection, and
+frontend conversion, while still using only real Celsius readings for
+`agent.temperature` or `metric=temperature` and without promoting GPU workload
+or process inventory into monitoring state.
 That same monitoring owner also owns canonical unified-resource publication on
 `/api/state` and the websocket `state.resources` hydrate path. Monitoring must
 publish those resources from the same canonical unified snapshot that

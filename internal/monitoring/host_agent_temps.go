@@ -121,8 +121,27 @@ func convertUnifiedHostSensorsToTemperature(sensors *unifiedresources.HostSensor
 		TemperatureCelsius: cloneStringFloatMap(sensors.TemperatureCelsius),
 		FanRPM:             cloneStringFloatMap(sensors.FanRPM),
 		Additional:         cloneStringFloatMap(sensors.Additional),
+		GPU:                convertUnifiedHostGPU(sensors.GPU),
 		SMART:              convertUnifiedHostSMART(sensors.SMART),
 	}, lastSeen)
+}
+
+func convertUnifiedHostGPU(gpus []unifiedresources.HostGPUSensor) []models.HostGPUSensor {
+	if len(gpus) == 0 {
+		return nil
+	}
+	result := make([]models.HostGPUSensor, len(gpus))
+	for i, gpu := range gpus {
+		result[i] = models.HostGPUSensor{
+			ID:                 gpu.ID,
+			Name:               gpu.Name,
+			TemperatureCelsius: cloneFloat64Ptr(gpu.TemperatureCelsius),
+			UtilizationPercent: cloneFloat64Ptr(gpu.UtilizationPercent),
+			MemoryUsedBytes:    cloneInt64Ptr(gpu.MemoryUsedBytes),
+			MemoryTotalBytes:   cloneInt64Ptr(gpu.MemoryTotalBytes),
+		}
+	}
+	return result
 }
 
 func convertUnifiedHostSMART(smart []unifiedresources.HostSMARTMeta) []models.HostDiskSMART {

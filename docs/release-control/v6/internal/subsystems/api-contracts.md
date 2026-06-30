@@ -3071,6 +3071,12 @@ macOS that expose thermal pressure but not stable Celsius sensor readings. API
 payloads must keep that state separate from `temperatureCelsius`; clients may
 display pressure and throttling limits, but must not synthesize a temperature
 metric or table value from pressure-only payloads.
+Host sensor summaries may also carry typed GPU readings in `gpu`: id, name,
+temperature, utilization, used VRAM, and total VRAM. Backend API payloads and
+`frontend-modern/src/types/api.ts` must preserve that optional collection
+without making it a required compatibility field, and clients must keep it as
+descriptive host telemetry rather than a separate resource or process/workload
+inventory contract.
 
 `aicontracts.Finding` (the shape Patrol hands the investigation
 orchestrator) carries optional `OperatorContext` and

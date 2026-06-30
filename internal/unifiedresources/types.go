@@ -535,8 +535,18 @@ type HostSensorMeta struct {
 	TemperatureCelsius map[string]float64 `json:"temperatureCelsius,omitempty"`
 	FanRPM             map[string]float64 `json:"fanRpm,omitempty"`
 	Additional         map[string]float64 `json:"additional,omitempty"`
+	GPU                []HostGPUSensor    `json:"gpu,omitempty"`
 	ThermalState       *HostThermalState  `json:"thermalState,omitempty"`
 	SMART              []HostSMARTMeta    `json:"smart,omitempty"`
+}
+
+type HostGPUSensor struct {
+	ID                 string   `json:"id,omitempty"`
+	Name               string   `json:"name,omitempty"`
+	TemperatureCelsius *float64 `json:"temperatureCelsius,omitempty"`
+	UtilizationPercent *float64 `json:"utilizationPercent,omitempty"`
+	MemoryUsedBytes    *int64   `json:"memoryUsedBytes,omitempty"`
+	MemoryTotalBytes   *int64   `json:"memoryTotalBytes,omitempty"`
 }
 
 type HostThermalState struct {

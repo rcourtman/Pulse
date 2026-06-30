@@ -15,6 +15,7 @@ import type {
 } from '@/types/api';
 import type { Resource, ResourceMetric, ResourceVMwareMeta } from '@/types/resource';
 import { formatTemperature } from '@/utils/temperature';
+import { formatBytes } from '@/utils/format';
 import { getActionableAgentIdFromResource } from '@/utils/agentResources';
 import {
   getPreferredInfrastructureDisplayName,
@@ -324,9 +325,49 @@ export const formatSensorName = (name: string) => {
   return titleCaseDelimitedLabel(clean);
 };
 
+const formatGPUStatsLabel = (id: string | undefined, index: number): string => {
+  const trimmed = (id || '').trim();
+  return trimmed ? `GPU ${trimmed}` : `GPU ${index + 1}`;
+};
+
+const formatGPUStatsValue = (gpu: NonNullable<HostSensorSummary['gpu']>[number]) => {
+  const parts: string[] = [];
+  if (gpu.name) parts.push(gpu.name);
+  if (typeof gpu.temperatureCelsius === 'number' && Number.isFinite(gpu.temperatureCelsius)) {
+    parts.push(formatTemperature(gpu.temperatureCelsius));
+  }
+  if (typeof gpu.utilizationPercent === 'number' && Number.isFinite(gpu.utilizationPercent)) {
+    parts.push(`${Math.round(Math.max(0, gpu.utilizationPercent))}%`);
+  }
+  if (
+    typeof gpu.memoryTotalBytes === 'number' &&
+    Number.isFinite(gpu.memoryTotalBytes) &&
+    gpu.memoryTotalBytes > 0
+  ) {
+    const used =
+      typeof gpu.memoryUsedBytes === 'number' && Number.isFinite(gpu.memoryUsedBytes)
+        ? Math.max(0, gpu.memoryUsedBytes)
+        : 0;
+    parts.push(`${formatBytes(used)} / ${formatBytes(gpu.memoryTotalBytes)}`);
+  }
+  return parts.join(' · ');
+};
+
+const buildTypedGPUTemperatureKeys = (gpus?: HostSensorSummary['gpu']) => {
+  const keys = new Set<string>();
+  gpus?.forEach((gpu) => {
+    const id = (gpu.id || '').trim();
+    if (!id) return;
+    if (typeof gpu.temperatureCelsius !== 'number' || !Number.isFinite(gpu.temperatureCelsius)) return;
+    keys.add(`gpu_nvidia_${id}`);
+  });
+  return keys;
+};
+
 export const buildTemperatureRows = (sensors?: HostSensorSummary) => {
   const rows: { label: string; value: string; valueTitle?: string }[] = [];
   const thermalState = sensors?.thermalState;
+  const typedGPUTemperatureKeys = buildTypedGPUTemperatureKeys(sensors?.gpu);
   if (thermalState?.pressure) {
     rows.push({
       label: 'Thermal pressure',
@@ -349,9 +390,23 @@ export const buildTemperatureRows = (sensors?: HostSensorSummary) => {
         });
       });
   }
+  const gpus = sensors?.gpu;
+  if (gpus) {
+    gpus.forEach((gpu, index) => {
+      const value = formatGPUStatsValue(gpu);
+      if (!value) return;
+      rows.push({
+        label: formatGPUStatsLabel(gpu.id, index),
+        value,
+        valueTitle: value,
+      });
+    });
+  }
   const temps = sensors?.temperatureCelsius;
   if (temps) {
-    const entries = Object.entries(temps).sort(([a], [b]) => a.localeCompare(b));
+    const entries = Object.entries(temps)
+      .filter(([name]) => !typedGPUTemperatureKeys.has(name))
+      .sort(([a], [b]) => a.localeCompare(b));
     entries.forEach(([name, temp]) => {
       rows.push({
         label: formatSensorName(name),

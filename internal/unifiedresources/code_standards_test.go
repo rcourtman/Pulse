@@ -2179,6 +2179,52 @@ func TestBroadcastStateUsesSharedCanonicalResourceContract(t *testing.T) {
 	}
 }
 
+func TestCloneHostSensorMetaKeepsGPUSensorsIsolated(t *testing.T) {
+	temperature := 63.0
+	utilization := 42.0
+	usedBytes := int64(4 * 1024 * 1024 * 1024)
+	totalBytes := int64(16 * 1024 * 1024 * 1024)
+	source := &HostSensorMeta{
+		GPU: []HostGPUSensor{
+			{
+				ID:                 "0",
+				Name:               "NVIDIA RTX A6000",
+				TemperatureCelsius: &temperature,
+				UtilizationPercent: &utilization,
+				MemoryUsedBytes:    &usedBytes,
+				MemoryTotalBytes:   &totalBytes,
+			},
+		},
+	}
+
+	clone := cloneHostSensorMeta(source)
+	if clone == nil || len(clone.GPU) != 1 {
+		t.Fatalf("GPU clone = %+v, want one sensor", clone)
+	}
+	temperature = 10
+	utilization = 1
+	usedBytes = 1
+	totalBytes = 2
+	source.GPU[0].Name = "mutated"
+
+	gpu := clone.GPU[0]
+	if gpu.Name != "NVIDIA RTX A6000" {
+		t.Fatalf("GPU name clone = %q, want original name", gpu.Name)
+	}
+	if gpu.TemperatureCelsius == nil || *gpu.TemperatureCelsius != 63 {
+		t.Fatalf("GPU temperature clone = %#v, want 63", gpu.TemperatureCelsius)
+	}
+	if gpu.UtilizationPercent == nil || *gpu.UtilizationPercent != 42 {
+		t.Fatalf("GPU utilization clone = %#v, want 42", gpu.UtilizationPercent)
+	}
+	if gpu.MemoryUsedBytes == nil || *gpu.MemoryUsedBytes != int64(4*1024*1024*1024) {
+		t.Fatalf("GPU used memory clone = %#v, want 4 GiB", gpu.MemoryUsedBytes)
+	}
+	if gpu.MemoryTotalBytes == nil || *gpu.MemoryTotalBytes != int64(16*1024*1024*1024) {
+		t.Fatalf("GPU total memory clone = %#v, want 16 GiB", gpu.MemoryTotalBytes)
+	}
+}
+
 func TestCloneVMwareDataKeepsNestedRuntimeDetailsIsolated(t *testing.T) {
 	repoRoot := filepath.Join("..", "..")
 	clonePath := filepath.Join(repoRoot, "internal", "unifiedresources", "clone.go")

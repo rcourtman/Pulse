@@ -480,10 +480,10 @@ func TestBuildReportIncludesNVIDIASMITemperaturesWhenLMSensorsUnavailable(t *tes
 			if name != "/usr/bin/nvidia-smi" {
 				t.Fatalf("command name = %q, want /usr/bin/nvidia-smi", name)
 			}
-			if len(arg) != 2 || arg[0] != "--query-gpu=index,name,temperature.gpu" || arg[1] != "--format=csv,noheader,nounits" {
-				t.Fatalf("command args = %#v, want NVIDIA temperature query", arg)
+			if len(arg) != 2 || arg[0] != "--query-gpu=index,name,temperature.gpu,utilization.gpu,memory.used,memory.total" || arg[1] != "--format=csv,noheader,nounits" {
+				t.Fatalf("command args = %#v, want NVIDIA stats query", arg)
 			}
-			return "0, NVIDIA GeForce RTX 4090, 63\n", nil
+			return "0, NVIDIA GeForce RTX 4090, 63, 42, 8192, 24576\n", nil
 		},
 	}
 
@@ -504,6 +504,15 @@ func TestBuildReportIncludesNVIDIASMITemperaturesWhenLMSensorsUnavailable(t *tes
 
 	if report.Sensors.TemperatureCelsius["gpu_nvidia_0"] != 63 {
 		t.Fatalf("NVIDIA GPU temp = %v, want 63", report.Sensors.TemperatureCelsius["gpu_nvidia_0"])
+	}
+	if len(report.Sensors.GPU) != 1 {
+		t.Fatalf("GPU stats = %d, want 1: %+v", len(report.Sensors.GPU), report.Sensors.GPU)
+	}
+	if report.Sensors.GPU[0].UtilizationPercent == nil || *report.Sensors.GPU[0].UtilizationPercent != 42 {
+		t.Fatalf("GPU utilization = %#v, want 42", report.Sensors.GPU[0].UtilizationPercent)
+	}
+	if report.Sensors.GPU[0].MemoryTotalBytes == nil || *report.Sensors.GPU[0].MemoryTotalBytes != 24576*1024*1024 {
+		t.Fatalf("GPU memory total = %#v, want 24576 MiB", report.Sensors.GPU[0].MemoryTotalBytes)
 	}
 }
 

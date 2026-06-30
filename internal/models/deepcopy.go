@@ -247,9 +247,28 @@ func cloneHostSensorSummary(src HostSensorSummary) HostSensorSummary {
 		TemperatureCelsius: cloneStringFloat64Map(src.TemperatureCelsius),
 		FanRPM:             cloneStringFloat64Map(src.FanRPM),
 		Additional:         cloneStringFloat64Map(src.Additional),
+		GPU:                cloneHostGPUSensors(src.GPU),
 		ThermalState:       cloneHostThermalState(src.ThermalState),
 		SMART:              cloneHostDiskSMART(src.SMART),
 	}.NormalizeCollections()
+}
+
+func cloneHostGPUSensors(src []HostGPUSensor) []HostGPUSensor {
+	if len(src) == 0 {
+		return nil
+	}
+	dest := make([]HostGPUSensor, len(src))
+	for i, gpu := range src {
+		dest[i] = HostGPUSensor{
+			ID:                 gpu.ID,
+			Name:               gpu.Name,
+			TemperatureCelsius: cloneFloat64Ptr(gpu.TemperatureCelsius),
+			UtilizationPercent: cloneFloat64Ptr(gpu.UtilizationPercent),
+			MemoryUsedBytes:    cloneInt64Ptr(gpu.MemoryUsedBytes),
+			MemoryTotalBytes:   cloneInt64Ptr(gpu.MemoryTotalBytes),
+		}
+	}
+	return dest
 }
 
 func cloneHostThermalState(src *HostThermalState) *HostThermalState {

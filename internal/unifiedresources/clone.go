@@ -689,9 +689,28 @@ func cloneHostSensorMeta(in *HostSensorMeta) *HostSensorMeta {
 	out.TemperatureCelsius = cloneStringFloat64Map(in.TemperatureCelsius)
 	out.FanRPM = cloneStringFloat64Map(in.FanRPM)
 	out.Additional = cloneStringFloat64Map(in.Additional)
+	out.GPU = cloneHostGPUSensors(in.GPU)
 	out.ThermalState = cloneHostThermalState(in.ThermalState)
 	out.SMART = cloneHostSMARTMetaSlice(in.SMART)
 	return &out
+}
+
+func cloneHostGPUSensors(in []HostGPUSensor) []HostGPUSensor {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]HostGPUSensor, len(in))
+	for i, gpu := range in {
+		out[i] = HostGPUSensor{
+			ID:                 gpu.ID,
+			Name:               gpu.Name,
+			TemperatureCelsius: cloneFloat64Ptr(gpu.TemperatureCelsius),
+			UtilizationPercent: cloneFloat64Ptr(gpu.UtilizationPercent),
+			MemoryUsedBytes:    cloneInt64Ptr(gpu.MemoryUsedBytes),
+			MemoryTotalBytes:   cloneInt64Ptr(gpu.MemoryTotalBytes),
+		}
+	}
+	return out
 }
 
 func cloneHostThermalState(in *HostThermalState) *HostThermalState {

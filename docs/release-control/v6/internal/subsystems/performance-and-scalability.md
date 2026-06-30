@@ -802,6 +802,11 @@ platform tables may show a short pressure status such as `Nominal` or
 exists, while `resourceDetailMappers.ts` owns the fuller thermals-card rows for
 pressure source and throttling limits. The table fallback must stay row-local
 and must not add history reads, polling work, or a second thermal query path.
+GPU utilization and VRAM rows in `resourceDetailMappers.ts` follow the same
+drawer-only rule. The mapper may render typed GPU sensor values already present
+on the selected resource payload, but it must not add GPU-specific history
+reads, per-row polling, browser-side `nvidia-smi` assumptions, or table-wide
+aggregation work.
 The Proxmox node drawer overview should follow the existing guest drawer
 compact detail-card pattern and expose node-specific context such as platform,
 kernel, hardware, raw capacity, telemetry, and thermal facts rather than

@@ -876,14 +876,15 @@ surface and no new `internal/api/` lifecycle handler.
    it must report Darwin `pmset` thermal and performance pressure as
    `sensors.thermalState` instead of inventing Celsius readings from unavailable
    Apple silicon sensor values.
-   Linux NVIDIA GPU temperature telemetry belongs in that same host-agent
-   sensor contract: the runtime may supplement `lm-sensors` with a bounded
-   `nvidia-smi` temperature query and may use that query as a best-effort
-   fallback when `lm-sensors` is unavailable. The report must map only direct
+   Linux NVIDIA GPU telemetry belongs in that same host-agent sensor contract:
+   the runtime may supplement `lm-sensors` with a bounded `nvidia-smi` query
+   for direct GPU temperature, utilization, and VRAM readings, and may use that
+   query as a best-effort fallback when `lm-sensors` is unavailable. The report
+   must keep typed GPU readings in `sensors.gpu` while mapping only direct
    `temperature.gpu` readings into existing `sensors.temperatureCelsius`
-   `gpu_nvidia_<index>` keys; it must not infer lifecycle health, command
-   authority, enrollment state, or GPU workload/process inventory from
-   `nvidia-smi` output.
+   `gpu_nvidia_<index>` keys for compatibility; it must not infer lifecycle
+   health, command authority, enrollment state, or GPU workload/process
+   inventory from `nvidia-smi` output.
    Runtime RAID collection uses `/proc/mdstat` as the canonical discovery
    baseline for Linux md arrays. `mdadm --detail` may enrich level, state,
    member, UUID, and rebuild fields when available, but missing or failing

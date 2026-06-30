@@ -77,10 +77,10 @@ func TestAgent_collectTemperatures_MergesNVIDIASMITemperatures(t *testing.T) {
 			if name != "/usr/bin/nvidia-smi" {
 				t.Fatalf("command name = %q, want /usr/bin/nvidia-smi", name)
 			}
-			if len(arg) != 2 || arg[0] != "--query-gpu=index,name,temperature.gpu" || arg[1] != "--format=csv,noheader,nounits" {
-				t.Fatalf("command args = %#v, want NVIDIA temperature query", arg)
+			if len(arg) != 2 || arg[0] != "--query-gpu=index,name,temperature.gpu,utilization.gpu,memory.used,memory.total" || arg[1] != "--format=csv,noheader,nounits" {
+				t.Fatalf("command args = %#v, want NVIDIA stats query", arg)
 			}
-			return "0, NVIDIA GeForce RTX 4090, 61\n", nil
+			return "0, NVIDIA GeForce RTX 4090, 61, 7, 4096, 24576\n", nil
 		},
 	}
 
@@ -92,6 +92,15 @@ func TestAgent_collectTemperatures_MergesNVIDIASMITemperatures(t *testing.T) {
 	}
 	if got.TemperatureCelsius["gpu_nvidia_0"] != 61 {
 		t.Fatalf("NVIDIA GPU temp = %v, want 61", got.TemperatureCelsius["gpu_nvidia_0"])
+	}
+	if len(got.GPU) != 1 {
+		t.Fatalf("GPU stats = %d, want 1: %+v", len(got.GPU), got.GPU)
+	}
+	if got.GPU[0].UtilizationPercent == nil || *got.GPU[0].UtilizationPercent != 7 {
+		t.Fatalf("GPU utilization = %#v, want 7", got.GPU[0].UtilizationPercent)
+	}
+	if got.GPU[0].MemoryUsedBytes == nil || *got.GPU[0].MemoryUsedBytes != 4096*1024*1024 {
+		t.Fatalf("GPU memory used = %#v, want 4096 MiB", got.GPU[0].MemoryUsedBytes)
 	}
 }
 
@@ -106,7 +115,7 @@ func TestAgent_collectTemperatures_UsesNVIDIASMIWhenLMSensorsUnavailable(t *test
 			return "/usr/bin/nvidia-smi", nil
 		},
 		commandCombinedOutputFn: func(context.Context, string, ...string) (string, error) {
-			return "0, NVIDIA RTX A6000, 58\n", nil
+			return "0, NVIDIA RTX A6000, 58, 0, 0, 49152\n", nil
 		},
 	}
 
@@ -118,6 +127,12 @@ func TestAgent_collectTemperatures_UsesNVIDIASMIWhenLMSensorsUnavailable(t *test
 	}
 	if got.TemperatureCelsius["gpu_nvidia_0"] != 58 {
 		t.Fatalf("NVIDIA GPU temp = %v, want 58", got.TemperatureCelsius["gpu_nvidia_0"])
+	}
+	if got.GPU[0].UtilizationPercent == nil || *got.GPU[0].UtilizationPercent != 0 {
+		t.Fatalf("GPU utilization = %#v, want 0", got.GPU[0].UtilizationPercent)
+	}
+	if got.GPU[0].MemoryUsedBytes == nil || *got.GPU[0].MemoryUsedBytes != 0 {
+		t.Fatalf("GPU memory used = %#v, want 0", got.GPU[0].MemoryUsedBytes)
 	}
 }
 
@@ -143,10 +158,10 @@ func TestAgent_collectTemperatures_BestEffortFailuresReturnEmpty(t *testing.T) {
 }
 
 func TestParseNVIDIASMITemperatures(t *testing.T) {
-	input := `0, NVIDIA GeForce RTX 4090, 47
-1, "NVIDIA, RTX A6000", N/A
-2, NVIDIA Tesla T4, 58 C
-0000:65:00.0, NVIDIA H100, 64`
+	input := `0, NVIDIA GeForce RTX 4090, 47, 11, 2048, 24576
+1, "NVIDIA, RTX A6000", N/A, N/A, N/A, N/A
+2, NVIDIA Tesla T4, 58 C, 0 %, 0 MiB, 15360 MiB
+0000:65:00.0, NVIDIA H100, 64, 95, 70000, 81920`
 
 	got, err := parseNVIDIASMITemperatures(input)
 	if err != nil {
@@ -165,6 +180,40 @@ func TestParseNVIDIASMITemperatures(t *testing.T) {
 		if gotTemp := got[key]; gotTemp != wantTemp {
 			t.Fatalf("%s = %v, want %v", key, gotTemp, wantTemp)
 		}
+	}
+}
+
+func TestParseNVIDIASMIStats(t *testing.T) {
+	input := `0, NVIDIA GeForce RTX 4090, 47, 11, 2048, 24576
+1, NVIDIA RTX A6000, 0, 0, 0, 49152`
+
+	got, err := parseNVIDIASMIStats(input)
+	if err != nil {
+		t.Fatalf("parseNVIDIASMIStats returned error: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("GPU stats = %d, want 2: %+v", len(got), got)
+	}
+	if got[0].ID != "0" || got[0].Name != "NVIDIA GeForce RTX 4090" {
+		t.Fatalf("unexpected first GPU identity: %+v", got[0])
+	}
+	if got[0].TemperatureCelsius == nil || *got[0].TemperatureCelsius != 47 {
+		t.Fatalf("first GPU temp = %#v, want 47", got[0].TemperatureCelsius)
+	}
+	if got[0].UtilizationPercent == nil || *got[0].UtilizationPercent != 11 {
+		t.Fatalf("first GPU utilization = %#v, want 11", got[0].UtilizationPercent)
+	}
+	if got[0].MemoryUsedBytes == nil || *got[0].MemoryUsedBytes != 2048*1024*1024 {
+		t.Fatalf("first GPU memory used = %#v, want 2048 MiB", got[0].MemoryUsedBytes)
+	}
+	if got[1].TemperatureCelsius != nil {
+		t.Fatalf("second GPU temp = %#v, want nil for zero temperature", got[1].TemperatureCelsius)
+	}
+	if got[1].UtilizationPercent == nil || *got[1].UtilizationPercent != 0 {
+		t.Fatalf("second GPU utilization = %#v, want 0", got[1].UtilizationPercent)
+	}
+	if got[1].MemoryUsedBytes == nil || *got[1].MemoryUsedBytes != 0 {
+		t.Fatalf("second GPU memory used = %#v, want 0", got[1].MemoryUsedBytes)
 	}
 }
 

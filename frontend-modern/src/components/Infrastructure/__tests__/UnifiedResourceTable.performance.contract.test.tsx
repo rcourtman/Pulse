@@ -594,6 +594,40 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(resourceDetailDiscoveryModelSource).toContain('export const toDiscoveryConfig');
     });
 
+    it('keeps typed GPU detail rows bounded to the selected resource payload', () => {
+      expect(
+        buildTemperatureRows({
+          temperatureCelsius: {
+            cpu_package: 48,
+            gpu_nvidia_0: 63,
+          },
+          gpu: [
+            {
+              id: '0',
+              name: 'NVIDIA RTX A6000',
+              temperatureCelsius: 63,
+              utilizationPercent: 0,
+              memoryUsedBytes: 2 * 1024 * 1024 * 1024,
+              memoryTotalBytes: 48 * 1024 * 1024 * 1024,
+            },
+          ],
+        }),
+      ).toEqual([
+        {
+          label: 'GPU 0',
+          value: 'NVIDIA RTX A6000 · 63°C · 0% · 2.00 GB / 48.0 GB',
+          valueTitle: 'NVIDIA RTX A6000 · 63°C · 0% · 2.00 GB / 48.0 GB',
+        },
+        {
+          label: 'Package',
+          value: '48°C',
+          valueTitle: '48.0°C',
+        },
+      ]);
+      expect(resourceDetailMappersSource).not.toContain('nvidia-smi');
+      expect(resourceDetailMappersSource).not.toContain('fetch(');
+    });
+
     it('keeps hot-path table state and windowing in the shared table state owner', () => {
       expect(unifiedResourceTableSource).toContain('useUnifiedResourceTableState');
       expect(unifiedResourceTableSource).toContain('UnifiedResourceHostTableCard');

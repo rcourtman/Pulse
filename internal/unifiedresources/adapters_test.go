@@ -555,6 +555,53 @@ func TestResourceFromHostProjectsPressureOnlyThermalState(t *testing.T) {
 	}
 }
 
+func TestResourceFromHostProjectsTypedGPUSensors(t *testing.T) {
+	temperature := 63.0
+	utilization := 18.0
+	usedBytes := int64(3 * 1024 * 1024 * 1024)
+	totalBytes := int64(24 * 1024 * 1024 * 1024)
+	host := models.Host{
+		ID:       "gpu-host",
+		Hostname: "gpu-node",
+		Platform: "linux",
+		Status:   "online",
+		Sensors: models.HostSensorSummary{
+			TemperatureCelsius: map[string]float64{"gpu_nvidia_0": temperature},
+			GPU: []models.HostGPUSensor{
+				{
+					ID:                 "0",
+					Name:               "NVIDIA RTX A6000",
+					TemperatureCelsius: &temperature,
+					UtilizationPercent: &utilization,
+					MemoryUsedBytes:    &usedBytes,
+					MemoryTotalBytes:   &totalBytes,
+				},
+			},
+		},
+	}
+
+	resource, _ := resourceFromHost(host)
+	if resource.Agent == nil || resource.Agent.Sensors == nil {
+		t.Fatalf("expected agent sensor payload, got %+v", resource.Agent)
+	}
+	if len(resource.Agent.Sensors.GPU) != 1 {
+		t.Fatalf("GPU sensors = %+v, want one sensor", resource.Agent.Sensors.GPU)
+	}
+	gpu := resource.Agent.Sensors.GPU[0]
+	if gpu.ID != "0" || gpu.Name != "NVIDIA RTX A6000" {
+		t.Fatalf("unexpected GPU identity: %+v", gpu)
+	}
+	if gpu.UtilizationPercent == nil || *gpu.UtilizationPercent != utilization {
+		t.Fatalf("GPU utilization = %#v, want %.1f", gpu.UtilizationPercent, utilization)
+	}
+	if gpu.MemoryTotalBytes == nil || *gpu.MemoryTotalBytes != totalBytes {
+		t.Fatalf("GPU memory total = %#v, want %d", gpu.MemoryTotalBytes, totalBytes)
+	}
+	if resource.Agent.Sensors.TemperatureCelsius["gpu_nvidia_0"] != temperature {
+		t.Fatalf("legacy GPU temperature = %+v, want %.1f", resource.Agent.Sensors.TemperatureCelsius, temperature)
+	}
+}
+
 func TestResourceFromVMPreservesProxmoxPool(t *testing.T) {
 	vm := models.VM{
 		ID:       "cluster-a:pve-a:101",

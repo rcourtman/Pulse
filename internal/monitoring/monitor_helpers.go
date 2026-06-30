@@ -216,6 +216,22 @@ func cloneIntPtr(src *int) *int {
 	return &out
 }
 
+func cloneFloat64Ptr(src *float64) *float64 {
+	if src == nil {
+		return nil
+	}
+	out := *src
+	return &out
+}
+
+func cloneInt64Ptr(src *int64) *int64 {
+	if src == nil {
+		return nil
+	}
+	out := *src
+	return &out
+}
+
 func cloneStringMap(src map[string]string) map[string]string {
 	if len(src) == 0 {
 		return nil
@@ -610,6 +626,24 @@ func convertAgentSMARTToModels(smart []agentshost.DiskSMART) []models.HostDiskSM
 			entry.Attributes = convertAgentSMARTAttributes(disk.Attributes)
 		}
 		result = append(result, entry)
+	}
+	return result
+}
+
+func convertAgentGPUToModels(gpus []agentshost.GPUSensor) []models.HostGPUSensor {
+	if len(gpus) == 0 {
+		return nil
+	}
+	result := make([]models.HostGPUSensor, len(gpus))
+	for i, gpu := range gpus {
+		result[i] = models.HostGPUSensor{
+			ID:                 gpu.ID,
+			Name:               gpu.Name,
+			TemperatureCelsius: cloneFloat64Ptr(gpu.TemperatureCelsius),
+			UtilizationPercent: cloneFloat64Ptr(gpu.UtilizationPercent),
+			MemoryUsedBytes:    cloneInt64Ptr(gpu.MemoryUsedBytes),
+			MemoryTotalBytes:   cloneInt64Ptr(gpu.MemoryTotalBytes),
+		}
 	}
 	return result
 }

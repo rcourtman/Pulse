@@ -839,7 +839,7 @@ func (s DockerSwarmInfo) ToFrontend() DockerSwarmFrontend {
 }
 
 func hostSensorSummaryToFrontend(src HostSensorSummary) *HostSensorSummaryFrontend {
-	if len(src.TemperatureCelsius) == 0 && len(src.FanRPM) == 0 && len(src.Additional) == 0 && src.ThermalState == nil && len(src.SMART) == 0 {
+	if len(src.TemperatureCelsius) == 0 && len(src.FanRPM) == 0 && len(src.Additional) == 0 && len(src.GPU) == 0 && src.ThermalState == nil && len(src.SMART) == 0 {
 		return nil
 	}
 
@@ -852,6 +852,19 @@ func hostSensorSummaryToFrontend(src HostSensorSummary) *HostSensorSummaryFronte
 	}
 	if len(src.Additional) > 0 {
 		dest.Additional = copyStringFloatMap(src.Additional)
+	}
+	if len(src.GPU) > 0 {
+		dest.GPU = make([]HostGPUSensorFrontend, len(src.GPU))
+		for i, gpu := range src.GPU {
+			dest.GPU[i] = HostGPUSensorFrontend{
+				ID:                 gpu.ID,
+				Name:               gpu.Name,
+				TemperatureCelsius: cloneFloat64Ptr(gpu.TemperatureCelsius),
+				UtilizationPercent: cloneFloat64Ptr(gpu.UtilizationPercent),
+				MemoryUsedBytes:    cloneInt64Ptr(gpu.MemoryUsedBytes),
+				MemoryTotalBytes:   cloneInt64Ptr(gpu.MemoryTotalBytes),
+			}
+		}
 	}
 	if src.ThermalState != nil {
 		dest.ThermalState = copyHostThermalState(src.ThermalState)

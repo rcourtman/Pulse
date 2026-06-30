@@ -122,6 +122,38 @@ describe('resourceDetailMappers', () => {
         },
       ]);
     });
+
+    it('surfaces typed GPU utilization and memory readings', () => {
+      const rows = buildTemperatureRows({
+        temperatureCelsius: {
+          gpu_nvidia_0: 63,
+          cpu_package: 41,
+        },
+        gpu: [
+          {
+            id: '0',
+            name: 'NVIDIA RTX A6000',
+            temperatureCelsius: 63,
+            utilizationPercent: 0,
+            memoryUsedBytes: 2 * 1024 * 1024 * 1024,
+            memoryTotalBytes: 48 * 1024 * 1024 * 1024,
+          },
+        ],
+      });
+
+      expect(rows).toEqual([
+        {
+          label: 'GPU 0',
+          value: 'NVIDIA RTX A6000 · 63°C · 0% · 2.00 GB / 48.0 GB',
+          valueTitle: 'NVIDIA RTX A6000 · 63°C · 0% · 2.00 GB / 48.0 GB',
+        },
+        {
+          label: 'Package',
+          value: '41°C',
+          valueTitle: '41.0°C',
+        },
+      ]);
+    });
   });
 
   describe('toNodeFromProxmox', () => {
