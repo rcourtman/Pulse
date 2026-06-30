@@ -7,6 +7,7 @@ import {
   getPatrolQueueWorkspaceDescription,
   getPatrolReadyWorkDetail,
   getPatrolSetupIssueReason,
+  getPatrolWorkspaceProtectionPosture,
   getPatrolWorkspaceWorkGroups,
   PATROL_AUTONOMY_POLICY_PRESENTATION,
   PATROL_WORKSPACE_QUEUE_TITLE,
@@ -262,6 +263,156 @@ describe('patrolControlPresentation', () => {
           error_count: 0,
           next_patrol_at: '2026-06-30T14:05:00Z',
           running: true,
+        },
+      }),
+    ).toEqual([]);
+  });
+
+  it('surfaces calm-day protection posture from Patrol run and status facts', () => {
+    expect(
+      getPatrolWorkspaceProtectionPosture({
+        findingCount: 0,
+        historicalRegressionCount: 0,
+        latestRun: {
+          error_count: 0,
+          resources_checked: 4,
+          status: 'healthy',
+        },
+        nowMs: Date.parse('2026-06-30T13:00:00Z'),
+        patrolStatus: {
+          enabled: true,
+          error_count: 0,
+          findings_count: 0,
+          healthy: true,
+          next_patrol_at: '2026-06-30T14:05:00Z',
+          resources_checked: 4,
+          running: false,
+          runtime_state: 'active',
+        },
+        pendingApprovalCount: 0,
+        workTypeComposition: {
+          total: 0,
+          approval: 0,
+          failed: 0,
+          inProgress: 0,
+          recurring: 0,
+          newIssues: 0,
+        },
+      }),
+    ).toEqual([
+      {
+        detail: 'No current issue or approval is waiting in Patrol.',
+        id: 'protection',
+        label: 'Protection current',
+        tone: 'success',
+      },
+      {
+        detail: 'Coverage came from the latest Patrol check.',
+        id: 'coverage',
+        label: 'Checked 4 resources',
+        tone: 'success',
+      },
+      {
+        detail: 'Patrol is scheduled to check again.',
+        id: 'freshness',
+        label: 'Schedule active',
+        tone: 'info',
+      },
+      {
+        detail: 'No current issue is marked as reappeared after earlier resolution.',
+        id: 'drift',
+        label: 'No recurring issues',
+        tone: 'success',
+      },
+      {
+        detail: 'No approval, failed action, or follow-up result is waiting for review.',
+        id: 'verification',
+        label: 'No verification waiting',
+        tone: 'success',
+      },
+    ]);
+  });
+
+  it('keeps past drift as history in calm-day protection posture', () => {
+    expect(
+      getPatrolWorkspaceProtectionPosture({
+        historicalRegressionCount: 2,
+        latestRun: {
+          effective_scope_resource_ids: ['resource-a', 'resource-b'],
+          error_count: 0,
+          resources_checked: 1,
+          scope_resource_ids: ['resource-a'],
+          status: 'healthy',
+        },
+        nowMs: Date.parse('2026-06-30T13:00:00Z'),
+        patrolStatus: {
+          enabled: true,
+          error_count: 0,
+          findings_count: 0,
+          healthy: true,
+          next_patrol_at: '2026-06-30T14:05:00Z',
+          resources_checked: 1,
+          running: false,
+          runtime_state: 'active',
+        },
+      }),
+    ).toContainEqual({
+      detail: 'History keeps the drift record; no recurring issue is current.',
+      id: 'drift',
+      label: '2 past regressions',
+      tone: 'info',
+    });
+  });
+
+  it('does not render calm-day posture for current work, failed checks, or overdue protection', () => {
+    expect(
+      getPatrolWorkspaceProtectionPosture({
+        findingCount: 1,
+        latestRun: {
+          error_count: 0,
+          resources_checked: 4,
+          status: 'issues_found',
+        },
+      }),
+    ).toEqual([]);
+
+    expect(
+      getPatrolWorkspaceProtectionPosture({
+        latestRun: {
+          error_count: 1,
+          resources_checked: 4,
+          status: 'error',
+        },
+        patrolStatus: {
+          enabled: true,
+          error_count: 1,
+          findings_count: 0,
+          healthy: false,
+          next_patrol_at: '2026-06-30T14:05:00Z',
+          resources_checked: 4,
+          running: false,
+          runtime_state: 'active',
+        },
+      }),
+    ).toEqual([]);
+
+    expect(
+      getPatrolWorkspaceProtectionPosture({
+        latestRun: {
+          error_count: 0,
+          resources_checked: 4,
+          status: 'healthy',
+        },
+        nowMs: Date.parse('2026-06-30T15:00:00Z'),
+        patrolStatus: {
+          enabled: true,
+          error_count: 0,
+          findings_count: 0,
+          healthy: true,
+          next_patrol_at: '2026-06-30T14:05:00Z',
+          resources_checked: 4,
+          running: false,
+          runtime_state: 'active',
         },
       }),
     ).toEqual([]);

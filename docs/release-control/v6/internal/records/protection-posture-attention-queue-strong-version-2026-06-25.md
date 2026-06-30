@@ -122,6 +122,12 @@ loop, and routes the operator from real findings/evidence to safe action.
   recurring active issues, and overdue scheduled protection. The grouping stays
   inside Patrol and does not replace issue rows, approvals, verification, or
   contextual Assistant handoffs.
+- 2026-06-30: Added Patrol-owned calm-day protection posture inside the empty
+  `Open work` workspace. It surfaces protection-current, latest coverage,
+  schedule freshness, drift-history, and verification-waiting facts only after
+  current findings, approvals, failed checks, stale protection, running checks,
+  and setup failures have been ruled out, and browser proof keeps those facts
+  out of the monitor-first launch page.
 
 ## Evidence
 
@@ -139,7 +145,8 @@ loop, and routes the operator from real findings/evidence to safe action.
 - Cross-source current-work grouping remains useful, but it belongs inside
   Patrol or contextual monitoring surfaces rather than a renamed top-level
   destination.
-- Calm-day posture still needs a deliberately contextual design pass before it
-  should be added to monitoring or Patrol.
+- Calm-day posture now has a Patrol-side empty-work shape; monitoring-context
+  posture still needs a separate contextual pass before any monitor page should
+  show protection or coverage summaries.
 - The status coverage gap `protection-posture-attention-queue` tracks the
   remaining product-surface work.

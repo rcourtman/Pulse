@@ -5,6 +5,7 @@ import {
   getPatrolWorkTypeCompositionClause,
 } from '@/utils/aiFindingPresentation';
 import type { PatrolWorkTypeComposition } from '@/utils/aiFindingPresentation';
+import { getPatrolRunCoverageSummary } from '@/utils/patrolRunPresentation';
 import type { UpgradeDestination } from '@/utils/upgradeNavigation';
 
 export const PATROL_AUTONOMY_POLICY_PRESENTATION: Record<
@@ -65,10 +66,44 @@ export interface PatrolWorkspaceWorkGroupSummary {
   tone: MetadataBadgeTone;
 }
 
+export interface PatrolWorkspaceProtectionPostureSummary {
+  detail: string;
+  id: 'coverage' | 'drift' | 'freshness' | 'protection' | 'verification';
+  label: string;
+  tone: MetadataBadgeTone;
+}
+
 interface PatrolWorkspaceWorkGroupsInput {
   latestRun?: Pick<PatrolRunRecord, 'error_count' | 'resources_checked' | 'status'> | null;
   nowMs?: number;
   patrolStatus?: Pick<PatrolStatus, 'error_count' | 'next_patrol_at' | 'running'> | null;
+  pendingApprovalCount?: number;
+  workTypeComposition?: PatrolWorkTypeComposition;
+}
+
+interface PatrolWorkspaceProtectionPostureInput {
+  findingCount?: number;
+  historicalRegressionCount?: number;
+  latestRun?: Pick<
+    PatrolRunRecord,
+    | 'effective_scope_resource_ids'
+    | 'error_count'
+    | 'resources_checked'
+    | 'scope_resource_ids'
+    | 'status'
+  > | null;
+  nowMs?: number;
+  patrolStatus?: Pick<
+    PatrolStatus,
+    | 'enabled'
+    | 'error_count'
+    | 'findings_count'
+    | 'healthy'
+    | 'next_patrol_at'
+    | 'resources_checked'
+    | 'running'
+    | 'runtime_state'
+  > | null;
   pendingApprovalCount?: number;
   workTypeComposition?: PatrolWorkTypeComposition;
 }
@@ -116,6 +151,33 @@ function isScheduledPatrolOverdue(
   if (!status || status.running || !status.next_patrol_at) return false;
   const nextPatrolAt = Date.parse(status.next_patrol_at);
   return Number.isFinite(nextPatrolAt) && nextPatrolAt < nowMs;
+}
+
+function isActivePatrolRuntime(
+  status: Pick<PatrolStatus, 'runtime_state'> | null | undefined,
+): boolean {
+  return !status?.runtime_state || status.runtime_state === 'active';
+}
+
+function getPatrolCoverageLabel(
+  latestRun:
+    | Pick<
+        PatrolRunRecord,
+        'effective_scope_resource_ids' | 'resources_checked' | 'scope_resource_ids'
+      >
+    | null
+    | undefined,
+  status: Pick<PatrolStatus, 'resources_checked'> | null | undefined,
+): string | undefined {
+  const latestRunCoverage = latestRun ? getPatrolRunCoverageSummary(latestRun) : '';
+  if (latestRunCoverage) return latestRunCoverage;
+
+  const statusResourcesChecked = normalizeCount(status?.resources_checked);
+  if (statusResourcesChecked > 0) {
+    return `Checked ${formatCount(statusResourcesChecked, 'resource')}`;
+  }
+
+  return undefined;
 }
 
 function getPatrolQueueActionDetail(input: PatrolControlCopyInput): string {
@@ -278,6 +340,120 @@ export function getPatrolWorkspaceWorkGroups(
   }
 
   return groups;
+}
+
+export function getPatrolWorkspaceProtectionPosture(
+  input: PatrolWorkspaceProtectionPostureInput,
+): PatrolWorkspaceProtectionPostureSummary[] {
+  const composition = input.workTypeComposition;
+  const pendingApprovalCount = normalizeCount(input.pendingApprovalCount);
+  const findingCount = normalizeCount(input.findingCount);
+  const failedActionCount = normalizeCount(composition?.failed);
+  const approvalWorkCount = normalizeCount(composition?.approval);
+  const inProgressWorkCount = normalizeCount(composition?.inProgress);
+  const recurringIssueCount = normalizeCount(composition?.recurring);
+  const latestRun = input.latestRun ?? null;
+  const patrolStatus = input.patrolStatus ?? null;
+  const statusErrorCount = normalizeCount(patrolStatus?.error_count);
+  const statusFindingCount = normalizeCount(patrolStatus?.findings_count);
+
+  if (
+    findingCount > 0 ||
+    pendingApprovalCount > 0 ||
+    failedActionCount > 0 ||
+    approvalWorkCount > 0 ||
+    inProgressWorkCount > 0 ||
+    recurringIssueCount > 0 ||
+    statusFindingCount > 0 ||
+    patrolStatus?.running ||
+    statusErrorCount > 0 ||
+    hasFailedPatrolCheck(latestRun) ||
+    !isActivePatrolRuntime(patrolStatus) ||
+    isScheduledPatrolOverdue(patrolStatus, input.nowMs ?? Date.now())
+  ) {
+    return [];
+  }
+
+  if (!latestRun && !patrolStatus) {
+    return [];
+  }
+
+  const coverageLabel = getPatrolCoverageLabel(latestRun, patrolStatus);
+  const historicalRegressionCount = normalizeCount(input.historicalRegressionCount);
+  const healthyTone: MetadataBadgeTone = patrolStatus?.healthy === false ? 'warning' : 'success';
+
+  const posture: PatrolWorkspaceProtectionPostureSummary[] = [
+    {
+      id: 'protection',
+      label: 'Protection current',
+      detail: 'No current issue or approval is waiting in Patrol.',
+      tone: healthyTone,
+    },
+  ];
+
+  posture.push(
+    coverageLabel
+      ? {
+          id: 'coverage',
+          label: coverageLabel,
+          detail: 'Coverage came from the latest Patrol check.',
+          tone: healthyTone,
+        }
+      : {
+          id: 'coverage',
+          label: 'Coverage needs refresh',
+          detail: 'Run Patrol to record current coverage.',
+          tone: 'warning',
+        },
+  );
+
+  if (patrolStatus?.enabled === false) {
+    posture.push({
+      id: 'freshness',
+      label: 'Scheduled checks paused',
+      detail: 'Run Patrol manually or enable scheduled checks to keep coverage fresh.',
+      tone: 'warning',
+    });
+  } else if (patrolStatus?.next_patrol_at) {
+    posture.push({
+      id: 'freshness',
+      label: 'Schedule active',
+      detail: 'Patrol is scheduled to check again.',
+      tone: 'info',
+    });
+  } else {
+    posture.push({
+      id: 'freshness',
+      label: 'Ready to check',
+      detail: 'Run Patrol any time to refresh current coverage.',
+      tone: 'info',
+    });
+  }
+
+  posture.push(
+    historicalRegressionCount > 0
+      ? {
+          id: 'drift',
+          label: `${formatCount(historicalRegressionCount, 'past regression')}`,
+          detail: 'History keeps the drift record; no recurring issue is current.',
+          tone: 'info',
+        }
+      : {
+          id: 'drift',
+          label: 'No recurring issues',
+          detail: 'No current issue is marked as reappeared after earlier resolution.',
+          tone: healthyTone,
+        },
+  );
+
+  posture.push({
+    id: 'verification',
+    label: 'No verification waiting',
+    detail: 'No approval, failed action, or follow-up result is waiting for review.',
+    tone: healthyTone,
+  });
+
+  return posture;
 }
 
 const PATROL_PRO_HANDOFF_ACTIONABLE_SEVERITIES = new Set(['critical', 'warning']);

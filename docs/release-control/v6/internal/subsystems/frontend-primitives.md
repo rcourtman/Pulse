@@ -1382,7 +1382,12 @@ settings`, and candidate review when discovered sources are waiting. It must
     empty and descriptive text must explain what Patrol-found problems will
     appear there, what the selected control level allows, and the next useful
     operator action; it must not fall back to activation-loop, proof, queue, or
-    verification-accounting language. The
+    verification-accounting language. Calm-day protection posture may use the
+    shared compact list and badge primitives inside that empty Open work
+    context only after current findings, approvals, failed checks, running
+    checks, setup failures, and overdue scheduled protection are ruled out; it
+    must stay subordinate to the empty queue and must not become a generic Home,
+    dashboard, trust, or proof strip. The
     Patrol schedule and model drawer is part of that shared
     feature-presentation boundary: it must stay viewport-bounded, expose an
     accessible dialog label, keep the four-level control policy on the default

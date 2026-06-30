@@ -152,7 +152,7 @@ const buildPatrolStatus = (
   running: false,
   enabled: true,
   last_patrol_at: "2026-06-30T08:05:42Z",
-  next_patrol_at: "2026-06-30T14:05:42Z",
+  next_patrol_at: "2099-06-30T14:05:42Z",
   last_duration_ms: 42_000,
   resources_checked: options.resourcesChecked,
   findings_count: options.findingCount,
@@ -523,6 +523,10 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
     await expect(
       page.getByRole("heading", { name: "No current issues" }),
     ).toHaveCount(0);
+    await expect(page.getByText("Protection current")).toHaveCount(0);
+    await expect(
+      page.getByRole("list", { name: "Patrol protection posture" }),
+    ).toHaveCount(0);
 
     await page.getByRole("tab", { name: "Patrol" }).click();
     await expect(page).toHaveURL(/\/patrol$/);
@@ -534,6 +538,15 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
     ).toBeVisible();
     await expect(page.getByText("No current issues").first()).toBeVisible();
     await expect(page.getByText("Checked 1 resource.")).toBeVisible();
+    const protectionPosture = page.getByRole("list", {
+      name: "Patrol protection posture",
+    });
+    await expect(protectionPosture).toBeVisible();
+    await expect(protectionPosture.getByText("Protection current")).toBeVisible();
+    await expect(protectionPosture.getByText("Checked 1 resource")).toBeVisible();
+    await expect(protectionPosture.getByText("Schedule active")).toBeVisible();
+    await expect(protectionPosture.getByText("No recurring issues")).toBeVisible();
+    await expect(protectionPosture.getByText("No verification waiting")).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Ask Pulse Assistant about Patrol" }),
     ).toBeVisible();
@@ -560,6 +573,7 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
     await expect(page).toHaveURL(/\/proxmox\/overview$/, { timeout: 30_000 });
     await expect(page.getByText("Latest check needs review")).toHaveCount(0);
     await expect(page.getByText("1 approval waiting")).toHaveCount(0);
+    await expect(page.getByText("Protection current")).toHaveCount(0);
 
     await page.getByRole("tab", { name: /Patrol/ }).click();
     await expect(page).toHaveURL(/\/patrol$/);
@@ -577,6 +591,9 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
         "Patrol checked 4 resources but ended with runtime issues.",
       ),
     ).toBeVisible();
+    await expect(
+      page.getByRole("list", { name: "Patrol protection posture" }),
+    ).toHaveCount(0);
     await expect(
       page.getByRole("heading", { name: /^Pulse Assistant$/ }),
     ).toHaveCount(0);

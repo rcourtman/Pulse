@@ -1814,6 +1814,11 @@ a new API state machine, queue contract, or verification-accounting field.
    overdue scheduled protection only from API-owned Patrol status, run history,
    approval state, and finding-composition facts rather than page-local
    inference
+   and the calm-day Patrol protection-posture inputs, where the browser may
+   summarize protection-current, coverage, schedule freshness, drift history,
+   and verification-waiting state only from API-owned Patrol status, run
+   history, approval state, and finding-composition facts after current work has
+   been ruled out
    while keeping the learning counters backend-only coverage, so Patrol keeps health and findings primary and renders timeline, correlation, and policy-posture data as selected-item investigation context rather than as a separate headline product metric
    and that secondary investigation context remains explanatory API evidence,
    not a default workspace mode: the Patrol page may expand recent-change,

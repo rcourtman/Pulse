@@ -89,6 +89,14 @@ or historical proof/counting for resolved-only work.
    current finding composition; it must not become a status strip, trust strip,
    health summary, generic proof counter, or replacement for the issue row's
    action, evidence, approval, verification, and Assistant handoff controls.
+   A compact calm-day protection posture may appear inside that same `Open
+   work` workspace only when Patrol has no current findings, pending approvals,
+   failed/latest check, running check, overdue scheduled protection, or setup
+   failure to show. It may summarize protection-current, coverage, freshness,
+   drift-history, and verification-waiting facts from Patrol status, run
+   history, and finding composition, but it must stay contextual to Patrol's
+   empty queue and must not render on monitor-first launch pages, become a Home
+   summary, or promote trust/history counters into current work.
    Runtime/setup findings are still active Patrol work, but setup-only runtime
    failures must read as one setup task rather than an infrastructure issue
    queue. The header may suppress run and schedule/model controls while setup is
