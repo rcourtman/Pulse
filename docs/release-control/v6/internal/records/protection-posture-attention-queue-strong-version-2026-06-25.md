@@ -116,6 +116,12 @@ loop, and routes the operator from real findings/evidence to safe action.
   alert cards now lead with `Have Patrol investigate`, which starts the scoped
   manual Patrol check, while Assistant stays available as the secondary
   read-only explanation path with the alert context attached.
+- 2026-06-30: Added Patrol-owned work grouping inside the `Open work` workspace
+  for current signals that are not captured by a single finding title:
+  approvals awaiting decisions, failed governed actions, failed latest checks,
+  recurring active issues, and overdue scheduled protection. The grouping stays
+  inside Patrol and does not replace issue rows, approvals, verification, or
+  contextual Assistant handoffs.
 
 ## Evidence
 

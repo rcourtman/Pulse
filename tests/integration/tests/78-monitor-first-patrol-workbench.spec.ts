@@ -13,8 +13,10 @@ type WorkerFixtures = {
 
 type PatrolWorkbenchFixtureOptions = {
   findingCount?: number;
+  pendingApprovalCount?: number;
+  runErrorCount?: number;
   resourcesChecked?: number;
-  runStatus?: "healthy" | "issues_found";
+  runStatus?: "healthy" | "issues_found" | "error";
 };
 
 const test = base.extend<{}, WorkerFixtures>({
@@ -136,7 +138,7 @@ const buildRunHistory = (options: Required<PatrolWorkbenchFixtureOptions>) => [
     findings_summary:
       options.findingCount > 0 ? "1 active finding" : "No active findings",
     finding_ids: options.findingCount > 0 ? ["finding-active-work"] : [],
-    error_count: 0,
+    error_count: options.runErrorCount,
     status: options.runStatus,
     triage_flags: 0,
     tool_call_count: 1,
@@ -154,8 +156,8 @@ const buildPatrolStatus = (
   last_duration_ms: 42_000,
   resources_checked: options.resourcesChecked,
   findings_count: options.findingCount,
-  error_count: 0,
-  healthy: options.findingCount === 0,
+  error_count: options.runErrorCount,
+  healthy: options.findingCount === 0 && options.runErrorCount === 0,
   interval_ms: 21_600_000,
   fixed_count: 0,
   blocked_reason: "",
@@ -229,6 +231,10 @@ const buildPatrolFindingsResponse = (
         times_raised: 1,
         suppressed: false,
         investigation_attempts: 0,
+        investigation_status:
+          options.pendingApprovalCount > 0 ? "needs_attention" : undefined,
+        investigation_outcome:
+          options.pendingApprovalCount > 0 ? "fix_queued" : undefined,
       },
     ],
     count: 1,
@@ -247,6 +253,9 @@ async function mockMonitorFirstPatrolWorkbench(
   const resolved = {
     findingCount: options.findingCount ?? 0,
     resourcesChecked: options.resourcesChecked ?? 1,
+    pendingApprovalCount: options.pendingApprovalCount ?? 0,
+    runErrorCount:
+      options.runErrorCount ?? (options.runStatus === "error" ? 1 : 0),
     runStatus:
       options.runStatus ?? (options.findingCount ? "issues_found" : "healthy"),
   } satisfies Required<PatrolWorkbenchFixtureOptions>;
@@ -397,10 +406,29 @@ async function mockMonitorFirstPatrolWorkbench(
   });
 
   await page.route("**/api/ai/approvals", async (route) => {
+    const approvals =
+      resolved.pendingApprovalCount > 0
+        ? [
+            {
+              id: "approval-finding-active-work",
+              toolId: "investigation_fix",
+              command: "systemctl restart pulse-agent",
+              targetType: "agent",
+              targetId: "finding-active-work",
+              targetName: "pve-main",
+              context:
+                "Restart Pulse Agent on pve-main to clear the sustained pressure finding.",
+              riskLevel: "medium",
+              status: "pending",
+              requestedAt: "2026-06-30T08:06:00Z",
+              expiresAt: "2099-06-30T08:11:00Z",
+            },
+          ]
+        : [];
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ approvals: [] }),
+      body: JSON.stringify({ approvals }),
     });
   });
 
@@ -510,5 +538,47 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
       page.getByRole("button", { name: "Ask Pulse Assistant about Patrol" }),
     ).toBeVisible();
     await expect(page.getByText(/Nothing needs attention/i)).toHaveCount(0);
+  });
+
+  test("Patrol groups approvals and failed checks inside the Patrol workbench", async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name.startsWith("mobile-"),
+      "Desktop workbench routing proof",
+    );
+
+    await mockMonitorFirstPatrolWorkbench(page, {
+      findingCount: 1,
+      pendingApprovalCount: 1,
+      resourcesChecked: 4,
+      runErrorCount: 1,
+      runStatus: "error",
+    });
+    await page.goto("/infrastructure", { waitUntil: "domcontentloaded" });
+
+    await expect(page).toHaveURL(/\/proxmox\/overview$/, { timeout: 30_000 });
+    await expect(page.getByText("Latest check needs review")).toHaveCount(0);
+    await expect(page.getByText("1 approval waiting")).toHaveCount(0);
+
+    await page.getByRole("tab", { name: /Patrol/ }).click();
+    await expect(page).toHaveURL(/\/patrol$/);
+    await expect(
+      page.getByRole("heading", { level: 2, name: "Open work" }),
+    ).toBeVisible();
+    const workGroups = page.getByRole("list", { name: "Patrol work groups" });
+    await expect(workGroups).toBeVisible();
+    await expect(workGroups.getByText("1 approval waiting")).toBeVisible();
+    await expect(
+      workGroups.getByText("Latest check needs review"),
+    ).toBeVisible();
+    await expect(
+      workGroups.getByText(
+        "Patrol checked 4 resources but ended with runtime issues.",
+      ),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: /^Pulse Assistant$/ }),
+    ).toHaveCount(0);
   });
 });

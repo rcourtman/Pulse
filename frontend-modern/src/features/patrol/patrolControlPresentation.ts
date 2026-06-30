@@ -1,4 +1,5 @@
-import type { PatrolAutonomyLevel } from '@/api/patrol';
+import type { PatrolAutonomyLevel, PatrolRunRecord, PatrolStatus } from '@/api/patrol';
+import type { MetadataBadgeTone } from '@/components/shared/MetadataBadge';
 import {
   getPatrolFindingIssueCountLabel,
   getPatrolWorkTypeCompositionClause,
@@ -57,6 +58,21 @@ interface PatrolQueueCountInput {
   workTypeComposition?: PatrolWorkTypeComposition;
 }
 
+export interface PatrolWorkspaceWorkGroupSummary {
+  detail: string;
+  id: 'approvals' | 'failed-actions' | 'failed-check' | 'recurring' | 'stale-protection';
+  label: string;
+  tone: MetadataBadgeTone;
+}
+
+interface PatrolWorkspaceWorkGroupsInput {
+  latestRun?: Pick<PatrolRunRecord, 'error_count' | 'resources_checked' | 'status'> | null;
+  nowMs?: number;
+  patrolStatus?: Pick<PatrolStatus, 'error_count' | 'next_patrol_at' | 'running'> | null;
+  pendingApprovalCount?: number;
+  workTypeComposition?: PatrolWorkTypeComposition;
+}
+
 interface PatrolSetupIssueReasonInput {
   setupFindingTitle?: string;
   readinessSummary?: string;
@@ -77,6 +93,29 @@ function normalizeText(value: string | undefined): string {
 
 function formatCount(count: number, singular: string, plural = `${singular}s`): string {
   return `${count} ${count === 1 ? singular : plural}`;
+}
+
+function normalizeStatus(value: string | undefined): string {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_');
+}
+
+function hasFailedPatrolCheck(
+  run: Pick<PatrolRunRecord, 'error_count' | 'status'> | null | undefined,
+): boolean {
+  if (!run) return false;
+  return normalizeCount(run.error_count) > 0 || normalizeStatus(run.status) === 'error';
+}
+
+function isScheduledPatrolOverdue(
+  status: Pick<PatrolStatus, 'next_patrol_at' | 'running'> | null | undefined,
+  nowMs: number,
+): boolean {
+  if (!status || status.running || !status.next_patrol_at) return false;
+  const nextPatrolAt = Date.parse(status.next_patrol_at);
+  return Number.isFinite(nextPatrolAt) && nextPatrolAt < nowMs;
 }
 
 function getPatrolQueueActionDetail(input: PatrolControlCopyInput): string {
@@ -175,6 +214,70 @@ export function getPatrolQueueWorkspaceDescription(
     default:
       return 'Patrol lists current issues here after each check. History keeps past outcomes.';
   }
+}
+
+export function getPatrolWorkspaceWorkGroups(
+  input: PatrolWorkspaceWorkGroupsInput,
+): PatrolWorkspaceWorkGroupSummary[] {
+  const groups: PatrolWorkspaceWorkGroupSummary[] = [];
+  const composition = input.workTypeComposition;
+  const pendingApprovalCount = normalizeCount(input.pendingApprovalCount);
+  const failedActionCount = normalizeCount(composition?.failed);
+  const recurringIssueCount = normalizeCount(composition?.recurring);
+  const latestRun = input.latestRun ?? null;
+  const latestRunFailed = hasFailedPatrolCheck(latestRun);
+  const statusErrorCount = normalizeCount(input.patrolStatus?.error_count);
+
+  if (pendingApprovalCount > 0) {
+    groups.push({
+      id: 'approvals',
+      label: `${formatCount(pendingApprovalCount, 'approval')} waiting`,
+      detail: 'Approve or reject requested fixes from the issue rows.',
+      tone: 'warning',
+    });
+  }
+
+  if (failedActionCount > 0) {
+    groups.push({
+      id: 'failed-actions',
+      label: `${formatCount(failedActionCount, 'failed action')}`,
+      detail: 'Review the failed action and verification state in the affected issue row.',
+      tone: 'danger',
+    });
+  }
+
+  if (latestRunFailed || statusErrorCount > 0) {
+    const checkedResources = normalizeCount(latestRun?.resources_checked);
+    groups.push({
+      id: 'failed-check',
+      label: 'Latest check needs review',
+      detail:
+        checkedResources > 0
+          ? `Patrol checked ${formatCount(checkedResources, 'resource')} but ended with runtime issues.`
+          : 'The last Patrol check ended with runtime issues.',
+      tone: 'danger',
+    });
+  }
+
+  if (recurringIssueCount > 0) {
+    groups.push({
+      id: 'recurring',
+      label: `${formatCount(recurringIssueCount, 'recurring issue')}`,
+      detail: 'Current work includes issues that reappeared after earlier resolution.',
+      tone: 'warning',
+    });
+  }
+
+  if (isScheduledPatrolOverdue(input.patrolStatus, input.nowMs ?? Date.now())) {
+    groups.push({
+      id: 'stale-protection',
+      label: 'Check overdue',
+      detail: 'The next scheduled Patrol check is overdue; run Patrol when the system is ready.',
+      tone: 'warning',
+    });
+  }
+
+  return groups;
 }
 
 const PATROL_PRO_HANDOFF_ACTIONABLE_SEVERITIES = new Set(['critical', 'warning']);

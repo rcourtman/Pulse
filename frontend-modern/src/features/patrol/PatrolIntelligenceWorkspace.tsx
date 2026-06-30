@@ -1,4 +1,4 @@
-import { createMemo, Show } from 'solid-js';
+import { createMemo, For, Show } from 'solid-js';
 import HistoryIcon from 'lucide-solid/icons/history';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import { FindingsPanel } from '@/components/AI/FindingsPanel';
@@ -25,6 +25,7 @@ import {
   getPatrolProInvestigationHandoff,
   getPatrolQueueBadgeLabel,
   getPatrolQueueWorkspaceDescription,
+  getPatrolWorkspaceWorkGroups,
   getPatrolSetupIssueReason,
   PATROL_WORKSPACE_HISTORY_DESCRIPTION,
   PATROL_WORKSPACE_QUEUE_TITLE,
@@ -118,6 +119,17 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
     const run = state.selectedRun();
     return run ? getPatrolRunRecordSummaryPresentation(run) : null;
   };
+  const latestCompletedRun = createMemo(() => state.patrolRunHistory.value()?.[0] ?? null);
+  const workGroupSummaries = createMemo(() =>
+    getPatrolWorkspaceWorkGroups({
+      latestRun: latestCompletedRun(),
+      patrolStatus: state.patrolStatus(),
+      pendingApprovalCount: state.patrolPendingApprovalCount(),
+      workTypeComposition: workTypeComposition(),
+    }),
+  );
+  const shouldShowWorkGroups = () =>
+    !isHistoryOpen() && !isSetupOnly() && !state.selectedRun() && workGroupSummaries().length > 0;
 
   return (
     <>
@@ -171,6 +183,30 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
           </div>
         </Show>
       </div>
+
+      <Show when={shouldShowWorkGroups()}>
+        <div
+          role="list"
+          aria-label="Patrol work groups"
+          class="grid gap-2 sm:grid-cols-2 xl:grid-cols-3"
+        >
+          <For each={workGroupSummaries()}>
+            {(group) => (
+              <div
+                role="listitem"
+                class="rounded-md border border-border-subtle bg-surface-alt/60 px-3 py-2"
+              >
+                <div class="flex min-w-0 flex-wrap items-center gap-2">
+                  <MetadataBadge tone={group.tone} size="xs" shape="rounded">
+                    {group.label}
+                  </MetadataBadge>
+                </div>
+                <p class="mt-1 text-xs leading-5 text-muted">{group.detail}</p>
+              </div>
+            )}
+          </For>
+        </div>
+      </Show>
 
       <Show when={state.activeTab() === 'findings'}>
         <Show when={state.selectedRun()}>

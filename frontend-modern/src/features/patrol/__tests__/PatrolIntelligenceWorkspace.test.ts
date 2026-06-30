@@ -50,6 +50,8 @@ describe('PatrolIntelligenceWorkspace trust strip', () => {
     expect(workspaceSource).toContain('affectedResourceCount: queueAffectedResourceCount()');
     expect(workspaceSource).toContain('findingCount: queueIssueCount()');
     expect(workspaceSource).toContain('getPatrolQueueWorkspaceDescription');
+    expect(workspaceSource).toContain('getPatrolWorkspaceWorkGroups');
+    expect(workspaceSource).toContain('Patrol work groups');
     expect(workspaceSource).toContain('autonomyLevel: state.autonomyLevel()');
     expect(workspaceSource).toContain('autonomyLocked: state.autoFixLocked()');
     expect(workspaceSource).toContain('Boolean(queueBadgeLabel())');

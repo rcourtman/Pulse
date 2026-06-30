@@ -81,6 +81,14 @@ or historical proof/counting for resolved-only work.
    surface before the drawer opens; it must not include finding IDs, prompt
    text, resource context, model output, or direct-action payloads in that
    marker.
+   A compact Patrol work-group row may appear above the list only when it adds
+   cross-source current-work grouping that the row title alone cannot express:
+   pending approvals, failed governed actions, a failed/latest Patrol check,
+   recurring active issues, or overdue scheduled protection. It must be
+   data-only presentation from Patrol status, run history, approval state, and
+   current finding composition; it must not become a status strip, trust strip,
+   health summary, generic proof counter, or replacement for the issue row's
+   action, evidence, approval, verification, and Assistant handoff controls.
    Runtime/setup findings are still active Patrol work, but setup-only runtime
    failures must read as one setup task rather than an infrastructure issue
    queue. The header may suppress run and schedule/model controls while setup is

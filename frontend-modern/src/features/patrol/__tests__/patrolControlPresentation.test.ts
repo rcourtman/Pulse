@@ -7,6 +7,7 @@ import {
   getPatrolQueueWorkspaceDescription,
   getPatrolReadyWorkDetail,
   getPatrolSetupIssueReason,
+  getPatrolWorkspaceWorkGroups,
   PATROL_AUTONOMY_POLICY_PRESENTATION,
   PATROL_WORKSPACE_QUEUE_TITLE,
 } from '../patrolControlPresentation';
@@ -168,6 +169,102 @@ describe('patrolControlPresentation', () => {
     ).toBe(
       'Patrol found 2 issues on 2 affected resources. Open a row to review evidence and record the outcome.',
     );
+  });
+
+  it('does not add work-group chrome for ordinary active findings alone', () => {
+    expect(
+      getPatrolWorkspaceWorkGroups({
+        workTypeComposition: {
+          total: 1,
+          approval: 0,
+          failed: 0,
+          inProgress: 0,
+          recurring: 0,
+          newIssues: 1,
+        },
+      }),
+    ).toEqual([]);
+  });
+
+  it('groups approvals, failed checks, recurring issues, and stale protection as Patrol work', () => {
+    expect(
+      getPatrolWorkspaceWorkGroups({
+        latestRun: {
+          error_count: 1,
+          resources_checked: 4,
+          status: 'error',
+        },
+        nowMs: Date.parse('2026-06-30T15:00:00Z'),
+        patrolStatus: {
+          error_count: 1,
+          next_patrol_at: '2026-06-30T14:05:00Z',
+          running: false,
+        },
+        pendingApprovalCount: 2,
+        workTypeComposition: {
+          total: 3,
+          approval: 1,
+          failed: 1,
+          inProgress: 0,
+          recurring: 1,
+          newIssues: 1,
+        },
+      }),
+    ).toEqual([
+      {
+        detail: 'Approve or reject requested fixes from the issue rows.',
+        id: 'approvals',
+        label: '2 approvals waiting',
+        tone: 'warning',
+      },
+      {
+        detail: 'Review the failed action and verification state in the affected issue row.',
+        id: 'failed-actions',
+        label: '1 failed action',
+        tone: 'danger',
+      },
+      {
+        detail: 'Patrol checked 4 resources but ended with runtime issues.',
+        id: 'failed-check',
+        label: 'Latest check needs review',
+        tone: 'danger',
+      },
+      {
+        detail: 'Current work includes issues that reappeared after earlier resolution.',
+        id: 'recurring',
+        label: '1 recurring issue',
+        tone: 'warning',
+      },
+      {
+        detail: 'The next scheduled Patrol check is overdue; run Patrol when the system is ready.',
+        id: 'stale-protection',
+        label: 'Check overdue',
+        tone: 'warning',
+      },
+    ]);
+  });
+
+  it('does not call future or running scheduled checks stale protection', () => {
+    expect(
+      getPatrolWorkspaceWorkGroups({
+        nowMs: Date.parse('2026-06-30T13:00:00Z'),
+        patrolStatus: {
+          error_count: 0,
+          next_patrol_at: '2026-06-30T14:05:00Z',
+          running: false,
+        },
+      }),
+    ).toEqual([]);
+    expect(
+      getPatrolWorkspaceWorkGroups({
+        nowMs: Date.parse('2026-06-30T15:00:00Z'),
+        patrolStatus: {
+          error_count: 0,
+          next_patrol_at: '2026-06-30T14:05:00Z',
+          running: true,
+        },
+      }),
+    ).toEqual([]);
   });
 
   it('keeps setup-only issue reasons short and actionable', () => {
