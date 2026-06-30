@@ -988,6 +988,20 @@ describe('aiFindingPresentation', () => {
       expect(findingsPanelSource).toContain('isPatrolFindingsSource() && patrolActionableState()');
     });
 
+    it('renders row-owned Patrol issue scaffolding without adding a trust strip', () => {
+      expect(findingsPanelSource).toContain('getPatrolFindingRowScaffold');
+      expect(findingsPanelSource).toContain('patrolRowScaffold');
+      expect(findingsPanelSource).toContain('aria-label="Patrol issue summary"');
+      expect(aiFindingPresentationSource).toContain("label: 'Problem'");
+      expect(aiFindingPresentationSource).toContain("label: 'Affected'");
+      expect(aiFindingPresentationSource).toContain("label: 'Why it matters'");
+      expect(aiFindingPresentationSource).toContain("label: 'What Pulse checked'");
+      expect(aiFindingPresentationSource).toContain("label: 'Recommended next step'");
+      expect(aiFindingPresentationSource).toContain("label: 'Verification'");
+      expect(findingsPanelSource).not.toContain('Patrol trust summary');
+      expect(findingsPanelSource).not.toContain('Patrol proof strip');
+    });
+
     it('does not stack a default detected loop-state badge on active findings', () => {
       expect(findingsPanelSource).toContain('const shouldShowLoopStateBadge = () =>');
       expect(findingsPanelSource).toContain('!isPatrolFindingsSource()');

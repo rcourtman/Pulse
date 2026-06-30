@@ -74,7 +74,12 @@ or historical proof/counting for resolved-only work.
    second proof strip that restates the same finding, approval, or setup
    problem above the list. When active Patrol findings are the next operator
    step, the finding row owns the canonical primary action, contextual
-   Assistant handoffs, approvals, verification, and manual controls. Because a
+   Assistant handoffs, approvals, verification, and manual controls. A
+   compact row-owned issue scaffold may translate the same finding, approval,
+   and workflow fields into problem, affected resource, consequence, checked
+   evidence, next step, and verification state, but it must stay attached to
+   the active issue row and must not become a separate proof, trust, or status
+   strip. Because a
    contextual Assistant handoff from that workflow is still a first-party Patrol
    starter for the same governed journey, it must record content-free workflow
    prompt activity through the shared marker route with the `pulse_patrol`

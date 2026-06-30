@@ -128,6 +128,11 @@ loop, and routes the operator from real findings/evidence to safe action.
   current findings, approvals, failed checks, stale protection, running checks,
   and setup failures have been ruled out, and browser proof keeps those facts
   out of the monitor-first launch page.
+- 2026-06-30: Added active Patrol row scaffolding so each infrastructure
+  finding can expose its problem, affected resource, consequence, checked
+  evidence, next step, and verification state from existing finding, approval,
+  and workflow fields. The scaffold stays attached to the issue row and does
+  not create a separate proof, trust, or status strip.
 
 ## Evidence
 

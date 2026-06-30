@@ -1382,7 +1382,11 @@ settings`, and candidate review when discovered sources are waiting. It must
     empty and descriptive text must explain what Patrol-found problems will
     appear there, what the selected control level allows, and the next useful
     operator action; it must not fall back to activation-loop, proof, queue, or
-    verification-accounting language. Calm-day protection posture may use the
+    verification-accounting language. Active Patrol issue rows may use shared
+    definition-list and muted text primitives to show problem, affected
+    resource, checked evidence, next step, and verification state inside the
+    row, but that scaffold must not become a nested card, status strip, trust
+    strip, or page-level proof block. Calm-day protection posture may use the
     shared compact list and badge primitives inside that empty Open work
     context only after current findings, approvals, failed checks, running
     checks, setup failures, and overdue scheduled protection are ruled out; it

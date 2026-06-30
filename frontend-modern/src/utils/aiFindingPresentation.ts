@@ -677,6 +677,24 @@ export interface PatrolActionableStatePresentation {
   tone: MetadataBadgeTone;
 }
 
+export type PatrolFindingRowScaffoldItemId =
+  | 'affected'
+  | 'checked'
+  | 'next-step'
+  | 'problem'
+  | 'verification'
+  | 'why';
+
+export interface PatrolFindingRowScaffoldItem {
+  id: PatrolFindingRowScaffoldItemId;
+  label: string;
+  value: string;
+}
+
+export interface PatrolFindingRowScaffold {
+  items: PatrolFindingRowScaffoldItem[];
+}
+
 export function getPatrolFindingActionableState(
   finding: Pick<UnifiedFinding, 'status' | 'investigationStatus' | 'investigationOutcome'>,
 ): PatrolActionableStatePresentation | undefined {
@@ -699,6 +717,131 @@ export function getPatrolFindingActionableState(
   }
 
   return undefined;
+}
+
+function getPatrolFindingVerificationSummary(
+  finding: Pick<UnifiedFinding, 'investigationStatus' | 'investigationOutcome'>,
+): string {
+  switch (finding.investigationOutcome) {
+    case 'fix_queued':
+      return 'Waiting for approval before any fix runs.';
+    case 'fix_executed':
+      return 'Fix ran; verification is in progress.';
+    case 'fix_verified':
+    case 'resolved':
+      return 'Verified outcome recorded.';
+    case 'fix_verification_failed':
+      return 'Verification failed and needs review.';
+    case 'fix_verification_unknown':
+      return 'Verification was inconclusive.';
+    case 'fix_failed':
+    case 'cannot_fix':
+    case 'timed_out':
+    case 'needs_attention':
+      return 'No verified fix; action needs review.';
+    case 'fix_rejected':
+      return 'No change ran because the fix was rejected.';
+    default:
+      break;
+  }
+
+  if (finding.investigationStatus === 'running' || finding.investigationStatus === 'pending') {
+    return 'Patrol is investigating; no fix has run yet.';
+  }
+
+  return 'No fix has run yet.';
+}
+
+const getNonEmptyPresentationText = (
+  value: string | undefined,
+  fallback: string,
+): string => {
+  const normalized = String(value || '').trim();
+  return normalized || fallback;
+};
+
+export function getPatrolFindingRowScaffold(
+  finding: Pick<
+    UnifiedFinding,
+    | 'description'
+    | 'evidence'
+    | 'id'
+    | 'impact'
+    | 'investigationOutcome'
+    | 'investigationStatus'
+    | 'loopState'
+    | 'recommendation'
+    | 'resourceId'
+    | 'resourceName'
+    | 'resourceType'
+    | 'source'
+    | 'status'
+    | 'title'
+  >,
+  approvals: Pick<ApprovalRequest, 'status' | 'toolId' | 'targetId' | 'expiresAt'>[] = [],
+  now = Date.now(),
+): PatrolFindingRowScaffold | undefined {
+  if (
+    finding.source !== 'ai-patrol' ||
+    finding.status !== 'active' ||
+    isPatrolRuntimeFinding(finding)
+  ) {
+    return undefined;
+  }
+
+  const title = getNonEmptyPresentationText(
+    getFindingTitlePresentation(finding).label,
+    'Current Patrol issue',
+  );
+  const subject = getNonEmptyPresentationText(
+    getFindingSubjectPresentation(finding).label,
+    'Affected resource not specified',
+  );
+  const workflow = getFindingPatrolWorkflowPresentation(finding, approvals, now);
+
+  return {
+    items: [
+      {
+        id: 'problem',
+        label: 'Problem',
+        value: title,
+      },
+      {
+        id: 'affected',
+        label: 'Affected',
+        value: subject,
+      },
+      {
+        id: 'why',
+        label: 'Why it matters',
+        value: getNonEmptyPresentationText(
+          finding.impact || finding.description,
+          'Review this Patrol finding before making infrastructure changes.',
+        ),
+      },
+      {
+        id: 'checked',
+        label: 'What Pulse checked',
+        value: getNonEmptyPresentationText(
+          finding.evidence,
+          'Patrol recorded this from the current check.',
+        ),
+      },
+      {
+        id: 'next-step',
+        label: 'Recommended next step',
+        value: getNonEmptyPresentationText(
+          workflow?.detail || finding.recommendation,
+          'Open details to review evidence and decide the next action.',
+        ),
+      },
+      {
+        id: 'verification',
+        label: 'Verification',
+        value: getPatrolFindingVerificationSummary(finding),
+      },
+    ],
+  };
 }
 
 export const getPatrolFindingIssueCountLabel = (count: number): string => {

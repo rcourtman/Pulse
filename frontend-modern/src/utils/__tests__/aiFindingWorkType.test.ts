@@ -5,9 +5,12 @@ import {
   getPatrolWorkTypeComposition,
   getPatrolWorkTypeCompositionClause,
   getPatrolFindingActionableState,
+  getPatrolFindingRowScaffold,
 } from '@/utils/aiFindingPresentation';
 
 type ClassifyInput = Parameters<typeof classifyPatrolFindingWorkType>[0];
+type RowScaffoldInput = Parameters<typeof getPatrolFindingRowScaffold>[0];
+type RowScaffoldApprovalInput = NonNullable<Parameters<typeof getPatrolFindingRowScaffold>[1]>;
 
 function makeFinding(overrides: Partial<ClassifyInput> = {}): ClassifyInput {
   return {
@@ -16,6 +19,26 @@ function makeFinding(overrides: Partial<ClassifyInput> = {}): ClassifyInput {
     investigationOutcome: undefined,
     regressionCount: undefined,
     timesRaised: undefined,
+    ...overrides,
+  };
+}
+
+function makeRowScaffoldFinding(overrides: Partial<RowScaffoldInput> = {}): RowScaffoldInput {
+  return {
+    id: 'finding-active-work',
+    source: 'ai-patrol',
+    status: 'active',
+    resourceId: 'node:pve-main',
+    resourceName: 'pve-main',
+    resourceType: 'agent',
+    title: 'High CPU pressure on pve-main',
+    description: 'Patrol detected sustained CPU pressure on the monitored Proxmox host.',
+    impact: 'Sustained CPU pressure can slow hosted workloads on this Proxmox host.',
+    evidence: 'CPU stayed above the configured warning threshold during the scheduled Patrol check.',
+    recommendation: 'Review the host load and move or stop noisy workloads before approving a fix.',
+    investigationStatus: undefined,
+    investigationOutcome: undefined,
+    loopState: undefined,
     ...overrides,
   };
 }
@@ -90,6 +113,89 @@ describe('classifyPatrolFindingWorkType', () => {
         makeFinding({ investigationOutcome: 'fix_failed', regressionCount: 5 }),
       ),
     ).toBe('failed');
+  });
+});
+
+describe('getPatrolFindingRowScaffold', () => {
+  it('summarizes a plain active Patrol finding as row-owned issue text', () => {
+    expect(getPatrolFindingRowScaffold(makeRowScaffoldFinding())?.items).toEqual([
+      { id: 'problem', label: 'Problem', value: 'High CPU pressure on pve-main' },
+      { id: 'affected', label: 'Affected', value: 'pve-main (agent)' },
+      {
+        id: 'why',
+        label: 'Why it matters',
+        value: 'Sustained CPU pressure can slow hosted workloads on this Proxmox host.',
+      },
+      {
+        id: 'checked',
+        label: 'What Pulse checked',
+        value: 'CPU stayed above the configured warning threshold during the scheduled Patrol check.',
+      },
+      {
+        id: 'next-step',
+        label: 'Recommended next step',
+        value: 'Review the host load and move or stop noisy workloads before approving a fix.',
+      },
+      { id: 'verification', label: 'Verification', value: 'No fix has run yet.' },
+    ]);
+  });
+
+  it('uses live approval workflow and verification state for queued fixes', () => {
+    const approvals: RowScaffoldApprovalInput = [
+      {
+        status: 'pending',
+        toolId: 'investigation_fix',
+        targetId: 'finding-active-work',
+        expiresAt: '2099-06-30T08:11:00Z',
+      },
+    ];
+
+    expect(
+      getPatrolFindingRowScaffold(
+        makeRowScaffoldFinding({
+          investigationStatus: 'needs_attention',
+          investigationOutcome: 'fix_queued',
+        }),
+        approvals,
+        Date.parse('2026-06-30T08:07:00Z'),
+      )?.items,
+    ).toContainEqual({
+      id: 'next-step',
+      label: 'Recommended next step',
+      value: 'A governed fix is waiting for an approve or reject decision.',
+    });
+    expect(
+      getPatrolFindingRowScaffold(
+        makeRowScaffoldFinding({
+          investigationStatus: 'needs_attention',
+          investigationOutcome: 'fix_queued',
+        }),
+        approvals,
+        Date.parse('2026-06-30T08:07:00Z'),
+      )?.items,
+    ).toContainEqual({
+      id: 'verification',
+      label: 'Verification',
+      value: 'Waiting for approval before any fix runs.',
+    });
+  });
+
+  it('does not scaffold non-Patrol, runtime setup, or resolved findings', () => {
+    expect(
+      getPatrolFindingRowScaffold(makeRowScaffoldFinding({ source: 'threshold' })),
+    ).toBeUndefined();
+    expect(
+      getPatrolFindingRowScaffold(
+        makeRowScaffoldFinding({
+          resourceId: 'ai-service',
+          resourceName: 'Pulse Patrol service',
+          title: 'Pulse Patrol: insufficient API credits',
+        }),
+      ),
+    ).toBeUndefined();
+    expect(
+      getPatrolFindingRowScaffold(makeRowScaffoldFinding({ status: 'resolved' })),
+    ).toBeUndefined();
   });
 });
 

@@ -82,6 +82,7 @@ import {
   getInvestigationOutcomeSortOrder,
   getInvestigationStatusBadgeTone,
   getPatrolFindingActionableState,
+  getPatrolFindingRowScaffold,
 } from '@/utils/aiFindingPresentation';
 import { copyToClipboard } from '@/utils/clipboard';
 
@@ -901,6 +902,10 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     const patrolWorkflow = () =>
       getFindingPatrolWorkflowPresentation(finding, aiIntelligenceStore.patrolPendingApprovals);
     const patrolActionableState = () => getPatrolFindingActionableState(finding);
+    const patrolRowScaffold = () =>
+      isPatrolFindingsSource()
+        ? getPatrolFindingRowScaffold(finding, aiIntelligenceStore.patrolPendingApprovals)
+        : undefined;
     const collapsedApprovalAction = () => {
       const workflow = patrolWorkflow();
       return workflow?.stage === 'approval' ? workflow : undefined;
@@ -1179,6 +1184,23 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 </span>
               </Show>
             </div>
+            <Show when={patrolRowScaffold()}>
+              {(scaffold) => (
+                <dl
+                  aria-label="Patrol issue summary"
+                  class="mt-2 grid gap-x-3 gap-y-1 text-xs sm:grid-cols-2 xl:grid-cols-3"
+                >
+                  <For each={scaffold().items}>
+                    {(item) => (
+                      <div class="min-w-0">
+                        <dt class="font-medium text-base-content">{item.label}</dt>
+                        <dd class="mt-0.5 break-words text-muted">{item.value}</dd>
+                      </div>
+                    )}
+                  </For>
+                </dl>
+              )}
+            </Show>
           </div>
           {/* Actions */}
           <div class="flex items-center gap-1 shrink-0">

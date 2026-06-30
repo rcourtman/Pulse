@@ -1920,7 +1920,11 @@ a new API state machine, queue contract, or verification-accounting field.
 	   rows use API-owned severity, subject, recency, recurrence, and actionable
 	   workflow state as semantic input while suppressing raw `loopState`,
 	   investigation-status, investigation-outcome, confidence, and generic
-	   review/detected process badges from the default row; those process details
+	   review/detected process badges from the default row. Row-owned Patrol issue
+	   scaffolding may also use API-owned finding description, impact, evidence,
+	   recommendation, approval state, and workflow fields to explain problem,
+	   affected resource, checked evidence, next step, and verification state
+	   without adding a new API payload or page-level proof surface; those process details
 	   remain available in expanded context, selected run records, Assistant
 	   handoff context, or API diagnostics when they are actually needed
 	   and the Patrol verification summary derived from run history, so the page also states whether recent Patrol evidence came from a successful full patrol or only from scoped/erroring runs instead of leaving verification scope implicit

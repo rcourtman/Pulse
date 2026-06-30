@@ -225,6 +225,12 @@ const buildPatrolFindingsResponse = (
         title: "High CPU pressure on pve-main",
         description:
           "Patrol detected sustained CPU pressure on the monitored Proxmox host.",
+        impact:
+          "Sustained CPU pressure can slow hosted workloads on this Proxmox host.",
+        evidence:
+          "CPU stayed above the configured warning threshold during the scheduled Patrol check.",
+        recommendation:
+          "Review the host load and move or stop noisy workloads before approving a fix.",
         detected_at: "2026-06-30T08:05:00Z",
         last_seen_at: "2026-06-30T08:05:42Z",
         auto_resolved: false,
@@ -574,6 +580,7 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
     await expect(page.getByText("Latest check needs review")).toHaveCount(0);
     await expect(page.getByText("1 approval waiting")).toHaveCount(0);
     await expect(page.getByText("Protection current")).toHaveCount(0);
+    await expect(page.getByText("What Pulse checked")).toHaveCount(0);
 
     await page.getByRole("tab", { name: /Patrol/ }).click();
     await expect(page).toHaveURL(/\/patrol$/);
@@ -594,6 +601,36 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
     await expect(
       page.getByRole("list", { name: "Patrol protection posture" }),
     ).toHaveCount(0);
+    const issueSummary = page.locator('dl[aria-label="Patrol issue summary"]');
+    await expect(issueSummary).toBeVisible();
+    await expect(issueSummary.getByText("Problem")).toBeVisible();
+    await expect(issueSummary.getByText("Affected")).toBeVisible();
+    await expect(issueSummary.getByText("Why it matters")).toBeVisible();
+    await expect(issueSummary.getByText("What Pulse checked")).toBeVisible();
+    await expect(issueSummary.getByText("Recommended next step")).toBeVisible();
+    await expect(issueSummary.getByText("Verification")).toBeVisible();
+    await expect(
+      issueSummary.getByText("High CPU pressure on pve-main"),
+    ).toBeVisible();
+    await expect(issueSummary.getByText("pve-main (agent)")).toBeVisible();
+    await expect(
+      issueSummary.getByText(
+        "Sustained CPU pressure can slow hosted workloads on this Proxmox host.",
+      ),
+    ).toBeVisible();
+    await expect(
+      issueSummary.getByText(
+        "CPU stayed above the configured warning threshold during the scheduled Patrol check.",
+      ),
+    ).toBeVisible();
+    await expect(
+      issueSummary.getByText(
+        "A governed fix is waiting for an approve or reject decision.",
+      ),
+    ).toBeVisible();
+    await expect(
+      issueSummary.getByText("Waiting for approval before any fix runs."),
+    ).toBeVisible();
     await expect(
       page.getByRole("heading", { name: /^Pulse Assistant$/ }),
     ).toHaveCount(0);
