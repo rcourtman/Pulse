@@ -23,6 +23,7 @@ PATROL_PAGE_AND_STATE_EXACT_FILES = [
     "frontend-modern/src/utils/__tests__/patrolPagePresentation.test.ts",
     "tests/integration/tests/18-patrol-runtime-state.spec.ts",
     "tests/integration/tests/73-patrol-assistant-operator-briefing.spec.ts",
+    "tests/integration/tests/78-monitor-first-patrol-workbench.spec.ts",
 ]
 
 PLATFORM_CONNECTIONS_WORKSPACE_EXACT_FILES = [
@@ -2916,7 +2917,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 {
                     "heading": "## Shared Boundaries",
                     "path": "internal/api/access_control_handlers.go",
-                    "line": 1093,
+                    "line": 1099,
                     "heading_line": 137,
                 }
             ],

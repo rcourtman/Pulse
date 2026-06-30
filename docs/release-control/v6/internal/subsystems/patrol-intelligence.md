@@ -51,6 +51,7 @@ Patrol-specific presentation helpers.
 28. `frontend-modern/src/utils/patrolRuntimeActions.ts`
 29. `frontend-modern/src/utils/textPresentation.ts`
 30. `tests/integration/tests/73-patrol-assistant-operator-briefing.spec.ts`
+31. `tests/integration/tests/78-monitor-first-patrol-workbench.spec.ts`
 
 ## Shared Boundaries
 
@@ -1035,6 +1036,16 @@ successes: the Patrol popover must keep the saved provider/model visible,
 render a `Patrol control needs attention` inline state with the returned
 readiness cause and summary, and hand off to Assistant as a model-only Patrol
 control issue rather than as a save failure.
+A separate browser proof in
+`tests/integration/tests/78-monitor-first-patrol-workbench.spec.ts` keeps the
+authenticated launch workbench monitor-first. When the runtime has monitored
+Proxmox resources, legacy infrastructure entry points must resolve to the
+Proxmox monitoring lens before Patrol or Assistant chrome, while the stable
+Patrol tab may still expose the open-work count. Calm-day copy such as `No
+current issues` and checked-resource coverage belongs inside the Patrol route
+after the operator chooses Patrol; the monitor lens must not become a hidden
+Patrol all-clear page, and Assistant launchers must stay scoped to the current
+surface.
 The readiness contract now applies before Patrol work is admitted, not only
 after a page render: recoverable Patrol provider/model settings saves must
 persist and echo structured readiness cause metadata, manual run requests must
