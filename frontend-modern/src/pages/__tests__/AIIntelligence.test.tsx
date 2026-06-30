@@ -650,7 +650,9 @@ describe('AIIntelligence entitlement gating', () => {
     expect(patrolControl.getByText('Patrol mode')).toBeInTheDocument();
     expect(patrolControl.getAllByText('Watch only').length).toBeGreaterThan(0);
     expect(
-      patrolControl.getByText('Patrol checks and reports issues without making changes.'),
+      patrolControl.getByText(
+        'Patrol checks infrastructure and reports issues only; it does not start fixes.',
+      ),
     ).toBeInTheDocument();
     expect(patrolControl.queryByRole('button', { name: 'Limits' })).not.toBeInTheDocument();
     expect(patrolControl.queryByRole('button', { name: 'Ask first' })).toBeNull();
@@ -1198,7 +1200,9 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.getByRole('button', { name: 'Safe auto-fix' })).not.toBeDisabled();
     expect(screen.getByRole('button', { name: 'Autopilot' })).not.toBeDisabled();
     expect(
-      screen.getByText('Patrol checks and reports issues without making changes.'),
+      screen.getByText(
+        'Patrol checks infrastructure and reports issues only; it does not start fixes.',
+      ),
     ).toBeInTheDocument();
     expect(screen.queryByText('Patrol handles')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Limits' })).not.toBeInTheDocument();
@@ -1209,7 +1213,7 @@ describe('AIIntelligence entitlement gating', () => {
     await waitFor(() => {
       expect(
         screen.getByText(
-          'Patrol handles policy-approved issues automatically. It asks only when policy requires approval.',
+          'Patrol can act automatically within policy and still asks when approval is required.',
         ),
       ).toBeInTheDocument();
     });
@@ -1880,7 +1884,9 @@ describe('AIIntelligence entitlement gating', () => {
     expect(patrolControl.getByText('Patrol mode')).toBeInTheDocument();
     expect(patrolControl.getAllByText('Watch only').length).toBeGreaterThan(0);
     expect(
-      patrolControl.getByText('Patrol checks and reports issues without making changes.'),
+      patrolControl.getByText(
+        'Patrol checks infrastructure and reports issues only; it does not start fixes.',
+      ),
     ).toBeInTheDocument();
     expect(patrolControl.getByRole('button', { name: 'Ask first' })).not.toBeDisabled();
     expect(patrolControl.getByRole('button', { name: 'Safe auto-fix' })).not.toBeDisabled();

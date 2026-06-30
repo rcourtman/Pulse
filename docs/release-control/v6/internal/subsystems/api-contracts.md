@@ -2036,20 +2036,20 @@ a new API state machine, queue contract, or verification-accounting field.
    and the Patrol mode selector boundary, so the default header and the
    Patrol mode dialog compose the shared
    `frontend-modern/src/components/shared/FilterButtonGroup.tsx` primitive for
-   the visible `Watch only` / `Ask before changes` / `Auto-fix safe issues` /
-   `Policy autopilot` presentation while the API contract remains the sole owner of
+   the visible `Watch only` / `Ask first` / `Safe auto-fix` /
+   `Autopilot` presentation while the API contract remains the sole owner of
    accepted autonomy values, `full_mode_unlocked` persistence,
    license-required rejection shape, and the monitor-only clamp; when the
    API/license state clamps Patrol to monitor for plan reasons, frontend
-   consumers must present watch-only as the effective capability and badge paid
-   levels rather than rendering a default Pro-absence explainer or a full-loop
-   header description, while runtime-locked Pro installs may explain the missing
-   runtime; provider model, schedule, trigger tuning, and readiness validation
-   must remain advanced settings plumbing alongside that inline Patrol mode
-   boundary. API-adjacent frontend and docs projections may keep legacy wire
-   values such as `monitor`, `assisted`, and `full`, but customer-facing copy
-   must name the visible choices as `Watch only`, `Auto-fix safe issues`, and
-   `Policy autopilot` rather than leaking compatibility terminology.
+   consumers must present watch-only as the effective capability without paid
+   level badges, disabled paid choices, default Pro-absence explainers, or a
+   full-loop header description, while runtime-locked Pro installs may explain
+   the missing runtime; provider model, schedule, trigger tuning, and readiness
+   validation must remain advanced settings plumbing alongside that inline
+   Patrol mode boundary. API-adjacent frontend and docs projections may keep
+   legacy wire values such as `monitor`, `assisted`, and `full`, but
+   customer-facing copy must name the visible choices as `Watch only`, `Ask first`,
+   `Safe auto-fix`, and `Autopilot` rather than leaking compatibility terminology.
    policy rather than changing the compatibility API boundary; setup-only
    readiness may hide those run/configuration affordances, but the visible
    Patrol mode selector remains the primary policy boundary during setup

@@ -2746,9 +2746,10 @@ query...`, and `Reading storage...` before streamed tool arguments are
    contextual and external-agent access paths over the same governed
    capabilities.
    Public overview, safety, and onboarding copy must use the same visible
-   Patrol mode labels as the product (`Watch only`, `Ask before changes`,
-   `Auto-fix safe issues`, `Policy autopilot`) and must not reintroduce the
-   retired `Only watch`, `Fix safe issues`, or `Full control` labels as
+   Patrol mode labels as the product (`Watch only`, `Ask first`,
+   `Safe auto-fix`, `Autopilot`) and must not reintroduce the retired
+   `Only watch`, `Ask before changes`, `Fix safe issues`,
+   `Auto-fix safe issues`, `Full control`, or `Policy autopilot` labels as
    customer-facing names.
    The public overview must also preserve the model-owned AI boundary: Pulse
    Assistant and Patrol provide governed context, tools, safety gates,
@@ -3427,9 +3428,11 @@ separate findings. Verification is
 
 Public Pulse Intelligence overview, safety, and onboarding copy now use the
 same visible Patrol mode labels as the product: `Watch only`,
-`Ask before changes`, `Auto-fix safe issues`, and `Policy autopilot`. The
-legacy `Only watch`, `Fix safe issues`, and `Full control` names may remain
-only as historical context or compatibility implementation details, not as customer-facing Patrol mode labels.
+`Ask first`, `Safe auto-fix`, and `Autopilot`. The legacy `Only watch`,
+`Ask before changes`, `Fix safe issues`, `Auto-fix safe issues`,
+`Full control`, and `Policy autopilot` names may remain only as historical
+context or compatibility implementation details, not as customer-facing Patrol
+mode labels.
 
 Assistant provider-readiness repair actions now use the canonical Pulse
 Intelligence > Provider & Models route

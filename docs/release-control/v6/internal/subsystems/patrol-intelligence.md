@@ -950,9 +950,9 @@ rather than forking a patrol-local form.
 
 The Patrol page now keeps the Patrol mode policy inline on the main surface,
 not inside the secondary Schedule & model drawer: the first configurable decision remains
-what Patrol may handle automatically (`Watch only`, `Ask before changes`,
-`Auto-fix safe issues`, `Policy autopilot`), and there must be only one visible
-chooser for that decision.
+what Patrol may handle automatically (`Watch only`, `Ask first`,
+`Safe auto-fix`, `Autopilot`), and there must be only one visible chooser for
+that decision.
 Commercial, runtime, and documentation copy that describes this same decision
 must also use those visible labels and the umbrella name `Patrol mode`, not
 the retired `Only watch`, `Fix safe issues`, `Full control`, or generic
@@ -1095,9 +1095,9 @@ instead of rebuilding a local active-button group. The wide default Patrol
 header uses the segmented layout; the constrained configuration dialog may use
 the shared prominent layout so all four mode labels remain readable without
 inventing a Patrol-local selector. Patrol owns the default visible four-level
-policy presentation (`Watch only`, `Ask before changes`, `Auto-fix safe issues`,
-`Policy autopilot`), entitlement locks, and the rule that choosing the highest
-policy-autopilot level sends `full_mode_unlocked:true` while choosing any lower level clears that
+policy presentation (`Watch only`, `Ask first`, `Safe auto-fix`,
+`Autopilot`), entitlement locks, and the rule that choosing the highest
+Autopilot level sends `full_mode_unlocked:true` while choosing any lower level clears that
 acknowledgement. The shared primitive owns pressed-state semantics,
 disabled-option behavior, and active/inactive selector styling.
 That same Patrol-owned presentation rule also applies to the findings empty

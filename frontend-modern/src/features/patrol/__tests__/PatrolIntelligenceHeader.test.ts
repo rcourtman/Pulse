@@ -95,23 +95,25 @@ describe('PatrolIntelligenceHeader', () => {
     expect(PATROL_AUTONOMY_POLICY_PRESENTATION).toEqual({
       monitor: {
         label: 'Watch only',
-        detail: 'Patrol checks and reports issues without making changes.',
+        detail: 'Patrol checks infrastructure and reports issues only; it does not start fixes.',
         compactLabel: 'Watch only',
       },
       approval: {
         label: 'Ask first',
-        detail: 'Patrol investigates issues and prepares fixes. You approve every change.',
+        detail:
+          'Patrol investigates and prepares fixes, but every change waits for your approval.',
         compactLabel: 'Ask first',
       },
       assisted: {
         label: 'Safe auto-fix',
-        detail: 'Patrol fixes safe policy-allowed issues. It asks before anything riskier.',
+        detail:
+          'Patrol can run low- or medium-risk fixes allowed by policy; higher-risk work still asks first.',
         compactLabel: 'Safe auto-fix',
       },
       full: {
         label: 'Autopilot',
         detail:
-          'Patrol handles policy-approved issues automatically. It asks only when policy requires approval.',
+          'Patrol can act automatically within policy and still asks when approval is required.',
         compactLabel: 'Autopilot',
       },
     });
@@ -144,6 +146,9 @@ describe('PatrolIntelligenceHeader', () => {
     expect(headerSource).not.toContain('How much can Patrol do?');
     expect(headerSource).not.toContain("level === 'full' ? 'assisted'");
     expect(headerSource).not.toContain('Autonomous critical remediation');
+    expect(headerSource).not.toContain('Ask before changes');
+    expect(headerSource).not.toContain('Auto-fix safe issues');
+    expect(headerSource).not.toContain('Policy autopilot');
   });
 
   it('keeps Patrol mode inline and routes configuration to settings', () => {

@@ -6,7 +6,7 @@ export const PATROL_PAGE_WATCH_ONLY_DESCRIPTION =
   'Patrol checks your infrastructure and shows current issues.';
 
 export const PATROL_PAGE_MONITOR_DESCRIPTION =
-  'Watch only: Patrol checks and reports issues without making changes.';
+  'Watch only: Patrol checks infrastructure and reports issues only.';
 
 export const PATROL_PAGE_DESCRIPTION =
   'Patrol checks your infrastructure, explains what it found, follows your mode before acting, and records the result.';
@@ -25,11 +25,11 @@ function getPatrolPageDescription(input: PatrolPageHeaderMetaInput): string {
 
   switch (input.autonomyLevel) {
     case 'approval':
-      return 'Patrol investigates issues and asks before every change.';
+      return 'Ask first: Patrol investigates and prepares fixes, but every change waits for approval.';
     case 'assisted':
-      return 'Patrol handles safe policy-allowed fixes and asks before anything riskier.';
+      return 'Safe auto-fix: Patrol may run low- or medium-risk fixes allowed by policy.';
     case 'full':
-      return 'Patrol handles policy-approved work automatically and asks only when approval is required.';
+      return 'Autopilot: Patrol may act automatically within policy and still asks when approval is required.';
     default:
       return PATROL_PAGE_DESCRIPTION;
   }

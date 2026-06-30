@@ -32,7 +32,7 @@ describe('patrolPagePresentation', () => {
       'Patrol checks your infrastructure and shows current issues.',
     );
     expect(PATROL_PAGE_MONITOR_DESCRIPTION).toBe(
-      'Watch only: Patrol checks and reports issues without making changes.',
+      'Watch only: Patrol checks infrastructure and reports issues only.',
     );
     expect(getPatrolPageHeaderMeta({ autonomyLocked: true })).toEqual({
       title: 'Patrol',
@@ -48,14 +48,16 @@ describe('patrolPagePresentation', () => {
 
   it('describes each governed Patrol mode level by what it can actually do', () => {
     expect(getPatrolPageHeaderMeta({ autonomyLevel: 'approval' })).toMatchObject({
-      description: 'Patrol investigates issues and asks before every change.',
+      description:
+        'Ask first: Patrol investigates and prepares fixes, but every change waits for approval.',
     });
     expect(getPatrolPageHeaderMeta({ autonomyLevel: 'assisted' })).toMatchObject({
-      description: 'Patrol handles safe policy-allowed fixes and asks before anything riskier.',
+      description:
+        'Safe auto-fix: Patrol may run low- or medium-risk fixes allowed by policy.',
     });
     expect(getPatrolPageHeaderMeta({ autonomyLevel: 'full' })).toMatchObject({
       description:
-        'Patrol handles policy-approved work automatically and asks only when approval is required.',
+        'Autopilot: Patrol may act automatically within policy and still asks when approval is required.',
     });
   });
 });
