@@ -217,6 +217,57 @@ func TestHandleGetPatrolFindings_WithResourceIDFilter(t *testing.T) {
 	}
 }
 
+func TestHandleGetPatrolFindings_AppliesResourceCriticalityFromOperatorState(t *testing.T) {
+	t.Parallel()
+	handler := createTestAIHandler(t)
+	patrol := ai.NewPatrolService(nil, nil)
+	patrol.GetFindings().Add(&ai.Finding{
+		ID:           "finding-priority",
+		ResourceID:   "vm:101",
+		ResourceName: "db-primary",
+		ResourceType: "vm",
+		Severity:     ai.FindingSeverityWarning,
+		Category:     ai.FindingCategoryPerformance,
+		Title:        "CPU saturated",
+		Description:  "CPU is high",
+	})
+	setUnexportedField(t, handler.defaultAIService, "patrolService", patrol)
+
+	resourceStore := unifiedresources.NewMemoryStore()
+	if err := resourceStore.SetResourceOperatorState(unifiedresources.ResourceOperatorState{
+		CanonicalID: "vm:101",
+		Criticality: unifiedresources.CriticalityHigh,
+		SetAt:       time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("SetResourceOperatorState: %v", err)
+	}
+	handler.SetResourceStoreProvider(func(orgID string) (unifiedresources.ResourceStore, error) {
+		if orgID != "" && orgID != "default" {
+			t.Fatalf("unexpected org id %q", orgID)
+		}
+		return resourceStore, nil
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/findings", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleGetPatrolFindings(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+	var findings []ai.Finding
+	if err := json.Unmarshal(rec.Body.Bytes(), &findings); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+	if len(findings) != 1 {
+		t.Fatalf("expected one finding, got %d", len(findings))
+	}
+	if findings[0].ResourceCriticality != "high" {
+		t.Fatalf("ResourceCriticality = %q, want high", findings[0].ResourceCriticality)
+	}
+}
+
 func TestHandleForcePatrol_MethodNotAllowed(t *testing.T) {
 	t.Parallel()
 	handler := createTestAIHandler(t)

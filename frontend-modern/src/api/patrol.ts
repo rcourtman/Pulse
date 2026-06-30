@@ -6,6 +6,7 @@
 import { apiFetchJSON } from '@/utils/apiClient';
 import { arrayOrEmpty, promoteLegacyAlertIdentifier } from './responseUtils';
 import type { InvestigationRecord } from './ai';
+import type { ResourceCriticality } from './resourceOperatorState';
 
 export type FindingSeverity = 'info' | 'watch' | 'warning' | 'critical';
 export type FindingCategory =
@@ -24,6 +25,7 @@ export interface Finding {
   resource_id: string;
   resource_name: string;
   resource_type: string; // node, vm, system-container, app-container, storage, pbs, host_raid
+  resource_criticality?: ResourceCriticality;
   node?: string;
   title: string;
   description: string;
@@ -774,8 +776,7 @@ export async function triggerPatrolRun(
   scope?: PatrolRunScope,
 ): Promise<{ success: boolean; message: string }> {
   const hasScope =
-    !!scope &&
-    ((scope.resource_ids?.length ?? 0) > 0 || (scope.resource_types?.length ?? 0) > 0);
+    !!scope && ((scope.resource_ids?.length ?? 0) > 0 || (scope.resource_types?.length ?? 0) > 0);
   return apiFetchJSON('/api/ai/patrol/run', {
     method: 'POST',
     ...(hasScope

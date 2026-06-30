@@ -62,6 +62,7 @@ type AISettingsHandler struct {
 	stateProvider           ai.StateProvider
 	readState               unifiedresources.ReadState
 	unifiedResourceProvider ai.UnifiedResourceProvider
+	resourceStoreProvider   func(orgID string) (unifiedresources.ResourceStore, error)
 	metadataProvider        ai.MetadataProvider
 	patrolThresholdProvider ai.ThresholdProvider
 	metricsHistoryProvider  ai.MetricsHistoryProvider
@@ -116,6 +117,20 @@ type AISettingsHandler struct {
 // Called during route registration so the approval handler can delegate investigation fix approvals.
 func (h *AISettingsHandler) SetAIAutoFixEndpoints(ep extensions.AIAutoFixEndpoints) {
 	h.aiAutoFixEndpoints = ep
+}
+
+// SetResourceStoreProvider installs the resource-store resolver used by
+// read-side Patrol response enrichment. The findings store owns durable
+// suppression/stamping during Add; this provider lets the HTTP response
+// reflect operator priority changes immediately, without waiting for the
+// next Patrol detection pass.
+func (h *AISettingsHandler) SetResourceStoreProvider(provider func(orgID string) (unifiedresources.ResourceStore, error)) {
+	if h == nil {
+		return
+	}
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	h.resourceStoreProvider = provider
 }
 
 func (h *AISettingsHandler) stateRefs() (
@@ -5648,10 +5663,72 @@ func (h *AISettingsHandler) HandleGetPatrolFindings(w http.ResponseWriter, r *ht
 	if limit > 0 && limit < len(findings) {
 		findings = findings[:limit]
 	}
+	h.applyResourceCriticalityToPatrolFindings(r.Context(), findings)
 
 	if err := utils.WriteJSONResponse(w, findings); err != nil {
 		log.Error().Err(err).Msg("Failed to write patrol findings response")
 	}
+}
+
+func (h *AISettingsHandler) applyResourceCriticalityToPatrolFindings(ctx context.Context, findings []*ai.Finding) {
+	if h == nil || len(findings) == 0 {
+		return
+	}
+	h.stateMu.RLock()
+	provider := h.resourceStoreProvider
+	h.stateMu.RUnlock()
+	if provider == nil {
+		return
+	}
+	store, err := provider(GetOrgID(ctx))
+	if err != nil || store == nil {
+		if err != nil {
+			log.Debug().Err(err).Msg("Failed to resolve resource store for Patrol finding priority enrichment")
+		}
+		return
+	}
+
+	criticalityByResourceID := make(map[string]string)
+	for _, finding := range findings {
+		if finding == nil {
+			continue
+		}
+		resourceID := strings.TrimSpace(finding.ResourceID)
+		if resourceID == "" {
+			continue
+		}
+		if _, exists := criticalityByResourceID[resourceID]; exists {
+			continue
+		}
+		state, found, fetchErr := store.GetResourceOperatorState(resourceID)
+		if fetchErr != nil {
+			log.Debug().Err(fetchErr).Str("resource_id", resourceID).Msg("Failed to load resource operator priority for Patrol finding")
+			continue
+		}
+		if !found {
+			criticalityByResourceID[resourceID] = ""
+			continue
+		}
+		criticalityByResourceID[resourceID] = normalizePatrolResourceCriticality(string(state.Criticality))
+	}
+
+	for _, finding := range findings {
+		if finding == nil {
+			continue
+		}
+		resourceID := strings.TrimSpace(finding.ResourceID)
+		if criticality, ok := criticalityByResourceID[resourceID]; ok {
+			finding.ResourceCriticality = criticality
+		}
+	}
+}
+
+func normalizePatrolResourceCriticality(value string) string {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	if !unifiedresources.IsValidCriticality(normalized) {
+		return ""
+	}
+	return normalized
 }
 
 func patrolFindingsLimitFromQuery(query url.Values, includeResolved bool) int {

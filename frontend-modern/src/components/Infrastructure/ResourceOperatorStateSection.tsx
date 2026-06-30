@@ -2,6 +2,7 @@ import { Component, Show, createEffect, createMemo, createSignal } from 'solid-j
 import { Toggle } from '@/components/shared/Toggle';
 import { notificationStore } from '@/stores/notifications';
 import {
+  type ResourceCriticality,
   type ResourceOperatorState,
   type ResourceOperatorStateInput,
   clearResourceOperatorState,
@@ -60,6 +61,8 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
   // or Discard.
   const [intentionallyOffline, setIntentionallyOffline] = createSignal(false);
   const [neverAutoRemediate, setNeverAutoRemediate] = createSignal(false);
+  const [criticality, setCriticality] = createSignal<ResourceCriticality>('');
+  const [note, setNote] = createSignal('');
   const [saving, setSaving] = createSignal(false);
   const [confirmingLock, setConfirmingLock] = createSignal(false);
 
@@ -80,6 +83,8 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
     if (current === undefined) return;
     setIntentionallyOffline(current?.intentionallyOffline ?? false);
     setNeverAutoRemediate(current?.neverAutoRemediate ?? false);
+    setCriticality(current?.criticality ?? '');
+    setNote(current?.note ?? '');
     setConfirmingLock(false);
   });
 
@@ -87,11 +92,17 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
     const current = persisted();
     const persistedOffline = current?.intentionallyOffline ?? false;
     const persistedLocked = current?.neverAutoRemediate ?? false;
+    const persistedCriticality = current?.criticality ?? '';
+    const persistedNote = current?.note ?? '';
     return (
       intentionallyOffline() !== persistedOffline ||
-      neverAutoRemediate() !== persistedLocked
+      neverAutoRemediate() !== persistedLocked ||
+      criticality() !== persistedCriticality ||
+      note().trim() !== persistedNote
     );
   });
+
+  const noteForSave = () => note().trim() || undefined;
 
   // The lock toggle is a safety override — confirm before flipping to
   // true. Flipping back to false from true is just a release and does
@@ -121,14 +132,13 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
         intentionallyOffline: intentionallyOffline(),
         neverAutoRemediate: neverAutoRemediate(),
         // Preserve any maintenance-window data the API currently holds
-        // — this slice owns toggles only; window scheduling is a
-        // separate slice and clobbering it on save would surprise the
-        // operator.
+        // — window scheduling is a separate action and clobbering it
+        // on save would surprise the operator.
         maintenanceStartAt: current?.maintenanceStartAt,
         maintenanceEndAt: current?.maintenanceEndAt,
         maintenanceReason: current?.maintenanceReason,
-        criticality: current?.criticality,
-        note: current?.note,
+        criticality: criticality(),
+        note: noteForSave(),
       };
       await setResourceOperatorState(props.resourceId, input);
       // Refresh from server so the section displays the persisted
@@ -148,6 +158,8 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
     const current = persisted();
     setIntentionallyOffline(current?.intentionallyOffline ?? false);
     setNeverAutoRemediate(current?.neverAutoRemediate ?? false);
+    setCriticality(current?.criticality ?? '');
+    setNote(current?.note ?? '');
     setConfirmingLock(false);
   };
 
@@ -161,6 +173,8 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
       await query.refetch();
       setIntentionallyOffline(false);
       setNeverAutoRemediate(false);
+      setCriticality('');
+      setNote('');
       notificationStore.success('Operator overrides cleared');
     } catch (err) {
       notificationStore.error(
@@ -198,8 +212,8 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
     return current;
   });
 
-  const hasAnyMaintenanceWindow = createMemo(
-    () => Boolean(activeMaintenanceWindow() || scheduledMaintenanceWindow()),
+  const hasAnyMaintenanceWindow = createMemo(() =>
+    Boolean(activeMaintenanceWindow() || scheduledMaintenanceWindow()),
   );
 
   // Datetime-local input format is "YYYY-MM-DDTHH:mm" in the browser's
@@ -264,7 +278,6 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
     }
     setSaving(true);
     try {
-      const current = persisted();
       const input: ResourceOperatorStateInput = {
         // Keep the toggle state intact when scheduling — operator
         // editing one facet must not lose work on the other.
@@ -273,8 +286,8 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
         maintenanceStartAt: start.toISOString(),
         maintenanceEndAt: end.toISOString(),
         maintenanceReason: scheduleReason().trim() || undefined,
-        criticality: current?.criticality,
-        note: current?.note,
+        criticality: criticality(),
+        note: noteForSave(),
       };
       await setResourceOperatorState(props.resourceId, input);
       await query.refetch();
@@ -292,15 +305,14 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
   const handleClearMaintenanceWindow = async () => {
     setSaving(true);
     try {
-      const current = persisted();
       const input: ResourceOperatorStateInput = {
         intentionallyOffline: intentionallyOffline(),
         neverAutoRemediate: neverAutoRemediate(),
         maintenanceStartAt: undefined,
         maintenanceEndAt: undefined,
         maintenanceReason: undefined,
-        criticality: current?.criticality,
-        note: current?.note,
+        criticality: criticality(),
+        note: noteForSave(),
       };
       await setResourceOperatorState(props.resourceId, input);
       await query.refetch();
@@ -316,13 +328,16 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
   };
 
   return (
-    <section class="rounded-md border border-border bg-surface p-4 space-y-3" aria-label="Operator overrides">
+    <section
+      class="rounded-md border border-border bg-surface p-4 space-y-3"
+      aria-label="Operator overrides"
+    >
       <header class="flex items-center justify-between">
         <div>
           <h3 class="text-sm font-semibold text-base-content">Operator overrides</h3>
           <p class="text-xs text-muted">
-            Tell Pulse how to treat this resource — suppress expected noise, or lock it against
-            automated remediation.
+            Tell Pulse how Patrol should treat this resource — suppress expected noise, prioritize
+            its findings, or lock it against automated remediation.
           </p>
         </div>
         <Show when={persisted()?.setBy || persisted()?.setAt}>
@@ -339,8 +354,8 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
 
       <Show when={activeMaintenanceWindow()}>
         <div class="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-200">
-          <span class="font-semibold">Maintenance window active.</span>{' '}
-          Findings raised on this resource are auto-acknowledged until{' '}
+          <span class="font-semibold">Maintenance window active.</span> Findings raised on this
+          resource are auto-acknowledged until{' '}
           {formatRelativeTime(activeMaintenanceWindow()!.maintenanceEndAt!, { compact: true })}.
           <Show when={activeMaintenanceWindow()!.maintenanceReason}>
             <span class="block mt-0.5">Reason: {activeMaintenanceWindow()!.maintenanceReason}</span>
@@ -350,16 +365,50 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
 
       <Show when={scheduledMaintenanceWindow() && !activeMaintenanceWindow()}>
         <div class="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-200">
-          <span class="font-semibold">Maintenance window scheduled.</span>{' '}
-          Auto-acknowledgement will start{' '}
+          <span class="font-semibold">Maintenance window scheduled.</span> Auto-acknowledgement will
+          start{' '}
           {formatRelativeTime(scheduledMaintenanceWindow()!.maintenanceStartAt!, { compact: true })}{' '}
           and end{' '}
           {formatRelativeTime(scheduledMaintenanceWindow()!.maintenanceEndAt!, { compact: true })}.
           <Show when={scheduledMaintenanceWindow()!.maintenanceReason}>
-            <span class="block mt-0.5">Reason: {scheduledMaintenanceWindow()!.maintenanceReason}</span>
+            <span class="block mt-0.5">
+              Reason: {scheduledMaintenanceWindow()!.maintenanceReason}
+            </span>
           </Show>
         </div>
       </Show>
+
+      <div class="grid grid-cols-1 gap-3 pt-2 border-t border-border-subtle sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
+        <label class="block">
+          <span class="text-sm font-medium text-base-content">Patrol priority</span>
+          <select
+            value={criticality()}
+            onChange={(e) => setCriticality(e.currentTarget.value as ResourceCriticality)}
+            disabled={saving()}
+            class="mt-1 w-full text-xs rounded border border-border bg-surface px-2 py-1.5 text-base-content focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-50"
+          >
+            <option value="">Default</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+          <span class="mt-1 block text-[11px] text-muted leading-tight">
+            Orders this resource among same-severity Patrol findings.
+          </span>
+        </label>
+
+        <label class="block">
+          <span class="text-sm font-medium text-base-content">Operator note</span>
+          <textarea
+            value={note()}
+            onInput={(e) => setNote(e.currentTarget.value)}
+            placeholder="e.g. Production database; page before rebooting"
+            class="mt-1 min-h-16 w-full resize-y text-xs rounded border border-border bg-surface px-2 py-1.5 text-base-content focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-50"
+            disabled={saving()}
+            maxLength={500}
+          />
+        </label>
+      </div>
 
       {/* Maintenance window scheduler. The form is closed by default;
           opening it pre-fills with sensible defaults (start = now, end
@@ -369,9 +418,8 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
           <div class="flex-1">
             <label class="text-sm font-medium text-base-content">Maintenance window</label>
             <p class="text-[11px] text-muted mt-0.5 leading-tight">
-              Suspend findings on this resource for a defined window. Useful for scheduled
-              upgrades, planned downtime, or reboots where Pulse should stay quiet until the
-              window closes.
+              Suspend findings on this resource for a defined window. Useful for scheduled upgrades,
+              planned downtime, or reboots where Pulse should stay quiet until the window closes.
             </p>
           </div>
           <Show
@@ -590,7 +638,6 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
           </button>
         </Show>
       </div>
-
     </section>
   );
 };

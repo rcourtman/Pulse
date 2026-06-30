@@ -2292,27 +2292,28 @@ type AISuppressionRuleRecord struct {
 
 // AIFindingRecord is a persisted finding with full history
 type AIFindingRecord struct {
-	ID              string     `json:"id"`
-	Key             string     `json:"key,omitempty"`
-	Severity        string     `json:"severity"`
-	Category        string     `json:"category"`
-	ResourceID      string     `json:"resource_id"`
-	ResourceName    string     `json:"resource_name"`
-	ResourceType    string     `json:"resource_type"`
-	Node            string     `json:"node,omitempty"`
-	Title           string     `json:"title"`
-	Description     string     `json:"description"`
-	Recommendation  string     `json:"recommendation,omitempty"`
-	Evidence        string     `json:"evidence,omitempty"`
-	Source          string     `json:"source,omitempty"`
-	DetectedAt      time.Time  `json:"detected_at"`
-	LastSeenAt      time.Time  `json:"last_seen_at"`
-	ResolvedAt      *time.Time `json:"resolved_at,omitempty"`
-	AutoResolved    bool       `json:"auto_resolved"`
-	ResolveReason   string     `json:"resolve_reason,omitempty"`
-	AcknowledgedAt  *time.Time `json:"acknowledged_at,omitempty"`
-	SnoozedUntil    *time.Time `json:"snoozed_until,omitempty"`
-	AlertIdentifier string     `json:"-"`
+	ID                  string     `json:"id"`
+	Key                 string     `json:"key,omitempty"`
+	Severity            string     `json:"severity"`
+	Category            string     `json:"category"`
+	ResourceID          string     `json:"resource_id"`
+	ResourceName        string     `json:"resource_name"`
+	ResourceType        string     `json:"resource_type"`
+	ResourceCriticality string     `json:"resource_criticality,omitempty"`
+	Node                string     `json:"node,omitempty"`
+	Title               string     `json:"title"`
+	Description         string     `json:"description"`
+	Recommendation      string     `json:"recommendation,omitempty"`
+	Evidence            string     `json:"evidence,omitempty"`
+	Source              string     `json:"source,omitempty"`
+	DetectedAt          time.Time  `json:"detected_at"`
+	LastSeenAt          time.Time  `json:"last_seen_at"`
+	ResolvedAt          *time.Time `json:"resolved_at,omitempty"`
+	AutoResolved        bool       `json:"auto_resolved"`
+	ResolveReason       string     `json:"resolve_reason,omitempty"`
+	AcknowledgedAt      *time.Time `json:"acknowledged_at,omitempty"`
+	SnoozedUntil        *time.Time `json:"snoozed_until,omitempty"`
+	AlertIdentifier     string     `json:"-"`
 	// User feedback fields - enables persistence of dismissal state
 	DismissedReason string     `json:"dismissed_reason,omitempty"`
 	UserNote        string     `json:"user_note,omitempty"`

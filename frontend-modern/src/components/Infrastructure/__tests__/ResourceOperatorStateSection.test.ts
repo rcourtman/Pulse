@@ -13,10 +13,10 @@ const overviewTabSource = readFileSync(
 );
 
 describe('ResourceOperatorStateSection', () => {
-  it('exposes the two operator-set toggles bound to the canonical API client', () => {
+  it('exposes operator-set controls bound to the canonical API client', () => {
     // The section is the operator's window into the per-resource state
-    // feature. It must offer both toggles (intentionally offline + never
-    // auto-remediate) and route them through the canonical
+    // feature. It must offer the suppress/remediation toggles plus
+    // Patrol priority and note fields, all routed through the canonical
     // resourceOperatorState client — no parallel fetch path that could
     // drift from the API contract.
     expect(sectionSource).toContain("from '@/api/resourceOperatorState'");
@@ -25,6 +25,10 @@ describe('ResourceOperatorStateSection', () => {
     expect(sectionSource).toContain('clearResourceOperatorState');
     expect(sectionSource).toContain('Intentionally offline');
     expect(sectionSource).toContain('Never auto-remediate');
+    expect(sectionSource).toContain('Patrol priority');
+    expect(sectionSource).toContain('Operator note');
+    expect(sectionSource).toContain('setCriticality');
+    expect(sectionSource).toContain('setNote');
   });
 
   it('keeps the section out of the parent Suspense fallback by using createNonSuspendingQuery', () => {
@@ -49,16 +53,45 @@ describe('ResourceOperatorStateSection', () => {
     expect(sectionSource).toContain('if (next && !neverAutoRemediate())');
   });
 
-  it('preserves persisted maintenance-window data on toggle save so the two facets stay decoupled', () => {
-    // Toggling intentionallyOffline or neverAutoRemediate must not
-    // clobber a persisted maintenance window. The toggle save path
-    // reads the current persisted window fields and forwards them
-    // through the PUT body (which replaces the whole record).
+  it('preserves persisted maintenance-window data on override save so window scheduling stays decoupled', () => {
+    // Saving non-window overrides must not clobber a persisted
+    // maintenance window. The save path reads the current persisted
+    // window fields and forwards them through the PUT body (which
+    // replaces the whole record), while priority/note come from the
+    // local edit state.
     expect(sectionSource).toContain('maintenanceStartAt: current?.maintenanceStartAt');
     expect(sectionSource).toContain('maintenanceEndAt: current?.maintenanceEndAt');
     expect(sectionSource).toContain('maintenanceReason: current?.maintenanceReason');
-    expect(sectionSource).toContain('criticality: current?.criticality');
-    expect(sectionSource).toContain('note: current?.note');
+    expect(sectionSource).toContain('criticality: criticality()');
+    expect(sectionSource).toContain('note: noteForSave()');
+  });
+
+  it('offers the canonical Patrol priority options and dirty-tracks priority plus note edits', () => {
+    // Criticality is constrained by the API contract. The drawer must
+    // expose exactly the canonical values and compare both priority and
+    // trimmed note against persisted state so Save/Discard appear for
+    // those edits too.
+    expect(sectionSource).toContain('<option value="">Default</option>');
+    expect(sectionSource).toContain('<option value="high">High</option>');
+    expect(sectionSource).toContain('<option value="medium">Medium</option>');
+    expect(sectionSource).toContain('<option value="low">Low</option>');
+    expect(sectionSource).toContain('const persistedCriticality = current?.criticality ??');
+    expect(sectionSource).toContain('const persistedNote = current?.note ??');
+    expect(sectionSource).toContain('criticality() !== persistedCriticality');
+    expect(sectionSource).toContain('note().trim() !== persistedNote');
+  });
+
+  it('keeps priority and note edit-state when scheduling or clearing maintenance windows', () => {
+    // PUT replaces the whole record, so the maintenance-window actions
+    // must forward the local priority/note signals rather than the last
+    // persisted values. Otherwise editing a note and then scheduling a
+    // window would silently lose the note.
+    expect(sectionSource).toContain('maintenanceStartAt: start.toISOString()');
+    expect(sectionSource).toContain('maintenanceEndAt: end.toISOString()');
+    expect(sectionSource).toContain('criticality: criticality()');
+    expect(sectionSource).toContain('note: noteForSave()');
+    expect(sectionSource).not.toContain('criticality: current?.criticality');
+    expect(sectionSource).not.toContain('note: current?.note');
   });
 
   it('exposes a maintenance-window scheduler with HTML5 datetime-local inputs and quick presets', () => {
@@ -98,7 +131,8 @@ describe('ResourceOperatorStateSection', () => {
     // nothing once it ends.
     expect(sectionSource).toContain('scheduledMaintenanceWindow');
     expect(sectionSource).toContain('Maintenance window scheduled.');
-    expect(sectionSource).toContain('Auto-acknowledgement will start');
+    expect(sectionSource).toContain('Auto-acknowledgement will');
+    expect(sectionSource).toContain("start{' '}");
   });
 
   it('exposes Edit window and Cancel window controls when a window exists', () => {
@@ -144,7 +178,9 @@ describe('ResourceDetailDrawerOverviewTab integration', () => {
     // what Pulse actually did. They belong on the same drawer surface
     // so the operator can read both stories together.
     expect(overviewTabSource).toContain("from './ResourceOperatorStateSection'");
-    expect(overviewTabSource).toContain('<ResourceOperatorStateSection resourceId={resource.id} />');
+    expect(overviewTabSource).toContain(
+      '<ResourceOperatorStateSection resourceId={resource.id} />',
+    );
     // Section must precede the action-history block so the override
     // explains the actions that follow, not vice versa.
     const operatorIndex = overviewTabSource.indexOf('<ResourceOperatorStateSection');

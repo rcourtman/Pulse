@@ -3989,9 +3989,13 @@ wires the adapter at startup, projecting
 `unified.ResourceOperatorState` into the
 `ResourceOperatorStateProjection` shape the findings runtime
 consumes. The projection carries every operator-set signal in one
-call (active maintenance window plus the `IntentionallyOffline`
-flag) so adding new signals later does not multiply round-trips per
-finding.
+call (active maintenance window, `IntentionallyOffline`,
+`NeverAutoRemediate`, and `Criticality`) so adding new signals later does
+not multiply round-trips per finding. `FindingsStore.Add` stamps
+`Finding.ResourceCriticality` from that projection on new and re-detected
+findings. The field persists as `resource_criticality` and may affect
+same-severity Patrol attention ordering only; it must not mutate
+`Finding.Severity` or bypass severity escalation/resolution rules.
 
 The approval store exposes `SetOnApprovalCreated(cb)` so the API
 layer can install a fire-and-forget callback that runs after every
@@ -4039,13 +4043,13 @@ the situated picture, and it can avoid proposing fixes the
 operator has locked the resource against.
 
 `ResourceOperatorStateProjection` carries `NeverAutoRemediate`
-alongside `IntentionallyOffline` and `MaintenanceWindow` so the
+and `Criticality` alongside `IntentionallyOffline` and `MaintenanceWindow` so the
 investigation read path and the suppression read path share a
 single projection. The findings store exposes the projection via
 `OperatorStateProjectionFor`; the suppression hot path keeps its
 existing internal access. Both paths see the same operator-state
-facts so investigation reasoning and suppression behavior cannot
-drift against each other.
+facts so investigation reasoning, suppression behavior, and Patrol
+priority stamping cannot drift against each other.
 
 A cross-slice consequence worth pinning: operator-state-suppressed
 findings (auto-dismissed with `DismissedReason="expected_behavior"`

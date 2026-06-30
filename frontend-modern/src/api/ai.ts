@@ -419,6 +419,7 @@ export interface UnifiedFindingRecord {
   resource_id: string;
   resource_name: string;
   resource_type: string;
+  resource_criticality?: 'high' | 'medium' | 'low' | '';
   node?: string;
   title: string;
   description: string;

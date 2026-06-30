@@ -2166,6 +2166,64 @@ func TestToCoreFinding_LeavesOperationalMemoryNilForFreshFindings(t *testing.T) 
 	}
 }
 
+func TestFindingsStore_Add_StampsResourceCriticalityFromOperatorState(t *testing.T) {
+	store := NewFindingsStore()
+	criticality := "high"
+	store.SetResourceOperatorStateProvider(
+		ResourceOperatorStateProviderFunc(func(canonicalID string, _ time.Time) (ResourceOperatorStateProjection, bool) {
+			if canonicalID != "vm:101" {
+				return ResourceOperatorStateProjection{}, false
+			}
+			return ResourceOperatorStateProjection{Criticality: criticality}, true
+		}),
+	)
+
+	store.Add(&Finding{
+		ID:          "finding-priority",
+		ResourceID:  "vm:101",
+		Severity:    FindingSeverityWarning,
+		Category:    FindingCategoryPerformance,
+		Title:       "CPU saturated",
+		Description: "CPU is high",
+	})
+	if got := store.Get("finding-priority"); got == nil || got.ResourceCriticality != "high" {
+		t.Fatalf("new finding ResourceCriticality = %q, want high", findingResourceCriticalityForTest(got))
+	}
+
+	criticality = "low"
+	store.Add(&Finding{
+		ID:          "finding-priority",
+		ResourceID:  "vm:101",
+		Severity:    FindingSeverityWarning,
+		Category:    FindingCategoryPerformance,
+		Title:       "CPU still saturated",
+		Description: "CPU is still high",
+	})
+	if got := store.Get("finding-priority"); got == nil || got.ResourceCriticality != "low" {
+		t.Fatalf("re-detected finding ResourceCriticality = %q, want low", findingResourceCriticalityForTest(got))
+	}
+
+	criticality = ""
+	store.Add(&Finding{
+		ID:          "finding-priority",
+		ResourceID:  "vm:101",
+		Severity:    FindingSeverityWarning,
+		Category:    FindingCategoryPerformance,
+		Title:       "CPU saturated again",
+		Description: "CPU is high again",
+	})
+	if got := store.Get("finding-priority"); got == nil || got.ResourceCriticality != "" {
+		t.Fatalf("cleared finding ResourceCriticality = %q, want empty", findingResourceCriticalityForTest(got))
+	}
+}
+
+func findingResourceCriticalityForTest(f *Finding) string {
+	if f == nil {
+		return "<nil>"
+	}
+	return f.ResourceCriticality
+}
+
 func TestFindingsStore_OperatorStateProjectionFor_ReturnsFalseWithoutProvider(t *testing.T) {
 	// Default store with no provider wired must report false so
 	// callers can branch on absence rather than parsing zero-valued
@@ -2189,6 +2247,7 @@ func TestFindingsStore_OperatorStateProjectionFor_ProxiesProvider(t *testing.T) 
 	expected := ResourceOperatorStateProjection{
 		IntentionallyOffline: true,
 		NeverAutoRemediate:   true,
+		Criticality:          "high",
 	}
 	store.SetResourceOperatorStateProvider(
 		ResourceOperatorStateProviderFunc(func(_ string, _ time.Time) (ResourceOperatorStateProjection, bool) {
@@ -2205,6 +2264,9 @@ func TestFindingsStore_OperatorStateProjectionFor_ProxiesProvider(t *testing.T) 
 	}
 	if got.NeverAutoRemediate != expected.NeverAutoRemediate {
 		t.Errorf("NeverAutoRemediate must round-trip — investigation runtime reads this projection too; got %v want %v", got.NeverAutoRemediate, expected.NeverAutoRemediate)
+	}
+	if got.Criticality != expected.Criticality {
+		t.Errorf("Criticality must round-trip — Patrol attention ordering reads this projection too; got %q want %q", got.Criticality, expected.Criticality)
 	}
 }
 

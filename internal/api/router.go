@@ -619,6 +619,9 @@ func (r *Router) setupRoutes() {
 
 	// AI settings endpoints
 	r.aiSettingsHandler = NewAISettingsHandler(r.multiTenant, r.mtMonitor, r.agentExecServer)
+	if r.resourceHandlers != nil {
+		r.aiSettingsHandler.SetResourceStoreProvider(r.resourceHandlers.getStore)
+	}
 	r.aiSettingsHandler.SetConfig(r.config)
 	// Inject state provider so AI has access to full infrastructure context (VMs, containers, IPs)
 	if r.monitor != nil {
@@ -2066,6 +2069,7 @@ func (r *Router) startPatrolForContext(ctx context.Context, orgID string) bool {
 						projection := ai.ResourceOperatorStateProjection{
 							IntentionallyOffline: state.IntentionallyOffline,
 							NeverAutoRemediate:   state.NeverAutoRemediate,
+							Criticality:          string(state.Criticality),
 						}
 						if state.IsInMaintenanceAt(now) {
 							projection.MaintenanceWindow = &ai.ResourceOperatorStateMaintenanceWindow{

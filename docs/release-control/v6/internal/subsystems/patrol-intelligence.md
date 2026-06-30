@@ -786,6 +786,16 @@ fix`, or `Explain` based on current finding state), while secondary
    subsequent Patrol finding loads continue to request include-resolved history
    with the 200-item history limit instead of unbounded historical payloads or
    a transient active-only refresh.
+   Resource operator priority is a Patrol attention-queue tie-breaker, not a
+   second queue model and not a severity rewrite. `resource_criticality` from
+   the Patrol findings API normalizes to `UnifiedFinding.resourceCriticality`;
+   `sortFindingsForAttentionQueue` may order same-severity findings by
+   high/medium/default/low before runtime and recency, but severity,
+   investigation outcome, approval state, and the direct Patrol findings source
+   remain the canonical current-work model. The operator edits that priority
+   and the associated note from `ResourceOperatorStateSection` on the resource
+   detail drawer, alongside maintenance/offline/remediation-lock state, so the
+   drawer stays the single resource-level Patrol intent surface.
    The TS API client mirrors (`UnifiedFindingRecord.impact`,
    `Finding.impact`) and the store normalizers
    (`normalizeUnifiedFindingRecord`, `normalizePatrolFindingRecord`) must

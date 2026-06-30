@@ -7,6 +7,8 @@ import { apiFetchJSON } from '@/utils/apiClient';
  * evolution. See the patrol-intelligence and ai-runtime subsystem contracts
  * for the suppression / refusal semantics each field drives.
  */
+export type ResourceCriticality = 'high' | 'medium' | 'low' | '';
+
 export interface ResourceOperatorState {
   canonicalId: string;
   /**
@@ -37,7 +39,7 @@ export interface ResourceOperatorState {
    * Optional operator hint that affects finding sort order. One of
    * `'high' | 'medium' | 'low' | ''` (empty = default).
    */
-  criticality?: 'high' | 'medium' | 'low' | '';
+  criticality?: ResourceCriticality;
   note?: string;
   setAt: string;
   setBy?: string;
@@ -70,7 +72,12 @@ export async function getResourceOperatorState(
     // The 404 response shape is `{ error: 'operator_state_not_set', ... }`.
     // Translating into null lets the caller treat "no state" as a clean
     // default rather than a thrown error.
-    if (err && typeof err === 'object' && 'status' in err && (err as { status: number }).status === 404) {
+    if (
+      err &&
+      typeof err === 'object' &&
+      'status' in err &&
+      (err as { status: number }).status === 404
+    ) {
       return null;
     }
     throw err;
@@ -102,8 +109,7 @@ export async function setResourceOperatorState(
  * cleanly whether or not an entry was present.
  */
 export async function clearResourceOperatorState(resourceId: string): Promise<void> {
-  await apiFetchJSON(
-    `/api/resources/${encodeURIComponent(resourceId)}/operator-state`,
-    { method: 'DELETE' },
-  );
+  await apiFetchJSON(`/api/resources/${encodeURIComponent(resourceId)}/operator-state`, {
+    method: 'DELETE',
+  });
 }

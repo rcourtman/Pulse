@@ -838,6 +838,12 @@ payload shape change when the portal presents compact client rows.
     `/api/ai/patrol/runs` records may expose bounded `source` provenance so demo
     evidence can be separated from live runtime assessment state without
     changing the stable run payload shape.
+    The Patrol findings payload carries optional `resource_criticality`
+    (`high`, `medium`, `low`, or omitted/empty default) stamped from
+    `/api/resources/{id}/operator-state`. It is a resource priority
+    tie-breaker for same-severity Patrol work, not a severity override; the
+    frontend client mirrors it on both `Finding` and `UnifiedFindingRecord`
+    and normalizes it to `UnifiedFinding.resourceCriticality`.
     The Patrol findings payload carries `capacity_forecast` as a structured
     deterministic field (`current_pct`, `daily_change`, `days_to_full`) on
     capacity-relevant findings whose resource has enough utilization history to
@@ -3606,7 +3612,12 @@ at startup: `internal/api/router.go` calls
 `ResourceOperatorStateProviderFunc` closure that reads the unified
 store and returns a `ResourceOperatorStateProjection` carrying every
 operator-set signal in one call (maintenance window via
-`state.IsInMaintenanceAt` plus the `IntentionallyOffline` flag).
+`state.IsInMaintenanceAt`, the `IntentionallyOffline` flag, and the
+`Criticality` hint). The same router setup also calls
+`SetResourceStoreProvider(r.resourceHandlers.getStore)` on the AI settings
+handler so `/api/ai/patrol/findings` can refresh `resource_criticality` at
+read time after an operator changes priority, without waiting for the next
+Patrol detection to re-stamp stored findings.
 This keeps `internal/ai` free of an `internal/unifiedresources`
 import while giving the findings runtime full per-resource
 suppression without each org needing a separate adapter declaration

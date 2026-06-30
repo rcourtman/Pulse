@@ -208,30 +208,31 @@ func TestFindingsPersistenceAdapter_PreservesAllFields(t *testing.T) {
 	snoozed := now.Add(24 * time.Hour)
 
 	originalFinding := &Finding{
-		ID:              "test-finding",
-		Key:             "test-key",
-		Severity:        FindingSeverityCritical,
-		Category:        FindingCategorySecurity,
-		ResourceID:      "resource-123",
-		ResourceName:    "Test Resource",
-		ResourceType:    "vm",
-		Node:            "node1",
-		Title:           "Test Title",
-		Description:     "Test Description",
-		Recommendation:  "Test Recommendation",
-		Evidence:        "Test Evidence",
-		Source:          "ai-analysis",
-		DetectedAt:      now,
-		LastSeenAt:      now,
-		ResolvedAt:      &resolved,
-		AutoResolved:    true,
-		AcknowledgedAt:  &acked,
-		SnoozedUntil:    &snoozed,
-		AlertIdentifier: "alert-456",
-		DismissedReason: "expected_behavior",
-		UserNote:        "This is intentional for Frigate recordings",
-		TimesRaised:     5,
-		Suppressed:      false,
+		ID:                  "test-finding",
+		Key:                 "test-key",
+		Severity:            FindingSeverityCritical,
+		Category:            FindingCategorySecurity,
+		ResourceID:          "resource-123",
+		ResourceName:        "Test Resource",
+		ResourceType:        "vm",
+		ResourceCriticality: "high",
+		Node:                "node1",
+		Title:               "Test Title",
+		Description:         "Test Description",
+		Recommendation:      "Test Recommendation",
+		Evidence:            "Test Evidence",
+		Source:              "ai-analysis",
+		DetectedAt:          now,
+		LastSeenAt:          now,
+		ResolvedAt:          &resolved,
+		AutoResolved:        true,
+		AcknowledgedAt:      &acked,
+		SnoozedUntil:        &snoozed,
+		AlertIdentifier:     "alert-456",
+		DismissedReason:     "expected_behavior",
+		UserNote:            "This is intentional for Frigate recordings",
+		TimesRaised:         5,
+		Suppressed:          false,
 	}
 
 	findings := map[string]*Finding{"test-finding": originalFinding}
@@ -266,6 +267,9 @@ func TestFindingsPersistenceAdapter_PreservesAllFields(t *testing.T) {
 	}
 	if f.ResourceID != originalFinding.ResourceID {
 		t.Errorf("ResourceID mismatch: got %q", f.ResourceID)
+	}
+	if f.ResourceCriticality != originalFinding.ResourceCriticality {
+		t.Errorf("ResourceCriticality mismatch: got %q", f.ResourceCriticality)
 	}
 	if f.AutoResolved != originalFinding.AutoResolved {
 		t.Errorf("AutoResolved mismatch: got %v", f.AutoResolved)

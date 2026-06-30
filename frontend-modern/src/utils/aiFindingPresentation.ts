@@ -230,6 +230,13 @@ const FINDING_SEVERITY_SORT_ORDER: Record<string, number> = {
   info: 3,
 };
 
+const FINDING_RESOURCE_CRITICALITY_SORT_ORDER: Record<string, number> = {
+  high: 0,
+  medium: 1,
+  '': 2,
+  low: 3,
+};
+
 const FINDING_SEVERITY_COMPACT_LABELS: Record<string, string> = {
   critical: 'CRIT',
   warning: 'WARN',
@@ -397,6 +404,15 @@ export const getFindingSeverityToneClasses = (
 export const getFindingSeveritySortOrder = (
   severity: UnifiedFinding['severity'] | string,
 ): number => FINDING_SEVERITY_SORT_ORDER[severity] ?? 4;
+
+export const getFindingResourceCriticalitySortOrder = (
+  criticality: UnifiedFinding['resourceCriticality'] | string | undefined,
+): number => {
+  const normalized = String(criticality || '')
+    .trim()
+    .toLowerCase();
+  return FINDING_RESOURCE_CRITICALITY_SORT_ORDER[normalized] ?? 2;
+};
 
 export const getFindingActiveRuntimeSortOrder = (
   finding: Pick<UnifiedFinding, 'status' | 'resourceId' | 'resourceName' | 'title'>,
@@ -638,9 +654,7 @@ export function getPatrolWorkTypeComposition<
   return composition;
 }
 
-export function getPatrolWorkTypeCompositionClause(
-  composition: PatrolWorkTypeComposition,
-): string {
+export function getPatrolWorkTypeCompositionClause(composition: PatrolWorkTypeComposition): string {
   const parts: string[] = [];
   if (composition.approval > 0) {
     parts.push(`${composition.approval} need${composition.approval === 1 ? 's' : ''} approval`);
@@ -750,6 +764,12 @@ export const sortFindingsForAttentionQueue = (findings: UnifiedFinding[]): Unifi
     const bSeverity = getFindingSeveritySortOrder(b.severity);
     if (aSeverity !== bSeverity) return aSeverity - bSeverity;
 
+    const aResourceCriticality = getFindingResourceCriticalitySortOrder(a.resourceCriticality);
+    const bResourceCriticality = getFindingResourceCriticalitySortOrder(b.resourceCriticality);
+    if (aResourceCriticality !== bResourceCriticality) {
+      return aResourceCriticality - bResourceCriticality;
+    }
+
     const aRuntime = getFindingActiveRuntimeSortOrder(a);
     const bRuntime = getFindingActiveRuntimeSortOrder(b);
     if (aRuntime !== bRuntime) return aRuntime - bRuntime;
@@ -840,9 +860,9 @@ export const hasFindingInvestigationDetails = (
 ): boolean =>
   Boolean(
     finding.investigationSessionId?.trim() ||
-    finding.investigationStatus ||
-    finding.investigationOutcome ||
-    (finding.investigationAttempts ?? 0) > 0,
+      finding.investigationStatus ||
+      finding.investigationOutcome ||
+      (finding.investigationAttempts ?? 0) > 0,
   );
 
 // hasFindingInvestigationHandoffPointer is the narrower check used by the

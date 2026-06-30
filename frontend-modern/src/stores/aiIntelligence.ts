@@ -20,6 +20,7 @@ import {
   type Finding as PatrolFinding,
   type CapacityForecast,
 } from '@/api/patrol';
+import type { ResourceCriticality } from '@/api/resourceOperatorState';
 import type {
   RemediationPlan,
   CircuitBreakerStatus,
@@ -68,6 +69,7 @@ const VALID_INVESTIGATION_OUTCOMES = new Set<string>([
   'fix_verification_unknown',
 ]);
 const VALID_SEVERITIES = new Set<string>(['critical', 'warning', 'info', 'watch']);
+const VALID_RESOURCE_CRITICALITIES = new Set<string>(['high', 'medium', 'low', '']);
 const VALID_SOURCES = new Set<string>([
   'threshold',
   'ai-patrol',
@@ -98,6 +100,13 @@ function validateInvestigationOutcome(
 function validateSeverity(value: string | undefined): UnifiedFinding['severity'] {
   if (value && VALID_SEVERITIES.has(value)) return value as UnifiedFinding['severity'];
   return 'info';
+}
+
+function validateResourceCriticality(value: string | undefined): ResourceCriticality | undefined {
+  if (value === undefined) return undefined;
+  const normalized = String(value).trim().toLowerCase();
+  if (VALID_RESOURCE_CRITICALITIES.has(normalized)) return normalized as ResourceCriticality;
+  return undefined;
 }
 
 function validateSource(value: string | undefined): UnifiedFinding['source'] {
@@ -138,6 +147,7 @@ export interface UnifiedFinding {
   resourceId: string;
   resourceName: string;
   resourceType: string;
+  resourceCriticality?: ResourceCriticality;
   alertIdentifier?: string;
   alertType?: string;
   isThreshold?: boolean;
@@ -229,6 +239,7 @@ function normalizeUnifiedFindingRecord(item: UnifiedFindingRecord, now: number):
     resourceId: item.resource_id,
     resourceName: item.resource_name || item.resource_id,
     resourceType: item.resource_type || 'unknown',
+    resourceCriticality: validateResourceCriticality(item.resource_criticality),
     alertIdentifier,
     isThreshold: Boolean(item.is_threshold || item.source === 'threshold'),
     category: item.category || 'general',
@@ -273,6 +284,7 @@ function normalizePatrolFindingRecord(item: PatrolFinding, now: number): Unified
     resourceId: item.resource_id,
     resourceName: item.resource_name || item.resource_id,
     resourceType: item.resource_type || 'unknown',
+    resourceCriticality: validateResourceCriticality(item.resource_criticality),
     alertIdentifier: item.alertIdentifier,
     isThreshold: false,
     category: item.category || 'general',

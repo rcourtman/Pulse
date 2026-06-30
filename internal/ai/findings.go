@@ -180,10 +180,14 @@ type Finding struct {
 	ResourceID   string          `json:"resource_id"`
 	ResourceName string          `json:"resource_name"`
 	ResourceType string          `json:"resource_type"` // node, vm, container, docker, storage, agent, pbs, agent_raid
-	Node         string          `json:"node,omitempty"`
-	Title        string          `json:"title"`
-	Description  string          `json:"description"`
-	Impact       string          `json:"impact,omitempty"` // Operator-facing consequence-if-ignored statement
+	// ResourceCriticality is the operator-set resource priority stamped
+	// from ResourceOperatorState. It affects Patrol attention ordering
+	// among same-severity findings but does not alter severity.
+	ResourceCriticality string `json:"resource_criticality,omitempty"`
+	Node                string `json:"node,omitempty"`
+	Title               string `json:"title"`
+	Description         string `json:"description"`
+	Impact              string `json:"impact,omitempty"` // Operator-facing consequence-if-ignored statement
 	// PreviousResolvedFixSummary preserves the description of the fix that
 	// resolved this finding the last time it was active. Captured at
 	// regression time before InvestigationRecord is cleared, so the next
@@ -255,6 +259,7 @@ type findingJSON struct {
 	ResourceID                 string                           `json:"resource_id"`
 	ResourceName               string                           `json:"resource_name"`
 	ResourceType               string                           `json:"resource_type"`
+	ResourceCriticality        string                           `json:"resource_criticality,omitempty"`
 	Node                       string                           `json:"node,omitempty"`
 	Title                      string                           `json:"title"`
 	Description                string                           `json:"description"`
@@ -301,6 +306,7 @@ func (f Finding) MarshalJSON() ([]byte, error) {
 		ResourceID:                 f.ResourceID,
 		ResourceName:               f.ResourceName,
 		ResourceType:               f.ResourceType,
+		ResourceCriticality:        normalizeResourceCriticality(f.ResourceCriticality),
 		Node:                       f.Node,
 		Title:                      f.Title,
 		Description:                f.Description,
@@ -352,6 +358,7 @@ func (f *Finding) UnmarshalJSON(data []byte) error {
 		ResourceID:                 payload.ResourceID,
 		ResourceName:               payload.ResourceName,
 		ResourceType:               payload.ResourceType,
+		ResourceCriticality:        normalizeResourceCriticality(payload.ResourceCriticality),
 		Node:                       payload.Node,
 		Title:                      payload.Title,
 		Description:                payload.Description,
@@ -465,6 +472,15 @@ func (f *Finding) syncLoopState() {
 		return
 	}
 	f.LoopState = string(deriveLoopState(f))
+}
+
+func normalizeResourceCriticality(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "high", "medium", "low":
+		return strings.ToLower(strings.TrimSpace(value))
+	default:
+		return ""
+	}
 }
 
 // ShouldInvestigate returns true if this finding should be automatically investigated
@@ -801,6 +817,8 @@ type ResourceOperatorStateMaintenanceWindow struct {
 // does not multiply round-trips per finding. MaintenanceWindow is nil
 // when no window is currently active; IntentionallyOffline reflects
 // the operator's "this resource is expected to be offline" flag.
+// Criticality is an operator-set Patrol queue hint: high promotes
+// same-severity findings, low demotes them, and empty means default.
 type ResourceOperatorStateProjection struct {
 	MaintenanceWindow    *ResourceOperatorStateMaintenanceWindow
 	IntentionallyOffline bool
@@ -812,6 +830,7 @@ type ResourceOperatorStateProjection struct {
 	// the same projection means the suppression and investigation
 	// hot paths share a single read.
 	NeverAutoRemediate bool
+	Criticality        string
 }
 
 // ResourceOperatorStateProvider is the narrow interface the findings
@@ -1612,6 +1631,9 @@ func (s *FindingsStore) mergeEquivalentFindingLocked(existing, incoming *Finding
 	if existing.Node == "" && incoming.Node != "" {
 		existing.Node = incoming.Node
 	}
+	if criticality := normalizeResourceCriticality(incoming.ResourceCriticality); criticality != "" {
+		existing.ResourceCriticality = criticality
+	}
 	s.syncLoopStateLocked(existing)
 	if incoming.ResourceID != "" && incoming.ResourceID != existing.ResourceID {
 		appendFindingResourceIndexUnique(s.byResource, incoming.ResourceID, existing.ID)
@@ -1703,8 +1725,31 @@ func (s *FindingsStore) Add(f *Finding) bool {
 	f.syncLoopState()
 
 	existing, exists := s.findings[f.ID]
+	operatorStateProviderPresent := false
+	operatorProjectionOK := false
+	var operatorProjection ResourceOperatorStateProjection
+	if provider := s.resourceOperatorStateProvider; provider != nil {
+		operatorResourceID := strings.TrimSpace(f.ResourceID)
+		if operatorResourceID == "" && existing != nil {
+			operatorResourceID = strings.TrimSpace(existing.ResourceID)
+		}
+		if operatorResourceID != "" {
+			operatorStateProviderPresent = true
+			operatorProjection, operatorProjectionOK = provider.OperatorStateProjection(operatorResourceID, time.Now())
+			if operatorProjectionOK {
+				f.ResourceCriticality = normalizeResourceCriticality(operatorProjection.Criticality)
+			} else {
+				f.ResourceCriticality = ""
+			}
+		}
+	} else {
+		f.ResourceCriticality = normalizeResourceCriticality(f.ResourceCriticality)
+	}
 	if exists {
 		wasResolved := existing.ResolvedAt != nil
+		if operatorStateProviderPresent || f.ResourceCriticality != "" {
+			existing.ResourceCriticality = normalizeResourceCriticality(f.ResourceCriticality)
+		}
 		if existing.ResourceType == "" {
 			if f.ResourceType != "" {
 				existing.ResourceType = f.ResourceType
@@ -1743,10 +1788,9 @@ func (s *FindingsStore) Add(f *Finding) bool {
 			operatorStateLifted := false
 			if !willFixReminderDue && existing.DismissedReason == "expected_behavior" && !existing.Suppressed {
 				if cause := findOperatorStateDismissCause(existing); cause != "" {
-					if provider := s.resourceOperatorStateProvider; provider != nil && existing.ResourceID != "" {
-						projection, ok := provider.OperatorStateProjection(existing.ResourceID, time.Now())
-						currentlySuppressing := ok &&
-							(projection.MaintenanceWindow != nil || projection.IntentionallyOffline)
+					if operatorStateProviderPresent {
+						currentlySuppressing := operatorProjectionOK &&
+							(operatorProjection.MaintenanceWindow != nil || operatorProjection.IntentionallyOffline)
 						operatorStateLifted = !currentlySuppressing
 					} else {
 						// No provider currently wired but the finding was
@@ -1929,8 +1973,8 @@ func (s *FindingsStore) Add(f *Finding) bool {
 	// the operator can audit what tripped during the suppression;
 	// severity escalation paths still wake it later if the underlying
 	// condition stays after the operator clears the state.
-	if provider := s.resourceOperatorStateProvider; provider != nil && f.ResourceID != "" {
-		if projection, ok := provider.OperatorStateProjection(f.ResourceID, time.Now()); ok {
+	if operatorStateProviderPresent {
+		if projection, ok := operatorProjection, operatorProjectionOK; ok {
 			now := time.Now()
 			switch {
 			case projection.MaintenanceWindow != nil:

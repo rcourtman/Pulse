@@ -19242,6 +19242,9 @@ func TestContract_FindingsResourceOperatorStateProviderIsWired(t *testing.T) {
 	if !strings.Contains(src, "SetResourceOperatorStateProvider(") {
 		t.Error("router.go must call SetResourceOperatorStateProvider on the findings store at startup")
 	}
+	if !strings.Contains(src, "SetResourceStoreProvider(r.resourceHandlers.getStore)") {
+		t.Error("router.go must expose the resource store to the Patrol findings handler so read-time priority changes surface immediately")
+	}
 	if !strings.Contains(src, "ResourceOperatorStateProviderFunc(") {
 		t.Error("router.go must use the ai.ResourceOperatorStateProviderFunc adapter so the closure satisfies the provider interface")
 	}
@@ -19253,6 +19256,9 @@ func TestContract_FindingsResourceOperatorStateProviderIsWired(t *testing.T) {
 	}
 	if !strings.Contains(src, "IntentionallyOffline: state.IntentionallyOffline") {
 		t.Error("router.go must propagate state.IntentionallyOffline through the projection so the findings runtime sees it")
+	}
+	if !strings.Contains(src, "Criticality:          string(state.Criticality)") {
+		t.Error("router.go must propagate state.Criticality through the projection so Patrol attention ordering sees it")
 	}
 }
 
