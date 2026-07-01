@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
-import { Route, Router } from '@solidjs/router';
+import { Route, Router, useNavigate } from '@solidjs/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { State } from '@/types/api';
 import type { Resource } from '@/types/resource';
@@ -56,6 +56,17 @@ describe('AppLayout navigation icons', () => {
 
   const renderLayout = (resources: Resource[] = [], initialPath = '/settings/infrastructure') => {
     window.history.replaceState({}, '', initialPath);
+    const RouteStateProbe = () => {
+      const navigate = useNavigate();
+      return (
+        <button
+          type="button"
+          onClick={() => navigate('/proxmox/overview?status=running', { replace: true })}
+        >
+          Set Proxmox running filter
+        </button>
+      );
+    };
     const LayoutRoute = () => (
       <AppLayout
         connectionStatus={() => ({
@@ -91,6 +102,7 @@ describe('AppLayout navigation icons', () => {
         onSwitchOrg={() => {}}
       >
         <div>Infrastructure body</div>
+        <RouteStateProbe />
       </AppLayout>
     );
     return render(() => (
@@ -215,6 +227,28 @@ describe('AppLayout navigation icons', () => {
 
   it('restores the previous Proxmox route state when returning from another platform tab', async () => {
     renderLayout(platformResources(), '/proxmox/overview?status=running');
+
+    await fireEvent.click(getInfrastructureTab('Docker'));
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/docker/overview');
+      expect(window.location.search).toBe('');
+    });
+
+    await fireEvent.click(getInfrastructureTab('Proxmox'));
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/proxmox/overview');
+      expect(window.location.search).toBe('?status=running');
+    });
+  });
+
+  it('restores Proxmox route state changed after the page has loaded', async () => {
+    renderLayout(platformResources(), '/proxmox/overview');
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Set Proxmox running filter' }));
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/proxmox/overview');
+      expect(window.location.search).toBe('?status=running');
+    });
 
     await fireEvent.click(getInfrastructureTab('Docker'));
     await waitFor(() => {

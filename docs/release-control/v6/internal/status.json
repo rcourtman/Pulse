@@ -6597,11 +6597,11 @@
     },
     {
       "id": "rc-to-ga-promotion-readiness",
-      "summary": "Confirm stable or GA promotion is coming from an exercised RC with live release-pipeline proof, rollback instructions, and a written v5 maintenance-only policy.",
+      "summary": "Confirm Pulse v6 GA promotion is coming from the current pulse/v6-release branch after accumulated post-RC7 fixes, final current-branch validation, rollback instructions, and a written v5 maintenance-only policy.",
       "owner": "project-owner",
       "blocking_level": "release-ready",
       "minimum_evidence_tier": "real-external-e2e",
-      "status": "passed",
+      "status": "pending",
       "verification_doc": "docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L1",
@@ -6610,6 +6610,12 @@
         "L12"
       ],
       "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/current-branch-ga-release-policy-2026-07-01.md",
+          "kind": "file",
+          "evidence_tier": "local-rehearsal"
+        },
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-blocked-2026-03-13.md",
@@ -8159,6 +8165,20 @@
       ],
       "lane_ids": [
         "L6"
+      ]
+    },
+    {
+      "id": "current-branch-ga-no-rc8-default",
+      "summary": "The next public v6 release target is GA from current pulse/v6-release after accumulated post-RC7 fixes and final validation. Do not promote RC7 unchanged, and do not plan RC8 by default unless the release owner changes direction.",
+      "kind": "release-policy",
+      "decided_at": "2026-07-01",
+      "subsystem_ids": [],
+      "lane_ids": [
+        "L1",
+        "L2",
+        "L5",
+        "L9",
+        "L12"
       ]
     }
   ]

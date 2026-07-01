@@ -237,17 +237,18 @@ user language should update the control plane.
 
 1. v6 is the current active release profile.
 2. `v6-ga-promotion` is the current active engineering target.
-   The shipped RC line has already reached `release_ready`, so the target is
-   now a human-held GA launch-execution target: RC7 is the final soak candidate
-   unless telemetry or newly reported RC7 issues expose a blocker, and the next
-   public release is GA rather than another default RC.
+   The next public v6 release target is GA from the current
+   `pulse/v6-release` branch after accumulated post-RC7 fixes and final
+   current-branch validation. The published RC7 candidate must not be promoted
+   unchanged, and another RC is not planned by default unless a release-owner
+   decision changes that.
 3. `v6-product-lane-expansion` remains planned behind the GA launch target.
    Its candidate-lane surface remains available in the linked
    `candidate_lanes` and `coverage_gaps`, but it should not displace release
    execution while GA is the current objective.
-4. The GA readiness gates are passed because the shipped RC line reached
-   `release_ready` with exercised prerelease-to-GA promotion proof, rollback
-   clarity, and the written v5 maintenance-only policy in place.
+4. The older RC line reached the historical `release_ready` floor, but the
+   current GA target now requires fresh current-branch validation because the
+   release will include accumulated fixes and changes after RC7.
 5. `v6-rc-stabilization` is completed after the shipped RCs established the
    current monitored-first floor and the active objective moved to stable
    promotion.

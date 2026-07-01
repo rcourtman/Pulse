@@ -55,7 +55,7 @@
       "profile_id": "v6",
       "kind": "release",
       "status": "active",
-      "summary": "Execute Pulse v6 GA from the RC7 soak candidate unless telemetry or newly reported RC7 issues expose a release blocker; readiness gates are already cleared, so remaining work is release-day execution, public cutover approval, and final artifact publication rather than another default RC.",
+      "summary": "Prepare Pulse v6 GA from the current pulse/v6-release branch after accumulated post-RC7 fixes and final current-branch validation. Do not promote the published RC7 candidate unchanged, and do not plan another RC by default; remaining release-day execution and public cutover approval require fresh current-branch proof, while newly reported RC7 issues stay regression signals unless a release-owner decision changes direction.",
       "completion_rule": "manual",
       "proof_scope": "none"
     },
