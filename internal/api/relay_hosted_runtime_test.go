@@ -53,6 +53,90 @@ func TestLoadRelayConfigForRuntime_HostedEntitlementAutoBootstrapsRelay(t *testi
 	}
 }
 
+func TestLoadRelayConfigForRuntime_EnvEnabledRelayGeneratesPersistedIdentity(t *testing.T) {
+	t.Setenv(relay.EnvRelayEnabled, "true")
+	t.Setenv(relay.EnvRelayServerURL, "wss://relay.internal.example/ws/instance")
+
+	persistence := config.NewConfigPersistence(t.TempDir())
+	router := &Router{persistence: persistence}
+
+	cfg, err := router.loadRelayConfigForRuntime(context.Background())
+	if err != nil {
+		t.Fatalf("loadRelayConfigForRuntime() error = %v", err)
+	}
+	if cfg == nil {
+		t.Fatal("loadRelayConfigForRuntime() returned nil config")
+	}
+	if !cfg.Enabled {
+		t.Fatal("expected env-enabled relay config to remain enabled")
+	}
+	if cfg.ServerURL != "wss://relay.internal.example/ws/instance" {
+		t.Fatalf("server_url = %q, want env override", cfg.ServerURL)
+	}
+	if cfg.IdentityPrivateKey == "" || cfg.IdentityPublicKey == "" || cfg.IdentityFingerprint == "" {
+		t.Fatal("expected env-enabled relay config to generate full identity")
+	}
+
+	t.Setenv(relay.EnvRelayEnabled, "")
+	t.Setenv(relay.EnvRelayServerURL, "")
+
+	persisted, err := persistence.LoadRelayConfig()
+	if err != nil {
+		t.Fatalf("LoadRelayConfig() error = %v", err)
+	}
+	if persisted == nil || !persisted.Enabled {
+		t.Fatal("expected generated relay identity config to be persisted enabled")
+	}
+	if persisted.ServerURL != cfg.ServerURL {
+		t.Fatalf("persisted server_url = %q, want %q", persisted.ServerURL, cfg.ServerURL)
+	}
+	if persisted.IdentityPrivateKey == "" || persisted.IdentityPublicKey == "" || persisted.IdentityFingerprint == "" {
+		t.Fatal("expected persisted relay config to include full identity")
+	}
+}
+
+func TestLoadRelayConfigForRuntime_EnabledPartialIdentityRegeneratesFullIdentity(t *testing.T) {
+	persistence := config.NewConfigPersistence(t.TempDir())
+	partial := relay.Config{
+		Enabled:            true,
+		ServerURL:          "wss://relay.example.test/ws/instance",
+		InstanceSecret:     "relay-instance-secret",
+		IdentityPrivateKey: "private-key-without-public-material",
+	}
+	if err := persistence.SaveRelayConfig(partial); err != nil {
+		t.Fatalf("SaveRelayConfig() error = %v", err)
+	}
+
+	router := &Router{persistence: persistence}
+	cfg, err := router.loadRelayConfigForRuntime(context.Background())
+	if err != nil {
+		t.Fatalf("loadRelayConfigForRuntime() error = %v", err)
+	}
+	if cfg == nil {
+		t.Fatal("loadRelayConfigForRuntime() returned nil config")
+	}
+	if !cfg.Enabled {
+		t.Fatal("expected enabled relay config to remain enabled")
+	}
+	if cfg.IdentityPrivateKey == partial.IdentityPrivateKey {
+		t.Fatal("expected partial relay identity to be replaced with a complete keypair")
+	}
+	if cfg.IdentityPrivateKey == "" || cfg.IdentityPublicKey == "" || cfg.IdentityFingerprint == "" {
+		t.Fatal("expected enabled relay config to include full identity")
+	}
+
+	persisted, err := persistence.LoadRelayConfig()
+	if err != nil {
+		t.Fatalf("LoadRelayConfig() error = %v", err)
+	}
+	if persisted == nil || persisted.IdentityPrivateKey != cfg.IdentityPrivateKey {
+		t.Fatal("expected repaired relay identity to be persisted")
+	}
+	if persisted.IdentityPublicKey == "" || persisted.IdentityFingerprint == "" {
+		t.Fatal("expected persisted relay identity to be complete")
+	}
+}
+
 func TestLoadRelayConfigForRuntime_DoesNotOverrideExplicitDisabledRelayConfig(t *testing.T) {
 	router, _, instanceHost := newHostedRelayRuntimeTestRouter(t)
 

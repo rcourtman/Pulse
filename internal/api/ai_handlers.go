@@ -7215,7 +7215,12 @@ func (h *AISettingsHandler) HandleListApprovals(w http.ResponseWriter, r *http.R
 
 	store := approval.GetStore()
 	if store == nil {
-		writeErrorResponse(w, http.StatusServiceUnavailable, "not_initialized", "Approval store not initialized", nil)
+		response := map[string]interface{}{
+			"approvals": []approval.ApprovalRequest{},
+			"stats":     emptyApprovalStats(),
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
 		return
 	}
 
@@ -7227,6 +7232,16 @@ func (h *AISettingsHandler) HandleListApprovals(w http.ResponseWriter, r *http.R
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+}
+
+func emptyApprovalStats() map[string]int {
+	return map[string]int{
+		"pending":    0,
+		"approved":   0,
+		"denied":     0,
+		"expired":    0,
+		"executions": 0,
+	}
 }
 
 // HandleGetApproval returns a specific approval request.

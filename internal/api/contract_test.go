@@ -3655,20 +3655,17 @@ func TestContract_ApprovalJSONSnapshot(t *testing.T) {
 }
 
 func TestContract_ApprovalListResponseJSONSnapshot(t *testing.T) {
-	payload := map[string]any{
-		"approvals": []approval.ApprovalRequest{},
-		"stats": map[string]int{
-			"approved":   0,
-			"denied":     0,
-			"executions": 0,
-			"expired":    0,
-			"pending":    0,
-		},
-	}
+	previousStore := approval.GetStore()
+	approval.SetStore(nil)
+	t.Cleanup(func() { approval.SetStore(previousStore) })
 
-	got, err := json.Marshal(payload)
-	if err != nil {
-		t.Fatalf("marshal approval list response: %v", err)
+	handler := newTestAISettingsHandler(&config.Config{DataPath: t.TempDir()}, nil, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/approvals", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleListApprovals(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("approval list status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
 	}
 
 	const want = `{
@@ -3682,7 +3679,7 @@ func TestContract_ApprovalListResponseJSONSnapshot(t *testing.T) {
 		}
 	}`
 
-	assertJSONSnapshot(t, got, want)
+	assertJSONSnapshot(t, rec.Body.Bytes(), want)
 }
 
 func TestContract_HostedSignupResponseJSONSnapshot(t *testing.T) {

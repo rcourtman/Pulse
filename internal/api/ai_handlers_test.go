@@ -3122,6 +3122,27 @@ func TestAISettingsHandler_Approvals(t *testing.T) {
 		assert.Equal(t, 1, resp.Stats["pending"])
 	})
 
+	t.Run("HandleListApprovalsWithoutStoreReturnsEmptyCollections", func(t *testing.T) {
+		approval.SetStore(nil)
+		t.Cleanup(func() { approval.SetStore(approvalStore) })
+
+		req := newLoopbackRequest(http.MethodGet, "/api/ai/approvals", nil)
+		rec := httptest.NewRecorder()
+		handler.HandleListApprovals(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var resp struct {
+			Approvals []approval.ApprovalRequest `json:"approvals"`
+			Stats     map[string]int             `json:"stats"`
+		}
+		err := json.Unmarshal(rec.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		require.NotNil(t, resp.Approvals)
+		require.Len(t, resp.Approvals, 0)
+		assert.Equal(t, 0, resp.Stats["pending"])
+		assert.Equal(t, 0, resp.Stats["executions"])
+	})
+
 	t.Run("HandleApproveCommand", func(t *testing.T) {
 		req := newLoopbackRequest(http.MethodPost, "/api/ai/approvals/"+appID+"/approve", nil)
 		rec := httptest.NewRecorder()

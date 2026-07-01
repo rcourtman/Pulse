@@ -16,6 +16,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
@@ -1556,6 +1557,45 @@ func TestRelayMobileAccessScopeAllowsGovernedMobileRuntimeEndpoints(t *testing.T
 		if rec.Code == http.StatusForbidden && strings.Contains(rec.Body.String(), "missing_scope") {
 			t.Fatalf("expected relay mobile scope to pass scope gating on %s %s, got %d with body %q", tc.method, tc.path, rec.Code, rec.Body.String())
 		}
+	}
+}
+
+func TestRelayMobileApprovalsListReturnsEmptyBeforeAIChatConfigured(t *testing.T) {
+	rawToken := "relay-mobile-approvals-empty-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeRelayMobileAccess}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+
+	previousStore := approval.GetStore()
+	approval.SetStore(nil)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	t.Cleanup(func() {
+		router.shutdownBackgroundWorkers()
+		approval.SetStore(previousStore)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/approvals", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("approvals list status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var response struct {
+		Approvals []approval.ApprovalRequest `json:"approvals"`
+		Stats     map[string]int             `json:"stats"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode approvals list response: %v", err)
+	}
+	if response.Approvals == nil {
+		t.Fatal("approvals must be an empty array, not null")
+	}
+	if len(response.Approvals) != 0 {
+		t.Fatalf("approvals length = %d, want 0", len(response.Approvals))
+	}
+	if response.Stats["pending"] != 0 || response.Stats["approved"] != 0 || response.Stats["denied"] != 0 || response.Stats["expired"] != 0 || response.Stats["executions"] != 0 {
+		t.Fatalf("expected zero approval stats, got %#v", response.Stats)
 	}
 }
 

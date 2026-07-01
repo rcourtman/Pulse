@@ -752,6 +752,9 @@ func (r *Router) setupRoutes() {
 		}
 		return svc.CostStore()
 	})
+	// Mobile polls approvals as part of its normal paired runtime. Keep the
+	// approval store available even when AI chat is disabled or not configured.
+	r.aiHandler.ensureApprovalStore(r.config.DataPath)
 
 	// AI-powered infrastructure discovery handlers
 	// Note: The actual service is wired up later via SetDiscoveryService
@@ -2577,6 +2580,9 @@ func (r *Router) shutdownBackgroundWorkers() {
 	if r.aiSettingsHandler != nil {
 		r.aiSettingsHandler.StopServices()
 	}
+	if r.aiHandler != nil {
+		r.aiHandler.clearApprovalStore()
+	}
 	if r.trueNASPoller != nil {
 		r.trueNASPoller.Stop()
 	}
@@ -3431,20 +3437,20 @@ func (r *Router) handleUpdateRelayConfig(w http.ResponseWriter, req *http.Reques
 		cfg.InstanceSecret = *update.InstanceSecret
 	}
 
-	// Generate identity keypair on first enable
+	// Generate a full identity keypair on first enable, or repair a partial
+	// identity so the running client can sign mobile key exchanges.
 	identityGenerated := false
-	if cfg.Enabled && cfg.IdentityPrivateKey == "" {
-		privKey, pubKey, fp, err := relay.GenerateIdentityKeyPair()
+	if cfg.Enabled {
+		generated, err := ensureRelayIdentityKeyPair(&cfg)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to generate relay identity keypair")
 			http.Error(w, "failed to generate identity keypair", http.StatusInternalServerError)
 			return
 		}
-		cfg.IdentityPrivateKey = privKey
-		cfg.IdentityPublicKey = pubKey
-		cfg.IdentityFingerprint = fp
-		identityGenerated = true
-		log.Info().Str("fingerprint", fp).Msg("Generated relay instance identity keypair")
+		identityGenerated = generated
+		if identityGenerated {
+			log.Info().Str("fingerprint", cfg.IdentityFingerprint).Msg("Generated relay instance identity keypair")
+		}
 	}
 
 	if err := r.persistence.SaveRelayConfig(cfg); err != nil {

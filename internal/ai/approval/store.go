@@ -380,7 +380,7 @@ func (s *Store) GetPendingApprovals() []*ApprovalRequest {
 	defer s.mu.RUnlock()
 
 	now := time.Now()
-	var pending []*ApprovalRequest
+	pending := make([]*ApprovalRequest, 0)
 
 	for _, req := range s.approvals {
 		if req.Status == StatusPending && now.Before(req.ExpiresAt) {
@@ -398,7 +398,7 @@ func (s *Store) GetPendingApprovalsForOrg(orgID string) []*ApprovalRequest {
 	defer s.mu.RUnlock()
 
 	now := time.Now()
-	var pending []*ApprovalRequest
+	pending := make([]*ApprovalRequest, 0)
 
 	for _, req := range s.approvals {
 		if !BelongsToOrg(req, orgID) {

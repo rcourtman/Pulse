@@ -21,7 +21,12 @@ func (r *Router) loadRelayConfigForRuntime(ctx context.Context) (*relay.Config, 
 		return nil, err
 	}
 
-	return r.ensureHostedRelayConfig(ctx, cfg)
+	cfg, err = r.ensureHostedRelayConfig(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	return r.ensureEnabledRelayIdentityConfig(cfg)
 }
 
 func (r *Router) ensureHostedRelayConfig(ctx context.Context, cfg *relay.Config) (*relay.Config, error) {
@@ -56,16 +61,11 @@ func (r *Router) ensureHostedRelayConfig(ctx context.Context, cfg *relay.Config)
 		effective.InstanceSecret = instanceHost
 		changed = true
 	}
-	if strings.TrimSpace(effective.IdentityPrivateKey) == "" ||
-		strings.TrimSpace(effective.IdentityPublicKey) == "" ||
-		strings.TrimSpace(effective.IdentityFingerprint) == "" {
-		privKey, pubKey, fingerprint, err := relay.GenerateIdentityKeyPair()
-		if err != nil {
-			return nil, fmt.Errorf("generate hosted relay identity: %w", err)
-		}
-		effective.IdentityPrivateKey = privKey
-		effective.IdentityPublicKey = pubKey
-		effective.IdentityFingerprint = fingerprint
+	identityGenerated, err := ensureRelayIdentityKeyPair(&effective)
+	if err != nil {
+		return nil, fmt.Errorf("generate hosted relay identity: %w", err)
+	}
+	if identityGenerated {
 		changed = true
 	}
 
@@ -92,6 +92,52 @@ func (r *Router) shouldAutoBootstrapHostedRelayConfig(cfg *relay.Config) bool {
 		strings.TrimSpace(cfg.IdentityPrivateKey) == "" &&
 		strings.TrimSpace(cfg.IdentityPublicKey) == "" &&
 		strings.TrimSpace(cfg.IdentityFingerprint) == ""
+}
+
+func (r *Router) ensureEnabledRelayIdentityConfig(cfg *relay.Config) (*relay.Config, error) {
+	if cfg == nil {
+		cfg = relay.DefaultConfig()
+	}
+	if !cfg.Enabled {
+		return cfg, nil
+	}
+
+	effective := *cfg
+	identityGenerated, err := ensureRelayIdentityKeyPair(&effective)
+	if err != nil {
+		return nil, fmt.Errorf("generate relay identity: %w", err)
+	}
+	if !identityGenerated {
+		return cfg, nil
+	}
+
+	if r != nil && r.persistence != nil {
+		if err := r.persistence.SaveRelayConfig(effective); err != nil {
+			return nil, fmt.Errorf("save relay identity config: %w", err)
+		}
+	}
+
+	return &effective, nil
+}
+
+func ensureRelayIdentityKeyPair(cfg *relay.Config) (bool, error) {
+	if cfg == nil {
+		return false, nil
+	}
+	if strings.TrimSpace(cfg.IdentityPrivateKey) != "" &&
+		strings.TrimSpace(cfg.IdentityPublicKey) != "" &&
+		strings.TrimSpace(cfg.IdentityFingerprint) != "" {
+		return false, nil
+	}
+
+	privKey, pubKey, fingerprint, err := relay.GenerateIdentityKeyPair()
+	if err != nil {
+		return false, err
+	}
+	cfg.IdentityPrivateKey = privKey
+	cfg.IdentityPublicKey = pubKey
+	cfg.IdentityFingerprint = fingerprint
+	return true, nil
 }
 
 func (r *Router) relayRegistrationToken(ctx context.Context) string {
