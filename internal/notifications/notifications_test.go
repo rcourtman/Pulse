@@ -2687,6 +2687,48 @@ func TestGeneratePayloadFromTemplateWithService(t *testing.T) {
 		}
 	})
 
+	t.Run("teams adaptive resolved template escapes resource name", func(t *testing.T) {
+		nm := &NotificationManager{}
+		var teamsAdaptive *WebhookTemplate
+		for _, tmpl := range GetWebhookTemplates() {
+			if tmpl.Service == "teams-adaptive" {
+				teamsAdaptive = &tmpl
+				break
+			}
+		}
+		if teamsAdaptive == nil {
+			t.Fatal("teams-adaptive template not found")
+		}
+
+		data := WebhookPayloadData{
+			ID:           "alert-1",
+			Type:         "cpu",
+			ResourceName: "db \"primary\" \\\\ prod",
+			Node:         "node-1",
+			Message:      "Recovered after \"burst\"",
+			Duration:     "5m",
+			ResolvedAt:   "2026-07-01T08:30:00Z",
+		}
+
+		result, err := nm.generatePayloadFromTemplateWithService(teamsAdaptive.ResolvedPayloadTemplate, data, "teams-adaptive")
+		if err != nil {
+			t.Fatalf("expected valid JSON for escaped teams-adaptive resolved template, got %v", err)
+		}
+
+		var parsed map[string]interface{}
+		if err := json.Unmarshal(result, &parsed); err != nil {
+			t.Fatalf("result is not valid JSON: %v", err)
+		}
+		attachments := parsed["attachments"].([]interface{})
+		content := attachments[0].(map[string]interface{})["content"].(map[string]interface{})
+		body := content["body"].([]interface{})
+		title := body[0].(map[string]interface{})["text"]
+		wantTitle := "Resolved: " + data.ResourceName
+		if title != wantTitle {
+			t.Fatalf("expected title %q, got %v", wantTitle, title)
+		}
+	})
+
 	t.Run("telegram service validates JSON", func(t *testing.T) {
 		nm := &NotificationManager{}
 		data := WebhookPayloadData{

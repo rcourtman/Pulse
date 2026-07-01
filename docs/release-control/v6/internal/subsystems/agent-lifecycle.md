@@ -1078,6 +1078,11 @@ surface and no new `internal/api/` lifecycle handler.
 10. Preserve canonical token-lifecycle reads in shared `internal/api/` auth/security helpers so lifecycle-adjacent setup and install flows do not revoke a displayed relay pairing token after `lastUsedAt` proves that an already paired device is actively depending on that credential.
 11. Preserve backend-owned Pulse Mobile relay runtime credential minting in those same shared `internal/api/` auth/security helpers so lifecycle-adjacent setup and install flows reuse the canonical mobile token route instead of reintroducing wildcard or browser-authored runtime token bundles.
 12. Preserve the dedicated backend-owned `relay:mobile:access` capability and its governed backward-compatible route inventory plus the shared helper call sites around it, so lifecycle-adjacent setup and install flows do not widen the mobile device credential back into general AI chat/execute scope ownership.
+    Shared proxy-auth admin evaluation in `internal/api/auth.go` remains an
+    API/security trust boundary, not an agent lifecycle enrollment shortcut:
+    lifecycle-adjacent setup and install surfaces may rely on the authenticated
+    user identity passed through that helper, but they must not treat a missing
+    configured role header as administrator proof.
 13. Preserve shipped security-doc guidance in shared lifecycle setup helpers so `internal/api/config_setup_handlers.go` and adjacent install/setup runtime paths point operators at the running build's local security documentation route rather than GitHub `main` links.
 14. Keep shared `internal/api/router.go` workload-chart downsampling presentation-only: when that router caps mixed-cadence workload history into equal-time buckets for operator-facing cards, lifecycle-adjacent setup and fleet surfaces must not reuse the shaped chart samples as heartbeat, enrollment, or last-seen authority.
     That same presentation-only boundary must preserve canonical millisecond timestamps when it serializes chart points, so lifecycle-adjacent first-host and fleet surfaces do not misread rounded chart samples as duplicate or restarted heartbeat evidence.

@@ -1854,6 +1854,34 @@ func TestRequireAdmin_ProxyAuthNoRoleHeaderDefaultsToAdmin(t *testing.T) {
 	}
 }
 
+func TestRequireAdmin_ProxyAuthConfiguredRoleHeaderMissingForbidden(t *testing.T) {
+	cfg := &config.Config{
+		ProxyAuthSecret:     "secret123",
+		ProxyAuthUserHeader: "X-Remote-User",
+		ProxyAuthRoleHeader: "X-Remote-Roles",
+		ProxyAuthAdminRole:  "admin",
+	}
+
+	handlerCalled := false
+	handler := RequireAdmin(cfg, func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/admin/test", nil)
+	req.Header.Set("X-Proxy-Secret", "secret123")
+	req.Header.Set("X-Remote-User", "regular-user")
+	handler(w, req)
+
+	if handlerCalled {
+		t.Error("RequireAdmin should not call handler when configured role header is missing")
+	}
+	if w.Code != http.StatusForbidden {
+		t.Errorf("RequireAdmin returned status %d, want %d", w.Code, http.StatusForbidden)
+	}
+}
+
 func TestRequireAdmin_NonAdminSessionForbidden(t *testing.T) {
 	InitSessionStore(t.TempDir())
 

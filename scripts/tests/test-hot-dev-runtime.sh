@@ -314,6 +314,15 @@ test_hot_dev_browser_urls_distinguish_bind_and_browser_hosts() {
   assert_contains "loopback binds do not advertise a LAN browser URL" "${output}" "loopback_lan="
 }
 
+test_go_module_security_dependency_floors() {
+  local output
+  output="$(cd "${ROOT_DIR}" && go list -m golang.org/x/net golang.org/x/crypto golang.org/x/sys)"
+
+  assert_contains "Go module floor keeps x/net past restricted-outbound advisories" "${output}" "golang.org/x/net v0.56.0"
+  assert_contains "Go module floor keeps x/crypto aligned with x/net security floor" "${output}" "golang.org/x/crypto v0.53.0"
+  assert_contains "Go module floor keeps x/sys aligned with security module graph" "${output}" "golang.org/x/sys v0.46.0"
+}
+
 source "${HOT_DEV_RUNTIME_LIB}"
 test_pulse_process_count_handles_zero_matches_under_pipefail
 test_pulse_process_count_counts_matching_processes
@@ -325,6 +334,7 @@ test_hot_dev_network_defaults_are_local_first_with_explicit_lan_opt_in
 test_hot_dev_lab_agent_mode_enables_lan_and_guest_docker_inventory_defaults
 test_hot_dev_remembers_explicit_lab_agent_mode_for_later_managed_starts
 test_hot_dev_browser_urls_distinguish_bind_and_browser_hosts
+test_go_module_security_dependency_floors
 
 if (( failures > 0 )); then
   echo "FAIL: ${failures} hot-dev runtime assertions failed" >&2

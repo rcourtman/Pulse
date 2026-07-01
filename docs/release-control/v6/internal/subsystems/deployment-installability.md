@@ -1386,6 +1386,11 @@ are part of the same governed bootstrap input even when the package manifest
 range already permits the newer version; the lockfile must identify the
 resolved package version and integrity that the release build will actually
 consume.
+Security-driven Go module graph bumps follow the same rule: `go.mod` and
+`go.sum` must move together when a reachable vulnerability is remediated, and
+the slice must carry direct vulnerability or dependency-floor proof so the
+release and local dev runtimes consume the intended module graph rather than a
+stale transitive floor.
 When the managed launcher reports runtime status, it must tell operators which
 browser URL to use and whether the frontend shell, proxied API path, and
 direct backend health endpoint all agree, instead of leaving `5173` versus

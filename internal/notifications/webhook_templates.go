@@ -369,7 +369,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 						"body": [
 							{
 								"type": "TextBlock",
-								"text": "Resolved: {{.ResourceName}}",
+								"text": "Resolved: {{.ResourceName | jsonString}}",
 								"weight": "Bolder",
 								"size": "Large",
 								"color": "Good"

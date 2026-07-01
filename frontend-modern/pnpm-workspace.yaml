@@ -1,0 +1,14 @@
+packages:
+  - .
+
+allowBuilds:
+  esbuild: true
+
+overrides:
+  esbuild: 0.28.1
+  form-data: ^4.0.6
+  seroval: ^1.4.1
+  seroval-plugins: ^1.4.1
+
+onlyBuiltDependencies:
+  - esbuild

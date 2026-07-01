@@ -563,9 +563,32 @@ func TestCheckProxyAuth_RoleCheckingEmptyRolesHeader(t *testing.T) {
 	if username != "testuser" {
 		t.Errorf("username should be 'testuser', got %q", username)
 	}
-	// When role header is empty, isAdmin stays true (default)
-	if !isAdmin {
-		t.Error("isAdmin should be true when roles header is empty")
+	if isAdmin {
+		t.Error("isAdmin should be false when configured roles header is missing")
+	}
+}
+
+func TestCheckProxyAuth_RoleCheckingBlankRolesHeader(t *testing.T) {
+	cfg := &config.Config{
+		ProxyAuthSecret:     "correct-secret",
+		ProxyAuthUserHeader: "X-Remote-User",
+		ProxyAuthRoleHeader: "X-Remote-Roles",
+		ProxyAuthAdminRole:  "admin",
+	}
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("X-Proxy-Secret", "correct-secret")
+	req.Header.Set("X-Remote-User", "testuser")
+	req.Header.Set("X-Remote-Roles", "   ")
+
+	valid, username, isAdmin := CheckProxyAuth(cfg, req)
+	if !valid {
+		t.Error("CheckProxyAuth should return true for valid auth")
+	}
+	if username != "testuser" {
+		t.Errorf("username should be 'testuser', got %q", username)
+	}
+	if isAdmin {
+		t.Error("isAdmin should be false when configured roles header is blank")
 	}
 }
 

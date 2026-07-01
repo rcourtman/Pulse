@@ -4,9 +4,20 @@ Pulse exposes metrics at `/metrics` (default port `9091`).
 
 Example scrape target:
 
-- `http://<pulse-host>:9091/metrics`
+- `http://127.0.0.1:9091/metrics`
 
-This listener is separate from the main UI/API port (`7655`). In Docker and Kubernetes you must expose `9091` explicitly if you want to scrape it from outside the container/pod.
+This listener is separate from the main UI/API port (`7655`) and binds to loopback by default. Use `PULSE_METRICS_BIND_ADDRESS` only when a scraper must reach Pulse from another host.
+
+When `PULSE_METRICS_TOKEN` is set, Pulse refuses to serve that bearer token on a non-loopback plaintext listener unless `PULSE_METRICS_ALLOW_INSECURE_REMOTE=true` is explicitly set. Prefer a local Prometheus agent, SSH tunnel, VPN-private scrape path, or TLS/mTLS reverse proxy for remote scraping.
+
+| Variable | Description | Default |
+| :--- | :--- | :--- |
+| `PULSE_METRICS_PORT` | Metrics listener port. | `9091` |
+| `PULSE_METRICS_BIND_ADDRESS` | Metrics listener bind address. Keep loopback unless a protected remote scraper needs direct access. | `127.0.0.1` |
+| `PULSE_METRICS_TOKEN` | Optional bearer token required for `/metrics`. | *(empty)* |
+| `PULSE_METRICS_ALLOW_INSECURE_REMOTE` | Explicit opt-in to serve `PULSE_METRICS_TOKEN` on a non-loopback plaintext listener. Use only behind a trusted private network or TLS-terminating proxy. | `false` |
+
+In Docker and Kubernetes you must expose `9091` explicitly if you want to scrape it from outside the container/pod, and the container/pod should set `PULSE_METRICS_BIND_ADDRESS` to the intended listener address.
 
 **Helm note:** the current chart exposes only port `7655`, so Prometheus scraping requires an additional Service that targets `9091` (and a matching ServiceMonitor).
 

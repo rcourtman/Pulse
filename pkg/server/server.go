@@ -266,9 +266,12 @@ func Run(ctx context.Context, version string) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	// Metrics port is configurable via MetricsPort variable
-	metricsAddr := fmt.Sprintf("%s:%d", cfg.BindAddress, MetricsPort)
-	startMetricsServer(ctx, metricsAddr, cfg.MetricsToken)
+	// Metrics uses a dedicated bind address so bearer-token scrape credentials
+	// do not inherit the public UI/API listener exposure by default.
+	metricsAddr := metricsListenAddress(cfg, MetricsPort)
+	if err := startMetricsServer(ctx, metricsAddr, cfg.MetricsToken, cfg.MetricsAllowInsecureRemote); err != nil {
+		log.Error().Err(err).Str("addr", metricsAddr).Msg("Metrics server disabled")
+	}
 
 	// Initialize WebSocket hub first
 	wsHub := websocket.NewHub(nil)
@@ -859,7 +862,11 @@ func agentIngestHandler(inner http.Handler) http.Handler {
 
 // startMetricsServer starts the Prometheus /metrics endpoint. When metricsToken
 // is non-empty, requests must include a matching Authorization: Bearer <token> header.
-func startMetricsServer(ctx context.Context, addr string, metricsToken string) {
+func startMetricsServer(ctx context.Context, addr string, metricsToken string, allowInsecureRemote bool) error {
+	if metricsToken != "" && !allowInsecureRemote && !metricsAddressIsLoopback(addr) {
+		return fmt.Errorf("metrics bearer token over remote plaintext HTTP is disabled; bind metrics to loopback or set PULSE_METRICS_ALLOW_INSECURE_REMOTE=true")
+	}
+
 	handler := promhttp.Handler()
 	if metricsToken != "" {
 		inner := handler
@@ -901,6 +908,8 @@ func startMetricsServer(ctx context.Context, addr string, metricsToken string) {
 		defer cancel()
 		_ = srv.Shutdown(shutdownCtx)
 	}()
+
+	return nil
 }
 
 func ShouldAutoImport() bool {

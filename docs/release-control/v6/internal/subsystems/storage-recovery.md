@@ -682,6 +682,11 @@ recovery scope, or a storage/recovery-owned secret source.
    stable hosted owner principal is server-side org metadata resolved later
    through magic-link verification.
 7. Preserve fail-closed API assignment and lookup behavior in shared `internal/api/` helpers so storage and recovery surfaces do not inherit orphaned profile or resource references from unrelated transport mutations.
+   Preserve fail-closed proxy-auth administrator evaluation in those same
+   shared helpers as an adjacent security/API boundary: storage and recovery
+   surfaces may consume an already-authorized admin request, but they must not
+   infer storage, restore, or protected-system authority from a proxy-auth user
+   whose configured role header is missing or blank.
 8. Preserve canonical configured public endpoint selection in shared `internal/api/` helpers so recovery and storage links do not inherit loopback-local scheme drift from admin-originated setup/install flows.
 9. Preserve trailing-slash normalization in those shared install-command helpers so recovery-adjacent transport and link surfaces do not inherit double-slash installer paths or slash-suffixed public endpoint drift from canonical backend install payloads.
 10. Preserve canonical /api/auto-register token-action truth in shared `internal/api/` helpers so adjacent setup and recovery-adjacent transport flows stay on caller-supplied credential completion instead of reviving deleted alternate completion modes.

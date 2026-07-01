@@ -526,29 +526,34 @@ func CheckProxyAuth(cfg *config.Config, r *http.Request) (bool, string, bool) {
 		}
 	}
 
-	// Check admin role if configured
+	// Check admin role if configured. Once a role header and admin role are
+	// configured, admin access must be proven by an explicit role value.
 	isAdmin := true // Default to admin if no role checking configured
 	if cfg.ProxyAuthRoleHeader != "" && cfg.ProxyAuthAdminRole != "" {
 		roles := r.Header.Get(cfg.ProxyAuthRoleHeader)
-		if roles != "" {
+		isAdmin = false
+		if strings.TrimSpace(roles) == "" {
+			log.Debug().
+				Str("header", cfg.ProxyAuthRoleHeader).
+				Msg("Proxy auth role header missing or empty")
+		} else {
 			// Split roles by separator
 			separator := cfg.ProxyAuthRoleSeparator
 			if separator == "" {
 				separator = "|"
 			}
 			roleList := strings.Split(roles, separator)
-			isAdmin = false
 			for _, role := range roleList {
 				if strings.TrimSpace(role) == cfg.ProxyAuthAdminRole {
 					isAdmin = true
 					break
 				}
 			}
-			log.Debug().
-				Str("roles", roles).
-				Bool("is_admin", isAdmin).
-				Msg("Proxy auth roles checked")
 		}
+		log.Debug().
+			Str("roles", roles).
+			Bool("is_admin", isAdmin).
+			Msg("Proxy auth roles checked")
 	}
 
 	log.Debug().

@@ -209,6 +209,8 @@ type Config struct {
 	TelemetryEnabled                  bool             `envconfig:"PULSE_TELEMETRY" default:"true"`                                       // Anonymous outbound usage telemetry enabled by default (install ID, version, resource counts, feature flags — opt out any time)
 	MultiTenantEnabled                bool             `envconfig:"PULSE_MULTI_TENANT_ENABLED" default:"false"`                           // Enable multi-tenant support
 	MetricsToken                      string           `envconfig:"PULSE_METRICS_TOKEN" default:"" json:"-"`                              // Bearer token for /metrics endpoint (empty = unauthenticated)
+	MetricsBindAddress                string           `envconfig:"PULSE_METRICS_BIND_ADDRESS" default:"127.0.0.1" json:"-"`              // Bind address for /metrics endpoint
+	MetricsAllowInsecureRemote        bool             `envconfig:"PULSE_METRICS_ALLOW_INSECURE_REMOTE" default:"false" json:"-"`         // Explicit opt-in for bearer-token metrics over remote plaintext HTTP
 	ProTrialSignupURL                 string           `envconfig:"PULSE_PRO_TRIAL_SIGNUP_URL" default:""`                                // Legacy hosted commercial base URL used for entitlement refresh compatibility
 
 	// Proxy authentication settings
@@ -802,6 +804,7 @@ func load(initLogging bool) (*Config, error) {
 		ProTrialSignupURL:               pkglicensing.DefaultProTrialSignupURL,
 		EnvOverrides:                    make(map[string]bool),
 		AgentConnectURL:                 "",
+		MetricsBindAddress:              "127.0.0.1",
 		// Metrics retention defaults (tiered)
 		MetricsRetentionRawHours:    2,  // 2 hours of raw ~5s data
 		MetricsRetentionMinuteHours: 24, // 24 hours of minute averages
@@ -1429,6 +1432,20 @@ func load(initLogging bool) (*Config, error) {
 		cfg.MetricsToken = metricsToken
 		cfg.EnvOverrides["PULSE_METRICS_TOKEN"] = true
 		log.Debug().Msg("Metrics token configured from env var")
+	}
+	if metricsBindAddress := utils.GetenvTrim("PULSE_METRICS_BIND_ADDRESS"); metricsBindAddress != "" {
+		cfg.MetricsBindAddress = metricsBindAddress
+		cfg.EnvOverrides["PULSE_METRICS_BIND_ADDRESS"] = true
+		log.Info().Str("bind_address", metricsBindAddress).Msg("Metrics bind address overridden by environment")
+	}
+	if allowInsecureRemote := utils.GetenvTrim("PULSE_METRICS_ALLOW_INSECURE_REMOTE"); allowInsecureRemote != "" {
+		if enabled, err := strconv.ParseBool(allowInsecureRemote); err == nil {
+			cfg.MetricsAllowInsecureRemote = enabled
+			cfg.EnvOverrides["PULSE_METRICS_ALLOW_INSECURE_REMOTE"] = true
+			log.Warn().Bool("enabled", enabled).Msg("Metrics insecure remote scrape override configured")
+		} else {
+			log.Warn().Str("value", allowInsecureRemote).Msg("Invalid PULSE_METRICS_ALLOW_INSECURE_REMOTE value, ignoring")
+		}
 	}
 	if metricsDBPath := utils.GetenvTrim("PULSE_METRICS_DB_PATH"); metricsDBPath != "" {
 		cfg.MetricsDBPath = metricsDBPath

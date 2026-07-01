@@ -372,6 +372,19 @@ Persistent metrics history uses tiered retention windows. These values are store
 
 See [METRICS_HISTORY.md](METRICS_HISTORY.md) for details.
 
+### Prometheus Metrics Endpoint
+
+The `/metrics` listener is separate from the main UI/API listener and binds to loopback by default.
+
+| Variable | Description | Default |
+| ---------- | ------------- | --------- |
+| `PULSE_METRICS_PORT` | Metrics listener port | `9091` |
+| `PULSE_METRICS_BIND_ADDRESS` | Metrics listener bind address | `127.0.0.1` |
+| `PULSE_METRICS_TOKEN` | Optional bearer token for `/metrics` | *(empty)* |
+| `PULSE_METRICS_ALLOW_INSECURE_REMOTE` | Explicit opt-in to serve a metrics bearer token over non-loopback plaintext HTTP | `false` |
+
+For remote scraping with `PULSE_METRICS_TOKEN`, prefer a local scraper, tunnel, VPN-private path, or TLS/mTLS reverse proxy. Pulse refuses non-loopback plaintext token scraping unless `PULSE_METRICS_ALLOW_INSECURE_REMOTE=true` is set.
+
 ---
 
 ## 🔔 Alerts (`alerts.json`)

@@ -19589,3 +19589,35 @@ func TestContract_OrgBoundTokenIsScopedAwayFromDefaultOrg(t *testing.T) {
 		t.Fatal("authenticated users must retain default-org access")
 	}
 }
+
+// TestContract_ProxyAuthConfiguredRoleHeaderMissingIsNonAdmin pins the
+// proxy-auth admin boundary: once an admin role header is configured, admin
+// authorization must be proven by that header rather than inherited from
+// successful proxy authentication alone.
+func TestContract_ProxyAuthConfiguredRoleHeaderMissingIsNonAdmin(t *testing.T) {
+	cfg := &config.Config{
+		ProxyAuthSecret:     "secret123",
+		ProxyAuthUserHeader: "X-Remote-User",
+		ProxyAuthRoleHeader: "X-Remote-Roles",
+		ProxyAuthAdminRole:  "admin",
+	}
+
+	handlerCalled := false
+	handler := RequireAdmin(cfg, func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/test", nil)
+	req.Header.Set("X-Proxy-Secret", "secret123")
+	req.Header.Set("X-Remote-User", "regular-user")
+	rec := httptest.NewRecorder()
+	handler(rec, req)
+
+	if handlerCalled {
+		t.Fatal("admin handler was called without the configured role header")
+	}
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}

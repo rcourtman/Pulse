@@ -92,6 +92,10 @@ injecting raw alert fields directly into JSON bodies. Custom user templates
 may still choose their own formatting, but the shipped provider templates may
 not rely on callers to pre-sanitize alert text or resource names just to keep
 their JSON payloads valid.
+Teams Adaptive Card templates are part of that same built-in provider boundary:
+resolved alert titles and resource-name text must pass through the JSON string
+helper before entering Adaptive `TextBlock.text`, so a resource name containing
+quotes or backslashes cannot invalidate the webhook payload.
 Email single-alert, grouped, resolved, and HTML send paths must follow that
 same ownership rule: they may expose different calling surfaces, but they must
 all route through one canonical enhanced email executor instead of rebuilding

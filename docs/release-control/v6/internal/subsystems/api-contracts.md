@@ -143,6 +143,14 @@ registration, or the dedicated Pulse Mobile credential is incomplete, while
 `frontend-modern/src/api/onboarding.ts` and relay settings consumers may only
 surface those diagnostics and must not synthesize partial pairing payloads.
 
+Proxy-auth administrator evaluation is a shared auth/API contract. Once
+`PROXY_AUTH_ROLE_HEADER` and `PROXY_AUTH_ADMIN_ROLE` are configured,
+`internal/api/auth.go` must treat a valid proxy-auth user with a missing or
+blank role header as authenticated but non-admin, and only an explicit
+configured admin role may pass admin gates. Installations that intentionally
+make every proxy-authenticated user an admin must do that by leaving the role
+header unset and protecting Pulse at the proxy/IdP layer.
+
 Assistant chat `workflow_state` events are a shared AI/API payload boundary.
 The backend source of truth is `internal/ai/chat.WorkflowStateData`, generated
 to `frontend-modern/src/api/generated/aiChatEvents.ts` by

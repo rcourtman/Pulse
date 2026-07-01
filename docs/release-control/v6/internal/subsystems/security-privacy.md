@@ -881,6 +881,13 @@ direct-loopback browser recovery session, and must not reopen authentication
 through a shared `.auth_recovery` flag that affects every localhost client.
 Secret-bearing comparisons on adjacent auth paths such as metrics bearer
 validation and local-auth username matching must stay constant-time.
+Metrics bearer-token transport is also part of this trust boundary:
+`internal/config/config.go` owns `PULSE_METRICS_BIND_ADDRESS`, which defaults
+the metrics listener to loopback, and the explicit
+`PULSE_METRICS_ALLOW_INSECURE_REMOTE` escape hatch. Runtime metrics serving
+must reject a configured bearer token on non-loopback plaintext HTTP unless
+that override is set, so a UI/API bind address cannot silently widen scrape
+credentials to a remote network.
 That same persistence rule also governs API token metadata: even though
 `api_tokens.json` stores hashed records rather than raw token secrets, a
 legacy plaintext metadata file may only serve as migration input. Canonical

@@ -162,6 +162,25 @@ func TestLoad_MetricsStorageEnvOverrides(t *testing.T) {
 	assert.True(t, cfg.EnvOverrides["PULSE_METRICS_ROLLUP_INTERVAL"])
 }
 
+func TestLoad_MetricsBindSecurityDefaultsAndOverrides(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	assert.Equal(t, "127.0.0.1", cfg.MetricsBindAddress)
+	assert.False(t, cfg.MetricsAllowInsecureRemote)
+
+	t.Setenv("PULSE_METRICS_BIND_ADDRESS", "0.0.0.0")
+	t.Setenv("PULSE_METRICS_ALLOW_INSECURE_REMOTE", "true")
+
+	cfg, err = Load()
+	require.NoError(t, err)
+	assert.Equal(t, "0.0.0.0", cfg.MetricsBindAddress)
+	assert.True(t, cfg.MetricsAllowInsecureRemote)
+	assert.True(t, cfg.EnvOverrides["PULSE_METRICS_BIND_ADDRESS"])
+	assert.True(t, cfg.EnvOverrides["PULSE_METRICS_ALLOW_INSECURE_REMOTE"])
+}
+
 func TestLoad_InvalidMetricsRollupIntervalIgnored(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 	t.Setenv("PULSE_METRICS_ROLLUP_INTERVAL", "2m")
