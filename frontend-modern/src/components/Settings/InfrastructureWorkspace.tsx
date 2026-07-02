@@ -58,6 +58,7 @@ import {
   filterRepresentedDiscoveredServers,
   type DiscoveredServer,
 } from './infrastructureSettingsModel';
+import type { NodeImportPlanCandidate } from './infrastructureImportPlanModel';
 
 export type InfrastructureWorkspaceProps = InfrastructurePlatformSettingsProps;
 
@@ -312,13 +313,36 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     if (selected && activeType && activeType !== selected.type) {
       setSelectedDiscoveredSource(null);
     }
+
+    const probed = selectedProbeCandidate();
+    if (probed && activeType && activeType !== probed.type) {
+      setSelectedProbeCandidate(null);
+    }
   });
+
+  const importCandidateForNodeType = (
+    type: 'pve' | 'pbs' | 'pmg',
+    candidate?: ProbeCandidate | null,
+  ): NodeImportPlanCandidate | null => {
+    const discovered = selectedDiscoveredSource();
+    if (discovered && discovered.type === type) {
+      return { kind: 'discovery', server: discovered };
+    }
+
+    const probed = candidate ?? selectedProbeCandidate();
+    if (probed && probed.type === type) {
+      return { kind: 'probe', candidate: probed };
+    }
+
+    return null;
+  };
 
   const renderNodeSlot = (
     type: 'pve' | 'pbs' | 'pmg',
     editingNode?: NodeConfigWithStatus | null,
     editingRow?: Connection | null,
     prefillNode?: Partial<NodeConfig>,
+    importCandidate?: NodeImportPlanCandidate | null,
   ) => {
     const connectionId = editingRow?.id ?? null;
     return (
@@ -327,6 +351,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
         settings={props}
         editingNode={editingNode ?? null}
         prefillNode={prefillNode}
+        importCandidate={importCandidate ?? null}
         onCancel={editingRow ? closeEditFlow : closeAddFlow}
         onSaved={editingRow ? handleEditSaved : handleAddSaved}
         onToggleEnabled={
@@ -621,6 +646,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
   const renderConnectionSlot = (context: {
     mode: 'add' | 'edit';
     type: ConnectionType;
+    candidate?: ProbeCandidate | null;
     onCancel: () => void;
     onSaved: () => void;
   }) => {
@@ -756,7 +782,13 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
       case 'pve':
       case 'pbs':
       case 'pmg':
-        return renderNodeSlot(context.type, undefined, undefined, discoveredPrefill());
+        return renderNodeSlot(
+          context.type,
+          undefined,
+          undefined,
+          discoveredPrefill(),
+          importCandidateForNodeType(context.type, context.candidate),
+        );
       case 'truenas':
         return (
           <TrueNASCredentialSlot
@@ -951,8 +983,8 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                     onSelectCandidate={openAddFlowFromProbe}
                     onClose={closeAddFlow}
                     onSaved={handleAddSaved}
-                    renderCredentialSlot={({ type, onCancel, onSaved }) =>
-                      renderConnectionSlot({ mode: 'add', type, onCancel, onSaved })
+                    renderCredentialSlot={({ type, candidate, onCancel, onSaved }) =>
+                      renderConnectionSlot({ mode: 'add', type, candidate, onCancel, onSaved })
                     }
                   />
                 </Match>
@@ -966,8 +998,8 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                     onBackToCatalog={() => openAddFlow('pick')}
                     onClose={closeAddFlow}
                     onSaved={handleAddSaved}
-                    renderCredentialSlot={({ type, onCancel, onSaved }) =>
-                      renderConnectionSlot({ mode: 'add', type, onCancel, onSaved })
+                    renderCredentialSlot={({ type, candidate, onCancel, onSaved }) =>
+                      renderConnectionSlot({ mode: 'add', type, candidate, onCancel, onSaved })
                     }
                   />
                 </Match>

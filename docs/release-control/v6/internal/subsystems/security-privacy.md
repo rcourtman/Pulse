@@ -234,6 +234,12 @@ existing resource-policy redaction still governs any model-bound context.
    Pulse Mobile token scopes, bypass the server-minted credential requirement,
    or expose relay secrets beyond the existing public onboarding diagnostics.
 4. Change security/auth/token transport behavior through the shared `frontend-modern/src/api/security.ts`, `frontend-modern/src/components/Settings/APITokenManager.tsx`, `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`, `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`, `internal/api/security.go`, `internal/api/security_tokens.go`, and `internal/api/system_settings.go` boundary.
+   Local username/password verification in `internal/api/auth.go` and
+   `internal/api/router.go` must snapshot `AuthUser` and `AuthPass` under
+   `config.Mu.RLock()` before comparison. Security/privacy may consume that
+   shared auth result, but it must not read mutable credential fields outside
+   the shared config lock or hold the lock across password hashing, session
+   mutation, SSO provider checks, or response writing.
    Release metadata surfaced through `/api/version` remains outside token,
    auth, and privacy state. Adding or changing `agentUpdateTargetVersion`
    must stay limited to non-secret deployable release identity and must not

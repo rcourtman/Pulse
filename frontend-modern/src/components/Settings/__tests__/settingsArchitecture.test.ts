@@ -52,10 +52,12 @@ import infrastructureWorkspaceModelSource from '../infrastructureWorkspaceModel.
 import useConnectionsLedgerSource from '../useConnectionsLedger.ts?raw';
 import agentProfileSettingsSource from '../agentProfileSettings.ts?raw';
 import monitoredSystemImpactPreviewSource from '../MonitoredSystemImpactPreview.tsx?raw';
+import infrastructureImportPlanModelSource from '../infrastructureImportPlanModel.ts?raw';
 import connectionEditorSource from '../ConnectionEditor/ConnectionEditor.tsx?raw';
 import addressProbeStepSource from '../ConnectionEditor/AddressProbeStep.tsx?raw';
 import connectionEditorStateSource from '../ConnectionEditor/useConnectionEditor.ts?raw';
 import nodeCredentialSlotSource from '../ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx?raw';
+import nodeCandidateImportPlanSource from '../ConnectionEditor/CredentialSlots/NodeCandidateImportPlan.tsx?raw';
 import networkBoundarySettingsSectionSource from '../NetworkBoundarySettingsSection.tsx?raw';
 import nodeModalBasicInfoSectionSource from '../NodeModalBasicInfoSection.tsx?raw';
 import nodeModalAuthenticationSectionSource from '../NodeModalAuthenticationSection.tsx?raw';
@@ -1075,6 +1077,13 @@ describe('settings architecture guardrails', () => {
     );
     expect(infrastructureWorkspaceSource).toContain('reviewDiscoveredSource');
     expect(infrastructureWorkspaceSource).toContain('selectedDiscoveredSource');
+    expect(infrastructureWorkspaceSource).toContain('selectedProbeCandidate');
+    expect(infrastructureWorkspaceSource).toContain('importCandidateForNodeType');
+    expect(infrastructureWorkspaceSource).toContain('importCandidate={importCandidate ?? null}');
+    expect(infrastructureWorkspaceSource).toContain(
+      "return { kind: 'discovery', server: discovered };",
+    );
+    expect(infrastructureWorkspaceSource).toContain("return { kind: 'probe', candidate: probed };");
     expect(infrastructureWorkspaceSource).toContain(
       "import { InfrastructureDiscoverySettingsDialog } from './InfrastructureDiscoverySettingsDialog';",
     );
@@ -1123,6 +1132,10 @@ describe('settings architecture guardrails', () => {
       'reuses your current monitored-system allowance',
     );
     expect(monitoredSystemImpactPreviewSource).not.toContain('frees monitored-system allowance');
+    expect(nodeCandidateImportPlanSource).toContain('aria-label="Candidate import plan"');
+    expect(nodeCandidateImportPlanSource).toContain('MonitoredSystemImpactPreview');
+    expect(nodeCandidateImportPlanSource).toContain('Preview impact');
+    expect(nodeCandidateImportPlanSource).toContain('Approve this import plan');
     // Card-level description was dropped; the page-level subtitle from
     // SETTINGS_HEADER_META carries the same intent without duplication.
     expect(infrastructureSourceManagerSource).toContain('onReviewDiscoveredSource');
@@ -1257,6 +1270,15 @@ describe('settings architecture guardrails', () => {
     expect(nodeCredentialSlotSource).toContain('<NodeModalMonitoringSection');
     expect(nodeCredentialSlotSource).toContain('<NodeModalStatusFooter');
     expect(nodeCredentialSlotSource).not.toContain('<Dialog');
+    expect(nodeCredentialSlotSource).toContain('buildNodeImportPlan');
+    expect(nodeCredentialSlotSource).toContain('MonitoredSystemLedgerAPI.preview');
+    expect(nodeCredentialSlotSource).toContain('<NodeCandidateImportPlan');
+    expect(nodeCredentialSlotSource).toContain('setupHandoffDisabled');
+    expect(nodeCredentialSlotSource).toContain('saveDisabled={saveBlockedByImportPlan()}');
+    expect(infrastructureImportPlanModelSource).toContain('MonitoredSystemLedgerPreviewRequest');
+    expect(infrastructureImportPlanModelSource).toContain('nodeTypeToMonitoredSource');
+    expect(infrastructureImportPlanModelSource).toContain('previewRequest');
+    expect(infrastructureImportPlanModelSource).toContain('resource_id: name');
     expect(nodeModalAuthenticationSectionSource).toContain(
       "state.formData().setupMode === 'manual'",
     );
@@ -1273,7 +1295,10 @@ describe('settings architecture guardrails', () => {
     expect(nodeModalSetupGuideSectionSource).toContain(
       'PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true',
     );
+    expect(nodeModalSetupGuideSectionSource).toContain('setupCommandButtonTitle');
+    expect(nodeModalSetupGuideSectionSource).toContain('disabled={setupHandoffDisabled()}');
     expect(nodeModalStatusFooterSource).toContain('guidedSetupOnlyMode');
+    expect(nodeModalStatusFooterSource).toContain('props.saveDisabled');
     expect(nodeModalStateSource).toContain("enableCommands: type === 'pve'");
     expect(nodeModalStateSource).toContain('data.setupMode !==');
 

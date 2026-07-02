@@ -4098,13 +4098,17 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		skipCSRF := false
 		// Quick setup can run before auth exists. Keep bootstrap/recovery flows usable
 		// without a prior session+CSRF pair, but enforce CSRF once auth is configured.
+		config.Mu.RLock()
 		authConfigured := (r.config.AuthUser != "" && r.config.AuthPass != "") ||
 			r.config.HasAPITokens() ||
-			r.config.ProxyAuthSecret != "" ||
-			(func() bool {
-				ssoCfg := r.ensureSSOConfig()
-				return ssoCfg != nil && ssoCfg.HasEnabledProviders()
-			})()
+			r.config.ProxyAuthSecret != ""
+		config.Mu.RUnlock()
+		if !authConfigured {
+			ssoCfg := r.ensureSSOConfig()
+			if ssoCfg != nil && ssoCfg.HasEnabledProviders() {
+				authConfigured = true
+			}
+		}
 		validRecoveryToken := false
 		if recoveryToken := strings.TrimSpace(req.Header.Get("X-Recovery-Token")); recoveryToken != "" {
 			validRecoveryToken = GetRecoveryTokenStore().IsRecoveryTokenValidConstantTime(recoveryToken, clientIP)
@@ -5103,7 +5107,11 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Verify credentials (or accept any credentials when admin bypass is enabled)
-	credentialsValid := constantTimeStringEqual(loginReq.Username, r.config.AuthUser) && auth.CheckPasswordHash(loginReq.Password, r.config.AuthPass)
+	config.Mu.RLock()
+	cfgAuthUser := r.config.AuthUser
+	cfgAuthPass := r.config.AuthPass
+	config.Mu.RUnlock()
+	credentialsValid := constantTimeStringEqual(loginReq.Username, cfgAuthUser) && auth.CheckPasswordHash(loginReq.Password, cfgAuthPass)
 	effectiveUsername := loginReq.Username
 	if adminBypassEnabled() {
 		credentialsValid = true

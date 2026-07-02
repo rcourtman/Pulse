@@ -193,6 +193,15 @@ deep-link flow. The self-hosted `Plans` page is not a deep-link-only flow:
 `system-billing` stays visible whenever commercial presentation is allowed,
 while demo or commercial-suppressed sessions may still hide it.
 
+Candidate import-plan presentation inside the Infrastructure settings dialog is
+a shared primitive composition boundary. `NodeCandidateImportPlan.tsx` may use
+shared `Button`, checkbox styling, lucide icons, and
+`MonitoredSystemImpactPreview`, while `InfrastructureWorkspace.tsx` owns the
+route-backed dialog state that feeds probe or Discovery candidates into the
+credential slot. That surface must keep the approval card readable inside the
+existing dialog body and must not introduce a second nested modal, detached
+wizard shell, or page-local preview renderer for monitored-system impact.
+
 Frontend localization is a shared primitive boundary. Locale support must flow
 through typed message catalogs with an English fallback and explicit seed
 locale coverage rather than page-local string switches.

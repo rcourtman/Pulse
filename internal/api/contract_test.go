@@ -19622,3 +19622,36 @@ func TestContract_ProxyAuthConfiguredRoleHeaderMissingIsNonAdmin(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
 	}
 }
+
+// TestContract_LocalAuthConfigReadsUseSharedLock pins the shared mutable-config
+// boundary for local username/password checks. Auth handlers may snapshot
+// credentials under the config lock, but must not read mutable auth fields
+// directly while hashing passwords or mutating sessions.
+func TestContract_LocalAuthConfigReadsUseSharedLock(t *testing.T) {
+	expectations := map[string][]string{
+		"auth.go": {
+			"config.Mu.RLock()\n\t\t\t\t\t\tcfgAuthUser := cfg.AuthUser\n\t\t\t\t\t\tcfgAuthPass := cfg.AuthPass\n\t\t\t\t\t\tconfig.Mu.RUnlock()",
+			"constantTimeStringEqual(parts[0], cfgAuthUser)",
+			"internalauth.CheckPasswordHash(parts[1], cfgAuthPass)",
+		},
+		"router.go": {
+			"config.Mu.RLock()\n\t\tauthConfigured := (r.config.AuthUser != \"\" && r.config.AuthPass != \"\")",
+			"r.config.ProxyAuthSecret != \"\"\n\t\tconfig.Mu.RUnlock()",
+			"cfgAuthUser := r.config.AuthUser\n\tcfgAuthPass := r.config.AuthPass",
+			"constantTimeStringEqual(loginReq.Username, cfgAuthUser) && auth.CheckPasswordHash(loginReq.Password, cfgAuthPass)",
+		},
+	}
+
+	for file, snippets := range expectations {
+		sourceBytes, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("read %s: %v", file, err)
+		}
+		source := string(sourceBytes)
+		for _, snippet := range snippets {
+			if !strings.Contains(source, snippet) {
+				t.Fatalf("%s must contain %q", file, snippet)
+			}
+		}
+	}
+}

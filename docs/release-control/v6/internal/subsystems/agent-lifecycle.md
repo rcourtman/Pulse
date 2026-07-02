@@ -111,6 +111,13 @@ shared `/api/resources` payload carries a backend-authored Proxmox workload
 target linked to that node agent. Suppressing an inside-guest install cue for
 that case means governed actions have a node-agent path; it must not be
 presented as proof that a guest-local agent is installed.
+Candidate-sourced PVE/PBS/PMG onboarding remains lifecycle-owned even when the
+candidate starts in Discovery or a platform probe: the settings connection flow
+may preview the monitored-system impact and credential path, but setup
+commands, downloaded scripts, manual token command copies, and manual saves
+must stay blocked until the operator explicitly approves the candidate import
+plan. Type-first manual adds without a candidate must stay on the normal
+credential-entry path and must not synthesize a discovery import plan.
 Agent-facing operations-loop status wiring in `internal/api/router.go` and
 `internal/api/agent_resource_context.go` is lifecycle-adjacent only because it
 shares agent route infrastructure. Other handlers in `internal/api/` such as
@@ -3173,6 +3180,16 @@ That same node setup modal owner must also stay on the direct
 `NodeModalStatusFooter.tsx`, `nodeModalModel.ts`, and `useNodeModalState.ts`,
 rather than relying only on broad lane ownership or downstream command tests
 to catch lifecycle drift in the settings surface.
+Candidate-sourced PVE/PBS/PMG node setup is part of that same node setup
+owner. When a connection originates from Discovery or the API platform probe,
+`InfrastructureWorkspace.tsx` must pass the candidate into
+`NodeCredentialSlot.tsx`, `infrastructureImportPlanModel.ts` must derive the
+endpoint, identity, credential path, collection scope, monitored-system preview
+request, and reset signature, and the setup surface must require explicit
+operator approval before any assisted setup command, downloaded setup script,
+manual token command copy, or manual save can proceed. Direct type-first adds
+with no candidate remain normal credential entry and must not fabricate an
+import plan.
 That same Proxmox lifecycle transport now explicitly includes the shared
 `frontend-modern/src/api/nodes.ts` client boundary itself: changes to setup
 command or install-command request transport must carry both lifecycle proof

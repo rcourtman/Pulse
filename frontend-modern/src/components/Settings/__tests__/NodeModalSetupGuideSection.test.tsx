@@ -7,8 +7,14 @@ import { NodeModalSetupGuideSection } from '../NodeModalSetupGuideSection';
 
 const renderSetupGuide = (
   nodeType: NodeModalNodeType = 'pve',
-  options: { isEditingExistingNode?: boolean } = {},
+  options: {
+    isEditingExistingNode?: boolean;
+    setupHandoffDisabled?: boolean;
+    setupHandoffDisabledReason?: string;
+  } = {},
 ) => {
+  const copyCommand = vi.fn();
+  const copyQuickSetupCommand = vi.fn();
   const Harness = () => {
     const [setupMode, setSetupMode] = createSignal<NodeModalSetupMode>('auto');
     const updateField = vi.fn((field: string, value: string | boolean | number) => {
@@ -20,9 +26,9 @@ const renderSetupGuide = (
     const state = {
       agentCommandError: () => null,
       agentInstallCommand: () => '',
-      copyCommand: vi.fn(),
+      copyCommand,
       copyProxmoxAgentInstallCommand: vi.fn(),
-      copyQuickSetupCommand: vi.fn(),
+      copyQuickSetupCommand,
       downloadProxmoxSetupScript: vi.fn(),
       formData: () => ({ setupMode: setupMode(), host: '' }),
       isAdvancedSetupMode: () => setupMode() === 'manual',
@@ -35,10 +41,25 @@ const renderSetupGuide = (
       updateField,
     } as unknown as NodeModalState;
 
-    return <NodeModalSetupGuideSection modalProps={{ nodeType } as any} state={state} />;
+    return (
+      <NodeModalSetupGuideSection
+        modalProps={
+          {
+            nodeType,
+            setupHandoffDisabled:
+              options.setupHandoffDisabled === undefined
+                ? undefined
+                : () => Boolean(options.setupHandoffDisabled),
+            setupHandoffDisabledReason: options.setupHandoffDisabledReason,
+          } as any
+        }
+        state={state}
+      />
+    );
   };
 
   render(() => <Harness />);
+  return { copyCommand, copyQuickSetupCommand };
 };
 
 describe('NodeModalSetupGuideSection', () => {
@@ -103,4 +124,47 @@ describe('NodeModalSetupGuideSection', () => {
     expect(screen.getByText(/creates the Proxmox Backup Server API token/i)).toBeInTheDocument();
     expect(screen.getAllByText(/without installing a root agent/i).length).toBeGreaterThan(0);
   });
+
+  it('blocks guided setup handoff actions until an import plan is approved', () => {
+    const reason = 'Approve the import plan before generating setup commands.';
+    const { copyQuickSetupCommand } = renderSetupGuide('pve', {
+      setupHandoffDisabled: true,
+      setupHandoffDisabledReason: reason,
+    });
+
+    expect(screen.getByText(reason)).toBeInTheDocument();
+    const copyButton = screen.getAllByTitle(reason)[0];
+    expect(copyButton).toBeDisabled();
+
+    fireEvent.click(copyButton);
+
+    expect(copyQuickSetupCommand).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['pve' as const, /pveum user add pulse-monitor@pve/i],
+    ['pbs' as const, /proxmox-backup-manager user create pulse-monitor@pbs/i],
+  ])(
+    'blocks %s manual token command copies until an import plan is approved',
+    (nodeType, command) => {
+      const reason = 'Approve the import plan before generating setup commands.';
+      const { copyCommand } = renderSetupGuide(nodeType, {
+        setupHandoffDisabled: true,
+        setupHandoffDisabledReason: reason,
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /^Manual Token Setup$/i }));
+
+      expect(screen.getByText(command)).toBeInTheDocument();
+      const disabledCopyButtons = screen.getAllByTitle(reason);
+      expect(disabledCopyButtons.length).toBeGreaterThanOrEqual(4);
+      for (const button of disabledCopyButtons) {
+        expect(button).toBeDisabled();
+      }
+
+      fireEvent.click(disabledCopyButtons[0]);
+
+      expect(copyCommand).not.toHaveBeenCalled();
+    },
+  );
 });

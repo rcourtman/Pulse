@@ -2232,6 +2232,24 @@ func TestReloadAndRuntimeContextStayOnCanonicalMonitoringPath(t *testing.T) {
 	}
 }
 
+func TestUnifiedStorageMetricsFallbackToResourceIDWhenResolverTargetMissing(t *testing.T) {
+	data, err := os.ReadFile("monitor.go")
+	if err != nil {
+		t.Fatalf("failed to read monitor.go: %v", err)
+	}
+	source := string(data)
+	for _, snippet := range []string{
+		"target := resolver.MetricsTargetForResource(resource.ID)",
+		"if target != nil && target.ResourceType == \"storage\" && strings.TrimSpace(target.ResourceID) != \"\" {",
+		"targetID = strings.TrimSpace(target.ResourceID)",
+		"} else {\n\t\t\ttargetID = resource.ID\n\t\t}",
+	} {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("monitor.go must contain %q", snippet)
+		}
+	}
+}
+
 // TestPollersHonorDisabledInstanceFlag asserts that the PVE, PBS, and PMG
 // pollers skip instances whose `Disabled` flag is set, both at client
 // initialization/reconnect time and on every per-instance iteration of the

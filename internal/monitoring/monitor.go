@@ -4813,10 +4813,12 @@ func (m *Monitor) syncUnifiedStorageMetrics(store ResourceStoreInterface) {
 		}
 
 		target := resolver.MetricsTargetForResource(resource.ID)
-		if target == nil || target.ResourceType != "storage" || strings.TrimSpace(target.ResourceID) == "" {
-			continue
+		var targetID string
+		if target != nil && target.ResourceType == "storage" && strings.TrimSpace(target.ResourceID) != "" {
+			targetID = strings.TrimSpace(target.ResourceID)
+		} else {
+			targetID = resource.ID
 		}
-		targetID := strings.TrimSpace(target.ResourceID)
 		if _, ok := seenTargets[targetID]; ok {
 			continue
 		}

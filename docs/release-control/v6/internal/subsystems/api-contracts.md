@@ -151,6 +151,23 @@ configured admin role may pass admin gates. Installations that intentionally
 make every proxy-authenticated user an admin must do that by leaving the role
 header unset and protecting Pulse at the proxy/IdP layer.
 
+Local credential auth reads are also part of this shared boundary. Handlers in
+`internal/api/auth.go` and `internal/api/router.go` that compare `AuthUser` and
+`AuthPass` must snapshot those mutable config fields while holding
+`config.Mu.RLock()` before running constant-time username or password-hash
+checks. CSRF bootstrap checks may snapshot local auth, API-token, and proxy
+secret presence under that same lock, then evaluate SSO provider state outside
+the config lock.
+
+Candidate import plans for PVE/PBS/PMG onboarding are API-contract consumers,
+not local UI estimates. Probe and Discovery candidates must build their
+preview through `frontend-modern/src/api/monitoredSystemLedger.ts` and
+`POST /api/license/monitored-system-ledger/preview`, preserving source,
+resource type, name, hostname, host URL, and resource id in the request. The
+frontend may render the preview and approval state, but it must not persist a
+candidate or call node setup/save APIs until the operator has approved the
+current endpoint, credential path, and collection scope.
+
 Assistant chat `workflow_state` events are a shared AI/API payload boundary.
 The backend source of truth is `internal/ai/chat.WorkflowStateData`, generated
 to `frontend-modern/src/api/generated/aiChatEvents.ts` by

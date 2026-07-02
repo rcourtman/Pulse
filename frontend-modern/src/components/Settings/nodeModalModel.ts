@@ -17,6 +17,8 @@ export interface NodeModalProps {
   temperatureMonitoringLocked?: boolean;
   savingTemperatureSetting?: boolean;
   onToggleTemperatureMonitoring?: (enabled: boolean) => Promise<void> | void;
+  setupHandoffDisabled?: () => boolean;
+  setupHandoffDisabledReason?: string;
 }
 
 export const deriveNameFromHost = (host: string): string => {

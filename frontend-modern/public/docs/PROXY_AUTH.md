@@ -23,6 +23,10 @@ Authenticate users via your existing reverse proxy (Authentik, Authelia, Cloudfl
 | `PROXY_AUTH_ADMIN_ROLE` | Role name that grants admin access. | `admin` |
 | `PROXY_AUTH_LOGOUT_URL` | URL to redirect to after logout. | - |
 
+If `PROXY_AUTH_ROLE_HEADER` and `PROXY_AUTH_ADMIN_ROLE` are configured, admin access fails closed unless the role header is present and contains the configured admin role. A missing or blank role header still authenticates the user, but the user is treated as non-admin.
+
+If you intentionally want every proxy-authenticated user to be an admin, leave `PROXY_AUTH_ROLE_HEADER` unset and protect Pulse entirely at the proxy/IdP layer.
+
 ## 📦 Examples
 
 ### Authentik (with Traefik)

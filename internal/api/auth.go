@@ -825,16 +825,16 @@ func checkAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request, write
 							}
 							return false
 						}
-						// Check username
-						userMatch := constantTimeStringEqual(parts[0], cfg.AuthUser)
-
-						// Check password - support both hashed and plain text for migration
-						// Config always has hashed password now (auto-hashed on load)
-						passMatch := internalauth.CheckPasswordHash(parts[1], cfg.AuthPass)
+						config.Mu.RLock()
+						cfgAuthUser := cfg.AuthUser
+						cfgAuthPass := cfg.AuthPass
+						config.Mu.RUnlock()
+						userMatch := constantTimeStringEqual(parts[0], cfgAuthUser)
+						passMatch := internalauth.CheckPasswordHash(parts[1], cfgAuthPass)
 
 						log.Debug().
 							Str("provided_user", parts[0]).
-							Str("expected_user", cfg.AuthUser).
+							Str("expected_user", cfgAuthUser).
 							Bool("user_match", userMatch).
 							Bool("pass_match", passMatch).
 							Msg("Auth check")

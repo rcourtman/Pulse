@@ -1,4 +1,8 @@
-import { Component } from 'solid-js';
+import { Component, createEffect, createMemo, createSignal } from 'solid-js';
+import {
+  MonitoredSystemLedgerAPI,
+  type MonitoredSystemLedgerPreviewResponse,
+} from '@/api/monitoredSystemLedger';
 import type { NodeConfig, NodeConfigWithStatus } from '@/types/nodes';
 import { NodeModalAuthenticationSection } from '@/components/Settings/NodeModalAuthenticationSection';
 import { NodeModalBasicInfoSection } from '@/components/Settings/NodeModalBasicInfoSection';
@@ -7,6 +11,13 @@ import { NodeModalStatusFooter } from '@/components/Settings/NodeModalStatusFoot
 import { useNodeModalState } from '@/components/Settings/useNodeModalState';
 import type { NodeModalProps } from '@/components/Settings/nodeModalModel';
 import type { InfrastructurePlatformSettingsProps } from '@/components/Settings/proxmoxSettingsModel';
+import { notificationStore } from '@/stores/notifications';
+import { logger } from '@/utils/logger';
+import {
+  buildNodeImportPlan,
+  type NodeImportPlanCandidate,
+} from '../../infrastructureImportPlanModel';
+import { NodeCandidateImportPlan } from './NodeCandidateImportPlan';
 
 export type NodeSlotType = 'pve' | 'pbs' | 'pmg';
 
@@ -15,6 +26,7 @@ export interface NodeCredentialSlotProps {
   settings: InfrastructurePlatformSettingsProps;
   editingNode?: NodeConfigWithStatus | null;
   prefillNode?: Partial<NodeConfig>;
+  importCandidate?: NodeImportPlanCandidate | null;
   initialAddress?: string;
   onCancel: () => void;
   onSaved: () => void;
@@ -30,6 +42,13 @@ export interface NodeCredentialSlotProps {
 export const NodeCredentialSlot: Component<NodeCredentialSlotProps> = (props) => {
   const prefill: Partial<NodeConfig> | undefined =
     props.prefillNode ?? (props.initialAddress ? { host: props.initialAddress } : undefined);
+  const importApprovalRequiredMessage =
+    'Approve the import plan before generating setup commands or adding this source.';
+  const [importApproved, setImportApproved] = createSignal(false);
+  const [previewingImportImpact, setPreviewingImportImpact] = createSignal(false);
+  const [importImpactPreview, setImportImpactPreview] =
+    createSignal<MonitoredSystemLedgerPreviewResponse | null>(null);
+  const [importImpactPreviewError, setImportImpactPreviewError] = createSignal<string | null>(null);
 
   const handleSave = async (nodeData: Partial<NodeConfig>) => {
     await props.settings.saveNode(nodeData);
@@ -49,6 +68,8 @@ export const NodeCredentialSlot: Component<NodeCredentialSlotProps> = (props) =>
     ),
     temperatureMonitoringLocked: props.settings.temperatureMonitoringLocked(),
     savingTemperatureSetting: props.settings.savingTemperatureSetting(),
+    setupHandoffDisabled: () => Boolean(props.importCandidate && !importApproved()),
+    setupHandoffDisabledReason: importApprovalRequiredMessage,
     onToggleTemperatureMonitoring: async (enabled) => {
       const target = props.editingNode;
       if (target?.id) {
@@ -60,9 +81,59 @@ export const NodeCredentialSlot: Component<NodeCredentialSlotProps> = (props) =>
   };
 
   const state = useNodeModalState(modalProps);
+  const importPlan = createMemo(() =>
+    buildNodeImportPlan(props.nodeType, state.formData(), props.importCandidate),
+  );
+
+  let previousImportPlanSignature = '';
+
+  createEffect(() => {
+    const signature = importPlan()?.signature ?? '';
+    if (signature === previousImportPlanSignature) {
+      return;
+    }
+    previousImportPlanSignature = signature;
+    setImportApproved(false);
+    setImportImpactPreview(null);
+    setImportImpactPreviewError(null);
+  });
+
+  const saveBlockedByImportPlan = () => Boolean(importPlan() && !importApproved());
+
+  const handlePreviewImportImpact = async () => {
+    const plan = importPlan();
+    if (!plan?.previewRequest) {
+      setImportImpactPreviewError('Enter an endpoint before previewing impact.');
+      return;
+    }
+
+    setPreviewingImportImpact(true);
+    setImportImpactPreviewError(null);
+    try {
+      const preview = await MonitoredSystemLedgerAPI.preview(plan.previewRequest);
+      setImportImpactPreview(preview);
+    } catch (error) {
+      logger.error('[Infrastructure Import Plan] Impact preview failed', error);
+      setImportImpactPreview(null);
+      setImportImpactPreviewError(
+        error instanceof Error ? error.message : 'Unable to calculate import impact right now.',
+      );
+    } finally {
+      setPreviewingImportImpact(false);
+    }
+  };
+
+  const handleSubmit = (event: Event) => {
+    if (saveBlockedByImportPlan()) {
+      event.preventDefault();
+      notificationStore.error(importApprovalRequiredMessage);
+      return;
+    }
+    state.handleSubmit(event);
+  };
 
   return (
-    <form onSubmit={state.handleSubmit} class="space-y-6">
+    <form onSubmit={handleSubmit} class="space-y-6">
       <section
         aria-label="Infrastructure connection sequence"
         class="rounded-md border border-border bg-surface-alt px-4 py-3"
@@ -97,6 +168,17 @@ export const NodeCredentialSlot: Component<NodeCredentialSlotProps> = (props) =>
           </div>
         </div>
       </section>
+      {importPlan() && (
+        <NodeCandidateImportPlan
+          plan={importPlan()!}
+          approved={importApproved()}
+          onApprovedChange={setImportApproved}
+          onPreviewImpact={handlePreviewImportImpact}
+          preview={importImpactPreview()}
+          previewing={previewingImportImpact()}
+          previewError={importImpactPreviewError()}
+        />
+      )}
       <NodeModalBasicInfoSection modalProps={modalProps} state={state} />
       <NodeModalAuthenticationSection modalProps={modalProps} state={state} />
       <NodeModalMonitoringSection modalProps={modalProps} state={state} />
@@ -110,6 +192,8 @@ export const NodeCredentialSlot: Component<NodeCredentialSlotProps> = (props) =>
         deletePending={props.deletePending}
         deleteConfirming={props.deleteConfirming}
         deleteError={props.deleteError}
+        saveDisabled={saveBlockedByImportPlan()}
+        saveDisabledReason={importApprovalRequiredMessage}
       />
     </form>
   );

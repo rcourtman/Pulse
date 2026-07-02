@@ -372,6 +372,19 @@ Persistent metrics history uses tiered retention windows. These values are store
 
 See [METRICS_HISTORY.md](METRICS_HISTORY.md) for details.
 
+### Prometheus Metrics Endpoint
+
+The `/metrics` listener is separate from the main UI/API listener and binds to loopback by default.
+
+| Variable | Description | Default |
+| ---------- | ------------- | --------- |
+| `PULSE_METRICS_PORT` | Metrics listener port | `9091` |
+| `PULSE_METRICS_BIND_ADDRESS` | Metrics listener bind address | `127.0.0.1` |
+| `PULSE_METRICS_TOKEN` | Optional bearer token for `/metrics` | *(empty)* |
+| `PULSE_METRICS_ALLOW_INSECURE_REMOTE` | Explicit opt-in to serve a metrics bearer token over non-loopback plaintext HTTP | `false` |
+
+For remote scraping with `PULSE_METRICS_TOKEN`, prefer a local scraper, tunnel, VPN-private path, or TLS/mTLS reverse proxy. Pulse refuses non-loopback plaintext token scraping unless `PULSE_METRICS_ALLOW_INSECURE_REMOTE=true` is set.
+
 ---
 
 ## 🔔 Alerts (`alerts.json`)
@@ -399,6 +412,47 @@ Pulse uses a powerful alerting engine with hysteresis (separate trigger/clear th
 }
 ```
 </details>
+
+---
+
+## Availability Checks (`availability_targets.enc`)
+
+Availability checks are agentless probes for devices and services where Pulse
+cannot install an agent or does not need full machine telemetry. Use them for
+simple ping monitoring, TCP service checks, and HTTP/HTTPS status checks.
+
+**Managed via UI**: Settings -> Monitoring -> Availability checks
+
+Supported protocols:
+
+| Protocol | Use case | Required fields |
+| ---------- | ---------- | ---------------- |
+| `icmp` | Ping-only reachability for devices, computers, and appliances | `address` |
+| `ping` | API input alias for `icmp`; saved targets return `icmp` | `address` |
+| `tcp` | A reachable port such as MQTT, SSH, or a custom service | `address`, `port` |
+| `http` / `https` | Web UI or health endpoint availability | `address`, optional `port`, optional `path` |
+
+Saved targets include `name`, `targetKind` (`machine`, `service`, or
+`device`), `address`, `protocol`, `enabled`, polling interval, timeout,
+failure threshold, and an optional `linkedResourceId`. ICMP ping is the
+default probe for new targets. Availability targets publish
+`network-endpoint` resources and can raise downtime alerts after the configured
+failure threshold.
+
+Example API payload for simple ping monitoring:
+
+```json
+{
+  "name": "Garage temperature sensor",
+  "targetKind": "device",
+  "address": "garage-sensor.local",
+  "protocol": "ping",
+  "enabled": true
+}
+```
+
+Pulse stores and returns that target as `protocol: "icmp"` so dashboards,
+alerts, and resource projections keep one canonical protocol value.
 
 ---
 

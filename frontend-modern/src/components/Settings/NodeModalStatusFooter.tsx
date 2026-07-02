@@ -13,6 +13,8 @@ interface NodeModalStatusFooterProps {
   deletePending?: boolean;
   deleteConfirming?: boolean;
   deleteError?: string | null;
+  saveDisabled?: boolean;
+  saveDisabledReason?: string;
 }
 
 export const NodeModalStatusFooter: Component<NodeModalStatusFooterProps> = (props) => {
@@ -210,7 +212,8 @@ export const NodeModalStatusFooter: Component<NodeModalStatusFooterProps> = (pro
           <Show when={!guidedSetupOnlyMode()}>
             <button
               type="submit"
-              disabled={props.togglePending || props.deletePending}
+              disabled={props.togglePending || props.deletePending || props.saveDisabled}
+              title={props.saveDisabled ? props.saveDisabledReason : undefined}
               class="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {state.isEditingExistingNode() ? 'Save changes' : 'Add node'}

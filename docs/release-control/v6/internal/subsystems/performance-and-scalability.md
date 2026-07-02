@@ -204,6 +204,12 @@ regression protection.
    fetches, Discovery probes, or page-local external-link logic on the table
    hot path.
 4. Keep shared auth gating in `internal/api/router.go` cheap and local: pre-auth quick-setup and recovery routing may short-circuit on loopback/session/token checks, but they must not trigger chart, metrics, or broad persistence fan-out on the protected request hot path.
+   Reading mutable auth configuration for CSRF bootstrap and login checks must
+   stay a short in-memory snapshot under `config.Mu.RLock()`: local
+   username/password presence, API-token presence, and proxy-auth secret
+   presence may be copied while locked, while SSO provider presence is checked
+   after the lock is released. This preserves the protected hot path and avoids
+   holding the config lock across provider/state work.
    The same rule applies to public setup-script lifecycle routes: `/api/auto-register`
    and `/api/auto-unregister` may bypass the global auth wall so their handlers can
    validate request-body setup tokens, but the router-level public-path check must

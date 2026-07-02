@@ -239,6 +239,11 @@ Storage/recovery auth-adjacent changes may consume SSO-authenticated sessions,
 but they must not reinterpret SAML or multi-provider SSO availability as a
 storage/recovery entitlement; that provider-route and license truth belongs to
 the shared API/security boundary.
+Storage/recovery may consume authenticated chart and report routes through the
+shared API boundary, but it must not own router-level auth configuration reads.
+Those reads stay API/security-owned and must snapshot mutable auth credentials
+under `config.Mu.RLock()` before storage-adjacent routes rely on the resulting
+session or API-token decision.
 Storage/recovery may also consume org-scoped session identity from the shared
 API boundary, but durable user IDs remain the authorization principal. Contact
 email may support display or legacy lookup only; storage and recovery surfaces

@@ -371,6 +371,14 @@ truth for live infrastructure data.
 
 ## Current State
 
+The monitoring-owned storage metrics runtime must preserve store-backed storage
+chart continuity during resolver warm-up. `syncUnifiedStorageMetrics` must
+prefer the resolver's canonical storage metrics target when it exists, but must
+fall back to the storage resource id instead of dropping the resource when the
+resolver has not yet produced a storage target. The fallback is a metrics
+continuity path for canonical storage resources, not a second storage identity
+or recovery-source model.
+
 That same reloadable multi-tenant monitor boundary also owns instance-wide
 notification settings fan-out. `ForEachMonitor` visits every live tenant
 monitor so callers can propagate the webhook security allowlist and public
