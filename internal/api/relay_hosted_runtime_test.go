@@ -168,11 +168,17 @@ func TestLoadRelayConfigForRuntime_DoesNotOverrideExplicitDisabledRelayConfig(t 
 }
 
 func TestHostedRelayRuntimeBuildsMobileOnboardingAppRelayURL(t *testing.T) {
-	router, _, _ := newHostedRelayRuntimeTestRouter(t)
+	router, _, instanceHost := newHostedRelayRuntimeTestRouter(t)
 
 	relayCfg, err := router.loadRelayConfigForRuntime(context.Background())
 	if err != nil {
 		t.Fatalf("loadRelayConfigForRuntime() error = %v", err)
+	}
+	router.relayClient = fakeRelayRuntimeClient{
+		status: relay.ClientStatus{
+			Connected:  true,
+			InstanceID: instanceHost,
+		},
 	}
 
 	req := httptest.NewRequest("GET", "https://t-hostedrelay01.cloud.pulserelay.pro/api/onboarding/qr", nil)
