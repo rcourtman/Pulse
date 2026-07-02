@@ -589,7 +589,7 @@ TLS floor in the dynamic config.
    across release notes, upgrade guidance, support policy, promotion records,
    and release-promotion resolver proof before workflow dispatch. For the
    2026-07-02 cutover candidate, that packet is
-   `promoted_from_tag=v6.0.0-rc.7`, `rollback_version=v5.1.34`,
+   `promoted_from_tag=v6.0.0-rc.7`, `rollback_version=v5.1.35`,
    `ga_date=2026-07-02`, and `v5_eos_date=2026-09-30`.
    That stable cut must also move the repo-root Docker compose default and
    `scripts/install-docker.sh` fallback from the final RC image tag to the
@@ -757,6 +757,12 @@ TLS floor in the dynamic config.
 
 ## Current State
 
+The active stable `v6.0.0` cut sets the repo-root `VERSION`, repo-root
+`docker-compose.yml` image default, and `scripts/install-docker.sh` fallback
+to the same `6.0.0` release version. The GA promotion metadata for this cut is
+`promoted_from_tag=v6.0.0-rc.7`, `rollback_version=v5.1.35`,
+`ga_date=2026-07-02`, and `v5_eos_date=2026-09-30`.
+
 The shell-installer boundary carries root-agent service hardening for Linux
 installs. Installer-rendered agent units must keep the health/metrics listener
 loopback by default, allow explicit disablement or network-scrape opt-in
@@ -803,10 +809,10 @@ compose image default and the standalone installer fallback constant. A draft
 release workflow failure caused by stale Docker image pins is a release-packet
 blocker until the defaults, tests, and evidence record are refreshed from the
 new branch head.
-For the active `v6.0.0-rc.7` cut, the repo-root compose default and
-`scripts/install-docker.sh` fallback must both pin `6.0.0-rc.7`; the stable
-promotion guard remains in force by rejecting leftover `-rc.` defaults only
-when the governed `VERSION` is a stable release.
+For the active stable `v6.0.0` cut, the repo-root compose default and
+`scripts/install-docker.sh` fallback must both pin `6.0.0`; the stable
+promotion guard remains in force by rejecting leftover `-rc.` defaults when
+the governed `VERSION` is a stable release.
 The RC7 packet refresh records `fc10de9b5477613316473267b72b05b6b2b7aaff`
 as the current validation-risk commit. That head includes the earlier
 Docker-default correction plus the follow-on capacity-forecast and Patrol
