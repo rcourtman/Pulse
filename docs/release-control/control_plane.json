@@ -55,7 +55,7 @@
       "profile_id": "v6",
       "kind": "release",
       "status": "active",
-      "summary": "Prepare Pulse v6 GA from the current pulse/v6-release branch after accumulated post-RC7 fixes and final current-branch validation. Do not promote the published RC7 candidate unchanged, and do not plan another RC by default; remaining release-day execution and public cutover approval require fresh current-branch proof, while newly reported RC7 issues stay regression signals unless a release-owner decision changes direction.",
+      "summary": "Prepare Pulse v6 GA from the current pulse/v6-release branch after accumulated post-RC7 fixes. Do not promote the published RC7 candidate unchanged, and do not plan another RC by default; on 2026-07-02 the release owner accepted the remaining current-branch validation risk for GA rather than requiring RC8 or another soak, while newly reported RC7 issues stay regression signals unless a release-owner decision changes direction and release-day execution plus public cutover still require explicit owner approval.",
       "completion_rule": "manual",
       "proof_scope": "none"
     },

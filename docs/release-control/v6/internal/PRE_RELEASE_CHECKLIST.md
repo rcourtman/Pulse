@@ -19,16 +19,17 @@ Use this as the final gate before cutting a Pulse v6 pre-release.
 - The latest RC publication judgment packet is
   `docs/release-control/v6/internal/records/rc-publication-judgment-packet-2026-04-09.md`.
   It now records approval, not a proof blocker.
-- The active target is now `v6-product-lane-expansion`; the stable promotion
-  packet is no longer the only release-ready concern, and release-ready gates
-  must still fail closed if the product truth changes.
-- `rc-to-ga-promotion-readiness` was cleared on 2026-04-20 by `Release Dry Run`
-  run `24673393628`, recorded at
-  `docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-rehearsal-2026-04-20.md`.
-- The stable `6.0.0` candidate now has an exercised non-publish promotion
-  rehearsal carrying the canonical promotion artifact envelope: candidate
-  stable tag, promotion channel, promoted prerelease tag, rollback target,
-  exact rollback command, exact GA date, and exact v5 end-of-support inputs.
+- The active target is now `v6-ga-promotion`; lane expansion stays planned
+  behind GA.
+- The stable `6.0.0` candidate is the current `pulse/v6-release` branch after
+  accumulated post-RC7 changes, not the published RC7 candidate unchanged.
+- `rc-to-ga-promotion-readiness` is cleared for v6.0.0 by the prior governed
+  release-pipeline rehearsals plus the 2026-07-02 release-owner risk
+  acceptance recorded at
+  `docs/release-control/v6/internal/records/current-branch-ga-owner-approval-2026-07-02.md`.
+- The release-owner acceptance is not validation evidence for the post-RC7
+  changes. It is the explicit decision to ship the current branch without RC8,
+  another soak, or additional current-branch validation before GA.
 - `known-rc-issue-closure-for-ga` was introduced on 2026-04-21 to reflect the
   locked rule that v6 GA must be feature-complete relative to the prerelease
   issue set. It is currently blocked on the dated RC issue-closure packet.
@@ -38,11 +39,11 @@ Use this as the final gate before cutting a Pulse v6 pre-release.
 ## Promotion Policy
 - [x] Record the previous stable tag and exact rollback pin command before publishing a new prerelease or stable release.
 - [ ] For any prerelease or stable publication, confirm the repo variable `PULSE_UPDATE_SIGNING_PUBLIC_KEY` is set to the intended active update signer public key and that the release workflows are consuming it alongside `PULSE_UPDATE_SIGNING_KEY`, so accidental trust-root rotation fails closed before publication.
-- [ ] For the GA/stable candidate, confirm the release pipeline has already been exercised on a real prerelease tag, not only linted or YAML-parsed.
+- [x] For the GA/stable candidate, confirm the release pipeline has already been exercised on a real prerelease tag, not only linted or YAML-parsed.
 - [x] For stable promotion, confirm the candidate commit has already shipped on `rc`.
 - [x] For stable promotion, confirm the chosen `promoted_from_tag` is a prerelease that was actually published through the governed prerelease path, not an accidental git tag.
 - [x] For stable promotion, confirm the prerelease soak window is at least 72 hours or document the hotfix exception explicitly.
-- [ ] For stable promotion, confirm paid production tenants are not being moved onto an unvalidated build.
+- [x] For stable promotion, record the 2026-07-02 release-owner decision accepting the current-branch validation risk for the post-RC7 changes.
 - [x] For GA/stable promotion, confirm `V5_MAINTENANCE_SUPPORT_POLICY.md` is still the intended policy and replace any placeholder GA notice dates with the exact v6 GA date and exact v5 end-of-support date that will ship with the announcement.
 - [x] For GA/stable promotion, confirm the pushed governed release-branch copy of `.github/workflows/release-dry-run.yml` already accepts the governed stable rehearsal metadata envelope (`promoted_from_tag`, `rollback_version`, `ga_date`, `v5_eos_date`) through `workflow_dispatch`, because GitHub executes the selected remote ref and does not see local-only governance state.
 - [x] For GA/stable promotion, confirm the local rehearsal branch exactly matches `origin` before dispatching `Release Dry Run`, so the run exercises the intended governed branch state instead of stale remote control-plane metadata.

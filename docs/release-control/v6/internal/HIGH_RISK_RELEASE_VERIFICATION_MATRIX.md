@@ -454,17 +454,25 @@ Companion drill:
      URL in the release ticket or rehearsal record.
   8. Confirm the migration gate and other applicable high-risk gates are
      cleared for this same candidate before broad rollout.
+  9. For v6.0.0 only, confirm the 2026-07-02 owner risk acceptance is recorded
+     if the current branch contains post-RC7 changes that will ship without
+     RC8, another soak, or additional current-branch validation before GA.
 - Pass when:
   Stable or GA promotion is a governed handoff from an exercised prerelease with live
   release-pipeline proof, explicit rollback instructions, and the published v5
   maintenance policy plus exact end-of-support date, with a linked rehearsal
   run URL and dry-run artifact carrying the full canonical promotion metadata
-  envelope.
+  envelope. For v6.0.0 only, the recorded 2026-07-02 owner risk acceptance may
+  clear the remaining current-branch validation risk without implying the
+  post-RC7 changes were RC-tested.
 - Latest exercised record:
-  `docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-rehearsal-2026-04-20.md`
+  `docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-rehearsal-2026-06-04.md`
+- Owner risk acceptance:
+  `docs/release-control/v6/internal/records/current-branch-ga-owner-approval-2026-07-02.md`
 - Block release if:
-  Stable users would become the first real validation cohort, the rollback
-  target is unclear, or the v5 maintenance-only policy is still undecided.
+  Stable users would become the first real validation cohort without explicit
+  owner risk acceptance, the rollback target is unclear, or the v5
+  maintenance-only policy is still undecided.
 
 ## Gate: `upgrade-state-and-entitlement-preservation`
 

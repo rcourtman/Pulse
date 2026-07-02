@@ -1,6 +1,6 @@
 # Pulse v6 Source Of Truth
 
-Last updated: 2026-06-26
+Last updated: 2026-07-02
 Status: ACTIVE
 
 This file is the stable human governance layer for the active v6 release
@@ -470,7 +470,11 @@ Assertion design rules:
    architectural blockers.
 7. Stable or GA promotion for v6 must come from an exercised RC and stay
    blocked until the RC-to-GA promotion gate is cleared and the published v5
-   maintenance-policy notice is ready.
+   maintenance-policy notice is ready. For v6.0.0 only, the 2026-07-02
+   release-owner risk acceptance allows the current post-RC7 `pulse/v6-release`
+   branch to ship without RC8, another soak, or additional current-branch
+   validation before GA; this is not validation evidence and not a standing
+   stable-promotion rule for later releases.
 8. v6 and later releases use a promotion model, not a direct broad-rollout
    model.
    `stable` must receive only promoted, already-validated builds, `rc` is the

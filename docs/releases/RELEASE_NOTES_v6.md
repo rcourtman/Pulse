@@ -1,7 +1,8 @@
 # Pulse v6.0.0 Release Notes
 
-`v6.0.0` is the first stable release of Pulse v6. It promotes the validated
-`v6.0.0-rc.6` candidate into the default supported v6 release.
+`v6.0.0` is the first stable release of Pulse v6. It promotes the current
+`pulse/v6-release` branch into the default supported v6 release after seven
+release candidates and accumulated post-RC7 fixes.
 
 Pulse v6 keeps the platform-shaped top-level navigation existing v5 operators
 already know (Proxmox, Docker, Kubernetes, TrueNAS, vSphere, Machines, plus
@@ -15,16 +16,17 @@ RC line.
 The v6 line briefly shipped a unified `Infrastructure` / `Workloads` /
 `Storage` / `Recovery` top-level layout across `rc.1` through `rc.5`. Operator
 feedback consistently preferred the platform-shaped navigation v5 already had,
-so I reverted the frontend information architecture in `rc.6` to platform-
-shaped pages while keeping the unified resource model on the backend. Same
-backend, the navigation shape you already know.
+so I reverted the frontend information architecture in `rc.6` and kept that
+platform-shaped direction through the final release branch while preserving the
+unified resource model on the backend. Same backend, the navigation shape you
+already know.
 
 ## Pulse v5 Support Transition
 
-Pulse v5 entered maintenance-only support on `2026-06-04`.
+Pulse v5 entered maintenance-only support on `2026-07-02`.
 I will ship only critical security, data-loss, licensing or billing blocker,
-installer or updater failure, and safe migration blocker fixes for existing v5 users until `2026-09-02`.
-After `2026-09-02`, Pulse v5 is end-of-support and new fixes land on v6 unless
+installer or updater failure, and safe migration blocker fixes for existing v5 users until `2026-09-30`.
+After `2026-09-30`, Pulse v5 is end-of-support and new fixes land on v6 unless
 I publish an explicit exception.
 
 ## What Is In v6.0.0

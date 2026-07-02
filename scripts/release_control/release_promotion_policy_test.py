@@ -134,6 +134,58 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("license.pulserelay.pro/pulse-pro:6.0.0", content)
         self.assertIn("moving branch", content)
 
+    def test_v6_ga_owner_risk_exception_is_bounded_and_packet_aligned(self) -> None:
+        policy = read("docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md")
+        checklist = read("docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md")
+        owner_record = read(
+            "docs/release-control/v6/internal/records/current-branch-ga-owner-approval-2026-07-02.md"
+        )
+        release_notes = read("docs/releases/RELEASE_NOTES_v6.md")
+        v5_policy = read("docs/release-control/v6/internal/V5_MAINTENANCE_SUPPORT_POLICY.md")
+        status = read_json("docs/release-control/v6/internal/status.json")
+        control_plane = read_json("docs/release-control/control_plane.json")
+
+        normalized_policy = normalize_ws(policy)
+        normalized_checklist = normalize_ws(checklist)
+        normalized_owner_record = normalize_ws(owner_record)
+        normalized_release_notes = normalize_ws(release_notes)
+        normalized_v5_policy = normalize_ws(v5_policy)
+
+        self.assertIn("v6.0.0 owner-risk exception", policy)
+        self.assertIn("bounded v6.0.0 release-owner risk acceptance", normalized_policy)
+        self.assertIn("not validation evidence for the post-RC7 changes", normalized_policy)
+        self.assertIn("not a standing policy for later stable releases", normalized_policy)
+        self.assertIn("Additional RC or soak required: no", normalized_owner_record)
+        self.assertIn("Additional current-branch validation required before GA: no", normalized_owner_record)
+        self.assertIn("accepting the remaining current-branch validation risk", normalized_owner_record)
+        self.assertIn("not validation evidence for the post-RC7", normalized_checklist)
+
+        self.assertIn("current `pulse/v6-release` branch", normalized_release_notes)
+        self.assertIn("seven release candidates and accumulated post-RC7 fixes", normalized_release_notes)
+        self.assertIn("Pulse v5 entered maintenance-only support on `2026-07-02`.", normalized_release_notes)
+        self.assertIn("existing v5 users until `2026-09-30`.", normalized_release_notes)
+        self.assertIn("Pulse v5 entered maintenance-only support on 2026-07-02.", normalized_v5_policy)
+        self.assertIn("2026-09-30. After 2026-09-30", normalized_v5_policy)
+
+        gate = next(gate for gate in status["release_gates"] if gate["id"] == "rc-to-ga-promotion-readiness")
+        self.assertEqual(gate["status"], "passed")
+        self.assertIn("owner risk acceptance", gate["summary"])
+        self.assertIn(
+            "docs/release-control/v6/internal/records/current-branch-ga-owner-approval-2026-07-02.md",
+            {item["path"] for item in gate["evidence"]},
+        )
+
+        decisions = {decision["id"]: decision for decision in status["resolved_decisions"]}
+        self.assertEqual(
+            decisions["current-branch-ga-owner-risk-acceptance"]["decided_at"],
+            "2026-07-02",
+        )
+
+        active_target = next(
+            target for target in control_plane["targets"] if target["id"] == control_plane["active_target_id"]
+        )
+        self.assertIn("accepted the remaining current-branch validation risk", active_target["summary"])
+
     def test_pre_release_checklist_tracks_rc_to_ga_gate_inputs(self) -> None:
         content = read("docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md")
         self.assertIn("release pipeline has already been exercised on a real prerelease tag", content)

@@ -147,6 +147,18 @@ Cloud, and self-hosted production users.
      customer harm.
    - The exception plus the rollback target and exact reinstall command must be
      recorded in the release notes or release ticket before promotion.
+7. v6.0.0 owner-risk exception:
+   - On 2026-07-02, after seven v6 release candidates, the release owner
+     explicitly approved promoting the current `pulse/v6-release` branch with
+     accumulated post-RC7 changes without RC8, another soak, or additional
+     current-branch validation before GA.
+   - This is a bounded v6.0.0 release-owner risk acceptance, not validation
+     evidence for the post-RC7 changes and not a standing policy for later
+     stable releases.
+   - The release packet must describe the GA candidate honestly as the current
+     branch after the RC line, keep rollback and v5 maintenance dates explicit,
+     and retain the prior governed release-pipeline rehearsal evidence as
+     automation lineage rather than claiming the post-RC7 changes were RC-tested.
 
 ## Rollout Rules
 

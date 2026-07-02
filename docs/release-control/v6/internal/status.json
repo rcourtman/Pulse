@@ -1,6 +1,6 @@
 {
   "version": "6.0",
-  "updated_at": "2026-06-26",
+  "updated_at": "2026-07-02",
   "scope": {
     "active_repos": [
       "pulse",
@@ -666,6 +666,16 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/current-branch-ga-owner-approval-2026-07-02.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/current-branch-ga-release-policy-2026-07-01.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/known-rc-issue-closure-for-ga-blocked-2026-04-21.md",
           "kind": "file"
         },
@@ -692,6 +702,11 @@
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-rehearsal-2026-04-20.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-rehearsal-2026-06-04.md",
           "kind": "file"
         },
         {
@@ -6597,11 +6612,11 @@
     },
     {
       "id": "rc-to-ga-promotion-readiness",
-      "summary": "Confirm Pulse v6 GA promotion is coming from the current pulse/v6-release branch after accumulated post-RC7 fixes, final current-branch validation, rollback instructions, and a written v5 maintenance-only policy.",
+      "summary": "Confirm Pulse v6 GA promotion is coming from the current pulse/v6-release branch after accumulated post-RC7 fixes, with the 2026-07-02 owner risk acceptance for no RC8 or further current-branch validation, rollback instructions, and a written v5 maintenance-only policy.",
       "owner": "project-owner",
       "blocking_level": "release-ready",
       "minimum_evidence_tier": "real-external-e2e",
-      "status": "pending",
+      "status": "passed",
       "verification_doc": "docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L1",
@@ -6610,6 +6625,12 @@
         "L12"
       ],
       "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/current-branch-ga-owner-approval-2026-07-02.md",
+          "kind": "file",
+          "evidence_tier": "local-rehearsal"
+        },
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/current-branch-ga-release-policy-2026-07-01.md",
@@ -6643,6 +6664,12 @@
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-rehearsal-2026-04-20.md",
+          "kind": "file",
+          "evidence_tier": "real-external-e2e"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-rehearsal-2026-06-04.md",
           "kind": "file",
           "evidence_tier": "real-external-e2e"
         },
@@ -8169,9 +8196,23 @@
     },
     {
       "id": "current-branch-ga-no-rc8-default",
-      "summary": "The next public v6 release target is GA from current pulse/v6-release after accumulated post-RC7 fixes and final validation. Do not promote RC7 unchanged, and do not plan RC8 by default unless the release owner changes direction.",
+      "summary": "The next public v6 release target is GA from current pulse/v6-release after accumulated post-RC7 fixes. Do not promote RC7 unchanged, and do not plan RC8 by default unless the release owner changes direction.",
       "kind": "release-policy",
       "decided_at": "2026-07-01",
+      "subsystem_ids": [],
+      "lane_ids": [
+        "L1",
+        "L2",
+        "L5",
+        "L9",
+        "L12"
+      ]
+    },
+    {
+      "id": "current-branch-ga-owner-risk-acceptance",
+      "summary": "On 2026-07-02 the release owner accepted the accumulated post-RC7 pulse/v6-release branch changes for v6.0.0 GA without RC8, another soak, or additional current-branch validation before GA; this is a bounded release-owner risk acceptance, not validation evidence for the post-RC7 changes.",
+      "kind": "release-policy",
+      "decided_at": "2026-07-02",
       "subsystem_ids": [],
       "lane_ids": [
         "L1",
