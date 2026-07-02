@@ -184,6 +184,11 @@ truth for live infrastructure data.
    `/api/state` and websocket broadcasts must coalesce transient split host
    resources before serialization so a single Proxmox node with a reporting
    host agent remains one hybrid top-level system across rebuild ticks.
+   High-frequency monitor ticker, mock-mode, and alert-resolution broadcast
+   signals are current-state invalidations. They must call the WebSocket hub's
+   lazy current-state broadcast path and let the hub resolve tenant-aware
+   frontend state after coalescing; monitor callsites must not build or retain
+   full frontend-state snapshots for supersedable broadcast signals.
 14. Add or change Proxmox-side LXC Docker detection or inventory through
    `internal/monitoring/docker_detection.go`,
    `internal/monitoring/monitor_pve_guest_poll.go`,

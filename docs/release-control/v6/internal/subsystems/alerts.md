@@ -211,6 +211,11 @@ and severity-change re-notifications. Accepted alert dispatch must record
 `LastNotified` back onto the live active-alert state before persistence, even
 when a restored or replayed alert is dispatched through a clone, so reloads do
 not reopen the same alert's notification window.
+Recently resolved alerts are an operator-facing transition window, not an
+unbounded history store. `recentlyResolved` must prune expired entries and cap
+the newest retained entries on insert as well as during cleanup, so monitor
+sync and websocket state snapshots remain bounded; durable resolved-alert
+history belongs in the alert history store, not in this live transition cache.
 The browser thresholds surface is also platform-shaped: Proxmox, Docker,
 Kubernetes, TrueNAS, vSphere, PBS, PMG, and Systems. It must use the shared
 FilterBar chip and "+ Filter" pattern for resource filtering, and alert tables

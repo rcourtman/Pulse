@@ -159,6 +159,14 @@ checks. CSRF bootstrap checks may snapshot local auth, API-token, and proxy
 secret presence under that same lock, then evaluate SSO provider state outside
 the config lock.
 
+WebSocket state refreshes triggered by API handlers are invalidation signals,
+not a parallel API payload contract. `internal/api/agent_handlers_base.go` and
+`internal/api/alerts.go` may check subscriber counts, then call
+`BroadcastCurrentState` / `BroadcastCurrentStateToTenant`; they must not build
+or retain full frontend-state payloads at the handler boundary. The WebSocket
+hub owns tenant-aware state resolution after coalescing, through the same state
+getter that backs the canonical `/api/state` payload.
+
 Candidate import plans for PVE/PBS/PMG onboarding are API-contract consumers,
 not local UI estimates. Probe and Discovery candidates must build their
 preview through `frontend-modern/src/api/monitoredSystemLedger.ts` and

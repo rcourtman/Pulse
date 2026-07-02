@@ -2,6 +2,7 @@ package alerts
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -18,7 +19,43 @@ func (m *Manager) addRecentlyResolvedUnlocked(resolved *ResolvedAlert) {
 	storageKey := activeAlertStorageKey(resolved.Alert, resolved.Alert.ID)
 	m.recentlyResolved[storageKey] = resolved
 	m.registerResolvedAliasUnlocked(storageKey, resolved)
+	m.pruneRecentlyResolvedUnlocked(time.Now())
 	m.resolvedMutex.Unlock()
+}
+
+func (m *Manager) pruneRecentlyResolvedUnlocked(now time.Time) {
+	type candidate struct {
+		key        string
+		resolvedAt time.Time
+	}
+
+	cutoff := now.Add(-recentlyResolvedRetention)
+	candidates := make([]candidate, 0, len(m.recentlyResolved))
+	for key, resolved := range m.recentlyResolved {
+		if resolved == nil || resolved.ResolvedTime.Before(cutoff) {
+			m.removeResolvedAlertUnlocked(key)
+			continue
+		}
+		candidates = append(candidates, candidate{key: key, resolvedAt: resolved.ResolvedTime})
+	}
+
+	overflow := len(m.recentlyResolved) - maxRecentlyResolvedAlerts
+	if overflow <= 0 {
+		return
+	}
+
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].resolvedAt.Before(candidates[j].resolvedAt)
+	})
+
+	for _, candidate := range candidates {
+		if overflow <= 0 {
+			return
+		}
+		if _, removed := m.removeResolvedAlertUnlocked(candidate.key); removed {
+			overflow--
+		}
+	}
 }
 
 // addRecentlyResolvedWithPrimaryLock records a resolved alert while preserving the caller's

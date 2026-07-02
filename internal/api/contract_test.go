@@ -19655,3 +19655,51 @@ func TestContract_LocalAuthConfigReadsUseSharedLock(t *testing.T) {
 		}
 	}
 }
+
+func TestContract_StateBroadcastsUseLazyCurrentStateInvalidation(t *testing.T) {
+	expectations := map[string]struct {
+		required  []string
+		forbidden []string
+	}{
+		"agent_handlers_base.go": {
+			required: []string{
+				"b.wsHub.BroadcastCurrentStateToTenant(orgID)",
+				"b.wsHub.BroadcastCurrentState()",
+			},
+			forbidden: []string{
+				"monitor.BuildFrontendState()",
+				"BroadcastStateToTenant(orgID, state)",
+				"BroadcastState(state)",
+			},
+		},
+		"alerts.go": {
+			required: []string{
+				"h.wsHub.BroadcastCurrentStateToTenant(orgID)",
+				"h.wsHub.BroadcastCurrentState()",
+			},
+			forbidden: []string{
+				"h.getMonitor(ctx).BuildFrontendState()",
+				"BroadcastStateToTenant(orgID, frontendState)",
+				"BroadcastState(frontendState)",
+			},
+		},
+	}
+
+	for file, expectation := range expectations {
+		sourceBytes, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("read %s: %v", file, err)
+		}
+		source := string(sourceBytes)
+		for _, snippet := range expectation.required {
+			if !strings.Contains(source, snippet) {
+				t.Fatalf("%s must contain lazy state invalidation primitive %q", file, snippet)
+			}
+		}
+		for _, snippet := range expectation.forbidden {
+			if strings.Contains(source, snippet) {
+				t.Fatalf("%s must not eagerly build or broadcast full state at mutation boundary: found %q", file, snippet)
+			}
+		}
+	}
+}

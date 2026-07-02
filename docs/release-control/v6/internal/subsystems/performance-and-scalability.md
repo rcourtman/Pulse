@@ -148,6 +148,11 @@ regression protection.
 1. Add performance budgets through SLO or contract tests
 2. Add query-plan guardrails for DB-backed hot paths
 3. Optimize hot paths only when backed by benchmarks or proven query issues
+   WebSocket state refreshes on monitor, agent-report, and alert mutation hot
+   paths must enqueue coalesced current-state invalidations instead of building
+   full frontend-state payloads at every signal. The hub owns delayed
+   tenant-aware state resolution so superseded signals do not retain large
+   state snapshots.
    The operations-loop status endpoint is performance-adjacent because it
    aggregates fleet, action-audit, workflow-starter, AI-usage, and
    external-agent activity evidence for every request. Starter and contextual

@@ -1908,12 +1908,10 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 				Int("pbsBackups", len(state.Backups.PBS)).
 				Int("physicalDisks", len(state.PhysicalDisks)).
 				Msg("Broadcasting state update (ticker)")
-			if !stateBroadcasterHasSubscribers(wsHub, m.GetOrgID()) {
+			if !currentStateBroadcasterHasSubscribers(wsHub, m.GetOrgID()) {
 				continue
 			}
-			frontendState := m.buildBroadcastFrontendStateFromSnapshot(state)
-			// Use tenant-aware broadcast method
-			m.broadcastState(wsHub, frontendState)
+			m.broadcastCurrentState(wsHub)
 
 		case <-ctx.Done():
 			log.Info().Msg("monitoring loop stopped")
@@ -3882,6 +3880,11 @@ type stateBroadcaster interface {
 	BroadcastStateToTenant(orgID string, state interface{})
 }
 
+type currentStateBroadcaster interface {
+	BroadcastCurrentState()
+	BroadcastCurrentStateToTenant(orgID string)
+}
+
 type stateSubscriberCounter interface {
 	GetClientCount() int
 	GetTenantClientCount(orgID string) int
@@ -3889,6 +3892,23 @@ type stateSubscriberCounter interface {
 
 func stateBroadcasterHasSubscribers(hub stateBroadcaster, orgID string) bool {
 	if isNilStateBroadcaster(hub) {
+		return false
+	}
+
+	counter, ok := hub.(stateSubscriberCounter)
+	if !ok {
+		return true
+	}
+
+	orgID = strings.TrimSpace(orgID)
+	if orgID != "" {
+		return counter.GetTenantClientCount(orgID) > 0
+	}
+	return counter.GetClientCount() > 0
+}
+
+func currentStateBroadcasterHasSubscribers(hub currentStateBroadcaster, orgID string) bool {
+	if isNilCurrentStateBroadcaster(hub) {
 		return false
 	}
 
@@ -3923,7 +3943,37 @@ func (m *Monitor) broadcastState(hub stateBroadcaster, frontendState interface{}
 	}
 }
 
+func (m *Monitor) broadcastCurrentState(hub currentStateBroadcaster) {
+	if isNilCurrentStateBroadcaster(hub) {
+		return
+	}
+
+	orgID := strings.TrimSpace(m.GetOrgID())
+	if !currentStateBroadcasterHasSubscribers(hub, orgID) {
+		return
+	}
+	if orgID != "" {
+		hub.BroadcastCurrentStateToTenant(orgID)
+	} else {
+		hub.BroadcastCurrentState()
+	}
+}
+
 func isNilStateBroadcaster(hub stateBroadcaster) bool {
+	if hub == nil {
+		return true
+	}
+
+	value := reflect.ValueOf(hub)
+	switch value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice:
+		return value.IsNil()
+	default:
+		return false
+	}
+}
+
+func isNilCurrentStateBroadcaster(hub currentStateBroadcaster) bool {
 	if hub == nil {
 		return true
 	}
@@ -3989,10 +4039,8 @@ func (m *Monitor) SetMockMode(enable bool) error {
 	hub := m.wsHub
 	m.mu.RUnlock()
 
-	if hub != nil && stateBroadcasterHasSubscribers(hub, m.GetOrgID()) {
-		frontendState := m.buildBroadcastFrontendStateFromSnapshot(m.GetState())
-		// Use tenant-aware broadcast method
-		m.broadcastState(hub, frontendState)
+	if hub != nil {
+		m.broadcastCurrentState(hub)
 	}
 
 	if enable && ctx != nil && keepRealPollingInMockMode() {

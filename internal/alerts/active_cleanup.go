@@ -139,13 +139,8 @@ func (m *Manager) Cleanup(maxAge time.Duration) {
 		}
 	}
 
-	fiveMinutesAgo := now.Add(-5 * time.Minute)
 	m.resolvedMutex.Lock()
-	for alertID, resolved := range m.recentlyResolved {
-		if resolved.ResolvedTime.Before(fiveMinutesAgo) {
-			m.removeResolvedAlertUnlocked(alertID)
-		}
-	}
+	m.pruneRecentlyResolvedUnlocked(now)
 	m.resolvedMutex.Unlock()
 
 	maxPendingAge := 10 * time.Minute

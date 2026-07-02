@@ -278,13 +278,7 @@ func (m *Monitor) broadcastStateUpdate() {
 	if hub == nil {
 		return
 	}
-	if !stateBroadcasterHasSubscribers(hub, m.GetOrgID()) {
-		return
-	}
-
-	frontendState := m.BuildBroadcastFrontendState()
-	// Use tenant-aware broadcast method
-	m.broadcastState(hub, frontendState)
+	m.broadcastCurrentState(hub)
 }
 
 // recordAuthFailure records an authentication failure for a node

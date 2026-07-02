@@ -1,6 +1,7 @@
 package websocket
 
 import (
+	"encoding/json"
 	"math"
 	"net/http"
 	"testing"
@@ -933,5 +934,78 @@ func TestHub_CheckOrigin_UntrustedProxyIgnoresForwarded(t *testing.T) {
 	result := hub.checkOrigin(req)
 	if result {
 		t.Error("checkOrigin should reject forwarded headers from untrusted peers")
+	}
+}
+
+func TestBroadcastCurrentStateEnqueuesLazyStateRequest(t *testing.T) {
+	getterCalls := 0
+	hub := NewHub(func(orgID string) interface{} {
+		getterCalls++
+		return map[string]string{"org": orgID}
+	})
+
+	hub.BroadcastCurrentState()
+
+	msg := <-hub.broadcastSeq
+	if msg.Type != "rawData" {
+		t.Fatalf("message type = %q, want rawData", msg.Type)
+	}
+	if _, ok := msg.Data.(stateBroadcastRequest); !ok {
+		t.Fatalf("message data = %T, want stateBroadcastRequest", msg.Data)
+	}
+	if getterCalls != 0 {
+		t.Fatalf("state getter called before coalesced flush: %d", getterCalls)
+	}
+
+	data, ok := hub.marshalBroadcastMessage(msg, "")
+	if !ok {
+		t.Fatal("expected lazy state request to marshal")
+	}
+	if getterCalls != 1 {
+		t.Fatalf("state getter calls after marshal = %d, want 1", getterCalls)
+	}
+
+	var decoded Message
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal broadcast message: %v", err)
+	}
+	payload := decoded.Data.(map[string]interface{})
+	if payload["org"] != "default" {
+		t.Fatalf("lazy state org = %v, want default", payload["org"])
+	}
+}
+
+func TestBroadcastCurrentStateToTenantResolvesTenantState(t *testing.T) {
+	var requestedOrg string
+	hub := NewHub(func(orgID string) interface{} {
+		requestedOrg = orgID
+		return map[string]string{"org": orgID}
+	})
+
+	hub.BroadcastCurrentStateToTenant("org-123")
+
+	tb := <-hub.tenantBroadcast
+	if tb.OrgID != "org-123" {
+		t.Fatalf("tenant broadcast org = %q, want org-123", tb.OrgID)
+	}
+	if _, ok := tb.Message.Data.(stateBroadcastRequest); !ok {
+		t.Fatalf("tenant message data = %T, want stateBroadcastRequest", tb.Message.Data)
+	}
+
+	data, ok := hub.marshalBroadcastMessage(tb.Message, tb.OrgID)
+	if !ok {
+		t.Fatal("expected tenant lazy state request to marshal")
+	}
+	if requestedOrg != "org-123" {
+		t.Fatalf("state getter org = %q, want org-123", requestedOrg)
+	}
+
+	var decoded Message
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal tenant broadcast message: %v", err)
+	}
+	payload := decoded.Data.(map[string]interface{})
+	if payload["org"] != "org-123" {
+		t.Fatalf("lazy tenant state org = %v, want org-123", payload["org"])
 	}
 }

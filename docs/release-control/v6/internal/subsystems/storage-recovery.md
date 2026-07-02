@@ -588,6 +588,12 @@ recovery scope, or a storage/recovery-owned secret source.
    state payload must publish the same canonical resource types and display
    labels as `/api/resources` so storage and recovery do not momentarily switch
    between legacy and canonical infrastructure identities within one session.
+   WebSocket current-state refreshes are an API/monitoring invalidation
+   mechanism. Storage and recovery consumers may observe refreshed canonical
+   resource, backup, and recovery state after the hub resolves the coalesced
+   payload, but they must not treat the refresh event itself as backup
+   evidence, recovery coverage proof, recovery-job state, or storage-health
+   verification.
    Adjacent list surfaces that build `/api/resources` queries with standard
    browser encoders must also treat `%2C` separators the same as literal
    comma-separated type filters, so storage and recovery consumers do not lose

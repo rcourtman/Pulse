@@ -373,6 +373,10 @@ type TenantBroadcast struct {
 	Message Message
 }
 
+type stateBroadcastRequest struct {
+	orgID string
+}
+
 // OrgAuthChecker checks if a user/token can access an organization.
 type OrgAuthChecker interface {
 	// CanAccessOrg checks if the given user (and optional token) can access the org.
@@ -470,12 +474,19 @@ func (h *Hub) hasStateGetter() bool {
 
 // getStateForClient returns the state for a specific client based on their tenant
 func (h *Hub) getStateForClient(client *Client) interface{} {
+	if client == nil {
+		return h.getStateForOrg("")
+	}
+	return h.getStateForOrg(client.orgID)
+}
+
+func (h *Hub) getStateForOrg(orgID string) interface{} {
 	h.mu.RLock()
 	getState := h.getState
 	h.mu.RUnlock()
 
 	if getState != nil {
-		return getState(normalizeOrgID(client.orgID))
+		return getState(normalizeOrgID(orgID))
 	}
 
 	return nil
@@ -922,6 +933,65 @@ func (h *Hub) popCoalescedMessage() *Message {
 	return &msg
 }
 
+func (h *Hub) messageHasCurrentStateRequest(msg Message) (stateBroadcastRequest, bool) {
+	req, ok := msg.Data.(stateBroadcastRequest)
+	return req, ok
+}
+
+func (h *Hub) hasRecipientsForMessage(msg Message, orgID string) bool {
+	if _, ok := h.messageHasCurrentStateRequest(msg); !ok {
+		return true
+	}
+	if orgID != "" {
+		return h.GetTenantClientCount(orgID) > 0
+	}
+	return h.GetClientCount() > 0
+}
+
+func (h *Hub) prepareMessageForMarshal(msg Message, orgID string) (Message, bool) {
+	req, ok := h.messageHasCurrentStateRequest(msg)
+	if !ok {
+		return msg, true
+	}
+
+	requestOrgID := strings.TrimSpace(req.orgID)
+	if requestOrgID == "" {
+		requestOrgID = orgID
+	}
+
+	h.mu.RLock()
+	hasGetter := h.getState != nil
+	h.mu.RUnlock()
+	if !hasGetter {
+		log.Warn().
+			Str("component", websocketHubComponent).
+			Str("action", "current_state_broadcast_skipped_missing_getter").
+			Str("org_id", normalizeOrgID(requestOrgID)).
+			Msg("Skipping current state broadcast because no state getter is configured")
+		return Message{}, false
+	}
+
+	msg.Data = h.prepareStateForBroadcast(h.getStateForOrg(requestOrgID))
+	return msg, true
+}
+
+func (h *Hub) marshalBroadcastMessage(msg Message, orgID string) ([]byte, bool) {
+	prepared, ok := h.prepareMessageForMarshal(msg, orgID)
+	if !ok {
+		return nil, false
+	}
+	data, err := json.Marshal(prepared)
+	if err != nil {
+		if orgID != "" {
+			log.Error().Err(err).Str("org_id", orgID).Str("type", prepared.Type).Msg("Failed to marshal tenant broadcast message")
+		} else {
+			log.Error().Err(err).Str("type", prepared.Type).Msg("Failed to marshal broadcast message")
+		}
+		return nil, false
+	}
+	return data, true
+}
+
 // runBroadcastSequencer handles sequenced broadcasts with coalescing for rapid state updates
 func (h *Hub) runBroadcastSequencer() {
 	for {
@@ -944,10 +1014,11 @@ func (h *Hub) runBroadcastSequencer() {
 				h.coalesceTimer = time.AfterFunc(h.coalesceWindow, func() {
 					pending := h.popCoalescedMessage()
 					if pending != nil {
-						if data, err := json.Marshal(*pending); err == nil {
+						if !h.hasRecipientsForMessage(*pending, "") {
+							return
+						}
+						if data, ok := h.marshalBroadcastMessage(*pending, ""); ok {
 							h.dispatchToClients(data, "Client send channel full, dropping coalesced message and closing connection")
-						} else {
-							log.Error().Err(err).Str("type", pending.Type).Msg("Failed to marshal coalesced broadcast message")
 						}
 					}
 				})
@@ -955,10 +1026,8 @@ func (h *Hub) runBroadcastSequencer() {
 				h.coalesceMutex.Unlock()
 			} else {
 				// Non-state messages (alerts, etc.) - send immediately
-				if data, err := json.Marshal(msg); err == nil {
+				if data, ok := h.marshalBroadcastMessage(msg, ""); ok {
 					h.dispatchToClients(data, "Client send channel full, dropping message and closing connection")
-				} else {
-					log.Error().Err(err).Str("type", msg.Type).Msg("Failed to marshal broadcast message")
 				}
 			}
 
@@ -986,10 +1055,11 @@ func (h *Hub) runBroadcastSequencer() {
 					h.coalesceMutex.Unlock()
 
 					if pending != nil {
-						if data, err := json.Marshal(*pending); err == nil {
+						if !h.hasRecipientsForMessage(*pending, orgID) {
+							return
+						}
+						if data, ok := h.marshalBroadcastMessage(*pending, orgID); ok {
 							h.dispatchToTenantClients(orgID, data, "Client send channel full, dropping tenant coalesced message and closing connection")
-						} else {
-							log.Error().Err(err).Str("org_id", orgID).Str("type", pending.Type).Msg("Failed to marshal tenant coalesced broadcast message")
 						}
 					}
 				})
@@ -997,10 +1067,8 @@ func (h *Hub) runBroadcastSequencer() {
 				h.coalesceMutex.Unlock()
 			} else {
 				// Non-state messages - send immediately to tenant
-				if data, err := json.Marshal(tb.Message); err == nil {
+				if data, ok := h.marshalBroadcastMessage(tb.Message, tb.OrgID); ok {
 					h.dispatchToTenantClients(tb.OrgID, data, "Client send channel full, dropping tenant message and closing connection")
-				} else {
-					log.Error().Err(err).Str("org_id", tb.OrgID).Str("type", tb.Message.Type).Msg("Failed to marshal tenant broadcast message")
 				}
 			}
 
@@ -1052,6 +1120,33 @@ func (h *Hub) BroadcastState(state interface{}) {
 	}
 }
 
+// BroadcastCurrentState coalesces a state-change signal and resolves the current
+// tenant-aware state only when the broadcast window is ready to flush.
+func (h *Hub) BroadcastCurrentState() {
+	if h.isStopping() {
+		log.Debug().Msg("Skipping current state broadcast while hub is stopping")
+		return
+	}
+
+	log.Debug().Msg("broadcasting current state")
+	msg := Message{
+		Type: "rawData",
+		Data: stateBroadcastRequest{},
+	}
+
+	select {
+	case h.broadcastSeq <- msg:
+	default:
+		log.Warn().
+			Str("component", websocketHubComponent).
+			Str("action", "enqueue_state_dropped").
+			Str("channel", "broadcast_seq").
+			Int("channel_depth", len(h.broadcastSeq)).
+			Int("channel_capacity", cap(h.broadcastSeq)).
+			Msg("Broadcast sequencer channel full, dropping state update")
+	}
+}
+
 // BroadcastStateToTenant broadcasts state update only to clients of a specific tenant.
 func (h *Hub) BroadcastStateToTenant(orgID string, state interface{}) {
 	if h.isStopping() {
@@ -1068,6 +1163,35 @@ func (h *Hub) BroadcastStateToTenant(orgID string, state interface{}) {
 	}
 
 	// Send through tenant broadcast channel
+	select {
+	case h.tenantBroadcast <- TenantBroadcast{OrgID: orgID, Message: msg}:
+	default:
+		log.Warn().
+			Str("component", websocketHubComponent).
+			Str("action", "enqueue_tenant_state_dropped").
+			Str("org_id", orgID).
+			Str("channel", "tenant_broadcast").
+			Int("channel_depth", len(h.tenantBroadcast)).
+			Int("channel_capacity", cap(h.tenantBroadcast)).
+			Msg("Tenant broadcast channel full, dropping state update")
+	}
+}
+
+// BroadcastCurrentStateToTenant coalesces a tenant state-change signal and
+// resolves that tenant's current state only when the broadcast window flushes.
+func (h *Hub) BroadcastCurrentStateToTenant(orgID string) {
+	orgID = normalizeOrgID(orgID)
+	if h.isStopping() {
+		log.Debug().Str("org_id", orgID).Msg("Skipping tenant current state broadcast while hub is stopping")
+		return
+	}
+
+	log.Debug().Str("org_id", orgID).Msg("Broadcasting current state to tenant")
+	msg := Message{
+		Type: "rawData",
+		Data: stateBroadcastRequest{orgID: orgID},
+	}
+
 	select {
 	case h.tenantBroadcast <- TenantBroadcast{OrgID: orgID, Message: msg}:
 	default:

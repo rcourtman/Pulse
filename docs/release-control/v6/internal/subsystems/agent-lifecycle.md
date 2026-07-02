@@ -635,6 +635,13 @@ surface and no new `internal/api/` lifecycle handler.
    registrations are the only source that may display the operator-facing
    success toast, while background agent registrations must update the ledger
    without claiming the operator just added that node.
+   Lifecycle-adjacent handlers that refresh browser state after agent reports
+   or registration changes may emit canonical lifecycle events when the event
+   contract requires it, but routine state refresh is an API/monitoring-owned
+   current-state invalidation signal. Those handlers must not build or retain
+   full frontend state in the lifecycle boundary, and lifecycle consumers must
+   not treat a coalesced websocket state refresh as install, registration,
+   command, or update proof.
    Shared `internal/api/` session and auth changes consumed by lifecycle
    routes must preserve durable principal IDs as the authorization key. Agent
    lifecycle surfaces may display contact email when supplied by the shared

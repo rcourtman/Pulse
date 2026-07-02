@@ -2437,3 +2437,41 @@ func TestAgentFleetDoctorStaysReadOnlyProjection(t *testing.T) {
 		}
 	}
 }
+
+func TestStateBroadcastSignalsUseLazyCurrentState(t *testing.T) {
+	monitorSourceBytes, err := os.ReadFile("monitor.go")
+	if err != nil {
+		t.Fatalf("read monitor.go: %v", err)
+	}
+	monitorSource := string(monitorSourceBytes)
+	for _, required := range []string{
+		"m.broadcastCurrentState(wsHub)",
+		"m.broadcastCurrentState(hub)",
+		"hub.BroadcastCurrentStateToTenant(orgID)",
+		"hub.BroadcastCurrentState()",
+	} {
+		if !strings.Contains(monitorSource, required) {
+			t.Fatalf("monitor.go must contain lazy state broadcast primitive %q", required)
+		}
+	}
+	for _, forbidden := range []string{
+		"m.buildBroadcastFrontendStateFromSnapshot(state)\n\t\t\tm.broadcastState(wsHub",
+		"frontendState := m.buildBroadcastFrontendStateFromSnapshot(m.GetState())",
+	} {
+		if strings.Contains(monitorSource, forbidden) {
+			t.Fatalf("monitor.go must not build full frontend state at high-frequency broadcast callsite %q", forbidden)
+		}
+	}
+
+	alertSourceBytes, err := os.ReadFile("monitor_alerts.go")
+	if err != nil {
+		t.Fatalf("read monitor_alerts.go: %v", err)
+	}
+	alertSource := string(alertSourceBytes)
+	if !strings.Contains(alertSource, "m.broadcastCurrentState(hub)") {
+		t.Fatal("monitor_alerts.go must signal lazy current-state broadcasts")
+	}
+	if strings.Contains(alertSource, "m.BuildBroadcastFrontendState()") {
+		t.Fatal("monitor_alerts.go must not build full frontend state for alert-driven broadcast signals")
+	}
+}

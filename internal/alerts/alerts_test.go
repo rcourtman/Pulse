@@ -19255,3 +19255,42 @@ func addDeliveryDiagnosisAlert(manager *Manager, alert *Alert) *Alert {
 	manager.activeAlerts[alert.ID] = alert
 	return alert
 }
+
+func TestRecentlyResolvedPrunesExpiredEntriesOnInsert(t *testing.T) {
+	manager := NewManager()
+	t.Cleanup(manager.Stop)
+
+	manager.addRecentlyResolvedUnlocked(&ResolvedAlert{
+		Alert:        &Alert{ID: "expired-alert"},
+		ResolvedTime: time.Now().Add(-recentlyResolvedRetention - time.Minute),
+	})
+
+	if resolved := manager.GetResolvedAlert("expired-alert"); resolved != nil {
+		t.Fatalf("expired recently resolved alert was retained: %#v", resolved)
+	}
+}
+
+func TestRecentlyResolvedCapsNewestEntries(t *testing.T) {
+	manager := NewManager()
+	t.Cleanup(manager.Stop)
+
+	start := time.Now().Add(-time.Minute)
+	for i := 0; i < maxRecentlyResolvedAlerts+3; i++ {
+		manager.addRecentlyResolvedUnlocked(&ResolvedAlert{
+			Alert:        &Alert{ID: fmt.Sprintf("resolved-%04d", i)},
+			ResolvedTime: start.Add(time.Duration(i) * time.Millisecond),
+		})
+	}
+
+	resolved := manager.GetRecentlyResolved()
+	if len(resolved) != maxRecentlyResolvedAlerts {
+		t.Fatalf("recently resolved count = %d, want %d", len(resolved), maxRecentlyResolvedAlerts)
+	}
+
+	if manager.GetResolvedAlert("resolved-0000") != nil {
+		t.Fatal("oldest overflow entry was retained")
+	}
+	if manager.GetResolvedAlert(fmt.Sprintf("resolved-%04d", maxRecentlyResolvedAlerts+2)) == nil {
+		t.Fatal("newest recently resolved entry was pruned")
+	}
+}

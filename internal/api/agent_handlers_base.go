@@ -91,10 +91,9 @@ func (b *baseAgentHandlers) broadcastState(ctx context.Context) {
 		return
 	}
 
-	state := monitor.BuildFrontendState()
 	if orgID != "" {
-		go b.wsHub.BroadcastStateToTenant(orgID, state)
+		b.wsHub.BroadcastCurrentStateToTenant(orgID)
 		return
 	}
-	go b.wsHub.BroadcastState(state)
+	b.wsHub.BroadcastCurrentState()
 }

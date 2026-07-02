@@ -128,12 +128,15 @@ func (h *AlertHandlers) broadcastStateForContext(ctx context.Context) {
 		return
 	}
 
-	frontendState := h.getMonitor(ctx).BuildFrontendState()
-	if orgID != "" {
-		h.wsHub.BroadcastStateToTenant(orgID, frontendState)
+	monitor := h.getMonitor(ctx)
+	if monitor == nil {
 		return
 	}
-	h.wsHub.BroadcastState(frontendState)
+	if orgID != "" {
+		h.wsHub.BroadcastCurrentStateToTenant(orgID)
+		return
+	}
+	h.wsHub.BroadcastCurrentState()
 }
 
 // validateAlertIdentifier validates an alert identifier for security.
