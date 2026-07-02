@@ -173,7 +173,7 @@ export function getDockerUpdateActionsUpdateErrorMessage(message?: string): stri
 }
 
 export function getTelemetryUpdateErrorMessage(message?: string): string {
-  return message || 'Unable to update anonymous telemetry.';
+  return message || 'Unable to update outbound usage telemetry.';
 }
 
 export function getTemperatureMonitoringUpdateErrorMessage(message?: string): string {

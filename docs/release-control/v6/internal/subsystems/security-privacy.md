@@ -398,7 +398,7 @@ the API boundary before it reaches persisted AI config: the settings handler
 trim, drop blanks, de-duplicate) so untrusted request bodies cannot widen the
 alert-driven investigation surface beyond the validated shape.
 That same governed home now also owns the single customer-facing "usage data"
-vocabulary for anonymous outbound telemetry. Local commercial activation and
+vocabulary for outbound usage telemetry. Local commercial activation and
 license-recovery runtime records must stay out of ordinary Settings, support
 diagnostics, outbound telemetry disclosure copy, and public configuration
 reference tables.
@@ -607,14 +607,14 @@ That same disclosure boundary now also fixes the telemetry payload floor:
 commercial and auth-adjacent telemetry may report only coarse posture signals
 such as whether a paid license is active or whether any API tokens exist.
 Exact license tiers and exact API-token counts are not part of the canonical
-anonymous telemetry contract and may not be reintroduced without updating this
+outbound usage telemetry contract and may not be reintroduced without updating this
 trust boundary and the governed privacy disclosure together.
 That same rule also applies at the license-server ingest and storage boundary:
 server-side telemetry rows may preserve the canonical normalized version
 identity plus those same coarse booleans, but they must not retain legacy
 exact commercial tier or exact API-token count fields as first-class analytics
 dimensions just because older clients once sent them.
-That same anonymous telemetry floor now also permits only privacy-safe
+That same outbound usage telemetry floor now also permits only privacy-safe
 aggregate self-hosted adoption counters: counts of monitored platforms,
 workloads, storage resources, physical disks, Ceph clusters, network shares,
 TrueNAS and VMware resource categories, availability targets, and active
@@ -622,7 +622,7 @@ alerts. Those counts may describe scale and feature adoption, but they must not
 include hostnames, resource IDs, infrastructure identifiers, credentials,
 prompts, chat messages, command text, action output, token values, or personal
 information.
-That same anonymous telemetry floor now also permits content-free update
+That same outbound usage telemetry floor now also permits content-free update
 funnel counters derived from local update history inside the same rotating
 30-day telemetry window: update attempts, successful updates, failed or
 rolled-back updates, and the latest coarse failure category. The category may
@@ -631,7 +631,7 @@ identify only the governed class (`download`, `signature`, `checksum`,
 `cancelled`, or `unknown`). It must not export raw updater error text,
 download URLs, command output, log lines, paths, hostnames, release asset URLs,
 checksums, signatures, or operator-entered values.
-That same anonymous telemetry floor now also permits only content-free Pulse
+That same outbound usage telemetry floor now also permits only content-free Pulse
 Patrol control and governed Pulse Intelligence operations adoption flags and
 counters inside the same rotating 30-day telemetry window:
 configured/active/completed/resolved governed-operation and approved-execution
@@ -713,7 +713,7 @@ content-free Pulse Intelligence fields only alongside the canonical coarse
 entry-to-retention cohorts, paid Patrol-control completed/resolved
 cohorts, and observed free-to-paid conversion counts without linking telemetry
 to customer accounts or storing exact commercial tiers. The report may also
-derive or persist a completed governed-operation signal from those same anonymous
+derive or persist a completed governed-operation signal from those same content-free
 fields, but completion may only mean observed Patrol
 issue evidence plus Assistant governed-context or MCP collaboration activity
 plus approved/rejected governed-action decision evidence inside the source window;
@@ -733,7 +733,7 @@ collaboration, and at least one approved governed action completed
 successfully. It may not encode finding IDs, resource IDs, fix details,
 verification detail, command text, action output, approver identity, or a
 causal claim that the approved action directly resolved the finding.
-The Patrol control completed-loop status count follows that same anonymous
+The Patrol control completed-loop status count follows that same content-free telemetry
 evidence contract: it may only mean the same content-free window also had
 Patrol issue evidence, contextual collaboration, and either a rejected governed
 decision or an approved governed decision with verified outcome proof. Legacy
@@ -741,7 +741,7 @@ Patrol autonomy and Pro activation completed-loop fields may mirror that value
 for compatibility, but must not add checkout/account identity, prompt content,
 action identity, resource identity, finding identity, token identity, or a
 causality claim.
-The Patrol control resolved-loop status count follows that same anonymous
+The Patrol control resolved-loop status count follows that same content-free telemetry
 evidence contract: it may only mean the same content-free window also had
 Patrol issue evidence, contextual collaboration, an approved governed decision,
 and verified outcome proof. It must not require MCP readiness, treat rejected
@@ -751,7 +751,7 @@ the status projection and outbound telemetry must derive these Patrol control
 completed/resolved values through the shared `internal/telemetry` proof
 classifier so privacy-sensitive reporting cannot drift into a richer runtime
 event join in one caller.
-That same anonymous telemetry contract also treats `install_id` as a rotating
+That same outbound usage telemetry contract also treats `install_id` as a rotating
 pseudonymous identifier, not a lifetime install handle. The runtime may keep a
 local rotating UUID so startup and heartbeat pings can still represent an
 active installation window, but it may not preserve one stable install

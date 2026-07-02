@@ -1,4 +1,4 @@
-// Package telemetry provides anonymous usage telemetry for Pulse.
+// Package telemetry provides outbound usage telemetry for Pulse.
 //
 // Pulse sends a lightweight ping on startup and once every 24 hours to help the
 // developer understand how many active installations exist and which features are
@@ -41,17 +41,17 @@
 //
 // # What is NOT sent
 //
-//   - No IP addresses are stored server-side
+//   - No IP addresses are included in the payload or stored in telemetry rows
 //   - No hostnames, node names, VM names, or any infrastructure identifiers
 //   - No Proxmox credentials, API tokens, or passwords
 //   - No alert content, AI prompts, chat messages, command text, action output, or token values
 //   - No action targets, resource IDs, finding IDs, approval actors, or approval reasons
-//   - No personally identifiable information of any kind
+//   - No names, email addresses, account identifiers, or other intentionally identifying personal content
 //
 // # How to disable
 //
 // Set the environment variable PULSE_TELEMETRY=false, or toggle off
-// "Anonymous outbound telemetry" in Settings → System → General.
+// "Outbound usage telemetry" in Settings → System → General.
 package telemetry
 
 import (
@@ -73,7 +73,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// pingEndpoint is the URL that receives anonymous telemetry pings.
+// pingEndpoint is the URL that receives outbound usage telemetry pings.
 // It is a var (not const) so that tests can redirect it to a local server.
 var pingEndpoint = "https://license.pulserelay.pro/v1/telemetry/ping"
 
@@ -440,7 +440,7 @@ type PulseIntelligencePatrolControlProofInput struct {
 }
 
 // PulseIntelligencePatrolControlProof is the shared classification used by
-// the native status endpoint and anonymous outbound telemetry.
+// the native status endpoint and outbound usage telemetry.
 type PulseIntelligencePatrolControlProof struct {
 	Completed       bool
 	Resolved        bool
@@ -591,15 +591,15 @@ var (
 	current *runner
 )
 
-// Start begins anonymous outbound telemetry if enabled.
+// Start begins outbound usage telemetry if enabled.
 // It reads or creates a rotating install ID in dataDir, waits for the monitor
 // to populate state, sends a startup ping, and schedules a daily heartbeat.
 // Call Stop() on shutdown.
 //
-// This is a no-op when anonymous outbound telemetry is not opted in.
+// This is a no-op when outbound usage telemetry is disabled.
 func Start(ctx context.Context, cfg Config) {
 	if !cfg.Enabled {
-		log.Info().Msg("Anonymous outbound telemetry is disabled (enable via PULSE_TELEMETRY=true or Settings → System)")
+		log.Info().Msg("Outbound usage telemetry is disabled (enable via PULSE_TELEMETRY=true or Settings → System)")
 		return
 	}
 
@@ -623,7 +623,7 @@ func Start(ctx context.Context, cfg Config) {
 
 	log.Info().
 		Str("platform", base.Platform).
-		Msg("Anonymous outbound telemetry enabled — sends a rotating install ID, version identity, platform, OS/arch, resource counts, feature flags, and coarse Patrol, Assistant, and external-agent usage counters (nothing else)")
+		Msg("Outbound usage telemetry enabled — sends a rotating pseudonymous install ID, version identity, platform, OS/arch, resource counts, feature flags, and coarse Patrol, Assistant, and external-agent usage counters")
 
 	r.wg.Add(1)
 	go func() {

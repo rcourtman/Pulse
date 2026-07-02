@@ -5,7 +5,7 @@ import { EN_MESSAGES } from '@/i18n/messages';
 
 const migratedGeneralSettingsCopy = [
   'Usage data and privacy',
-  'Anonymous outbound telemetry',
+  'Outbound usage telemetry',
   'Preview payload',
   'Refresh payload',
   'Reset ID',
@@ -54,7 +54,10 @@ describe('GeneralSettingsPanel guardrails', () => {
       'retained for up to 90 days',
     );
     expect(EN_MESSAGES['settings.general.telemetry.description']).toContain(
-      'IP addresses are not stored in telemetry rows',
+      'request IP addresses are used only transiently for rate limiting',
+    );
+    expect(EN_MESSAGES['settings.general.telemetry.description']).toContain(
+      'not stored in telemetry rows',
     );
   });
 

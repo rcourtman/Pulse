@@ -23,7 +23,7 @@ func (e PulseIntelligenceAIUsageEvidence) AssistantCollaborationActive() bool {
 }
 
 // PulseIntelligenceAIUsageEvidenceFromHistory projects AI usage history into
-// the same anonymous Pulse Intelligence evidence used by telemetry and the
+// the same content-free Pulse Intelligence evidence used by telemetry and the
 // agent operations-loop status endpoint.
 func PulseIntelligenceAIUsageEvidenceFromHistory(history *config.AIUsageHistoryData, since time.Time) PulseIntelligenceAIUsageEvidence {
 	var evidence PulseIntelligenceAIUsageEvidence
@@ -103,7 +103,7 @@ func (e PulseIntelligenceExternalAgentEvidence) CollaborationCount() int {
 }
 
 // PulseIntelligenceExternalAgentEvidenceFromHistory projects external-agent
-// activity history into anonymous collaboration evidence.
+// activity history into content-free collaboration evidence.
 func PulseIntelligenceExternalAgentEvidenceFromHistory(history *config.ExternalAgentActivityHistoryData, since time.Time) PulseIntelligenceExternalAgentEvidence {
 	var evidence PulseIntelligenceExternalAgentEvidence
 	if history == nil {

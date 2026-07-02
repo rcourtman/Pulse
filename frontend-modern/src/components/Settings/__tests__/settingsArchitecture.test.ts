@@ -626,13 +626,13 @@ describe('settings architecture guardrails', () => {
       'aggregate self-hosted adoption',
     );
     expect(EN_MESSAGES['settings.general.telemetry.description']).toContain(
-      'counts, coarse feature flags, and coarse Patrol, Assistant, and external-agent usage counters',
+      'aggregate self-hosted adoption counts, coarse feature flags, and coarse Patrol, Assistant, and external-agent usage counters',
     );
     expect(EN_MESSAGES['settings.general.telemetry.description']).not.toContain(
       'Pulse Intelligence loop adoption',
     );
     expect(EN_MESSAGES['settings.general.telemetry.description']).toContain(
-      'identifiers, prompts, chat messages, command text, action output, token values, or personal information are sent.',
+      'identifiers, prompts, chat messages, command text, action output, token values, names, email addresses, or IP addresses',
     );
     expect(generalSettingsPanelSource).toContain('settings.general.telemetry.payloadAriaLabel');
     expect(generalSettingsPanelSource).toContain('settings.general.telemetry.resetId');

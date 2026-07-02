@@ -71,6 +71,14 @@ describe('WelcomeStep', () => {
         'Connect a platform API, install Pulse Agent, or use both for full coverage.',
       ),
     ).toBeInTheDocument();
+    expect(screen.getByText('Usage telemetry is enabled by default')).toBeInTheDocument();
+    expect(
+      screen.getByText(/To disable it before any ping, set PULSE_TELEMETRY=false/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Full details' })).toHaveAttribute(
+      'href',
+      '/docs/PRIVACY.md',
+    );
     expect(screen.getByText('What this token does')).toBeInTheDocument();
     expect(
       screen.getByText(

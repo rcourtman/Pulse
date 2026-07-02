@@ -950,7 +950,7 @@ reporting surface that claims installation totals must aggregate across the
 provisioned tenant set through the reloadable multi-tenant monitor boundary,
 not by reading `GetMonitor()`'s default-org compatibility shim.
 Those install-wide counts are now the canonical aggregate adoption signal for
-anonymous telemetry: monitoring owns the source counts for agent hosts, Docker
+outbound usage telemetry: monitoring owns the source counts for agent hosts, Docker
 and Kubernetes workloads, storage pools and physical disks, Ceph, network
 shares, TrueNAS systems/VMs/apps, VMware hosts/VMs/datastores, availability
 targets, and active alerts. Telemetry callers may consume those coarse totals,

@@ -127,7 +127,7 @@ describe('systemSettingsPresentation', () => {
     expect(getDockerUpdateActionsUpdateErrorMessage()).toBe(
       'Unable to update Docker / Podman update actions.',
     );
-    expect(getTelemetryUpdateErrorMessage()).toBe('Unable to update anonymous telemetry.');
+    expect(getTelemetryUpdateErrorMessage()).toBe('Unable to update outbound usage telemetry.');
     expect(getTemperatureMonitoringUpdateErrorMessage()).toBe(
       'Unable to update temperature monitoring.',
     );

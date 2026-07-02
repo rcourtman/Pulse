@@ -4,7 +4,9 @@ import { showError, showSuccess } from '@/utils/toast';
 import { apiFetch, apiFetchJSON } from '@/utils/apiClient';
 import { logger } from '@/utils/logger';
 import { copyToClipboard } from '@/utils/clipboard';
-import { Copy, Check, Terminal } from 'lucide-solid';
+import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
+import { PRIVACY_DOC_URL } from '@/utils/docsLinks';
+import { Copy, Check, Terminal, ShieldCheck } from 'lucide-solid';
 
 interface WelcomeStepProps {
   onNext: () => void;
@@ -192,6 +194,23 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
         <p class="text-sm text-muted max-w-xl mx-auto mt-2">
           <span>{t('setup.welcome.hero.coverage')}</span>
         </p>
+      </div>
+
+      <div class="mb-6 max-w-2xl mx-auto rounded-md border border-border bg-surface px-4 py-3 text-left">
+        <div class="flex items-start gap-3">
+          <ShieldCheck class="mt-0.5 h-4 w-4 shrink-0 text-blue-500" strokeWidth={2} />
+          <div class="min-w-0">
+            <p class="text-sm font-medium text-base-content">
+              {t('setup.welcome.telemetryNotice.title')}
+            </p>
+            <p class="mt-1 text-xs leading-5 text-muted">
+              {t('setup.welcome.telemetryNotice.description')}{' '}
+              <ExternalTextLink href={PRIVACY_DOC_URL} variant="muted">
+                {t('setup.welcome.telemetryNotice.detailsLink')}
+              </ExternalTextLink>
+            </p>
+          </div>
+        </div>
       </div>
 
       <Show when={!props.isUnlocked}>

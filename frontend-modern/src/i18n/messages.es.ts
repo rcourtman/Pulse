@@ -268,6 +268,10 @@ export const ES_MESSAGE_OVERRIDES = {
   'setup.welcome.hero.title': 'Bienvenido a Pulse',
   'setup.welcome.placeholder.bootstrapToken': 'Pega tu token de bootstrap',
   'setup.welcome.success.commandCopied': 'Comando copiado al portapapeles',
+  'setup.welcome.telemetryNotice.description':
+    'La telemetría de uso saliente está activada por defecto. Pulse envía un ping de inicio retrasado y un heartbeat diario con un ID de instalación seudónimo rotativo, detalles de versión/runtime, conteos agregados y flags de funciones. Para desactivarla antes de cualquier ping, define PULSE_TELEMETRY=false antes de iniciar Pulse; también puedes desactivarla luego en Ajustes.',
+  'setup.welcome.telemetryNotice.detailsLink': 'Detalles completos',
+  'setup.welcome.telemetryNotice.title': 'La telemetría de uso está activada por defecto',
   'setup.welcome.tokenHelp.afterVerify':
     'Después de que Pulse verifique este token, el siguiente paso es crear la cuenta de administrador para este servidor.',
   'setup.welcome.tokenHelp.docker':
@@ -314,7 +318,7 @@ export const ES_MESSAGE_OVERRIDES = {
   'settings.general.temperature.title': 'Unidad de temperatura',
   'settings.general.telemetry.copyJson': 'Copiar JSON',
   'settings.general.telemetry.description':
-    'Ayuda a mejorar Pulse compartiendo datos de uso salientes anónimos: un ID de instalación rotativo, identidad de versión normalizada, plataforma de ejecución, conteos agregados de adopción autohospedada, flags de funciones de alto nivel, y contadores generales de uso de Patrol, Assistant y agentes externos. No se envían hostnames, credenciales, identificadores de infraestructura, prompts, mensajes de chat, texto de comandos, salida de acciones, valores de tokens ni información personal. Las filas de telemetría se conservan hasta 90 días y las direcciones IP no se guardan en filas de telemetría.',
+    'Ayuda a mejorar Pulse compartiendo datos de uso salientes: un ID de instalación seudónimo rotativo, identidad de versión normalizada, plataforma de ejecución, conteos agregados de adopción autohospedada, flags de funciones de alto nivel, y contadores generales de uso de Patrol, Assistant y agentes externos. El payload no incluye hostnames, credenciales, identificadores de infraestructura, prompts, mensajes de chat, texto de comandos, salida de acciones, valores de tokens, nombres, direcciones de email ni direcciones IP. Las filas de telemetría se conservan hasta 90 días, y las direcciones IP de las solicitudes se usan solo transitoriamente para rate limiting y no se guardan en filas de telemetría.',
   'settings.general.telemetry.disabledPreview':
     'La telemetría está desactivada. Esta vista previa muestra el payload que Pulse enviaría si la activas.',
   'settings.general.telemetry.fullDetails': 'Detalles completos',
@@ -324,9 +328,9 @@ export const ES_MESSAGE_OVERRIDES = {
   'settings.general.telemetry.refreshPayload': 'Actualizar payload',
   'settings.general.telemetry.resetId': 'Restablecer ID',
   'settings.general.telemetry.section.description':
-    'Controla telemetría saliente anónima de esta instancia de Pulse.',
+    'Controla la telemetría de uso saliente de esta instancia de Pulse.',
   'settings.general.telemetry.section.title': 'Datos de uso y privacidad',
-  'settings.general.telemetry.title': 'Telemetría saliente anónima',
+  'settings.general.telemetry.title': 'Telemetría de uso saliente',
   'settings.general.theme.description': 'Elige claro, oscuro o sincroniza con el tema del sistema.',
   'settings.general.theme.option.dark': 'Oscuro',
   'settings.general.theme.option.light': 'Claro',

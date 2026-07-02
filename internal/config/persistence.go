@@ -1467,7 +1467,7 @@ type SystemSettings struct {
 	ReduceProUpsellNoise bool `json:"reduceProUpsellNoise,omitempty"` // Legacy compatibility preference for proactive commercial prompts
 
 	// Telemetry (enabled by default, opt-out)
-	TelemetryEnabled *bool `json:"telemetryEnabled,omitempty"` // Send anonymous usage telemetry (install ID, version, resource counts, feature flags — no PII)
+	TelemetryEnabled *bool `json:"telemetryEnabled,omitempty"` // Send outbound usage telemetry (rotating pseudonymous install ID, version, resource counts, feature flags)
 
 	// APIToken is not persisted in system settings; API tokens are managed in api_tokens.json.
 }

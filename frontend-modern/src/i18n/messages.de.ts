@@ -276,6 +276,10 @@ export const DE_MESSAGE_OVERRIDES = {
   'setup.welcome.hero.title': 'Willkommen bei Pulse',
   'setup.welcome.placeholder.bootstrapToken': 'Bootstrap-Token einfuegen',
   'setup.welcome.success.commandCopied': 'Befehl in Zwischenablage kopiert',
+  'setup.welcome.telemetryNotice.description':
+    'Ausgehende Nutzungstelemetrie ist standardmaessig aktiviert. Pulse sendet einen verzoegerten Start-Ping und einen taeglichen Heartbeat mit einer rotierenden pseudonymen Installations-ID, Release-/Runtime-Details, aggregierten Zaehlern und Funktionsflags. Um sie vor jedem Ping zu deaktivieren, setzen Sie PULSE_TELEMETRY=false, bevor Sie Pulse starten; spaeter koennen Sie sie auch in den Einstellungen ausschalten.',
+  'setup.welcome.telemetryNotice.detailsLink': 'Details',
+  'setup.welcome.telemetryNotice.title': 'Nutzungstelemetrie ist standardmaessig aktiviert',
   'setup.welcome.tokenHelp.afterVerify':
     'Nachdem Pulse dieses Token geprueft hat, erstellen Sie im naechsten Schritt das Admin-Konto fuer diesen Server.',
   'setup.welcome.tokenHelp.docker':
@@ -322,7 +326,7 @@ export const DE_MESSAGE_OVERRIDES = {
   'settings.general.temperature.title': 'Temperatureinheit',
   'settings.general.telemetry.copyJson': 'JSON kopieren',
   'settings.general.telemetry.description':
-    'Helfen Sie, Pulse zu verbessern, indem Sie anonyme ausgehende Nutzungsdaten teilen: eine rotierende Installations-ID, normalisierte Release-Identitaet, Laufzeitplattform, aggregierte Self-hosted-Nutzungszahlen, grobe Funktionsflags sowie grobe Nutzungszaehler fuer Patrol, Assistant und externe Agents. Es werden keine Hostnamen, Zugangsdaten, Infrastrukturkennungen, Prompts, Chatnachrichten, Befehlstexte, Aktionsausgaben, Token-Werte oder personenbezogenen Daten gesendet. Telemetriezeilen werden bis zu 90 Tage aufbewahrt, und IP-Adressen werden nicht in Telemetriezeilen gespeichert.',
+    'Helfen Sie, Pulse zu verbessern, indem Sie ausgehende Nutzungsdaten teilen: eine rotierende pseudonyme Installations-ID, normalisierte Release-Identitaet, Laufzeitplattform, aggregierte Self-hosted-Nutzungszahlen, grobe Funktionsflags sowie grobe Nutzungszaehler fuer Patrol, Assistant und externe Agents. Der Payload enthaelt keine Hostnamen, Zugangsdaten, Infrastrukturkennungen, Prompts, Chatnachrichten, Befehlstexte, Aktionsausgaben, Token-Werte, Namen, E-Mail-Adressen oder IP-Adressen. Telemetriezeilen werden bis zu 90 Tage aufbewahrt, und Anfrage-IP-Adressen werden nur kurzzeitig fuer Rate-Limiting verwendet und nicht in Telemetriezeilen gespeichert.',
   'settings.general.telemetry.disabledPreview':
     'Telemetrie ist derzeit deaktiviert. Diese Vorschau zeigt den Payload, den Pulse senden wuerde, wenn Sie sie aktivieren.',
   'settings.general.telemetry.fullDetails': 'Details',
@@ -332,9 +336,9 @@ export const DE_MESSAGE_OVERRIDES = {
   'settings.general.telemetry.refreshPayload': 'Payload aktualisieren',
   'settings.general.telemetry.resetId': 'ID zuruecksetzen',
   'settings.general.telemetry.section.description':
-    'Steuern Sie anonyme ausgehende Telemetrie von dieser Pulse-Instanz.',
+    'Steuern Sie ausgehende Nutzungstelemetrie von dieser Pulse-Instanz.',
   'settings.general.telemetry.section.title': 'Nutzungsdaten und Datenschutz',
-  'settings.general.telemetry.title': 'Anonyme ausgehende Telemetrie',
+  'settings.general.telemetry.title': 'Ausgehende Nutzungstelemetrie',
   'settings.general.theme.description': 'Waehlen Sie hell, dunkel oder die Systemeinstellung.',
   'settings.general.theme.option.dark': 'Dunkel',
   'settings.general.theme.option.light': 'Hell',

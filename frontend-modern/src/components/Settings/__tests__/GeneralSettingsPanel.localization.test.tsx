@@ -70,7 +70,7 @@ describe('GeneralSettingsPanel localization', () => {
       screen.getByText(/Commands, resource names, and API fields stay unchanged/),
     ).toBeInTheDocument();
     expect(screen.getByText('Usage data and privacy')).toBeInTheDocument();
-    expect(screen.getByText('Anonymous outbound telemetry')).toBeInTheDocument();
+    expect(screen.getByText('Outbound usage telemetry')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Preview payload' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Reset ID' })).toBeInTheDocument();
     expect(screen.getByText('Monitoring cadence')).toBeInTheDocument();

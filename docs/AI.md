@@ -461,7 +461,7 @@ Use this only in trusted environments.
 
 ## Privacy
 
-Patrol runs on your server and only sends the minimal context needed for analysis to the configured provider (when AI is enabled). Anonymous outbound telemetry (counts, feature flags, and coarse Patrol mode and governed Pulse Intelligence operations adoption flags and counters only; no hostnames, credentials, prompts, chat messages, command text, action output, token values, or resource identifiers) is enabled by default and can be disabled any time. See [Privacy](PRIVACY.md) for details.
+Patrol runs on your server and only sends the minimal context needed for analysis to the configured provider (when AI is enabled). Outbound usage telemetry (a rotating pseudonymous install ID, counts, feature flags, and coarse Patrol mode and governed Pulse Intelligence operations adoption flags and counters only; no hostnames, credentials, prompts, chat messages, command text, action output, token values, IP addresses, or resource identifiers in the payload) is enabled by default and can be disabled any time. See [Privacy](PRIVACY.md) for details.
 
 ---
 

@@ -109,6 +109,12 @@ handlers, including Pro activation entry-point telemetry for the same
 operations-loop prompt, is likewise API/privacy/commercial activation evidence
 only; storage and recovery surfaces must not treat it as backup readiness,
 restore capability, recovered-state proof, or storage-health verification.
+Outbound usage telemetry projection in `internal/api/telemetry_pulse_intelligence.go`
+is likewise API/privacy evidence only. Update funnel and governed-action
+adoption counters may summarize content-free activity for product analytics,
+but storage and recovery surfaces must not treat those counters as backup
+coverage, restore capability, recovery-job proof, storage-health verification,
+or evidence that a specific resource was protected or recovered.
 Proxmox page stale-agent notices are adjacent frontend and agent-lifecycle
 plumbing even though `ProxmoxPageSurface` is a storage/recovery canonical file.
 Those notices may link an operator to scoped agent update commands for

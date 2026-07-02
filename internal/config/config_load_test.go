@@ -85,6 +85,24 @@ func TestLoad_EnvOverrides(t *testing.T) {
 	assert.Equal(t, "admin", cfg.AuthUser)
 }
 
+func TestLoad_TelemetryEnabledDefaultAndEnvOverride(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+	os.Unsetenv("PULSE_TELEMETRY")
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	assert.True(t, cfg.TelemetryEnabled)
+	assert.False(t, cfg.EnvOverrides["PULSE_TELEMETRY"])
+	assert.False(t, cfg.EnvOverrides["telemetryEnabled"])
+
+	t.Setenv("PULSE_TELEMETRY", "false")
+	cfg, err = Load()
+	require.NoError(t, err)
+	assert.False(t, cfg.TelemetryEnabled)
+	assert.True(t, cfg.EnvOverrides["PULSE_TELEMETRY"])
+	assert.True(t, cfg.EnvOverrides["telemetryEnabled"])
+}
+
 func TestLoad_AgentIngestPortDefaultsDisabled(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 	os.Unsetenv("PULSE_AGENT_INGEST_PORT")

@@ -193,9 +193,13 @@ describe('i18n foundation', () => {
 
   it('keeps machine-facing identifiers unchanged in first-wave settings general catalog copy', () => {
     for (const locale of FIRST_LOCALIZATION_LOCALES) {
+      const telemetryDescription = I18N_MESSAGES[locale]['settings.general.telemetry.description'];
+
       expect(I18N_MESSAGES[locale]['settings.general.language.description']).toContain('API');
-      expect(I18N_MESSAGES[locale]['settings.general.telemetry.description']).toContain('Pulse');
-      expect(I18N_MESSAGES[locale]['settings.general.telemetry.description']).toContain('IP');
+      expect(telemetryDescription).toContain('Pulse');
+      expect(telemetryDescription).toContain('IP');
+      expect(telemetryDescription).toContain('90');
+      expect(telemetryDescription).not.toMatch(/anonymous/i);
       expect(I18N_MESSAGES[locale]['settings.general.telemetry.copyJson']).toContain('JSON');
       expect(
         t(
@@ -228,6 +232,11 @@ describe('i18n foundation', () => {
 
   it('keeps machine-facing identifiers unchanged in first-session monitoring catalog copy', () => {
     for (const locale of FIRST_LOCALIZATION_LOCALES) {
+      const telemetryNotice = I18N_MESSAGES[locale]['setup.welcome.telemetryNotice.description'];
+
+      expect(telemetryNotice).toContain('Pulse');
+      expect(telemetryNotice).toContain('PULSE_TELEMETRY=false');
+      expect(telemetryNotice).not.toMatch(/anonymous/i);
       expect(I18N_MESSAGES[locale]['setup.welcome.deploymentHint.dockerUnnamed']).toContain(
         '<pulse-container>',
       );

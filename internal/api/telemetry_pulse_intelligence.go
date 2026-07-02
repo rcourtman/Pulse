@@ -10,7 +10,7 @@ import (
 )
 
 // ApplyUpdateTelemetrySnapshot adds router-owned, content-free update funnel
-// counters to the anonymous telemetry snapshot.
+// counters to the outbound usage telemetry snapshot.
 func (r *Router) ApplyUpdateTelemetrySnapshot(s *telemetry.Snapshot, now time.Time) {
 	if r == nil || s == nil {
 		return
@@ -19,7 +19,7 @@ func (r *Router) ApplyUpdateTelemetrySnapshot(s *telemetry.Snapshot, now time.Ti
 }
 
 // GetPulseIntelligenceActionTelemetry returns count-only action-governance
-// telemetry for the anonymous Pulse Intelligence loop. It deliberately drops
+// telemetry for the outbound Pulse Intelligence usage loop. It deliberately drops
 // command text, approval actors/reasons, action outputs, and resource IDs.
 func (r *Router) GetPulseIntelligenceActionTelemetry(since time.Time) telemetry.PulseIntelligenceActionSnapshot {
 	var snapshot telemetry.PulseIntelligenceActionSnapshot

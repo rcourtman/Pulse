@@ -129,6 +129,20 @@ class AIRuntimeDocsPolicyTest(unittest.TestCase):
         self.assertNotIn('EVAL_RESOURCE_CONTEXT_FORBIDDEN="/mnt/pve/finance-db,/var/lib/homeassistant,secret"', content)
         self.assertNotRegex(content, r"(?i)understands resources before you ask")
 
+    def test_public_ai_privacy_copy_discloses_outbound_usage_telemetry(self) -> None:
+        content = read_repo_text("docs/AI.md")
+        normalized_content = " ".join(content.split())
+
+        self.assertIn("## Privacy", content)
+        self.assertIn("Outbound usage telemetry", content)
+        self.assertIn("rotating pseudonymous install ID", normalized_content)
+        self.assertIn(
+            "no hostnames, credentials, prompts, chat messages, command text, action output, token values, IP addresses, or resource identifiers in the payload",
+            normalized_content,
+        )
+        self.assertIn("enabled by default and can be disabled any time", normalized_content)
+        self.assertNotIn("anonymous telemetry", normalized_content.lower())
+
     def test_public_ai_docs_use_current_surface_naming(self) -> None:
         for doc_path in PUBLIC_AI_DOC_PATHS:
             with self.subTest(doc_path=doc_path):

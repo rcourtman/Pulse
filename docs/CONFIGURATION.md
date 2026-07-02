@@ -306,7 +306,7 @@ When `allowEmbedding` is `false`, Pulse sends `X-Frame-Options: DENY` and `frame
 | `PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION` | Allow Proxmox-side LXC Docker socket hinting with `pct exec` | `false` |
 | `PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY` | Allow Proxmox-side minimal LXC Docker inventory collection with `pct exec`; collects Docker host/container summary, not inspect/env/mount/process data | `false` |
 | `PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS` | Optional comma-separated VMID allowlist for Proxmox-side LXC Docker inventory; empty means all running Docker-enabled LXCs are eligible when inventory is enabled | *(unset)* |
-| `PULSE_TELEMETRY` | Anonymous outbound usage telemetry ([details](PRIVACY.md)); set `false` to disable | `true` |
+| `PULSE_TELEMETRY` | Outbound usage telemetry ([details](PRIVACY.md)); set `false` to disable | `true` |
 
 ### Logging Overrides
 

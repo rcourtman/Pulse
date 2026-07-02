@@ -639,6 +639,38 @@ func TestPulseIntelligenceTelemetryFieldsAreDisclosed(t *testing.T) {
 	}
 }
 
+func TestTelemetryPrivacyDocsDisclosePseudonymousIdentityAndIPHandling(t *testing.T) {
+	for _, relativePath := range []string{
+		filepath.Join("..", "..", "docs", "PRIVACY.md"),
+		filepath.Join("..", "..", "frontend-modern", "public", "docs", "PRIVACY.md"),
+	} {
+		raw, err := os.ReadFile(relativePath)
+		if err != nil {
+			t.Fatalf("read %s: %v", relativePath, err)
+		}
+		content := string(raw)
+		normalized := normalizedTelemetryDisclosureText(content)
+
+		for _, required := range []string{
+			"outbound usage telemetry",
+			"enabled by default",
+			"rotating pseudonymous install ID",
+			"PULSE_TELEMETRY=false",
+			"The license server uses request IP addresses transiently for abuse/rate limiting",
+		} {
+			if !strings.Contains(content, required) {
+				t.Errorf("%s must disclose %q", relativePath, required)
+			}
+		}
+		if !strings.Contains(normalized, "does not store ip addresses in telemetry rows") {
+			t.Errorf("%s must disclose that telemetry rows do not store IP addresses", relativePath)
+		}
+		if strings.Contains(normalized, "anonymous telemetry") {
+			t.Errorf("%s must not describe outbound usage telemetry as anonymous", relativePath)
+		}
+	}
+}
+
 func normalizedTelemetryDisclosureTableText(value string) string {
 	tableLines := make([]string, 0)
 	for _, line := range strings.Split(value, "\n") {
@@ -666,6 +698,7 @@ func normalizedTelemetryDisclosureText(value string) string {
 		".", " ",
 		":", " ",
 		";", " ",
+		"*", " ",
 		"(", " ",
 		")", " ",
 		"[", " ",

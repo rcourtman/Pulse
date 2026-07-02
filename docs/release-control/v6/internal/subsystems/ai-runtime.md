@@ -500,7 +500,7 @@ request payload.
 must update the MCP README's Pulse Intelligence surface contract and the public
 `docs/AI.md` overview from the manifest instead of leaving hand-written
 Core/Patrol/Assistant/MCP relationship prose beside generated inventories.
-Public AI docs may describe anonymous outbound telemetry only as counts,
+Public AI docs may describe outbound usage telemetry only as counts,
 feature flags, and coarse Patrol control and governed Pulse Intelligence
 operations adoption flags and counters.
 They must keep prompts, chat messages, command text, action output, token

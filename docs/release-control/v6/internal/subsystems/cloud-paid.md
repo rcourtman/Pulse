@@ -232,7 +232,7 @@ Stripe-free and avoids a cloud-control-plane report data path across clients.
    `pkg/licensing/grant_refresh.go`, and cloud-paid transport must send those
    values on activate, legacy exchange, and grant refresh instead of inferring
    install version or paid-runtime status from browser state, dev build
-   metadata, public image tags, or anonymous telemetry.
+   metadata, public image tags, or outbound usage telemetry.
    Active self-hosted paid entitlements must also treat runtime identity as a
    first-class product state. A paid Pro, Pro Annual, Pro+, lifetime, or
    enterprise entitlement on a non-Pro or missing runtime identity must render
@@ -395,7 +395,7 @@ files.
 Pulse Intelligence paid-value evidence is a separate private admin aggregate,
 not a revival of those retired funnel stores. The `pulse-pro` license server
 may expose `/v1/admin/pulse-intelligence/value` and the matching admin-console
-strip only as coarse install cohorts over anonymous telemetry pings: paid
+strip only as coarse install cohorts over outbound usage telemetry pings: paid
 install rate, free-to-paid conversion, returning-install retention, and whether
 the full Patrol -> contextual collaboration -> governed action loop, the
 stricter Patrol -> contextual collaboration -> approved execution loop, and

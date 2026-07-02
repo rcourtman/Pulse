@@ -15109,7 +15109,7 @@ func TestContract_ExternalAgentActivityUsesRouteSpecificMarkers(t *testing.T) {
 }
 
 // TestContract_UpdateFunnelTelemetryStaysContentFree pins the server-owned
-// update funnel telemetry path. Update history may feed anonymous adoption
+// update funnel telemetry path. Update history may feed outbound usage adoption
 // analysis, but only as aggregate 30-day counts and a coarse failure category,
 // and the operator preview type must expose the same JSON fields.
 func TestContract_UpdateFunnelTelemetryStaysContentFree(t *testing.T) {
@@ -15144,11 +15144,15 @@ func TestContract_UpdateFunnelTelemetryStaysContentFree(t *testing.T) {
 	}
 	for _, fragment := range []string{
 		"func (r *Router) ApplyUpdateTelemetrySnapshot(s *telemetry.Snapshot, now time.Time)",
+		"counters to the outbound usage telemetry snapshot",
 		"telemetry.ApplyUpdateTelemetrySnapshot(s, r.updateHistory, now)",
 	} {
 		if !strings.Contains(string(routerSource), fragment) {
 			t.Errorf("router-owned update telemetry boundary missing %s", fragment)
 		}
+	}
+	if strings.Contains(string(routerSource), "anonymous telemetry") {
+		t.Error("router-owned update telemetry boundary must not describe outbound usage telemetry as anonymous")
 	}
 
 	settingsSource, err := os.ReadFile(filepath.Join("..", "..", "frontend-modern", "src", "api", "settings.ts"))

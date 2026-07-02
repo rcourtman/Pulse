@@ -206,7 +206,7 @@ type Config struct {
 	EnableProxmoxGuestDockerDetection bool             `envconfig:"PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION" default:"false" json:"-"` // Allow Proxmox-side pct exec probes that only detect Docker socket presence inside LXC guests
 	EnableProxmoxGuestDockerInventory bool             `envconfig:"PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY" default:"false" json:"-"` // Allow Proxmox-side pct exec collection of minimal Docker inventory from LXC guests
 	ProxmoxGuestDockerInventoryVMIDs  string           `envconfig:"PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS" default:"" json:"-"`       // Optional comma-separated Proxmox VMID allowlist for LXC Docker inventory
-	TelemetryEnabled                  bool             `envconfig:"PULSE_TELEMETRY" default:"true"`                                       // Anonymous outbound usage telemetry enabled by default (install ID, version, resource counts, feature flags — opt out any time)
+	TelemetryEnabled                  bool             `envconfig:"PULSE_TELEMETRY" default:"true"`                                       // Outbound usage telemetry enabled by default (pseudonymous install ID, version, resource counts, feature flags — opt out any time)
 	MultiTenantEnabled                bool             `envconfig:"PULSE_MULTI_TENANT_ENABLED" default:"false"`                           // Enable multi-tenant support
 	MetricsToken                      string           `envconfig:"PULSE_METRICS_TOKEN" default:"" json:"-"`                              // Bearer token for /metrics endpoint (empty = unauthenticated)
 	MetricsBindAddress                string           `envconfig:"PULSE_METRICS_BIND_ADDRESS" default:"127.0.0.1" json:"-"`              // Bind address for /metrics endpoint
@@ -1112,7 +1112,7 @@ func load(initLogging bool) (*Config, error) {
 			cfg.TelemetryEnabled = enabled
 			cfg.EnvOverrides["PULSE_TELEMETRY"] = true
 			cfg.EnvOverrides["telemetryEnabled"] = true
-			log.Info().Bool("enabled", enabled).Msg("Overriding anonymous outbound telemetry setting from environment")
+			log.Info().Bool("enabled", enabled).Msg("Overriding outbound usage telemetry setting from environment")
 		} else {
 			log.Warn().Str("value", telemetryStr).Msg("Invalid PULSE_TELEMETRY value, ignoring")
 		}

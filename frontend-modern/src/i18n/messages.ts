@@ -262,6 +262,10 @@ export const EN_MESSAGES = {
   'setup.welcome.hero.title': 'Welcome to Pulse',
   'setup.welcome.placeholder.bootstrapToken': 'Paste your bootstrap token',
   'setup.welcome.success.commandCopied': 'Command copied to clipboard',
+  'setup.welcome.telemetryNotice.description':
+    'Outbound usage telemetry is on by default. Pulse sends a delayed startup ping and daily heartbeat with a rotating pseudonymous install ID, release/runtime details, aggregate counts, and feature flags. To disable it before any ping, set PULSE_TELEMETRY=false before starting Pulse; you can also turn it off later in Settings.',
+  'setup.welcome.telemetryNotice.detailsLink': 'Full details',
+  'setup.welcome.telemetryNotice.title': 'Usage telemetry is enabled by default',
   'setup.welcome.tokenHelp.afterVerify':
     'After Pulse verifies this token, the next step is creating the admin account for this server.',
   'setup.welcome.tokenHelp.docker':
@@ -307,7 +311,7 @@ export const EN_MESSAGES = {
   'settings.general.temperature.title': 'Temperature unit',
   'settings.general.telemetry.copyJson': 'Copy JSON',
   'settings.general.telemetry.description':
-    'Help improve Pulse by sharing anonymous outbound usage data: a rotating install ID, normalized release identity, runtime platform, aggregate self-hosted adoption counts, coarse feature flags, and coarse Patrol, Assistant, and external-agent usage counters. No hostnames, credentials, infrastructure identifiers, prompts, chat messages, command text, action output, token values, or personal information are sent. Telemetry rows are retained for up to 90 days, and IP addresses are not stored in telemetry rows.',
+    'Help improve Pulse by sharing outbound usage data: a rotating pseudonymous install ID, normalized release identity, runtime platform, aggregate self-hosted adoption counts, coarse feature flags, and coarse Patrol, Assistant, and external-agent usage counters. The payload does not include hostnames, credentials, infrastructure identifiers, prompts, chat messages, command text, action output, token values, names, email addresses, or IP addresses. Telemetry rows are retained for up to 90 days, and request IP addresses are used only transiently for rate limiting and are not stored in telemetry rows.',
   'settings.general.telemetry.disabledPreview':
     'Telemetry is currently disabled. This preview shows the payload Pulse would send if you enable it.',
   'settings.general.telemetry.fullDetails': 'Full details',
@@ -317,9 +321,9 @@ export const EN_MESSAGES = {
   'settings.general.telemetry.refreshPayload': 'Refresh payload',
   'settings.general.telemetry.resetId': 'Reset ID',
   'settings.general.telemetry.section.description':
-    'Control anonymous outbound telemetry from this Pulse instance.',
+    'Control outbound usage telemetry from this Pulse instance.',
   'settings.general.telemetry.section.title': 'Usage data and privacy',
-  'settings.general.telemetry.title': 'Anonymous outbound telemetry',
+  'settings.general.telemetry.title': 'Outbound usage telemetry',
   'settings.general.theme.description': 'Choose light, dark, or sync with your system theme.',
   'settings.general.theme.option.dark': 'Dark',
   'settings.general.theme.option.light': 'Light',
@@ -631,6 +635,9 @@ export const FIRST_SESSION_MONITORING_MIGRATED_MESSAGE_KEYS = [
   'setup.welcome.hero.title',
   'setup.welcome.placeholder.bootstrapToken',
   'setup.welcome.success.commandCopied',
+  'setup.welcome.telemetryNotice.description',
+  'setup.welcome.telemetryNotice.detailsLink',
+  'setup.welcome.telemetryNotice.title',
   'setup.welcome.tokenHelp.afterVerify',
   'setup.welcome.tokenHelp.docker',
   'setup.welcome.tokenHelp.host',

@@ -507,7 +507,7 @@ AGENT_SURFACE_ID_PULSE_MCP)` and `getAgentSurfaceToolPosturePresentation`,
 4. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx` shared with `security-privacy`: the data-handling settings surface is both a security/privacy trust surface and a canonical settings-shell presentation boundary.
 5. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts` shared with `security-privacy`: the data-handling settings model is both a security/privacy posture projection and a canonical settings-shell presentation boundary.
 6. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx` shared with `security-privacy`: the general settings privacy panel is both a security/privacy control surface and a canonical settings-shell presentation boundary.
-   The panel owns compact settings-shell framing for anonymous telemetry, but
+   The panel owns compact settings-shell framing for outbound usage telemetry, but
    its vocabulary must stay aligned with `security-privacy`: aggregate
    self-hosted adoption counts, coarse feature flags, and coarse Patrol,
    Assistant, and external-agent usage counters may be named, while
@@ -2057,7 +2057,7 @@ default` instead of fusing provider and badge text such as
     `AIRuntimeControlsSection.tsx` must not hardcode GitHub `main` doc URLs for
     privacy, security, proxy-auth, scope-reference, or Terms-of-Service links.
 29. Keep shared settings-shell telemetry transparency controls on the governed
-    general settings panel. Preview/reset affordances for anonymous telemetry
+    general settings panel. Preview/reset affordances for outbound usage telemetry
     must stay rendered inside
     `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`
     instead of drifting into route-local modals, hidden dev tools, or shell
@@ -2069,7 +2069,7 @@ default` instead of fusing provider and badge text such as
     `GeneralSettingsPanel.tsx` must state those facts plainly instead of
     reverting to a stronger but inaccurate shorthand.
 31. Keep maintainer commercial-event controls out of customer settings.
-    The shared general settings privacy panel may expose anonymous outbound
+    The shared general settings privacy panel may expose outbound usage
     telemetry controls, preview, and reset affordances, but it must not render
     local commercial handoff event toggles, `PULSE_DISABLE_LOCAL_UPGRADE_METRICS`,
     or other commercial-debug controls as normal customer-facing preferences.
@@ -2446,8 +2446,8 @@ That same shared settings and modal boundary now also owns the public usage-data
 vocabulary. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`,
 `frontend-modern/src/components/Settings/useSystemSettingsState.ts`, and
 `frontend-modern/src/utils/systemSettingsPresentation.ts` must present one
-explicit `Usage data and privacy` model centered on `Anonymous outbound
-telemetry`; maintainer commercial-event controls, upgrade-metrics labels, and
+explicit `Usage data and privacy` model centered on `Outbound usage telemetry`;
+maintainer commercial-event controls, upgrade-metrics labels, and
 sales/onboarding reporting language must not appear in customer-facing Settings
 or support diagnostics, and public configuration docs must not list their
 internal compatibility switches as ordinary operator settings. Customer
@@ -4627,7 +4627,7 @@ through `frontend-modern/src/utils/docsLinks.ts` rather than panel-local
 external URLs.
 That same shared-shell framing also covers the concise telemetry summary in
 General settings. The shell may present the privacy contract in compact product
-copy, but the vocabulary for anonymous outbound telemetry must stay aligned
+copy, but the vocabulary for outbound usage telemetry must stay aligned
 with `security-privacy`: aggregate self-hosted adoption counts, coarse feature
 flags, and coarse Patrol, Assistant, and external-agent usage counters are
 allowed, while hostnames, credentials, infrastructure identifiers, prompts,

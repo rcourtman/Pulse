@@ -76,6 +76,7 @@ describe('localized setup wizard journey', () => {
     expect(screen.getByText('Bienvenido a Pulse')).toBeInTheDocument();
     expect(screen.getByText('Desbloquear configuración')).toBeInTheDocument();
     expect(screen.getByText(/Conecta una API de plataforma/)).toBeInTheDocument();
+    expect(screen.getByText('La telemetría de uso está activada por defecto')).toBeInTheDocument();
     expect(screen.getByText('sudo pulse bootstrap-token')).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Verificar token de bootstrap →' }),

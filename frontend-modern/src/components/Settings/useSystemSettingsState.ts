@@ -322,7 +322,7 @@ export function useSystemSettingsState({
     try {
       await SettingsAPI.updateSystemSettings({ telemetryEnabled: enabled });
       notificationStore.success(
-        enabled ? 'Anonymous outbound telemetry enabled' : 'Anonymous outbound telemetry disabled',
+        enabled ? 'Outbound usage telemetry enabled' : 'Outbound usage telemetry disabled',
         3000,
       );
     } catch (error) {
@@ -374,7 +374,7 @@ export function useSystemSettingsState({
 
     if (
       !confirm(
-        'Reset the rotating telemetry install ID now? This immediately replaces the local identifier used for anonymous telemetry.',
+        'Reset the rotating telemetry install ID now? This immediately replaces the local pseudonymous identifier used for outbound usage telemetry.',
       )
     ) {
       return;

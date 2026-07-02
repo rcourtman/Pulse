@@ -4,7 +4,7 @@ Pulse is designed to run locally. By default, your monitoring data stays on your
 
 ## Usage Data
 
-Pulse has one outbound usage-data scope: **anonymous outbound telemetry** to
+Pulse has one outbound usage-data scope: **outbound usage telemetry** to
 help me understand active installations, release uptake, and feature use in
 aggregate.
 
@@ -12,15 +12,15 @@ Commercial activation and license-recovery runtime records stay on the Pulse
 instance where they were created. They are not exported to Pulse infrastructure,
 third-party analytics, support diagnostics, or ordinary Settings surfaces.
 
-### Anonymous outbound telemetry
+### Outbound usage telemetry
 
-Pulse includes anonymous outbound telemetry that is **enabled by default**. It sends a lightweight ping on startup and once every 24 hours to help me understand how many active installations exist, which releases are actually deployed, which features are in use, and whether Patrol control and governed Pulse Intelligence operations are being adopted.
+Pulse includes outbound usage telemetry that is **enabled by default**. It sends a lightweight ping on startup and once every 24 hours with a rotating pseudonymous install ID to help me understand how many active installations exist, which releases are actually deployed, which features are in use, and whether Patrol control and governed Pulse Intelligence operations are being adopted.
 
-No hostnames, credentials, infrastructure identifiers, IP addresses, prompts, chat messages, command text, action output, token values, or personally identifiable information is ever sent. See the full field list below.
+The telemetry payload does not include hostnames, credentials, infrastructure identifiers, IP addresses, prompts, chat messages, command text, action output, token values, names, email addresses, or account identifiers. See the full field list below.
 
 #### How to disable
 
-- **Settings → System → General → Anonymous outbound telemetry** (toggle off), or
+- **Settings → System → General → Outbound usage telemetry** (toggle off), or
 - Set the environment variable `PULSE_TELEMETRY=false`
 
 #### How to inspect or rotate it
@@ -31,7 +31,7 @@ No hostnames, credentials, infrastructure identifiers, IP addresses, prompts, ch
 
 #### Exactly what is sent
 
-Every field is listed below with the reason it exists — nothing else leaves your server:
+Every field is listed below with the reason it exists. Nothing else is included in the telemetry payload:
 
 | Field | Example | Purpose |
 |-------|---------|---------|
@@ -148,19 +148,19 @@ Every field is listed below with the reason it exists — nothing else leaves yo
 - Pulse may derive aggregate Pulse Intelligence adoption reports from those same rows, including whether an install reached Patrol issue activity, Patrol resolution, Assistant, direct external-agent, or MCP collaboration, Patrol mode starter use, paid Patrol mode cohorts, governed-action activity, approved or rejected action decisions, approved action success, completed Patrol control work, recent retention, and observed free-to-paid movement within the source window. Those reports do not add prompts, findings, resource identifiers, tool names, tool inputs, tool outputs, command payloads, action outputs, account links, or exact commercial tiers.
 - External-agent/MCP activity is stored only as a coarse adapter-origin flag plus capability-class counters: context, event stream, provisioning, operator state, findings, and action requests.
 - Telemetry rows older than **90 days** are purged automatically.
-- The license server uses client IP addresses transiently for abuse/rate limiting, but it does **not** store IP addresses in telemetry rows.
+- The license server uses request IP addresses transiently for abuse/rate limiting, but it does **not** store IP addresses in telemetry rows.
 
 #### What is NOT sent
 
-- No IP addresses are stored in telemetry rows
+- No IP addresses are included in the telemetry payload or stored in telemetry rows
 - No hostnames, node names, VM names, or any infrastructure identifiers
 - No Proxmox credentials, API tokens, or passwords
 - No alert content, AI prompts, chat messages, tool names, tool inputs, tool outputs, command text, action output, or token values
-- No personally identifiable information of any kind
+- No names, email addresses, account identifiers, or other intentionally identifying personal content
 
 #### Install ID rotation
 
-The telemetry install ID is pseudonymous and rotates automatically every 30 days.
+The telemetry install ID is pseudonymous, is not tied to a Pulse account, and rotates automatically every 30 days.
 Pulse keeps it only to avoid treating every startup ping as a brand-new install
 while still limiting long-term linkage from one heartbeat window to the next.
 Operators can also rotate it immediately from **Settings → System → General → Reset ID**.
