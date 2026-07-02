@@ -940,6 +940,14 @@
       ]
     },
     {
+      "path": "internal/kubernetesagent/agent.go",
+      "rationale": "the Kubernetes native agent runtime is both a monitoring inventory source and an agent lifecycle Pulse control-plane transport client",
+      "subsystems": [
+        "agent-lifecycle",
+        "monitoring"
+      ]
+    },
+    {
       "path": "internal/proxmoxidentity/backup_identity.go",
       "rationale": "Proxmox PBS backup subject identity is a shared runtime boundary for monitoring backup freshness, backup-age alert attribution, and recovery-point guest mapping",
       "subsystems": [
@@ -1070,7 +1078,11 @@
         "internal/api/config_setup_handlers.go",
         "internal/api/setup_script_render.go",
         "internal/api/unified_agent.go",
+        "internal/dockeragent/agent.go",
+        "internal/kubernetesagent/agent.go",
         "internal/remoteconfig/client.go",
+        "internal/securityutil/httpurl.go",
+        "pkg/securityutil/httpurl.go",
         "scripts/install.ps1",
         "scripts/install.sh"
       ],
@@ -1136,14 +1148,21 @@
             "match_prefixes": [],
             "match_files": [
               "internal/agenttls/config.go",
-              "internal/remoteconfig/client.go"
+              "internal/dockeragent/agent.go",
+              "internal/kubernetesagent/agent.go",
+              "internal/remoteconfig/client.go",
+              "internal/securityutil/httpurl.go",
+              "pkg/securityutil/httpurl.go"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
               "internal/agenttls/config_test.go",
+              "internal/dockeragent/agent_internal_test.go",
+              "internal/kubernetesagent/agent_new_test.go",
               "internal/remoteconfig/client_additional_test.go",
-              "internal/remoteconfig/client_test.go"
+              "internal/remoteconfig/client_test.go",
+              "internal/securityutil/httpurl_test.go"
             ]
           },
           {
@@ -1173,6 +1192,8 @@
               "internal/agentupdate/coverage_test.go",
               "internal/hostagent/agent_metrics_test.go",
               "internal/hostagent/agent_new_test.go",
+              "internal/hostagent/command_client_test.go",
+              "internal/hostagent/commands_deploy_test.go",
               "internal/hostagent/send_report_test.go"
             ]
           },
@@ -4530,6 +4551,7 @@
             "test_prefixes": [],
             "exact_files": [
               "internal/kubernetesagent/agent_inventory_test.go",
+              "internal/kubernetesagent/agent_new_test.go",
               "internal/monitoring/kubernetes_agents_test.go",
               "internal/unifiedresources/adapter_coverage_test.go",
               "internal/unifiedresources/kubernetes_registry_test.go"

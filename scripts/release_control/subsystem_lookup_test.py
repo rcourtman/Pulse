@@ -4345,6 +4345,8 @@ class SubsystemLookupTest(unittest.TestCase):
                 "internal/agentupdate/coverage_test.go",
                 "internal/hostagent/agent_metrics_test.go",
                 "internal/hostagent/agent_new_test.go",
+                "internal/hostagent/command_client_test.go",
+                "internal/hostagent/commands_deploy_test.go",
                 "internal/hostagent/send_report_test.go",
             ],
         )

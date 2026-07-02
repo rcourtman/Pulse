@@ -120,8 +120,8 @@ func TestParseProxmoxProductType(t *testing.T) {
 	}
 }
 
-func TestProxmoxSetupNormalizePulseURL_AllowsInsecureRemoteHTTP(t *testing.T) {
-	got, err := normalizePulseURL("http://10.0.0.5:7655/pulse/", true)
+func TestProxmoxSetupNormalizePulseURL_AllowsLocalNetworkHTTP(t *testing.T) {
+	got, err := normalizePulseURL("http://10.0.0.5:7655/pulse/")
 	if err != nil {
 		t.Fatalf("normalizePulseURL() error = %v", err)
 	}

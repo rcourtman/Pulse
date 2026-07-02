@@ -75,7 +75,7 @@ func TestNormalizeTargetsInvalid(t *testing.T) {
 }
 
 func TestNormalizeTargetURL(t *testing.T) {
-	normalized, err := normalizeTargetURL(" HTTPS://Pulse.EXAMPLE.com:443/api/ ", false)
+	normalized, err := normalizeTargetURL(" HTTPS://Pulse.EXAMPLE.com:443/api/ ")
 	if err != nil {
 		t.Fatalf("normalizeTargetURL returned error: %v", err)
 	}
@@ -84,8 +84,8 @@ func TestNormalizeTargetURL(t *testing.T) {
 	}
 }
 
-func TestNormalizeTargetURLAllowsInsecureRemoteHTTP(t *testing.T) {
-	normalized, err := normalizeTargetURL(" http://10.0.0.5:7655/api/ ", true)
+func TestNormalizeTargetURLAllowsLocalNetworkHTTP(t *testing.T) {
+	normalized, err := normalizeTargetURL(" http://10.0.0.5:7655/api/ ")
 	if err != nil {
 		t.Fatalf("normalizeTargetURL returned error: %v", err)
 	}
@@ -94,8 +94,14 @@ func TestNormalizeTargetURLAllowsInsecureRemoteHTTP(t *testing.T) {
 	}
 }
 
-func TestNormalizeTargetsAllowsInsecureRemoteHTTP(t *testing.T) {
-	targets, err := normalizeTargets([]TargetConfig{{URL: "http://10.0.0.5:7655", Token: "token", InsecureSkipVerify: true}})
+func TestNormalizeTargetURLRejectsPublicHTTP(t *testing.T) {
+	if _, err := normalizeTargetURL("http://pulse.example.com:7655/api"); err == nil {
+		t.Fatal("expected public HTTP Pulse target to be rejected")
+	}
+}
+
+func TestNormalizeTargetsAllowsLocalNetworkHTTP(t *testing.T) {
+	targets, err := normalizeTargets([]TargetConfig{{URL: "http://10.0.0.5:7655", Token: "token"}})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -112,8 +118,7 @@ func TestNormalizeTargetsRejectsInsecureOrInvalidURLs(t *testing.T) {
 		name string
 		url  string
 	}{
-		{name: "non-loopback http", url: "http://pulse.example.com"},
-		{name: "private-network http", url: "http://10.0.0.5:7655"},
+		{name: "public http", url: "http://pulse.example.com"},
 		{name: "unsupported scheme", url: "ftp://pulse.example.com"},
 		{name: "missing scheme", url: "pulse.example.com"},
 		{name: "query string", url: "https://pulse.example.com?x=1"},

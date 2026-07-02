@@ -355,7 +355,7 @@ func NewProxmoxSetup(logger zerolog.Logger, httpClient *http.Client, collector S
 // 2. Creates the monitoring user and API token
 // 3. Registers the node with Pulse via auto-register
 func (p *ProxmoxSetup) Run(ctx context.Context) (*ProxmoxSetupResult, error) {
-	pulseURL, err := normalizePulseURL(p.pulseURL, p.insecureSkipVerify)
+	pulseURL, err := normalizePulseURL(p.pulseURL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid pulse URL: %w", err)
 	}
@@ -431,7 +431,7 @@ func (p *ProxmoxSetup) Run(ctx context.Context) (*ProxmoxSetupResult, error) {
 // supported configuration). Each type gets its own registration and state tracking.
 // Returns results for all types that were processed (skipping already-registered ones).
 func (p *ProxmoxSetup) RunAll(ctx context.Context) ([]*ProxmoxSetupResult, error) {
-	pulseURL, err := normalizePulseURL(p.pulseURL, p.insecureSkipVerify)
+	pulseURL, err := normalizePulseURL(p.pulseURL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid pulse URL: %w", err)
 	}
@@ -490,7 +490,7 @@ func (p *ProxmoxSetup) RunAll(ctx context.Context) ([]*ProxmoxSetupResult, error
 // health-check rotation, which would cause uncontrolled token churn if Pulse
 // is temporarily unreachable.
 func (p *ProxmoxSetup) RunHealthCheck(ctx context.Context) ([]*ProxmoxSetupResult, error) {
-	pulseURL, err := normalizePulseURL(p.pulseURL, p.insecureSkipVerify)
+	pulseURL, err := normalizePulseURL(p.pulseURL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid pulse URL: %w", err)
 	}

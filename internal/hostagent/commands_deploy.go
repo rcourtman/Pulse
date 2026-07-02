@@ -259,7 +259,7 @@ func (c *CommandClient) preflightTarget(
 			"preflight_complete", "failed", fmt.Sprintf("Invalid node IP: %s", target.NodeIP), data, false)
 		return false
 	}
-	normalizedPulseURL, err := normalizePulseURL(pulseURL, c.insecureSkipVerify)
+	normalizedPulseURL, err := normalizePulseURL(pulseURL)
 	if err != nil {
 		data := marshalPreflightResult(false, false, false, "", err.Error())
 		c.sendDeployProgress(conn, requestID, jobID, target.TargetID,
@@ -366,7 +366,7 @@ func (c *CommandClient) installTarget(
 			"install_complete", "failed", fmt.Sprintf("Invalid node IP: %s", target.NodeIP), data, false)
 		return false
 	}
-	normalizedPulseURL, err := normalizePulseURL(pulseURL, c.insecureSkipVerify)
+	normalizedPulseURL, err := normalizePulseURL(pulseURL)
 	if err != nil {
 		data := marshalInstallResult(-1, err.Error())
 		c.sendDeployProgress(conn, requestID, jobID, target.TargetID,
@@ -549,7 +549,7 @@ func (c *CommandClient) writeTokenSSH(ctx context.Context, nodeIP, token string)
 
 // runInstallSSH runs the Pulse install script on a remote node via SSH.
 func (c *CommandClient) runInstallSSH(ctx context.Context, nodeIP, pulseURL string) (int, string, error) {
-	normalizedPulseURL, err := normalizePulseURL(pulseURL, c.insecureSkipVerify)
+	normalizedPulseURL, err := normalizePulseURL(pulseURL)
 	if err != nil {
 		return -1, "", err
 	}

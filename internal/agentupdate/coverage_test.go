@@ -318,26 +318,25 @@ func TestValidatePulseURL(t *testing.T) {
 		}
 	})
 
-	t.Run("RejectRemoteHTTPInInsecureMode", func(t *testing.T) {
+	t.Run("RejectPublicHTTPInInsecureMode", func(t *testing.T) {
 		u := newUpdaterForTest("http://pulse.example.com")
 		u.cfg.InsecureSkipVerify = true
-		if err := u.validatePulseURL(); err != nil {
-			t.Fatalf("expected remote http URL in insecure mode to be allowed, got %v", err)
-		}
-	})
-
-	t.Run("RejectPrivateNetworkHTTP", func(t *testing.T) {
-		u := newUpdaterForTest("http://10.0.0.5:7655")
 		if err := u.validatePulseURL(); err == nil {
-			t.Fatalf("expected private-network http URL to be rejected")
+			t.Fatalf("expected public http URL in insecure mode to be rejected")
 		}
 	})
 
-	t.Run("AllowPrivateNetworkHTTPInInsecureMode", func(t *testing.T) {
+	t.Run("AllowPrivateNetworkHTTP", func(t *testing.T) {
 		u := newUpdaterForTest("http://10.0.0.5:7655")
-		u.cfg.InsecureSkipVerify = true
 		if err := u.validatePulseURL(); err != nil {
-			t.Fatalf("expected private-network http URL in insecure mode to be allowed, got %v", err)
+			t.Fatalf("expected private-network http URL to be allowed, got %v", err)
+		}
+	})
+
+	t.Run("AllowHomeDomainHTTP", func(t *testing.T) {
+		u := newUpdaterForTest("http://ct-pulse.home:7655")
+		if err := u.validatePulseURL(); err != nil {
+			t.Fatalf("expected .home http URL to be allowed, got %v", err)
 		}
 	})
 

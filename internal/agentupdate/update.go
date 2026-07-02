@@ -617,7 +617,7 @@ func (u *Updater) validatePulseURL() error {
 	}
 
 	parsed, err := securityutil.NormalizePulseHTTPBaseURLWithOptions(pulseURL, securityutil.PulseURLValidationOptions{
-		AllowInsecureHTTP: u.cfg.InsecureSkipVerify,
+		AllowLocalNetworkHTTP: true,
 	})
 	if err != nil {
 		return fmt.Errorf("invalid Pulse URL: %w", err)

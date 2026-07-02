@@ -27,6 +27,10 @@ func IsLoopbackHost(host string) bool {
 	return pubsec.IsLoopbackHost(host)
 }
 
+func IsLocalNetworkHost(host string) bool {
+	return pubsec.IsLocalNetworkHost(host)
+}
+
 func NormalizePulseHTTPBaseURL(raw string) (*url.URL, error) {
 	return pubsec.NormalizePulseHTTPBaseURL(raw)
 }

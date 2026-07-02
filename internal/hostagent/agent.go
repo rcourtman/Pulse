@@ -159,7 +159,7 @@ func New(cfg Config) (*Agent, error) {
 		pulseURL = "http://localhost:7655"
 	}
 	var err error
-	pulseURL, err = normalizePulseURL(pulseURL, cfg.InsecureSkipVerify)
+	pulseURL, err = normalizePulseURL(pulseURL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid pulse URL: %w", err)
 	}
@@ -1009,9 +1009,9 @@ func normalisePlatform(platform string) string {
 	}
 }
 
-func normalizePulseURL(rawURL string, allowInsecureHTTP bool) (string, error) {
+func normalizePulseURL(rawURL string) (string, error) {
 	parsed, err := securityutil.NormalizePulseHTTPBaseURLWithOptions(rawURL, securityutil.PulseURLValidationOptions{
-		AllowInsecureHTTP: allowInsecureHTTP,
+		AllowLocalNetworkHTTP: true,
 	})
 	if err != nil {
 		return "", err

@@ -124,9 +124,19 @@ func TestNormalizePulseURL(t *testing.T) {
 			want: "http://localhost:7655",
 		},
 		{
-			name:      "rejects private-network http",
-			raw:       "http://10.0.0.5:7655",
-			wantError: "must use https unless host is loopback",
+			name: "allows private-network http",
+			raw:  "http://10.0.0.5:7655",
+			want: "http://10.0.0.5:7655",
+		},
+		{
+			name: "allows home domain http",
+			raw:  "http://ct-pulse.home:7655",
+			want: "http://ct-pulse.home:7655",
+		},
+		{
+			name:      "rejects public http",
+			raw:       "http://pulse.example.com:7655",
+			wantError: "must use https unless host is loopback or local/private",
 		},
 		{
 			name:      "missing scheme",
@@ -162,7 +172,7 @@ func TestNormalizePulseURL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := normalizePulseURL(tt.raw, false)
+			got, err := normalizePulseURL(tt.raw)
 			if tt.wantError != "" {
 				if err == nil {
 					t.Fatalf("normalizePulseURL(%q) expected error", tt.raw)
@@ -182,8 +192,8 @@ func TestNormalizePulseURL(t *testing.T) {
 	}
 }
 
-func TestNormalizePulseURLAllowsInsecureRemoteHTTP(t *testing.T) {
-	got, err := normalizePulseURL("http://10.0.0.5:7655/base/", true)
+func TestNormalizePulseURLAllowsLocalNetworkHTTP(t *testing.T) {
+	got, err := normalizePulseURL("http://10.0.0.5:7655/base/")
 	if err != nil {
 		t.Fatalf("normalizePulseURL() error = %v", err)
 	}

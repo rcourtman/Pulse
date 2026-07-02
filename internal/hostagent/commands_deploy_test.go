@@ -217,18 +217,18 @@ func TestRunInstallSSH_IncludesEnrollAndEnableCommands(t *testing.T) {
 	}
 }
 
-func TestRunInstallSSH_RejectsNonLoopbackPlainHTTP(t *testing.T) {
+func TestRunInstallSSH_RejectsPublicPlainHTTP(t *testing.T) {
 	c := &CommandClient{
 		logger:        zerolog.New(zerolog.NewTestWriter(t)),
 		sshKnownHosts: stubKnownHostsManager{path: "/tmp/pulse-test-known-hosts"},
 	}
 
-	if _, _, err := c.runInstallSSH(context.Background(), "10.0.0.1", "http://10.0.0.1:7655"); err == nil {
-		t.Fatal("expected non-loopback plain HTTP Pulse URL to be rejected")
+	if _, _, err := c.runInstallSSH(context.Background(), "10.0.0.1", "http://pulse.example.com:7655"); err == nil {
+		t.Fatal("expected public plain HTTP Pulse URL to be rejected")
 	}
 }
 
-func TestRunInstallSSH_AllowsNonLoopbackPlainHTTPInInsecureMode(t *testing.T) {
+func TestRunInstallSSH_AllowsLocalNetworkPlainHTTP(t *testing.T) {
 	origExec := execCommandContext
 	defer func() { execCommandContext = origExec }()
 
@@ -239,9 +239,8 @@ func TestRunInstallSSH_AllowsNonLoopbackPlainHTTPInInsecureMode(t *testing.T) {
 	}
 
 	c := &CommandClient{
-		insecureSkipVerify: true,
-		logger:             zerolog.New(zerolog.NewTestWriter(t)),
-		sshKnownHosts:      stubKnownHostsManager{path: "/tmp/pulse-test-known-hosts"},
+		logger:        zerolog.New(zerolog.NewTestWriter(t)),
+		sshKnownHosts: stubKnownHostsManager{path: "/tmp/pulse-test-known-hosts"},
 	}
 
 	exitCode, _, err := c.runInstallSSH(context.Background(), "10.0.0.1", "http://10.0.0.1:7655")

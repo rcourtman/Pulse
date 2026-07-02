@@ -57,7 +57,7 @@ func TestNew_AllowsMissingAPITokenWhenEnrollmentDisabled(t *testing.T) {
 	}
 }
 
-func TestNew_AllowsInsecureRemoteHTTPPulseURL(t *testing.T) {
+func TestNew_AllowsLocalNetworkHTTPPulseURL(t *testing.T) {
 	mc := &mockCollector{
 		hostInfoFn: func(context.Context) (*gohost.InfoStat, error) {
 			return &gohost.InfoStat{Hostname: "host", HostID: "hid", KernelArch: runtime.GOARCH}, nil
@@ -65,11 +65,10 @@ func TestNew_AllowsInsecureRemoteHTTPPulseURL(t *testing.T) {
 	}
 
 	agent, err := New(Config{
-		PulseURL:           "http://192.168.0.98:7655",
-		APIToken:           "token",
-		InsecureSkipVerify: true,
-		LogLevel:           zerolog.InfoLevel,
-		Collector:          mc,
+		PulseURL:  "http://192.168.0.98:7655",
+		APIToken:  "token",
+		LogLevel:  zerolog.InfoLevel,
+		Collector: mc,
 	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -953,14 +952,9 @@ func TestNew_RejectsInvalidPulseURL(t *testing.T) {
 		want string
 	}{
 		{
-			name: "non-loopback http rejected",
+			name: "public http rejected",
 			url:  "http://example.com",
-			want: "must use https unless host is loopback",
-		},
-		{
-			name: "private-network http rejected",
-			url:  "http://10.0.0.5:7655",
-			want: "must use https unless host is loopback",
+			want: "must use https unless host is loopback or local/private",
 		},
 		{
 			name: "query rejected",
@@ -994,6 +988,27 @@ func TestNew_RejectsInvalidPulseURL(t *testing.T) {
 				t.Fatalf("error = %q, want substring %q", err.Error(), tt.want)
 			}
 		})
+	}
+}
+
+func TestNew_AllowsSelfHostedLocalHTTPPulseURL(t *testing.T) {
+	mc := &mockCollector{
+		hostInfoFn: func(context.Context) (*gohost.InfoStat, error) {
+			return &gohost.InfoStat{Hostname: "host", HostID: "hid", KernelArch: runtime.GOARCH}, nil
+		},
+	}
+
+	agent, err := New(Config{
+		PulseURL:  "http://ct-pulse.home:7655/",
+		APIToken:  "token",
+		LogLevel:  zerolog.InfoLevel,
+		Collector: mc,
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if agent.cfg.PulseURL != "http://ct-pulse.home:7655" {
+		t.Fatalf("cfg.PulseURL = %q, want http://ct-pulse.home:7655", agent.cfg.PulseURL)
 	}
 }
 

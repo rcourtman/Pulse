@@ -99,9 +99,9 @@ func TestCommandClientBuildWebSocketURL(t *testing.T) {
 			wantErr:  true,
 		},
 		{
-			name:     "private-network http rejected",
+			name:     "private-network http becomes ws",
 			pulseURL: "http://10.0.0.5:7655",
-			wantErr:  true,
+			want:     "ws://10.0.0.5:7655/api/agent/ws",
 		},
 		{
 			name:     "non-loopback ws rejected",
@@ -109,9 +109,9 @@ func TestCommandClientBuildWebSocketURL(t *testing.T) {
 			wantErr:  true,
 		},
 		{
-			name:     "private-network ws rejected",
+			name:     "private-network ws preserved",
 			pulseURL: "ws://10.0.0.5:7655",
-			wantErr:  true,
+			want:     "ws://10.0.0.5:7655/api/agent/ws",
 		},
 		{
 			name:     "query rejected",
@@ -129,9 +129,9 @@ func TestCommandClientBuildWebSocketURL(t *testing.T) {
 			wantErr:  true,
 		},
 		{
-			name:     "insecure remote http becomes ws",
-			pulseURL: "http://10.0.0.5:7655/pulse",
-			want:     "ws://10.0.0.5:7655/pulse/api/agent/ws",
+			name:     "home domain http becomes ws",
+			pulseURL: "http://ct-pulse.home:7655/pulse",
+			want:     "ws://ct-pulse.home:7655/pulse/api/agent/ws",
 		},
 		{
 			name:     "missing host returns error",
@@ -143,9 +143,6 @@ func TestCommandClientBuildWebSocketURL(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client := &CommandClient{pulseURL: tt.pulseURL}
-			if tt.name == "insecure remote http becomes ws" {
-				client.insecureSkipVerify = true
-			}
 			got, err := client.buildWebSocketURL()
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("buildWebSocketURL() err = %v, wantErr %v", err, tt.wantErr)
@@ -195,18 +192,20 @@ func TestCommandClientBuildWebSocketOrigin(t *testing.T) {
 			wantErr:  true,
 		},
 		{
-			name:     "insecure remote http stays http origin",
+			name:     "private-network http stays http origin",
 			pulseURL: "http://10.0.0.5:7655/pulse",
 			want:     "http://10.0.0.5:7655",
+		},
+		{
+			name:     "home domain http stays http origin",
+			pulseURL: "http://ct-pulse.home:7655/pulse",
+			want:     "http://ct-pulse.home:7655",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client := &CommandClient{pulseURL: tt.pulseURL}
-			if tt.name == "insecure remote http stays http origin" {
-				client.insecureSkipVerify = true
-			}
 			got, err := client.buildWebSocketOrigin()
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("buildWebSocketOrigin() err = %v, wantErr %v", err, tt.wantErr)

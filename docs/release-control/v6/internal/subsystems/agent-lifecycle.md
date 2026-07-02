@@ -29,6 +29,8 @@ that binary, not separate customer-facing agent products.
 3. `internal/api/unified_agent.go`
 4. `internal/agentupdate/update.go`
 5. `internal/hostagent/agent.go`
+   5a. `internal/dockeragent/agent.go`
+   5b. `internal/kubernetesagent/agent.go`
 6. `cmd/pulse-agent/main.go`
 7. `scripts/install.sh`
 8. `scripts/install.ps1`
@@ -90,6 +92,8 @@ that binary, not separate customer-facing agent products.
 60. `internal/remoteconfig/client.go`
 61. `internal/agenttls/config.go`
 62. `internal/api/agent_exec_token_binding.go`
+63. `internal/securityutil/httpurl.go`
+64. `pkg/securityutil/httpurl.go`
 
 ## Shared Boundaries
 
@@ -195,7 +199,8 @@ state instead of inferring it from outbound usage telemetry.
     artifact URL, so install-time registration keeps one API root regardless of
     whether the script came from `/api/setup-script` or `/api/setup-script-url`.
 22. `internal/api/unified_agent.go` shared with `api-contracts`: unified agent download and installer handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
-23. `scripts/install.ps1` shared with `deployment-installability`: the Windows installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
+23. `internal/kubernetesagent/agent.go` shared with `monitoring`: the Kubernetes native agent runtime is both a monitoring inventory source and an agent lifecycle Pulse control-plane transport client.
+24. `scripts/install.ps1` shared with `deployment-installability`: the Windows installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
     The Windows installer must support a non-mutating download preflight that
     can run before Administrator-only install work, must accept token-file
     enrollment input, and must persist plain-HTTP/insecure runtime continuity
@@ -204,7 +209,7 @@ state instead of inferring it from outbound usage telemetry.
     `pulse-agent` runs so installer "healthy" verification and post-install
     smoke checks prove a live agent runtime, not merely a running service
     wrapper.
-24. `scripts/install.sh` shared with `deployment-installability`: the shell installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
+25. `scripts/install.sh` shared with `deployment-installability`: the shell installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
 
 Server update planning is part of the same lifecycle contract. The System
 Updates plan must surface a structured upgrade-readiness verdict before an
@@ -1063,7 +1068,7 @@ surface and no new `internal/api/` lifecycle handler.
 7. Keep legacy Unified Agent compatibility names explicitly secondary when touching shared `internal/api/` runtime helpers: the legacy host-route family and `host-agent:*` scope names may remain as ingress or migration aliases, but they must not retake primary ownership in router state, live runtime scope checks, handler commentary, or operator-facing guidance.
 8. Add or change the unified agent CLI entrypoint, version/help exit semantics, or startup argument/error routing through `cmd/pulse-agent/main.go`.
    The CLI entrypoint owns propagation of persistence context into runtime-owned helpers. When installer-selected state roots differ from the default, `cmd/pulse-agent/main.go` must pass that exact `StateDir` through both the host-agent runtime and updater startup paths instead of letting one path silently fall back to `/var/lib/pulse-agent`.
-   The same runtime-owned boundary also owns Pulse control-plane URL validation for agent startup, remote config, updater continuity, and command transport. Non-loopback control-plane URLs remain HTTPS/WSS by default, but explicitly insecure agent/dev-runtime flows may use plain HTTP/WS for LAN development control planes; installer-persisted dev URLs must not be accepted by one runtime path and rejected by another.
+   The same runtime-owned boundary also owns Pulse control-plane URL validation for agent startup, remote config, updater continuity, and command transport. Public control-plane hostnames remain HTTPS/WSS, but self-hosted local control planes may use plain HTTP/WS when the host is loopback, a private or link-local IP, a single-label LAN name, or a local DNS suffix such as `.local`, `.lan`, `.home`, `.home.arpa`, or `.internal`; installer-persisted local HTTP URLs must not be accepted by one runtime path and rejected by another.
    The unified agent CLI copy follows the same command-execution vocabulary as the install surface. `cmd/pulse-agent/main.go` may keep the `--enable-commands` flag name for compatibility, but the help text and inline comments must describe command execution as Pulse command execution for Patrol actions and governed Proxmox LXC Docker inventory rather than reviving AI auto-fix language.
    The unified agent CLI copy also owns operator-facing Docker / Podman runtime
    labels. `cmd/pulse-agent/main.go` may keep the historical
@@ -2573,17 +2578,18 @@ operators configure a non-root SSH user for deploy fan-out, privileged token
 write and install steps must escalate through non-interactive `sudo` on the
 remote node instead of hard-coding `root@` for every SSH hop or silently
 falling back to a second unaudited privilege path.
-That same transport boundary also keeps plaintext Pulse URLs loopback-only.
-`internal/securityutil/httpurl.go` owns the canonical Pulse transport
+That same transport boundary also keeps plaintext Pulse URLs local/private.
+`pkg/securityutil/httpurl.go`, surfaced internally through
+`internal/securityutil/httpurl.go`, owns the canonical Pulse transport
 normalization used by `internal/hostagent/agent.go`,
 `internal/hostagent/commands.go`, `internal/agentupdate/update.go`,
 `internal/dockeragent/agent.go`, `internal/kubernetesagent/agent.go`, and
-`internal/remoteconfig/client.go`. Those runtime clients may keep local-
-development `http://` or `ws://` only for loopback hosts, but private-network
-and remote Pulse URLs must still use HTTPS/WSS. `InsecureSkipVerify` may
-relax certificate verification on TLS transport; it must not reopen plaintext
-HTTP for private-network updater, websocket, reporting, or remote-config
-paths.
+`internal/remoteconfig/client.go`. Those runtime clients may keep self-hosted
+`http://` or `ws://` only for loopback, private/link-local IP, single-label, or
+local DNS Pulse origins; public remote Pulse URLs must still use HTTPS/WSS.
+`InsecureSkipVerify` may relax certificate verification on TLS transport; it
+must not reopen public plaintext HTTP for updater, websocket, reporting, or
+remote-config paths.
 That same first-run lifecycle boundary also keeps unauthenticated setup local.
 Lifecycle-adjacent quick setup or recovery entrypoints may exist before an
 operator has configured auth, but they must stay direct-loopback only and any

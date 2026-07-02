@@ -114,12 +114,45 @@ func IsLoopbackHost(host string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
+// IsLocalNetworkHost reports whether host names a loopback, private, or
+// operator-local network origin rather than a public internet hostname.
+func IsLocalNetworkHost(host string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(strings.Trim(host, "[]")))
+	normalized = strings.TrimSuffix(normalized, ".")
+	if normalized == "" {
+		return false
+	}
+	if IsLoopbackHost(normalized) {
+		return true
+	}
+
+	if ip := net.ParseIP(normalized); ip != nil {
+		return ip.IsPrivate() || ip.IsLinkLocalUnicast()
+	}
+
+	if !strings.Contains(normalized, ".") {
+		return true
+	}
+
+	for _, suffix := range []string{".local", ".lan", ".home", ".home.arpa", ".internal"} {
+		if strings.HasSuffix(normalized, suffix) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // PulseURLValidationOptions controls optional relaxations for Pulse runtime
 // transports. The default zero value preserves the strict production contract.
 type PulseURLValidationOptions struct {
-	// AllowInsecureHTTP permits plain HTTP/WS to non-loopback hosts. This is
-	// reserved for explicitly insecure agent/dev-runtime flows.
+	// AllowInsecureHTTP permits plain HTTP/WS to local/private non-loopback
+	// hosts. Deprecated: use AllowLocalNetworkHTTP for new runtime callers.
 	AllowInsecureHTTP bool
+
+	// AllowLocalNetworkHTTP permits plain HTTP/WS to private IP, link-local,
+	// single-label, and local DNS control-plane hosts for self-hosted installs.
+	AllowLocalNetworkHTTP bool
 }
 
 // NormalizePulseHTTPBaseURL validates a Pulse control-plane base URL.
@@ -216,11 +249,8 @@ func normalizePulseBaseURL(raw string, websocket bool, opts PulseURLValidationOp
 			parsed.Scheme = "https"
 		}
 	case "http":
-		if !IsLoopbackHost(parsed.Hostname()) && !opts.AllowInsecureHTTP {
-			if websocket {
-				return nil, fmt.Errorf("Pulse URL %q must use https/wss unless host is loopback", raw)
-			}
-			return nil, fmt.Errorf("Pulse URL %q must use https unless host is loopback", raw)
+		if !pulseURLAllowsPlaintextHost(parsed.Hostname(), opts) {
+			return nil, pulseURLPlaintextError(raw, websocket, opts)
 		}
 		if websocket {
 			parsed.Scheme = "ws"
@@ -236,8 +266,8 @@ func normalizePulseBaseURL(raw string, websocket bool, opts PulseURLValidationOp
 		if !websocket {
 			return nil, fmt.Errorf("Pulse URL %q has unsupported scheme %q", raw, parsed.Scheme)
 		}
-		if !IsLoopbackHost(parsed.Hostname()) && !opts.AllowInsecureHTTP {
-			return nil, fmt.Errorf("Pulse URL %q must use https/wss unless host is loopback", raw)
+		if !pulseURLAllowsPlaintextHost(parsed.Hostname(), opts) {
+			return nil, pulseURLPlaintextError(raw, websocket, opts)
 		}
 		parsed.Scheme = "ws"
 	default:
@@ -251,6 +281,24 @@ func normalizePulseBaseURL(raw string, websocket bool, opts PulseURLValidationOp
 	parsed.Fragment = ""
 
 	return parsed, nil
+}
+
+func pulseURLAllowsPlaintextHost(host string, opts PulseURLValidationOptions) bool {
+	if IsLoopbackHost(host) {
+		return true
+	}
+	return (opts.AllowInsecureHTTP || opts.AllowLocalNetworkHTTP) && IsLocalNetworkHost(host)
+}
+
+func pulseURLPlaintextError(raw string, websocket bool, opts PulseURLValidationOptions) error {
+	allowedHosts := "loopback"
+	if opts.AllowInsecureHTTP || opts.AllowLocalNetworkHTTP {
+		allowedHosts = "loopback or local/private"
+	}
+	if websocket {
+		return fmt.Errorf("Pulse URL %q must use https/wss unless host is %s", raw, allowedHosts)
+	}
+	return fmt.Errorf("Pulse URL %q must use https unless host is %s", raw, allowedHosts)
 }
 
 // AppendURLPath appends path segments onto a validated base URL.

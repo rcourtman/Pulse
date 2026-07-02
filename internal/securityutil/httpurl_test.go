@@ -42,6 +42,39 @@ func TestIsLoopbackHost(t *testing.T) {
 	})
 }
 
+func TestIsLocalNetworkHost(t *testing.T) {
+	t.Run("true", func(t *testing.T) {
+		cases := []string{
+			"localhost",
+			"127.0.0.1",
+			"10.0.0.5",
+			"172.16.4.20",
+			"192.168.1.15",
+			"fe80::1",
+			"pulse",
+			"ct-pulse.home",
+			"pulse.local",
+			"pulse.lan",
+			"pulse.internal",
+			"pulse.home.arpa",
+		}
+		for _, tc := range cases {
+			if !IsLocalNetworkHost(tc) {
+				t.Fatalf("expected local/private host for %q", tc)
+			}
+		}
+	})
+
+	t.Run("false", func(t *testing.T) {
+		cases := []string{"", "example.com", "pulse.example.com", "8.8.8.8"}
+		for _, tc := range cases {
+			if IsLocalNetworkHost(tc) {
+				t.Fatalf("expected public/non-local host for %q", tc)
+			}
+		}
+	})
+}
+
 func TestNormalizePulseHTTPBaseURL(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -105,13 +138,29 @@ func TestNormalizePulseHTTPBaseURL(t *testing.T) {
 
 func TestNormalizePulseHTTPBaseURLWithOptions(t *testing.T) {
 	got, err := NormalizePulseHTTPBaseURLWithOptions("http://10.0.0.5:7655/pulse/", PulseURLValidationOptions{
-		AllowInsecureHTTP: true,
+		AllowLocalNetworkHTTP: true,
 	})
 	if err != nil {
 		t.Fatalf("NormalizePulseHTTPBaseURLWithOptions() error = %v", err)
 	}
 	if got.String() != "http://10.0.0.5:7655/pulse" {
 		t.Fatalf("NormalizePulseHTTPBaseURLWithOptions() = %q", got.String())
+	}
+
+	got, err = NormalizePulseHTTPBaseURLWithOptions("http://ct-pulse.home:7655/", PulseURLValidationOptions{
+		AllowLocalNetworkHTTP: true,
+	})
+	if err != nil {
+		t.Fatalf("NormalizePulseHTTPBaseURLWithOptions(.home) error = %v", err)
+	}
+	if got.String() != "http://ct-pulse.home:7655" {
+		t.Fatalf("NormalizePulseHTTPBaseURLWithOptions(.home) = %q", got.String())
+	}
+
+	if _, err := NormalizePulseHTTPBaseURLWithOptions("http://pulse.example.com:7655", PulseURLValidationOptions{
+		AllowLocalNetworkHTTP: true,
+	}); err == nil || !strings.Contains(err.Error(), "must use https unless host is loopback or local/private") {
+		t.Fatalf("NormalizePulseHTTPBaseURLWithOptions(public HTTP) error = %v, want public HTTP rejection", err)
 	}
 }
 
@@ -229,13 +278,19 @@ func TestNormalizePulseWebSocketBaseURL(t *testing.T) {
 
 func TestNormalizePulseWebSocketBaseURLWithOptions(t *testing.T) {
 	got, err := NormalizePulseWebSocketBaseURLWithOptions("http://10.0.0.5:7655/pulse", PulseURLValidationOptions{
-		AllowInsecureHTTP: true,
+		AllowLocalNetworkHTTP: true,
 	})
 	if err != nil {
 		t.Fatalf("NormalizePulseWebSocketBaseURLWithOptions() error = %v", err)
 	}
 	if got.String() != "ws://10.0.0.5:7655/pulse" {
 		t.Fatalf("NormalizePulseWebSocketBaseURLWithOptions() = %q", got.String())
+	}
+
+	if _, err := NormalizePulseWebSocketBaseURLWithOptions("http://pulse.example.com:7655/pulse", PulseURLValidationOptions{
+		AllowLocalNetworkHTTP: true,
+	}); err == nil || !strings.Contains(err.Error(), "must use https/wss unless host is loopback or local/private") {
+		t.Fatalf("NormalizePulseWebSocketBaseURLWithOptions(public HTTP) error = %v, want public HTTP rejection", err)
 	}
 }
 
@@ -299,7 +354,7 @@ func TestHTTPOriginForWebSocketBaseURL(t *testing.T) {
 
 func TestHTTPOriginForWebSocketBaseURLWithOptions(t *testing.T) {
 	got, err := HTTPOriginForWebSocketBaseURLWithOptions("http://10.0.0.5:7655/pulse", PulseURLValidationOptions{
-		AllowInsecureHTTP: true,
+		AllowLocalNetworkHTTP: true,
 	})
 	if err != nil {
 		t.Fatalf("HTTPOriginForWebSocketBaseURLWithOptions() error = %v", err)

@@ -375,7 +375,7 @@ func (c *CommandClient) connectAndHandle(ctx context.Context) error {
 
 func (c *CommandClient) buildWebSocketURL() (string, error) {
 	parsed, err := securityutil.NormalizePulseWebSocketBaseURLWithOptions(c.pulseURL, securityutil.PulseURLValidationOptions{
-		AllowInsecureHTTP: c.insecureSkipVerify,
+		AllowLocalNetworkHTTP: true,
 	})
 	if err != nil {
 		return "", err
@@ -395,7 +395,7 @@ func (c *CommandClient) buildWebSocketURL() (string, error) {
 
 func (c *CommandClient) buildWebSocketOrigin() (string, error) {
 	return securityutil.HTTPOriginForWebSocketBaseURLWithOptions(c.pulseURL, securityutil.PulseURLValidationOptions{
-		AllowInsecureHTTP: c.insecureSkipVerify,
+		AllowLocalNetworkHTTP: true,
 	})
 }
 

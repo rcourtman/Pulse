@@ -445,21 +445,20 @@ func TestClientFetchConfigValidation(t *testing.T) {
 			wantText: "invalid remote config client configuration",
 		},
 		{
-			name: "private-network http rejected",
+			name: "public http rejected",
+			cfg: Config{
+				PulseURL: "http://pulse.example.com:7655",
+				APIToken: "token",
+				AgentID:  "agent-1",
+			},
+			wantText: "must use https unless host is loopback or local/private",
+		},
+		{
+			name: "private-network http allowed",
 			cfg: Config{
 				PulseURL: "http://10.0.0.5:7655",
 				APIToken: "token",
 				AgentID:  "agent-1",
-			},
-			wantText: "must use https unless host is loopback",
-		},
-		{
-			name: "private-network http allowed in insecure mode",
-			cfg: Config{
-				PulseURL:           "http://10.0.0.5:7655",
-				APIToken:           "token",
-				AgentID:            "agent-1",
-				InsecureSkipVerify: true,
 			},
 			wantText: "do request:",
 		},
@@ -491,6 +490,16 @@ func TestClientFetchConfigValidation(t *testing.T) {
 				t.Fatalf("expected error containing %q, got %v", tt.wantText, err)
 			}
 		})
+	}
+}
+
+func TestNormalizeConfigAllowsSelfHostedLocalHTTPPulseURL(t *testing.T) {
+	cfg, err := normalizeConfig(Config{PulseURL: "http://ct-pulse.home:7655/"})
+	if err != nil {
+		t.Fatalf("normalizeConfig() error = %v", err)
+	}
+	if cfg.PulseURL != "http://ct-pulse.home:7655" {
+		t.Fatalf("PulseURL = %q, want http://ct-pulse.home:7655", cfg.PulseURL)
 	}
 }
 

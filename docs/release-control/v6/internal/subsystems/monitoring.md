@@ -86,7 +86,8 @@ block a distinct live host by hostname alone.
 
 ## Shared Boundaries
 
-1. `internal/proxmoxidentity/backup_identity.go` shared with `alerts`, `storage-recovery`: Proxmox PBS backup subject identity is a shared runtime boundary for monitoring backup freshness, backup-age alert attribution, and recovery-point guest mapping.
+1. `internal/kubernetesagent/agent.go` shared with `agent-lifecycle`: the Kubernetes native agent runtime is both a monitoring inventory source and an agent lifecycle Pulse control-plane transport client.
+2. `internal/proxmoxidentity/backup_identity.go` shared with `alerts`, `storage-recovery`: Proxmox PBS backup subject identity is a shared runtime boundary for monitoring backup freshness, backup-age alert attribution, and recovery-point guest mapping.
 
 ## Extension Points
 
