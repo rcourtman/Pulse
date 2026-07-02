@@ -2048,7 +2048,9 @@ func TestHostAgentRemovalGuardUsesResolvedIdentifier(t *testing.T) {
 	}
 	source := string(data)
 	requiredSnippets := []string{
-		"removedAt, wasRemoved := m.lookupRemovedHostAgent(identifier, hostname)",
+		"removedAt, wasRemoved := m.lookupRemovedHostAgent(identifier, hostname, report.Host.MachineID, tokenID)",
+		"func removedHostAgentMatchesReport(entry models.RemovedHostAgent, identifier, hostname, machineID, tokenID string) bool {",
+		"entryTokenID == \"\" || tokenID == \"\" || entryTokenID != tokenID",
 		`Str("hostID", identifier)`,
 		`fmt.Errorf("host agent %q had monitoring stopped at %v and cannot report again.`,
 	}
@@ -2059,6 +2061,9 @@ func TestHostAgentRemovalGuardUsesResolvedIdentifier(t *testing.T) {
 	}
 	if strings.Contains(source, "m.lookupRemovedHostAgent(baseIdentifier, hostname)") {
 		t.Fatal("monitor_agents.go must not check removed host-agent state against pre-resolution baseIdentifier")
+	}
+	if strings.Contains(source, "if hostAgentHostnamesMatch(entry.Hostname, hostname) {") {
+		t.Fatal("monitor_agents.go must not block host-agent re-enroll solely by removed hostname")
 	}
 }
 

@@ -219,6 +219,8 @@ func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 		ID:                hostID,
 		Hostname:          host.Hostname,
 		DisplayName:       host.DisplayName,
+		MachineID:         host.MachineID,
+		TokenID:           host.TokenID,
 		LinkedVMID:        host.LinkedVMID,
 		LinkedContainerID: host.LinkedContainerID,
 		RemovedAt:         removedAt,
@@ -282,8 +284,10 @@ func (m *Monitor) AllowHostAgentReenroll(hostID string) error {
 	return nil
 }
 
-func (m *Monitor) lookupRemovedHostAgent(identifier, hostname string) (time.Time, bool) {
+func (m *Monitor) lookupRemovedHostAgent(identifier, hostname, machineID, tokenID string) (time.Time, bool) {
 	identifier = strings.TrimSpace(identifier)
+	machineID = sanitizeDockerHostSuffix(machineID)
+	tokenID = strings.TrimSpace(tokenID)
 
 	m.mu.RLock()
 	removedAt, wasRemoved := m.removedHostAgents[identifier]
@@ -293,15 +297,38 @@ func (m *Monitor) lookupRemovedHostAgent(identifier, hostname string) (time.Time
 	}
 
 	for _, entry := range m.state.GetRemovedHostAgents() {
-		if strings.TrimSpace(entry.ID) == identifier {
-			return entry.RemovedAt, true
-		}
-		if hostAgentHostnamesMatch(entry.Hostname, hostname) {
+		if removedHostAgentMatchesReport(entry, identifier, hostname, machineID, tokenID) {
 			return entry.RemovedAt, true
 		}
 	}
 
 	return time.Time{}, false
+}
+
+func removedHostAgentMatchesReport(entry models.RemovedHostAgent, identifier, hostname, machineID, tokenID string) bool {
+	if strings.TrimSpace(entry.ID) == strings.TrimSpace(identifier) {
+		return true
+	}
+
+	entryMachineID := sanitizeDockerHostSuffix(entry.MachineID)
+	entryTokenID := strings.TrimSpace(entry.TokenID)
+	if entryTokenID != "" || tokenID != "" {
+		if entryTokenID == "" || tokenID == "" || entryTokenID != tokenID {
+			return false
+		}
+		if entryMachineID != "" && machineID != "" && entryMachineID == machineID {
+			return true
+		}
+		if !hostAgentHostnamesMatch(entry.Hostname, hostname) {
+			return false
+		}
+		return entryMachineID == "" || machineID == "" || entryMachineID == machineID
+	}
+
+	return entryMachineID != "" &&
+		machineID != "" &&
+		entryMachineID == machineID &&
+		hostAgentHostnamesMatch(entry.Hostname, hostname)
 }
 
 // LinkHostAgent manually links a host agent to a specific PVE node.
@@ -1726,7 +1753,11 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		}
 	}
 
-	removedAt, wasRemoved := m.lookupRemovedHostAgent(identifier, hostname)
+	tokenID := ""
+	if tokenRecord != nil {
+		tokenID = strings.TrimSpace(tokenRecord.ID)
+	}
+	removedAt, wasRemoved := m.lookupRemovedHostAgent(identifier, hostname, report.Host.MachineID, tokenID)
 	if wasRemoved {
 		log.Info().
 			Str("hostID", identifier).

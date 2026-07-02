@@ -824,6 +824,8 @@ type RemovedHostAgent struct {
 	ID                string    `json:"id"`
 	Hostname          string    `json:"hostname,omitempty"`
 	DisplayName       string    `json:"displayName,omitempty"`
+	MachineID         string    `json:"machineId,omitempty"`
+	TokenID           string    `json:"tokenId,omitempty"`
 	LinkedVMID        string    `json:"linkedVmId,omitempty"`
 	LinkedContainerID string    `json:"linkedContainerId,omitempty"`
 	RemovedAt         time.Time `json:"removedAt"`

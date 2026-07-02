@@ -23,6 +23,9 @@ Monitoring also owns the distinction between Proxmox VM power state and QEMU
 guest-agent reachability: fresh or never-healthy VMs with an enabled but
 unavailable guest agent stay `not-running`, while only VMs with recent healthy
 guest-agent evidence may become `expected-unreachable`.
+Removed host-agent reconnect blocks are identity-scoped: matching may use the
+canonical host ID or token-qualified machine/hostname continuity, but must never
+block a distinct live host by hostname alone.
 
 ## Canonical Files
 
@@ -1193,10 +1196,13 @@ before snapshots are returned to diagnostics consumers, not only when new
 snapshots are first recorded.
 The same canonical identity rule now applies when removed host agents are
 blocked from re-reporting. `ApplyHostReport` must resolve the final canonical
-host identifier for the `(token, machine-id, hostname)` tuple before it checks
-`removedHostAgents` or emits the reconnect-blocking error, so removing one
-token-bound host cannot poison a different host that shared the same raw
-machine identifier.
+host identifier before it checks `removedHostAgents` or emits the
+reconnect-blocking error, and removed-host records must carry machine and token
+identity so the block is scoped to the retired host. Hostname equivalence may
+only participate when it is qualified by the same token and compatible machine
+identity; removing one stale duplicate must not poison a different live host
+that shares the same hostname or raw machine identifier through a different
+token.
 Docker host re-identification now shares the same hostname-equivalence rule:
 monitoring may treat `qnap` and `qnap.local` as the same host when the token
 or machine identity already points at one canonical runtime, but it must not

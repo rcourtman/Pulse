@@ -971,6 +971,121 @@ func TestApplyHostReportDisambiguatesCollidingIdentifiersAcrossTokens(t *testing
 	}
 }
 
+func TestRemoveHostAgent_DoesNotBlockDistinctLiveHostWithSameHostname(t *testing.T) {
+	t.Helper()
+
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+		rateTracker:       NewRateTracker(),
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	now := time.Now().UTC()
+	staleReport := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:              "old-agent",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentshost.HostInfo{
+			ID:        "shared-machine",
+			MachineID: "shared-machine",
+			Hostname:  "pve-node",
+			Platform:  "linux",
+		},
+		Timestamp: now,
+	}
+	liveReport := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:              "new-agent",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentshost.HostInfo{
+			ID:        "shared-machine",
+			MachineID: "shared-machine",
+			Hostname:  "pve-node",
+			Platform:  "linux",
+		},
+		Timestamp: now.Add(30 * time.Second),
+	}
+
+	staleHost, err := monitor.ApplyHostReport(staleReport, &config.APITokenRecord{ID: "old-token"})
+	if err != nil {
+		t.Fatalf("ApplyHostReport stale host: %v", err)
+	}
+	liveHost, err := monitor.ApplyHostReport(liveReport, &config.APITokenRecord{ID: "new-token"})
+	if err != nil {
+		t.Fatalf("ApplyHostReport live host: %v", err)
+	}
+	if liveHost.ID == staleHost.ID {
+		t.Fatalf("expected distinct duplicate host IDs, got %q", liveHost.ID)
+	}
+
+	if _, err := monitor.RemoveHostAgent(staleHost.ID); err != nil {
+		t.Fatalf("RemoveHostAgent stale host: %v", err)
+	}
+
+	liveReport.Timestamp = now.Add(time.Minute)
+	liveHostAfterRemoval, err := monitor.ApplyHostReport(liveReport, &config.APITokenRecord{ID: "new-token"})
+	if err != nil {
+		t.Fatalf("live host with same hostname should not be blocked by stale removal: %v", err)
+	}
+	if liveHostAfterRemoval.ID != liveHost.ID {
+		t.Fatalf("expected live host ID %q to remain stable, got %q", liveHost.ID, liveHostAfterRemoval.ID)
+	}
+}
+
+func TestRemoveHostAgent_BlocksRemovedTokenMachineAfterIdentifierChurn(t *testing.T) {
+	t.Helper()
+
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+		rateTracker:       NewRateTracker(),
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	now := time.Now().UTC()
+	hostID := "agent-id-before-reinstall"
+	monitor.state.UpsertHost(models.Host{
+		ID:        hostID,
+		Hostname:  "blocked-node",
+		MachineID: "machine-stable",
+		TokenID:   "host-token",
+		Status:    "offline",
+		LastSeen:  now.Add(-time.Minute),
+	})
+
+	if _, err := monitor.RemoveHostAgent(hostID); err != nil {
+		t.Fatalf("RemoveHostAgent: %v", err)
+	}
+
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:              "agent-id-after-reinstall",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentshost.HostInfo{
+			ID:        "machine-stable",
+			MachineID: "machine-stable",
+			Hostname:  "blocked-node",
+			Platform:  "linux",
+		},
+		Timestamp: now,
+	}
+
+	if _, err := monitor.ApplyHostReport(report, &config.APITokenRecord{ID: "host-token"}); err == nil {
+		t.Fatal("expected stable token and machine identity to remain blocked after host ID changed")
+	}
+}
+
 func TestRemoveHostAgentUnbindsToken(t *testing.T) {
 	t.Helper()
 
