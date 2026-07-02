@@ -628,6 +628,9 @@ export interface ResourceProxmoxMeta {
   cpus?: number;
   template?: boolean;
   disks?: Disk[];
+  diskStatusReason?: string;
+  guestAgentStatus?: string;
+  guestAgentExpected?: boolean;
   swapUsed?: number;
   swapTotal?: number;
   balloon?: number;

@@ -183,6 +183,39 @@ describe('Resource Type Guards', () => {
 });
 
 describe('Resource Helper Functions', () => {
+  describe('ResourceProxmoxMeta', () => {
+    it('accepts guest-agent outage metadata and availability incidents on VM resources', () => {
+      const proxmox: ResourceProxmoxMeta = {
+        vmid: 101,
+        nodeName: 'pve-a',
+        instance: 'cluster-a',
+        diskStatusReason: 'agent-not-running',
+        guestAgentStatus: 'expected-unreachable',
+        guestAgentExpected: true,
+      };
+      const resource: Resource = createResource({
+        type: 'vm',
+        proxmox,
+        incidents: [
+          {
+            provider: 'proxmox',
+            nativeId: 'cluster-a:pve-a:101',
+            source: 'qemu-guest-agent',
+            code: 'availability_unreachable',
+            severity: 'warning',
+            summary: 'QEMU guest agent stopped responding while the VM is still running',
+            startedAt: '2026-07-02T22:45:00Z',
+          },
+        ],
+      });
+
+      expect(resource.proxmox?.guestAgentStatus).toBe('expected-unreachable');
+      expect(resource.proxmox?.guestAgentExpected).toBe(true);
+      expect(resource.proxmox?.diskStatusReason).toBe('agent-not-running');
+      expect(resource.incidents?.[0]?.source).toBe('qemu-guest-agent');
+    });
+  });
+
   describe('ResourceDockerMeta', () => {
     it('accepts Docker host runtime and Swarm evidence in the canonical resource contract', () => {
       const docker: ResourceDockerMeta = {

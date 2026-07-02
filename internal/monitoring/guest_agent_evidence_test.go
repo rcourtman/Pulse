@@ -23,6 +23,22 @@ func TestHasRecentGuestAgentEvidenceAcceptsUnifiedReadStateStatus(t *testing.T) 
 	}
 }
 
+func TestHasRecentGuestAgentEvidenceAcceptsGuestAgentStatus(t *testing.T) {
+	now := time.Now()
+
+	prev := &models.VM{
+		Type:               "qemu",
+		Status:             "running",
+		GuestAgentStatus:   "available",
+		GuestAgentExpected: true,
+		LastSeen:           now.Add(-time.Minute),
+	}
+
+	if !hasRecentGuestAgentEvidence(prev, now) {
+		t.Fatal("expected previous guest-agent available status to count as recent evidence")
+	}
+}
+
 func TestHasRecentGuestAgentEvidenceRejectsStaleSnapshots(t *testing.T) {
 	now := time.Now()
 

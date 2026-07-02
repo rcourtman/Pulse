@@ -183,6 +183,8 @@ export interface VM {
   disk: Disk;
   disks?: Disk[];
   diskStatusReason?: string;
+  guestAgentStatus?: string;
+  guestAgentExpected?: boolean;
   ipAddresses?: string[];
   osName?: string;
   osVersion?: string;

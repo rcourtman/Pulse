@@ -851,7 +851,9 @@ func TestProxmoxGuestDiskCarryForwardUsesCanonicalStabilityHelper(t *testing.T) 
 		},
 		"monitor_pve_guest_builders.go": {
 			"state.diskTotal, state.diskUsed, state.diskFree, state.diskUsage, state.individualDisks, state.diskStatusReason = stabilizeGuestLowTrustDisk(",
-			"DiskStatusReason:  state.diskStatusReason,",
+			"DiskStatusReason:   state.diskStatusReason,",
+			"GuestAgentStatus:   state.guestAgentStatus,",
+			"GuestAgentExpected: state.guestAgentExpected,",
 			"return nil, classifyGuestAgentDiskStatusError(err), false",
 		},
 		"monitor_polling_vm.go": {

@@ -185,28 +185,30 @@ func TestVMToFrontend(t *testing.T) {
 	lastBackup := now.Add(-24 * time.Hour)
 
 	vm := VM{
-		ID:          "vm-100",
-		VMID:        100,
-		Name:        "test-vm",
-		Node:        "pve1",
-		Instance:    "default",
-		Status:      "running",
-		Type:        "qemu",
-		CPU:         0.15,
-		CPUs:        4,
-		Memory:      Memory{Total: 8000000000, Used: 4000000000},
-		Disk:        Disk{Total: 100000000000, Used: 50000000000},
-		NetworkIn:   1000000,
-		NetworkOut:  500000,
-		DiskRead:    100000,
-		DiskWrite:   50000,
-		Uptime:      3600,
-		Tags:        []string{"production", "web"},
-		LastSeen:    now,
-		LastBackup:  lastBackup,
-		IPAddresses: []string{"192.168.1.50", "10.0.0.50"},
-		OSName:      "Ubuntu",
-		OSVersion:   "22.04",
+		ID:                 "vm-100",
+		VMID:               100,
+		Name:               "test-vm",
+		Node:               "pve1",
+		Instance:           "default",
+		Status:             "running",
+		Type:               "qemu",
+		CPU:                0.15,
+		CPUs:               4,
+		Memory:             Memory{Total: 8000000000, Used: 4000000000},
+		Disk:               Disk{Total: 100000000000, Used: 50000000000},
+		NetworkIn:          1000000,
+		NetworkOut:         500000,
+		DiskRead:           100000,
+		DiskWrite:          50000,
+		Uptime:             3600,
+		Tags:               []string{"production", "web"},
+		LastSeen:           now,
+		LastBackup:         lastBackup,
+		IPAddresses:        []string{"192.168.1.50", "10.0.0.50"},
+		OSName:             "Ubuntu",
+		OSVersion:          "22.04",
+		GuestAgentStatus:   "expected-unreachable",
+		GuestAgentExpected: true,
 	}
 
 	frontend := vm.ToFrontend()
@@ -222,6 +224,12 @@ func TestVMToFrontend(t *testing.T) {
 	}
 	if frontend.Status != vm.Status {
 		t.Errorf("Status = %q, want %q", frontend.Status, vm.Status)
+	}
+	if frontend.GuestAgentStatus != vm.GuestAgentStatus {
+		t.Errorf("GuestAgentStatus = %q, want %q", frontend.GuestAgentStatus, vm.GuestAgentStatus)
+	}
+	if frontend.GuestAgentExpected != vm.GuestAgentExpected {
+		t.Errorf("GuestAgentExpected = %t, want %t", frontend.GuestAgentExpected, vm.GuestAgentExpected)
 	}
 	if frontend.CPU != vm.CPU {
 		t.Errorf("CPU = %f, want %f", frontend.CPU, vm.CPU)

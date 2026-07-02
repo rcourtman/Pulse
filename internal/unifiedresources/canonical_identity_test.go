@@ -3,6 +3,8 @@ package unifiedresources
 import (
 	"reflect"
 	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
 func TestRefreshCanonicalIdentityPrefersTargetsAndCanonicalHostData(t *testing.T) {
@@ -70,6 +72,27 @@ func TestRefreshCanonicalIdentityPrefersTargetsAndCanonicalHostData(t *testing.T
 		if got := resource.Canonical.Aliases[i]; got != want {
 			t.Fatalf("alias[%d] = %q, want %q", i, got, want)
 		}
+	}
+}
+
+func TestVMGuestAgentIncidentUsesCanonicalSourceID(t *testing.T) {
+	vm := models.VM{
+		ID:                 "cluster-a:pve-a:101",
+		Name:               "win-app",
+		Node:               "pve-a",
+		Instance:           "cluster-a",
+		VMID:               101,
+		Status:             "running",
+		Type:               "qemu",
+		GuestAgentStatus:   "expected-unreachable",
+		GuestAgentExpected: true,
+	}
+	resource, _ := resourceFromVM(vm)
+	if len(resource.Incidents) != 1 {
+		t.Fatalf("expected one incident, got %+v", resource.Incidents)
+	}
+	if got, want := resource.Incidents[0].NativeID, proxmoxVMSourceID(vm); got != want {
+		t.Fatalf("incident NativeID = %q, want %q", got, want)
 	}
 }
 

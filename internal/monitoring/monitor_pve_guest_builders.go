@@ -13,28 +13,30 @@ import (
 )
 
 type vmBuildState struct {
-	memTotal          uint64
-	memUsed           uint64
-	memorySource      string
-	guestRaw          VMMemoryRaw
-	diskReadBytes     int64
-	diskWriteBytes    int64
-	networkInBytes    int64
-	networkOutBytes   int64
-	diskTotal         uint64
-	diskUsed          uint64
-	diskFree          uint64
-	diskUsage         float64
-	diskFromAgent     bool
-	diskStatusReason  string
-	individualDisks   []models.Disk
-	ipAddresses       []string
-	networkInterfaces []models.GuestNetworkInterface
-	osName            string
-	osVersion         string
-	agentVersion      string
-	detailedStatus    *proxmox.VMStatus
-	onBoot            *bool
+	memTotal           uint64
+	memUsed            uint64
+	memorySource       string
+	guestRaw           VMMemoryRaw
+	diskReadBytes      int64
+	diskWriteBytes     int64
+	networkInBytes     int64
+	networkOutBytes    int64
+	diskTotal          uint64
+	diskUsed           uint64
+	diskFree           uint64
+	diskUsage          float64
+	diskFromAgent      bool
+	diskStatusReason   string
+	guestAgentStatus   string
+	guestAgentExpected bool
+	individualDisks    []models.Disk
+	ipAddresses        []string
+	networkInterfaces  []models.GuestNetworkInterface
+	osName             string
+	osVersion          string
+	agentVersion       string
+	detailedStatus     *proxmox.VMStatus
+	onBoot             *bool
 }
 
 func (m *Monitor) applyVMStatusDetails(
@@ -45,6 +47,7 @@ func (m *Monitor) applyVMStatusDetails(
 	guestID string,
 	vmIDToHostAgent map[string]models.Host,
 	status *proxmox.VMStatus,
+	recentGuestAgentEvidence bool,
 	state *vmBuildState,
 ) {
 	if status == nil || state == nil {
@@ -52,6 +55,7 @@ func (m *Monitor) applyVMStatusDetails(
 	}
 
 	state.detailedStatus = status
+	state.guestAgentStatus, state.guestAgentExpected = vmGuestAgentRuntimeState(status, recentGuestAgentEvidence)
 	state.memTotal, state.memUsed, state.memorySource = m.resolveGuestStatusMemory(
 		ctx,
 		client,
@@ -128,6 +132,22 @@ func (m *Monitor) applyVMStatusDetails(
 
 }
 
+func vmGuestAgentRuntimeState(status *proxmox.VMStatus, recentGuestAgentEvidence bool) (string, bool) {
+	if status == nil {
+		return "", false
+	}
+	if status.Agent.IsAvailable() {
+		return "available", true
+	}
+	if status.Agent.IsEnabled() {
+		if recentGuestAgentEvidence {
+			return "expected-unreachable", true
+		}
+		return "not-running", false
+	}
+	return "disabled", false
+}
+
 func (m *Monitor) buildVMFromClusterResource(
 	ctx context.Context,
 	instanceName string,
@@ -146,6 +166,9 @@ func (m *Monitor) buildVMFromClusterResource(
 		guestID = makeGuestID(instanceName, res.Node, res.VMID)
 	}
 	prevSnapshot := m.previousGuestSnapshot(instanceName, "qemu", res.Node, res.VMID)
+	prePollTime := time.Now()
+	recentGuestAgentEvidence := hasRecentGuestAgentEvidence(prevVM, prePollTime) ||
+		m.hasRecentGuestMetadataEvidence(instanceName, res.Node, res.VMID, prePollTime)
 
 	state := vmBuildState{
 		memTotal:        res.MaxMem,
@@ -189,7 +212,7 @@ func (m *Monitor) buildVMFromClusterResource(
 				Int("vmid", res.VMID).
 				Msg("Could not get VM status to check guest agent availability")
 		} else if status != nil {
-			m.applyVMStatusDetails(ctx, instanceName, res, client, guestID, vmIDToHostAgent, status, &state)
+			m.applyVMStatusDetails(ctx, instanceName, res, client, guestID, vmIDToHostAgent, status, recentGuestAgentEvidence, &state)
 		} else {
 			if state.diskTotal > 0 {
 				state.diskStatusReason = "no-status"
@@ -244,6 +267,10 @@ func (m *Monitor) buildVMFromClusterResource(
 			)
 			if len(fsDisks) > 0 {
 				state.individualDisks = fsDisks
+			}
+			state.guestAgentExpected = true
+			if len(guestIPs) > 0 || len(guestIfaces) > 0 || guestOSName != "" || guestOSVersion != "" || guestAgentVersion != "" || state.diskFromAgent {
+				state.guestAgentStatus = "available"
 			}
 		}
 
@@ -359,21 +386,23 @@ func (m *Monitor) buildVMFromClusterResource(
 			Free:  int64(state.diskFree),
 			Usage: state.diskUsage,
 		},
-		Disks:             state.individualDisks,
-		DiskStatusReason:  state.diskStatusReason,
-		IPAddresses:       state.ipAddresses,
-		OSName:            state.osName,
-		OSVersion:         state.osVersion,
-		AgentVersion:      state.agentVersion,
-		NetworkInterfaces: state.networkInterfaces,
-		NetworkIn:         max(0, int64(netInRate)),
-		NetworkOut:        max(0, int64(netOutRate)),
-		DiskRead:          max(0, int64(diskReadRate)),
-		DiskWrite:         max(0, int64(diskWriteRate)),
-		Uptime:            int64(res.Uptime),
-		Template:          res.Template == 1,
-		OnBoot:            state.onBoot,
-		LastSeen:          sampleTime,
+		Disks:              state.individualDisks,
+		DiskStatusReason:   state.diskStatusReason,
+		GuestAgentStatus:   state.guestAgentStatus,
+		GuestAgentExpected: state.guestAgentExpected,
+		IPAddresses:        state.ipAddresses,
+		OSName:             state.osName,
+		OSVersion:          state.osVersion,
+		AgentVersion:       state.agentVersion,
+		NetworkInterfaces:  state.networkInterfaces,
+		NetworkIn:          max(0, int64(netInRate)),
+		NetworkOut:         max(0, int64(netOutRate)),
+		DiskRead:           max(0, int64(diskReadRate)),
+		DiskWrite:          max(0, int64(diskWriteRate)),
+		Uptime:             int64(res.Uptime),
+		Template:           res.Template == 1,
+		OnBoot:             state.onBoot,
+		LastSeen:           sampleTime,
 	}
 
 	// Parse tags

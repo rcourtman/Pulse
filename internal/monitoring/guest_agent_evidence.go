@@ -22,6 +22,7 @@ func hasRecentGuestAgentEvidence(prev *models.VM, now time.Time) bool {
 	}
 
 	if prev.AgentVersion != "" ||
+		prev.GuestAgentStatus == "available" ||
 		len(prev.IPAddresses) > 0 ||
 		len(prev.NetworkInterfaces) > 0 ||
 		prev.OSName != "" ||

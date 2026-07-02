@@ -339,6 +339,8 @@ type ProxmoxData struct {
 	Uptime                       int64               `json:"uptime,omitempty"`
 	LastBackup                   time.Time           `json:"lastBackup,omitempty"`
 	DiskStatusReason             string              `json:"diskStatusReason,omitempty"`
+	GuestAgentStatus             string              `json:"guestAgentStatus,omitempty"`
+	GuestAgentExpected           bool                `json:"guestAgentExpected,omitempty"`
 	OSName                       string              `json:"osName,omitempty"`
 	OSVersion                    string              `json:"osVersion,omitempty"`
 	AgentVersion                 string              `json:"agentVersion,omitempty"`

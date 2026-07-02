@@ -118,6 +118,64 @@ func TestMonitorSourceType(t *testing.T) {
 	}
 }
 
+func TestResourceFromVMProjectsExpectedGuestAgentOutageIncident(t *testing.T) {
+	now := time.Now()
+	resource, _ := resourceFromVM(models.VM{
+		ID:                 "cluster-a:pve-a:101",
+		Name:               "win-app",
+		Node:               "pve-a",
+		Instance:           "cluster-a",
+		VMID:               101,
+		Status:             "running",
+		Type:               "qemu",
+		GuestAgentStatus:   "expected-unreachable",
+		GuestAgentExpected: true,
+		LastSeen:           now,
+	})
+
+	if resource.Status != StatusWarning {
+		t.Fatalf("Status = %q, want warning", resource.Status)
+	}
+	if resource.Proxmox == nil || resource.Proxmox.GuestAgentStatus != "expected-unreachable" || !resource.Proxmox.GuestAgentExpected {
+		t.Fatalf("expected proxmox guest-agent status projection, got %+v", resource.Proxmox)
+	}
+	if len(resource.Incidents) != 1 {
+		t.Fatalf("expected one guest-agent incident, got %+v", resource.Incidents)
+	}
+	incident := resource.Incidents[0]
+	if incident.Provider != "proxmox" || incident.Source != "qemu-guest-agent" || incident.Code != "availability_unreachable" {
+		t.Fatalf("unexpected incident identity: %+v", incident)
+	}
+	if incident.Severity != storagehealth.RiskWarning {
+		t.Fatalf("incident severity = %q, want %q", incident.Severity, storagehealth.RiskWarning)
+	}
+	if !incident.StartedAt.Equal(now) {
+		t.Fatalf("incident StartedAt = %s, want %s", incident.StartedAt, now)
+	}
+}
+
+func TestResourceFromVMIgnoresNeverHealthyGuestAgent(t *testing.T) {
+	resource, _ := resourceFromVM(models.VM{
+		ID:                 "cluster-a:pve-a:102",
+		Name:               "new-vm",
+		Node:               "pve-a",
+		Instance:           "cluster-a",
+		VMID:               102,
+		Status:             "running",
+		Type:               "qemu",
+		GuestAgentStatus:   "not-running",
+		GuestAgentExpected: false,
+		LastSeen:           time.Now(),
+	})
+
+	if resource.Status != StatusOnline {
+		t.Fatalf("Status = %q, want online", resource.Status)
+	}
+	if len(resource.Incidents) != 0 {
+		t.Fatalf("expected no incident, got %+v", resource.Incidents)
+	}
+}
+
 func TestMonitorHostnamePriority(t *testing.T) {
 	tests := []struct {
 		name     string

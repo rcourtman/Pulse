@@ -45,37 +45,39 @@ func (n NodeFrontend) NormalizeCollections() NodeFrontend {
 
 // VMFrontend represents a VM with frontend-friendly field names
 type VMFrontend struct {
-	ID                string                  `json:"id"`
-	VMID              int                     `json:"vmid"`
-	Name              string                  `json:"name"`
-	Node              string                  `json:"node"`
-	Pool              string                  `json:"pool,omitempty"`
-	Instance          string                  `json:"instance"`
-	Status            string                  `json:"status"`
-	Type              string                  `json:"type"`
-	CPU               float64                 `json:"cpu"`
-	CPUs              int                     `json:"cpus"`
-	Memory            *Memory                 `json:"memory,omitempty"`           // Full memory object
-	Mem               int64                   `json:"mem"`                        // Maps to Memory.Used
-	MaxMem            int64                   `json:"maxmem"`                     // Maps to Memory.Total
-	DiskObj           *Disk                   `json:"disk,omitempty"`             // Full disk object
-	Disks             []Disk                  `json:"disks"`                      // Individual filesystem/disk usage
-	DiskStatusReason  string                  `json:"diskStatusReason,omitempty"` // Why disk stats are unavailable
-	OSName            string                  `json:"osName,omitempty"`
-	OSVersion         string                  `json:"osVersion,omitempty"`
-	AgentVersion      string                  `json:"agentVersion,omitempty"`
-	NetworkInterfaces []GuestNetworkInterface `json:"networkInterfaces"`
-	IPAddresses       []string                `json:"ipAddresses"`
-	NetIn             int64                   `json:"networkIn"`  // Maps to NetworkIn (camelCase for frontend)
-	NetOut            int64                   `json:"networkOut"` // Maps to NetworkOut (camelCase for frontend)
-	DiskRead          int64                   `json:"diskRead"`   // Maps to DiskRead (camelCase for frontend)
-	DiskWrite         int64                   `json:"diskWrite"`  // Maps to DiskWrite (camelCase for frontend)
-	Uptime            int64                   `json:"uptime"`
-	Template          bool                    `json:"template"`
-	LastBackup        int64                   `json:"lastBackup,omitempty"` // Unix timestamp
-	Tags              string                  `json:"tags,omitempty"`       // Joined string
-	Lock              string                  `json:"lock,omitempty"`
-	LastSeen          int64                   `json:"lastSeen"` // Unix timestamp
+	ID                 string                  `json:"id"`
+	VMID               int                     `json:"vmid"`
+	Name               string                  `json:"name"`
+	Node               string                  `json:"node"`
+	Pool               string                  `json:"pool,omitempty"`
+	Instance           string                  `json:"instance"`
+	Status             string                  `json:"status"`
+	Type               string                  `json:"type"`
+	CPU                float64                 `json:"cpu"`
+	CPUs               int                     `json:"cpus"`
+	Memory             *Memory                 `json:"memory,omitempty"`           // Full memory object
+	Mem                int64                   `json:"mem"`                        // Maps to Memory.Used
+	MaxMem             int64                   `json:"maxmem"`                     // Maps to Memory.Total
+	DiskObj            *Disk                   `json:"disk,omitempty"`             // Full disk object
+	Disks              []Disk                  `json:"disks"`                      // Individual filesystem/disk usage
+	DiskStatusReason   string                  `json:"diskStatusReason,omitempty"` // Why disk stats are unavailable
+	GuestAgentStatus   string                  `json:"guestAgentStatus,omitempty"` // QEMU guest-agent runtime status
+	GuestAgentExpected bool                    `json:"guestAgentExpected,omitempty"`
+	OSName             string                  `json:"osName,omitempty"`
+	OSVersion          string                  `json:"osVersion,omitempty"`
+	AgentVersion       string                  `json:"agentVersion,omitempty"`
+	NetworkInterfaces  []GuestNetworkInterface `json:"networkInterfaces"`
+	IPAddresses        []string                `json:"ipAddresses"`
+	NetIn              int64                   `json:"networkIn"`  // Maps to NetworkIn (camelCase for frontend)
+	NetOut             int64                   `json:"networkOut"` // Maps to NetworkOut (camelCase for frontend)
+	DiskRead           int64                   `json:"diskRead"`   // Maps to DiskRead (camelCase for frontend)
+	DiskWrite          int64                   `json:"diskWrite"`  // Maps to DiskWrite (camelCase for frontend)
+	Uptime             int64                   `json:"uptime"`
+	Template           bool                    `json:"template"`
+	LastBackup         int64                   `json:"lastBackup,omitempty"` // Unix timestamp
+	Tags               string                  `json:"tags,omitempty"`       // Joined string
+	Lock               string                  `json:"lock,omitempty"`
+	LastSeen           int64                   `json:"lastSeen"` // Unix timestamp
 }
 
 func (v VMFrontend) NormalizeCollections() VMFrontend {

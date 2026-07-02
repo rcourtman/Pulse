@@ -1532,26 +1532,28 @@ func resourceFromVM(vm models.VM) (Resource, ResourceIdentity) {
 	sourceID := proxmoxVMSourceID(vm)
 	metrics := metricsFromVM(vm)
 	proxmox := &ProxmoxData{
-		SourceID:          sourceID,
-		NodeName:          vm.Node,
-		Pool:              vm.Pool,
-		Instance:          vm.Instance,
-		VMID:              vm.VMID,
-		CPUs:              vm.CPUs,
-		Uptime:            vm.Uptime,
-		Template:          vm.Template,
-		LastBackup:        vm.LastBackup,
-		DiskStatusReason:  vm.DiskStatusReason,
-		OSName:            vm.OSName,
-		OSVersion:         vm.OSVersion,
-		AgentVersion:      vm.AgentVersion,
-		NetworkInterfaces: convertGuestInterfaces(vm.NetworkInterfaces),
-		Disks:             convertDisks(vm.Disks),
-		SwapUsed:          vm.Memory.SwapUsed,
-		SwapTotal:         vm.Memory.SwapTotal,
-		Balloon:           vm.Memory.Balloon,
-		MemoryCache:       vm.Memory.Cache,
-		Lock:              vm.Lock,
+		SourceID:           sourceID,
+		NodeName:           vm.Node,
+		Pool:               vm.Pool,
+		Instance:           vm.Instance,
+		VMID:               vm.VMID,
+		CPUs:               vm.CPUs,
+		Uptime:             vm.Uptime,
+		Template:           vm.Template,
+		LastBackup:         vm.LastBackup,
+		DiskStatusReason:   vm.DiskStatusReason,
+		GuestAgentStatus:   vm.GuestAgentStatus,
+		GuestAgentExpected: vm.GuestAgentExpected,
+		OSName:             vm.OSName,
+		OSVersion:          vm.OSVersion,
+		AgentVersion:       vm.AgentVersion,
+		NetworkInterfaces:  convertGuestInterfaces(vm.NetworkInterfaces),
+		Disks:              convertDisks(vm.Disks),
+		SwapUsed:           vm.Memory.SwapUsed,
+		SwapTotal:          vm.Memory.SwapTotal,
+		Balloon:            vm.Memory.Balloon,
+		MemoryCache:        vm.Memory.Cache,
+		Lock:               vm.Lock,
 	}
 	resource := Resource{
 		Type:       ResourceTypeVM,
@@ -1564,12 +1566,31 @@ func resourceFromVM(vm models.VM) (Resource, ResourceIdentity) {
 		Proxmox:    proxmox,
 		Tags:       vm.Tags,
 	}
+	if incident, ok := vmGuestAgentIncident(vm); ok {
+		resource.Incidents = append(resource.Incidents, incident)
+		resource.Status = incidentsStatus(resource.Status, resource.Incidents)
+	}
 	resource.Capabilities = proxmoxGuestLifecycleCapabilities("vm", "qemu", vm.Status, vm.Template, vm.Lock)
 	identity := ResourceIdentity{
 		Hostnames:   uniqueStrings([]string{vm.Name}),
 		IPAddresses: uniqueStrings(vm.IPAddresses),
 	}
 	return resource, identity
+}
+
+func vmGuestAgentIncident(vm models.VM) (ResourceIncident, bool) {
+	if !vm.GuestAgentExpected || vm.GuestAgentStatus != "expected-unreachable" || !strings.EqualFold(strings.TrimSpace(vm.Status), "running") {
+		return ResourceIncident{}, false
+	}
+	return ResourceIncident{
+		Provider:  "proxmox",
+		NativeID:  proxmoxVMSourceID(vm),
+		Code:      "availability_unreachable",
+		Severity:  storagehealth.RiskWarning,
+		Source:    "qemu-guest-agent",
+		Summary:   "QEMU guest agent stopped responding while the VM is still running",
+		StartedAt: vm.LastSeen,
+	}, true
 }
 
 func resourceFromContainer(ct models.Container) (Resource, ResourceIdentity) {

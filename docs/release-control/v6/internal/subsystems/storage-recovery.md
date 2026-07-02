@@ -2068,6 +2068,12 @@ must not reinterpret the finding ID or approval-required chat mode as backup
 freshness, restore authorization, storage remediation permission, or recovery
 transport state, and must not treat the context-only handoff as a
 storage/recovery-authored diagnostic prompt.
+Proxmox VM QEMU guest-agent outage incidents follow the same incident-context
+boundary. Storage and recovery may display or link from the resulting
+`availability_unreachable` resource incident when explaining why a VM lacks
+fresh guest telemetry, but they must not reinterpret `guestAgentStatus`,
+`guestAgentExpected`, or source `qemu-guest-agent` as backup freshness, restore
+eligibility, protection status, or recovery ownership.
 Patrol queued-fix approvals that seed shared action-audit records follow the
 same rule: storage and recovery may display the resulting action history as
 incident-adjacent context, including the requester identity that distinguishes

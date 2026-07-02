@@ -2511,6 +2511,13 @@ a new API state machine, queue contract, or verification-accounting field.
     chip option counts, and grouping all collapse to the canonical
     platform vocabulary instead of leaking storage technology labels
     into operator chrome.
+35. Keep Proxmox VM guest-agent reachability on the shared API payloads instead
+    of deriving it in page-local code. Backend VM payloads and
+    `frontend-modern/src/types/api.ts` may carry optional
+    `guestAgentStatus` and `guestAgentExpected` fields. `expected-unreachable`
+    means the VM is still powered/running in Proxmox but a previously healthy
+    QEMU guest agent stopped responding; consumers must not reinterpret that
+    field as the VM power state.
 
 ## Forbidden Paths
 

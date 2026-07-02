@@ -414,6 +414,11 @@ agent-backed resource and their `ProxmoxData.LinkedAgentID` must inherit the
 parent Pulse agent ID. That linked agent ID is the only source for Proxmox
 workload `discoveryTarget.agentId`; node names and VMIDs alone are not enough
 to authorize browser action targets.
+Proxmox VM guest-agent outage projection is also a unified-resource boundary.
+When monitoring marks a running VM's expected QEMU guest agent as unreachable,
+the resource adapter must surface a Proxmox-authored `availability_unreachable`
+`resource-incident` with source `qemu-guest-agent`; it must leave VM power
+status online/warning rather than rewriting the VM to stopped/offline.
 
 Service-discovery readiness is a unified-resource payload contract, not a
 drawer-local decoration. Resource list/detail payloads that expose a
@@ -2801,9 +2806,10 @@ ownership.
 
 Canonical Proxmox guest metadata now carries workload boundary fields such as
 guest OS identity, guest agent version, guest network interfaces, VM disk
-status reason, and container OCI/Docker-detection metadata so monitoring can
-derive `models.VM` and `models.Container` from unified views without depending
-on legacy snapshot ownership.
+status reason, QEMU guest-agent runtime status/expectation, and container
+OCI/Docker-detection metadata so monitoring can derive `models.VM` and
+`models.Container` from unified views without depending on legacy snapshot
+ownership.
 
 Canonical PBS metadata now carries full instance boundary payload such as host
 and guest URLs, full datastore details, and PBS job arrays so monitoring can

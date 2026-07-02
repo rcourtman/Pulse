@@ -1269,6 +1269,121 @@ func TestBuildVMFromClusterResource_ContinuesGuestAgentQueriesAfterTransientStat
 	}
 }
 
+func TestBuildVMFromClusterResource_MarksExpectedGuestAgentUnreachable(t *testing.T) {
+	monitor := &Monitor{
+		rateTracker:          NewRateTracker(),
+		guestMetadataCache:   make(map[string]guestMetadataCacheEntry),
+		guestMetadataLimiter: make(map[string]time.Time),
+	}
+	guestID := makeGuestID("pve1", "node1", 100)
+	prevVM := &models.VM{
+		ID:           guestID,
+		Instance:     "pve1",
+		Node:         "node1",
+		VMID:         100,
+		Name:         "win-app",
+		Type:         "qemu",
+		Status:       "running",
+		AgentVersion: "8.2.0",
+		LastSeen:     time.Now(),
+	}
+	client := &mockPVEClientExtra{
+		vmStatus: &proxmox.VMStatus{
+			Status: "running",
+			MaxMem: 8 * 1024 * 1024 * 1024,
+			Mem:    2 * 1024 * 1024 * 1024,
+			Agent: proxmox.VMAgentField{
+				Enabled:           1,
+				Available:         0,
+				AvailabilityKnown: true,
+			},
+		},
+	}
+
+	vm, _, _, _, _, ok := monitor.buildVMFromClusterResource(
+		context.Background(),
+		"pve1",
+		proxmox.ClusterResource{
+			Type:    "qemu",
+			Node:    "node1",
+			Name:    "win-app",
+			Status:  "running",
+			VMID:    100,
+			MaxCPU:  4,
+			MaxMem:  8 * 1024 * 1024 * 1024,
+			Mem:     2 * 1024 * 1024 * 1024,
+			MaxDisk: 100 * 1024 * 1024 * 1024,
+		},
+		client,
+		guestID,
+		nil,
+		prevVM,
+	)
+	if !ok {
+		t.Fatal("expected VM to be built")
+	}
+	if vm.Status != "running" {
+		t.Fatalf("VM Status = %q, want running", vm.Status)
+	}
+	if vm.GuestAgentStatus != "expected-unreachable" {
+		t.Fatalf("GuestAgentStatus = %q, want expected-unreachable", vm.GuestAgentStatus)
+	}
+	if !vm.GuestAgentExpected {
+		t.Fatal("expected GuestAgentExpected to be true")
+	}
+	if vm.DiskStatusReason != "agent-not-running" {
+		t.Fatalf("DiskStatusReason = %q, want agent-not-running", vm.DiskStatusReason)
+	}
+}
+
+func TestBuildVMFromClusterResource_DoesNotExpectNeverHealthyGuestAgent(t *testing.T) {
+	monitor := &Monitor{
+		rateTracker:          NewRateTracker(),
+		guestMetadataCache:   make(map[string]guestMetadataCacheEntry),
+		guestMetadataLimiter: make(map[string]time.Time),
+	}
+	client := &mockPVEClientExtra{
+		vmStatus: &proxmox.VMStatus{
+			Status: "running",
+			MaxMem: 4 * 1024 * 1024 * 1024,
+			Mem:    1024 * 1024 * 1024,
+			Agent: proxmox.VMAgentField{
+				Enabled:           1,
+				Available:         0,
+				AvailabilityKnown: true,
+			},
+		},
+	}
+
+	vm, _, _, _, _, ok := monitor.buildVMFromClusterResource(
+		context.Background(),
+		"pve1",
+		proxmox.ClusterResource{
+			Type:    "qemu",
+			Node:    "node1",
+			Name:    "fresh-vm",
+			Status:  "running",
+			VMID:    101,
+			MaxMem:  4 * 1024 * 1024 * 1024,
+			Mem:     1024 * 1024 * 1024,
+			MaxDisk: 20 * 1024 * 1024 * 1024,
+		},
+		client,
+		makeGuestID("pve1", "node1", 101),
+		nil,
+		nil,
+	)
+	if !ok {
+		t.Fatal("expected VM to be built")
+	}
+	if vm.GuestAgentStatus != "not-running" {
+		t.Fatalf("GuestAgentStatus = %q, want not-running", vm.GuestAgentStatus)
+	}
+	if vm.GuestAgentExpected {
+		t.Fatal("expected GuestAgentExpected to be false")
+	}
+}
+
 func TestPollVMsAndContainersEfficient_ContinuesGuestAgentQueriesAfterTransientStatusFailure(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 

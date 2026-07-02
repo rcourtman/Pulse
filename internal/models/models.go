@@ -135,36 +135,38 @@ func (n Node) NormalizeCollections() Node {
 
 // VM represents a virtual machine
 type VM struct {
-	ID                string                  `json:"id"`
-	VMID              int                     `json:"vmid"`
-	Name              string                  `json:"name"`
-	Node              string                  `json:"node"`
-	Pool              string                  `json:"pool,omitempty"`
-	Instance          string                  `json:"instance"`
-	Status            string                  `json:"status"`
-	Type              string                  `json:"type"`
-	CPU               float64                 `json:"cpu"`
-	CPUs              int                     `json:"cpus"`
-	Memory            Memory                  `json:"memory"`
-	Disk              Disk                    `json:"disk"`
-	Disks             []Disk                  `json:"disks,omitempty"`
-	DiskStatusReason  string                  `json:"diskStatusReason,omitempty"` // Why disk stats are unavailable
-	IPAddresses       []string                `json:"ipAddresses,omitempty"`
-	OSName            string                  `json:"osName,omitempty"`
-	OSVersion         string                  `json:"osVersion,omitempty"`
-	AgentVersion      string                  `json:"agentVersion,omitempty"`
-	NetworkInterfaces []GuestNetworkInterface `json:"networkInterfaces,omitempty"`
-	NetworkIn         int64                   `json:"networkIn"`
-	NetworkOut        int64                   `json:"networkOut"`
-	DiskRead          int64                   `json:"diskRead"`
-	DiskWrite         int64                   `json:"diskWrite"`
-	Uptime            int64                   `json:"uptime"`
-	Template          bool                    `json:"template"`
-	OnBoot            *bool                   `json:"onBoot,omitempty"`
-	LastBackup        time.Time               `json:"lastBackup,omitempty"`
-	Tags              []string                `json:"tags,omitempty"`
-	Lock              string                  `json:"lock,omitempty"`
-	LastSeen          time.Time               `json:"lastSeen"`
+	ID                 string                  `json:"id"`
+	VMID               int                     `json:"vmid"`
+	Name               string                  `json:"name"`
+	Node               string                  `json:"node"`
+	Pool               string                  `json:"pool,omitempty"`
+	Instance           string                  `json:"instance"`
+	Status             string                  `json:"status"`
+	Type               string                  `json:"type"`
+	CPU                float64                 `json:"cpu"`
+	CPUs               int                     `json:"cpus"`
+	Memory             Memory                  `json:"memory"`
+	Disk               Disk                    `json:"disk"`
+	Disks              []Disk                  `json:"disks,omitempty"`
+	DiskStatusReason   string                  `json:"diskStatusReason,omitempty"` // Why disk stats are unavailable
+	GuestAgentStatus   string                  `json:"guestAgentStatus,omitempty"` // QEMU guest-agent runtime status
+	GuestAgentExpected bool                    `json:"guestAgentExpected,omitempty"`
+	IPAddresses        []string                `json:"ipAddresses,omitempty"`
+	OSName             string                  `json:"osName,omitempty"`
+	OSVersion          string                  `json:"osVersion,omitempty"`
+	AgentVersion       string                  `json:"agentVersion,omitempty"`
+	NetworkInterfaces  []GuestNetworkInterface `json:"networkInterfaces,omitempty"`
+	NetworkIn          int64                   `json:"networkIn"`
+	NetworkOut         int64                   `json:"networkOut"`
+	DiskRead           int64                   `json:"diskRead"`
+	DiskWrite          int64                   `json:"diskWrite"`
+	Uptime             int64                   `json:"uptime"`
+	Template           bool                    `json:"template"`
+	OnBoot             *bool                   `json:"onBoot,omitempty"`
+	LastBackup         time.Time               `json:"lastBackup,omitempty"`
+	Tags               []string                `json:"tags,omitempty"`
+	Lock               string                  `json:"lock,omitempty"`
+	LastSeen           time.Time               `json:"lastSeen"`
 }
 
 func (v VM) NormalizeCollections() VM {
