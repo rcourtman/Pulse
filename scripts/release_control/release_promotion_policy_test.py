@@ -162,10 +162,10 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
 
         self.assertIn("current `pulse/v6-release` branch", normalized_release_notes)
         self.assertIn("seven release candidates and accumulated post-RC7 fixes", normalized_release_notes)
-        self.assertIn("Pulse v5 entered maintenance-only support on `2026-07-02`.", normalized_release_notes)
-        self.assertIn("existing v5 users until `2026-09-30`.", normalized_release_notes)
-        self.assertIn("Pulse v5 entered maintenance-only support on 2026-07-02.", normalized_v5_policy)
-        self.assertIn("2026-09-30. After 2026-09-30", normalized_v5_policy)
+        self.assertIn("Pulse v5 entered maintenance-only support on `2026-07-03`.", normalized_release_notes)
+        self.assertIn("existing v5 users until `2026-10-01`.", normalized_release_notes)
+        self.assertIn("Pulse v5 entered maintenance-only support on 2026-07-03.", normalized_v5_policy)
+        self.assertIn("2026-10-01. After 2026-10-01", normalized_v5_policy)
 
         gate = next(gate for gate in status["release_gates"] if gate["id"] == "rc-to-ga-promotion-readiness")
         self.assertEqual(gate["status"], "passed")

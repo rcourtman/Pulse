@@ -588,9 +588,9 @@ TLS floor in the dynamic config.
    rollback target, exact GA date, and exact v5 end-of-support date aligned
    across release notes, upgrade guidance, support policy, promotion records,
    and release-promotion resolver proof before workflow dispatch. For the
-   2026-07-02 cutover candidate, that packet is
+   2026-07-03 cutover candidate, that packet is
    `promoted_from_tag=v6.0.0-rc.7`, `rollback_version=v5.1.35`,
-   `ga_date=2026-07-02`, and `v5_eos_date=2026-09-30`.
+   `ga_date=2026-07-03`, and `v5_eos_date=2026-10-01`.
    That stable cut must also move the repo-root Docker compose default and
    `scripts/install-docker.sh` fallback from the final RC image tag to the
    stable `6.0.0` image tag in the same commit as `VERSION=6.0.0`.
@@ -761,7 +761,7 @@ The active stable `v6.0.0` cut sets the repo-root `VERSION`, repo-root
 `docker-compose.yml` image default, and `scripts/install-docker.sh` fallback
 to the same `6.0.0` release version. The GA promotion metadata for this cut is
 `promoted_from_tag=v6.0.0-rc.7`, `rollback_version=v5.1.35`,
-`ga_date=2026-07-02`, and `v5_eos_date=2026-09-30`.
+`ga_date=2026-07-03`, and `v5_eos_date=2026-10-01`.
 
 The shell-installer boundary carries root-agent service hardening for Linux
 installs. Installer-rendered agent units must keep the health/metrics listener

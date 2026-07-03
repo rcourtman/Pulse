@@ -2,17 +2,13 @@
 
 This guide covers practical upgrade steps for existing Pulse installs moving to v6.
 
-For the current v6 prerelease packet and rollout references, see:
+For the current stable v6 packet and rollout references, see:
 
-- `docs/releases/RELEASE_NOTES_v6_RC7_DRAFT.md`
-- `docs/releases/V6_CHANGELOG_RC7_DRAFT.md`
-- `docs/releases/V6_RC7_OPERATOR_SUPPORT_PACK_DRAFT.md`
+- `docs/releases/RELEASE_NOTES_v6.md`
+- `docs/releases/V6_CHANGELOG.md`
 
-The prepared stable v6 packet remains in `docs/releases/RELEASE_NOTES_v6.md`
-and `docs/releases/V6_CHANGELOG.md`, but the published GitHub release is the
-authority for what users can install as stable. Until the stable `v6.0.0`
-release exists, treat v6 as prerelease and keep v5.1.35 as the stable rollback
-target.
+The published GitHub release is the authority for what users can install as
+stable. Keep v5.1.35 as the explicit rollback target for the v6.0.0 cutover.
 
 ## Before You Upgrade
 

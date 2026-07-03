@@ -23,10 +23,10 @@ already know.
 
 ## Pulse v5 Support Transition
 
-Pulse v5 entered maintenance-only support on `2026-07-02`.
+Pulse v5 entered maintenance-only support on `2026-07-03`.
 I will ship only critical security, data-loss, licensing or billing blocker,
-installer or updater failure, and safe migration blocker fixes for existing v5 users until `2026-09-30`.
-After `2026-09-30`, Pulse v5 is end-of-support and new fixes land on v6 unless
+installer or updater failure, and safe migration blocker fixes for existing v5 users until `2026-10-01`.
+After `2026-10-01`, Pulse v5 is end-of-support and new fixes land on v6 unless
 I publish an explicit exception.
 
 ## What Is In v6.0.0
