@@ -39,6 +39,34 @@ func TestResourceFromProxmoxNodeIncludesTemperature(t *testing.T) {
 	}
 }
 
+func TestResourceFromProxmoxNodeUsesDisplayNameWithoutChangingRawNodeIdentity(t *testing.T) {
+	node := models.Node{
+		ID:          "pve-cluster-node01",
+		Name:        "node01",
+		DisplayName: "PVE Cluster (node01)",
+		ClusterName: "PVE Cluster",
+		Status:      "online",
+	}
+
+	resource, identity := resourceFromProxmoxNode(node, nil)
+	if resource.Name != "PVE Cluster (node01)" {
+		t.Fatalf("resource.Name = %q, want cluster-qualified display label", resource.Name)
+	}
+	if resource.Proxmox == nil || resource.Proxmox.NodeName != "node01" {
+		t.Fatalf("Proxmox.NodeName = %+v, want raw node identity node01", resource.Proxmox)
+	}
+	foundClusterIdentity := false
+	for _, hostname := range identity.Hostnames {
+		if hostname == "PVE Cluster:node01" {
+			foundClusterIdentity = true
+			break
+		}
+	}
+	if !foundClusterIdentity {
+		t.Fatalf("identity hostnames = %v, want cluster-qualified raw hostname identity", identity.Hostnames)
+	}
+}
+
 func TestResourceFromDockerContainerAdvertisesLifecycleCapabilities(t *testing.T) {
 	now := time.Now().UTC()
 	host := models.DockerHost{

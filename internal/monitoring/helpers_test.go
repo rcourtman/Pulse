@@ -136,14 +136,20 @@ func TestGetNodeDisplayName(t *testing.T) {
 		// non-cluster: returns unknown-node when host is IP address
 		{"host IP fallback to unknown-node", &config.PVEInstance{Name: "", Host: "https://192.168.1.100:8006"}, "", "unknown-node"},
 
-		// cluster: lookupClusterEndpointLabel result takes priority
-		{"cluster host label", clusterInstance, "node1", "node1.local"},
+		// cluster: configured instance label disambiguates the Proxmox node name
+		{"cluster configured label", clusterInstance, "node1", "cluster (node1)"},
 
-		// cluster: falls back to baseName when no endpoint label
-		{"cluster base fallback", clusterInstance, "node3", "node3"},
+		// cluster: still uses configured label even when no endpoint label is present
+		{"cluster base fallback", clusterInstance, "node3", "cluster (node3)"},
 
-		// cluster: falls back to nodeName (IP fallback via endpoint)
-		{"cluster ip fallback", clusterInstance, "node2", "node2"},
+		// cluster: keeps the node identity instead of substituting endpoint IP labels
+		{"cluster ip fallback", clusterInstance, "node2", "cluster (node2)"},
+
+		// cluster: ClusterName backs the display label when the user-facing name is empty
+		{"cluster name fallback", &config.PVEInstance{IsCluster: true, ClusterName: "detected-cluster"}, "node4", "detected-cluster (node4)"},
+
+		// cluster: do not duplicate the label when it already equals the node name
+		{"cluster duplicate label", &config.PVEInstance{IsCluster: true, Name: "node5", ClusterName: "detected-cluster"}, "node5", "node5"},
 
 		// cluster: falls back to friendly name when baseName is "unknown-node"
 		{"cluster friendly fallback", &config.PVEInstance{IsCluster: true, Name: "Cluster Name", ClusterEndpoints: []config.ClusterEndpoint{}}, "", "Cluster Name"},

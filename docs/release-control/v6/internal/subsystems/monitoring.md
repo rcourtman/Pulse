@@ -30,6 +30,11 @@ healthy source is between normal poll cycles.
 Removed host-agent reconnect blocks are identity-scoped: matching may use the
 canonical host ID or token-qualified machine/hostname continuity, but must never
 block a distinct live host by hostname alone.
+Proxmox cluster node labels are monitoring-owned identity presentation:
+configured cluster labels must project into node display names as
+`cluster label (node name)` so duplicate node hostnames across clusters remain
+distinguishable, while `models.Node.Name` and `ProxmoxData.NodeName` keep the
+raw Proxmox node identity for linking, metrics, URLs, and actions.
 
 ## Canonical Files
 

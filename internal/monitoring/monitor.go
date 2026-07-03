@@ -186,16 +186,27 @@ func getNodeDisplayName(instance *config.PVEInstance, nodeName string) string {
 	friendly := strings.TrimSpace(instance.Name)
 
 	if instance.IsCluster {
-		if endpointLabel := lookupClusterEndpointLabel(instance, nodeName); endpointLabel != "" {
-			return endpointLabel
+		clusterLabel := friendly
+		if clusterLabel == "" {
+			clusterLabel = strings.TrimSpace(instance.ClusterName)
 		}
 
 		if baseName != "" && baseName != "unknown-node" {
+			if clusterLabel != "" && !strings.EqualFold(clusterLabel, baseName) {
+				return fmt.Sprintf("%s (%s)", clusterLabel, baseName)
+			}
 			return baseName
 		}
 
-		if friendly != "" {
-			return friendly
+		if endpointLabel := lookupClusterEndpointLabel(instance, nodeName); endpointLabel != "" {
+			if clusterLabel != "" && !strings.EqualFold(clusterLabel, endpointLabel) {
+				return fmt.Sprintf("%s (%s)", clusterLabel, endpointLabel)
+			}
+			return endpointLabel
+		}
+
+		if clusterLabel != "" {
+			return clusterLabel
 		}
 
 		return baseName
