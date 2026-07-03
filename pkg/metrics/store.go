@@ -60,6 +60,8 @@ type StoreConfig struct {
 const (
 	minRollupInterval     = 5 * time.Minute
 	defaultRollupInterval = 15 * time.Minute
+	maxRollupChunkWindow  = 5 * time.Minute
+	maxRollupChunksPerRun = 128
 )
 
 // DefaultConfig returns sensible defaults for metrics storage
@@ -1577,29 +1579,100 @@ func (s *Store) rollupTier(fromTier, toTier Tier, bucketSize, minAge time.Durati
 		return
 	}
 
-	// Fast check: skip rollup and preserve the checkpoint if the source tier
-	// has no data in this window. This matches the old per-candidate path's
-	// len(candidates)==0 early return, preventing the checkpoint from advancing
-	// past windows where late or backfilled data may arrive later.
-	var hasSource bool
-	if err := s.db.QueryRow(`SELECT EXISTS(SELECT 1 FROM metrics WHERE tier = ? AND timestamp >= ? AND timestamp < ?)`,
-		string(fromTier), lastBucket, cutoffBucket).Scan(&hasSource); err != nil {
-		log.Warn().Err(err).Str("tier", string(fromTier)).Msg("Failed to check rollup source data")
-		return
-	}
-	if !hasSource {
-		return
+	chunkWindow := rollupChunkWindow(bucketSize)
+	chunkSecs := int64(chunkWindow.Seconds())
+	if chunkSecs <= 0 {
+		chunkSecs = bucketSecs
 	}
 
-	// Batch rollup: aggregate ALL resource/metric combinations in a single
-	// SQL statement. The GROUP BY naturally partitions results by
-	// (resource_type, resource_id, metric_type, bucket_ts), producing the
-	// same output as the previous per-candidate loop but in one query and
-	// one transaction instead of N+1.
+	windowStart := lastBucket
+	processedChunks := 0
+	processedAny := false
+
+	for windowStart < cutoffBucket {
+		nextBucket, hasSource := s.nextSourceRollupBucket(fromTier, windowStart, cutoffBucket, bucketSecs)
+		if !hasSource {
+			if processedAny {
+				if err := s.setMetaInt(metaKey, cutoffBucket); err != nil {
+					log.Warn().Err(err).Str("tier", string(fromTier)).Msg("Failed to persist rollup checkpoint")
+				}
+			}
+			return
+		}
+
+		if nextBucket > windowStart {
+			windowStart = nextBucket
+		}
+		windowEnd := windowStart + chunkSecs
+		if windowEnd > cutoffBucket {
+			windowEnd = cutoffBucket
+		}
+		if windowEnd <= windowStart {
+			return
+		}
+
+		if !s.rollupTierWindow(fromTier, toTier, bucketSecs, windowStart, windowEnd) {
+			return
+		}
+
+		windowStart = windowEnd
+		processedChunks++
+		processedAny = true
+
+		if err := s.setMetaInt(metaKey, windowStart); err != nil {
+			log.Warn().Err(err).Str("tier", string(fromTier)).Msg("Failed to persist rollup checkpoint")
+			return
+		}
+		if processedChunks >= maxRollupChunksPerRun && windowStart < cutoffBucket {
+			log.Debug().
+				Str("from", string(fromTier)).
+				Str("to", string(toTier)).
+				Int("chunks", processedChunks).
+				Msg("Metrics rollup paused after bounded chunk budget")
+			return
+		}
+	}
+}
+
+func rollupChunkWindow(bucketSize time.Duration) time.Duration {
+	if bucketSize <= 0 {
+		return maxRollupChunkWindow
+	}
+	if bucketSize >= maxRollupChunkWindow {
+		return bucketSize
+	}
+	buckets := int64(maxRollupChunkWindow / bucketSize)
+	if buckets < 1 {
+		buckets = 1
+	}
+	return time.Duration(buckets) * bucketSize
+}
+
+func (s *Store) nextSourceRollupBucket(tier Tier, startBucket, cutoffBucket, bucketSecs int64) (int64, bool) {
+	var next sql.NullInt64
+	if err := s.db.QueryRow(`
+		SELECT MIN(timestamp)
+		FROM metrics
+		WHERE tier = ? AND timestamp >= ? AND timestamp < ?
+	`, string(tier), startBucket, cutoffBucket).Scan(&next); err != nil {
+		log.Warn().Err(err).Str("tier", string(tier)).Msg("Failed to locate next rollup source window")
+		return 0, false
+	}
+	if !next.Valid {
+		return 0, false
+	}
+	nextBucket := (next.Int64 / bucketSecs) * bucketSecs
+	if nextBucket < startBucket {
+		nextBucket = startBucket
+	}
+	return nextBucket, true
+}
+
+func (s *Store) rollupTierWindow(fromTier, toTier Tier, bucketSecs, startTs, endTs int64) bool {
 	tx, err := s.db.Begin()
 	if err != nil {
 		log.Error().Err(err).Str("tier", string(fromTier)).Msg("Failed to begin rollup transaction")
-		return
+		return false
 	}
 	defer func() { _ = tx.Rollback() }()
 
@@ -1617,13 +1690,13 @@ func (s *Store) rollupTier(fromTier, toTier Tier, bucketSize, minAge time.Durati
 		FROM metrics
 		WHERE tier = ? AND timestamp >= ? AND timestamp < ?
 		GROUP BY resource_type, resource_id, metric_type, bucket_ts
-	`, bucketSecs, bucketSecs, string(toTier), string(fromTier), lastBucket, cutoffBucket)
+	`, bucketSecs, bucketSecs, string(toTier), string(fromTier), startTs, endTs)
 	if err != nil {
 		log.Warn().Err(err).
 			Str("from", string(fromTier)).
 			Str("to", string(toTier)).
 			Msg("Failed to batch rollup metrics")
-		return
+		return false
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -1631,12 +1704,9 @@ func (s *Store) rollupTier(fromTier, toTier Tier, bucketSize, minAge time.Durati
 			Str("from", string(fromTier)).
 			Str("to", string(toTier)).
 			Msg("Failed to commit rollup transaction")
-		return
+		return false
 	}
-
-	if err := s.setMetaInt(metaKey, cutoffBucket); err != nil {
-		log.Warn().Err(err).Str("tier", string(fromTier)).Msg("Failed to persist rollup checkpoint")
-	}
+	return true
 }
 
 // rollupCandidate aggregates a single resource/metric from one tier to another

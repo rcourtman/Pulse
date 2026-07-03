@@ -296,7 +296,7 @@ func BenchmarkLoadTest500Nodes_RollupAtScale(b *testing.B) {
 
 // BenchmarkLoadTest500Nodes_RollupTierBatched measures the production batched
 // rollupTier path at 500-node scale. This is the real aggregation path used in
-// the store: one INSERT...SELECT...GROUP BY across all node/metric series.
+// the store: bounded INSERT...SELECT...GROUP BY chunks across node/metric series.
 func BenchmarkLoadTest500Nodes_RollupTierBatched(b *testing.B) {
 	suppressLogs(b)
 	store := newBenchStore(b)

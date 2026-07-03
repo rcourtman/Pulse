@@ -624,7 +624,7 @@ func TestSLO_QueryManyResources(t *testing.T) {
 }
 
 // TestSLO_RollupTierBatched validates the production rollupTier path that
-// aggregates all resource/metric combinations in a single SQL statement.
+// aggregates resource/metric combinations with bounded grouped SQL statements.
 func TestSLO_RollupTierBatched(t *testing.T) {
 	skipUnderRace(t)
 	suppressTestLogs(t)
@@ -767,8 +767,8 @@ func TestSLO_ConcurrentReadWrite(t *testing.T) {
 }
 
 // TestSLO_RollupTierBatchedFleet validates the production batched rollupTier
-// path at 500-node scale, where all node/metric series are aggregated in a
-// single grouped SQL statement.
+// path at 500-node scale, where node/metric series are aggregated through the
+// bounded grouped SQL path.
 func TestSLO_RollupTierBatchedFleet(t *testing.T) {
 	skipUnderRace(t)
 	suppressTestLogs(t)

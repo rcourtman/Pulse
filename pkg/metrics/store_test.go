@@ -275,6 +275,64 @@ func TestStoreRollupTierMultiResource(t *testing.T) {
 	}
 }
 
+func TestStoreRollupTierUsesBoundedChunkBudget(t *testing.T) {
+	dir := t.TempDir()
+	cfg := DefaultConfig(dir)
+	cfg.DBPath = filepath.Join(dir, "metrics-rollup-chunks.db")
+	cfg.FlushInterval = time.Hour
+
+	store, err := NewStore(cfg)
+	if err != nil {
+		t.Fatalf("NewStore returned error: %v", err)
+	}
+	defer store.Close()
+
+	chunkWindow := rollupChunkWindow(time.Minute)
+	base := time.Now().UTC().Add(-24 * time.Hour).Truncate(time.Minute)
+	batch := make([]WriteMetric, 0, maxRollupChunksPerRun+1)
+	for i := 0; i <= maxRollupChunksPerRun; i++ {
+		batch = append(batch, WriteMetric{
+			ResourceType: "vm",
+			ResourceID:   fmt.Sprintf("vm-%d", i),
+			MetricType:   "cpu",
+			Value:        float64(i),
+			Timestamp:    base.Add(time.Duration(i) * chunkWindow),
+			Tier:         TierRaw,
+		})
+	}
+	store.WriteBatchSync(batch)
+
+	metaKey := "rollup:raw:minute"
+	store.rollupTier(TierRaw, TierMinute, time.Minute, 0)
+
+	var firstCount int
+	if err := store.db.QueryRow(`SELECT COUNT(*) FROM metrics WHERE tier = ?`, string(TierMinute)).Scan(&firstCount); err != nil {
+		t.Fatalf("count first rollup: %v", err)
+	}
+	if firstCount != maxRollupChunksPerRun {
+		t.Fatalf("first rollup should stop at chunk budget: got %d rows, want %d", firstCount, maxRollupChunksPerRun)
+	}
+
+	firstCheckpoint, ok := store.getMetaInt(metaKey)
+	if !ok {
+		t.Fatalf("expected checkpoint after bounded rollup")
+	}
+	wantCheckpoint := base.Add(time.Duration(maxRollupChunksPerRun) * chunkWindow).Unix()
+	if firstCheckpoint != wantCheckpoint {
+		t.Fatalf("checkpoint = %d, want %d", firstCheckpoint, wantCheckpoint)
+	}
+
+	store.rollupTier(TierRaw, TierMinute, time.Minute, 0)
+
+	var finalCount int
+	if err := store.db.QueryRow(`SELECT COUNT(*) FROM metrics WHERE tier = ?`, string(TierMinute)).Scan(&finalCount); err != nil {
+		t.Fatalf("count final rollup: %v", err)
+	}
+	if finalCount != maxRollupChunksPerRun+1 {
+		t.Fatalf("second rollup should resume remaining source rows: got %d rows, want %d", finalCount, maxRollupChunksPerRun+1)
+	}
+}
+
 // TestStoreRollupTierEmptyWindowPreservesCheckpoint verifies that rollupTier
 // does not advance the checkpoint when no source rows exist in the rollup
 // window. This ensures late or backfilled samples are still rolled up when
