@@ -1878,11 +1878,11 @@ a new API state machine, queue contract, or verification-accounting field.
    overdue scheduled protection only from API-owned Patrol status, run history,
    approval state, and finding-composition facts rather than page-local
    inference
-   and the calm-day Patrol protection-posture inputs, where the browser may
-   summarize protection-current, coverage, schedule freshness, drift history,
-   and verification-waiting state only from API-owned Patrol status, run
-   history, approval state, and finding-composition facts after current work has
-   been ruled out
+   and the calm-day Patrol empty queue boundary, where the browser must not
+   turn API-owned Patrol status, run history, approval state, or
+   finding-composition facts into a protection-current, coverage,
+   schedule-freshness, drift-history, verification-waiting, trust, or proof
+   strip after current work has been ruled out
    while keeping the learning counters backend-only coverage, so Patrol keeps health and findings primary and renders timeline, correlation, and policy-posture data as selected-item investigation context rather than as a separate headline product metric
    and that secondary investigation context remains explanatory API evidence,
    not a default workspace mode: the Patrol page may expand recent-change,
@@ -3445,7 +3445,7 @@ There are two layers of stable codes. First, **capability-specific
 codes** are declared per capability in the manifest's `errorCodes`
 list and represent the closed set of failure modes that
 capability's handler emits. Today these are:
-`resource_not_found` (`get_resource_context`),
+`resource_not_found` (`get_resource_context`, `list_resource_capabilities`),
 `operator_state_not_set` (`get_operator_state`),
 `operator_state_invalid` (`set_operator_state`);
 `invalid_finding_request`, `finding_not_found`,
@@ -3693,6 +3693,24 @@ approval counts must come from one org-scoped, resource-keyed scan
 of the bounded pending-approval list, not N calls to the
 per-resource approval summary helper. Agents pick a focus from the
 fleet view, then drill into the per-resource bundle for depth.
+
+`/api/agent/resource-capabilities/{id}` is the agent-consumable
+structured capability surface for a single resource: the governed
+capabilities it advertises (name, type, approval level, platform, and
+full parameter schemas). It is the companion to the resource-context
+bundle: the bundle renders capabilities as count-limited prose facts
+(`formatCapabilityFact` omits parameter schemas and caps at five
+entries), while this endpoint returns the structured list an agent
+needs to populate `plan_action.capabilityName` and `params` without
+guessing. The capability list is the in-memory
+`Resource.Capabilities` slice assembled by the registry — the same
+canonical source `plan_action` validates against — so the two
+endpoints cannot drift on what a resource can do. A resource
+advertising nothing returns 200 with `capabilities: []`, the signal
+an agent should not attempt `plan_action` against it; the array is
+always non-nil on the wire. The internal `InternalHandler` field is
+excluded from JSON via its `json:"-"` tag so execution plumbing does
+not leak to the public surface.
 
 The TS client `frontend-modern/src/api/resourceOperatorState.ts`
 mirrors the canonical Go shape from

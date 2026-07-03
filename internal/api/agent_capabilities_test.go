@@ -202,9 +202,10 @@ func TestAgentCapabilitiesManifest_EveryCapabilityDeclaresMethodPathScope(t *tes
 
 func TestAgentCapabilitiesManifest_ScopesMatchAPIAuthConstants(t *testing.T) {
 	expected := map[string]string{
-		agentcapabilities.ResourceContextCapabilityName:      config.ScopeMonitoringRead,
-		agentcapabilities.FleetContextCapabilityName:         config.ScopeMonitoringRead,
-		agentcapabilities.OperationsLoopStatusCapabilityName: config.ScopeMonitoringRead,
+		agentcapabilities.ResourceContextCapabilityName:          config.ScopeMonitoringRead,
+		agentcapabilities.ListResourceCapabilitiesCapabilityName: config.ScopeMonitoringRead,
+		agentcapabilities.FleetContextCapabilityName:             config.ScopeMonitoringRead,
+		agentcapabilities.OperationsLoopStatusCapabilityName:     config.ScopeMonitoringRead,
 		"list_nodes":                      config.ScopeSettingsRead,
 		"add_node":                        config.ScopeSettingsWrite,
 		"update_node":                     config.ScopeSettingsWrite,

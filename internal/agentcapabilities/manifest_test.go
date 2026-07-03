@@ -23,6 +23,7 @@ func TestCanonicalManifestOwnsAgentSurface(t *testing.T) {
 	for _, name := range []string{
 		FleetContextCapabilityName,
 		ResourceContextCapabilityName,
+		ListResourceCapabilitiesCapabilityName,
 		OperationsLoopStatusCapabilityName,
 		SetOperatorStateCapabilityName,
 		ListFindingsCapabilityName,
@@ -72,12 +73,13 @@ func TestCanonicalManifestUsesSharedResourceContextAddressing(t *testing.T) {
 
 	manifest := CanonicalManifest()
 	for name, path := range map[string]string{
-		FleetContextCapabilityName:         FleetContextCapabilityPath,
-		ResourceContextCapabilityName:      ResourceContextCapabilityPath,
-		OperationsLoopStatusCapabilityName: OperationsLoopStatusCapabilityPath,
-		GetOperatorStateCapabilityName:     OperatorStateCapabilityPath,
-		SetOperatorStateCapabilityName:     OperatorStateCapabilityPath,
-		ClearOperatorStateCapabilityName:   OperatorStateCapabilityPath,
+		FleetContextCapabilityName:             FleetContextCapabilityPath,
+		ResourceContextCapabilityName:          ResourceContextCapabilityPath,
+		ListResourceCapabilitiesCapabilityName: ListResourceCapabilitiesCapabilityPath,
+		OperationsLoopStatusCapabilityName:     OperationsLoopStatusCapabilityPath,
+		GetOperatorStateCapabilityName:         OperatorStateCapabilityPath,
+		SetOperatorStateCapabilityName:         OperatorStateCapabilityPath,
+		ClearOperatorStateCapabilityName:       OperatorStateCapabilityPath,
 	} {
 		cap, ok := FindCapability(manifest.Capabilities, name)
 		if !ok {
@@ -410,6 +412,16 @@ func TestCanonicalManifestPinsPulseMCPResolvedOperationsLoopCapabilities(t *test
 			category:   "context",
 			method:     http.MethodGet,
 			path:       ResourceContextCapabilityPath,
+			scope:      auth.ScopeMonitoringRead,
+			mode:       ActionModeRead,
+			approval:   ApprovalPolicyScopeOnly,
+			errorCodes: []string{AgentErrCodeResourceNotFound},
+		},
+		{
+			name:       ListResourceCapabilitiesCapabilityName,
+			category:   "context",
+			method:     http.MethodGet,
+			path:       ListResourceCapabilitiesCapabilityPath,
 			scope:      auth.ScopeMonitoringRead,
 			mode:       ActionModeRead,
 			approval:   ApprovalPolicyScopeOnly,

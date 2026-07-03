@@ -424,6 +424,7 @@ var allRouteAllowlist = []string{
 	"/api/maintenance-verifications/{reportId}",
 	"POST /api/maintenance-verifications/{reportId}/review",
 	"/api/agent/resource-context/{id}",
+	"/api/agent/resource-capabilities/{id}",
 	"/api/agent/fleet-context",
 	"/api/agent/capabilities",
 	"/api/agent/events",

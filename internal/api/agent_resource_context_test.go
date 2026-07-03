@@ -751,6 +751,156 @@ func TestHandleAgentResourceContext_RejectsNonGet(t *testing.T) {
 	}
 }
 
+func TestHandleAgentResourceCapabilities_ReturnsStructuredCapabilitiesAndParams(t *testing.T) {
+	// Stage a resource advertising one capability with typed params. The
+	// response must surface the full param schema (what formatCapabilityFact
+	// deliberately omits in the resource-context bundle) so an agent can
+	// populate plan_action.params without guessing. The internal handler
+	// field must be absent from the JSON.
+	resource := unified.Resource{
+		ID:   "vm:101",
+		Type: "vm",
+		Name: "db-01",
+		Capabilities: []unified.ResourceCapability{
+			{
+				Name:                 "restart",
+				Type:                 unified.CapabilityTypeNative,
+				Description:          "Restart the guest workload.",
+				MinimumApprovalLevel: unified.ApprovalAdmin,
+				Platform:             "qemu",
+				InternalHandler:      "shouldNotAppearOnWire",
+				Params: []unified.CapabilityParam{
+					{
+						Name:        "force",
+						Type:        "boolean",
+						Required:    false,
+						Description: "Force a hard restart when the graceful stop times out.",
+					},
+					{
+						Name:     "timeout",
+						Type:     "int",
+						Required: true,
+						Enum:     []string{"30", "60", "120"},
+						Pattern:  `^\d+$`,
+					},
+				},
+			},
+		},
+	}
+	h, _ := agentContextFixtureHandlersForResource(t, resource)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/resource-capabilities/vm:101", nil)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "default"))
+	h.HandleResourceCapabilities(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200; got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var bundle AgentResourceCapabilities
+	if err := json.Unmarshal(rec.Body.Bytes(), &bundle); err != nil {
+		t.Fatalf("unmarshal bundle: %v", err)
+	}
+	if bundle.ResourceID != "vm:101" {
+		t.Errorf("resourceId: got %q want vm:101", bundle.ResourceID)
+	}
+	if len(bundle.Capabilities) != 1 {
+		t.Fatalf("capabilities: got %d want 1", len(bundle.Capabilities))
+	}
+	cap := bundle.Capabilities[0]
+	if cap.Name != "restart" {
+		t.Errorf("capability name: got %q want restart", cap.Name)
+	}
+	if cap.Platform != "qemu" {
+		t.Errorf("platform: got %q want qemu", cap.Platform)
+	}
+	if cap.MinimumApprovalLevel != unified.ApprovalAdmin {
+		t.Errorf("approval level: got %q want admin", cap.MinimumApprovalLevel)
+	}
+	if len(cap.Params) != 2 {
+		t.Fatalf("params: got %d want 2", len(cap.Params))
+	}
+
+	// Param schemas must round-trip fully — this is the whole point of
+	// the new endpoint relative to the prose summary in get_resource_context.
+	force := cap.Params[0]
+	if force.Name != "force" || force.Type != "boolean" || force.Required {
+		t.Errorf("force param = %+v, want {force boolean false}", force)
+	}
+	if force.Description == "" {
+		t.Errorf("force param description must be preserved, got empty")
+	}
+	timeout := cap.Params[1]
+	if !timeout.Required || len(timeout.Enum) != 3 || timeout.Pattern == "" {
+		t.Errorf("timeout param = %+v, want required with enum+pattern", timeout)
+	}
+
+	// Internal execution plumbing must never leak to the wire.
+	if raw := strings.TrimSpace(rec.Body.String()); strings.Contains(raw, "shouldNotAppearOnWire") {
+		t.Errorf("internal handler leaked to wire: %s", raw)
+	}
+}
+
+func TestHandleAgentResourceCapabilities_EmptyCapabilitiesReturns200(t *testing.T) {
+	// A resource advertising nothing is the common case across the fleet
+	// and is exactly the signal an agent needs before attempting
+	// plan_action. It must be 200 with a JSON array, never null.
+	h, _ := agentContextFixtureHandlers(t, "vm:101")
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/resource-capabilities/vm:101", nil)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "default"))
+	h.HandleResourceCapabilities(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200; got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var bundle AgentResourceCapabilities
+	if err := json.Unmarshal(rec.Body.Bytes(), &bundle); err != nil {
+		t.Fatalf("unmarshal bundle: %v", err)
+	}
+	if bundle.Capabilities == nil {
+		t.Fatal("capabilities is null; want non-nil empty array on the wire")
+	}
+	if len(bundle.Capabilities) != 0 {
+		t.Errorf("capabilities: got %d want 0", len(bundle.Capabilities))
+	}
+	// Pin the wire shape directly: capabilities must serialize as [].
+	if !strings.Contains(rec.Body.String(), `"capabilities":[]`) {
+		t.Errorf("wire body must contain capabilities:[]; got %s", rec.Body.String())
+	}
+}
+
+func TestHandleAgentResourceCapabilities_404OnUnknownResource(t *testing.T) {
+	h, _ := agentContextFixtureHandlers(t, "vm:101")
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/resource-capabilities/vm:nonexistent", nil)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "default"))
+	h.HandleResourceCapabilities(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404; got %d", rec.Code)
+	}
+	var body map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal error body: %v", err)
+	}
+	if body["error"] != agentcapabilities.AgentErrCodeResourceNotFound {
+		t.Errorf("expected error=%s; got %v", agentcapabilities.AgentErrCodeResourceNotFound, body)
+	}
+}
+
+func TestHandleAgentResourceCapabilities_RejectsNonGet(t *testing.T) {
+	h, _ := agentContextFixtureHandlers(t, "vm:101")
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/agent/resource-capabilities/vm:101", nil)
+	h.HandleResourceCapabilities(rec, req)
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405; got %d", rec.Code)
+	}
+}
+
 func TestHandleAgentResourceContext_RecentActionsCarryRefusalTokens(t *testing.T) {
 	// Refused dispatches (resource_remediation_locked:, plan_drift:)
 	// must surface verbatim in the recent-actions slice so agents can
@@ -2602,6 +2752,23 @@ func TestExtractAgentResourceContextID(t *testing.T) {
 	for _, tc := range cases {
 		if got := extractAgentResourceContextID(tc.path); got != tc.want {
 			t.Errorf("extractAgentResourceContextID(%q) = %q, want %q", tc.path, got, tc.want)
+		}
+	}
+}
+
+func TestExtractAgentResourceCapabilitiesID(t *testing.T) {
+	cases := []struct {
+		path string
+		want string
+	}{
+		{"/api/agent/resource-capabilities/vm:101", "vm:101"},
+		{"/api/agent/resource-capabilities/vm:101/", "vm:101"},
+		{"/api/agent/resource-capabilities/instance:node:200", "instance:node:200"},
+		{"/api/agent/resource-capabilities/", ""},
+	}
+	for _, tc := range cases {
+		if got := extractAgentResourceCapabilitiesID(tc.path); got != tc.want {
+			t.Errorf("extractAgentResourceCapabilitiesID(%q) = %q, want %q", tc.path, got, tc.want)
 		}
 	}
 }

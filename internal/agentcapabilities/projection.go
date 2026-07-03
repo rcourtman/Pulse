@@ -13,6 +13,12 @@ const (
 	FleetContextCapabilityName = "get_fleet_context"
 	// ResourceContextCapabilityName is the manifest-owned per-resource depth read.
 	ResourceContextCapabilityName = "get_resource_context"
+	// ListResourceCapabilitiesCapabilityName is the manifest-owned per-resource
+	// structured capability surface (names + parameter schemas). Companion to
+	// get_resource_context: that tool renders capabilities as count-limited prose
+	// facts (omitting parameter schemas); this tool returns the structured list
+	// an agent needs to populate plan_action.capabilityName and params.
+	ListResourceCapabilitiesCapabilityName = "list_resource_capabilities"
 	// PatrolControlStatusCapabilityName is the manifest-owned Patrol control
 	// status read. It is count-only and content-safe so external agents can
 	// orient on the same Patrol -> Assistant -> governed action ->
@@ -30,6 +36,9 @@ const (
 	FleetContextCapabilityPath = "/api/agent/fleet-context"
 	// ResourceContextCapabilityPath is the manifest-owned per-resource context route.
 	ResourceContextCapabilityPath = "/api/agent/resource-context/{" + ResourceIDArgumentName + "}"
+	// ListResourceCapabilitiesCapabilityPath is the manifest-owned per-resource
+	// capability surface route.
+	ListResourceCapabilitiesCapabilityPath = "/api/agent/resource-capabilities/{" + ResourceIDArgumentName + "}"
 	// PatrolControlStatusCapabilityPath is the manifest-owned Patrol control
 	// status route.
 	PatrolControlStatusCapabilityPath = "/api/agent/patrol-control/status"

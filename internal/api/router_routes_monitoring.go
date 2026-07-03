@@ -89,6 +89,15 @@ func (r *Router) registerMonitoringResourceRoutes(
 		agentcapabilities.ResourceContextCapabilityName,
 		r.agentContextHandler.HandleResourceContext,
 	))))
+	// Agent-consumable structured capability surface for a single resource.
+	// Companion to the resource-context bundle above: that renders capabilities
+	// as count-limited prose facts; this returns the structured list (names +
+	// parameter schemas) an agent needs to populate plan_action.capabilityName
+	// and params without guessing.
+	r.mux.HandleFunc("/api/agent/resource-capabilities/{id}", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.withExternalAgentCapabilityActivity(
+		agentcapabilities.ListResourceCapabilitiesCapabilityName,
+		r.agentContextHandler.HandleResourceCapabilities,
+	))))
 	// Agent-consumable fleet triage view — thin per-resource rollups
 	// across the org so an agent can pick a focus in one read instead
 	// of walking every resource id and bundling each. Companion to the

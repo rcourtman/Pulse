@@ -228,6 +228,7 @@ the live set.
 **Context (read-only):**
 
 - `get_resource_context` (Get resource context, `GET /api/agent/resource-context/{resourceId}`, scope `monitoring:read`, mode `read`, approval `scope_only`): Return the situated picture of a resource — identity, operator-set state with maintenance-window-active flag, active findings, pending approvals scoped to this resource, recent actions including refused dispatches. Command fields are redacted for monitoring-read API tokens unless the token also has ai:execute.
+- `list_resource_capabilities` (List resource capabilities, `GET /api/agent/resource-capabilities/{resourceId}`, scope `monitoring:read`, mode `read`, approval `scope_only`): Return the structured governed capabilities a resource advertises (name, type, approval level, platform, and full parameter schemas). Companion to get_resource_context, which renders capabilities as count-limited prose; this is the structured surface an agent reads before calling plan_action so it can populate capabilityName and params without guessing. A resource with no advertised capabilities returns an empty array.
 - `get_fleet_context` (Get fleet context, `GET /api/agent/fleet-context`, scope `monitoring:read`, mode `read`, approval `scope_only`): Return a thin per-resource triage rollup across every resource visible to the org — identity, operator flags (intentionallyOffline, neverAutoRemediate, maintenanceWindowActive), per-severity finding counts (total/critical/warning/info), and pending-approval count. One read for 'where do I focus?'; follow up via get_resource_context for depth.
 - `get_patrol_control_status` (Get Patrol work status, `GET /api/agent/patrol-control/status`, scope `monitoring:read`, mode `read`, approval `scope_only`): Return the current content-safe Patrol work status: Patrol issue evidence, pending approvals, governed decisions/actions, verified outcomes, Patrol control outcome evidence, compatibility aliases, and optional MCP readiness. The payload is count-only and deliberately omits finding ids, action ids, prompts, commands, resource names, and output.
 
@@ -311,6 +312,7 @@ Capability-specific stable codes are advertised by the manifest:
 
 <!-- pulse-mcp-errors:start -->
 - `get_resource_context`: `resource_not_found`
+- `list_resource_capabilities`: `resource_not_found`
 - `get_operator_state`: `operator_state_not_set`
 - `set_operator_state`: `operator_state_invalid`
 - `acknowledge_finding`: `invalid_finding_request`, `finding_not_found`, `finding_action_not_allowed`, and `patrol_unavailable`

@@ -18628,6 +18628,54 @@ func TestContract_GetResourceContextCapabilityListsPendingApprovals(t *testing.T
 	}
 }
 
+// TestContract_ListResourceCapabilitiesCapabilitySurfacesStructuredParams pins
+// the canonical agent-surface contract for action planning: agents must be able
+// to discover a resource's governed capabilities and their parameter schemas
+// through a dedicated structured tool, not only as the count-limited prose
+// summary inside the resource-context bundle (formatCapabilityFact omits
+// parameter schemas). Without this tool, agents guess plan_action inputs.
+func TestContract_ListResourceCapabilitiesCapabilitySurfacesStructuredParams(t *testing.T) {
+	manifest := agentcapabilities.CanonicalManifest()
+	cap, ok := agentcapabilities.FindCapability(manifest.Capabilities, agentcapabilities.ListResourceCapabilitiesCapabilityName)
+	if !ok {
+		t.Fatalf("manifest missing %s", agentcapabilities.ListResourceCapabilitiesCapabilityName)
+	}
+	if cap.Method != http.MethodGet || cap.Scope != config.ScopeMonitoringRead {
+		t.Fatalf("%s must be a GET under monitoring:read so any read-only agent can plan actions; got method=%s scope=%s",
+			agentcapabilities.ListResourceCapabilitiesCapabilityName, cap.Method, cap.Scope)
+	}
+	if cap.Path != agentcapabilities.ListResourceCapabilitiesCapabilityPath {
+		t.Fatalf("%s path = %q, want %q", agentcapabilities.ListResourceCapabilitiesCapabilityName, cap.Path, agentcapabilities.ListResourceCapabilitiesCapabilityPath)
+	}
+	if len(cap.ErrorCodes) == 0 || cap.ErrorCodes[0] != agentcapabilities.AgentErrCodeResourceNotFound {
+		t.Fatalf("%s must declare resource_not_found so agents branch cleanly on unknown ids", agentcapabilities.ListResourceCapabilitiesCapabilityName)
+	}
+	// The capability must be projected to the MCP surface; otherwise external
+	// agents (the primary consumers of plan_action) cannot reach it.
+	found := false
+	for _, name := range agentcapabilities.ManifestSurfaceToolCapabilities(manifest, agentcapabilities.SurfaceIDPulseMCP) {
+		if name.Name == agentcapabilities.ListResourceCapabilitiesCapabilityName {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("%s must be projected to the Pulse MCP surface", agentcapabilities.ListResourceCapabilitiesCapabilityName)
+	}
+
+	// The handler must return a non-nil capabilities array (never null) so an
+	// agent can branch on len() without nil-checking — the same wire-shape rule
+	// the resource-context and fleet-context bundles follow.
+	handlerBytes, err := os.ReadFile("agent_resource_context.go")
+	if err != nil {
+		t.Fatalf("read agent_resource_context.go: %v", err)
+	}
+	handlerSrc := string(handlerBytes)
+	if !strings.Contains(handlerSrc, "capabilities := []unified.ResourceCapability{}") {
+		t.Errorf("%s handler must initialize capabilities as a non-nil empty array so the wire shape is always []", agentcapabilities.ListResourceCapabilitiesCapabilityName)
+	}
+}
+
 func TestContract_AgentCommandPayloadsRequireActionScope(t *testing.T) {
 	source, err := os.ReadFile("agent_command_redaction.go")
 	if err != nil {

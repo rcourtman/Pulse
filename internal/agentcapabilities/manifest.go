@@ -80,6 +80,14 @@ func resourceContextOutputSchema() json.RawMessage {
 	})
 }
 
+func resourceCapabilitiesOutputSchema() json.RawMessage {
+	return agentObjectOutputSchema([]string{"resourceId", "capabilities", "generatedAt"}, map[string]any{
+		"resourceId":   stringOption("Canonical Pulse resource id the capabilities belong to."),
+		"capabilities": objectArrayOption("Advertised governed capabilities with full parameter schemas; empty array when the resource advertises none."),
+		"generatedAt":  dateTimeOption("Server timestamp for this capability snapshot."),
+	})
+}
+
 func operatorStateOutputSchema() json.RawMessage {
 	return agentObjectOutputSchema([]string{"canonicalId", "intentionallyOffline", "neverAutoRemediate", "setAt"}, map[string]any{
 		"canonicalId":             stringOption("Canonical Pulse resource id."),
@@ -697,6 +705,20 @@ var canonicalManifest = Manifest{
 			ErrorCodes:     []string{AgentErrCodeResourceNotFound},
 		},
 		{
+			Name:           ListResourceCapabilitiesCapabilityName,
+			Title:          "List resource capabilities",
+			Description:    "Return the structured governed capabilities a resource advertises (name, type, approval level, platform, and full parameter schemas). Companion to get_resource_context, which renders capabilities as count-limited prose; this is the structured surface an agent reads before calling plan_action so it can populate capabilityName and params without guessing. A resource with no advertised capabilities returns an empty array.",
+			Category:       "context",
+			Method:         http.MethodGet,
+			Path:           ListResourceCapabilitiesCapabilityPath,
+			Scope:          agentCapabilityScopeMonitoringRead,
+			ActionMode:     agentCapabilityActionModeRead,
+			ApprovalPolicy: agentCapabilityApprovalPolicyScopeOnly,
+			ResponseShape:  "AgentResourceCapabilities",
+			OutputSchema:   resourceCapabilitiesOutputSchema(),
+			ErrorCodes:     []string{AgentErrCodeResourceNotFound},
+		},
+		{
 			Name:           "get_fleet_context",
 			Title:          "Get fleet context",
 			Description:    "Return a thin per-resource triage rollup across every resource visible to the org — identity, operator flags (intentionallyOffline, neverAutoRemediate, maintenanceWindowActive), per-severity finding counts (total/critical/warning/info), and pending-approval count. One read for 'where do I focus?'; follow up via get_resource_context for depth.",
@@ -1045,6 +1067,7 @@ func CanonicalManifest() Manifest {
 func canonicalPulseMCPSurfaceToolNames() []string {
 	return []string{
 		ResourceContextCapabilityName,
+		ListResourceCapabilitiesCapabilityName,
 		FleetContextCapabilityName,
 		OperationsLoopStatusCapabilityName,
 		ListNodesCapabilityName,

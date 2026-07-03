@@ -1651,7 +1651,13 @@ import; the parallel `AgentApprovalsProvider` adapter resolves the
 canonical approval store at request time, filters full per-resource
 summaries by canonical resource id and org, and exposes a separate
 resource-keyed count projection for fleet reads. The agent runtime
-keeps both providers wired across restarts.
+keeps both providers wired across restarts. The companion
+`/api/agent/resource-capabilities/{id}` endpoint (same
+`monitoring:read` scope) returns the structured governed
+capability list and parameter schemas for the same resource, so an
+agent can populate `plan_action` inputs from the canonical
+`Resource.Capabilities` source rather than the prose summary in
+the context bundle.
 
 `/api/agent/fleet-context` is the companion triage view: one read
 returns a thin per-resource rollup across every resource visible

@@ -1726,7 +1726,11 @@ in-memory findings store, and the same in-memory approval store.
 Fleet pending-approval counts may be grouped by canonical resource
 id from one bounded approval-store scan, but that is still a
 read-only projection over `approvals.json`, not a new recovery
-artifact or storage/recovery freshness signal. The recovery posture
+artifact or storage/recovery freshness signal. The companion
+`/api/agent/resource-capabilities/{id}` endpoint is the same kind
+of read-only projection: it returns the in-memory
+`Resource.Capabilities` slice the registry already assembles, so
+no new persistence or recovery artifact is introduced. The recovery posture
 is identical to the per-resource bundle: when the unified-resources
 store and the approval store rehydrate on startup, the fleet view
 recovers the same situated picture without any fleet-specific

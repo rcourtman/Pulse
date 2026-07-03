@@ -361,7 +361,12 @@ older clients. That shared Patrol work tool set starts with
 `get_patrol_control_status`, the count-only
 `GET /api/agent/patrol-control/status` orientation read, then uses the same
 fleet-context, resource-context, finding, governed action, and finding
-resolution tools as the rest of the governed issue-handling flow.
+resolution tools as the rest of the governed issue-handling flow. The
+structured `list_resource_capabilities` read is the companion to
+resource-context for action planning: it returns the per-resource
+governed capability names and parameter schemas an agent needs to
+populate `plan_action` inputs without guessing, where resource-context
+renders capabilities only as count-limited prose facts.
 `get_operations_loop_status` and `/api/agent/operations-loop/status` are
 compatibility aliases, not primary capability names. AI runtime prompts, MCP
 readiness helpers, and frontend presentation helpers must not carry separate

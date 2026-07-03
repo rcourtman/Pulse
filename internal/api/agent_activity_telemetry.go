@@ -50,7 +50,8 @@ func externalAgentCapabilityActivity(capabilityName string) (string, string, boo
 	}
 	var activity string
 	switch strings.TrimSpace(capabilityName) {
-	case agentcapabilities.ResourceContextCapabilityName:
+	case agentcapabilities.ResourceContextCapabilityName,
+		agentcapabilities.ListResourceCapabilitiesCapabilityName:
 		activity = config.ExternalAgentActivityResourceContext
 	case agentcapabilities.FleetContextCapabilityName:
 		activity = config.ExternalAgentActivityFleetContext

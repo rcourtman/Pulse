@@ -275,6 +275,17 @@ type AgentResourceContext struct {
 	GeneratedAt        time.Time                        `json:"generatedAt"`
 }
 
+// AgentResourceCapabilities is the structured capability surface for a single
+// resource: the names and parameter schemas an agent needs to populate
+// plan_action.capabilityName and params. Mirrors Resource.Capabilities but is
+// projected at request time so the wire shape stays stable. The internal
+// execution handler is excluded via its `json:"-"` tag.
+type AgentResourceCapabilities struct {
+	ResourceID   string                       `json:"resourceId"`
+	Capabilities []unified.ResourceCapability `json:"capabilities"`
+	GeneratedAt  time.Time                    `json:"generatedAt"`
+}
+
 // AgentFindingsProvider returns active findings as agent-stable snapshots and
 // count-only aggregate evidence. The implementation lives outside this package
 // (the patrol service holds the canonical findings store); this interface keeps
@@ -579,6 +590,65 @@ func buildAgentResourceContextSections(resource unified.Resource, store unified.
 	})
 }
 
+// HandleResourceCapabilities serves
+// `GET /api/agent/resource-capabilities/{id}` — the structured
+// capability surface for a single resource: the names and parameter
+// schemas an agent reads before calling plan_action. Companion to the
+// resource-context bundle, which renders capabilities as count-limited
+// prose facts (omitting parameter schemas). A resource with no
+// advertised capabilities returns 200 with an empty capabilities array,
+// which is the signal an agent should not attempt plan_action against it.
+//
+// Computed at request time (no caching). The capability list is the
+// in-memory Resource.Capabilities slice assembled by the registry, so
+// this endpoint only reads the canonical source of truth that
+// plan_action validates against.
+func (h *AgentContextHandler) HandleResourceCapabilities(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if h.resources == nil {
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	resourceID := extractAgentResourceCapabilitiesID(r.URL.Path)
+	if resourceID == "" {
+		http.Error(w, "Resource ID required", http.StatusBadRequest)
+		return
+	}
+
+	orgID := GetOrgID(r.Context())
+	registry, err := h.resources.buildRegistry(orgID)
+	if err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		return
+	}
+	resource, resourceID, ok := presentationResourceByReference(registry, resourceID)
+	if !ok {
+		writeJSONError(w, http.StatusNotFound, agentcapabilities.AgentErrCodeResourceNotFound,
+			"No resource is registered with this canonical id.")
+		return
+	}
+
+	// Capabilities default to a non-nil empty array so the wire shape is
+	// always a JSON array, never null. A resource advertising nothing is a
+	// valid, actionable answer (the signal to skip plan_action).
+	capabilities := []unified.ResourceCapability{}
+	if len(resource.Capabilities) > 0 {
+		capabilities = append(capabilities, resource.Capabilities...)
+	}
+
+	bundle := AgentResourceCapabilities{
+		ResourceID:   resourceID,
+		Capabilities: capabilities,
+		GeneratedAt:  time.Now().UTC(),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(bundle)
+}
+
 func agentResourceOperatorStateForContext(state *AgentResourceOperatorState) *agentcontext.OperatorState {
 	if state == nil {
 		return nil
@@ -600,6 +670,15 @@ func agentResourceOperatorStateForContext(state *AgentResourceOperatorState) *ag
 // for nested resource routes.
 func extractAgentResourceContextID(path string) string {
 	trimmed := strings.TrimPrefix(path, "/api/agent/resource-context/")
+	trimmed = strings.TrimSuffix(trimmed, "/")
+	return unified.CanonicalResourceID(trimmed)
+}
+
+// extractAgentResourceCapabilitiesID parses the canonical resource ID out
+// of the resource-capabilities URL path. Same trim/canonicalize pattern as
+// extractAgentResourceContextID against the capabilities route prefix.
+func extractAgentResourceCapabilitiesID(path string) string {
+	trimmed := strings.TrimPrefix(path, "/api/agent/resource-capabilities/")
 	trimmed = strings.TrimSuffix(trimmed, "/")
 	return unified.CanonicalResourceID(trimmed)
 }
