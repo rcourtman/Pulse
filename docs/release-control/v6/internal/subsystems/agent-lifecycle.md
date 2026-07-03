@@ -107,6 +107,11 @@ and owns the Docker / Podman collection module used by `pulse-agent`, but
 Docker runtime capability truth is monitoring-owned. Lifecycle consumers must
 not reinterpret standalone `Swarm.LocalNodeState=inactive` metadata as agent
 enrollment, install, command, or fleet-control authority.
+The Docker / Podman module reports runtime-native per-core container CPU
+percent because that is the collector's source evidence. Lifecycle surfaces may
+transport that report, but must not reinterpret it as host-capacity utilization;
+monitoring and unified resources own the normalized CPU contract used by
+history, alerts, and canonical app-container metrics.
 Inside-guest Docker / Podman visibility is also a privacy boundary: full
 Docker / Podman inventory may come from a guest-local agent or another explicit
 guest reporting path. LXC Docker inventory may also come from the Proxmox host

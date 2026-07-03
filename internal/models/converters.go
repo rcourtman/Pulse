@@ -558,6 +558,7 @@ func (c DockerContainer) ToFrontend() DockerContainerFrontend {
 		Status:              c.Status,
 		Health:              c.Health,
 		CPUPercent:          c.CPUPercent,
+		CPUCapacityPercent:  c.CPUCapacityPercent,
 		MemoryUsage:         c.MemoryUsage,
 		MemoryLimit:         c.MemoryLimit,
 		MemoryPercent:       c.MemoryPercent,

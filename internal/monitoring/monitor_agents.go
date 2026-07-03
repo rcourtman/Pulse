@@ -1206,6 +1206,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 			NetworkRXBytes: payload.NetworkRXBytes,
 			NetworkTXBytes: payload.NetworkTXBytes,
 		}
+		container.CPUCapacityPercent = models.DockerContainerCPUCapacityPercent(container, report.Host.TotalCPU)
 
 		// Copy update status if provided by agent
 		if payload.UpdateStatus != nil {
@@ -1548,7 +1549,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 			}
 
 			if m.metricsHistory != nil {
-				m.metricsHistory.AddGuestMetric(metricKey, "cpu", container.CPUPercent, now)
+				m.metricsHistory.AddGuestMetric(metricKey, "cpu", models.DockerContainerCPUCapacityPercent(container, host.CPUs), now)
 				m.metricsHistory.AddGuestMetric(metricKey, "memory", container.MemoryPercent, now)
 				m.metricsHistory.AddGuestMetric(metricKey, "disk", diskPercent, now)
 				if container.NetInRate >= 0 {
@@ -1566,7 +1567,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 			}
 
 			if m.metricsStore != nil {
-				m.metricsStore.Write("dockerContainer", container.ID, "cpu", container.CPUPercent, now)
+				m.metricsStore.Write("dockerContainer", container.ID, "cpu", models.DockerContainerCPUCapacityPercent(container, host.CPUs), now)
 				m.metricsStore.Write("dockerContainer", container.ID, "memory", container.MemoryPercent, now)
 				m.metricsStore.Write("dockerContainer", container.ID, "disk", diskPercent, now)
 				if container.NetInRate >= 0 {

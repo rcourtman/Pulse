@@ -235,6 +235,23 @@ func TestMetricsFromDockerContainerIncludesContainerIORates(t *testing.T) {
 	}
 }
 
+func TestMetricsFromDockerContainerUsesHostCapacityNormalizedCPU(t *testing.T) {
+	container := models.DockerContainer{
+		ID:         "ctr-cpu-1",
+		Name:       "api",
+		State:      "running",
+		CPUPercent: 240,
+	}
+
+	metrics := metricsFromDockerContainer(container, 4)
+	if metrics.CPU == nil {
+		t.Fatal("expected Docker container CPU metric")
+	}
+	if metrics.CPU.Value != 60 || metrics.CPU.Percent != 60 {
+		t.Fatalf("Docker container CPU metric = value %v percent %v, want 60", metrics.CPU.Value, metrics.CPU.Percent)
+	}
+}
+
 func TestMetricsFromDockerContainerMockFallbackSynthesizesIO(t *testing.T) {
 	enableMockMode(t)
 

@@ -35,6 +35,11 @@ configured cluster labels must project into node display names as
 `cluster label (node name)` so duplicate node hostnames across clusters remain
 distinguishable, while `models.Node.Name` and `ProxmoxData.NodeName` keep the
 raw Proxmox node identity for linking, metrics, URLs, and actions.
+Docker and Podman container CPU collection preserves the runtime-native raw
+per-core CPU percent, but monitoring-owned history and alert threshold
+evaluation use host-capacity-normalized CPU percent when host CPU capacity is
+known. Raw runtime CPU remains alert/resource metadata, not the canonical
+threshold value.
 
 ## Canonical Files
 
@@ -168,6 +173,11 @@ raw Proxmox node identity for linking, metrics, URLs, and actions.
    fail when container/runtime health data is otherwise usable. Podman libpod
    pods remain outside this collector until a libpod-native collector owns that
    API shape.
+   Docker's native CPU convention reports 100% per CPU core. Agent reports and
+   compatibility APIs may keep that raw value, but canonical monitoring history
+   and Docker container CPU alerts must pass through the shared normalized
+   capacity helper so an 80% threshold means 80% of the reporting host capacity,
+   not 0.8 of one core on a multi-core host.
 8. Add or change Proxmox Ceph compatibility payload decoding through `pkg/proxmox/ceph.go`
 9. Add or change Proxmox ZFS compatibility payload decoding and vdev-role normalization through `pkg/proxmox/zfs.go`
 10. Add or change mock chart synthesis, seeded history continuity, or mock-owned

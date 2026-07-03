@@ -158,6 +158,12 @@ command, prompt, or remediation payload into the model beyond the existing
 scoped-investigation context, so it adds no new disclosure surface and the
 existing resource-policy redaction still governs any model-bound context.
 
+Docker and Podman container CPU normalization may expose numeric raw per-core
+CPU percent, normalized capacity percent, and reporting host CPU count in
+resource or alert metadata. Those fields are operational usage telemetry only;
+they must not be expanded into command lines, environment variables, secret
+material, or unbounded container inspection output at the API boundary.
+
 1. Change privacy disclosures, usage-data vocabulary, or outbound-data guarantees through `docs/PRIVACY.md`, `frontend-modern/public/docs/PRIVACY.md`, `internal/telemetry/telemetry.go`, and `pkg/server/telemetry_pulse_intelligence.go` together.
    Pulse Intelligence external-agent/MCP telemetry may expose only content-free
    adapter-origin usage and capability-class counters for context, event

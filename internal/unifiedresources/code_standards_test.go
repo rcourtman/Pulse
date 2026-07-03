@@ -249,6 +249,30 @@ func TestCloneResourceClonesDockerSecurityPosture(t *testing.T) {
 	}
 }
 
+func TestCloneResourcePreservesDockerCPUCapacityMetadata(t *testing.T) {
+	original := Resource{
+		ID:   "app-container:docker-host-1:web",
+		Type: ResourceTypeAppContainer,
+		Docker: &DockerData{
+			HostSourceID:       "docker-host-1",
+			ContainerID:        "web",
+			CPURawPercent:      240,
+			CPUCapacityPercent: 60,
+			CPUCapacityCores:   4,
+		},
+	}
+
+	cloned := cloneResource(&original)
+	if cloned.Docker == nil {
+		t.Fatal("clone lost Docker metadata")
+	}
+	if cloned.Docker.CPURawPercent != 240 ||
+		cloned.Docker.CPUCapacityPercent != 60 ||
+		cloned.Docker.CPUCapacityCores != 4 {
+		t.Fatalf("docker CPU capacity metadata clone = %+v, want raw 240 normalized 60 cores 4", cloned.Docker)
+	}
+}
+
 func TestCloneResourceCopiesHostThermalState(t *testing.T) {
 	warningLevel := 1
 	resource := Resource{

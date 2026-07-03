@@ -211,6 +211,48 @@ func TestFindLinkedProxmoxEntityWithHints_UsesExactEndpointHostnameBeforeNameFal
 	}
 }
 
+func TestApplyDockerReportNormalizesContainerCPUCapacityAcceptedIngestProof(t *testing.T) {
+	monitor := newTestMonitor(t)
+	token := &config.APITokenRecord{ID: "token-docker-cpu", Name: "Docker Token"}
+
+	host, err := monitor.ApplyDockerReport(agentsdocker.Report{
+		Agent: agentsdocker.AgentInfo{
+			ID:              "docker-cpu-agent",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentsdocker.HostInfo{
+			Hostname:         "docker-cpu-host",
+			MachineID:        "docker-cpu-machine",
+			TotalCPU:         4,
+			TotalMemoryBytes: 8 << 30,
+		},
+		Containers: []agentsdocker.Container{{
+			ID:         "container-cpu",
+			Name:       "api",
+			Image:      "nginx:latest",
+			State:      "running",
+			Status:     "Up 1 minute",
+			CPUPercent: 240,
+		}},
+		Timestamp: time.Now().UTC(),
+	}, token)
+	if err != nil {
+		t.Fatalf("ApplyDockerReport: %v", err)
+	}
+	if len(host.Containers) != 1 {
+		t.Fatalf("expected one reported container, got %d", len(host.Containers))
+	}
+	if got := host.Containers[0].CPUCapacityPercent; got != 60 {
+		t.Fatalf("reported container CPU capacity percent = %v, want 60", got)
+	}
+
+	points := monitor.metricsHistory.GetGuestMetrics("docker:"+host.Containers[0].ID, "cpu", time.Hour)
+	if len(points) != 1 || points[0].Value != 60 {
+		t.Fatalf("metrics history Docker CPU points = %+v, want one normalized value 60", points)
+	}
+}
+
 func TestMonitor_HostAgentConfigUpdatePreservesReportedCommandStateInHostState(t *testing.T) {
 	monitor := &Monitor{
 		state:             models.NewState(),

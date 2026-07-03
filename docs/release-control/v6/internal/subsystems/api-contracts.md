@@ -173,6 +173,13 @@ or retain full frontend-state payloads at the handler boundary. The WebSocket
 hub owns tenant-aware state resolution after coalescing, through the same state
 getter that backs the canonical `/api/state` payload.
 
+Docker and Podman app-container CPU payloads expose two API facts with
+different meanings: canonical resource metrics and `/api/metrics-store/history`
+CPU fallback points use host-capacity-normalized percent, while Docker metadata
+may expose runtime-native per-core CPU percent plus the host CPU count as raw
+diagnostic evidence. API consumers must not treat raw per-core CPU as the
+threshold, chart, or canonical resource CPU value.
+
 Candidate import plans for PVE/PBS/PMG onboarding are API-contract consumers,
 not local UI estimates. Probe and Discovery candidates must build their
 preview through `frontend-modern/src/api/monitoredSystemLedger.ts` and

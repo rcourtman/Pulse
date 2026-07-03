@@ -17,6 +17,10 @@
 
 Own alert identity, alert specs, evaluation, persistence semantics, and
 operator-facing alert routing behavior for live runtime alerts.
+Docker and Podman container CPU thresholds evaluate host-capacity-normalized
+CPU percent, not Docker's runtime-native per-core percent. Alert metadata may
+carry the raw per-core value and reporting host CPU count for evidence, but the
+threshold value and canonical `cpuPercent` metadata remain normalized.
 
 ## Canonical Files
 

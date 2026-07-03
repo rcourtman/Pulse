@@ -2273,6 +2273,59 @@ func TestCheckDockerHostIgnoresContainersByPrefix(t *testing.T) {
 	}
 }
 
+func TestCheckDockerHostContainerCPUUsesCapacityNormalizedPercent(t *testing.T) {
+	m := newTestManager(t)
+	cfg := m.GetConfig()
+	cfg.Enabled = true
+	cfg.DockerDefaults.CPU = HysteresisThreshold{Trigger: 80, Clear: 70}
+	m.UpdateConfig(cfg)
+	m.mu.Lock()
+	m.config.TimeThresholds = map[string]int{}
+	m.config.MetricTimeThresholds = nil
+	m.mu.Unlock()
+
+	host := models.DockerHost{
+		ID:          "docker-host",
+		Hostname:    "docker-host",
+		DisplayName: "Docker Host",
+		CPUs:        4,
+		Containers: []models.DockerContainer{{
+			ID:         "container-1",
+			Name:       "transcoder",
+			State:      "running",
+			Status:     "running",
+			CPUPercent: 240,
+		}},
+	}
+	alertID := canonicalMetricStateID(dockerResourceID(host.ID, "container-1"), "cpu")
+
+	m.CheckDockerHost(host)
+	m.mu.RLock()
+	_, exists := testLookupActiveAlert(t, m, alertID)
+	m.mu.RUnlock()
+	if exists {
+		t.Fatal("240% raw Docker CPU on a 4-core host should be 60% capacity and stay below the 80% threshold")
+	}
+
+	host.Containers[0].CPUPercent = 360
+	m.CheckDockerHost(host)
+	m.mu.RLock()
+	alert, exists := testLookupActiveAlert(t, m, alertID)
+	m.mu.RUnlock()
+	if !exists {
+		t.Fatal("360% raw Docker CPU on a 4-core host should be 90% capacity and trigger the 80% threshold")
+	}
+	if alert.Value != 90 {
+		t.Fatalf("alert value = %v, want normalized capacity percent 90", alert.Value)
+	}
+	if got := alert.Metadata["cpuRawPercent"]; got != float64(360) {
+		t.Fatalf("alert raw CPU metadata = %#v, want 360", got)
+	}
+	if got := alert.Metadata["cpuCapacityCores"]; got != 4 {
+		t.Fatalf("alert CPU capacity cores metadata = %#v, want 4", got)
+	}
+}
+
 func TestDockerServiceReplicaAlerts(t *testing.T) {
 	m := newTestManager(t)
 	m.ClearActiveAlerts()

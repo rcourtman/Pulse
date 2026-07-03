@@ -10696,6 +10696,53 @@ func TestContract_MetricsHistoryLiveFallbackJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_MetricsHistoryDockerContainerCPUFallbackUsesCapacityPercent(t *testing.T) {
+	state := models.NewState()
+	state.UpsertDockerHost(models.DockerHost{
+		ID:       "docker-host-contract-cpu",
+		Hostname: "docker-host-contract-cpu",
+		CPUs:     4,
+		Containers: []models.DockerContainer{{
+			ID:            "container-contract-cpu",
+			Name:          "api",
+			State:         "running",
+			CPUPercent:    240,
+			MemoryPercent: 50,
+		}},
+	})
+
+	monitor := &monitoring.Monitor{}
+	setUnexportedField(t, monitor, "state", state)
+	setUnexportedField(t, monitor, "metricsHistory", monitoring.NewMetricsHistory(10, time.Hour))
+
+	router := &Router{monitor: monitor}
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/metrics-store/history?resourceType=app-container&resourceId=container-contract-cpu&metric=cpu&range=5m",
+		nil,
+	)
+	rec := httptest.NewRecorder()
+	router.handleMetricsHistory(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp metricsHistoryResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal metrics history response: %v", err)
+	}
+	if resp.ResourceType != "app-container" || resp.ResourceId != "container-contract-cpu" || resp.Metric != "cpu" {
+		t.Fatalf("unexpected metrics history identity: %+v", resp)
+	}
+	if resp.Source != "live" {
+		t.Fatalf("expected live fallback source, got %q", resp.Source)
+	}
+	if len(resp.Points) != 1 || resp.Points[0].Value != 60 {
+		t.Fatalf("Docker container CPU fallback points = %+v, want one normalized value 60", resp.Points)
+	}
+}
+
 func TestContract_MetricsHistoryAgentTemperatureLiveFallback(t *testing.T) {
 	state := models.NewState()
 	state.UpsertHost(models.Host{

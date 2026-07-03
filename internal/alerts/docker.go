@@ -297,19 +297,23 @@ func (m *Manager) evaluateDockerContainer(host models.DockerHost, container mode
 		}
 
 		if thresholds.CPU != nil {
+			cpuCapacityPercent := models.DockerContainerCPUCapacityPercent(container, host.CPUs)
 			cpuMetadata := map[string]interface{}{
-				"resourceType":  resourceType,
-				"hostId":        host.ID,
-				"hostName":      host.DisplayName,
-				"hostHostname":  host.Hostname,
-				"containerId":   container.ID,
-				"containerName": containerName,
-				"image":         container.Image,
-				"state":         container.State,
-				"status":        container.Status,
-				"restartCount":  container.RestartCount,
-				"metric":        "cpu",
-				"cpuPercent":    container.CPUPercent,
+				"resourceType":       resourceType,
+				"hostId":             host.ID,
+				"hostName":           host.DisplayName,
+				"hostHostname":       host.Hostname,
+				"containerId":        container.ID,
+				"containerName":      containerName,
+				"image":              container.Image,
+				"state":              container.State,
+				"status":             container.Status,
+				"restartCount":       container.RestartCount,
+				"metric":             "cpu",
+				"cpuPercent":         cpuCapacityPercent,
+				"cpuCapacityPercent": cpuCapacityPercent,
+				"cpuRawPercent":      container.CPUPercent,
+				"cpuCapacityCores":   host.CPUs,
 			}
 			spec, err := buildCanonicalMetricSpec(resourceID, containerName, unifiedresources.ResourceTypeAppContainer, "cpu", thresholds.CPU)
 			if err != nil {
@@ -319,7 +323,7 @@ func (m *Manager) evaluateDockerContainer(host models.DockerHost, container mode
 					Str("container", containerName).
 					Msg("Skipping invalid canonical docker container CPU metric spec")
 			} else {
-				m.checkMetricWithCanonicalSpec(spec, containerName, nodeName, instanceName, resourceType, container.CPUPercent, thresholds.CPU, &metricOptions{Metadata: cpuMetadata})
+				m.checkMetricWithCanonicalSpec(spec, containerName, nodeName, instanceName, resourceType, cpuCapacityPercent, thresholds.CPU, &metricOptions{Metadata: cpuMetadata})
 			}
 		}
 

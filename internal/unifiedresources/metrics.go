@@ -255,9 +255,13 @@ func metricsFromPhysicalDisk(disk models.PhysicalDisk) *ResourceMetrics {
 	return metrics
 }
 
-func metricsFromDockerContainer(ct models.DockerContainer) *ResourceMetrics {
+func metricsFromDockerContainer(ct models.DockerContainer, hostCPUs ...int) *ResourceMetrics {
 	metrics := &ResourceMetrics{}
-	cpuPercent := percentFromUsage(ct.CPUPercent)
+	cpuCapacity := 0
+	if len(hostCPUs) > 0 {
+		cpuCapacity = hostCPUs[0]
+	}
+	cpuPercent := percentFromUsage(models.DockerContainerCPUCapacityPercent(ct, cpuCapacity))
 	metrics.CPU = &MetricValue{Value: cpuPercent, Percent: cpuPercent, Unit: "percent", Source: SourceDocker}
 	if ct.MemoryLimit > 0 {
 		percent := percentFromUsage(ct.MemoryPercent)

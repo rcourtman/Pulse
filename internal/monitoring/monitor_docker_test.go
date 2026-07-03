@@ -336,6 +336,45 @@ func TestApplyDockerReportIncludesContainerDiskDetails(t *testing.T) {
 	}
 }
 
+func TestApplyDockerReportNormalizesContainerCPUCapacity(t *testing.T) {
+	report := agentsdocker.Report{
+		Agent: agentsdocker.AgentInfo{
+			ID:              "agent-1",
+			Version:         "1.2.3",
+			IntervalSeconds: 30,
+		},
+		Host: agentsdocker.HostInfo{
+			Hostname: "cpu-host",
+			TotalCPU: 4,
+		},
+		Containers: []agentsdocker.Container{{
+			ID:         "ctr-1",
+			Name:       "transcoder",
+			State:      "running",
+			Status:     "running",
+			CPUPercent: 240,
+		}},
+		Timestamp: time.Now().UTC(),
+	}
+
+	monitor := newTestMonitor(t)
+	host, err := monitor.ApplyDockerReport(report, nil)
+	if err != nil {
+		t.Fatalf("ApplyDockerReport returned error: %v", err)
+	}
+
+	if len(host.Containers) != 1 {
+		t.Fatalf("expected 1 container, got %d", len(host.Containers))
+	}
+	container := host.Containers[0]
+	if container.CPUPercent != 240 {
+		t.Fatalf("raw Docker CPU percent = %v, want 240", container.CPUPercent)
+	}
+	if container.CPUCapacityPercent != 60 {
+		t.Fatalf("normalized Docker CPU capacity percent = %v, want 60", container.CPUCapacityPercent)
+	}
+}
+
 func TestApplyDockerReportMigratesMetadataWhenContainerRuntimeIDChanges(t *testing.T) {
 	monitor := newTestMonitor(t)
 

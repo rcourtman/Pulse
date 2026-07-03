@@ -447,6 +447,7 @@ type DockerContainerFrontend struct {
 	Status              string                               `json:"status"`
 	Health              string                               `json:"health,omitempty"`
 	CPUPercent          float64                              `json:"cpuPercent"`
+	CPUCapacityPercent  float64                              `json:"cpuCapacityPercent,omitempty"`
 	MemoryUsage         int64                                `json:"memoryUsageBytes"`
 	MemoryLimit         int64                                `json:"memoryLimitBytes"`
 	MemoryPercent       float64                              `json:"memoryPercent"`

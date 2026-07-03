@@ -220,6 +220,11 @@ regression protection.
    validate request-body setup tokens, but the router-level public-path check must
    stay O(1) and must not front-run persistence loads, monitor refresh, or other
    teardown/register side effects before the canonical handler owns the request.
+   Metrics-history live fallback for Docker / Podman app-container CPU may read
+   the already-loaded Docker host snapshot to normalize per-core CPU by host
+   CPU capacity. It must remain inside the existing lazy fallback-state load and
+   must not add container-runtime calls, persistence scans, or extra unified
+   resource walks to the protected history endpoint.
    Test seams around the router's relay runtime client may expose the current
    relay status to onboarding handlers, but they must remain in-memory
    interface boundaries and must not add persistence probes, network reconnects,

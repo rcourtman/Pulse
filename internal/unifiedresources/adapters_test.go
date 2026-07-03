@@ -107,6 +107,35 @@ func TestResourceFromDockerContainerAdvertisesLifecycleCapabilities(t *testing.T
 	}
 }
 
+func TestResourceFromDockerContainerNormalizesDockerCPUCapacity(t *testing.T) {
+	resource, _ := resourceFromDockerContainer(models.DockerContainer{
+		ID:         "abc123",
+		Name:       "transcoder",
+		State:      "running",
+		CPUPercent: 240,
+	}, models.DockerHost{
+		ID:       "docker-host-1",
+		Hostname: "dock1",
+		CPUs:     4,
+	})
+
+	if resource.Metrics == nil || resource.Metrics.CPU == nil {
+		t.Fatalf("expected CPU metric on Docker container resource: %+v", resource.Metrics)
+	}
+	if got := resource.Metrics.CPU.Percent; got != 60 {
+		t.Fatalf("Docker container CPU metric percent = %v, want host-capacity-normalized 60", got)
+	}
+	if resource.Docker == nil {
+		t.Fatal("expected Docker metadata")
+	}
+	if resource.Docker.CPURawPercent != 240 {
+		t.Fatalf("Docker raw CPU percent = %v, want 240", resource.Docker.CPURawPercent)
+	}
+	if resource.Docker.CPUCapacityPercent != 60 || resource.Docker.CPUCapacityCores != 4 {
+		t.Fatalf("Docker capacity CPU metadata = %v across %d cores, want 60 across 4", resource.Docker.CPUCapacityPercent, resource.Docker.CPUCapacityCores)
+	}
+}
+
 func TestResourceFromDockerContainerLifecycleCapabilitiesFailClosed(t *testing.T) {
 	now := time.Now().UTC()
 	baseHost := models.DockerHost{

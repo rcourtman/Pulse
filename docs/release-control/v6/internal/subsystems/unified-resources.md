@@ -17,6 +17,10 @@
 
 Own canonical resource identity, type normalization, typed views, and
 cross-source deduplication.
+For Docker and Podman container resources, the canonical CPU metric represents
+host-capacity-normalized utilization. Runtime-native per-core CPU percent is
+kept on Docker metadata as raw evidence and must not replace the canonical
+metric or threshold surface.
 
 ## Canonical Files
 

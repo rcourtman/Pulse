@@ -8962,17 +8962,17 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		return nil
 	}
 
-	findDockerContainer := func(id string) *models.DockerContainer {
+	findDockerContainer := func(id string) (*models.DockerContainer, int) {
 		loadFallbackState()
 		for i := range dockerHosts {
 			host := &dockerHosts[i]
 			for j := range host.Containers {
 				if host.Containers[j].ID == id {
-					return &host.Containers[j]
+					return &host.Containers[j], host.CPUs
 				}
 			}
 		}
-		return nil
+		return nil, 0
 	}
 
 	findDisk := func(id string) *unifiedresources.Resource {
@@ -9100,11 +9100,11 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 				points["temperature"] = monitoring.MetricPoint{Timestamp: now, Value: *temperature}
 			}
 		case "app-container":
-			container := findDockerContainer(resourceID)
+			container, hostCPUs := findDockerContainer(resourceID)
 			if container == nil {
 				return points
 			}
-			points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: container.CPUPercent}
+			points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: models.DockerContainerCPUCapacityPercent(*container, hostCPUs)}
 			points["memory"] = monitoring.MetricPoint{Timestamp: now, Value: container.MemoryPercent}
 			if container.RootFilesystemBytes > 0 && container.WritableLayerBytes > 0 {
 				diskPercent := float64(container.WritableLayerBytes) / float64(container.RootFilesystemBytes) * 100

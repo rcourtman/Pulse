@@ -704,6 +704,9 @@ export interface ResourceDockerMeta {
   health?: string;
   restartCount?: number;
   exitCode?: number;
+  cpuRawPercent?: number;
+  cpuCapacityPercent?: number;
+  cpuCapacityCores?: number;
   finishedAt?: string;
   blockIo?: {
     readBytes?: number;

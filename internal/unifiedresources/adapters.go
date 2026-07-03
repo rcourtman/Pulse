@@ -2025,7 +2025,7 @@ func isZFSStorageType(storageType string) bool {
 }
 
 func resourceFromDockerContainer(ct models.DockerContainer, host models.DockerHost) (Resource, ResourceIdentity) {
-	metrics := metricsFromDockerContainer(ct)
+	metrics := metricsFromDockerContainer(ct, host.CPUs)
 	now := time.Now().UTC()
 	runtime := strings.TrimSpace(host.Runtime)
 	if runtime == "" {
@@ -2036,22 +2036,25 @@ func resourceFromDockerContainer(ct models.DockerContainer, host models.DockerHo
 		}
 	}
 	docker := &DockerData{
-		HostSourceID:   host.ID,
-		AgentID:        strings.TrimSpace(host.AgentID),
-		ContainerID:    ct.ID,
-		Hostname:       host.Hostname,
-		Image:          ct.Image,
-		ImageID:        ct.ImageDigest,
-		UptimeSeconds:  ct.UptimeSeconds,
-		ContainerState: ct.State,
-		Health:         ct.Health,
-		RestartCount:   ct.RestartCount,
-		ExitCode:       ct.ExitCode,
-		Labels:         cloneLabelMap(ct.Labels),
-		Runtime:        runtime,
-		RuntimeVersion: host.RuntimeVersion,
-		DockerVersion:  host.DockerVersion,
-		Security:       cloneDockerHostSecurity(host.Security),
+		HostSourceID:       host.ID,
+		AgentID:            strings.TrimSpace(host.AgentID),
+		ContainerID:        ct.ID,
+		Hostname:           host.Hostname,
+		Image:              ct.Image,
+		ImageID:            ct.ImageDigest,
+		UptimeSeconds:      ct.UptimeSeconds,
+		ContainerState:     ct.State,
+		Health:             ct.Health,
+		RestartCount:       ct.RestartCount,
+		ExitCode:           ct.ExitCode,
+		CPURawPercent:      ct.CPUPercent,
+		CPUCapacityPercent: models.DockerContainerCPUCapacityPercent(ct, host.CPUs),
+		CPUCapacityCores:   host.CPUs,
+		Labels:             cloneLabelMap(ct.Labels),
+		Runtime:            runtime,
+		RuntimeVersion:     host.RuntimeVersion,
+		DockerVersion:      host.DockerVersion,
+		Security:           cloneDockerHostSecurity(host.Security),
 	}
 	if !ct.CreatedAt.IsZero() {
 		docker.CreatedAt = ct.CreatedAt.UTC().Format(time.RFC3339)

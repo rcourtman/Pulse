@@ -954,19 +954,22 @@ type DockerData struct {
 	Security              *models.DockerHostSecurity      `json:"security,omitempty"`
 
 	// Container-specific fields (populated when Resource.Type == ResourceTypeAppContainer)
-	ContainerState string                      `json:"containerState,omitempty"`
-	Health         string                      `json:"health,omitempty"`
-	RestartCount   int                         `json:"restartCount,omitempty"`
-	ExitCode       int                         `json:"exitCode,omitempty"`
-	StartedAt      *time.Time                  `json:"startedAt,omitempty"`
-	FinishedAt     *time.Time                  `json:"finishedAt,omitempty"`
-	BlockIO        *DockerContainerBlockIOMeta `json:"blockIo,omitempty"`
-	Podman         *DockerPodmanContainerMeta  `json:"podman,omitempty"`
-	Ports          []DockerPortMeta            `json:"ports,omitempty"`
-	Labels         map[string]string           `json:"labels,omitempty"`
-	Networks       []DockerNetworkMeta         `json:"networks,omitempty"`
-	Mounts         []DockerMountMeta           `json:"mounts,omitempty"`
-	UpdateStatus   *DockerUpdateStatusMeta     `json:"updateStatus,omitempty"`
+	ContainerState     string                      `json:"containerState,omitempty"`
+	Health             string                      `json:"health,omitempty"`
+	RestartCount       int                         `json:"restartCount,omitempty"`
+	ExitCode           int                         `json:"exitCode,omitempty"`
+	CPURawPercent      float64                     `json:"cpuRawPercent,omitempty"`
+	CPUCapacityPercent float64                     `json:"cpuCapacityPercent,omitempty"`
+	CPUCapacityCores   int                         `json:"cpuCapacityCores,omitempty"`
+	StartedAt          *time.Time                  `json:"startedAt,omitempty"`
+	FinishedAt         *time.Time                  `json:"finishedAt,omitempty"`
+	BlockIO            *DockerContainerBlockIOMeta `json:"blockIo,omitempty"`
+	Podman             *DockerPodmanContainerMeta  `json:"podman,omitempty"`
+	Ports              []DockerPortMeta            `json:"ports,omitempty"`
+	Labels             map[string]string           `json:"labels,omitempty"`
+	Networks           []DockerNetworkMeta         `json:"networks,omitempty"`
+	Mounts             []DockerMountMeta           `json:"mounts,omitempty"`
+	UpdateStatus       *DockerUpdateStatusMeta     `json:"updateStatus,omitempty"`
 
 	// Service-specific fields (populated when Resource.Type == ResourceTypeDockerService)
 	ServiceID      string                   `json:"serviceId,omitempty"`

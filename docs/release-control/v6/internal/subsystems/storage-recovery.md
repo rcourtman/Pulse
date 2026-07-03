@@ -70,6 +70,12 @@ surfaces. Recovery code may consume the API-owned
 mobile pairing QR/deep-link payload from relay settings when relay
 registration or the dedicated Pulse Mobile credential is incomplete.
 
+Docker and Podman app-container CPU fields on unified resource metadata are
+storage/recovery-adjacent only because `DockerData` is a shared resource
+payload. Raw per-core CPU evidence and normalized capacity CPU must not be used
+as backup coverage, restore readiness, storage-health, or recovery-point
+signals.
+
 Shared command-agent token binding in `internal/api/agent_exec_token_binding.go`
 is API-owned adjacent infrastructure. Storage- and recovery-adjacent setup or
 diagnostics flows may observe the API-owned `bound_agent_id`,
