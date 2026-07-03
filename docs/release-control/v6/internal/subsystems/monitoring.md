@@ -1067,15 +1067,14 @@ into the canonical physical-disk model without overwriting provider truth. The
 Proxmox polling runtime in `internal/monitoring/monitor_pve.go` must evaluate
 disk alerts only after that merged disk view exists, so controller-backed disks
 do not lose health and endurance coverage between collection and alerting.
-That same host-agent temperature boundary must not suppress SSH SMART disk
-collection just because the agent already reported CPU package or NVMe
-temperatures. `internal/monitoring/monitor_polling_node_helpers.go` may skip
-SSH only once the host-agent temperature payload already has usable SMART disk
-temperatures rather than identity-only or zero-temperature SMART rows. Those
-identity-only host-agent rows must still allow wrapper or proxy SMART
-augmentation, and proxy SMART temperatures may replace them so nodes keep their
-disk-temperature and SMART augmentation when the host agent is present but lacks
-usable SMART temperature support.
+That same host-agent temperature boundary must prefer a recent linked host-agent
+payload over legacy SSH collection once the agent provides any usable CPU, NVMe,
+GPU, or SMART temperature reading. `internal/monitoring/monitor_polling_node_helpers.go`
+may invoke SSH only when no linked, recent, available host-agent temperature
+exists or the agent payload has no usable positive reading. Identity-only or
+zero-temperature SMART rows do not count as usable by themselves, but the
+runtime must not keep probing legacy SSH solely to augment an otherwise healthy
+agent temperature payload with SMART data.
 Legacy SSH temperature collection must also use the Pulse sensor-wrapper
 contract before falling back to raw lm-sensors output. `internal/monitoring/temperature.go`
 must request `/usr/local/sbin/pulse-sensors` when it exists, parse the wrapper

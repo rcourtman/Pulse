@@ -159,7 +159,7 @@ func TestShouldSkipTemperatureSSHCollection(t *testing.T) {
 		}
 	})
 
-	t.Run("cpu only host agent temp does not skip", func(t *testing.T) {
+	t.Run("host agent temp without recent timestamp does not skip", func(t *testing.T) {
 		host := &models.Temperature{
 			Available:  true,
 			HasCPU:     true,
@@ -170,15 +170,51 @@ func TestShouldSkipTemperatureSSHCollection(t *testing.T) {
 		}
 	})
 
-	t.Run("recent cpu only host agent temp does not skip", func(t *testing.T) {
+	t.Run("recent cpu package host agent temp skips", func(t *testing.T) {
 		host := &models.Temperature{
 			Available:  true,
 			HasCPU:     true,
 			CPUPackage: 55,
 			LastUpdate: time.Now(),
 		}
-		if shouldSkipTemperatureSSHCollection(host) {
-			t.Fatal("expected recent CPU-only host agent temp to allow SSH SMART augmentation")
+		if !shouldSkipTemperatureSSHCollection(host) {
+			t.Fatal("expected recent CPU host agent temp to skip legacy SSH collection")
+		}
+	})
+
+	t.Run("recent cpu core host agent temp skips", func(t *testing.T) {
+		host := &models.Temperature{
+			Available:  true,
+			HasCPU:     true,
+			Cores:      []models.CoreTemp{{Core: 0, Temp: 51}},
+			LastUpdate: time.Now(),
+		}
+		if !shouldSkipTemperatureSSHCollection(host) {
+			t.Fatal("expected recent CPU core host agent temp to skip legacy SSH collection")
+		}
+	})
+
+	t.Run("recent nvme host agent temp skips", func(t *testing.T) {
+		host := &models.Temperature{
+			Available:  true,
+			HasNVMe:    true,
+			NVMe:       []models.NVMeTemp{{Device: "nvme0", Temp: 42}},
+			LastUpdate: time.Now(),
+		}
+		if !shouldSkipTemperatureSSHCollection(host) {
+			t.Fatal("expected recent NVMe host agent temp to skip legacy SSH collection")
+		}
+	})
+
+	t.Run("recent gpu host agent temp skips", func(t *testing.T) {
+		host := &models.Temperature{
+			Available:  true,
+			HasGPU:     true,
+			GPU:        []models.GPUTemp{{Device: "gpu0", Edge: 62}},
+			LastUpdate: time.Now(),
+		}
+		if !shouldSkipTemperatureSSHCollection(host) {
+			t.Fatal("expected recent GPU host agent temp to skip legacy SSH collection")
 		}
 	})
 
@@ -219,16 +255,15 @@ func TestShouldSkipTemperatureSSHCollection(t *testing.T) {
 		}
 	})
 
-	t.Run("host agent smart inventory without temperatures does not skip", func(t *testing.T) {
+	t.Run("host agent smart inventory without any temperature does not skip", func(t *testing.T) {
 		host := &models.Temperature{
 			Available:  true,
-			HasCPU:     true,
 			HasSMART:   true,
 			SMART:      []models.DiskTemp{{Device: "/dev/sda", Temperature: 0}},
 			LastUpdate: time.Now(),
 		}
 		if shouldSkipTemperatureSSHCollection(host) {
-			t.Fatal("expected identity-only SMART rows to allow SSH SMART augmentation")
+			t.Fatal("expected identity-only SMART rows without a temperature to allow legacy SSH fallback")
 		}
 	})
 }

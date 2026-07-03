@@ -19,16 +19,17 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 Notes:
 - Install `lm-sensors` on each host (`apt install lm-sensors && sensors-detect --auto`).
 - Temperatures appear automatically once the agent reports.
+- When a Proxmox host has recent usable agent temperature data, Pulse treats the agent as the source of truth and does not also try SSH temperature collection for that host.
 
 ## SSH-Based Collection (Fallback)
 
-Pulse can also collect temperatures by SSHing into each host and running `sensors -j`, with a fallback to `/sys/class/thermal/thermal_zone0/temp` when available (for example, on Raspberry Pi).
+Pulse can also collect temperatures by SSHing into each host that does not have usable agent temperature data. The SSH path runs the Pulse sensor wrapper when present, falls back to `sensors -j`, and can fall back again to `/sys/class/thermal/thermal_zone0/temp` when available (for example, on Raspberry Pi).
 
 ### Requirements
 
 - SSH connectivity from the Pulse server to each host
 - `lm-sensors` installed and `sensors -j` returning JSON on the host
-- A restricted SSH key entry that only allows `sensors -j`
+- A restricted SSH key entry that only allows the Pulse sensor wrapper
 
 ### Setup
 
@@ -39,10 +40,10 @@ Pulse can also collect temperatures by SSHing into each host and running `sensor
    - Add a restricted SSH key entry for temperature collection
    - Install `lm-sensors` (optional)
 
-The SSH entry added to `authorized_keys` is restricted to `sensors -j`, for example:
+The SSH entry added to `authorized_keys` is restricted to the Pulse sensor wrapper, for example:
 
 ```text
-command="sensors -j",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty <public-key> # pulse-sensors
+command="/usr/local/sbin/pulse-sensors",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty <public-key> # pulse-sensors
 ```
 
 If you use a non-standard SSH port, set `SSH_PORT` (system-wide) or configure it in **Settings -> System**.
@@ -73,7 +74,8 @@ ssh -i /path/to/key root@node "cat /sys/class/thermal/thermal_zone0/temp"
 
 - If `sensors -j` returns empty output, run `sensors-detect --auto` and retry.
 - If temperatures show as unavailable, confirm the host actually exposes sensor data.
-- Ensure the SSH key entry is present and restricted to `sensors -j`.
+- If the unified agent is already reporting temperatures for a Proxmox host, SSH collection is not required for that host.
+- Ensure the SSH key entry is present and restricted to `/usr/local/sbin/pulse-sensors`.
 
 ## Legacy Cleanup (If Upgrading)
 

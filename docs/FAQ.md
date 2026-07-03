@@ -65,7 +65,7 @@ Recommended: install the unified agent on your Proxmox hosts with Proxmox integr
 1. Install `lm-sensors` on the host (`apt install lm-sensors && sensors-detect`)
 2. Install `pulse-agent` with `--enable-proxmox`
 
-If you do not run the agent, Pulse can collect temperatures over SSH. See [Temperature Monitoring](TEMPERATURE_MONITORING.md).
+If you do not run the agent, Pulse can collect temperatures over SSH. When the agent is reporting usable temperatures, Pulse uses the agent path and does not also require SSH for that host. See [Temperature Monitoring](TEMPERATURE_MONITORING.md).
 
 ---
 

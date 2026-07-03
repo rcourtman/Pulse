@@ -15,12 +15,12 @@ See [docs/TEMPERATURE_MONITORING.md](../TEMPERATURE_MONITORING.md) for setup.
 
 ## SSH-Based Collection
 
-SSH-based temperature monitoring uses a restricted key entry that only allows `sensors -j` to run. This limits the blast radius if a key leaks.
+SSH-based temperature monitoring uses a restricted key entry that only allows the Pulse sensor wrapper to run. This limits the blast radius if a key leaks.
 
 Recommended restrictions:
 
 ```text
-command="sensors -j",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty <public-key> # pulse-sensors
+command="/usr/local/sbin/pulse-sensors",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty <public-key> # pulse-sensors
 ```
 
 Additional notes:

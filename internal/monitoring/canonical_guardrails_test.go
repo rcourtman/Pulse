@@ -1107,11 +1107,16 @@ func TestStoragePollingKeepsSharedStorageClusterStatusCanonical(t *testing.T) {
 	}
 }
 
-func TestMonitoringTemperatureFallbackUsesSMARTAwareSSHSkipRule(t *testing.T) {
+func TestMonitoringTemperatureFallbackPrefersRecentAgentTelemetry(t *testing.T) {
 	requiredSnippets := map[string][]string{
 		"host_agent_temps.go": {
 			"func shouldSkipTemperatureSSHCollection(hostAgentTemp *models.Temperature) bool {",
-			"return hasUsableSMARTTemperature(hostAgentTemp)",
+			"return hasUsableTemperatureReading(hostAgentTemp)",
+			"func hasUsableTemperatureReading(temp *models.Temperature) bool {",
+			"temp.CPUPackage > 0 || temp.CPUMax > 0",
+			"core.Temp > 0",
+			"device.Temp > 0",
+			"gpu.Edge > 0 || gpu.Junction > 0 || gpu.Mem > 0",
 			"func hasUsableSMARTTemperature(temp *models.Temperature) bool {",
 			"disk.Temperature > 0 && !disk.StandbySkipped",
 		},

@@ -31,7 +31,37 @@ func shouldSkipTemperatureSSHCollection(hostAgentTemp *models.Temperature) bool 
 		return false
 	}
 
-	return hasUsableSMARTTemperature(hostAgentTemp)
+	return hasUsableTemperatureReading(hostAgentTemp)
+}
+
+func hasUsableTemperatureReading(temp *models.Temperature) bool {
+	if temp == nil {
+		return false
+	}
+
+	if temp.CPUPackage > 0 || temp.CPUMax > 0 {
+		return true
+	}
+
+	for _, core := range temp.Cores {
+		if core.Temp > 0 {
+			return true
+		}
+	}
+
+	for _, device := range temp.NVMe {
+		if device.Temp > 0 {
+			return true
+		}
+	}
+
+	for _, gpu := range temp.GPU {
+		if gpu.Edge > 0 || gpu.Junction > 0 || gpu.Mem > 0 {
+			return true
+		}
+	}
+
+	return hasUsableSMARTTemperature(temp)
 }
 
 func hasUsableSMARTTemperature(temp *models.Temperature) bool {

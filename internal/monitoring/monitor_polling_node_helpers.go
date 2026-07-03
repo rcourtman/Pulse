@@ -159,9 +159,9 @@ func (m *Monitor) collectNodeTemperatureData(
 				sshHost = node.Node
 			}
 
-			// Skip SSH only when the host agent already has SMART data too.
-			// If the host agent only has CPU/NVMe readings, SSH can still
-			// augment the node with SMART disk temperatures.
+			// A recent host agent payload is authoritative for this node.
+			// Legacy SSH remains only as a fallback when no usable local
+			// temperature reading has arrived from the linked agent.
 			skipSSHCollection := shouldSkipTemperatureSSHCollection(hostAgentTemp)
 
 			if !skipSSHCollection {
