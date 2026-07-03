@@ -1,6 +1,6 @@
 // AI feature types
 
-export type AIProvider = 'anthropic' | 'openai' | 'ollama' | 'deepseek' | 'gemini';
+export type AIProvider = 'anthropic' | 'openai' | 'ollama' | 'deepseek' | 'gemini' | 'requesty';
 export type AuthMethod = 'api_key' | 'oauth';
 
 export interface ModelInfo {
@@ -53,6 +53,7 @@ export interface AISettings {
   openai_configured: boolean; // true if OpenAI API key is set
   deepseek_configured: boolean; // true if DeepSeek API key is set
   gemini_configured: boolean; // true if Gemini API key is set
+  requesty_configured: boolean; // true if Requesty API key is set
   ollama_configured: boolean; // true (always available for attempt)
   ollama_base_url: string; // Ollama server URL
   ollama_username?: string; // Optional Basic Auth username for Ollama
@@ -99,6 +100,7 @@ export interface AISettingsUpdateRequest {
   openai_api_key?: string; // Set OpenAI API key
   deepseek_api_key?: string; // Set DeepSeek API key
   gemini_api_key?: string; // Set Gemini API key
+  requesty_api_key?: string; // Set Requesty API key
   ollama_base_url?: string; // Set Ollama server URL
   ollama_username?: string; // Set Ollama Basic Auth username
   ollama_password?: string; // Set Ollama Basic Auth password
@@ -108,6 +110,7 @@ export interface AISettingsUpdateRequest {
   clear_anthropic_key?: boolean; // Clear Anthropic API key
   clear_openai_key?: boolean; // Clear OpenAI API key
   clear_deepseek_key?: boolean; // Clear DeepSeek API key
+  clear_requesty_key?: boolean; // Clear Requesty API key
   clear_gemini_key?: boolean; // Clear Gemini API key
   clear_ollama_url?: boolean; // Clear Ollama URL
   clear_ollama_username?: boolean; // Clear Ollama Basic Auth username
@@ -142,6 +145,7 @@ export const DEFAULT_MODELS: Record<AIProvider, string> = {
   ollama: 'llama3',
   deepseek: 'deepseek-chat',
   gemini: 'gemini-2.5-flash',
+  requesty: 'openai/gpt-4o-mini',
 };
 
 // Provider display names
@@ -151,6 +155,7 @@ export const PROVIDER_NAMES: Record<AIProvider, string> = {
   ollama: 'Ollama',
   deepseek: 'DeepSeek',
   gemini: 'Google Gemini',
+  requesty: 'Requesty',
 };
 
 // Provider descriptions
@@ -160,6 +165,7 @@ export const PROVIDER_DESCRIPTIONS: Record<AIProvider, string> = {
   ollama: 'Local models via Ollama',
   deepseek: 'DeepSeek reasoning models',
   gemini: 'Gemini models from Google',
+  requesty: 'OpenAI-compatible router to many models',
 };
 
 // Conversation history for multi-turn chats

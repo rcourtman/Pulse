@@ -62,6 +62,13 @@ func NewFromConfig(cfg *config.AIConfig) (Provider, error) {
 		// DeepSeek uses OpenAI-compatible API
 		return NewOpenAIClient(cfg.APIKey, cfg.GetModel(), cfg.GetBaseURL(), timeout), nil
 
+	case config.AIProviderRequesty:
+		if cfg.APIKey == "" {
+			return nil, fmt.Errorf("Requesty API key is required")
+		}
+		// Requesty is an OpenAI-compatible router
+		return NewOpenAIClient(cfg.APIKey, cfg.GetModel(), cfg.GetBaseURL(), timeout), nil
+
 	case config.AIProviderGemini:
 		if cfg.APIKey == "" {
 			return nil, fmt.Errorf("Gemini API key is required")
@@ -115,6 +122,14 @@ func NewForProvider(cfg *config.AIConfig, provider, model string) (Provider, err
 			return nil, fmt.Errorf("DeepSeek API key not configured")
 		}
 		baseURL := cfg.GetBaseURLForProvider(config.AIProviderDeepSeek)
+		return NewOpenAIClient(apiKey, model, baseURL, timeout), nil
+
+	case config.AIProviderRequesty:
+		apiKey := cfg.GetAPIKeyForProvider(config.AIProviderRequesty)
+		if apiKey == "" {
+			return nil, fmt.Errorf("Requesty API key not configured")
+		}
+		baseURL := cfg.GetBaseURLForProvider(config.AIProviderRequesty)
 		return NewOpenAIClient(apiKey, model, baseURL, timeout), nil
 
 	case config.AIProviderOllama:

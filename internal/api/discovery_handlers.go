@@ -78,6 +78,8 @@ func (h *DiscoveryHandlers) getAIProviderInfo() *servicediscovery.AIProviderInfo
 		label = "Cloud (OpenAI)"
 	case config.AIProviderDeepSeek:
 		label = "Cloud (DeepSeek)"
+	case config.AIProviderRequesty:
+		label = "Cloud (Requesty)"
 	case config.AIProviderGemini:
 		label = "Cloud (Google Gemini)"
 	default:

@@ -12,6 +12,7 @@ const (
 	ProviderOpenAI    = config.AIProviderOpenAI
 	ProviderOllama    = config.AIProviderOllama
 	ProviderDeepSeek  = config.AIProviderDeepSeek
+	ProviderRequesty  = config.AIProviderRequesty
 )
 
 // NewDefaultConfig returns a new AI config with sensible defaults

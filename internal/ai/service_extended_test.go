@@ -1276,6 +1276,7 @@ func TestProviderDisplayName_AllProviders(t *testing.T) {
 		{config.AIProviderAnthropic, "Anthropic"},
 		{config.AIProviderOpenAI, "OpenAI"},
 		{config.AIProviderDeepSeek, "DeepSeek"},
+		{config.AIProviderRequesty, "Requesty"},
 		{config.AIProviderGemini, "Google Gemini"},
 		{config.AIProviderOllama, "Ollama"},
 		{"custom_provider", "custom_provider"},

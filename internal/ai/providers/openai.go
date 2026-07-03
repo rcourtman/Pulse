@@ -57,6 +57,8 @@ func NewOpenAIClient(apiKey, model, baseURL string, timeout time.Duration) *Open
 		model = strings.TrimPrefix(model, "openai:")
 	} else if strings.HasPrefix(model, "deepseek:") {
 		model = strings.TrimPrefix(model, "deepseek:")
+	} else if strings.HasPrefix(model, "requesty:") {
+		model = strings.TrimPrefix(model, "requesty:")
 	}
 	if timeout <= 0 {
 		timeout = 300 * time.Second // Default 5 minutes
@@ -263,6 +265,8 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 		model = strings.TrimPrefix(model, "openai:")
 	} else if strings.HasPrefix(model, "deepseek:") {
 		model = strings.TrimPrefix(model, "deepseek:")
+	} else if strings.HasPrefix(model, "requesty:") {
+		model = strings.TrimPrefix(model, "requesty:")
 	}
 	if model == "" {
 		model = c.model
@@ -623,6 +627,8 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 		model = strings.TrimPrefix(model, "openai:")
 	} else if strings.HasPrefix(model, "deepseek:") {
 		model = strings.TrimPrefix(model, "deepseek:")
+	} else if strings.HasPrefix(model, "requesty:") {
+		model = strings.TrimPrefix(model, "requesty:")
 	}
 	if model == "" {
 		model = c.model

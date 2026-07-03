@@ -325,6 +325,31 @@ func TestNewForProvider_DeepSeekNoAPIKey(t *testing.T) {
 	}
 }
 
+func TestNewForProvider_Requesty(t *testing.T) {
+	cfg := &config.AIConfig{
+		Enabled:        true,
+		RequestyAPIKey: "test-key",
+	}
+	provider, err := NewForProvider(cfg, config.AIProviderRequesty, "openai/gpt-4o-mini")
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	// Requesty uses OpenAI-compatible client
+	if provider.Name() != "openai" {
+		t.Errorf("Expected provider name 'openai', got '%s'", provider.Name())
+	}
+}
+
+func TestNewForProvider_RequestyNoAPIKey(t *testing.T) {
+	cfg := &config.AIConfig{
+		Enabled: true,
+	}
+	_, err := NewForProvider(cfg, config.AIProviderRequesty, "openai/gpt-4o-mini")
+	if err == nil {
+		t.Error("Expected error for Requesty without API key")
+	}
+}
+
 func TestNewForProvider_Ollama(t *testing.T) {
 	cfg := &config.AIConfig{
 		Enabled:         true,

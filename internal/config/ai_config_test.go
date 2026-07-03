@@ -250,6 +250,7 @@ func TestAIConfig_GetAPIKeyForProvider(t *testing.T) {
 		OpenAIAPIKey:    "openai-key",
 		DeepSeekAPIKey:  "deepseek-key",
 		GeminiAPIKey:    "gemini-key",
+		RequestyAPIKey:  "requesty-key",
 	}
 
 	tests := []struct {
@@ -259,6 +260,7 @@ func TestAIConfig_GetAPIKeyForProvider(t *testing.T) {
 		{AIProviderAnthropic, "anthropic-key"},
 		{AIProviderOpenAI, "openai-key"},
 		{AIProviderDeepSeek, "deepseek-key"},
+		{AIProviderRequesty, "requesty-key"},
 		{AIProviderGemini, "gemini-key"},
 		{AIProviderOllama, ""},
 		{"unknown", ""},
@@ -294,6 +296,13 @@ func TestAIConfig_GetAPIKeyForProvider(t *testing.T) {
 		}
 	})
 
+	t.Run("legacy fallback requesty", func(t *testing.T) {
+		cfg := AIConfig{APIKey: "legacy", Provider: AIProviderRequesty}
+		if key := cfg.GetAPIKeyForProvider(AIProviderRequesty); key != "legacy" {
+			t.Errorf("want legacy, got %q", key)
+		}
+	})
+
 	t.Run("legacy fallback gemini", func(t *testing.T) {
 		cfg := AIConfig{APIKey: "legacy", Provider: AIProviderGemini}
 		if key := cfg.GetAPIKeyForProvider(AIProviderGemini); key != "legacy" {
@@ -315,6 +324,7 @@ func TestAIConfig_GetBaseURLForProvider(t *testing.T) {
 		{AIProviderOllama, "http://custom:11434"},
 		{AIProviderOpenAI, "https://custom-openai.com"},
 		{AIProviderDeepSeek, DefaultDeepSeekBaseURL},
+		{AIProviderRequesty, DefaultRequestyBaseURL},
 		{AIProviderGemini, DefaultGeminiBaseURL},
 		{AIProviderAnthropic, ""},
 		{"unknown", ""},
@@ -445,6 +455,7 @@ func TestParseModelString(t *testing.T) {
 		{"openai:gpt-4o", AIProviderOpenAI, "gpt-4o"},
 		{"ollama:llama3", AIProviderOllama, "llama3"},
 		{"deepseek:deepseek-chat", AIProviderDeepSeek, "deepseek-chat"},
+		{"requesty:openai/gpt-4o-mini", AIProviderRequesty, "openai/gpt-4o-mini"},
 		{"gemini:gemini-1.5-pro", AIProviderGemini, "gemini-1.5-pro"},
 		// Detection by name
 		{"claude-3-opus", AIProviderAnthropic, "claude-3-opus"},

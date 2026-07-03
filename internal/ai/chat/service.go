@@ -800,6 +800,13 @@ func (s *Service) createProviderForModel(modelStr string) (providers.StreamingPr
 		}
 		baseURL := s.cfg.GetBaseURLForProvider(config.AIProviderDeepSeek)
 		return providers.NewOpenAIClient(apiKey, modelName, baseURL, timeout), nil
+	case "requesty":
+		apiKey := s.cfg.GetAPIKeyForProvider(config.AIProviderRequesty)
+		if apiKey == "" {
+			return nil, fmt.Errorf("Requesty API key not configured")
+		}
+		baseURL := s.cfg.GetBaseURLForProvider(config.AIProviderRequesty)
+		return providers.NewOpenAIClient(apiKey, modelName, baseURL, timeout), nil
 	case "gemini":
 		apiKey := s.cfg.GetAPIKeyForProvider(config.AIProviderGemini)
 		if apiKey == "" {

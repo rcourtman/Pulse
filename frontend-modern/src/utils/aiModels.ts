@@ -4,11 +4,12 @@ export const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
   anthropic: 'Anthropic',
   openai: 'OpenAI',
   deepseek: 'DeepSeek',
+  requesty: 'Requesty',
   gemini: 'Google Gemini',
   ollama: 'Ollama',
 };
 
-const KNOWN_PROVIDERS: AIProvider[] = ['anthropic', 'openai', 'deepseek', 'gemini', 'ollama'];
+const KNOWN_PROVIDERS: AIProvider[] = ['anthropic', 'openai', 'deepseek', 'gemini', 'ollama', 'requesty'];
 
 export function getProviderFromModelId(modelId: string): string {
   const colonIndex = modelId.indexOf(':');

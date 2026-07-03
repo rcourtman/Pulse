@@ -737,6 +737,7 @@ func shouldRestartAIChat(req AISettingsUpdateRequest) bool {
 		req.AnthropicAPIKey != nil ||
 		req.OpenAIAPIKey != nil ||
 		req.DeepSeekAPIKey != nil ||
+		req.RequestyAPIKey != nil ||
 		req.GeminiAPIKey != nil ||
 		req.OllamaBaseURL != nil ||
 		req.OllamaUsername != nil ||
@@ -746,6 +747,7 @@ func shouldRestartAIChat(req AISettingsUpdateRequest) bool {
 		req.ClearAnthropicKey != nil ||
 		req.ClearOpenAIKey != nil ||
 		req.ClearDeepSeekKey != nil ||
+		req.ClearRequestyKey != nil ||
 		req.ClearGeminiKey != nil ||
 		req.ClearOllamaURL != nil ||
 		req.ClearOllamaUsername != nil ||
@@ -1031,6 +1033,7 @@ type AISettingsResponse struct {
 	AnthropicConfigured bool     `json:"anthropic_configured"`        // true if Anthropic API key or OAuth is set
 	OpenAIConfigured    bool     `json:"openai_configured"`           // true if OpenAI API key is set
 	DeepSeekConfigured  bool     `json:"deepseek_configured"`         // true if DeepSeek API key is set
+	RequestyConfigured  bool     `json:"requesty_configured"`         // true if Requesty API key is set
 	GeminiConfigured    bool     `json:"gemini_configured"`           // true if Gemini API key is set
 	OllamaConfigured    bool     `json:"ollama_configured"`           // true (always available for attempt)
 	OllamaBaseURL       string   `json:"ollama_base_url"`             // Ollama server URL
@@ -1075,6 +1078,7 @@ type AISettingsUpdateRequest struct {
 	AnthropicAPIKey *string `json:"anthropic_api_key,omitempty"` // Set Anthropic API key
 	OpenAIAPIKey    *string `json:"openai_api_key,omitempty"`    // Set OpenAI API key
 	DeepSeekAPIKey  *string `json:"deepseek_api_key,omitempty"`  // Set DeepSeek API key
+	RequestyAPIKey  *string `json:"requesty_api_key,omitempty"`  // Set Requesty API key
 	GeminiAPIKey    *string `json:"gemini_api_key,omitempty"`    // Set Gemini API key
 	OllamaBaseURL   *string `json:"ollama_base_url,omitempty"`   // Set Ollama server URL
 	OllamaUsername  *string `json:"ollama_username,omitempty"`   // Set Ollama Basic Auth username
@@ -1085,6 +1089,7 @@ type AISettingsUpdateRequest struct {
 	ClearAnthropicKey   *bool `json:"clear_anthropic_key,omitempty"`   // Clear Anthropic API key
 	ClearOpenAIKey      *bool `json:"clear_openai_key,omitempty"`      // Clear OpenAI API key
 	ClearDeepSeekKey    *bool `json:"clear_deepseek_key,omitempty"`    // Clear DeepSeek API key
+	ClearRequestyKey    *bool `json:"clear_requesty_key,omitempty"`    // Clear Requesty API key
 	ClearGeminiKey      *bool `json:"clear_gemini_key,omitempty"`      // Clear Gemini API key
 	ClearOllamaURL      *bool `json:"clear_ollama_url,omitempty"`      // Clear Ollama URL
 	ClearOllamaUsername *bool `json:"clear_ollama_username,omitempty"` // Clear Ollama Basic Auth username
@@ -1156,6 +1161,7 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		AnthropicConfigured:    settings.HasProvider(config.AIProviderAnthropic),
 		OpenAIConfigured:       settings.HasProvider(config.AIProviderOpenAI),
 		DeepSeekConfigured:     settings.HasProvider(config.AIProviderDeepSeek),
+		RequestyConfigured:     settings.HasProvider(config.AIProviderRequesty),
 		GeminiConfigured:       settings.HasProvider(config.AIProviderGemini),
 		OllamaConfigured:       settings.HasProvider(config.AIProviderOllama),
 		OllamaBaseURL:          settings.GetBaseURLForProvider(config.AIProviderOllama),
@@ -1227,10 +1233,10 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 	if req.Provider != nil {
 		provider := strings.ToLower(strings.TrimSpace(*req.Provider))
 		switch provider {
-		case config.AIProviderAnthropic, config.AIProviderOpenAI, config.AIProviderOllama, config.AIProviderDeepSeek, config.AIProviderGemini:
+		case config.AIProviderAnthropic, config.AIProviderOpenAI, config.AIProviderOllama, config.AIProviderDeepSeek, config.AIProviderGemini, config.AIProviderRequesty:
 			settings.Provider = provider
 		default:
-			http.Error(w, "Invalid provider. Must be 'anthropic', 'openai', 'ollama', 'deepseek', or 'gemini'", http.StatusBadRequest)
+			http.Error(w, "Invalid provider. Must be 'anthropic', 'openai', 'ollama', 'deepseek', 'gemini', or 'requesty'", http.StatusBadRequest)
 			return
 		}
 	}
@@ -1326,6 +1332,11 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		settings.DeepSeekAPIKey = ""
 	} else if req.DeepSeekAPIKey != nil {
 		settings.DeepSeekAPIKey = strings.TrimSpace(*req.DeepSeekAPIKey)
+	}
+	if req.ClearRequestyKey != nil && *req.ClearRequestyKey {
+		settings.RequestyAPIKey = ""
+	} else if req.RequestyAPIKey != nil {
+		settings.RequestyAPIKey = strings.TrimSpace(*req.RequestyAPIKey)
 	}
 	if req.ClearGeminiKey != nil && *req.ClearGeminiKey {
 		settings.GeminiAPIKey = ""
@@ -1594,6 +1605,7 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		AnthropicConfigured:    settings.HasProvider(config.AIProviderAnthropic),
 		OpenAIConfigured:       settings.HasProvider(config.AIProviderOpenAI),
 		DeepSeekConfigured:     settings.HasProvider(config.AIProviderDeepSeek),
+		RequestyConfigured:     settings.HasProvider(config.AIProviderRequesty),
 		GeminiConfigured:       settings.HasProvider(config.AIProviderGemini),
 		OllamaConfigured:       settings.HasProvider(config.AIProviderOllama),
 		OllamaBaseURL:          settings.GetBaseURLForProvider(config.AIProviderOllama),

@@ -1182,6 +1182,8 @@ func (s *Service) LoadConfig() error {
 					fallbackModel = config.AIProviderOpenAI + ":" + config.DefaultAIModelOpenAI
 				case config.AIProviderDeepSeek:
 					fallbackModel = config.AIProviderDeepSeek + ":" + config.DefaultAIModelDeepSeek
+				case config.AIProviderRequesty:
+					fallbackModel = config.AIProviderRequesty + ":" + config.DefaultAIModelRequesty
 				case config.AIProviderGemini:
 					fallbackModel = config.AIProviderGemini + ":" + config.DefaultAIModelGemini
 				case config.AIProviderOllama:
@@ -3830,7 +3832,7 @@ func (s *Service) ListModelsWithDiagnostics(ctx context.Context) ([]providers.Mo
 	}
 	s.modelsCache.mu.Unlock()
 
-	providersList := []string{config.AIProviderAnthropic, config.AIProviderOpenAI, config.AIProviderDeepSeek, config.AIProviderGemini, config.AIProviderOllama}
+	providersList := []string{config.AIProviderAnthropic, config.AIProviderOpenAI, config.AIProviderDeepSeek, config.AIProviderRequesty, config.AIProviderGemini, config.AIProviderOllama}
 
 	allCached := true
 	diagnostics := make([]ProviderModelDiagnostic, 0, len(cfg.GetConfiguredProviders()))
@@ -3966,6 +3968,8 @@ func providerModelDiagnosticMessage(providerName, stage string, err error) strin
 		action += " Check the Server URL, Basic Auth settings, and that Ollama is reachable from the Pulse server."
 	case config.AIProviderDeepSeek:
 		action += " Check the DeepSeek API key and provider availability."
+	case config.AIProviderRequesty:
+		action += " Check the Requesty API key and provider availability."
 	case config.AIProviderGemini:
 		action += " Check the Gemini API key and provider availability."
 	case config.AIProviderAnthropic:
@@ -4026,6 +4030,8 @@ func providerDisplayName(provider string) string {
 		return "OpenAI"
 	case config.AIProviderDeepSeek:
 		return "DeepSeek"
+	case config.AIProviderRequesty:
+		return "Requesty"
 	case config.AIProviderGemini:
 		return "Google Gemini"
 	case config.AIProviderOllama:

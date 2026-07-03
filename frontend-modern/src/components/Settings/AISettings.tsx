@@ -37,6 +37,7 @@ function isProviderConfigured(provider: string, settings: AISettingsType | null)
     case 'openai': return settings.openai_configured;
     case 'deepseek': return settings.deepseek_configured;
     case 'gemini': return settings.gemini_configured;
+    case 'requesty': return settings.requesty_configured;
     case 'ollama': return settings.ollama_configured;
     default: return false;
   }
@@ -57,6 +58,7 @@ function providerSetupAction(provider: string): string {
     case 'anthropic':
     case 'deepseek':
     case 'gemini':
+    case 'requesty':
       return `add an API key for ${PROVIDER_DISPLAY_NAMES[provider] || provider}`;
     default:
       return `configure ${PROVIDER_DISPLAY_NAMES[provider] || provider}`;
@@ -108,7 +110,7 @@ export const AISettings: Component = () => {
 
   // First-time setup modal state
   const [showSetupModal, setShowSetupModal] = createSignal(false);
-  const [setupProvider, setSetupProvider] = createSignal<'anthropic' | 'openai' | 'deepseek' | 'gemini' | 'ollama'>('anthropic');
+  const [setupProvider, setSetupProvider] = createSignal<'anthropic' | 'openai' | 'deepseek' | 'gemini' | 'ollama' | 'requesty'>('anthropic');
   const [setupApiKey, setSetupApiKey] = createSignal('');
   const [setupOllamaUrl, setSetupOllamaUrl] = createSignal('http://localhost:11434');
   const [setupOllamaUsername, setSetupOllamaUsername] = createSignal('');
@@ -141,6 +143,7 @@ export const AISettings: Component = () => {
     openaiApiKey: '',
     deepseekApiKey: '',
     geminiApiKey: '',
+    requestyApiKey: '',
     ollamaBaseUrl: 'http://localhost:11434',
     ollamaUsername: '',
     ollamaPassword: '',
@@ -180,6 +183,7 @@ export const AISettings: Component = () => {
         openaiApiKey: '',
         deepseekApiKey: '',
         geminiApiKey: '',
+        requestyApiKey: '',
         ollamaBaseUrl: 'http://localhost:11434',
         ollamaUsername: '',
         ollamaPassword: '',
@@ -215,6 +219,7 @@ export const AISettings: Component = () => {
       openaiApiKey: '',
       deepseekApiKey: '',
       geminiApiKey: '',
+      requestyApiKey: '',
       ollamaBaseUrl: data.ollama_base_url || 'http://localhost:11434',
       ollamaUsername: data.ollama_username || '',
       ollamaPassword: '',
@@ -237,6 +242,7 @@ export const AISettings: Component = () => {
     if (data.anthropic_configured) configured.add('anthropic');
     if (data.openai_configured) configured.add('openai');
     if (data.deepseek_configured) configured.add('deepseek');
+    if (data.requesty_configured) configured.add('requesty');
     if (data.gemini_configured) configured.add('gemini');
     if (data.ollama_configured) configured.add('ollama');
     // Default to anthropic if nothing is configured
@@ -558,6 +564,9 @@ export const AISettings: Component = () => {
       if (form.geminiApiKey.trim()) {
         payload.gemini_api_key = form.geminiApiKey.trim();
       }
+      if (form.requestyApiKey.trim()) {
+        payload.requesty_api_key = form.requestyApiKey.trim();
+      }
       // Always include Ollama URL if it has a value and differs from what's saved
       // Compare against actual saved value (empty string if not set), not a prefilled default
       if (form.ollamaBaseUrl.trim() && form.ollamaBaseUrl.trim() !== (settings()?.ollama_base_url || '')) {
@@ -681,7 +690,7 @@ export const AISettings: Component = () => {
   const handleClearProvider = async (provider: string) => {
     // Check if this is the last configured provider
     const s = settings();
-    const configuredCount = [s?.anthropic_configured, s?.openai_configured, s?.deepseek_configured, s?.gemini_configured, s?.ollama_configured].filter(Boolean).length;
+    const configuredCount = [s?.anthropic_configured, s?.openai_configured, s?.deepseek_configured, s?.requesty_configured, s?.gemini_configured, s?.ollama_configured].filter(Boolean).length;
     const isLastProvider = configuredCount === 1 && isProviderConfigured(provider, s);
 
     // Check if current model uses this provider
@@ -707,6 +716,7 @@ export const AISettings: Component = () => {
       if (provider === 'anthropic') clearPayload.clear_anthropic_key = true;
       if (provider === 'openai') clearPayload.clear_openai_key = true;
       if (provider === 'deepseek') clearPayload.clear_deepseek_key = true;
+      if (provider === 'requesty') clearPayload.clear_requesty_key = true;
       if (provider === 'gemini') clearPayload.clear_gemini_key = true;
       if (provider === 'ollama') {
         clearPayload.clear_ollama_url = true;
@@ -725,6 +735,7 @@ export const AISettings: Component = () => {
       if (provider === 'anthropic') setForm('anthropicApiKey', '');
       if (provider === 'openai') setForm('openaiApiKey', '');
       if (provider === 'deepseek') setForm('deepseekApiKey', '');
+      if (provider === 'requesty') setForm('requestyApiKey', '');
       if (provider === 'gemini') setForm('geminiApiKey', '');
       if (provider === 'ollama') {
         setForm('ollamaBaseUrl', '');
@@ -778,6 +789,7 @@ export const AISettings: Component = () => {
               s.anthropic_configured ||
               s.openai_configured ||
               s.deepseek_configured ||
+              s.requesty_configured ||
               s.gemini_configured ||
               s.ollama_configured
             );
@@ -1280,6 +1292,74 @@ export const AISettings: Component = () => {
                           </Show>
                         </div>
                         <Show when={providerTestResult()?.provider === 'deepseek'}>
+                          <p class={`text-xs ${providerTestResult()?.success ? 'text-green-600' : 'text-red-600'}`}>
+                            {providerTestResult()?.message}
+                          </p>
+                        </Show>
+                      </div>
+                    </Show>
+                  </div>
+
+                  {/* Requesty */}
+                  <div class={`border rounded-lg overflow-hidden ${settings()?.requesty_configured ? 'border-green-300 dark:border-green-700' : 'border-gray-200 dark:border-gray-700'}`}>
+                    <button
+                      type="button"
+                      class="w-full px-3 py-2 flex items-center justify-between bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                      onClick={() => {
+                        const current = expandedProviders();
+                        const next = new Set(current);
+                        if (next.has('requesty')) next.delete('requesty');
+                        else next.add('requesty');
+                        setExpandedProviders(next);
+                      }}
+                    >
+                      <div class="flex items-center gap-2">
+                        <span class="font-medium text-sm">Requesty</span>
+                        <Show when={settings()?.requesty_configured}>
+                          <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded">Configured</span>
+                        </Show>
+                      </div>
+                      <svg class={`w-4 h-4 transition-transform ${expandedProviders().has('requesty') ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    <Show when={expandedProviders().has('requesty')}>
+                      <div class="px-3 py-3 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 space-y-2">
+                        <input
+                          type="password"
+                          value={form.requestyApiKey}
+                          onInput={(e) => setForm('requestyApiKey', e.currentTarget.value)}
+                          placeholder={settings()?.requesty_configured ? '••••••••••• (configured)' : 'rqsty-sk-...'}
+                          class={controlClass()}
+                          disabled={saving()}
+                        />
+                        <div class="flex items-center justify-between">
+                          <p class="text-xs text-gray-500">
+                            <a href="https://app.requesty.ai/api-keys" target="_blank" rel="noopener" class="text-blue-600 dark:text-blue-400 hover:underline">Get API key →</a>
+                          </p>
+                          <Show when={settings()?.requesty_configured}>
+                            <div class="flex gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleTestProvider('requesty')}
+                                disabled={testingProvider() === 'requesty' || saving()}
+                                class="px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
+                              >
+                                {testingProvider() === 'requesty' ? 'Testing...' : 'Test'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleClearProvider('requesty')}
+                                disabled={saving()}
+                                class="px-2 py-1 text-xs bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded hover:bg-red-200 dark:hover:bg-red-800 disabled:opacity-50"
+                                title="Clear API key"
+                              >
+                                Clear
+                              </button>
+                            </div>
+                          </Show>
+                        </div>
+                        <Show when={providerTestResult()?.provider === 'requesty'}>
                           <p class={`text-xs ${providerTestResult()?.success ? 'text-green-600' : 'text-red-600'}`}>
                             {providerTestResult()?.message}
                           </p>
