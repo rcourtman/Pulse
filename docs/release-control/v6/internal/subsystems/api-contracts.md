@@ -1882,7 +1882,9 @@ a new API state machine, queue contract, or verification-accounting field.
    turn API-owned Patrol status, run history, approval state, or
    finding-composition facts into a protection-current, coverage,
    schedule-freshness, drift-history, verification-waiting, trust, or proof
-   strip after current work has been ruled out
+   strip after current work has been ruled out. Latest coverage may appear only
+   as bounded empty-state copy inside the current-findings surface, not as a
+   separate calm-day posture list
    while keeping the learning counters backend-only coverage, so Patrol keeps health and findings primary and renders timeline, correlation, and policy-posture data as selected-item investigation context rather than as a separate headline product metric
    and that secondary investigation context remains explanatory API evidence,
    not a default workspace mode: the Patrol page may expand recent-change,

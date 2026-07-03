@@ -52,9 +52,9 @@ describe('PatrolIntelligenceWorkspace trust strip', () => {
     expect(workspaceSource).toContain('getPatrolQueueWorkspaceDescription');
     expect(workspaceSource).toContain('getPatrolWorkspaceWorkGroups');
     expect(workspaceSource).toContain('Patrol work groups');
-    expect(workspaceSource).toContain('getPatrolWorkspaceProtectionPosture');
-    expect(workspaceSource).toContain('Patrol protection posture');
-    expect(workspaceSource).toContain('protectionPostureSummaries');
+    expect(workspaceSource).not.toContain('getPatrolWorkspaceProtectionPosture');
+    expect(workspaceSource).not.toContain('Patrol protection posture');
+    expect(workspaceSource).not.toContain('protectionPostureSummaries');
     expect(workspaceSource).toContain('autonomyLevel: state.autonomyLevel()');
     expect(workspaceSource).toContain('autonomyLocked: state.autoFixLocked()');
     expect(workspaceSource).toContain('Boolean(queueBadgeLabel())');

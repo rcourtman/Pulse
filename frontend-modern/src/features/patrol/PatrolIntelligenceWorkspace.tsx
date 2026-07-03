@@ -25,7 +25,6 @@ import {
   getPatrolProInvestigationHandoff,
   getPatrolQueueBadgeLabel,
   getPatrolQueueWorkspaceDescription,
-  getPatrolWorkspaceProtectionPosture,
   getPatrolWorkspaceWorkGroups,
   getPatrolSetupIssueReason,
   PATROL_WORKSPACE_HISTORY_DESCRIPTION,
@@ -129,23 +128,8 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
       workTypeComposition: workTypeComposition(),
     }),
   );
-  const protectionPostureSummaries = createMemo(() =>
-    getPatrolWorkspaceProtectionPosture({
-      findingCount: queueIssueCount(),
-      historicalRegressionCount: state.historicalRegressionCount(),
-      latestRun: latestCompletedRun(),
-      patrolStatus: state.patrolStatus(),
-      pendingApprovalCount: state.patrolPendingApprovalCount(),
-      workTypeComposition: workTypeComposition(),
-    }),
-  );
   const shouldShowWorkGroups = () =>
     !isHistoryOpen() && !isSetupOnly() && !state.selectedRun() && workGroupSummaries().length > 0;
-  const shouldShowProtectionPosture = () =>
-    !isHistoryOpen() &&
-    !isSetupOnly() &&
-    !state.selectedRun() &&
-    protectionPostureSummaries().length > 0;
 
   return (
     <>
@@ -218,30 +202,6 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
                   </MetadataBadge>
                 </div>
                 <p class="mt-1 text-xs leading-5 text-muted">{group.detail}</p>
-              </div>
-            )}
-          </For>
-        </div>
-      </Show>
-
-      <Show when={shouldShowProtectionPosture()}>
-        <div
-          role="list"
-          aria-label="Patrol protection posture"
-          class="grid gap-2 sm:grid-cols-2 xl:grid-cols-3"
-        >
-          <For each={protectionPostureSummaries()}>
-            {(item) => (
-              <div
-                role="listitem"
-                class="rounded-md border border-border-subtle bg-surface-alt/50 px-3 py-2"
-              >
-                <div class="flex min-w-0 flex-wrap items-center gap-2">
-                  <MetadataBadge tone={item.tone} size="xs" shape="rounded">
-                    {item.label}
-                  </MetadataBadge>
-                </div>
-                <p class="mt-1 text-xs leading-5 text-muted">{item.detail}</p>
               </div>
             )}
           </For>

@@ -66,13 +66,6 @@ export interface PatrolWorkspaceWorkGroupSummary {
   tone: MetadataBadgeTone;
 }
 
-export interface PatrolWorkspaceProtectionPostureSummary {
-  detail: string;
-  id: 'coverage' | 'drift' | 'freshness' | 'protection' | 'verification';
-  label: string;
-  tone: MetadataBadgeTone;
-}
-
 export interface MonitorContextPatrolPostureSummary {
   detail: string;
   id: 'coverage' | 'open-work' | 'schedule';
@@ -88,9 +81,8 @@ interface PatrolWorkspaceWorkGroupsInput {
   workTypeComposition?: PatrolWorkTypeComposition;
 }
 
-interface PatrolWorkspaceProtectionPostureInput {
+interface MonitorContextPatrolPostureInput {
   findingCount?: number;
-  historicalRegressionCount?: number;
   latestRun?: Pick<
     PatrolRunRecord,
     | 'effective_scope_resource_ids'
@@ -113,9 +105,6 @@ interface PatrolWorkspaceProtectionPostureInput {
   > | null;
   pendingApprovalCount?: number;
   workTypeComposition?: PatrolWorkTypeComposition;
-}
-
-interface MonitorContextPatrolPostureInput extends PatrolWorkspaceProtectionPostureInput {
   monitoredResourceCount?: number;
 }
 
@@ -278,19 +267,19 @@ export function getPatrolQueueWorkspaceDescription(
   }
 
   if (input.autonomyLocked) {
-    return 'Patrol lists current issues here after each check. History keeps past outcomes.';
+    return 'Current Patrol issues appear here.';
   }
 
   switch (input.autonomyLevel) {
     case 'approval':
-      return 'Patrol lists investigations, approvals, and verification results here.';
+      return 'Current issues, investigations, and approvals appear here.';
     case 'assisted':
-      return 'Patrol lists issues it can fix, approvals it needs, and verification results here.';
+      return 'Current issues, fixes, and approvals appear here.';
     case 'full':
-      return 'Patrol lists automatic work, policy approvals, and verification results here.';
+      return 'Current issues, automatic work, and approvals appear here.';
     case 'monitor':
     default:
-      return 'Patrol lists current issues here after each check. History keeps past outcomes.';
+      return 'Current Patrol issues appear here.';
   }
 }
 
@@ -358,9 +347,7 @@ export function getPatrolWorkspaceWorkGroups(
   return groups;
 }
 
-export function getPatrolWorkspaceProtectionPosture(
-  input: PatrolWorkspaceProtectionPostureInput,
-): PatrolWorkspaceProtectionPostureSummary[] {
+function shouldSuppressMonitorContextPatrolPosture(input: MonitorContextPatrolPostureInput): boolean {
   const composition = input.workTypeComposition;
   const pendingApprovalCount = normalizeCount(input.pendingApprovalCount);
   const findingCount = normalizeCount(input.findingCount);
@@ -373,7 +360,7 @@ export function getPatrolWorkspaceProtectionPosture(
   const statusErrorCount = normalizeCount(patrolStatus?.error_count);
   const statusFindingCount = normalizeCount(patrolStatus?.findings_count);
 
-  if (
+  return (
     findingCount > 0 ||
     pendingApprovalCount > 0 ||
     failedActionCount > 0 ||
@@ -386,90 +373,7 @@ export function getPatrolWorkspaceProtectionPosture(
     hasFailedPatrolCheck(latestRun) ||
     !isActivePatrolRuntime(patrolStatus) ||
     isScheduledPatrolOverdue(patrolStatus, input.nowMs ?? Date.now())
-  ) {
-    return [];
-  }
-
-  if (!latestRun && !patrolStatus) {
-    return [];
-  }
-
-  const coverageLabel = getPatrolCoverageLabel(latestRun, patrolStatus);
-  const historicalRegressionCount = normalizeCount(input.historicalRegressionCount);
-  const healthyTone: MetadataBadgeTone = patrolStatus?.healthy === false ? 'warning' : 'success';
-
-  const posture: PatrolWorkspaceProtectionPostureSummary[] = [
-    {
-      id: 'protection',
-      label: 'Protection current',
-      detail: 'No current issue or approval is waiting in Patrol.',
-      tone: healthyTone,
-    },
-  ];
-
-  posture.push(
-    coverageLabel
-      ? {
-          id: 'coverage',
-          label: coverageLabel,
-          detail: 'Coverage came from the latest Patrol check.',
-          tone: healthyTone,
-        }
-      : {
-          id: 'coverage',
-          label: 'Coverage needs refresh',
-          detail: 'Run Patrol to record current coverage.',
-          tone: 'warning',
-        },
   );
-
-  if (patrolStatus?.enabled === false) {
-    posture.push({
-      id: 'freshness',
-      label: 'Scheduled checks paused',
-      detail: 'Run Patrol manually or enable scheduled checks to keep coverage fresh.',
-      tone: 'warning',
-    });
-  } else if (patrolStatus?.next_patrol_at) {
-    posture.push({
-      id: 'freshness',
-      label: 'Schedule active',
-      detail: 'Patrol is scheduled to check again.',
-      tone: 'info',
-    });
-  } else {
-    posture.push({
-      id: 'freshness',
-      label: 'Ready to check',
-      detail: 'Run Patrol any time to refresh current coverage.',
-      tone: 'info',
-    });
-  }
-
-  posture.push(
-    historicalRegressionCount > 0
-      ? {
-          id: 'drift',
-          label: `${formatCount(historicalRegressionCount, 'past regression')}`,
-          detail: 'History keeps the drift record; no recurring issue is current.',
-          tone: 'info',
-        }
-      : {
-          id: 'drift',
-          label: 'No recurring issues',
-          detail: 'No current issue is marked as reappeared after earlier resolution.',
-          tone: healthyTone,
-        },
-  );
-
-  posture.push({
-    id: 'verification',
-    label: 'No verification waiting',
-    detail: 'No approval, failed action, or follow-up result is waiting for review.',
-    tone: healthyTone,
-  });
-
-  return posture;
 }
 
 export function getMonitorContextPatrolProtectionPosture(
@@ -479,12 +383,11 @@ export function getMonitorContextPatrolProtectionPosture(
     return [];
   }
 
-  const patrolPosture = getPatrolWorkspaceProtectionPosture(input);
-  if (patrolPosture.length === 0) {
+  const patrolStatus = input.patrolStatus ?? null;
+  if ((!input.latestRun && !patrolStatus) || shouldSuppressMonitorContextPatrolPosture(input)) {
     return [];
   }
 
-  const patrolStatus = input.patrolStatus ?? null;
   const healthyTone: MetadataBadgeTone = patrolStatus?.healthy === false ? 'warning' : 'success';
   const coverageLabel = getPatrolCoverageLabel(input.latestRun ?? null, patrolStatus);
   const summaries: MonitorContextPatrolPostureSummary[] = [

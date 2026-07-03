@@ -71,8 +71,6 @@ type PatrolRunSnapshotEmptyStateArgs = Pick<
   | 'error_count'
 >;
 
-const HEALTHY_PATROL_EMPTY_STATE_BODY =
-  'No action needed from the latest Patrol check. Run Patrol any time to check again.';
 const DEGRADED_COVERAGE_EMPTY_STATE_BODY =
   'Run Patrol to check everything and refresh open work.';
 const DEGRADED_HEALTH_EMPTY_STATE_BODY =
@@ -254,9 +252,7 @@ export function getPatrolFindingsEmptyState(args: {
   const coverageContext = getLatestRunCoverageContext(args.runs);
   return {
     title: PATROL_QUEUE_CLEAR_TITLE,
-    body: coverageContext
-      ? `${coverageContext} ${HEALTHY_PATROL_EMPTY_STATE_BODY}`
-      : HEALTHY_PATROL_EMPTY_STATE_BODY,
+    body: coverageContext,
     tone: 'success',
   };
 }

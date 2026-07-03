@@ -8,7 +8,6 @@ import {
   getMonitorContextPatrolProtectionPosture,
   getPatrolReadyWorkDetail,
   getPatrolSetupIssueReason,
-  getPatrolWorkspaceProtectionPosture,
   getPatrolWorkspaceWorkGroups,
   PATROL_AUTONOMY_POLICY_PRESENTATION,
   PATROL_WORKSPACE_QUEUE_TITLE,
@@ -47,22 +46,22 @@ describe('patrolControlPresentation', () => {
     [
       'monitor',
       'Patrol is ready to check infrastructure and list current issues.',
-      'Patrol lists current issues here after each check. History keeps past outcomes.',
+      'Current Patrol issues appear here.',
     ],
     [
       'approval',
       'Patrol is ready to check, investigate, and ask before any change.',
-      'Patrol lists investigations, approvals, and verification results here.',
+      'Current issues, investigations, and approvals appear here.',
     ],
     [
       'assisted',
       'Patrol is ready to check, investigate, and fix safe issues when policy allows it.',
-      'Patrol lists issues it can fix, approvals it needs, and verification results here.',
+      'Current issues, fixes, and approvals appear here.',
     ],
     [
       'full',
       'Patrol is ready to check, investigate, and act automatically within your policy.',
-      'Patrol lists automatic work, policy approvals, and verification results here.',
+      'Current issues, automatic work, and approvals appear here.',
     ],
   ] satisfies Array<[PatrolAutonomyLevel, string, string]>)(
     'describes %s mode without generic control-level wording',
@@ -82,7 +81,7 @@ describe('patrolControlPresentation', () => {
         autonomyLevel: 'full',
         autonomyLocked: true,
       }),
-    ).toBe('Patrol lists current issues here after each check. History keeps past outcomes.');
+    ).toBe('Current Patrol issues appear here.');
   });
 
   it('summarizes the open queue by affected resource instead of raw findings', () => {
@@ -271,156 +270,6 @@ describe('patrolControlPresentation', () => {
     ).toEqual([]);
   });
 
-  it('surfaces calm-day protection posture from Patrol run and status facts', () => {
-    expect(
-      getPatrolWorkspaceProtectionPosture({
-        findingCount: 0,
-        historicalRegressionCount: 0,
-        latestRun: {
-          error_count: 0,
-          resources_checked: 4,
-          status: 'healthy',
-        },
-        nowMs: Date.parse('2026-06-30T13:00:00Z'),
-        patrolStatus: {
-          enabled: true,
-          error_count: 0,
-          findings_count: 0,
-          healthy: true,
-          next_patrol_at: '2026-06-30T14:05:00Z',
-          resources_checked: 4,
-          running: false,
-          runtime_state: 'active',
-        },
-        pendingApprovalCount: 0,
-        workTypeComposition: {
-          total: 0,
-          approval: 0,
-          failed: 0,
-          inProgress: 0,
-          recurring: 0,
-          newIssues: 0,
-        },
-      }),
-    ).toEqual([
-      {
-        detail: 'No current issue or approval is waiting in Patrol.',
-        id: 'protection',
-        label: 'Protection current',
-        tone: 'success',
-      },
-      {
-        detail: 'Coverage came from the latest Patrol check.',
-        id: 'coverage',
-        label: 'Checked 4 resources',
-        tone: 'success',
-      },
-      {
-        detail: 'Patrol is scheduled to check again.',
-        id: 'freshness',
-        label: 'Schedule active',
-        tone: 'info',
-      },
-      {
-        detail: 'No current issue is marked as reappeared after earlier resolution.',
-        id: 'drift',
-        label: 'No recurring issues',
-        tone: 'success',
-      },
-      {
-        detail: 'No approval, failed action, or follow-up result is waiting for review.',
-        id: 'verification',
-        label: 'No verification waiting',
-        tone: 'success',
-      },
-    ]);
-  });
-
-  it('keeps past drift as history in calm-day protection posture', () => {
-    expect(
-      getPatrolWorkspaceProtectionPosture({
-        historicalRegressionCount: 2,
-        latestRun: {
-          effective_scope_resource_ids: ['resource-a', 'resource-b'],
-          error_count: 0,
-          resources_checked: 1,
-          scope_resource_ids: ['resource-a'],
-          status: 'healthy',
-        },
-        nowMs: Date.parse('2026-06-30T13:00:00Z'),
-        patrolStatus: {
-          enabled: true,
-          error_count: 0,
-          findings_count: 0,
-          healthy: true,
-          next_patrol_at: '2026-06-30T14:05:00Z',
-          resources_checked: 1,
-          running: false,
-          runtime_state: 'active',
-        },
-      }),
-    ).toContainEqual({
-      detail: 'History keeps the drift record; no recurring issue is current.',
-      id: 'drift',
-      label: '2 past regressions',
-      tone: 'info',
-    });
-  });
-
-  it('does not render calm-day posture for current work, failed checks, or overdue protection', () => {
-    expect(
-      getPatrolWorkspaceProtectionPosture({
-        findingCount: 1,
-        latestRun: {
-          error_count: 0,
-          resources_checked: 4,
-          status: 'issues_found',
-        },
-      }),
-    ).toEqual([]);
-
-    expect(
-      getPatrolWorkspaceProtectionPosture({
-        latestRun: {
-          error_count: 1,
-          resources_checked: 4,
-          status: 'error',
-        },
-        patrolStatus: {
-          enabled: true,
-          error_count: 1,
-          findings_count: 0,
-          healthy: false,
-          next_patrol_at: '2026-06-30T14:05:00Z',
-          resources_checked: 4,
-          running: false,
-          runtime_state: 'active',
-        },
-      }),
-    ).toEqual([]);
-
-    expect(
-      getPatrolWorkspaceProtectionPosture({
-        latestRun: {
-          error_count: 0,
-          resources_checked: 4,
-          status: 'healthy',
-        },
-        nowMs: Date.parse('2026-06-30T15:00:00Z'),
-        patrolStatus: {
-          enabled: true,
-          error_count: 0,
-          findings_count: 0,
-          healthy: true,
-          next_patrol_at: '2026-06-30T14:05:00Z',
-          resources_checked: 4,
-          running: false,
-          runtime_state: 'active',
-        },
-      }),
-    ).toEqual([]);
-  });
-
   it('surfaces monitor-context posture without reusing the Patrol empty-work labels', () => {
     expect(
       getMonitorContextPatrolProtectionPosture({
@@ -514,6 +363,18 @@ describe('patrolControlPresentation', () => {
         ...baseInput,
         monitoredResourceCount: 4,
         pendingApprovalCount: 1,
+      }),
+    ).toEqual([]);
+
+    expect(
+      getMonitorContextPatrolProtectionPosture({
+        ...baseInput,
+        latestRun: {
+          error_count: 1,
+          resources_checked: 4,
+          status: 'error',
+        },
+        monitoredResourceCount: 4,
       }),
     ).toEqual([]);
   });

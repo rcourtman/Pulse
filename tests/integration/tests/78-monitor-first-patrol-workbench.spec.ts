@@ -511,7 +511,7 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
     ).toHaveCount(0);
   });
 
-  test("calm-day Patrol coverage stays on Patrol after infrastructure launch", async ({
+  test("calm-day Patrol empty queue stays plain after infrastructure launch", async ({
     page,
   }, testInfo) => {
     test.skip(
@@ -555,15 +555,12 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
     ).toBeVisible();
     await expect(page.getByText("No current issues").first()).toBeVisible();
     await expect(page.getByText("Checked 1 resource.")).toBeVisible();
-    const protectionPosture = page.getByRole("list", {
-      name: "Patrol protection posture",
-    });
-    await expect(protectionPosture).toBeVisible();
-    await expect(protectionPosture.getByText("Protection current")).toBeVisible();
-    await expect(protectionPosture.getByText("Checked 1 resource")).toBeVisible();
-    await expect(protectionPosture.getByText("Schedule active")).toBeVisible();
-    await expect(protectionPosture.getByText("No recurring issues")).toBeVisible();
-    await expect(protectionPosture.getByText("No verification waiting")).toBeVisible();
+    await expect(
+      page.getByRole("list", { name: "Patrol protection posture" }),
+    ).toHaveCount(0);
+    await expect(page.getByText("Protection current")).toHaveCount(0);
+    await expect(page.getByText("No recurring issues")).toHaveCount(0);
+    await expect(page.getByText("No verification waiting")).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: "Ask Pulse Assistant about Patrol" }),
     ).toBeVisible();

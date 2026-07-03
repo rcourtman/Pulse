@@ -1395,14 +1395,13 @@ settings`, and candidate review when discovered sources are waiting. It must
     definition-list and muted text primitives to show problem, affected
     resource, checked evidence, next step, and verification state inside the
     row, but that scaffold must not become a nested card, status strip, trust
-    strip, or page-level proof block. Calm-day protection posture may use the
-    shared compact list and badge primitives inside that empty Open work
-    context only after current findings, approvals, failed checks, running
-    checks, setup failures, and overdue scheduled protection are ruled out; it
-    must stay subordinate to the empty queue and must not become a generic Home,
-    dashboard, trust, or proof strip. Monitor-context Patrol coverage posture
-    must not use the shared compact list and badge primitives as a generic
-    Proxmox overview or monitor-first launch-page proof strip. A future scoped
+    strip, or page-level proof block. A calm Patrol queue must not use shared
+    compact-list or badge primitives to create protection-current,
+    verification-waiting, schedule-freshness, drift, trust, or proof strips;
+    empty work belongs to the plain empty-state and deliberate History affordance.
+    Monitor-context Patrol coverage posture must not use the shared compact list
+    and badge primitives as a generic Proxmox overview or monitor-first
+    launch-page proof strip. A future scoped
     monitor affordance may use these primitives only when it is attached to an
     operator action or selected Patrol context, uses distinct monitor labels,
     and does not become a nested card, generic dashboard strip, trust summary,

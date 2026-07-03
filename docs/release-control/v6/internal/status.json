@@ -7268,7 +7268,7 @@
     },
     {
       "id": "protection-posture-attention-queue",
-      "summary": "Pulse now has a durable strong-version product direction, but the current lane map does not yet model the simple user-facing shape as one governed surface: authenticated launch stays monitor-first on platform and dashboard surfaces, Patrol remains the named checking-loop destination for findings, approvals, and explain-act-verify work, Assistant explains selected context, and protection posture or coverage signals appear in the relevant monitor and Patrol contexts instead of a generic Home front door. Without an explicit lane-expansion record, work can drift into Home-first surfaces, Patrol renames, generic Assistant polish, or read-only object-browser copies instead of proving simple monitor-first operations.",
+      "summary": "Pulse now has a durable strong-version product direction, but the current lane map does not yet model the simple user-facing shape as one governed surface: authenticated launch stays monitor-first on platform and dashboard surfaces, Patrol remains the named checking-loop destination for findings, approvals, and explain-act-verify work, Assistant explains selected context, and coverage signals appear only when attached to relevant monitor or Patrol context instead of becoming a generic Home front door or calm-day proof strip. Without an explicit lane-expansion record, work can drift into Home-first surfaces, Patrol renames, generic Assistant polish, or read-only object-browser copies instead of proving simple monitor-first operations.",
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-06-25",
@@ -7375,7 +7375,7 @@
     {
       "id": "protection-posture-attention-queue",
       "name": "Monitor-First Patrol Workbench",
-      "summary": "Promote the corrected strong-version operator workbench into a governed lane expansion covering monitor-first launch, Patrol as the visible checking-loop surface, contextual Assistant demotion, safe action and verification flows, calm-day coverage posture in context, dashboard Explore boundaries, explicit autonomy and trust scaffolding, and browser proof for both active-work and calm-day states.",
+      "summary": "Promote the corrected strong-version operator workbench into a governed lane expansion covering monitor-first launch, Patrol as the visible checking-loop surface, contextual Assistant demotion, safe action and verification flows, plain calm-day empty queues without proof strips, dashboard Explore boundaries, explicit autonomy and trust scaffolding, and browser proof for both active-work and calm-day states.",
       "status": "planned",
       "recorded_at": "2026-06-25",
       "target_id": "v6-product-lane-expansion",

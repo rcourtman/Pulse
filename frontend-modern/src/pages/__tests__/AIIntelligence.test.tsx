@@ -673,9 +673,7 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.queryByRole('link', { name: 'View plans' })).not.toBeInTheDocument();
     expect(operationsLoopAnchor?.parentElement).toBe(patrolControlAnchor);
     expect(screen.queryByTestId('patrol-current-work')).not.toBeInTheDocument();
-    expect(
-      screen.getByText('Patrol lists current issues here after each check. History keeps past outcomes.'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Current Patrol issues appear here.')).toBeInTheDocument();
     expect(
       screen.queryByText('Issues Patrol found. Infrastructure stays unchanged.'),
     ).not.toBeInTheDocument();

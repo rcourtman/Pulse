@@ -176,7 +176,6 @@ describe('patrolEmptyStatePresentation', () => {
       }),
     ).toEqual({
       title: 'No current issues',
-      body: 'No action needed from the latest Patrol check. Run Patrol any time to check again.',
       tone: 'success',
     });
   });
@@ -267,8 +266,7 @@ describe('patrolEmptyStatePresentation', () => {
       ],
     });
     expect(result.title).toBe('No current issues');
-    expect(result.body).toContain('Checked 42 resources');
-    expect(result.body).toContain('No action needed');
+    expect(result.body).toBe('Checked 42 resources.');
     expect(result.tone).toBe('success');
   });
 
@@ -284,8 +282,6 @@ describe('patrolEmptyStatePresentation', () => {
       },
       runtimeState: 'active',
     });
-    expect(result.body).toBe(
-      'No action needed from the latest Patrol check. Run Patrol any time to check again.',
-    );
+    expect(result.body).toBeUndefined();
   });
 });
