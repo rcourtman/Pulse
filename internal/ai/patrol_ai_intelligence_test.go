@@ -240,7 +240,13 @@ func TestSeedBackupAnalysis_StaleAndRecent(t *testing.T) {
 			BackupTasks:    []models.BackupTask{{VMID: 102, Status: "OK", EndTime: now.Add(-72 * time.Hour)}},
 			StorageBackups: []models.StorageBackup{{VMID: 101, Time: now.Add(-36 * time.Hour)}},
 		},
-		PBSBackups: []models.PBSBackup{{VMID: "102", BackupTime: now.Add(-72 * time.Hour)}},
+		PBSBackups: []models.PBSBackup{{
+			VMID:       "102",
+			Instance:   "pbs-main",
+			Datastore:  "backup-vault",
+			Namespace:  "tenant-a",
+			BackupTime: now.Add(-60 * time.Hour),
+		}},
 	}
 
 	output := ps.seedBackupAnalysisState(patrolRuntimeStateForTest(ps, state), nil, now)
@@ -250,14 +256,88 @@ func TestSeedBackupAnalysis_StaleAndRecent(t *testing.T) {
 	if !strings.Contains(output, "Guests with no backup in >48h") {
 		t.Fatalf("expected stale backup section, got: %s", output)
 	}
-	if !strings.Contains(output, "ct-1 (never)") {
-		t.Fatalf("expected never-backed guest, got: %s", output)
+	if !strings.Contains(output, "ct-1 (never; no PVE/PBS backup seen)") {
+		t.Fatalf("expected never-backed guest to include source scope, got: %s", output)
 	}
-	if !strings.Contains(output, "vm-2 (last:") {
-		t.Fatalf("expected stale vm entry, got: %s", output)
+	if !strings.Contains(output, "vm-2 (last:") ||
+		!strings.Contains(output, "via PBS pbs-main/backup-vault namespace tenant-a") {
+		t.Fatalf("expected stale vm entry to include PBS source context, got: %s", output)
 	}
 	if !strings.Contains(output, "Guests with recent backups: 1/3") {
 		t.Fatalf("expected recent backup count, got: %s", output)
+	}
+}
+
+func TestPatrolRunAIAnalysisForRecord_ReconcilesNoAcceptedActions(t *testing.T) {
+	result := &AIAnalysisResult{
+		Response: strings.Join([]string{
+			"### Infrastructure Status",
+			"All resources appear healthy.",
+			"",
+			"### Key Observations",
+			"- Guest backup state should be checked.",
+			"",
+			"### Actions Taken",
+			"- patrol_report_finding (warning): Orphaned backup for vm-101.",
+		}, "\n"),
+		RejectedFindings: 1,
+	}
+
+	output := patrolRunAIAnalysisForRecord(result, patrolRunAnalysisRecordContext{
+		ResourcesChecked: 44,
+	})
+
+	if strings.Contains(output, "patrol_report_finding") {
+		t.Fatalf("expected rejected tool call prose to be removed, got: %s", output)
+	}
+	if !strings.Contains(output, "Patrol scanned 44 resources; no accepted warning or critical Patrol findings recorded.") {
+		t.Fatalf("expected reconciled status line, got: %s", output)
+	}
+	if !strings.Contains(output, "- No findings reported — all clear.") {
+		t.Fatalf("expected no-action line, got: %s", output)
+	}
+	if !strings.Contains(output, "Guest backup state should be checked.") {
+		t.Fatalf("expected key observations to be preserved, got: %s", output)
+	}
+}
+
+func TestPatrolRunAIAnalysisForRecord_RendersAcceptedActions(t *testing.T) {
+	result := &AIAnalysisResult{
+		Response: strings.Join([]string{
+			"Infrastructure Status:",
+			"All clear.",
+			"",
+			"Key Observations:",
+			"- Backup source context present.",
+			"",
+			"Actions Taken:",
+			"- patrol_report_finding (warning): old wording.",
+		}, "\n"),
+		Findings: []*Finding{{
+			Severity:     FindingSeverityWarning,
+			Title:        "Orphaned backup requires cleanup",
+			ResourceName: "pbs-main/backup-vault namespace tenant-a",
+		}},
+		ResolvedIDs: []string{"finding-123"},
+	}
+
+	output := patrolRunAIAnalysisForRecord(result, patrolRunAnalysisRecordContext{
+		ResourcesChecked: 12,
+		NewFindings:      1,
+		ResolvedFindings: 1,
+	})
+
+	if strings.Contains(output, "old wording") || strings.Contains(output, "patrol_report_finding") {
+		t.Fatalf("expected raw tool-call wording to be replaced, got: %s", output)
+	}
+	if !strings.Contains(output, "Patrol scanned 12 resources; accepted Patrol finding activity: 1 new, 1 resolved.") {
+		t.Fatalf("expected accepted finding status, got: %s", output)
+	}
+	if !strings.Contains(output, "- warning: Orphaned backup requires cleanup (pbs-main/backup-vault namespace tenant-a)") {
+		t.Fatalf("expected accepted finding action, got: %s", output)
+	}
+	if !strings.Contains(output, "- resolved: finding-123") {
+		t.Fatalf("expected resolved action, got: %s", output)
 	}
 }
 

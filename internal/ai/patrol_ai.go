@@ -48,6 +48,14 @@ type AIAnalysisResult struct {
 	Forecasts []seedForecast
 }
 
+type patrolRunAnalysisRecordContext struct {
+	ResourcesChecked int
+	NewFindings      int
+	ExistingFindings int
+	ResolvedFindings int
+	ErrorCount       int
+}
+
 const (
 	patrolMinTurns          = 20
 	patrolMaxTurnsLimit     = 80
@@ -216,6 +224,171 @@ func CleanThinkingTokens(content string) string {
 	}
 
 	return strings.TrimSpace(content)
+}
+
+func patrolRunAIAnalysisForRecord(result *AIAnalysisResult, ctx patrolRunAnalysisRecordContext) string {
+	if result == nil {
+		return ""
+	}
+	response := strings.TrimSpace(result.Response)
+	if response == "" {
+		return ""
+	}
+
+	response = replacePatrolSummarySection(response, "Infrastructure Status", renderPatrolRecordStatusLine(ctx))
+	response = replacePatrolSummarySection(response, "Actions Taken", renderPatrolAcceptedActions(result))
+	return response
+}
+
+func renderPatrolRecordStatusLine(ctx patrolRunAnalysisRecordContext) string {
+	resourceText := "resources"
+	if ctx.ResourcesChecked == 1 {
+		resourceText = "resource"
+	}
+
+	prefix := "Patrol scanned"
+	if ctx.ResourcesChecked > 0 {
+		prefix = fmt.Sprintf("Patrol scanned %d %s", ctx.ResourcesChecked, resourceText)
+	}
+
+	if ctx.ErrorCount > 0 {
+		return fmt.Sprintf("%s; analysis completed with %d %s.", prefix, ctx.ErrorCount, seedCountLabel(ctx.ErrorCount, "error", "errors"))
+	}
+
+	parts := make([]string, 0, 3)
+	if ctx.NewFindings > 0 {
+		parts = append(parts, fmt.Sprintf("%d new", ctx.NewFindings))
+	}
+	if ctx.ExistingFindings > 0 {
+		parts = append(parts, fmt.Sprintf("%d existing", ctx.ExistingFindings))
+	}
+	if ctx.ResolvedFindings > 0 {
+		parts = append(parts, fmt.Sprintf("%d resolved", ctx.ResolvedFindings))
+	}
+	if len(parts) == 0 {
+		return prefix + "; no accepted warning or critical Patrol findings recorded."
+	}
+
+	return fmt.Sprintf("%s; accepted Patrol finding activity: %s.", prefix, strings.Join(parts, ", "))
+}
+
+func renderPatrolAcceptedActions(result *AIAnalysisResult) string {
+	if result == nil || (len(result.Findings) == 0 && len(result.ResolvedIDs) == 0) {
+		return "- No findings reported — all clear."
+	}
+
+	var lines []string
+	for _, finding := range result.Findings {
+		if finding == nil {
+			continue
+		}
+		severity := patrolSummaryInline(string(finding.Severity))
+		if severity == "" {
+			severity = "finding"
+		}
+		title := patrolSummaryInline(finding.Title)
+		if title == "" {
+			title = "Untitled finding"
+		}
+		resource := patrolSummaryInline(finding.ResourceName)
+		if resource == "" {
+			resource = patrolSummaryInline(finding.ResourceID)
+		}
+		if resource != "" {
+			lines = append(lines, fmt.Sprintf("- %s: %s (%s)", severity, title, resource))
+		} else {
+			lines = append(lines, fmt.Sprintf("- %s: %s", severity, title))
+		}
+	}
+	for _, resolvedID := range result.ResolvedIDs {
+		resolvedID = patrolSummaryInline(resolvedID)
+		if resolvedID == "" {
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("- resolved: %s", resolvedID))
+	}
+	if len(lines) == 0 {
+		return "- No findings reported — all clear."
+	}
+	return strings.Join(lines, "\n")
+}
+
+func replacePatrolSummarySection(response, heading, body string) string {
+	body = strings.TrimSpace(body)
+	if strings.TrimSpace(response) == "" || body == "" {
+		return strings.TrimSpace(response)
+	}
+
+	lines := strings.Split(response, "\n")
+	target := strings.ToLower(strings.TrimSpace(heading))
+	start := -1
+	for i, line := range lines {
+		if patrolSummaryHeadingName(line) == target {
+			start = i
+			break
+		}
+	}
+
+	bodyLines := strings.Split(body, "\n")
+	if start < 0 {
+		out := append([]string(nil), lines...)
+		if len(out) > 0 && strings.TrimSpace(out[len(out)-1]) != "" {
+			out = append(out, "")
+		}
+		out = append(out, "### "+heading)
+		out = append(out, bodyLines...)
+		return strings.TrimSpace(strings.Join(out, "\n"))
+	}
+
+	end := len(lines)
+	for i := start + 1; i < len(lines); i++ {
+		if patrolSummaryLineStartsSection(lines[i]) {
+			end = i
+			break
+		}
+	}
+
+	out := make([]string, 0, len(lines)-maxInt(0, end-start-1)+len(bodyLines))
+	out = append(out, lines[:start+1]...)
+	out = append(out, bodyLines...)
+	if end < len(lines) {
+		if strings.TrimSpace(out[len(out)-1]) != "" && strings.TrimSpace(lines[end]) != "" {
+			out = append(out, "")
+		}
+		out = append(out, lines[end:]...)
+	}
+
+	return strings.TrimSpace(strings.Join(out, "\n"))
+}
+
+func patrolSummaryLineStartsSection(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" {
+		return false
+	}
+	if strings.HasPrefix(trimmed, "#") {
+		return true
+	}
+	switch patrolSummaryHeadingName(line) {
+	case "infrastructure status", "key observations", "actions taken":
+		return true
+	default:
+		return false
+	}
+}
+
+func patrolSummaryHeadingName(line string) string {
+	trimmed := strings.TrimSpace(line)
+	trimmed = strings.TrimLeft(trimmed, "#")
+	trimmed = strings.TrimSpace(trimmed)
+	trimmed = strings.Trim(trimmed, "*")
+	trimmed = strings.TrimSpace(trimmed)
+	trimmed = strings.TrimSuffix(trimmed, ":")
+	return strings.ToLower(strings.TrimSpace(trimmed))
+}
+
+func patrolSummaryInline(value string) string {
+	return strings.Join(strings.Fields(value), " ")
 }
 
 // runAIAnalysis uses the agentic tool-driven approach to analyze infrastructure.
@@ -977,11 +1150,13 @@ One sentence overall health verdict (e.g., "All 3 nodes and 18 guests are operat
 
 ### Key Observations
 - Bullet each noteworthy observation with the **resource name** bolded and the metric or finding inline
+- For backup or PBS observations, name the evidence source: PBS instance, datastore, and namespace when present. Do not collapse this to just "PBS"; if source fields are missing, say "PBS source unknown."
 - Only include items worth mentioning — skip anything completely normal
 - Group related items (e.g., all storage together, all compute together)
 
 ### Actions Taken
-- List each finding you reported or resolved, with its severity badge: ` + "`" + `⚠ warning` + "`" + `, ` + "`" + `🔴 critical` + "`" + `, ` + "`" + `✅ resolved` + "`" + `
+- List only findings that the tools successfully accepted as reported or resolved, with its severity badge: ` + "`" + `⚠ warning` + "`" + `, ` + "`" + `🔴 critical` + "`" + `, ` + "`" + `✅ resolved` + "`" + `
+- Do not list failed, rejected, or attempted tool calls as actions taken.
 - If no findings were created or resolved, write "No findings reported — all clear."
 
 Keep the summary factual, terse, and scannable. Do NOT repeat your investigation process or thinking. Do NOT use phrases like "Let me check..." or "I'll start by..." — only state results. Maximum 15 lines.`
@@ -3092,7 +3267,7 @@ func (p *PatrolService) seedBackupAnalysisState(snap patrolRuntimeState, scopedS
 			name = fmt.Sprintf("vmid-%d", bt.VMID)
 		}
 		if existing, ok := guestBackups[name]; !ok || bt.EndTime.After(existing.lastBackup) {
-			guestBackups[name] = &backupInfo{lastBackup: bt.EndTime, source: "pve"}
+			guestBackups[name] = &backupInfo{lastBackup: bt.EndTime, source: "PVE task history"}
 		}
 	}
 
@@ -3105,7 +3280,7 @@ func (p *PatrolService) seedBackupAnalysisState(snap patrolRuntimeState, scopedS
 			name = fmt.Sprintf("vmid-%d", stb.VMID)
 		}
 		if existing, ok := guestBackups[name]; !ok || stb.Time.After(existing.lastBackup) {
-			guestBackups[name] = &backupInfo{lastBackup: stb.Time, source: "pve"}
+			guestBackups[name] = &backupInfo{lastBackup: stb.Time, source: "PVE storage backup"}
 		}
 	}
 
@@ -3120,7 +3295,7 @@ func (p *PatrolService) seedBackupAnalysisState(snap patrolRuntimeState, scopedS
 			continue
 		}
 		if existing, ok := guestBackups[name]; !ok || pb.BackupTime.After(existing.lastBackup) {
-			guestBackups[name] = &backupInfo{lastBackup: pb.BackupTime, source: "pbs"}
+			guestBackups[name] = &backupInfo{lastBackup: pb.BackupTime, source: formatPBSBackupSource(pb)}
 		}
 	}
 
@@ -3129,7 +3304,7 @@ func (p *PatrolService) seedBackupAnalysisState(snap patrolRuntimeState, scopedS
 			continue
 		}
 		if existing, ok := guestBackups[guest.name]; !ok || guest.lastBackup.After(existing.lastBackup) {
-			guestBackups[guest.name] = &backupInfo{lastBackup: guest.lastBackup, source: "pve"}
+			guestBackups[guest.name] = &backupInfo{lastBackup: guest.lastBackup, source: "PVE guest metadata"}
 		}
 	}
 
@@ -3154,9 +3329,13 @@ func (p *PatrolService) seedBackupAnalysisState(snap patrolRuntimeState, scopedS
 	for name := range allGuestNames {
 		info, hasBackup := guestBackups[name]
 		if !hasBackup {
-			staleGuests = append(staleGuests, fmt.Sprintf("%s (never)", name))
+			staleGuests = append(staleGuests, fmt.Sprintf("%s (never; no PVE/PBS backup seen)", name))
 		} else if info.lastBackup.Before(threshold48h) {
-			staleGuests = append(staleGuests, fmt.Sprintf("%s (last: %s)", name, seedFormatTimeAgo(now, info.lastBackup)))
+			source := strings.TrimSpace(info.source)
+			if source == "" {
+				source = "source unknown"
+			}
+			staleGuests = append(staleGuests, fmt.Sprintf("%s (last: %s via %s)", name, seedFormatTimeAgo(now, info.lastBackup), source))
 		} else {
 			recentCount++
 		}
@@ -3170,6 +3349,33 @@ func (p *PatrolService) seedBackupAnalysisState(snap patrolRuntimeState, scopedS
 	sb.WriteString(fmt.Sprintf("Guests with recent backups: %d/%d\n", recentCount, totalGuests))
 	sb.WriteString("\n")
 	return sb.String()
+}
+
+func formatPBSBackupSource(pb models.PBSBackup) string {
+	instance := strings.TrimSpace(pb.Instance)
+	datastore := strings.TrimSpace(pb.Datastore)
+	namespace := strings.TrimSpace(pb.Namespace)
+
+	if instance == "" && datastore == "" {
+		return "PBS source unknown"
+	}
+
+	location := instance
+	if location == "" {
+		location = "PBS source unknown"
+	}
+	if datastore != "" {
+		if location == "" || location == "PBS source unknown" {
+			location = datastore
+		} else {
+			location += "/" + datastore
+		}
+	}
+
+	if namespace == "" {
+		namespace = "root"
+	}
+	return fmt.Sprintf("PBS %s namespace %s", location, namespace)
 }
 
 // seedHealthAndAlerts builds the disk health, alerts, connection health, kubernetes, and hosts sections.

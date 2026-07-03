@@ -74,6 +74,17 @@ canonical resource ID; the two diverge for most storage sources, so querying
 the canonical ID silently leaves the feature dormant. The forecast's own
 `resourceID` stays canonical so it can still be stamped onto findings keyed by
 canonical resource ID.
+Persisted Patrol run analysis is a display-safe summary, not an unchecked raw
+model transcript. Infrastructure status and actions-taken text in run history
+must be reconciled from the accepted structured Patrol result: accepted
+findings, resolved finding IDs, run errors, and user-visible finding counts.
+Rejected, failed, or attempted tool calls must not appear as actions taken, and
+healthy/no-finding runs must not claim that an unaccepted
+`patrol_report_finding` action occurred. Backup/PBS seed context must preserve
+the source identity behind backup observations, including PBS instance,
+datastore, and namespace when those fields are available, so model-authored
+key observations can name the affected backup source rather than saying only
+"PBS".
 
 The public Pulse Intelligence overview is a projection of those runtime
 contracts, not a second Assistant tool inventory. It must point readers at the

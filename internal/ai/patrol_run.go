@@ -627,7 +627,13 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 
 	// Add AI analysis details if available
 	if runStats.aiAnalysis != nil {
-		runRecord.AIAnalysis = runStats.aiAnalysis.Response
+		runRecord.AIAnalysis = patrolRunAIAnalysisForRecord(runStats.aiAnalysis, patrolRunAnalysisRecordContext{
+			ResourcesChecked: runStats.resourceCount,
+			NewFindings:      runStats.newFindings,
+			ExistingFindings: runStats.existingFindings,
+			ResolvedFindings: resolvedCount,
+			ErrorCount:       runStats.errors,
+		})
 		runRecord.InputTokens = runStats.aiAnalysis.InputTokens
 		runRecord.OutputTokens = runStats.aiAnalysis.OutputTokens
 		runRecord.TriageFlags = runStats.triageFlags
@@ -991,7 +997,13 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 	}
 
 	if runStats.aiAnalysis != nil {
-		runRecord.AIAnalysis = runStats.aiAnalysis.Response
+		runRecord.AIAnalysis = patrolRunAIAnalysisForRecord(runStats.aiAnalysis, patrolRunAnalysisRecordContext{
+			ResourcesChecked: runStats.resourceCount,
+			NewFindings:      runStats.newFindings,
+			ExistingFindings: runStats.existingFindings,
+			ResolvedFindings: resolvedFindings,
+			ErrorCount:       runStats.errors,
+		})
 		runRecord.InputTokens = runStats.aiAnalysis.InputTokens
 		runRecord.OutputTokens = runStats.aiAnalysis.OutputTokens
 		runRecord.TriageFlags = runStats.triageFlags

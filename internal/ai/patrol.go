@@ -149,7 +149,7 @@ type PatrolRunRecord struct {
 	TriageFlags      int  `json:"triage_flags"`                 // Number of deterministic flags found
 	TriageSkippedLLM bool `json:"triage_skipped_llm,omitempty"` // Legacy: true for older quiet-triage runs
 	// AI Analysis details
-	AIAnalysis   string `json:"ai_analysis,omitempty"`   // The AI's raw response/analysis
+	AIAnalysis   string `json:"ai_analysis,omitempty"`   // Display-safe AI run analysis summary
 	InputTokens  int    `json:"input_tokens,omitempty"`  // Tokens sent to AI
 	OutputTokens int    `json:"output_tokens,omitempty"` // Tokens received from AI
 	// Tool call traces
