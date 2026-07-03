@@ -234,6 +234,12 @@ The platform page embedding point may pass read-only Proxmox guest inventory
 into that backup surface solely for workload identity correlation; the backup
 surface must still source restore evidence from the PVE/PBS backup APIs rather
 than treating the page shell as recovery state.
+Shared router wiring may pass monitor-owned Proxmox/PBS/PMG source freshness
+thresholds into unified-resource adapters so resource rows do not flap between
+normal poll cycles, but storage/recovery consumers may use that only as
+operational resource-status context. Backup freshness, restore coverage,
+storage protection, and recovery authority remain sourced from the canonical
+PVE/PBS backup and storage-health evidence.
 
 Storage/recovery auth-adjacent changes may consume SSO-authenticated sessions,
 but they must not reinterpret SAML or multi-provider SSO availability as a

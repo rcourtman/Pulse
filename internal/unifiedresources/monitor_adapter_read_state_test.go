@@ -219,6 +219,50 @@ func TestReadStateWithRecordsClonesMonitorAdapterAndOverlaysRecords(t *testing.T
 	}
 }
 
+func TestReadStateWithRecordsPreservesConfiguredStaleThresholds(t *testing.T) {
+	seen := time.Now().UTC().Add(-90 * time.Second).Truncate(time.Millisecond)
+	base := NewMonitorAdapterWithStaleThresholds(NewRegistry(nil), map[DataSource]time.Duration{
+		SourceProxmox: 10 * time.Minute,
+	})
+	base.PopulateFromSnapshot(models.StateSnapshot{
+		VMs: []models.VM{{
+			ID:       "cluster-a:pve-a:101",
+			Name:     "db",
+			Node:     "pve-a",
+			Instance: "cluster-a",
+			VMID:     101,
+			Status:   "running",
+			Type:     "qemu",
+			LastSeen: seen,
+		}},
+	})
+
+	baseVMs := base.VMs()
+	if len(baseVMs) != 1 {
+		t.Fatalf("base VM count = %d, want 1", len(baseVMs))
+	}
+	if baseVMs[0].Status() != StatusOnline {
+		t.Fatalf("base VM status = %q, want online", baseVMs[0].Status())
+	}
+
+	overlay := ReadStateWithRecords(base, SourceAgent, []IngestRecord{
+		HostIngestRecord(models.Host{
+			ID:       "host-1",
+			Hostname: "host-1.local",
+			Status:   "online",
+			LastSeen: time.Now().UTC(),
+		}),
+	})
+
+	overlayVMs := overlay.VMs()
+	if len(overlayVMs) != 1 {
+		t.Fatalf("overlay VM count = %d, want 1", len(overlayVMs))
+	}
+	if overlayVMs[0].Status() != StatusOnline {
+		t.Fatalf("overlay VM status = %q, want online", overlayVMs[0].Status())
+	}
+}
+
 func TestMonitorAdapterRecordsSupplementalChangeTimeline(t *testing.T) {
 	store := NewMemoryStore()
 	adapter := NewMonitorAdapter(NewRegistry(store))

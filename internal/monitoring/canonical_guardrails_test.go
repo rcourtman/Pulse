@@ -2482,3 +2482,35 @@ func TestStateBroadcastSignalsUseLazyCurrentState(t *testing.T) {
 		t.Fatal("monitor_alerts.go must not build full frontend state for alert-driven broadcast signals")
 	}
 }
+
+func TestResourceStaleThresholdsFollowPollingCadence(t *testing.T) {
+	thresholds := ResourceStaleThresholdsForConfig(&config.Config{
+		PVEPollingInterval: 5 * time.Minute,
+		PBSPollingInterval: 45 * time.Second,
+		PMGPollingInterval: 3 * time.Minute,
+	})
+
+	if got := thresholds[unifiedresources.SourceProxmox]; got != 10*time.Minute {
+		t.Fatalf("Proxmox threshold = %v, want %v", got, 10*time.Minute)
+	}
+	if got := thresholds[unifiedresources.SourcePBS]; got != 120*time.Second {
+		t.Fatalf("PBS threshold = %v, want %v", got, 120*time.Second)
+	}
+	if got := thresholds[unifiedresources.SourcePMG]; got != 6*time.Minute {
+		t.Fatalf("PMG threshold = %v, want %v", got, 6*time.Minute)
+	}
+}
+
+func TestResourceStaleThresholdsPreserveDefaultFloors(t *testing.T) {
+	thresholds := ResourceStaleThresholdsForConfig(nil)
+
+	if got := thresholds[unifiedresources.SourceProxmox]; got != 60*time.Second {
+		t.Fatalf("default Proxmox threshold = %v, want %v", got, 60*time.Second)
+	}
+	if got := thresholds[unifiedresources.SourcePBS]; got != 120*time.Second {
+		t.Fatalf("default PBS threshold = %v, want %v", got, 120*time.Second)
+	}
+	if got := thresholds[unifiedresources.SourcePMG]; got != 120*time.Second {
+		t.Fatalf("default PMG threshold = %v, want %v", got, 120*time.Second)
+	}
+}

@@ -138,6 +138,12 @@ lifecycle authority. Native `pulse_patrol` starts, current paid
 `patrol_control` starts, legacy `patrol_autonomy` starts, and legacy
 `pulse_pro_activation` starts all contribute to Patrol control starter orientation;
 `proActivationOperationsLoopStarterCount` remains a legacy entry-point counter
+for continuity. Router wiring that passes monitor-owned Proxmox/PBS/PMG source
+freshness thresholds into unified-resource adapters is likewise adjacent API
+plumbing: lifecycle surfaces may consume the resulting resource status, but
+must not treat a between-poll stale/fresh decision as agent enrollment,
+installer success, update liveness, command reachability, or fleet-control
+authority.
 for the old alias only, while the legacy completed/resolved/value
 `proActivation*` fields are compatibility aliases for that same first-party
 Patrol control proof while older commercial and telemetry consumers migrate.

@@ -295,6 +295,11 @@ existing resource-policy redaction still governs any model-bound context.
     read-only Agent-context boundary. Router glue may connect providers, but
     it must not become an alternate command path, raw provider-command path,
     config path, environment path, or secret-bearing metadata path.
+    Router glue may also pass monitor-owned source freshness thresholds into
+    unified-resource adapters, but those thresholds are operational cadence
+    metadata only. They must not disclose credentials, command output, raw
+    provider payloads, tenant-crossing config, or any new resource-policy bypass
+    through monitoring-readable API responses.
 	    Assistant session rename routing through `PATCH /api/ai/sessions/{id}`
 	    stays on that same auth/scope boundary: the route may accept only a
 	    user-visible title mutation, must not expose transcript contents,

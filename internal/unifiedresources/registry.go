@@ -30,6 +30,40 @@ var defaultStaleThresholds = map[DataSource]time.Duration{
 	SourceAvailability: 120 * time.Second,
 }
 
+func cloneStaleThresholds(thresholds map[DataSource]time.Duration) map[DataSource]time.Duration {
+	if len(thresholds) == 0 {
+		return nil
+	}
+	cloned := make(map[DataSource]time.Duration, len(thresholds))
+	for source, threshold := range thresholds {
+		if strings.TrimSpace(string(source)) == "" || threshold <= 0 {
+			continue
+		}
+		cloned[source] = threshold
+	}
+	if len(cloned) == 0 {
+		return nil
+	}
+	return cloned
+}
+
+func effectiveStaleThresholds(thresholds map[DataSource]time.Duration) map[DataSource]time.Duration {
+	if len(thresholds) == 0 {
+		return defaultStaleThresholds
+	}
+	effective := make(map[DataSource]time.Duration, len(defaultStaleThresholds)+len(thresholds))
+	for source, threshold := range defaultStaleThresholds {
+		effective[source] = threshold
+	}
+	for source, threshold := range thresholds {
+		if strings.TrimSpace(string(source)) == "" || threshold <= 0 {
+			continue
+		}
+		effective[source] = threshold
+	}
+	return effective
+}
+
 // IngestRecord is a source-native resource entry normalized for registry ingestion.
 type IngestRecord struct {
 	SourceID       string
@@ -120,6 +154,16 @@ func (rr *ResourceRegistry) loadOverrides() {
 
 // IngestSnapshot ingests all resources from the current state snapshot.
 func (rr *ResourceRegistry) IngestSnapshot(snapshot models.StateSnapshot) {
+	rr.ingestSnapshot(snapshot, nil)
+}
+
+// IngestSnapshotWithStaleThresholds ingests all resources from the current
+// state snapshot and evaluates source freshness with caller-owned thresholds.
+func (rr *ResourceRegistry) IngestSnapshotWithStaleThresholds(snapshot models.StateSnapshot, thresholds map[DataSource]time.Duration) {
+	rr.ingestSnapshot(snapshot, thresholds)
+}
+
+func (rr *ResourceRegistry) ingestSnapshot(snapshot models.StateSnapshot, thresholds map[DataSource]time.Duration) {
 	hostByID := make(map[string]*models.Host, len(snapshot.Hosts))
 	for i := range snapshot.Hosts {
 		host := snapshot.Hosts[i]
@@ -452,7 +496,7 @@ func (rr *ResourceRegistry) IngestSnapshot(snapshot models.StateSnapshot) {
 	rr.refreshStoragePostureLocked()
 	rr.refreshIncidentRollupsLocked()
 	rr.buildChildCounts()
-	rr.markStaleLocked(time.Now().UTC(), nil)
+	rr.markStaleLocked(time.Now().UTC(), thresholds)
 	rr.viewsDirty = true
 	rr.mu.Unlock()
 }
@@ -488,6 +532,16 @@ func (rr *ResourceRegistry) IngestRecords(source DataSource, records []IngestRec
 // This is used when a caller already has a canonical unified read model and
 // only needs store-backed manual links/exclusions applied on top.
 func (rr *ResourceRegistry) IngestResources(resources []Resource) {
+	rr.ingestResources(resources, nil)
+}
+
+// IngestResourcesWithStaleThresholds seeds the registry from already-unified
+// resources and evaluates source freshness with caller-owned thresholds.
+func (rr *ResourceRegistry) IngestResourcesWithStaleThresholds(resources []Resource, thresholds map[DataSource]time.Duration) {
+	rr.ingestResources(resources, thresholds)
+}
+
+func (rr *ResourceRegistry) ingestResources(resources []Resource, thresholds map[DataSource]time.Duration) {
 	seededIDs := make([]string, 0, len(resources))
 	for _, incoming := range resources {
 		resource := cloneResourcePtr(&incoming)
@@ -529,7 +583,7 @@ func (rr *ResourceRegistry) IngestResources(resources []Resource) {
 	rr.refreshStoragePostureLocked()
 	rr.refreshIncidentRollupsLocked()
 	rr.buildChildCounts()
-	rr.markStaleLocked(time.Now().UTC(), nil)
+	rr.markStaleLocked(time.Now().UTC(), thresholds)
 	rr.viewsDirty = true
 	rr.mu.Unlock()
 }
@@ -1285,9 +1339,7 @@ func sourceSightingStatus(lastSeen time.Time) string {
 }
 
 func (rr *ResourceRegistry) markStaleLocked(now time.Time, thresholds map[DataSource]time.Duration) {
-	if thresholds == nil {
-		thresholds = defaultStaleThresholds
-	}
+	thresholds = effectiveStaleThresholds(thresholds)
 
 	for _, resource := range rr.resources {
 		staleFound := false

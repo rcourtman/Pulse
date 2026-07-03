@@ -176,6 +176,52 @@ func TestResourceFromVMIgnoresNeverHealthyGuestAgent(t *testing.T) {
 	}
 }
 
+func TestMonitorAdapterUsesConfiguredProxmoxStaleThreshold(t *testing.T) {
+	seen := time.Now().UTC().Add(-90 * time.Second).Truncate(time.Millisecond)
+	snapshot := models.StateSnapshot{
+		VMs: []models.VM{{
+			ID:       "cluster-a:pve-a:101",
+			Name:     "db",
+			Node:     "pve-a",
+			Instance: "cluster-a",
+			VMID:     101,
+			Status:   "running",
+			Type:     "qemu",
+			LastSeen: seen,
+		}},
+	}
+
+	defaultAdapter := NewMonitorAdapter(NewRegistry(nil))
+	defaultAdapter.PopulateFromSnapshot(snapshot)
+	defaultVMs := defaultAdapter.VMs()
+	if len(defaultVMs) != 1 {
+		t.Fatalf("expected one VM from default adapter, got %d", len(defaultVMs))
+	}
+	if defaultVMs[0].Status() != StatusWarning {
+		t.Fatalf("default stale threshold status = %q, want warning", defaultVMs[0].Status())
+	}
+
+	adapter := NewMonitorAdapterWithStaleThresholds(NewRegistry(nil), map[DataSource]time.Duration{
+		SourceProxmox: 10 * time.Minute,
+	})
+	adapter.PopulateFromSnapshot(snapshot)
+	vms := adapter.VMs()
+	if len(vms) != 1 {
+		t.Fatalf("expected one VM, got %d", len(vms))
+	}
+	if vms[0].Status() != StatusOnline {
+		t.Fatalf("configured stale threshold status = %q, want online", vms[0].Status())
+	}
+
+	resources := adapter.GetByType(ResourceTypeVM)
+	if len(resources) != 1 {
+		t.Fatal("expected VM resource to be available")
+	}
+	if status := resources[0].SourceStatus[SourceProxmox]; status.Status != "online" {
+		t.Fatalf("SourceStatus[proxmox] = %+v, want online", status)
+	}
+}
+
 func TestMonitorHostnamePriority(t *testing.T) {
 	tests := []struct {
 		name     string

@@ -13,21 +13,50 @@ import (
 type MonitorAdapter struct {
 	registry *ResourceRegistry
 
-	mu            sync.RWMutex
-	activeAlerts  []models.Alert
-	lastRebuiltAt time.Time
+	mu              sync.RWMutex
+	activeAlerts    []models.Alert
+	lastRebuiltAt   time.Time
+	staleThresholds map[DataSource]time.Duration
 }
 
 // NewMonitorAdapter creates a monitor-facing adapter around a registry.
 // If registry is nil, a new in-memory registry is created.
 func NewMonitorAdapter(registry *ResourceRegistry) *MonitorAdapter {
+	return NewMonitorAdapterWithStaleThresholds(registry, nil)
+}
+
+// NewMonitorAdapterWithStaleThresholds creates a monitor-facing adapter using
+// caller-owned source freshness thresholds.
+func NewMonitorAdapterWithStaleThresholds(registry *ResourceRegistry, staleThresholds map[DataSource]time.Duration) *MonitorAdapter {
 	if registry == nil {
 		registry = NewRegistry(nil)
 	}
 
 	return &MonitorAdapter{
-		registry: registry,
+		registry:        registry,
+		staleThresholds: cloneStaleThresholds(staleThresholds),
 	}
+}
+
+// SetStaleThresholds updates the source freshness thresholds used on future
+// snapshot rebuilds. Missing source entries keep the registry defaults.
+func (a *MonitorAdapter) SetStaleThresholds(staleThresholds map[DataSource]time.Duration) {
+	if a == nil {
+		return
+	}
+	a.mu.Lock()
+	a.staleThresholds = cloneStaleThresholds(staleThresholds)
+	a.mu.Unlock()
+}
+
+func (a *MonitorAdapter) currentStaleThresholds() map[DataSource]time.Duration {
+	if a == nil {
+		return nil
+	}
+	a.mu.RLock()
+	thresholds := cloneStaleThresholds(a.staleThresholds)
+	a.mu.RUnlock()
+	return thresholds
 }
 
 // ReadStateWithRecords clones a supported read state and overlays additional
@@ -52,9 +81,10 @@ func ReadStateWithRecords(
 	}
 
 	cloned := NewRegistry(registry.store)
-	cloned.IngestResources(registry.List())
+	thresholds := adapter.currentStaleThresholds()
+	cloned.IngestResourcesWithStaleThresholds(registry.List(), thresholds)
 	cloned.IngestRecords(source, records)
-	return NewMonitorAdapter(cloned)
+	return NewMonitorAdapterWithStaleThresholds(cloned, thresholds)
 }
 
 func (a *MonitorAdapter) currentRegistry() *ResourceRegistry {
@@ -96,7 +126,8 @@ func (a *MonitorAdapter) replaceRegistry(snapshot models.StateSnapshot, recordsB
 
 	before := registry.List()
 	rebuilt := NewRegistry(registry.store)
-	rebuilt.IngestSnapshot(snapshot)
+	staleThresholds := a.currentStaleThresholds()
+	rebuilt.IngestSnapshotWithStaleThresholds(snapshot, staleThresholds)
 	for source, records := range recordsBySource {
 		if len(records) == 0 || strings.TrimSpace(string(source)) == "" {
 			continue
@@ -107,7 +138,7 @@ func (a *MonitorAdapter) replaceRegistry(snapshot models.StateSnapshot, recordsB
 	// ingested, so record-sourced resources would otherwise keep their
 	// ingest-time "online" stamp regardless of how old their data is.
 	// Re-evaluate staleness over the fully assembled registry.
-	rebuilt.MarkStale(time.Now().UTC(), nil)
+	rebuilt.MarkStale(time.Now().UTC(), staleThresholds)
 	rebuiltAt := time.Now().UTC()
 	if !snapshot.LastUpdate.IsZero() && snapshot.LastUpdate.After(rebuiltAt) {
 		rebuiltAt = snapshot.LastUpdate

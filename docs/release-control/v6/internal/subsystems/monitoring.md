@@ -23,6 +23,10 @@ Monitoring also owns the distinction between Proxmox VM power state and QEMU
 guest-agent reachability: fresh or never-healthy VMs with an enabled but
 unavailable guest agent stay `not-running`, while only VMs with recent healthy
 guest-agent evidence may become `expected-unreachable`.
+Monitoring owns source freshness cadence for Proxmox, PBS, and PMG resources:
+the stale threshold is derived from the configured polling interval with a
+minimum floor, so API-facing resource status must not degrade merely because a
+healthy source is between normal poll cycles.
 Removed host-agent reconnect blocks are identity-scoped: matching may use the
 canonical host ID or token-qualified machine/hostname continuity, but must never
 block a distinct live host by hostname alone.
@@ -83,6 +87,7 @@ block a distinct live host by hostname alone.
 52. `internal/monitoring/monitor_alert_sync.go`
 53. `internal/monitoring/platform_poller_shared.go`
 54. `internal/monitoring/monitor_backups.go`
+55. `internal/monitoring/resource_stale_thresholds.go`
 
 ## Shared Boundaries
 
@@ -100,6 +105,11 @@ block a distinct live host by hostname alone.
    are built by `newPrefixedPollProvider` from a `prefixedPollProviderSpec`.
    New scheduler-backed platform providers extend those helpers instead of
    re-rolling per-platform copies of the same loops.
+   Source freshness thresholds for PVE/PBS/PMG resource ingestion are derived
+   through `internal/monitoring/resource_stale_thresholds.go` from the active
+   poll interval and passed into the unified-resource adapter. New pollers or
+   config paths that change source cadence must update that derivation instead
+   of hard-coding stale windows inside registry or API code.
    Periodic out-of-scheduler platform pollers (TrueNAS, VMware) share their
    lifecycle and config-resolution scaffold through
    `internal/monitoring/platform_poller_shared.go`: `startPollerLoop` owns

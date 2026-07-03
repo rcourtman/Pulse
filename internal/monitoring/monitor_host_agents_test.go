@@ -129,6 +129,40 @@ func TestFindLinkedProxmoxEntity_MatchesCanonicalReadStateViews(t *testing.T) {
 	}
 }
 
+func TestSnapshotBackedUnifiedReadStateUsesConfiguredStaleThreshold(t *testing.T) {
+	seen := time.Now().UTC().Add(-90 * time.Second).Truncate(time.Millisecond)
+	state := models.NewState()
+	state.UpdateVMs([]models.VM{{
+		ID:       "cluster-a:pve-a:101",
+		Name:     "db",
+		Node:     "pve-a",
+		Instance: "cluster-a",
+		VMID:     101,
+		Status:   "running",
+		Type:     "qemu",
+		LastSeen: seen,
+	}})
+
+	monitor := &Monitor{
+		config: &config.Config{
+			PVEPollingInterval: 5 * time.Minute,
+		},
+		state: state,
+	}
+
+	readState := monitor.snapshotBackedUnifiedReadState()
+	if readState == nil {
+		t.Fatal("expected snapshot-backed read state")
+	}
+	vms := readState.VMs()
+	if len(vms) != 1 {
+		t.Fatalf("VM count = %d, want 1", len(vms))
+	}
+	if vms[0].Status() != unifiedresources.StatusOnline {
+		t.Fatalf("VM status = %q, want online", vms[0].Status())
+	}
+}
+
 func TestFindLinkedProxmoxEntity_AmbiguousNodeNameReturnsNoLink(t *testing.T) {
 	monitor := &Monitor{
 		state: models.NewState(),

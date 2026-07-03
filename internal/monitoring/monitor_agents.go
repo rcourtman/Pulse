@@ -758,8 +758,9 @@ func (m *Monitor) snapshotBackedUnifiedReadState() unifiedresources.ReadState {
 	}
 
 	registry := unifiedresources.NewRegistry(nil)
-	registry.IngestSnapshot(m.state.GetSnapshot())
-	return unifiedresources.NewMonitorAdapter(registry)
+	thresholds := m.resourceStaleThresholds()
+	registry.IngestSnapshotWithStaleThresholds(m.state.GetSnapshot(), thresholds)
+	return unifiedresources.NewMonitorAdapterWithStaleThresholds(registry, thresholds)
 }
 
 func (m *Monitor) hostContinuitySince(now time.Time) time.Time {

@@ -305,7 +305,10 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 		r.tenantRateLimiter = NewTenantRateLimiter(0, 0)
 	}
 	r.resourceRegistry = unifiedresources.NewRegistry(nil)
-	r.monitorResourceAdapter = unifiedresources.NewMonitorAdapter(r.resourceRegistry)
+	r.monitorResourceAdapter = unifiedresources.NewMonitorAdapterWithStaleThresholds(
+		r.resourceRegistry,
+		monitoring.ResourceStaleThresholdsForConfig(cfg),
+	)
 
 	// Sync the configured admin user to the authorizer (if supported)
 	if cfg.AuthUser != "" {
@@ -535,7 +538,10 @@ func (r *Router) setupRoutes() {
 	}
 	if r.resourceHandlers != nil {
 		if store, err := r.resourceHandlers.getStore("default"); err == nil && store != nil {
-			r.monitorResourceAdapter = unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store))
+			r.monitorResourceAdapter = unifiedresources.NewMonitorAdapterWithStaleThresholds(
+				unifiedresources.NewRegistry(store),
+				monitoring.ResourceStaleThresholdsForConfig(r.config),
+			)
 		}
 	}
 	r.syncPlatformSupplementalProviders(mock.IsMockEnabled())
@@ -1458,7 +1464,10 @@ func (r *Router) monitorAdapterForMonitor(m *monitoring.Monitor) *unifiedresourc
 			store = resolved
 		}
 	}
-	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store))
+	adapter := unifiedresources.NewMonitorAdapterWithStaleThresholds(
+		unifiedresources.NewRegistry(store),
+		monitoring.ResourceStaleThresholdsForConfig(m.GetConfig()),
+	)
 	r.monitorResourceAdapters[orgID] = adapter
 	return adapter
 }

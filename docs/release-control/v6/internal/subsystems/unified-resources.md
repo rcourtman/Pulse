@@ -419,6 +419,11 @@ When monitoring marks a running VM's expected QEMU guest agent as unreachable,
 the resource adapter must surface a Proxmox-authored `availability_unreachable`
 `resource-incident` with source `qemu-guest-agent`; it must leave VM power
 status online/warning rather than rewriting the VM to stopped/offline.
+Source freshness is a separate unified-resource status input, not a fixed
+global health timer. Snapshot rebuilds, resource seeding, supplemental record
+overlays, and cloned read-state overlays must preserve the monitoring-provided
+stale thresholds for Proxmox, PBS, and PMG sources so resources do not flap to
+warning/degraded between successful configured poll cycles.
 
 Service-discovery readiness is a unified-resource payload contract, not a
 drawer-local decoration. Resource list/detail payloads that expose a

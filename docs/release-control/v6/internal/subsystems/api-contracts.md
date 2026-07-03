@@ -555,6 +555,13 @@ organization, range, metric set, and workload scope, but that cache is
 transport-only. It may amortize polling and remount cost, but it must not
 change normalized response shape, bypass monitor or read-state availability
 checks, merge tenants, or become the source of truth for telemetry freshness.
+Router-owned unified-resource adapter construction is also transport wiring,
+not an API-local health model. When `internal/api/router.go` creates default or
+tenant monitor adapters, it must pass the effective monitor configuration into
+monitoring-owned source freshness derivation so `/api/resources`, summaries,
+and Assistant resource providers observe the same Proxmox/PBS/PMG stale
+thresholds as the live monitor. API handlers must not hard-code source stale
+windows or reinterpret between-poll source freshness as workload degradation.
 
 The `/api/resources` type filter is the REST contract boundary for platform
 page native inventory. It must accept canonical Docker / Podman runtime tokens

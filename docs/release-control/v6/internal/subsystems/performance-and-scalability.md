@@ -254,6 +254,11 @@ regression protection.
    the same startup-only router rule: env opt-in may configure monitoring-owned
    checker/collector callbacks, but normal protected request setup must not run
    `pct`, scan LXC guests, or collect Docker inventory.
+   Source freshness threshold wiring in `internal/api/router.go` follows the
+   same bounded startup/config rule. Router construction may pass already-held
+   monitor config into the unified-resource adapter, but it must not add
+   per-request polling, registry rescans, persistence walks, or tenant-wide
+   refreshes to decide whether Proxmox/PBS/PMG resources are stale.
    Global resource timeline routing follows the same protected-request hot-path
    rule: `/api/resources/timeline` registration may wire the authenticated
    handler, but router setup and auth gating must not execute resource-change

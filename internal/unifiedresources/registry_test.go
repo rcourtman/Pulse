@@ -4776,3 +4776,55 @@ func TestMarkStaleRecomputesFromRemainingFreshSources(t *testing.T) {
 		t.Fatalf("status should be recomputed from remaining fresh availability source; got %s, want online", got.Status)
 	}
 }
+
+func TestResourceRegistryUsesConfiguredProxmoxStaleThresholds(t *testing.T) {
+	seen := time.Now().UTC().Add(-90 * time.Second).Truncate(time.Millisecond)
+	snapshot := models.StateSnapshot{
+		VMs: []models.VM{{
+			ID:       "cluster-a:pve-a:101",
+			Name:     "db",
+			Node:     "pve-a",
+			Instance: "cluster-a",
+			VMID:     101,
+			Status:   "running",
+			Type:     "qemu",
+			LastSeen: seen,
+		}},
+	}
+
+	defaultRegistry := NewRegistry(nil)
+	defaultRegistry.IngestSnapshot(snapshot)
+	defaultVMs := defaultRegistry.ListByType(ResourceTypeVM)
+	if len(defaultVMs) != 1 {
+		t.Fatalf("default VM count = %d, want 1", len(defaultVMs))
+	}
+	if defaultVMs[0].Status != StatusWarning {
+		t.Fatalf("default VM status = %q, want warning", defaultVMs[0].Status)
+	}
+
+	thresholds := map[DataSource]time.Duration{
+		SourceProxmox: 10 * time.Minute,
+	}
+	configuredRegistry := NewRegistry(nil)
+	configuredRegistry.IngestSnapshotWithStaleThresholds(snapshot, thresholds)
+	configuredVMs := configuredRegistry.ListByType(ResourceTypeVM)
+	if len(configuredVMs) != 1 {
+		t.Fatalf("configured VM count = %d, want 1", len(configuredVMs))
+	}
+	if configuredVMs[0].Status != StatusOnline {
+		t.Fatalf("configured VM status = %q, want online", configuredVMs[0].Status)
+	}
+
+	clonedRegistry := NewRegistry(nil)
+	clonedRegistry.IngestResourcesWithStaleThresholds(configuredRegistry.List(), thresholds)
+	clonedVMs := clonedRegistry.ListByType(ResourceTypeVM)
+	if len(clonedVMs) != 1 {
+		t.Fatalf("cloned VM count = %d, want 1", len(clonedVMs))
+	}
+	if clonedVMs[0].Status != StatusOnline {
+		t.Fatalf("cloned VM status = %q, want online", clonedVMs[0].Status)
+	}
+	if status := clonedVMs[0].SourceStatus[SourceProxmox]; status.Status != "online" {
+		t.Fatalf("cloned SourceStatus[proxmox] = %+v, want online", status)
+	}
+}

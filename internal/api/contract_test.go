@@ -8320,6 +8320,47 @@ func TestContract_TenantAIServiceAvoidsSnapshotProviderBridge(t *testing.T) {
 	}
 }
 
+func TestContract_TenantMonitorAdapterUsesMonitorPollingCadence(t *testing.T) {
+	router := &Router{
+		config: &config.Config{
+			PVEPollingInterval: 15 * time.Second,
+		},
+		monitorResourceAdapters: make(map[string]*unifiedresources.MonitorAdapter),
+	}
+	tenantMonitor := &monitoring.Monitor{}
+	tenantMonitor.SetOrgID("tenant-1")
+	setUnexportedField(t, tenantMonitor, "config", &config.Config{
+		PVEPollingInterval: 5 * time.Minute,
+	})
+
+	adapter := router.monitorAdapterForMonitor(tenantMonitor)
+	if adapter == nil {
+		t.Fatal("expected tenant monitor adapter")
+	}
+
+	seen := time.Now().UTC().Add(-90 * time.Second).Truncate(time.Millisecond)
+	adapter.PopulateFromSnapshot(models.StateSnapshot{
+		VMs: []models.VM{{
+			ID:       "cluster-a:pve-a:101",
+			Name:     "db",
+			Node:     "pve-a",
+			Instance: "cluster-a",
+			VMID:     101,
+			Status:   "running",
+			Type:     "qemu",
+			LastSeen: seen,
+		}},
+	})
+
+	vms := adapter.VMs()
+	if len(vms) != 1 {
+		t.Fatalf("VM count = %d, want 1", len(vms))
+	}
+	if vms[0].Status() != unifiedresources.StatusOnline {
+		t.Fatalf("VM status = %q, want online", vms[0].Status())
+	}
+}
+
 func TestContract_HandoffExchangeTargetPathIsSignedAndLocalOnly(t *testing.T) {
 	source, err := os.ReadFile(filepath.Clean("cloud_handoff_handlers.go"))
 	if err != nil {

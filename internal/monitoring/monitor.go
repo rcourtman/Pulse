@@ -112,6 +112,12 @@ type ResourceStoreInterface interface {
 	PopulateFromSnapshot(snapshot models.StateSnapshot)
 }
 
+// StaleThresholdResourceStore is implemented by stores that evaluate source
+// freshness while ingesting monitor snapshots.
+type StaleThresholdResourceStore interface {
+	SetStaleThresholds(thresholds map[unifiedresources.DataSource]time.Duration)
+}
+
 // SupplementalRecordStore is an optional extension for resource stores that can
 // ingest source-native unified records in addition to legacy snapshots.
 type SupplementalRecordStore interface {
@@ -1713,20 +1719,10 @@ func clampInterval(value, min, max time.Duration) time.Duration {
 }
 
 func (m *Monitor) effectivePVEPollingInterval() time.Duration {
-	const minInterval = 10 * time.Second
-	const maxInterval = time.Hour
-
-	interval := minInterval
-	if m != nil && m.config != nil && m.config.PVEPollingInterval > 0 {
-		interval = m.config.PVEPollingInterval
+	if m == nil {
+		return effectivePVEPollingIntervalForConfig(nil)
 	}
-	if interval < minInterval {
-		interval = minInterval
-	}
-	if interval > maxInterval {
-		interval = maxInterval
-	}
-	return interval
+	return effectivePVEPollingIntervalForConfig(m.config)
 }
 
 func (m *Monitor) baseIntervalForInstanceType(instanceType InstanceType) time.Duration {
@@ -4134,6 +4130,10 @@ func (m *Monitor) DisableTemperatureMonitoring() {
 // When set, the monitor will check if it should reduce polling frequency
 // for nodes that have host agents providing data.
 func (m *Monitor) SetResourceStore(store ResourceStoreInterface) {
+	if thresholdStore, ok := store.(StaleThresholdResourceStore); ok {
+		thresholdStore.SetStaleThresholds(m.resourceStaleThresholds())
+	}
+
 	m.mu.Lock()
 	m.resourceStore = store
 	incidentStore := m.incidentStore
@@ -4494,6 +4494,10 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 	if store == nil {
 		log.Debug().Msg("[Resources] No resource store configured, skipping population")
 		return
+	}
+
+	if thresholdStore, ok := store.(StaleThresholdResourceStore); ok {
+		thresholdStore.SetStaleThresholds(m.resourceStaleThresholds())
 	}
 
 	log.Debug().
