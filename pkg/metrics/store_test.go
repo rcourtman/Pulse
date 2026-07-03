@@ -277,9 +277,13 @@ func TestStoreRollupTierMultiResource(t *testing.T) {
 
 func TestStoreRollupTierUsesBoundedChunkBudget(t *testing.T) {
 	dir := t.TempDir()
+	chunkWindow := rollupChunkWindow(time.Minute)
+	sourceWindow := time.Duration(maxRollupChunksPerRun+4) * chunkWindow
+
 	cfg := DefaultConfig(dir)
 	cfg.DBPath = filepath.Join(dir, "metrics-rollup-chunks.db")
 	cfg.FlushInterval = time.Hour
+	cfg.RetentionRaw = sourceWindow + 20*time.Minute
 
 	store, err := NewStore(cfg)
 	if err != nil {
@@ -287,8 +291,11 @@ func TestStoreRollupTierUsesBoundedChunkBudget(t *testing.T) {
 	}
 	defer store.Close()
 
-	chunkWindow := rollupChunkWindow(time.Minute)
-	base := time.Now().UTC().Add(-24 * time.Hour).Truncate(time.Minute)
+	if err := store.WaitForMaintenance(5 * time.Second); err != nil {
+		t.Fatalf("wait for startup maintenance: %v", err)
+	}
+
+	base := time.Now().UTC().Add(-sourceWindow).Truncate(time.Minute)
 	batch := make([]WriteMetric, 0, maxRollupChunksPerRun+1)
 	for i := 0; i <= maxRollupChunksPerRun; i++ {
 		batch = append(batch, WriteMetric{
