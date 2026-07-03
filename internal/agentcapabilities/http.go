@@ -152,6 +152,12 @@ func BuildCapabilityHTTPRequest(ctx context.Context, baseURL, token string, cap 
 	if err != nil {
 		return nil, ProjectedCall{}, err
 	}
+	// Attach forwarded query parameters (GET/DELETE filter arguments). The
+	// projection layer owns which arguments become query params; here we only
+	// encode them onto the request URL.
+	if len(projected.Query) > 0 {
+		req.URL.RawQuery = projected.Query.Encode()
+	}
 	return req, projected, nil
 }
 

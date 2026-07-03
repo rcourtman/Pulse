@@ -30,6 +30,31 @@ func fleetContextOutputSchema() json.RawMessage {
 	})
 }
 
+// fleetContextInputSchema declares the optional additive filters for
+// get_fleet_context. None are required; omitting all returns the full fleet
+// (backward compatible). Forwarded as URL query parameters for the GET.
+func fleetContextInputSchema() json.RawMessage {
+	return agentObjectInputSchema(nil, map[string]any{
+		"hasFindings": map[string]any{
+			"type":        "boolean",
+			"description": "When true, return only resources with at least one active finding. Omit to include healthy resources.",
+		},
+		"severity": map[string]any{
+			"type":        "string",
+			"enum":        []string{"critical", "warning", "info"},
+			"description": "Return only resources with at least one finding at this severity. Composes with hasFindings and the dimension filters.",
+		},
+		"technology": map[string]any{
+			"type":        "string",
+			"description": "Return only resources whose technology matches exactly (case-insensitive), such as proxmox, docker, lxc, qemu.",
+		},
+		"resourceType": map[string]any{
+			"type":        "string",
+			"description": "Return only resources whose canonical type matches exactly (case-insensitive), such as vm, system-container, app-container, agent, storage.",
+		},
+	})
+}
+
 func operationsLoopStatusOutputSchema() json.RawMessage {
 	return agentObjectOutputSchema([]string{"nextAction", "progressLabel", "steps", "patrolEvidenceCount", "patrolIssueEvidenceCount", "activeFindingCount", "pendingApprovalCount", "governedActionCount", "approvedDecisionCount", "rejectedDecisionCount", "verifiedOutcomeCount", "operationsLoopStarterCount", "assistantOperationsLoopStarterCount", "patrolOperationsLoopStarterCount", "patrolControlOperationsLoopStarterCount", "patrolControlCompletedOperationsLoopCount", "patrolControlResolvedOperationsLoopCount", "patrolControlValueState", "patrolAutonomyOperationsLoopStarterCount", "patrolAutonomyCompletedOperationsLoopCount", "patrolAutonomyResolvedOperationsLoopCount", "patrolAutonomyValueState", "proActivationOperationsLoopStarterCount", "proActivationCompletedOperationsLoopCount", "proActivationResolvedOperationsLoopCount", "proActivationValueProofState", "mcpOperationsLoopStarterCount", "externalAgentReady", "windowStart", "generatedAt"}, map[string]any{
 		"nextAction":                                 stringEnumOption([]string{"run_patrol", "review_findings", "open_assistant", "review_approvals", "open_mcp", "complete"}, "Next recommended Patrol work action an agent or UI should take."),
@@ -721,7 +746,7 @@ var canonicalManifest = Manifest{
 		{
 			Name:           "get_fleet_context",
 			Title:          "Get fleet context",
-			Description:    "Return a thin per-resource triage rollup across every resource visible to the org — identity, operator flags (intentionallyOffline, neverAutoRemediate, maintenanceWindowActive), per-severity finding counts (total/critical/warning/info), and pending-approval count. One read for 'where do I focus?'; follow up via get_resource_context for depth.",
+			Description:    "Return a thin per-resource triage rollup across every resource visible to the org — identity, operator flags (intentionallyOffline, neverAutoRemediate, maintenanceWindowActive), per-severity finding counts (total/critical/warning/info), and pending-approval count. One read for 'where do I focus?'; follow up via get_resource_context for depth. Optional additive filters (hasFindings, severity, technology, resourceType) narrow the result to a relevant subset so agents triaging a large fleet do not receive or page through healthy resources.",
 			Category:       "context",
 			Method:         http.MethodGet,
 			Path:           FleetContextCapabilityPath,
@@ -729,6 +754,7 @@ var canonicalManifest = Manifest{
 			ActionMode:     agentCapabilityActionModeRead,
 			ApprovalPolicy: agentCapabilityApprovalPolicyScopeOnly,
 			ResponseShape:  "AgentFleetContext",
+			InputSchema:    fleetContextInputSchema(),
 			OutputSchema:   fleetContextOutputSchema(),
 		},
 		{

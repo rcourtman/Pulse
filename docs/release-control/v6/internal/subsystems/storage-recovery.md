@@ -1730,7 +1730,11 @@ artifact or storage/recovery freshness signal. The companion
 `/api/agent/resource-capabilities/{id}` endpoint is the same kind
 of read-only projection: it returns the in-memory
 `Resource.Capabilities` slice the registry already assembles, so
-no new persistence or recovery artifact is introduced. The recovery posture
+no new persistence or recovery artifact is introduced. The
+optional additive filter query params on fleet-context
+(hasFindings, severity, technology, resourceType) likewise
+introduce no new persistence: they only narrow the in-memory
+registry walk, so the recovery posture is unchanged. The recovery posture
 is identical to the per-resource bundle: when the unified-resources
 store and the approval store rehydrate on startup, the fleet view
 recovers the same situated picture without any fleet-specific

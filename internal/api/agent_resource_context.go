@@ -739,6 +739,13 @@ func (h *AgentContextHandler) HandleFleetContext(w http.ResponseWriter, r *http.
 		}
 	}
 
+	// Optional additive filters. All empty/unset = current behavior (return
+	// the full fleet). Unknown values match nothing and return an empty
+	// resources array, which is a valid triage answer, not an error: an agent
+	// asking for technology=docker on a fleet with none should see [], not a
+	// 400. String filters are case-insensitive and trimmed.
+	filter := parseFleetContextFilter(r)
+
 	for _, resource := range resources {
 		canonical := unified.CanonicalResourceID(resource.ID)
 		summary := AgentFleetResourceSummary{
@@ -759,6 +766,9 @@ func (h *AgentContextHandler) HandleFleetContext(w http.ResponseWriter, r *http.
 		if count, ok := pendingByResource[canonical]; ok {
 			summary.PendingApprovalCount = count
 		}
+		if !fleetContextFilterMatches(filter, summary) {
+			continue
+		}
 		out.Resources = append(out.Resources, summary)
 	}
 
@@ -766,7 +776,88 @@ func (h *AgentContextHandler) HandleFleetContext(w http.ResponseWriter, r *http.
 	_ = json.NewEncoder(w).Encode(out)
 }
 
-// HandleOperationsLoopStatus serves the content-safe status read for the shared
+// fleetContextFilter captures the optional, additive query-param filters for
+// GET /api/agent/fleet-context. A nil/zero field means "no filter on this
+// dimension." Empty values (hasFindingsFilter set but severity empty, etc.)
+// still match per their semantics below.
+type fleetContextFilter struct {
+	// hasFindingsFilter is set when the hasFindings query param is present.
+	// When true, only resources with at least one active finding are kept.
+	// When false/absent, no finding-presence filter is applied.
+	hasFindingsFilter bool
+	hasFindings       bool
+	// severity, when non-empty, keeps only resources with at least one finding
+	// at that severity (critical/warning/info). Case-insensitive, trimmed.
+	severity string
+	// technology, when non-empty, keeps only resources whose Technology matches
+	// (case-insensitive, trimmed). Empty technology on a resource does not match
+	// a non-empty filter.
+	technology string
+	// resourceType, when non-empty, keeps only resources whose Type matches
+	// (case-insensitive, trimmed).
+	resourceType string
+}
+
+// parseFleetContextFilter reads optional fleet-context filter query params.
+// follows the bare r.URL.Query().Get convention used elsewhere in the api
+// package. Invalid values are silently ignored (no 400) so the endpoint
+// degrades gracefully to a broader result rather than erroring on a typo.
+func parseFleetContextFilter(r *http.Request) fleetContextFilter {
+	q := r.URL.Query()
+	f := fleetContextFilter{}
+	if raw := strings.TrimSpace(q.Get("hasFindings")); raw != "" {
+		// Bare sentinel match, matching the codebase convention (e.g. == "1").
+		// Any value other than "true"/"1" is treated as absent to avoid
+		// erroring on an unfamiliar truthy spelling.
+		if raw == "true" || raw == "1" {
+			f.hasFindingsFilter = true
+			f.hasFindings = true
+		}
+	}
+	f.severity = strings.ToLower(strings.TrimSpace(q.Get("severity")))
+	f.technology = strings.ToLower(strings.TrimSpace(q.Get("technology")))
+	f.resourceType = strings.ToLower(strings.TrimSpace(q.Get("resourceType")))
+	return f
+}
+
+// fleetContextFilterMatches reports whether a resource summary passes the
+// active fleet-context filter. An empty filter matches everything (the
+// backward-compatible unfiltered behavior).
+func fleetContextFilterMatches(f fleetContextFilter, s AgentFleetResourceSummary) bool {
+	if f.hasFindingsFilter && f.hasFindings && s.Findings.Total == 0 {
+		return false
+	}
+	if f.severity != "" {
+		switch f.severity {
+		case "critical":
+			if s.Findings.Critical == 0 {
+				return false
+			}
+		case "warning":
+			if s.Findings.Warning == 0 {
+				return false
+			}
+		case "info":
+			if s.Findings.Info == 0 {
+				return false
+			}
+		default:
+			// Unknown severity matches nothing — a valid empty result, not an
+			// error. An agent asking for severity=blocker on a fleet that
+			// uses critical/warning/info should see [], signaling the filter
+			// did not apply, rather than the whole fleet.
+			return false
+		}
+	}
+	if f.technology != "" && strings.ToLower(s.Technology) != f.technology {
+		return false
+	}
+	if f.resourceType != "" && strings.ToLower(s.ResourceType) != f.resourceType {
+		return false
+	}
+	return true
+}
+
 // Pulse Intelligence Patrol control loop. The canonical route is
 // `GET /api/agent/patrol-control/status`; `GET /api/agent/operations-loop/status`
 // remains as a compatibility alias. It deliberately summarizes counts and

@@ -806,6 +806,14 @@ projections: `resources/list` must call the canonical `get_fleet_context`
 capability, `resources/read` must call `get_resource_context`, and the
 `pulse://resource/<resource-id>` URI shape, resource content MIME type, and
 resource read parameter validation live in `internal/agentcapabilities` rather
+than in `cmd/pulse-mcp` or an MCP-only inventory registry. The
+`get_fleet_context` capability accepts optional additive filter arguments
+(hasFindings, severity, technology, resourceType) that an agent may pass
+through `tools/call` to narrow the fleet to a relevant subset; the projection
+layer forwards non-path GET arguments as URL query parameters so the manifest
+contract, not a per-capability adapter, owns query-string transport. The
+`resources/list` adapter calls fleet-context with no filters and continues to
+receive the full fleet.
 than in `cmd/pulse-mcp` or an MCP-only inventory registry. They must enter
 through `ManifestSurfaceResourceCapabilities`,
 `ListMCPManifestSurfaceResourcesHTTP`, and

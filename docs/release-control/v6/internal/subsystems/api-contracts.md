@@ -3693,6 +3693,21 @@ approval counts must come from one org-scoped, resource-keyed scan
 of the bounded pending-approval list, not N calls to the
 per-resource approval summary helper. Agents pick a focus from the
 fleet view, then drill into the per-resource bundle for depth.
+`/api/agent/fleet-context` accepts optional additive filter query
+parameters — `hasFindings=true` (only resources with at least one
+active finding), `severity=critical|warning|info` (at least one
+finding at that severity), `technology=<string>`, and
+`resourceType=<string>` (case-insensitive exact match). All are
+optional and compose by intersection; omitting every filter returns
+the full fleet (backward compatible). Unknown or unmatched values
+return 200 with `resources: []` rather than an error, because "no
+resource matched this filter" is a valid triage answer. The filters
+narrow what would otherwise be a full-registry sweep, keeping the
+payload bounded for agents triaging a large fleet without paging
+through healthy resources; the manifest-owned `inputSchema` declares
+them so agents discover the filters through the capability surface,
+and non-path GET arguments are forwarded as query parameters by the
+shared projection layer rather than a per-capability adapter.
 
 `/api/agent/resource-capabilities/{id}` is the agent-consumable
 structured capability surface for a single resource: the governed

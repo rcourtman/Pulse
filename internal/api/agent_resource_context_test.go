@@ -1396,6 +1396,189 @@ func TestHandleAgentFleetContext_RejectsNonGet(t *testing.T) {
 	}
 }
 
+// fleetFilterFixture seeds a mixed fleet for filter tests: one healthy VM
+// (vm:healthy, no findings), one degraded VM (vm:critical, a critical finding),
+// one docker container (container:web, a warning finding), and one LXC
+// (container:lxcone, info finding). Covers every filter dimension.
+func fleetFilterFixture(t *testing.T) *AgentContextHandler {
+	t.Helper()
+	h, findings, _ := fleetFixtureHandlers(t, []unified.Resource{
+		{ID: "vm:healthy", Type: "vm", Name: "healthy-vm", Technology: "qemu"},
+		{ID: "vm:critical", Type: "vm", Name: "critical-vm", Technology: "qemu"},
+		{ID: "container:web", Type: "container", Name: "web", Technology: "docker"},
+		{ID: "container:lxcone", Type: "system-container", Name: "lxcone", Technology: "lxc"},
+	})
+	findings.byResource["vm:critical"] = []AgentResourceFindingSnapshot{
+		{ID: "c1", Severity: "critical"},
+	}
+	findings.byResource["container:web"] = []AgentResourceFindingSnapshot{
+		{ID: "w1", Severity: "warning"},
+	}
+	findings.byResource["container:lxcone"] = []AgentResourceFindingSnapshot{
+		{ID: "i1", Severity: "info"},
+	}
+	return h
+}
+
+func decodeFleetResponse(t *testing.T, rec *httptest.ResponseRecorder) AgentFleetContext {
+	t.Helper()
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d, body=%s", rec.Code, rec.Body.String())
+	}
+	var fleet AgentFleetContext
+	if err := json.NewDecoder(rec.Body).Decode(&fleet); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	return fleet
+}
+
+func fleetCanonicalIDs(fleet AgentFleetContext) []string {
+	ids := make([]string, 0, len(fleet.Resources))
+	for _, r := range fleet.Resources {
+		ids = append(ids, r.CanonicalID)
+	}
+	return ids
+}
+
+func TestHandleAgentFleetContext_HasFindingsFilter(t *testing.T) {
+	// hasFindings=true must drop healthy resources and keep only those with at
+	// least one finding — the headline triage filter. vm:healthy has none and
+	// must be excluded.
+	h := fleetFilterFixture(t)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/fleet-context?hasFindings=true", nil)
+	h.HandleFleetContext(rec, req)
+	fleet := decodeFleetResponse(t, rec)
+	got := fleetCanonicalIDs(fleet)
+	want := []string{"vm:critical", "container:web", "container:lxcone"}
+	if len(got) != len(want) {
+		t.Fatalf("hasFindings=true returned %v; want %v (healthy must be excluded)", got, want)
+	}
+	gotSet := map[string]bool{}
+	for _, id := range got {
+		gotSet[id] = true
+	}
+	for _, id := range want {
+		if !gotSet[id] {
+			t.Errorf("hasFindings=true missing %s; got %v", id, got)
+		}
+	}
+	if gotSet["vm:healthy"] {
+		t.Errorf("vm:healthy must be excluded by hasFindings=true; got %v", got)
+	}
+}
+
+func TestHandleAgentFleetContext_SeverityFilter(t *testing.T) {
+	// severity=critical must keep only resources with a critical finding.
+	h := fleetFilterFixture(t)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/fleet-context?severity=critical", nil)
+	h.HandleFleetContext(rec, req)
+	fleet := decodeFleetResponse(t, rec)
+	got := fleetCanonicalIDs(fleet)
+	if len(got) != 1 || got[0] != "vm:critical" {
+		t.Fatalf("severity=critical returned %v; want [vm:critical]", got)
+	}
+
+	// severity=warning must keep only the warning-bearing resource.
+	h2 := fleetFilterFixture(t)
+	rec2 := httptest.NewRecorder()
+	req2 := httptest.NewRequest(http.MethodGet, "/api/agent/fleet-context?severity=warning", nil)
+	h2.HandleFleetContext(rec2, req2)
+	fleet2 := decodeFleetResponse(t, rec2)
+	got2 := fleetCanonicalIDs(fleet2)
+	if len(got2) != 1 || got2[0] != "container:web" {
+		t.Fatalf("severity=warning returned %v; want [container:web]", got2)
+	}
+}
+
+func TestHandleAgentFleetContext_TechnologyFilter(t *testing.T) {
+	// technology=docker (case-insensitive) must keep only the docker container.
+	h := fleetFilterFixture(t)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/fleet-context?technology=docker", nil)
+	h.HandleFleetContext(rec, req)
+	fleet := decodeFleetResponse(t, rec)
+	got := fleetCanonicalIDs(fleet)
+	if len(got) != 1 || got[0] != "container:web" {
+		t.Fatalf("technology=docker returned %v; want [container:web]", got)
+	}
+
+	// Case-insensitivity: DOCKER must match the same resource.
+	h2 := fleetFilterFixture(t)
+	rec2 := httptest.NewRecorder()
+	req2 := httptest.NewRequest(http.MethodGet, "/api/agent/fleet-context?technology=DOCKER", nil)
+	h2.HandleFleetContext(rec2, req2)
+	fleet2 := decodeFleetResponse(t, rec2)
+	got2 := fleetCanonicalIDs(fleet2)
+	if len(got2) != 1 || got2[0] != "container:web" {
+		t.Fatalf("technology=DOCKER returned %v; want [container:web] (case-insensitive)", got2)
+	}
+}
+
+func TestHandleAgentFleetContext_ResourceTypeFilter(t *testing.T) {
+	// resourceType=vm must keep only VMs (the two qemu VMs).
+	h := fleetFilterFixture(t)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/fleet-context?resourceType=vm", nil)
+	h.HandleFleetContext(rec, req)
+	fleet := decodeFleetResponse(t, rec)
+	got := fleetCanonicalIDs(fleet)
+	if len(got) != 2 {
+		t.Fatalf("resourceType=vm returned %v; want 2 vms", got)
+	}
+	gotSet := map[string]bool{}
+	for _, id := range got {
+		gotSet[id] = true
+	}
+	if !gotSet["vm:healthy"] || !gotSet["vm:critical"] {
+		t.Errorf("resourceType=vm must return both vms; got %v", got)
+	}
+}
+
+func TestHandleAgentFleetContext_NoFilterReturnsAll(t *testing.T) {
+	// Backward compatibility: no query params returns the full fleet.
+	h := fleetFilterFixture(t)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/fleet-context", nil)
+	h.HandleFleetContext(rec, req)
+	fleet := decodeFleetResponse(t, rec)
+	if len(fleet.Resources) != 4 {
+		t.Fatalf("no-filter fleet returned %d resources; want 4 (backward compat)", len(fleet.Resources))
+	}
+}
+
+func TestHandleAgentFleetContext_UnknownFilterValueReturnsEmpty(t *testing.T) {
+	// An unknown technology must return 200 with an empty array, not a 400.
+	// The signal "no resource matched this filter" is a valid triage answer.
+	h := fleetFilterFixture(t)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/fleet-context?technology=nonexistent", nil)
+	h.HandleFleetContext(rec, req)
+	fleet := decodeFleetResponse(t, rec)
+	if fleet.Resources == nil {
+		t.Fatal("resources is null; want non-nil empty array")
+	}
+	if len(fleet.Resources) != 0 {
+		t.Errorf("unknown technology returned %d resources; want 0", len(fleet.Resources))
+	}
+}
+
+func TestHandleAgentFleetContext_FiltersCompose(t *testing.T) {
+	// Composed filters must intersect: hasFindings=true AND technology=qemu
+	// returns only the degraded VM (vm:critical), excluding the healthy qemu
+	// VM and the non-qemu degraded resources.
+	h := fleetFilterFixture(t)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/agent/fleet-context?hasFindings=true&technology=qemu", nil)
+	h.HandleFleetContext(rec, req)
+	fleet := decodeFleetResponse(t, rec)
+	got := fleetCanonicalIDs(fleet)
+	if len(got) != 1 || got[0] != "vm:critical" {
+		t.Fatalf("composed filter returned %v; want [vm:critical] (degraded qemu only)", got)
+	}
+}
+
 func TestHandleAgentOperationsLoopStatus_StartsAtPatrolWithoutIssueEvidence(t *testing.T) {
 	h, _, _ := fleetFixtureHandlers(t, []unified.Resource{
 		{ID: "vm:101", Type: "vm", Name: "db-01"},

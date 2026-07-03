@@ -19391,6 +19391,57 @@ func TestContract_GetFleetContextCapabilityListed(t *testing.T) {
 	}
 }
 
+// TestContract_GetFleetContextDeclaresAdditiveFilters pins the agent-surface
+// contract for fleet triage at scale: the capability must declare optional
+// additive filter arguments (hasFindings, severity, technology, resourceType)
+// so an agent can narrow a large fleet to a relevant subset without paging,
+// and the GET projection layer must forward non-path arguments as URL query
+// parameters (not drop them, not body them). Without the inputSchema the
+// filters are undiscoverable; without query forwarding they are unreachable
+// through the MCP tools/call path.
+func TestContract_GetFleetContextDeclaresAdditiveFilters(t *testing.T) {
+	manifest := agentcapabilities.CanonicalManifest()
+	cap, ok := agentcapabilities.FindCapability(manifest.Capabilities, agentcapabilities.FleetContextCapabilityName)
+	if !ok {
+		t.Fatalf("manifest missing %s", agentcapabilities.FleetContextCapabilityName)
+	}
+	if len(cap.InputSchema) == 0 {
+		t.Fatalf("%s must declare an inputSchema so filter arguments are discoverable through the manifest", agentcapabilities.FleetContextCapabilityName)
+	}
+	var schema map[string]any
+	if err := json.Unmarshal(cap.InputSchema, &schema); err != nil {
+		t.Fatalf("%s inputSchema must be valid JSON: %v", agentcapabilities.FleetContextCapabilityName, err)
+	}
+	properties, _ := schema["properties"].(map[string]any)
+	for _, filter := range []string{"hasFindings", "severity", "technology", "resourceType"} {
+		if _, ok := properties[filter]; !ok {
+			t.Errorf("%s inputSchema must declare filter %q; properties = %v", agentcapabilities.FleetContextCapabilityName, filter, properties)
+		}
+	}
+	// None of the filters are required — omitting all returns the full fleet.
+	if required, _ := schema["required"].([]any); len(required) != 0 {
+		t.Errorf("%s filter args must all be optional (backward compat); required = %v", agentcapabilities.FleetContextCapabilityName, required)
+	}
+
+	// The GET projection must forward non-path arguments as query params. Pin
+	// the contract end-to-end: a fleet-context call with filter args produces
+	// a request whose RawQuery carries them.
+	req, projected, err := agentcapabilities.BuildCapabilityHTTPRequest(
+		context.Background(), "http://pulse.local/", "token", cap, map[string]any{
+			"hasFindings": "true",
+			"technology":  "docker",
+		})
+	if err != nil {
+		t.Fatalf("BuildCapabilityHTTPRequest: %v", err)
+	}
+	if projected.Query == nil || projected.Query.Get("hasFindings") != "true" || projected.Query.Get("technology") != "docker" {
+		t.Fatalf("GET projection must forward filter args as query params; projected = %+v", projected)
+	}
+	if req.URL.RawQuery == "" {
+		t.Fatalf("filter args must reach the request URL; url = %q", req.URL.String())
+	}
+}
+
 // TestContract_FindingsResourceOperatorStateProviderIsWired pins the
 // startup wiring that gives the findings runtime access to
 // per-resource operator-set state via the API layer's adapter. The

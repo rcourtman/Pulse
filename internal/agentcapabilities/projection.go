@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 )
@@ -516,6 +517,11 @@ type ProjectedCall struct {
 	Path    string
 	Body    json.RawMessage
 	HasBody bool
+	// Query carries filter arguments forwarded as URL query parameters for
+	// GET/DELETE capabilities (which have no request body). Populated from
+	// leftover public arguments after path-parameter substitution. Empty for
+	// capabilities that declare no filter arguments.
+	Query url.Values
 }
 
 // ProjectCapabilityCall turns agent-facing tool arguments into the Pulse HTTP
@@ -528,6 +534,25 @@ func ProjectCapabilityCall(cap Capability, args map[string]any) (ProjectedCall, 
 
 	projected := ProjectedCall{Path: path}
 	if !CapabilityHasRequestBody(cap) {
+		// GET/DELETE carry non-path arguments as URL query parameters rather
+		// than a JSON body. Collect leftover public arguments after path
+		// substitution so filter-style capabilities (e.g. get_fleet_context)
+		// can forward filters without the agent constructing a raw query
+		// string. Empty when no non-path arguments are supplied — preserving
+		// the prior unfiltered behavior.
+		pathParams := PathParameterSet(cap.Path)
+		query := url.Values{}
+		for k, v := range PublicToolArguments(args) {
+			if pathParams[k] {
+				continue
+			}
+			if s, ok := v.(string); ok {
+				query.Set(k, s)
+			}
+		}
+		if len(query) > 0 {
+			projected.Query = query
+		}
 		return projected, nil
 	}
 

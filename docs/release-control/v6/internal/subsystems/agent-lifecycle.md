@@ -1670,7 +1670,11 @@ walks the registry once and reuses the in-memory findings index,
 one bounded approval-store scan grouped by canonical resource id,
 and a per-resource operator-state SQLite point lookup. Agents pick
 "where do I focus?" from the fleet view and then drill into the
-per-resource bundle for depth.
+per-resource bundle for depth. Optional additive filter query params
+(hasFindings, severity, technology, resourceType) narrow the sweep to
+a relevant subset; they introduce no new lifecycle state, operator
+intent, or persistence — they are a read-only projection over the
+same in-memory registry walk.
 
 `/api/agent/capabilities` is registered in the router's
 `publicPaths` list so the global auth middleware does not gate
