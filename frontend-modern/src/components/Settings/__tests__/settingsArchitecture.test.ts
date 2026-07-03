@@ -64,6 +64,7 @@ import nodeModalAuthenticationSectionSource from '../NodeModalAuthenticationSect
 import nodeModalMonitoringSectionSource from '../NodeModalMonitoringSection.tsx?raw';
 import nodeModalSetupGuideSectionSource from '../NodeModalSetupGuideSection.tsx?raw';
 import nodeModalStatusFooterSource from '../NodeModalStatusFooter.tsx?raw';
+import nodeModalModelSource from '../nodeModalModel.ts?raw';
 import nodeModalStateSource from '../useNodeModalState.ts?raw';
 import availabilityTargetSlotSource from '../ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx?raw';
 import trueNASCredentialSlotSource from '../ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx?raw';
@@ -1291,6 +1292,19 @@ describe('settings architecture guardrails', () => {
     expect(nodeModalSetupGuideSectionSource).toContain('Existing source repair');
     expect(nodeModalSetupGuideSectionSource).toContain('Audit/Repair');
     expect(nodeModalSetupGuideSectionSource).toContain('without rotating the current API token');
+    expect(nodeModalSetupGuideSectionSource).toContain('VM.GuestAgent.Audit/FileRead');
+    expect(nodeModalModelSource).toContain('HAS_GUEST_AGENT_AUDIT');
+    expect(nodeModalModelSource).toContain('VM.GuestAgent.FileRead');
+    expect(nodeModalModelSource).toContain('PulseTmpVMMonitor');
+    const guestAgentBranch = nodeModalModelSource.indexOf(
+      'if [ "$HAS_GUEST_AGENT_AUDIT" = true ]; then',
+    );
+    const monitorFallback = nodeModalModelSource.indexOf(
+      'pveum role add PulseTmpVMMonitor -privs VM.Monitor',
+    );
+    expect(guestAgentBranch).toBeGreaterThanOrEqual(0);
+    expect(monitorFallback).toBeGreaterThanOrEqual(0);
+    expect(guestAgentBranch).toBeLessThan(monitorFallback);
     expect(nodeModalSetupGuideSectionSource).toContain('Docker inside Proxmox LXCs');
     expect(nodeModalSetupGuideSectionSource).toContain(
       'PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true',

@@ -556,8 +556,8 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                       </div>
                       <p class="text-muted text-xs mt-1">
                         Note: PVEAuditor gives read-only API access. PulseMonitor adds Sys.Audit
-                        plus either VM.Monitor (PVE 8) or VM.GuestAgent.Audit (PVE 9+) for disk and
-                        guest metrics. PVEDatastoreAdmin on /storage adds backup visibility.
+                        plus VM.GuestAgent.Audit/FileRead (PVE 9+) or VM.Monitor (PVE 8) for disk
+                        and guest metrics. PVEDatastoreAdmin on /storage adds backup visibility.
                       </p>
                     </div>
 

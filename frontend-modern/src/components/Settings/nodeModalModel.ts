@@ -56,24 +56,31 @@ else
   fi
 fi
 
-# VM guest agent / monitor privileges
-VM_PRIV=""
-if pveum role list 2>/dev/null | grep -q "VM.Monitor"; then
-  VM_PRIV="VM.Monitor"
-elif pveum role list 2>/dev/null | grep -q "VM.GuestAgent.Audit"; then
-  VM_PRIV="VM.GuestAgent.Audit"
-else
-  if pveum role add PulseTmpVMMonitor -privs VM.Monitor 2>/dev/null; then
-    VM_PRIV="VM.Monitor"
-    pveum role delete PulseTmpVMMonitor 2>/dev/null
-  elif pveum role add PulseTmpGuestAudit -privs VM.GuestAgent.Audit 2>/dev/null; then
-    VM_PRIV="VM.GuestAgent.Audit"
-    pveum role delete PulseTmpGuestAudit 2>/dev/null
-  fi
+# VM guest agent (PVE 9+) / monitor (PVE 8) privileges
+HAS_GUEST_AGENT_AUDIT=false
+if pveum role list 2>/dev/null | grep -q "VM.GuestAgent.Audit"; then
+  HAS_GUEST_AGENT_AUDIT=true
+elif pveum role add PulseTmpGuestAudit -privs VM.GuestAgent.Audit 2>/dev/null; then
+  HAS_GUEST_AGENT_AUDIT=true
+  pveum role delete PulseTmpGuestAudit 2>/dev/null
 fi
 
-if [ -n "$VM_PRIV" ]; then
-  EXTRA_PRIVS+=("$VM_PRIV")
+if [ "$HAS_GUEST_AGENT_AUDIT" = true ]; then
+  EXTRA_PRIVS+=("VM.GuestAgent.Audit")
+
+  if pveum role list 2>/dev/null | grep -q "VM.GuestAgent.FileRead"; then
+    EXTRA_PRIVS+=("VM.GuestAgent.FileRead")
+  elif pveum role add PulseTmpGuestFileRead -privs VM.GuestAgent.FileRead 2>/dev/null; then
+    EXTRA_PRIVS+=("VM.GuestAgent.FileRead")
+    pveum role delete PulseTmpGuestFileRead 2>/dev/null
+  fi
+else
+  if pveum role list 2>/dev/null | grep -q "VM.Monitor"; then
+    EXTRA_PRIVS+=("VM.Monitor")
+  elif pveum role add PulseTmpVMMonitor -privs VM.Monitor 2>/dev/null; then
+    EXTRA_PRIVS+=("VM.Monitor")
+    pveum role delete PulseTmpVMMonitor 2>/dev/null
+  fi
 fi
 
 if [ \${#EXTRA_PRIVS[@]} -gt 0 ]; then

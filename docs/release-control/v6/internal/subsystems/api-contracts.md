@@ -136,6 +136,12 @@ product API routes free of maintainer commercial analytics.
 
 ## Shared Boundaries
 
+PVE setup API consumers, generated scripts, runtime setup, installer setup, and
+browser manual guidance must share one `PulseMonitor` privilege contract:
+prefer `VM.GuestAgent.Audit` plus `VM.GuestAgent.FileRead` on PVE 9+, and use
+legacy `VM.Monitor` only as the PVE 8 fallback when guest-agent privileges are
+unavailable.
+
 Mobile onboarding QR/deep-link payload readiness is a shared backend/frontend
 contract. `internal/api/onboarding_handlers.go` owns the `409
 onboarding_not_ready` diagnostic response when Remote Access, relay
@@ -1440,7 +1446,11 @@ payload shape change when the portal presents compact client rows.
     `PVEDatastoreAdmin` ACLs to both `pulse-monitor@pve` and the concrete token
     id. PBS scripts must grant `Audit` to both `pulse-monitor@pbs` and the
     concrete token id. Browser/runtime setup callers must not fork this into
-    token-shared, token-unprivileged, or user-only ACL variants.
+    token-shared, token-unprivileged, or user-only ACL variants. For PVE,
+    `PulseMonitor` privilege selection must prefer `VM.GuestAgent.Audit` plus
+    `VM.GuestAgent.FileRead` on PVE 9+ and reserve `VM.Monitor` for the legacy
+    PVE 8 fallback, so API-generated scripts, runtime setup, installer setup,
+    and browser manual guidance stay on one privilege contract.
 67. `internal/api/enterprise_extension_rbac_admin.go` shared with `organization-settings`: RBAC admin extension endpoints are both an organization settings control surface and a canonical API payload contract boundary.
 68. `internal/api/licensing_bridge.go` shared with `cloud-paid`: commercial licensing bridge handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
 69. `internal/api/licensing_handlers.go` shared with `cloud-paid`: commercial licensing handlers carry both API payload contract and cloud-paid entitlement boundary ownership.

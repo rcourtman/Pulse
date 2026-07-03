@@ -345,6 +345,10 @@ func TestRootInstallScriptAutoRegisterUsesSecureContractShape(t *testing.T) {
 		`pveum aclmod /storage -token "$token_id" -role PVEDatastoreAdmin`,
 		`priv_string="$(IFS=,; echo "${extra_privs[*]}")"`,
 		`pveum role modify PulseMonitor -privs "$priv_string"`,
+		`pveum role add PulseGuestFileReadProbe -privs VM.GuestAgent.FileRead`,
+		`extra_privs+=("VM.GuestAgent.Audit")`,
+		`extra_privs+=("VM.GuestAgent.FileRead")`,
+		`extra_privs+=("VM.Monitor")`,
 		`slug = re.sub(r"[^a-z0-9]+", "-", host)`,
 		`print(f"pulse-{slug}")`,
 	}
@@ -355,6 +359,11 @@ func TestRootInstallScriptAutoRegisterUsesSecureContractShape(t *testing.T) {
 	}
 	if strings.Contains(script, `local token_name="pulse-${pulse_host_slug}-$(date +%s)"`) {
 		t.Fatalf("root install.sh preserved stale timestamp-suffixed Proxmox token naming")
+	}
+	guestBranch := strings.Index(script, `if [[ "$has_guest_audit" == true ]]; then`)
+	monitorBranch := strings.Index(script, `if [[ "$has_vm_monitor" == true ]]; then`)
+	if guestBranch < 0 || monitorBranch < 0 || guestBranch > monitorBranch {
+		t.Fatalf("root install.sh must prefer VM.GuestAgent.* privileges before legacy VM.Monitor")
 	}
 	forbidden := []string{
 		`local bootstrap_token=""`,

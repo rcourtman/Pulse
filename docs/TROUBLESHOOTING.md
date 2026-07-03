@@ -137,15 +137,16 @@ pveum user permissions <user>@pam
 At minimum, ensure the user/token has read access for inventory and metrics:
 
 - `Sys.Audit`
-- `VM.Monitor`
 - `Datastore.Audit`
 
-For VM guest agent features on PVE 9+, also ensure:
+For VM guest agent features on PVE 9+, prefer:
 
 - `VM.GuestAgent.Audit` — required for disk usage and guest info
 - `VM.GuestAgent.FileRead` — required for accurate memory monitoring (excludes buff/cache)
 
-Note: The built-in `PVEAuditor` role cannot be modified. Create a custom role (e.g. `PulseMonitor`) with the above privileges added, and assign it to your Pulse API token.
+For PVE 8 only, use `VM.Monitor` instead of the `VM.GuestAgent.*` privileges.
+
+Note: The built-in `PVEAuditor` role cannot be modified. Create a custom role (e.g. `PulseMonitor`) with the above privileges added, and assign it to your Pulse API token. After upgrading to PVE 9, add the `VM.GuestAgent.*` privileges and remove legacy `VM.Monitor` from the custom role.
 
 **Rocky Linux / RHEL VMs**: The default qemu-guest-agent configuration may block file-read RPCs (`guest-file-open`, `guest-file-read`, `guest-file-close`). If memory or disk data is missing for these VMs, check `/etc/sysconfig/qemu-ga` and ensure those operations are not blocked, then restart the agent. Refer to your distro's qemu-guest-agent documentation for the exact config syntax.
 

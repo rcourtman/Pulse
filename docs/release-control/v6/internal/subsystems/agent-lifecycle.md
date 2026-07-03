@@ -97,6 +97,11 @@ that binary, not separate customer-facing agent products.
 
 ## Shared Boundaries
 
+PVE node setup shared boundaries that render or copy `PulseMonitor`
+permissions must treat `VM.GuestAgent.Audit` plus `VM.GuestAgent.FileRead` as
+the PVE 9+ primary contract, with `VM.Monitor` retained only as the legacy PVE
+8 fallback when guest-agent privileges are unavailable.
+
 `internal/dockeragent/` is lifecycle-adjacent for agent binary/update trust
 and owns the Docker / Podman collection module used by `pulse-agent`, but
 Docker runtime capability truth is monitoring-owned. Lifecycle consumers must
@@ -3179,7 +3184,10 @@ presentation in the extracted node setup surface
 `useNodeModalState.ts`): the copied PVE permission snippet must stay
 aligned with the canonical backend setup script, including comma-joined
 privilege transport and non-destructive `PulseMonitor` role updates, instead
-of shipping a stale local fork.
+of shipping a stale local fork. PVE 9+ guest-agent privileges
+`VM.GuestAgent.Audit` and `VM.GuestAgent.FileRead` are the primary setup
+contract; legacy `VM.Monitor` may appear only as the PVE 8 fallback when the
+guest-agent privilege probe is unavailable.
 That same node setup modal owner must also route Proxmox agent-install command
 generation through the canonical `NodesAPI.getAgentInstallCommand` client for
 both PVE and PBS, instead of mixing client-mediated and ad hoc raw POST
