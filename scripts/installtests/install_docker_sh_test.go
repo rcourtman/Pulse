@@ -1,9 +1,11 @@
 package installtests
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -23,6 +25,21 @@ func currentReleaseVersion(t *testing.T) string {
 
 func isPrereleaseVersion(version string) bool {
 	return strings.Contains(version, "-")
+}
+
+func previousStablePatchVersion(version string) (string, bool) {
+	if isPrereleaseVersion(version) {
+		return "", false
+	}
+	parts := strings.Split(version, ".")
+	if len(parts) != 3 {
+		return "", false
+	}
+	patch, err := strconv.Atoi(parts[2])
+	if err != nil || patch <= 0 {
+		return "", false
+	}
+	return fmt.Sprintf("%s.%s.%d", parts[0], parts[1], patch-1), true
 }
 
 func TestInstallDockerScriptUsesConfiguredImageRepoDefault(t *testing.T) {
@@ -105,6 +122,9 @@ func TestRepoDockerComposeDefaultPinsCurrentVersion(t *testing.T) {
 	if !isPrereleaseVersion(version) && version != "6.0.0" && strings.Contains(text, "rcourtman/pulse:6.0.0") {
 		t.Fatalf("stable patch repo docker-compose.yml must move off the initial GA image tag:\n%s", text)
 	}
+	if previous, ok := previousStablePatchVersion(version); ok && strings.Contains(text, "rcourtman/pulse:"+previous) {
+		t.Fatalf("repo docker-compose.yml must not retain the previous stable patch image tag %s:\n%s", previous, text)
+	}
 	if strings.Contains(text, ":latest") {
 		t.Fatalf("repo docker-compose.yml must not default to a floating latest tag:\n%s", text)
 	}
@@ -129,6 +149,9 @@ func TestInstallDockerScriptFallbackPinsCurrentVersion(t *testing.T) {
 	}
 	if !isPrereleaseVersion(version) && version != "6.0.0" && strings.Contains(text, `CANONICAL_DEFAULT_PULSE_VERSION="6.0.0"`) {
 		t.Fatalf("stable patch install-docker.sh fallback must move off the initial GA image tag:\n%s", text)
+	}
+	if previous, ok := previousStablePatchVersion(version); ok && strings.Contains(text, `CANONICAL_DEFAULT_PULSE_VERSION="`+previous+`"`) {
+		t.Fatalf("install-docker.sh fallback must not retain the previous stable patch version %s:\n%s", previous, text)
 	}
 }
 

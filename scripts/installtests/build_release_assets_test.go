@@ -673,6 +673,9 @@ func TestDeploymentDefaultsPinVersionedImagesAndHelmDocsChecksum(t *testing.T) {
 			t.Fatalf("Helm Chart.yaml must pin the governed release version, missing %s:\n%s", needle, chart)
 		}
 	}
+	if previous, ok := previousStablePatchVersion(version); ok && strings.Contains(chart, "v"+previous) {
+		t.Fatalf("Helm Chart.yaml must not retain the previous stable patch tag v%s:\n%s", previous, chart)
+	}
 
 	chartReadmeBytes, err := os.ReadFile(repoFile("deploy", "helm", "pulse", "README.md"))
 	if err != nil {
@@ -687,6 +690,9 @@ func TestDeploymentDefaultsPinVersionedImagesAndHelmDocsChecksum(t *testing.T) {
 		if !strings.Contains(chartReadme, needle) {
 			t.Fatalf("Helm README.md must reflect the governed release version, missing %s:\n%s", needle, chartReadme)
 		}
+	}
+	if previous, ok := previousStablePatchVersion(version); ok && strings.Contains(chartReadme, previous) {
+		t.Fatalf("Helm README.md must not retain the previous stable patch version %s:\n%s", previous, chartReadme)
 	}
 
 	helmPagesBytes, err := os.ReadFile(repoFile(".github", "workflows", "helm-pages.yml"))
