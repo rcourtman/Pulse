@@ -79,6 +79,11 @@ After the server is on v6, use the generated install or upgrade command from
 to v6. A v5 agent can be missing from v6 Reporting until it has upgraded,
 authenticated, and sent its first v6 report.
 
+Agent self-update still belongs to the agent update path and depends on the
+agent being able to authenticate, reach a trusted update channel, and accept
+the release signing key. Do not treat the server update alone as proof that
+every installed agent has moved to the same v6 version.
+
 ### Will an upgraded v5 agent keep the same identity in v6?
 
 Yes. The v5-to-v6 agent path is expected to preserve one canonical agent
@@ -118,10 +123,8 @@ servers.
 
 ### Can I keep Pulse v5 stable while I test Pulse v6?
 
-Pulse v5.1.35 remains the current stable line while RC7 is evaluated.
-
-Use a staging or otherwise controlled upgrade first and keep a rollback path
-available. For RC7, the stable rollback command is:
+Yes. Keep a rollback path available while you evaluate v6. For the v6.0.0 GA
+cutover, the stable rollback command is:
 
 ```bash
 ./scripts/install.sh --version v5.1.35

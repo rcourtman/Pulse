@@ -8,21 +8,24 @@
 
 1. The latest shipped Pulse v6 prerelease tag is `v6.0.0-rc.7`.
 2. That shipped prerelease tag resolves to commit `2900e41b2db95561471d17bb9f4fdf097b56b8ac`.
-3. The governed release profile in `docs/release-control/control_plane.json`
+3. The selected remote ref `origin/pulse/v6-release` is still behind the current
+   local governed branch state, so `Release Dry Run` would exercise stale remote
+   control-plane metadata instead of the intended candidate.
+4. The governed release profile in `docs/release-control/control_plane.json`
    currently declares both `prerelease_branch` and `stable_branch` as
    `pulse/v6-release`.
-4. The active control-plane target is `v6-ga-promotion`, so stable or GA
+5. The active control-plane target is `v6-ga-promotion`, so stable or GA
    promotion is now the governed objective for Pulse v6.
-5. The active local `pulse/v6-release` branch currently reports `VERSION=6.0.0`, so a
+6. The active local `pulse/v6-release` branch currently reports `VERSION=6.0.0`, so a
    local GA candidate exists on the governed stable line.
-6. There is still no governed `Prerelease-to-GA Rehearsal Record` proving a successful
+7. There is still no governed `Prerelease-to-GA Rehearsal Record` proving a successful
    non-publish `Release Dry Run` for the current `6.0.0` candidate.
-7. `docs/releases/RELEASE_NOTES_v6.md` and
+8. `docs/releases/RELEASE_NOTES_v6.md` and
    `docs/release-control/v6/internal/V5_MAINTENANCE_SUPPORT_POLICY.md` now carry the
    currently proposed exact dates for the eventual GA notice:
-   - `v6` GA date: `2026-07-03`
-   - `v5` end-of-support date: `2026-10-01`
-8. There is still no governed `Release Dry Run` artifact or rehearsal record
+   - `v6` GA date: `2026-07-04`
+   - `v5` end-of-support date: `2026-10-02`
+9. There is still no governed `Release Dry Run` artifact or rehearsal record
    exercising stable inputs for:
    - `version=6.0.0`
    - `promoted_from_tag=v6.0.0-rc.7`
@@ -30,10 +33,10 @@
    - the artifact-owned promotion channel for that rehearsal
    - the artifact-owned promoted prerelease tag for that rehearsal
    - the artifact-owned rollback target for that stable candidate
-   - `ga_date=2026-07-03`
+   - `ga_date=2026-07-04`
    - an explicit `rollback_version`
    - the exact derived rollback command that artifact will publish
-   - `v5_eos_date=2026-10-01`
+   - `v5_eos_date=2026-10-02`
 
 ## Why The Gate Cannot Be Cleared Yet
 
@@ -54,10 +57,10 @@ users would still be the first real cohort for the final promotion path.
    - an artifact-owned promoted prerelease tag matching that rehearsal
    - an artifact-owned rollback target for the stable candidate
    - the exact planned GA and v5 end-of-support dates for the publish notice
-   - `ga_date=2026-07-03`
+   - `ga_date=2026-07-04`
    - an explicit stable `rollback_version`
    - the exact derived rollback command that artifact will publish
-   - `v5_eos_date=2026-10-01`
+   - `v5_eos_date=2026-10-02`
 3. Capture the `rc-to-ga-rehearsal-summary` artifact and run URL.
 4. Materialize the final rehearsal record from that artifact without
    hand-repairing any missing candidate tag, promoted prerelease tag, rollback

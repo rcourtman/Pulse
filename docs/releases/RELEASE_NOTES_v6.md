@@ -23,10 +23,10 @@ already know.
 
 ## Pulse v5 Support Transition
 
-Pulse v5 entered maintenance-only support on `2026-07-03`.
+Pulse v5 entered maintenance-only support on `2026-07-04`.
 I will ship only critical security, data-loss, licensing or billing blocker,
-installer or updater failure, and safe migration blocker fixes for existing v5 users until `2026-10-01`.
-After `2026-10-01`, Pulse v5 is end-of-support and new fixes land on v6 unless
+installer or updater failure, and safe migration blocker fixes for existing v5 users until `2026-10-02`.
+After `2026-10-02`, Pulse v5 is end-of-support and new fixes land on v6 unless
 I publish an explicit exception.
 
 ## What Is In v6.0.0
@@ -139,8 +139,11 @@ hosted product; see the MSP section of the pricing doc.
 4. Re-test recovery workflows and any backup-era assumptions.
 5. Verify license activation or paid-license migration immediately after first
    boot on upgraded systems.
-6. Upgrade Unified Agents separately only when you are explicitly testing the
-   v5-to-v6 agent path.
+6. Upgrade Unified Agents separately from the server. Moving the Pulse server
+   to v6 does not by itself upgrade installed agents; after the server upgrade,
+   use `Settings → Infrastructure → Install on a host` to generate the current
+   install or upgrade command for each agent host, then confirm each agent
+   reports its v6 version.
 
 ## Operator References
 

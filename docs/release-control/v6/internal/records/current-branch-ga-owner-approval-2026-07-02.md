@@ -6,8 +6,8 @@
 - Scope decision: include accumulated post-RC7 changes in the GA release
 - Additional RC or soak required: no
 - Additional current-branch validation required before GA: no
-- GA date for publication packet: 2026-07-03
-- v5 end-of-support date for publication packet: 2026-10-01
+- GA date for publication packet: 2026-07-04
+- v5 end-of-support date for publication packet: 2026-10-02
 
 ## Owner Direction
 
@@ -18,7 +18,7 @@ soak cycle.
 This record is risk acceptance, not validation evidence. The release record
 must not describe the post-RC7 changes as RC-tested. The public release packet
 must describe v6.0.0 as the current branch GA after seven release candidates,
-with the exact GA and v5 end-of-support dates updated for the actual July 3,
+with the exact GA and v5 end-of-support dates updated for the actual July 4,
 2026 publication.
 
 ## Release-Control Impact
