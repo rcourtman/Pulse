@@ -23,6 +23,7 @@ Helm chart for deploying the Pulse hub and optional Docker monitoring agent.
 | agent.affinity | object | `{}` |  |
 | agent.args[0] | string | `"--enable-docker"` |  |
 | agent.args[1] | string | `"--enable-host=false"` |  |
+| agent.command[0] | string | `"/usr/local/bin/pulse-agent"` |  |
 | agent.dockerSocket.enabled | bool | `true` |  |
 | agent.dockerSocket.hostPathType | string | `"Socket"` |  |
 | agent.dockerSocket.path | string | `"/var/run/docker.sock"` |  |
@@ -36,7 +37,7 @@ Helm chart for deploying the Pulse hub and optional Docker monitoring agent.
 | agent.extraVolumes | list | `[]` |  |
 | agent.healthPort | int | `9191` |  |
 | agent.image.pullPolicy | string | `"IfNotPresent"` |  |
-| agent.image.repository | string | `"ghcr.io/rcourtman/pulse-agent"` |  |
+| agent.image.repository | string | `"rcourtman/pulse"` |  |
 | agent.image.tag | string | `""` |  |
 | agent.kind | string | `"DaemonSet"` |  |
 | agent.livenessProbe.enabled | bool | `true` |  |
