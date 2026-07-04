@@ -1,24 +1,26 @@
 # Pulse v6.0.0
 
 _This changelog describes the shipped stable `v6.0.0` release compared with
-`v5.1.34`. It includes the corrective changes that were validated across
-`v6.0.0-rc.1` through `v6.0.0-rc.6`._
+`v5.1.35`. It includes the corrective changes that were validated across
+`v6.0.0-rc.1` through `v6.0.0-rc.7` and the post-RC7 fixes that closed out
+the GA line._
 
 ## What v6 changes at a high level
 
 Pulse v6 keeps the platform-shaped top-level navigation existing v5 operators
-already know (Proxmox, Docker, Kubernetes, TrueNAS, vSphere, Machines, plus
-Alerts, Patrol, and Settings) and rebuilds the runtime behind it on a unified
-resource model. The default top-level shape is the same shape v5 had; the
-data flowing into those pages is the v6 unified `Resource` contract served
-from `/api/resources`.
+already know (Proxmox, Docker, Kubernetes, Machines, plus Alerts and
+Settings) and rebuilds the runtime behind it on a unified resource model.
+The default top-level shape is the same shape v5 had; the data flowing into
+those pages is the v6 unified `Resource` contract served from
+`/api/resources`. v6 also adds new top-level pages for platforms v5 did not
+have — vSphere and TrueNAS — plus Patrol and a first-class Machines page.
 
 For existing Pulse v5 operators, this is not just a visual refresh. The live-
 state contract changes, install and onboarding are split differently inside
 Settings, self-hosted commercial posture now revolves around core monitoring
 included for self-hosted installs plus paid convenience, history, and AI/admin
 surfaces rather than capped monitored-system volume, and there are new top-
-level pages (vSphere, Machines, Patrol).
+level pages (vSphere, TrueNAS, Patrol).
 
 The v6 line briefly shipped a unified `Infrastructure` / `Workloads` /
 `Storage` / `Recovery` layout across `rc.1` through `rc.5`. Operator feedback
@@ -30,10 +32,11 @@ the navigation shape you already know.
 ## Major product and workflow changes
 
 - **The top-level product layout stays platform-shaped, on a unified
-  backend.** Proxmox, Docker, Kubernetes, TrueNAS, vSphere, and Machines
-  are each their own top-level page, alongside Alerts, Patrol, and Settings.
-  Behind those pages, Pulse v6 runs on a unified `Resource` contract
-  (`/api/resources`) and per-platform pages consume that contract.
+  backend.** Each backing source has its own top-level page (Proxmox,
+  Docker, Kubernetes, TrueNAS, vSphere, Machines), alongside Alerts,
+  Patrol, and Settings. Behind those pages, Pulse v6 runs on a unified
+  `Resource` contract (`/api/resources`) and per-platform pages consume
+  that contract.
 
 - **vSphere is a first-class platform.** vSphere has a top-level page
   parallel to Proxmox, Docker, Kubernetes, and TrueNAS, with VMs through
@@ -41,6 +44,18 @@ the navigation shape you already know.
   uptime, cluster services, VM hardware config, VMware Tools status,
   vCenter MoRef on the workload ID, snapshot trees, and a vSphere placement
   card in the workload drawer.
+
+- **TrueNAS is a first-class platform.** TrueNAS monitoring covers pools,
+  datasets, disks, ZFS snapshots, replication tasks, and alerts, with
+  connection management through `/api/truenas/connections` and native
+  inline detail rendering across storage, system, service, and protection
+  rows.
+
+- **AI intelligence services sit behind Patrol and Assistant.** Pulse v6
+  exposes a dedicated intelligence surface at `/api/ai/intelligence/*`
+  covering patterns, correlations, anomalies, baselines, forecasts,
+  incident recording, and remediation plans. Patrol consumes these signals
+  in its findings and capacity-forecast actions.
 
 - **Patrol is a first-class intelligence surface.** Patrol findings carry
   in-place verbs (Investigate, Why, Verify fix, Create rule, Mark resolved),
