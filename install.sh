@@ -107,6 +107,7 @@ BUILD_FROM_SOURCE_MARKER="$INSTALL_DIR/BUILD_FROM_SOURCE"
 DETECTED_CTID=""
 UPDATE_MIN_TEMP_FREE_BYTES=$((900 * 1024 * 1024))
 UPDATE_MIN_INSTALL_FREE_BYTES=$((256 * 1024 * 1024))
+CONFIG_BACKUP_MIN_EXTRA_BYTES=$((64 * 1024 * 1024))
 
 release_signature_key_available() {
     [[ -n "${PINNED_RELEASE_SSH_PUBLIC_KEY:-}" ]]
@@ -204,6 +205,18 @@ get_filesystem_device_for_path() {
     printf '%s\n' "$filesystem"
 }
 
+get_directory_size_bytes() {
+    local path="$1"
+    local used_kb=""
+
+    used_kb=$(du -sk "$path" 2>/dev/null | awk 'NR==1 {print $1}')
+    if [[ ! "$used_kb" =~ ^[0-9]+$ ]]; then
+        return 1
+    fi
+
+    printf '%s\n' $((used_kb * 1024))
+}
+
 ensure_update_disk_headroom() {
     local temp_path="${1:-/tmp}"
     local install_path="${2:-$INSTALL_DIR}"
@@ -245,6 +258,38 @@ ensure_update_disk_headroom() {
         print_error "Not enough free disk space in $install_path to apply the Pulse update"
         print_info "Available: $(bytes_to_human "$install_free_bytes"), required: $(bytes_to_human "$UPDATE_MIN_INSTALL_FREE_BYTES")"
         print_info "Free disk space under $install_path and retry the update"
+        return 1
+    fi
+
+    return 0
+}
+
+ensure_config_backup_headroom() {
+    local config_path="${1:-$CONFIG_DIR}"
+    local backup_parent=""
+    local free_bytes=""
+    local config_bytes=""
+    local required_bytes=""
+
+    if [[ ! -d "$config_path" ]]; then
+        return 0
+    fi
+
+    backup_parent="$(dirname "$config_path")"
+    free_bytes=$(get_available_bytes_for_path "$backup_parent" 2>/dev/null || true)
+    config_bytes=$(get_directory_size_bytes "$config_path" 2>/dev/null || true)
+
+    if [[ -z "$free_bytes" || -z "$config_bytes" ]]; then
+        print_warn "Could not determine disk headroom for configuration backup; continuing anyway"
+        return 0
+    fi
+
+    required_bytes=$((config_bytes + CONFIG_BACKUP_MIN_EXTRA_BYTES))
+    if (( free_bytes < required_bytes )); then
+        print_error "Not enough free disk space to back up the existing Pulse configuration"
+        print_info "Configuration size: $(bytes_to_human "$config_bytes")"
+        print_info "Available in $backup_parent: $(bytes_to_human "$free_bytes"), required: $(bytes_to_human "$required_bytes")"
+        print_info "Free disk space or remove old ${config_path}.backup.* directories, then retry the update"
         return 1
     fi
 
@@ -2746,7 +2791,12 @@ create_user() {
 backup_existing() {
     if [[ -d "$CONFIG_DIR" ]]; then
         print_info "Backing up existing configuration..."
-        cp -a "$CONFIG_DIR" "${CONFIG_DIR}.backup.$(date +%Y%m%d-%H%M%S)"
+        ensure_config_backup_headroom "$CONFIG_DIR" || return 1
+        local backup_dir="${CONFIG_DIR}.backup.$(date +%Y%m%d-%H%M%S)"
+        if ! cp -a "$CONFIG_DIR" "$backup_dir"; then
+            rm -rf "$backup_dir"
+            return 1
+        fi
     fi
 }
 

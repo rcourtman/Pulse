@@ -757,6 +757,9 @@ func TestUpdateDemoWorkflowUsesGovernedNetworkPath(t *testing.T) {
 		`sed -i "s|^PINNED_RELEASE_SSH_PUBLIC_KEY=.*|PINNED_RELEASE_SSH_PUBLIC_KEY=\"${TRUSTED_SSH_PUBLIC_KEY}\"|" /tmp/pulse-install.sh`,
 		`Verify target host identity`,
 		`Demo environment points at host $REMOTE_HOSTNAME but expected $DEMO_EXPECTED_HOSTNAME.`,
+		`Prepare demo host storage`,
+		`KEEP_BACKUPS=2`,
+		`Demo host does not have enough free space to back up $CONFIG_DIR before install.`,
 		`Verify public browser smoke`,
 		`./scripts/run_demo_public_browser_smoke.sh`,
 	}

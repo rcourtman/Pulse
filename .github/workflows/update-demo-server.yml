@@ -330,6 +330,54 @@ jobs:
             echo "skip_current=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Prepare demo host storage
+        if: steps.current.outputs.skip_current != 'true'
+        env:
+          DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
+          DEMO_SERVER_USER: ${{ secrets.DEMO_SERVER_USER }}
+        run: |
+          set -euo pipefail
+          SERVICE_NAME="${{ steps.config.outputs.service_name }}"
+          REMOTE_SCRIPT=$(cat <<'EOF'
+          set -euo pipefail
+          SERVICE_NAME="$1"
+          CONFIG_DIR="/etc/${SERVICE_NAME:-pulse}"
+          BACKUP_PARENT="$(dirname "$CONFIG_DIR")"
+          BACKUP_BASENAME="$(basename "$CONFIG_DIR")"
+          KEEP_BACKUPS=2
+          BACKUP_MARGIN_KB=$((64 * 1024))
+
+          echo "Demo host filesystem before cleanup:"
+          df -h "$BACKUP_PARENT" /tmp || true
+
+          mapfile -t old_backups < <(
+            sudo find "$BACKUP_PARENT" -maxdepth 1 -type d -name "${BACKUP_BASENAME}.backup.*" -printf '%T@ %p\n' 2>/dev/null \
+              | sort -nr \
+              | awk -v keep="$KEEP_BACKUPS" 'NR > keep {sub(/^[^ ]+ /, ""); print}'
+          )
+          if ((${#old_backups[@]} > 0)); then
+            printf 'Removing %d old demo backup directorie(s).\n' "${#old_backups[@]}"
+            printf '%s\0' "${old_backups[@]}" | sudo xargs -0 rm -rf --
+          fi
+
+          if [[ -d "$CONFIG_DIR" ]]; then
+            config_kb="$(sudo du -sk "$CONFIG_DIR" | awk 'NR == 1 {print $1}')"
+            free_kb="$(df -Pk "$BACKUP_PARENT" | awk 'NR == 2 {print $4}')"
+            required_kb=$((config_kb + BACKUP_MARGIN_KB))
+            if ((free_kb < required_kb)); then
+              echo "::error::Demo host does not have enough free space to back up $CONFIG_DIR before install."
+              echo "Config: ${config_kb}KB, available: ${free_kb}KB, required: ${required_kb}KB"
+              sudo find "$BACKUP_PARENT" -maxdepth 1 -type d -name "${BACKUP_BASENAME}.backup.*" -printf '%TY-%Tm-%Td %TH:%TM %p\n' 2>/dev/null | sort || true
+              exit 1
+            fi
+          fi
+
+          echo "Demo host filesystem after cleanup:"
+          df -h "$BACKUP_PARENT" /tmp || true
+          EOF
+          )
+          ssh -i ~/.ssh/id_ed25519 "$DEMO_SERVER_USER@$DEMO_SERVER_HOST" "bash -s -- $(printf '%q ' "$SERVICE_NAME")" <<<"$REMOTE_SCRIPT"
+
       - name: Upload tagged installer
         if: steps.current.outputs.skip_current != 'true'
         env:

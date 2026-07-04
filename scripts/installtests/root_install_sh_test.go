@@ -210,6 +210,99 @@ func TestRootInstallScriptUpdateDiskHeadroomAcceptsSeparateFilesystems(t *testin
 	}
 }
 
+func TestRootInstallScriptConfigBackupHeadroomRejectsLowSpace(t *testing.T) {
+	configDir := t.TempDir()
+	configParent := filepath.Dir(configDir)
+
+	script := `
+		set -euo pipefail
+		print_error() { :; }
+		print_info() { :; }
+		print_warn() { :; }
+		CONFIG_DIR="$CONFIG_DIR_UNDER_TEST"
+		CONFIG_BACKUP_MIN_EXTRA_BYTES=$((64 * 1024))
+` + extractRootInstallShellFunction(t, "bytes_to_human") + `
+` + extractRootInstallShellFunction(t, "get_available_bytes_for_path") + `
+` + extractRootInstallShellFunction(t, "get_directory_size_bytes") + `
+` + extractRootInstallShellFunction(t, "ensure_config_backup_headroom") + `
+		df() {
+			if [[ "$1" == "-Pk" && "$2" == "$CONFIG_PARENT_UNDER_TEST" ]]; then
+				printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\n'
+				printf '/dev/root 1000 0 65 0%% /\n'
+				return 0
+			fi
+			command df "$@"
+		}
+		du() {
+			if [[ "$1" == "-sk" && "$2" == "$CONFIG_DIR_UNDER_TEST" ]]; then
+				printf '4\t%s\n' "$CONFIG_DIR_UNDER_TEST"
+				return 0
+			fi
+			command du "$@"
+		}
+		if ensure_config_backup_headroom "$CONFIG_DIR"; then
+			echo "ensure_config_backup_headroom unexpectedly passed with no backup margin" >&2
+			exit 1
+		fi
+	`
+
+	cmd := exec.Command("bash", "-c", script)
+	cmd.Env = append(os.Environ(),
+		"CONFIG_DIR_UNDER_TEST="+configDir,
+		"CONFIG_PARENT_UNDER_TEST="+configParent,
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+}
+
+func TestRootInstallScriptConfigBackupCleansPartialCopy(t *testing.T) {
+	configDir := t.TempDir()
+	backupDir := configDir + ".backup.20260704-141422"
+
+	script := `
+		set -euo pipefail
+		print_error() { :; }
+		print_info() { :; }
+		print_warn() { :; }
+		CONFIG_DIR="$CONFIG_DIR_UNDER_TEST"
+		CONFIG_BACKUP_MIN_EXTRA_BYTES=$((64 * 1024))
+` + extractRootInstallShellFunction(t, "bytes_to_human") + `
+` + extractRootInstallShellFunction(t, "get_available_bytes_for_path") + `
+` + extractRootInstallShellFunction(t, "get_directory_size_bytes") + `
+` + extractRootInstallShellFunction(t, "ensure_config_backup_headroom") + `
+` + extractRootInstallShellFunction(t, "backup_existing") + `
+		date() { printf '20260704-141422\n'; }
+		cp() {
+			if [[ "$1" == "-a" && "$2" == "$CONFIG_DIR_UNDER_TEST" ]]; then
+				mkdir -p "$3"
+				printf 'partial\n' > "$3/partial"
+				return 1
+			fi
+			command cp "$@"
+		}
+		if backup_existing; then
+			echo "backup_existing unexpectedly passed after a failed copy" >&2
+			exit 1
+		fi
+		if [[ -e "$BACKUP_DIR_UNDER_TEST" ]]; then
+			echo "partial backup was not removed" >&2
+			exit 1
+		fi
+	`
+
+	cmd := exec.Command("bash", "-c", script)
+	cmd.Env = append(os.Environ(),
+		"CONFIG_DIR_UNDER_TEST="+configDir,
+		"BACKUP_DIR_UNDER_TEST="+backupDir,
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+}
+
 func TestRootInstallScriptV5ToV6PreflightWarnsWhenAgentScopeMissing(t *testing.T) {
 	configDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(configDir, "api_tokens.json"), []byte(`[{"id":"tok-1","name":"admin","hash":"hash","scopes":["settings:read"]}]`), 0600); err != nil {
