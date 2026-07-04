@@ -54,9 +54,47 @@ var (
 	baseWriter    io.Writer = os.Stderr
 	baseComponent string
 	fileCloser    io.Closer
+	globalSink    = &dynamicWriter{writer: os.Stderr}
 
 	defaultTimeFmt = time.RFC3339
 )
+
+type dynamicWriter struct {
+	mu     sync.RWMutex
+	writer io.Writer
+}
+
+func (w *dynamicWriter) SetWriter(writer io.Writer) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if writer == nil {
+		writer = io.Discard
+	}
+	w.writer = writer
+}
+
+func (w *dynamicWriter) Write(p []byte) (int, error) {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+
+	if w.writer == nil {
+		return len(p), nil
+	}
+	return w.writer.Write(p)
+}
+
+type componentHook struct{}
+
+func (componentHook) Run(event *zerolog.Event, _ zerolog.Level, _ string) {
+	mu.RLock()
+	component := baseComponent
+	mu.RUnlock()
+
+	if component != "" {
+		event.Str("component", component)
+	}
+}
 
 var (
 	nowFn           = time.Now
@@ -85,11 +123,18 @@ var (
 
 func init() {
 	baseWriter = io.MultiWriter(baseWriter, GetBroadcaster())
-	baseLogger = zerolog.New(baseWriter).With().Timestamp().Logger()
+	globalSink.SetWriter(baseWriter)
+	zerolog.TimeFieldFormat = defaultTimeFmt
+	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
+	baseLogger = newBaseLogger()
 	log.Logger = baseLogger
 }
 
-// Init configures zerolog globals and establishes the package baseline logger.
+func newBaseLogger() zerolog.Logger {
+	return zerolog.New(globalSink).Hook(componentHook{}).With().Timestamp().Logger()
+}
+
+// Init configures zerolog globals and refreshes the package logger output.
 func Init(cfg Config) zerolog.Logger {
 	mu.Lock()
 	defer mu.Unlock()
@@ -97,9 +142,7 @@ func Init(cfg Config) zerolog.Logger {
 	previousFileCloser := fileCloser
 	fileCloser = nil
 
-	zerolog.TimeFieldFormat = defaultTimeFmt
 	zerolog.SetGlobalLevel(parseLevel(cfg.Level))
-	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 
 	writer := selectWriter(cfg.Format)
 
@@ -117,15 +160,9 @@ func Init(cfg Config) zerolog.Logger {
 	}
 	component := strings.TrimSpace(cfg.Component)
 
-	contextBuilder := zerolog.New(writer).With().Timestamp()
-	if component != "" {
-		contextBuilder = contextBuilder.Str("component", component)
-	}
-
-	baseLogger = contextBuilder.Logger()
 	baseWriter = writer
 	baseComponent = component
-	log.Logger = baseLogger
+	globalSink.SetWriter(writer)
 
 	if previousFileCloser != nil {
 		if err := previousFileCloser.Close(); err != nil {
@@ -141,11 +178,15 @@ func Shutdown() {
 	mu.Lock()
 	defer mu.Unlock()
 
-	if fileCloser != nil {
-		if err := fileCloser.Close(); err != nil {
+	previousFileCloser := fileCloser
+	fileCloser = nil
+	baseWriter = io.MultiWriter(os.Stderr, GetBroadcaster())
+	globalSink.SetWriter(baseWriter)
+
+	if previousFileCloser != nil {
+		if err := previousFileCloser.Close(); err != nil {
 			fmt.Fprintf(os.Stderr, "logging: unable to close log file writer: %v\n", err)
 		}
-		fileCloser = nil
 	}
 
 	GetBroadcaster().Shutdown()

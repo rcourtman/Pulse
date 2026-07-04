@@ -16,6 +16,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog/pkgerrors"
 	"golang.org/x/term"
 )
 
@@ -33,9 +34,11 @@ func resetLoggingState() {
 
 	baseWriter = os.Stderr
 	baseComponent = ""
-	baseLogger = zerolog.New(baseWriter).With().Timestamp().Logger()
+	globalSink.SetWriter(baseWriter)
+	baseLogger = newBaseLogger()
 	log.Logger = baseLogger
 	zerolog.TimeFieldFormat = defaultTimeFmt
+	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	nowFn = time.Now
 	isTerminalFn = term.IsTerminal
@@ -240,6 +243,45 @@ func TestInitThreadSafety(t *testing.T) {
 	if !reflect.DeepEqual(log.Logger, baseLogger) {
 		t.Fatal("expected global log.Logger to match baseLogger after concurrent init")
 	}
+}
+
+func TestInitThreadSafetyWithGlobalLogging(t *testing.T) {
+	t.Cleanup(resetLoggingState)
+
+	configs := []Config{
+		{Format: "json", Level: "debug", Component: "worker"},
+		{Format: "json", Level: "info", Component: "api"},
+		{Format: "json", Level: "warn", Component: "server"},
+	}
+
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func(worker int) {
+			defer wg.Done()
+			<-start
+			for j := 0; j < 20; j++ {
+				Init(configs[(worker+j)%len(configs)])
+				log.Info().Int("worker", worker).Int("iteration", j).Msg("concurrent init log")
+			}
+		}(i)
+	}
+
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func(worker int) {
+			defer wg.Done()
+			<-start
+			for j := 0; j < 40; j++ {
+				log.Info().Int("worker", worker).Int("iteration", j).Msg("concurrent global log")
+			}
+		}(i)
+	}
+
+	close(start)
+	wg.Wait()
 }
 
 func TestIsLevelEnabled(t *testing.T) {
@@ -1118,7 +1160,9 @@ func TestConcurrentLogging(t *testing.T) {
 	buf := &lockedBuffer{}
 	mu.Lock()
 	baseWriter = buf
-	baseLogger = zerolog.New(buf).With().Timestamp().Logger()
+	baseComponent = ""
+	globalSink.SetWriter(buf)
+	baseLogger = newBaseLogger()
 	log.Logger = baseLogger
 	mu.Unlock()
 
