@@ -608,6 +608,15 @@ TLS floor in the dynamic config.
    That stable cut must also move the repo-root Docker compose default and
    `scripts/install-docker.sh` fallback from the final RC image tag to the
    stable `6.0.0` image tag in the same commit as `VERSION=6.0.0`.
+   Stable patch releases after `6.0.0` stay on this same governed release
+   boundary but do not need a fabricated same-version RC tag when the release
+   owner is intentionally publishing a hotfix patch from the current stable
+   branch. In that case `resolve_release_promotion.py` may accept an omitted
+   `promoted_from_tag` only for a stable semver patch version with
+   `hotfix_exception=true`, a non-empty `hotfix_reason`, and
+   `rollback_version` set to the previous stable tag. Non-hotfix stable
+   promotions, and any first-GA or minor-line stable promotion, still require
+   explicit promoted prerelease lineage and soak proof.
 7. Preserve release-matched installer and Helm operator documentation links through `scripts/install.sh`, `.github/workflows/helm-pages.yml`, `.github/workflows/publish-helm-chart.yml`, and the chart metadata itself so deployment guidance and packaged chart metadata do not drift back to branch-tip `main` docs when a release line or promoted tag already exists.
    The same governed Helm boundary also owns `deploy/helm/pulse/` itself:
    chart metadata, default values, templates, and generated chart docs must
@@ -771,11 +780,15 @@ TLS floor in the dynamic config.
 
 ## Current State
 
-The active stable `v6.0.0` cut sets the repo-root `VERSION`, repo-root
-`docker-compose.yml` image default, and `scripts/install-docker.sh` fallback
-to the same `6.0.0` release version. The GA promotion metadata for this cut is
+The active stable `v6.0.1` cut sets the repo-root `VERSION`, repo-root
+`docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and
+Helm chart release metadata to the same `6.0.1` release version. This patch
+release uses the stable hotfix path with `rollback_version=v6.0.0`,
+`hotfix_exception=true`, a release-owner reason, and no fabricated
+same-version RC tag. The initial GA promotion metadata remains
 `promoted_from_tag=v6.0.0-rc.7`, `rollback_version=v5.1.35`,
-`ga_date=2026-07-04`, and `v5_eos_date=2026-10-02`.
+`ga_date=2026-07-04`, and `v5_eos_date=2026-10-02` for the first stable
+`6.0.0` cut.
 
 The shell-installer boundary carries root-agent service hardening for Linux
 installs. Installer-rendered agent units must keep the health/metrics listener
@@ -818,13 +831,14 @@ operators only move to a newer image when they choose a newer explicit tag or
 override `PULSE_IMAGE`.
 For every RC or stable release cut, those Docker defaults must move with the
 same governed `VERSION` change and the installer proof in
-`scripts/installtests/install_docker_sh_test.go` must assert both the repo-root
-compose image default and the standalone installer fallback constant. A draft
-release workflow failure caused by stale Docker image pins is a release-packet
-blocker until the defaults, tests, and evidence record are refreshed from the
-new branch head.
-For the active stable `v6.0.0` cut, the repo-root compose default and
-`scripts/install-docker.sh` fallback must both pin `6.0.0`; the stable
+`scripts/installtests/install_docker_sh_test.go` and
+`scripts/installtests/build_release_assets_test.go` must assert the repo-root
+compose image default, standalone installer fallback constant, and packaged
+Helm metadata. A draft release workflow failure caused by stale image or chart
+pins is a release-packet blocker until the defaults, tests, and evidence
+record are refreshed from the new branch head.
+For the active stable `v6.0.1` cut, the repo-root compose default and
+`scripts/install-docker.sh` fallback must both pin `6.0.1`; the stable
 promotion guard remains in force by rejecting leftover `-rc.` defaults when
 the governed `VERSION` is a stable release.
 The RC7 packet refresh records `fc10de9b5477613316473267b72b05b6b2b7aaff`

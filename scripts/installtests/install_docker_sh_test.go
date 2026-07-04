@@ -102,6 +102,9 @@ func TestRepoDockerComposeDefaultPinsCurrentVersion(t *testing.T) {
 	if !isPrereleaseVersion(version) && version == "6.0.0" && !strings.Contains(text, "rcourtman/pulse:6.0.0") {
 		t.Fatalf("v6 GA repo docker-compose.yml must default to the stable v6 image:\n%s", text)
 	}
+	if !isPrereleaseVersion(version) && version != "6.0.0" && strings.Contains(text, "rcourtman/pulse:6.0.0") {
+		t.Fatalf("stable patch repo docker-compose.yml must move off the initial GA image tag:\n%s", text)
+	}
 	if strings.Contains(text, ":latest") {
 		t.Fatalf("repo docker-compose.yml must not default to a floating latest tag:\n%s", text)
 	}
@@ -123,6 +126,9 @@ func TestInstallDockerScriptFallbackPinsCurrentVersion(t *testing.T) {
 	}
 	if !isPrereleaseVersion(version) && version == "6.0.0" && !strings.Contains(text, `CANONICAL_DEFAULT_PULSE_VERSION="6.0.0"`) {
 		t.Fatalf("v6 GA install-docker.sh fallback must default to the stable v6 image tag:\n%s", text)
+	}
+	if !isPrereleaseVersion(version) && version != "6.0.0" && strings.Contains(text, `CANONICAL_DEFAULT_PULSE_VERSION="6.0.0"`) {
+		t.Fatalf("stable patch install-docker.sh fallback must move off the initial GA image tag:\n%s", text)
 	}
 }
 

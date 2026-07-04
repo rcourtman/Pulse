@@ -13,6 +13,7 @@ from typing import Callable
 from repo_file_io import REPO_ROOT, git_env
 
 
+SEMVER_STABLE_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
 SEMVER_PRERELEASE_RE = re.compile(r"-(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)(?:\+[0-9A-Za-z.-]+)?$")
 
 
@@ -27,6 +28,11 @@ def normalize_tag(value: str) -> str:
 
 def is_prerelease_version(version: str) -> bool:
     return bool(SEMVER_PRERELEASE_RE.search(version))
+
+
+def is_stable_patch_version(version: str) -> bool:
+    match = SEMVER_STABLE_RE.match(version)
+    return bool(match and int(match.group(3)) > 0)
 
 
 def tag_exists(tag: str) -> bool:
@@ -124,35 +130,41 @@ def resolve_metadata(
     else:
         promoted_from_tag = normalize_tag(promoted_from_tag_input)
         if not promoted_from_tag:
-            raise ValueError(
-                "Stable promotion requires promoted_from_tag naming the prerelease being promoted."
-            )
-        if not re.match(rf"^v{re.escape(version)}-rc\.\d+$", promoted_from_tag):
-            raise ValueError(
-                f"promoted_from_tag must reference a prerelease tag for the same stable version ({version}), got {promoted_from_tag}."
-            )
-        if not tag_exists_fn(promoted_from_tag):
-            raise ValueError(
-                f"promoted_from_tag {promoted_from_tag} does not exist as a repository tag."
-            )
+            if is_stable_patch_version(version) and hotfix_exception:
+                if not hotfix_reason:
+                    raise ValueError("hotfix_reason is required when hotfix_exception is true.")
+            else:
+                raise ValueError(
+                    "Stable promotion requires promoted_from_tag naming the prerelease being promoted. "
+                    "Stable patch hotfix releases may omit promoted_from_tag only when hotfix_exception is true and hotfix_reason is set."
+                )
+        else:
+            if not re.match(rf"^v{re.escape(version)}-rc\.\d+$", promoted_from_tag):
+                raise ValueError(
+                    f"promoted_from_tag must reference a prerelease tag for the same stable version ({version}), got {promoted_from_tag}."
+                )
+            if not tag_exists_fn(promoted_from_tag):
+                raise ValueError(
+                    f"promoted_from_tag {promoted_from_tag} does not exist as a repository tag."
+                )
 
-        promoted_commit = tag_commit_fn(promoted_from_tag)
-        if not head_descends_from_fn(promoted_commit):
-            raise ValueError(
-                f"Stable promotion {tag} must descend from promoted prerelease tag {promoted_from_tag}."
-            )
+            promoted_commit = tag_commit_fn(promoted_from_tag)
+            if not head_descends_from_fn(promoted_commit):
+                raise ValueError(
+                    f"Stable promotion {tag} must descend from promoted prerelease tag {promoted_from_tag}."
+                )
 
-        promoted_tag_ts = tag_created_unix_fn(promoted_from_tag)
-        soak_hours_value = int((now_unix_fn() - promoted_tag_ts) / 3600)
-        soak_hours = str(soak_hours_value)
+            promoted_tag_ts = tag_created_unix_fn(promoted_from_tag)
+            soak_hours_value = int((now_unix_fn() - promoted_tag_ts) / 3600)
+            soak_hours = str(soak_hours_value)
 
-        if hotfix_exception:
-            if not hotfix_reason:
-                raise ValueError("hotfix_reason is required when hotfix_exception is true.")
-        elif soak_hours_value < 72:
-            raise ValueError(
-                f"Stable promotion {tag} has only {soak_hours_value} hours of prerelease soak since {promoted_from_tag}; minimum is 72 hours unless hotfix_exception is true."
-            )
+            if hotfix_exception:
+                if not hotfix_reason:
+                    raise ValueError("hotfix_reason is required when hotfix_exception is true.")
+            elif soak_hours_value < 72:
+                raise ValueError(
+                    f"Stable promotion {tag} has only {soak_hours_value} hours of prerelease soak since {promoted_from_tag}; minimum is 72 hours unless hotfix_exception is true."
+                )
 
         if version == "6.0.0":
             if not re.match(r"^\d{4}-\d{2}-\d{2}$", ga_date):

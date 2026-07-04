@@ -78,6 +78,18 @@ def rc_packet_paths_for_version(version: str) -> tuple[str, str, str] | None:
     )
 
 
+def stable_packet_paths_for_version(version: str) -> tuple[str, str] | None:
+    """Return the stable release-notes and changelog packet paths for a v6 stable VERSION."""
+    if not re.match(r"^6\.\d+\.\d+$", version):
+        return None
+    if version == "6.0.0":
+        return ("docs/releases/RELEASE_NOTES_v6.md", "docs/releases/V6_CHANGELOG.md")
+    return (
+        f"docs/releases/RELEASE_NOTES_v{version}.md",
+        f"docs/releases/V6_CHANGELOG_v{version}.md",
+    )
+
+
 def staged_files() -> tuple[str, ...]:
     result = subprocess.run(
         ["git", "diff", "--cached", "--name-only"],
@@ -327,10 +339,13 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
     def test_version_file_matches_current_rc_packet(self) -> None:
         current_version = read("VERSION").strip()
         release_index = read("docs/RELEASE_NOTES.md")
-        if current_version == "6.0.0":
-            release_notes = read("docs/releases/RELEASE_NOTES_v6.md")
-            changelog = read("docs/releases/V6_CHANGELOG.md")
-            self.assertIn("prepared stable v6 release packet", release_index)
+        stable_packet_paths = stable_packet_paths_for_version(current_version)
+        if stable_packet_paths is not None:
+            release_notes_path, changelog_path = stable_packet_paths
+            release_notes = read(release_notes_path)
+            changelog = read(changelog_path)
+            self.assertIn(release_notes_path, release_index)
+            self.assertIn(changelog_path, release_index)
             self.assertIn(f"Pulse v{current_version} Release Notes", release_notes)
             self.assertIn(f"`v{current_version}`", release_notes)
             self.assertIn(f"Pulse v{current_version}", changelog)
@@ -376,9 +391,11 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertNotIn("`POST /api/license/trial/start`", upgrade_guide)
         self.assertNotIn("signed activation token to `/auth/trial-activate`", upgrade_guide)
         self.assertNotIn("25 hosted Patrol", upgrade_guide)
-        if current_version == "6.0.0":
-            self.assertIn("docs/releases/RELEASE_NOTES_v6.md", upgrade_guide)
-            self.assertIn("docs/releases/V6_CHANGELOG.md", upgrade_guide)
+        stable_packet_paths = stable_packet_paths_for_version(current_version)
+        if stable_packet_paths is not None:
+            release_notes_path, changelog_path = stable_packet_paths
+            self.assertIn(release_notes_path, upgrade_guide)
+            self.assertIn(changelog_path, upgrade_guide)
             for _, _, _, support_pack in discover_rc_draft_packets():
                 self.assertNotIn(support_pack, upgrade_guide)
             self.assertNotIn("docs/releases/V6_RC_OPERATOR_SUPPORT_PACK.md", upgrade_guide)
@@ -453,6 +470,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("default_output_path", recorder)
         self.assertIn("rollback_version is required for every release rehearsal and promotion", resolver)
         self.assertIn("Stable promotion requires promoted_from_tag", resolver)
+        self.assertIn("Stable patch hotfix releases may omit promoted_from_tag", resolver)
         self.assertIn("Stable v6.0.0 requires ga_date in YYYY-MM-DD form", resolver)
         self.assertIn("release_notes must include the exact ga_date", resolver)
         self.assertIn("check-workflow-dispatch-inputs.py", dry_run_trigger)
@@ -802,8 +820,10 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         blocked = read("docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-blocked-2026-04-04.md")
         current_version = read("VERSION").strip()
         active_target_id = read_json("docs/release-control/control_plane.json")["active_target_id"]
-        if current_version == "6.0.0":
-            self.assertIn(f"VERSION={current_version}", blocked)
+        if stable_packet_paths_for_version(current_version) is not None:
+            self.assertIn("VERSION=6.0.0", blocked)
+            if current_version != "6.0.0":
+                self.assertNotIn(f"VERSION={current_version}", blocked)
         else:
             self.assertIsNotNone(
                 rc_packet_paths_for_version(current_version),

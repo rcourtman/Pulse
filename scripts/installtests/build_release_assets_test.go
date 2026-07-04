@@ -657,6 +657,38 @@ func TestDeploymentDefaultsPinVersionedImagesAndHelmDocsChecksum(t *testing.T) {
 		t.Fatalf("install-docker.sh must not default to a floating latest tag:\n%s", installDocker)
 	}
 
+	chartBytes, err := os.ReadFile(repoFile("deploy", "helm", "pulse", "Chart.yaml"))
+	if err != nil {
+		t.Fatalf("read Helm Chart.yaml: %v", err)
+	}
+	chart := string(chartBytes)
+	chartRequired := []string{
+		"version: " + version,
+		`appVersion: "` + version + `"`,
+		"https://raw.githubusercontent.com/rcourtman/Pulse/v" + version + "/docs/images/pulse-logo.svg",
+		"https://github.com/rcourtman/Pulse/blob/v" + version + "/docs/KUBERNETES.md",
+	}
+	for _, needle := range chartRequired {
+		if !strings.Contains(chart, needle) {
+			t.Fatalf("Helm Chart.yaml must pin the governed release version, missing %s:\n%s", needle, chart)
+		}
+	}
+
+	chartReadmeBytes, err := os.ReadFile(repoFile("deploy", "helm", "pulse", "README.md"))
+	if err != nil {
+		t.Fatalf("read Helm README.md: %v", err)
+	}
+	chartReadme := string(chartReadmeBytes)
+	chartReadmeRequired := []string{
+		"![Version: " + version + "](https://img.shields.io/badge/Version-" + version + "-informational?style=flat-square)",
+		"![AppVersion: " + version + "](https://img.shields.io/badge/AppVersion-" + version + "-informational?style=flat-square)",
+	}
+	for _, needle := range chartReadmeRequired {
+		if !strings.Contains(chartReadme, needle) {
+			t.Fatalf("Helm README.md must reflect the governed release version, missing %s:\n%s", needle, chartReadme)
+		}
+	}
+
 	helmPagesBytes, err := os.ReadFile(repoFile(".github", "workflows", "helm-pages.yml"))
 	if err != nil {
 		t.Fatalf("read helm-pages.yml: %v", err)
