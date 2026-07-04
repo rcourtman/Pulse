@@ -7,6 +7,7 @@ import {
   E2E_CREDENTIALS,
   isMultiTenantEnabled,
   switchOrg,
+  waitForAppShell,
 } from './helpers';
 
 type Organization = {
@@ -84,8 +85,8 @@ test.describe('Multi-tenant E2E flows', () => {
         const created = await createOrg(page, `E2E Visibility Org ${Date.now()}`);
         tempOrgID = created.id;
 
-        await page.reload();
-        await page.waitForLoadState('domcontentloaded');
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        await waitForAppShell(page);
 
         await expect(page.getByLabel('Organization')).toBeVisible();
       } else {

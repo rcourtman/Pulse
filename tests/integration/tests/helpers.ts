@@ -121,7 +121,7 @@ const persistRuntimePrimaryAPIToken = (token: string) => {
   }
 };
 
-async function waitForAppShell(page: Page, timeoutMs = 20_000) {
+export async function waitForAppShell(page: Page, timeoutMs = 20_000) {
   await page.waitForLoadState("domcontentloaded");
 
   // The raw HTML shell contains a noscript fallback. Wait for the SPA to
@@ -1311,8 +1311,8 @@ export async function switchOrg(page: Page, orgId: string): Promise<void> {
     window.localStorage.setItem("pulse_org_id", id);
     document.cookie = `pulse_org_id=${encodeURIComponent(id)}; Path=/; SameSite=Lax`;
   }, orgId);
-  await page.reload();
-  await page.waitForLoadState("networkidle");
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await waitForAppShell(page);
 }
 
 /**
