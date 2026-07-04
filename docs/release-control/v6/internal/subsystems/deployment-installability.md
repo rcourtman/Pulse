@@ -990,21 +990,20 @@ rehearsal skipped that header-composition gate.
 That same dry-run backend gate must run non-race Go package tests serially with
 `go test -p 1 ./...` so release SLO proof reflects product behavior rather
 than cross-package contention on 2-core hosted runners.
-That same governed demo-deployment boundary now owns target separation between
-the public stable demo and the opt-in v6 preview demo. `.github/workflows/create-release.yml`,
+That same governed demo-deployment boundary now owns the post-GA single-demo
+contract. `.github/workflows/create-release.yml`,
 `.github/workflows/update-demo-server.yml`, and `.github/workflows/deploy-demo-server.yml`
-must route stable tags to the stable demo environment and prerelease tags to a
-separate preview environment instead of skipping prerelease demo updates or
-reusing the stable runtime in place.
-That same preview deployment boundary also owns service-identity isolation and
-public-shell parity proof. Preview demo runs must fail closed onto the
-dedicated preview service identity instead of defaulting back to the stable
-`pulse` instance, must prove that the SSH target reports the governed expected
-hostname before any installer or binary copy runs, and demo deploy/update
-verification must prove that the public demo HTML serves the same frontend
-entry asset as the target service or freshly built preview artifact rather than
-treating a passing `/api/health` response as enough evidence that the public
-shell actually updated. That proof
+must treat `demo-stable` as the only active public demo target: stable releases
+may update it, prerelease tags must not create or update a second public v6
+preview target by default, and any future preview surface requires a new
+explicitly governed target instead of reusing the retired v6-preview path.
+That same demo deployment boundary also owns service-identity and public-shell
+parity proof. Stable demo runs default to the `pulse` service identity, must
+prove that the SSH target reports the governed expected hostname before any
+installer or binary copy runs, and demo deploy/update verification must prove
+that the public demo HTML serves the same frontend entry asset as the target
+service or freshly built artifact rather than treating a passing `/api/health`
+response as enough evidence that the public shell actually updated. That proof
 must use a deterministic HTML parser for the actual module entry script rather
 than brittle escaped shell regex or a first-match asset scrape that can fail
 differently over SSH or select the wrong preloaded chunk.

@@ -886,7 +886,7 @@ hands-on Patrol modes, issue investigation, verified fixes, and 90-day history`.
     may prewarm shared infrastructure summary caches for route-owned surfaces,
     but public-demo arrival must not front-run a broader infrastructure-summary
     fetch than the route actually renders. Commercial
-    posture on `v6-demo` therefore stays governed by the route-owned
+    posture on the stable public demo therefore stays governed by the route-owned
     presentation policy and summary scope rather than by app-shell-wide
     bootstrap heuristics. That same app-shell boundary must also keep the
     public login entrypoints (`/` and `/login`) quiet before a session exists:
@@ -1324,20 +1324,13 @@ The governed browser proof for that posture lives in
 `tests/integration/tests/53-demo-mode-commercial-boundary.spec.ts` and is
 expected to stay runnable through
 `tests/integration/scripts/run-tests.sh demo-contract`.
-That same public-demo boundary also owns the governed `pulse-pro` operational
-path for the live v6 preview. `pulse-pro/.github/workflows/deploy-v6-preview-demo.yml`
-is the canonical operator entrypoint, and it must drive
-`pulse-pro/scripts/bootstrap-v6-demo-preview.sh` as the canonical preview
-runtime bootstrap/update path. The cost-contained default is the
-`pulse-v6-preview.service` instance on `pulse-relay` behind the
-`v6-demo.pulserelay.pro` Caddy route; the old dedicated
-`pulse-v6-preview` Droplet remains a hibernated snapshot and is only a rebuild
-or isolation option.
-`pulse-pro/scripts/audit_v6_preview_demo.sh` is the canonical public smoke
-proof. The bootstrap must fail closed unless the target preview host is
-already the live public target and that public smoke audit passes; any
-`--skip-public-audit` escape hatch is only for pre-cutover host staging or
-deliberate Caddy/DNS maintenance, never an ordinary live refresh.
+That same public-demo boundary now treats the old `v6-demo.pulserelay.pro`
+preview route and its `pulse-v6-preview` service/bootstrap tooling as retired
+after v6 GA. The stable public demo is the canonical customer-facing v6 demo
+surface. Any future prerelease or canary demo needs a newly governed target,
+hostname, service identity, and audit path; it must not silently revive the
+retired v6-preview route or split the public demo posture back into parallel
+stable and v6 surfaces.
 That same licensing/browser boundary now also owns authenticated commercial
 posture bootstrap and the prohibition on non-billing entitlement reads.
 `frontend-modern/src/useAppRuntimeState.ts` is the canonical authenticated

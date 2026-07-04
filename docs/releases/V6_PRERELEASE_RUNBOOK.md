@@ -32,8 +32,9 @@ Release workflows now enforce branch/tag lineage rules:
   - Validate the release tag commit is reachable from the governed branch for
     that version instead of assuming `main`.
 - `update-demo-server.yml`
-  - Routes stable tags to the stable demo environment and prerelease tags to
-    the separate v6 preview demo environment.
+  - Routes stable tags to the stable demo environment.
+  - Prerelease public demo deployment is retired after v6 GA; prerelease tags
+    must not create or update a second public v6 demo surface by default.
   - The selected tag must still be reachable from the governed branch for that
     version.
 
@@ -132,10 +133,11 @@ git push origin pulse/v6-release
    - Existing unpublished draft releases for the same tag are updated in place
      and their tag is retargeted to the current governed `pulse/v6-release`
      head automatically. Do not delete the tag manually just to retry publish.
-   - The release workflow dispatches `update-demo-server.yml` against the
-     `preview-v6` demo target automatically.
-   - Keep the public stable demo on v5/stable; prereleases must land only on
-     the separate preview demo runtime.
+   - Historical prerelease publications used a separate preview demo runtime
+     while v5 remained the public stable demo.
+   - Prerelease public demo deployment is retired after v6 GA; future
+     prerelease tags must not create or update a second public v6 demo surface
+     unless a new governed preview target is explicitly introduced.
 
 6. Canary rollout:
    - Upgrade a small user subset first.

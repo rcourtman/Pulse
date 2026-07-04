@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag to deploy (e.g., v6.0.0-rc.N or v6.0.0)'
+        description: 'Stable release tag to deploy (e.g., v6.0.0)'
         required: true
         type: string
       target:
@@ -17,7 +17,6 @@ on:
         options:
           - auto
           - stable
-          - preview-v6
 
 permissions:
   contents: read
@@ -29,7 +28,7 @@ jobs:
       tag: ${{ steps.target.outputs.tag }}
       target: ${{ steps.target.outputs.target }}
       environment_name: ${{ steps.target.outputs.environment_name }}
-      skip: ${{ steps.latest.outputs.skip || 'false' }}
+      skip: ${{ steps.target.outputs.skip || steps.latest.outputs.skip || 'false' }}
 
     steps:
       - name: Resolve target tag and demo environment
@@ -59,10 +58,14 @@ jobs:
           TARGET="${REQUESTED_TARGET:-auto}"
           if [ -z "$TARGET" ] || [ "$TARGET" = "auto" ]; then
             if [ "$IS_PRERELEASE" = "true" ]; then
-              TARGET="preview-v6"
-            else
-              TARGET="stable"
+              echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+              echo "target=stable" >> "$GITHUB_OUTPUT"
+              echo "environment_name=demo-stable" >> "$GITHUB_OUTPUT"
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              echo "Prerelease demo updates are retired after v6 GA; skipping public demo update for ${TAG}."
+              exit 0
             fi
+            TARGET="stable"
           fi
 
           case "$TARGET" in
@@ -72,13 +75,6 @@ jobs:
                 exit 1
               fi
               ENVIRONMENT_NAME="demo-stable"
-              ;;
-            preview-v6)
-              if [ "$IS_PRERELEASE" != "true" ]; then
-                echo "::error::Preview demo target only accepts prerelease tags. Refusing stable tag ${TAG}."
-                exit 1
-              fi
-              ENVIRONMENT_NAME="demo-preview-v6"
               ;;
             *)
               echo "::error::Unsupported demo target: ${TARGET}"
@@ -124,31 +120,26 @@ jobs:
 
       - name: Skip if not latest published release for target
         id: latest
-        if: github.event_name == 'release'
+        if: github.event_name == 'release' && steps.target.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          TARGET="${{ steps.target.outputs.target }}"
           TAG="${{ steps.target.outputs.tag }}"
 
-          if [ "$TARGET" = "stable" ]; then
-            LATEST=$(gh api "repos/${{ github.repository }}/releases/latest" --jq '.tag_name')
-          else
-            LATEST=$(gh api "repos/${{ github.repository }}/releases?per_page=100" --jq '[.[] | select(.draft == false and .prerelease == true)][0].tag_name')
-          fi
+          LATEST=$(gh api "repos/${{ github.repository }}/releases/latest" --jq '.tag_name')
 
           echo "Target tag: $TAG"
-          echo "Latest published tag for $TARGET: $LATEST"
+          echo "Latest published stable release: $LATEST"
 
           if [ -z "$LATEST" ] || [ "$LATEST" = "null" ]; then
-            echo "::error::Could not determine the latest published release for demo target $TARGET."
+            echo "::error::Could not determine the latest published stable release for demo deployment."
             exit 1
           fi
 
           if [ "$TAG" != "$LATEST" ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "Release is not the latest published tag for ${TARGET}; skipping demo update."
+            echo "Release is not the latest published stable tag; skipping demo update."
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
@@ -292,21 +283,10 @@ jobs:
           TARGET="${{ needs.resolve.outputs.target }}"
           SERVICE_NAME="${DEMO_SERVICE_NAME:-}"
           if [ -z "$SERVICE_NAME" ]; then
-            case "$TARGET" in
-              stable)
-                SERVICE_NAME="pulse"
-                ;;
-              preview-v6)
-                SERVICE_NAME="pulse-v6-preview"
-                ;;
-              *)
-                echo "::error::Unsupported demo target: ${TARGET}"
-                exit 1
-                ;;
-            esac
+            SERVICE_NAME="pulse"
           fi
-          if [ "$TARGET" = "preview-v6" ] && [ "$SERVICE_NAME" = "pulse" ]; then
-            echo "::error::Preview demo updates must not target the stable pulse service."
+          if [ "$TARGET" != "stable" ]; then
+            echo "::error::Unsupported demo target: ${TARGET}"
             exit 1
           fi
           echo "service_name=$SERVICE_NAME" >> "$GITHUB_OUTPUT"

@@ -10,7 +10,6 @@ on:
         type: choice
         options:
           - stable
-          - preview-v6
   # schedule:
   #   - cron: '0 0 * * *' # Nightly at midnight
 
@@ -35,9 +34,6 @@ jobs:
           case "$TARGET" in
             stable)
               ENVIRONMENT_NAME="demo-stable"
-              ;;
-            preview-v6)
-              ENVIRONMENT_NAME="demo-preview-v6"
               ;;
             *)
               echo "::error::Unsupported demo target: ${TARGET}"
@@ -180,21 +176,10 @@ jobs:
           TARGET="${{ needs.resolve.outputs.target }}"
           SERVICE_NAME="${DEMO_SERVICE_NAME:-}"
           if [ -z "$SERVICE_NAME" ]; then
-            case "$TARGET" in
-              stable)
-                SERVICE_NAME="pulse"
-                ;;
-              preview-v6)
-                SERVICE_NAME="pulse-v6-preview"
-                ;;
-              *)
-                echo "::error::Unsupported demo target: ${TARGET}"
-                exit 1
-                ;;
-            esac
+            SERVICE_NAME="pulse"
           fi
-          if [ "$TARGET" = "preview-v6" ] && [ "$SERVICE_NAME" = "pulse" ]; then
-            echo "::error::Preview demo deployments must not target the stable pulse service."
+          if [ "$TARGET" != "stable" ]; then
+            echo "::error::Unsupported demo target: ${TARGET}"
             exit 1
           fi
           INSTALL_DIR="${DEMO_INSTALL_DIR:-}"

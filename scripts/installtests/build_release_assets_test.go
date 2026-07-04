@@ -503,7 +503,6 @@ func TestDockerAndDemoBuildsUseCanonicalReleaseLdflags(t *testing.T) {
 	workflowRequired := []string{
 		`./scripts/release_ldflags.sh server --version "${VERSION}" --build-time "${BUILD_TIME}" --git-commit "${GIT_COMMIT}"`,
 		`-buildvcs=false`,
-		`demo-preview-v6`,
 		`demo-stable`,
 		`workflow_dispatch:`,
 		`target:`,
@@ -512,6 +511,9 @@ func TestDockerAndDemoBuildsUseCanonicalReleaseLdflags(t *testing.T) {
 		if !strings.Contains(workflow, needle) {
 			t.Fatalf("deploy-demo-server workflow missing canonical release ldflags usage: %s", needle)
 		}
+	}
+	if strings.Contains(workflow, `preview-v6`) || strings.Contains(workflow, `demo-preview-v6`) {
+		t.Fatal("deploy-demo-server workflow must not keep a separate v6 preview demo target after GA")
 	}
 }
 

@@ -17,18 +17,16 @@ Issue intake is split deliberately:
 **File**: `update-demo-server.yml`
 
 Automatically updates the governed demo target after a release is published.
-Stable releases update the stable public demo. Prerelease tags update the
-separate v6 preview demo.
+Stable releases update the public demo. Prerelease tags no longer update a
+separate v6 preview demo after GA.
 
 ### Configuration Required
 
-Create two GitHub Environments:
+Create one GitHub Environment:
 
 1. `demo-stable`
-2. `demo-preview-v6`
 
-Each environment must define the same secret names so the workflow can select
-the target by environment instead of hardcoding separate workflows.
+The environment must define the secret names used by the governed demo target.
 
 Required environment secrets:
 
@@ -53,26 +51,22 @@ Required shared secret:
 Required environment variables:
 
 1. **DEMO_EXPECTED_HOSTNAME**
-   - The remote `hostname` value the selected environment is expected to report
+   - The remote `hostname` value the stable demo environment is expected to report
    - Stable example: `pulse-relay`
-   - Preview example: `pulse-v6-preview`
    - This is a host-identity guard: the workflow fails closed if the SSH secret points at the wrong machine
 
 2. **DEMO_LOCAL_BASE_URL**
    - Local URL used on the target host for version and mock-mode verification
    - Example stable value: `http://localhost:7655`
-   - Example preview value: `http://localhost:8665`
 
 3. **DEMO_PUBLIC_HEALTH_URL**
-   - Public health endpoint for the selected demo target
+   - Public health endpoint for the stable demo target
    - Example stable value: `https://demo.pulserelay.pro/api/health`
-   - Example preview value: `https://v6-demo.pulserelay.pro/api/health`
 
 Optional environment variables:
 
 1. **DEMO_SERVICE_NAME**
    - Stable default: `pulse`
-   - Preview example: `pulse-v6-preview`
    - When set, the server installer derives the instance-specific install dir,
      config dir, update helper, and update timer from this service identity.
 
@@ -83,10 +77,10 @@ Optional environment variables:
 ### How It Works
 
 1. **Trigger**: Runs automatically when a GitHub release is published
-2. **Target selection**: Stable tags deploy to `demo-stable`; prerelease tags deploy to `demo-preview-v6`
-3. **Service identity guard**: Preview runs default to `pulse-v6-preview` and refuse to target the stable `pulse` service identity
+2. **Target selection**: Stable tags deploy to `demo-stable`; prerelease tags are skipped because the public v6 preview target is retired after GA
+3. **Service identity**: Stable runs default to the `pulse` service identity
 4. **Governance check**: Validates the selected tag is reachable from the governed release branch for that version
-5. **Latest check**: Refuses to update a target unless the published tag is the latest release for that target channel
+5. **Latest check**: Refuses to update the public demo unless the published tag is the latest stable release
 6. **Network attach**: Joins Tailscale before any SSH step so governed demo targets can stay on private hostnames or Tailscale IPs
 7. **Update**: SSHs to the selected demo host and runs the tag-matched root installer from that exact git tag
 8. **Host identity check**: Verifies the SSH target reports the governed expected hostname before running installer or deploy steps
@@ -99,39 +93,29 @@ Optional environment variables:
 To test without publishing a release:
 1. Go to `Actions` tab in GitHub
 2. Select `Update Demo Server` workflow
-3. Provide a tag and choose `stable`, `preview-v6`, or `auto`
+3. Provide a stable tag and choose `stable` or `auto`
 
 ### Benefits
 
-- ✅ Stable and preview demos stay on separate governed targets
-- ✅ Prereleases no longer require a stable demo overwrite or a manual skip
+- ✅ The public demo follows the stable v6 release line after GA
+- ✅ Prereleases no longer require a second public v6 preview surface
 - ✅ Validates the real server installer path on the selected target
 - ✅ Removes release-operator guesswork about which demo should move
-
-### Preview Bootstrap Note
-
-The preview environment must be bootstrapped once on the host before the update
-workflow can keep it current. The supported path is a separate service identity
-such as `pulse-v6-preview` plus a separate public route such as
-`v6-demo.pulserelay.pro`; do not reuse the stable `pulse.service` instance.
 
 ## Deploy Demo Server
 
 **File**: `deploy-demo-server.yml`
 
-Manually deploys the current branch build to either the stable or preview demo
-environment without changing the governed release workflow.
+Manually deploys the current branch build to the stable demo environment
+without changing the governed release workflow.
 
-- Uses the same `demo-stable` / `demo-preview-v6` environment contract as the
-  release-driven updater
+- Uses the same `demo-stable` environment contract as the release-driven updater
 - Joins Tailscale before SSH so governed demo targets can stay on private
   addresses instead of requiring public runner reachability
 - Requires `DEMO_EXPECTED_HOSTNAME`, `DEMO_LOCAL_BASE_URL`, and `DEMO_PUBLIC_HEALTH_URL`
 - Supports optional `DEMO_SERVICE_NAME`, `DEMO_INSTALL_DIR`, `DEMO_TEST_PORT`,
   `DEMO_AUTH_USER`, and `DEMO_AUTH_PASS`
 - Assumes the target service and install directory already exist on the host
-- Defaults preview runs to `pulse-v6-preview` and refuses to target the stable
-  `pulse` service identity
 - Verifies the SSH target reports the governed expected hostname before deploy
 - Verifies that the public demo shell serves the same frontend entry asset that
   was built and deployed

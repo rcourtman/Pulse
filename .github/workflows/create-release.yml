@@ -992,12 +992,11 @@ jobs:
           REQUIRED_BRANCH: ${{ needs.prepare.outputs.required_branch }}
         run: |
           if [ "${{ needs.prepare.outputs.is_prerelease }}" = "true" ]; then
-            TARGET="preview-v6"
-          else
-            TARGET="stable"
+            echo "[OK] Prerelease public demo update skipped; post-GA demo target is stable only."
+            exit 0
           fi
-          gh workflow run update-demo-server.yml --ref "${REQUIRED_BRANCH}" -f tag="${{ needs.prepare.outputs.tag }}" -f target="${TARGET}"
-          echo "[OK] Demo server update dispatched for ${TARGET} from ${REQUIRED_BRANCH}"
+          gh workflow run update-demo-server.yml --ref "${REQUIRED_BRANCH}" -f tag="${{ needs.prepare.outputs.tag }}" -f target="stable"
+          echo "[OK] Demo server update dispatched for stable from ${REQUIRED_BRANCH}"
 
       - name: Summary
         run: |
