@@ -51,6 +51,39 @@ func TestIncidentRecorderStartStopIdempotentGuards(t *testing.T) {
 	recorder.Stop()
 }
 
+func TestIncidentRecorderStopWaitsForPendingSavesWhenAlreadyStopped(t *testing.T) {
+	recorder := NewIncidentRecorder(IncidentRecorderConfig{
+		DataDir: t.TempDir(),
+	})
+
+	recorder.saveMu.Lock()
+	recorder.saveInProgress = true
+	recorder.saveMu.Unlock()
+
+	done := make(chan struct{})
+	go func() {
+		recorder.Stop()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		t.Fatal("expected Stop to wait for pending saves even when recorder is already stopped")
+	case <-time.After(20 * time.Millisecond):
+	}
+
+	recorder.saveMu.Lock()
+	recorder.saveInProgress = false
+	recorder.saveCond.Broadcast()
+	recorder.saveMu.Unlock()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for Stop to return after pending saves were cleared")
+	}
+}
+
 func TestRecordSampleNoProviderNoop(t *testing.T) {
 	recorder := NewIncidentRecorder(IncidentRecorderConfig{})
 	recorder.recordSample()
@@ -291,11 +324,8 @@ func TestCompleteWindowAsyncSaveErrorPath(t *testing.T) {
 	recorder.activeWindows[window.ID] = window
 
 	recorder.completeWindowLocked(window)
+	recorder.waitForPendingSaves()
 
-	deadline := time.Now().Add(500 * time.Millisecond)
-	for !writer.hit.Load() && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
-	}
 	if !writer.hit.Load() {
 		t.Fatal("expected async save error warning to be logged")
 	}

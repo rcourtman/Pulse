@@ -118,6 +118,7 @@ type IncidentRecorder struct {
 	// Persistence
 	dataDir  string
 	filePath string
+	saveIOMu sync.Mutex
 
 	// Control
 	stopCh   chan struct{}
@@ -225,6 +226,7 @@ func (r *IncidentRecorder) Stop() {
 	r.mu.Lock()
 	if !r.running {
 		r.mu.Unlock()
+		r.waitForPendingSaves()
 		return
 	}
 	r.running = false
@@ -476,17 +478,8 @@ func (r *IncidentRecorder) completeWindowLocked(window *IncidentWindow) {
 		Int("data_points", len(window.DataPoints)).
 		Msg("completed incident recording")
 
-	// Save asynchronously
-	go func() {
-		if err := r.saveToDisk(); err != nil {
-			log.Warn().
-				Str("window_id", window.ID).
-				Str("resource_id", window.ResourceID).
-				Str("file_path", r.filePath).
-				Err(err).
-				Msg("Failed to save incident windows")
-		}
-	}()
+	// Save asynchronously.
+	r.requestAsyncSave()
 }
 
 // computeSummary computes statistics for a window
@@ -629,6 +622,8 @@ func (r *IncidentRecorder) saveToDisk() error {
 	if r.filePath == "" {
 		return nil
 	}
+	r.saveIOMu.Lock()
+	defer r.saveIOMu.Unlock()
 
 	data := struct {
 		CompletedWindows []*IncidentWindow `json:"completed_windows"`
@@ -683,6 +678,44 @@ func (r *IncidentRecorder) saveToDisk() error {
 	return os.Chmod(r.filePath, incidentRecorderFilePerm)
 }
 
+func (r *IncidentRecorder) requestAsyncSave() {
+	if r.filePath == "" {
+		return
+	}
+
+	r.saveMu.Lock()
+	if r.saveInProgress {
+		r.saveRequested = true
+		r.saveMu.Unlock()
+		return
+	}
+	r.saveInProgress = true
+	r.saveMu.Unlock()
+
+	go r.runAsyncSaves()
+}
+
+func (r *IncidentRecorder) runAsyncSaves() {
+	for {
+		if err := r.saveToDisk(); err != nil {
+			log.Warn().
+				Str("file_path", r.filePath).
+				Err(err).
+				Msg("Failed to save incident windows")
+		}
+
+		r.saveMu.Lock()
+		if !r.saveRequested {
+			r.saveInProgress = false
+			r.saveCond.Broadcast()
+			r.saveMu.Unlock()
+			return
+		}
+		r.saveRequested = false
+		r.saveMu.Unlock()
+	}
+}
+
 func (r *IncidentRecorder) snapshotCompletedWindows() []*IncidentWindow {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -704,6 +737,9 @@ func (r *IncidentRecorder) waitForPendingSaves() {
 		r.saveCond.Wait()
 	}
 	r.saveMu.Unlock()
+
+	r.saveIOMu.Lock()
+	r.saveIOMu.Unlock()
 }
 
 // loadFromDisk loads completed windows
