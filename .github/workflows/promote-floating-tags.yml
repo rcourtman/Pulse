@@ -111,56 +111,11 @@ jobs:
       - name: Validate release line policy
         env:
           TAG: ${{ steps.extract.outputs.tag }}
-          PRERELEASE: ${{ steps.extract.outputs.prerelease }}
         run: |
           set -euo pipefail
-
-          VERSION="${TAG#v}"
-          REQUIRED_BRANCH="$(python3 scripts/release_control/control_plane.py --branch-for-version "${VERSION}")"
-
-          if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
-            git fetch --prune --unshallow origin
-          fi
-          git fetch --prune origin "${REQUIRED_BRANCH}" --tags
-
-          if ! git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
-            echo "::error::Tag ${TAG} does not exist in repository tags."
-            exit 1
-          fi
-
-          TAG_COMMIT="$(git rev-list -n1 "refs/tags/${TAG}")"
-          if ! git merge-base --is-ancestor "$TAG_COMMIT" "origin/${REQUIRED_BRANCH}"; then
-            echo "::error::Tag ${TAG} is not reachable from origin/${REQUIRED_BRANCH}. Refusing floating-tag promotion."
-            exit 1
-          fi
-
-          if [ "$PRERELEASE" != "true" ]; then
-            BASE_VERSION="${TAG#v}"
-            BASE_VERSION="${BASE_VERSION%%-*}"
-            mapfile -t RC_TAGS < <(git tag -l "v${BASE_VERSION}-rc.*" --sort=-version:refname)
-            if [ "${#RC_TAGS[@]}" -eq 0 ]; then
-              echo "::error::Stable tag ${TAG} has no matching prerelease tags for base version ${BASE_VERSION}."
-              exit 1
-            fi
-
-            MATCHED_RC=""
-            for rc_tag in "${RC_TAGS[@]}"; do
-              rc_commit="$(git rev-list -n1 "refs/tags/${rc_tag}")"
-              if git merge-base --is-ancestor "$rc_commit" "$TAG_COMMIT"; then
-                MATCHED_RC="$rc_tag"
-                break
-              fi
-            done
-
-            if [ -z "$MATCHED_RC" ]; then
-              echo "::error::Stable tag ${TAG} does not descend from any matching prerelease tag for base version ${BASE_VERSION}."
-              exit 1
-            fi
-
-            echo "[OK] ${TAG} descends from prerelease ${MATCHED_RC}"
-          fi
-
-          echo "[OK] ${TAG} validated against release line ${REQUIRED_BRANCH}"
+          python3 scripts/release_control/validate_artifact_release_line.py \
+            --tag "${TAG}" \
+            --purpose "floating-tag promotion"
 
       - name: Log in to Docker Hub
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
