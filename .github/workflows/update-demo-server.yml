@@ -379,10 +379,37 @@ jobs:
                 fi
               done
             fi
+            pruned_volatile=false
+            if ((free_kb < required_kb)); then
+              echo "Pruning demo volatile runtime stores to restore install headroom."
+              if command -v systemctl >/dev/null 2>&1; then
+                sudo systemctl stop "$SERVICE_NAME" || true
+              fi
+              for volatile_path in \
+                "$CONFIG_DIR/metrics.db" \
+                "$CONFIG_DIR/metrics.db-shm" \
+                "$CONFIG_DIR/metrics.db-wal" \
+                "$CONFIG_DIR/notification_queue.db" \
+                "$CONFIG_DIR/notification_queue.db-shm" \
+                "$CONFIG_DIR/notification_queue.db-wal"
+              do
+                if [[ -e "$volatile_path" ]]; then
+                  printf 'Removing demo volatile store: %s\n' "$volatile_path"
+                  sudo rm -f -- "$volatile_path"
+                  pruned_volatile=true
+                fi
+              done
+              config_kb="$(sudo du -sk "$CONFIG_DIR" | awk 'NR == 1 {print $1}')"
+              free_kb="$(df -Pk "$BACKUP_PARENT" | awk 'NR == 2 {print $4}')"
+              required_kb=$((config_kb + BACKUP_MARGIN_KB))
+            fi
             if ((free_kb < required_kb)); then
               echo "::error::Demo host does not have enough free space to back up $CONFIG_DIR before install."
               echo "Config: ${config_kb}KB, available: ${free_kb}KB, required: ${required_kb}KB"
               sudo find "$BACKUP_PARENT" -maxdepth 1 -type d -name "${BACKUP_BASENAME}.backup.*" -printf '%TY-%Tm-%Td %TH:%TM %p\n' 2>/dev/null | sort || true
+              if [[ "$pruned_volatile" == "true" ]] && command -v systemctl >/dev/null 2>&1; then
+                sudo systemctl start "$SERVICE_NAME" || true
+              fi
               exit 1
             fi
           fi
