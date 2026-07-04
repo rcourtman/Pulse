@@ -761,6 +761,8 @@ func TestUpdateDemoWorkflowUsesGovernedNetworkPath(t *testing.T) {
 		`KEEP_BACKUPS=2`,
 		`Removing demo backup to restore install headroom: %s`,
 		`Pruning demo volatile runtime stores to restore install headroom.`,
+		`sudo find "$CONFIG_DIR" -xdev -type f`,
+		`-name "metrics.db"`,
 		`Removing demo volatile store: %s`,
 		`Demo host does not have enough free space to back up $CONFIG_DIR before install.`,
 		`Verify public browser smoke`,

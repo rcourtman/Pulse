@@ -385,19 +385,23 @@ jobs:
               if command -v systemctl >/dev/null 2>&1; then
                 sudo systemctl stop "$SERVICE_NAME" || true
               fi
-              for volatile_path in \
-                "$CONFIG_DIR/metrics.db" \
-                "$CONFIG_DIR/metrics.db-shm" \
-                "$CONFIG_DIR/metrics.db-wal" \
-                "$CONFIG_DIR/notification_queue.db" \
-                "$CONFIG_DIR/notification_queue.db-shm" \
-                "$CONFIG_DIR/notification_queue.db-wal"
-              do
-                if [[ -e "$volatile_path" ]]; then
-                  printf 'Removing demo volatile store: %s\n' "$volatile_path"
-                  sudo rm -f -- "$volatile_path"
-                  pruned_volatile=true
-                fi
+              mapfile -d '' volatile_paths < <(
+                sudo find "$CONFIG_DIR" -xdev -type f \( \
+                  -name "metrics.db" -o \
+                  -name "metrics.db-shm" -o \
+                  -name "metrics.db-wal" -o \
+                  -name "notification_queue.db" -o \
+                  -name "notification_queue.db-shm" -o \
+                  -name "notification_queue.db-wal" -o \
+                  -name "deploy.db" -o \
+                  -name "deploy.db-shm" -o \
+                  -name "deploy.db-wal" \
+                \) -print0 2>/dev/null || true
+              )
+              for volatile_path in "${volatile_paths[@]}"; do
+                printf 'Removing demo volatile store: %s\n' "$(basename "$volatile_path")"
+                sudo rm -f -- "$volatile_path"
+                pruned_volatile=true
               done
               config_kb="$(sudo du -sk "$CONFIG_DIR" | awk 'NR == 1 {print $1}')"
               free_kb="$(df -Pk "$BACKUP_PARENT" | awk 'NR == 2 {print $4}')"
