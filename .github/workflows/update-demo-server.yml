@@ -448,6 +448,39 @@ jobs:
           SERVICE_NAME="${1:-pulse}"
           DEMO_LOCAL_BASE_URL="$2"
           CONFIG_DIR="/etc/${SERVICE_NAME:-pulse}"
+          SERVICE_USER="$(systemctl show "$SERVICE_NAME" --property=User --value 2>/dev/null || true)"
+          SERVICE_GROUP="$(systemctl show "$SERVICE_NAME" --property=Group --value 2>/dev/null || true)"
+          SERVICE_USER="${SERVICE_USER:-pulse}"
+          SERVICE_GROUP="${SERVICE_GROUP:-$SERVICE_USER}"
+
+          resolve_config_dir() {
+            local fallback="$CONFIG_DIR"
+            local unit_env=""
+            local fragment=""
+            unit_env="$(systemctl show "$SERVICE_NAME" --property=Environment --value 2>/dev/null || true)"
+            for entry in $unit_env; do
+              case "$entry" in
+                PULSE_DATA_DIR=*)
+                  printf '%s\n' "${entry#PULSE_DATA_DIR=}"
+                  return 0
+                  ;;
+              esac
+            done
+
+            fragment="$(systemctl show "$SERVICE_NAME" --property=FragmentPath --value 2>/dev/null || true)"
+            if [ -n "$fragment" ] && sudo test -r "$fragment"; then
+              local unit_data_dir
+              unit_data_dir="$(sudo sed -n -E 's/^Environment="?PULSE_DATA_DIR=([^"]*)"?$/\1/p' "$fragment" | tail -1)"
+              if [ -n "$unit_data_dir" ]; then
+                printf '%s\n' "$unit_data_dir"
+                return 0
+              fi
+            fi
+
+            printf '%s\n' "$fallback"
+          }
+
+          CONFIG_DIR="$(resolve_config_dir)"
           ENV_FILE="$CONFIG_DIR/.env"
 
           set_env_value() {
@@ -465,6 +498,34 @@ jobs:
             fi
           }
 
+          ensure_demo_fixture_entitlement() {
+            local billing_file="$CONFIG_DIR/billing.json"
+            local tmp_file
+            tmp_file="$(mktemp)"
+            sudo mkdir -p "$CONFIG_DIR"
+
+            if sudo test -s "$billing_file" && sudo jq '
+                .capabilities = (((.capabilities // []) + ["demo_fixtures"]) | unique)
+                | .limits = (.limits // {})
+                | .meters_enabled = (.meters_enabled // [])
+                | .plan_version = (if (.plan_version // "") == "" then "community" else .plan_version end)
+                | .subscription_state = (if (.subscription_state // "") == "" then "active" else .subscription_state end)
+                | del(.integrity)
+              ' "$billing_file" > "$tmp_file"; then
+              :
+            else
+              cat > "$tmp_file" <<'JSON'
+          {"capabilities":["demo_fixtures"],"limits":{},"meters_enabled":[],"plan_version":"community","subscription_state":"active"}
+          JSON
+            fi
+
+            sudo tee "$billing_file" < "$tmp_file" >/dev/null
+            rm -f "$tmp_file"
+            sudo chown "$SERVICE_USER:$SERVICE_GROUP" "$billing_file" || sudo chown "$SERVICE_USER" "$billing_file" || true
+            sudo chmod 600 "$billing_file"
+            echo "Demo fixture entitlement ensured in governed demo billing state."
+          }
+
           set_env_value DEMO_MODE true
           set_env_value PULSE_MOCK_MODE true
           set_env_value PULSE_MOCK_NODES 5
@@ -480,7 +541,9 @@ jobs:
           set_env_value PULSE_MOCK_RANDOM_METRICS true
           set_env_value PULSE_MOCK_STOPPED_PERCENT 6
 
-          sudo chown pulse:pulse "$ENV_FILE" || true
+          ensure_demo_fixture_entitlement
+
+          sudo chown "$SERVICE_USER:$SERVICE_GROUP" "$ENV_FILE" || sudo chown "$SERVICE_USER" "$ENV_FILE" || true
           sudo chmod 600 "$ENV_FILE"
           sudo systemctl daemon-reload
           sudo systemctl restart "$SERVICE_NAME"

@@ -3,6 +3,9 @@
 package api
 
 import (
+	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -137,5 +140,40 @@ func TestSyncReleaseDemoFixtureRuntime_IgnoresNonDefaultOrg(t *testing.T) {
 
 	if mock.IsMockEnabled() {
 		t.Fatal("expected non-default org sync to leave process-wide mock mode untouched")
+	}
+}
+
+func TestSyncReleaseDemoFixtureRuntime_FileBillingStateSeedEnablesMockFixtures(t *testing.T) {
+	previousEnabled := mock.IsMockEnabled()
+	t.Cleanup(func() {
+		_ = mock.SetEnabled(false)
+		mock.SetReleaseFixturesAuthorized(false)
+		_ = mock.SetEnabled(previousEnabled)
+	})
+	_ = mock.SetEnabled(false)
+	mock.SetReleaseFixturesAuthorized(false)
+	t.Setenv("PULSE_MOCK_MODE", "true")
+
+	baseDir := t.TempDir()
+	billingState := []byte(`{"capabilities":["demo_fixtures"],"limits":{},"meters_enabled":[],"plan_version":"community","subscription_state":"active"}`)
+	if err := os.WriteFile(filepath.Join(baseDir, "billing.json"), billingState, 0o600); err != nil {
+		t.Fatalf("write demo billing state: %v", err)
+	}
+
+	handler := NewLicenseHandlers(
+		config.NewMultiTenantPersistence(baseDir),
+		false,
+		&config.Config{DemoMode: true},
+	)
+
+	service, _, err := handler.getTenantComponents(context.Background())
+	if err != nil {
+		t.Fatalf("getTenantComponents: %v", err)
+	}
+	if !service.HasFeature(featureDemoFixturesValue) {
+		t.Fatal("expected seeded demo billing state to authorize demo fixtures")
+	}
+	if !mock.IsMockEnabled() {
+		t.Fatal("expected demo fixture sync to enable mock mode from seeded billing state")
 	}
 }

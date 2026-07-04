@@ -1066,11 +1066,17 @@ That same stable demo-update boundary must also restore the canonical demo
 runtime `.env` before verification on every run, including when the service is
 already on the requested version and the binary update is skipped. The workflow
 must set `DEMO_MODE=true`, converge the governed `PULSE_MOCK_*` fixture
-defaults in `/etc/<service>/.env`, restart the selected service, force the
-release-build demo-fixture entitlement sync through authenticated
-`/api/license/runtime-capabilities`, and then prove both
+defaults in the service's resolved runtime `.env`, seed the hidden
+`demo_fixtures` capability into the default-org demo `billing.json` entitlement
+state, restart the selected service, force the release-build demo-fixture
+entitlement sync through authenticated `/api/license/runtime-capabilities`, and
+then prove both
 `/api/system/mock-mode.enabled` and `/api/state.resources[]` converge. A
 passing `/api/version` or `/api/health` response alone is not demo readiness.
+If the workflow mutates an existing demo `billing.json`, it must remove the old
+`integrity` field so the running application re-signs the entitlement state
+through the canonical billing-state migration path instead of silently treating
+the privileged deployment mutation as tampering.
 That same operator-proof boundary also now owns the canonical hosted staging
 smoke entrypoint. `scripts/run_hosted_staging_smoke.sh` must stay as the
 repo-tracked operator command that composes the hosted signup/billing eval pack
