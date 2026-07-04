@@ -270,6 +270,12 @@ TLS floor in the dynamic config.
    settings, insecure flag, and persisted agent id from the local installed
    agent state, must fail closed when no existing installation or connection
    state is present, and must refuse to silently become a new install command.
+   That recovery must not depend only on a v6 `connection.env`: v5.1.x agents
+   that predate persisted connection state may recover the existing URL, token,
+   feature flags, identity, and trust posture from the running `pulse-agent`
+   process or its systemd service definition, then persist the upgraded runtime
+   back through the v6 token-file service-argument path rather than keeping the
+   raw token in process arguments.
    The shell installer must disclose `--enable-commands` as Pulse command
    execution, disabled by default, and must name both Patrol actions and
    Proxmox LXC Docker inventory as the operator-visible reasons to enable it.
@@ -363,6 +369,14 @@ TLS floor in the dynamic config.
    deploy them for LXC / systemd installs too. The original gap (sidecars never
    deployed on LXC, so the endpoint proxied the SERVER installer) shipped as the
    rc.6 agent-wizard regression (issue #1470).
+   The agent installer update path must also cover legacy v5 process-state
+   recovery as a first-class installability behavior: a tokenless
+   `--update --url <server>` command copied from the v6 UI must be able to
+   upgrade an already-running v5.1.x `pulse-agent` that was launched with
+   `--url`, `--token`, feature flags, and identity arguments even when
+   `connection.env` is missing or incomplete. The upgraded service must be
+   rendered through the shared exec-argument builder and use the secure
+   `--token-file` runtime path.
    Deployment bootstrap token behavior remains a deployment-installability
    trust boundary even when the handler is API-owned. `internal/api/deploy_handlers.go`
    must preserve server-derived `owner_user_id` lineage on bootstrap tokens and
@@ -688,7 +702,7 @@ TLS floor in the dynamic config.
 
 1. Update this contract when canonical deployment or installer entry points move
 2. Keep deployment runtime and shared API proof routing aligned in `registry.json`
-3. Preserve explicit coverage for installer parity, update planning, and deployment bootstrap behavior when these surfaces change
+3. Preserve explicit coverage for installer parity, update planning, and deployment bootstrap behavior when these surfaces change. Shell installer update recovery changes must keep `scripts/installtests/install_sh_test.go` covering both persisted `connection.env` recovery and legacy running-process/service recovery, including the rule that upgraded service args use `--token-file` instead of raw `--token`.
 4. Keep stable and prerelease packet lineage explicit when `docs/releases/` or
    `VERSION` changes: preserve already-shipped RC packets under dedicated
    historical filenames before reusing canonical stable names, keep

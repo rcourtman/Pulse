@@ -118,6 +118,8 @@ APPLIED_SERVICE_ENV_KEYS="|"
 DOCKER_EXPLICIT="false"
 KUBERNETES_EXPLICIT="false"
 PROXMOX_EXPLICIT="false"
+HOST_EXPLICIT="false"
+INTERVAL_EXPLICIT="false"
 
 # --- Helper Functions ---
 log_info() {
@@ -1511,6 +1513,334 @@ recover_connection_state() {
     fi
 }
 
+strip_recovered_arg_quotes() {
+    local value="$1"
+
+    case "$value" in
+        \"*\") value="${value#\"}"; value="${value%\"}" ;;
+        \'*\') value="${value#\'}"; value="${value%\'}" ;;
+    esac
+
+    printf '%s\n' "$value"
+}
+
+apply_recovered_agent_arg_value() {
+    local key="$1"
+    local value="$2"
+
+    value=$(strip_recovered_arg_quotes "$value")
+
+    case "$key" in
+        url|pulse-url)
+            if [[ -z "$PULSE_URL" ]]; then PULSE_URL="$value"; fi
+            RECOVERED_AGENT_ARG_STATE="true"
+            ;;
+        token)
+            if [[ -z "$PULSE_TOKEN" ]]; then PULSE_TOKEN="$value"; fi
+            RECOVERED_AGENT_ARG_STATE="true"
+            ;;
+        token-file)
+            if [[ -z "$PULSE_TOKEN" && -n "$value" && -f "$value" ]]; then
+                PULSE_TOKEN=$(cat "$value")
+            fi
+            RECOVERED_AGENT_ARG_STATE="true"
+            ;;
+        interval)
+            if [[ "$INTERVAL_EXPLICIT" != "true" && -n "$value" ]]; then INTERVAL="$value"; fi
+            RECOVERED_AGENT_ARG_STATE="true"
+            ;;
+        agent-id)
+            if [[ -z "$AGENT_ID" ]]; then AGENT_ID="$value"; fi
+            RECOVERED_AGENT_ARG_STATE="true"
+            ;;
+        hostname)
+            if [[ -z "$HOSTNAME_OVERRIDE" ]]; then HOSTNAME_OVERRIDE="$value"; fi
+            RECOVERED_AGENT_ARG_STATE="true"
+            ;;
+        cacert)
+            if [[ -z "$CURL_CA_BUNDLE" ]]; then CURL_CA_BUNDLE="$value"; fi
+            RECOVERED_AGENT_ARG_STATE="true"
+            ;;
+        health-addr)
+            if [[ "$HEALTH_ADDR_SET" != "true" ]]; then
+                HEALTH_ADDR="$value"
+                HEALTH_ADDR_SET="true"
+            fi
+            RECOVERED_AGENT_ARG_STATE="true"
+            ;;
+        state-dir)
+            if [[ -n "$value" && "$STATE_DIR" == "/var/lib/pulse-agent" ]]; then STATE_DIR="$value"; fi
+            RECOVERED_AGENT_ARG_STATE="true"
+            ;;
+        kubeconfig)
+            if [[ "$KUBERNETES_EXPLICIT" != "true" ]]; then
+                KUBECONFIG_PATH="$value"
+                KUBERNETES_EXPLICIT="true"
+                ENABLE_KUBERNETES="true"
+            fi
+            RECOVERED_AGENT_ARG_STATE="true"
+            ;;
+        proxmox-type)
+            if [[ -z "$PROXMOX_TYPE" ]]; then PROXMOX_TYPE="$value"; fi
+            RECOVERED_AGENT_ARG_STATE="true"
+            ;;
+        disk-exclude)
+            DISK_EXCLUDES+=("$value")
+            RECOVERED_AGENT_ARG_STATE="true"
+            ;;
+    esac
+}
+
+recover_connection_state_from_arg_stream() {
+    local arg=""
+    local pending_key=""
+    local key=""
+    local value=""
+
+    RECOVERED_AGENT_ARG_STATE="false"
+
+    while IFS= read -r arg; do
+        if [[ -n "$pending_key" ]]; then
+            apply_recovered_agent_arg_value "$pending_key" "$arg"
+            pending_key=""
+            continue
+        fi
+
+        case "$arg" in
+            --url|--pulse-url|--token|--token-file|--interval|--agent-id|--hostname|--cacert|--health-addr|--state-dir|--kubeconfig|--proxmox-type|--disk-exclude)
+                pending_key="${arg#--}"
+                ;;
+            --url=*|--pulse-url=*|--token=*|--token-file=*|--interval=*|--agent-id=*|--hostname=*|--cacert=*|--health-addr=*|--state-dir=*|--kubeconfig=*|--proxmox-type=*|--disk-exclude=*)
+                key="${arg%%=*}"
+                value="${arg#*=}"
+                apply_recovered_agent_arg_value "${key#--}" "$value"
+                ;;
+            --enable-host|--enable-host=true)
+                if [[ "$HOST_EXPLICIT" != "true" ]]; then ENABLE_HOST="true"; fi
+                RECOVERED_AGENT_ARG_STATE="true"
+                ;;
+            --enable-host=false|--disable-host)
+                if [[ "$HOST_EXPLICIT" != "true" ]]; then ENABLE_HOST="false"; fi
+                RECOVERED_AGENT_ARG_STATE="true"
+                ;;
+            --enable-docker|--enable-docker=true)
+                if [[ "$DOCKER_EXPLICIT" != "true" ]]; then
+                    ENABLE_DOCKER="true"
+                    DOCKER_EXPLICIT="true"
+                fi
+                RECOVERED_AGENT_ARG_STATE="true"
+                ;;
+            --enable-docker=false|--disable-docker)
+                if [[ "$DOCKER_EXPLICIT" != "true" ]]; then
+                    ENABLE_DOCKER="false"
+                    DOCKER_EXPLICIT="true"
+                fi
+                RECOVERED_AGENT_ARG_STATE="true"
+                ;;
+            --enable-kubernetes|--enable-kubernetes=true)
+                if [[ "$KUBERNETES_EXPLICIT" != "true" ]]; then
+                    ENABLE_KUBERNETES="true"
+                    KUBERNETES_EXPLICIT="true"
+                fi
+                RECOVERED_AGENT_ARG_STATE="true"
+                ;;
+            --enable-kubernetes=false|--disable-kubernetes)
+                if [[ "$KUBERNETES_EXPLICIT" != "true" ]]; then
+                    ENABLE_KUBERNETES="false"
+                    KUBERNETES_EXPLICIT="true"
+                fi
+                RECOVERED_AGENT_ARG_STATE="true"
+                ;;
+            --enable-proxmox|--enable-proxmox=true)
+                if [[ "$PROXMOX_EXPLICIT" != "true" ]]; then
+                    ENABLE_PROXMOX="true"
+                    PROXMOX_EXPLICIT="true"
+                fi
+                RECOVERED_AGENT_ARG_STATE="true"
+                ;;
+            --enable-proxmox=false|--disable-proxmox)
+                if [[ "$PROXMOX_EXPLICIT" != "true" ]]; then
+                    ENABLE_PROXMOX="false"
+                    PROXMOX_EXPLICIT="true"
+                fi
+                RECOVERED_AGENT_ARG_STATE="true"
+                ;;
+            --insecure)
+                INSECURE="true"
+                RECOVERED_AGENT_ARG_STATE="true"
+                ;;
+            --enable-commands)
+                ENABLE_COMMANDS="true"
+                RECOVERED_AGENT_ARG_STATE="true"
+                ;;
+            --enroll)
+                ENROLL="true"
+                RECOVERED_AGENT_ARG_STATE="true"
+                ;;
+            --kube-include-all-pods)
+                KUBE_INCLUDE_ALL_PODS="true"
+                RECOVERED_AGENT_ARG_STATE="true"
+                ;;
+            --kube-include-all-deployments)
+                KUBE_INCLUDE_ALL_DEPLOYMENTS="true"
+                RECOVERED_AGENT_ARG_STATE="true"
+                ;;
+        esac
+    done
+
+    [[ "$RECOVERED_AGENT_ARG_STATE" == "true" && -n "$PULSE_URL" ]]
+}
+
+recover_connection_state_from_env_stream() {
+    local env_line=""
+    local value=""
+
+    RECOVERED_AGENT_ENV_STATE="false"
+
+    while IFS= read -r env_line; do
+        case "$env_line" in
+            PULSE_URL=*|PULSE_AGENT_URL=*|PULSE_AGENT_CONNECT_URL=*)
+                value="${env_line#*=}"
+                if [[ -z "$PULSE_URL" ]]; then PULSE_URL="$value"; fi
+                RECOVERED_AGENT_ENV_STATE="true"
+                ;;
+            PULSE_TOKEN=*)
+                value="${env_line#*=}"
+                if [[ -z "$PULSE_TOKEN" ]]; then PULSE_TOKEN="$value"; fi
+                RECOVERED_AGENT_ENV_STATE="true"
+                ;;
+            PULSE_TOKEN_FILE=*)
+                value="${env_line#*=}"
+                if [[ -z "$PULSE_TOKEN" && -n "$value" && -f "$value" ]]; then
+                    PULSE_TOKEN=$(cat "$value")
+                fi
+                RECOVERED_AGENT_ENV_STATE="true"
+                ;;
+            PULSE_AGENT_ID=*)
+                value="${env_line#*=}"
+                if [[ -z "$AGENT_ID" ]]; then AGENT_ID="$value"; fi
+                RECOVERED_AGENT_ENV_STATE="true"
+                ;;
+            PULSE_HOSTNAME=*)
+                value="${env_line#*=}"
+                if [[ -z "$HOSTNAME_OVERRIDE" ]]; then HOSTNAME_OVERRIDE="$value"; fi
+                RECOVERED_AGENT_ENV_STATE="true"
+                ;;
+            PULSE_INSECURE_SKIP_VERIFY=true)
+                INSECURE="true"
+                RECOVERED_AGENT_ENV_STATE="true"
+                ;;
+            PULSE_CACERT=*)
+                value="${env_line#*=}"
+                if [[ -z "$CURL_CA_BUNDLE" ]]; then CURL_CA_BUNDLE="$value"; fi
+                RECOVERED_AGENT_ENV_STATE="true"
+                ;;
+        esac
+    done
+
+    [[ "$RECOVERED_AGENT_ENV_STATE" == "true" && -n "$PULSE_URL" ]]
+}
+
+collect_running_agent_pids() {
+    local path=""
+    local pid=""
+
+    if command -v pgrep >/dev/null 2>&1; then
+        {
+            pgrep -x "$BINARY_NAME" 2>/dev/null || true
+            pgrep -f "/${BINARY_NAME}( |$)" 2>/dev/null || true
+        } | awk '!seen[$0]++'
+        return 0
+    fi
+
+    for path in /proc/[0-9]*/cmdline; do
+        [[ -r "$path" ]] || continue
+        if tr '\0' '\n' < "$path" 2>/dev/null | grep -qx ".*/${BINARY_NAME}"; then
+            pid="${path%/cmdline}"
+            printf '%s\n' "${pid##*/}"
+        fi
+    done
+}
+
+recover_connection_state_from_running_agent() {
+    local pid=""
+    local recovered="false"
+
+    [[ -d /proc ]] || return 1
+
+    while IFS= read -r pid; do
+        [[ -n "$pid" && "$pid" != "$$" ]] || continue
+        recovered="false"
+
+        if [[ -r "/proc/${pid}/cmdline" ]]; then
+            if recover_connection_state_from_arg_stream < <(tr '\0' '\n' < "/proc/${pid}/cmdline" 2>/dev/null); then
+                recovered="true"
+            fi
+        fi
+        if [[ -r "/proc/${pid}/environ" ]]; then
+            if recover_connection_state_from_env_stream < <(tr '\0' '\n' < "/proc/${pid}/environ" 2>/dev/null); then
+                recovered="true"
+            fi
+        fi
+        if [[ "$recovered" == "true" && -n "$PULSE_URL" ]]; then
+            return 0
+        fi
+    done < <(collect_running_agent_pids)
+
+    return 1
+}
+
+recover_connection_state_from_systemd_unit() {
+    local unit_path=""
+    local candidate=""
+    local line=""
+    local payload=""
+    local recovered="false"
+
+    if command -v systemctl >/dev/null 2>&1; then
+        unit_path=$(systemctl show -p FragmentPath --value "$AGENT_NAME" 2>/dev/null || true)
+    fi
+
+    for candidate in "$unit_path" "/etc/systemd/system/${AGENT_NAME}.service" "/lib/systemd/system/${AGENT_NAME}.service" "/usr/lib/systemd/system/${AGENT_NAME}.service"; do
+        [[ -n "$candidate" && -f "$candidate" ]] || continue
+        recovered="false"
+        while IFS= read -r line; do
+            case "$line" in
+                ExecStart=*)
+                    payload="${line#ExecStart=}"
+                    if recover_connection_state_from_arg_stream < <(printf '%s\n' "$payload" | tr ' ' '\n'); then
+                        recovered="true"
+                    fi
+                    ;;
+                Environment=*)
+                    payload="${line#Environment=}"
+                    if recover_connection_state_from_env_stream < <(printf '%s\n' "$payload" | tr ' ' '\n' | sed 's/^"//; s/"$//'); then
+                        recovered="true"
+                    fi
+                    ;;
+            esac
+        done < "$candidate"
+        if [[ "$recovered" == "true" && -n "$PULSE_URL" ]]; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+recover_connection_state_from_existing_agent() {
+    if recover_connection_state_from_running_agent; then
+        log_info "Recovered connection details from the running Pulse Agent process."
+        return 0
+    fi
+    if recover_connection_state_from_systemd_unit; then
+        log_info "Recovered connection details from the existing Pulse Agent service."
+        return 0
+    fi
+
+    return 1
+}
+
 find_connection_state_file() {
     local conn_env=""
     local qnap_state_dir=""
@@ -1600,11 +1930,11 @@ while [[ $# -gt 0 ]]; do
         --help|-h) show_help; exit 0 ;;
         --url) PULSE_URL="$2"; shift 2 ;;
         --token) PULSE_TOKEN="$2"; shift 2 ;;
-        --interval) INTERVAL="$2"; shift 2 ;;
-        --enable-host) ENABLE_HOST="true"; shift ;;
-        --enable-host=true) ENABLE_HOST="true"; shift ;;
-        --enable-host=false) ENABLE_HOST="false"; shift ;;
-        --disable-host) ENABLE_HOST="false"; shift ;;
+        --interval) INTERVAL="$2"; INTERVAL_EXPLICIT="true"; shift 2 ;;
+        --enable-host) ENABLE_HOST="true"; HOST_EXPLICIT="true"; shift ;;
+        --enable-host=true) ENABLE_HOST="true"; HOST_EXPLICIT="true"; shift ;;
+        --enable-host=false) ENABLE_HOST="false"; HOST_EXPLICIT="true"; shift ;;
+        --disable-host) ENABLE_HOST="false"; HOST_EXPLICIT="true"; shift ;;
         --enable-docker) ENABLE_DOCKER="true"; DOCKER_EXPLICIT="true"; shift ;;
         --enable-docker=true) ENABLE_DOCKER="true"; DOCKER_EXPLICIT="true"; shift ;;
         --enable-docker=false) ENABLE_DOCKER="false"; DOCKER_EXPLICIT="true"; shift ;;
@@ -1684,6 +2014,12 @@ if [[ "$UPDATE_ONLY" == "true" ]]; then
         if [[ -n "$update_conn_env" ]]; then
             log_info "Recovering connection details from ${update_conn_env}..."
             recover_connection_state "$update_conn_env"
+        fi
+        if [[ -z "$PULSE_URL" || -z "$PULSE_TOKEN" ]]; then
+            recover_connection_state_from_existing_agent || true
+        fi
+        if [[ -n "$PULSE_URL" && -n "$PULSE_TOKEN" ]]; then
+            :
         elif [[ -z "$PULSE_URL" || -z "$PULSE_TOKEN" ]]; then
             fail "No existing Pulse Agent connection state found. Use the install command instead." "$EXIT_MISSING_ARGS"
         fi

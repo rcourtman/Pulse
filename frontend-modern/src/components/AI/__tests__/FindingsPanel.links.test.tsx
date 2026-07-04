@@ -189,6 +189,10 @@ vi.mock('@/stores/aiIntelligence', () => ({
 }));
 
 describe('FindingsPanel resource links', () => {
+  const expectCollapsedFinding = (title: string) => {
+    expect(screen.getByRole('button', { name: `View details for ${title}` })).toBeInTheDocument();
+  };
+
   beforeEach(() => {
     mockState.findings = [...mockState.initialFindings];
     mockState.patrolFindings = [...mockState.initialPatrolFindings];
@@ -355,7 +359,7 @@ describe('FindingsPanel resource links', () => {
     await waitFor(() => expect(mockState.loadPatrolFindings).toHaveBeenCalled());
 
     expect(screen.getByText('warning')).toBeInTheDocument();
-    expect(screen.getByText('Database latency spike')).toBeInTheDocument();
+    expectCollapsedFinding('Database latency spike');
     expect(screen.queryByText('detected')).not.toBeInTheDocument();
     expect(screen.queryByText('Review finding')).not.toBeInTheDocument();
   });
@@ -400,8 +404,8 @@ describe('FindingsPanel resource links', () => {
 
     await waitFor(() => expect(mockState.loadPatrolFindings).toHaveBeenCalled());
 
-    expect(screen.getByText('Database latency spike')).toBeInTheDocument();
-    expect(screen.getByText('Web service restart loop')).toBeInTheDocument();
+    expectCollapsedFinding('Database latency spike');
+    expectCollapsedFinding('Web service restart loop');
     expect(screen.queryByText('Patrol investigating')).not.toBeInTheDocument();
     expect(screen.queryByText('Verify outcome')).not.toBeInTheDocument();
     expect(screen.queryByText('Review finding')).not.toBeInTheDocument();
@@ -511,10 +515,8 @@ describe('FindingsPanel resource links', () => {
 
     expect(screen.getByText('critical')).toBeInTheDocument();
     expect(screen.getByText('warning')).toBeInTheDocument();
-    expect(
-      screen.getByText('Unraid array running without parity protection while at 86% capacity'),
-    ).toBeInTheDocument();
-    expect(screen.getByText('Storage pool Tower Array at 85.9% usage')).toBeInTheDocument();
+    expectCollapsedFinding('Unraid array running without parity protection while at 86% capacity');
+    expectCollapsedFinding('Storage pool Tower Array at 85.9% usage');
     expect(screen.queryByText('detected')).not.toBeInTheDocument();
     expect(screen.queryByText('Review finding')).not.toBeInTheDocument();
 
@@ -536,17 +538,17 @@ describe('FindingsPanel resource links', () => {
       ),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(
+      screen.getAllByText(
         'Verify the parity check is progressing and let it complete before making array changes.',
       ),
-    ).toBeInTheDocument();
+    ).toHaveLength(2);
     expect(screen.getByText('Recommended next step:')).toBeInTheDocument();
     expect(screen.getByText('What Pulse checked:')).toBeInTheDocument();
     expect(
-      screen.getByText(
+      screen.getAllByText(
         'Checked array status via Unraid API: parity_status=check, capacity=85.9%, disk2=95.8%.',
       ),
-    ).toBeInTheDocument();
+    ).toHaveLength(2);
   });
 
   it('can render Patrol findings from the direct Patrol source', async () => {
@@ -555,7 +557,7 @@ describe('FindingsPanel resource links', () => {
     await waitFor(() => expect(mockState.loadPatrolFindings).toHaveBeenCalled());
 
     expect(mockState.loadFindings).not.toHaveBeenCalled();
-    expect(screen.getByText('Provider connection issue')).toBeInTheDocument();
+    expectCollapsedFinding('Provider connection issue');
   });
 
   it('renders Patrol findings while the unified findings request is still loading', async () => {
@@ -567,7 +569,7 @@ describe('FindingsPanel resource links', () => {
     await waitFor(() => expect(mockState.loadPatrolFindings).toHaveBeenCalled());
 
     expect(screen.queryByText('Loading findings...')).not.toBeInTheDocument();
-    expect(screen.getByText('Provider connection issue')).toBeInTheDocument();
+    expectCollapsedFinding('Provider connection issue');
   });
 
   it('keeps loaded Patrol findings visible during a Patrol refresh', async () => {
@@ -578,7 +580,7 @@ describe('FindingsPanel resource links', () => {
     await waitFor(() => expect(mockState.loadPatrolFindings).toHaveBeenCalled());
 
     expect(screen.queryByText('Loading findings...')).not.toBeInTheDocument();
-    expect(screen.getByText('Provider connection issue')).toBeInTheDocument();
+    expectCollapsedFinding('Provider connection issue');
   });
 
   it('renders a selected Patrol run empty snapshot while Patrol findings are loading', async () => {

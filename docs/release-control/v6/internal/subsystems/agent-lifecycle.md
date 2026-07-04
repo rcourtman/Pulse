@@ -1107,6 +1107,13 @@ surface and no new `internal/api/` lifecycle handler.
    limited to the PVE command-agent path; it must not become the default for
    Docker / Podman, host-only, PBS-only, or ordinary non-command agents.
    Persistence-sensitive NAS targets must keep one canonical continuity model here: installer-owned bootstraps may use flash-backed or immutable-root launch hooks only as thin trampolines, while the durable wrapper, state, and reboot-surviving binary copy stay in the governed persistent state directory that updater continuity also refreshes.
+   Unix `--update` re-entry must also preserve lifecycle identity for legacy
+   v5.1.x agents that do not yet have v6 `connection.env` state. When a
+   running `pulse-agent` process or its systemd unit already carries the Pulse
+   URL, token, feature flags, agent id, hostname, or trust posture, the shell
+   installer may recover those values for the update handoff, but the resulting
+   v6 service must be rendered through the shared exec-argument builder and
+   migrate the token into the installer-owned `--token-file` path.
    Approval-gated command execution must expose stable rejection reasons for
    invalid approval grants so fleet operators can distinguish missing, expired,
    mismatched, and signature-invalid grants through agent metrics.
@@ -1333,7 +1340,7 @@ surface and no new `internal/api/` lifecycle handler.
 
 1. Update this contract when agent lifecycle ownership changes. Routes added under the shared `internal/api/` extension point that are clearly outside lifecycle ownership (for example `POST /api/ai/patrol/preflight`, the `patrol_preflight` snapshot field added to `/api/settings/ai`, the auto-trigger preflight dispatch on settings save, the startup-seed dispatch in `NewAISettingsHandler`, and the cached-preflight integration into the Patrol `tools` readiness check — all owned by ai-runtime) do not extend this subsystem's contract; they live in their owning subsystem.
 2. Keep shared API proof routing aligned whenever install, register, or profile payloads change.
-3. Update runtime and settings tests in the same slice when lifecycle behavior changes.
+3. Update runtime and settings tests in the same slice when lifecycle behavior changes. Shell installer lifecycle changes must keep `scripts/installtests/install_sh_test.go` covering explicit flags, persisted connection state, legacy running-process/service recovery, and secure token-file service argument rendering for update re-entry.
 4. Keep host-agent test hooks, command-client factories, and timing overrides
    instance-scoped under `internal/hostagent/agent.go`; lifecycle-owned
    registration and update paths must not depend on package-global mutable test
@@ -3775,6 +3782,11 @@ installer-owned helper path: `scripts/install.sh` may not write the state file
 one way and then recover it through a separate field-by-field inline parser,
 because lifecycle ownership requires one canonical reader/writer for persisted
 install identity and trust metadata.
+When persisted state is absent or partial during update, legacy running-process
+or service-unit recovery is a fallback into that same lifecycle continuity
+model, not a separate source of truth: it may only seed the installer-owned
+state for the upgrade and must not keep raw token arguments in the installed v6
+service command.
 That same lifecycle ownership must cover service control too: the installer may
 still choose different platform adapters, but stop/restart semantics for the
 managed agent must route through shared installer helpers instead of being

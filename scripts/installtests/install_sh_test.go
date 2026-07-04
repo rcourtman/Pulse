@@ -104,8 +104,8 @@ func TestInstallSHAcceptsLegacyBooleanFlagValues(t *testing.T) {
 
 	script := string(content)
 	required := []string{
-		`--enable-host=true) ENABLE_HOST="true"; shift ;;`,
-		`--enable-host=false) ENABLE_HOST="false"; shift ;;`,
+		`--enable-host=true) ENABLE_HOST="true"; HOST_EXPLICIT="true"; shift ;;`,
+		`--enable-host=false) ENABLE_HOST="false"; HOST_EXPLICIT="true"; shift ;;`,
 		`--enable-docker=true) ENABLE_DOCKER="true"; DOCKER_EXPLICIT="true"; shift ;;`,
 		`--enable-docker=false) ENABLE_DOCKER="false"; DOCKER_EXPLICIT="true"; shift ;;`,
 		`--enable-kubernetes=true) ENABLE_KUBERNETES="true"; KUBERNETES_EXPLICIT="true"; shift ;;`,
@@ -640,6 +640,13 @@ func TestInstallSHSupportsSavedStateUpdateMode(t *testing.T) {
 		`if [[ "$UPDATE_ONLY" == "true" ]]; then`,
 		`update_conn_env=$(find_connection_state_file || true)`,
 		`recover_connection_state "$update_conn_env"`,
+		`recover_connection_state_from_existing_agent() {`,
+		`recover_connection_state_from_running_agent`,
+		`recover_connection_state_from_systemd_unit`,
+		`recover_connection_state_from_arg_stream`,
+		`recover_connection_state_from_env_stream`,
+		`recover_connection_state_from_existing_agent || true`,
+		`if [[ -n "$PULSE_URL" && -n "$PULSE_TOKEN" ]]; then`,
 		`recover_agent_id_from_state_file() {`,
 		`AGENT_ID=$(recover_agent_id_from_state_file || true)`,
 		`No existing Pulse Agent connection state found. Use the install command instead.`,
@@ -650,6 +657,89 @@ func TestInstallSHSupportsSavedStateUpdateMode(t *testing.T) {
 		if !strings.Contains(script, needle) {
 			t.Fatalf("install.sh missing saved-state update mode contract: %s", needle)
 		}
+	}
+}
+
+func TestInstallSHRecoversV5ProcessArgsForSavedStateUpdate(t *testing.T) {
+	script := `
+		fail() { echo "FAIL:$1"; exit 99; }
+		PULSE_URL=""
+		PULSE_TOKEN=""
+		INTERVAL="30s"
+		INTERVAL_EXPLICIT="false"
+		ENABLE_HOST="true"
+		HOST_EXPLICIT="false"
+		ENABLE_DOCKER=""
+		DOCKER_EXPLICIT="false"
+		ENABLE_KUBERNETES=""
+		KUBERNETES_EXPLICIT="false"
+		KUBECONFIG_PATH=""
+		ENABLE_PROXMOX=""
+		PROXMOX_EXPLICIT="false"
+		PROXMOX_TYPE=""
+		INSECURE="false"
+		ENABLE_COMMANDS="false"
+		ENROLL="false"
+		HEALTH_ADDR=""
+		HEALTH_ADDR_SET="false"
+		AGENT_ID=""
+		HOSTNAME_OVERRIDE=""
+		STATE_DIR="/var/lib/pulse-agent"
+		CURL_CA_BUNDLE=""
+		KUBE_INCLUDE_ALL_PODS="false"
+		KUBE_INCLUDE_ALL_DEPLOYMENTS="false"
+		DISK_EXCLUDES=()
+		RUNTIME_TOKEN_FILE="/var/lib/pulse-agent/token"
+` + extractInstallShellFunction(t, "strip_recovered_arg_quotes") + `
+` + extractInstallShellFunction(t, "apply_recovered_agent_arg_value") + `
+` + extractInstallShellFunction(t, "recover_connection_state_from_arg_stream") + `
+` + extractInstallShellFunction(t, "build_exec_arg_items") + `
+` + extractInstallShellFunction(t, "join_exec_arg_items") + `
+` + extractInstallShellFunction(t, "build_exec_args") + `
+		recover_connection_state_from_arg_stream <<'ARGS'
+/usr/local/bin/pulse-agent
+--url
+http://192.168.2.96:7655
+--token
+deadbeef
+--interval
+30s
+--enable-host
+--enable-docker
+--insecure
+--agent-id
+agent-123
+--hostname
+pve-one
+ARGS
+		build_exec_args
+		printf 'URL=%s\nTOKEN=%s\nDOCKER=%s\nDOCKER_EXPLICIT=%s\nINSECURE=%s\nAGENT_ID=%s\nHOSTNAME=%s\nEXEC_ARGS=%s\n' \
+			"$PULSE_URL" "$PULSE_TOKEN" "$ENABLE_DOCKER" "$DOCKER_EXPLICIT" "$INSECURE" "$AGENT_ID" "$HOSTNAME_OVERRIDE" "$EXEC_ARGS"
+	`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	got := string(out)
+	required := []string{
+		"URL=http://192.168.2.96:7655",
+		"TOKEN=deadbeef",
+		"DOCKER=true",
+		"DOCKER_EXPLICIT=true",
+		"INSECURE=true",
+		"AGENT_ID=agent-123",
+		"HOSTNAME=pve-one",
+		"--token-file /var/lib/pulse-agent/token",
+		"--enable-docker",
+	}
+	for _, needle := range required {
+		if !strings.Contains(got, needle) {
+			t.Fatalf("recovered update state missing %q:\n%s", needle, got)
+		}
+	}
+	if strings.Contains(got, "--token deadbeef") {
+		t.Fatalf("recovered service args leaked raw token:\n%s", got)
 	}
 }
 

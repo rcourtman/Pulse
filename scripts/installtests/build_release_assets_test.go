@@ -711,7 +711,7 @@ func TestHelmChartDoesNotPublishRetiredExplorePrepassMonitoring(t *testing.T) {
 	}
 }
 
-func TestDeployDemoWorkflowFailsClosedForPreviewAndVerifiesFrontendParity(t *testing.T) {
+func TestDeployDemoWorkflowFailsClosedForStableAndVerifiesFrontendParity(t *testing.T) {
 	workflowBytes, err := os.ReadFile(repoFile(".github", "workflows", "deploy-demo-server.yml"))
 	if err != nil {
 		t.Fatalf("read deploy-demo-server workflow: %v", err)
@@ -723,10 +723,13 @@ func TestDeployDemoWorkflowFailsClosedForPreviewAndVerifiesFrontendParity(t *tes
 		`DEMO_LOCAL_BASE_URL: ${{ vars.DEMO_LOCAL_BASE_URL }}`,
 		`[ -n "$DEMO_EXPECTED_HOSTNAME" ] || { echo "::error::DEMO_EXPECTED_HOSTNAME is required in the selected demo environment."; exit 1; }`,
 		`[ -n "$DEMO_LOCAL_BASE_URL" ] || { echo "::error::DEMO_LOCAL_BASE_URL is required in the selected demo environment."; exit 1; }`,
+		`ENVIRONMENT_NAME="demo-stable"`,
+		`options:`,
+		`          - stable`,
 		`Capture expected frontend entry asset`,
 		`Verify target host identity`,
-		`SERVICE_NAME="pulse-v6-preview"`,
-		`Preview demo deployments must not target the stable pulse service.`,
+		`SERVICE_NAME="pulse"`,
+		`Unsupported demo target: ${TARGET}`,
 		`Demo environment points at host $REMOTE_HOSTNAME but expected $DEMO_EXPECTED_HOSTNAME.`,
 		`Verify frontend parity`,
 		`Verify public browser smoke`,
@@ -738,7 +741,12 @@ func TestDeployDemoWorkflowFailsClosedForPreviewAndVerifiesFrontendParity(t *tes
 	}
 	for _, needle := range required {
 		if !strings.Contains(workflow, needle) {
-			t.Fatalf("deploy-demo-server workflow missing preview isolation or frontend parity proof: %s", needle)
+			t.Fatalf("deploy-demo-server workflow missing stable isolation or frontend parity proof: %s", needle)
+		}
+	}
+	for _, forbidden := range []string{`pulse-v6-preview`, `preview-v6`, `demo-preview-v6`} {
+		if strings.Contains(workflow, forbidden) {
+			t.Fatalf("deploy-demo-server workflow must not retain retired v6 preview target %s", forbidden)
 		}
 	}
 }

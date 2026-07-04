@@ -81,7 +81,7 @@ describe('systemSettings store', () => {
     expect(privacyDoc).not.toContain('reduceProUpsellNoise');
     expect(privacyDoc).toContain('Every field is listed below with the reason it exists');
     expect(privacyDoc).toContain('rows older than **90 days** are purged automatically');
-    expect(privacyDoc).toContain('uses client IP addresses transiently for abuse/rate limiting');
+    expect(privacyDoc).toContain('uses request IP addresses transiently for abuse/rate limiting');
     expect(privacyDoc).toContain('Reset ID');
     expect(privacyDoc).toContain('Pulse Intelligence Patrol control completed operations loop 30d');
     expect(privacyDoc).toContain('Pulse Intelligence Patrol control paid resolved operations loop 30d');
