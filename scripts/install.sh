@@ -1591,6 +1591,10 @@ apply_recovered_agent_arg_value() {
     esac
 }
 
+recovered_connection_state_ready() {
+    [[ -n "$PULSE_URL" && -n "$PULSE_TOKEN" ]]
+}
+
 recover_connection_state_from_arg_stream() {
     local arg=""
     local pending_key=""
@@ -1688,7 +1692,7 @@ recover_connection_state_from_arg_stream() {
         esac
     done
 
-    [[ "$RECOVERED_AGENT_ARG_STATE" == "true" && -n "$PULSE_URL" ]]
+    [[ "$RECOVERED_AGENT_ARG_STATE" == "true" ]] && recovered_connection_state_ready
 }
 
 recover_connection_state_from_env_stream() {
@@ -1738,7 +1742,7 @@ recover_connection_state_from_env_stream() {
         esac
     done
 
-    [[ "$RECOVERED_AGENT_ENV_STATE" == "true" && -n "$PULSE_URL" ]]
+    [[ "$RECOVERED_AGENT_ENV_STATE" == "true" ]] && recovered_connection_state_ready
 }
 
 collect_running_agent_pids() {
@@ -1782,7 +1786,7 @@ recover_connection_state_from_running_agent() {
                 recovered="true"
             fi
         fi
-        if [[ "$recovered" == "true" && -n "$PULSE_URL" ]]; then
+        if [[ "$recovered" == "true" ]] && recovered_connection_state_ready; then
             return 0
         fi
     done < <(collect_running_agent_pids)
@@ -1820,7 +1824,7 @@ recover_connection_state_from_systemd_unit() {
                     ;;
             esac
         done < "$candidate"
-        if [[ "$recovered" == "true" && -n "$PULSE_URL" ]]; then
+        if [[ "$recovered" == "true" ]] && recovered_connection_state_ready; then
             return 0
         fi
     done

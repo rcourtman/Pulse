@@ -436,8 +436,70 @@ jobs:
           )
           ssh -i ~/.ssh/id_ed25519 "$DEMO_SERVER_USER@$DEMO_SERVER_HOST" "bash -s -- $(printf '%q ' "$TAG" "$SERVICE_NAME")" <<<"$REMOTE_SCRIPT"
 
-      - name: Verify update
-        if: steps.current.outputs.skip_current != 'true'
+      - name: Restore demo runtime configuration
+        env:
+          DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
+          DEMO_SERVER_USER: ${{ secrets.DEMO_SERVER_USER }}
+        run: |
+          set -euo pipefail
+          SERVICE_NAME="${{ steps.config.outputs.service_name }}"
+          REMOTE_SCRIPT=$(cat <<'EOF'
+          set -euo pipefail
+          SERVICE_NAME="${1:-pulse}"
+          DEMO_LOCAL_BASE_URL="$2"
+          CONFIG_DIR="/etc/${SERVICE_NAME:-pulse}"
+          ENV_FILE="$CONFIG_DIR/.env"
+
+          set_env_value() {
+            local key="$1"
+            local value="$2"
+            sudo mkdir -p "$CONFIG_DIR"
+            if sudo test -f "$ENV_FILE"; then
+              if sudo grep -Eq "^[[:space:]]*${key}=" "$ENV_FILE"; then
+                sudo sed -i "s|^[[:space:]]*${key}=.*|${key}=${value}|" "$ENV_FILE"
+              else
+                printf '\n%s=%s\n' "$key" "$value" | sudo tee -a "$ENV_FILE" >/dev/null
+              fi
+            else
+              printf '# Pulse demo runtime configuration\n%s=%s\n' "$key" "$value" | sudo tee "$ENV_FILE" >/dev/null
+            fi
+          }
+
+          set_env_value DEMO_MODE true
+          set_env_value PULSE_MOCK_MODE true
+          set_env_value PULSE_MOCK_NODES 5
+          set_env_value PULSE_MOCK_VMS_PER_NODE 6
+          set_env_value PULSE_MOCK_LXCS_PER_NODE 8
+          set_env_value PULSE_MOCK_DOCKER_HOSTS 5
+          set_env_value PULSE_MOCK_DOCKER_CONTAINERS 14
+          set_env_value PULSE_MOCK_GENERIC_HOSTS 4
+          set_env_value PULSE_MOCK_K8S_CLUSTERS 3
+          set_env_value PULSE_MOCK_K8S_NODES 5
+          set_env_value PULSE_MOCK_K8S_PODS 40
+          set_env_value PULSE_MOCK_K8S_DEPLOYMENTS 14
+          set_env_value PULSE_MOCK_RANDOM_METRICS true
+          set_env_value PULSE_MOCK_STOPPED_PERCENT 6
+
+          sudo chown pulse:pulse "$ENV_FILE" || true
+          sudo chmod 600 "$ENV_FILE"
+          sudo systemctl daemon-reload
+          sudo systemctl restart "$SERVICE_NAME"
+
+          for attempt in $(seq 1 30); do
+            if curl -fsS "${DEMO_LOCAL_BASE_URL}/api/health" >/dev/null; then
+              echo "Demo service restarted with governed demo runtime configuration."
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "::error::Demo service did not become healthy after restoring demo runtime configuration."
+          exit 1
+          EOF
+          )
+          ssh -i ~/.ssh/id_ed25519 "$DEMO_SERVER_USER@$DEMO_SERVER_HOST" "bash -s -- $(printf '%q ' "$SERVICE_NAME" "$DEMO_LOCAL_BASE_URL")" <<<"$REMOTE_SCRIPT"
+
+      - name: Verify demo runtime
         env:
           DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
           DEMO_SERVER_USER: ${{ secrets.DEMO_SERVER_USER }}
@@ -459,26 +521,41 @@ jobs:
 
           AUTH_USER="${DEMO_AUTH_USER:-demo}"
           AUTH_PASS="${DEMO_AUTH_PASS:-demo}"
-          RESOURCES=$(ssh -i ~/.ssh/id_ed25519 "$DEMO_SERVER_USER@$DEMO_SERVER_HOST" \
+          ssh -i ~/.ssh/id_ed25519 "$DEMO_SERVER_USER@$DEMO_SERVER_HOST" \
             'AUTH_USER='"$(printf '%q' "$AUTH_USER")"' AUTH_PASS='"$(printf '%q' "$AUTH_PASS")"' DEMO_LOCAL_BASE_URL='"$(printf '%q' "$DEMO_LOCAL_BASE_URL")"' bash -s' <<'EOF'
           set -euo pipefail
-          COOKIE_FILE="$HOME/.demo-cookies.txt"
+          COOKIE_FILE="$(mktemp)"
+          trap 'rm -f "$COOKIE_FILE"' EXIT
           curl -fsS -c "$COOKIE_FILE" "${DEMO_LOCAL_BASE_URL}/api/login" -X POST \
             -H "Content-Type: application/json" \
             -d "{\"username\":\"${AUTH_USER}\",\"password\":\"${AUTH_PASS}\"}" > /dev/null
-          curl -fsS -b "$COOKIE_FILE" "${DEMO_LOCAL_BASE_URL}/api/state" | jq -r '.resources | if type == "array" then length else 0 end'
-          rm -f "$COOKIE_FILE"
-          EOF
-          )
+          curl -fsS -b "$COOKIE_FILE" "${DEMO_LOCAL_BASE_URL}/api/license/runtime-capabilities" >/dev/null
 
+          MOCK_ENABLED="false"
+          RESOURCES="0"
+          for attempt in $(seq 1 30); do
+            MOCK_ENABLED=$(curl -fsS -b "$COOKIE_FILE" "${DEMO_LOCAL_BASE_URL}/api/system/mock-mode" | jq -r '.enabled // false')
+            RESOURCES=$(curl -fsS -b "$COOKIE_FILE" "${DEMO_LOCAL_BASE_URL}/api/state" | jq -r '.resources | if type == "array" then length else 0 end')
+            if [ "$MOCK_ENABLED" = "true" ] && [ "$RESOURCES" -ge 1 ]; then
+              break
+            fi
+            sleep 2
+          done
+
+          echo "Mock mode enabled: $MOCK_ENABLED"
           echo "Mock resources detected: $RESOURCES"
 
-          if [ "$RESOURCES" -ge 1 ]; then
-            echo "Demo server successfully updated and verified."
-          else
+          if [ "$MOCK_ENABLED" != "true" ]; then
+            echo "::error::Demo server mock mode did not enable after entitlement sync"
+            exit 1
+          fi
+          if [ "$RESOURCES" -lt 1 ]; then
             echo "::error::Demo server updated but canonical mock resources are missing"
             exit 1
           fi
+          EOF
+
+          echo "Demo server successfully updated and verified."
 
       - name: Verify frontend parity
         env:

@@ -645,6 +645,9 @@ func TestInstallSHSupportsSavedStateUpdateMode(t *testing.T) {
 		`recover_connection_state_from_systemd_unit`,
 		`recover_connection_state_from_arg_stream`,
 		`recover_connection_state_from_env_stream`,
+		`recovered_connection_state_ready() {`,
+		`[[ "$RECOVERED_AGENT_ARG_STATE" == "true" ]] && recovered_connection_state_ready`,
+		`[[ "$RECOVERED_AGENT_ENV_STATE" == "true" ]] && recovered_connection_state_ready`,
 		`recover_connection_state_from_existing_agent || true`,
 		`if [[ -n "$PULSE_URL" && -n "$PULSE_TOKEN" ]]; then`,
 		`recover_agent_id_from_state_file() {`,
@@ -692,6 +695,7 @@ func TestInstallSHRecoversV5ProcessArgsForSavedStateUpdate(t *testing.T) {
 		RUNTIME_TOKEN_FILE="/var/lib/pulse-agent/token"
 ` + extractInstallShellFunction(t, "strip_recovered_arg_quotes") + `
 ` + extractInstallShellFunction(t, "apply_recovered_agent_arg_value") + `
+` + extractInstallShellFunction(t, "recovered_connection_state_ready") + `
 ` + extractInstallShellFunction(t, "recover_connection_state_from_arg_stream") + `
 ` + extractInstallShellFunction(t, "build_exec_arg_items") + `
 ` + extractInstallShellFunction(t, "join_exec_arg_items") + `
@@ -740,6 +744,144 @@ ARGS
 	}
 	if strings.Contains(got, "--token deadbeef") {
 		t.Fatalf("recovered service args leaked raw token:\n%s", got)
+	}
+}
+
+func TestInstallSHRejectsPartialRecoveredProcessConnectionState(t *testing.T) {
+	script := `
+		PULSE_URL=""
+		PULSE_TOKEN=""
+		INTERVAL="30s"
+		INTERVAL_EXPLICIT="false"
+		ENABLE_HOST="true"
+		HOST_EXPLICIT="false"
+		ENABLE_DOCKER=""
+		DOCKER_EXPLICIT="false"
+		ENABLE_KUBERNETES=""
+		KUBERNETES_EXPLICIT="false"
+		KUBECONFIG_PATH=""
+		ENABLE_PROXMOX=""
+		PROXMOX_EXPLICIT="false"
+		PROXMOX_TYPE=""
+		INSECURE="false"
+		ENABLE_COMMANDS="false"
+		ENROLL="false"
+		HEALTH_ADDR=""
+		HEALTH_ADDR_SET="false"
+		AGENT_ID=""
+		HOSTNAME_OVERRIDE=""
+		STATE_DIR="/var/lib/pulse-agent"
+		CURL_CA_BUNDLE=""
+		KUBE_INCLUDE_ALL_PODS="false"
+		KUBE_INCLUDE_ALL_DEPLOYMENTS="false"
+		DISK_EXCLUDES=()
+` + extractInstallShellFunction(t, "strip_recovered_arg_quotes") + `
+` + extractInstallShellFunction(t, "apply_recovered_agent_arg_value") + `
+` + extractInstallShellFunction(t, "recovered_connection_state_ready") + `
+` + extractInstallShellFunction(t, "recover_connection_state_from_arg_stream") + `
+		if recover_connection_state_from_arg_stream <<'ARGS'
+/usr/local/bin/pulse-agent
+--url
+http://192.168.2.96:7655
+--enable-host
+--agent-id
+agent-123
+ARGS
+		then
+			echo "UNEXPECTED_SUCCESS"
+		else
+			echo "EXPECTED_FAILURE"
+		fi
+		printf 'URL=%s\nTOKEN=%s\nAGENT_ID=%s\n' "$PULSE_URL" "$PULSE_TOKEN" "$AGENT_ID"
+	`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	got := string(out)
+	if !strings.Contains(got, "EXPECTED_FAILURE") {
+		t.Fatalf("partial recovered state should fail closed:\n%s", got)
+	}
+	if strings.Contains(got, "UNEXPECTED_SUCCESS") {
+		t.Fatalf("partial recovered state reported success:\n%s", got)
+	}
+	if !strings.Contains(got, "URL=http://192.168.2.96:7655") || !strings.Contains(got, "AGENT_ID=agent-123") {
+		t.Fatalf("partial recovery should still preserve non-secret fields for later sources:\n%s", got)
+	}
+	if !strings.Contains(got, "TOKEN=") {
+		t.Fatalf("expected token to remain empty:\n%s", got)
+	}
+}
+
+func TestInstallSHCombinesRecoveredProcessArgsAndEnvConnectionState(t *testing.T) {
+	script := `
+		PULSE_URL=""
+		PULSE_TOKEN=""
+		INTERVAL="30s"
+		INTERVAL_EXPLICIT="false"
+		ENABLE_HOST="true"
+		HOST_EXPLICIT="false"
+		ENABLE_DOCKER=""
+		DOCKER_EXPLICIT="false"
+		ENABLE_KUBERNETES=""
+		KUBERNETES_EXPLICIT="false"
+		KUBECONFIG_PATH=""
+		ENABLE_PROXMOX=""
+		PROXMOX_EXPLICIT="false"
+		PROXMOX_TYPE=""
+		INSECURE="false"
+		ENABLE_COMMANDS="false"
+		ENROLL="false"
+		HEALTH_ADDR=""
+		HEALTH_ADDR_SET="false"
+		AGENT_ID=""
+		HOSTNAME_OVERRIDE=""
+		STATE_DIR="/var/lib/pulse-agent"
+		CURL_CA_BUNDLE=""
+		KUBE_INCLUDE_ALL_PODS="false"
+		KUBE_INCLUDE_ALL_DEPLOYMENTS="false"
+		DISK_EXCLUDES=()
+` + extractInstallShellFunction(t, "strip_recovered_arg_quotes") + `
+` + extractInstallShellFunction(t, "apply_recovered_agent_arg_value") + `
+` + extractInstallShellFunction(t, "recovered_connection_state_ready") + `
+` + extractInstallShellFunction(t, "recover_connection_state_from_arg_stream") + `
+` + extractInstallShellFunction(t, "recover_connection_state_from_env_stream") + `
+		if recover_connection_state_from_arg_stream <<'ARGS'
+/usr/local/bin/pulse-agent
+--url
+http://192.168.2.96:7655
+ARGS
+		then
+			echo "ARGS_READY"
+		else
+			echo "ARGS_PARTIAL"
+		fi
+		if recover_connection_state_from_env_stream <<'ENV'
+PULSE_TOKEN=deadbeef
+ENV
+		then
+			echo "ENV_READY"
+		else
+			echo "ENV_PARTIAL"
+		fi
+		printf 'URL=%s\nTOKEN=%s\n' "$PULSE_URL" "$PULSE_TOKEN"
+	`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	got := string(out)
+	for _, needle := range []string{
+		"ARGS_PARTIAL",
+		"ENV_READY",
+		"URL=http://192.168.2.96:7655",
+		"TOKEN=deadbeef",
+	} {
+		if !strings.Contains(got, needle) {
+			t.Fatalf("combined recovery missing %q:\n%s", needle, got)
+		}
 	}
 }
 

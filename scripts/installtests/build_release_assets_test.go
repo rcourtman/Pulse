@@ -807,6 +807,12 @@ func TestUpdateDemoWorkflowUsesGovernedNetworkPath(t *testing.T) {
 		`-name "metrics.db"`,
 		`Removing demo volatile store: %s`,
 		`Demo host does not have enough free space to back up $CONFIG_DIR before install.`,
+		`Restore demo runtime configuration`,
+		`set_env_value DEMO_MODE true`,
+		`set_env_value PULSE_MOCK_MODE true`,
+		`/api/license/runtime-capabilities`,
+		`Mock mode enabled`,
+		`Demo server mock mode did not enable after entitlement sync`,
 		`Verify public browser smoke`,
 		`./scripts/run_demo_public_browser_smoke.sh`,
 	}

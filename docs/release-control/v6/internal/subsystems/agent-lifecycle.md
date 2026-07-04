@@ -255,9 +255,13 @@ that Pulse already sees, the copied stale-agent update command must use
 `scripts/install.sh --update` and recover URL, token, identity, custom CA, and
 insecure transport from installer-owned saved state instead of asking the
 operator to mint a fresh install token or exposing agent IDs in the copied
-command. Windows stale-agent update commands remain on the existing token-gated
-install transport until the Windows installer owns an equivalent saved-state
-update mode.
+command. If saved state is missing and the Unix shell installer falls back to
+legacy running-process or service-unit recovery, recovered connection state is
+usable only when both the control-plane URL and token are present. A URL-only
+process or unit may seed later recovery attempts, but it must not be logged or
+treated as recovered update state. Windows stale-agent update commands remain
+on the existing token-gated install transport until the Windows installer owns
+an equivalent saved-state update mode.
 Agent Fleet Doctor diagnostics extend that same read-only lifecycle triage
 surface: `GET /api/agents/diagnostics` may explain stale versions, missing
 reports, profile deployment drift, expected Docker/Kubernetes telemetry gaps,
@@ -3786,7 +3790,11 @@ When persisted state is absent or partial during update, legacy running-process
 or service-unit recovery is a fallback into that same lifecycle continuity
 model, not a separate source of truth: it may only seed the installer-owned
 state for the upgrade and must not keep raw token arguments in the installed v6
-service command.
+service command. It may report recovery success only after URL and token are
+both available, even when those values were assembled from different legacy
+sources; partial URL-only recovery must fall through to the explicit
+missing-state error so operators are not told the update state was recovered
+when the installer still cannot reconnect.
 That same lifecycle ownership must cover service control too: the installer may
 still choose different platform adapters, but stop/restart semantics for the
 managed agent must route through shared installer helpers instead of being

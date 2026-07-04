@@ -1062,6 +1062,15 @@ runtime state contract. `.github/workflows/update-demo-server.yml` must verify
 mock-mode readiness through the unified `/api/state` `resources[]` collection,
 not legacy `nodes`, because v6 intentionally strips per-type arrays from the
 state payload.
+That same stable demo-update boundary must also restore the canonical demo
+runtime `.env` before verification on every run, including when the service is
+already on the requested version and the binary update is skipped. The workflow
+must set `DEMO_MODE=true`, converge the governed `PULSE_MOCK_*` fixture
+defaults in `/etc/<service>/.env`, restart the selected service, force the
+release-build demo-fixture entitlement sync through authenticated
+`/api/license/runtime-capabilities`, and then prove both
+`/api/system/mock-mode.enabled` and `/api/state.resources[]` converge. A
+passing `/api/version` or `/api/health` response alone is not demo readiness.
 That same operator-proof boundary also now owns the canonical hosted staging
 smoke entrypoint. `scripts/run_hosted_staging_smoke.sh` must stay as the
 repo-tracked operator command that composes the hosted signup/billing eval pack
@@ -1875,6 +1884,13 @@ writer/reader path: `scripts/install.sh` may not keep a heredoc writer plus a
 second inline field parser for the same `connection.env` contract, because
 offline uninstall must consume the same persisted install-state artifact the
 installer wrote instead of reconstructing it ad hoc.
+That same shell-agent update recovery path must fail closed on partial
+legacy process or service-unit state: a recovered URL without a recovered token
+is not usable connection state and must not be logged or treated as recovered.
+Fallback recovery may merge URL and token across process args, environment, and
+systemd unit data, but it may report success only once both values are present;
+otherwise the update command must fall through to the explicit missing-state
+error instead of implying recovery succeeded.
 That same installer ownership now also applies to service lifecycle control:
 upgrade, reinstall, and platform-specific start/restart flows may not each
 carry their own stop/start command sequence for the same agent runtime.
