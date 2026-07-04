@@ -1,5 +1,17 @@
 # syntax=docker/dockerfile:1.7
 
+FROM --platform=linux/amd64 node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS frontend-builder
+WORKDIR /app/frontend-modern
+COPY frontend-modern/package*.json ./
+RUN --mount=type=cache,id=pulse-control-plane-npm-cache,target=/root/.npm \
+    npm ci
+COPY frontend-modern/ ./
+COPY scripts/exclusive-lock.mjs /app/scripts/exclusive-lock.mjs
+COPY docs/ /app/docs/
+COPY SECURITY.md TERMS.md /app/
+RUN --mount=type=cache,id=pulse-control-plane-npm-cache,target=/root/.npm \
+    npm run build
+
 FROM --platform=$BUILDPLATFORM golang:1.25.11-alpine@sha256:8d95af53d0d58e1759ddb4028285d9b1239067e4fbf4f544618cad0f60fbc354 AS builder
 ARG VERSION=dev
 ARG BUILD_TIME=unknown
@@ -16,6 +28,7 @@ COPY cmd/ ./cmd/
 COPY internal/ ./internal/
 COPY pkg/ ./pkg/
 COPY scripts/release_ldflags.sh ./scripts/release_ldflags.sh
+COPY --from=frontend-builder /app/internal/api/frontend-modern/dist ./internal/api/frontend-modern/dist
 RUN --mount=type=cache,id=pulse-control-plane-go-mod,target=/go/pkg/mod \
     --mount=type=cache,id=pulse-control-plane-go-build,target=/root/.cache/go-build \
     --mount=type=secret,id=pulse_license_public_key,required=false \

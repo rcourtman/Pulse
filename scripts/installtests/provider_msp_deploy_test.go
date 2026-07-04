@@ -266,6 +266,9 @@ func TestProviderMSPControlPlaneDockerfileBuildsReleaseLicenseBinary(t *testing.
 	text := string(dockerfileBytes)
 	assertContainsAll(t, text,
 		"# syntax=docker/dockerfile:1.7",
+		"FROM --platform=linux/amd64 node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS frontend-builder",
+		"npm ci",
+		"npm run build",
 		"FROM --platform=$BUILDPLATFORM golang:1.25.11-alpine@sha256:8d95af53d0d58e1759ddb4028285d9b1239067e4fbf4f544618cad0f60fbc354 AS builder",
 		"FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc",
 		"ARG PULSE_LICENSE_PUBLIC_KEY_SHA256",
@@ -277,6 +280,7 @@ func TestProviderMSPControlPlaneDockerfileBuildsReleaseLicenseBinary(t *testing.
 		`LICENSE_PUBLIC_KEY="$(tr -d '\r\n' < /run/secrets/pulse_license_public_key)"`,
 		"mounted license public key must decode to 32 bytes.",
 		"mounted license public key does not match PULSE_LICENSE_PUBLIC_KEY_SHA256.",
+		"COPY --from=frontend-builder /app/internal/api/frontend-modern/dist ./internal/api/frontend-modern/dist",
 		`TARGET_GOOS="${TARGETOS:-linux}"`,
 		`TARGET_GOARCH="${TARGETARCH:-$(go env GOARCH)}"`,
 		`./scripts/release_ldflags.sh server --version "${VERSION}" --build-time "${BUILD_TIME}" --git-commit "${GIT_COMMIT}" --license-public-key "${LICENSE_PUBLIC_KEY}"`,
