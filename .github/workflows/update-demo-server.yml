@@ -365,6 +365,21 @@ jobs:
             free_kb="$(df -Pk "$BACKUP_PARENT" | awk 'NR == 2 {print $4}')"
             required_kb=$((config_kb + BACKUP_MARGIN_KB))
             if ((free_kb < required_kb)); then
+              mapfile -t remaining_backups < <(
+                sudo find "$BACKUP_PARENT" -maxdepth 1 -type d -name "${BACKUP_BASENAME}.backup.*" -printf '%T@ %p\n' 2>/dev/null \
+                  | sort -n \
+                  | awk '{sub(/^[^ ]+ /, ""); print}'
+              )
+              for backup_dir in "${remaining_backups[@]}"; do
+                printf 'Removing demo backup to restore install headroom: %s\n' "$backup_dir"
+                sudo rm -rf -- "$backup_dir"
+                free_kb="$(df -Pk "$BACKUP_PARENT" | awk 'NR == 2 {print $4}')"
+                if ((free_kb >= required_kb)); then
+                  break
+                fi
+              done
+            fi
+            if ((free_kb < required_kb)); then
               echo "::error::Demo host does not have enough free space to back up $CONFIG_DIR before install."
               echo "Config: ${config_kb}KB, available: ${free_kb}KB, required: ${required_kb}KB"
               sudo find "$BACKUP_PARENT" -maxdepth 1 -type d -name "${BACKUP_BASENAME}.backup.*" -printf '%TY-%Tm-%Td %TH:%TM %p\n' 2>/dev/null | sort || true

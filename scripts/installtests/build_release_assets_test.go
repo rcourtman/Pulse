@@ -759,6 +759,7 @@ func TestUpdateDemoWorkflowUsesGovernedNetworkPath(t *testing.T) {
 		`Demo environment points at host $REMOTE_HOSTNAME but expected $DEMO_EXPECTED_HOSTNAME.`,
 		`Prepare demo host storage`,
 		`KEEP_BACKUPS=2`,
+		`Removing demo backup to restore install headroom: %s`,
 		`Demo host does not have enough free space to back up $CONFIG_DIR before install.`,
 		`Verify public browser smoke`,
 		`./scripts/run_demo_public_browser_smoke.sh`,
