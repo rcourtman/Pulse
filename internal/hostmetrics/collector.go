@@ -73,9 +73,14 @@ func Collect(ctx context.Context, diskExclude []string) (Snapshot, error) {
 		return Snapshot{}, fmt.Errorf("memory stats: %w", err)
 	}
 
-	usedBytes := memStats.Used
 	freeBytes := memStats.Free
+	usedBytes := memStats.Used
 	usedPercent := memStats.UsedPercent
+
+	if memStats.Total > 0 && memStats.Available > 0 && memStats.Available <= memStats.Total {
+		usedBytes = memStats.Total - memStats.Available
+		usedPercent = memoryUsagePercent(usedBytes, memStats.Total)
+	}
 
 	// Reclaimable page cache: Available counts the pages the kernel would hand
 	// back under pressure on top of truly-free ones, so the gap is buff/cache.
@@ -94,15 +99,7 @@ func Collect(ctx context.Context, diskExclude []string) (Snapshot, error) {
 		} else {
 			usedBytes = 0
 		}
-		if memStats.Total > 0 {
-			usedPercent = float64(usedBytes) / float64(memStats.Total) * 100.0
-			if usedPercent < 0 {
-				usedPercent = 0
-			}
-			if usedPercent > 100 {
-				usedPercent = 100
-			}
-		}
+		usedPercent = memoryUsagePercent(usedBytes, memStats.Total)
 		// Recompute free so used + cache + free still covers the total after
 		// the ARC pages move out of used.
 		if memStats.Total >= usedBytes+cacheBytes {
@@ -133,6 +130,20 @@ func Collect(ctx context.Context, diskExclude []string) (Snapshot, error) {
 	snapshot.Network = collectNetwork(collectCtx)
 
 	return snapshot, nil
+}
+
+func memoryUsagePercent(usedBytes, totalBytes uint64) float64 {
+	if totalBytes == 0 {
+		return 0
+	}
+	percent := float64(usedBytes) / float64(totalBytes) * 100.0
+	if percent < 0 {
+		return 0
+	}
+	if percent > 100 {
+		return 100
+	}
+	return percent
 }
 
 func collectCPUUsage(ctx context.Context) (float64, error) {

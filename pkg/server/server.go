@@ -402,10 +402,7 @@ func Run(ctx context.Context, version string) error {
 
 	// Initialize API server with reload function
 	var router *api.Router
-	reloadFunc := func() error {
-		if err := reloadableMonitor.Reload(); err != nil {
-			return err
-		}
+	refreshRouterAfterMonitorReload := func() {
 		if router != nil {
 			router.SetMonitor(reloadableMonitor.GetMonitor())
 			router.SetMultiTenantMonitor(reloadableMonitor.GetMultiTenantMonitor())
@@ -418,6 +415,12 @@ func Run(ctx context.Context, version string) error {
 			// are lost on every monitor reload triggered by auto-registration.
 			router.ReloadSystemSettings()
 		}
+	}
+	reloadFunc := func() error {
+		if err := reloadableMonitor.Reload(); err != nil {
+			return err
+		}
+		refreshRouterAfterMonitorReload()
 		return nil
 	}
 	router = api.NewRouter(cfg, reloadableMonitor.GetMonitor(), reloadableMonitor.GetMultiTenantMonitor(), wsHub, reloadFunc, version)
@@ -627,12 +630,8 @@ func Run(ctx context.Context, version string) error {
 			log.Info().Msg(".env mock settings changed, reloading monitor")
 			if err := reloadableMonitor.Reload(); err != nil {
 				log.Error().Err(err).Msg("Failed to reload monitor after .env mock setting change")
-			} else if router != nil {
-				router.SetMonitor(reloadableMonitor.GetMonitor())
-				router.SetMultiTenantMonitor(reloadableMonitor.GetMultiTenantMonitor())
-				if cfg := reloadableMonitor.GetConfig(); cfg != nil {
-					router.SetConfig(cfg)
-				}
+			} else {
+				refreshRouterAfterMonitorReload()
 			}
 		})
 

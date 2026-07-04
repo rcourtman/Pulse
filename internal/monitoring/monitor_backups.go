@@ -20,6 +20,8 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const pbsBackupSnapshotFetchWorkers = 5
+
 func pveBackupTemplateSubjectKey(instance, guestType, node string, vmid int) string {
 	return alerts.BuildBackupPVETemplateSubjectKey(instance, guestType, node, vmid)
 }
@@ -1630,51 +1632,69 @@ func (m *Monitor) fetchPBSBackupSnapshots(ctx context.Context, client *pbs.Clien
 		return nil
 	}
 
-	results := make(chan []models.PBSBackup, len(requests))
-	var wg sync.WaitGroup
-	sem := make(chan struct{}, 5)
+	workerCount := pbsBackupSnapshotFetchWorkers
+	if len(requests) < workerCount {
+		workerCount = len(requests)
+	}
 
-	for _, req := range requests {
-		req := req
+	jobs := make(chan pbsBackupFetchRequest)
+	results := make(chan []models.PBSBackup, workerCount)
+	var wg sync.WaitGroup
+
+	for i := 0; i < workerCount; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 
-			select {
-			case sem <- struct{}{}:
-			case <-ctx.Done():
-				return
-			}
-			defer func() { <-sem }()
-
-			log.Debug().
-				Str("instance", instanceName).
-				Str("datastore", req.datastore).
-				Str("namespace", req.namespace).
-				Str("type", req.group.BackupType).
-				Str("id", req.group.BackupID).
-				Msg("Refreshing PBS backup group")
-
-			snapshots, err := client.ListBackupSnapshots(ctx, req.datastore, req.namespace, req.group.BackupType, req.group.BackupID)
-			if err != nil {
-				log.Error().
-					Err(err).
+			for req := range jobs {
+				log.Debug().
 					Str("instance", instanceName).
 					Str("datastore", req.datastore).
 					Str("namespace", req.namespace).
 					Str("type", req.group.BackupType).
 					Str("id", req.group.BackupID).
-					Msg("Failed to list PBS backup snapshots")
+					Msg("Refreshing PBS backup group")
 
-				if len(req.cached.snapshots) > 0 {
-					results <- req.cached.snapshots
+				snapshots, err := client.ListBackupSnapshots(ctx, req.datastore, req.namespace, req.group.BackupType, req.group.BackupID)
+				if err != nil {
+					log.Error().
+						Err(err).
+						Str("instance", instanceName).
+						Str("datastore", req.datastore).
+						Str("namespace", req.namespace).
+						Str("type", req.group.BackupType).
+						Str("id", req.group.BackupID).
+						Msg("Failed to list PBS backup snapshots")
+
+					if len(req.cached.snapshots) > 0 {
+						select {
+						case results <- req.cached.snapshots:
+						case <-ctx.Done():
+						}
+					}
+					continue
 				}
-				return
-			}
 
-			results <- convertPBSSnapshots(instanceName, req.datastore, req.namespace, snapshots)
+				backups := convertPBSSnapshots(instanceName, req.datastore, req.namespace, snapshots)
+				select {
+				case results <- backups:
+				case <-ctx.Done():
+					return
+				}
+			}
 		}()
 	}
+
+	go func() {
+		defer close(jobs)
+		for _, req := range requests {
+			select {
+			case jobs <- req:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 
 	go func() {
 		wg.Wait()

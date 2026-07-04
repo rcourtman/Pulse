@@ -56,6 +56,33 @@ const parseWorkloadsStatusMode = (raw: string | null | undefined): WorkloadsStat
     ? (raw as WorkloadsStatusMode)
     : DEFAULT_WORKLOADS_STATUS_MODE;
 
+const workloadsStatusModeStorageKey = (scope: string | undefined): string => {
+  const trimmedScope = (scope || '').trim();
+  return trimmedScope ? `workloadsStatusMode:${trimmedScope}` : 'workloadsStatusMode';
+};
+
+const saveWorkloadsStatusMode = (
+  scope: string | undefined,
+  value: WorkloadsStatusMode,
+): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(workloadsStatusModeStorageKey(scope), value);
+  } catch {
+    // Ignore storage failures; the URL remains the canonical live state.
+  }
+};
+
+const readSavedWorkloadsStatusMode = (scope: string | undefined): WorkloadsStatusMode => {
+  if (typeof window === 'undefined') return DEFAULT_WORKLOADS_STATUS_MODE;
+  try {
+    const raw = window.localStorage.getItem(workloadsStatusModeStorageKey(scope));
+    return parseWorkloadsStatusMode(raw);
+  } catch {
+    return DEFAULT_WORKLOADS_STATUS_MODE;
+  }
+};
+
 export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -86,6 +113,7 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
   const statusMode: Accessor<WorkloadsStatusMode> = () =>
     parseWorkloadsStatusMode(new URLSearchParams(location.search).get('status'));
   const setStatusMode = (value: WorkloadsStatusMode): void => {
+    saveWorkloadsStatusMode(options.statusModeStorageScope, value);
     updateSearchParam((params) => {
       if (value === DEFAULT_WORKLOADS_STATUS_MODE) {
         params.delete('status');
@@ -99,12 +127,9 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     if (params.has('status')) return;
-    const scope = (options.statusModeStorageScope || '').trim();
-    const legacyKey = scope ? `workloadsStatusMode:${scope}` : 'workloadsStatusMode';
-    const legacy = window.localStorage.getItem(legacyKey);
-    const parsed = parseWorkloadsStatusMode(legacy);
-    if (parsed !== DEFAULT_WORKLOADS_STATUS_MODE && legacy === parsed) {
-      params.set('status', parsed);
+    const saved = readSavedWorkloadsStatusMode(options.statusModeStorageScope);
+    if (saved !== DEFAULT_WORKLOADS_STATUS_MODE) {
+      params.set('status', saved);
       navigate(`${window.location.pathname}?${params.toString()}`, { replace: true });
     }
   });

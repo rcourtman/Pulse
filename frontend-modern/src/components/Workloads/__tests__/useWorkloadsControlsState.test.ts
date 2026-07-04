@@ -42,6 +42,7 @@ describe('useWorkloadsControlsState', () => {
     localStorage.clear();
     setMockRouterSearch('');
     navigateSpy.mockClear();
+    window.history.replaceState(null, '', '/workloads');
     setWideViewport();
   });
 
@@ -90,6 +91,48 @@ describe('useWorkloadsControlsState', () => {
         dispose();
       }
     });
+  });
+
+  it('persists scoped workload status so platform pages restore it when revisited', async () => {
+    createRoot((dispose) => {
+      try {
+        const [showFilters, setShowFilters] = createSignal(false);
+        const state = useWorkloadsControlsState({
+          viewMode: () => 'all' as ViewMode,
+          showFilters,
+          setShowFilters,
+          statusModeStorageScope: 'proxmox',
+        });
+
+        state.setStatusMode('running');
+
+        expect(mockRouterSearch()).toBe('?status=running');
+        expect(localStorage.getItem('workloadsStatusMode:proxmox')).toBe('running');
+      } finally {
+        dispose();
+      }
+    });
+
+    setMockRouterSearch('');
+    window.history.replaceState(null, '', '/workloads');
+    navigateSpy.mockClear();
+
+    const disposeRestore = createRoot((dispose) => {
+      const [showFilters, setShowFilters] = createSignal(false);
+      useWorkloadsControlsState({
+        viewMode: () => 'all' as ViewMode,
+        showFilters,
+        setShowFilters,
+        statusModeStorageScope: 'proxmox',
+      });
+      return dispose;
+    });
+
+    await Promise.resolve();
+
+    expect(navigateSpy).toHaveBeenCalledWith('/workloads?status=running', { replace: true });
+    expect(mockRouterSearch()).toBe('?status=running');
+    disposeRestore();
   });
 
   it('lets Docker scope use a container-native column profile without hiding disk globally', () => {

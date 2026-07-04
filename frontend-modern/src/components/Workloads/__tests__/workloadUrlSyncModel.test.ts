@@ -93,7 +93,7 @@ describe('workloadUrlSyncModel', () => {
     expect(
       resolveWorkloadsManagedWorkloadsNavigateTarget({
         currentPathname: '/proxmox/overview',
-        currentSearch: '?resource=guest-1&type=vm&agent=node-a',
+        currentSearch: '?resource=guest-1&status=running&type=vm&agent=node-a',
         viewMode: 'pod',
         effectiveViewMode: 'pod',
         containerRuntime: 'docker',
@@ -105,7 +105,7 @@ describe('workloadUrlSyncModel', () => {
         selectedHostHint: null,
       }),
     ).toBe(
-      '/proxmox/overview?resource=guest-1&type=pod&platform=kubernetes&context=prod&namespace=default',
+      '/proxmox/overview?resource=guest-1&status=running&type=pod&platform=kubernetes&context=prod&namespace=default',
     );
 
     expect(

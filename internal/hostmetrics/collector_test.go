@@ -148,3 +148,43 @@ func TestCollectSplitsReclaimableCache(t *testing.T) {
 		t.Fatalf("used+cache+free = %d exceeds total %d", sum, snapshot.Memory.TotalBytes)
 	}
 }
+
+func TestCollectDerivesMemoryPressureFromAvailableMemory(t *testing.T) {
+	origVirtualMemory := virtualMemory
+	t.Cleanup(func() { virtualMemory = origVirtualMemory })
+
+	const gib = uint64(1024 * 1024 * 1024)
+	virtualMemory = func(ctx context.Context) (*gomem.VirtualMemoryStat, error) {
+		return &gomem.VirtualMemoryStat{
+			Total: 16 * gib,
+			// Some Linux/gopsutil paths can report Used as cache-inclusive. The
+			// operator-facing pressure value should follow MemAvailable instead.
+			Used:        15 * gib,
+			Free:        1 * gib,
+			Available:   8 * gib,
+			UsedPercent: 93.75,
+		}, nil
+	}
+
+	snapshot, err := Collect(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("Collect failed: %v", err)
+	}
+
+	if got, want := snapshot.Memory.UsedBytes, int64(8*gib); got != want {
+		t.Fatalf("UsedBytes = %d, want %d", got, want)
+	}
+	if got, want := snapshot.Memory.CacheBytes, int64(7*gib); got != want {
+		t.Fatalf("CacheBytes = %d, want %d", got, want)
+	}
+	if got, want := snapshot.Memory.FreeBytes, int64(1*gib); got != want {
+		t.Fatalf("FreeBytes = %d, want %d", got, want)
+	}
+	if got, want := snapshot.Memory.Usage, 50.0; got != want {
+		t.Fatalf("Usage = %.2f, want %.2f", got, want)
+	}
+	sum := snapshot.Memory.UsedBytes + snapshot.Memory.CacheBytes + snapshot.Memory.FreeBytes
+	if got, want := sum, snapshot.Memory.TotalBytes; got != want {
+		t.Fatalf("used+cache+free = %d, want total %d", got, want)
+	}
+}

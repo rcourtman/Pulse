@@ -208,6 +208,10 @@ regression protection.
    URL from already-loaded row metadata and must not add per-row metadata
    fetches, Discovery probes, or page-local external-link logic on the table
    hot path.
+   Workload status filters remain URL-canonical. Scoped local persistence may
+   seed a missing `status` parameter when a platform page is revisited, but the
+   restore path must write the URL once with `replace` and must not force row
+   filtering through a separate page-local state channel.
 4. Keep shared auth gating in `internal/api/router.go` cheap and local: pre-auth quick-setup and recovery routing may short-circuit on loopback/session/token checks, but they must not trigger chart, metrics, or broad persistence fan-out on the protected request hot path.
    Reading mutable auth configuration for CSRF bootstrap and login checks must
    stay a short in-memory snapshot under `config.Mu.RLock()`: local

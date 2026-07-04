@@ -3,12 +3,18 @@ package monitoring
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	proxmoxmapper "github.com/rcourtman/pulse-go-rewrite/internal/recovery/mapper/proxmox"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	pveapi "github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
@@ -154,6 +160,73 @@ func TestMonitorCalculateBackupOperationTimeout_UsesCanonicalReadState(t *testin
 	timeout := m.calculateBackupOperationTimeout("pve1")
 	if want := 122 * time.Second; timeout != want {
 		t.Fatalf("expected timeout %v from canonical workload count, got %v", want, timeout)
+	}
+}
+
+func TestFetchPBSBackupSnapshotsUsesBoundedWorkerPool(t *testing.T) {
+	t.Parallel()
+
+	const requestCount = 40
+
+	var active int64
+	var maxActive int64
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/admin/datastore/archive/snapshots") {
+			current := atomic.AddInt64(&active, 1)
+			defer atomic.AddInt64(&active, -1)
+
+			for {
+				previous := atomic.LoadInt64(&maxActive)
+				if current <= previous || atomic.CompareAndSwapInt64(&maxActive, previous, current) {
+					break
+				}
+			}
+
+			time.Sleep(10 * time.Millisecond)
+
+			backupID := r.URL.Query().Get("backup-id")
+			_, _ = w.Write([]byte(fmt.Sprintf(
+				`{"data":[{"backup-type":"vm","backup-id":%q,"backup-time":1700000000}]}`,
+				backupID,
+			)))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	client, err := pbs.NewClient(pbs.ClientConfig{
+		Host:       server.URL,
+		TokenName:  "root@pam!token",
+		TokenValue: "secret",
+	})
+	if err != nil {
+		t.Fatalf("failed to create PBS client: %v", err)
+	}
+
+	requests := make([]pbsBackupFetchRequest, 0, requestCount)
+	for i := 0; i < requestCount; i++ {
+		backupID := strconv.Itoa(1000 + i)
+		requests = append(requests, pbsBackupFetchRequest{
+			datastore: "archive",
+			group: pbs.BackupGroup{
+				BackupType:  "vm",
+				BackupID:    backupID,
+				LastBackup:  1700000000,
+				BackupCount: 1,
+			},
+		})
+	}
+
+	m := &Monitor{}
+	backups := m.fetchPBSBackupSnapshots(context.Background(), client, "pbs1", requests)
+	if len(backups) != requestCount {
+		t.Fatalf("expected %d fetched backups, got %d", requestCount, len(backups))
+	}
+
+	if got := atomic.LoadInt64(&maxActive); got > int64(pbsBackupSnapshotFetchWorkers) {
+		t.Fatalf("expected at most %d concurrent PBS snapshot fetches, saw %d", pbsBackupSnapshotFetchWorkers, got)
 	}
 }
 

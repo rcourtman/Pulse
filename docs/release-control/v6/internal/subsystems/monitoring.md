@@ -27,6 +27,11 @@ Monitoring owns source freshness cadence for Proxmox, PBS, and PMG resources:
 the stale threshold is derived from the configured polling interval with a
 minimum floor, so API-facing resource status must not degrade merely because a
 healthy source is between normal poll cycles.
+PBS backup snapshot refresh is a bounded monitoring hot path: group-level
+snapshot fetches must run through the fixed worker pool in
+`internal/monitoring/monitor_backups.go`, reuse cached snapshots on per-group
+fetch failures, and must not allocate one goroutine or buffered result slot per
+backup group in large PBS datastores.
 Removed host-agent reconnect blocks are identity-scoped: matching may use the
 canonical host ID or token-qualified machine/hostname continuity, but must never
 block a distinct live host by hostname alone.
@@ -205,6 +210,11 @@ threshold value.
    guest slices as the primary source of truth. Clustered PVE snapshot polling
    must therefore see guests collected earlier in the same cycle before calling
    the Proxmox guest snapshot APIs.
+   PBS backup snapshot refreshes in that same file must stay bounded by the
+   package worker-pool constant and stream requests through workers instead of
+   creating one goroutine per backup group; per-group API failures may reuse
+   cached snapshots, but the polling loop must keep memory proportional to the
+   worker count rather than datastore cardinality.
 12. Add or change agentless availability monitoring only through the
    poll-provider path. `internal/monitoring/availability_poller.go` owns ICMP,
    TCP, and HTTP probes, provider health, scheduler task construction, and
