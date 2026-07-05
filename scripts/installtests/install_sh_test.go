@@ -646,8 +646,10 @@ func TestInstallSHSupportsSavedStateUpdateMode(t *testing.T) {
 		`recover_connection_state_from_arg_stream`,
 		`recover_connection_state_from_env_stream`,
 		`recovered_connection_state_ready() {`,
+		`update_connection_state_incomplete() {`,
 		`[[ "$RECOVERED_AGENT_ARG_STATE" == "true" ]] && recovered_connection_state_ready`,
 		`[[ "$RECOVERED_AGENT_ENV_STATE" == "true" ]] && recovered_connection_state_ready`,
+		`if update_connection_state_incomplete; then`,
 		`recover_connection_state_from_existing_agent || true`,
 		`if [[ -n "$PULSE_URL" && -n "$PULSE_TOKEN" ]]; then`,
 		`recover_agent_id_from_state_file() {`,
@@ -882,6 +884,115 @@ ENV
 		if !strings.Contains(got, needle) {
 			t.Fatalf("combined recovery missing %q:\n%s", needle, got)
 		}
+	}
+}
+
+func TestInstallSHUpdateModeMergesExplicitURLWithRunningV5ProcessState(t *testing.T) {
+	script := `
+		fail() { echo "FAIL:$1"; exit 99; }
+		log_info() { :; }
+		UPDATE_ONLY="true"
+		PULSE_URL="http://192.168.2.96:7655"
+		PULSE_TOKEN=""
+		INTERVAL="30s"
+		INTERVAL_EXPLICIT="false"
+		ENABLE_HOST="true"
+		HOST_EXPLICIT="false"
+		ENABLE_DOCKER=""
+		DOCKER_EXPLICIT="false"
+		ENABLE_KUBERNETES=""
+		KUBERNETES_EXPLICIT="false"
+		KUBECONFIG_PATH=""
+		ENABLE_PROXMOX=""
+		PROXMOX_EXPLICIT="false"
+		PROXMOX_TYPE=""
+		INSECURE="true"
+		ENABLE_COMMANDS="false"
+		ENROLL="false"
+		HEALTH_ADDR=""
+		HEALTH_ADDR_SET="false"
+		AGENT_ID=""
+		HOSTNAME_OVERRIDE=""
+		STATE_DIR="/var/lib/pulse-agent"
+		CURL_CA_BUNDLE=""
+		KUBE_INCLUDE_ALL_PODS="false"
+		KUBE_INCLUDE_ALL_DEPLOYMENTS="false"
+		DISK_EXCLUDES=()
+		RUNTIME_TOKEN_FILE="/var/lib/pulse-agent/token"
+` + extractInstallShellFunction(t, "strip_recovered_arg_quotes") + `
+` + extractInstallShellFunction(t, "apply_recovered_agent_arg_value") + `
+` + extractInstallShellFunction(t, "recovered_connection_state_ready") + `
+` + extractInstallShellFunction(t, "update_connection_state_incomplete") + `
+` + extractInstallShellFunction(t, "recover_connection_state_from_arg_stream") + `
+` + extractInstallShellFunction(t, "build_exec_arg_items") + `
+` + extractInstallShellFunction(t, "join_exec_arg_items") + `
+` + extractInstallShellFunction(t, "build_exec_args") + `
+		find_connection_state_file() { return 1; }
+		recover_agent_id_from_state_file() { return 1; }
+		recover_connection_state_from_existing_agent() {
+			recover_connection_state_from_arg_stream <<'ARGS'
+/usr/local/bin/pulse-agent
+--url
+http://192.168.2.96:7655
+--token
+deadbeef
+--interval
+30s
+--enable-host
+--enable-docker
+--agent-id
+machine-1
+--hostname
+docker1
+ARGS
+		}
+
+		if [[ "$UPDATE_ONLY" == "true" ]]; then
+			if update_connection_state_incomplete; then
+				update_conn_env=$(find_connection_state_file || true)
+				if [[ -n "$update_conn_env" ]]; then
+					recover_connection_state "$update_conn_env"
+				fi
+				if update_connection_state_incomplete; then
+					recover_connection_state_from_existing_agent || true
+				fi
+				if [[ -n "$PULSE_URL" && -n "$PULSE_TOKEN" ]]; then
+					echo "READY"
+				elif [[ -z "$PULSE_URL" || -z "$PULSE_TOKEN" ]]; then
+					fail "No existing Pulse Agent connection state found. Use the install command instead."
+				fi
+				if [[ -z "$AGENT_ID" ]]; then
+					AGENT_ID=$(recover_agent_id_from_state_file || true)
+				fi
+			fi
+		fi
+		build_exec_args
+		printf 'URL=%s\nTOKEN=%s\nDOCKER=%s\nDOCKER_EXPLICIT=%s\nAGENT_ID=%s\nHOSTNAME=%s\nEXEC_ARGS=%s\n' \
+			"$PULSE_URL" "$PULSE_TOKEN" "$ENABLE_DOCKER" "$DOCKER_EXPLICIT" "$AGENT_ID" "$HOSTNAME_OVERRIDE" "$EXEC_ARGS"
+	`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	got := string(out)
+	required := []string{
+		"READY",
+		"URL=http://192.168.2.96:7655",
+		"TOKEN=deadbeef",
+		"DOCKER=true",
+		"DOCKER_EXPLICIT=true",
+		"AGENT_ID=machine-1",
+		"HOSTNAME=docker1",
+		"--token-file /var/lib/pulse-agent/token",
+	}
+	for _, needle := range required {
+		if !strings.Contains(got, needle) {
+			t.Fatalf("reported v5 update recovery missing %q:\n%s", needle, got)
+		}
+	}
+	if strings.Contains(got, "--token deadbeef") {
+		t.Fatalf("reported v5 update recovery leaked raw token into service args:\n%s", got)
 	}
 }
 

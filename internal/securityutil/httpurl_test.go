@@ -50,6 +50,9 @@ func TestIsLocalNetworkHost(t *testing.T) {
 			"10.0.0.5",
 			"172.16.4.20",
 			"192.168.1.15",
+			"100.64.0.1",
+			"100.100.100.5",
+			"100.127.255.254",
 			"fe80::1",
 			"pulse",
 			"ct-pulse.home",
@@ -66,7 +69,7 @@ func TestIsLocalNetworkHost(t *testing.T) {
 	})
 
 	t.Run("false", func(t *testing.T) {
-		cases := []string{"", "example.com", "pulse.example.com", "8.8.8.8"}
+		cases := []string{"", "example.com", "pulse.example.com", "8.8.8.8", "100.63.255.255", "100.128.0.1"}
 		for _, tc := range cases {
 			if IsLocalNetworkHost(tc) {
 				t.Fatalf("expected public/non-local host for %q", tc)
@@ -145,6 +148,16 @@ func TestNormalizePulseHTTPBaseURLWithOptions(t *testing.T) {
 	}
 	if got.String() != "http://10.0.0.5:7655/pulse" {
 		t.Fatalf("NormalizePulseHTTPBaseURLWithOptions() = %q", got.String())
+	}
+
+	got, err = NormalizePulseHTTPBaseURLWithOptions("http://100.100.100.5:7655/", PulseURLValidationOptions{
+		AllowLocalNetworkHTTP: true,
+	})
+	if err != nil {
+		t.Fatalf("NormalizePulseHTTPBaseURLWithOptions(CGNAT) error = %v", err)
+	}
+	if got.String() != "http://100.100.100.5:7655" {
+		t.Fatalf("NormalizePulseHTTPBaseURLWithOptions(CGNAT) = %q", got.String())
 	}
 
 	got, err = NormalizePulseHTTPBaseURLWithOptions("http://ct-pulse.home:7655/", PulseURLValidationOptions{
@@ -285,6 +298,16 @@ func TestNormalizePulseWebSocketBaseURLWithOptions(t *testing.T) {
 	}
 	if got.String() != "ws://10.0.0.5:7655/pulse" {
 		t.Fatalf("NormalizePulseWebSocketBaseURLWithOptions() = %q", got.String())
+	}
+
+	got, err = NormalizePulseWebSocketBaseURLWithOptions("http://100.100.100.5:7655/pulse", PulseURLValidationOptions{
+		AllowLocalNetworkHTTP: true,
+	})
+	if err != nil {
+		t.Fatalf("NormalizePulseWebSocketBaseURLWithOptions(CGNAT) error = %v", err)
+	}
+	if got.String() != "ws://100.100.100.5:7655/pulse" {
+		t.Fatalf("NormalizePulseWebSocketBaseURLWithOptions(CGNAT) = %q", got.String())
 	}
 
 	if _, err := NormalizePulseWebSocketBaseURLWithOptions("http://pulse.example.com:7655/pulse", PulseURLValidationOptions{

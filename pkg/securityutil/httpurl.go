@@ -127,7 +127,7 @@ func IsLocalNetworkHost(host string) bool {
 	}
 
 	if ip := net.ParseIP(normalized); ip != nil {
-		return ip.IsPrivate() || ip.IsLinkLocalUnicast()
+		return ip.IsPrivate() || ip.IsLinkLocalUnicast() || isCarrierGradeNATIPv4(ip)
 	}
 
 	if !strings.Contains(normalized, ".") {
@@ -141,6 +141,15 @@ func IsLocalNetworkHost(host string) bool {
 	}
 
 	return false
+}
+
+func isCarrierGradeNATIPv4(ip net.IP) bool {
+	v4 := ip.To4()
+	if v4 == nil {
+		return false
+	}
+
+	return v4[0] == 100 && v4[1] >= 64 && v4[1] <= 127
 }
 
 // PulseURLValidationOptions controls optional relaxations for Pulse runtime

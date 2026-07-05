@@ -276,7 +276,10 @@ TLS floor in the dynamic config.
    feature flags, identity, and trust posture from the running `pulse-agent`
    process or its systemd service definition, then persist the upgraded runtime
    back through the v6 token-file service-argument path rather than keeping the
-   raw token in process arguments.
+   raw token in process arguments. That fallback remains required when the
+   operator supplies `--url` on the update command but token, identity,
+   feature-flag, or trust continuity still exists only in legacy process or
+   service state.
    The shell installer must disclose `--enable-commands` as Pulse command
    execution, disabled by default, and must name both Patrol actions and
    Proxmox LXC Docker inventory as the operator-visible reasons to enable it.
@@ -377,7 +380,9 @@ TLS floor in the dynamic config.
    `--url`, `--token`, feature flags, and identity arguments even when
    `connection.env` is missing or incomplete. The upgraded service must be
    rendered through the shared exec-argument builder and use the secure
-   `--token-file` runtime path.
+   `--token-file` runtime path, and explicit update URL arguments must not
+   suppress legacy recovery of the remaining connection, identity, feature, or
+   trust fields.
    Deployment bootstrap token behavior remains a deployment-installability
    trust boundary even when the handler is API-owned. `internal/api/deploy_handlers.go`
    must preserve server-derived `owner_user_id` lineage on bootstrap tokens and
@@ -1903,7 +1908,10 @@ is not usable connection state and must not be logged or treated as recovered.
 Fallback recovery may merge URL and token across process args, environment, and
 systemd unit data, but it may report success only once both values are present;
 otherwise the update command must fall through to the explicit missing-state
-error instead of implying recovery succeeded.
+error instead of implying recovery succeeded. Explicit update arguments that
+provide only the URL must still run legacy process/service recovery before this
+decision so v5 agents without `connection.env` can recover their token and
+identity.
 That same installer ownership now also applies to service lifecycle control:
 upgrade, reinstall, and platform-specific start/restart flows may not each
 carry their own stop/start command sequence for the same agent runtime.

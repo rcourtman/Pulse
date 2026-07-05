@@ -1595,6 +1595,10 @@ recovered_connection_state_ready() {
     [[ -n "$PULSE_URL" && -n "$PULSE_TOKEN" ]]
 }
 
+update_connection_state_incomplete() {
+    [[ -z "$PULSE_URL" || -z "$PULSE_TOKEN" || -z "$AGENT_ID" || -z "$HOSTNAME_OVERRIDE" || -z "$CURL_CA_BUNDLE" || "$INSECURE" != "true" ]]
+}
+
 recover_connection_state_from_arg_stream() {
     local arg=""
     local pending_key=""
@@ -2012,14 +2016,14 @@ fi
 # installer reuses the canonical saved connection state instead of asking the
 # operator to mint a new install token for a host Pulse already knows about.
 if [[ "$UPDATE_ONLY" == "true" ]]; then
-    if [[ -z "$PULSE_URL" || -z "$PULSE_TOKEN" || -z "$AGENT_ID" || -z "$HOSTNAME_OVERRIDE" || -z "$CURL_CA_BUNDLE" || "$INSECURE" != "true" ]]; then
+    if update_connection_state_incomplete; then
         local update_conn_env=""
         update_conn_env=$(find_connection_state_file || true)
         if [[ -n "$update_conn_env" ]]; then
             log_info "Recovering connection details from ${update_conn_env}..."
             recover_connection_state "$update_conn_env"
         fi
-        if [[ -z "$PULSE_URL" || -z "$PULSE_TOKEN" ]]; then
+        if update_connection_state_incomplete; then
             recover_connection_state_from_existing_agent || true
         fi
         if [[ -n "$PULSE_URL" && -n "$PULSE_TOKEN" ]]; then

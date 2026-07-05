@@ -259,9 +259,12 @@ command. If saved state is missing and the Unix shell installer falls back to
 legacy running-process or service-unit recovery, recovered connection state is
 usable only when both the control-plane URL and token are present. A URL-only
 process or unit may seed later recovery attempts, but it must not be logged or
-treated as recovered update state. Windows stale-agent update commands remain
-on the existing token-gated install transport until the Windows installer owns
-an equivalent saved-state update mode.
+treated as recovered update state. That fallback must still run when an
+operator supplies the update URL explicitly but token, identity, feature-flag,
+or trust continuity remains recoverable only from a legacy v5 process or
+service. Windows stale-agent update commands remain on the existing token-gated
+install transport until the Windows installer owns an equivalent saved-state
+update mode.
 Agent Fleet Doctor diagnostics extend that same read-only lifecycle triage
 surface: `GET /api/agents/diagnostics` may explain stale versions, missing
 reports, profile deployment drift, expected Docker/Kubernetes telemetry gaps,
@@ -1088,7 +1091,7 @@ surface and no new `internal/api/` lifecycle handler.
 7. Keep legacy Unified Agent compatibility names explicitly secondary when touching shared `internal/api/` runtime helpers: the legacy host-route family and `host-agent:*` scope names may remain as ingress or migration aliases, but they must not retake primary ownership in router state, live runtime scope checks, handler commentary, or operator-facing guidance.
 8. Add or change the unified agent CLI entrypoint, version/help exit semantics, or startup argument/error routing through `cmd/pulse-agent/main.go`.
    The CLI entrypoint owns propagation of persistence context into runtime-owned helpers. When installer-selected state roots differ from the default, `cmd/pulse-agent/main.go` must pass that exact `StateDir` through both the host-agent runtime and updater startup paths instead of letting one path silently fall back to `/var/lib/pulse-agent`.
-   The same runtime-owned boundary also owns Pulse control-plane URL validation for agent startup, remote config, updater continuity, and command transport. Public control-plane hostnames remain HTTPS/WSS, but self-hosted local control planes may use plain HTTP/WS when the host is loopback, a private or link-local IP, a single-label LAN name, or a local DNS suffix such as `.local`, `.lan`, `.home`, `.home.arpa`, or `.internal`; installer-persisted local HTTP URLs must not be accepted by one runtime path and rejected by another.
+   The same runtime-owned boundary also owns Pulse control-plane URL validation for agent startup, remote config, updater continuity, and command transport. Public control-plane hostnames remain HTTPS/WSS, but self-hosted local control planes may use plain HTTP/WS when the host is loopback, a private, link-local, or carrier-grade NAT IP, a single-label LAN name, or a local DNS suffix such as `.local`, `.lan`, `.home`, `.home.arpa`, or `.internal`; installer-persisted local HTTP URLs must not be accepted by one runtime path and rejected by another.
    The unified agent CLI copy follows the same command-execution vocabulary as the install surface. `cmd/pulse-agent/main.go` may keep the `--enable-commands` flag name for compatibility, but the help text and inline comments must describe command execution as Pulse command execution for Patrol actions and governed Proxmox LXC Docker inventory rather than reviving AI auto-fix language.
    The unified agent CLI copy also owns operator-facing Docker / Podman runtime
    labels. `cmd/pulse-agent/main.go` may keep the historical
@@ -2622,8 +2625,9 @@ normalization used by `internal/hostagent/agent.go`,
 `internal/hostagent/commands.go`, `internal/agentupdate/update.go`,
 `internal/dockeragent/agent.go`, `internal/kubernetesagent/agent.go`, and
 `internal/remoteconfig/client.go`. Those runtime clients may keep self-hosted
-`http://` or `ws://` only for loopback, private/link-local IP, single-label, or
-local DNS Pulse origins; public remote Pulse URLs must still use HTTPS/WSS.
+`http://` or `ws://` only for loopback, private/link-local IP,
+carrier-grade NAT `100.64.0.0/10`, single-label, or local DNS Pulse origins;
+public remote Pulse URLs must still use HTTPS/WSS.
 `InsecureSkipVerify` may relax certificate verification on TLS transport; it
 must not reopen public plaintext HTTP for updater, websocket, reporting, or
 remote-config paths.
@@ -3794,7 +3798,10 @@ service command. It may report recovery success only after URL and token are
 both available, even when those values were assembled from different legacy
 sources; partial URL-only recovery must fall through to the explicit
 missing-state error so operators are not told the update state was recovered
-when the installer still cannot reconnect.
+when the installer still cannot reconnect. That fallback must also run after
+saved-state parsing when explicit update arguments supplied the URL but legacy
+v5 process or service state is still the only source for the token, identity,
+feature flags, or trust posture.
 That same lifecycle ownership must cover service control too: the installer may
 still choose different platform adapters, but stop/restart semantics for the
 managed agent must route through shared installer helpers instead of being
