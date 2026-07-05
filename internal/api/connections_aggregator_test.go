@@ -330,11 +330,11 @@ func TestBuildConnections_AgentVersionUpdateAvailability(t *testing.T) {
 	now := time.Now()
 	in := aggregatorInputs{
 		hosts: []models.Host{
-			{ID: "current", Hostname: "current", LastSeen: now, AgentVersion: "6.0.2"},
+			{ID: "current", Hostname: "current", LastSeen: now, AgentVersion: "6.0.3"},
 			{ID: "outdated", Hostname: "outdated", LastSeen: now, AgentVersion: "6.0.0"},
 			{ID: "unknown", Hostname: "unknown", LastSeen: now},
 		},
-		expectedAgentVersion: "6.0.2",
+		expectedAgentVersion: "6.0.3",
 		now:                  now,
 	}
 
@@ -344,14 +344,14 @@ func TestBuildConnections_AgentVersionUpdateAvailability(t *testing.T) {
 		byID[connection.ID] = connection
 	}
 
-	if byID["agent:current"].AgentVersion != "6.0.2" {
-		t.Fatalf("current agent version = %q, want %q", byID["agent:current"].AgentVersion, "6.0.2")
+	if byID["agent:current"].AgentVersion != "6.0.3" {
+		t.Fatalf("current agent version = %q, want %q", byID["agent:current"].AgentVersion, "6.0.3")
 	}
-	if byID["agent:current"].ExpectedAgentVersion != "6.0.2" {
+	if byID["agent:current"].ExpectedAgentVersion != "6.0.3" {
 		t.Fatalf(
 			"current expected agent version = %q, want %q",
 			byID["agent:current"].ExpectedAgentVersion,
-			"6.0.2",
+			"6.0.3",
 		)
 	}
 	if byID["agent:current"].AgentUpdateAvailable {
@@ -387,7 +387,7 @@ func TestBuildConnections_AgentFleetGovernance(t *testing.T) {
 				ID:              "current",
 				Hostname:        "current",
 				LastSeen:        now,
-				AgentVersion:    "6.0.2",
+				AgentVersion:    "6.0.3",
 				CommandsEnabled: true,
 			},
 			{
@@ -404,7 +404,7 @@ func TestBuildConnections_AgentFleetGovernance(t *testing.T) {
 		agentDesiredConfigs: map[string]connectionAgentDesiredConfig{
 			"current": currentDesiredConfig,
 		},
-		expectedAgentVersion: "6.0.2",
+		expectedAgentVersion: "6.0.3",
 		now:                  now,
 	}
 

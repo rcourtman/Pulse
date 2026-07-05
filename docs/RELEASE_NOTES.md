@@ -7,6 +7,8 @@ For historical v4 notes that previously lived in this repo, see:
 `docs/releases/RELEASE_NOTES_v4.md`
 
 For the current stable v6 patch packet, see:
+- `docs/releases/RELEASE_NOTES_v6.0.3.md`
+- `docs/releases/V6_CHANGELOG_v6.0.3.md`
 - `docs/releases/RELEASE_NOTES_v6.0.2.md`
 - `docs/releases/V6_CHANGELOG_v6.0.2.md`
 - `docs/UPGRADE_v6.md`

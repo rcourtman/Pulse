@@ -155,6 +155,23 @@ func TestInstallDockerScriptFallbackPinsCurrentVersion(t *testing.T) {
 	}
 }
 
+func TestInstallDockerProofTracksStablePatchReleaseContract(t *testing.T) {
+	version := currentReleaseVersion(t)
+	if isPrereleaseVersion(version) {
+		t.Skip("current release is a prerelease")
+	}
+	previous, ok := previousStablePatchVersion(version)
+	if !ok {
+		t.Skip("current release is not a stable patch release")
+	}
+
+	assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
+		"The active stable `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
+		"This patch release uses the stable hotfix path with `rollback_version=v"+previous+"`, `hotfix_exception=true`, a release-owner reason, and no fabricated same-version RC tag.",
+		"For the active stable `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"`",
+	)
+}
+
 func runInstallDockerScript(t *testing.T, workDir string, envVars ...string) {
 	t.Helper()
 

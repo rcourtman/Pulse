@@ -240,6 +240,60 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 	}
 }
 
+func TestCurrentStablePatchReleasePacketTracksInstallMetadata(t *testing.T) {
+	version := currentReleaseVersion(t)
+	if isPrereleaseVersion(version) {
+		t.Skip("current release is a prerelease")
+	}
+	previous, ok := previousStablePatchVersion(version)
+	if !ok {
+		t.Skip("current release is not a stable patch release")
+	}
+
+	releaseNotesPath := repoFile("docs", "releases", "RELEASE_NOTES_v"+version+".md")
+	changelogPath := repoFile("docs", "releases", "V6_CHANGELOG_v"+version+".md")
+
+	assertFileContainsAllNormalized(t, releaseNotesPath,
+		"`v"+version+"` is a stable patch release",
+		"`v"+previous+"`",
+		"rollback target for this patch release is `v"+previous+"`",
+	)
+	assertFileContainsAll(t, changelogPath,
+		"Version: `v"+version+"`",
+		"Rollback target: `v"+previous+"`",
+		"Promotion path: stable patch hotfix from `pulse/v6-release`",
+	)
+	assertFileContainsAll(t, repoFile("docs", "RELEASE_NOTES.md"),
+		"docs/releases/RELEASE_NOTES_v"+version+".md",
+		"docs/releases/V6_CHANGELOG_v"+version+".md",
+	)
+	assertFileContainsAll(t, repoFile("docs", "UPGRADE_v6.md"),
+		"docs/releases/RELEASE_NOTES_v"+version+".md",
+		"docs/releases/V6_CHANGELOG_v"+version+".md",
+	)
+	assertFileContainsAll(t, repoFile("deploy", "helm", "pulse", "Chart.yaml"),
+		"version: "+version,
+		`appVersion: "`+version+`"`,
+		"raw.githubusercontent.com/rcourtman/Pulse/v"+version+"/docs/images/pulse-logo.svg",
+		"blob/v"+version+"/docs/KUBERNETES.md",
+	)
+	assertFileContainsAll(t, repoFile("deploy", "helm", "pulse", "README.md"),
+		"Version-"+version+"-informational",
+		"AppVersion-"+version+"-informational",
+	)
+	assertFileContainsAll(t, repoFile("docker-compose.yml"),
+		"image: ${PULSE_IMAGE:-rcourtman/pulse:"+version+"}",
+	)
+	assertFileContainsAll(t, repoFile("scripts", "install-docker.sh"),
+		`CANONICAL_DEFAULT_PULSE_VERSION="`+version+`"`,
+	)
+	assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
+		"The active stable `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
+		"This patch release uses the stable hotfix path with `rollback_version=v"+previous+"`, `hotfix_exception=true`, a release-owner reason, and no fabricated same-version RC tag.",
+		"For the active stable `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"`",
+	)
+}
+
 func TestBackfillReleaseWorkflowRepairsPublishedAssetsWithoutRebuilds(t *testing.T) {
 	scriptBytes, err := os.ReadFile(repoFile("scripts", "backfill-release-assets.sh"))
 	if err != nil {
@@ -1295,6 +1349,24 @@ func assertFileContainsAll(t *testing.T, path string, required ...string) {
 			t.Fatalf("%s missing required substring: %s", path, needle)
 		}
 	}
+}
+
+func assertFileContainsAllNormalized(t *testing.T, path string, required ...string) {
+	t.Helper()
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	s := normalizedInstallTestWhitespace(string(content))
+	for _, needle := range required {
+		if !strings.Contains(s, normalizedInstallTestWhitespace(needle)) {
+			t.Fatalf("%s missing required normalized substring: %s", path, needle)
+		}
+	}
+}
+
+func normalizedInstallTestWhitespace(text string) string {
+	return strings.Join(strings.Fields(text), " ")
 }
 
 func workflowJobBlock(t *testing.T, workflow, job string) string {

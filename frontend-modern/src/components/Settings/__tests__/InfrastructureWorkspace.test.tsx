@@ -906,7 +906,7 @@ describe('InfrastructureWorkspace', () => {
       surfaces: ['host'],
       scope: { host: true } as any,
       source: 'agent',
-      agentVersion: '6.0.2',
+      agentVersion: '6.0.3',
       agentIdentity: {
         hostname: 'tower',
         platform: 'linux',
@@ -970,7 +970,7 @@ describe('InfrastructureWorkspace', () => {
 
     await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
     expect(screen.getByText('Pulse Agent version')).toBeInTheDocument();
-    expect(screen.getByText('6.0.2')).toBeInTheDocument();
+    expect(screen.getByText('6.0.3')).toBeInTheDocument();
     expect(screen.getByText('Operating system')).toBeInTheDocument();
     expect(screen.getAllByText('Unraid 7.1.0').length).toBeGreaterThan(0);
     expect(screen.getByText('Reported hostname')).toBeInTheDocument();
@@ -996,7 +996,7 @@ describe('InfrastructureWorkspace', () => {
       scope: { host: true } as any,
       lastSeen: new Date().toISOString(),
       agentVersion: '6.0.0',
-      expectedAgentVersion: '6.0.2',
+      expectedAgentVersion: '6.0.3',
       agentUpdateAvailable: true,
       capabilities: { supportsPause: true, supportsScope: true, supportsTest: true },
     });
@@ -1042,7 +1042,7 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByText('Pulse Agent augmentation')).toBeInTheDocument();
     expect(screen.getByText('zeus-agent')).toBeInTheDocument();
     expect(screen.getByText('Update available')).toBeInTheDocument();
-    expect(screen.getByText('6.0.0 -> 6.0.2')).toBeInTheDocument();
+    expect(screen.getByText('6.0.0 -> 6.0.3')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Copy uninstall command/i })).toBeInTheDocument();
   });
 

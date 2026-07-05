@@ -88,7 +88,7 @@ describe('ConnectionsAPI', () => {
         lastError: null,
         source: 'agent',
         agentVersion: '6.0.0',
-        expectedAgentVersion: '6.0.2',
+        expectedAgentVersion: '6.0.3',
         agentUpdateAvailable: true,
         capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
       },
@@ -99,7 +99,7 @@ describe('ConnectionsAPI', () => {
 
     expect(result.connections[0]).toMatchObject({
       agentVersion: '6.0.0',
-      expectedAgentVersion: '6.0.2',
+      expectedAgentVersion: '6.0.3',
       agentUpdateAvailable: true,
     });
   });
