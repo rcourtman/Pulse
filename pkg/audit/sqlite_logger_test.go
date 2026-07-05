@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"testing"
@@ -265,6 +266,48 @@ func TestSQLiteLoggerQuery(t *testing.T) {
 			t.Errorf("Expected 3 events with offset-only query, got %d", len(results))
 		}
 	})
+}
+
+func TestSQLiteLoggerQueryHandlesLegacyDatetimeTimestampRows(t *testing.T) {
+	tempDir := t.TempDir()
+
+	logger, err := NewSQLiteLogger(SQLiteLoggerConfig{
+		DataDir:       tempDir,
+		CryptoMgr:     newMockCryptoManager(),
+		RetentionDays: 30,
+	})
+	if err != nil {
+		t.Fatalf("NewSQLiteLogger failed: %v", err)
+	}
+	defer logger.Close()
+
+	legacyTime := time.Date(2026, 7, 5, 16, 4, 13, 0, time.UTC)
+	if _, err := logger.db.Exec(`
+		INSERT INTO audit_events (id, timestamp, event_type, user, ip, path, success, details, signature)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		"legacy-datetime",
+		legacyTime,
+		"startup",
+		sql.NullString{},
+		sql.NullString{},
+		"/api/audit",
+		1,
+		"legacy Pro runtime timestamp",
+		"legacy-signature",
+	); err != nil {
+		t.Fatalf("insert legacy datetime row: %v", err)
+	}
+
+	events, err := logger.Query(QueryFilter{ID: "legacy-datetime", Limit: 1})
+	if err != nil {
+		t.Fatalf("Query failed for legacy datetime timestamp row: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("Expected 1 event, got %d", len(events))
+	}
+	if !events[0].Timestamp.Equal(legacyTime) {
+		t.Fatalf("timestamp = %s, want %s", events[0].Timestamp, legacyTime)
+	}
 }
 
 func TestSQLiteLoggerCount(t *testing.T) {

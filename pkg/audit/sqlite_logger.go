@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -406,16 +407,20 @@ func (l *SQLiteLogger) queryLocked(filter QueryFilter) ([]Event, error) {
 	var events []Event
 	for rows.Next() {
 		var e Event
-		var timestamp int64
+		var timestampValue any
 		var success int
 		var user, ip, path, details, signature sql.NullString
 
-		err := rows.Scan(&e.ID, &timestamp, &e.EventType, &user, &ip, &path, &success, &details, &signature)
+		err := rows.Scan(&e.ID, &timestampValue, &e.EventType, &user, &ip, &path, &success, &details, &signature)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan audit event: %w", err)
+		}
+		timestamp, err := parseAuditTimestamp(timestampValue)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan audit event: %w", err)
 		}
 
-		e.Timestamp = time.Unix(timestamp, 0)
+		e.Timestamp = timestamp
 		e.Success = success == 1
 		e.User = user.String
 		e.IP = ip.String
@@ -427,6 +432,62 @@ func (l *SQLiteLogger) queryLocked(filter QueryFilter) ([]Event, error) {
 	}
 
 	return events, rows.Err()
+}
+
+func parseAuditTimestamp(value any) (time.Time, error) {
+	switch v := value.(type) {
+	case time.Time:
+		return v, nil
+	case int64:
+		return time.Unix(v, 0), nil
+	case int:
+		return time.Unix(int64(v), 0), nil
+	case int32:
+		return time.Unix(int64(v), 0), nil
+	case float64:
+		return time.Unix(int64(v), 0), nil
+	case []byte:
+		return parseAuditTimestampString(string(v))
+	case string:
+		return parseAuditTimestampString(v)
+	case nil:
+		return time.Time{}, errors.New("timestamp is null")
+	default:
+		return time.Time{}, fmt.Errorf("unsupported timestamp type %T", value)
+	}
+}
+
+func parseAuditTimestampString(raw string) (time.Time, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return time.Time{}, errors.New("timestamp is empty")
+	}
+	if unix, err := strconv.ParseInt(raw, 10, 64); err == nil {
+		return time.Unix(unix, 0), nil
+	}
+
+	layouts := []string{
+		time.RFC3339Nano,
+		time.RFC3339,
+		"2006-01-02 15:04:05.999999999Z07:00",
+		"2006-01-02 15:04:05.999999Z07:00",
+		"2006-01-02 15:04:05Z07:00",
+		"2006-01-02 15:04:05.999999999-07:00",
+		"2006-01-02 15:04:05.999999-07:00",
+		"2006-01-02 15:04:05-07:00",
+		"2006-01-02 15:04:05.999999999 -0700 MST",
+		"2006-01-02 15:04:05.999999 -0700 MST",
+		"2006-01-02 15:04:05 -0700 MST",
+		"2006-01-02 15:04:05.999999999",
+		"2006-01-02 15:04:05.999999",
+		"2006-01-02 15:04:05",
+	}
+	for _, layout := range layouts {
+		if timestamp, err := time.Parse(layout, raw); err == nil {
+			return timestamp, nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("unsupported timestamp value %q", raw)
 }
 
 // Count returns the number of events matching the filter.
