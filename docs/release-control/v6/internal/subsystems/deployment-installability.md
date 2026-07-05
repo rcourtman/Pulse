@@ -647,6 +647,13 @@ TLS floor in the dynamic config.
    `release` and `workflow_dispatch` triggers, and its chart-version
    resolver must prefer inputs over the release-event tag when inputs are
    present so all three entry paths converge on the same identity.
+   After pushing the OCI chart, `publish-helm-chart.yml` must prove the
+   pushed chart is readable from GHCR without registry credentials by logging
+   out of `ghcr.io` and running `helm show chart` against the versioned chart
+   reference. The workflow must not mask package-visibility drift with
+   best-effort GitHub Packages visibility API calls: invalid or unauthorized
+   visibility endpoints create false success and noisy release logs, while the
+   unauthenticated chart read is the customer-facing availability contract.
    `create-release.yml` must apply the same explicit `workflow_call` to
    `promote-floating-tags.yml`. Its legacy `workflow_run` chain off
    `publish-docker.yml` silently stops promoting `latest` / major / minor

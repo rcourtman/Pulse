@@ -1144,7 +1144,8 @@ func TestPromoteFloatingTagsReachableViaWorkflowCall(t *testing.T) {
 }
 
 func TestPublishHelmChartReachableViaWorkflowCall(t *testing.T) {
-	assertFileContainsAll(t, repoFile(".github", "workflows", "publish-helm-chart.yml"),
+	workflowPath := repoFile(".github", "workflows", "publish-helm-chart.yml")
+	assertFileContainsAll(t, workflowPath,
 		`workflow_call:`,
 		`chart_version:`,
 		`description: "Chart version (e.g., 6.0.0-rc.5). Required for workflow_call."`,
@@ -1154,7 +1155,27 @@ func TestPublishHelmChartReachableViaWorkflowCall(t *testing.T) {
 		// Chart-version resolver prefers inputs over release-event tag.
 		`if [ -n "${INPUT_CHART_VERSION}" ]; then`,
 		`RELEASE_TAG="${RELEASE_TAG_NAME}"`,
+		`name: Verify public GHCR chart read`,
+		`helm registry logout ghcr.io || true`,
+		`helm show chart`,
+		`oci://ghcr.io/${{ github.repository_owner }}/pulse-chart/pulse`,
+		`--version "${{ steps.versions.outputs.chart_version }}"`,
 	)
+
+	content, err := os.ReadFile(workflowPath)
+	if err != nil {
+		t.Fatalf("read publish-helm-chart.yml: %v", err)
+	}
+	workflow := string(content)
+	for _, forbidden := range []string{
+		`versions/latest/restore`,
+		`-f visibility=public`,
+		`Package visibility configuration attempted`,
+	} {
+		if strings.Contains(workflow, forbidden) {
+			t.Fatalf("publish-helm-chart.yml must verify chart readability instead of masking GHCR visibility API failures; found %q", forbidden)
+		}
+	}
 }
 
 func TestCreateReleasePublishesPrivateProRuntime(t *testing.T) {

@@ -141,4 +141,5 @@ Packages the Helm chart and pushes it to the GitHub Container Registry (OCI) whe
 - Triggered automatically on `release: published`, or manually via workflow dispatch (requires `chart_version` input)
 - Chart and app versions mirror the Pulse release tag (e.g., `v4.24.0` → `4.24.0`)
 - Publishes to `oci://ghcr.io/<owner>/pulse-chart`
+- Verifies the pushed OCI chart can be read from GHCR without registry credentials
 - Requires no additional secrets—uses the built-in `GITHUB_TOKEN` with `packages: write` permission
