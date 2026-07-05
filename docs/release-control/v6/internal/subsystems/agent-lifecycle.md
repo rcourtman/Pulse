@@ -1361,6 +1361,17 @@ surface and no new `internal/api/` lifecycle handler.
    into a short-name collapse that would make two different FQDNs appear to
    be the same lifecycle target.
 6. Keep Proxmox registration continuity self-healing: stale local registration markers must be verified against Pulse before the host agent skips setup, and a missing matching node on the Pulse side must drive canonical re-registration instead of asking operators to delete marker files manually.
+   Runtime-side Proxmox setup must keep Pulse-managed Proxmox API tokens
+   scoped to the concrete node before falling back to the Pulse URL. PVE API
+   tokens are cluster-wide, so two cluster members that report to the same
+   Pulse server must not share one token name or let a later node install
+   rotate the token stored by an earlier node.
+   Reusable Infrastructure install tokens minted by the browser setup handoff
+   are reporting and config-read credentials, with Docker and Kubernetes
+   reporting scope when needed. They must not include `agent:exec`; command
+   execution is granted only by backend-issued host-bound runtime tokens or by
+   first-use Proxmox install-command tokens carrying the governed install
+   metadata that the command websocket can bind to one agent identity.
 7. Keep first-session lifecycle handoff explicit: the live setup completion
    surface in `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`
    must route the primary CTA into `/settings/infrastructure?add=pick`, frame

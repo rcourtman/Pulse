@@ -82,6 +82,11 @@ diagnostics flows may observe the API-owned `bound_agent_id`,
 `bound_hostname`, and `bound_at` metadata, but they must not rebind generic
 `agent:exec` tokens or treat a Proxmox install-command token as recoverable for
 another host after the first command registration identity has been persisted.
+Remote-config suppression of command enablement for generic or unbound
+command-scope tokens is part of that same adjacent API boundary. Storage and
+recovery surfaces may observe disconnected command readiness, but they must not
+re-enable command config, reinterpret the suppression as backup or restore
+state, or introduce a recovery-local command-token binding path.
 
 Hosted tenant agent install commands in `internal/api/cloud_agent_install_command.go`
 are adjacent API/lifecycle transport only. A provider-hosted MSP PVE/PBS install

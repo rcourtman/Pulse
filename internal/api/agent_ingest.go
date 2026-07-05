@@ -99,6 +99,7 @@ func (h *UnifiedAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Reque
 
 	// Include any server-side config overrides in the response
 	serverConfig := h.getMonitor(r.Context()).GetHostAgentConfig(host.ID)
+	serverConfig = sanitizeHostAgentConfigForToken(serverConfig, tokenRecord, host)
 
 	resp := map[string]any{
 		"success":   true,
@@ -482,6 +483,7 @@ func (h *UnifiedAgentHandlers) handleGetConfig(w http.ResponseWriter, r *http.Re
 	agentID = host.ID
 
 	config := h.getMonitor(r.Context()).GetHostAgentConfig(agentID)
+	config = sanitizeHostAgentConfigForToken(config, record, host)
 	signedConfig, err := h.signAgentConfig(agentID, config)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to sign agent config payload")
@@ -513,6 +515,39 @@ func tokenID(record *config.APITokenRecord) string {
 		return ""
 	}
 	return record.ID
+}
+
+func sanitizeHostAgentConfigForToken(cfg monitoring.HostAgentConfig, record *config.APITokenRecord, host models.Host) monitoring.HostAgentConfig {
+	if cfg.CommandsEnabled == nil || !*cfg.CommandsEnabled || commandConfigAllowedForToken(record, host) {
+		return cfg
+	}
+
+	disabled := false
+	cfg.CommandsEnabled = &disabled
+	return cfg
+}
+
+func commandConfigAllowedForToken(record *config.APITokenRecord, host models.Host) bool {
+	if record == nil {
+		return true
+	}
+	if !record.HasScope(config.ScopeAgentExec) {
+		return false
+	}
+
+	requestedID := strings.TrimSpace(host.ID)
+	requestedHost := strings.TrimSpace(host.Hostname)
+	boundID := strings.TrimSpace(record.Metadata["bound_agent_id"])
+	boundHost := strings.TrimSpace(record.Metadata["bound_hostname"])
+
+	if boundHost != "" && requestedHost != "" && strings.EqualFold(boundHost, requestedHost) {
+		return true
+	}
+	if boundID != "" && requestedID != "" && boundID == requestedID {
+		return true
+	}
+
+	return boundID == "" && boundHost == "" && canBindProxmoxAgentInstallExecToken(record, requestedID, requestedHost)
 }
 
 func (h *UnifiedAgentHandlers) ensureAgentTokenMatch(w http.ResponseWriter, r *http.Request, agentID string) bool {

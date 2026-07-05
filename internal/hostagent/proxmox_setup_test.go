@@ -614,6 +614,33 @@ func TestProxmoxSetup_RunForType(t *testing.T) {
 	})
 }
 
+func TestProxmoxSetup_MonitorTokenNameIsNodeScoped(t *testing.T) {
+	first := &ProxmoxSetup{
+		pulseURL: "https://pulse.example.com",
+		hostname: "pve01",
+	}
+	second := &ProxmoxSetup{
+		pulseURL: "https://pulse.example.com",
+		hostname: "pve02",
+	}
+	fallback := &ProxmoxSetup{
+		pulseURL: "https://pulse.example.com",
+	}
+
+	if got := first.monitorTokenName(); got != "pulse-pve01" {
+		t.Fatalf("first node token name = %q, want pulse-pve01", got)
+	}
+	if got := second.monitorTokenName(); got != "pulse-pve02" {
+		t.Fatalf("second node token name = %q, want pulse-pve02", got)
+	}
+	if first.monitorTokenName() == second.monitorTokenName() {
+		t.Fatal("PVE cluster nodes pointed at the same Pulse URL must not share one Proxmox API token name")
+	}
+	if got := fallback.monitorTokenName(); got != "pulse-pulse-example-com" {
+		t.Fatalf("fallback token name = %q, want pulse-pulse-example-com", got)
+	}
+}
+
 func TestProxmoxSetup_SetupPVETokenUsesPrivilegeSeparatedTokenACLs(t *testing.T) {
 	mc := &mockCollector{}
 	calls := make([]commandCall, 0)

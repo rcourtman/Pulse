@@ -7,7 +7,6 @@ import type { AgentLookupResponse, ConnectedInfrastructureItem } from '@/types/a
 import type { SecurityStatus } from '@/types/config';
 import {
   AGENT_CONFIG_READ_SCOPE,
-  AGENT_EXEC_SCOPE,
   AGENT_REPORT_SCOPE,
   DOCKER_REPORT_SCOPE,
   KUBERNETES_REPORT_SCOPE,
@@ -263,7 +262,6 @@ Pulse prepares the first-host install token from setup so you can move straight 
         AGENT_CONFIG_READ_SCOPE,
         DOCKER_REPORT_SCOPE,
         KUBERNETES_REPORT_SCOPE,
-        AGENT_EXEC_SCOPE,
       ];
       const { token, record } = await SecurityAPI.createToken(desiredName, scopes);
 
@@ -278,7 +276,7 @@ Pulse prepares the first-host install token from setup so you can move straight 
       setSetupHandoffAutoTokenFailed(false);
       if (options.notifySuccess) {
         notificationStore.success(
-          'Token generated with Agent config + reporting, Docker, and Kubernetes permissions.',
+          'Token generated with Agent config, reporting, Docker, and Kubernetes permissions.',
           4000,
         );
       }

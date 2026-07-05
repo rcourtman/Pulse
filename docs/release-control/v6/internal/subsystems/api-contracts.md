@@ -2585,6 +2585,22 @@ a new API state machine, queue contract, or verification-accounting field.
 2. Update frontend API types in the same slice
 3. Route runtime changes through the explicit API-contract proof policies in `registry.json`; default fallback proof routing is not allowed
 4. Update this contract when canonical payload ownership changes
+   Reusable install-token generation in
+   `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`
+   must stay outside the command-execution scope. The browser may request
+   reporting/config plus Docker and Kubernetes reporting scopes for reusable
+   installer transport, but it must not add `agent:exec`; command-capable
+   install commands must come from the backend command-generation path with
+   host-bound metadata or first-use Proxmox install metadata.
+   Signed Unified Agent config responses must honor the command-registration
+   token boundary before returning `commandsEnabled:true`. When a real API
+   token record is present on an agent config/report request, the backend may
+   sign or echo command enablement as true only if that token has `agent:exec`
+   and is already bound to the requested agent by hostname or agent id, or is
+   an unbound Pulse-minted Proxmox install-command token carrying the governed
+   first-use metadata. Generic or unbound command-scope tokens must receive
+   `commandsEnabled:false` in the response while the stored desired setting
+   remains unchanged for a later correctly bound token.
 5. Keep `/api/resources` policy metadata aligned across backend payload tests and canonical frontend resource consumers whenever sensitivity or routing fields change
 6. Keep Patrol status payloads explicit enough that the frontend can present blocked runtime state without treating a previously healthy summary snapshot as current runtime truth, and keep Patrol recency semantics explicit in transport by reserving `last_patrol_at` for completed full patrols while exposing any Patrol activity separately through `last_activity_at`
    and the scoped-trigger status payload on that same Patrol status surface, so queued scoped work, busy-mode state, and per-source enablement (`alert` versus `anomaly`) stay transport-backed instead of being inferred by page-local heuristics

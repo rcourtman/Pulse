@@ -333,6 +333,14 @@ describe('infrastructure operations model', () => {
     );
   });
 
+  it('keeps reusable install tokens out of the command-exec scope', () => {
+    expect(useInfrastructureInstallStateSource).toContain('AGENT_REPORT_SCOPE');
+    expect(useInfrastructureInstallStateSource).toContain('AGENT_CONFIG_READ_SCOPE');
+    expect(useInfrastructureInstallStateSource).toContain('DOCKER_REPORT_SCOPE');
+    expect(useInfrastructureInstallStateSource).toContain('KUBERNETES_REPORT_SCOPE');
+    expect(useInfrastructureInstallStateSource).not.toContain('AGENT_EXEC_SCOPE');
+  });
+
   it('keeps infrastructure install and operations surfaces free of retired commercial telemetry wrappers', () => {
     for (const source of [
       infrastructureOperationsModelSource,

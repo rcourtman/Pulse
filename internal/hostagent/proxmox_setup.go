@@ -200,7 +200,7 @@ func proxmoxTokenScope(candidates ...string) string {
 }
 
 func (p *ProxmoxSetup) monitorTokenName() string {
-	return "pulse-" + proxmoxTokenScope(p.pulseURL, p.hostname)
+	return "pulse-" + proxmoxTokenScope(p.hostname, p.pulseURL)
 }
 
 func tokenAlreadyExists(err error, output string) bool {

@@ -12706,6 +12706,86 @@ func TestContract_AgentExecWebSocketBindsProxmoxInstallTokenOnFirstUse(t *testin
 	}
 }
 
+func TestContract_AgentConfigSuppressesCommandsForUnboundExecToken(t *testing.T) {
+	handler, monitor := newUnifiedAgentHandlers(t, nil)
+	hostID := seedUnifiedAgentHost(t, monitor)
+	state := monitorState(t, monitor)
+	state.UpsertHost(models.Host{
+		ID:       hostID,
+		Hostname: "node-1",
+		TokenID:  "runtime-token",
+	})
+
+	commandsEnabled := true
+	if err := monitor.UpdateHostAgentConfig(hostID, &commandsEnabled); err != nil {
+		t.Fatalf("UpdateHostAgentConfig: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/agent/"+hostID+"/config", nil)
+	attachAPITokenRecord(req, &config.APITokenRecord{
+		ID:     "runtime-token",
+		Scopes: []string{config.ScopeAgentConfigRead, config.ScopeAgentReport, config.ScopeAgentExec},
+	})
+	rec := httptest.NewRecorder()
+	handler.HandleConfig(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		Config monitoring.HostAgentConfig `json:"config"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode config response: %v", err)
+	}
+	if resp.Config.CommandsEnabled == nil || *resp.Config.CommandsEnabled {
+		t.Fatalf("commandsEnabled = %+v, want false for an unbound command token", resp.Config.CommandsEnabled)
+	}
+}
+
+func TestContract_AgentConfigAllowsFirstUseProxmoxInstallCommandToken(t *testing.T) {
+	handler, monitor := newUnifiedAgentHandlers(t, nil)
+	hostID := seedUnifiedAgentHost(t, monitor)
+	state := monitorState(t, monitor)
+	state.UpsertHost(models.Host{
+		ID:       hostID,
+		Hostname: "pve-node-1",
+		TokenID:  "proxmox-runtime-token",
+	})
+
+	commandsEnabled := true
+	if err := monitor.UpdateHostAgentConfig(hostID, &commandsEnabled); err != nil {
+		t.Fatalf("UpdateHostAgentConfig: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/agent/"+hostID+"/config", nil)
+	attachAPITokenRecord(req, &config.APITokenRecord{
+		ID:     "proxmox-runtime-token",
+		Scopes: []string{config.ScopeAgentConfigRead, config.ScopeAgentReport, config.ScopeAgentExec},
+		Metadata: map[string]string{
+			"install_type": proxmoxInstallTypePVE,
+			"issued_via":   agentInstallIssuedViaConfig,
+		},
+	})
+	rec := httptest.NewRecorder()
+	handler.HandleConfig(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		Config monitoring.HostAgentConfig `json:"config"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode config response: %v", err)
+	}
+	if resp.Config.CommandsEnabled == nil || !*resp.Config.CommandsEnabled {
+		t.Fatalf("commandsEnabled = %+v, want true for a first-use Proxmox install command token", resp.Config.CommandsEnabled)
+	}
+}
+
 func TestContract_AdminBypassFailsClosedOutsideDevMode(t *testing.T) {
 	t.Setenv("ALLOW_ADMIN_BYPASS", "1")
 	t.Setenv("PULSE_DEV", "")

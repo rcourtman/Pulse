@@ -150,6 +150,51 @@ func TestUnifiedAgentHandlers_HandleReportIncludesConfigOverride(t *testing.T) {
 	}
 }
 
+func TestUnifiedAgentHandlers_HandleReportSuppressesConfigOverrideForUnboundExecToken(t *testing.T) {
+	handler, monitor := newUnifiedAgentHandlers(t, nil)
+
+	hostID := "machine-report-unbound"
+	enabled := true
+	if err := monitor.UpdateHostAgentConfig(hostID, &enabled); err != nil {
+		t.Fatalf("UpdateHostAgentConfig: %v", err)
+	}
+
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{ID: "agent-report-unbound"},
+		Host: agentshost.HostInfo{
+			ID:       hostID,
+			Hostname: "host-report-unbound.local",
+			Platform: "linux",
+		},
+	}
+	body, _ := json.Marshal(report)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/report", bytes.NewReader(body))
+	attachAPITokenRecord(req, &config.APITokenRecord{
+		ID:     "install-token",
+		Scopes: []string{config.ScopeAgentReport, config.ScopeAgentConfigRead, config.ScopeAgentExec},
+	})
+	rec := httptest.NewRecorder()
+
+	handler.HandleReport(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	cfg, ok := resp["config"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected config override in response")
+	}
+	if val, ok := cfg["commandsEnabled"].(bool); !ok || val {
+		t.Fatalf("expected commandsEnabled=false for unbound exec token, got %#v", cfg["commandsEnabled"])
+	}
+}
+
 func TestUnifiedAgentHandlers_HandleDeleteHostErrors(t *testing.T) {
 	handler := newUnifiedAgentHandlerForTests(t)
 
@@ -397,6 +442,124 @@ func TestUnifiedAgentHandlers_HandleConfigSignsDesiredMetadata(t *testing.T) {
 	}
 	if err := remoteconfig.VerifyConfigPayloadSignature(payload, resp.Config.Signature); err != nil {
 		t.Fatalf("VerifyConfigPayloadSignature: %v", err)
+	}
+}
+
+func TestUnifiedAgentHandlers_HandleConfigSuppressesCommandsForUnboundExecToken(t *testing.T) {
+	handler, monitor := newUnifiedAgentHandlers(t, nil)
+	hostID := seedUnifiedAgentHost(t, monitor)
+	state := monitorState(t, monitor)
+	state.UpsertHost(models.Host{
+		ID:       hostID,
+		Hostname: "host-1.local",
+		TokenID:  "install-token",
+	})
+
+	commandsEnabled := true
+	if err := monitor.UpdateHostAgentConfig(hostID, &commandsEnabled); err != nil {
+		t.Fatalf("UpdateHostAgentConfig: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/agent/"+hostID+"/config", nil)
+	attachAPITokenRecord(req, &config.APITokenRecord{
+		ID:     "install-token",
+		Scopes: []string{config.ScopeAgentConfigRead, config.ScopeAgentReport, config.ScopeAgentExec},
+	})
+	rec := httptest.NewRecorder()
+	handler.HandleConfig(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		Config monitoring.HostAgentConfig `json:"config"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Config.CommandsEnabled == nil || *resp.Config.CommandsEnabled {
+		t.Fatalf("commandsEnabled = %+v, want false for unbound exec token", resp.Config.CommandsEnabled)
+	}
+}
+
+func TestUnifiedAgentHandlers_HandleConfigPreservesCommandsForBoundExecToken(t *testing.T) {
+	handler, monitor := newUnifiedAgentHandlers(t, nil)
+	hostID := seedUnifiedAgentHost(t, monitor)
+	state := monitorState(t, monitor)
+	state.UpsertHost(models.Host{
+		ID:       hostID,
+		Hostname: "host-1.local",
+		TokenID:  "runtime-token",
+	})
+
+	commandsEnabled := true
+	if err := monitor.UpdateHostAgentConfig(hostID, &commandsEnabled); err != nil {
+		t.Fatalf("UpdateHostAgentConfig: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/agent/"+hostID+"/config", nil)
+	attachAPITokenRecord(req, &config.APITokenRecord{
+		ID:     "runtime-token",
+		Scopes: []string{config.ScopeAgentConfigRead, config.ScopeAgentReport, config.ScopeAgentExec},
+		Metadata: map[string]string{
+			"bound_hostname": "host-1.local",
+		},
+	})
+	rec := httptest.NewRecorder()
+	handler.HandleConfig(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		Config monitoring.HostAgentConfig `json:"config"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Config.CommandsEnabled == nil || !*resp.Config.CommandsEnabled {
+		t.Fatalf("commandsEnabled = %+v, want true for bound exec token", resp.Config.CommandsEnabled)
+	}
+}
+
+func TestUnifiedAgentHandlers_HandleConfigPreservesCommandsForFirstUseProxmoxInstallToken(t *testing.T) {
+	handler, monitor := newUnifiedAgentHandlers(t, nil)
+	hostID := seedUnifiedAgentHost(t, monitor)
+	state := monitorState(t, monitor)
+	state.UpsertHost(models.Host{
+		ID:       hostID,
+		Hostname: "pve-1",
+		TokenID:  "proxmox-install-token",
+	})
+
+	commandsEnabled := true
+	if err := monitor.UpdateHostAgentConfig(hostID, &commandsEnabled); err != nil {
+		t.Fatalf("UpdateHostAgentConfig: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/agents/agent/"+hostID+"/config", nil)
+	attachAPITokenRecord(req, &config.APITokenRecord{
+		ID:     "proxmox-install-token",
+		Scopes: []string{config.ScopeAgentConfigRead, config.ScopeAgentReport, config.ScopeAgentExec},
+		Metadata: map[string]string{
+			"install_type": proxmoxInstallTypePVE,
+			"issued_via":   agentInstallIssuedViaConfig,
+		},
+	})
+	rec := httptest.NewRecorder()
+	handler.HandleConfig(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		Config monitoring.HostAgentConfig `json:"config"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Config.CommandsEnabled == nil || !*resp.Config.CommandsEnabled {
+		t.Fatalf("commandsEnabled = %+v, want true for first-use Proxmox install token", resp.Config.CommandsEnabled)
 	}
 }
 
