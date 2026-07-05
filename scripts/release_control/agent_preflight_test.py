@@ -8,7 +8,7 @@ import agent_preflight
 class AgentPreflightTest(unittest.TestCase):
     def test_audit_preflight_passes_when_branch_and_active_claim_match(self) -> None:
         control_plane = {
-            "prerelease_branch": "pulse/v6-release",
+            "prerelease_branch": "main",
             "active_profile_id": "v6",
             "active_target_id": "v6-rc-stabilization",
         }
@@ -33,7 +33,7 @@ class AgentPreflightTest(unittest.TestCase):
 
         with patch.object(agent_preflight, "active_control_plane", return_value=control_plane), patch.object(
             agent_preflight, "load_status_payload", return_value=status_payload
-        ), patch.object(agent_preflight, "current_branch", return_value="pulse/v6-release"):
+        ), patch.object(agent_preflight, "current_branch", return_value="main"):
             report = agent_preflight.audit_preflight(agent_id="codex", require_active_claim=True)
 
         self.assertEqual(report["errors"], [])
@@ -42,23 +42,7 @@ class AgentPreflightTest(unittest.TestCase):
 
     def test_audit_preflight_requires_active_claim_for_agent(self) -> None:
         control_plane = {
-            "prerelease_branch": "pulse/v6-release",
-            "active_profile_id": "v6",
-            "active_target_id": "v6-rc-stabilization",
-        }
-        status_payload = {"work_claims": []}
-
-        with patch.object(agent_preflight, "active_control_plane", return_value=control_plane), patch.object(
-            agent_preflight, "load_status_payload", return_value=status_payload
-        ), patch.object(agent_preflight, "current_branch", return_value="pulse/v6-release"):
-            report = agent_preflight.audit_preflight(agent_id="codex", require_active_claim=True)
-
-        self.assertTrue(report["errors"])
-        self.assertIn("expected exactly one active work claim", report["errors"][0])
-
-    def test_audit_preflight_flags_branch_mismatch(self) -> None:
-        control_plane = {
-            "prerelease_branch": "pulse/v6-release",
+            "prerelease_branch": "main",
             "active_profile_id": "v6",
             "active_target_id": "v6-rc-stabilization",
         }
@@ -67,6 +51,22 @@ class AgentPreflightTest(unittest.TestCase):
         with patch.object(agent_preflight, "active_control_plane", return_value=control_plane), patch.object(
             agent_preflight, "load_status_payload", return_value=status_payload
         ), patch.object(agent_preflight, "current_branch", return_value="main"):
+            report = agent_preflight.audit_preflight(agent_id="codex", require_active_claim=True)
+
+        self.assertTrue(report["errors"])
+        self.assertIn("expected exactly one active work claim", report["errors"][0])
+
+    def test_audit_preflight_flags_branch_mismatch(self) -> None:
+        control_plane = {
+            "prerelease_branch": "main",
+            "active_profile_id": "v6",
+            "active_target_id": "v6-rc-stabilization",
+        }
+        status_payload = {"work_claims": []}
+
+        with patch.object(agent_preflight, "active_control_plane", return_value=control_plane), patch.object(
+            agent_preflight, "load_status_payload", return_value=status_payload
+        ), patch.object(agent_preflight, "current_branch", return_value="pulse/v6-release"):
             report = agent_preflight.audit_preflight(agent_id="codex", require_active_claim=False)
 
         self.assertTrue(report["errors"])

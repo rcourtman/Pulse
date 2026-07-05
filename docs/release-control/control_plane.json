@@ -6,7 +6,7 @@
   "control_plane_doc": "docs/release-control/internal/CONTROL_PLANE.md",
   "control_plane_schema": "docs/release-control/control_plane.schema.json",
   "active_profile_id": "v6",
-  "active_target_id": "v6-ga-promotion",
+  "active_target_id": "v6-product-lane-expansion",
   "legacy_release_lines": [
     {
       "version_prefix": "5.1.",
@@ -19,8 +19,8 @@
       "id": "v6",
       "lifecycle": "active",
       "root": "docs/release-control/v6",
-      "prerelease_branch": "pulse/v6-release",
-      "stable_branch": "pulse/v6-release",
+      "prerelease_branch": "main",
+      "stable_branch": "main",
       "source_of_truth": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
       "status": "docs/release-control/v6/internal/status.json",
       "status_schema": "docs/release-control/v6/status.schema.json",
@@ -54,8 +54,8 @@
       "id": "v6-ga-promotion",
       "profile_id": "v6",
       "kind": "release",
-      "status": "active",
-      "summary": "Prepare Pulse v6 GA from the current pulse/v6-release branch after accumulated post-RC7 fixes. Do not promote the published RC7 candidate unchanged, and do not plan another RC by default; on 2026-07-02 the release owner accepted the remaining current-branch validation risk for GA rather than requiring RC8 or another soak, while newly reported RC7 issues stay regression signals unless a release-owner decision changes direction and release-day execution plus public cutover still require explicit owner approval.",
+      "status": "completed",
+      "summary": "Pulse v6 GA and the initial 6.0.x patch line shipped from the governed v6 release branch; after the v6 public cutover, main is the canonical latest-and-greatest branch for active development and stable release preparation.",
       "completion_rule": "manual",
       "proof_scope": "none"
     },
@@ -63,8 +63,8 @@
       "id": "v6-product-lane-expansion",
       "profile_id": "v6",
       "kind": "feature",
-      "status": "planned",
-      "summary": "Promote proactive Pulse Intelligence, policy-aware data governance, resource-change intelligence, action-governance, fleet-governance, agent-operable infrastructure onboarding, continuous discovery reconciliation, and agent-ready operations contract proof only after the monitoring-first RC target is satisfied and the broader surfaced product case is proven; Patrol is the detection and investigation engine, Assistant is the contextual explanation, approval, and governed action surface, and agent-ready proof is API/CLI-first with MCP only as an adapter over canonical contracts.",
+      "status": "active",
+      "summary": "Post-GA active development runs on main and promotes proactive Pulse Intelligence, policy-aware data governance, resource-change intelligence, action-governance, fleet-governance, agent-operable infrastructure onboarding, continuous discovery reconciliation, and agent-ready operations contract proof after the monitoring-first v6 floor; Patrol is the detection and investigation engine, Assistant is the contextual explanation, approval, and governed action surface, and agent-ready proof is API/CLI-first with MCP only as an adapter over canonical contracts.",
       "completion_rule": "manual",
       "proof_scope": "none"
     }

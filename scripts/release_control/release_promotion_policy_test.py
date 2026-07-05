@@ -193,10 +193,9 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
             "2026-07-02",
         )
 
-        active_target = next(
-            target for target in control_plane["targets"] if target["id"] == control_plane["active_target_id"]
-        )
-        self.assertIn("accepted the remaining current-branch validation risk", active_target["summary"])
+        ga_target = next(target for target in control_plane["targets"] if target["id"] == "v6-ga-promotion")
+        self.assertIn("Pulse v6 GA", ga_target["summary"])
+        self.assertIn("main is the canonical latest-and-greatest branch", ga_target["summary"])
 
     def test_pre_release_checklist_tracks_rc_to_ga_gate_inputs(self) -> None:
         content = read("docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md")
@@ -866,12 +865,17 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                 f"The active control-plane target is `{active_target_id}`, so stable or GA",
                 blocked,
             )
+        elif active_target_id == "v6-product-lane-expansion":
+            self.assertIn(
+                "The active control-plane target is `v6-ga-promotion`, so stable or GA",
+                blocked,
+            )
         else:
             self.assertIn(f"The active control-plane target is still `{active_target_id}`, not", blocked)
         matrix = read("docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md")
         self.assertIn(promotion_metadata_envelope(), normalize_ws(matrix))
         expected = blocked_record.build_blocked_record(record_date="2026-04-04")
-        if current_version != "6.0.0":
+        if current_version != "6.0.0" or active_target_id != "v6-ga-promotion":
             return
         if blocked != expected:
             record_path = REPO_ROOT / "docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-blocked-2026-04-04.md"

@@ -566,13 +566,13 @@ func TestReleaseControlPlaneFilesExist(t *testing.T) {
 		"\"system\": \"pulse-release-control\"",
 		"\"agent_values_doc\": \"docs/release-control/internal/AGENT_VALUES.md\"",
 		"\"active_profile_id\": \"v6\"",
-		"\"prerelease_branch\": \"pulse/v6-release\"",
-		"\"stable_branch\": \"pulse/v6-release\"",
+		"\"prerelease_branch\": \"main\"",
+		"\"stable_branch\": \"main\"",
 		"\"completion_rule\": \"rc_ready\"",
 		"\"completion_rule\": \"manual\"",
 		"\"proof_scope\": \"none\"",
-		"release-day execution",
-		"newly reported RC7 issues",
+		"main is the canonical latest-and-greatest branch",
+		"Post-GA active development runs on main",
 	})
 
 	var controlPlane map[string]any

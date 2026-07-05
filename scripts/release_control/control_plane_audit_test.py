@@ -25,8 +25,8 @@ VALID_PAYLOAD = {
             "id": "v6",
             "lifecycle": "active",
             "root": "docs/release-control/v6",
-            "prerelease_branch": "pulse/v6-release",
-            "stable_branch": "pulse/v6-release",
+            "prerelease_branch": "main",
+            "stable_branch": "main",
             "source_of_truth": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
             "status": "docs/release-control/v6/internal/status.json",
             "status_schema": "docs/release-control/v6/status.schema.json",
@@ -176,9 +176,9 @@ class ControlPlaneAuditTest(unittest.TestCase):
     def test_release_branch_for_version_uses_profile_branch_policy(self) -> None:
         self.assertEqual(release_branch_for_version("5.1.27", control_plane=VALID_PAYLOAD), "main")
         self.assertEqual(release_branch_for_version("5.1.27-rc.3", control_plane=VALID_PAYLOAD), "main")
-        self.assertEqual(release_branch_for_version("6.0.0-rc.1", control_plane=VALID_PAYLOAD), "pulse/v6-release")
-        self.assertEqual(release_branch_for_version("6.0.0-dev", control_plane=VALID_PAYLOAD), "pulse/v6-release")
-        self.assertEqual(release_branch_for_version("6.0.0", control_plane=VALID_PAYLOAD), "pulse/v6-release")
+        self.assertEqual(release_branch_for_version("6.0.0-rc.1", control_plane=VALID_PAYLOAD), "main")
+        self.assertEqual(release_branch_for_version("6.0.0-dev", control_plane=VALID_PAYLOAD), "main")
+        self.assertEqual(release_branch_for_version("6.0.0", control_plane=VALID_PAYLOAD), "main")
 
     def test_release_branch_for_version_prefers_longest_legacy_prefix(self) -> None:
         payload = dict(VALID_PAYLOAD)
