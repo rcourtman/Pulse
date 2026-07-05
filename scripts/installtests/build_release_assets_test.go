@@ -107,6 +107,10 @@ func TestBuildReleaseUsesV6InstallScripts(t *testing.T) {
 	}
 }
 
+func shieldsBadgeMessage(value string) string {
+	return strings.ReplaceAll(value, "-", "--")
+}
+
 func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 	content, err := os.ReadFile(repoFile(".github", "workflows", "create-release.yml"))
 	if err != nil {
@@ -736,9 +740,10 @@ func TestDeploymentDefaultsPinVersionedImagesAndHelmDocsChecksum(t *testing.T) {
 		t.Fatalf("read Helm README.md: %v", err)
 	}
 	chartReadme := string(chartReadmeBytes)
+	badgeVersion := shieldsBadgeMessage(version)
 	chartReadmeRequired := []string{
-		"![Version: " + version + "](https://img.shields.io/badge/Version-" + version + "-informational?style=flat-square)",
-		"![AppVersion: " + version + "](https://img.shields.io/badge/AppVersion-" + version + "-informational?style=flat-square)",
+		"![Version: " + version + "](https://img.shields.io/badge/Version-" + badgeVersion + "-informational?style=flat-square)",
+		"![AppVersion: " + version + "](https://img.shields.io/badge/AppVersion-" + badgeVersion + "-informational?style=flat-square)",
 	}
 	for _, needle := range chartReadmeRequired {
 		if !strings.Contains(chartReadme, needle) {

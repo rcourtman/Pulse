@@ -804,12 +804,14 @@ TLS floor in the dynamic config.
 
 ## Current State
 
-The active stable `v6.0.3` cut sets the repo-root `VERSION`, repo-root
-`docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and
-Helm chart release metadata to the same `6.0.3` release version. This patch
-release uses the stable hotfix path with `rollback_version=v6.0.2`,
-`hotfix_exception=true`, a release-owner reason, and no fabricated
-same-version RC tag. The initial GA promotion metadata remains
+The active support prerelease `v6.0.4-rc.1` cut sets the repo-root `VERSION`,
+repo-root `docker-compose.yml` image default, `scripts/install-docker.sh`
+fallback, and Helm chart release metadata to the same `6.0.4-rc.1` release
+version. This support prerelease uses the private Pro support image path with a
+stable rollback reference `v6.0.3`, no `latest` movement, no stable semver tag
+movement, no R2 manifest promotion, no broker download metadata promotion, and
+no public `rcourtman/pulse` image publication. The initial GA promotion
+metadata remains
 `promoted_from_tag=v6.0.0-rc.7`, `rollback_version=v5.1.35`,
 `ga_date=2026-07-04`, and `v5_eos_date=2026-10-02` for the first stable
 `6.0.0` cut.
@@ -861,10 +863,11 @@ compose image default, standalone installer fallback constant, and packaged
 Helm metadata. A draft release workflow failure caused by stale image or chart
 pins is a release-packet blocker until the defaults, tests, and evidence
 record are refreshed from the new branch head.
-For the active stable `v6.0.3` cut, the repo-root compose default and
-`scripts/install-docker.sh` fallback must both pin `6.0.3`; the stable
-promotion guard remains in force by rejecting leftover `-rc.` defaults when
-the governed `VERSION` is a stable release.
+For the active support prerelease `v6.0.4-rc.1` cut, the repo-root compose
+default and `scripts/install-docker.sh` fallback must both pin `6.0.4-rc.1`
+until the next governed stable cut moves them forward. The stable promotion
+guard remains in force by rejecting leftover `-rc.` defaults when the governed
+`VERSION` is a stable release.
 The RC7 packet refresh records `fc10de9b5477613316473267b72b05b6b2b7aaff`
 as the current validation-risk commit. That head includes the earlier
 Docker-default correction plus the follow-on capacity-forecast and Patrol

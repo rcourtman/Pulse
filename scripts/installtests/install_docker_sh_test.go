@@ -42,6 +42,17 @@ func previousStablePatchVersion(version string) (string, bool) {
 	return fmt.Sprintf("%s.%s.%d", parts[0], parts[1], patch-1), true
 }
 
+func previousStableForPrereleaseVersion(version string) (string, bool) {
+	if !isPrereleaseVersion(version) {
+		return "", false
+	}
+	base, _, ok := strings.Cut(version, "-")
+	if !ok {
+		return "", false
+	}
+	return previousStablePatchVersion(base)
+}
+
 func TestInstallDockerScriptUsesConfiguredImageRepoDefault(t *testing.T) {
 	workDir := t.TempDir()
 	version := currentReleaseVersion(t)
@@ -169,6 +180,23 @@ func TestInstallDockerProofTracksStablePatchReleaseContract(t *testing.T) {
 		"The active stable `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
 		"This patch release uses the stable hotfix path with `rollback_version=v"+previous+"`, `hotfix_exception=true`, a release-owner reason, and no fabricated same-version RC tag.",
 		"For the active stable `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"`",
+	)
+}
+
+func TestInstallDockerProofTracksSupportPrereleaseContract(t *testing.T) {
+	version := currentReleaseVersion(t)
+	if !isPrereleaseVersion(version) {
+		t.Skip("current release is stable")
+	}
+	previous, ok := previousStableForPrereleaseVersion(version)
+	if !ok {
+		t.Skip("current prerelease does not have a previous stable patch")
+	}
+
+	assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
+		"The active support prerelease `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
+		"This support prerelease uses the private Pro support image path with a stable rollback reference `v"+previous+"`, no `latest` movement, no stable semver tag movement, no R2 manifest promotion, no broker download metadata promotion, and no public `rcourtman/pulse` image publication.",
+		"For the active support prerelease `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"` until the next governed stable cut moves them forward.",
 	)
 }
 
