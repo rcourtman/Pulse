@@ -593,6 +593,14 @@ TLS floor in the dynamic config.
    fail the public release workflow; future private Pro publication must not
    depend on an operator noticing a manual checklist step after the public RC
    has shipped.
+   A support-only private Pro prerelease image is a narrower exception for
+   customer verification of an already-fixed defect. It may dispatch the private
+   `Build Pro Release` workflow with `publish_docker_image=true`,
+   `upload_to_r2=false`, the exact `vX.Y.Z-rc.N` `pulse_ref`, and the matching
+   `X.Y.Z-rc.N` version. That path may publish only the explicit private Docker
+   tag, for example `license.pulserelay.pro/pulse-pro:X.Y.Z-rc.N`; it must not
+   move `latest`, stable semver tags, R2 manifests, broker download metadata,
+   public GitHub release assets, or the public `rcourtman/pulse` image.
    The repo-root VERSION file is part of the same governed boundary and must
    not drift as an
    unowned release-cut switch: changing the version string for a new RC or
@@ -734,7 +742,10 @@ TLS floor in the dynamic config.
    packets, or paid-user GA guidance changes: public OSS release archives are
    not sufficient proof of paid self-hosted Pro readiness unless the matching
    `pulse-enterprise` Pro artifact/image path is built, identified, and linked
-   for paid users.
+   for paid users. Support-only private Pro prerelease Docker images may be cut
+   from an exact governed prerelease tag, but they must keep the explicit
+   prerelease tag in the customer pull command and must not be treated as a
+   stable, latest, R2, or download-page promotion.
 6. Keep `deploy/helm/pulse/README.md` regenerated and release-matched whenever
    chart metadata or the governed release version changes so packaged Helm docs
    remain on the same validated cut as `Chart.yaml`.

@@ -61,6 +61,20 @@ class ValidateArtifactReleaseLineTest(unittest.TestCase):
         self.assertEqual(result["lineage"], "stable_patch")
         self.assertEqual(result["lineage_tag"], "v6.0.0")
 
+    def test_prerelease_support_tag_does_not_require_stable_lineage(self) -> None:
+        result = self.validate(
+            tag="v6.0.4-rc.1",
+            existing_tags={"v6.0.4-rc.1"},
+            commits={
+                "v6.0.4-rc.1": "support-rc",
+                "origin/pulse/v6-release": "branch",
+            },
+            ancestors={("support-rc", "branch")},
+        )
+
+        self.assertEqual(result["lineage"], "prerelease")
+        self.assertEqual(result["lineage_tag"], "")
+
     def test_stable_patch_rejects_without_previous_stable_or_rc(self) -> None:
         with self.assertRaisesRegex(ValueError, "previous stable tag v6.0.0"):
             self.validate(
