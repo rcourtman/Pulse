@@ -269,9 +269,12 @@ process or unit may seed later recovery attempts, but it must not be logged or
 treated as recovered update state. That fallback must still run when an
 operator supplies the update URL explicitly but token, identity, feature-flag,
 or trust continuity remains recoverable only from a legacy v5 process or
-service. Windows stale-agent update commands remain on the existing token-gated
-install transport until the Windows installer owns an equivalent saved-state
-update mode.
+service. Because v5.1.x agents were launched by Go flag parsing, that legacy
+fallback must treat single-dash and double-dash agent flag spellings as the
+same recovered state while preserving the same fail-closed URL-plus-token
+threshold. Windows stale-agent update commands remain on the existing
+token-gated install transport until the Windows installer owns an equivalent
+saved-state update mode.
 Agent Fleet Doctor diagnostics extend that same read-only lifecycle triage
 surface: `GET /api/agents/diagnostics` may explain stale versions, missing
 reports, profile deployment drift, expected Docker/Kubernetes telemetry gaps,
@@ -1354,7 +1357,7 @@ surface and no new `internal/api/` lifecycle handler.
 
 1. Update this contract when agent lifecycle ownership changes. Routes added under the shared `internal/api/` extension point that are clearly outside lifecycle ownership (for example `POST /api/ai/patrol/preflight`, the `patrol_preflight` snapshot field added to `/api/settings/ai`, the auto-trigger preflight dispatch on settings save, the startup-seed dispatch in `NewAISettingsHandler`, and the cached-preflight integration into the Patrol `tools` readiness check — all owned by ai-runtime) do not extend this subsystem's contract; they live in their owning subsystem.
 2. Keep shared API proof routing aligned whenever install, register, or profile payloads change.
-3. Update runtime and settings tests in the same slice when lifecycle behavior changes. Shell installer lifecycle changes must keep `scripts/installtests/install_sh_test.go` covering explicit flags, persisted connection state, legacy running-process/service recovery, and secure token-file service argument rendering for update re-entry.
+3. Update runtime and settings tests in the same slice when lifecycle behavior changes. Shell installer lifecycle changes must keep `scripts/installtests/install_sh_test.go` covering explicit flags, persisted connection state, legacy running-process/service recovery, legacy single-dash v5 agent flag recovery, and secure token-file service argument rendering for update re-entry.
 4. Keep host-agent test hooks, command-client factories, and timing overrides
    instance-scoped under `internal/hostagent/agent.go`; lifecycle-owned
    registration and update paths must not depend on package-global mutable test

@@ -279,7 +279,10 @@ TLS floor in the dynamic config.
    raw token in process arguments. That fallback remains required when the
    operator supplies `--url` on the update command but token, identity,
    feature-flag, or trust continuity still exists only in legacy process or
-   service state.
+   service state. Because v5.1.x agents used Go's single-dash flag spelling,
+   the installer-owned recovery path must accept both single-dash and
+   double-dash forms for recovered agent args without weakening the existing
+   missing-state failure behavior.
    The shell installer must disclose `--enable-commands` as Pulse command
    execution, disabled by default, and must name both Patrol actions and
    Proxmox LXC Docker inventory as the operator-visible reasons to enable it.
@@ -732,7 +735,7 @@ TLS floor in the dynamic config.
 
 1. Update this contract when canonical deployment or installer entry points move
 2. Keep deployment runtime and shared API proof routing aligned in `registry.json`
-3. Preserve explicit coverage for installer parity, update planning, and deployment bootstrap behavior when these surfaces change. Shell installer update recovery changes must keep `scripts/installtests/install_sh_test.go` covering both persisted `connection.env` recovery and legacy running-process/service recovery, including the rule that upgraded service args use `--token-file` instead of raw `--token`.
+3. Preserve explicit coverage for installer parity, update planning, and deployment bootstrap behavior when these surfaces change. Shell installer update recovery changes must keep `scripts/installtests/install_sh_test.go` covering both persisted `connection.env` recovery and legacy running-process/service recovery, including single-dash v5 agent flags and the rule that upgraded service args use `--token-file` instead of raw `--token`.
 4. Keep stable and prerelease packet lineage explicit when `docs/releases/` or
    `VERSION` changes: preserve already-shipped RC packets under dedicated
    historical filenames before reusing canonical stable names, keep

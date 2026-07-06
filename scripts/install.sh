@@ -1524,10 +1524,19 @@ strip_recovered_arg_quotes() {
     printf '%s\n' "$value"
 }
 
+normalize_recovered_agent_arg_key() {
+    local key="$1"
+
+    key="${key#--}"
+    key="${key#-}"
+    printf '%s\n' "$key"
+}
+
 apply_recovered_agent_arg_value() {
     local key="$1"
     local value="$2"
 
+    key=$(normalize_recovered_agent_arg_key "$key")
     value=$(strip_recovered_arg_quotes "$value")
 
     case "$key" in
@@ -1615,81 +1624,81 @@ recover_connection_state_from_arg_stream() {
         fi
 
         case "$arg" in
-            --url|--pulse-url|--token|--token-file|--interval|--agent-id|--hostname|--cacert|--health-addr|--state-dir|--kubeconfig|--proxmox-type|--disk-exclude)
-                pending_key="${arg#--}"
+            --url|--pulse-url|--token|--token-file|--interval|--agent-id|--hostname|--cacert|--health-addr|--state-dir|--kubeconfig|--proxmox-type|--disk-exclude|-url|-pulse-url|-token|-token-file|-interval|-agent-id|-hostname|-cacert|-health-addr|-state-dir|-kubeconfig|-proxmox-type|-disk-exclude)
+                pending_key=$(normalize_recovered_agent_arg_key "$arg")
                 ;;
-            --url=*|--pulse-url=*|--token=*|--token-file=*|--interval=*|--agent-id=*|--hostname=*|--cacert=*|--health-addr=*|--state-dir=*|--kubeconfig=*|--proxmox-type=*|--disk-exclude=*)
+            --url=*|--pulse-url=*|--token=*|--token-file=*|--interval=*|--agent-id=*|--hostname=*|--cacert=*|--health-addr=*|--state-dir=*|--kubeconfig=*|--proxmox-type=*|--disk-exclude=*|-url=*|-pulse-url=*|-token=*|-token-file=*|-interval=*|-agent-id=*|-hostname=*|-cacert=*|-health-addr=*|-state-dir=*|-kubeconfig=*|-proxmox-type=*|-disk-exclude=*)
                 key="${arg%%=*}"
                 value="${arg#*=}"
-                apply_recovered_agent_arg_value "${key#--}" "$value"
+                apply_recovered_agent_arg_value "$key" "$value"
                 ;;
-            --enable-host|--enable-host=true)
+            --enable-host|-enable-host|--enable-host=true|-enable-host=true)
                 if [[ "$HOST_EXPLICIT" != "true" ]]; then ENABLE_HOST="true"; fi
                 RECOVERED_AGENT_ARG_STATE="true"
                 ;;
-            --enable-host=false|--disable-host)
+            --enable-host=false|-enable-host=false|--disable-host|-disable-host)
                 if [[ "$HOST_EXPLICIT" != "true" ]]; then ENABLE_HOST="false"; fi
                 RECOVERED_AGENT_ARG_STATE="true"
                 ;;
-            --enable-docker|--enable-docker=true)
+            --enable-docker|-enable-docker|--enable-docker=true|-enable-docker=true)
                 if [[ "$DOCKER_EXPLICIT" != "true" ]]; then
                     ENABLE_DOCKER="true"
                     DOCKER_EXPLICIT="true"
                 fi
                 RECOVERED_AGENT_ARG_STATE="true"
                 ;;
-            --enable-docker=false|--disable-docker)
+            --enable-docker=false|-enable-docker=false|--disable-docker|-disable-docker)
                 if [[ "$DOCKER_EXPLICIT" != "true" ]]; then
                     ENABLE_DOCKER="false"
                     DOCKER_EXPLICIT="true"
                 fi
                 RECOVERED_AGENT_ARG_STATE="true"
                 ;;
-            --enable-kubernetes|--enable-kubernetes=true)
+            --enable-kubernetes|-enable-kubernetes|--enable-kubernetes=true|-enable-kubernetes=true)
                 if [[ "$KUBERNETES_EXPLICIT" != "true" ]]; then
                     ENABLE_KUBERNETES="true"
                     KUBERNETES_EXPLICIT="true"
                 fi
                 RECOVERED_AGENT_ARG_STATE="true"
                 ;;
-            --enable-kubernetes=false|--disable-kubernetes)
+            --enable-kubernetes=false|-enable-kubernetes=false|--disable-kubernetes|-disable-kubernetes)
                 if [[ "$KUBERNETES_EXPLICIT" != "true" ]]; then
                     ENABLE_KUBERNETES="false"
                     KUBERNETES_EXPLICIT="true"
                 fi
                 RECOVERED_AGENT_ARG_STATE="true"
                 ;;
-            --enable-proxmox|--enable-proxmox=true)
+            --enable-proxmox|-enable-proxmox|--enable-proxmox=true|-enable-proxmox=true)
                 if [[ "$PROXMOX_EXPLICIT" != "true" ]]; then
                     ENABLE_PROXMOX="true"
                     PROXMOX_EXPLICIT="true"
                 fi
                 RECOVERED_AGENT_ARG_STATE="true"
                 ;;
-            --enable-proxmox=false|--disable-proxmox)
+            --enable-proxmox=false|-enable-proxmox=false|--disable-proxmox|-disable-proxmox)
                 if [[ "$PROXMOX_EXPLICIT" != "true" ]]; then
                     ENABLE_PROXMOX="false"
                     PROXMOX_EXPLICIT="true"
                 fi
                 RECOVERED_AGENT_ARG_STATE="true"
                 ;;
-            --insecure)
+            --insecure|-insecure)
                 INSECURE="true"
                 RECOVERED_AGENT_ARG_STATE="true"
                 ;;
-            --enable-commands)
+            --enable-commands|-enable-commands)
                 ENABLE_COMMANDS="true"
                 RECOVERED_AGENT_ARG_STATE="true"
                 ;;
-            --enroll)
+            --enroll|-enroll)
                 ENROLL="true"
                 RECOVERED_AGENT_ARG_STATE="true"
                 ;;
-            --kube-include-all-pods)
+            --kube-include-all-pods|-kube-include-all-pods)
                 KUBE_INCLUDE_ALL_PODS="true"
                 RECOVERED_AGENT_ARG_STATE="true"
                 ;;
-            --kube-include-all-deployments)
+            --kube-include-all-deployments|-kube-include-all-deployments)
                 KUBE_INCLUDE_ALL_DEPLOYMENTS="true"
                 RECOVERED_AGENT_ARG_STATE="true"
                 ;;

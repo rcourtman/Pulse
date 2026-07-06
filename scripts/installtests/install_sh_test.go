@@ -644,6 +644,9 @@ func TestInstallSHSupportsSavedStateUpdateMode(t *testing.T) {
 		`recover_connection_state_from_running_agent`,
 		`recover_connection_state_from_systemd_unit`,
 		`recover_connection_state_from_arg_stream`,
+		`normalize_recovered_agent_arg_key() {`,
+		`-url|-pulse-url|-token|-token-file|-interval|-agent-id|-hostname|-cacert|-health-addr|-state-dir|-kubeconfig|-proxmox-type|-disk-exclude)`,
+		`--enable-host|-enable-host|--enable-host=true|-enable-host=true)`,
 		`recover_connection_state_from_env_stream`,
 		`recovered_connection_state_ready() {`,
 		`update_connection_state_incomplete() {`,
@@ -696,6 +699,7 @@ func TestInstallSHRecoversV5ProcessArgsForSavedStateUpdate(t *testing.T) {
 		DISK_EXCLUDES=()
 		RUNTIME_TOKEN_FILE="/var/lib/pulse-agent/token"
 ` + extractInstallShellFunction(t, "strip_recovered_arg_quotes") + `
+` + extractInstallShellFunction(t, "normalize_recovered_agent_arg_key") + `
 ` + extractInstallShellFunction(t, "apply_recovered_agent_arg_value") + `
 ` + extractInstallShellFunction(t, "recovered_connection_state_ready") + `
 ` + extractInstallShellFunction(t, "recover_connection_state_from_arg_stream") + `
@@ -778,6 +782,7 @@ func TestInstallSHRejectsPartialRecoveredProcessConnectionState(t *testing.T) {
 		KUBE_INCLUDE_ALL_DEPLOYMENTS="false"
 		DISK_EXCLUDES=()
 ` + extractInstallShellFunction(t, "strip_recovered_arg_quotes") + `
+` + extractInstallShellFunction(t, "normalize_recovered_agent_arg_key") + `
 ` + extractInstallShellFunction(t, "apply_recovered_agent_arg_value") + `
 ` + extractInstallShellFunction(t, "recovered_connection_state_ready") + `
 ` + extractInstallShellFunction(t, "recover_connection_state_from_arg_stream") + `
@@ -845,6 +850,7 @@ func TestInstallSHCombinesRecoveredProcessArgsAndEnvConnectionState(t *testing.T
 		KUBE_INCLUDE_ALL_DEPLOYMENTS="false"
 		DISK_EXCLUDES=()
 ` + extractInstallShellFunction(t, "strip_recovered_arg_quotes") + `
+` + extractInstallShellFunction(t, "normalize_recovered_agent_arg_key") + `
 ` + extractInstallShellFunction(t, "apply_recovered_agent_arg_value") + `
 ` + extractInstallShellFunction(t, "recovered_connection_state_ready") + `
 ` + extractInstallShellFunction(t, "recover_connection_state_from_arg_stream") + `
@@ -920,6 +926,7 @@ func TestInstallSHUpdateModeMergesExplicitURLWithRunningV5ProcessState(t *testin
 		DISK_EXCLUDES=()
 		RUNTIME_TOKEN_FILE="/var/lib/pulse-agent/token"
 ` + extractInstallShellFunction(t, "strip_recovered_arg_quotes") + `
+` + extractInstallShellFunction(t, "normalize_recovered_agent_arg_key") + `
 ` + extractInstallShellFunction(t, "apply_recovered_agent_arg_value") + `
 ` + extractInstallShellFunction(t, "recovered_connection_state_ready") + `
 ` + extractInstallShellFunction(t, "update_connection_state_incomplete") + `
@@ -932,17 +939,17 @@ func TestInstallSHUpdateModeMergesExplicitURLWithRunningV5ProcessState(t *testin
 		recover_connection_state_from_existing_agent() {
 			recover_connection_state_from_arg_stream <<'ARGS'
 /usr/local/bin/pulse-agent
---url
+-url
 http://192.168.2.96:7655
---token
+-token
 deadbeef
---interval
+-interval
 30s
---enable-host
---enable-docker
---agent-id
+-enable-host
+-enable-docker
+-agent-id
 machine-1
---hostname
+-hostname
 docker1
 ARGS
 		}
