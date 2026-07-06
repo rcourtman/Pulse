@@ -27,6 +27,22 @@ const AGENT_PROVIDER_OWNER_PLATFORM_IDS = new Set<string>([
 const asRecord = (value: unknown): Record<string, unknown> | undefined =>
   value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
 
+const hasMeaningfulFacetValue = (value: unknown): boolean => {
+  if (typeof value === 'string') return value.trim().length > 0;
+  if (typeof value === 'number') return Number.isFinite(value) && value !== 0;
+  if (typeof value === 'boolean') return value;
+  if (Array.isArray(value)) return value.some(hasMeaningfulFacetValue);
+
+  const record = asRecord(value);
+  if (!record) return false;
+  return Object.values(record).some(hasMeaningfulFacetValue);
+};
+
+export const hasDockerFacetEvidence = (value: unknown): boolean => {
+  const docker = asRecord(value);
+  return Boolean(docker && hasMeaningfulFacetValue(docker));
+};
+
 type KubernetesContextLike = {
   clusterId?: string | null;
   name?: string | null;
@@ -182,13 +198,19 @@ export const getActionableDockerRuntimeIdFromResource = (
     (resource.metricsTarget?.resourceType === 'docker-host'
       ? asTrimmedString(resource.metricsTarget.resourceId)
       : undefined) ||
-    (resource.type === 'docker-host' ? asTrimmedString(resource.discoveryTarget?.agentId) : undefined)
+    (resource.type === 'docker-host'
+      ? asTrimmedString(resource.discoveryTarget?.agentId)
+      : undefined)
   );
 };
 
 export const hasDockerWorkloadsScope = (resource: Resource): boolean => {
   const platformData = getPlatformDataRecord(resource);
-  return resource.type === 'docker-host' || Boolean(asRecord(platformData?.docker));
+  return (
+    resource.type === 'docker-host' ||
+    hasDockerFacetEvidence(resource.docker) ||
+    hasDockerFacetEvidence(platformData?.docker)
+  );
 };
 
 export const getActionableKubernetesClusterIdFromResource = (

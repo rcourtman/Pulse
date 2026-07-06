@@ -114,7 +114,11 @@ describe('agentResources', () => {
         makeResource({
           type: 'docker-host',
           identity: { machineId: 'docker-runtime-machine-id' },
-          discoveryTarget: { resourceType: 'agent', resourceId: 'resource-agent-id', agentId: 'resource-agent-id' },
+          discoveryTarget: {
+            resourceType: 'agent',
+            resourceId: 'resource-agent-id',
+            agentId: 'resource-agent-id',
+          },
         }),
       ),
     ).toBe('docker-runtime-machine-id');
@@ -226,6 +230,19 @@ describe('agentResources', () => {
         makeResource({
           type: 'agent',
           platformData: {
+            agent: { hostname: 'tower' },
+          },
+        }),
+      ),
+    ).toBe(false);
+
+    expect(
+      hasDockerWorkloadsScope(
+        makeResource({
+          type: 'agent',
+          docker: {},
+          platformData: {
+            docker: {},
             agent: { hostname: 'tower' },
           },
         }),

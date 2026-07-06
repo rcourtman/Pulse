@@ -24,6 +24,7 @@ import type { Resource } from '@/types/resource';
 import {
   getActionableAgentIdFromResource,
   getExplicitResourceClusterName,
+  hasDockerFacetEvidence,
 } from '@/utils/agentResources';
 import {
   getPreferredInfrastructureDisplayName,
@@ -148,6 +149,14 @@ const mergePlatformData = (
       continue;
     }
     const nested = mergeRecord(asRecord(incoming[key]), asRecord(existing[key]));
+    if (key === 'docker') {
+      if (hasDockerFacetEvidence(nested)) {
+        merged[key] = nested;
+      } else {
+        delete merged[key];
+      }
+      continue;
+    }
     if (nested) {
       merged[key] = nested;
     }
@@ -213,7 +222,9 @@ const deriveLegacySourceList = (
   if (getFacetRecord(resource, platformData, 'vmware')) sources.push('vmware');
   if (getFacetRecord(resource, platformData, 'truenas')) sources.push('truenas');
   if (getFacetRecord(resource, platformData, 'kubernetes')) sources.push('kubernetes');
-  if (getFacetRecord(resource, platformData, 'docker')) sources.push('docker');
+  if (hasDockerFacetEvidence(getFacetRecord(resource, platformData, 'docker'))) {
+    sources.push('docker');
+  }
   if (getFacetRecord(resource, platformData, 'availability')) sources.push('availability');
   if (getFacetRecord(resource, platformData, 'agent')) sources.push('agent');
   if (sources.length > 0) {
@@ -290,6 +301,9 @@ const canonicalizeLegacyPlatformData = (resource: Resource): Resource['platformD
       ['availability', resourceRecord.availability],
       ['physicalDisk', resourceRecord.physicalDisk],
     ] as const) {
+      if (key === 'docker' && !hasDockerFacetEvidence(value)) {
+        continue;
+      }
       if (value !== undefined) {
         normalized[key] = value;
       }
@@ -298,6 +312,10 @@ const canonicalizeLegacyPlatformData = (resource: Resource): Resource['platformD
   }
 
   const normalized: JsonRecord = { ...platformData };
+  if (asRecord(normalized.docker) && !hasDockerFacetEvidence(normalized.docker)) {
+    delete normalized.docker;
+  }
+
   const resourceRecord = getResourceRecord(resource);
   for (const key of [
     'agent',
@@ -312,6 +330,17 @@ const canonicalizeLegacyPlatformData = (resource: Resource): Resource['platformD
     'availability',
     'physicalDisk',
   ] as const) {
+    if (
+      key === 'docker' &&
+      !asRecord(normalized[key]) &&
+      hasDockerFacetEvidence(resourceRecord[key])
+    ) {
+      normalized[key] = resourceRecord[key];
+      continue;
+    }
+    if (key === 'docker') {
+      continue;
+    }
     if (!asRecord(normalized[key]) && asRecord(resourceRecord[key])) {
       normalized[key] = resourceRecord[key];
     }
@@ -611,6 +640,11 @@ export const canonicalizeRealtimeResource = (
   const platformData = canonicalizeLegacyPlatformData(resource);
   const platformRecord = asRecord(platformData);
   const sources = getCanonicalSourceList(resource, platformData);
+  const docker = hasDockerFacetEvidence(resource.docker)
+    ? resource.docker
+    : hasDockerFacetEvidence(platformRecord?.docker)
+      ? (platformRecord?.docker as Resource['docker'])
+      : undefined;
   const platformType =
     resolvePlatformTypeFromSources(sources) ||
     (hasAvailabilityFacet(resource, platformData) ? 'availability' : resource.platformType);
@@ -638,6 +672,7 @@ export const canonicalizeRealtimeResource = (
     proxmox: resource.proxmox ?? (platformRecord?.proxmox as Resource['proxmox']),
     pbs: resource.pbs ?? (platformRecord?.pbs as Resource['pbs']),
     kubernetes: resource.kubernetes ?? (platformRecord?.kubernetes as Resource['kubernetes']),
+    docker,
     vmware: resource.vmware ?? (platformRecord?.vmware as Resource['vmware']),
     truenas: resource.truenas ?? (platformRecord?.truenas as Resource['truenas']),
     storage: resource.storage ?? (platformRecord?.storage as Resource['storage']),
@@ -722,6 +757,16 @@ export const mergeCanonicalResource = (incoming: Resource, existing?: Resource):
       incomingSources,
       'kubernetes',
     ) as Resource['kubernetes'],
+    docker: mergeCanonicalSourceFacet(
+      hasDockerFacetEvidence(incoming.docker)
+        ? (incoming.docker as JsonRecord | undefined)
+        : undefined,
+      hasDockerFacetEvidence(existingCanonical.docker)
+        ? (existingCanonical.docker as JsonRecord | undefined)
+        : undefined,
+      incomingSources,
+      'docker',
+    ) as Resource['docker'],
     vmware: mergeCanonicalSourceFacet(
       incoming.vmware as JsonRecord | undefined,
       existingCanonical.vmware as JsonRecord | undefined,
@@ -785,8 +830,7 @@ const buildMemory = (
   const cache = asNumber(proxmoxMeta?.memoryCache) ?? asNumber(fallback?.cache) ?? 0;
   // The metric ships no free bytes for PVE payloads; total-used is the
   // reclaimable-inclusive available, so carve the cache back out when known.
-  const free =
-    metric?.free ?? asNumber(fallback?.free) ?? Math.max(total - used - cache, 0);
+  const free = metric?.free ?? asNumber(fallback?.free) ?? Math.max(total - used - cache, 0);
   const usage =
     metric?.current ?? (total > 0 ? (used / total) * 100 : (asNumber(fallback?.usage) ?? 0));
   return {

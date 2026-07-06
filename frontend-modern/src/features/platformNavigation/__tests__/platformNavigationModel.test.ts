@@ -79,6 +79,21 @@ describe('platformNavigationModel', () => {
     expect(visibility.standalone).toBe(true);
   });
 
+  it('does not show Docker for a machine agent with an empty Docker facet', () => {
+    const tower = resource({
+      id: 'tower',
+      platformType: 'agent',
+      type: 'agent',
+      docker: {},
+      platformData: { agent: { hostname: 'tower' }, docker: {} },
+    });
+    const visibility = buildPrimaryPlatformNavigationVisibility([tower]);
+
+    expect(collectResourcePlatformEvidence(tower)).toEqual(['agent']);
+    expect(visibility.docker).toBe(false);
+    expect(visibility.standalone).toBe(true);
+  });
+
   it('does not infer Docker from TrueNAS-scoped app metadata', () => {
     const truenasApp = resource({
       id: 'truenas-app',

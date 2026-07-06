@@ -656,6 +656,41 @@ describe('resourceStateAdapters nodeFromResource', () => {
     expect((resource.platformData as Record<string, unknown>).proxmox).toBeUndefined();
   });
 
+  it('does not synthesize Docker platform state from an empty machine-agent Docker facet', () => {
+    const [resource] = mergeCanonicalResourceSnapshot(
+      [
+        {
+          id: 'agent-tower',
+          type: 'agent',
+          name: 'Tower',
+          displayName: 'Tower',
+          platformId: 'tower',
+          platformType: 'agent',
+          sourceType: 'hybrid',
+          status: 'online',
+          lastSeen: Date.now(),
+          agent: {
+            hostname: 'Tower',
+          },
+          docker: {},
+          platformData: {
+            agent: {
+              hostname: 'Tower',
+            },
+            docker: {},
+          },
+        } as Resource,
+      ],
+      [],
+    );
+
+    expect(resource.platformType).toBe('agent');
+    expect(resource.sourceType).toBe('agent');
+    expect(resource.docker).toBeUndefined();
+    expect((resource.platformData as Record<string, unknown>).sources).toEqual(['agent']);
+    expect((resource.platformData as Record<string, unknown>).docker).toBeUndefined();
+  });
+
   it('replaces stale platform source facets with the current snapshot sources', () => {
     const existing = {
       id: 'agent-tower',

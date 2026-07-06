@@ -1,6 +1,6 @@
 import type { Accessor } from 'solid-js';
 import type { Resource, ResourceType } from '@/types/resource';
-import { isPulseAgentPlatformResource } from '@/utils/agentResources';
+import { hasDockerFacetEvidence, isPulseAgentPlatformResource } from '@/utils/agentResources';
 import {
   ADMITTED_PLATFORM_IDS,
   SUPPORTED_PLATFORM_IDS,
@@ -33,10 +33,7 @@ export const PRIMARY_PLATFORM_NAV_IDS: readonly PrimaryPlatformNavId[] = [
   'standalone',
 ] as const;
 
-export const PRIMARY_PLATFORM_NAV_SCOPE_IDS: Record<
-  PrimaryPlatformNavId,
-  readonly string[]
-> = {
+export const PRIMARY_PLATFORM_NAV_SCOPE_IDS: Record<PrimaryPlatformNavId, readonly string[]> = {
   proxmox: ['proxmox-pve', 'proxmox-pbs', 'proxmox-pmg'],
   docker: ['docker'],
   kubernetes: ['kubernetes'],
@@ -100,6 +97,8 @@ const addDirectDockerRuntimeEvidence = (
   platformData: Record<string, unknown> | null,
 ): void => {
   const resolvedPlatformType = resolveResourcePlatformType(resource);
+  const hasDockerMetadata =
+    hasDockerFacetEvidence(resource.docker) || hasDockerFacetEvidence(platformData?.docker);
   if (normalizeSourcePlatformKey(resource.platformType) === 'docker') {
     ids.add('docker');
     return;
@@ -112,7 +111,7 @@ const addDirectDockerRuntimeEvidence = (
     ids.add('docker');
     return;
   }
-  if (ids.has('agent') && (resource.docker || asRecord(platformData?.docker))) {
+  if (ids.has('agent') && hasDockerMetadata) {
     ids.add('docker');
   }
 };
@@ -150,8 +149,8 @@ export function collectResourcePlatformEvidence(resource: Resource): string[] {
     ids.add('kubernetes');
   }
   if (
-    resource.docker ||
-    asRecord(platformData?.docker) ||
+    hasDockerFacetEvidence(resource.docker) ||
+    hasDockerFacetEvidence(platformData?.docker) ||
     DOCKER_RESOURCE_TYPES.has(resource.type)
   ) {
     ids.add('docker');
@@ -190,21 +189,13 @@ export function buildPrimaryPlatformNavigationVisibility(
       resource.sources?.includes('availability'),
   );
   return {
-    proxmox: PRIMARY_PLATFORM_NAV_SCOPE_IDS.proxmox.some((id) =>
-      presentNavigableScopes.has(id),
-    ),
-    docker: PRIMARY_PLATFORM_NAV_SCOPE_IDS.docker.some((id) =>
-      presentNavigableScopes.has(id),
-    ),
+    proxmox: PRIMARY_PLATFORM_NAV_SCOPE_IDS.proxmox.some((id) => presentNavigableScopes.has(id)),
+    docker: PRIMARY_PLATFORM_NAV_SCOPE_IDS.docker.some((id) => presentNavigableScopes.has(id)),
     kubernetes: PRIMARY_PLATFORM_NAV_SCOPE_IDS.kubernetes.some((id) =>
       presentNavigableScopes.has(id),
     ),
-    truenas: PRIMARY_PLATFORM_NAV_SCOPE_IDS.truenas.some((id) =>
-      presentNavigableScopes.has(id),
-    ),
-    vmware: PRIMARY_PLATFORM_NAV_SCOPE_IDS.vmware.some((id) =>
-      presentNavigableScopes.has(id),
-    ),
+    truenas: PRIMARY_PLATFORM_NAV_SCOPE_IDS.truenas.some((id) => presentNavigableScopes.has(id)),
+    vmware: PRIMARY_PLATFORM_NAV_SCOPE_IDS.vmware.some((id) => presentNavigableScopes.has(id)),
     standalone: resources.some(isPulseAgentPlatformResource) || hasAvailabilityEndpoints,
   };
 }
@@ -232,9 +223,7 @@ export function filterPlatformNavigationShortcuts(
 ): Record<string, string> {
   const routes: Record<string, string> = {};
   for (const [navId, shortcut] of Object.entries(shortcuts)) {
-    if (
-      !primaryPlatformNavigationIsVisible(visibility, navId as PrimaryPlatformNavId)
-    ) {
+    if (!primaryPlatformNavigationIsVisible(visibility, navId as PrimaryPlatformNavId)) {
       continue;
     }
     routes[shortcut.key] = shortcut.route;

@@ -123,6 +123,7 @@ reserved for providers that report 0..1 usage ratios.
 88. `frontend-modern/src/utils/platformSupportManifest.generated.ts`
 89. `internal/unifiedresources/kubernetes_metric_ids.go`
 90. `internal/unifiedresources/policy_posture.go`
+91. `frontend-modern/src/features/platformNavigation/platformNavigationModel.ts`
 91. `internal/unifiedresources/clone.go`
 92. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerPresentation.ts`
 93. `internal/unifiedresources/storage_consumers.go`
@@ -452,6 +453,11 @@ legacy/direct object routes fall back to `Overview` when the requested workflow
 has no rows for the current setup. Signals outside unified-resource inventory,
 such as TrueNAS recovery protection points or vSphere activity timeline rows,
 must be treated as explicit tab evidence rather than permanent navigation.
+Primary platform navigation is also resource-evidence gated: runtime lenses such
+as Docker / Podman must be admitted from explicit source scopes, Docker host or
+service resource types, or non-empty Docker runtime metadata. Empty compatibility
+facets such as `docker: {}` on a plain machine agent are not Docker inventory and
+must not create a transient Docker tab during hydration.
 
 Kubernetes configuration and policy inventory are unified-resource consumer
 boundaries: the `/kubernetes/configuration` workflow tab must render Namespace,

@@ -5914,6 +5914,7 @@
         "frontend-modern/src/features/kubernetes/KubernetesPolicyTable.tsx",
         "frontend-modern/src/features/kubernetes/KubernetesServicesTable.tsx",
         "frontend-modern/src/features/kubernetes/KubernetesStorageTable.tsx",
+        "frontend-modern/src/features/platformNavigation/platformNavigationModel.ts",
         "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
         "frontend-modern/src/features/proxmox/ProxmoxCephTable.tsx",
         "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
@@ -6234,6 +6235,7 @@
             "label": "resource runtime adapter helper proof",
             "match_prefixes": [],
             "match_files": [
+              "frontend-modern/src/features/platformNavigation/platformNavigationModel.ts",
               "frontend-modern/src/utils/agentResources.ts",
               "frontend-modern/src/utils/resourcePlatformData.ts",
               "frontend-modern/src/utils/resourceStateAdapters.ts"
@@ -6241,6 +6243,7 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "frontend-modern/src/features/platformNavigation/__tests__/platformNavigationModel.test.ts",
               "frontend-modern/src/utils/__tests__/agentResources.test.ts",
               "frontend-modern/src/utils/__tests__/resourcePlatformData.test.ts",
               "frontend-modern/src/utils/__tests__/resourceStateAdapters.test.ts"
