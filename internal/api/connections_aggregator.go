@@ -97,6 +97,7 @@ type aggregatorInputs struct {
 	availabilityTargets  []config.AvailabilityTarget
 	availabilityStatuses map[string]monitoring.AvailabilityProbeStatus
 	hosts                []models.Host
+	apiTokens            []config.APITokenRecord
 	agentDesiredConfigs  map[string]connectionAgentDesiredConfig
 	instanceHealth       map[string]monitoring.InstanceHealth
 	expectedAgentVersion string
@@ -975,18 +976,20 @@ func connectionConfigFingerprint(version string, payload any) *ConnectionFleetCo
 	}
 }
 
-func connectionAgentDesiredConfigFingerprints(monitor *monitoring.Monitor, hosts []models.Host) map[string]connectionAgentDesiredConfig {
+func connectionAgentDesiredConfigFingerprints(monitor *monitoring.Monitor, hosts []models.Host, tokens []config.APITokenRecord) map[string]connectionAgentDesiredConfig {
 	if monitor == nil || len(hosts) == 0 {
 		return nil
 	}
 
 	configs := make(map[string]connectionAgentDesiredConfig, len(hosts))
+	tokenByID := connectionAgentTokenRecordsByID(tokens)
 	for _, host := range hosts {
 		hostID := strings.TrimSpace(host.ID)
 		if hostID == "" {
 			continue
 		}
 		cfg := monitor.GetHostAgentConfig(hostID)
+		cfg = effectiveConnectionAgentConfig(cfg, host, tokenByID)
 		desired := connectionAgentDesiredConfig{
 			CommandsEnabled: cloneBoolPtr(cfg.CommandsEnabled),
 		}
@@ -1001,6 +1004,37 @@ func connectionAgentDesiredConfigFingerprints(monitor *monitoring.Monitor, hosts
 		return nil
 	}
 	return configs
+}
+
+func connectionAgentTokenRecordsByID(tokens []config.APITokenRecord) map[string]*config.APITokenRecord {
+	if len(tokens) == 0 {
+		return nil
+	}
+	records := make(map[string]*config.APITokenRecord, len(tokens))
+	for i := range tokens {
+		id := strings.TrimSpace(tokens[i].ID)
+		if id == "" {
+			continue
+		}
+		records[id] = &tokens[i]
+	}
+	return records
+}
+
+func effectiveConnectionAgentConfig(cfg monitoring.HostAgentConfig, host models.Host, tokenByID map[string]*config.APITokenRecord) monitoring.HostAgentConfig {
+	var record *config.APITokenRecord
+	if tokenByID != nil {
+		record = tokenByID[strings.TrimSpace(host.TokenID)]
+	}
+	cfg = sanitizeHostAgentConfigForToken(cfg, record, host)
+
+	metadata, err := remoteconfig.BuildDesiredConfigMetadata(cfg.CommandsEnabled, cfg.Settings)
+	if err != nil {
+		cfg.DesiredConfig = nil
+		return cfg
+	}
+	cfg.DesiredConfig = &metadata
+	return cfg
 }
 
 func connectionAgentDesiredConfigForHost(configs map[string]connectionAgentDesiredConfig, hostID string) *connectionAgentDesiredConfig {

@@ -828,7 +828,7 @@ func unraidStorageCapacity(host models.Host) (int64, int64, int64, float64) {
 	for _, disk := range host.Disks {
 		mount := strings.TrimSpace(disk.Mountpoint)
 		if mount == "/mnt/user" || mount == "/mnt/user0" {
-			return disk.Total, disk.Used, disk.Free, percentFromUsage(disk.Usage)
+			return disk.Total, disk.Used, disk.Free, percentFromReportedPercent(disk.Usage)
 		}
 	}
 

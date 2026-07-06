@@ -32,6 +32,63 @@ func TestMetricsFromDockerHostIncludesIORates(t *testing.T) {
 	}
 }
 
+func TestMetricsFromHostKeepsReportedPercentValues(t *testing.T) {
+	host := models.Host{
+		CPUUsage: 1,
+		Memory:   models.Memory{Total: 1000, Used: 5, Usage: 0.5},
+		Disks:    []models.Disk{{Total: 1000, Used: 2, Usage: 0.2}},
+	}
+
+	metrics := metricsFromHost(host)
+	if metrics.CPU == nil || metrics.CPU.Percent != 1 {
+		t.Fatalf("expected host cpu percent 1, got %+v", metrics.CPU)
+	}
+	if metrics.Memory == nil || metrics.Memory.Percent != 0.5 {
+		t.Fatalf("expected host memory percent 0.5, got %+v", metrics.Memory)
+	}
+	if metrics.Disk == nil || metrics.Disk.Percent != 0.2 {
+		t.Fatalf("expected host disk percent 0.2, got %+v", metrics.Disk)
+	}
+}
+
+func TestMetricsFromDockerHostKeepsReportedPercentValues(t *testing.T) {
+	host := models.DockerHost{
+		CPUUsage: 1,
+		Memory:   models.Memory{Total: 1000, Used: 5, Usage: 0.5},
+		Disks:    []models.Disk{{Total: 1000, Used: 2, Usage: 0.2}},
+	}
+
+	metrics := metricsFromDockerHost(host)
+	if metrics.CPU == nil || metrics.CPU.Percent != 1 {
+		t.Fatalf("expected docker host cpu percent 1, got %+v", metrics.CPU)
+	}
+	if metrics.Memory == nil || metrics.Memory.Percent != 0.5 {
+		t.Fatalf("expected docker host memory percent 0.5, got %+v", metrics.Memory)
+	}
+	if metrics.Disk == nil || metrics.Disk.Percent != 0.2 {
+		t.Fatalf("expected docker host disk percent 0.2, got %+v", metrics.Disk)
+	}
+}
+
+func TestMetricsFromKubernetesClusterAggregatesLinkedHostReportedPercents(t *testing.T) {
+	cluster := models.KubernetesCluster{ID: "cluster-1", Name: "cluster-1"}
+	hosts := []*models.Host{
+		{
+			Hostname: "worker-1",
+			CPUUsage: 1,
+		},
+		{
+			Hostname: "worker-2",
+			CPUUsage: 2,
+		},
+	}
+
+	metrics := metricsFromKubernetesCluster(cluster, hosts)
+	if metrics.CPU == nil || metrics.CPU.Percent != 1.5 {
+		t.Fatalf("expected linked host cluster cpu percent 1.5, got %+v", metrics.CPU)
+	}
+}
+
 func TestMetricsFromKubernetesPod_MockModeIncludesLiveLikeValues(t *testing.T) {
 	enableMockMode(t)
 

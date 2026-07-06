@@ -690,6 +690,11 @@ recovery scope, or a storage/recovery-owned secret source.
    commands, adjacent storage/recovery surfaces must also inherit the
    API/runtime gate: `settings:write` plus enabled Discovery are required
    before command-backed refresh, and `monitoring:write` remains insufficient.
+   Storage and recovery may also observe `/api/connections` agent
+   command-policy and config-rollout state from this adjacent API boundary, but
+   that state must already be token-gated by agent lifecycle. It must not be
+   reinterpreted as storage readiness, protected-system ownership, backup
+   visibility, or a recovery-local command grant.
    If the shared discovery boundary repairs a fresh unknown workload record
    into a known service identity and endpoint candidate from canonical resource
    metadata, stored facts, or safe command evidence, storage and recovery may

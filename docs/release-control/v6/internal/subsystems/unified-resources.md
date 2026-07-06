@@ -21,6 +21,11 @@ For Docker and Podman container resources, the canonical CPU metric represents
 host-capacity-normalized utilization. Runtime-native per-core CPU percent is
 kept on Docker metadata as raw evidence and must not replace the canonical
 metric or threshold surface.
+Host-agent and Docker-host CPU, memory, and disk usage fields are already
+reported as 0..100 percentages. Unified-resource host metric payloads and
+host-derived storage adapters must clamp those reported percentages directly
+rather than passing them through ratio-to-percent normalization, which is
+reserved for providers that report 0..1 usage ratios.
 
 ## Canonical Files
 

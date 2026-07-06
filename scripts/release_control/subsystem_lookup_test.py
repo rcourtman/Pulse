@@ -2917,7 +2917,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 {
                     "heading": "## Shared Boundaries",
                     "path": "internal/api/access_control_handlers.go",
-                    "line": 1159,
+                    "line": 1168,
                     "heading_line": 137,
                 }
             ],

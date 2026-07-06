@@ -97,6 +97,13 @@ that binary, not separate customer-facing agent products.
 
 ## Shared Boundaries
 
+`/api/connections` command-policy comparison is lifecycle-adjacent fleet
+truth. The desired side is the effective runtime config served to the agent
+after token scope and binding checks, not the unsanitized profile desire. If a
+profile enables commands but the agent runtime token cannot execute them,
+lifecycle surfaces must see desired-disabled/applied-disabled as in sync
+rather than a command-policy rollout failure.
+
 PVE node setup shared boundaries that render or copy `PulseMonitor`
 permissions must treat `VM.GuestAgent.Audit` plus `VM.GuestAgent.FileRead` as
 the PVE 9+ primary contract, with `VM.Monitor` retained only as the legacy PVE

@@ -288,15 +288,15 @@ func TestParityHostFields(t *testing.T) {
 		KernelVersion: "6.8.0",
 		Architecture:  "amd64",
 		CPUCount:      16,
-		CPUUsage:      0.25,
-		Memory:        testMemory(),
+		CPUUsage:      25,
+		Memory:        testMemoryPercent(),
 		LoadAverage:   []float64{0.21, 0.18, 0.22},
 		Disks: []models.Disk{
 			{
 				Total:      107374182400,
 				Used:       10737418240,
 				Free:       96636764160,
-				Usage:      float64(10737418240) / float64(107374182400),
+				Usage:      10,
 				Mountpoint: "/",
 				Type:       "ext4",
 				Device:     "/dev/sda1",
@@ -375,15 +375,15 @@ func TestParityDockerHostFields(t *testing.T) {
 		CPUs:              8,
 		TotalMemoryBytes:  17179869184,
 		UptimeSeconds:     123456,
-		CPUUsage:          0.15,
+		CPUUsage:          15,
 		LoadAverage:       []float64{0.12, 0.10, 0.09},
-		Memory:            testMemory(),
+		Memory:            testMemoryPercent(),
 		Disks: []models.Disk{
 			{
 				Total:      107374182400,
 				Used:       10737418240,
 				Free:       96636764160,
-				Usage:      float64(10737418240) / float64(107374182400),
+				Usage:      10,
 				Mountpoint: "/",
 				Type:       "ext4",
 				Device:     "/dev/sda1",
@@ -440,8 +440,8 @@ func TestParityDockerHostFields(t *testing.T) {
 	require.InEpsilon(t, dockerTemp, v.Temperature(), 1e-9)
 	require.Len(t, v.NetworkInterfaces(), len(dh.NetworkInterfaces))
 	require.Len(t, v.Disks(), len(dh.Disks))
-	require.InEpsilon(t, percentFromUsage(dh.CPUUsage), v.CPUPercent(), 1e-9)
-	require.InEpsilon(t, percentFromUsage(dh.Memory.Usage), v.MemoryPercent(), 1e-9)
+	require.InEpsilon(t, dh.CPUUsage, v.CPUPercent(), 1e-9)
+	require.InEpsilon(t, dh.Memory.Usage, v.MemoryPercent(), 1e-9)
 	require.True(t, v.LastSeen().Equal(dh.LastSeen))
 }
 
@@ -730,9 +730,9 @@ func TestParityResourceCounts(t *testing.T) {
 				{Name: "eth0", MAC: "00:11:22:33:44:55", Addresses: []string{"192.168.50.10/24"}},
 			},
 			Sensors:  models.HostSensorSummary{TemperatureCelsius: map[string]float64{"cpu_package": 50.0}},
-			Disks:    []models.Disk{testDisk()},
-			Memory:   testMemory(),
-			CPUUsage: 0.05,
+			Disks:    []models.Disk{testDiskPercent()},
+			Memory:   testMemoryPercent(),
+			CPUUsage: 5,
 		},
 		// One standalone host agent that should not merge with anything.
 		models.Host{
@@ -750,9 +750,9 @@ func TestParityResourceCounts(t *testing.T) {
 				{Name: "eth0", MAC: "00:aa:bb:cc:dd:ee", Addresses: []string{"10.250.0.10/24"}},
 			},
 			Sensors:  models.HostSensorSummary{TemperatureCelsius: map[string]float64{"cpu_package": 45.0}},
-			Disks:    []models.Disk{testDisk()},
-			Memory:   testMemory(),
-			CPUUsage: 0.07,
+			Disks:    []models.Disk{testDiskPercent()},
+			Memory:   testMemoryPercent(),
+			CPUUsage: 7,
 		},
 	)
 
@@ -820,9 +820,9 @@ func TestExpectedDeltaHostMerge(t *testing.T) {
 			{Name: "eth0", MAC: "00:11:22:33:44:55", Addresses: []string{"192.168.50.10/24"}},
 		},
 		Sensors:  models.HostSensorSummary{TemperatureCelsius: map[string]float64{"cpu_package": 51.0}},
-		Disks:    []models.Disk{testDisk()},
-		Memory:   testMemory(),
-		CPUUsage: 0.05,
+		Disks:    []models.Disk{testDiskPercent()},
+		Memory:   testMemoryPercent(),
+		CPUUsage: 5,
 	}
 
 	snapshot := models.StateSnapshot{
@@ -876,9 +876,9 @@ func TestExpectedDeltaNodesThroughTwoViews(t *testing.T) {
 			{Name: "eth0", MAC: "00:11:22:33:44:55", Addresses: []string{"192.168.50.10/24"}},
 		},
 		Sensors:  models.HostSensorSummary{TemperatureCelsius: map[string]float64{"cpu_package": 51.0}},
-		Disks:    []models.Disk{testDisk()},
-		Memory:   testMemory(),
-		CPUUsage: 0.05,
+		Disks:    []models.Disk{testDiskPercent()},
+		Memory:   testMemoryPercent(),
+		CPUUsage: 5,
 	}
 
 	snapshot := models.StateSnapshot{
@@ -1103,10 +1103,10 @@ func testStateSnapshot() models.StateSnapshot {
 			CPUs:              8,
 			TotalMemoryBytes:  17179869184,
 			UptimeSeconds:     123456,
-			CPUUsage:          0.15,
+			CPUUsage:          15,
 			LoadAverage:       []float64{0.12, 0.10, 0.09},
-			Memory:            testMemory(),
-			Disks:             []models.Disk{testDisk()},
+			Memory:            testMemoryPercent(),
+			Disks:             []models.Disk{testDiskPercent()},
 			NetworkInterfaces: []models.HostNetworkInterface{{Name: "eth0", MAC: "de:ad:be:ef:00:01", Addresses: []string{"10.10.0.10/24"}}},
 			Status:            "online",
 			LastSeen:          now,
@@ -1247,6 +1247,12 @@ func testMemory() models.Memory {
 	}
 }
 
+func testMemoryPercent() models.Memory {
+	mem := testMemory()
+	mem.Usage = 25
+	return mem
+}
+
 func testDisk() models.Disk {
 	used := int64(10737418240)   // 10GB
 	total := int64(107374182400) // 100GB
@@ -1256,6 +1262,12 @@ func testDisk() models.Disk {
 		Free:  total - used,
 		Usage: float64(used) / float64(total),
 	}
+}
+
+func testDiskPercent() models.Disk {
+	disk := testDisk()
+	disk.Usage = 10
+	return disk
 }
 
 func percentFromUsage(value float64) float64 {

@@ -30,6 +30,7 @@ func buildAggregatorInputsWithRuntimeSources(
 		inputs.pveInstances = cfg.PVEInstances
 		inputs.pbsInstances = cfg.PBSInstances
 		inputs.pmgInstances = cfg.PMGInstances
+		inputs.apiTokens = append([]config.APITokenRecord(nil), cfg.APITokens...)
 	}
 
 	if persistence != nil {
@@ -57,7 +58,7 @@ func buildAggregatorInputsWithRuntimeSources(
 
 	if monitor != nil {
 		inputs.hosts = monitor.HostsSnapshot()
-		inputs.agentDesiredConfigs = connectionAgentDesiredConfigFingerprints(monitor, inputs.hosts)
+		inputs.agentDesiredConfigs = connectionAgentDesiredConfigFingerprints(monitor, inputs.hosts, inputs.apiTokens)
 		inputs.instanceHealth = instanceHealthByKey(monitor.SchedulerHealth())
 		inputs.availabilityStatuses = monitor.AvailabilityStatusSnapshot()
 	} else {

@@ -87,16 +87,16 @@ func buildHostMetricPayload(
 	source DataSource,
 ) *ResourceMetrics {
 	metrics := &ResourceMetrics{}
-	cpuPercent := percentFromUsage(cpuUsage)
+	cpuPercent := percentFromReportedPercent(cpuUsage)
 	metrics.CPU = &MetricValue{Value: cpuPercent, Percent: cpuPercent, Unit: "percent", Source: source}
 	if memory.Total > 0 {
-		percent := percentFromUsage(memory.Usage)
+		percent := percentFromReportedPercent(memory.Usage)
 		metrics.Memory = &MetricValue{Used: &memory.Used, Total: &memory.Total, Percent: percent, Unit: "bytes", Source: source}
 	}
 	if len(disks) > 0 {
 		disk := disks[0]
 		if disk.Total > 0 {
-			percent := percentFromUsage(disk.Usage)
+			percent := percentFromReportedPercent(disk.Usage)
 			metrics.Disk = &MetricValue{Used: &disk.Used, Total: &disk.Total, Percent: percent, Unit: "bytes", Source: source}
 		}
 	}
@@ -337,7 +337,7 @@ func metricsFromKubernetesCluster(cluster models.KubernetesCluster, linkedHosts 
 			continue
 		}
 
-		cpuSum += percentFromUsage(host.CPUUsage)
+		cpuSum += percentFromReportedPercent(host.CPUUsage)
 		cpuCount++
 
 		hostName := strings.TrimSpace(host.Hostname)
@@ -790,6 +790,10 @@ func percentFromUsage(value float64) float64 {
 		return value * 100
 	}
 	return value
+}
+
+func percentFromReportedPercent(value float64) float64 {
+	return clampMetricValue(value, 0, 100)
 }
 
 func setNetworkAndDiskIOMetricsHost(metrics *ResourceMetrics, netIn, netOut, diskRead, diskWrite float64, source DataSource) {

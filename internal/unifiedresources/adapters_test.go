@@ -985,6 +985,28 @@ func TestResourceFromHostUnraidStorageIncludesTopologyMetadata(t *testing.T) {
 	}
 }
 
+func TestResourceFromHostUnraidStorageKeepsReportedDiskPercent(t *testing.T) {
+	host := models.Host{
+		ID:          "tower-host",
+		Hostname:    "tower",
+		DisplayName: "Tower",
+		Status:      "online",
+		LastSeen:    time.Now().UTC(),
+		Disks: []models.Disk{
+			{Mountpoint: "/mnt/user", Total: 1000, Used: 4, Free: 996, Usage: 0.4},
+		},
+		Unraid: &models.HostUnraidStorage{
+			ArrayStarted: true,
+			ArrayState:   "STARTED",
+		},
+	}
+
+	resource, _ := resourceFromHostUnraidStorage(host)
+	if resource.Metrics == nil || resource.Metrics.Disk == nil || resource.Metrics.Disk.Percent != 0.4 {
+		t.Fatalf("expected reported /mnt/user disk percent 0.4, got %+v", resource.Metrics)
+	}
+}
+
 func TestResourceFromHostDerivesStorageTopologyRisk(t *testing.T) {
 	host := models.Host{
 		ID:       "tower-host",

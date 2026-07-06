@@ -136,6 +136,15 @@ product API routes free of maintainer commercial analytics.
 
 ## Shared Boundaries
 
+`GET /api/connections` consumes the agent desired-config contract for fleet
+governance. When it derives `fleet.commandPolicy`, `fleet.configDrift`, and
+rollout state, it must compare the agent-applied report with the effective
+desired config after token command-execution gates have been applied, not the
+raw profile or metadata desire. A profile that wants commands enabled but is
+served to a runtime token without an allowed `agent:exec` binding is
+desired-disabled for the connections payload, matching
+`/api/agents/agent/{id}/config` and agent report responses.
+
 PVE setup API consumers, generated scripts, runtime setup, installer setup, and
 browser manual guidance must share one `PulseMonitor` privilege contract:
 prefer `VM.GuestAgent.Audit` plus `VM.GuestAgent.FileRead` on PVE 9+, and use

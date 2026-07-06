@@ -653,7 +653,7 @@ func TestConnectionAgentDesiredConfigFingerprintsSkipsEmptyDefaultConfig(t *test
 	t.Cleanup(func() { monitor.Stop() })
 
 	hostID := "default-agent"
-	got := connectionAgentDesiredConfigFingerprints(monitor, []models.Host{{ID: hostID}})
+	got := connectionAgentDesiredConfigFingerprints(monitor, []models.Host{{ID: hostID}}, nil)
 	desired, ok := got[hostID]
 	if !ok {
 		t.Fatalf("expected resolved desired config entry for %q, got %+v", hostID, got)
@@ -669,13 +669,87 @@ func TestConnectionAgentDesiredConfigFingerprintsSkipsEmptyDefaultConfig(t *test
 	if err := monitor.UpdateHostAgentConfig(hostID, &commandsEnabled); err != nil {
 		t.Fatalf("UpdateHostAgentConfig: %v", err)
 	}
-	got = connectionAgentDesiredConfigFingerprints(monitor, []models.Host{{ID: hostID}})
+	got = connectionAgentDesiredConfigFingerprints(monitor, []models.Host{{ID: hostID}}, nil)
 	desired = got[hostID]
 	if desired.Fingerprint == nil {
 		t.Fatalf("managed command override should create desired config fingerprint")
 	}
 	if desired.CommandsEnabled == nil || !*desired.CommandsEnabled {
 		t.Fatalf("managed command override = %+v, want true", desired.CommandsEnabled)
+	}
+}
+
+func TestConnectionAgentDesiredConfigFingerprintsUsesTokenEffectiveCommandPolicy(t *testing.T) {
+	monitor, err := monitoring.New(&config.Config{DataPath: t.TempDir()})
+	if err != nil {
+		t.Fatalf("monitoring.New: %v", err)
+	}
+	t.Cleanup(func() { monitor.Stop() })
+
+	hostID := "agent-token-gated"
+	rawDesiredCommands := true
+	if err := monitor.UpdateHostAgentConfig(hostID, &rawDesiredCommands); err != nil {
+		t.Fatalf("UpdateHostAgentConfig: %v", err)
+	}
+
+	now := time.Now()
+	host := models.Host{
+		ID:              hostID,
+		Hostname:        "agent-token-gated.local",
+		LastSeen:        now,
+		CommandsEnabled: false,
+		TokenID:         "runtime-without-exec",
+	}
+	tokens := []config.APITokenRecord{
+		{
+			ID:     "runtime-without-exec",
+			Scopes: []string{config.ScopeAgentReport, config.ScopeAgentConfigRead},
+		},
+	}
+
+	got := connectionAgentDesiredConfigFingerprints(monitor, []models.Host{host}, tokens)
+	desired, ok := got[hostID]
+	if !ok {
+		t.Fatalf("expected resolved desired config entry for %q, got %+v", hostID, got)
+	}
+	if desired.CommandsEnabled == nil || *desired.CommandsEnabled {
+		t.Fatalf("effective desired CommandsEnabled = %+v, want false", desired.CommandsEnabled)
+	}
+	if desired.Fingerprint == nil {
+		t.Fatal("effective command override should still create a desired config fingerprint")
+	}
+
+	effectiveDisabled := false
+	effectiveMetadata, err := remoteconfig.BuildDesiredConfigMetadata(&effectiveDisabled, nil)
+	if err != nil {
+		t.Fatalf("BuildDesiredConfigMetadata disabled: %v", err)
+	}
+	rawMetadata, err := remoteconfig.BuildDesiredConfigMetadata(&rawDesiredCommands, nil)
+	if err != nil {
+		t.Fatalf("BuildDesiredConfigMetadata raw: %v", err)
+	}
+	if desired.Fingerprint.Hash != effectiveMetadata.Hash {
+		t.Fatalf("desired fingerprint hash = %q, want effective disabled hash %q", desired.Fingerprint.Hash, effectiveMetadata.Hash)
+	}
+	if desired.Fingerprint.Hash == rawMetadata.Hash {
+		t.Fatalf("desired fingerprint reused raw unsanitized command policy hash %q", desired.Fingerprint.Hash)
+	}
+
+	connections := buildConnections(aggregatorInputs{
+		hosts:               []models.Host{host},
+		agentDesiredConfigs: got,
+		now:                 now,
+	})
+	if len(connections) != 1 {
+		t.Fatalf("expected one connection, got %d", len(connections))
+	}
+	policy := connections[0].Fleet.CommandPolicy
+	if policy == nil ||
+		policy.Status != fleetStateDisabled ||
+		policy.Desired != fleetStateDisabled ||
+		policy.Applied != fleetStateDisabled ||
+		policy.Enforcement != fleetCommandPolicyInSync {
+		t.Fatalf("command policy = %+v, want effective disabled in sync", policy)
 	}
 }
 

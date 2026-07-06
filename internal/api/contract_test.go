@@ -14701,6 +14701,63 @@ func TestContract_AgentDefaultDesiredConfigDoesNotCreateRolloutAttention(t *test
 	assertJSONSnapshot(t, body, want)
 }
 
+func TestContract_AgentConnectionPayloadUsesTokenEffectiveCommandPolicy(t *testing.T) {
+	cfg := &config.Config{
+		DataPath: t.TempDir(),
+		APITokens: []config.APITokenRecord{
+			{
+				ID:     "runtime-without-exec",
+				Scopes: []string{config.ScopeAgentReport, config.ScopeAgentConfigRead},
+			},
+		},
+	}
+	monitor, err := monitoring.New(cfg)
+	if err != nil {
+		t.Fatalf("monitoring.New: %v", err)
+	}
+	t.Cleanup(func() { monitor.Stop() })
+
+	hostID := "host-token-gated"
+	rawDesiredCommands := true
+	if err := monitor.UpdateHostAgentConfig(hostID, &rawDesiredCommands); err != nil {
+		t.Fatalf("UpdateHostAgentConfig: %v", err)
+	}
+
+	now := time.Date(2026, 5, 14, 10, 30, 0, 0, time.UTC)
+	host := models.Host{
+		ID:              hostID,
+		Hostname:        "host-token-gated",
+		ReportIP:        "192.0.2.43",
+		LastSeen:        now.Add(-10 * time.Second),
+		AgentVersion:    "6.0.0",
+		Platform:        "linux",
+		CommandsEnabled: false,
+		TokenID:         "runtime-without-exec",
+	}
+	desiredConfigs := connectionAgentDesiredConfigFingerprints(monitor, []models.Host{host}, cfg.APITokens)
+	connections := buildConnections(aggregatorInputs{
+		hosts:                []models.Host{host},
+		apiTokens:            cfg.APITokens,
+		agentDesiredConfigs:  desiredConfigs,
+		expectedAgentVersion: "6.0.0",
+		now:                  now,
+	})
+	if len(connections) != 1 {
+		t.Fatalf("expected one agent connection, got %d", len(connections))
+	}
+
+	body, err := json.Marshal(connections[0])
+	if err != nil {
+		t.Fatalf("marshal agent Connection: %v", err)
+	}
+
+	want := `{"id":"agent:host-token-gated","type":"agent","name":"host-token-gated","address":"host-token-gated","hostAliases":["host-token-gated","192.0.2.43"],"state":"active","enabled":true,"surfaces":["host"],"scope":{"host":true},"lastSeen":"2026-05-14T10:29:50Z","source":"agent","agentIdentity":{"hostname":"host-token-gated","platform":"linux","reportIp":"192.0.2.43"},"agentVersion":"6.0.0","expectedAgentVersion":"6.0.0","fleet":{"enrollmentState":"enrolled","livenessState":"active","versionDrift":"current","adapterHealth":"healthy","configRollout":"reported","credentialStatus":"verified","updateStatus":"current","remoteControl":"disabled","configDrift":{"status":"pending","desired":{"version":"host-agent-config/v1","hash":"sha256:59378fe4db8132c2ce1d9c16b492c16093156579d09357db44e34a0fab494bea"},"reason":"Pulse has not received a comparable applied agent configuration fingerprint yet"},"rollout":{"status":"pending","stage":"pending","reason":"waiting for the agent to report an applied configuration fingerprint"},"credentialHealth":{"status":"verified","kind":"agent-token","rotation":"healthy","lastVerifiedAt":"2026-05-14T10:29:50Z"},"commandPolicy":{"status":"disabled","desired":"disabled","applied":"disabled","enforcement":"in-sync","reason":"agent command execution matches the desired disabled policy"}},"capabilities":{"supportsPause":false,"supportsScope":false,"supportsTest":false}}`
+	assertJSONSnapshot(t, body, want)
+	if strings.Contains(string(body), `"desired":"enabled"`) {
+		t.Fatalf("connections payload used unsanitized command desire: %s", body)
+	}
+}
+
 func TestContract_ConnectionsListIncludesAgentHostsFromUnifiedReadState(t *testing.T) {
 	cfg := &config.Config{DataPath: t.TempDir()}
 	monitor, err := monitoring.New(cfg)
