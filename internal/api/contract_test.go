@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -10800,6 +10801,57 @@ func TestContract_MetricsHistoryLiveFallbackJSONSnapshot(t *testing.T) {
 	}`
 
 	assertJSONSnapshot(t, got, want)
+}
+
+func TestContract_MetricsHistoryProxmoxNodeCPUFallbackConvertsRatioToPercent(t *testing.T) {
+	state := models.NewState()
+	state.UpdateNodes([]models.Node{{
+		ID:       "pve1:node1",
+		Name:     "node1",
+		Instance: "pve1",
+		Status:   "online",
+		CPU:      0.37,
+	}})
+
+	monitor := &monitoring.Monitor{}
+	setUnexportedField(t, monitor, "state", state)
+	setUnexportedField(t, monitor, "metricsHistory", monitoring.NewMetricsHistory(10, time.Hour))
+
+	tempDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(tempDir)
+	if _, err := mtp.GetPersistence("default"); err != nil {
+		t.Fatalf("failed to init persistence: %v", err)
+	}
+
+	router := &Router{
+		monitor:         monitor,
+		licenseHandlers: NewLicenseHandlers(mtp, false),
+	}
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/metrics-store/history?resourceType=node&resourceId=pve1:node1&metric=cpu&range=24h",
+		nil,
+	)
+	rec := httptest.NewRecorder()
+	router.handleMetricsHistory(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp metricsHistoryResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal metrics history response: %v", err)
+	}
+	if resp.Source != "live" {
+		t.Fatalf("source = %q, want live", resp.Source)
+	}
+	if len(resp.Points) != 1 {
+		t.Fatalf("points = %d, want 1", len(resp.Points))
+	}
+	if math.Abs(resp.Points[0].Value-37) > 0.001 {
+		t.Fatalf("cpu fallback value = %f, want 37", resp.Points[0].Value)
+	}
 }
 
 func TestContract_MetricsHistoryDockerContainerCPUFallbackUsesCapacityPercent(t *testing.T) {

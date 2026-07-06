@@ -188,6 +188,10 @@ CPU fallback points use host-capacity-normalized percent, while Docker metadata
 may expose runtime-native per-core CPU percent plus the host CPU count as raw
 diagnostic evidence. API consumers must not treat raw per-core CPU as the
 threshold, chart, or canonical resource CPU value.
+Proxmox legacy model CPU fields have the inverse compatibility shape:
+`models.Node.CPU`, `models.VM.CPU`, and `models.Container.CPU` remain 0..1
+ratios, but `/api/metrics-store/history` live fallback points must convert
+those ratios to 0..100 chart percentages before serialization.
 
 Candidate import plans for PVE/PBS/PMG onboarding are API-contract consumers,
 not local UI estimates. Probe and Discovery candidates must build their
@@ -2459,8 +2463,10 @@ a new API state machine, queue contract, or verification-accounting field.
     and `POST /api/connections/probe` stay on one canonical payload shape
     instead of re-deriving state from per-type config stores in the frontend.
     State must remain a derived field sourced from in-memory scheduler health
-    (`monitoring.Monitor.SchedulerHealth()`) plus agent `Host.LastSeen`; the
-    endpoint must not introduce new persisted per-connection state. The probe
+    (`monitoring.Monitor.SchedulerHealth()`) plus agent `Host.LastSeen`; for
+    agent rows, `Host.LastSeen` is the monitoring-owned server receipt time,
+    not the agent payload timestamp. The endpoint must not introduce new
+    persisted per-connection state. The probe
     endpoint must remain admin-gated (`RequireAdmin` + `ScopeSettingsWrite`)
     to block unauthenticated SSRF against internal hosts. That same probe path
     must also validate user-supplied addresses before probing, reject metadata,

@@ -7540,6 +7540,10 @@ func clampWorkloadPercent(value float64) float64 {
 	return value
 }
 
+func proxmoxModelCPURatioPercent(value float64) float64 {
+	return clampWorkloadPercent(value * 100)
+}
+
 func clampNonNegativeWorkloadValue(value float64) float64 {
 	if value != value {
 		return 0
@@ -9010,7 +9014,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			if vm == nil {
 				return points
 			}
-			points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: vm.CPU}
+			points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: proxmoxModelCPURatioPercent(vm.CPU)}
 			points["memory"] = monitoring.MetricPoint{Timestamp: now, Value: vm.Memory.Usage}
 			if vm.Disk.Usage >= 0 {
 				points["disk"] = monitoring.MetricPoint{Timestamp: now, Value: vm.Disk.Usage}
@@ -9024,7 +9028,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			if ct == nil {
 				return points
 			}
-			points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: ct.CPU}
+			points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: proxmoxModelCPURatioPercent(ct.CPU)}
 			points["memory"] = monitoring.MetricPoint{Timestamp: now, Value: ct.Memory.Usage}
 			if ct.Disk.Usage >= 0 {
 				points["disk"] = monitoring.MetricPoint{Timestamp: now, Value: ct.Disk.Usage}
@@ -9038,7 +9042,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			if node == nil {
 				return points
 			}
-			points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: node.CPU}
+			points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: proxmoxModelCPURatioPercent(node.CPU)}
 			points["memory"] = monitoring.MetricPoint{Timestamp: now, Value: node.Memory.Usage}
 			points["disk"] = monitoring.MetricPoint{Timestamp: now, Value: node.Disk.Usage}
 			if temperature := primaryNodeTemperatureCelsius(node.Temperature); temperature != nil {
@@ -9093,7 +9097,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			if node == nil {
 				return points
 			}
-			points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: node.CPU}
+			points["cpu"] = monitoring.MetricPoint{Timestamp: now, Value: proxmoxModelCPURatioPercent(node.CPU)}
 			points["memory"] = monitoring.MetricPoint{Timestamp: now, Value: node.Memory.Usage}
 			points["disk"] = monitoring.MetricPoint{Timestamp: now, Value: node.Disk.Usage}
 			if temperature := primaryNodeTemperatureCelsius(node.Temperature); temperature != nil {
