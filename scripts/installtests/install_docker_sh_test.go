@@ -23,6 +23,20 @@ func currentReleaseVersion(t *testing.T) string {
 	return version
 }
 
+func requiredReleaseBranchForVersion(t *testing.T, version string) string {
+	t.Helper()
+	cmd := exec.Command("python3", repoFile("scripts", "release_control", "control_plane.py"), "--branch-for-version", version)
+	output, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("resolve release branch for %s: %v", version, err)
+	}
+	branch := strings.TrimSpace(string(output))
+	if branch == "" {
+		t.Fatalf("release branch for %s is empty", version)
+	}
+	return branch
+}
+
 func isPrereleaseVersion(version string) bool {
 	return strings.Contains(version, "-")
 }

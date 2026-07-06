@@ -253,6 +253,7 @@ func TestCurrentStablePatchReleasePacketTracksInstallMetadata(t *testing.T) {
 	if !ok {
 		t.Skip("current release is not a stable patch release")
 	}
+	releaseBranch := requiredReleaseBranchForVersion(t, version)
 
 	releaseNotesPath := repoFile("docs", "releases", "RELEASE_NOTES_v"+version+".md")
 	changelogPath := repoFile("docs", "releases", "V6_CHANGELOG_v"+version+".md")
@@ -265,7 +266,7 @@ func TestCurrentStablePatchReleasePacketTracksInstallMetadata(t *testing.T) {
 	assertFileContainsAll(t, changelogPath,
 		"Version: `v"+version+"`",
 		"Rollback target: `v"+previous+"`",
-		"Promotion path: stable patch hotfix from `pulse/v6-release`",
+		"Promotion path: stable patch hotfix from `"+releaseBranch+"`",
 	)
 	assertFileContainsAll(t, repoFile("docs", "RELEASE_NOTES.md"),
 		"docs/releases/RELEASE_NOTES_v"+version+".md",
