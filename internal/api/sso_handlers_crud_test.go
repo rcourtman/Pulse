@@ -167,6 +167,82 @@ func TestSSOProviderCRUD(t *testing.T) {
 	assert.Nil(t, loadedConfig.GetProvider("test-oidc"))
 }
 
+func TestSSOProviderDetailRoundTripPreservesOIDCEditableSettings(t *testing.T) {
+	router, _ := setupTestRouter(t)
+
+	provider := config.SSOProvider{
+		ID:          "corp-oidc",
+		Name:        "Corporate OIDC",
+		Type:        config.SSOProviderTypeOIDC,
+		Enabled:     true,
+		DisplayName: "Sign in with Corporate SSO",
+		Priority:    2,
+		AllowedGroups: []string{
+			"admins",
+			"operators",
+		},
+		AllowedDomains: []string{"example.com"},
+		AllowedEmails:  []string{"owner@example.com"},
+		GroupsClaim:    "groups",
+		GroupRoleMappings: map[string]string{
+			"admins": "admin",
+		},
+		OIDC: &config.OIDCProviderConfig{
+			IssuerURL:    "https://idp.example.com/realms/pulse",
+			ClientID:     "pulse-client",
+			ClientSecret: "super-secret",
+			RedirectURL:  "https://pulse.example.com/api/oidc/corp-oidc/callback",
+			LogoutURL:    "https://idp.example.com/logout",
+			Scopes:       []string{"openid", "profile", "email", "groups"},
+		},
+	}
+	require.NoError(t, router.ssoConfig.AddProvider(provider))
+	require.NoError(t, router.saveSSOConfig())
+
+	req := httptest.NewRequest(http.MethodGet, "/api/security/sso/providers/corp-oidc", nil)
+	w := httptest.NewRecorder()
+	router.handleSSOProvider(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+	require.NotContains(t, w.Body.String(), "super-secret")
+
+	var detail SSOProviderResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &detail))
+	require.NotNil(t, detail.OIDC)
+	assert.Equal(t, "https://idp.example.com/realms/pulse", detail.OIDC.IssuerURL)
+	assert.Equal(t, "pulse-client", detail.OIDC.ClientID)
+	assert.Equal(t, "https://pulse.example.com/api/oidc/corp-oidc/callback", detail.OIDC.RedirectURL)
+	assert.Equal(t, "https://idp.example.com/logout", detail.OIDC.LogoutURL)
+	assert.Equal(t, []string{"openid", "profile", "email", "groups"}, detail.OIDC.Scopes)
+	assert.True(t, detail.OIDC.ClientSecretSet)
+	assert.Equal(t, "groups", detail.GroupsClaim)
+	assert.Equal(t, map[string]string{"admins": "admin"}, detail.GroupRoleMappings)
+
+	body, err := json.Marshal(detail)
+	require.NoError(t, err)
+	req = httptest.NewRequest(http.MethodPut, "/api/security/sso/providers/corp-oidc", bytes.NewReader(body))
+	w = httptest.NewRecorder()
+	router.handleSSOProvider(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	loadedConfig, err := router.persistence.LoadSSOConfig()
+	require.NoError(t, err)
+	stored := loadedConfig.GetProvider("corp-oidc")
+	require.NotNil(t, stored)
+	require.NotNil(t, stored.OIDC)
+	assert.Equal(t, "https://idp.example.com/realms/pulse", stored.OIDC.IssuerURL)
+	assert.Equal(t, "pulse-client", stored.OIDC.ClientID)
+	assert.Equal(t, "super-secret", stored.OIDC.ClientSecret)
+	assert.True(t, stored.OIDC.ClientSecretSet)
+	assert.Equal(t, "https://pulse.example.com/api/oidc/corp-oidc/callback", stored.OIDC.RedirectURL)
+	assert.Equal(t, "https://idp.example.com/logout", stored.OIDC.LogoutURL)
+	assert.Equal(t, []string{"openid", "profile", "email", "groups"}, stored.OIDC.Scopes)
+	assert.Equal(t, []string{"admins", "operators"}, stored.AllowedGroups)
+	assert.Equal(t, []string{"example.com"}, stored.AllowedDomains)
+	assert.Equal(t, []string{"owner@example.com"}, stored.AllowedEmails)
+	assert.Equal(t, "groups", stored.GroupsClaim)
+	assert.Equal(t, map[string]string{"admins": "admin"}, stored.GroupRoleMappings)
+}
+
 func TestCreateSSOProvider_Validation(t *testing.T) {
 	router, _ := setupTestRouter(t)
 

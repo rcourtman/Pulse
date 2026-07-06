@@ -99,22 +99,49 @@ type SSOProviderResponse struct {
 	Priority    int    `json:"priority"`
 
 	// OIDC-specific (only present for OIDC providers)
-	OIDCIssuerURL       string `json:"oidcIssuerUrl,omitempty"`
-	OIDCClientID        string `json:"oidcClientId,omitempty"`
-	OIDCClientSecretSet bool   `json:"oidcClientSecretSet,omitempty"`
-	OIDCLoginURL        string `json:"oidcLoginUrl,omitempty"`
-	OIDCCallbackURL     string `json:"oidcCallbackUrl,omitempty"`
+	OIDCIssuerURL       string                   `json:"oidcIssuerUrl,omitempty"`
+	OIDCClientID        string                   `json:"oidcClientId,omitempty"`
+	OIDCClientSecretSet bool                     `json:"oidcClientSecretSet,omitempty"`
+	OIDCLoginURL        string                   `json:"oidcLoginUrl,omitempty"`
+	OIDCCallbackURL     string                   `json:"oidcCallbackUrl,omitempty"`
+	OIDC                *SSOProviderOIDCResponse `json:"oidc,omitempty"`
 
 	// SAML-specific (only present for SAML providers)
-	SAMLIDPEntityID string `json:"samlIdpEntityId,omitempty"`
-	SAMLSPEntityID  string `json:"samlSpEntityId,omitempty"`
-	SAMLMetadataURL string `json:"samlMetadataUrl,omitempty"`
-	SAMLACSURL      string `json:"samlAcsUrl,omitempty"`
+	SAMLIDPEntityID string                   `json:"samlIdpEntityId,omitempty"`
+	SAMLSPEntityID  string                   `json:"samlSpEntityId,omitempty"`
+	SAMLMetadataURL string                   `json:"samlMetadataUrl,omitempty"`
+	SAMLACSURL      string                   `json:"samlAcsUrl,omitempty"`
+	SAML            *SSOProviderSAMLResponse `json:"saml,omitempty"`
 
 	// Common restrictions
-	AllowedGroups  []string `json:"allowedGroups"`
-	AllowedDomains []string `json:"allowedDomains"`
-	AllowedEmails  []string `json:"allowedEmails"`
+	AllowedGroups     []string          `json:"allowedGroups"`
+	AllowedDomains    []string          `json:"allowedDomains"`
+	AllowedEmails     []string          `json:"allowedEmails"`
+	GroupsClaim       string            `json:"groupsClaim,omitempty"`
+	GroupRoleMappings map[string]string `json:"groupRoleMappings,omitempty"`
+}
+
+type SSOProviderOIDCResponse struct {
+	IssuerURL       string   `json:"issuerUrl,omitempty"`
+	ClientID        string   `json:"clientId,omitempty"`
+	RedirectURL     string   `json:"redirectUrl,omitempty"`
+	LogoutURL       string   `json:"logoutUrl,omitempty"`
+	Scopes          []string `json:"scopes"`
+	ClientSecretSet bool     `json:"clientSecretSet,omitempty"`
+}
+
+type SSOProviderSAMLResponse struct {
+	IDPMetadataURL    string `json:"idpMetadataUrl,omitempty"`
+	IDPMetadataXML    string `json:"idpMetadataXml,omitempty"`
+	IDPSSOURL         string `json:"idpSsoUrl,omitempty"`
+	IDPEntityID       string `json:"idpEntityId,omitempty"`
+	IDPCertificate    string `json:"idpCertificate,omitempty"`
+	SPEntityID        string `json:"spEntityId,omitempty"`
+	SignRequests      bool   `json:"signRequests,omitempty"`
+	AllowIDPInitiated bool   `json:"allowIdpInitiated,omitempty"`
+	UsernameAttr      string `json:"usernameAttr,omitempty"`
+	EmailAttr         string `json:"emailAttr,omitempty"`
+	GroupsAttr        string `json:"groupsAttr,omitempty"`
 }
 
 func EmptySSOProviderResponse() SSOProviderResponse {
@@ -130,6 +157,12 @@ func (r SSOProviderResponse) NormalizeCollections() SSOProviderResponse {
 	}
 	if r.AllowedEmails == nil {
 		r.AllowedEmails = []string{}
+	}
+	if r.GroupRoleMappings == nil {
+		r.GroupRoleMappings = map[string]string{}
+	}
+	if r.OIDC != nil && r.OIDC.Scopes == nil {
+		r.OIDC.Scopes = []string{}
 	}
 	return r
 }
@@ -244,7 +277,7 @@ func (r *Router) handleGetSSOProvider(w http.ResponseWriter, req *http.Request, 
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(providerToResponse(provider, r.config.PublicURL).NormalizeCollections())
+	json.NewEncoder(w).Encode(providerToDetailResponse(provider, r.config.PublicURL).NormalizeCollections())
 }
 
 func (r *Router) handleCreateSSOProvider(w http.ResponseWriter, req *http.Request) {
@@ -299,6 +332,9 @@ func (r *Router) handleCreateSSOProvider(w http.ResponseWriter, req *http.Reques
 		if provider.OIDC.RedirectURL != "" && !validateURL(provider.OIDC.RedirectURL, []string{"https", "http"}) {
 			writeErrorResponse(w, http.StatusBadRequest, "validation_error", "Invalid OIDC redirect URL", nil)
 			return
+		}
+		if provider.OIDC.ClientSecret != "" {
+			provider.OIDC.ClientSecretSet = true
 		}
 	}
 
@@ -470,8 +506,11 @@ func (r *Router) handleUpdateSSOProvider(w http.ResponseWriter, req *http.Reques
 
 	// Preserve secrets if not provided in update
 	if updated.Type == config.SSOProviderTypeOIDC && updated.OIDC != nil && existing.OIDC != nil {
-		if updated.OIDC.ClientSecret == "" && existing.OIDC.ClientSecretSet {
+		existingHasSecret := existing.OIDC.ClientSecretSet || existing.OIDC.ClientSecret != ""
+		if updated.OIDC.ClientSecret == "" && existingHasSecret {
 			updated.OIDC.ClientSecret = existing.OIDC.ClientSecret
+			updated.OIDC.ClientSecretSet = true
+		} else if updated.OIDC.ClientSecret != "" {
 			updated.OIDC.ClientSecretSet = true
 		}
 	}
@@ -599,6 +638,8 @@ func providerToResponse(p *config.SSOProvider, publicURL string) SSOProviderResp
 	resp.AllowedGroups = p.AllowedGroups
 	resp.AllowedDomains = p.AllowedDomains
 	resp.AllowedEmails = p.AllowedEmails
+	resp.GroupsClaim = p.GroupsClaim
+	resp.GroupRoleMappings = p.GroupRoleMappings
 
 	if resp.DisplayName == "" {
 		resp.DisplayName = p.Name
@@ -628,6 +669,39 @@ func providerToResponse(p *config.SSOProvider, publicURL string) SSOProviderResp
 		}
 		resp.SAMLMetadataURL = baseURL + "/api/saml/" + p.ID + "/metadata"
 		resp.SAMLACSURL = baseURL + "/api/saml/" + p.ID + "/acs"
+	}
+
+	return resp.NormalizeCollections()
+}
+
+func providerToDetailResponse(p *config.SSOProvider, publicURL string) SSOProviderResponse {
+	resp := providerToResponse(p, publicURL)
+
+	if p.Type == config.SSOProviderTypeOIDC && p.OIDC != nil {
+		resp.OIDC = &SSOProviderOIDCResponse{
+			IssuerURL:       p.OIDC.IssuerURL,
+			ClientID:        p.OIDC.ClientID,
+			RedirectURL:     p.OIDC.RedirectURL,
+			LogoutURL:       p.OIDC.LogoutURL,
+			Scopes:          append([]string{}, p.OIDC.Scopes...),
+			ClientSecretSet: p.OIDC.ClientSecretSet || p.OIDC.ClientSecret != "",
+		}
+	}
+
+	if p.Type == config.SSOProviderTypeSAML && p.SAML != nil {
+		resp.SAML = &SSOProviderSAMLResponse{
+			IDPMetadataURL:    p.SAML.IDPMetadataURL,
+			IDPMetadataXML:    p.SAML.IDPMetadataXML,
+			IDPSSOURL:         p.SAML.IDPSSOURL,
+			IDPEntityID:       p.SAML.IDPEntityID,
+			IDPCertificate:    p.SAML.IDPCertificate,
+			SPEntityID:        p.SAML.SPEntityID,
+			SignRequests:      p.SAML.SignRequests,
+			AllowIDPInitiated: p.SAML.AllowIDPInitiated,
+			UsernameAttr:      p.SAML.UsernameAttr,
+			EmailAttr:         p.SAML.EmailAttr,
+			GroupsAttr:        p.SAML.GroupsAttr,
+		}
 	}
 
 	return resp.NormalizeCollections()

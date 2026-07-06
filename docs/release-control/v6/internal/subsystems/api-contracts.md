@@ -3093,7 +3093,16 @@ a new API state machine, queue contract, or verification-accounting field.
     inputs before any outbound request is attempted, and OIDC discovery must
     append `/.well-known/openid-configuration` beneath the configured issuer
     base path instead of resetting to the origin root.
-32. Keep config-archive import reloads fail-closed on the shared API/runtime
+32. Keep SSO provider-detail payloads edit-complete and non-secret:
+    `GET /api/security/sso/providers/{id}` may keep flat list/card fields for
+    summary compatibility, but it must also return the nested OIDC/SAML fields
+    used by settings edit forms, plus restrictions and role mappings, without
+    echoing raw OIDC client secrets or SAML private keys. The same detail
+    payload must round-trip through `PUT /api/security/sso/providers/{id}`
+    without clearing existing OIDC redirect, logout, scopes, restrictions,
+    role mappings, or stored secret markers unless the update explicitly
+    replaces them.
+33. Keep config-archive import reloads fail-closed on the shared API/runtime
     boundary. `internal/api/config_export_import_handlers.go`,
     `internal/api/contract_test.go`, and adjacent config/runtime helpers must
     tolerate absent notification managers and other optional runtime managers
@@ -4147,6 +4156,15 @@ That same SSO boundary also owns manual SAML endpoint validation payloads.
 through the same validated absolute HTTP(S) helpers instead of letting the
 manual logout URL drift out of the request model or bypass the governed URL
 normalization path.
+That same SSO provider-detail boundary must return the non-secret nested
+provider configuration used by the settings edit form. `GET
+/api/security/sso/providers/{id}` may keep the flat list/card fields for
+summary compatibility, but it must also include nested OIDC/SAML edit fields,
+group restrictions, and role mappings while never echoing raw OIDC client
+secrets or SAML private keys. Saving that detail payload back through `PUT
+/api/security/sso/providers/{id}` must preserve configured OIDC redirect,
+logout, scopes, restrictions, mappings, and existing secrets unless the update
+explicitly replaces them.
 That same runtime SSO contract also owns the Pulse-side public URL that feeds
 SAML service-provider metadata and auth requests. `internal/api/saml_handlers.go`,
 `internal/api/saml_service.go`, and the SAML regression tests must rebind

@@ -3239,6 +3239,112 @@ func TestContract_SSOTestOIDCDiscoveryKeepsIssuerBasePath(t *testing.T) {
 	}
 }
 
+func TestContract_SSOProviderDetailRoundTripKeepsEditableOIDCConfig(t *testing.T) {
+	tmp := t.TempDir()
+	persistence := config.NewConfigPersistence(tmp)
+	router := &Router{
+		config: &config.Config{
+			DataPath:  tmp,
+			PublicURL: "https://pulse.example.com",
+		},
+		persistence: persistence,
+		ssoConfig:   config.NewSSOConfig(),
+		samlManager: NewSAMLServiceManager("https://pulse.example.com"),
+		oidcManager: NewOIDCServiceManager(),
+	}
+	if err := persistence.SaveSSOConfig(router.ssoConfig); err != nil {
+		t.Fatalf("save initial sso config: %v", err)
+	}
+
+	provider := config.SSOProvider{
+		ID:                "corp-oidc",
+		Name:              "Corporate OIDC",
+		Type:              config.SSOProviderTypeOIDC,
+		Enabled:           true,
+		AllowedGroups:     []string{"admins", "operators"},
+		AllowedDomains:    []string{"example.com"},
+		AllowedEmails:     []string{"owner@example.com"},
+		GroupsClaim:       "groups",
+		GroupRoleMappings: map[string]string{"admins": "admin"},
+		OIDC: &config.OIDCProviderConfig{
+			IssuerURL:    "https://idp.example.com/realms/pulse",
+			ClientID:     "pulse-client",
+			ClientSecret: "super-secret",
+			RedirectURL:  "https://pulse.example.com/api/oidc/corp-oidc/callback",
+			LogoutURL:    "https://idp.example.com/logout",
+			Scopes:       []string{"openid", "profile", "email", "groups"},
+		},
+	}
+	if err := router.ssoConfig.AddProvider(provider); err != nil {
+		t.Fatalf("add provider: %v", err)
+	}
+	if err := router.saveSSOConfig(); err != nil {
+		t.Fatalf("save provider: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/security/sso/providers/corp-oidc", nil)
+	rec := httptest.NewRecorder()
+	router.handleSSOProvider(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("get status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "super-secret") {
+		t.Fatal("provider detail response exposed raw OIDC client secret")
+	}
+
+	var detail SSOProviderResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &detail); err != nil {
+		t.Fatalf("unmarshal detail response: %v", err)
+	}
+	if detail.OIDC == nil {
+		t.Fatal("provider detail response missing nested OIDC edit config")
+	}
+	if detail.OIDC.RedirectURL != provider.OIDC.RedirectURL {
+		t.Fatalf("redirect URL = %q, want %q", detail.OIDC.RedirectURL, provider.OIDC.RedirectURL)
+	}
+	if detail.OIDC.LogoutURL != provider.OIDC.LogoutURL {
+		t.Fatalf("logout URL = %q, want %q", detail.OIDC.LogoutURL, provider.OIDC.LogoutURL)
+	}
+	if !reflect.DeepEqual(detail.OIDC.Scopes, provider.OIDC.Scopes) {
+		t.Fatalf("scopes = %#v, want %#v", detail.OIDC.Scopes, provider.OIDC.Scopes)
+	}
+	if detail.GroupsClaim != "groups" || !reflect.DeepEqual(detail.GroupRoleMappings, provider.GroupRoleMappings) {
+		t.Fatalf("group mapping detail lost: claim=%q mappings=%#v", detail.GroupsClaim, detail.GroupRoleMappings)
+	}
+
+	body, err := json.Marshal(detail)
+	if err != nil {
+		t.Fatalf("marshal detail response: %v", err)
+	}
+	req = httptest.NewRequest(http.MethodPut, "/api/security/sso/providers/corp-oidc", bytes.NewReader(body))
+	rec = httptest.NewRecorder()
+	router.handleSSOProvider(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("put status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	loaded, err := persistence.LoadSSOConfig()
+	if err != nil {
+		t.Fatalf("load stored sso config: %v", err)
+	}
+	stored := loaded.GetProvider("corp-oidc")
+	if stored == nil || stored.OIDC == nil {
+		t.Fatalf("stored provider missing OIDC config: %#v", stored)
+	}
+	if stored.OIDC.ClientSecret != "super-secret" || !stored.OIDC.ClientSecretSet {
+		t.Fatal("OIDC edit round-trip did not preserve existing client secret marker")
+	}
+	if stored.OIDC.RedirectURL != provider.OIDC.RedirectURL || stored.OIDC.LogoutURL != provider.OIDC.LogoutURL || !reflect.DeepEqual(stored.OIDC.Scopes, provider.OIDC.Scopes) {
+		t.Fatalf("OIDC edit fields were not preserved: %#v", stored.OIDC)
+	}
+	if !reflect.DeepEqual(stored.AllowedGroups, provider.AllowedGroups) || !reflect.DeepEqual(stored.AllowedDomains, provider.AllowedDomains) || !reflect.DeepEqual(stored.AllowedEmails, provider.AllowedEmails) {
+		t.Fatalf("SSO restrictions were not preserved: %#v", stored)
+	}
+	if stored.GroupsClaim != provider.GroupsClaim || !reflect.DeepEqual(stored.GroupRoleMappings, provider.GroupRoleMappings) {
+		t.Fatalf("SSO role mappings were not preserved: %#v", stored)
+	}
+}
+
 func TestContract_SSOTestRejectsCrossOriginSAMLMetadataRedirect(t *testing.T) {
 	targetCalled := make(chan struct{}, 1)
 	target := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

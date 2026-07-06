@@ -1593,6 +1593,12 @@ likewise adjacent only: the webhook `signingSecret` payload field and its
 masking semantics are notifications/API-contract owned and create no storage,
 recovery-point, or backup-surface semantics.
 
+SSO provider-detail payload changes on shared `internal/api/identity_sso_handlers.go`
+are API-contract/security-settings owned. Nested OIDC/SAML edit fields,
+restriction lists, role mappings, and masked secret-presence markers create no
+storage health, recovery-point, backup verification, restore authorization, or
+provider-coverage semantics.
+
 Alert delivery diagnosis on shared `internal/api/alerts.go` is likewise
 adjacent only: `/api/alerts/delivery-diagnosis` exposes alerts/API-contract
 read-only notification-policy evidence and creates no storage health,

@@ -1597,6 +1597,12 @@ list representation, and masked-echo preservation on update are
 notifications/API-contract owned and grant no agent install, enrollment,
 setup-token, or fleet command authority.
 
+SSO provider-detail payload changes on shared `internal/api/identity_sso_handlers.go`
+are API-contract/security-settings owned. Nested OIDC/SAML edit fields,
+restriction lists, role mappings, and masked secret-presence markers create no
+agent install, enrollment, setup-token, command, fleet liveness, or agent
+profile semantics.
+
 Alert delivery diagnosis on shared `internal/api/alerts.go` is likewise
 adjacent only: `/api/alerts/delivery-diagnosis` is alerts/API-contract owned
 read-only notification-policy evidence and must not be interpreted as agent
