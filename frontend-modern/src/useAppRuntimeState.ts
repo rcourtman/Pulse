@@ -97,7 +97,7 @@ export const useAppRuntimeState = () => {
     }
 
     try {
-      return Boolean(window.sessionStorage.getItem('pulse_auth_user'));
+      return Boolean(window.sessionStorage.getItem(STORAGE_KEYS.AUTH_USER));
     } catch {
       return false;
     }

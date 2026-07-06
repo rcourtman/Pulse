@@ -100,12 +100,12 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
       fallback={
         <A
           href={providerSetupAction.href}
-          aria-label={`Fix Patrol provider: ${state.triggerPatrolDisabledReason() || 'Provider needs attention'}`}
+          aria-label={`Check Patrol model: ${state.triggerPatrolDisabledReason() || 'Patrol model needs attention'}`}
           title={state.triggerPatrolDisabledReason() || 'Open Provider & Models'}
           class={className}
         >
           <SettingsIcon class="w-4 h-4" />
-          Fix provider
+          Check model
         </A>
       }
     >

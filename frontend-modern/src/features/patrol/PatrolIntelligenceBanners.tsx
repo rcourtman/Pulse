@@ -164,8 +164,8 @@ export function PatrolIntelligenceBanners(props: { state: PatrolIntelligenceStat
                   }`}
                 >
                   {state.patrolReadiness()?.status === 'not_ready'
-                    ? 'Provider issue'
-                    : 'Provider warning'}
+                    ? 'Patrol model issue'
+                    : 'Patrol model warning'}
                 </p>
                 <p
                   class={`text-xs ${

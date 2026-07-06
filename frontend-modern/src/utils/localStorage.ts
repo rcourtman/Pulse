@@ -147,6 +147,8 @@ export function createLocalStorageStringSignal(
 export const STORAGE_KEYS = {
   // Authentication
   AUTH: 'pulse_auth',
+  AUTH_USER: 'pulse_auth_user',
+  REMEMBERED_LOGIN_USERNAME: 'pulse_remembered_login_username',
   ORG_ID: 'pulse_org_id',
   SETUP_CREDENTIALS: 'pulse_setup_credentials',
   SETUP_HANDOFF: 'pulse_setup_handoff',

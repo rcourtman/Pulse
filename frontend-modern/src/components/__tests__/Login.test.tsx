@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { Login } from '@/components/Login';
 import loginSource from '@/components/Login.tsx?raw';
+import { STORAGE_KEYS } from '@/utils/localStorage';
 
 // Mock fetch globally
 const mockFetch = vi.fn();
@@ -23,6 +24,7 @@ Object.defineProperty(window, 'matchMedia', {
 });
 
 // Mock localStorage
+let mockLocalStorageData: Record<string, string>;
 const mockLocalStorage = {
   getItem: vi.fn(),
   setItem: vi.fn(),
@@ -36,8 +38,23 @@ window.history.replaceState = vi.fn();
 
 describe('Login', () => {
   beforeEach(() => {
+    mockLocalStorageData = {};
     mockFetch.mockReset();
     mockLocalStorage.getItem.mockReset();
+    mockLocalStorage.getItem.mockImplementation((key: string) => mockLocalStorageData[key] ?? null);
+    mockLocalStorage.setItem.mockReset();
+    mockLocalStorage.setItem.mockImplementation((key: string, value: string) => {
+      mockLocalStorageData[key] = value;
+    });
+    mockLocalStorage.removeItem.mockReset();
+    mockLocalStorage.removeItem.mockImplementation((key: string) => {
+      delete mockLocalStorageData[key];
+    });
+    mockLocalStorage.clear.mockReset();
+    mockLocalStorage.clear.mockImplementation(() => {
+      mockLocalStorageData = {};
+    });
+    window.sessionStorage.clear();
     // Default mock for security status
     mockFetch.mockResolvedValue({
       ok: true,
@@ -171,6 +188,91 @@ describe('Login', () => {
 
     expect(await screen.findByText('Demo Mode')).toBeInTheDocument();
     expect(screen.getAllByText('demo')).toHaveLength(2);
+  });
+
+  it('restores the remembered username without storing a password', async () => {
+    mockLocalStorageData[STORAGE_KEYS.REMEMBERED_LOGIN_USERNAME] = 'johannes';
+    const mockOnLogin = vi.fn();
+    const securityStatus = {
+      hasAuthentication: true,
+      hideLocalLogin: false,
+      ssoEnabled: false,
+    };
+
+    render(() => (
+      <Login onLogin={mockOnLogin} hasAuth={true} securityStatus={securityStatus as any} />
+    ));
+
+    const usernameInput = (await screen.findByPlaceholderText('Username')) as HTMLInputElement;
+    expect(usernameInput.value).toBe('johannes');
+    expect(screen.getByLabelText('Remember me')).toBeChecked();
+    expect((screen.getByPlaceholderText('Password') as HTMLInputElement).value).toBe('');
+  });
+
+  it('stores the username after a successful remembered login', async () => {
+    const mockOnLogin = vi.fn();
+    mockFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    const securityStatus = {
+      hasAuthentication: true,
+      hideLocalLogin: false,
+      ssoEnabled: false,
+    };
+
+    render(() => (
+      <Login onLogin={mockOnLogin} hasAuth={true} securityStatus={securityStatus as any} />
+    ));
+
+    fireEvent.input(await screen.findByPlaceholderText('Username'), {
+      target: { value: 'johannes' },
+    });
+    fireEvent.input(screen.getByPlaceholderText('Password'), { target: { value: 'secret' } });
+    fireEvent.click(screen.getByLabelText('Remember me'));
+    fireEvent.click(screen.getByRole('button', { name: /sign in to pulse/i }));
+
+    await waitFor(() => expect(mockOnLogin).toHaveBeenCalledOnce());
+    expect(window.sessionStorage.getItem(STORAGE_KEYS.AUTH_USER)).toBe('johannes');
+    expect(mockLocalStorage.setItem).toHaveBeenCalledWith(
+      STORAGE_KEYS.REMEMBERED_LOGIN_USERNAME,
+      'johannes',
+    );
+  });
+
+  it('clears a previously remembered username after a successful non-remembered login', async () => {
+    mockLocalStorageData[STORAGE_KEYS.REMEMBERED_LOGIN_USERNAME] = 'old-user';
+    const mockOnLogin = vi.fn();
+    mockFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    const securityStatus = {
+      hasAuthentication: true,
+      hideLocalLogin: false,
+      ssoEnabled: false,
+    };
+
+    render(() => (
+      <Login onLogin={mockOnLogin} hasAuth={true} securityStatus={securityStatus as any} />
+    ));
+
+    const rememberCheckbox = await screen.findByLabelText('Remember me');
+    fireEvent.click(rememberCheckbox);
+    fireEvent.input(screen.getByPlaceholderText('Username'), {
+      target: { value: 'new-user' },
+    });
+    fireEvent.input(screen.getByPlaceholderText('Password'), { target: { value: 'secret' } });
+    fireEvent.click(screen.getByRole('button', { name: /sign in to pulse/i }));
+
+    await waitFor(() => expect(mockOnLogin).toHaveBeenCalledOnce());
+    expect(mockLocalStorage.removeItem).toHaveBeenCalledWith(
+      STORAGE_KEYS.REMEMBERED_LOGIN_USERNAME,
+    );
   });
 
   it('routes login loading indicators through the shared LoadingSpinner primitive', () => {

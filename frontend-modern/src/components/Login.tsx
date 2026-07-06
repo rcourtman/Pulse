@@ -1,6 +1,7 @@
 import { Component, createSignal, Show, For, onMount, lazy, Suspense } from 'solid-js';
 import { logger } from '@/utils/logger';
 import { apiClient, apiFetchJSON } from '@/utils/apiClient';
+import { STORAGE_KEYS } from '@/utils/localStorage';
 import Globe from 'lucide-solid/icons/globe';
 import Key from 'lucide-solid/icons/key';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
@@ -14,6 +15,39 @@ interface LoginProps {
 }
 
 import type { SecurityStatus, SSOProviderInfo } from '@/types/config';
+
+function getBrowserStorage(kind: 'localStorage' | 'sessionStorage'): Storage | undefined {
+  if (typeof window === 'undefined') return undefined;
+  try {
+    return window[kind];
+  } catch {
+    return undefined;
+  }
+}
+
+function readRememberedUsername(): string {
+  const storage = getBrowserStorage('localStorage');
+  if (!storage) return '';
+  try {
+    return (storage.getItem(STORAGE_KEYS.REMEMBERED_LOGIN_USERNAME) || '').trim();
+  } catch {
+    return '';
+  }
+}
+
+function persistRememberedUsername(username: string, remember: boolean): void {
+  const storage = getBrowserStorage('localStorage');
+  if (!storage) return;
+  try {
+    if (remember) {
+      storage.setItem(STORAGE_KEYS.REMEMBERED_LOGIN_USERNAME, username);
+    } else {
+      storage.removeItem(STORAGE_KEYS.REMEMBERED_LOGIN_USERNAME);
+    }
+  } catch {
+    // Ignore storage failures (private browsing, quota, managed browsers).
+  }
+}
 
 export const Login: Component<LoginProps> = (props) => {
   const [username, setUsername] = createSignal('');
@@ -67,6 +101,12 @@ export const Login: Component<LoginProps> = (props) => {
   };
 
   onMount(async () => {
+    const rememberedUsername = readRememberedUsername();
+    if (rememberedUsername) {
+      setUsername(rememberedUsername);
+      setRememberMe(true);
+    }
+
     const params = new URLSearchParams(window.location.search);
 
     // Handle OIDC callback
@@ -185,10 +225,11 @@ export const Login: Component<LoginProps> = (props) => {
       if (response.ok && data.success) {
         // Credentials are valid; persist username for convenience and rely on session cookie
         try {
-          sessionStorage.setItem('pulse_auth_user', usernameValue);
+          getBrowserStorage('sessionStorage')?.setItem(STORAGE_KEYS.AUTH_USER, usernameValue);
         } catch (_err) {
           // Ignore storage failures (private browsing, etc.)
         }
+        persistRememberedUsername(usernameValue, rememberMe());
         props.onLogin();
       } else if (response.status === 403) {
         // Account is locked
@@ -200,7 +241,7 @@ export const Login: Component<LoginProps> = (props) => {
           setError(data.message || 'Account temporarily locked due to too many failed attempts.');
         }
         // Clear the input fields
-        setUsername('');
+        if (!rememberMe()) setUsername('');
         setPassword('');
       } else if (response.status === 429) {
         // Rate limited
@@ -217,7 +258,7 @@ export const Login: Component<LoginProps> = (props) => {
           setError(data.message || 'Invalid username or password');
         }
         // Clear the input fields
-        setUsername('');
+        if (!rememberMe()) setUsername('');
         setPassword('');
       } else {
         setError(data.message || 'Server error. Please try again.');

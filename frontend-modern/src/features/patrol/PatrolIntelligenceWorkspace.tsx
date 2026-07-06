@@ -301,8 +301,10 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
           <div class="rounded-md border border-border bg-surface-alt p-4">
             <div class="flex flex-wrap items-start justify-between gap-3">
               <div class="min-w-0 max-w-2xl">
-                <h3 class="text-sm font-semibold text-base-content">Provider needs attention</h3>
-                <p class="mt-2 text-xs text-muted">Issue: {setupReason()}</p>
+                <h3 class="text-sm font-semibold text-base-content">
+                  Patrol model needs attention
+                </h3>
+                <p class="mt-2 text-xs text-muted">Patrol check: {setupReason()}</p>
               </div>
               <ButtonLink href={setupAction.href} variant="primary" size="sm" class="gap-1.5">
                 <SettingsIcon class="h-4 w-4" aria-hidden="true" />

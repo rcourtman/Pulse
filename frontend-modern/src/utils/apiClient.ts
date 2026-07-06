@@ -5,6 +5,7 @@ import { logger } from '@/utils/logger';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 
 const AUTH_STORAGE_KEY = STORAGE_KEYS.AUTH;
+const AUTH_USER_STORAGE_KEY = STORAGE_KEYS.AUTH_USER;
 const ORG_STORAGE_KEY = STORAGE_KEYS.ORG_ID;
 const ORG_HEADER_NAME = 'X-Pulse-Org-ID';
 const ORG_COOKIE_NAME = 'pulse_org_id';
@@ -515,7 +516,7 @@ class ApiClient {
     const storage = getSessionStorage();
     if (!storage) return;
     try {
-      storage.removeItem('pulse_auth_user');
+      storage.removeItem(AUTH_USER_STORAGE_KEY);
     } catch {
       // Ignore storage quota errors
     }

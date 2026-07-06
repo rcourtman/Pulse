@@ -77,8 +77,8 @@ describe('PatrolIntelligenceHeader', () => {
     expect(headerSource).toContain("state.patrolReadiness()?.status === 'not_ready'");
     expect(headerSource).toContain('getPatrolProviderSettingsAction');
     expect(headerSource).toContain('providerSetupAction.href');
-    expect(headerSource).toContain('Fix provider');
-    expect(headerSource).toContain('Fix Patrol provider:');
+    expect(headerSource).toContain('Check model');
+    expect(headerSource).toContain('Check Patrol model:');
     expect(headerSource).toContain('runButtonDisabled');
     expect(headerSource).not.toContain('!state.canTriggerPatrol() ||');
   });
