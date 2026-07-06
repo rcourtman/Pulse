@@ -116,6 +116,8 @@ describe('useAppRuntimeState', () => {
     vi.doMock('@/utils/localStorage', () => ({
       STORAGE_KEYS: {
         AUTH: 'auth',
+        AUTH_USER: 'pulse_auth_user',
+        REMEMBERED_LOGIN_USERNAME: 'pulse_remembered_login_username',
         ORG_ID: 'org_id',
         GUEST_METADATA: 'guest_metadata',
         DOCKER_METADATA: 'docker_metadata',

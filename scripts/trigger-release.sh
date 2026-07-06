@@ -184,19 +184,6 @@ echo ""
 echo "Derived rollback command: ${ROLLBACK_COMMAND}"
 
 if [ "$IS_PRERELEASE" != "true" ]; then
-    DEFAULT_PROMOTED_FROM_TAG=$(git tag -l "v${VERSION}-rc.*" --sort=-version:refname | head -1 || true)
-    echo ""
-    if [ -n "$DEFAULT_PROMOTED_FROM_TAG" ]; then
-      read -r -p "Promoted prerelease tag [${DEFAULT_PROMOTED_FROM_TAG}]: " PROMOTED_FROM_TAG
-      PROMOTED_FROM_TAG="${PROMOTED_FROM_TAG:-$DEFAULT_PROMOTED_FROM_TAG}"
-    else
-      read -r -p "Promoted prerelease tag (for example v${VERSION}-rc.2): " PROMOTED_FROM_TAG
-    fi
-    if [ -z "$PROMOTED_FROM_TAG" ]; then
-      echo "❌ Error: promoted prerelease tag is required for stable releases"
-      exit 1
-    fi
-
     echo ""
     read -r -p "Hotfix exception to bypass 72-hour prerelease soak? [y/N] " HOTFIX_REPLY
     if [[ "$HOTFIX_REPLY" =~ ^[Yy]$ ]]; then
@@ -206,6 +193,23 @@ if [ "$IS_PRERELEASE" != "true" ]; then
         echo "❌ Error: hotfix reason is required when bypassing prerelease soak"
         exit 1
       fi
+    fi
+
+    DEFAULT_PROMOTED_FROM_TAG=$(git tag -l "v${VERSION}-rc.*" --sort=-version:refname | head -1 || true)
+    echo ""
+    if [ -n "$DEFAULT_PROMOTED_FROM_TAG" ]; then
+      if [ "$HOTFIX_EXCEPTION" = "true" ]; then
+        read -r -p "Promoted prerelease tag, or blank for hotfix with no RC lineage [${DEFAULT_PROMOTED_FROM_TAG}]: " PROMOTED_FROM_TAG
+      else
+        read -r -p "Promoted prerelease tag [${DEFAULT_PROMOTED_FROM_TAG}]: " PROMOTED_FROM_TAG
+        PROMOTED_FROM_TAG="${PROMOTED_FROM_TAG:-$DEFAULT_PROMOTED_FROM_TAG}"
+      fi
+    else
+      read -r -p "Promoted prerelease tag (for example v${VERSION}-rc.2; blank only for approved hotfix): " PROMOTED_FROM_TAG
+    fi
+    if [ -z "$PROMOTED_FROM_TAG" ] && [ "$HOTFIX_EXCEPTION" != "true" ]; then
+      echo "❌ Error: promoted prerelease tag is required for stable releases unless this is an approved hotfix"
+      exit 1
     fi
 
     if [ "$VERSION" = "6.0.0" ]; then
@@ -226,6 +230,29 @@ if [ "$IS_PRERELEASE" != "true" ]; then
 fi
 
 # Trigger the workflow
+echo ""
+echo "Resolving governed promotion metadata..."
+RESOLVER_ARGS=(
+  --version "$VERSION"
+  --rollback-version "$ROLLBACK_VERSION"
+  --hotfix-reason "$HOTFIX_REASON"
+  --release-notes-file "$NOTES_FILE"
+)
+if [ -n "$PROMOTED_FROM_TAG" ]; then
+  RESOLVER_ARGS+=(--promoted-from-tag "$PROMOTED_FROM_TAG")
+fi
+if [ -n "$GA_DATE" ]; then
+  RESOLVER_ARGS+=(--ga-date "$GA_DATE")
+fi
+if [ -n "$V5_EOS_DATE" ]; then
+  RESOLVER_ARGS+=(--v5-eos-date "$V5_EOS_DATE")
+fi
+if [ "$HOTFIX_EXCEPTION" = "true" ]; then
+  RESOLVER_ARGS+=(--hotfix-exception)
+fi
+python3 scripts/release_control/resolve_release_promotion.py "${RESOLVER_ARGS[@]}" >/tmp/pulse-release-metadata.out
+cat /tmp/pulse-release-metadata.out
+
 echo ""
 echo "Triggering release workflow..."
 if [ -n "$NOTES_FILE" ]; then
