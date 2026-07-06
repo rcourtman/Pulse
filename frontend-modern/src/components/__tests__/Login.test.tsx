@@ -242,6 +242,41 @@ describe('Login', () => {
     );
   });
 
+  it('uses the submitted checkbox state when browser restore does not fire change', async () => {
+    const mockOnLogin = vi.fn();
+    mockFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    const securityStatus = {
+      hasAuthentication: true,
+      hideLocalLogin: false,
+      ssoEnabled: false,
+    };
+
+    render(() => (
+      <Login onLogin={mockOnLogin} hasAuth={true} securityStatus={securityStatus as any} />
+    ));
+
+    fireEvent.input(await screen.findByPlaceholderText('Username'), {
+      target: { value: 'johannes' },
+    });
+    fireEvent.input(screen.getByPlaceholderText('Password'), { target: { value: 'secret' } });
+    (screen.getByLabelText('Remember me') as HTMLInputElement).checked = true;
+    fireEvent.click(screen.getByRole('button', { name: /sign in to pulse/i }));
+
+    await waitFor(() => expect(mockOnLogin).toHaveBeenCalledOnce());
+    expect(mockLocalStorage.setItem).toHaveBeenCalledWith(
+      STORAGE_KEYS.REMEMBERED_LOGIN_USERNAME,
+      'johannes',
+    );
+    expect(mockLocalStorage.removeItem).not.toHaveBeenCalledWith(
+      STORAGE_KEYS.REMEMBERED_LOGIN_USERNAME,
+    );
+  });
+
   it('clears a previously remembered username after a successful non-remembered login', async () => {
     mockLocalStorageData[STORAGE_KEYS.REMEMBERED_LOGIN_USERNAME] = 'old-user';
     const mockOnLogin = vi.fn();

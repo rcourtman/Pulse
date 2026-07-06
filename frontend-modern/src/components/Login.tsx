@@ -188,14 +188,16 @@ export const Login: Component<LoginProps> = (props) => {
     setError('');
     setLoading(true);
 
-    // Read values directly from the form DOM to handle password manager autofill
-    // Password managers may fill fields without triggering input events,
-    // leaving the SolidJS signals empty while the DOM has the actual values
+    // Read values directly from the form DOM to handle password manager and
+    // browser form-state restores that do not trigger Solid input/change events.
     const form = e.currentTarget as HTMLFormElement;
     const usernameInput = form.querySelector('#username') as HTMLInputElement;
     const passwordInput = form.querySelector('#password') as HTMLInputElement;
+    const rememberInput = form.querySelector('#remember-me') as HTMLInputElement;
     const usernameValue = usernameInput?.value || username();
     const passwordValue = passwordInput?.value || password();
+    const rememberLogin = rememberInput?.checked ?? rememberMe();
+    setRememberMe(rememberLogin);
 
     // Validate that we have credentials before attempting login
     if (!usernameValue || !passwordValue) {
@@ -215,7 +217,7 @@ export const Login: Component<LoginProps> = (props) => {
         body: JSON.stringify({
           username: usernameValue,
           password: passwordValue,
-          rememberMe: rememberMe(),
+          rememberMe: rememberLogin,
         }),
         skipAuth: true,
       });
@@ -229,7 +231,7 @@ export const Login: Component<LoginProps> = (props) => {
         } catch (_err) {
           // Ignore storage failures (private browsing, etc.)
         }
-        persistRememberedUsername(usernameValue, rememberMe());
+        persistRememberedUsername(usernameValue, rememberLogin);
         props.onLogin();
       } else if (response.status === 403) {
         // Account is locked
@@ -241,7 +243,7 @@ export const Login: Component<LoginProps> = (props) => {
           setError(data.message || 'Account temporarily locked due to too many failed attempts.');
         }
         // Clear the input fields
-        if (!rememberMe()) setUsername('');
+        if (!rememberLogin) setUsername('');
         setPassword('');
       } else if (response.status === 429) {
         // Rate limited
@@ -258,7 +260,7 @@ export const Login: Component<LoginProps> = (props) => {
           setError(data.message || 'Invalid username or password');
         }
         // Clear the input fields
-        if (!rememberMe()) setUsername('');
+        if (!rememberLogin) setUsername('');
         setPassword('');
       } else {
         setError(data.message || 'Server error. Please try again.');
