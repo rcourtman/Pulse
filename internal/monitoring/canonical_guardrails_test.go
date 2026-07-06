@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -108,6 +109,84 @@ func TestBroadcastResourceDiskIOUsesUnifiedResourceMetrics(t *testing.T) {
 	}
 	if readRate != 4096 || writeRate != 8192 {
 		t.Fatalf("unexpected projected disk I/O rates: read=%d write=%d", readRate, writeRate)
+	}
+}
+
+func TestProxmoxReadStateCPUPercentRehydratesLegacyRatios(t *testing.T) {
+	const (
+		canonicalPercent = 0.6
+		legacyRatio      = 0.006
+	)
+
+	t.Run("node", func(t *testing.T) {
+		view := unifiedresources.NewNodeView(&unifiedresources.Resource{
+			ID:     "node-pve1",
+			Name:   "pve1",
+			Type:   unifiedresources.ResourceTypeAgent,
+			Status: unifiedresources.StatusOnline,
+			Metrics: &unifiedresources.ResourceMetrics{
+				CPU: &unifiedresources.MetricValue{Percent: canonicalPercent},
+			},
+			Proxmox: &unifiedresources.ProxmoxData{
+				SourceID: "node/pve1",
+				NodeName: "pve1",
+				Instance: "lab",
+			},
+		})
+
+		got := nodeFromReadStateView(&view)
+		assertFloatClose(t, got.CPU, legacyRatio)
+	})
+
+	t.Run("vm", func(t *testing.T) {
+		view := unifiedresources.NewVMView(&unifiedresources.Resource{
+			ID:     "vm-101",
+			Name:   "debian",
+			Type:   unifiedresources.ResourceTypeVM,
+			Status: unifiedresources.StatusOnline,
+			Metrics: &unifiedresources.ResourceMetrics{
+				CPU: &unifiedresources.MetricValue{Percent: canonicalPercent},
+			},
+			Proxmox: &unifiedresources.ProxmoxData{
+				SourceID: "qemu/101",
+				NodeName: "pve1",
+				Instance: "lab",
+				VMID:     101,
+			},
+		})
+
+		got := vmFromReadStateView(&view)
+		assertFloatClose(t, got.CPU, legacyRatio)
+	})
+
+	t.Run("container", func(t *testing.T) {
+		view := unifiedresources.NewContainerView(&unifiedresources.Resource{
+			ID:     "ct-201",
+			Name:   "nginx",
+			Type:   unifiedresources.ResourceTypeSystemContainer,
+			Status: unifiedresources.StatusOnline,
+			Metrics: &unifiedresources.ResourceMetrics{
+				CPU: &unifiedresources.MetricValue{Percent: canonicalPercent},
+			},
+			Proxmox: &unifiedresources.ProxmoxData{
+				SourceID:      "lxc/201",
+				NodeName:      "pve1",
+				Instance:      "lab",
+				VMID:          201,
+				ContainerType: "lxc",
+			},
+		})
+
+		got := containerFromReadStateView(&view)
+		assertFloatClose(t, got.CPU, legacyRatio)
+	})
+}
+
+func assertFloatClose(t *testing.T, got float64, want float64) {
+	t.Helper()
+
+	if math.Abs(got-want) > 0.000001 {
+		t.Fatalf("got %v, want %v", got, want)
 	}
 }
 

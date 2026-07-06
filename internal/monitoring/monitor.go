@@ -3054,6 +3054,13 @@ func storageFromReadStateView(view *unifiedresources.StoragePoolView) models.Sto
 	}
 }
 
+func proxmoxRatioFromPercent(percent float64) float64 {
+	if math.IsNaN(percent) || math.IsInf(percent, 0) || percent <= 0 {
+		return 0
+	}
+	return percent / 100
+}
+
 func nodeFromReadStateView(view *unifiedresources.NodeView) models.Node {
 	if view == nil {
 		return models.Node{}
@@ -3074,7 +3081,7 @@ func nodeFromReadStateView(view *unifiedresources.NodeView) models.Node {
 		GuestURL:                     view.GuestURL(),
 		Status:                       string(view.Status()),
 		Type:                         "node",
-		CPU:                          view.CPUPercent(),
+		CPU:                          proxmoxRatioFromPercent(view.CPUPercent()),
 		Memory:                       models.Memory{Used: view.MemoryUsed(), Total: view.MemoryTotal(), Free: maxInt64(0, view.MemoryTotal()-view.MemoryUsed()), Usage: view.MemoryPercent()},
 		Disk:                         models.Disk{Used: view.DiskUsed(), Total: view.DiskTotal(), Free: maxInt64(0, view.DiskTotal()-view.DiskUsed()), Usage: view.DiskPercent()},
 		Uptime:                       view.Uptime(),
@@ -3167,7 +3174,7 @@ func vmFromReadStateView(view *unifiedresources.VMView) models.VM {
 		Instance:          view.Instance(),
 		Status:            string(view.Status()),
 		Type:              "qemu",
-		CPU:               view.CPUPercent(),
+		CPU:               proxmoxRatioFromPercent(view.CPUPercent()),
 		CPUs:              view.CPUs(),
 		Memory:            models.Memory{Total: totalMemory, Used: usedMemory, Free: maxInt64(0, totalMemory-usedMemory), Usage: view.MemoryPercent()},
 		Disk:              models.Disk{Used: usedDisk, Total: totalDisk, Free: maxInt64(0, totalDisk-usedDisk), Usage: view.DiskPercent()},
@@ -3209,7 +3216,7 @@ func containerFromReadStateView(view *unifiedresources.ContainerView) models.Con
 		Instance:          view.Instance(),
 		Status:            string(view.Status()),
 		Type:              firstNonEmptyString(view.ContainerType(), "lxc"),
-		CPU:               view.CPUPercent(),
+		CPU:               proxmoxRatioFromPercent(view.CPUPercent()),
 		CPUs:              view.CPUs(),
 		Memory:            models.Memory{Total: totalMemory, Used: usedMemory, Free: maxInt64(0, totalMemory-usedMemory), Usage: view.MemoryPercent()},
 		Disk:              models.Disk{Used: usedDisk, Total: totalDisk, Free: maxInt64(0, totalDisk-usedDisk), Usage: view.DiskPercent()},

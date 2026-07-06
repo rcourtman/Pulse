@@ -50,6 +50,12 @@ per-core CPU percent, but monitoring-owned history and alert threshold
 evaluation use host-capacity-normalized CPU percent when host CPU capacity is
 known. Raw runtime CPU remains alert/resource metadata, not the canonical
 threshold value.
+Proxmox read-state rehydration is the inverse boundary: canonical
+unified-resource CPU metrics are 0..100 percentages, while legacy
+`models.Node.CPU`, `models.VM.CPU`, and `models.Container.CPU` remain Proxmox
+0..1 ratio fields. Monitoring-owned read-state conversion must divide canonical
+Proxmox node, VM, and LXC CPU percentages before handing them back to legacy
+snapshot/current-row paths.
 
 ## Canonical Files
 
