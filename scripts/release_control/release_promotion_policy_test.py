@@ -78,6 +78,18 @@ def rc_packet_paths_for_version(version: str) -> tuple[str, str, str] | None:
     )
 
 
+def support_prerelease_packet_paths_for_version(version: str) -> tuple[str, str] | None:
+    """Return release-notes and changelog paths for post-GA support RC versions."""
+    if not re.match(r"^6\.\d+\.\d+-rc\.\d+$", version):
+        return None
+    if version.startswith("6.0.0-rc."):
+        return None
+    return (
+        f"docs/releases/RELEASE_NOTES_v{version}.md",
+        f"docs/releases/V6_CHANGELOG_v{version}.md",
+    )
+
+
 def stable_packet_paths_for_version(version: str) -> tuple[str, str] | None:
     """Return the stable release-notes and changelog packet paths for a v6 stable VERSION."""
     if not re.match(r"^6\.\d+\.\d+$", version):
@@ -350,25 +362,40 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
             self.assertIn(f"Pulse v{current_version}", changelog)
         else:
             packet_paths = rc_packet_paths_for_version(current_version)
-            self.assertIsNotNone(
-                packet_paths,
-                f"VERSION={current_version} does not match the 6.0.0-rc.N pattern",
+            support_packet_paths = support_prerelease_packet_paths_for_version(current_version)
+            self.assertTrue(
+                packet_paths is not None or support_packet_paths is not None,
+                f"VERSION={current_version} does not match a governed v6 prerelease packet pattern",
             )
-            release_notes_path, changelog_path, operator_pack_path = packet_paths
+            if packet_paths is not None:
+                release_notes_path, changelog_path, operator_pack_path = packet_paths
 
-            release_notes = read(release_notes_path)
-            changelog = read(changelog_path)
-            operator_pack = read(operator_pack_path)
+                release_notes = read(release_notes_path)
+                changelog = read(changelog_path)
+                operator_pack = read(operator_pack_path)
 
-            self.assertIn(f"current in-repo v6 `rc.{current_version.rsplit('.', 1)[1]}` draft packet", release_index)
-            self.assertIn(release_notes_path, release_index)
-            self.assertIn(changelog_path, release_index)
-            self.assertIn(operator_pack_path, release_index)
-            self.assertNotIn("current stable v6 release packet", release_index)
-            self.assertIn(f"Pulse v{current_version} Draft Release Notes", release_notes)
-            self.assertIn(f"`v{current_version}`", release_notes)
-            self.assertIn(f"Pulse v{current_version} Draft Changelog", changelog)
-            self.assertIn(f"`v{current_version}`", operator_pack)
+                self.assertIn(f"current in-repo v6 `rc.{current_version.rsplit('.', 1)[1]}` draft packet", release_index)
+                self.assertIn(release_notes_path, release_index)
+                self.assertIn(changelog_path, release_index)
+                self.assertIn(operator_pack_path, release_index)
+                self.assertNotIn("current stable v6 release packet", release_index)
+                self.assertIn(f"Pulse v{current_version} Draft Release Notes", release_notes)
+                self.assertIn(f"`v{current_version}`", release_notes)
+                self.assertIn(f"Pulse v{current_version} Draft Changelog", changelog)
+                self.assertIn(f"`v{current_version}`", operator_pack)
+            else:
+                assert support_packet_paths is not None
+                release_notes_path, changelog_path = support_packet_paths
+
+                release_notes = read(release_notes_path)
+                changelog = read(changelog_path)
+
+                self.assertIn("current v6 support release candidate packet", release_index)
+                self.assertIn(release_notes_path, release_index)
+                self.assertIn(changelog_path, release_index)
+                self.assertIn(f"Pulse v{current_version} Release Notes", release_notes)
+                self.assertIn(f"`v{current_version}`", release_notes)
+                self.assertIn(f"Pulse v{current_version}", changelog)
 
     def test_upgrade_guide_points_at_current_rc_support_pack(self) -> None:
         upgrade_guide = read("docs/UPGRADE_v6.md")
@@ -400,17 +427,27 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
             self.assertNotIn("docs/releases/V6_RC_OPERATOR_SUPPORT_PACK.md", upgrade_guide)
         else:
             packet_paths = rc_packet_paths_for_version(current_version)
-            self.assertIsNotNone(
-                packet_paths,
-                f"VERSION={current_version} does not match the 6.0.0-rc.N pattern",
+            support_packet_paths = support_prerelease_packet_paths_for_version(current_version)
+            self.assertTrue(
+                packet_paths is not None or support_packet_paths is not None,
+                f"VERSION={current_version} does not match a governed v6 prerelease packet pattern",
             )
-            current_support_pack = packet_paths[2]
-            self.assertIn(current_support_pack, upgrade_guide)
-            for _, _, _, support_pack in discover_rc_draft_packets():
-                if support_pack == current_support_pack:
-                    continue
-                self.assertNotIn(support_pack, upgrade_guide)
-            self.assertNotIn("docs/releases/V6_RC_OPERATOR_SUPPORT_PACK.md", upgrade_guide)
+            if packet_paths is not None:
+                current_support_pack = packet_paths[2]
+                self.assertIn(current_support_pack, upgrade_guide)
+                for _, _, _, support_pack in discover_rc_draft_packets():
+                    if support_pack == current_support_pack:
+                        continue
+                    self.assertNotIn(support_pack, upgrade_guide)
+                self.assertNotIn("docs/releases/V6_RC_OPERATOR_SUPPORT_PACK.md", upgrade_guide)
+            else:
+                assert support_packet_paths is not None
+                release_notes_path, changelog_path = support_packet_paths
+                self.assertIn(release_notes_path, upgrade_guide)
+                self.assertIn(changelog_path, upgrade_guide)
+                for _, _, _, support_pack in discover_rc_draft_packets():
+                    self.assertNotIn(support_pack, upgrade_guide)
+                self.assertNotIn("docs/releases/V6_RC_OPERATOR_SUPPORT_PACK.md", upgrade_guide)
 
     def test_prerelease_feedback_template_uses_generic_current_rc_wording(self) -> None:
         template = read(".github/ISSUE_TEMPLATE/v6_rc_feedback.yml")
@@ -855,9 +892,10 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
             if current_version != "6.0.0":
                 self.assertNotIn(f"VERSION={current_version}", blocked)
         else:
-            self.assertIsNotNone(
-                rc_packet_paths_for_version(current_version),
-                f"VERSION={current_version} does not match the 6.0.0-rc.N pattern",
+            self.assertTrue(
+                rc_packet_paths_for_version(current_version) is not None
+                or support_prerelease_packet_paths_for_version(current_version) is not None,
+                f"VERSION={current_version} does not match a governed v6 prerelease packet pattern",
             )
             self.assertIn("VERSION=6.0.0", blocked)
             self.assertNotIn(f"VERSION={current_version}", blocked)

@@ -1,7 +1,7 @@
-# Pulse v6.0.5
+# Pulse v6.0.5-rc.1
 
-_This changelog describes the stable `v6.0.5` patch release compared with
-`v6.0.4`._
+_This changelog describes the `v6.0.5-rc.1` release candidate compared with
+stable `v6.0.4`._
 
 ## Fixed
 
@@ -13,10 +13,10 @@ _This changelog describes the stable `v6.0.5` patch release compared with
   explicit SAT probe when smartctl auto-detection returns health but no
   temperature.
 - Docker, Helm, installer, and release-helper metadata now track the active
-  stable patch version.
+  release candidate version.
 
 ## Release Metadata
 
-- Version: `v6.0.5`
+- Version: `v6.0.5-rc.1`
 - Rollback target: `v6.0.4`
-- Promotion path: stable patch hotfix from `main`
+- Promotion path: release candidate from `main`
