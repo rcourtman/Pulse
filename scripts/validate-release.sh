@@ -10,6 +10,9 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
 # Color output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -136,6 +139,52 @@ validate_download_script_headers() {
     fi
 }
 
+host_can_execute_linux_amd64() {
+    [ "$(uname -s)" = "Linux" ] || return 1
+    case "$(uname -m)" in
+        x86_64|amd64)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+docker_runtime_available() {
+    [ "$SKIP_DOCKER" = false ] || return 1
+    command -v docker >/dev/null 2>&1 || return 1
+    docker info >/dev/null 2>&1 || return 1
+}
+
+validate_linux_amd64_version_with_docker() {
+    local tarball="$1"
+
+    docker run --rm -i \
+        --platform linux/amd64 \
+        --entrypoint /bin/sh \
+        -e EXPECTED_TAG="$PULSE_TAG" \
+        -e EXPECTED_VERSION="$PULSE_VERSION" \
+        "$IMAGE" \
+        -c 'set -euo pipefail
+tmp="$(mktemp -d)"
+tar -xzf - -C "$tmp"
+version_output="$("$tmp/bin/pulse" version 2>/dev/null)"
+printf "%s\n" "$version_output"
+printf "%s\n" "$version_output" | grep -Fx "Pulse $EXPECTED_TAG" >/dev/null || {
+    echo "Extracted pulse binary version mismatch: $version_output" >&2
+    exit 1
+}
+grep -aF "$EXPECTED_TAG" "$tmp/bin/pulse" >/dev/null || {
+    echo "Extracted pulse binary does not contain expected version string: $EXPECTED_TAG" >&2
+    exit 1
+}
+grep -Fx "$EXPECTED_VERSION" "$tmp/VERSION" >/dev/null || {
+    echo "Extracted VERSION file mismatch" >&2
+    exit 1
+}' < "$tarball"
+}
+
 if [ $# -lt 1 ]; then
     error "Usage: $0 <pulse-version> [image] [release-dir] [--skip-docker]"
     exit 1
@@ -173,6 +222,7 @@ if [ "$SKIP_DOCKER" = false ]; then
     command -v docker >/dev/null || { error "docker is required (use --skip-docker to skip Docker validation)"; exit 1; }
 fi
 [ -d "$RELEASE_DIR" ] || { error "release dir not found: $RELEASE_DIR"; exit 1; }
+RELEASE_DIR="$(cd "$RELEASE_DIR" && pwd)"
 
 # Create temp directory for extractions
 tmp_root=$(mktemp -d)
@@ -557,7 +607,7 @@ success "SSH signature sidecars validated"
 # pinned key and runs the exact verification command, so any drift between
 # documented key and actual signing key fails the release.
 info "Validating README pinned signature key matches install.sh.sshsig..."
-readme_path="$(cd "$(dirname "$0")/.." && pwd)/README.md"
+readme_path="$REPO_ROOT/README.md"
 if [ ! -f "$readme_path" ]; then
     error "README.md not found at $readme_path — cannot validate documented signature key"
     exit 1
@@ -622,15 +672,12 @@ echo ""
 info "=== Version Embedding Validation (Extracted Binaries) ==="
 
 # Extract linux-amd64 tarball for testing
+linux_amd64_tarball="$RELEASE_DIR/pulse-v${PULSE_VERSION}-linux-amd64.tar.gz"
 extract_dir="$tmp_root/linux-amd64"
 mkdir -p "$extract_dir"
-tar -xzf "$RELEASE_DIR/pulse-v${PULSE_VERSION}-linux-amd64.tar.gz" -C "$extract_dir"
+tar -xzf "$linux_amd64_tarball" -C "$extract_dir"
 
 info "Testing extracted binaries from linux-amd64 tarball..."
-
-# Test Pulse server
-"$extract_dir/bin/pulse" version 2>/dev/null | grep -Fx "Pulse $PULSE_TAG" >/dev/null || { error "Extracted pulse binary version mismatch"; exit 1; }
-success "Extracted pulse binary: $PULSE_TAG"
 
 # Ensure extracted pulse binary contains embedded version string metadata.
 grep -aF "$PULSE_TAG" "$extract_dir/bin/pulse" >/dev/null || { error "Extracted pulse binary does not contain expected version string"; exit 1; }
@@ -639,6 +686,19 @@ success "Extracted pulse binary contains expected version string: $PULSE_TAG"
 # Test VERSION file
 grep -Fx "$PULSE_VERSION" "$extract_dir/VERSION" >/dev/null || { error "Extracted VERSION file mismatch"; exit 1; }
 success "Extracted VERSION file: $PULSE_VERSION"
+
+# Test Pulse server. The release tarball is linux/amd64, so macOS and arm64
+# hosts cannot execute it directly. Use Docker when available, otherwise keep
+# the static version checks above and make the skip explicit.
+if host_can_execute_linux_amd64; then
+    "$extract_dir/bin/pulse" version 2>/dev/null | grep -Fx "Pulse $PULSE_TAG" >/dev/null || { error "Extracted pulse binary version mismatch"; exit 1; }
+    success "Extracted pulse binary executes on host: $PULSE_TAG"
+elif docker_runtime_available; then
+    validate_linux_amd64_version_with_docker "$linux_amd64_tarball" | grep -Fx "Pulse $PULSE_TAG" >/dev/null || { error "Extracted pulse binary Docker version check failed"; exit 1; }
+    success "Extracted pulse binary executes under Docker linux/amd64: $PULSE_TAG"
+else
+    warn "Skipping extracted linux/amd64 pulse execution on $(uname -s)/$(uname -m); Docker runtime unavailable or --skip-docker was provided"
+fi
 
 echo ""
 
