@@ -1358,6 +1358,7 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 	existingGroups := m.buildPBSBackupCache(instanceName)
 
 	var allBackups []models.PBSBackup
+	retainedGroups := make(map[pbsBackupGroupKey]struct{}, len(existingGroups))
 	datastoreCount := len(datastores) // Number of datastores to query
 	datastoreFetches := 0             // Number of successful datastore fetches
 	datastoreErrors := 0              // Number of failed datastore fetches
@@ -1426,6 +1427,7 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 				if group.BackupCount == 0 {
 					continue
 				}
+				retainedGroups[key] = struct{}{}
 
 				lastBackupTime := time.Unix(group.LastBackup, 0)
 				hasCachedData := len(cached.snapshots) > 0
@@ -1510,6 +1512,7 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 						continue
 					}
 					allBackups = append(allBackups, entry.snapshots...)
+					retainedGroups[key] = struct{}{}
 				}
 			}
 			datastoreErrors++
@@ -1531,6 +1534,8 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 			Msg("All PBS datastore queries failed; keeping previous backup list")
 		return
 	}
+
+	m.prunePBSBackupCacheTimes(instanceName, retainedGroups)
 
 	// Update state
 	m.state.UpdatePBSBackups(instanceName, allBackups)
@@ -1600,6 +1605,28 @@ func (m *Monitor) setPBSBackupCacheTime(instanceName string, key pbsBackupGroupK
 		m.pbsBackupCacheTime[instanceName] = make(map[pbsBackupGroupKey]time.Time)
 	}
 	m.pbsBackupCacheTime[instanceName][key] = t
+}
+
+func (m *Monitor) prunePBSBackupCacheTimes(instanceName string, retained map[pbsBackupGroupKey]struct{}) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.pbsBackupCacheTime == nil {
+		return
+	}
+	perGroup := m.pbsBackupCacheTime[instanceName]
+	if len(perGroup) == 0 {
+		return
+	}
+
+	for key := range perGroup {
+		if _, ok := retained[key]; !ok {
+			delete(perGroup, key)
+		}
+	}
+	if len(perGroup) == 0 {
+		delete(m.pbsBackupCacheTime, instanceName)
+	}
 }
 
 func normalizePBSNamespacePath(ns string) string {

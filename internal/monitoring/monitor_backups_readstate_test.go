@@ -230,6 +230,95 @@ func TestFetchPBSBackupSnapshotsUsesBoundedWorkerPool(t *testing.T) {
 	}
 }
 
+func TestPollPBSBackupsPrunesCacheTimesForDeletedGroups(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/admin/datastore/archive/groups") {
+			_, _ = w.Write([]byte(`{"data":[{"backup-type":"vm","backup-id":"100","last-backup":1700000000,"backup-count":1}]}`))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	client, err := pbs.NewClient(pbs.ClientConfig{
+		Host:       server.URL,
+		TokenName:  "root@pam!token",
+		TokenValue: "secret",
+	})
+	if err != nil {
+		t.Fatalf("failed to create PBS client: %v", err)
+	}
+
+	keepKey := pbsBackupGroupKey{
+		datastore:  "archive",
+		namespace:  "",
+		backupType: "vm",
+		backupID:   "100",
+	}
+	staleKey := pbsBackupGroupKey{
+		datastore:  "archive",
+		namespace:  "",
+		backupType: "vm",
+		backupID:   "999",
+	}
+
+	m := &Monitor{
+		state: models.NewState(),
+		pbsBackupCacheTime: map[string]map[pbsBackupGroupKey]time.Time{
+			"pbs1": {
+				keepKey:  time.Now(),
+				staleKey: time.Now(),
+			},
+		},
+	}
+	m.state.UpdatePBSBackups("pbs1", []models.PBSBackup{
+		{
+			ID:         "pbs-pbs1-archive--vm-100-1700000000",
+			Instance:   "pbs1",
+			Datastore:  "archive",
+			Namespace:  "",
+			BackupType: "vm",
+			VMID:       "100",
+			BackupTime: time.Unix(1700000000, 0),
+		},
+		{
+			ID:         "pbs-pbs1-archive--vm-999-1690000000",
+			Instance:   "pbs1",
+			Datastore:  "archive",
+			Namespace:  "",
+			BackupType: "vm",
+			VMID:       "999",
+			BackupTime: time.Unix(1690000000, 0),
+		},
+	})
+
+	m.pollPBSBackups(context.Background(), "pbs1", client, []models.PBSDatastore{
+		{Name: "archive"},
+	})
+
+	m.mu.RLock()
+	perGroup := m.pbsBackupCacheTime["pbs1"]
+	_, kept := perGroup[keepKey]
+	_, stale := perGroup[staleKey]
+	m.mu.RUnlock()
+
+	if !kept {
+		t.Fatal("expected current PBS group cache time to be retained")
+	}
+	if stale {
+		t.Fatal("expected deleted PBS group cache time to be pruned")
+	}
+
+	snapshot := m.state.GetSnapshot()
+	for _, backup := range snapshot.PBSBackups {
+		if backup.Instance == "pbs1" && backup.VMID == "999" {
+			t.Fatalf("expected stale backup to be removed with cache time, found: %+v", backup)
+		}
+	}
+}
+
 func TestMonitorPollGuestSnapshots_UsesCanonicalReadState(t *testing.T) {
 	m := &Monitor{
 		state: models.NewState(),

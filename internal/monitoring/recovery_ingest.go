@@ -16,12 +16,43 @@ func (m *Monitor) ingestRecoveryPointsAsync(points []recovery.RecoveryPoint) {
 	if m == nil || len(points) == 0 {
 		return
 	}
-	go func() {
+
+	m.recoveryIngestMu.Lock()
+	if m.recoveryIngestRunning {
+		m.recoveryIngestPending = points
+		m.recoveryIngestMu.Unlock()
+		log.Debug().
+			Int("points", len(points)).
+			Msg("Coalesced recovery point ingest behind active batch")
+		return
+	}
+	m.recoveryIngestRunning = true
+	m.recoveryIngestMu.Unlock()
+
+	go m.runRecoveryPointIngestLoop(points)
+}
+
+func (m *Monitor) runRecoveryPointIngestLoop(points []recovery.RecoveryPoint) {
+	for len(points) > 0 {
 		// SQLite upserts are usually quick, but allow a bit of time for large batches.
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		defer cancel()
 		m.ingestRecoveryPointsBestEffort(ctx, points)
-	}()
+		cancel()
+
+		m.recoveryIngestMu.Lock()
+		if len(m.recoveryIngestPending) == 0 {
+			m.recoveryIngestRunning = false
+			m.recoveryIngestMu.Unlock()
+			return
+		}
+		points = m.recoveryIngestPending
+		m.recoveryIngestPending = nil
+		m.recoveryIngestMu.Unlock()
+	}
+
+	m.recoveryIngestMu.Lock()
+	m.recoveryIngestRunning = false
+	m.recoveryIngestMu.Unlock()
 }
 
 func (m *Monitor) ingestRecoveryPointsBestEffort(ctx context.Context, points []recovery.RecoveryPoint) {
