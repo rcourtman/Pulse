@@ -70,6 +70,23 @@ func TestMetricsFromDockerHostKeepsReportedPercentValues(t *testing.T) {
 	}
 }
 
+func TestMetricsFromDockerContainerKeepsCapacityPercentValues(t *testing.T) {
+	container := models.DockerContainer{
+		CPUPercent:    2,
+		MemoryUsage:   5,
+		MemoryLimit:   1000,
+		MemoryPercent: 0.5,
+	}
+
+	metrics := metricsFromDockerContainer(container, 4)
+	if metrics.CPU == nil || metrics.CPU.Percent != 0.5 || metrics.CPU.Value != 0.5 {
+		t.Fatalf("expected docker container cpu percent 0.5, got %+v", metrics.CPU)
+	}
+	if metrics.Memory == nil || metrics.Memory.Percent != 0.5 {
+		t.Fatalf("expected docker container memory percent 0.5, got %+v", metrics.Memory)
+	}
+}
+
 func TestMetricsFromKubernetesClusterAggregatesLinkedHostReportedPercents(t *testing.T) {
 	cluster := models.KubernetesCluster{ID: "cluster-1", Name: "cluster-1"}
 	hosts := []*models.Host{

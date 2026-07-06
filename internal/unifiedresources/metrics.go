@@ -261,10 +261,10 @@ func metricsFromDockerContainer(ct models.DockerContainer, hostCPUs ...int) *Res
 	if len(hostCPUs) > 0 {
 		cpuCapacity = hostCPUs[0]
 	}
-	cpuPercent := percentFromUsage(models.DockerContainerCPUCapacityPercent(ct, cpuCapacity))
+	cpuPercent := percentFromReportedPercent(models.DockerContainerCPUCapacityPercent(ct, cpuCapacity))
 	metrics.CPU = &MetricValue{Value: cpuPercent, Percent: cpuPercent, Unit: "percent", Source: SourceDocker}
 	if ct.MemoryLimit > 0 {
-		percent := percentFromUsage(ct.MemoryPercent)
+		percent := percentFromReportedPercent(ct.MemoryPercent)
 		metrics.Memory = &MetricValue{Used: &ct.MemoryUsage, Total: &ct.MemoryLimit, Percent: percent, Unit: "bytes", Source: SourceDocker}
 	}
 	if ct.RootFilesystemBytes > 0 {
@@ -646,7 +646,9 @@ func syntheticDockerContainerIOMetrics(ct models.DockerContainer) dockerContaine
 
 	state := strings.ToLower(strings.TrimSpace(ct.State))
 	running := state == "running" || state == "restarting"
-	activity := clampMetricValue((percentFromUsage(ct.CPUPercent)+percentFromUsage(ct.MemoryPercent))/180.0, 0.12, 1.25)
+	cpuActivity := percentFromReportedPercent(models.DockerContainerCPUCapacityPercent(ct, 0))
+	memoryActivity := percentFromReportedPercent(ct.MemoryPercent)
+	activity := clampMetricValue((cpuActivity+memoryActivity)/180.0, 0.12, 1.25)
 	if !running {
 		activity = clampMetricValue(activity*0.32, 0.05, 0.45)
 	}
