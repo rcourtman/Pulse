@@ -1652,7 +1652,7 @@ func TestDockerReportPreservesMetadataAcrossObservedContainerRecreation(t *testi
 	requiredMigrationSnippets := []string{
 		"func (m *Monitor) migrateDockerContainerMetadataForRecreatedContainers(",
 		"normalizeDockerContainerMetadataIdentity(container.Name)",
-		`strings.TrimSpace(strings.TrimPrefix(name, "/"))`,
+		`strings.TrimLeft(strings.TrimSpace(name), "/")`,
 		"m.CopyDockerContainerMetadata(hostID, previousContainer.ID, container.ID)",
 	}
 	for _, snippet := range requiredMigrationSnippets {

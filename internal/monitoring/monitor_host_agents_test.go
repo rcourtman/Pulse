@@ -253,6 +253,52 @@ func TestApplyDockerReportNormalizesContainerCPUCapacityAcceptedIngestProof(t *t
 	}
 }
 
+func TestApplyDockerReportMigratesAppContainerURLToStableNameAcceptedIngestProof(t *testing.T) {
+	monitor := newTestMonitor(t)
+	report := agentsdocker.Report{
+		Agent: agentsdocker.AgentInfo{
+			ID:              "docker-url-agent",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentsdocker.HostInfo{
+			Hostname:  "docker-url-host",
+			MachineID: "docker-url-machine",
+		},
+		Containers: []agentsdocker.Container{{
+			ID:   "container-runtime-old",
+			Name: "/homepage",
+		}},
+		Timestamp: time.Now().UTC(),
+	}
+
+	host, err := monitor.ApplyDockerReport(report, nil)
+	if err != nil {
+		t.Fatalf("initial ApplyDockerReport: %v", err)
+	}
+
+	legacyKey := dockerAppContainerLegacyResourceID(host.ID, "container-runtime-old")
+	if err := monitor.guestMetadataStore.Set(legacyKey, &config.GuestMetadata{
+		CustomURL: "https://homepage.internal",
+	}); err != nil {
+		t.Fatalf("seed legacy guest metadata: %v", err)
+	}
+
+	report.Timestamp = report.Timestamp.Add(30 * time.Second)
+	if _, err := monitor.ApplyDockerReport(report, nil); err != nil {
+		t.Fatalf("metadata migration ApplyDockerReport: %v", err)
+	}
+
+	stableKey := dockerAppContainerMetadataKey(host.ID, "homepage")
+	stableMeta := monitor.guestMetadataStore.Get(stableKey)
+	if stableMeta == nil {
+		t.Fatalf("expected stable metadata at %q", stableKey)
+	}
+	if stableMeta.CustomURL != "https://homepage.internal" {
+		t.Fatalf("stable CustomURL = %q, want legacy URL", stableMeta.CustomURL)
+	}
+}
+
 func TestMonitor_HostAgentConfigUpdatePreservesReportedCommandStateInHostState(t *testing.T) {
 	monitor := &Monitor{
 		state:             models.NewState(),

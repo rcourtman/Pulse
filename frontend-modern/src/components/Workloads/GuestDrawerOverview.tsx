@@ -49,6 +49,7 @@ interface GuestDrawerOverviewProps {
   } | null;
   diskThresholds?: MetricDisplayThresholds | null;
   discoveryIdentifiedSummary?: DiscoveryIdentifiedSummary | null;
+  webInterfaceMetadataId: string;
   webInterfaceTargetLabel: string;
   workloadActionAgentTitle: string;
 }
@@ -465,10 +466,10 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
       <div class="mt-3">
         <WebInterfaceUrlField
           metadataKind="guest"
-          metadataId={props.guestId}
+          metadataId={props.webInterfaceMetadataId}
           targetLabel={props.webInterfaceTargetLabel}
           customUrl={props.customUrl}
-          onCustomUrlChange={(url) => props.onCustomUrlChange?.(props.guestId, url)}
+          onCustomUrlChange={(url) => props.onCustomUrlChange?.(props.webInterfaceMetadataId, url)}
           suggestedUrl={props.discoveryIdentifiedSummary?.suggestedUrl}
           suggestedUrlReasonText={props.discoveryIdentifiedSummary?.suggestedUrlReasonText}
           suggestedUrlReasonTitle={props.discoveryIdentifiedSummary?.suggestedUrlReasonTitle}
@@ -479,7 +480,12 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
             <AvailabilityProbeStatusCard availability={props.guest.availability!} />
           </div>
         </Show>
-        <Show when={props.discoveryIdentifiedSummary?.suggestedAvailabilityProbe && !props.guest.availability}>
+        <Show
+          when={
+            props.discoveryIdentifiedSummary?.suggestedAvailabilityProbe &&
+            !props.guest.availability
+          }
+        >
           <div class="mt-3 max-w-sm">
             <AvailabilityProbeSuggestionCard
               suggestion={props.discoveryIdentifiedSummary!.suggestedAvailabilityProbe!}

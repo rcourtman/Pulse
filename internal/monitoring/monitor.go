@@ -5176,7 +5176,7 @@ func (m *Monitor) getResourcesForBroadcast() []models.ResourceFrontend {
 }
 
 func (m *Monitor) applyDockerMetadataToUnifiedResources(resources []unifiedresources.Resource) []unifiedresources.Resource {
-	if len(resources) == 0 || m == nil || m.dockerMetadataStore == nil {
+	if len(resources) == 0 || m == nil {
 		return resources
 	}
 
@@ -5189,14 +5189,56 @@ func (m *Monitor) applyDockerMetadataToUnifiedResources(resources []unifiedresou
 		}
 		hostID := strings.TrimSpace(resource.Docker.HostSourceID)
 		containerID := strings.TrimSpace(resource.Docker.ContainerID)
-		if hostID == "" || containerID == "" {
+		if hostID == "" {
 			continue
 		}
-		if meta := m.dockerMetadataStore.Get(fmt.Sprintf("%s:container:%s", hostID, containerID)); meta != nil {
-			resource.CustomURL = strings.TrimSpace(meta.CustomURL)
+		if customURL, ok := m.dockerAppContainerCustomURL(*resource, hostID, containerID); ok {
+			resource.CustomURL = customURL
 		}
 	}
 	return out
+}
+
+func (m *Monitor) dockerAppContainerCustomURL(
+	resource unifiedresources.Resource,
+	hostID,
+	containerID string,
+) (string, bool) {
+	if m == nil {
+		return "", false
+	}
+
+	if m.guestMetadataStore != nil {
+		if stableKey := dockerAppContainerMetadataKey(hostID, resource.Name); stableKey != "" {
+			if meta := m.guestMetadataStore.Get(stableKey); meta != nil {
+				return strings.TrimSpace(meta.CustomURL), true
+			}
+		}
+		for _, key := range append(
+			[]string{strings.TrimSpace(resource.ID)},
+			dockerAppContainerGuestMetadataLegacyKeys(hostID, containerID)...,
+		) {
+			if key == "" {
+				continue
+			}
+			if meta := m.guestMetadataStore.Get(key); meta != nil {
+				return strings.TrimSpace(meta.CustomURL), true
+			}
+		}
+	}
+
+	if m.dockerMetadataStore != nil {
+		if stableKey := dockerContainerNameMetadataKey(hostID, resource.Name); stableKey != "" {
+			if meta := m.dockerMetadataStore.Get(stableKey); meta != nil {
+				return strings.TrimSpace(meta.CustomURL), true
+			}
+		}
+		if meta := m.dockerMetadataStore.Get(dockerContainerRuntimeMetadataKey(hostID, containerID)); meta != nil {
+			return strings.TrimSpace(meta.CustomURL), true
+		}
+	}
+
+	return "", false
 }
 
 // convertResourcesForBroadcast converts unified resources into the frontend payload shape.

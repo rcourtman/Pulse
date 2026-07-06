@@ -7,6 +7,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
@@ -30,8 +31,8 @@ func (m *Monitor) CopyDockerContainerMetadata(hostID, oldContainerID, newContain
 		return nil
 	}
 
-	oldKey := fmt.Sprintf("%s:container:%s", hostID, oldContainerID)
-	newKey := fmt.Sprintf("%s:container:%s", hostID, newContainerID)
+	oldKey := dockerContainerRuntimeMetadataKey(hostID, oldContainerID)
+	newKey := dockerContainerRuntimeMetadataKey(hostID, newContainerID)
 
 	oldMeta := m.dockerMetadataStore.Get(oldKey)
 	if oldMeta == nil {
@@ -71,6 +72,181 @@ func (m *Monitor) CopyDockerContainerMetadata(hostID, oldContainerID, newContain
 	}
 
 	return m.dockerMetadataStore.Set(newKey, &merged)
+}
+
+func dockerContainerRuntimeMetadataKey(hostID, containerID string) string {
+	hostID = strings.TrimSpace(hostID)
+	containerID = strings.TrimSpace(containerID)
+	if hostID == "" || containerID == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s:container:%s", hostID, containerID)
+}
+
+func dockerContainerNameMetadataKey(hostID, containerName string) string {
+	hostID = strings.TrimSpace(hostID)
+	containerName = normalizeDockerContainerMetadataIdentity(containerName)
+	if hostID == "" || containerName == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s:container-name:%s", hostID, containerName)
+}
+
+func dockerAppContainerMetadataKey(hostID, containerName string) string {
+	hostID = strings.TrimSpace(hostID)
+	containerName = normalizeDockerContainerMetadataIdentity(containerName)
+	if hostID == "" || containerName == "" {
+		return ""
+	}
+	return fmt.Sprintf("app-container:%s:name:%s", hostID, containerName)
+}
+
+func dockerAppContainerLegacyResourceID(hostID, containerID string) string {
+	hostID = strings.TrimSpace(hostID)
+	containerID = strings.TrimSpace(containerID)
+	if hostID == "" || containerID == "" {
+		return ""
+	}
+	return unifiedresources.SourceSpecificID(
+		unifiedresources.ResourceTypeAppContainer,
+		unifiedresources.SourceDocker,
+		fmt.Sprintf("%s/container/%s", hostID, containerID),
+	)
+}
+
+func dockerAppContainerLegacyMetadataKey(hostID, containerID string) string {
+	hostID = strings.TrimSpace(hostID)
+	containerID = strings.TrimSpace(containerID)
+	if hostID == "" || containerID == "" {
+		return ""
+	}
+	return fmt.Sprintf("app-container:%s:%s", hostID, containerID)
+}
+
+func dockerAppContainerGuestMetadataLegacyKeys(hostID, containerID string) []string {
+	candidates := []string{
+		dockerAppContainerLegacyResourceID(hostID, containerID),
+		dockerAppContainerLegacyMetadataKey(hostID, containerID),
+	}
+	out := make([]string, 0, len(candidates))
+	seen := make(map[string]struct{}, len(candidates))
+	for _, candidate := range candidates {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "" {
+			continue
+		}
+		if _, ok := seen[candidate]; ok {
+			continue
+		}
+		seen[candidate] = struct{}{}
+		out = append(out, candidate)
+	}
+	return out
+}
+
+func copyDockerMetadataAliasIfTargetMissing(store *config.DockerMetadataStore, sourceKey, targetKey string) error {
+	if store == nil || strings.TrimSpace(sourceKey) == "" || strings.TrimSpace(targetKey) == "" {
+		return nil
+	}
+	if store.Get(targetKey) != nil {
+		return nil
+	}
+	source := store.Get(sourceKey)
+	if source == nil {
+		return nil
+	}
+	clone := &config.DockerMetadata{
+		CustomURL:   source.CustomURL,
+		Description: source.Description,
+	}
+	if len(source.Tags) > 0 {
+		clone.Tags = append([]string(nil), source.Tags...)
+	}
+	if len(source.Notes) > 0 {
+		clone.Notes = append([]string(nil), source.Notes...)
+	}
+	return store.Set(targetKey, clone)
+}
+
+func copyGuestMetadataAliasIfTargetMissing(
+	store *config.GuestMetadataStore,
+	sourceKey,
+	targetKey,
+	containerName string,
+) error {
+	if store == nil || strings.TrimSpace(sourceKey) == "" || strings.TrimSpace(targetKey) == "" {
+		return nil
+	}
+	if store.Get(targetKey) != nil {
+		return nil
+	}
+	source := store.Get(sourceKey)
+	if source == nil {
+		return nil
+	}
+	clone := &config.GuestMetadata{
+		CustomURL:     source.CustomURL,
+		Description:   source.Description,
+		LastKnownName: normalizeDockerContainerMetadataIdentity(containerName),
+		LastKnownType: "app-container",
+	}
+	if len(source.Tags) > 0 {
+		clone.Tags = append([]string(nil), source.Tags...)
+	}
+	if len(source.Notes) > 0 {
+		clone.Notes = append([]string(nil), source.Notes...)
+	}
+	return store.Set(targetKey, clone)
+}
+
+func (m *Monitor) migrateCurrentDockerContainerMetadataToStableIdentities(
+	hostID string,
+	containers []models.DockerContainer,
+) {
+	if m == nil || len(containers) == 0 {
+		return
+	}
+
+	hostID = strings.TrimSpace(hostID)
+	if hostID == "" {
+		return
+	}
+
+	for _, container := range containers {
+		containerID := strings.TrimSpace(container.ID)
+		containerName := normalizeDockerContainerMetadataIdentity(container.Name)
+		if containerID == "" || containerName == "" {
+			continue
+		}
+
+		if stableKey := dockerContainerNameMetadataKey(hostID, containerName); stableKey != "" {
+			sourceKey := dockerContainerRuntimeMetadataKey(hostID, containerID)
+			if err := copyDockerMetadataAliasIfTargetMissing(m.dockerMetadataStore, sourceKey, stableKey); err != nil {
+				log.Warn().
+					Err(err).
+					Str("dockerHostID", hostID).
+					Str("containerName", container.Name).
+					Str("containerID", container.ID).
+					Msg("Failed to migrate docker metadata to stable container name key")
+			}
+		}
+
+		if stableKey := dockerAppContainerMetadataKey(hostID, containerName); stableKey != "" {
+			for _, sourceKey := range dockerAppContainerGuestMetadataLegacyKeys(hostID, containerID) {
+				if err := copyGuestMetadataAliasIfTargetMissing(m.guestMetadataStore, sourceKey, stableKey, containerName); err != nil {
+					log.Warn().
+						Err(err).
+						Str("dockerHostID", hostID).
+						Str("containerName", container.Name).
+						Str("containerID", container.ID).
+						Msg("Failed to migrate guest metadata to stable app-container name key")
+				}
+				if m.guestMetadataStore != nil && m.guestMetadataStore.Get(stableKey) != nil {
+					break
+				}
+			}
+		}
+	}
 }
 
 func (m *Monitor) migrateDockerContainerMetadataForRecreatedContainers(
@@ -133,5 +309,5 @@ func (m *Monitor) migrateDockerContainerMetadataForRecreatedContainers(
 }
 
 func normalizeDockerContainerMetadataIdentity(name string) string {
-	return strings.TrimSpace(strings.TrimPrefix(name, "/"))
+	return strings.TrimLeft(strings.TrimSpace(name), "/")
 }

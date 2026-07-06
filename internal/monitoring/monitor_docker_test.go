@@ -23,6 +23,7 @@ func newTestMonitor(t *testing.T) *Monitor {
 		rateTracker:         NewRateTracker(),
 		metricsHistory:      NewMetricsHistory(1000, 24*time.Hour),
 		dockerTokenBindings: make(map[string]string),
+		guestMetadataStore:  config.NewGuestMetadataStore(t.TempDir(), nil),
 		dockerMetadataStore: config.NewDockerMetadataStore(t.TempDir(), nil),
 	}
 	t.Cleanup(func() { m.alertManager.Stop() })
@@ -428,6 +429,85 @@ func TestApplyDockerReportMigratesMetadataWhenContainerRuntimeIDChanges(t *testi
 	}
 }
 
+func TestApplyDockerReportMigratesGuestMetadataToStableContainerName(t *testing.T) {
+	monitor := newTestMonitor(t)
+
+	baseTimestamp := time.Now().UTC()
+	report := agentsdocker.Report{
+		Agent: agentsdocker.AgentInfo{
+			ID:              "agent-stable-guest",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentsdocker.HostInfo{
+			Hostname:  "docker-host-stable-guest",
+			MachineID: "machine-stable-guest",
+		},
+		Containers: []agentsdocker.Container{
+			{ID: "container-old", Name: "/app"},
+		},
+		Timestamp: baseTimestamp,
+	}
+
+	host, err := monitor.ApplyDockerReport(report, nil)
+	if err != nil {
+		t.Fatalf("first ApplyDockerReport failed: %v", err)
+	}
+
+	legacyKey := dockerAppContainerLegacyResourceID(host.ID, "container-old")
+	if err := monitor.guestMetadataStore.Set(legacyKey, &config.GuestMetadata{
+		CustomURL: "https://app.internal",
+	}); err != nil {
+		t.Fatalf("seed guest metadata: %v", err)
+	}
+
+	report.Timestamp = baseTimestamp.Add(30 * time.Second)
+	if _, err := monitor.ApplyDockerReport(report, nil); err != nil {
+		t.Fatalf("metadata seeding ApplyDockerReport failed: %v", err)
+	}
+
+	stableKey := dockerAppContainerMetadataKey(host.ID, "app")
+	stableMeta := monitor.guestMetadataStore.Get(stableKey)
+	if stableMeta == nil {
+		t.Fatalf("expected stable guest metadata key %q", stableKey)
+	}
+	if stableMeta.CustomURL != "https://app.internal" {
+		t.Fatalf("stable guest metadata URL = %q, want https://app.internal", stableMeta.CustomURL)
+	}
+
+	report.Timestamp = baseTimestamp.Add(60 * time.Second)
+	report.Containers = nil
+	if _, err := monitor.ApplyDockerReport(report, nil); err != nil {
+		t.Fatalf("empty-container ApplyDockerReport failed: %v", err)
+	}
+
+	report.Timestamp = baseTimestamp.Add(90 * time.Second)
+	report.Containers = []agentsdocker.Container{
+		{ID: "container-new", Name: "app"},
+	}
+	host, err = monitor.ApplyDockerReport(report, nil)
+	if err != nil {
+		t.Fatalf("recreated-container ApplyDockerReport failed: %v", err)
+	}
+
+	resources := []unifiedresources.Resource{
+		{
+			ID:   dockerAppContainerLegacyResourceID(host.ID, "container-new"),
+			Type: unifiedresources.ResourceTypeAppContainer,
+			Name: "app",
+			Docker: &unifiedresources.DockerData{
+				HostSourceID: host.ID,
+				ContainerID:  "container-new",
+			},
+		},
+	}
+
+	got := monitor.applyDockerMetadataToUnifiedResources(resources)
+	if got[0].CustomURL != "https://app.internal" {
+		t.Fatalf("CustomURL after recreate gap = %q, want https://app.internal", got[0].CustomURL)
+	}
+}
+
 func TestApplyDockerReportSkipsMetadataMigrationForAmbiguousContainerNames(t *testing.T) {
 	monitor := newTestMonitor(t)
 
@@ -527,6 +607,63 @@ func TestApplyDockerMetadataToUnifiedResourcesKeepsResourceCustomURL(t *testing.
 	got := monitor.applyDockerMetadataToUnifiedResources(resources)
 	if got[0].CustomURL != "https://resource.internal" {
 		t.Fatalf("CustomURL = %q, want existing resource URL to win", got[0].CustomURL)
+	}
+}
+
+func TestApplyDockerMetadataToUnifiedResourcesUsesStableDockerMetadata(t *testing.T) {
+	monitor := newTestMonitor(t)
+	if err := monitor.dockerMetadataStore.Set("docker-host-1:container-name:app", &config.DockerMetadata{
+		CustomURL: "https://stable-docker.internal",
+	}); err != nil {
+		t.Fatalf("seed stable docker metadata: %v", err)
+	}
+
+	resources := []unifiedresources.Resource{
+		{
+			ID:   "resource:app-container:app",
+			Type: unifiedresources.ResourceTypeAppContainer,
+			Name: "app",
+			Docker: &unifiedresources.DockerData{
+				HostSourceID: "docker-host-1",
+				ContainerID:  "container-new",
+			},
+		},
+	}
+
+	got := monitor.applyDockerMetadataToUnifiedResources(resources)
+	if got[0].CustomURL != "https://stable-docker.internal" {
+		t.Fatalf("CustomURL = %q, want stable Docker metadata URL", got[0].CustomURL)
+	}
+}
+
+func TestApplyDockerMetadataToUnifiedResourcesStableGuestMetadataBlocksLegacyFallback(t *testing.T) {
+	monitor := newTestMonitor(t)
+	if err := monitor.guestMetadataStore.Set(dockerAppContainerMetadataKey("docker-host-1", "app"), &config.GuestMetadata{
+		CustomURL: "",
+	}); err != nil {
+		t.Fatalf("seed stable guest metadata: %v", err)
+	}
+	if err := monitor.dockerMetadataStore.Set("docker-host-1:container:container-new", &config.DockerMetadata{
+		CustomURL: "https://legacy.internal",
+	}); err != nil {
+		t.Fatalf("seed legacy docker metadata: %v", err)
+	}
+
+	resources := []unifiedresources.Resource{
+		{
+			ID:   "resource:app-container:app",
+			Type: unifiedresources.ResourceTypeAppContainer,
+			Name: "app",
+			Docker: &unifiedresources.DockerData{
+				HostSourceID: "docker-host-1",
+				ContainerID:  "container-new",
+			},
+		},
+	}
+
+	got := monitor.applyDockerMetadataToUnifiedResources(resources)
+	if got[0].CustomURL != "" {
+		t.Fatalf("CustomURL = %q, want stable empty guest metadata to block legacy fallback", got[0].CustomURL)
 	}
 }
 

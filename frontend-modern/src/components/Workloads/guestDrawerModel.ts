@@ -16,6 +16,7 @@ type Guest = WorkloadGuest;
 export interface GuestDrawerProps {
   guest: Guest;
   onClose: () => void;
+  metadataId?: string;
   customUrl?: string;
   onCustomUrlChange?: (guestId: string, url: string) => void;
   parentNodeOnline?: boolean;

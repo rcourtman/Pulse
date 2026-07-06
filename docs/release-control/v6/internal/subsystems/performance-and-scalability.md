@@ -1215,6 +1215,13 @@ owns workload-route synchronization, deep-link normalization, and route-scoped
 filter contracts. Future workload hot-path changes must extend through those
 owners within the Workloads surface, and new overview-route work must not
 accrete back into `frontend-modern/src/components/Workloads/WorkloadsSurface.tsx`.
+Docker-managed app-container saved web-interface URLs are a metadata identity
+exception inside that owner boundary: Workloads must derive their metadata key
+from Docker host plus normalized container name, read stable-first with legacy
+runtime-key fallback, and keep intentional empty stable records so stale
+runtime-key URLs do not reappear after a user clears the link. This must not
+change the canonical workload ID used for selection, routing, charts, actions,
+or hover correlation.
 That same route-owned filter contract now also includes canonical workload
 `platform` scoping for API-backed runtimes. Workloads URL-sync, filter-option
 assembly, and workload drill-down routes must preserve
@@ -1756,7 +1763,10 @@ but they must not add a second discovery request, route-level Suspense
 dependency, row-time endpoint probe, or auto-save mutation. Suggested
 URLs remain copy/open/adopt affordances only; persisting them as a
 workload link stays a user action through the existing Web Interface URL
-field.
+field. For Docker-managed app-containers, that field must receive the stable
+host-plus-container-name metadata ID rather than the runtime container ID, while
+the row and drawer still use the canonical workload ID for all non-metadata
+state.
 The compact provenance marker for those values is presentation-only. It
 may identify already-loaded Discovery fields, but must not introduce
 additional discovery fetches, provider lookups, endpoint probes, or

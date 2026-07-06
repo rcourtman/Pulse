@@ -9,6 +9,8 @@ import {
   getWorkloadMetricsKind,
   getCanonicalWorkloadId,
   getCanonicalWorkloadIdForResource,
+  getWorkloadMetadataId,
+  getWorkloadMetadataIdCandidates,
   isDockerManagedAppContainer,
   getWebInterfaceTargetLabelForWorkload,
 } from '@/utils/workloads';
@@ -229,6 +231,45 @@ describe('buildCanonicalNodeScopedWorkloadId', () => {
     expect(
       buildCanonicalNodeScopedWorkloadId({ instance: 'Core Fabric', node: 'pve2', vmid: 0 }),
     ).toBeNull();
+  });
+});
+
+describe('getWorkloadMetadataId', () => {
+  it('uses a stable host-and-name key for Docker-managed app-container URLs', () => {
+    const guest = {
+      id: 'app-container:docker-main:container-123',
+      name: '/grafana',
+      type: 'docker',
+      workloadType: 'app-container' as const,
+      dockerHostId: 'docker-main',
+      instance: '',
+      node: '',
+      vmid: 0,
+    };
+
+    expect(getWorkloadMetadataId(guest)).toBe('app-container:docker-main:name:grafana');
+    expect(getWorkloadMetadataIdCandidates(guest)).toEqual([
+      'app-container:docker-main:name:grafana',
+      'app-container:docker-main:container-123',
+    ]);
+  });
+
+  it('falls back to the canonical workload id when a Docker host id is unavailable', () => {
+    const guest = {
+      id: 'app-container:truenas-main:nextcloud',
+      name: 'nextcloud',
+      type: 'app-container',
+      workloadType: 'app-container' as const,
+      platformType: 'truenas',
+      instance: '',
+      node: '',
+      vmid: 0,
+    };
+
+    expect(getWorkloadMetadataId(guest)).toBe('app-container:truenas-main:nextcloud');
+    expect(getWorkloadMetadataIdCandidates(guest)).toEqual([
+      'app-container:truenas-main:nextcloud',
+    ]);
   });
 });
 

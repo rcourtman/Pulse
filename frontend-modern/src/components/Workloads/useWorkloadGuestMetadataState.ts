@@ -32,6 +32,9 @@ const instrumentationEnabled = import.meta.env.DEV && typeof performance !== 'un
 const guestMetadataStorageKeyForOrg = (orgScope: string): string =>
   `${STORAGE_KEYS.GUEST_METADATA}.${encodeURIComponent(orgScope)}`;
 
+const isStableAppContainerMetadataId = (guestId: string): boolean =>
+  guestId.trim().startsWith('app-container:') && guestId.includes(':name:');
+
 const readGuestMetadataCache = (storageKey: string): GuestMetadataRecord => {
   if (cachedGuestMetadata && cachedGuestMetadataStorageKey === storageKey) {
     return cachedGuestMetadata;
@@ -231,7 +234,9 @@ export function useWorkloadGuestMetadataState() {
     const trimmedUrl = url.trim();
     const nextUrl = trimmedUrl === '' ? undefined : trimmedUrl;
     const currentUrl = guestMetadata()[guestId]?.customUrl;
-    if (currentUrl === nextUrl) {
+    const shouldKeepStableClearRecord =
+      nextUrl === undefined && isStableAppContainerMetadataId(guestId);
+    if (currentUrl === nextUrl && !shouldKeepStableClearRecord) {
       return;
     }
 
@@ -239,6 +244,16 @@ export function useWorkloadGuestMetadataState() {
       const previousEntry = prev[guestId];
 
       if (nextUrl === undefined) {
+        if (isStableAppContainerMetadataId(guestId)) {
+          return {
+            ...prev,
+            [guestId]: {
+              ...(previousEntry || { id: guestId }),
+              customUrl: '',
+            },
+          };
+        }
+
         if (!previousEntry || typeof previousEntry.customUrl === 'undefined') {
           return prev;
         }

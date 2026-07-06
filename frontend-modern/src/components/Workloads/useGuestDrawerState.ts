@@ -21,6 +21,7 @@ import {
   getDiscoveryResourceTypeForWorkload,
   hasDiscoverySupportForWorkload,
   getWebInterfaceTargetLabelForWorkload,
+  getWorkloadMetadataId,
 } from '@/utils/workloads';
 
 import {
@@ -111,6 +112,9 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
   const discoveryResourceType = createMemo(() => getDiscoveryResourceTypeForWorkload(props.guest));
   const webInterfaceTargetLabel = createMemo(() =>
     getWebInterfaceTargetLabelForWorkload(props.guest),
+  );
+  const webInterfaceMetadataId = createMemo(
+    () => props.metadataId?.trim() || getWorkloadMetadataId(props.guest),
   );
 
   // Load the existing discovery record (if any) so the Overview can surface
@@ -225,6 +229,7 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
     copyAgentContext,
     switchTab,
     setHistoryRange,
+    webInterfaceMetadataId,
     webInterfaceTargetLabel,
   };
 }

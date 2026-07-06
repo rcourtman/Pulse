@@ -5,7 +5,7 @@ import type { WorkloadGuest } from '@/types/workloads';
 import type { Memory, Disk, GuestNetworkInterface } from '@/types/api';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 import { aiChatStore } from '@/stores/aiChat';
-import { getCanonicalWorkloadId } from '@/utils/workloads';
+import { getCanonicalWorkloadId, getWorkloadMetadataId } from '@/utils/workloads';
 import { getDiscoveryProvenanceTitle } from '@/utils/discoveryPresentation';
 import guestDrawerSource from './GuestDrawer.tsx?raw';
 
@@ -991,6 +991,25 @@ describe('GuestDrawer', () => {
       render(() => <GuestDrawer guest={makeGuest({ id: 'my-guest-id' })} onClose={vi.fn()} />);
       expect(screen.getByTestId('url-id').textContent).toBe(
         getCanonicalWorkloadId(makeGuest({ id: 'my-guest-id' })),
+      );
+    });
+
+    it('passes stable app-container metadataId for Docker-managed workload URLs', () => {
+      const guest = makeGuest({
+        id: 'app-container-synthetic-hash',
+        name: 'grafana',
+        type: 'app-container',
+        workloadType: 'app-container',
+        platformType: 'docker',
+        dockerHostId: 'docker-main',
+        containerId: 'container-runtime-id',
+      });
+
+      render(() => <GuestDrawer guest={guest} onClose={vi.fn()} />);
+
+      expect(screen.getByTestId('url-id').textContent).toBe(getWorkloadMetadataId(guest));
+      expect(screen.getByTestId('url-id').textContent).toBe(
+        'app-container:docker-main:name:grafana',
       );
     });
 

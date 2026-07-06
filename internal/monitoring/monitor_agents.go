@@ -1446,6 +1446,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 	if hasPrevious {
 		m.migrateDockerContainerMetadataForRecreatedContainers(identifier, previous.Containers(), host.Containers)
 	}
+	m.migrateCurrentDockerContainerMetadataToStableIdentities(identifier, host.Containers)
 
 	if tokenRecord != nil {
 		host.TokenID = tokenRecord.ID

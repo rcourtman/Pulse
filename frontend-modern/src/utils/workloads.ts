@@ -148,6 +148,42 @@ export const getCanonicalWorkloadId = (
   return guest.id;
 };
 
+export const buildAppContainerMetadataId = ({
+  dockerHostId,
+  name,
+}: Pick<WorkloadGuest, 'dockerHostId' | 'name'>): string | null => {
+  const hostId = (dockerHostId || '').trim();
+  const containerName = (name || '').trim().replace(/^\/+/, '');
+  if (!hostId || !containerName) return null;
+  return `app-container:${hostId}:name:${containerName}`;
+};
+
+export const getWorkloadMetadataIdCandidates = (
+  guest: Pick<
+    WorkloadGuest,
+    'id' | 'workloadType' | 'type' | 'instance' | 'node' | 'vmid' | 'dockerHostId' | 'name'
+  >,
+): string[] => {
+  const canonicalId = getCanonicalWorkloadId(guest);
+  const candidates: string[] = [];
+
+  if (isDockerManagedAppContainer(guest)) {
+    const appContainerId = buildAppContainerMetadataId(guest);
+    if (appContainerId) candidates.push(appContainerId);
+  }
+
+  if (canonicalId) candidates.push(canonicalId);
+
+  return [...new Set(candidates)];
+};
+
+export const getWorkloadMetadataId = (
+  guest: Pick<
+    WorkloadGuest,
+    'id' | 'workloadType' | 'type' | 'instance' | 'node' | 'vmid' | 'dockerHostId' | 'name'
+  >,
+): string => getWorkloadMetadataIdCandidates(guest)[0] || getCanonicalWorkloadId(guest);
+
 type NodeScopedWorkloadIdentity = {
   instance?: string | null;
   node?: string | null;

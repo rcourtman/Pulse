@@ -21,7 +21,7 @@ import { getAlertStyles } from '@/utils/alerts';
 import { formatSpeed, formatUptime } from '@/utils/format';
 import { isNodeOnline } from '@/utils/status';
 import { formatTemperature, getCpuTemperature, getTemperatureTextClass } from '@/utils/temperature';
-import { getCanonicalWorkloadId } from '@/utils/workloads';
+import { getCanonicalWorkloadId, getWorkloadMetadataIdCandidates } from '@/utils/workloads';
 import {
   resolveSummaryGroupMemberInteractionState,
   type SummarySeriesGroupScope,
@@ -509,12 +509,21 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
               <Index each={groupGuests()} fallback={<></>}>
                 {(guest) => {
                   const guestId = createMemo(() => getCanonicalWorkloadId(guest()));
+                  const metadataIdCandidates = createMemo(() =>
+                    getWorkloadMetadataIdCandidates(guest()),
+                  );
                   const detailControlsId = createMemo(() =>
                     buildSummaryDisclosureControlsId(guestId()),
                   );
-                  const metadata = () =>
-                    props.guestMetadata()[guestId()] ||
-                    props.guestMetadata()[`${guest().instance}:${guest().node}:${guest().vmid}`];
+                  const metadata = () => {
+                    const byId = props.guestMetadata();
+                    for (const metadataId of metadataIdCandidates()) {
+                      if (metadataId && byId[metadataId]) {
+                        return byId[metadataId];
+                      }
+                    }
+                    return byId[`${guest().instance}:${guest().node}:${guest().vmid}`];
+                  };
                   const parentNode = () => node() ?? props.guestParentNodeMap()[guestId()];
                   const parentNodeOnline = () => {
                     const pn = parentNode();
@@ -567,6 +576,7 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                           <GuestDrawer
                             guest={guest()}
                             onClose={() => props.setSelectedGuestId(null)}
+                            metadataId={metadataIdCandidates()[0] || guestId()}
                             customUrl={metadata()?.customUrl}
                             nestedWorkloadContext={nestedWorkloadContext()}
                             onCustomUrlChange={props.handleCustomUrlUpdate}

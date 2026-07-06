@@ -1170,6 +1170,13 @@ Name normalization for that contract must treat Docker's leading `/` prefix as
 presentation noise rather than identity, so routine recreate flows keep
 metadata continuity when one report spells the same container as `/app` and a
 later report spells it as `app`.
+Docker-managed app-container web-interface metadata must use the same
+host-plus-normalized-container-name identity (`app-container:<host>:name:<name>`)
+as the stable synchronization key. Monitoring must migrate current runtime-key
+Docker metadata and legacy app-container guest metadata to that key when a
+Docker report is ingested, then prefer that stable guest key when projecting
+unified app-container custom URLs. Runtime container IDs remain action and
+metric identities, not the persistent URL metadata identity.
 The same applies to proxmox topology coordinates exposed through typed views:
 node, cluster, and instance accessors must return canonical trimmed values so
 monitoring consumers do not fork topology grouping or labeling on `" pve-a "`

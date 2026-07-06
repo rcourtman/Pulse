@@ -53,6 +53,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
     setHistoryRange,
     showInGuestAgentInstallCue,
     switchTab,
+    webInterfaceMetadataId,
     webInterfaceTargetLabel,
     workloadActionAgentTitle,
   } = useGuestDrawerState(props);
@@ -152,6 +153,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
           discoveryIdentifiedSummary={discoveryIdentifiedSummary()}
           hasWorkloadActionAgent={hasWorkloadActionAgent()}
           showInGuestAgentInstallCue={showInGuestAgentInstallCue()}
+          webInterfaceMetadataId={webInterfaceMetadataId()}
           webInterfaceTargetLabel={webInterfaceTargetLabel()}
           workloadActionAgentTitle={workloadActionAgentTitle()}
         />
