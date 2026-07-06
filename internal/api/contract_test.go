@@ -6131,7 +6131,11 @@ func TestContract_SetupScriptEmbedsFailFastGuidance(t *testing.T) {
 	if !strings.Contains(script, `SSH_SENSORS_KEY_ENTRY="command=\"$PULSE_SENSORS_WRAPPER\",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty $SSH_SENSORS_PUBLIC_KEY # pulse-sensors"`) {
 		t.Fatalf("setup script must force temperature SSH keys to the Pulse sensor wrapper: %s", script)
 	}
-	if !strings.Contains(script, `"smart": collect_smart(),`) || !strings.Contains(script, `apt-get install -y smartmontools`) {
+	if !strings.Contains(script, `"smart": collect_smart(),`) ||
+		!strings.Contains(script, `apt-get install -y smartmontools`) ||
+		!strings.Contains(script, `def inferred_smart_device_types(device):`) ||
+		!strings.Contains(script, `for dtype in inferred_smart_device_types(device):`) ||
+		!strings.Contains(script, `attempt_index == len(attempts) - 1`) {
 		t.Fatalf("setup script missing SMART temperature wrapper contract: %s", script)
 	}
 	if strings.Contains(script, `SSH_SENSORS_KEY_ENTRY="command=\"sensors -j\"`) {

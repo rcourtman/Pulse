@@ -263,6 +263,8 @@ func TestCurrentStablePatchReleasePacketTracksInstallMetadata(t *testing.T) {
 		"`v"+previous+"`",
 		"Patrol Gemini model readiness",
 		"remembered-login submit persistence",
+		"Proxmox SMART temperature fallback",
+		"direct SATA/SAT disks",
 		"rollback target for this patch release is `v"+previous+"`",
 	)
 	assertFileContainsAll(t, changelogPath,
@@ -271,6 +273,8 @@ func TestCurrentStablePatchReleasePacketTracksInstallMetadata(t *testing.T) {
 		"Promotion path: stable patch hotfix from `"+releaseBranch+"`",
 		"Gemini tool-call capability",
 		"Remembered-login state now persists",
+		"Proxmox SMART temperature collection",
+		"explicit SAT probe",
 	)
 	assertFileContainsAll(t, repoFile("docs", "RELEASE_NOTES.md"),
 		"docs/releases/RELEASE_NOTES_v"+version+".md",

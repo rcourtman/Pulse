@@ -12,6 +12,47 @@ import (
 	gohost "github.com/shirou/gopsutil/v4/host"
 )
 
+func TestAgentMetricsSMARTProbeAttemptsRetryExplicitSAT(t *testing.T) {
+	stubLinuxSysfs(t, []string{"sda"}, nil)
+
+	origRun := smartRunCommandOutput
+	origLook := execLookPath
+	t.Cleanup(func() {
+		smartRunCommandOutput = origRun
+		execLookPath = origLook
+	})
+	execLookPath = func(string) (string, error) { return "smartctl", nil }
+
+	var attempts [][]string
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		attempts = append(attempts, append([]string(nil), args...))
+		if len(args) >= 2 && args[0] == "-d" && args[1] == "sat" {
+			return []byte(smartctlSATTemperatureAttributeJSON), nil
+		}
+		if len(args) > 0 && args[0] == "-d" {
+			return []byte(smartctlNoDataJSON), nil
+		}
+		return []byte(smartctlUntypedHealthOnlyJSON), nil
+	}
+
+	result, err := collectSMARTTarget(context.Background(), smartctlTarget{Path: "/dev/sda"})
+	if err != nil {
+		t.Fatalf("collectSMARTTarget error: %v", err)
+	}
+	if len(attempts) != 2 {
+		t.Fatalf("expected untyped attempt then explicit SAT retry, got %v", attempts)
+	}
+	if attempts[0][0] == "-d" {
+		t.Fatalf("first attempt should use smartctl auto-detection, got %v", attempts[0])
+	}
+	if len(attempts[1]) < 2 || attempts[1][0] != "-d" || attempts[1][1] != "sat" {
+		t.Fatalf("second attempt should force -d sat, got %v", attempts[1])
+	}
+	if result == nil || result.Temperature != 32 || result.Type != "sata" {
+		t.Fatalf("expected SAT temperature result, got %#v", result)
+	}
+}
+
 func TestBuildReport(t *testing.T) {
 	// Setup mocks
 	fixedTime := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)

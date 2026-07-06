@@ -59,6 +59,25 @@ const smartctlNoDataJSON = `{
 	"device": {"name": "/dev/sda", "type": "sat", "protocol": "ATA"}
 }`
 
+const smartctlUntypedHealthOnlyJSON = `{
+	"device": {"name": "/dev/sda", "type": "scsi", "protocol": "SCSI"},
+	"model_name": "WDC_WD80EFPX-68C4ZN0",
+	"serial_number": "WD-SAT-TEMP-1",
+	"smart_status": {"passed": true}
+}`
+
+const smartctlSATTemperatureAttributeJSON = `{
+	"device": {"name": "/dev/sda", "type": "sat", "protocol": "ATA"},
+	"model_name": "WDC_WD80EFPX-68C4ZN0",
+	"serial_number": "WD-SAT-TEMP-1",
+	"smart_status": {"passed": true},
+	"ata_smart_attributes": {
+		"table": [
+			{"id": 194, "name": "Temperature_Celsius", "raw": {"value": 0, "string": "32"}}
+		]
+	}
+}`
+
 func stubLinuxSysfs(t *testing.T, entries []string, files map[string]string) {
 	t.Helper()
 
@@ -257,6 +276,47 @@ func TestCollectSMARTTargetRetriesUntypedAfterTypedProbeFailure(t *testing.T) {
 				t.Errorf("unexpected retry result: %#v", result)
 			}
 		})
+	}
+}
+
+func TestCollectSMARTTargetRetriesExplicitSATWhenUntypedHasNoTemperature(t *testing.T) {
+	stubLinuxSysfs(t, []string{"sda"}, nil)
+
+	origRun := smartRunCommandOutput
+	origLook := execLookPath
+	t.Cleanup(func() {
+		smartRunCommandOutput = origRun
+		execLookPath = origLook
+	})
+	execLookPath = func(string) (string, error) { return "smartctl", nil }
+
+	var attempts [][]string
+	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		attempts = append(attempts, append([]string(nil), args...))
+		if len(args) >= 2 && args[0] == "-d" && args[1] == "sat" {
+			return []byte(smartctlSATTemperatureAttributeJSON), nil
+		}
+		if len(args) > 0 && args[0] == "-d" {
+			return []byte(smartctlNoDataJSON), nil
+		}
+		return []byte(smartctlUntypedHealthOnlyJSON), nil
+	}
+
+	result, err := collectSMARTTarget(context.Background(), smartctlTarget{Path: "/dev/sda"})
+	if err != nil {
+		t.Fatalf("collectSMARTTarget error: %v", err)
+	}
+	if len(attempts) != 2 {
+		t.Fatalf("expected untyped attempt then explicit SAT retry, got %v", attempts)
+	}
+	if attempts[0][0] == "-d" {
+		t.Fatalf("first attempt should use smartctl auto-detection, got %v", attempts[0])
+	}
+	if len(attempts[1]) < 2 || attempts[1][0] != "-d" || attempts[1][1] != "sat" {
+		t.Fatalf("second attempt should force -d sat, got %v", attempts[1])
+	}
+	if result == nil || result.Temperature != 32 || result.Type != "sata" {
+		t.Fatalf("expected SAT temperature result, got %#v", result)
 	}
 }
 

@@ -9,6 +9,9 @@ _This changelog describes the stable `v6.0.5` patch release compared with
   candidate parts as well as top-level tool-call lists.
 - Remembered-login state now persists the saved username when the checkbox is
   enabled during submit.
+- Proxmox SMART temperature collection now retries direct SATA/SAT disks with an
+  explicit SAT probe when smartctl auto-detection returns health but no
+  temperature.
 - Docker, Helm, installer, and release-helper metadata now track the active
   stable patch version.
 

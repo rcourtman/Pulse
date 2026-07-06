@@ -180,6 +180,10 @@ func TestPVESetupScriptRestrictsTemperatureMonitoringToPulseSensorWrapper(t *tes
 		`["lsblk", "-J", "-d", "-o", "NAME,TYPE,TRAN,MODEL,VENDOR,SUBSYSTEMS"]`,
 		`def union_smart_targets(scan_targets, block_devices):`,
 		`def smart_probe_attempts(device, device_type):`,
+		`def inferred_smart_device_types(device):`,
+		`for dtype in inferred_smart_device_types(device):`,
+		`for attempt_index, (attempt_device, attempt_type) in enumerate(attempts):`,
+		`attempt_index == len(attempts) - 1`,
 		`"smart": collect_smart(),`,
 		`SSH_SENSORS_KEY_ENTRY="command=\"$PULSE_SENSORS_WRAPPER\",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty $SSH_SENSORS_PUBLIC_KEY # pulse-sensors"`,
 	}

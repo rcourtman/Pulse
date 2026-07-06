@@ -203,6 +203,7 @@ var (
 	smartTextTempAttributeRE = regexp.MustCompile(`^\s*(190|194)\s+\S+.*-\s+(\d{1,3})\b`)
 	smartTextCurrentTempRE   = regexp.MustCompile(`(?i)^current(?: drive)? temperature:\s*(\d{1,3})\b`)
 	smartTextTemperatureRE   = regexp.MustCompile(`(?i)^temperature:\s*(\d{1,3})\b`)
+	linuxDirectSATDeviceRE   = regexp.MustCompile(`^(sd|hd)[a-z]+$`)
 )
 
 type smartctlTarget struct {
@@ -1106,7 +1107,7 @@ func collectSMARTTarget(ctx context.Context, target smartctlTarget) (*DiskSMART,
 		if firstParsed == nil {
 			firstParsed = result
 		}
-		if !shouldRetryFreeBSDSMART(target.Path, result, i, len(attempts)) {
+		if !shouldRetrySMARTTarget(target.Path, result, i, len(attempts)) {
 			log.Debug().
 				Str("component", smartctlComponent).
 				Str("action", "collect_device_smart_success").
@@ -1149,9 +1150,7 @@ func collectSMARTTarget(ctx context.Context, target smartctlTarget) (*DiskSMART,
 func smartctlProbeAttempts(target smartctlTarget) [][]string {
 	device := target.Path
 	if target.DeviceType != "" {
-		attempts := [][]string{
-			smartctlArgs(device, target.DeviceType),
-		}
+		deviceTypes := []string{target.DeviceType}
 		// A scan-open device type is a hint, not ground truth: smartctl can
 		// suggest a type whose full query (-i -A -H) fails or returns no usable
 		// data even though untyped auto-detection works (#1483: a SATA SSD
@@ -1159,24 +1158,53 @@ func smartctlProbeAttempts(target smartctlTarget) [][]string {
 		// giving up. Multiplexed controller members are exempt because dropping
 		// the -d would re-probe the shared array device, not the member.
 		if runtimeGOOS == "linux" && !isMultiplexedDeviceType(target.DeviceType) {
-			attempts = append(attempts, smartctlArgs(device, ""))
+			deviceTypes = append(deviceTypes, "")
+			deviceTypes = append(deviceTypes, linuxInferredSmartctlDeviceTypes(device)...)
 		}
-		return attempts
+		return smartctlArgsForDeviceTypes(device, deviceTypes)
+	}
+
+	if runtimeGOOS == "linux" {
+		deviceTypes := append([]string{""}, linuxInferredSmartctlDeviceTypes(device)...)
+		return smartctlArgsForDeviceTypes(device, deviceTypes)
 	}
 
 	if runtimeGOOS == "freebsd" {
 		deviceTypes := freeBSDSmartctlDeviceTypes(filepath.Base(device))
 		if len(deviceTypes) > 0 {
-			attempts := make([][]string, 0, len(deviceTypes)+1)
-			for _, deviceType := range deviceTypes {
-				attempts = append(attempts, smartctlArgs(device, deviceType))
-			}
-			return append(attempts, smartctlArgs(device, ""))
+			return smartctlArgsForDeviceTypes(device, append(deviceTypes, ""))
 		}
 	}
 
 	return [][]string{
 		smartctlArgs(device, ""),
+	}
+}
+
+func smartctlArgsForDeviceTypes(device string, deviceTypes []string) [][]string {
+	attempts := make([][]string, 0, len(deviceTypes))
+	seen := make(map[string]struct{}, len(deviceTypes))
+	for _, deviceType := range deviceTypes {
+		deviceType = strings.TrimSpace(deviceType)
+		if _, ok := seen[deviceType]; ok {
+			continue
+		}
+		seen[deviceType] = struct{}{}
+		attempts = append(attempts, smartctlArgs(device, deviceType))
+	}
+	return attempts
+}
+
+func linuxInferredSmartctlDeviceTypes(device string) []string {
+	if runtimeGOOS != "linux" {
+		return nil
+	}
+	name := strings.ToLower(filepath.Base(strings.TrimSpace(device)))
+	switch {
+	case linuxDirectSATDeviceRE.MatchString(name):
+		return []string{"sat", "scsi"}
+	default:
+		return nil
 	}
 }
 
@@ -1224,8 +1252,8 @@ func freeBSDSmartctlDeviceTypes(device string) []string {
 	}
 }
 
-func shouldRetryFreeBSDSMART(device string, result *DiskSMART, attemptIndex, attemptCount int) bool {
-	if runtimeGOOS != "freebsd" || attemptIndex >= attemptCount-1 || result == nil {
+func shouldRetrySMARTTarget(device string, result *DiskSMART, attemptIndex, attemptCount int) bool {
+	if attemptIndex >= attemptCount-1 || result == nil {
 		return false
 	}
 	if result.Temperature > 0 {
@@ -1234,7 +1262,14 @@ func shouldRetryFreeBSDSMART(device string, result *DiskSMART, attemptIndex, att
 	if result.Standby {
 		return true
 	}
-	return len(freeBSDSmartctlDeviceTypes(filepath.Base(device))) > 0
+	switch runtimeGOOS {
+	case "freebsd":
+		return len(freeBSDSmartctlDeviceTypes(filepath.Base(device))) > 0
+	case "linux":
+		return true
+	default:
+		return false
+	}
 }
 
 func enrichFreeBSDSCTTemperature(ctx context.Context, smartctlPath string, args []string, target smartctlTarget, current *DiskSMART) *DiskSMART {

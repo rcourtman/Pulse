@@ -909,6 +909,13 @@ def canonical_block_for_device(device):
     return name
 
 
+def inferred_smart_device_types(device):
+    name = os.path.basename(str(device or "").strip()).lower()
+    if re.fullmatch(r"(sd|hd)[a-z]+", name or ""):
+        return ["sat", "scsi"]
+    return []
+
+
 def is_physical_block_device(device):
     name = str(device.get("name") or "").strip()
     dtype = str(device.get("type") or "").strip().lower()
@@ -1024,9 +1031,26 @@ def smart_targets(path):
 
 
 def smart_probe_attempts(device, device_type):
-    attempts = [(device, device_type)] if device_type else [(device, "")]
+    attempts = []
+    seen = set()
+
+    def add(dtype):
+        key = (device, dtype)
+        if key in seen:
+            return
+        seen.add(key)
+        attempts.append(key)
+
+    if device_type:
+        add(device_type)
+    else:
+        add("")
+
     if device_type and not is_multiplexed_device_type(device_type):
-        attempts.append((device, ""))
+        add("")
+    if not is_multiplexed_device_type(device_type):
+        for dtype in inferred_smart_device_types(device):
+            add(dtype)
     return attempts
 
 
@@ -1129,7 +1153,8 @@ def collect_smart():
     observed_at = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     for device, device_type in smart_targets(path):
         best_entry = None
-        for attempt_device, attempt_type in smart_probe_attempts(device, device_type):
+        attempts = smart_probe_attempts(device, device_type)
+        for attempt_index, (attempt_device, attempt_type) in enumerate(attempts):
             args = [path]
             if attempt_type:
                 args.extend(["-d", attempt_type])
@@ -1164,7 +1189,7 @@ def collect_smart():
                 "lastUpdated": observed_at,
             }
             best_entry = entry
-            if entry["temperature"] > 0 or entry["standbySkipped"] or not attempt_type:
+            if entry["temperature"] > 0 or entry["standbySkipped"] or attempt_index == len(attempts) - 1:
                 break
 
         if best_entry:

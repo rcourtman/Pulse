@@ -919,6 +919,9 @@ surface and no new `internal/api/` lifecycle handler.
    `internal/hostagent/smartctl.go`. Linux SMART discovery must prefer
    `smartctl --scan-open` typed targets before generic block-device fallback so
    controller-backed disks keep their canonical SMART and wearout coverage.
+   Direct Linux SATA/SAT-style block devices that return health but no
+   temperature through smartctl auto-detection must retry explicit `-d sat` and
+   `-d scsi` probes before settling on a no-temperature result.
    FreeBSD SMART probing must retry through the canonical typed and untyped
    device modes and the SCT temperature status path before settling on standby
    or no-data results, and partial or plain-text smartctl output must still
@@ -3459,7 +3462,9 @@ shape for temperature-monitoring SSH keys: new keys must execute the
 Pulse-owned `/usr/local/sbin/pulse-sensors` wrapper, not raw `sensors -j`, so
 lifecycle setup can collect CPU sensor data and SMART disk temperatures through
 one bounded JSON payload while preserving old forced-key compatibility in the
-runtime collector.
+runtime collector. That wrapper must mirror the host-agent Linux SMART probe
+fallback for direct SATA/SAT-style disks by retrying explicit `-d sat` and
+`-d scsi` before reporting an active disk with no temperature.
 That same generated setup-script boundary must also use exact token-name
 matching when it decides whether to rotate an existing Pulse-managed token, so
 reruns do not treat partial-name collisions as the canonical managed token.

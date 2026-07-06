@@ -633,7 +633,11 @@ TLS floor in the dynamic config.
    `hotfix_exception=true`, a non-empty `hotfix_reason`, and
    `rollback_version` set to the previous stable tag. Non-hotfix stable
    promotions, and any first-GA or minor-line stable promotion, still require
-   explicit promoted prerelease lineage and soak proof.
+   explicit promoted prerelease lineage and soak proof. Stable patch release
+   packets must also enumerate every customer-visible support fix included in
+   the cut, and the release-asset proof must pin the current packet to those
+   runtime fixes so a patch that includes support work cannot ship as a
+   metadata-only release note.
 7. Preserve release-matched installer and Helm operator documentation links through `scripts/install.sh`, `.github/workflows/helm-pages.yml`, `.github/workflows/publish-helm-chart.yml`, and the chart metadata itself so deployment guidance and packaged chart metadata do not drift back to branch-tip `main` docs when a release line or promoted tag already exists.
    The same governed Helm boundary also owns `deploy/helm/pulse/` itself:
    chart metadata, default values, templates, and generated chart docs must

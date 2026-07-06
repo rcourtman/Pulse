@@ -3127,6 +3127,12 @@ replay timing, recent rate-limit counts, and flapping suppression evidence. The
 route requires `monitoring:read`, returns `404` for unknown active alerts, and
 must not send notifications or mutate delivery tracking state.
 
+The generated PVE setup-script temperature wrapper is part of the API contract
+for legacy SSH sensor collection. Direct Linux SATA/SAT-style disks that return
+health but no temperature through smartctl auto-detection must retry explicit
+`-d sat` and `-d scsi` probes before the rendered wrapper reports an active
+disk with no temperature.
+
 Manifest-backed Patrol finding lifecycle schemas are the API source of truth
 for Assistant provider-tool optionality as well as MCP/API discovery. Legacy
 Assistant runtime paths may project those schemas into provider-tool JSON, but
@@ -5920,7 +5926,10 @@ raw `sensors -j`. The wrapper is the setup-script API contract for legacy SSH
 temperature collection: it must emit a bounded JSON object with `sensors` and
 `smart` members, install or verify `smartmontools` for SATA/SAS/HDD disk
 temperatures, and keep `sensors -j` only as a compatibility fallback inside
-the wrapper/runtime collector path.
+the wrapper/runtime collector path. Direct Linux SATA/SAT-style disks that
+return health but no temperature through smartctl auto-detection must retry
+explicit `-d sat` and `-d scsi` probes before the wrapper reports an active
+disk with no temperature.
 That same generated-script payload must also preserve the canonical encoded
 rerun URL contract: embedded `SETUP_SCRIPT_URL` values must carry the exact
 selected `host`, `pulse_url`, and `backup_perms` query state instead of
