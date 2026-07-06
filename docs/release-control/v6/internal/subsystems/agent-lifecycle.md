@@ -1569,6 +1569,12 @@ Agent` secondary handoff against the live setup wizard instead of relying
     from a deserialised HTTP body, a user-supplied command string, an
     AI tool call, or a governed approval consumer — those callers must
     continue to carry an `ApprovalID` and approval grant.
+18. Keep plaintext agent transport validation resolver-aware but fail-closed.
+    When agent reporting, remote config, update, Docker, Kubernetes, or
+    command-channel clients allow self-hosted `http://` or `ws://`, dotted
+    local DNS names must resolve only to loopback, private/link-local, or
+    carrier-grade NAT addresses. Any unresolved, public, or mixed public/local
+    answer must keep requiring HTTPS/WSS.
 
 ## Current State
 
@@ -2652,6 +2658,10 @@ normalization used by `internal/hostagent/agent.go`,
 `http://` or `ws://` only for loopback, private/link-local IP,
 carrier-grade NAT `100.64.0.0/10`, single-label, or local DNS Pulse origins;
 public remote Pulse URLs must still use HTTPS/WSS.
+For dotted local DNS Pulse origins, the validator must either recognize the
+name as an operator-local namespace or resolve it and require every returned
+address to remain loopback, private/link-local, or carrier-grade NAT; mixed
+public and local resolution must fail closed to HTTPS/WSS.
 `InsecureSkipVerify` may relax certificate verification on TLS transport; it
 must not reopen public plaintext HTTP for updater, websocket, reporting, or
 remote-config paths.

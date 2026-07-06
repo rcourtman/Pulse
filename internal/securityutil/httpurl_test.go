@@ -2,6 +2,7 @@ package securityutil
 
 import (
 	"context"
+	"net"
 	"strings"
 	"testing"
 )
@@ -174,6 +175,24 @@ func TestNormalizePulseHTTPBaseURLWithOptions(t *testing.T) {
 		AllowLocalNetworkHTTP: true,
 	}); err == nil || !strings.Contains(err.Error(), "must use https unless host is loopback or local/private") {
 		t.Fatalf("NormalizePulseHTTPBaseURLWithOptions(public HTTP) error = %v, want public HTTP rejection", err)
+	}
+}
+
+func TestNormalizePulseHTTPBaseURLWithOptionsAllowsResolvedLocalDNS(t *testing.T) {
+	got, err := NormalizePulseHTTPBaseURLWithOptions("http://myhost.fritz.box:7655/", PulseURLValidationOptions{
+		AllowLocalNetworkHTTP: true,
+		ResolveIPAddrs: func(_ context.Context, host string) ([]net.IPAddr, error) {
+			if host != "myhost.fritz.box" {
+				t.Fatalf("resolved host = %q, want myhost.fritz.box", host)
+			}
+			return []net.IPAddr{{IP: net.ParseIP("192.168.178.20")}}, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("NormalizePulseHTTPBaseURLWithOptions() error = %v", err)
+	}
+	if got.String() != "http://myhost.fritz.box:7655" {
+		t.Fatalf("NormalizePulseHTTPBaseURLWithOptions() = %q", got.String())
 	}
 }
 

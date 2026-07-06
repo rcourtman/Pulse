@@ -10,9 +10,12 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const requestPlaceholderURL = "http://pulse.invalid"
+
+const localNetworkHostResolveTimeout = 2 * time.Second
 
 func cloneURL(u *url.URL) *url.URL {
 	if u == nil {
@@ -127,7 +130,7 @@ func IsLocalNetworkHost(host string) bool {
 	}
 
 	if ip := net.ParseIP(normalized); ip != nil {
-		return ip.IsPrivate() || ip.IsLinkLocalUnicast() || isCarrierGradeNATIPv4(ip)
+		return isLocalNetworkIP(ip)
 	}
 
 	if !strings.Contains(normalized, ".") {
@@ -141,6 +144,13 @@ func IsLocalNetworkHost(host string) bool {
 	}
 
 	return false
+}
+
+func isLocalNetworkIP(ip net.IP) bool {
+	if ip == nil {
+		return false
+	}
+	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || isCarrierGradeNATIPv4(ip)
 }
 
 func isCarrierGradeNATIPv4(ip net.IP) bool {
@@ -162,6 +172,11 @@ type PulseURLValidationOptions struct {
 	// AllowLocalNetworkHTTP permits plain HTTP/WS to private IP, link-local,
 	// single-label, and local DNS control-plane hosts for self-hosted installs.
 	AllowLocalNetworkHTTP bool
+
+	// ResolveIPAddrs resolves dotted local DNS names when deciding whether
+	// AllowLocalNetworkHTTP may permit plaintext transport. When unset, the
+	// system resolver is used.
+	ResolveIPAddrs func(ctx context.Context, host string) ([]net.IPAddr, error)
 }
 
 // NormalizePulseHTTPBaseURL validates a Pulse control-plane base URL.
@@ -296,7 +311,40 @@ func pulseURLAllowsPlaintextHost(host string, opts PulseURLValidationOptions) bo
 	if IsLoopbackHost(host) {
 		return true
 	}
-	return (opts.AllowInsecureHTTP || opts.AllowLocalNetworkHTTP) && IsLocalNetworkHost(host)
+	if !(opts.AllowInsecureHTTP || opts.AllowLocalNetworkHTTP) {
+		return false
+	}
+	return IsLocalNetworkHost(host) || hostResolvesToLocalNetwork(host, opts)
+}
+
+func hostResolvesToLocalNetwork(host string, opts PulseURLValidationOptions) bool {
+	normalized := strings.ToLower(strings.TrimSpace(strings.Trim(host, "[]")))
+	normalized = strings.TrimSuffix(normalized, ".")
+	if normalized == "" {
+		return false
+	}
+	if ip := net.ParseIP(normalized); ip != nil {
+		return isLocalNetworkIP(ip)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), localNetworkHostResolveTimeout)
+	defer cancel()
+
+	resolver := opts.ResolveIPAddrs
+	if resolver == nil {
+		resolver = net.DefaultResolver.LookupIPAddr
+	}
+	addrs, err := resolver(ctx, normalized)
+	if err != nil || len(addrs) == 0 {
+		return false
+	}
+
+	for _, addr := range addrs {
+		if !isLocalNetworkIP(addr.IP) {
+			return false
+		}
+	}
+	return true
 }
 
 func pulseURLPlaintextError(raw string, websocket bool, opts PulseURLValidationOptions) error {
