@@ -560,6 +560,11 @@ uninitialized audit stores must surface as `audit_store_unavailable`. The
 Audit Log settings surface may translate those stable API codes into recovery
 copy, but it must not show raw internal server errors or collapse audit-store
 state into a generic frontend failure.
+The persistent audit reader must also tolerate legacy timestamp encodings that
+were previously written into `audit_events.timestamp`, including Unix seconds,
+SQLite datetime values, and Go wall-clock strings carrying a monotonic
+`m=+...` suffix, so valid historical audit rows cannot make `/api/audit`
+return `query_failed`.
 That shared token-management boundary now also includes
 `frontend-modern/src/utils/apiTokenPresentation.ts`, so API-token load,
 generate, and revoke errors stay on one governed customer-facing wording path

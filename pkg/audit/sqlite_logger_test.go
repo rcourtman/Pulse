@@ -310,6 +310,49 @@ func TestSQLiteLoggerQueryHandlesLegacyDatetimeTimestampRows(t *testing.T) {
 	}
 }
 
+func TestSQLiteLoggerQueryHandlesLegacyGoMonotonicTimestampRows(t *testing.T) {
+	tempDir := t.TempDir()
+
+	logger, err := NewSQLiteLogger(SQLiteLoggerConfig{
+		DataDir:       tempDir,
+		CryptoMgr:     newMockCryptoManager(),
+		RetentionDays: 30,
+	})
+	if err != nil {
+		t.Fatalf("NewSQLiteLogger failed: %v", err)
+	}
+	defer logger.Close()
+
+	const legacyTimestamp = "2026-07-05 08:51:23.65653076 +0000 UTC m=+0.009025344"
+	want := time.Date(2026, 7, 5, 8, 51, 23, 656530760, time.UTC)
+	if _, err := logger.db.Exec(`
+		INSERT INTO audit_events (id, timestamp, event_type, user, ip, path, success, details, signature)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		"legacy-go-monotonic",
+		legacyTimestamp,
+		"startup",
+		sql.NullString{},
+		sql.NullString{},
+		"/api/audit",
+		1,
+		"legacy Go monotonic timestamp",
+		"legacy-signature",
+	); err != nil {
+		t.Fatalf("insert legacy Go monotonic row: %v", err)
+	}
+
+	events, err := logger.Query(QueryFilter{ID: "legacy-go-monotonic", Limit: 1})
+	if err != nil {
+		t.Fatalf("Query failed for legacy Go monotonic timestamp row: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("Expected 1 event, got %d", len(events))
+	}
+	if !events[0].Timestamp.Equal(want) {
+		t.Fatalf("timestamp = %s, want %s", events[0].Timestamp, want)
+	}
+}
+
 func TestSQLiteLoggerCount(t *testing.T) {
 	tempDir := t.TempDir()
 

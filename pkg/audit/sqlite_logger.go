@@ -465,6 +465,12 @@ func parseAuditTimestampString(raw string) (time.Time, error) {
 	if unix, err := strconv.ParseInt(raw, 10, 64); err == nil {
 		return time.Unix(unix, 0), nil
 	}
+	if monotonicIndex := strings.LastIndex(raw, " m="); monotonicIndex > 0 && monotonicIndex+3 < len(raw) {
+		sign := raw[monotonicIndex+3]
+		if sign == '+' || sign == '-' {
+			raw = strings.TrimSpace(raw[:monotonicIndex])
+		}
+	}
 
 	layouts := []string{
 		time.RFC3339Nano,
