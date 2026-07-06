@@ -706,6 +706,54 @@ func TestApplyHostReportPreservesThermalState(t *testing.T) {
 	}
 }
 
+func TestApplyHostReportUsesReceiptTimeForSkewedAgentClockLiveness(t *testing.T) {
+	monitor := newTestMonitor(t)
+
+	agentClock := time.Now().UTC().Add(-3 * time.Hour)
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:              "clock-skew-agent",
+			Version:         "6.0.3",
+			IntervalSeconds: 30,
+		},
+		Host: agentshost.HostInfo{
+			ID:        "clock-skew-machine",
+			MachineID: "clock-skew-machine",
+			Hostname:  "clock-skew.local",
+			Platform:  "linux",
+		},
+		Timestamp: agentClock,
+		Metrics: agentshost.Metrics{
+			CPUUsagePercent: 12,
+		},
+	}
+
+	before := time.Now().UTC()
+	host, err := monitor.ApplyHostReport(report, &config.APITokenRecord{ID: "clock-skew-token"})
+	after := time.Now().UTC()
+	if err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+	if host.LastSeen.Before(before) || host.LastSeen.After(after.Add(time.Second)) {
+		t.Fatalf("host LastSeen = %s, want server receipt between %s and %s", host.LastSeen, before, after)
+	}
+	if !host.LastSeen.After(agentClock.Add(2 * time.Hour)) {
+		t.Fatalf("host LastSeen followed skewed agent timestamp %s: got %s", agentClock, host.LastSeen)
+	}
+
+	readState := monitor.snapshotBackedUnifiedReadState()
+	if readState == nil {
+		t.Fatal("expected snapshot-backed read state")
+	}
+	hosts := readState.Hosts()
+	if len(hosts) != 1 {
+		t.Fatalf("host count = %d, want 1", len(hosts))
+	}
+	if hosts[0].Status() != unifiedresources.StatusOnline {
+		t.Fatalf("canonical host status = %q, want online", hosts[0].Status())
+	}
+}
+
 func TestApplyDockerReportPreservesNativeRuntimeInventory(t *testing.T) {
 	monitor := newTestMonitor(t)
 	now := time.Date(2026, 5, 24, 8, 0, 0, 0, time.UTC)

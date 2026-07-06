@@ -1644,6 +1644,9 @@ func normalizedSecurityStrings(values []string) []string {
 
 // ApplyHostReport ingests a host agent report into the shared state.
 func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.APITokenRecord) (models.Host, error) {
+	receivedAt := time.Now()
+	observedAt := receivedAt.UTC()
+
 	hostname := strings.TrimSpace(report.Host.Hostname)
 	if hostname == "" {
 		return models.Host{}, fmt.Errorf("host report missing hostname")
@@ -1781,11 +1784,6 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	displayName := strings.TrimSpace(report.Host.DisplayName)
 	if displayName == "" {
 		displayName = hostname
-	}
-
-	timestamp := report.Timestamp
-	if timestamp.IsZero() {
-		timestamp = time.Now().UTC()
 	}
 
 	memory := models.Memory{
@@ -1981,7 +1979,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		Status:          "online",
 		UptimeSeconds:   report.Host.UptimeSeconds,
 		IntervalSeconds: report.Agent.IntervalSeconds,
-		LastSeen:        timestamp,
+		LastSeen:        observedAt,
 		AgentVersion:    strings.TrimSpace(report.Agent.Version),
 		MachineID:       strings.TrimSpace(report.Host.MachineID),
 		CommandsEnabled: report.Agent.CommandsEnabled,
@@ -2064,7 +2062,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	// Compute I/O rates from cumulative counters before adding to state.
 	// Network and disk bytes from the agent are cumulative totals since boot;
 	// the RateTracker converts them to bytes/second, just like VMs and containers.
-	now := time.Now()
+	now := receivedAt
 
 	var totalRXBytes, totalTXBytes uint64
 	for _, nic := range host.NetworkInterfaces {
@@ -2114,7 +2112,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 
 	// If host reports Ceph data, also update the global CephClusters state
 	if report.Ceph != nil {
-		cephCluster := convertAgentCephToGlobalCluster(report.Ceph, hostname, identifier, timestamp)
+		cephCluster := convertAgentCephToGlobalCluster(report.Ceph, hostname, identifier, observedAt)
 		storedCephCluster := m.state.UpsertCephCluster(cephCluster)
 		log.Debug().
 			Str("hostId", identifier).
@@ -2196,7 +2194,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	}
 
 	// Store cluster peer sensor data if present and evict stale entries
-	m.applyClusterSensors(report.ClusterSensors, timestamp)
+	m.applyClusterSensors(report.ClusterSensors, observedAt)
 	m.persistHostContinuity(host, report)
 
 	return host, nil

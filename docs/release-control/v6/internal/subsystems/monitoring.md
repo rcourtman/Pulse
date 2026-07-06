@@ -27,6 +27,11 @@ Monitoring owns source freshness cadence for Proxmox, PBS, and PMG resources:
 the stale threshold is derived from the configured polling interval with a
 minimum floor, so API-facing resource status must not degrade merely because a
 healthy source is between normal poll cycles.
+Host-agent report liveness is server-observed, not agent-clock-observed:
+`ApplyHostReport` must stamp `Host.LastSeen`, agent-sourced Ceph cluster
+freshness, and host-agent cluster sensor freshness from Pulse receipt time, so
+a reporting machine with a slow or fast local clock cannot be ingested as stale
+or keep offline/recovery alerts flapping while reports are still arriving.
 PBS backup snapshot refresh is a bounded monitoring hot path: group-level
 snapshot fetches must run through the fixed worker pool in
 `internal/monitoring/monitor_backups.go`, reuse cached snapshots on per-group
