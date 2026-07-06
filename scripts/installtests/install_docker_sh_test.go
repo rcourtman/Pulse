@@ -53,6 +53,18 @@ func previousStableForPrereleaseVersion(version string) (string, bool) {
 	return previousStablePatchVersion(base)
 }
 
+func previousPrereleaseVersion(version string) (string, bool) {
+	base, suffix, ok := strings.Cut(version, "-rc.")
+	if !ok {
+		return "", false
+	}
+	rc, err := strconv.Atoi(suffix)
+	if err != nil || rc <= 1 {
+		return "", false
+	}
+	return fmt.Sprintf("%s-rc.%d", base, rc-1), true
+}
+
 func TestInstallDockerScriptUsesConfiguredImageRepoDefault(t *testing.T) {
 	workDir := t.TempDir()
 	version := currentReleaseVersion(t)
@@ -136,6 +148,9 @@ func TestRepoDockerComposeDefaultPinsCurrentVersion(t *testing.T) {
 	if previous, ok := previousStablePatchVersion(version); ok && strings.Contains(text, "rcourtman/pulse:"+previous) {
 		t.Fatalf("repo docker-compose.yml must not retain the previous stable patch image tag %s:\n%s", previous, text)
 	}
+	if previous, ok := previousPrereleaseVersion(version); ok && strings.Contains(text, "rcourtman/pulse:"+previous) {
+		t.Fatalf("repo docker-compose.yml must not retain the previous prerelease image tag %s:\n%s", previous, text)
+	}
 	if strings.Contains(text, ":latest") {
 		t.Fatalf("repo docker-compose.yml must not default to a floating latest tag:\n%s", text)
 	}
@@ -163,6 +178,9 @@ func TestInstallDockerScriptFallbackPinsCurrentVersion(t *testing.T) {
 	}
 	if previous, ok := previousStablePatchVersion(version); ok && strings.Contains(text, `CANONICAL_DEFAULT_PULSE_VERSION="`+previous+`"`) {
 		t.Fatalf("install-docker.sh fallback must not retain the previous stable patch version %s:\n%s", previous, text)
+	}
+	if previous, ok := previousPrereleaseVersion(version); ok && strings.Contains(text, `CANONICAL_DEFAULT_PULSE_VERSION="`+previous+`"`) {
+		t.Fatalf("install-docker.sh fallback must not retain the previous prerelease version %s:\n%s", previous, text)
 	}
 }
 

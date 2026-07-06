@@ -63,10 +63,10 @@ class ValidateArtifactReleaseLineTest(unittest.TestCase):
 
     def test_prerelease_support_tag_does_not_require_stable_lineage(self) -> None:
         result = self.validate(
-            tag="v6.0.4-rc.1",
-            existing_tags={"v6.0.4-rc.1"},
+            tag="v6.0.4-rc.2",
+            existing_tags={"v6.0.4-rc.2"},
             commits={
-                "v6.0.4-rc.1": "support-rc",
+                "v6.0.4-rc.2": "support-rc",
                 "origin/pulse/v6-release": "branch",
             },
             ancestors={("support-rc", "branch")},

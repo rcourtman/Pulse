@@ -734,6 +734,9 @@ func TestDeploymentDefaultsPinVersionedImagesAndHelmDocsChecksum(t *testing.T) {
 	if previous, ok := previousStablePatchVersion(version); ok && strings.Contains(chart, "v"+previous) {
 		t.Fatalf("Helm Chart.yaml must not retain the previous stable patch tag v%s:\n%s", previous, chart)
 	}
+	if previous, ok := previousPrereleaseVersion(version); ok && strings.Contains(chart, "v"+previous) {
+		t.Fatalf("Helm Chart.yaml must not retain the previous prerelease tag v%s:\n%s", previous, chart)
+	}
 
 	chartReadmeBytes, err := os.ReadFile(repoFile("deploy", "helm", "pulse", "README.md"))
 	if err != nil {
@@ -752,6 +755,9 @@ func TestDeploymentDefaultsPinVersionedImagesAndHelmDocsChecksum(t *testing.T) {
 	}
 	if previous, ok := previousStablePatchVersion(version); ok && strings.Contains(chartReadme, previous) {
 		t.Fatalf("Helm README.md must not retain the previous stable patch version %s:\n%s", previous, chartReadme)
+	}
+	if previous, ok := previousPrereleaseVersion(version); ok && strings.Contains(chartReadme, previous) {
+		t.Fatalf("Helm README.md must not retain the previous prerelease version %s:\n%s", previous, chartReadme)
 	}
 
 	helmPagesBytes, err := os.ReadFile(repoFile(".github", "workflows", "helm-pages.yml"))

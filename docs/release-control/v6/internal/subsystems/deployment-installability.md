@@ -804,9 +804,9 @@ TLS floor in the dynamic config.
 
 ## Current State
 
-The active support prerelease `v6.0.4-rc.1` cut sets the repo-root `VERSION`,
+The active support prerelease `v6.0.4-rc.2` cut sets the repo-root `VERSION`,
 repo-root `docker-compose.yml` image default, `scripts/install-docker.sh`
-fallback, and Helm chart release metadata to the same `6.0.4-rc.1` release
+fallback, and Helm chart release metadata to the same `6.0.4-rc.2` release
 version. This support prerelease uses the private Pro support image path with a
 stable rollback reference `v6.0.3`, no `latest` movement, no stable semver tag
 movement, no R2 manifest promotion, no broker download metadata promotion, and
@@ -863,8 +863,8 @@ compose image default, standalone installer fallback constant, and packaged
 Helm metadata. A draft release workflow failure caused by stale image or chart
 pins is a release-packet blocker until the defaults, tests, and evidence
 record are refreshed from the new branch head.
-For the active support prerelease `v6.0.4-rc.1` cut, the repo-root compose
-default and `scripts/install-docker.sh` fallback must both pin `6.0.4-rc.1`
+For the active support prerelease `v6.0.4-rc.2` cut, the repo-root compose
+default and `scripts/install-docker.sh` fallback must both pin `6.0.4-rc.2`
 until the next governed stable cut moves them forward. The stable promotion
 guard remains in force by rejecting leftover `-rc.` defaults when the governed
 `VERSION` is a stable release.
