@@ -57,6 +57,9 @@ type ToolChoiceType string
 const (
 	// ToolChoiceNone prevents the model from using any tools
 	ToolChoiceNone ToolChoiceType = "none"
+	// ToolChoiceRequired asks providers with a native forcing mechanism to
+	// require at least one tool call.
+	ToolChoiceRequired ToolChoiceType = "required"
 )
 
 // ToolChoice controls how the model selects tools
@@ -73,7 +76,7 @@ type ChatRequest struct {
 	Temperature float64     `json:"temperature,omitempty"`
 	System      string      `json:"system,omitempty"`      // System prompt (Anthropic style)
 	Tools       []Tool      `json:"tools,omitempty"`       // Available tools
-	ToolChoice  *ToolChoice `json:"tool_choice,omitempty"` // nil = model-owned automatic selection; none = text-only safety brake
+	ToolChoice  *ToolChoice `json:"tool_choice,omitempty"` // nil = model-owned automatic selection; none = text-only safety brake; required = provider-native forced tool use where supported
 }
 
 func (r ChatRequest) NormalizeCollections() ChatRequest {

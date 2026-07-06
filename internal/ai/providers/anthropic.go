@@ -73,10 +73,24 @@ type anthropicRequest struct {
 	ToolChoice  *anthropicToolChoice `json:"tool_choice,omitempty"`
 }
 
-// anthropicToolChoice controls whether tools are available or disabled.
-// Pulse uses automatic selection by default and none only as a safety brake.
+// anthropicToolChoice controls whether tools are automatic, required, or disabled.
+// Pulse omits automatic selection by default and only serializes explicit overrides.
 type anthropicToolChoice struct {
-	Type string `json:"type"` // "auto" or "none"
+	Type string `json:"type"` // "auto", "any", or "none"
+}
+
+func convertToolChoiceToAnthropic(tc *ToolChoice) *anthropicToolChoice {
+	if tc == nil {
+		return nil
+	}
+	switch tc.Type {
+	case ToolChoiceNone:
+		return &anthropicToolChoice{Type: "none"}
+	case ToolChoiceRequired:
+		return &anthropicToolChoice{Type: "any"}
+	default:
+		return nil
+	}
 }
 
 type anthropicMessage struct {
@@ -269,12 +283,10 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespo
 		anthropicReq.Tools[len(anthropicReq.Tools)-1].CacheControl = &anthropicCacheControl{Type: "ephemeral"}
 	}
 
-	// Add tool_choice if specified. Pulse only sends automatic selection or
-	// text-only safety brakes.
+	// Add tool_choice only for explicit overrides. Nil keeps Anthropic's default
+	// automatic tool selection.
 	if shouldAddTools && req.ToolChoice != nil {
-		anthropicReq.ToolChoice = &anthropicToolChoice{
-			Type: string(req.ToolChoice.Type),
-		}
+		anthropicReq.ToolChoice = convertToolChoiceToAnthropic(req.ToolChoice)
 	}
 
 	body, err := json.Marshal(anthropicReq)
@@ -606,12 +618,9 @@ func (c *AnthropicClient) ChatStream(ctx context.Context, req ChatRequest, callb
 		anthropicReq.Tools[len(anthropicReq.Tools)-1].CacheControl = &anthropicCacheControl{Type: "ephemeral"}
 	}
 
-	// Add tool_choice if specified (same as non-streaming). Pulse only sends
-	// automatic selection or text-only safety brakes.
+	// Add tool_choice only for explicit overrides, same as non-streaming.
 	if shouldAddTools && req.ToolChoice != nil {
-		anthropicReq.ToolChoice = &anthropicToolChoice{
-			Type: string(req.ToolChoice.Type),
-		}
+		anthropicReq.ToolChoice = convertToolChoiceToAnthropic(req.ToolChoice)
 	}
 
 	body, err := json.Marshal(anthropicReq)

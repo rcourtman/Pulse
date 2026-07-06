@@ -277,6 +277,7 @@ func TestGeminiClient_Chat_ToolCalls(t *testing.T) {
 						Parts: []geminiPart{
 							{
 								FunctionCall: &geminiFunctionCall{
+									ID:   "gemini-call-weather",
 									Name: "get_weather",
 									Args: map[string]interface{}{"location": "NYC"},
 								},
@@ -319,6 +320,77 @@ func TestGeminiClient_Chat_ToolCalls(t *testing.T) {
 
 	if resp.ToolCalls[0].Name != "get_weather" {
 		t.Errorf("expected tool name 'get_weather', got %q", resp.ToolCalls[0].Name)
+	}
+	if resp.ToolCalls[0].ID != "gemini-call-weather" {
+		t.Errorf("expected provider tool id to be preserved, got %q", resp.ToolCalls[0].ID)
+	}
+}
+
+func TestGeminiClient_Chat_ToolChoiceRequiredUsesAnyAndSanitizesSchema(t *testing.T) {
+	var receivedReq geminiRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&receivedReq)
+		resp := geminiResponse{
+			Candidates: []geminiCandidate{
+				{
+					Content: geminiContent{
+						Parts: []geminiPart{{
+							FunctionCall: &geminiFunctionCall{
+								ID:   "call-verify-1",
+								Name: "verify_pulse_patrol",
+								Args: map[string]interface{}{"ok": true},
+							},
+						}},
+					},
+					FinishReason: "STOP",
+				},
+			},
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	client := NewGeminiClient("test-key", "gemini-pro", server.URL, 0)
+
+	resp, err := client.Chat(context.Background(), ChatRequest{
+		Messages: []Message{{Role: "user", Content: "Run the self-test"}},
+		Tools: []Tool{{
+			Name:        "verify_pulse_patrol",
+			Description: "Verify Patrol tool calling",
+			InputSchema: map[string]interface{}{
+				"type":                 "object",
+				"additionalProperties": false,
+				"properties": map[string]interface{}{
+					"ok": map[string]interface{}{
+						"type":                 "boolean",
+						"description":          "Always true.",
+						"additionalProperties": false,
+					},
+				},
+				"required": []string{"ok"},
+			},
+		}},
+		ToolChoice: &ToolChoice{Type: ToolChoiceRequired},
+	})
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if receivedReq.ToolConfig == nil || receivedReq.ToolConfig.FunctionCallingConfig == nil {
+		t.Fatalf("expected Gemini toolConfig in required mode, got %+v", receivedReq.ToolConfig)
+	}
+	if receivedReq.ToolConfig.FunctionCallingConfig.Mode != "ANY" {
+		t.Fatalf("Gemini function calling mode = %q, want ANY", receivedReq.ToolConfig.FunctionCallingConfig.Mode)
+	}
+	if len(receivedReq.Tools) != 1 || len(receivedReq.Tools[0].FunctionDeclarations) != 1 {
+		t.Fatalf("expected one Gemini function declaration, got %+v", receivedReq.Tools)
+	}
+	params := receivedReq.Tools[0].FunctionDeclarations[0].Parameters
+	if hasMapKeyDeep(params, "additionalProperties") {
+		t.Fatalf("Gemini function parameters leaked unsupported additionalProperties: %#v", params)
+	}
+	if len(resp.ToolCalls) != 1 || resp.ToolCalls[0].ID != "call-verify-1" {
+		t.Fatalf("expected provider function-call id to survive response parsing, got %+v", resp.ToolCalls)
 	}
 }
 
@@ -612,7 +684,7 @@ func TestGeminiClient_Chat_ToolResultsAndAssistantToolCalls(t *testing.T) {
 	_, err := client.Chat(context.Background(), ChatRequest{
 		Messages: []Message{
 			{Role: "assistant", Content: "Calling tool", ToolCalls: []ToolCall{{ID: "tc1", Name: "get_time", Input: map[string]any{"tz": "UTC"}}}},
-			{Role: "user", ToolResult: &ToolResult{ToolUseID: "get_time", Content: "{\"time\":\"00:00\"}"}},
+			{Role: "user", ToolResult: &ToolResult{ToolUseID: "tc1", Content: "{\"time\":\"00:00\"}"}},
 		},
 	})
 	if err != nil {
@@ -626,9 +698,18 @@ func TestGeminiClient_Chat_ToolResultsAndAssistantToolCalls(t *testing.T) {
 	if got.Contents[0].Role != "model" || got.Contents[0].Parts[1].FunctionCall == nil {
 		t.Errorf("Expected model role with function call, got %+v", got.Contents[0])
 	}
+	if got.Contents[0].Parts[1].FunctionCall.ID != "tc1" {
+		t.Errorf("Expected model function call id tc1, got %+v", got.Contents[0].Parts[1].FunctionCall)
+	}
 	// Check tool result
 	if got.Contents[1].Role != "user" || got.Contents[1].Parts[0].FunctionResponse == nil {
 		t.Errorf("Expected user role with function response, got %+v", got.Contents[1])
+	}
+	if got.Contents[1].Parts[0].FunctionResponse.ID != "tc1" {
+		t.Errorf("Expected function response id tc1, got %+v", got.Contents[1].Parts[0].FunctionResponse)
+	}
+	if got.Contents[1].Parts[0].FunctionResponse.Name != "get_time" {
+		t.Errorf("Expected function response name get_time, got %+v", got.Contents[1].Parts[0].FunctionResponse)
 	}
 }
 
@@ -673,9 +754,33 @@ func TestGeminiClient_Chat_ResolvesAndGroupsToolResults(t *testing.T) {
 	if resultParts[0].FunctionResponse == nil || resultParts[0].FunctionResponse.Name != "get_time" {
 		t.Fatalf("first function response = %+v, want get_time", resultParts[0].FunctionResponse)
 	}
+	if resultParts[0].FunctionResponse.ID != "call-time" {
+		t.Fatalf("first function response id = %q, want call-time", resultParts[0].FunctionResponse.ID)
+	}
 	if resultParts[1].FunctionResponse == nil || resultParts[1].FunctionResponse.Name != "get_weather" {
 		t.Fatalf("second function response = %+v, want get_weather", resultParts[1].FunctionResponse)
 	}
+	if resultParts[1].FunctionResponse.ID != "call-weather" {
+		t.Fatalf("second function response id = %q, want call-weather", resultParts[1].FunctionResponse.ID)
+	}
+}
+
+func hasMapKeyDeep(value interface{}, key string) bool {
+	switch v := value.(type) {
+	case map[string]interface{}:
+		for k, item := range v {
+			if k == key || hasMapKeyDeep(item, key) {
+				return true
+			}
+		}
+	case []interface{}:
+		for _, item := range v {
+			if hasMapKeyDeep(item, key) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func TestGeminiClient_Chat_Retry(t *testing.T) {

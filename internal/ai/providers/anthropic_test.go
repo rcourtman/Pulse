@@ -210,6 +210,73 @@ func TestAnthropicClient_Chat_ToolChoiceNone_DropsTools(t *testing.T) {
 	}
 }
 
+func TestAnthropicClient_Chat_ToolChoiceRequired_KeepsToolsAndUsesAny(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var got map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+
+		toolChoice, ok := got["tool_choice"].(map[string]any)
+		if !ok {
+			t.Fatalf("tool_choice field should be present when tools are required: %+v", got["tool_choice"])
+		}
+		if toolChoice["type"] != "any" {
+			t.Fatalf("tool_choice.type = %v, want any", toolChoice["type"])
+		}
+		tools, ok := got["tools"].([]any)
+		if !ok || len(tools) != 1 {
+			t.Fatalf("tools field should contain one tool when tool_choice is required: %+v", got["tools"])
+		}
+		tool, ok := tools[0].(map[string]any)
+		if !ok || tool["name"] != "get_time" {
+			t.Fatalf("unexpected tool definition: %+v", tools[0])
+		}
+
+		_ = json.NewEncoder(w).Encode(anthropicResponse{
+			ID:         "msg_123",
+			Type:       "message",
+			Role:       "assistant",
+			Model:      "claude-3-5-sonnet",
+			StopReason: "tool_use",
+			Content: []anthropicContent{
+				{
+					Type:  "tool_use",
+					ID:    "tool_1",
+					Name:  "get_time",
+					Input: map[string]interface{}{"tz": "UTC"},
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := NewAnthropicClientWithBaseURL("test-key", "claude-3-5-sonnet", server.URL+"/v1/messages", 0)
+	out, err := client.Chat(context.Background(), ChatRequest{
+		Messages: []Message{{Role: "user", Content: "Hello"}},
+		Tools: []Tool{
+			{
+				Name:        "get_time",
+				Description: "get time",
+				InputSchema: map[string]any{"type": "object"},
+			},
+		},
+		ToolChoice: &ToolChoice{Type: ToolChoiceRequired},
+	})
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+	if out.StopReason != "tool_use" {
+		t.Fatalf("StopReason = %q, want tool_use", out.StopReason)
+	}
+	if len(out.ToolCalls) != 1 || out.ToolCalls[0].ID != "tool_1" || out.ToolCalls[0].Name != "get_time" {
+		t.Fatalf("unexpected ToolCalls: %+v", out.ToolCalls)
+	}
+	if out.ToolCalls[0].Input["tz"] != "UTC" {
+		t.Fatalf("unexpected ToolCall input: %+v", out.ToolCalls[0].Input)
+	}
+}
+
 func TestAnthropicClient_Chat_ToolResultInRequest(t *testing.T) {
 	var got map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

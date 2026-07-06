@@ -199,6 +199,9 @@ func (s *Service) RunPatrolToolPreflight(ctx context.Context, providerName, mode
 		},
 		MaxTokens: 256,
 	}
+	if parsedProvider == config.AIProviderGemini {
+		req.ToolChoice = &providers.ToolChoice{Type: providers.ToolChoiceRequired}
+	}
 
 	resp, err := provider.Chat(ctx, req)
 	result.DurationMs = time.Since(started).Milliseconds()

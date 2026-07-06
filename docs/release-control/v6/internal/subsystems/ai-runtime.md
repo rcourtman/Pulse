@@ -153,6 +153,24 @@ Provider definitions that declare a BaseURLField (today OpenAI, Ollama, and
 Z.ai) expose a user-overridable endpoint via the AI settings payload; the
 registry default base URL applies when no override is stored, so one provider
 can serve both standard and alternate (e.g. Z.ai coding) endpoint tiers.
+Native provider tool-calling is a transport projection over the shared
+provider-neutral `Tool`, `ToolChoice`, `ToolCall`, and `ToolResult` shapes.
+Nil `ToolChoice` means provider-owned automatic selection, `none` disables
+tools by omitting them from the provider request, and `required` is reserved for
+callers that explicitly need provider-native forced tool use. That required mode
+maps to OpenAI `required`, Anthropic `any`, and Gemini
+`FunctionCallingConfig` `ANY`; normal chat and Patrol runs must not force tool
+use unless the caller sets that override. Patrol's static model-readiness
+self-test may use required mode for Gemini because it is a fixed capability
+probe with no infrastructure identifiers and needs deterministic tool-call
+proof. Provider-specific schema restrictions belong at the native transport
+edge: Gemini strips unsupported `additionalProperties` only from Gemini function
+declarations, while the registry-owned provider-neutral schemas and providers
+that support stricter JSON Schema keep that field. Gemini function-call
+continuations must preserve the provider `functionCall.id` on parsed
+`ToolCall.ID` values and return that same value as `functionResponse.id`; the
+function name remains a separate field resolved from the preceding assistant
+call when building tool-result turns.
 
 ## Canonical Files
 

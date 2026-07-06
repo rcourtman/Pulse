@@ -150,3 +150,42 @@ func TestChatStream_ToolResults_MultipleMerged(t *testing.T) {
 	assert.Equal(t, "func3", mergedUserMsg.Parts[2].FunctionResponse.Name)
 	assert.Equal(t, "res3", mergedUserMsg.Parts[2].FunctionResponse.Response.Content)
 }
+
+func TestGeminiClient_ChatStream_ToolChoiceRequiredUsesAnyAndSanitizesSchema(t *testing.T) {
+	var capturedBody geminiRequest
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&capturedBody)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Write([]byte("data: {}\n\n"))
+	}))
+	defer ts.Close()
+
+	client := NewGeminiClient("fake-key", "gemini-pro", ts.URL, 10*time.Second)
+
+	err := client.ChatStream(context.Background(), ChatRequest{
+		Messages: []Message{{Role: "user", Content: "Run the self-test"}},
+		Tools: []Tool{{
+			Name: "verify_pulse_patrol",
+			InputSchema: map[string]interface{}{
+				"type":                 "object",
+				"additionalProperties": false,
+				"properties": map[string]interface{}{
+					"ok": map[string]interface{}{
+						"type":                 "boolean",
+						"additionalProperties": false,
+					},
+				},
+				"required": []string{"ok"},
+			},
+		}},
+		ToolChoice: &ToolChoice{Type: ToolChoiceRequired},
+	}, func(event StreamEvent) {})
+
+	assert.NoError(t, err)
+	if assert.NotNil(t, capturedBody.ToolConfig) && assert.NotNil(t, capturedBody.ToolConfig.FunctionCallingConfig) {
+		assert.Equal(t, "ANY", capturedBody.ToolConfig.FunctionCallingConfig.Mode)
+	}
+	if assert.Len(t, capturedBody.Tools, 1) && assert.Len(t, capturedBody.Tools[0].FunctionDeclarations, 1) {
+		assert.False(t, hasMapKeyDeep(capturedBody.Tools[0].FunctionDeclarations[0].Parameters, "additionalProperties"))
+	}
+}

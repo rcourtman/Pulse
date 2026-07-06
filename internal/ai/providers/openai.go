@@ -224,7 +224,7 @@ type openaiRequest struct {
 	MaxCompletionTokens int             `json:"max_completion_tokens,omitempty"` // For o1/o3 models
 	Temperature         float64         `json:"temperature,omitempty"`
 	Tools               []openaiTool    `json:"tools,omitempty"`
-	ToolChoice          interface{}     `json:"tool_choice,omitempty"` // "auto" or "none"
+	ToolChoice          interface{}     `json:"tool_choice,omitempty"` // "none", "required", or provider-specific choices
 }
 
 // openaiTool represents a function tool in OpenAI format
@@ -353,13 +353,20 @@ func (c *OpenAIClient) requiresMaxCompletionTokens(model string) bool {
 
 // convertToolChoiceToOpenAI converts our ToolChoice to OpenAI's format.
 // Pulse omits automatic tool_choice so tool use stays model-owned, and only
-// uses text-only safety brakes when tools are removed from the request.
+// serializes native override modes when the caller explicitly requests them.
 // See: https://platform.openai.com/docs/api-reference/chat/create#chat-create-tool_choice
 func convertToolChoiceToOpenAI(tc *ToolChoice) interface{} {
-	if tc != nil && tc.Type == ToolChoiceNone {
-		return "none"
+	if tc == nil {
+		return nil
 	}
-	return nil
+	switch tc.Type {
+	case ToolChoiceNone:
+		return "none"
+	case ToolChoiceRequired:
+		return "required"
+	default:
+		return nil
+	}
 }
 
 // convertMessagesToOpenAI converts provider-neutral messages into the

@@ -732,6 +732,66 @@ func TestOpenAIClient_Chat_ToolChoiceNone_DropsTools(t *testing.T) {
 	assert.Equal(t, "No tools", resp.Content)
 }
 
+func TestOpenAIClient_Chat_ToolChoiceRequired_KeepsToolsAndRequiresCall(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var got map[string]interface{}
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&got))
+
+		assert.Equal(t, "required", got["tool_choice"])
+		tools, ok := got["tools"].([]interface{})
+		require.True(t, ok, "tools field should be present when tool_choice is required")
+		require.Len(t, tools, 1)
+		tool, ok := tools[0].(map[string]interface{})
+		require.True(t, ok, "tool should be an object")
+		assert.Equal(t, "function", tool["type"])
+		fn, ok := tool["function"].(map[string]interface{})
+		require.True(t, ok, "function definition should be an object")
+		assert.Equal(t, "get_time", fn["name"])
+
+		_ = json.NewEncoder(w).Encode(openaiResponse{
+			ID:    "chatcmpl-required-tools",
+			Model: "gpt-4",
+			Choices: []openaiChoice{
+				{
+					Message: openaiRespMsg{
+						Role: "assistant",
+						ToolCalls: []openaiToolCall{
+							{
+								ID:   "call_1",
+								Type: "function",
+								Function: openaiToolFunction{
+									Name:      "get_time",
+									Arguments: `{"tz":"UTC"}`,
+								},
+							},
+						},
+					},
+					FinishReason: "tool_calls",
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := NewOpenAIClient("sk-test", "gpt-4", server.URL, 0)
+	resp, err := client.Chat(context.Background(), ChatRequest{
+		Messages: []Message{{Role: "user", Content: "Hi"}},
+		Tools: []Tool{
+			{
+				Name:        "get_time",
+				Description: "get time",
+				InputSchema: map[string]interface{}{"type": "object"},
+			},
+		},
+		ToolChoice: &ToolChoice{Type: ToolChoiceRequired},
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.ToolCalls, 1)
+	assert.Equal(t, "call_1", resp.ToolCalls[0].ID)
+	assert.Equal(t, "get_time", resp.ToolCalls[0].Name)
+	assert.Equal(t, "UTC", resp.ToolCalls[0].Input["tz"])
+}
+
 func TestOpenAIClient_ChatStream_ToolChoiceNone_DropsTools(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var got map[string]interface{}

@@ -34,7 +34,6 @@ func NewGeminiClient(apiKey, model, baseURL string, timeout time.Duration) *Gemi
 		baseURL = geminiAPIURL
 	}
 	// Strip provider prefix if present - the model should be just the model name
-	// Strip provider prefix if present - the model should be just the model name
 	model = strings.TrimPrefix(model, "gemini:")
 	if timeout <= 0 {
 		timeout = 300 * time.Second // Default 5 minutes
@@ -87,11 +86,13 @@ type geminiPart struct {
 }
 
 type geminiFunctionCall struct {
+	ID   string                 `json:"id,omitempty"`
 	Name string                 `json:"name"`
 	Args map[string]interface{} `json:"args"`
 }
 
 type geminiFunctionResponse struct {
+	ID       string `json:"id,omitempty"`
 	Name     string `json:"name"`
 	Response struct {
 		Content string `json:"content"`
@@ -258,13 +259,92 @@ func sanitizeGeminiContents(contents []geminiContent) []geminiContent {
 }
 
 // convertToolChoiceToGemini converts our ToolChoice to Gemini's mode string.
-// Pulse omits automatic tool config so tool use stays model-owned.
-// See: https://ai.google.dev/api/caching#FunctionCallingConfig
+// Pulse omits automatic tool config so normal tool use stays model-owned.
+// See: https://ai.google.dev/gemini-api/docs/generate-content#function_calling
 func convertToolChoiceToGemini(tc *ToolChoice) string {
-	if tc != nil && tc.Type == ToolChoiceNone {
-		return "NONE"
+	if tc == nil {
+		return ""
 	}
-	return ""
+	switch tc.Type {
+	case ToolChoiceNone:
+		return "NONE"
+	case ToolChoiceRequired:
+		return "ANY"
+	default:
+		return ""
+	}
+}
+
+func buildGeminiFunctionDeclarations(tools []Tool) []geminiFunctionDeclaration {
+	funcDecls := make([]geminiFunctionDeclaration, 0, len(tools))
+	for _, t := range tools {
+		if t.Type != "" && t.Type != "function" {
+			continue
+		}
+		funcDecls = append(funcDecls, geminiFunctionDeclaration{
+			Name:        t.Name,
+			Description: t.Description,
+			Parameters:  sanitizeGeminiToolSchema(t.InputSchema),
+		})
+	}
+	return funcDecls
+}
+
+func applyGeminiTools(geminiReq *geminiRequest, tools []Tool, toolChoice *ToolChoice) []geminiFunctionDeclaration {
+	shouldAddTools := len(tools) > 0
+	if toolChoice != nil && toolChoice.Type == ToolChoiceNone {
+		shouldAddTools = false
+	}
+	if !shouldAddTools {
+		return nil
+	}
+
+	funcDecls := buildGeminiFunctionDeclarations(tools)
+	if len(funcDecls) == 0 {
+		return nil
+	}
+	geminiReq.Tools = []geminiToolDef{{FunctionDeclarations: funcDecls}}
+	if mode := convertToolChoiceToGemini(toolChoice); mode != "" {
+		geminiReq.ToolConfig = &geminiToolConfig{
+			FunctionCallingConfig: &geminiFunctionCallingConfig{Mode: mode},
+		}
+	}
+	return funcDecls
+}
+
+// sanitizeGeminiToolSchema projects Pulse's provider-neutral JSON schema onto
+// Gemini's function declaration subset. Gemini rejects additionalProperties in
+// function parameters, while other providers rely on it for stricter schemas.
+func sanitizeGeminiToolSchema(schema map[string]interface{}) map[string]interface{} {
+	if schema == nil {
+		return nil
+	}
+	sanitized, _ := sanitizeGeminiSchemaValue(schema).(map[string]interface{})
+	return sanitized
+}
+
+func sanitizeGeminiSchemaValue(value interface{}) interface{} {
+	switch v := value.(type) {
+	case map[string]interface{}:
+		out := make(map[string]interface{}, len(v))
+		for key, item := range v {
+			if key == "additionalProperties" {
+				continue
+			}
+			out[key] = sanitizeGeminiSchemaValue(item)
+		}
+		return out
+	case []interface{}:
+		out := make([]interface{}, len(v))
+		for i, item := range v {
+			out[i] = sanitizeGeminiSchemaValue(item)
+		}
+		return out
+	case []string:
+		return append([]string(nil), v...)
+	default:
+		return v
+	}
 }
 
 // convertMessagesToGemini converts provider-neutral messages into Gemini's
@@ -302,13 +382,13 @@ func convertMessagesToGemini(reqMessages []Message) []geminiContent {
 				return id
 			}
 
-			parts := []geminiPart{geminiFunctionResponsePart(resolveName(m.ToolResult.ToolUseID), m.ToolResult.Content)}
+			parts := []geminiPart{geminiFunctionResponsePart(m.ToolResult.ToolUseID, resolveName(m.ToolResult.ToolUseID), m.ToolResult.Content)}
 			for i+1 < len(reqMessages) {
 				next := reqMessages[i+1]
 				if next.ToolResult == nil {
 					break
 				}
-				parts = append(parts, geminiFunctionResponsePart(resolveName(next.ToolResult.ToolUseID), next.ToolResult.Content))
+				parts = append(parts, geminiFunctionResponsePart(next.ToolResult.ToolUseID, resolveName(next.ToolResult.ToolUseID), next.ToolResult.Content))
 				i++
 			}
 
@@ -327,6 +407,7 @@ func convertMessagesToGemini(reqMessages []Message) []geminiContent {
 			for _, tc := range m.ToolCalls {
 				parts = append(parts, geminiPart{
 					FunctionCall: &geminiFunctionCall{
+						ID:   tc.ID,
 						Name: tc.Name,
 						Args: tc.Input,
 					},
@@ -355,8 +436,8 @@ func convertMessagesToGemini(reqMessages []Message) []geminiContent {
 	return sanitizeGeminiContents(contents)
 }
 
-func geminiFunctionResponsePart(name, content string) geminiPart {
-	response := geminiFunctionResponse{Name: name}
+func geminiFunctionResponsePart(id, name, content string) geminiPart {
+	response := geminiFunctionResponse{ID: id, Name: name}
 	response.Response.Content = content
 	return geminiPart{FunctionResponse: &response}
 }
@@ -398,41 +479,15 @@ func (c *GeminiClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 		geminiReq.GenerationConfig.Temperature = req.Temperature
 	}
 
-	// Add tools if provided (unless ToolChoice is None)
-	shouldAddTools := len(req.Tools) > 0
-	if req.ToolChoice != nil && req.ToolChoice.Type == ToolChoiceNone {
-		shouldAddTools = false
-	}
-
-	if shouldAddTools {
-		funcDecls := make([]geminiFunctionDeclaration, 0, len(req.Tools))
-		for _, t := range req.Tools {
-			// Skip non-function tools
-			if t.Type != "" && t.Type != "function" {
-				continue
+	funcDecls := applyGeminiTools(&geminiReq, req.Tools, req.ToolChoice)
+	if len(funcDecls) > 0 {
+		log.Debug().Int("tool_count", len(funcDecls)).Strs("tool_names", func() []string {
+			names := make([]string, len(funcDecls))
+			for i, f := range funcDecls {
+				names[i] = f.Name
 			}
-			funcDecls = append(funcDecls, geminiFunctionDeclaration{
-				Name:        t.Name,
-				Description: t.Description,
-				Parameters:  t.InputSchema,
-			})
-		}
-		if len(funcDecls) > 0 {
-			geminiReq.Tools = []geminiToolDef{{FunctionDeclarations: funcDecls}}
-			if mode := convertToolChoiceToGemini(req.ToolChoice); mode != "" {
-				geminiReq.ToolConfig = &geminiToolConfig{
-					FunctionCallingConfig: &geminiFunctionCallingConfig{Mode: mode},
-				}
-			}
-
-			log.Debug().Int("tool_count", len(funcDecls)).Strs("tool_names", func() []string {
-				names := make([]string, len(funcDecls))
-				for i, f := range funcDecls {
-					names[i] = f.Name
-				}
-				return names
-			}()).Msg("gemini request includes tools")
-		}
+			return names
+		}()).Msg("gemini request includes tools")
 	}
 
 	body, err := json.Marshal(geminiReq)
@@ -576,9 +631,10 @@ func (c *GeminiClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 			textContent += part.Text
 		}
 		if part.FunctionCall != nil {
-			// Generate a unique ID for this tool call since Gemini doesn't provide one
-			// Use name + index to ensure uniqueness when same function is called multiple times
-			toolID := fmt.Sprintf("%s_%d", part.FunctionCall.Name, len(toolCalls))
+			toolID := strings.TrimSpace(part.FunctionCall.ID)
+			if toolID == "" {
+				toolID = fmt.Sprintf("%s_%d", part.FunctionCall.Name, len(toolCalls))
+			}
 			signature := part.ThoughtSignature
 			if len(signature) == 0 {
 				signature = part.ThoughtSignatureSnake
@@ -677,42 +733,16 @@ func (c *GeminiClient) ChatStream(ctx context.Context, req ChatRequest, callback
 		geminiReq.GenerationConfig.Temperature = req.Temperature
 	}
 
-	// Add tools if provided (unless ToolChoice is None) - same as non-streaming
-	shouldAddTools := len(req.Tools) > 0
-	if req.ToolChoice != nil && req.ToolChoice.Type == ToolChoiceNone {
-		shouldAddTools = false
-	}
-
-	if shouldAddTools {
-		funcDecls := make([]geminiFunctionDeclaration, 0, len(req.Tools))
-		for _, t := range req.Tools {
-			if t.Type != "" && t.Type != "function" {
-				continue
-			}
-			funcDecls = append(funcDecls, geminiFunctionDeclaration{
-				Name:        t.Name,
-				Description: t.Description,
-				Parameters:  t.InputSchema,
-			})
+	funcDecls := applyGeminiTools(&geminiReq, req.Tools, req.ToolChoice)
+	if len(funcDecls) > 0 {
+		toolNames := make([]string, len(funcDecls))
+		for i, f := range funcDecls {
+			toolNames[i] = f.Name
 		}
-		if len(funcDecls) > 0 {
-			geminiReq.Tools = []geminiToolDef{{FunctionDeclarations: funcDecls}}
-			if mode := convertToolChoiceToGemini(req.ToolChoice); mode != "" {
-				geminiReq.ToolConfig = &geminiToolConfig{
-					FunctionCallingConfig: &geminiFunctionCallingConfig{Mode: mode},
-				}
-			}
-
-			// Log tool names for debugging tool selection issues
-			toolNames := make([]string, len(funcDecls))
-			for i, f := range funcDecls {
-				toolNames[i] = f.Name
-			}
-			log.Debug().
-				Int("tool_count", len(funcDecls)).
-				Strs("tool_names", toolNames).
-				Msg("Gemini stream request includes tools")
-		}
+		log.Debug().
+			Int("tool_count", len(funcDecls)).
+			Strs("tool_names", toolNames).
+			Msg("Gemini stream request includes tools")
 	}
 
 	body, err := json.Marshal(geminiReq)
@@ -878,7 +908,10 @@ func (c *GeminiClient) ChatStream(ctx context.Context, req ChatRequest, callback
 						}
 
 						if part.FunctionCall != nil {
-							toolID := fmt.Sprintf("%s_%d", part.FunctionCall.Name, len(toolCalls))
+							toolID := strings.TrimSpace(part.FunctionCall.ID)
+							if toolID == "" {
+								toolID = fmt.Sprintf("%s_%d", part.FunctionCall.Name, len(toolCalls))
+							}
 							signature := part.ThoughtSignature
 							if len(signature) == 0 {
 								signature = part.ThoughtSignatureSnake
