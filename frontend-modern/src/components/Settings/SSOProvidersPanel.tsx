@@ -333,6 +333,21 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                       />
                     </div>
                   </div>
+
+                  <div class={formField}>
+                    <label class={labelClass()}>Scopes</label>
+                    <input
+                      type="text"
+                      value={form.oidcScopes}
+                      onInput={(e) => setForm('oidcScopes', e.currentTarget.value)}
+                      placeholder="openid profile email"
+                      class={controlClass()}
+                    />
+                    <p class={formHelpText}>
+                      Space-separated scopes for the sign-in request. Some IdPs only return group
+                      claims when an extra scope (e.g. groups) is requested here.
+                    </p>
+                  </div>
                 </div>
               </Show>
 
@@ -599,7 +614,9 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                           class={controlClass()}
                         />
                         <p class={formHelpText}>
-                          Claim used for OIDC allowed groups and role mappings.
+                          Claim used for OIDC allowed groups and role mappings. If your IdP only
+                          returns groups when asked, add the matching scope in the Scopes field
+                          above.
                         </p>
                       </div>
                     </Show>
