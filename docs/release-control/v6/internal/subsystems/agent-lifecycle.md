@@ -269,12 +269,17 @@ process or unit may seed later recovery attempts, but it must not be logged or
 treated as recovered update state. That fallback must still run when an
 operator supplies the update URL explicitly but token, identity, feature-flag,
 or trust continuity remains recoverable only from a legacy v5 process or
-service. Because v5.1.x agents were launched by Go flag parsing, that legacy
-fallback must treat single-dash and double-dash agent flag spellings as the
-same recovered state while preserving the same fail-closed URL-plus-token
-threshold. Windows stale-agent update commands remain on the existing
-token-gated install transport until the Windows installer owns an equivalent
-saved-state update mode.
+service. Legacy v5.1.x Linux services that omitted `--token` and
+`--token-file` because the Go agent read `/var/lib/pulse-agent/token`
+implicitly may complete recovery from that installer state-dir/default token
+file only after a running process, service unit, or saved state supplies local
+agent connection context; the token file alone must not hide a missing
+control-plane URL. Because v5.1.x agents were launched by Go flag parsing,
+that legacy fallback must treat single-dash and double-dash agent flag
+spellings as the same recovered state while preserving the same fail-closed
+URL-plus-token threshold. Windows stale-agent update commands remain on the
+existing token-gated install transport until the Windows installer owns an
+equivalent saved-state update mode.
 Agent Fleet Doctor diagnostics extend that same read-only lifecycle triage
 surface: `GET /api/agents/diagnostics` may explain stale versions, missing
 reports, profile deployment drift, expected Docker/Kubernetes telemetry gaps,

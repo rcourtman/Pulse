@@ -644,6 +644,7 @@ func TestInstallSHSupportsSavedStateUpdateMode(t *testing.T) {
 		`recover_connection_state_from_running_agent`,
 		`recover_connection_state_from_systemd_unit`,
 		`recover_connection_state_from_arg_stream`,
+		`recover_token_from_default_agent_token_file() {`,
 		`normalize_recovered_agent_arg_key() {`,
 		`-url|-pulse-url|-token|-token-file|-interval|-agent-id|-hostname|-cacert|-health-addr|-state-dir|-kubeconfig|-proxmox-type|-disk-exclude)`,
 		`--enable-host|-enable-host|--enable-host=true|-enable-host=true)`,
@@ -702,6 +703,7 @@ func TestInstallSHRecoversV5ProcessArgsForSavedStateUpdate(t *testing.T) {
 ` + extractInstallShellFunction(t, "normalize_recovered_agent_arg_key") + `
 ` + extractInstallShellFunction(t, "apply_recovered_agent_arg_value") + `
 ` + extractInstallShellFunction(t, "recovered_connection_state_ready") + `
+` + extractInstallShellFunction(t, "recover_token_from_default_agent_token_file") + `
 ` + extractInstallShellFunction(t, "recover_connection_state_from_arg_stream") + `
 ` + extractInstallShellFunction(t, "build_exec_arg_items") + `
 ` + extractInstallShellFunction(t, "join_exec_arg_items") + `
@@ -785,6 +787,7 @@ func TestInstallSHRejectsPartialRecoveredProcessConnectionState(t *testing.T) {
 ` + extractInstallShellFunction(t, "normalize_recovered_agent_arg_key") + `
 ` + extractInstallShellFunction(t, "apply_recovered_agent_arg_value") + `
 ` + extractInstallShellFunction(t, "recovered_connection_state_ready") + `
+` + extractInstallShellFunction(t, "recover_token_from_default_agent_token_file") + `
 ` + extractInstallShellFunction(t, "recover_connection_state_from_arg_stream") + `
 		if recover_connection_state_from_arg_stream <<'ARGS'
 /usr/local/bin/pulse-agent
@@ -821,6 +824,100 @@ ARGS
 	}
 }
 
+func TestInstallSHRecoversLegacyDefaultTokenFileForSavedStateUpdate(t *testing.T) {
+	stateDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(stateDir, "token"), []byte("deadbeef\n"), 0600); err != nil {
+		t.Fatalf("write legacy token file: %v", err)
+	}
+
+	script := `
+		fail() { echo "FAIL:$1"; exit 99; }
+		PULSE_URL="http://192.168.2.96:7655"
+		PULSE_TOKEN=""
+		INTERVAL="30s"
+		INTERVAL_EXPLICIT="false"
+		ENABLE_HOST="true"
+		HOST_EXPLICIT="false"
+		ENABLE_DOCKER=""
+		DOCKER_EXPLICIT="false"
+		ENABLE_KUBERNETES=""
+		KUBERNETES_EXPLICIT="false"
+		KUBECONFIG_PATH=""
+		ENABLE_PROXMOX=""
+		PROXMOX_EXPLICIT="false"
+		PROXMOX_TYPE=""
+		INSECURE="true"
+		ENABLE_COMMANDS="false"
+		ENROLL="false"
+		HEALTH_ADDR=""
+		HEALTH_ADDR_SET="false"
+		AGENT_ID=""
+		HOSTNAME_OVERRIDE=""
+		STATE_DIR="${PULSE_TEST_STATE_DIR:?}"
+		TRUENAS_STATE_DIR="${PULSE_TEST_STATE_DIR:?}/truenas"
+		CURL_CA_BUNDLE=""
+		KUBE_INCLUDE_ALL_PODS="false"
+		KUBE_INCLUDE_ALL_DEPLOYMENTS="false"
+		DISK_EXCLUDES=()
+		RUNTIME_TOKEN_FILE="${STATE_DIR}/token"
+` + extractInstallShellFunction(t, "strip_recovered_arg_quotes") + `
+` + extractInstallShellFunction(t, "normalize_recovered_agent_arg_key") + `
+` + extractInstallShellFunction(t, "apply_recovered_agent_arg_value") + `
+` + extractInstallShellFunction(t, "recovered_connection_state_ready") + `
+` + extractInstallShellFunction(t, "recover_token_from_default_agent_token_file") + `
+` + extractInstallShellFunction(t, "recover_connection_state_from_arg_stream") + `
+` + extractInstallShellFunction(t, "build_exec_arg_items") + `
+` + extractInstallShellFunction(t, "join_exec_arg_items") + `
+` + extractInstallShellFunction(t, "build_exec_args") + `
+		if recover_connection_state_from_arg_stream <<'ARGS'
+/usr/local/bin/pulse-agent
+-url
+http://192.168.2.96:7655
+-interval
+30s
+-enable-host
+-enable-docker
+-agent-id
+machine-1
+-hostname
+docker1
+ARGS
+		then
+			echo "READY"
+		else
+			echo "NOT_READY"
+		fi
+		build_exec_args
+		printf 'URL=%s\nTOKEN=%s\nDOCKER=%s\nAGENT_ID=%s\nHOSTNAME=%s\nEXEC_ARGS=%s\n' \
+			"$PULSE_URL" "$PULSE_TOKEN" "$ENABLE_DOCKER" "$AGENT_ID" "$HOSTNAME_OVERRIDE" "$EXEC_ARGS"
+	`
+
+	cmd := exec.Command("bash", "-c", script)
+	cmd.Env = append(os.Environ(), "PULSE_TEST_STATE_DIR="+stateDir)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	got := string(out)
+	for _, needle := range []string{
+		"READY",
+		"URL=http://192.168.2.96:7655",
+		"TOKEN=deadbeef",
+		"DOCKER=true",
+		"AGENT_ID=machine-1",
+		"HOSTNAME=docker1",
+		"--token-file",
+		stateDir + "/token",
+	} {
+		if !strings.Contains(got, needle) {
+			t.Fatalf("legacy default token recovery missing %q:\n%s", needle, got)
+		}
+	}
+	if strings.Contains(got, "--token deadbeef") {
+		t.Fatalf("legacy default token recovery leaked raw token into service args:\n%s", got)
+	}
+}
+
 func TestInstallSHCombinesRecoveredProcessArgsAndEnvConnectionState(t *testing.T) {
 	script := `
 		PULSE_URL=""
@@ -853,6 +950,7 @@ func TestInstallSHCombinesRecoveredProcessArgsAndEnvConnectionState(t *testing.T
 ` + extractInstallShellFunction(t, "normalize_recovered_agent_arg_key") + `
 ` + extractInstallShellFunction(t, "apply_recovered_agent_arg_value") + `
 ` + extractInstallShellFunction(t, "recovered_connection_state_ready") + `
+` + extractInstallShellFunction(t, "recover_token_from_default_agent_token_file") + `
 ` + extractInstallShellFunction(t, "recover_connection_state_from_arg_stream") + `
 ` + extractInstallShellFunction(t, "recover_connection_state_from_env_stream") + `
 		if recover_connection_state_from_arg_stream <<'ARGS'
@@ -930,6 +1028,7 @@ func TestInstallSHUpdateModeMergesExplicitURLWithRunningV5ProcessState(t *testin
 ` + extractInstallShellFunction(t, "apply_recovered_agent_arg_value") + `
 ` + extractInstallShellFunction(t, "recovered_connection_state_ready") + `
 ` + extractInstallShellFunction(t, "update_connection_state_incomplete") + `
+` + extractInstallShellFunction(t, "recover_token_from_default_agent_token_file") + `
 ` + extractInstallShellFunction(t, "recover_connection_state_from_arg_stream") + `
 ` + extractInstallShellFunction(t, "build_exec_arg_items") + `
 ` + extractInstallShellFunction(t, "join_exec_arg_items") + `

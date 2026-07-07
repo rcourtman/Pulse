@@ -1479,6 +1479,28 @@ read_connection_state_value() {
     ' "$file" 2>/dev/null || true
 }
 
+recover_token_from_default_agent_token_file() {
+    local token_path=""
+    local recovered_token=""
+
+    if [[ -n "$PULSE_TOKEN" ]]; then
+        return 0
+    fi
+
+    # v5.1.x Linux services could omit --token and --token-file because the
+    # Go agent read this default file itself.
+    for token_path in "${STATE_DIR%/}/token" "/var/lib/pulse-agent/token" "$TRUENAS_STATE_DIR/token"; do
+        [[ -n "$token_path" && -f "$token_path" ]] || continue
+        recovered_token=$(cat "$token_path" 2>/dev/null || true)
+        if [[ -n "$recovered_token" ]]; then
+            PULSE_TOKEN="$recovered_token"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
 recover_connection_state() {
     local file="$1"
 
@@ -1494,6 +1516,9 @@ recover_connection_state() {
         if [[ -n "$saved_token_file" && -f "$saved_token_file" ]]; then
             PULSE_TOKEN=$(cat "$saved_token_file")
         fi
+    fi
+    if [[ -z "$PULSE_TOKEN" && -n "$PULSE_URL" ]]; then
+        recover_token_from_default_agent_token_file || true
     fi
     if [[ -z "$AGENT_ID" ]]; then
         AGENT_ID=$(read_connection_state_value "$file" "PULSE_AGENT_ID")
@@ -1705,6 +1730,10 @@ recover_connection_state_from_arg_stream() {
         esac
     done
 
+    if [[ "$RECOVERED_AGENT_ARG_STATE" == "true" && -z "$PULSE_TOKEN" && -n "$PULSE_URL" ]]; then
+        recover_token_from_default_agent_token_file || true
+    fi
+
     [[ "$RECOVERED_AGENT_ARG_STATE" == "true" ]] && recovered_connection_state_ready
 }
 
@@ -1754,6 +1783,10 @@ recover_connection_state_from_env_stream() {
                 ;;
         esac
     done
+
+    if [[ "$RECOVERED_AGENT_ENV_STATE" == "true" && -z "$PULSE_TOKEN" && -n "$PULSE_URL" ]]; then
+        recover_token_from_default_agent_token_file || true
+    fi
 
     [[ "$RECOVERED_AGENT_ENV_STATE" == "true" ]] && recovered_connection_state_ready
 }

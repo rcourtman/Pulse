@@ -279,10 +279,14 @@ TLS floor in the dynamic config.
    raw token in process arguments. That fallback remains required when the
    operator supplies `--url` on the update command but token, identity,
    feature-flag, or trust continuity still exists only in legacy process or
-   service state. Because v5.1.x agents used Go's single-dash flag spelling,
-   the installer-owned recovery path must accept both single-dash and
-   double-dash forms for recovered agent args without weakening the existing
-   missing-state failure behavior.
+   service state. Legacy v5.1.x Linux services that relied on the Go agent's
+   implicit `/var/lib/pulse-agent/token` fallback may recover that default
+   token file only after local process, service, or saved-state context has
+   supplied the agent connection shape; the token file alone is not enough to
+   convert a missing-state update into a new install. Because v5.1.x agents
+   used Go's single-dash flag spelling, the installer-owned recovery path must
+   accept both single-dash and double-dash forms for recovered agent args
+   without weakening the existing missing-state failure behavior.
    The shell installer must disclose `--enable-commands` as Pulse command
    execution, disabled by default, and must name both Patrol actions and
    Proxmox LXC Docker inventory as the operator-visible reasons to enable it.
