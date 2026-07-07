@@ -2,7 +2,8 @@
 
 ## Status
 
-Active v6.0.5 RC regression.
+Resolved on 2026-07-07; see Resolution. Reporter retest still requires a
+release artifact containing both fixes.
 
 Primary issue: #1535
 
@@ -147,3 +148,29 @@ A complete fix needs proof for these outcomes:
 - The #1533 SSO button/discovery fix remains intact.
 - Tests cover both backend payload persistence and the Settings UI path that a normal administrator uses.
 - Browser proof exercises the Settings -> Security -> Single Sign-On create/edit path, not only source-level payload builders.
+
+## Resolution (2026-07-07)
+
+Two defects, two repos:
+
+- repos/pulse `87aac4e57` adds the editable Scopes field to the Settings
+  OIDC create/edit modal (the form model already round-tripped
+  `oidc.scopes`; the panel never rendered an input for it), plus model and
+  panel tests covering the create/edit round-trip.
+- pulse-enterprise `689100c` fixes the deeper root cause. SSO admin
+  endpoints are overridden by the enterprise binder
+  (`pulse-enterprise/internal/ssoadmin/hooks.go`), and its provider detail
+  GET used a local flat serialization that drops nested OIDC scopes, the
+  groups claim, and group role mappings. Because SSO is license gated,
+  every real install reads provider detail through that override, so
+  reopening a provider showed defaults and the next save reset the saved
+  scopes. The OSS-side persistence/detail fixes in `caa9b41834` never
+  executed on licensed builds. Detail reads now delegate to the core
+  handler, which returns the canonical nested payload.
+
+Verified live against a dev enterprise build: a provider created with
+`openid profile email groups` shows the same set when reopened, and the
+`/api/oidc/{id}/login` redirect carries
+`scope=openid+profile+email+groups`. Persistence and the authorization
+request were already correct end to end; only the detail read path was
+lossy.
