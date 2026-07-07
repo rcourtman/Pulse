@@ -230,20 +230,44 @@ func TestFetchPBSBackupSnapshotsUsesBoundedWorkerPool(t *testing.T) {
 	}
 }
 
-func TestPollPBSBackupsSummarizesLargeGroupsWithoutFetchingSnapshots(t *testing.T) {
+// Regression test for issue #1541: groups larger than the per-group limit
+// must still be fetched for real, keeping verification, size, file, and
+// per-snapshot time data for the newest bounded set. RC3 summarized such
+// groups into a single synthesized entry, which surfaced as "Unverified",
+// "No size", "PBS files not listed", and a collapsed backup timeline.
+func TestPollPBSBackupsFetchesRealSnapshotsForLargeGroups(t *testing.T) {
 	t.Parallel()
+
+	const firstBackupTime = int64(1700000000)
+	snapshotCount := pbsBackupSnapshotsPerGroupLimit + 3
+
+	var snapshots strings.Builder
+	snapshots.WriteString(`{"data":[`)
+	for i := 0; i < snapshotCount; i++ {
+		if i > 0 {
+			snapshots.WriteByte(',')
+		}
+		_, _ = fmt.Fprintf(
+			&snapshots,
+			`{"backup-type":"vm","backup-id":"100","backup-time":%d,"size":2048,"owner":"root@pam","files":[{"filename":"drive-scsi0.img.fidx"}],"verification":{"state":"ok","upid":"UPID:pbs1"}}`,
+			firstBackupTime+int64(i),
+		)
+	}
+	snapshots.WriteString(`]}`)
+	snapshotsJSON := snapshots.String()
 
 	var snapshotCalls int64
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case strings.Contains(r.URL.Path, "/admin/datastore/archive/groups"):
 			_, _ = w.Write([]byte(fmt.Sprintf(
-				`{"data":[{"backup-type":"vm","backup-id":"100","last-backup":1700000000,"backup-count":%d}]}`,
-				pbsBackupSnapshotsPerGroupLimit+1,
+				`{"data":[{"backup-type":"vm","backup-id":"100","last-backup":%d,"backup-count":%d}]}`,
+				firstBackupTime+int64(snapshotCount-1),
+				snapshotCount,
 			)))
 		case strings.Contains(r.URL.Path, "/admin/datastore/archive/snapshots"):
 			atomic.AddInt64(&snapshotCalls, 1)
-			_, _ = w.Write([]byte(`{"data":[{"backup-type":"vm","backup-id":"100","backup-time":1700000000}]}`))
+			_, _ = w.Write([]byte(snapshotsJSON))
 		default:
 			http.NotFound(w, r)
 		}
@@ -262,20 +286,45 @@ func TestPollPBSBackupsSummarizesLargeGroupsWithoutFetchingSnapshots(t *testing.
 	m := &Monitor{state: models.NewState()}
 	m.pollPBSBackups(context.Background(), "pbs1", client, []models.PBSDatastore{{Name: "archive"}})
 
-	if got := atomic.LoadInt64(&snapshotCalls); got != 0 {
-		t.Fatalf("large PBS backup group fetched snapshots %d times, want 0", got)
+	if got := atomic.LoadInt64(&snapshotCalls); got != 1 {
+		t.Fatalf("large PBS backup group fetched snapshots %d times, want 1", got)
 	}
 
 	snapshot := m.state.GetSnapshot()
-	if len(snapshot.PBSBackups) != 1 {
-		t.Fatalf("expected one summarized PBS backup artifact, got %d: %+v", len(snapshot.PBSBackups), snapshot.PBSBackups)
+	if len(snapshot.PBSBackups) != pbsBackupSnapshotsPerGroupLimit {
+		t.Fatalf("retained backups = %d, want newest %d real snapshots", len(snapshot.PBSBackups), pbsBackupSnapshotsPerGroupLimit)
 	}
-	got := snapshot.PBSBackups[0]
-	if got.Instance != "pbs1" || got.Datastore != "archive" || got.BackupType != "vm" || got.VMID != "100" {
-		t.Fatalf("unexpected summarized PBS backup: %+v", got)
+	seenTimes := make(map[int64]struct{}, len(snapshot.PBSBackups))
+	for i, backup := range snapshot.PBSBackups {
+		if !backup.Verified {
+			t.Fatalf("backup %d lost verification state: %+v", i, backup)
+		}
+		if backup.Size != 2048 {
+			t.Fatalf("backup %d lost size: %+v", i, backup)
+		}
+		if len(backup.Files) != 1 || backup.Files[0] != "drive-scsi0.img.fidx" {
+			t.Fatalf("backup %d lost file list: %+v", i, backup)
+		}
+		seenTimes[backup.BackupTime.Unix()] = struct{}{}
 	}
-	if !got.BackupTime.Equal(time.Unix(1700000000, 0)) {
-		t.Fatalf("summary backup time = %s, want %s", got.BackupTime, time.Unix(1700000000, 0))
+	if len(seenTimes) != pbsBackupSnapshotsPerGroupLimit {
+		t.Fatalf("backup times collapsed: %d distinct times, want %d", len(seenTimes), pbsBackupSnapshotsPerGroupLimit)
+	}
+	newestTime := firstBackupTime + int64(snapshotCount-1)
+	oldestRetainedTime := newestTime - int64(pbsBackupSnapshotsPerGroupLimit-1)
+	for want := oldestRetainedTime; want <= newestTime; want++ {
+		if _, ok := seenTimes[want]; !ok {
+			t.Fatalf("expected newest snapshots retained, missing backup time %d", want)
+		}
+	}
+
+	// A second poll must reuse the bounded cache instead of refetching.
+	m.pollPBSBackups(context.Background(), "pbs1", client, []models.PBSDatastore{{Name: "archive"}})
+	if got := atomic.LoadInt64(&snapshotCalls); got != 1 {
+		t.Fatalf("second poll refetched snapshots (%d calls), want cached reuse", got)
+	}
+	if got := len(m.state.GetSnapshot().PBSBackups); got != pbsBackupSnapshotsPerGroupLimit {
+		t.Fatalf("retained backups after cached poll = %d, want %d", got, pbsBackupSnapshotsPerGroupLimit)
 	}
 }
 
@@ -292,10 +341,9 @@ func TestPollPBSBackupsBoundsLargeTopologyAcrossPolls(t *testing.T) {
 		}
 		_, _ = fmt.Fprintf(
 			&groups,
-			`{"backup-type":"vm","backup-id":"%d","last-backup":%d,"backup-count":%d}`,
+			`{"backup-type":"vm","backup-id":"%d","last-backup":%d,"backup-count":1}`,
 			i,
 			firstBackupTime+int64(i),
-			pbsBackupSnapshotsPerGroupLimit+20,
 		)
 	}
 	groups.WriteString(`]}`)
@@ -308,7 +356,17 @@ func TestPollPBSBackupsBoundsLargeTopologyAcrossPolls(t *testing.T) {
 			_, _ = w.Write([]byte(groupsJSON))
 		case strings.Contains(r.URL.Path, "/admin/datastore/archive/snapshots"):
 			atomic.AddInt64(&snapshotCalls, 1)
-			_, _ = w.Write([]byte(`{"data":[]}`))
+			backupID := r.URL.Query().Get("backup-id")
+			id, err := strconv.Atoi(backupID)
+			if err != nil {
+				http.Error(w, "bad backup-id", http.StatusBadRequest)
+				return
+			}
+			_, _ = w.Write([]byte(fmt.Sprintf(
+				`{"data":[{"backup-type":"vm","backup-id":%q,"backup-time":%d,"size":1024,"verification":{"state":"ok"}}]}`,
+				backupID,
+				firstBackupTime+int64(id),
+			)))
 		default:
 			http.NotFound(w, r)
 		}
@@ -332,16 +390,32 @@ func TestPollPBSBackupsBoundsLargeTopologyAcrossPolls(t *testing.T) {
 		if got := len(snapshot.PBSBackups); got != pbsBackupLiveStateLimit {
 			t.Fatalf("cycle %d PBS backup state size = %d, want %d", cycle, got, pbsBackupLiveStateLimit)
 		}
-		if got := atomic.LoadInt64(&snapshotCalls); got != 0 {
-			t.Fatalf("cycle %d large topology fetched snapshots %d times, want 0", cycle, got)
+		// Snapshot fetches must stay bounded by the live-state limit: newest
+		// groups are fetched once, groups beyond the limit are never fetched,
+		// and later cycles reuse the bounded cache without refetching.
+		if got := atomic.LoadInt64(&snapshotCalls); got != int64(pbsBackupLiveStateLimit) {
+			t.Fatalf("cycle %d cumulative snapshot fetches = %d, want %d", cycle, got, pbsBackupLiveStateLimit)
 		}
-		newest := snapshot.PBSBackups[0]
-		if newest.VMID != strconv.Itoa(groupCount-1) || newest.BackupTime.Unix() != firstBackupTime+int64(groupCount-1) {
-			t.Fatalf("cycle %d newest backup = %+v, want vmid %d at %d", cycle, newest, groupCount-1, firstBackupTime+int64(groupCount-1))
+		times := make(map[int64]struct{}, len(snapshot.PBSBackups))
+		for _, backup := range snapshot.PBSBackups {
+			if !backup.Verified {
+				t.Fatalf("cycle %d backup lost verification state: %+v", cycle, backup)
+			}
+			times[backup.BackupTime.Unix()] = struct{}{}
 		}
-		oldestRetained := snapshot.PBSBackups[len(snapshot.PBSBackups)-1]
-		if oldestRetained.VMID != strconv.Itoa(groupCount-pbsBackupLiveStateLimit) {
-			t.Fatalf("cycle %d oldest retained vmid = %s, want %d", cycle, oldestRetained.VMID, groupCount-pbsBackupLiveStateLimit)
+		if len(times) != pbsBackupLiveStateLimit {
+			t.Fatalf("cycle %d distinct backup times = %d, want %d", cycle, len(times), pbsBackupLiveStateLimit)
+		}
+		newestTime := firstBackupTime + int64(groupCount-1)
+		oldestRetainedTime := firstBackupTime + int64(groupCount-pbsBackupLiveStateLimit)
+		if _, ok := times[newestTime]; !ok {
+			t.Fatalf("cycle %d missing newest backup time %d", cycle, newestTime)
+		}
+		if _, ok := times[oldestRetainedTime]; !ok {
+			t.Fatalf("cycle %d missing oldest retained backup time %d", cycle, oldestRetainedTime)
+		}
+		if _, ok := times[oldestRetainedTime-1]; ok {
+			t.Fatalf("cycle %d retained backup older than the live-state window: %d", cycle, oldestRetainedTime-1)
 		}
 	}
 }

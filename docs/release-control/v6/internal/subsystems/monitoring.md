@@ -37,10 +37,12 @@ snapshot fetches must run through the fixed worker pool in
 `internal/monitoring/monitor_backups.go`, reuse cached snapshots on per-group
 fetch failures, and must not allocate one goroutine or buffered result slot per
 backup group in large PBS datastores. Live PBS backup state is intentionally
-bounded: groups are processed newest-first, large groups are represented by
-their newest group metadata instead of every snapshot, per-group snapshots are
-capped to the newest bounded set, and the per-instance PBS backup list must not
-grow without an explicit monitoring-owned limit. PBS backup group cache metadata
+bounded: groups are processed newest-first, per-group snapshots are capped to
+the newest bounded set of real fetched snapshots, and the per-instance PBS
+backup list must not grow without an explicit monitoring-owned limit. Bounding
+must never synthesize placeholder backup entries from group metadata: a
+placeholder drops verification, size, file, and per-snapshot time data, which
+users read as broken discovery and failed verification. PBS backup group cache metadata
 must be pruned to the retained group set after a completed poll, while
 preserving cache metadata only for groups still observed or intentionally reused
 after transient datastore failures. Recovery-point ingestion started by backup
