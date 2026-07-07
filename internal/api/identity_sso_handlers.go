@@ -248,6 +248,14 @@ func (r *Router) ensureSSOConfig() *config.SSOConfig {
 		}
 	}
 
+	publicURL := ""
+	if r.config != nil {
+		publicURL = r.config.PublicURL
+	}
+	if config.ApplyLegacyOIDCEnvProvider(r.ssoConfig, publicURL) {
+		log.Info().Str("provider_id", config.LegacyOIDCProviderID).Msg("Loaded legacy OIDC environment SSO provider")
+	}
+
 	setSSOAuthSnapshot(r.config, r.ssoConfig)
 	return r.ssoConfig
 }
@@ -421,6 +429,10 @@ func (r *Router) handleUpdateSSOProvider(w http.ResponseWriter, req *http.Reques
 		writeErrorResponse(w, http.StatusNotFound, "not_found", "Provider not found", nil)
 		return
 	}
+	if existing.RuntimeManaged {
+		writeErrorResponse(w, http.StatusConflict, "provider_managed_by_environment", "Provider is managed by OIDC environment variables", nil)
+		return
+	}
 
 	body, err := io.ReadAll(io.LimitReader(req.Body, maxRequestBodySize))
 	if err != nil {
@@ -579,6 +591,10 @@ func (r *Router) handleDeleteSSOProvider(w http.ResponseWriter, req *http.Reques
 	existing := r.ssoConfig.GetProvider(providerID)
 	if existing == nil {
 		writeErrorResponse(w, http.StatusNotFound, "not_found", "Provider not found", nil)
+		return
+	}
+	if existing.RuntimeManaged {
+		writeErrorResponse(w, http.StatusConflict, "provider_managed_by_environment", "Provider is managed by OIDC environment variables", nil)
 		return
 	}
 

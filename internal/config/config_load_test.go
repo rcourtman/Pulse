@@ -345,16 +345,28 @@ func TestLoad_ProxyAuth(t *testing.T) {
 	assert.Equal(t, "X-User", cfg.ProxyAuthUserHeader)
 }
 
-func TestLoad_OIDCEnvIgnored(t *testing.T) {
+func TestLegacyOIDCEnvProvider(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 	t.Setenv("OIDC_ENABLED", "true")
 	t.Setenv("OIDC_ISSUER_URL", "https://issuer.com")
 	t.Setenv("OIDC_CLIENT_ID", "client-id")
 	t.Setenv("OIDC_CLIENT_SECRET", "client-secret")
+	t.Setenv("OIDC_ALLOWED_GROUPS", "admins, operators")
+	t.Setenv("OIDC_GROUP_ROLE_MAPPINGS", "admins=admin,operators=viewer")
 
-	cfg, err := Load()
-	require.NoError(t, err)
-	require.NotNil(t, cfg)
+	provider, ok := LegacyOIDCEnvProvider("https://pulse.example.com")
+	require.True(t, ok)
+	require.NotNil(t, provider)
+	require.NotNil(t, provider.OIDC)
+	assert.Equal(t, LegacyOIDCProviderID, provider.ID)
+	assert.True(t, provider.RuntimeManaged)
+	assert.Equal(t, "https://issuer.com", provider.OIDC.IssuerURL)
+	assert.Equal(t, "client-id", provider.OIDC.ClientID)
+	assert.Equal(t, "client-secret", provider.OIDC.ClientSecret)
+	assert.Equal(t, "https://pulse.example.com/api/oidc/callback", provider.OIDC.RedirectURL)
+	assert.Equal(t, []string{"admins", "operators"}, provider.AllowedGroups)
+	assert.Equal(t, map[string]string{"admins": "admin", "operators": "viewer"}, provider.GroupRoleMappings)
+	assert.True(t, provider.OIDC.EnvOverrides["clientSecret"])
 }
 
 func TestLoad_AuthPass_AutoHash(t *testing.T) {

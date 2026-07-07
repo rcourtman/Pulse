@@ -42,6 +42,10 @@ type SSOProvider struct {
 
 	// SAML-specific configuration
 	SAML *SAMLProviderConfig `json:"saml,omitempty"`
+
+	// RuntimeManaged marks providers sourced from process environment. Runtime
+	// providers are usable for auth discovery but must not be persisted.
+	RuntimeManaged bool `json:"-"`
 }
 
 // OIDCProviderConfig contains OIDC-specific settings
@@ -119,6 +123,34 @@ func NewSSOConfig() *SSOConfig {
 		Providers:              []SSOProvider{},
 		AllowMultipleProviders: true,
 	}
+}
+
+// ApplyLegacyOIDCEnvProvider adds the legacy OIDC_* environment configuration
+// as a runtime-managed SSO provider. It returns true when a provider is newly
+// added. Existing persisted providers with the same ID are left untouched.
+func ApplyLegacyOIDCEnvProvider(c *SSOConfig, publicURL string) bool {
+	if c == nil {
+		return false
+	}
+
+	provider, ok := LegacyOIDCEnvProvider(publicURL)
+	if !ok {
+		return false
+	}
+
+	existing := c.GetProvider(provider.ID)
+	if existing != nil {
+		if existing.RuntimeManaged {
+			*existing = *provider
+		}
+		return false
+	}
+
+	c.Providers = append(c.Providers, *provider)
+	if c.DefaultProviderID == "" || c.GetProvider(c.DefaultProviderID) == nil {
+		c.DefaultProviderID = provider.ID
+	}
+	return true
 }
 
 // GetProvider returns a provider by ID

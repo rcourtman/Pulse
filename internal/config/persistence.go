@@ -38,6 +38,7 @@ type ConfigPersistence struct {
 	availabilityFile           string
 	systemFile                 string
 	ssoFile                    string
+	oidcFile                   string
 	apiTokensFile              string
 	aiFile                     string
 	aiFindingsFile             string
@@ -114,6 +115,7 @@ type resolvedConfigPersistencePaths struct {
 	availabilityFile           string
 	systemFile                 string
 	ssoFile                    string
+	oidcFile                   string
 	apiTokensFile              string
 	aiFile                     string
 	aiFindingsFile             string
@@ -178,6 +180,10 @@ func resolveConfigPersistencePaths(configDir string) (string, resolvedConfigPers
 	if err != nil {
 		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve sso.enc: %w", err)
 	}
+	oidcFile, err := resolveLeaf("oidc.enc")
+	if err != nil {
+		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve oidc.enc: %w", err)
+	}
 	apiTokensFile, err := resolveLeaf("api_tokens.json")
 	if err != nil {
 		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve api_tokens.json: %w", err)
@@ -238,6 +244,7 @@ func resolveConfigPersistencePaths(configDir string) (string, resolvedConfigPers
 		availabilityFile:           availabilityFile,
 		systemFile:                 systemFile,
 		ssoFile:                    ssoFile,
+		oidcFile:                   oidcFile,
 		apiTokensFile:              apiTokensFile,
 		aiFile:                     aiFile,
 		aiFindingsFile:             aiFindingsFile,
@@ -291,6 +298,7 @@ func newConfigPersistence(configDir string) (*ConfigPersistence, error) {
 		availabilityFile:           resolvedPaths.availabilityFile,
 		systemFile:                 resolvedPaths.systemFile,
 		ssoFile:                    resolvedPaths.ssoFile,
+		oidcFile:                   resolvedPaths.oidcFile,
 		apiTokensFile:              resolvedPaths.apiTokensFile,
 		aiFile:                     resolvedPaths.aiFile,
 		aiFindingsFile:             resolvedPaths.aiFindingsFile,
@@ -1972,11 +1980,19 @@ func (c *ConfigPersistence) SaveSSOConfig(settings *SSOConfig) error {
 	// Clone to avoid modifying the original
 	clone := settings.Clone()
 
-	// Clear sensitive data from OIDC providers (env overrides)
-	for i := range clone.Providers {
-		if clone.Providers[i].OIDC != nil {
-			clone.Providers[i].OIDC.EnvOverrides = nil
+	persistedProviders := clone.Providers[:0]
+	for _, provider := range clone.Providers {
+		if provider.RuntimeManaged {
+			continue
 		}
+		if provider.OIDC != nil {
+			provider.OIDC.EnvOverrides = nil
+		}
+		persistedProviders = append(persistedProviders, provider)
+	}
+	clone.Providers = persistedProviders
+	if clone.DefaultProviderID != "" && clone.GetProvider(clone.DefaultProviderID) == nil {
+		clone.DefaultProviderID = ""
 	}
 
 	data, err := json.Marshal(clone)
@@ -2009,7 +2025,7 @@ func (c *ConfigPersistence) LoadSSOConfig() (*SSOConfig, error) {
 	migratedPlaintext, _, err := loadEncryptedJSONLocked(c, c.ssoFile, &settings, "sso config")
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil
+			return c.loadLegacyOIDCConfigAsSSOLocked()
 		}
 		return nil, err
 	}
@@ -2026,6 +2042,40 @@ func (c *ConfigPersistence) LoadSSOConfig() (*SSOConfig, error) {
 
 	log.Info().Str("file", c.ssoFile).Int("providers", len(settings.Providers)).Msg("SSO configuration loaded")
 	return &settings, nil
+}
+
+func (c *ConfigPersistence) loadLegacyOIDCConfigAsSSOLocked() (*SSOConfig, error) {
+	var legacy OIDCConfig
+	_, _, err := loadEncryptedJSONLocked(c, c.oidcFile, &legacy, "legacy oidc config")
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	settings, ok := LegacyOIDCConfigToSSOConfig(&legacy, "")
+	if !ok {
+		if legacy.Enabled {
+			log.Warn().Str("file", c.oidcFile).Msg("Legacy OIDC config is enabled but incomplete; skipping SSO migration")
+		}
+		return nil, nil
+	}
+
+	jsonData, err := json.Marshal(settings)
+	if err != nil {
+		return nil, fmt.Errorf("marshal legacy oidc migration: %w", err)
+	}
+	if err := rewriteEncryptedJSONLocked(c, c.ssoFile, jsonData, "legacy oidc migration to sso config"); err != nil {
+		return nil, err
+	}
+
+	log.Info().
+		Str("from", c.oidcFile).
+		Str("to", c.ssoFile).
+		Int("providers", len(settings.Providers)).
+		Msg("Migrated legacy OIDC configuration to SSO configuration")
+	return settings, nil
 }
 
 // SaveAIConfig stores AI settings, encrypting them when a crypto manager is available.

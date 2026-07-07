@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"embed"
+	"html"
 	"io"
 	"io/fs"
 	"net/http"
@@ -23,12 +24,105 @@ var cspNoncePlaceholder = []byte("__CSP_NONCE__")
 func serveIndexWithNonce(w http.ResponseWriter, r *http.Request, content []byte) {
 	if nonce := CSPNonceFromContext(r.Context()); nonce != "" {
 		content = bytes.ReplaceAll(content, cspNoncePlaceholder, []byte(nonce))
+		content = addNonceToInlineHTMLTags(content, nonce)
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	w.Header().Set("Pragma", "no-cache")
 	w.Header().Set("Expires", "0")
 	w.Write(content)
+}
+
+func addNonceToInlineHTMLTags(content []byte, nonce string) []byte {
+	if len(content) == 0 || nonce == "" {
+		return content
+	}
+	nonceAttr := []byte(` nonce="` + html.EscapeString(nonce) + `"`)
+	content = addNonceToInlineHTMLTag(content, "script", "src", nonceAttr)
+	content = addNonceToInlineHTMLTag(content, "style", "", nonceAttr)
+	return content
+}
+
+func addNonceToInlineHTMLTag(content []byte, tagName string, skipAttr string, nonceAttr []byte) []byte {
+	lowerContent := bytes.ToLower(content)
+	needle := []byte("<" + strings.ToLower(tagName))
+	searchAt := 0
+	copiedUntil := 0
+	var out []byte
+
+	for searchAt < len(content) {
+		relativeStart := bytes.Index(lowerContent[searchAt:], needle)
+		if relativeStart == -1 {
+			break
+		}
+		start := searchAt + relativeStart
+		tagNameEnd := start + len(needle)
+		if tagNameEnd < len(content) && !isHTMLTagBoundary(lowerContent[tagNameEnd]) {
+			searchAt = tagNameEnd
+			continue
+		}
+
+		relativeEnd := bytes.IndexByte(content[tagNameEnd:], '>')
+		if relativeEnd == -1 {
+			break
+		}
+		end := tagNameEnd + relativeEnd
+		tag := lowerContent[start : end+1]
+		if htmlStartTagHasAttribute(tag, "nonce") || (skipAttr != "" && htmlStartTagHasAttribute(tag, skipAttr)) {
+			searchAt = end + 1
+			continue
+		}
+
+		if out == nil {
+			out = make([]byte, 0, len(content)+len(nonceAttr))
+		}
+		out = append(out, content[copiedUntil:end]...)
+		out = append(out, nonceAttr...)
+		out = append(out, content[end])
+		copiedUntil = end + 1
+		searchAt = end + 1
+	}
+
+	if out == nil {
+		return content
+	}
+	out = append(out, content[copiedUntil:]...)
+	return out
+}
+
+func htmlStartTagHasAttribute(tag []byte, attr string) bool {
+	if len(tag) == 0 || attr == "" {
+		return false
+	}
+	attrBytes := []byte(strings.ToLower(attr))
+	searchAt := 0
+	for searchAt < len(tag) {
+		idx := bytes.Index(tag[searchAt:], attrBytes)
+		if idx == -1 {
+			return false
+		}
+		start := searchAt + idx
+		end := start + len(attrBytes)
+		beforeOK := start == 0 || isHTMLAttributeBoundaryBefore(tag[start-1])
+		afterOK := end >= len(tag) || isHTMLAttributeBoundaryAfter(tag[end])
+		if beforeOK && afterOK {
+			return true
+		}
+		searchAt = end
+	}
+	return false
+}
+
+func isHTMLTagBoundary(b byte) bool {
+	return b == ' ' || b == '\t' || b == '\n' || b == '\r' || b == '/' || b == '>'
+}
+
+func isHTMLAttributeBoundaryBefore(b byte) bool {
+	return b == '<' || b == '/' || b == ' ' || b == '\t' || b == '\n' || b == '\r'
+}
+
+func isHTMLAttributeBoundaryAfter(b byte) bool {
+	return b == '=' || b == '/' || b == '>' || b == ' ' || b == '\t' || b == '\n' || b == '\r'
 }
 
 // Embed the entire frontend dist directory

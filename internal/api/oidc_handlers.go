@@ -234,12 +234,18 @@ func ssoProviderToOIDCConfig(provider *config.SSOProvider, redirectURL string) *
 }
 
 // extractOIDCProviderID extracts the provider ID from an OIDC endpoint path.
-// Expected paths: /api/oidc/{providerID}/login, /api/oidc/{providerID}/callback
+// Expected paths: /api/oidc/{providerID}/login, /api/oidc/{providerID}/callback.
+// Legacy v5 paths /api/oidc/login and /api/oidc/callback map to the migrated
+// legacy provider ID.
 func extractOIDCProviderID(urlPath, endpoint string) string {
 	parts := strings.Split(strings.TrimPrefix(urlPath, "/"), "/")
 	// parts: ["api", "oidc", "{providerID}", "{endpoint}"]
 	if len(parts) >= 4 && parts[0] == "api" && parts[1] == "oidc" && parts[3] == endpoint {
 		return parts[2]
+	}
+	// parts: ["api", "oidc", "{endpoint}"]
+	if len(parts) == 3 && parts[0] == "api" && parts[1] == "oidc" && parts[2] == endpoint {
+		return config.LegacyOIDCProviderID
 	}
 	return ""
 }

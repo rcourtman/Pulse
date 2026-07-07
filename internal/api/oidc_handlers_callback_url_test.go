@@ -3,6 +3,8 @@ package api
 import (
 	"net/http/httptest"
 	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
 func TestBuildSSOOIDCCallbackURL(t *testing.T) {
@@ -27,4 +29,18 @@ func TestBuildSSOOIDCCallbackURL(t *testing.T) {
 			t.Fatalf("buildSSOOIDCCallbackURL() = %q, want %q", got, want)
 		}
 	})
+}
+
+func TestExtractOIDCProviderIDSupportsLegacyPaths(t *testing.T) {
+	t.Parallel()
+
+	if got := extractOIDCProviderID("/api/oidc/legacy-oidc/login", "login"); got != "legacy-oidc" {
+		t.Fatalf("provider scoped login id = %q, want legacy-oidc", got)
+	}
+	if got := extractOIDCProviderID("/api/oidc/callback", "callback"); got != config.LegacyOIDCProviderID {
+		t.Fatalf("legacy callback id = %q, want %s", got, config.LegacyOIDCProviderID)
+	}
+	if got := extractOIDCProviderID("/api/oidc/login", "login"); got != config.LegacyOIDCProviderID {
+		t.Fatalf("legacy login id = %q, want %s", got, config.LegacyOIDCProviderID)
+	}
 }

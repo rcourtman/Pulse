@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -133,5 +134,37 @@ func TestServeFrontendHandler_StaticAndSPA(t *testing.T) {
 	handler(rec, req)
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("api route status = %d", rec.Code)
+	}
+}
+
+func TestServeIndexWithNonceAddsNonceToGeneratedInlineTags(t *testing.T) {
+	content := []byte(`<html><head>` +
+		`<script type="importmap">{"integrity":{}}</script>` +
+		`<script src="/assets/index.js"></script>` +
+		`<style>body{color:#111}</style>` +
+		`<script nonce="__CSP_NONCE__">window.__theme="dark"</script>` +
+		`</head><body></body></html>`)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req = req.WithContext(context.WithValue(req.Context(), cspNonceKey{}, "test-nonce"))
+	rec := httptest.NewRecorder()
+
+	serveIndexWithNonce(rec, req, content)
+
+	body := rec.Body.String()
+	if strings.Contains(body, "__CSP_NONCE__") {
+		t.Fatalf("expected nonce placeholder to be replaced, got body %q", body)
+	}
+	if !strings.Contains(body, `<script type="importmap" nonce="test-nonce">`) {
+		t.Fatalf("expected import map script to receive nonce, got body %q", body)
+	}
+	if !strings.Contains(body, `<style nonce="test-nonce">body{color:#111}</style>`) {
+		t.Fatalf("expected inline style to receive nonce, got body %q", body)
+	}
+	if !strings.Contains(body, `<script src="/assets/index.js"></script>`) {
+		t.Fatalf("expected external script to remain without nonce, got body %q", body)
+	}
+	if got := strings.Count(body, `nonce="test-nonce"`); got != 3 {
+		t.Fatalf("nonce count = %d, want 3 in body %q", got, body)
 	}
 }

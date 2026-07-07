@@ -132,6 +132,50 @@ func TestSecurityStatusExposesPersistedSSOProvider(t *testing.T) {
 	}
 }
 
+func TestSecurityStatusExposesLegacyOIDCEnvProvider(t *testing.T) {
+	t.Setenv("OIDC_ENABLED", "true")
+	t.Setenv("OIDC_ISSUER_URL", "https://id.example.test")
+	t.Setenv("OIDC_CLIENT_ID", "pulse-client")
+	t.Setenv("OIDC_CLIENT_SECRET", "secret")
+
+	cfg := newTestConfigWithTokens(t)
+	cfg.PublicURL = "https://pulse.example.test"
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for security status, got %d", rec.Code)
+	}
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	rawProviders, ok := payload["ssoProviders"].([]interface{})
+	if !ok || len(rawProviders) != 1 {
+		t.Fatalf("expected one legacy OIDC provider in security status, got %#v", payload["ssoProviders"])
+	}
+
+	firstProvider, ok := rawProviders[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected provider object, got %#v", rawProviders[0])
+	}
+
+	if got := firstProvider["id"]; got != config.LegacyOIDCProviderID {
+		t.Fatalf("provider id = %v, want %s", got, config.LegacyOIDCProviderID)
+	}
+	if got := firstProvider["displayName"]; got != "Single Sign-On" {
+		t.Fatalf("provider displayName = %v, want Single Sign-On", got)
+	}
+	if got := firstProvider["loginUrl"]; got != "/api/oidc/legacy-oidc/login" {
+		t.Fatalf("provider loginUrl = %v, want /api/oidc/legacy-oidc/login", got)
+	}
+}
+
 func TestSecurityStatusExposesSettingsCapabilitiesForScopedToken(t *testing.T) {
 	prevAuthorizer := auth.GetAuthorizer()
 	auth.SetAuthorizer(&allowRulesAuthorizer{
