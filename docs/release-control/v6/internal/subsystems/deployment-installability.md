@@ -679,6 +679,11 @@ TLS floor in the dynamic config.
    `release` and `workflow_dispatch` triggers, and its chart-version
    resolver must prefer inputs over the release-event tag when inputs are
    present so all three entry paths converge on the same identity.
+   `helm-pages.yml` must not treat chart-releaser's "no chart changes
+   detected" no-op as a successful Pages publication for a newly published
+   release version. A successful Pages workflow must create or update the
+   `helm-chart-<version>` release asset and assert that `gh-pages/index.yaml`
+   contains `version: <version>` before the workflow exits green.
    After pushing the OCI chart, `publish-helm-chart.yml` must prove the
    pushed chart is readable from GHCR without registry credentials by logging
    out of `ghcr.io` and running `helm show chart` against the versioned chart

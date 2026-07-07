@@ -236,6 +236,76 @@ jobs:
           CR_RELEASE_NAME_TEMPLATE: "helm-chart-{{ .Version }}"
           CR_MAKE_RELEASE_LATEST: false
 
+      - name: Ensure chart release and pages index
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          REPOSITORY: ${{ github.repository }}
+          RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+
+          CHART="pulse-${VERSION}.tgz"
+          CHART_PATH="dist/${CHART}"
+          CHART_RELEASE="helm-chart-${VERSION}"
+          CHART_RELEASE_URL="https://github.com/${REPOSITORY}/releases/download/${CHART_RELEASE}"
+          RELEASE_SHA="$(git rev-list -n 1 "${RELEASE_TAG}")"
+
+          mkdir -p dist
+          helm package deploy/helm/pulse \
+            --version "${VERSION}" \
+            --app-version "${VERSION}" \
+            --destination dist
+
+          if gh release view "${CHART_RELEASE}" >/dev/null 2>&1; then
+            gh release upload "${CHART_RELEASE}" "${CHART_PATH}" --clobber
+          else
+            gh release create "${CHART_RELEASE}" "${CHART_PATH}" \
+              --target "${RELEASE_SHA}" \
+              --title "Helm chart ${VERSION}" \
+              --notes "Helm chart for Pulse ${VERSION}." \
+              --prerelease \
+              --latest=false
+          fi
+          gh release edit "${CHART_RELEASE}" --prerelease --latest=false
+
+          workdir="$(mktemp -d)"
+          cleanup() {
+            git worktree remove -f "${workdir}/gh-pages" >/dev/null 2>&1 || true
+            rm -rf "${workdir}"
+          }
+          trap cleanup EXIT
+
+          git fetch origin gh-pages
+          git worktree add "${workdir}/gh-pages" origin/gh-pages
+          git -C "${workdir}/gh-pages" checkout -B gh-pages origin/gh-pages
+
+          index_work="${workdir}/index"
+          mkdir -p "${index_work}"
+          cp "${CHART_PATH}" "${index_work}/${CHART}"
+          if [ -f "${workdir}/gh-pages/index.yaml" ]; then
+            cp "${workdir}/gh-pages/index.yaml" "${index_work}/index.yaml"
+            helm repo index "${index_work}" \
+              --url "${CHART_RELEASE_URL}" \
+              --merge "${index_work}/index.yaml"
+          else
+            helm repo index "${index_work}" --url "${CHART_RELEASE_URL}"
+          fi
+          cp "${index_work}/index.yaml" "${workdir}/gh-pages/index.yaml"
+
+          if ! grep -q "version: ${VERSION}" "${workdir}/gh-pages/index.yaml"; then
+            echo "::error::Helm pages index is missing version ${VERSION}"
+            exit 1
+          fi
+
+          git -C "${workdir}/gh-pages" add index.yaml
+          if git -C "${workdir}/gh-pages" diff --cached --quiet; then
+            echo "Helm pages index already contains ${VERSION}"
+          else
+            git -C "${workdir}/gh-pages" commit -m "Update Helm chart index for ${VERSION}"
+            git -C "${workdir}/gh-pages" push origin HEAD:gh-pages
+          fi
+
       - name: Mark Helm chart release as pre-release (avoid latest override)
         env:
           GITHUB_TOKEN: ${{ github.token }}

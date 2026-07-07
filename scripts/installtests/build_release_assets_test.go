@@ -862,6 +862,11 @@ func TestDeploymentDefaultsPinVersionedImagesAndHelmDocsChecksum(t *testing.T) {
 		`HELM_DOCS_ARCHIVE="helm-docs_${HELM_DOCS_VERSION}_Linux_x86_64.tar.gz"`,
 		`HELM_DOCS_SHA256="a8cf72ada34fad93285ba2a452b38bdc5bd52cc9a571236244ec31022928d6cc"`,
 		`sha256sum --check --`,
+		`name: Ensure chart release and pages index`,
+		`gh release create "${CHART_RELEASE}" "${CHART_PATH}"`,
+		`helm repo index "${index_work}"`,
+		`git -C "${workdir}/gh-pages" push origin HEAD:gh-pages`,
+		`grep -q "version: ${VERSION}"`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(helmPages, needle) {
