@@ -91,6 +91,15 @@ describe('reporting catalog model', () => {
     );
   });
 
+  it('accepts a catalog without the optional inventory export surface', () => {
+    const catalog = parseReportingCatalog({
+      ...baseCatalogPayload,
+      vmInventoryExport: null,
+    });
+
+    expect(catalog.vmInventoryExport).toBeNull();
+  });
+
   it('rejects a catalog whose default format is not in the supported formats', () => {
     expect(() =>
       parseReportingCatalog({

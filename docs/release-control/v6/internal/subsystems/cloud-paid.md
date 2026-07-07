@@ -117,8 +117,9 @@ contract, not control-plane report generation. The control plane may accept
 provider-default report brand environment values and pass them into each tenant
 container as generic `PULSE_REPORT_PROVIDER_BRAND_*` runtime configuration, but
 the tenant Pulse runtime owns report rendering, per-workspace override loading,
-and the `white_label` entitlement gate. This keeps provider-hosted MSP
-Stripe-free and avoids a cloud-control-plane report data path across clients.
+scheduled report cadence/delivery, generated output retention, and the
+`white_label` entitlement gate. This keeps provider-hosted MSP Stripe-free and
+avoids a cloud-control-plane report data path across clients.
 
 ## Canonical Files
 
@@ -341,8 +342,9 @@ Stripe-free and avoids a cloud-control-plane report data path across clients.
     contract: `internal/cloudcp/docker/manager.go` may inject
     `PULSE_REPORT_PROVIDER_BRAND_DISPLAY_NAME`, logo path/data, and logo format
     into each tenant container, but it must not collect report data or render
-    PDFs in the control plane. Tenant-local reporting and tenant-local licensing
-    decide whether that configured brand appears.
+    PDFs in the control plane. Tenant-local reporting, tenant-local schedules,
+    and tenant-local licensing decide whether that configured brand appears and
+    how recurring report delivery runs.
     `pulse_hosted_msp` is the Pulse-operated form of the same Stripe-free MSP
     control-plane family, not the public Pulse-hosted SaaS checkout path. It
     must share the license-backed MSP plan source, workspace limit policy,
@@ -673,6 +675,10 @@ or other self-hosted uncapped continuity plans.
    runtime; Pulse Account may deep-link to those tenant surfaces but must not
    mint workspace agent credentials or render cross-client monitoring state in
    the account portal.
+   Pulse Account may surface tenant-local active alert rollups as counts and
+   age labels from read-only setup facts so providers can prioritize the
+   workspace list, but it must not become an alert console or expose alert
+   bodies, remediation state, acknowledgements, or cross-client alert streams.
    Pulse Account also owns the provider-facing setup progression for client
    workspaces: after workspace creation the portal should select the created
    workspace, reveal the setup job, and preserve workspace/target context in
@@ -686,9 +692,11 @@ or other self-hosted uncapped continuity plans.
    provider setup templates for MSP accounts, but those templates are guidance
    rather than configuration. `Ready` requires at least one reporting agent, one
    enabled alert route, and one enabled report schedule; a failed latest health
-   check remains `Review` ahead of setup counts. Local MSP onboarding previews
-   should be scenario-backed portal bootstrap data, not static screenshots, so
-   they stay grounded in the real portal shape as the bundle changes.
+   check remains `Review` ahead of setup counts, and critical alert rollups
+   outrank generic health/setup review in provider attention ordering. Local MSP
+   onboarding previews should be scenario-backed portal bootstrap data, not
+   static screenshots, so they stay grounded in the real portal shape as the
+   bundle changes.
    Hosted provider workspaces may store agent install tokens in the tenant
    runtime root token store rather than the org-specific config directory.
    Portal setup facts must count only root tokens whose `OrgID` or `OrgIDs`

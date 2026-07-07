@@ -346,7 +346,7 @@ header .logout-btn:hover,
 }
 .workspace-list-head {
   display: grid;
-  grid-template-columns: minmax(12rem, 1fr) 112px 88px minmax(300px, auto);
+  grid-template-columns: minmax(12rem, 1fr) 112px 128px 88px minmax(300px, auto);
   gap: 8px;
   padding: 6px 16px;
   background: var(--bg-subtle);
@@ -361,7 +361,7 @@ header .logout-btn:hover,
 }
 .workspace-row {
   display: grid;
-  grid-template-columns: minmax(12rem, 1fr) 112px 88px minmax(300px, auto);
+  grid-template-columns: minmax(12rem, 1fr) 112px 128px 88px minmax(300px, auto);
   gap: 8px;
   align-items: center;
   padding: 10px 16px;
@@ -497,6 +497,26 @@ header .logout-btn:hover,
   border-color: #f5b3b3;
   background: var(--danger-subtle);
   color: var(--danger);
+}
+.badge-alert-critical {
+  border-color: #f5b3b3;
+  background: var(--danger-subtle);
+  color: var(--danger);
+}
+.badge-alert-warning {
+  border-color: #e3c97a;
+  background: var(--warn-subtle);
+  color: var(--warn);
+}
+.badge-alert-quiet {
+  border-color: #aedcb5;
+  background: var(--success-subtle);
+  color: var(--success);
+}
+.badge-alert-unknown {
+  border-color: var(--border);
+  background: var(--bg-subtle);
+  color: var(--ink-muted);
 }
 .workspace-operations-shell {
   display: flex;

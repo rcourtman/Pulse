@@ -65,6 +65,11 @@ unified-resource CPU metrics are 0..100 percentages, while legacy
 0..1 ratio fields. Monitoring-owned read-state conversion must divide canonical
 Proxmox node, VM, and LXC CPU percentages before handing them back to legacy
 snapshot/current-row paths.
+Tenant monitor enumeration is monitoring-owned runtime topology, not a
+reporting source of truth. `MultiTenantMonitor.ListOrganizationIDs` may expose
+persisted organization IDs to API-owned background workers, but it must not
+initialize monitors, start pollers, or reinterpret tenant IDs as monitored
+resource health.
 
 ## Canonical Files
 
@@ -124,6 +129,7 @@ snapshot/current-row paths.
 54. `internal/monitoring/monitor_backups.go`
 55. `internal/monitoring/resource_stale_thresholds.go`
 56. `internal/monitoring/recovery_ingest.go`
+57. `internal/monitoring/multi_tenant_monitor.go`
 
 ## Shared Boundaries
 

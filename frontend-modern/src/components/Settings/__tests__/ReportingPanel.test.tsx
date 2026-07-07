@@ -72,6 +72,9 @@ const baseCatalog = {
 
 function buildState(overrides: Record<string, unknown> = {}) {
   return {
+    closeScheduleForm: vi.fn(),
+    deleteReportSchedule: vi.fn(),
+    deletingScheduleID: () => '',
     exportingInventory: () => false,
     format: () => 'pdf' as const,
     handleExportVMInventory: vi.fn(),
@@ -81,18 +84,50 @@ function buildState(overrides: Record<string, unknown> = {}) {
     isReportingEnabled: () => true,
     metricType: () => '',
     range: () => '24h',
+    reportSchedules: () => [],
+    reportSchedulesError: () => '',
+    reportSchedulesLoading: () => false,
     reportingCatalog: () => baseCatalog,
     reportingCatalogError: () => '',
     reportingCatalogLoading: () => false,
     reloadReportingCatalog: vi.fn(),
+    reloadReportSchedules: vi.fn(),
+    runReportScheduleNow: vi.fn(),
+    runningScheduleID: () => '',
+    saveReportSchedule: vi.fn(),
+    savingSchedule: () => false,
+    scheduleForm: () => ({
+      id: '',
+      name: '',
+      enabled: true,
+      cadenceType: 'monthly',
+      dayOfMonth: 1,
+      weekday: 'monday',
+      time: '09:00',
+      timezone: 'UTC',
+      format: 'pdf',
+      deliveryMethod: 'email',
+      recipients: '',
+      attach: true,
+      saveToDisk: true,
+      tagFilter: '',
+      retentionCount: 12,
+    }),
+    scheduleFormOpen: () => false,
+    scheduleResources: () => [],
     selectedResources: () => [],
     setFormat: vi.fn(),
     setMetricType: vi.fn(),
     setRange: vi.fn(),
+    setScheduleResources: vi.fn(),
     setSelectedResources: vi.fn(),
     setTitle: vi.fn(),
     showUpgradePrompts: () => true,
+    startCreateSchedule: vi.fn(),
+    startEditSchedule: vi.fn(),
     title: () => '',
+    toggleReportSchedule: vi.fn(),
+    updateScheduleForm: vi.fn(),
     upgradeDestination: () => ({
       href: getPublicPricingUrl('advanced_reporting'),
       external: true,
@@ -117,6 +152,15 @@ describe('ReportingPanel', () => {
 
     expect(screen.getByText('Metric Type (Optional)')).toBeInTheDocument();
     expect(screen.getByText('Report Title')).toBeInTheDocument();
+  });
+
+  it('shows the scheduled reports table surface with an empty state', () => {
+    useReportingPanelStateMock.mockReturnValue(buildState());
+
+    render(() => <ReportingPanel />);
+
+    expect(screen.getByText('Scheduled reports')).toBeInTheDocument();
+    expect(screen.getByText('No scheduled reports are configured yet.')).toBeInTheDocument();
   });
 
   it('hides unsupported optional controls from the reporting surface', () => {

@@ -75,6 +75,21 @@ const catalogPayload = {
   },
 };
 
+const schedulesPayload = { schedules: [] };
+
+function jsonResponse(payload: unknown, status = 200): Response {
+  return new Response(JSON.stringify(payload), { status });
+}
+
+function buildCatalogAndSchedulesFetchMock(catalogResponse: Response = jsonResponse(catalogPayload)) {
+  return vi.fn((url: string) => {
+    if (url === '/api/admin/reports/schedules') {
+      return Promise.resolve(jsonResponse(schedulesPayload));
+    }
+    return Promise.resolve(catalogResponse);
+  });
+}
+
 describe('useReportingPanelState', () => {
   let useReportingPanelState: UseReportingPanelStateModule['useReportingPanelState'];
   let apiFetchMock: ReturnType<typeof vi.fn>;
@@ -85,9 +100,7 @@ describe('useReportingPanelState', () => {
   beforeEach(async () => {
     vi.resetModules();
 
-    apiFetchMock = vi
-      .fn()
-      .mockResolvedValue(new Response(JSON.stringify(catalogPayload), { status: 200 }));
+    apiFetchMock = buildCatalogAndSchedulesFetchMock();
     hasReportingFeature = true;
     loadRuntimeLicenseStatusMock = vi.fn();
     loadCommercialLicenseStatusMock = vi.fn();
@@ -183,9 +196,7 @@ describe('useReportingPanelState', () => {
   it('loads the reporting catalog before license readiness settles', async () => {
     vi.resetModules();
 
-    apiFetchMock = vi
-      .fn()
-      .mockResolvedValue(new Response(JSON.stringify(catalogPayload), { status: 200 }));
+    apiFetchMock = buildCatalogAndSchedulesFetchMock();
     hasReportingFeature = false;
     loadRuntimeLicenseStatusMock = vi.fn();
     loadCommercialLicenseStatusMock = vi.fn();
@@ -241,10 +252,17 @@ describe('useReportingPanelState', () => {
   it('allows retrying the reporting catalog fetch after an initial failure', async () => {
     vi.resetModules();
 
-    apiFetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(new Response('temporary failure', { status: 500 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(catalogPayload), { status: 200 }));
+    let catalogCalls = 0;
+    apiFetchMock = vi.fn((url: string) => {
+      if (url === '/api/admin/reports/schedules') {
+        return Promise.resolve(jsonResponse(schedulesPayload));
+      }
+      catalogCalls += 1;
+      if (catalogCalls === 1) {
+        return Promise.resolve(new Response('temporary failure', { status: 500 }));
+      }
+      return Promise.resolve(jsonResponse(catalogPayload));
+    });
 
     vi.doMock('@/utils/apiClient', async () => {
       const actual = await vi.importActual<typeof import('@/utils/apiClient')>('@/utils/apiClient');
@@ -291,8 +309,9 @@ describe('useReportingPanelState', () => {
     await flushAsync();
     await flushAsync();
 
-    expect(apiFetchMock).toHaveBeenCalledTimes(2);
+    expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/admin/reports/catalog')).toHaveLength(2);
     expect(hookState.reportingCatalog()?.title).toBe('Detailed Reporting');
+    expect(hookState.reportSchedules()).toEqual([]);
 
     dispose();
   });
@@ -300,13 +319,11 @@ describe('useReportingPanelState', () => {
   it('extracts structured API error messages for reporting catalog failures', async () => {
     vi.resetModules();
 
-    apiFetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ error: 'Catalog is unavailable right now' }), {
-          status: 503,
-        }),
-      );
+    apiFetchMock = buildCatalogAndSchedulesFetchMock(
+      new Response(JSON.stringify({ error: 'Catalog is unavailable right now' }), {
+        status: 503,
+      }),
+    );
 
     vi.doMock('@/utils/apiClient', async () => {
       const actual = await vi.importActual<typeof import('@/utils/apiClient')>('@/utils/apiClient');
@@ -355,9 +372,9 @@ describe('useReportingPanelState', () => {
   it('falls back to the legacy reporting transport when the catalog route is missing', async () => {
     vi.resetModules();
 
-    apiFetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(new Response('404 page not found', { status: 404 }));
+    apiFetchMock = buildCatalogAndSchedulesFetchMock(
+      new Response('404 page not found', { status: 404 }),
+    );
 
     vi.doMock('@/utils/apiClient', async () => {
       const actual = await vi.importActual<typeof import('@/utils/apiClient')>('@/utils/apiClient');

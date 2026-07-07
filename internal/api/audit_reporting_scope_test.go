@@ -51,6 +51,7 @@ func TestReportingEndpointsRequireSettingsReadScope(t *testing.T) {
 		"/api/admin/reports/generate",
 		"/api/admin/reports/generate-multi",
 		"/api/admin/reports/inventory/vms/export",
+		"/api/admin/reports/schedules",
 	}
 
 	for _, path := range paths {
@@ -63,6 +64,39 @@ func TestReportingEndpointsRequireSettingsReadScope(t *testing.T) {
 		}
 		if !strings.Contains(rec.Body.String(), config.ScopeSettingsRead) {
 			t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsRead, rec.Body.String())
+		}
+	}
+}
+
+func TestReportScheduleMutationEndpointsRequireSettingsWriteScope(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+
+	rawToken := "reports-write-scope-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	cases := []struct {
+		method string
+		path   string
+		body   string
+	}{
+		{method: http.MethodPost, path: "/api/admin/reports/schedules", body: `{}`},
+		{method: http.MethodPut, path: "/api/admin/reports/schedules/schedule-1", body: `{}`},
+		{method: http.MethodDelete, path: "/api/admin/reports/schedules/schedule-1", body: ""},
+		{method: http.MethodPost, path: "/api/admin/reports/schedules/schedule-1/run", body: ""},
+	}
+
+	for _, tc := range cases {
+		req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403 for missing settings:write scope on %s %s, got %d", tc.method, tc.path, rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), config.ScopeSettingsWrite) {
+			t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsWrite, rec.Body.String())
 		}
 	}
 }

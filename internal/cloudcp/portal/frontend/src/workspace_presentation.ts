@@ -3,6 +3,7 @@ import type { PortalWorkspaceSummary } from './types';
 export type WorkspaceSetupState = 'ready' | 'setup_path' | 'install_agents' | 'configure_outputs' | 'review';
 export type WorkspaceSetupStepID = 'workspace' | 'agent' | 'alerts' | 'reports' | 'access';
 export type WorkspaceSetupStepTone = 'done' | 'next' | 'pending' | 'blocked' | 'available';
+export type WorkspaceAlertState = 'critical' | 'warning' | 'quiet' | 'unknown';
 
 export interface WorkspaceSetupStepModel {
   id: WorkspaceSetupStepID;
@@ -64,6 +65,36 @@ export function workspaceRowNote(workspace: PortalWorkspaceSummary): string {
 
 function hasNumber(value: unknown): boolean {
   return typeof value === 'number' && Number.isFinite(value);
+}
+
+export function workspaceActiveAlertState(workspace: PortalWorkspaceSummary): WorkspaceAlertState {
+  if (!hasNumber(workspace.active_critical_alert_count) || !hasNumber(workspace.active_warning_alert_count)) {
+    return 'unknown';
+  }
+  if (Number(workspace.active_critical_alert_count) > 0) return 'critical';
+  if (Number(workspace.active_warning_alert_count) > 0) return 'warning';
+  return 'quiet';
+}
+
+export function workspaceActiveAlertLabel(workspace: PortalWorkspaceSummary): string {
+  var state = workspaceActiveAlertState(workspace);
+  if (state === 'unknown') return 'No alert data yet';
+  var critical = Number(workspace.active_critical_alert_count || 0);
+  var warning = Number(workspace.active_warning_alert_count || 0);
+  if (state === 'quiet') return '0 active alerts';
+  var parts = [];
+  if (critical > 0) parts.push(String(critical) + ' critical');
+  if (warning > 0) parts.push(String(warning) + ' warning');
+  return parts.join(', ');
+}
+
+export function workspaceActiveAlertsUpdatedLabel(workspace: PortalWorkspaceSummary, now = new Date()): string {
+  if (!workspace.active_alerts_updated_at) return 'no alert data yet';
+  var updated = new Date(workspace.active_alerts_updated_at);
+  if (Number.isNaN(updated.getTime())) return 'no alert data yet';
+  var minutes = Math.max(0, Math.round((now.getTime() - updated.getTime()) / 60000));
+  if (minutes <= 1) return 'as of 1 min ago';
+  return 'as of ' + String(minutes) + ' min ago';
 }
 
 function positiveCount(value: unknown): boolean {

@@ -131,6 +131,10 @@ func (r *Router) registerOrgLicenseRoutesGroup(orgHandlers *OrgHandlers, rbacHan
 		reportingAdminEndpointAdapter{handlers: r.reportingHandlers},
 		newReportingAdminRuntime(r.reportingHandlers),
 	)
+	var reportingScheduleEndpoints extensions.ReportingScheduleAdminEndpoints = reportingAdminEndpointAdapter{handlers: r.reportingHandlers}
+	if scheduleEndpoints, ok := reportingAdminEndpoints.(extensions.ReportingScheduleAdminEndpoints); ok {
+		reportingScheduleEndpoints = scheduleEndpoints
+	}
 	// RBAC admin operations (Enterprise feature)
 	r.mux.HandleFunc("GET /api/admin/rbac/integrity", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureAdminSession(r.config, w, req) {
@@ -169,6 +173,36 @@ func (r *Router) registerOrgLicenseRoutesGroup(orgHandlers *OrgHandlers, rbacHan
 			return
 		}
 		RequireLicenseFeature(r.licenseHandlers, featureAdvancedReportingValue, RequireScope(config.ScopeSettingsRead, reportingAdminEndpoints.HandleExportVMInventory))(w, req)
+	}))
+	r.mux.HandleFunc("GET /api/admin/reports/schedules", RequirePermission(r.config, r.authorizer, auth.ActionRead, auth.ResourceNodes, func(w http.ResponseWriter, req *http.Request) {
+		if !ensureAdminSession(r.config, w, req) {
+			return
+		}
+		RequireLicenseFeature(r.licenseHandlers, featureAdvancedReportingValue, RequireScope(config.ScopeSettingsRead, reportingScheduleEndpoints.HandleListReportSchedules))(w, req)
+	}))
+	r.mux.HandleFunc("POST /api/admin/reports/schedules", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceNodes, func(w http.ResponseWriter, req *http.Request) {
+		if !ensureAdminSession(r.config, w, req) {
+			return
+		}
+		RequireLicenseFeature(r.licenseHandlers, featureAdvancedReportingValue, RequireScope(config.ScopeSettingsWrite, reportingScheduleEndpoints.HandleCreateReportSchedule))(w, req)
+	}))
+	r.mux.HandleFunc("PUT /api/admin/reports/schedules/{id}", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceNodes, func(w http.ResponseWriter, req *http.Request) {
+		if !ensureAdminSession(r.config, w, req) {
+			return
+		}
+		RequireLicenseFeature(r.licenseHandlers, featureAdvancedReportingValue, RequireScope(config.ScopeSettingsWrite, reportingScheduleEndpoints.HandleUpdateReportSchedule))(w, req)
+	}))
+	r.mux.HandleFunc("DELETE /api/admin/reports/schedules/{id}", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceNodes, func(w http.ResponseWriter, req *http.Request) {
+		if !ensureAdminSession(r.config, w, req) {
+			return
+		}
+		RequireLicenseFeature(r.licenseHandlers, featureAdvancedReportingValue, RequireScope(config.ScopeSettingsWrite, reportingScheduleEndpoints.HandleDeleteReportSchedule))(w, req)
+	}))
+	r.mux.HandleFunc("POST /api/admin/reports/schedules/{id}/run", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceNodes, func(w http.ResponseWriter, req *http.Request) {
+		if !ensureAdminSession(r.config, w, req) {
+			return
+		}
+		RequireLicenseFeature(r.licenseHandlers, featureAdvancedReportingValue, RequireScope(config.ScopeSettingsWrite, reportingScheduleEndpoints.HandleRunReportSchedule))(w, req)
 	}))
 
 	// Audit Webhook routes
@@ -267,6 +301,7 @@ type reportingAdminEndpointAdapter struct {
 }
 
 var _ extensions.ReportingAdminEndpoints = reportingAdminEndpointAdapter{}
+var _ extensions.ReportingScheduleAdminEndpoints = reportingAdminEndpointAdapter{}
 
 func (a reportingAdminEndpointAdapter) HandleGetReportingCatalog(w http.ResponseWriter, req *http.Request) {
 	if a.handlers == nil {
@@ -298,6 +333,46 @@ func (a reportingAdminEndpointAdapter) HandleExportVMInventory(w http.ResponseWr
 		return
 	}
 	a.handlers.HandleExportVMInventory(w, req)
+}
+
+func (a reportingAdminEndpointAdapter) HandleListReportSchedules(w http.ResponseWriter, req *http.Request) {
+	if a.handlers == nil {
+		writeErrorResponse(w, http.StatusNotImplemented, "reporting_unavailable", "Reporting is not available", nil)
+		return
+	}
+	a.handlers.HandleListReportSchedules(w, req)
+}
+
+func (a reportingAdminEndpointAdapter) HandleCreateReportSchedule(w http.ResponseWriter, req *http.Request) {
+	if a.handlers == nil {
+		writeErrorResponse(w, http.StatusNotImplemented, "reporting_unavailable", "Reporting is not available", nil)
+		return
+	}
+	a.handlers.HandleCreateReportSchedule(w, req)
+}
+
+func (a reportingAdminEndpointAdapter) HandleUpdateReportSchedule(w http.ResponseWriter, req *http.Request) {
+	if a.handlers == nil {
+		writeErrorResponse(w, http.StatusNotImplemented, "reporting_unavailable", "Reporting is not available", nil)
+		return
+	}
+	a.handlers.HandleUpdateReportSchedule(w, req)
+}
+
+func (a reportingAdminEndpointAdapter) HandleDeleteReportSchedule(w http.ResponseWriter, req *http.Request) {
+	if a.handlers == nil {
+		writeErrorResponse(w, http.StatusNotImplemented, "reporting_unavailable", "Reporting is not available", nil)
+		return
+	}
+	a.handlers.HandleDeleteReportSchedule(w, req)
+}
+
+func (a reportingAdminEndpointAdapter) HandleRunReportSchedule(w http.ResponseWriter, req *http.Request) {
+	if a.handlers == nil {
+		writeErrorResponse(w, http.StatusNotImplemented, "reporting_unavailable", "Reporting is not available", nil)
+		return
+	}
+	a.handlers.HandleRunReportSchedule(w, req)
 }
 
 func newRBACAdminRuntime(handlers *RBACHandlers) extensions.RBACAdminRuntime {

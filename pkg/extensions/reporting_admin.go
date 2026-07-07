@@ -16,6 +16,18 @@ type ReportingAdminEndpoints interface {
 	HandleExportVMInventory(http.ResponseWriter, *http.Request)
 }
 
+// ReportingScheduleAdminEndpoints is an optional extension surface for
+// scheduled report management. It is separate from ReportingAdminEndpoints so
+// existing enterprise binders keep compiling while newer binders can decorate
+// the schedule API explicitly.
+type ReportingScheduleAdminEndpoints interface {
+	HandleListReportSchedules(http.ResponseWriter, *http.Request)
+	HandleCreateReportSchedule(http.ResponseWriter, *http.Request)
+	HandleUpdateReportSchedule(http.ResponseWriter, *http.Request)
+	HandleDeleteReportSchedule(http.ResponseWriter, *http.Request)
+	HandleRunReportSchedule(http.ResponseWriter, *http.Request)
+}
+
 // WriteReportingErrorFunc writes a structured reporting error response.
 type WriteReportingErrorFunc func(http.ResponseWriter, int, string, string, map[string]string)
 

@@ -178,6 +178,11 @@ particular agent update, profile rollout, host command, registration, or fleet
 operation succeeded. Lifecycle surfaces must keep reading update readiness and
 continuity from the updater, installer, connection ledger, and agent runtime
 state instead of inferring it from outbound usage telemetry.
+Scheduled-report route and background-worker wiring in `internal/api/router.go`
+and the reporting handlers is API/reporting ownership, not agent lifecycle.
+The scheduler may enumerate tenant organization IDs so each workspace can run
+its own reports, but that enumeration is not agent enrollment, install,
+update, profile rollout, command reachability, or fleet-control authority.
 
 1. `frontend-modern/src/api/agentProfiles.ts` shared with `api-contracts`: the agent profiles frontend client is both an agent lifecycle control surface and a canonical API payload contract boundary.
 2. `frontend-modern/src/api/nodes.ts` shared with `api-contracts`: the shared Proxmox node client is both an agent lifecycle setup/install control surface and a canonical API payload contract boundary.

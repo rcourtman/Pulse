@@ -171,6 +171,13 @@ resource or alert metadata. Those fields are operational usage telemetry only;
 they must not be expanded into command lines, environment variables, secret
 material, or unbounded container inspection output at the API boundary.
 
+Scheduled report management under `/api/admin/reports/schedules` is a
+settings/reporting control surface, not a new public data export. It must reuse
+the existing reporting feature gate and settings read/write scopes, persist
+workspace-local schedule metadata only, and never add cross-tenant report
+creation, unauthenticated delivery, raw SMTP secret exposure, or bypasses for
+the `white_label` branding entitlement.
+
 1. Change privacy disclosures, usage-data vocabulary, or outbound-data guarantees through `docs/PRIVACY.md`, `frontend-modern/public/docs/PRIVACY.md`, `internal/telemetry/telemetry.go`, and `pkg/server/telemetry_pulse_intelligence.go` together.
    Pulse Intelligence external-agent/MCP telemetry may expose only content-free
    adapter-origin usage and capability-class counters for context, event

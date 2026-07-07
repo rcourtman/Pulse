@@ -21,6 +21,9 @@ type BootstrapWorkspace struct {
 	LastAgentSeenAt             string `json:"last_agent_seen_at,omitempty"`
 	AlertRouteCount             *int   `json:"alert_route_count,omitempty"`
 	DisabledAlertRouteCount     *int   `json:"disabled_alert_route_count,omitempty"`
+	ActiveCriticalAlertCount    *int   `json:"active_critical_alert_count,omitempty"`
+	ActiveWarningAlertCount     *int   `json:"active_warning_alert_count,omitempty"`
+	ActiveAlertsUpdatedAt       string `json:"active_alerts_updated_at,omitempty"`
 	ReportScheduleCount         *int   `json:"report_schedule_count,omitempty"`
 	DisabledReportScheduleCount *int   `json:"disabled_report_schedule_count,omitempty"`
 	LastHealthCheck             string `json:"last_health_check,omitempty"`
@@ -97,6 +100,10 @@ func BuildBootstrapDataWithSignupPath(authenticated bool, email string, accounts
 			if workspace.LastAgentSeenAt != nil {
 				lastAgentSeenAt = workspace.LastAgentSeenAt.UTC().Format(time.RFC3339)
 			}
+			activeAlertsUpdatedAt := ""
+			if workspace.ActiveAlertsUpdatedAt != nil {
+				activeAlertsUpdatedAt = workspace.ActiveAlertsUpdatedAt.UTC().Format(time.RFC3339)
+			}
 			workspaces = append(workspaces, BootstrapWorkspace{
 				ID:                          workspace.ID,
 				DisplayName:                 workspace.DisplayName,
@@ -110,6 +117,9 @@ func BuildBootstrapDataWithSignupPath(authenticated bool, email string, accounts
 				LastAgentSeenAt:             lastAgentSeenAt,
 				AlertRouteCount:             workspace.AlertRouteCount,
 				DisabledAlertRouteCount:     workspace.DisabledAlertRouteCount,
+				ActiveCriticalAlertCount:    workspace.ActiveCriticalAlertCount,
+				ActiveWarningAlertCount:     workspace.ActiveWarningAlertCount,
+				ActiveAlertsUpdatedAt:       activeAlertsUpdatedAt,
 				ReportScheduleCount:         workspace.ReportScheduleCount,
 				DisabledReportScheduleCount: workspace.DisabledReportScheduleCount,
 				LastHealthCheck:             lastHealthCheck,

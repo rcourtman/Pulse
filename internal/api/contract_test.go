@@ -133,6 +133,70 @@ func TestContract_AlertDeliveryDiagnosisPayloadShape(t *testing.T) {
 	}
 }
 
+func TestContract_ReportSchedulePayloadShape(t *testing.T) {
+	nextRun := time.Date(2026, 7, 8, 6, 0, 0, 0, time.UTC)
+	schedule := config.ReportSchedule{
+		ID:      "monthly-acme",
+		Name:    "Acme monthly report",
+		Enabled: true,
+		Cadence: config.ReportScheduleCadence{
+			Type:       config.ReportScheduleCadenceMonthly,
+			DayOfMonth: 1,
+			Time:       "06:00",
+			Timezone:   "Europe/London",
+		},
+		Scope: config.ReportScheduleScope{
+			Resources: []config.ReportScheduleResource{{
+				ResourceType: "agent",
+				ResourceID:   "agent-1",
+				Name:         "pve-a",
+			}},
+			Tags: []string{"client:acme"},
+		},
+		Format: config.ReportScheduleFormatPDF,
+		Delivery: config.ReportScheduleDelivery{
+			Method:     config.ReportScheduleDeliveryEmail,
+			To:         []string{"ops@example.com"},
+			Attach:     true,
+			SaveToDisk: true,
+		},
+		RetentionCount: 12,
+		LastRunStatus:  config.ReportScheduleLastRunOK,
+		NextRunAt:      &nextRun,
+		CreatedAt:      time.Date(2026, 7, 7, 6, 0, 0, 0, time.UTC),
+		UpdatedAt:      time.Date(2026, 7, 7, 6, 30, 0, 0, time.UTC),
+	}
+
+	payload, err := json.Marshal(config.ReportScheduleStore{Schedules: []config.ReportSchedule{schedule}})
+	if err != nil {
+		t.Fatalf("marshal report schedule contract: %v", err)
+	}
+	body := string(payload)
+	for _, field := range []string{
+		`"schedules":[`,
+		`"id":"monthly-acme"`,
+		`"enabled":true`,
+		`"type":"monthly"`,
+		`"day_of_month":1`,
+		`"timezone":"Europe/London"`,
+		`"resourceType":"agent"`,
+		`"resourceId":"agent-1"`,
+		`"tags":["client:acme"]`,
+		`"format":"pdf"`,
+		`"method":"email"`,
+		`"to":["ops@example.com"]`,
+		`"attach":true`,
+		`"save_to_disk":true`,
+		`"retention_count":12`,
+		`"last_run_status":"ok"`,
+		`"next_run_at":"2026-07-08T06:00:00Z"`,
+	} {
+		if !strings.Contains(body, field) {
+			t.Fatalf("report schedule payload missing %s in %s", field, body)
+		}
+	}
+}
+
 func TestContract_PMGInstancesEndpointUsesUnifiedReadStatePayload(t *testing.T) {
 	now := time.Now().UTC()
 	source := models.PMGInstance{

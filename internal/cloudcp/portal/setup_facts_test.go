@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 )
@@ -86,6 +87,11 @@ func TestTenantDirWorkspaceSetupFactReaderCountsTenantFacts(t *testing.T) {
 		{"name": "Monthly", "enabled": true},
 		{"name": "Disabled", "enabled": false},
 	})
+	writeSetupFactJSON(t, filepath.Join(tenantsDir, "ws_one"), filepath.Join("alerts", "active-alerts.json"), []alerts.Alert{
+		{ID: "critical-1", Level: alerts.AlertLevelCritical},
+		{ID: "warning-1", Level: alerts.AlertLevelWarning},
+		{ID: "warning-2", Level: alerts.AlertLevelWarning},
+	})
 
 	facts := NewTenantDirWorkspaceSetupFactReader(tenantsDir).FactsForWorkspace("ws_one")
 	if facts.AgentCount == nil || *facts.AgentCount != 1 {
@@ -105,6 +111,15 @@ func TestTenantDirWorkspaceSetupFactReaderCountsTenantFacts(t *testing.T) {
 	}
 	if facts.DisabledAlertRouteCount == nil || *facts.DisabledAlertRouteCount != 1 {
 		t.Fatalf("DisabledAlertRouteCount = %v, want 1", facts.DisabledAlertRouteCount)
+	}
+	if facts.ActiveCriticalAlertCount == nil || *facts.ActiveCriticalAlertCount != 1 {
+		t.Fatalf("ActiveCriticalAlertCount = %v, want 1", facts.ActiveCriticalAlertCount)
+	}
+	if facts.ActiveWarningAlertCount == nil || *facts.ActiveWarningAlertCount != 2 {
+		t.Fatalf("ActiveWarningAlertCount = %v, want 2", facts.ActiveWarningAlertCount)
+	}
+	if facts.ActiveAlertsUpdatedAt == nil {
+		t.Fatalf("ActiveAlertsUpdatedAt = nil, want mtime")
 	}
 	if facts.ReportScheduleCount == nil || *facts.ReportScheduleCount != 1 {
 		t.Fatalf("ReportScheduleCount = %v, want 1", facts.ReportScheduleCount)
@@ -199,6 +214,12 @@ func TestTenantDirWorkspaceSetupFactReaderMissingFactsAreZero(t *testing.T) {
 	if facts.DisabledAlertRouteCount == nil || *facts.DisabledAlertRouteCount != 0 {
 		t.Fatalf("DisabledAlertRouteCount = %v, want 0", facts.DisabledAlertRouteCount)
 	}
+	if facts.ActiveCriticalAlertCount != nil {
+		t.Fatalf("ActiveCriticalAlertCount = %v, want unknown", facts.ActiveCriticalAlertCount)
+	}
+	if facts.ActiveWarningAlertCount != nil {
+		t.Fatalf("ActiveWarningAlertCount = %v, want unknown", facts.ActiveWarningAlertCount)
+	}
 	if facts.ReportScheduleCount == nil || *facts.ReportScheduleCount != 0 {
 		t.Fatalf("ReportScheduleCount = %v, want 0", facts.ReportScheduleCount)
 	}
@@ -215,8 +236,93 @@ func TestTenantDirWorkspaceSetupFactReaderRejectsUnsafeTenantID(t *testing.T) {
 		facts.UnusedAgentTokenCount != nil ||
 		facts.AlertRouteCount != nil ||
 		facts.DisabledAlertRouteCount != nil ||
+		facts.ActiveCriticalAlertCount != nil ||
+		facts.ActiveWarningAlertCount != nil ||
 		facts.ReportScheduleCount != nil ||
 		facts.DisabledReportScheduleCount != nil {
 		t.Fatalf("unsafe tenant facts = %+v, want empty facts", facts)
+	}
+}
+
+func TestTenantDirWorkspaceSetupFactReaderTreatsCorruptActiveAlertFileAsUnknown(t *testing.T) {
+	tenantsDir := t.TempDir()
+	alertsDir := filepath.Join(tenantsDir, "ws_corrupt", "alerts")
+	orgDir := filepath.Join(tenantsDir, "ws_corrupt", "orgs", "ws_corrupt")
+	if err := os.MkdirAll(alertsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(orgDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(alertsDir, "active-alerts.json"), []byte(`{"bad":`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	facts := NewTenantDirWorkspaceSetupFactReader(tenantsDir).FactsForWorkspace("ws_corrupt")
+	if facts.ActiveCriticalAlertCount != nil || facts.ActiveWarningAlertCount != nil || facts.ActiveAlertsUpdatedAt != nil {
+		t.Fatalf("active alert facts = critical %v warning %v mtime %v, want unknown", facts.ActiveCriticalAlertCount, facts.ActiveWarningAlertCount, facts.ActiveAlertsUpdatedAt)
+	}
+}
+
+func TestTenantDirWorkspaceSetupFactReaderCountsRuntimePersistedReportSchedules(t *testing.T) {
+	tenantsDir := t.TempDir()
+	orgDir := filepath.Join(tenantsDir, "ws_runtime", "orgs", "ws_runtime")
+	if err := os.MkdirAll(orgDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	persistence := config.NewConfigPersistence(orgDir)
+	if err := persistence.SaveReportScheduleStore(config.ReportScheduleStore{
+		Schedules: []config.ReportSchedule{
+			{
+				ID:      "schedule-enabled",
+				Name:    "Monthly client report",
+				Enabled: true,
+				Cadence: config.ReportScheduleCadence{
+					Type:       config.ReportScheduleCadenceMonthly,
+					DayOfMonth: 1,
+					Time:       "09:00",
+					Timezone:   "UTC",
+				},
+				Scope: config.ReportScheduleScope{
+					Resources: []config.ReportScheduleResource{{ResourceType: "vm", ResourceID: "vm-1"}},
+				},
+				Format: config.ReportScheduleFormatPDF,
+				Delivery: config.ReportScheduleDelivery{
+					Method:     config.ReportScheduleDeliveryEmail,
+					Attach:     true,
+					SaveToDisk: true,
+				},
+			},
+			{
+				ID:      "schedule-disabled",
+				Name:    "Disabled",
+				Enabled: false,
+				Cadence: config.ReportScheduleCadence{
+					Type:       config.ReportScheduleCadenceMonthly,
+					DayOfMonth: 1,
+					Time:       "09:00",
+					Timezone:   "UTC",
+				},
+				Scope: config.ReportScheduleScope{
+					Resources: []config.ReportScheduleResource{{ResourceType: "vm", ResourceID: "vm-2"}},
+				},
+				Format: config.ReportScheduleFormatPDF,
+				Delivery: config.ReportScheduleDelivery{
+					Method:     config.ReportScheduleDeliveryEmail,
+					Attach:     true,
+					SaveToDisk: true,
+				},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("SaveReportScheduleStore: %v", err)
+	}
+
+	facts := NewTenantDirWorkspaceSetupFactReader(tenantsDir).FactsForWorkspace("ws_runtime")
+	if facts.ReportScheduleCount == nil || *facts.ReportScheduleCount != 1 {
+		t.Fatalf("ReportScheduleCount = %v, want 1", facts.ReportScheduleCount)
+	}
+	if facts.DisabledReportScheduleCount == nil || *facts.DisabledReportScheduleCount != 1 {
+		t.Fatalf("DisabledReportScheduleCount = %v, want 1", facts.DisabledReportScheduleCount)
 	}
 }

@@ -75,6 +75,7 @@ work extends shared components instead of creating new local variants.
 46. `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx`
 47. `frontend-modern/src/components/Settings/ReportingPanel.tsx`
 48. `frontend-modern/src/components/Settings/reportingPanelModel.ts`
+    48a. `frontend-modern/src/components/Settings/reportingSchedulesModel.ts`
 49. `frontend-modern/src/components/Settings/reportingInventoryExportModel.ts`
 50. `frontend-modern/src/components/Settings/useReportingPanelState.ts`
 51. `frontend-modern/src/utils/reportingPresentation.ts`
@@ -4788,6 +4789,13 @@ shared buttons must preserve discriminated disclosure props, toggle and a11y
 helpers must expose exact event signatures, shared rows must accept typed
 `data-*` props, and reporting-panel helpers must remain ES2020-safe instead of
 depending on feature-local casts or newer string helpers.
+Settings report scheduling follows the same shell/runtime/model split as the
+rest of the Reports panel. `ReportingPanel.tsx` owns layout and shared controls,
+`useReportingPanelState.ts` owns API lifecycle and save/run/delete control
+flow, and `reportingSchedulesModel.ts` owns schedule payload normalization,
+labels, default form state, and cadence formatting. Schedule scope selection
+must reuse the shared `ResourcePicker` and reporting catalog types rather than
+creating a separate resource selector or browser-local schedule API contract.
 The settings navigation model now exposes a single `infrastructure-systems`
 sidebar entry for the infrastructure settings area. The former
 `infrastructure-connections` and `infrastructure-install` entries have been

@@ -177,6 +177,11 @@ cannot treat raw config strings as header fragments or `RCPT TO` input.
 That same SMTP boundary also owns MIME-safe body construction. Text and HTML
 payloads must be emitted through canonical multipart writers with encoded body
 parts instead of being concatenated directly into handcrafted message bodies.
+Scheduled report delivery uses that same enhanced email boundary. Report
+attachments must be emitted as MIME attachment parts by
+`internal/notifications/email_enhanced.go`, and oversized-report fallback copy
+belongs to the reporting scheduler. SMTP transport, recipient parsing,
+headers, body encoding, and attachment encoding remain notification-owned.
 That same queue ownership also governs persistent queue storage roots. The
 notifications queue database must normalize its owned data directory and
 resolve the fixed `notification_queue.db` leaf through the shared storage-path

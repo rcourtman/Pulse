@@ -10,6 +10,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -96,6 +97,7 @@ type ReportingHandlers struct {
 	recoveryManager  *recoverymanager.Manager
 	narratorResolver func(ctx context.Context) (reporting.Narrator, reporting.FleetNarrator, reporting.FindingsProvider)
 	settingsStore    reportingSystemSettingsStore
+	scheduleRunMu    sync.Mutex
 }
 
 type reportingSystemSettingsStore interface {
@@ -946,39 +948,67 @@ type multiReportRequestBody struct {
 	MetricType string                     `json:"metricType"`
 }
 
-// HandleGenerateMultiReport generates a multi-resource report.
-func (h *ReportingHandlers) HandleGenerateMultiReport(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
+type generatedMultiReport struct {
+	Data          []byte
+	ContentType   string
+	Filename      string
+	Format        reporting.ReportFormat
+	Start         time.Time
+	End           time.Time
+	ResourceCount int
+}
 
+type reportingRequestError struct {
+	status  int
+	code    string
+	message string
+}
+
+func (e *reportingRequestError) Error() string {
+	if e == nil {
+		return ""
+	}
+	return e.message
+}
+
+func writeReportingRequestError(w http.ResponseWriter, err error) bool {
+	var reqErr *reportingRequestError
+	if !errors.As(err, &reqErr) {
+		return false
+	}
+	writeErrorResponse(w, reqErr.status, reqErr.code, reqErr.message, nil)
+	return true
+}
+
+func (h *ReportingHandlers) generateMultiReportFromBody(ctx context.Context, body multiReportRequestBody, now time.Time) (generatedMultiReport, error) {
 	engine := reporting.GetEngine()
 	if engine == nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "engine_unavailable", "Reporting engine not initialized", nil)
-		return
+		return generatedMultiReport{}, &reportingRequestError{
+			status:  http.StatusInternalServerError,
+			code:    "engine_unavailable",
+			message: "Reporting engine not initialized",
+		}
 	}
 
 	definition := performanceReportDefinition()
-	body, ok := decodeMultiReportRequestBody(w, r)
-	if !ok {
-		return
-	}
-
-	// Validate resource count
 	if len(body.Resources) == 0 {
-		writeErrorResponse(w, http.StatusBadRequest, "no_resources", "At least one resource is required", nil)
-		return
+		return generatedMultiReport{}, &reportingRequestError{
+			status:  http.StatusBadRequest,
+			code:    "no_resources",
+			message: "At least one resource is required",
+		}
 	}
 	if len(body.Resources) > definition.MultiResourceMax {
-		writeErrorResponse(w, http.StatusBadRequest, "too_many_resources", fmt.Sprintf("Maximum %d resources allowed", definition.MultiResourceMax), nil)
-		return
+		return generatedMultiReport{}, &reportingRequestError{
+			status:  http.StatusBadRequest,
+			code:    "too_many_resources",
+			message: fmt.Sprintf("Maximum %d resources allowed", definition.MultiResourceMax),
+		}
 	}
 
 	format, err := normalizePerformanceReportFormat(body.Format, definition)
 	if err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_format", err.Error(), nil)
-		return
+		return generatedMultiReport{}, &reportingRequestError{status: http.StatusBadRequest, code: "invalid_format", message: err.Error()}
 	}
 	metricType, title, err := normalizePerformanceReportOptionalFields(definition, body.MetricType, body.Title)
 	if err != nil {
@@ -987,44 +1017,43 @@ func (h *ReportingHandlers) HandleGenerateMultiReport(w http.ResponseWriter, r *
 		if errors.As(err, &validationErr) && validationErr.code != "" {
 			code = validationErr.code
 		}
-		writeErrorResponse(w, http.StatusBadRequest, code, err.Error(), nil)
-		return
+		return generatedMultiReport{}, &reportingRequestError{status: http.StatusBadRequest, code: code, message: err.Error()}
 	}
 
-	start, end, err := normalizePerformanceReportTimeRange(definition, body.Start, body.End, time.Now())
+	start, end, err := normalizePerformanceReportTimeRange(definition, body.Start, body.End, now)
 	if err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_time_range", err.Error(), nil)
-		return
+		return generatedMultiReport{}, &reportingRequestError{status: http.StatusBadRequest, code: "invalid_time_range", message: err.Error()}
 	}
 
-	// Build multi-report request
 	multiReq := reporting.MultiReportRequest{
 		Format:     format,
 		Start:      start,
 		End:        end,
 		Title:      title,
 		MetricType: metricType,
-		Branding:   h.resolveReportBranding(r.Context()),
+		Branding:   h.resolveReportBranding(ctx),
 	}
 
-	// Get monitor state for enrichment
-	orgID := GetOrgID(r.Context())
-	snapshot, hasSnapshot := h.getReportingEnrichmentSnapshot(r.Context(), orgID)
-
-	// Validate and build each resource request
+	orgID := GetOrgID(ctx)
+	snapshot, hasSnapshot := h.getReportingEnrichmentSnapshot(ctx, orgID)
 	for _, res := range body.Resources {
 		if !validResourceID.MatchString(res.ResourceType) || len(res.ResourceType) > 64 {
-			writeErrorResponse(w, http.StatusBadRequest, "invalid_resource_type", fmt.Sprintf("Invalid resourceType: %s", res.ResourceType), nil)
-			return
+			return generatedMultiReport{}, &reportingRequestError{
+				status:  http.StatusBadRequest,
+				code:    "invalid_resource_type",
+				message: fmt.Sprintf("Invalid resourceType: %s", res.ResourceType),
+			}
 		}
 		if !validResourceID.MatchString(res.ResourceID) || len(res.ResourceID) > 128 {
-			writeErrorResponse(w, http.StatusBadRequest, "invalid_resource_id", fmt.Sprintf("Invalid resourceId: %s", res.ResourceID), nil)
-			return
+			return generatedMultiReport{}, &reportingRequestError{
+				status:  http.StatusBadRequest,
+				code:    "invalid_resource_id",
+				message: fmt.Sprintf("Invalid resourceId: %s", res.ResourceID),
+			}
 		}
 		resourceType, err := normalizeReportResourceType(res.ResourceType)
 		if err != nil {
-			writeErrorResponse(w, http.StatusBadRequest, "invalid_resource_type", err.Error(), nil)
-			return
+			return generatedMultiReport{}, &reportingRequestError{status: http.StatusBadRequest, code: "invalid_resource_type", message: err.Error()}
 		}
 
 		req := reporting.MetricReportRequest{
@@ -1037,34 +1066,25 @@ func (h *ReportingHandlers) HandleGenerateMultiReport(w http.ResponseWriter, r *
 			Title:        title,
 			Branding:     multiReq.Branding,
 		}
-
-		// Enrich with resource data
 		if hasSnapshot {
-			h.enrichReportRequest(r.Context(), orgID, &req, snapshot, start, end)
+			h.enrichReportRequest(ctx, orgID, &req, snapshot, start, end)
 		}
-
 		multiReq.Resources = append(multiReq.Resources, req)
 	}
 
-	// Wire the per-tenant fleet narrator and Patrol findings provider
-	// when configured. The single-resource Narrator is intentionally
-	// not propagated to the multi path: a fleet PDF would otherwise
-	// trigger one AI call per resource. The fleet narrator handles
-	// cross-resource synthesis in a single call instead.
-	_, fleetNarrator, findings := h.resolveNarrator(r.Context())
+	_, fleetNarrator, findings := h.resolveNarrator(ctx)
 	multiReq.FleetNarrator = fleetNarrator
 	multiReq.FindingsProvider = findings
 
 	data, contentType, err := engine.GenerateMulti(multiReq)
 	if err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "generation_failed", "Failed to generate multi-resource report", nil)
-		return
+		return generatedMultiReport{}, &reportingRequestError{
+			status:  http.StatusInternalServerError,
+			code:    "generation_failed",
+			message: "Failed to generate multi-resource report",
+		}
 	}
 
-	// Telemetry: same shape as the single-resource path so usage of
-	// the two report shapes can be compared. resource_count is the
-	// caller's requested set (engine may skip individual resources on
-	// query failure; this number is the upper bound).
 	log.Info().
 		Str("event", "reporting.fleet.generated").
 		Str("org_id", orgID).
@@ -1078,10 +1098,39 @@ func (h *ReportingHandlers) HandleGenerateMultiReport(w http.ResponseWriter, r *
 		Time("window_end", end).
 		Msg("Reporting: fleet report generated")
 
-	w.Header().Set("Content-Type", contentType)
-	filename := definition.MultiAttachmentFilename(time.Now().UTC(), format)
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
-	w.Write(data)
+	return generatedMultiReport{
+		Data:          data,
+		ContentType:   contentType,
+		Filename:      definition.MultiAttachmentFilename(now.UTC(), format),
+		Format:        format,
+		Start:         start,
+		End:           end,
+		ResourceCount: len(multiReq.Resources),
+	}, nil
+}
+
+// HandleGenerateMultiReport generates a multi-resource report.
+func (h *ReportingHandlers) HandleGenerateMultiReport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	body, ok := decodeMultiReportRequestBody(w, r)
+	if !ok {
+		return
+	}
+
+	report, err := h.generateMultiReportFromBody(r.Context(), body, time.Now())
+	if err != nil {
+		if !writeReportingRequestError(w, err) {
+			writeErrorResponse(w, http.StatusInternalServerError, "generation_failed", "Failed to generate multi-resource report", nil)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", report.ContentType)
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", report.Filename))
+	w.Write(report.Data)
 }
 
 // enrichContainerReport adds container-specific data to the report request

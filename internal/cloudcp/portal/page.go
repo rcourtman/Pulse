@@ -4,6 +4,7 @@ import (
 	"errors"
 	"html/template"
 	"net/http"
+	"sort"
 	"time"
 
 	cpauth "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/auth"
@@ -26,6 +27,9 @@ type portalPageWorkspace struct {
 	LastAgentSeenAt             *time.Time
 	AlertRouteCount             *int
 	DisabledAlertRouteCount     *int
+	ActiveCriticalAlertCount    *int
+	ActiveWarningAlertCount     *int
+	ActiveAlertsUpdatedAt       *time.Time
 	ReportScheduleCount         *int
 	DisabledReportScheduleCount *int
 	LastHealthCheck             *time.Time
@@ -176,6 +180,7 @@ func loadPortalAccountsForUserWithSetupFacts(reg *registry.TenantRegistry, userI
 			}
 			workspaces = append(workspaces, portalPageWorkspaceFromTenant(t, workspaceSetupFactsForTenant(setupFacts, t.ID)))
 		}
+		sortPortalPageWorkspaces(workspaces)
 
 		kindLabel := "Cloud"
 		if a.Kind == registry.AccountKindMSP {
@@ -229,11 +234,33 @@ func portalPageWorkspaceFromTenant(t *registry.Tenant, facts WorkspaceSetupFacts
 		LastAgentSeenAt:             facts.LastAgentSeenAt,
 		AlertRouteCount:             facts.AlertRouteCount,
 		DisabledAlertRouteCount:     facts.DisabledAlertRouteCount,
+		ActiveCriticalAlertCount:    facts.ActiveCriticalAlertCount,
+		ActiveWarningAlertCount:     facts.ActiveWarningAlertCount,
+		ActiveAlertsUpdatedAt:       facts.ActiveAlertsUpdatedAt,
 		ReportScheduleCount:         facts.ReportScheduleCount,
 		DisabledReportScheduleCount: facts.DisabledReportScheduleCount,
 		LastHealthCheck:             t.LastHealthCheck,
 		CreatedAt:                   t.CreatedAt,
 	}
+}
+
+func sortPortalPageWorkspaces(workspaces []portalPageWorkspace) {
+	sort.SliceStable(workspaces, func(i, j int) bool {
+		leftCritical := derefInt(workspaces[i].ActiveCriticalAlertCount)
+		rightCritical := derefInt(workspaces[j].ActiveCriticalAlertCount)
+		if leftCritical != rightCritical {
+			return leftCritical > rightCritical
+		}
+		leftWarning := derefInt(workspaces[i].ActiveWarningAlertCount)
+		rightWarning := derefInt(workspaces[j].ActiveWarningAlertCount)
+		if leftWarning != rightWarning {
+			return leftWarning > rightWarning
+		}
+		if workspaces[i].Healthy != workspaces[j].Healthy {
+			return !workspaces[i].Healthy
+		}
+		return workspaces[i].DisplayName < workspaces[j].DisplayName
+	})
 }
 
 func loadPortalAccountMembers(reg *registry.TenantRegistry, accountID string, actorRole registry.MemberRole) ([]portalPageMember, error) {

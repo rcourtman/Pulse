@@ -32,6 +32,7 @@ type ConfigPersistence struct {
 	emailFile                  string
 	webhookFile                string
 	appriseFile                string
+	reportSchedulesFile        string
 	nodesFile                  string
 	trueNASFile                string
 	vmwareFile                 string
@@ -109,6 +110,7 @@ type resolvedConfigPersistencePaths struct {
 	emailFile                  string
 	webhookFile                string
 	appriseFile                string
+	reportSchedulesFile        string
 	nodesFile                  string
 	trueNASFile                string
 	vmwareFile                 string
@@ -155,6 +157,10 @@ func resolveConfigPersistencePaths(configDir string) (string, resolvedConfigPers
 	appriseFile, err := resolveLeaf("apprise.enc")
 	if err != nil {
 		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve apprise.enc: %w", err)
+	}
+	reportSchedulesFile, err := resolveLeaf("report_schedules.json")
+	if err != nil {
+		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve report_schedules.json: %w", err)
 	}
 	nodesFile, err := resolveLeaf("nodes.enc")
 	if err != nil {
@@ -238,6 +244,7 @@ func resolveConfigPersistencePaths(configDir string) (string, resolvedConfigPers
 		emailFile:                  emailFile,
 		webhookFile:                webhookFile,
 		appriseFile:                appriseFile,
+		reportSchedulesFile:        reportSchedulesFile,
 		nodesFile:                  nodesFile,
 		trueNASFile:                trueNASFile,
 		vmwareFile:                 vmwareFile,
@@ -292,6 +299,7 @@ func newConfigPersistence(configDir string) (*ConfigPersistence, error) {
 		emailFile:                  resolvedPaths.emailFile,
 		webhookFile:                resolvedPaths.webhookFile,
 		appriseFile:                resolvedPaths.appriseFile,
+		reportSchedulesFile:        resolvedPaths.reportSchedulesFile,
 		nodesFile:                  resolvedPaths.nodesFile,
 		trueNASFile:                resolvedPaths.trueNASFile,
 		vmwareFile:                 resolvedPaths.vmwareFile,

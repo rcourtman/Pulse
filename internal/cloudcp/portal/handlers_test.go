@@ -132,6 +132,9 @@ type dashboardResp struct {
 		LastAgentSeenAt             *time.Time           `json:"last_agent_seen_at"`
 		AlertRouteCount             *int                 `json:"alert_route_count"`
 		DisabledAlertRouteCount     *int                 `json:"disabled_alert_route_count"`
+		ActiveCriticalAlertCount    *int                 `json:"active_critical_alert_count"`
+		ActiveWarningAlertCount     *int                 `json:"active_warning_alert_count"`
+		ActiveAlertsUpdatedAt       *time.Time           `json:"active_alerts_updated_at"`
 		ReportScheduleCount         *int                 `json:"report_schedule_count"`
 		DisabledReportScheduleCount *int                 `json:"disabled_report_schedule_count"`
 		LastHealthCheck             *time.Time           `json:"last_health_check"`
@@ -143,6 +146,7 @@ type dashboardResp struct {
 		Healthy   int `json:"healthy"`
 		Unhealthy int `json:"unhealthy"`
 		Suspended int `json:"suspended"`
+		Critical  int `json:"critical"`
 	} `json:"summary"`
 }
 
@@ -262,6 +266,9 @@ func TestPortalDashboard(t *testing.T) {
 			LastAgentSeenAt:             ws.LastAgentSeenAt,
 			AlertRouteCount:             ws.AlertRouteCount,
 			DisabledAlertRouteCount:     ws.DisabledAlertRouteCount,
+			ActiveCriticalAlertCount:    ws.ActiveCriticalAlertCount,
+			ActiveWarningAlertCount:     ws.ActiveWarningAlertCount,
+			ActiveAlertsUpdatedAt:       ws.ActiveAlertsUpdatedAt,
 			ReportScheduleCount:         ws.ReportScheduleCount,
 			DisabledReportScheduleCount: ws.DisabledReportScheduleCount,
 			LastHealthCheck:             ws.LastHealthCheck,
@@ -434,6 +441,9 @@ func TestPortalDashboardUsesWorkspaceSetupFacts(t *testing.T) {
 			LastAgentSeenAt:             ws.LastAgentSeenAt,
 			AlertRouteCount:             ws.AlertRouteCount,
 			DisabledAlertRouteCount:     ws.DisabledAlertRouteCount,
+			ActiveCriticalAlertCount:    ws.ActiveCriticalAlertCount,
+			ActiveWarningAlertCount:     ws.ActiveWarningAlertCount,
+			ActiveAlertsUpdatedAt:       ws.ActiveAlertsUpdatedAt,
 			ReportScheduleCount:         ws.ReportScheduleCount,
 			DisabledReportScheduleCount: ws.DisabledReportScheduleCount,
 			LastHealthCheck:             ws.LastHealthCheck,
@@ -469,6 +479,89 @@ func TestPortalDashboardUsesWorkspaceSetupFacts(t *testing.T) {
 	}
 }
 
+func TestPortalDashboardRollsUpActiveAlertsAndSortsCriticalFirst(t *testing.T) {
+	reg := newTestRegistry(t)
+	mux := http.NewServeMux()
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindMSP, DisplayName: "Example MSP"}); err != nil {
+		t.Fatal(err)
+	}
+
+	criticalID, err := registry.GenerateTenantID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	unknownID, err := registry.GenerateTenantID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC)
+	for _, tenant := range []*registry.Tenant{
+		{ID: unknownID, AccountID: accountID, DisplayName: "Unknown Alerts", State: registry.TenantStateActive, CreatedAt: now, HealthCheckOK: true},
+		{ID: criticalID, AccountID: accountID, DisplayName: "Critical Alerts", State: registry.TenantStateActive, CreatedAt: now, HealthCheckOK: true},
+	} {
+		if err := reg.Create(tenant); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	mux.Handle(PortalDashboardPath, admin.AdminKeyMiddleware("secret-key", HandlePortalDashboardWithSetupFacts(reg, staticSetupFactReader{
+		criticalID: {
+			AgentCount:                  intPtr(1),
+			AlertRouteCount:             intPtr(1),
+			ReportScheduleCount:         intPtr(1),
+			ActiveCriticalAlertCount:    intPtr(2),
+			ActiveWarningAlertCount:     intPtr(3),
+			ActiveAlertsUpdatedAt:       &now,
+			DisabledAlertRouteCount:     intPtr(0),
+			DisabledReportScheduleCount: intPtr(0),
+		},
+		unknownID: {
+			AgentCount:                  intPtr(1),
+			AlertRouteCount:             intPtr(1),
+			ReportScheduleCount:         intPtr(1),
+			DisabledAlertRouteCount:     intPtr(0),
+			DisabledReportScheduleCount: intPtr(0),
+		},
+	})))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/portal/dashboard?account_id="+accountID, nil)
+	rec := doRequest(t, mux, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var resp dashboardResp
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v (body=%q)", err, rec.Body.String())
+	}
+	if len(resp.Workspaces) != 2 {
+		t.Fatalf("workspaces len = %d, want 2", len(resp.Workspaces))
+	}
+	if resp.Workspaces[0].ID != criticalID {
+		t.Fatalf("first workspace = %s, want critical workspace %s", resp.Workspaces[0].ID, criticalID)
+	}
+	if resp.Workspaces[0].ActiveCriticalAlertCount == nil || *resp.Workspaces[0].ActiveCriticalAlertCount != 2 {
+		t.Fatalf("critical active_critical_alert_count = %v, want 2", resp.Workspaces[0].ActiveCriticalAlertCount)
+	}
+	if resp.Workspaces[0].ActiveWarningAlertCount == nil || *resp.Workspaces[0].ActiveWarningAlertCount != 3 {
+		t.Fatalf("critical active_warning_alert_count = %v, want 3", resp.Workspaces[0].ActiveWarningAlertCount)
+	}
+	if resp.Workspaces[0].ActiveAlertsUpdatedAt == nil || !resp.Workspaces[0].ActiveAlertsUpdatedAt.Equal(now) {
+		t.Fatalf("critical active_alerts_updated_at = %v, want %v", resp.Workspaces[0].ActiveAlertsUpdatedAt, now)
+	}
+	if resp.Workspaces[1].ActiveCriticalAlertCount != nil || resp.Workspaces[1].ActiveWarningAlertCount != nil {
+		t.Fatalf("unknown alert counts = critical %v warning %v, want nil", resp.Workspaces[1].ActiveCriticalAlertCount, resp.Workspaces[1].ActiveWarningAlertCount)
+	}
+	if resp.Summary.Critical != 1 {
+		t.Fatalf("summary.critical = %d, want 1", resp.Summary.Critical)
+	}
+}
+
 type dashboardRespWorkspace struct {
 	ID                          string
 	DisplayName                 string
@@ -481,6 +574,9 @@ type dashboardRespWorkspace struct {
 	LastAgentSeenAt             *time.Time
 	AlertRouteCount             *int
 	DisabledAlertRouteCount     *int
+	ActiveCriticalAlertCount    *int
+	ActiveWarningAlertCount     *int
+	ActiveAlertsUpdatedAt       *time.Time
 	ReportScheduleCount         *int
 	DisabledReportScheduleCount *int
 	LastHealthCheck             *time.Time

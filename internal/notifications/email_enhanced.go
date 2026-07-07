@@ -3,7 +3,9 @@ package notifications
 import (
 	"bytes"
 	"crypto/tls"
+	"encoding/base64"
 	"fmt"
+	"io"
 	"mime/multipart"
 	"mime/quotedprintable"
 	"net"
@@ -17,6 +19,12 @@ import (
 
 	"github.com/rs/zerolog/log"
 )
+
+type EmailAttachment struct {
+	Filename    string
+	ContentType string
+	Data        []byte
+}
 
 // loginAuth implements the SMTP LOGIN authentication mechanism.
 // Many mail servers (notably Microsoft 365) advertise only AUTH LOGIN
@@ -233,6 +241,132 @@ func buildMultipartEmailMessage(addresses resolvedEmailAddresses, subject, htmlB
 	return message.Bytes(), nil
 }
 
+func buildMultipartEmailMessageWithAttachments(addresses resolvedEmailAddresses, subject, htmlBody, textBody string, attachments []EmailAttachment, now time.Time) ([]byte, error) {
+	if len(attachments) == 0 {
+		return buildMultipartEmailMessage(addresses, subject, htmlBody, textBody, now)
+	}
+
+	var message bytes.Buffer
+	var body bytes.Buffer
+	mixedWriter := multipart.NewWriter(&body)
+
+	if _, err := fmt.Fprintf(&message, "From: %s\r\n", addresses.from.String()); err != nil {
+		return nil, fmt.Errorf("write from header: %w", err)
+	}
+	if _, err := fmt.Fprintf(&message, "To: %s\r\n", formatHeaderAddresses(addresses.to)); err != nil {
+		return nil, fmt.Errorf("write to header: %w", err)
+	}
+	if addresses.replyTo != nil {
+		if _, err := fmt.Fprintf(&message, "Reply-To: %s\r\n", addresses.replyTo.String()); err != nil {
+			return nil, fmt.Errorf("write reply-to header: %w", err)
+		}
+	}
+	if _, err := fmt.Fprintf(&message, "Subject: %s\r\n", sanitizeEmailHeaderValue(subject)); err != nil {
+		return nil, fmt.Errorf("write subject header: %w", err)
+	}
+	if _, err := fmt.Fprintf(&message, "Date: %s\r\n", now.Format(time.RFC1123Z)); err != nil {
+		return nil, fmt.Errorf("write date header: %w", err)
+	}
+	if _, err := fmt.Fprintf(&message, "Message-ID: <%d@pulse-monitoring>\r\n", now.UnixNano()); err != nil {
+		return nil, fmt.Errorf("write message-id header: %w", err)
+	}
+	if _, err := message.WriteString("MIME-Version: 1.0\r\n"); err != nil {
+		return nil, fmt.Errorf("write mime-version header: %w", err)
+	}
+	if _, err := fmt.Fprintf(&message, "Content-Type: multipart/mixed; boundary=%q\r\n", mixedWriter.Boundary()); err != nil {
+		return nil, fmt.Errorf("write content-type header: %w", err)
+	}
+	if _, err := message.WriteString("X-Mailer: Pulse Monitoring System\r\n\r\n"); err != nil {
+		return nil, fmt.Errorf("write x-mailer header: %w", err)
+	}
+
+	var alternativeBody bytes.Buffer
+	alternativeWriter := multipart.NewWriter(&alternativeBody)
+	if err := writeMultipartBodyPart(alternativeWriter, "text/plain", textBody); err != nil {
+		return nil, err
+	}
+	if err := writeMultipartBodyPart(alternativeWriter, "text/html", htmlBody); err != nil {
+		return nil, err
+	}
+	if err := alternativeWriter.Close(); err != nil {
+		return nil, fmt.Errorf("close alternative writer: %w", err)
+	}
+	alternativeHeader := textproto.MIMEHeader{}
+	alternativeHeader.Set("Content-Type", fmt.Sprintf("multipart/alternative; boundary=%q", alternativeWriter.Boundary()))
+	alternativePart, err := mixedWriter.CreatePart(alternativeHeader)
+	if err != nil {
+		return nil, fmt.Errorf("create alternative part: %w", err)
+	}
+	if _, err := alternativePart.Write(alternativeBody.Bytes()); err != nil {
+		return nil, fmt.Errorf("write alternative part: %w", err)
+	}
+
+	for _, attachment := range attachments {
+		if len(attachment.Data) == 0 {
+			continue
+		}
+		filename := sanitizeEmailHeaderValue(strings.TrimSpace(attachment.Filename))
+		if filename == "" {
+			filename = "attachment"
+		}
+		contentType := strings.TrimSpace(attachment.ContentType)
+		if contentType == "" {
+			contentType = "application/octet-stream"
+		}
+		header := textproto.MIMEHeader{}
+		header.Set("Content-Type", fmt.Sprintf("%s; name=%q", contentType, filename))
+		header.Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
+		header.Set("Content-Transfer-Encoding", "base64")
+		part, err := mixedWriter.CreatePart(header)
+		if err != nil {
+			return nil, fmt.Errorf("create attachment part: %w", err)
+		}
+		encoder := base64.NewEncoder(base64.StdEncoding, newBase64LineWriter(part))
+		if _, err := encoder.Write(attachment.Data); err != nil {
+			_ = encoder.Close()
+			return nil, fmt.Errorf("encode attachment: %w", err)
+		}
+		if err := encoder.Close(); err != nil {
+			return nil, fmt.Errorf("close attachment encoder: %w", err)
+		}
+	}
+
+	if err := mixedWriter.Close(); err != nil {
+		return nil, fmt.Errorf("close mixed writer: %w", err)
+	}
+	if _, err := message.Write(body.Bytes()); err != nil {
+		return nil, fmt.Errorf("write multipart body: %w", err)
+	}
+	return message.Bytes(), nil
+}
+
+type base64LineWriter struct {
+	w     io.Writer
+	count int
+}
+
+func newBase64LineWriter(w io.Writer) *base64LineWriter {
+	return &base64LineWriter{w: w}
+}
+
+func (w *base64LineWriter) Write(p []byte) (int, error) {
+	written := 0
+	for _, b := range p {
+		if w.count == 76 {
+			if _, err := w.w.Write([]byte("\r\n")); err != nil {
+				return written, err
+			}
+			w.count = 0
+		}
+		if _, err := w.w.Write([]byte{b}); err != nil {
+			return written, err
+		}
+		w.count++
+		written++
+	}
+	return written, nil
+}
+
 // negotiateAuth queries the server for supported AUTH mechanisms after EHLO
 // and returns the best smtp.Auth to use. Prefers PLAIN, falls back to LOGIN.
 // Returns nil if auth is not configured.
@@ -312,6 +446,10 @@ func NewEnhancedEmailManager(config EmailProviderConfig) *EnhancedEmailManager {
 // Total attempts = MaxRetries * MaxAttempts (e.g., 3 * 3 = 9 SMTP calls for a single notification)
 // This ensures delivery even during transient failures at either layer.
 func (e *EnhancedEmailManager) SendEmailWithRetry(subject, htmlBody, textBody string) error {
+	return e.SendEmailWithAttachments(subject, htmlBody, textBody, nil)
+}
+
+func (e *EnhancedEmailManager) SendEmailWithAttachments(subject, htmlBody, textBody string, attachments []EmailAttachment) error {
 	var lastErr error
 
 	for attempt := 0; attempt <= e.config.MaxRetries; attempt++ {
@@ -331,7 +469,7 @@ func (e *EnhancedEmailManager) SendEmailWithRetry(subject, htmlBody, textBody st
 		}
 
 		// Try to send
-		err := e.sendEmailOnce(subject, htmlBody, textBody)
+		err := e.sendEmailOnceWithAttachments(subject, htmlBody, textBody, attachments)
 		if err == nil {
 			if attempt > 0 {
 				log.Info().
@@ -376,14 +514,18 @@ func (e *EnhancedEmailManager) checkRateLimit() error {
 	return nil
 }
 
-// sendEmailOnce sends a single email
+// sendEmailOnce sends a single email.
 func (e *EnhancedEmailManager) sendEmailOnce(subject, htmlBody, textBody string) error {
+	return e.sendEmailOnceWithAttachments(subject, htmlBody, textBody, nil)
+}
+
+func (e *EnhancedEmailManager) sendEmailOnceWithAttachments(subject, htmlBody, textBody string, attachments []EmailAttachment) error {
 	addresses, err := e.resolveEmailAddresses()
 	if err != nil {
 		return err
 	}
 
-	msg, err := buildMultipartEmailMessage(addresses, subject, htmlBody, textBody, time.Now())
+	msg, err := buildMultipartEmailMessageWithAttachments(addresses, subject, htmlBody, textBody, attachments, time.Now())
 	if err != nil {
 		return err
 	}

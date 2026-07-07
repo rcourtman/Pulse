@@ -160,6 +160,13 @@ storage or recovery product state. `reportBranding` persisted in a tenant
 runtime's `system.json` should be preserved by the existing tenant data
 backup/restore path, but it must not create cross-client report storage,
 restore scope, backup visibility, or recovery authority.
+Scheduled report definitions and generated report files are likewise
+reporting-owned tenant-local artifacts. The scheduler may save output under
+the workspace data directory for operator retrieval and retention, but those
+PDF/CSV files are not recovery points, backup artifacts, storage-health
+evidence, restore manifests, or cross-client storage inventory. Storage and
+recovery flows may preserve them as normal tenant data during backup/restore,
+but must not interpret their presence as infrastructure protection.
 
 Generated Proxmox setup-script, runtime host-agent setup, and installer
 auto-registration changes that affect backup visibility permissions are

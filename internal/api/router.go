@@ -1261,6 +1261,11 @@ func (r *Router) StartBackgroundWorkers() {
 		r.startLifecycleWorker(func() {
 			r.backgroundUpdateChecker(r.lifecycleCtx)
 		})
+		if r.reportingHandlers != nil {
+			r.startLifecycleWorker(func() {
+				r.reportingHandlers.RunReportScheduleScheduler(r.lifecycleCtx)
+			})
+		}
 	})
 }
 

@@ -3337,22 +3337,28 @@ func TestReportingExecutionEndpointsRequireLicenseFeature(t *testing.T) {
 	cfg := newTestConfigWithTokens(t, record)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
-	paths := []string{
-		"/api/admin/reports/generate",
-		"/api/admin/reports/generate-multi",
-		"/api/admin/reports/inventory/vms/export",
+	cases := []struct {
+		method string
+		path   string
+		body   string
+	}{
+		{method: http.MethodGet, path: "/api/admin/reports/generate", body: ""},
+		{method: http.MethodPost, path: "/api/admin/reports/generate-multi", body: `{}`},
+		{method: http.MethodGet, path: "/api/admin/reports/inventory/vms/export", body: ""},
+		{method: http.MethodGet, path: "/api/admin/reports/schedules", body: ""},
+		{method: http.MethodPost, path: "/api/admin/reports/schedules", body: `{}`},
+		{method: http.MethodPut, path: "/api/admin/reports/schedules/schedule-1", body: `{}`},
+		{method: http.MethodDelete, path: "/api/admin/reports/schedules/schedule-1", body: ""},
+		{method: http.MethodPost, path: "/api/admin/reports/schedules/schedule-1/run", body: ""},
 	}
 
-	for _, path := range paths {
-		req := httptest.NewRequest(http.MethodGet, path, nil)
-		if path == "/api/admin/reports/generate-multi" {
-			req = httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{}`))
-		}
+	for _, tc := range cases {
+		req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
 		req.Header.Set("X-API-Token", rawToken)
 		rec := httptest.NewRecorder()
 		router.Handler().ServeHTTP(rec, req)
 		if rec.Code != http.StatusPaymentRequired {
-			t.Fatalf("expected 402 for missing reporting license on %s, got %d", path, rec.Code)
+			t.Fatalf("expected 402 for missing reporting license on %s %s, got %d", tc.method, tc.path, rec.Code)
 		}
 	}
 }
@@ -3619,6 +3625,11 @@ func TestPermissionProtectedEndpointsDenyWhenAuthorizerBlocks(t *testing.T) {
 		{method: http.MethodGet, path: "/api/admin/reports/catalog", body: ""},
 		{method: http.MethodGet, path: "/api/admin/reports/generate", body: ""},
 		{method: http.MethodPost, path: "/api/admin/reports/generate-multi", body: `{}`},
+		{method: http.MethodGet, path: "/api/admin/reports/schedules", body: ""},
+		{method: http.MethodPost, path: "/api/admin/reports/schedules", body: `{}`},
+		{method: http.MethodPut, path: "/api/admin/reports/schedules/schedule-1", body: `{}`},
+		{method: http.MethodDelete, path: "/api/admin/reports/schedules/schedule-1", body: ""},
+		{method: http.MethodPost, path: "/api/admin/reports/schedules/schedule-1/run", body: ""},
 		{method: http.MethodGet, path: "/api/admin/webhooks/audit", body: ""},
 		{method: http.MethodPost, path: "/api/security/tokens/relay-mobile", body: `{}`},
 		{method: http.MethodGet, path: "/api/security/tokens", body: ""},

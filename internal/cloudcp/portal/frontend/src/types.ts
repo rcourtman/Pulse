@@ -11,6 +11,9 @@ export interface PortalWorkspaceSummary {
   last_agent_seen_at?: string;
   alert_route_count?: number;
   disabled_alert_route_count?: number;
+  active_critical_alert_count?: number;
+  active_warning_alert_count?: number;
+  active_alerts_updated_at?: string;
   report_schedule_count?: number;
   disabled_report_schedule_count?: number;
   last_health_check?: string;

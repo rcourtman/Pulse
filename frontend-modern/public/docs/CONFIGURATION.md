@@ -22,6 +22,7 @@ Pulse uses a split-configuration model to ensure security and flexibility.
 | `ai_usage_history.json` | AI usage history | 📝 Standard |
 | `ai_chat_sessions.json` | Legacy AI chat sessions (UI sync) | 📝 Standard |
 | `license.enc` | Relay/Pro/legacy Pro+/Cloud license key | 🔒 **Encrypted** |
+| `report_schedules.json` | Scheduled report definitions, recipients, and last-run metadata | 🔒 **Sensitive** (encrypted when data-dir encryption is enabled) |
 | `host_metadata.json` | Host notes, tags, and AI command overrides | 📝 Standard |
 | `docker_metadata.json` | Docker metadata cache | 📝 Standard |
 | `guest_metadata.json` | Guest notes and metadata | 📝 Standard |

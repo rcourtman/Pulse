@@ -75,6 +75,16 @@ func TestNoGetStateResourceArrayRegression(t *testing.T) {
 	}
 }
 
+func TestMultiTenantMonitorListOrganizationIDsFallsBackToDefault(t *testing.T) {
+	got, err := (&MultiTenantMonitor{}).ListOrganizationIDs()
+	if err != nil {
+		t.Fatalf("ListOrganizationIDs() error = %v", err)
+	}
+	if len(got) != 1 || got[0] != "default" {
+		t.Fatalf("ListOrganizationIDs() = %v, want [default]", got)
+	}
+}
+
 func TestPVETagStyleRefreshStaysPerInstance(t *testing.T) {
 	data, err := os.ReadFile("monitor_pve.go")
 	if err != nil {

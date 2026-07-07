@@ -9,6 +9,9 @@ import type {
 import { portalRoleLabel } from './account_roles';
 import { preferredPortalShellSection } from './shell_section';
 import {
+  workspaceActiveAlertLabel,
+  workspaceActiveAlertsUpdatedLabel,
+  workspaceActiveAlertState,
   workspaceHealthLabel,
   workspaceHealthState,
   workspaceRowNote,
@@ -130,6 +133,12 @@ function setupNeededWorkspaceChipLabel(count: number, clientLanguage = false): s
   return count === 1
     ? '1 ' + workspaceEntityName(clientLanguage) + ' in setup'
     : String(count) + ' ' + workspaceEntityName(clientLanguage, true) + ' in setup';
+}
+
+function criticalWorkspaceChipLabel(count: number, clientLanguage = false): string {
+  return count === 1
+    ? '1 ' + workspaceEntityName(clientLanguage) + ' with critical alerts'
+    : String(count) + ' ' + workspaceEntityName(clientLanguage, true) + ' with critical alerts';
 }
 
 
@@ -285,6 +294,16 @@ function setupBadgeHTML(workspace: PortalWorkspaceSummary): string {
   return '<span class="badge badge-setup-' + escapeHTML(setup) + '">' + escapeHTML(workspaceSetupLabel(workspace)) + '</span>';
 }
 
+function alertBadgeHTML(workspace: PortalWorkspaceSummary): string {
+  var state = workspaceActiveAlertState(workspace);
+  var label = state === 'unknown' ? '-' : workspaceActiveAlertLabel(workspace);
+  var title = workspaceActiveAlertLabel(workspace);
+  if (state !== 'unknown') {
+    title += ' · ' + workspaceActiveAlertsUpdatedLabel(workspace);
+  }
+  return '<span class="badge badge-alert-' + escapeAttr(state) + '" title="' + escapeAttr(title) + '">' + escapeHTML(label) + '</span>';
+}
+
 function renderBillingActionRow(
   id: string,
   title: string,
@@ -330,11 +349,15 @@ function attentionWorkspaces(workspaces: PortalWorkspaceSummary[]): PortalWorksp
   var results: PortalWorkspaceSummary[] = [];
   for (var i = 0; i < workspaces.length; i += 1) {
     var status = workspaceHealthState(workspaces[i]);
-    if (status === 'unhealthy' || status === 'checking') {
+    if (workspaceActiveAlertState(workspaces[i]) === 'critical' || status === 'unhealthy' || status === 'checking') {
       results.push(workspaces[i]);
     }
   }
   return results;
+}
+
+function hasCriticalAlerts(workspace: PortalWorkspaceSummary): boolean {
+  return workspaceActiveAlertState(workspace) === 'critical';
 }
 
 function accountContextRoleMeta(account: PortalAccountSummary): string {
@@ -498,6 +521,9 @@ function renderWorkspaceCard(account: PortalAccountSummary, workspace: PortalWor
         setupBadgeHTML(workspace) +
       '</div>' +
       '<div class="workspace-row-status-cell workspace-row-status-cell-badge">' +
+        alertBadgeHTML(workspace) +
+      '</div>' +
+      '<div class="workspace-row-status-cell workspace-row-status-cell-badge">' +
         healthBadgeHTML(workspace) +
       '</div>' +
       '<div class="workspace-actions">' +
@@ -562,7 +588,17 @@ function attentionWorkspaceEntries(entries: WorkspaceSummaryEntry[]): WorkspaceS
   var results: WorkspaceSummaryEntry[] = [];
   for (var i = 0; i < entries.length; i += 1) {
     var status = workspaceHealthState(entries[i].workspace);
-    if (status === 'unhealthy' || status === 'checking') {
+    if (hasCriticalAlerts(entries[i].workspace) || status === 'unhealthy' || status === 'checking') {
+      results.push(entries[i]);
+    }
+  }
+  return results;
+}
+
+function criticalAlertWorkspaceEntries(entries: WorkspaceSummaryEntry[]): WorkspaceSummaryEntry[] {
+  var results: WorkspaceSummaryEntry[] = [];
+  for (var i = 0; i < entries.length; i += 1) {
+    if (hasCriticalAlerts(entries[i].workspace)) {
       results.push(entries[i]);
     }
   }
@@ -651,6 +687,7 @@ function renderWorkspaceSummaryDecision(
   showSelfHostedCommercial: boolean
 ): WorkspaceSummaryDecision {
   var clientLanguage = accountsUseClientLanguage(accounts);
+  var critical = criticalAlertWorkspaceEntries(entries);
   var attention = attentionWorkspaceEntries(entries);
   var suspended = suspendedWorkspaceEntries(entries);
   var setupNeeded = setupNeededWorkspaceEntries(entries);
@@ -668,7 +705,22 @@ function renderWorkspaceSummaryDecision(
   }) || null;
   var hostedViewOnly = accounts.length > 0 && !accessAccount;
 
-  if (attention.length) {
+  if (critical.length) {
+    var criticalEntry = critical[0];
+    title = 'Review ' + criticalEntry.workspace.display_name;
+    description = workspaceSummaryContext(criticalEntry, accounts.length > 1, workspaceActiveAlertLabel(criticalEntry.workspace));
+    primaryAction = renderWorkspaceAnchorAction(
+      workspaceRowAnchorID(criticalEntry.account.id, criticalEntry.workspace.id),
+      clientLanguage ? 'Review client' : 'Review workspace',
+      'btn-primary btn-compact workspace-summary-link',
+    );
+    secondaryAction = renderWorkspaceHandoffForm(
+      criticalEntry.account.id,
+      criticalEntry.workspace.id,
+      accountAPIBasePath,
+      clientLanguage ? 'Open client' : 'Open workspace',
+    );
+  } else if (attention.length) {
     var attentionEntry = attention[0];
     title = 'Review ' + attentionEntry.workspace.display_name;
     description = workspaceSummaryContext(attentionEntry, accounts.length > 1, workspaceSummaryStatusCopy(attentionEntry.workspace, clientLanguage));
@@ -813,6 +865,7 @@ function renderWorkspaceSummaryFacts(accounts: PortalAccountSummary[], entries: 
     workspaceCountLabel(entries.length, clientLanguage),
     readyWorkspaceChipLabel(readyWorkspaceEntries(entries).length, clientLanguage),
     setupNeededWorkspaceChipLabel(setupNeededWorkspaceEntries(entries).length, clientLanguage),
+    criticalWorkspaceChipLabel(criticalAlertWorkspaceEntries(entries).length, clientLanguage),
     reviewWorkspaceChipLabel(attentionWorkspaceEntries(entries).length, clientLanguage),
     suspendedWorkspaceChipLabel(suspendedWorkspaceEntries(entries).length, clientLanguage),
   ];
@@ -1237,6 +1290,7 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
           '<div class="workspace-list-head">' +
             '<span>' + escapeHTML(clientLanguage ? 'Client' : 'Workspace') + '</span>' +
             '<span>Setup</span>' +
+            '<span>Alerts</span>' +
             '<span>Health</span>' +
             '<span>Actions</span>' +
           '</div>' +

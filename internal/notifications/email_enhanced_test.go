@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/tls"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"mime"
@@ -422,6 +423,43 @@ func TestBuildMultipartEmailMessage_EncodesMultipartBodies(t *testing.T) {
 
 	if _, err := reader.NextRawPart(); err != io.EOF {
 		t.Fatalf("expected multipart EOF, got %v", err)
+	}
+}
+
+func TestBuildMultipartEmailMessageWithAttachments_EncodesReportAttachment(t *testing.T) {
+	addresses := resolvedEmailAddresses{
+		from: &mail.Address{Address: "sender@example.com"},
+		to:   []*mail.Address{{Address: "recipient@example.com"}},
+	}
+
+	attachment := EmailAttachment{
+		Filename:    "report.pdf",
+		ContentType: "application/pdf",
+		Data:        []byte("%PDF-1.7\nreport\n"),
+	}
+	msg, err := buildMultipartEmailMessageWithAttachments(
+		addresses,
+		"Scheduled report",
+		"<p>Attached</p>",
+		"Attached",
+		[]EmailAttachment{attachment},
+		time.Unix(1711711711, 1234).UTC(),
+	)
+	if err != nil {
+		t.Fatalf("buildMultipartEmailMessageWithAttachments() error = %v", err)
+	}
+
+	raw := string(msg)
+	for _, want := range []string{
+		`Subject: Scheduled report`,
+		`Content-Disposition: attachment; filename="report.pdf"`,
+		`Content-Type: application/pdf`,
+		`Content-Transfer-Encoding: base64`,
+		base64.StdEncoding.EncodeToString(attachment.Data),
+	} {
+		if !strings.Contains(raw, want) {
+			t.Fatalf("attachment message missing %q in:\n%s", want, raw)
+		}
 	}
 }
 

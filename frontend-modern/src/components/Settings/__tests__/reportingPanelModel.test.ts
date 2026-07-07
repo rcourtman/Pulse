@@ -5,6 +5,12 @@ import {
   getReportingRangeStart,
 } from '../reportingPanelModel';
 import type { ReportingPerformanceReportDefinition } from '../reportingCatalogModel';
+import {
+  buildReportSchedulePayload,
+  parseReportSchedulesResponse,
+  reportScheduleCadenceLabel,
+  reportScheduleDeliveryLabel,
+} from '../reportingSchedulesModel';
 
 const performanceDefinition: ReportingPerformanceReportDefinition = {
   id: 'performance_reports',
@@ -259,5 +265,77 @@ describe('reporting panel model', () => {
     }, performanceDefinition);
 
     expect(request.filename).toBe('report-lab-node-quotedvm-20260320.pdf');
+  });
+
+  it('builds scheduled report payloads with explicit workspace scope and delivery', () => {
+    const payload = buildReportSchedulePayload(
+      {
+        id: '',
+        name: ' Acme monthly ',
+        enabled: true,
+        cadenceType: 'monthly',
+        dayOfMonth: 1,
+        weekday: 'monday',
+        time: '06:00',
+        timezone: 'Europe/London',
+        format: 'pdf',
+        deliveryMethod: 'email',
+        recipients: 'ops@example.com, Ops@example.com, noc@example.com',
+        attach: true,
+        saveToDisk: true,
+        tagFilter: 'client:acme, client:acme',
+        retentionCount: 12,
+      },
+      [
+        {
+          id: 'agent-1',
+          type: 'agent',
+          name: 'pve-a',
+        },
+      ],
+    );
+
+    expect(payload).toMatchObject({
+      id: '',
+      name: 'Acme monthly',
+      enabled: true,
+      cadence: {
+        type: 'monthly',
+        day_of_month: 1,
+        time: '06:00',
+        timezone: 'Europe/London',
+      },
+      scope: {
+        resources: [{ resourceType: 'agent', resourceId: 'agent-1', name: 'pve-a' }],
+        tags: ['client:acme'],
+      },
+      format: 'pdf',
+      delivery: {
+        method: 'email',
+        to: ['ops@example.com', 'noc@example.com'],
+        attach: true,
+        save_to_disk: true,
+      },
+      retention_count: 12,
+    });
+  });
+
+  it('normalizes scheduled report labels from the API response contract', () => {
+    const [schedule] = parseReportSchedulesResponse({
+      schedules: [
+        {
+          id: 'weekly',
+          name: 'Weekly report',
+          enabled: true,
+          cadence: { type: 'weekly', weekday: 'friday', time: '08:15', timezone: 'UTC' },
+          scope: { resources: [], tags: ['client:acme'] },
+          format: 'csv',
+          delivery: { method: 'disk', attach: false, save_to_disk: true },
+        },
+      ],
+    });
+
+    expect(reportScheduleCadenceLabel(schedule)).toBe('Friday at 08:15');
+    expect(reportScheduleDeliveryLabel(schedule)).toBe('Save to disk');
   });
 });

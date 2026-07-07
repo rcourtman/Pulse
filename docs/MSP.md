@@ -192,6 +192,11 @@ that client's resources:
   `POST /api/admin/reports/generate-multi` (up to 50 resources per report),
   returning PDF or CSV. In shared-process mode, scope with `X-Pulse-Org-ID`
   or an org-bound token.
+- **Schedules**: `GET`/`POST /api/admin/reports/schedules`,
+  `PUT`/`DELETE /api/admin/reports/schedules/{id}`, and
+  `POST /api/admin/reports/schedules/{id}/run`. Schedules can target explicit
+  resources and/or comma-separated resource tags, choose weekly or monthly
+  cadence, and deliver PDF or CSV output by email or to disk.
 
 Report branding (logo + display name) supports a provider-wide default via
 environment (`PULSE_REPORT_PROVIDER_BRAND_DISPLAY_NAME`,
@@ -202,9 +207,14 @@ per-client; in shared-process mode the settings override applies
 instance-wide, so all organizations share one brand (usually yours). Branding
 requires the `white_label` entitlement on the licence.
 
-Pulse does not yet schedule recurring reports; generate monthly client reports
-on demand from the UI, or call the report API from your own scheduler with an
-org-bound token.
+Scheduled reports are tenant-local. In provider-hosted MSP, each client
+runtime stores its own schedules in `report_schedules.json`, writes generated
+outputs under `reports/generated/`, and applies its own SMTP settings,
+recipients, resource tags, branding, and entitlement checks. If email delivery
+is selected before SMTP is configured, Pulse records the run and saves the
+report to disk instead of sending it. The Pulse Account portal may show whether
+a workspace has an enabled report schedule, but it does not render cross-client
+reports or collect report data in the provider control plane.
 
 ## Licensing
 

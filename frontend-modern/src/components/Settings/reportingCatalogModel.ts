@@ -274,6 +274,9 @@ export function parseReportingCatalog(input: unknown): ReportingCatalog {
     lockedState: parseReportingLockedStateDefinition(candidate.lockedState),
     guidance: parseReportingGuidanceDefinition(candidate.guidance),
     performanceReport: parseReportingPerformanceReportDefinition(candidate.performanceReport),
-    vmInventoryExport: parseVMInventoryExportDefinition(candidate.vmInventoryExport),
+    vmInventoryExport:
+      candidate.vmInventoryExport === null
+        ? null
+        : parseVMInventoryExportDefinition(candidate.vmInventoryExport),
   };
 }

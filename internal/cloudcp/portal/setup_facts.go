@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/crypto"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
@@ -21,6 +22,9 @@ type WorkspaceSetupFacts struct {
 	LastAgentSeenAt             *time.Time
 	AlertRouteCount             *int
 	DisabledAlertRouteCount     *int
+	ActiveCriticalAlertCount    *int
+	ActiveWarningAlertCount     *int
+	ActiveAlertsUpdatedAt       *time.Time
 	ReportScheduleCount         *int
 	DisabledReportScheduleCount *int
 }
@@ -62,6 +66,7 @@ func readWorkspaceSetupFacts(tenantID, tenantDataDir, orgDir string) WorkspaceSe
 
 	facts.AgentCount, facts.AgentTokenCount, facts.UnusedAgentTokenCount, facts.LastAgentSeenAt = readAgentSetupFacts(tenantID, tenantDataDir, orgDir)
 	facts.AlertRouteCount, facts.DisabledAlertRouteCount = readAlertRouteFacts(orgDir)
+	facts.ActiveCriticalAlertCount, facts.ActiveWarningAlertCount, facts.ActiveAlertsUpdatedAt = readActiveAlertFacts(tenantDataDir)
 	facts.ReportScheduleCount, facts.DisabledReportScheduleCount = readReportScheduleFacts(orgDir)
 	return facts
 }
@@ -212,6 +217,47 @@ func nonBlankCount(values []string) int {
 		}
 	}
 	return count
+}
+
+func readActiveAlertFacts(tenantDataDir string) (*int, *int, *time.Time) {
+	path, ok := safeConfigLeafPath(tenantDataDir, filepath.Join("alerts", "active-alerts.json"))
+	if !ok {
+		return nil, nil, nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			log.Warn().Err(err).Str("tenant_data_dir", tenantDataDir).Msg("cloudcp.portal.setup_facts: read active alerts")
+		}
+		return nil, nil, nil
+	}
+	if len(strings.TrimSpace(string(data))) == 0 {
+		return nil, nil, nil
+	}
+
+	var active []alerts.Alert
+	if err := json.Unmarshal(data, &active); err != nil {
+		log.Warn().Err(err).Str("tenant_data_dir", tenantDataDir).Msg("cloudcp.portal.setup_facts: parse active alerts")
+		return nil, nil, nil
+	}
+
+	criticalCount := 0
+	warningCount := 0
+	for _, alert := range active {
+		switch strings.ToLower(strings.TrimSpace(string(alert.Level))) {
+		case "critical":
+			criticalCount++
+		case "warning":
+			warningCount++
+		}
+	}
+
+	var updatedAt *time.Time
+	if info, err := os.Stat(path); err == nil {
+		ts := info.ModTime().UTC()
+		updatedAt = &ts
+	}
+	return intPtr(criticalCount), intPtr(warningCount), updatedAt
 }
 
 func readReportScheduleFacts(orgDir string) (*int, *int) {

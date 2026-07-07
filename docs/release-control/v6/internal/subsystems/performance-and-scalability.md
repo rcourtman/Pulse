@@ -218,6 +218,12 @@ regression protection.
    restore path must write the URL once with `replace` and must not force row
    filtering through a separate page-local state channel.
 4. Keep shared auth gating in `internal/api/router.go` cheap and local: pre-auth quick-setup and recovery routing may short-circuit on loopback/session/token checks, but they must not trigger chart, metrics, or broad persistence fan-out on the protected request hot path.
+   Scheduled-report background worker registration is allowed in router startup,
+   but it must stay outside protected request handling. Due-schedule scans may
+   enumerate tenant organization IDs and load each workspace schedule store, but
+   normal API route dispatch must not generate reports, render PDFs, scan
+   metrics history, or perform SMTP delivery as part of auth gating or router
+   registration.
    Reading mutable auth configuration for CSRF bootstrap and login checks must
    stay a short in-memory snapshot under `config.Mu.RLock()`: local
    username/password presence, API-token presence, and proxy-auth secret

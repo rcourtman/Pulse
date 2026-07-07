@@ -81,6 +81,9 @@ product API routes free of maintainer commercial analytics.
 44. `internal/api/ai_hosted_runtime.go`
 45. `internal/api/router_routes_licensing.go`
 46. `internal/api/reporting_inventory_handlers.go`
+    46a. `internal/api/report_schedules.go`
+    46b. `internal/config/report_schedules.go`
+    46c. `internal/notifications/email_enhanced.go`
 47. `internal/cloudcp/portal/bootstrap.go`
 48. `internal/cloudcp/portal/handlers.go`
 49. `internal/cloudcp/portal/page.go`
@@ -4608,6 +4611,16 @@ The catalog route itself is intentionally metadata-readable without the
 `advanced_reporting` feature gate so locked admin surfaces can present the same
 canonical reporting definition before upsell, while report generation and
 inventory export remain feature-gated execution routes.
+Scheduled report management is part of that same reporting contract, not a
+parallel scheduler-owned report API. `/api/admin/reports/schedules` CRUD and
+manual-run routes must reuse the canonical reporting catalog resource model,
+multi-report generation path, strict payload validation, and feature/RBAC gates.
+The persisted `report_schedules.json` store is tenant or org-local config that
+may be encrypted by `ConfigPersistence`; schedule cadence, tag/resource scope,
+retention, email attachments, fallback-to-disk delivery, and last-run status
+stay inside the tenant runtime. Pulse Account may read schedule setup facts,
+but generated PDFs/CSVs and recipient delivery decisions must not move into the
+provider control plane.
 That metadata route is still a version boundary as well. Current Pulse servers
 must expose `/api/admin/reports/catalog`, but frontend consumers may treat a
 `404` from that route as an old-backend compatibility signal and fall back to

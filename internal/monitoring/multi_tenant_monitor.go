@@ -104,6 +104,29 @@ func (mtm *MultiTenantMonitor) ForEachMonitor(fn func(*Monitor)) {
 	}
 }
 
+// ListOrganizationIDs returns the persisted organization IDs known to the
+// tenant monitor without requiring every monitor to be initialized first.
+func (mtm *MultiTenantMonitor) ListOrganizationIDs() ([]string, error) {
+	if mtm == nil || mtm.persistence == nil {
+		return []string{"default"}, nil
+	}
+	orgs, err := mtm.persistence.ListOrganizations()
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(orgs))
+	for _, org := range orgs {
+		if org == nil || strings.TrimSpace(org.ID) == "" {
+			continue
+		}
+		ids = append(ids, strings.TrimSpace(org.ID))
+	}
+	if len(ids) == 0 {
+		ids = append(ids, "default")
+	}
+	return ids, nil
+}
+
 // GetMonitor returns the monitor instance for a specific organization.
 // It lazily initializes the monitor if it doesn't exist.
 func (mtm *MultiTenantMonitor) GetMonitor(orgID string) (*Monitor, error) {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -32,6 +33,9 @@ type workspaceSummaryItem struct {
 	LastAgentSeenAt             *time.Time           `json:"last_agent_seen_at,omitempty"`
 	AlertRouteCount             *int                 `json:"alert_route_count,omitempty"`
 	DisabledAlertRouteCount     *int                 `json:"disabled_alert_route_count,omitempty"`
+	ActiveCriticalAlertCount    *int                 `json:"active_critical_alert_count,omitempty"`
+	ActiveWarningAlertCount     *int                 `json:"active_warning_alert_count,omitempty"`
+	ActiveAlertsUpdatedAt       *time.Time           `json:"active_alerts_updated_at,omitempty"`
 	ReportScheduleCount         *int                 `json:"report_schedule_count,omitempty"`
 	DisabledReportScheduleCount *int                 `json:"disabled_report_schedule_count,omitempty"`
 	LastHealthCheck             *time.Time           `json:"last_health_check"`
@@ -44,6 +48,7 @@ type dashboardSummary struct {
 	Healthy   int `json:"healthy"`
 	Unhealthy int `json:"unhealthy"`
 	Suspended int `json:"suspended"`
+	Critical  int `json:"critical"`
 }
 
 type dashboardResponse struct {
@@ -145,6 +150,9 @@ func HandlePortalDashboardWithSetupFacts(reg *registry.TenantRegistry, setupFact
 				LastAgentSeenAt:             facts.LastAgentSeenAt,
 				AlertRouteCount:             facts.AlertRouteCount,
 				DisabledAlertRouteCount:     facts.DisabledAlertRouteCount,
+				ActiveCriticalAlertCount:    facts.ActiveCriticalAlertCount,
+				ActiveWarningAlertCount:     facts.ActiveWarningAlertCount,
+				ActiveAlertsUpdatedAt:       facts.ActiveAlertsUpdatedAt,
 				ReportScheduleCount:         facts.ReportScheduleCount,
 				DisabledReportScheduleCount: facts.DisabledReportScheduleCount,
 				LastHealthCheck:             t.LastHealthCheck,
@@ -152,6 +160,9 @@ func HandlePortalDashboardWithSetupFacts(reg *registry.TenantRegistry, setupFact
 			})
 
 			resp.Summary.Total++
+			if factCountIsPositive(facts.ActiveCriticalAlertCount) {
+				resp.Summary.Critical++
+			}
 
 			switch t.State {
 			case registry.TenantStateActive:
@@ -165,6 +176,7 @@ func HandlePortalDashboardWithSetupFacts(reg *registry.TenantRegistry, setupFact
 				resp.Summary.Suspended++
 			}
 		}
+		sortWorkspaceSummaries(resp.Workspaces)
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -238,6 +250,32 @@ func isPortalVisibleTenant(t *registry.Tenant) bool {
 		return false
 	}
 	return t.State != registry.TenantStateDeleted && t.State != registry.TenantStateDeleting
+}
+
+func sortWorkspaceSummaries(workspaces []workspaceSummaryItem) {
+	sort.SliceStable(workspaces, func(i, j int) bool {
+		leftCritical := derefInt(workspaces[i].ActiveCriticalAlertCount)
+		rightCritical := derefInt(workspaces[j].ActiveCriticalAlertCount)
+		if leftCritical != rightCritical {
+			return leftCritical > rightCritical
+		}
+		leftWarning := derefInt(workspaces[i].ActiveWarningAlertCount)
+		rightWarning := derefInt(workspaces[j].ActiveWarningAlertCount)
+		if leftWarning != rightWarning {
+			return leftWarning > rightWarning
+		}
+		if workspaces[i].HealthCheckOK != workspaces[j].HealthCheckOK {
+			return !workspaces[i].HealthCheckOK
+		}
+		return strings.ToLower(workspaces[i].DisplayName) < strings.ToLower(workspaces[j].DisplayName)
+	})
+}
+
+func derefInt(value *int) int {
+	if value == nil {
+		return -1
+	}
+	return *value
 }
 
 // HandlePortalBootstrap returns the renderer-owned Pulse Account bootstrap payload.
