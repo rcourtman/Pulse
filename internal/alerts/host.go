@@ -69,31 +69,42 @@ func hostInstanceName(host models.Host) string {
 func (m *Manager) resolveHostThresholdsNoLock(hostID, linkedNodeID, linkedVMID, linkedContainerID string) ThresholdConfig {
 	base := m.defaultThresholdsForResourceType("agent")
 
+	if override, exists := m.hostThresholdOverrideNoLock(hostID, linkedNodeID, linkedVMID, linkedContainerID); exists {
+		return m.applyThresholdOverride(base, override)
+	}
+
+	return base
+}
+
+// hostThresholdOverrideNoLock returns the first override in the host-agent
+// resolution chain (host, linked node, linked guest), mirroring
+// resolveHostThresholdsNoLock's precedence. Callers must hold m.mu.
+func (m *Manager) hostThresholdOverrideNoLock(hostID, linkedNodeID, linkedVMID, linkedContainerID string) (ThresholdConfig, bool) {
 	if hostID = strings.TrimSpace(hostID); hostID != "" {
 		if override, exists := m.config.Overrides[hostID]; exists {
-			return m.applyThresholdOverride(base, override)
+			return override, true
 		}
 	}
 
 	if linkedNodeID = strings.TrimSpace(linkedNodeID); linkedNodeID != "" {
 		if override, exists := m.config.Overrides[linkedNodeID]; exists {
-			return m.applyThresholdOverride(base, override)
+			return override, true
 		}
 	}
 
 	if linkedVMID = strings.TrimSpace(linkedVMID); linkedVMID != "" {
 		if override, exists := lookupGuestOverride(m.config.Overrides, nil, linkedVMID); exists {
-			return m.applyThresholdOverride(base, override)
+			return override, true
 		}
 	}
 
 	if linkedContainerID = strings.TrimSpace(linkedContainerID); linkedContainerID != "" {
 		if override, exists := lookupGuestOverride(m.config.Overrides, nil, linkedContainerID); exists {
-			return m.applyThresholdOverride(base, override)
+			return override, true
 		}
 	}
 
-	return base
+	return ThresholdConfig{}, false
 }
 
 // resolveHostAlertThresholdsNoLock resolves thresholds for persisted host-agent alerts.
@@ -217,6 +228,12 @@ func (m *Manager) CheckHost(host models.Host) {
 	alertsEnabled := m.config.Enabled
 	disableAllAgents := m.config.DisableAllAgents
 	thresholds := m.resolveHostThresholdsNoLock(host.ID, host.LinkedNodeID, host.LinkedVMID, host.LinkedContainerID)
+	// An explicit disk temperature override (host or inherited linked-resource)
+	// beats the per-type defaults in DiskTempByType.
+	diskTempOverridden := false
+	if override, exists := m.hostThresholdOverrideNoLock(host.ID, host.LinkedNodeID, host.LinkedVMID, host.LinkedContainerID); exists && override.DiskTemperature != nil {
+		diskTempOverridden = true
+	}
 	m.mu.RUnlock()
 
 	if !alertsEnabled {
@@ -318,7 +335,7 @@ func (m *Manager) CheckHost(host models.Host) {
 			for _, disk := range host.Sensors.SMART {
 				if disk.Temperature > 0 && !disk.Standby {
 					effectiveTempThreshold := thresholds.DiskTemperature
-					if diskType := strings.ToLower(strings.TrimSpace(disk.Type)); diskType != "" {
+					if diskType := strings.ToLower(strings.TrimSpace(disk.Type)); diskType != "" && !diskTempOverridden {
 						m.mu.RLock()
 						if th, ok := m.config.DiskTempByType[diskType]; ok {
 							t := th

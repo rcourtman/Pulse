@@ -314,3 +314,47 @@ func TestHostDiskTempPerTypeThresholdDoesNotOverrideDisabledGlobalDefault(t *tes
 	}
 	m.mu.RUnlock()
 }
+
+func TestHostDiskTempExplicitOverrideBeatsPerTypeThreshold(t *testing.T) {
+	m := configureDiskTempTypeHostManager(t)
+
+	hostID := "host-temp-override-nvme"
+	m.mu.Lock()
+	m.config.Overrides[hostID] = ThresholdConfig{
+		DiskTemperature: &HysteresisThreshold{Trigger: 60, Clear: 55},
+	}
+	m.mu.Unlock()
+
+	// 62C is below the nvme per-type trigger (70) but above the explicit
+	// override (60): the override must win and fire the alert.
+	hostAbove := hostWithSMARTDiskTemp(hostID, "nvme", 62)
+	m.CheckHost(hostAbove)
+
+	trackingKey := hostDiskTempAlertID(hostAbove)
+	if _, exists := testLookupActiveAlert(t, m, trackingKey); !exists {
+		t.Fatalf("expected alert for nvme disk at 62C with explicit override trigger 60, active: %v", alertKeys(m))
+	}
+
+	m.ClearActiveAlerts()
+
+	m.mu.Lock()
+	m.config.Overrides[hostID] = ThresholdConfig{
+		DiskTemperature: &HysteresisThreshold{Trigger: 80, Clear: 75},
+	}
+	m.mu.Unlock()
+
+	// 75C is above the nvme per-type trigger (70) but below the explicit
+	// override (80): the override must win and stay quiet.
+	hostBelow := hostWithSMARTDiskTemp(hostID, "nvme", 75)
+	m.CheckHost(hostBelow)
+
+	if _, exists := testLookupActiveAlert(t, m, trackingKey); exists {
+		t.Fatalf("expected no alert for nvme disk at 75C with explicit override trigger 80, active: %v", alertKeys(m))
+	}
+	m.mu.RLock()
+	if _, pending := m.pendingAlerts[trackingKey]; pending {
+		m.mu.RUnlock()
+		t.Fatalf("expected no pending alert for nvme disk at 75C with explicit override trigger 80, but pendingAlerts has %q", trackingKey)
+	}
+	m.mu.RUnlock()
+}
