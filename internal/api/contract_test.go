@@ -798,6 +798,34 @@ fi`
 	}
 }
 
+func TestContract_NodeConfigUpdateTracksOptionalConnectionFieldsAndRedactedSecrets(t *testing.T) {
+	var preserveReq NodeConfigRequest
+	if err := json.Unmarshal([]byte(`{"name":"cluster","tokenName":"pulse-monitor@pve!pulse-pve","tokenValue":"********"}`), &preserveReq); err != nil {
+		t.Fatalf("decode preserve request: %v", err)
+	}
+	preserveReq.normalizeTokenAliases()
+	if preserveReq.hasGuestURLField() {
+		t.Fatal("omitted guestURL must preserve the stored connection URL")
+	}
+	if preserveReq.hasFingerprintField() {
+		t.Fatal("omitted fingerprint must preserve the stored TLS fingerprint")
+	}
+	if preserveReq.TokenValue != "" {
+		t.Fatalf("redacted token placeholder must not become a stored token secret, got %q", preserveReq.TokenValue)
+	}
+
+	var clearReq NodeConfigRequest
+	if err := json.Unmarshal([]byte(`{"guestURL":"","fingerprint":""}`), &clearReq); err != nil {
+		t.Fatalf("decode clear request: %v", err)
+	}
+	if !clearReq.hasGuestURLField() {
+		t.Fatal("explicit empty guestURL must remain observable so clients can clear it intentionally")
+	}
+	if !clearReq.hasFingerprintField() {
+		t.Fatal("explicit empty fingerprint must remain observable so clients can clear it intentionally")
+	}
+}
+
 func TestContract_HostedMagicLinkStablePrincipalProof(t *testing.T) {
 	source, err := os.ReadFile(filepath.Clean("magic_link_handlers.go"))
 	if err != nil {

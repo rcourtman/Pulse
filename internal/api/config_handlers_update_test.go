@@ -243,3 +243,164 @@ func TestHandleUpdateNode_AllowsProjectedNetNewSystemWithoutPaidLimit(t *testing
 		t.Fatalf("expected update to apply new host without paid limit enforcement, got %q", got)
 	}
 }
+
+func TestHandleUpdateNode_PreservesPVESecretsAndConnectionFieldsWhenOmitted(t *testing.T) {
+	cfg := &config.Config{
+		DataPath: t.TempDir(),
+		PVEInstances: []config.PVEInstance{{
+			Name:        "cluster",
+			Host:        "https://pve.local:8006",
+			GuestURL:    "https://guest.pve.local",
+			Fingerprint: "AA:BB:CC",
+			TokenName:   "pulse-monitor@pve!pulse-pve-local",
+			TokenValue:  "saved-secret",
+			VerifySSL:   true,
+		}},
+	}
+	handler := newTestConfigHandlers(t, cfg)
+
+	body, _ := json.Marshal(map[string]any{
+		"name":       "cluster-renamed",
+		"tokenName":  "pulse-monitor@pve!pulse-pve-local",
+		"tokenValue": "********",
+	})
+	req := httptest.NewRequest(http.MethodPut, "/api/config/nodes/pve-0", bytes.NewBuffer(body))
+	rec := httptest.NewRecorder()
+
+	handler.HandleUpdateNode(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected update to succeed, got %d: %s", rec.Code, rec.Body.String())
+	}
+	node := cfg.PVEInstances[0]
+	if node.TokenValue != "saved-secret" {
+		t.Fatalf("token value = %q, want preserved saved secret", node.TokenValue)
+	}
+	if node.GuestURL != "https://guest.pve.local" {
+		t.Fatalf("guestURL = %q, want preserved guest URL", node.GuestURL)
+	}
+	if node.Fingerprint != "AA:BB:CC" {
+		t.Fatalf("fingerprint = %q, want preserved fingerprint", node.Fingerprint)
+	}
+}
+
+func TestHandleUpdateNode_RejectsTokenNameChangeWithoutNewSecret(t *testing.T) {
+	cfg := &config.Config{
+		DataPath: t.TempDir(),
+		PVEInstances: []config.PVEInstance{{
+			Name:       "cluster",
+			Host:       "https://pve.local:8006",
+			TokenName:  "pulse-monitor@pve!old",
+			TokenValue: "saved-secret",
+		}},
+	}
+	handler := newTestConfigHandlers(t, cfg)
+
+	body, _ := json.Marshal(map[string]any{
+		"tokenName": "pulse-monitor@pve!new",
+	})
+	req := httptest.NewRequest(http.MethodPut, "/api/config/nodes/pve-0", bytes.NewBuffer(body))
+	rec := httptest.NewRecorder()
+
+	handler.HandleUpdateNode(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected token-name-only change to fail, got %d: %s", rec.Code, rec.Body.String())
+	}
+	node := cfg.PVEInstances[0]
+	if node.TokenName != "pulse-monitor@pve!old" || node.TokenValue != "saved-secret" {
+		t.Fatalf("token auth changed after rejected update: %+v", node)
+	}
+}
+
+func TestHandleUpdateNode_RejectsTokenNameWithoutPreservedSecret(t *testing.T) {
+	cfg := &config.Config{
+		DataPath: t.TempDir(),
+		PVEInstances: []config.PVEInstance{{
+			Name:     "cluster",
+			Host:     "https://pve.local:8006",
+			User:     "root@pam",
+			Password: "saved-password",
+		}},
+	}
+	handler := newTestConfigHandlers(t, cfg)
+
+	body, _ := json.Marshal(map[string]any{
+		"tokenName": "pulse-monitor@pve!new",
+	})
+	req := httptest.NewRequest(http.MethodPut, "/api/config/nodes/pve-0", bytes.NewBuffer(body))
+	rec := httptest.NewRecorder()
+
+	handler.HandleUpdateNode(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected token auth without a secret to fail, got %d: %s", rec.Code, rec.Body.String())
+	}
+	node := cfg.PVEInstances[0]
+	if node.Password != "saved-password" || node.TokenName != "" || node.TokenValue != "" {
+		t.Fatalf("password auth changed after rejected update: %+v", node)
+	}
+}
+
+func TestHandleUpdateNode_UserOnlyEditDoesNotClearProxmoxTokenAuth(t *testing.T) {
+	cfg := &config.Config{
+		DataPath: t.TempDir(),
+		PBSInstances: []config.PBSInstance{{
+			Name:           "backup",
+			Host:           "https://pbs.local:8007",
+			User:           "",
+			Password:       "",
+			TokenName:      "pulse-monitor@pbs!pulse-pbs-local",
+			TokenValue:     "pbs-secret",
+			MonitorBackups: false,
+		}},
+		PMGInstances: []config.PMGInstance{{
+			Name:             "mail",
+			Host:             "https://pmg.local:8006",
+			User:             "",
+			Password:         "",
+			TokenName:        "pulse-monitor@pmg!pulse-pmg-local",
+			TokenValue:       "pmg-secret",
+			MonitorMailStats: false,
+		}},
+	}
+	handler := newTestConfigHandlers(t, cfg)
+
+	for _, tc := range []struct {
+		name   string
+		nodeID string
+	}{
+		{name: "pbs", nodeID: "pbs-0"},
+		{name: "pmg", nodeID: "pmg-0"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body, _ := json.Marshal(map[string]any{
+				"user": "someone",
+			})
+			req := httptest.NewRequest(http.MethodPut, "/api/config/nodes/"+tc.nodeID, bytes.NewBuffer(body))
+			rec := httptest.NewRecorder()
+
+			handler.HandleUpdateNode(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("expected update to succeed, got %d: %s", rec.Code, rec.Body.String())
+			}
+		})
+	}
+
+	pbs := cfg.PBSInstances[0]
+	if pbs.TokenName != "pulse-monitor@pbs!pulse-pbs-local" || pbs.TokenValue != "pbs-secret" || pbs.User != "" || pbs.Password != "" {
+		t.Fatalf("PBS token auth changed after user-only edit: %+v", pbs)
+	}
+	if pbs.MonitorBackups {
+		t.Fatalf("PBS monitor backups should preserve false when omitted")
+	}
+
+	pmg := cfg.PMGInstances[0]
+	if pmg.TokenName != "pulse-monitor@pmg!pulse-pmg-local" || pmg.TokenValue != "pmg-secret" || pmg.User != "" || pmg.Password != "" {
+		t.Fatalf("PMG token auth changed after user-only edit: %+v", pmg)
+	}
+	if pmg.MonitorMailStats {
+		t.Fatalf("PMG monitor mail stats should preserve false when omitted")
+	}
+}

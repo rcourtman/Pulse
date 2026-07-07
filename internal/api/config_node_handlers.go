@@ -1054,8 +1054,160 @@ func (h *ConfigHandlers) handleTestConnection(w http.ResponseWriter, r *http.Req
 	}
 }
 
-// HandleUpdateNode updates an existing node
+func applyPVEAuthUpdate(updated *config.PVEInstance, req NodeConfigRequest) error {
+	tokenNameProvided := req.TokenName != ""
+	tokenValueProvided := req.TokenValue != ""
 
+	switch {
+	case tokenNameProvided && tokenValueProvided:
+		updated.TokenName = req.TokenName
+		updated.TokenValue = req.TokenValue
+		updated.Password = ""
+		if req.User != "" {
+			updated.User = req.User
+		}
+	case tokenValueProvided:
+		if strings.TrimSpace(updated.TokenName) == "" {
+			return fmt.Errorf("token value requires an existing token ID or tokenName")
+		}
+		updated.TokenValue = req.TokenValue
+		updated.Password = ""
+		if req.User != "" {
+			updated.User = req.User
+		}
+	case tokenNameProvided:
+		if strings.TrimSpace(updated.TokenValue) == "" {
+			return fmt.Errorf("tokenName without tokenValue cannot enable token authentication")
+		}
+		if updated.TokenName != "" && req.TokenName != updated.TokenName {
+			return fmt.Errorf("tokenName changes require a new tokenValue")
+		}
+		updated.TokenName = req.TokenName
+		updated.Password = ""
+		if req.User != "" {
+			updated.User = req.User
+		}
+	case req.Password != "":
+		if req.User != "" {
+			updated.User = normalizePVEUser(req.User)
+		} else if updated.User != "" {
+			updated.User = normalizePVEUser(updated.User)
+		}
+		updated.Password = req.Password
+		updated.TokenName = ""
+		updated.TokenValue = ""
+	default:
+		if req.User != "" && updated.Password != "" && updated.TokenName == "" && updated.TokenValue == "" {
+			updated.User = normalizePVEUser(req.User)
+		} else if updated.User != "" {
+			updated.User = normalizePVEUser(updated.User)
+		}
+	}
+
+	return nil
+}
+
+func applyPBSAuthUpdate(updated *config.PBSInstance, req NodeConfigRequest) error {
+	tokenNameProvided := req.TokenName != ""
+	tokenValueProvided := req.TokenValue != ""
+
+	switch {
+	case tokenNameProvided && tokenValueProvided:
+		updated.TokenName = req.TokenName
+		updated.TokenValue = req.TokenValue
+		updated.User = ""
+		updated.Password = ""
+	case tokenValueProvided:
+		if strings.TrimSpace(updated.TokenName) == "" {
+			return fmt.Errorf("token value requires an existing token ID or tokenName")
+		}
+		updated.TokenValue = req.TokenValue
+		updated.User = ""
+		updated.Password = ""
+	case tokenNameProvided:
+		if strings.TrimSpace(updated.TokenValue) == "" {
+			return fmt.Errorf("tokenName without tokenValue cannot enable token authentication")
+		}
+		if updated.TokenName != "" && req.TokenName != updated.TokenName {
+			return fmt.Errorf("tokenName changes require a new tokenValue")
+		}
+		updated.TokenName = req.TokenName
+		updated.User = ""
+		updated.Password = ""
+	case req.Password != "":
+		updated.Password = req.Password
+		updated.User = normalizePBSUser(req.User)
+		updated.TokenName = ""
+		updated.TokenValue = ""
+	default:
+		if req.User != "" && updated.Password != "" && updated.TokenName == "" && updated.TokenValue == "" {
+			updated.User = normalizePBSUser(req.User)
+		}
+	}
+
+	return nil
+}
+
+func applyPMGAuthUpdate(updated *config.PMGInstance, req NodeConfigRequest) error {
+	tokenNameProvided := req.TokenName != ""
+	tokenValueProvided := req.TokenValue != ""
+
+	switch {
+	case tokenNameProvided && tokenValueProvided:
+		updated.TokenName = req.TokenName
+		updated.TokenValue = req.TokenValue
+		updated.User = ""
+		updated.Password = ""
+	case tokenValueProvided:
+		if strings.TrimSpace(updated.TokenName) == "" {
+			return fmt.Errorf("token value requires an existing token ID or tokenName")
+		}
+		updated.TokenValue = req.TokenValue
+		updated.User = ""
+		updated.Password = ""
+	case tokenNameProvided:
+		if strings.TrimSpace(updated.TokenValue) == "" {
+			return fmt.Errorf("tokenName without tokenValue cannot enable token authentication")
+		}
+		if updated.TokenName != "" && req.TokenName != updated.TokenName {
+			return fmt.Errorf("tokenName changes require a new tokenValue")
+		}
+		updated.TokenName = req.TokenName
+		updated.User = ""
+		updated.Password = ""
+	case req.Password != "":
+		if req.User != "" {
+			updated.User = normalizePMGUser(req.User)
+		}
+		updated.Password = req.Password
+		updated.TokenName = ""
+		updated.TokenValue = ""
+	default:
+		if req.User != "" && updated.Password != "" && updated.TokenName == "" && updated.TokenValue == "" {
+			updated.User = normalizePMGUser(req.User)
+		}
+	}
+
+	return nil
+}
+
+func normalizePBSUser(user string) string {
+	user = strings.TrimSpace(user)
+	if user == "" || strings.Contains(user, "@") {
+		return user
+	}
+	return user + "@pbs"
+}
+
+func normalizePMGUser(user string) string {
+	user = strings.TrimSpace(user)
+	if user == "" || strings.Contains(user, "@") {
+		return user
+	}
+	return user + "@pmg"
+}
+
+// HandleUpdateNode updates an existing node
 func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request) {
 	// Prevent node modifications in mock mode
 	if mock.IsMockEnabled() {
@@ -1115,43 +1267,18 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 			updated.Host = host
 		}
 
-		// Update GuestURL if provided
-		updated.GuestURL = req.GuestURL
-
-		// Handle authentication updates - only switch auth method if explicitly provided
-		if req.TokenName != "" || req.TokenValue != "" {
-			// Switching to or updating token authentication
-			if req.TokenName != "" {
-				updated.TokenName = req.TokenName
-			}
-			if req.TokenValue != "" {
-				updated.TokenValue = req.TokenValue
-			}
-			// Clear password to avoid conflicts
-			updated.Password = ""
-			if req.User != "" {
-				updated.User = req.User
-			}
-		} else if req.Password != "" {
-			// Explicitly switching to password authentication
-			if req.User != "" {
-				updated.User = normalizePVEUser(req.User)
-			} else if updated.User != "" {
-				updated.User = normalizePVEUser(updated.User)
-			}
-			updated.Password = req.Password
-			// Clear token fields when switching to password auth
-			updated.TokenName = ""
-			updated.TokenValue = ""
-		} else {
-			// No authentication changes - preserve existing auth fields
-			// Only normalize user if it exists
-			if updated.User != "" {
-				updated.User = normalizePVEUser(updated.User)
-			}
+		if req.hasGuestURLField() {
+			updated.GuestURL = req.GuestURL
 		}
 
-		updated.Fingerprint = req.Fingerprint
+		if err := applyPVEAuthUpdate(&updated, req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		if req.hasFingerprintField() {
+			updated.Fingerprint = req.Fingerprint
+		}
 		if req.VerifySSL != nil {
 			updated.VerifySSL = *req.VerifySSL
 		}
@@ -1200,57 +1327,23 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 			updated.Host = host
 		}
 
-		// Update GuestURL if provided
-		updated.GuestURL = req.GuestURL
-
-		// Handle authentication updates - only switch auth method if explicitly provided
-		if req.TokenName != "" && req.TokenValue != "" {
-			// Switching to token authentication
-			updated.TokenName = req.TokenName
-			updated.TokenValue = req.TokenValue
-			// Clear user/password when switching to token auth
-			updated.User = ""
-			updated.Password = ""
-		} else if req.TokenName != "" {
-			// Token name provided without new value - keep existing token value
-			updated.TokenName = req.TokenName
-			// Clear user/password when using token auth
-			updated.User = ""
-			updated.Password = ""
-		} else if req.Password != "" {
-			// Switching to password authentication
-			updated.Password = req.Password
-			// Ensure user has realm for PBS
-			pbsUser := req.User
-			if req.User != "" && !strings.Contains(req.User, "@") {
-				pbsUser = req.User + "@pbs" // Default to @pbs realm if not specified
-			}
-			updated.User = pbsUser
-			// Clear token fields when switching to password auth
-			updated.TokenName = ""
-			updated.TokenValue = ""
-		} else if req.User != "" {
-			// User provided - assume password auth but keep existing password
-			// Ensure user has realm for PBS
-			pbsUser := req.User
-			if !strings.Contains(req.User, "@") {
-				pbsUser = req.User + "@pbs" // Default to @pbs realm if not specified
-			}
-			updated.User = pbsUser
-			// Clear token fields when using password auth
-			updated.TokenName = ""
-			updated.TokenValue = ""
+		if req.hasGuestURLField() {
+			updated.GuestURL = req.GuestURL
 		}
-		// else: No authentication changes - preserve existing auth fields
 
-		updated.Fingerprint = req.Fingerprint
+		if err := applyPBSAuthUpdate(&updated, req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		if req.hasFingerprintField() {
+			updated.Fingerprint = req.Fingerprint
+		}
 		if req.VerifySSL != nil {
 			updated.VerifySSL = *req.VerifySSL
 		}
 		if req.MonitorBackups != nil {
 			updated.MonitorBackups = *req.MonitorBackups
-		} else {
-			updated.MonitorBackups = true // Enable by default for PBS
 		}
 		if req.MonitorDatastores != nil {
 			updated.MonitorDatastores = *req.MonitorDatastores
@@ -1283,7 +1376,9 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 		pmgInst := &h.getConfig(r.Context()).PMGInstances[index]
 		current := *pmgInst
 		updated := current
-		updated.Name = req.Name
+		if req.Name != "" {
+			updated.Name = req.Name
+		}
 
 		if req.Host != "" {
 			host, err := normalizeNodeHost(req.Host, nodeType)
@@ -1294,55 +1389,23 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 			updated.Host = host
 		}
 
-		// Update GuestURL if provided
-		updated.GuestURL = req.GuestURL
-
-		// Handle authentication updates - only switch auth method if explicitly provided
-		if req.TokenName != "" && req.TokenValue != "" {
-			// Switching to token authentication
-			updated.TokenName = req.TokenName
-			updated.TokenValue = req.TokenValue
-			// Clear user/password when switching to token auth
-			updated.User = ""
-			updated.Password = ""
-		} else if req.Password != "" {
-			// Switching to password authentication
-			if req.User != "" {
-				user := req.User
-				if !strings.Contains(user, "@") {
-					user = user + "@pmg"
-				}
-				updated.User = user
-			}
-			updated.Password = req.Password
-			// Clear token fields when switching to password auth
-			updated.TokenName = ""
-			updated.TokenValue = ""
-		} else if req.User != "" {
-			// User provided - assume password auth but keep existing password
-			user := req.User
-			if !strings.Contains(user, "@") {
-				user = user + "@pmg"
-			}
-			updated.User = user
-			// Clear token fields when using password auth
-			updated.TokenName = ""
-			updated.TokenValue = ""
+		if req.hasGuestURLField() {
+			updated.GuestURL = req.GuestURL
 		}
-		// else: No authentication changes - preserve existing auth fields
 
-		updated.Fingerprint = req.Fingerprint
+		if err := applyPMGAuthUpdate(&updated, req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		if req.hasFingerprintField() {
+			updated.Fingerprint = req.Fingerprint
+		}
 		if req.VerifySSL != nil {
 			updated.VerifySSL = *req.VerifySSL
 		}
-		// Special logic for MonitorMailStats: default to true if all monitor flags are false/unset
 		if req.MonitorMailStats != nil {
 			updated.MonitorMailStats = *req.MonitorMailStats
-		} else if (req.MonitorMailStats == nil || !*req.MonitorMailStats) &&
-			(req.MonitorQueues == nil || !*req.MonitorQueues) &&
-			(req.MonitorQuarantine == nil || !*req.MonitorQuarantine) &&
-			(req.MonitorDomainStats == nil || !*req.MonitorDomainStats) {
-			updated.MonitorMailStats = true
 		}
 		if req.MonitorQueues != nil {
 			updated.MonitorQueues = *req.MonitorQueues

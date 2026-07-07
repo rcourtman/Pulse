@@ -2109,6 +2109,35 @@ extract_pve_token_value() {
     '
 }
 
+pve_token_already_exists_error() {
+    local token_output="$1"
+    printf '%s\n' "$token_output" | grep -Eqi 'already exists|already defined|duplicate|exists already'
+}
+
+create_pve_auto_register_token() {
+    local token_name="$1"
+    local token_output_var="$2"
+    local token_status_var="$3"
+    local token_output=""
+    local token_status=0
+
+    set +e
+    token_output=$(pveum user token add pulse-monitor@pve "$token_name" --privsep 1 --output-format json 2>&1)
+    token_status=$?
+    set -e
+
+    # Older pveum builds reject --output-format; fall back to the legacy table form.
+    if [[ $token_status -ne 0 ]] && printf '%s\n' "$token_output" | grep -Eqi 'unknown option|unknown command|no such option|unable to parse option|output-format'; then
+        set +e
+        token_output=$(pveum user token add pulse-monitor@pve "$token_name" --privsep 1 2>&1)
+        token_status=$?
+        set -e
+    fi
+
+    printf -v "$token_output_var" '%s' "$token_output"
+    printf -v "$token_status_var" '%s' "$token_status"
+}
+
 auto_register_pve_node() {
     local ctid="$1"
     local pulse_ip="$2"
@@ -2419,16 +2448,16 @@ PY
 )
 
     local token_output=""
-    set +e
-    token_output=$(pveum user token add pulse-monitor@pve "$token_name" --privsep 1 --output-format json 2>&1)
-    local token_status=$?
-    set -e
-    # Older pveum builds reject --output-format; fall back to the legacy table form.
-    if [[ $token_status -ne 0 ]] && printf '%s\n' "$token_output" | grep -Eqi 'unknown option|unknown command|no such option|unable to parse option|output-format'; then
-        set +e
-        token_output=$(pveum user token add pulse-monitor@pve "$token_name" --privsep 1 2>&1)
-        token_status=$?
-        set -e
+    local token_status=0
+    create_pve_auto_register_token "$token_name" token_output token_status
+    if [[ $token_status -ne 0 ]] && pve_token_already_exists_error "$token_output"; then
+        print_info "Existing Proxmox monitoring token '${token_name}' found; rotating it so Pulse receives a fresh secret"
+        if ! pveum user token remove pulse-monitor@pve "$token_name" >/dev/null 2>&1; then
+            AUTO_NODE_REGISTER_ERROR="failed to rotate existing token"
+            print_warn "Unable to remove existing monitoring API token; skipping automatic node registration"
+            return
+        fi
+        create_pve_auto_register_token "$token_name" token_output token_status
     fi
     if [[ $token_status -ne 0 ]]; then
         AUTO_NODE_REGISTER_ERROR="failed to create token"

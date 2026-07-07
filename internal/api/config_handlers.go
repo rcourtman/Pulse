@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -691,6 +692,26 @@ type NodeConfigRequest struct {
 	MonitorQuarantine            *bool    `json:"monitorQuarantine,omitempty"`            // PMG only
 	MonitorDomainStats           *bool    `json:"monitorDomainStats,omitempty"`           // PMG only
 	Enabled                      *bool    `json:"enabled,omitempty"`                      // Lifecycle toggle; nil on update preserves current
+	guestURLSet                  bool     `json:"-"`
+	fingerprintSet               bool     `json:"-"`
+}
+
+func (r *NodeConfigRequest) UnmarshalJSON(data []byte) error {
+	type nodeConfigRequestJSON NodeConfigRequest
+
+	var decoded nodeConfigRequestJSON
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	*r = NodeConfigRequest(decoded)
+	_, r.guestURLSet = raw["guestURL"]
+	_, r.fingerprintSet = raw["fingerprint"]
+	return nil
 }
 
 func (r *NodeConfigRequest) normalizeTokenAliases() {
@@ -703,6 +724,40 @@ func (r *NodeConfigRequest) normalizeTokenAliases() {
 	if r.TokenValue == "" {
 		r.TokenValue = strings.TrimSpace(r.TokenSecret)
 	}
+	if isRedactedCredentialPlaceholder(r.TokenValue) {
+		r.TokenValue = ""
+	}
+	if isRedactedCredentialPlaceholder(r.Password) {
+		r.Password = ""
+	}
+}
+
+func (r NodeConfigRequest) hasGuestURLField() bool {
+	return r.guestURLSet
+}
+
+func (r NodeConfigRequest) hasFingerprintField() bool {
+	return r.fingerprintSet
+}
+
+func isRedactedCredentialPlaceholder(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	switch strings.ToLower(trimmed) {
+	case "[redacted]", "redacted", "********":
+		return true
+	}
+	if len([]rune(trimmed)) < 6 {
+		return false
+	}
+	for _, r := range trimmed {
+		switch r {
+		case '*', '•', '●':
+			continue
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // NodeResponse represents a node in API responses
