@@ -15,11 +15,19 @@ permissions:
 jobs:
   governance:
     runs-on: ubuntu-24.04
+    # The release-control audits resolve the workspace layout from the
+    # local checkout: the repo directory must be named exactly "pulse"
+    # (the canonical repo id) and the evidence repos must be checked out
+    # as siblings, mirroring <workspace>/repos/<repo-id> on dev machines.
+    defaults:
+      run:
+        working-directory: repos/pulse
     steps:
       - name: Checkout repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
+          path: repos/pulse
 
       - name: Checkout pulse-pro evidence repo
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -28,7 +36,7 @@ jobs:
           token: ${{ secrets.WORKFLOW_PAT }}
           persist-credentials: false
           fetch-depth: 1
-          path: .governance/repos/pulse-pro
+          path: repos/pulse-pro
 
       - name: Checkout pulse-enterprise evidence repo
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -37,7 +45,7 @@ jobs:
           token: ${{ secrets.WORKFLOW_PAT }}
           persist-credentials: false
           fetch-depth: 1
-          path: .governance/repos/pulse-enterprise
+          path: repos/pulse-enterprise
 
       - name: Checkout pulse-mobile evidence repo
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -46,13 +54,14 @@ jobs:
           token: ${{ secrets.WORKFLOW_PAT }}
           persist-credentials: false
           fetch-depth: 1
-          path: .governance/repos/pulse-mobile
+          path: repos/pulse-mobile
 
       - name: Set up Go
         uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
-          go-version-file: go.mod
+          go-version-file: repos/pulse/go.mod
           cache: true
+          cache-dependency-path: repos/pulse/go.sum
 
       - name: Determine governance diff range
         id: diff
@@ -83,18 +92,18 @@ jobs:
 
       - name: Run status audit
         env:
-          PULSE_REPO_ROOT_PULSE: ${{ github.workspace }}
-          PULSE_REPO_ROOT_PULSE_PRO: ${{ github.workspace }}/.governance/repos/pulse-pro
-          PULSE_REPO_ROOT_PULSE_ENTERPRISE: ${{ github.workspace }}/.governance/repos/pulse-enterprise
-          PULSE_REPO_ROOT_PULSE_MOBILE: ${{ github.workspace }}/.governance/repos/pulse-mobile
+          PULSE_REPO_ROOT_PULSE: ${{ github.workspace }}/repos/pulse
+          PULSE_REPO_ROOT_PULSE_PRO: ${{ github.workspace }}/repos/pulse-pro
+          PULSE_REPO_ROOT_PULSE_ENTERPRISE: ${{ github.workspace }}/repos/pulse-enterprise
+          PULSE_REPO_ROOT_PULSE_MOBILE: ${{ github.workspace }}/repos/pulse-mobile
         run: python3 scripts/release_control/status_audit.py --check
 
       - name: Run control plane audit
         env:
-          PULSE_REPO_ROOT_PULSE: ${{ github.workspace }}
-          PULSE_REPO_ROOT_PULSE_PRO: ${{ github.workspace }}/.governance/repos/pulse-pro
-          PULSE_REPO_ROOT_PULSE_ENTERPRISE: ${{ github.workspace }}/.governance/repos/pulse-enterprise
-          PULSE_REPO_ROOT_PULSE_MOBILE: ${{ github.workspace }}/.governance/repos/pulse-mobile
+          PULSE_REPO_ROOT_PULSE: ${{ github.workspace }}/repos/pulse
+          PULSE_REPO_ROOT_PULSE_PRO: ${{ github.workspace }}/repos/pulse-pro
+          PULSE_REPO_ROOT_PULSE_ENTERPRISE: ${{ github.workspace }}/repos/pulse-enterprise
+          PULSE_REPO_ROOT_PULSE_MOBILE: ${{ github.workspace }}/repos/pulse-mobile
         run: python3 scripts/release_control/control_plane_audit.py --check
 
       - name: Run registry audit
@@ -138,10 +147,10 @@ jobs:
 
       - name: Run repo governance guardrail tests
         env:
-          PULSE_REPO_ROOT_PULSE: ${{ github.workspace }}
-          PULSE_REPO_ROOT_PULSE_PRO: ${{ github.workspace }}/.governance/repos/pulse-pro
-          PULSE_REPO_ROOT_PULSE_ENTERPRISE: ${{ github.workspace }}/.governance/repos/pulse-enterprise
-          PULSE_REPO_ROOT_PULSE_MOBILE: ${{ github.workspace }}/.governance/repos/pulse-mobile
+          PULSE_REPO_ROOT_PULSE: ${{ github.workspace }}/repos/pulse
+          PULSE_REPO_ROOT_PULSE_PRO: ${{ github.workspace }}/repos/pulse-pro
+          PULSE_REPO_ROOT_PULSE_ENTERPRISE: ${{ github.workspace }}/repos/pulse-enterprise
+          PULSE_REPO_ROOT_PULSE_MOBILE: ${{ github.workspace }}/repos/pulse-mobile
         run: go test ./internal/repoctl -count=1
 
       - name: Run active-target automated readiness assertion proofs
