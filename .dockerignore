@@ -29,6 +29,7 @@ scripts/macos/dist/
 
 # Dependencies
 node_modules/
+**/node_modules/
 vendor/
 
 # Logs
