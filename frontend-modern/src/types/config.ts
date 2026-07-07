@@ -142,6 +142,7 @@ export interface SecurityStatus {
   authLastModified?: string;
   message?: string;
   ssoSessionUsername?: string;
+  ssoSessionDisplayName?: string;
   ssoLogoutURL?: string;
   hideLocalLogin?: boolean; // Hide local login form
   agentUrl?: string; // URL for agent install commands (from PULSE_PUBLIC_URL or auto-detected)

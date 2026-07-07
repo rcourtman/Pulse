@@ -616,7 +616,7 @@ func (r *Router) handleSSOOIDCCallback(w http.ResponseWriter, req *http.Request)
 		}
 	}
 
-	if err := r.establishOIDCSession(w, req, principal, oidcTokens); err != nil {
+	if err := r.establishOIDCSession(w, req, principal, username, oidcTokens); err != nil {
 		log.Error().Err(err).Msg("Failed to establish session after SSO OIDC login")
 		r.redirectOIDCError(w, req, entry.ReturnTo, "session_failed")
 		return

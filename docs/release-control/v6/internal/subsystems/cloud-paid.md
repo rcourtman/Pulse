@@ -223,6 +223,13 @@ Stripe-free and avoids a cloud-control-plane report data path across clients.
    into a generic paid-state prompt or create browser-owned relay credentials.
 2. `frontend-modern/src/components/Settings/MonitoredSystemImpactPreview.tsx` shared with `agent-lifecycle`: the monitored-system impact preview is both a platform-connections lifecycle surface and a canonical cloud-paid monitored-system presentation boundary.
 3. `frontend-modern/src/useAppRuntimeState.ts` shared with `performance-and-scalability`: the authenticated app runtime bootstrap is both a hosted commercial org-context boundary and a protected app-shell performance boundary.
+   The app runtime may use `ssoSessionDisplayName` from security status for
+   visible signed-in chrome, but hosted/commercial organization context must
+   remain bound to the stable authenticated principal carried separately in
+   `ssoSessionUsername` and backend request context. Display labels, contact
+   emails, and SSO name claims must not become hosted owner/member identity,
+   billing authority, entitlement state, or organization bootstrap source of
+   truth.
 4. `internal/api/licensing_bridge.go` shared with `api-contracts`: commercial licensing bridge handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
 5. `internal/api/licensing_handlers.go` shared with `api-contracts`: commercial licensing handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
    That same shared licensing boundary also owns installation-version and
@@ -822,6 +829,10 @@ or other self-hosted uncapped continuity plans.
     invitation flow must therefore refresh org bootstrap through the shared
     `organizations_changed` app-shell path instead of forking a second hosted
     org bootstrap or pricing-aware shell reload.
+    SSO display labels consumed during that same security-status bootstrap must
+    reuse the existing `/api/security/status` response and must not add another
+    hosted organization or commercial posture probe before the protected state
+    bootstrap.
     App-shell navigation rendered by `frontend-modern/src/AppLayout.tsx` must
     also keep decorative icon titles out of tab accessible names, so hosted and
     self-hosted chrome announce the canonical tab label plus meaningful badge

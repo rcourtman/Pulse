@@ -1044,6 +1044,12 @@ func TestContract_SSOStablePrincipalProof(t *testing.T) {
 			}
 		}
 	}
+	if !strings.Contains(string(oidcSource), "establishOIDCSession(w, req, principal, username, oidcTokens)") {
+		t.Fatal("oidc_handlers.go must establish OIDC sessions with a stable principal and separate display username")
+	}
+	if !strings.Contains(string(samlSource), "establishSAMLSession(w, req, principal, result.Username, samlSession)") {
+		t.Fatal("saml_handlers.go must establish SAML sessions with a stable principal and separate display username")
+	}
 	for _, forbidden := range []string{
 		"establishOIDCSession(w, req, username, oidcTokens)",
 		"UpdateUserRoles(username, rolesToAssign)",

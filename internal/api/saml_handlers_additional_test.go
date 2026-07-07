@@ -99,7 +99,7 @@ func TestEstablishSAMLSession(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	samlInfo := &SAMLSessionInfo{ProviderID: "okta", NameID: "user", SessionIndex: "sess-1"}
-	if err := router.establishSAMLSession(rec, req, "admin", samlInfo); err != nil {
+	if err := router.establishSAMLSession(rec, req, "admin", "admin", samlInfo); err != nil {
 		t.Fatalf("establishSAMLSession error: %v", err)
 	}
 

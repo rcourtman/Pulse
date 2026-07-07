@@ -61,12 +61,12 @@ func TestContract_HostedIdentityUsesStablePrincipals(t *testing.T) {
 		"oidc_handlers.go": {
 			"stableSSOPrincipal(config.SSOProviderTypeOIDC, providerID, idToken.Subject)",
 			"applySSORoleAssignments(authManager, principal",
-			"establishOIDCSession(w, req, principal, oidcTokens)",
+			"establishOIDCSession(w, req, principal, username, oidcTokens)",
 		},
 		"saml_handlers.go": {
 			"stableSSOPrincipal(config.SSOProviderTypeSAML, providerID, result.NameID)",
 			"applySSORoleAssignments(authManager, principal",
-			"establishSAMLSession(w, req, principal, samlSession)",
+			"establishSAMLSession(w, req, principal, result.Username, samlSession)",
 		},
 		"auth_principal_identity.go": {
 			"stableSSOPrincipal",

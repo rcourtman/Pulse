@@ -236,6 +236,35 @@ func TestSessionStore_CreateOIDCSession_PersistsAccessTokenIssuedAt(t *testing.T
 	}
 }
 
+func TestSessionStore_CreateSAMLSession_PersistsDisplayUsernameSeparatelyFromPrincipal(t *testing.T) {
+	tmpDir := t.TempDir()
+	token := "saml-display-token"
+	principal := "sso:saml:test-saml:stable-principal"
+	displayUsername := "Alice Example"
+
+	store := NewSessionStore(tmpDir)
+	store.CreateSAMLSessionWithDisplayName(token, time.Hour, "TestAgent", "127.0.0.1", principal, displayUsername, &SAMLTokenInfo{
+		ProviderID:   "test-saml",
+		NameID:       "name-id-123",
+		SessionIndex: "session-index-123",
+	})
+	store.Shutdown()
+
+	reloaded := NewSessionStore(tmpDir)
+	defer reloaded.Shutdown()
+
+	session := reloaded.GetSession(token)
+	if session == nil {
+		t.Fatal("expected reloaded SAML session to exist")
+	}
+	if session.Username != principal {
+		t.Fatalf("session principal = %q, want %q", session.Username, principal)
+	}
+	if session.DisplayUsername != displayUsername {
+		t.Fatalf("session display username = %q, want %q", session.DisplayUsername, displayUsername)
+	}
+}
+
 func TestSessionStore_ValidateSession_NonExistent(t *testing.T) {
 	store := &SessionStore{
 		sessions: make(map[string]*SessionData),

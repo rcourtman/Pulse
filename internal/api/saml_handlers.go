@@ -304,7 +304,7 @@ func (r *Router) handleSAMLACS(w http.ResponseWriter, req *http.Request) {
 		SessionIndex: result.SessionIdx,
 	}
 
-	if err := r.establishSAMLSession(w, req, principal, samlSession); err != nil {
+	if err := r.establishSAMLSession(w, req, principal, result.Username, samlSession); err != nil {
 		log.Error().Err(err).Msg("Failed to establish session after SAML login")
 		LogAuditEventForTenant(GetOrgID(req.Context()), "saml_login", principal, GetClientIP(req), req.URL.Path, false, "Session creation failed")
 		r.redirectSAMLError(w, req, relayState, "session_failed")
@@ -501,8 +501,8 @@ type SAMLSessionInfo struct {
 	SessionIndex string `json:"sessionIndex"`
 }
 
-// establishSAMLSession creates a session for a SAML-authenticated user
-func (r *Router) establishSAMLSession(w http.ResponseWriter, req *http.Request, username string, samlInfo *SAMLSessionInfo) error {
+// establishSAMLSession creates a session for a SAML-authenticated user.
+func (r *Router) establishSAMLSession(w http.ResponseWriter, req *http.Request, username, displayUsername string, samlInfo *SAMLSessionInfo) error {
 	// Invalidate any pre-existing session to prevent session fixation attacks.
 	InvalidateOldSessionFromRequest(req)
 
@@ -525,7 +525,7 @@ func (r *Router) establishSAMLSession(w http.ResponseWriter, req *http.Request, 
 	}
 
 	// Create session with SAML info for SLO support
-	GetSessionStore().CreateSAMLSession(token, 24*time.Hour, userAgent, clientIP, username, samlTokens)
+	GetSessionStore().CreateSAMLSessionWithDisplayName(token, 24*time.Hour, userAgent, clientIP, username, displayUsername, samlTokens)
 
 	if username != "" {
 		TrackUserSession(username, token)

@@ -320,6 +320,46 @@ describe('useAppRuntimeState', () => {
     dispose();
   });
 
+  it('uses the SSO display name for app chrome without replacing the stable principal', async () => {
+    const principal = 'sso:oidc:test-oidc:stable-principal';
+    apiFetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/security/status') {
+        return new Response(
+          JSON.stringify({
+            hasAuthentication: true,
+            ssoEnabled: true,
+            ssoSessionUsername: principal,
+            ssoSessionDisplayName: 'alice@example.com',
+            ssoLogoutURL: '/api/oidc/test-oidc/logout',
+          }),
+          { status: 200 },
+        );
+      }
+      if (url === '/api/state') {
+        return new Response('{}', { status: 200 });
+      }
+      if (url === '/api/health') {
+        return new Response('{}', { status: 200 });
+      }
+      throw new Error(`Unhandled apiFetch URL: ${url}`);
+    });
+
+    const { hookState, dispose } = mountHook();
+
+    await waitFor(() => {
+      expect(hookState.proxyAuthInfo()).toEqual({
+        username: 'alice@example.com',
+        logoutURL: '/api/oidc/test-oidc/logout',
+      });
+    });
+
+    expect(hookState.securityStatus()?.ssoSessionUsername).toBe(principal);
+    expect(hookState.hasAuth()).toBe(true);
+    expect(hookState.needsAuth()).toBe(false);
+
+    dispose();
+  });
+
   it('uses the protected state response as shell state before websocket data arrives', async () => {
     const bootstrapResource: Resource = {
       id: 'pve-1',

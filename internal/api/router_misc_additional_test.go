@@ -1622,7 +1622,7 @@ func TestEstablishOIDCSession(t *testing.T) {
 		ClientID:       "client",
 	}
 
-	if err := router.establishOIDCSession(rec, req, "admin", oidc); err != nil {
+	if err := router.establishOIDCSession(rec, req, "admin", "admin", oidc); err != nil {
 		t.Fatalf("establishOIDCSession error: %v", err)
 	}
 

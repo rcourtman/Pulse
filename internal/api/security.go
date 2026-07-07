@@ -779,6 +779,18 @@ func GetSessionUsername(sessionID string) string {
 	return ""
 }
 
+// GetSessionDisplayUsername returns the human-readable label associated with a
+// session, falling back to the stable principal for older sessions.
+func GetSessionDisplayUsername(sessionID string) string {
+	if session := GetSessionStore().GetSession(sessionID); session != nil {
+		if session.DisplayUsername != "" {
+			return session.DisplayUsername
+		}
+		return session.Username
+	}
+	return ""
+}
+
 // InvalidateUserSessions invalidates all sessions for a user (e.g., on password change)
 func InvalidateUserSessions(user string) {
 	sessionsMu.Lock()

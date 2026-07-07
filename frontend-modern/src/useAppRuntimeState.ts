@@ -629,6 +629,7 @@ export const useAppRuntimeState = () => {
         proxyAuthLogoutURL?: string;
         ssoEnabled?: boolean;
         ssoSessionUsername?: string;
+        ssoSessionDisplayName?: string;
         ssoLogoutURL?: string;
       };
       logger.debug('[App] Security status fetched', securityData);
@@ -650,10 +651,11 @@ export const useAppRuntimeState = () => {
       }
 
       if (securityData.ssoEnabled && securityData.ssoSessionUsername) {
-        logger.info('[App] SSO session detected', { user: securityData.ssoSessionUsername });
+        const ssoDisplayName = securityData.ssoSessionDisplayName || securityData.ssoSessionUsername;
+        logger.info('[App] SSO session detected', { user: ssoDisplayName });
         setHasAuth(true);
         setProxyAuthInfo({
-          username: securityData.ssoSessionUsername,
+          username: ssoDisplayName,
           logoutURL: securityData.ssoLogoutURL,
         });
         await beginAuthenticatedRuntime();

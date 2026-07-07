@@ -33,6 +33,7 @@ func sessionHash(token string) string {
 type sessionPersisted struct {
 	Key              string        `json:"key"`
 	Username         string        `json:"username,omitempty"`
+	DisplayUsername  string        `json:"display_username,omitempty"`
 	RecoveryBypass   bool          `json:"recovery_bypass,omitempty"`
 	ExpiresAt        time.Time     `json:"expires_at"`
 	CreatedAt        time.Time     `json:"created_at"`
@@ -54,7 +55,8 @@ type sessionPersisted struct {
 
 // SessionData represents a user session
 type SessionData struct {
-	Username         string        `json:"username,omitempty"` // The authenticated user
+	Username         string        `json:"username,omitempty"`         // Stable authenticated principal
+	DisplayUsername  string        `json:"display_username,omitempty"` // Human-readable session label
 	RecoveryBypass   bool          `json:"recovery_bypass,omitempty"`
 	ExpiresAt        time.Time     `json:"expires_at"`
 	CreatedAt        time.Time     `json:"created_at"`
@@ -103,6 +105,7 @@ func (s *SessionStore) loadHashedSessions(persisted []sessionPersisted, now time
 
 		s.sessions[entry.Key] = &SessionData{
 			Username:                entry.Username,
+			DisplayUsername:         entry.DisplayUsername,
 			RecoveryBypass:          entry.RecoveryBypass,
 			ExpiresAt:               entry.ExpiresAt,
 			CreatedAt:               entry.CreatedAt,
@@ -214,6 +217,7 @@ func (s *SessionStore) CreateSession(token string, duration time.Duration, userA
 	key := sessionHash(token)
 	s.sessions[key] = &SessionData{
 		Username:         username,
+		DisplayUsername:  username,
 		RecoveryBypass:   false,
 		ExpiresAt:        time.Now().Add(duration),
 		CreatedAt:        time.Now(),
@@ -235,6 +239,7 @@ func (s *SessionStore) CreateRecoverySession(token string, duration time.Duratio
 	key := sessionHash(token)
 	s.sessions[key] = &SessionData{
 		Username:         username,
+		DisplayUsername:  username,
 		RecoveryBypass:   true,
 		ExpiresAt:        time.Now().Add(duration),
 		CreatedAt:        time.Now(),
@@ -257,13 +262,23 @@ type OIDCTokenInfo struct {
 
 // CreateOIDCSession creates a new session with OIDC token information
 func (s *SessionStore) CreateOIDCSession(token string, duration time.Duration, userAgent, ip, username string, oidc *OIDCTokenInfo) {
+	s.CreateOIDCSessionWithDisplayName(token, duration, userAgent, ip, username, username, oidc)
+}
+
+// CreateOIDCSessionWithDisplayName creates an OIDC session with a stable
+// principal and a separate human-readable label for UI display.
+func (s *SessionStore) CreateOIDCSessionWithDisplayName(token string, duration time.Duration, userAgent, ip, username, displayUsername string, oidc *OIDCTokenInfo) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if displayUsername == "" {
+		displayUsername = username
+	}
 	now := time.Now()
 	key := sessionHash(token)
 	session := &SessionData{
 		Username:         username,
+		DisplayUsername:  displayUsername,
 		RecoveryBypass:   false,
 		ExpiresAt:        now.Add(duration),
 		CreatedAt:        now,
@@ -299,15 +314,26 @@ type SAMLTokenInfo struct {
 
 // CreateSAMLSession creates a new session with SAML session information
 func (s *SessionStore) CreateSAMLSession(token string, duration time.Duration, userAgent, ip, username string, saml *SAMLTokenInfo) {
+	s.CreateSAMLSessionWithDisplayName(token, duration, userAgent, ip, username, username, saml)
+}
+
+// CreateSAMLSessionWithDisplayName creates a SAML session with a stable
+// principal and a separate human-readable label for UI display.
+func (s *SessionStore) CreateSAMLSessionWithDisplayName(token string, duration time.Duration, userAgent, ip, username, displayUsername string, saml *SAMLTokenInfo) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if displayUsername == "" {
+		displayUsername = username
+	}
 	key := sessionHash(token)
+	now := time.Now()
 	session := &SessionData{
 		Username:         username,
+		DisplayUsername:  displayUsername,
 		RecoveryBypass:   false,
-		ExpiresAt:        time.Now().Add(duration),
-		CreatedAt:        time.Now(),
+		ExpiresAt:        now.Add(duration),
+		CreatedAt:        now,
 		UserAgent:        userAgent,
 		IP:               ip,
 		OriginalDuration: duration,
@@ -500,6 +526,7 @@ func (s *SessionStore) saveUnsafe() {
 		persisted = append(persisted, sessionPersisted{
 			Key:                     key,
 			Username:                session.Username,
+			DisplayUsername:         session.DisplayUsername,
 			RecoveryBypass:          session.RecoveryBypass,
 			ExpiresAt:               session.ExpiresAt,
 			CreatedAt:               session.CreatedAt,

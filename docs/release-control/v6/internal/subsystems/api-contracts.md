@@ -1518,6 +1518,13 @@ payload shape change when the portal presents compact client rows.
     replacement can validate its retry. Logout, password-change, and explicit
     session revocation must still delete the full session token set rather than
     leaving any retained replacement token valid.
+    The same boundary owns SSO browser-session identity shape:
+    `ssoSessionUsername` in `/api/security/status` is the stable
+    provider-scoped principal used by authorization and organization context,
+    while `ssoSessionDisplayName` is the mutable human-readable label derived
+    from SSO claims for app chrome. Frontend consumers may display the label,
+    but API, organization, token, and permission checks must continue to bind
+    to the stable principal.
 79. `internal/api/security_tokens.go` shared with `security-privacy`: the security token handlers are both a security/privacy control surface and a canonical API payload contract boundary.
     Token owner identity is reserved for the server-authenticated principal:
     shared token-minting helpers must derive `owner_user_id` from the current
@@ -2239,6 +2246,10 @@ a new API state machine, queue contract, or verification-accounting field.
     authorized-keys target before filtering Pulse-managed `# pulse-` lines,
     and `internal/api/contract_test.go` must pin the generated shell shape.
 13. Keep `internal/api/session_store.go` on a fail-closed auth-persistence boundary: persisted OIDC refresh tokens may only round-trip through encrypted-at-rest session payloads, and any missing-crypto or invalid-ciphertext path must drop the token instead of preserving plaintext-at-rest session state.
+    SSO session persistence must also keep the stable session owner and the
+    display label as separate fields. Restart survival may restore both, but
+    display-claim changes must not rewrite the session owner used for RBAC,
+    tenant, organization, or token ownership checks.
 14. Keep tenant AI handler wiring on canonical provider ownership: `internal/api/ai_handlers.go` may wire tenant `ReadState` and tenant-scoped unified-resource providers into AI services, but it must not revive tenant snapshot-provider bridges once Patrol can initialize and verify from those canonical providers directly.
 15. Keep Patrol status transport semantics explicit in that same AI handler layer: the Patrol status endpoint must carry machine-readable runtime availability such as blocked, running, disabled, active, or unavailable rather than asking frontend consumers to infer operator state from stale summaries or run history.
 16. Keep legacy Patrol quickstart transport semantics retired from the public v6 GA contract: ordinary AI settings and Patrol status payloads must not expose quickstart credit/status fields, and any stale hosted-model blocked copy that survives from compatibility state must normalize back to provider/local-model setup rather than presenting credit badges or acquisition prompts.

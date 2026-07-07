@@ -82,6 +82,11 @@ describe('App architecture', () => {
     expect(appRuntimeStateSource).not.toContain('fetchInfrastructureSummaryAndCache');
     expect(appRuntimeStateSource).not.toContain('fetchWorkloadsSummaryAndCache');
     expect(appRuntimeStateSource).not.toContain('requestIdleCallback');
+    expect(appRuntimeStateSource).toContain('ssoSessionDisplayName?: string;');
+    expect(appRuntimeStateSource).toContain(
+      'securityData.ssoSessionDisplayName || securityData.ssoSessionUsername',
+    );
+    expect(appRuntimeStateSource).toContain('username: ssoDisplayName');
     expect(appSource).toContain("const StandalonePage = lazy(() => import('./pages/Standalone'));");
     expect(appSource).toContain('<Route path={STANDALONE_PATH} component={StandalonePage} />');
     expect(appSource).toContain(

@@ -736,6 +736,12 @@ recovery scope, or a storage/recovery-owned secret source.
    surfaces may consume an already-authorized admin request, but they must not
    infer storage, restore, or protected-system authority from a proxy-auth user
    whose configured role header is missing or blank.
+   SSO session display labels in those shared helpers are also adjacent
+   security/API presentation state only. Storage and recovery surfaces may show
+   the current user's display label when a parent shell provides it, but backup
+   visibility, restore authority, protected-system ownership, and
+   recovery-local audit attribution must continue to use backend-authenticated
+   stable principals and storage/recovery resource identities.
 8. Preserve canonical configured public endpoint selection in shared `internal/api/` helpers so recovery and storage links do not inherit loopback-local scheme drift from admin-originated setup/install flows.
 9. Preserve trailing-slash normalization in those shared install-command helpers so recovery-adjacent transport and link surfaces do not inherit double-slash installer paths or slash-suffixed public endpoint drift from canonical backend install payloads.
 10. Preserve canonical /api/auto-register token-action truth in shared `internal/api/` helpers so adjacent setup and recovery-adjacent transport flows stay on caller-supplied credential completion instead of reviving deleted alternate completion modes.

@@ -251,10 +251,15 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 
 			// Check for SSO-backed session
 			ssoSessionUsername := ""
+			ssoSessionDisplayName := ""
 			if hasEnabledSSO {
 				if cookie, err := readSessionCookie(req); err == nil && cookie.Value != "" {
 					if ValidateSession(cookie.Value) {
-						ssoSessionUsername = GetSessionUsername(cookie.Value)
+						session := GetSessionStore().GetSession(cookie.Value)
+						if session != nil && (strings.TrimSpace(session.OIDCIssuer) != "" || strings.TrimSpace(session.SAMLProviderID) != "") {
+							ssoSessionUsername = GetSessionUsername(cookie.Value)
+							ssoSessionDisplayName = GetSessionDisplayUsername(cookie.Value)
+						}
 					}
 				}
 			}
@@ -291,6 +296,7 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 				"authLastModified":            "",
 				"ssoEnabled":                  hasEnabledSSO,
 				"ssoSessionUsername":          ssoSessionUsername,
+				"ssoSessionDisplayName":       ssoSessionDisplayName,
 				"hideLocalLogin":              r.config.HideLocalLogin,
 				"agentUrl":                    agentURL,
 				"sessionCapabilities":         r.securityStatusSessionCapabilities(req.Context()),

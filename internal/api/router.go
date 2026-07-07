@@ -5007,8 +5007,8 @@ func (r *Router) establishRecoverySession(w http.ResponseWriter, req *http.Reque
 	return nil
 }
 
-// establishOIDCSession creates a session with OIDC token information for refresh token support
-func (r *Router) establishOIDCSession(w http.ResponseWriter, req *http.Request, username string, oidcTokens *OIDCTokenInfo) error {
+// establishOIDCSession creates a session with OIDC token information for refresh token support.
+func (r *Router) establishOIDCSession(w http.ResponseWriter, req *http.Request, username, displayUsername string, oidcTokens *OIDCTokenInfo) error {
 	// Invalidate any pre-existing session to prevent session fixation attacks.
 	InvalidateOldSessionFromRequest(req)
 
@@ -5020,8 +5020,8 @@ func (r *Router) establishOIDCSession(w http.ResponseWriter, req *http.Request, 
 	userAgent := req.Header.Get("User-Agent")
 	clientIP := GetClientIP(req)
 
-	// Create session with OIDC tokens (including username for restart survival)
-	GetSessionStore().CreateOIDCSession(token, 24*time.Hour, userAgent, clientIP, username, oidcTokens)
+	// Create session with OIDC tokens (including principal and display label for restart survival)
+	GetSessionStore().CreateOIDCSessionWithDisplayName(token, 24*time.Hour, userAgent, clientIP, username, displayUsername, oidcTokens)
 
 	if username != "" {
 		TrackUserSession(username, token)

@@ -176,6 +176,68 @@ func TestSecurityStatusExposesLegacyOIDCEnvProvider(t *testing.T) {
 	}
 }
 
+func TestSecurityStatusExposesSSOSessionPrincipalAndDisplayName(t *testing.T) {
+	resetSessionStoreForTests()
+	resetSessionTracking()
+	t.Cleanup(resetSessionStoreForTests)
+	t.Cleanup(resetSessionTracking)
+
+	cfg := newTestConfigWithTokens(t)
+	ssoCfg := config.NewSSOConfig()
+	if err := ssoCfg.AddProvider(config.SSOProvider{
+		ID:      "test-oidc",
+		Name:    "Test OIDC",
+		Type:    config.SSOProviderTypeOIDC,
+		Enabled: true,
+		OIDC: &config.OIDCProviderConfig{
+			IssuerURL:    "https://id.example.test",
+			ClientID:     "pulse-client",
+			ClientSecret: "secret",
+		},
+	}); err != nil {
+		t.Fatalf("failed to add SSO provider: %v", err)
+	}
+	if err := config.NewConfigPersistence(cfg.DataPath).SaveSSOConfig(ssoCfg); err != nil {
+		t.Fatalf("failed to persist SSO config: %v", err)
+	}
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	sessionToken := "status-sso-display-token"
+	principal := "sso:oidc:test-oidc:stable-principal"
+	displayUsername := "alice@example.com"
+	GetSessionStore().CreateOIDCSessionWithDisplayName(sessionToken, time.Hour, "agent", "127.0.0.1", principal, displayUsername, &OIDCTokenInfo{
+		Issuer:   "https://id.example.test",
+		ClientID: "pulse-client",
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
+	req.AddCookie(&http.Cookie{Name: cookieNameSession, Value: sessionToken})
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for security status, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var payload struct {
+		SSOEnabled            bool   `json:"ssoEnabled"`
+		SSOSessionUsername    string `json:"ssoSessionUsername"`
+		SSOSessionDisplayName string `json:"ssoSessionDisplayName"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if !payload.SSOEnabled {
+		t.Fatal("expected SSO to be enabled")
+	}
+	if payload.SSOSessionUsername != principal {
+		t.Fatalf("ssoSessionUsername = %q, want %q", payload.SSOSessionUsername, principal)
+	}
+	if payload.SSOSessionDisplayName != displayUsername {
+		t.Fatalf("ssoSessionDisplayName = %q, want %q", payload.SSOSessionDisplayName, displayUsername)
+	}
+}
+
 func TestSecurityStatusExposesSettingsCapabilitiesForScopedToken(t *testing.T) {
 	prevAuthorizer := auth.GetAuthorizer()
 	auth.SetAuthorizer(&allowRulesAuthorizer{

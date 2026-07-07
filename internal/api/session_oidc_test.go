@@ -150,6 +150,33 @@ func TestOIDCSessionPersistence(t *testing.T) {
 	}
 }
 
+func TestOIDCSessionPersistsDisplayUsernameSeparatelyFromPrincipal(t *testing.T) {
+	tmpDir := t.TempDir()
+	token := "test-session-token-display"
+	principal := "sso:oidc:test-oidc:stable-principal"
+	displayUsername := "alice@example.com"
+
+	store1 := NewSessionStore(tmpDir)
+	store1.CreateOIDCSessionWithDisplayName(token, 24*time.Hour, "TestAgent", "127.0.0.1", principal, displayUsername, &OIDCTokenInfo{
+		RefreshToken:   "display-refresh-token",
+		AccessTokenExp: time.Now().Add(1 * time.Hour),
+		Issuer:         "https://example.com",
+		ClientID:       "test-client-id",
+	})
+
+	store2 := NewSessionStore(tmpDir)
+	session := store2.GetSession(token)
+	if session == nil {
+		t.Fatal("Session should be restored after reload")
+	}
+	if session.Username != principal {
+		t.Fatalf("session principal = %q, want %q", session.Username, principal)
+	}
+	if session.DisplayUsername != displayUsername {
+		t.Fatalf("session display username = %q, want %q", session.DisplayUsername, displayUsername)
+	}
+}
+
 func TestCreateOIDCSession_NilTokenInfo(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "pulse-session-test-*")
 	if err != nil {

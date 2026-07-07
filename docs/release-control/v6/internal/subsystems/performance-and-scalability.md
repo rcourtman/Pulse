@@ -142,6 +142,11 @@ regression protection.
 11. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts` shared with `unified-resources`: unified resource table viewport sync and selected-row reveal are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 15. `frontend-modern/src/routing/routePreload.ts` shared with `frontend-primitives`: the app-shell route preload registry is both a canonical frontend shell boundary and an authenticated hot-path performance boundary.
 16. `frontend-modern/src/useAppRuntimeState.ts` shared with `cloud-paid`: the authenticated app runtime bootstrap is both a hosted commercial org-context boundary and a protected app-shell performance boundary.
+    Security-status SSO display labels are part of the existing authenticated
+    bootstrap payload. The app shell may project `ssoSessionDisplayName` into
+    visible signed-in chrome, but it must not introduce an additional
+    pre-protected-state fetch, route preload, organization probe, or commercial
+    posture request just to resolve display identity.
 17. `internal/api/slo.go` shared with `api-contracts`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
 ## Extension Points
 

@@ -123,6 +123,13 @@ controls as normal product settings.
     summaries, and revoke warnings so security-facing copy does not drift into
     page-local `container runtime` labels.
 13. `internal/api/security.go` shared with `api-contracts`: the security handlers are both a security/privacy control surface and a canonical API payload contract boundary.
+    SSO session status must distinguish stable identity from presentation:
+    `ssoSessionUsername` remains the provider-scoped principal used for
+    authorization-sensitive comparisons, while `ssoSessionDisplayName` is
+    display/contact metadata for app chrome. Security/privacy surfaces may show
+    the display label, but they must not use mutable username, email, or name
+    claims as proof of admin, organization owner, token owner, or tenant
+    membership.
 14. `internal/api/security_tokens.go` shared with `api-contracts`: the security token handlers are both a security/privacy control surface and a canonical API payload contract boundary.
     Pulse Mobile relay token creation is a security token-management surface,
     but it is not a free API-token convenience. After admin and
@@ -261,7 +268,8 @@ material, or unbounded container inspection output at the API boundary.
    email is contact metadata once a stable principal exists, and browser
    sessions must bind to the durable principal rather than a delivery address.
    For SSO, the durable principal is the provider-scoped subject, and mutable
-   username/email/display claims may not be written as the session owner.
+   username/email/display claims may not be written as the session owner. Those
+   mutable claims may persist only as display metadata for user-facing chrome.
    Live organization authorization follows the same trust boundary: contact
    email can support display, delivery, or migration, but request access must
    match the authenticated principal against stored `OwnerUserID` or member
