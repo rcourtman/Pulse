@@ -1012,6 +1012,10 @@ func (s *Store) CleanupOrphanedDiscoveries(currentResourceIDs map[string]bool) i
 			if err := os.Remove(filePath); err != nil {
 				log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to remove orphaned discovery file")
 			} else {
+				s.mu.Lock()
+				delete(s.cache, resourceID)
+				delete(s.cacheTime, resourceID)
+				s.mu.Unlock()
 				log.Debug().Str("id", resourceID).Msg("removed orphaned discovery")
 				removed++
 			}

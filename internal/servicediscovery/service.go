@@ -1101,6 +1101,65 @@ func (s *Service) collectFingerprints(ctx context.Context) {
 	newCount += vmNew
 	changedCount += vmChanged
 
+	// Process agent hosts (PVE nodes and standalone hosts with a Pulse agent).
+	// Without a fingerprint a host never enters GetChangedResources, so a new
+	// host would only ever be discovered by a manual per-resource trigger.
+	for i := range snap.Hosts {
+		host := &snap.Hosts[i]
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+		if strings.TrimSpace(host.ID) == "" {
+			continue
+		}
+
+		newFP := GenerateHostFingerprint(host)
+		// Match the canonical host discovery key: agent:<agentID>:<agentID>.
+		fpKey := string(ResourceTypeAgent) + ":" + host.ID + ":" + host.ID
+
+		oldFP, err := s.store.GetFingerprint(fpKey)
+		if err != nil {
+			log.Warn().
+				Err(err).
+				Str("resource_id", fpKey).
+				Str("host", host.Hostname).
+				Msg("Failed to load previous host fingerprint")
+		}
+
+		newFP.ResourceID = fpKey
+
+		if err := s.store.SaveFingerprint(newFP); err != nil {
+			log.Warn().Err(err).Str("host", host.Hostname).Msg("failed to save host fingerprint")
+			continue
+		}
+
+		if oldFP == nil {
+			newCount++
+			log.Debug().
+				Str("type", "agent").
+				Str("host", host.Hostname).
+				Str("hash", newFP.Hash).
+				Msg("New fingerprint captured")
+		} else if newFP.HasSchemaChanged(oldFP) {
+			log.Debug().
+				Str("type", "agent").
+				Str("host", host.Hostname).
+				Int("old_schema", oldFP.SchemaVersion).
+				Int("new_schema", newFP.SchemaVersion).
+				Msg("Fingerprint schema updated")
+		} else if oldFP.Hash != newFP.Hash {
+			changedCount++
+			log.Info().
+				Str("type", "agent").
+				Str("host", host.Hostname).
+				Str("old_hash", oldFP.Hash).
+				Str("new_hash", newFP.Hash).
+				Msg("Fingerprint changed - discovery will run on next request")
+		}
+	}
+
 	// Process Kubernetes pods
 	for _, cluster := range snap.KubernetesClusters {
 		for _, pod := range cluster.Pods {
@@ -1281,7 +1340,7 @@ func (s *Service) processFingerprint(
 func (s *Service) cleanupOrphanedData(snap StateSnapshot) {
 	// Safety check: Don't cleanup if state appears empty
 	// This prevents catastrophic deletion if state provider has an error
-	totalResources := len(snap.Containers) + len(snap.VMs) + len(snap.KubernetesClusters)
+	totalResources := len(snap.Containers) + len(snap.VMs) + len(snap.KubernetesClusters) + len(snap.Hosts)
 	for _, host := range snap.DockerHosts {
 		totalResources += len(host.Containers)
 	}
@@ -1319,6 +1378,29 @@ func (s *Service) cleanupOrphanedData(snap StateSnapshot) {
 			fpKey := "k8s:" + cluster.ID + ":" + pod.Namespace + "/" + pod.Name
 			currentIDs[fpKey] = true
 		}
+	}
+
+	// Agent hosts and PVE nodes. Host discoveries are keyed canonically by
+	// agent UUID (agent:<id>:<id>) but legacy/alias records may be keyed by
+	// hostname or node name — keep every form so live hosts are never swept
+	// as orphans.
+	addAgentKey := func(id string) {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			return
+		}
+		currentIDs[string(ResourceTypeAgent)+":"+id+":"+id] = true
+		// Pre-v6 records were stored under the legacy "host" alias and IDs
+		// are persisted verbatim, so keep that form too.
+		currentIDs[string(legacyHostAlias)+":"+id+":"+id] = true
+	}
+	for _, host := range snap.Hosts {
+		addAgentKey(host.ID)
+		addAgentKey(host.Hostname)
+	}
+	for _, node := range snap.Nodes {
+		addAgentKey(node.ID)
+		addAgentKey(node.Name)
 	}
 
 	// Run cleanup

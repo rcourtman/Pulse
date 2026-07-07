@@ -186,6 +186,48 @@ func GenerateVMFingerprint(nodeID string, vm *VM) *ContainerFingerprint {
 	return fp
 }
 
+// GenerateHostFingerprint creates a fingerprint from host-agent metadata.
+// Tracks: agent ID, hostname, platform, OS identity, kernel, architecture,
+// and tags. Status is intentionally excluded — online/offline flapping must
+// not trigger rediscovery.
+func GenerateHostFingerprint(host *Host) *ContainerFingerprint {
+	fp := &ContainerFingerprint{
+		ResourceID:    host.ID,
+		TargetID:      host.ID,
+		SchemaVersion: FingerprintSchemaVersion,
+		GeneratedAt:   time.Now(),
+		ImageName:     host.OSName,
+	}
+
+	var components []string
+
+	// Core identity
+	components = append(components, host.ID)
+	components = append(components, host.Hostname)
+
+	// OS identity (kernel/OS upgrades should trigger rediscovery)
+	components = append(components, host.Platform)
+	components = append(components, host.OSName)
+	components = append(components, host.OSVersion)
+	components = append(components, host.KernelVersion)
+	components = append(components, host.Architecture)
+	components = append(components, strconv.Itoa(host.CPUCount))
+
+	// Tags
+	if len(host.Tags) > 0 {
+		sortedTags := make([]string, len(host.Tags))
+		copy(sortedTags, host.Tags)
+		sort.Strings(sortedTags)
+		components = append(components, sortedTags...)
+	}
+
+	h := sha256.New()
+	h.Write([]byte(strings.Join(components, "|")))
+	fp.Hash = hex.EncodeToString(h.Sum(nil))[:16]
+
+	return fp
+}
+
 // GenerateK8sPodFingerprint creates a fingerprint from Kubernetes pod metadata.
 // Tracks: UID, name, namespace, labels, owner (deployment/statefulset/etc), and container images.
 func GenerateK8sPodFingerprint(clusterID string, pod *KubernetesPod) *ContainerFingerprint {

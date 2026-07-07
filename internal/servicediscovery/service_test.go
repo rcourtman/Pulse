@@ -1083,6 +1083,111 @@ func TestService_CollectFingerprints_LXCAndVM(t *testing.T) {
 	}
 }
 
+// Regression for #1479: hosts never entered the fingerprint model, so a new
+// PVE host / host agent never appeared in GetChangedResources and automatic
+// discovery never ran for it — only per-resource manual triggers worked.
+func TestService_CollectFingerprints_HostsBecomeAutoDiscoveryCandidates(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+	store.crypto = nil
+
+	state := StateSnapshot{
+		Hosts: []Host{
+			{ID: "agent-uuid-1", Hostname: "pve-one", Platform: "linux", OSName: "Debian", OSVersion: "13", KernelVersion: "6.8.0", Architecture: "amd64", Status: "online"},
+		},
+		Containers: []Container{
+			{VMID: 100, Name: "lxc-one", Node: "pve-one", Status: "running", OSTemplate: "debian-12", CPUs: 2, MaxMemory: 2 << 30},
+		},
+	}
+
+	service := NewService(store, nil, DefaultConfig())
+	service.SetReadState(readStateFromSnapshot(state))
+
+	service.collectFingerprints(context.Background())
+
+	hostKey := "agent:agent-uuid-1:agent-uuid-1"
+	fp, err := store.GetFingerprint(hostKey)
+	if err != nil {
+		t.Fatalf("GetFingerprint(%q) error: %v", hostKey, err)
+	}
+	if fp == nil || fp.Hash == "" {
+		t.Fatalf("expected host fingerprint at %q, got %#v", hostKey, fp)
+	}
+
+	changed, err := store.GetChangedResources()
+	if err != nil {
+		t.Fatalf("GetChangedResources error: %v", err)
+	}
+	found := false
+	for _, id := range changed {
+		if id == hostKey {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected undiscovered host %q in changed resources, got %v", hostKey, changed)
+	}
+}
+
+// Regression for #1479: cleanupOrphanedData built its keep-set only from
+// docker/system-container/vm/k8s IDs, so every host discovery (agent:*) was
+// deleted as an orphan on the next fingerprint cycle — a manually discovered
+// host reverted to undiscovered within minutes.
+func TestService_CleanupPreservesLiveHostDiscoveries(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+	store.crypto = nil
+
+	live := &ResourceDiscovery{
+		ID:           "agent:agent-uuid-1:agent-uuid-1",
+		ResourceType: ResourceTypeAgent,
+		TargetID:     "agent-uuid-1",
+		ResourceID:   "agent-uuid-1",
+		Hostname:     "pve-one",
+		ServiceType:  "proxmox",
+	}
+	orphan := &ResourceDiscovery{
+		ID:           "agent:gone-uuid:gone-uuid",
+		ResourceType: ResourceTypeAgent,
+		TargetID:     "gone-uuid",
+		ResourceID:   "gone-uuid",
+		Hostname:     "decommissioned",
+		ServiceType:  "debian",
+	}
+	for _, d := range []*ResourceDiscovery{live, orphan} {
+		if err := store.Save(d); err != nil {
+			t.Fatalf("Save(%s) error: %v", d.ID, err)
+		}
+	}
+
+	state := StateSnapshot{
+		Hosts: []Host{
+			{ID: "agent-uuid-1", Hostname: "pve-one", Platform: "linux", Status: "online"},
+		},
+		Containers: []Container{
+			{VMID: 100, Name: "lxc-one", Node: "pve-one", Status: "running"},
+		},
+	}
+
+	service := NewService(store, nil, DefaultConfig())
+	service.SetReadState(readStateFromSnapshot(state))
+	service.cleanupOrphanedData(state)
+
+	if got, err := store.Get(live.ID); err != nil || got == nil {
+		t.Fatalf("live host discovery was swept as an orphan: got %#v err=%v", got, err)
+	}
+	if got, err := store.Get(orphan.ID); err != nil {
+		t.Fatalf("Get(orphan) error: %v", err)
+	} else if got != nil {
+		t.Fatalf("expected decommissioned host discovery to be removed, still present: %#v", got)
+	}
+}
+
 func TestService_PromptsAndDiscoveryLoop(t *testing.T) {
 	service := NewService(nil, nil, DefaultConfig())
 
