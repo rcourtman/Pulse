@@ -36,12 +36,16 @@ PBS backup snapshot refresh is a bounded monitoring hot path: group-level
 snapshot fetches must run through the fixed worker pool in
 `internal/monitoring/monitor_backups.go`, reuse cached snapshots on per-group
 fetch failures, and must not allocate one goroutine or buffered result slot per
-backup group in large PBS datastores. PBS backup group cache metadata must be
-pruned to the retained group set after a completed poll, while preserving cache
-metadata only for groups still observed or intentionally reused after transient
-datastore failures. Recovery-point ingestion started by backup polling must be
-serialized and coalesced so slow store writes cannot retain one full backup
-point batch per poll cycle.
+backup group in large PBS datastores. Live PBS backup state is intentionally
+bounded: groups are processed newest-first, large groups are represented by
+their newest group metadata instead of every snapshot, per-group snapshots are
+capped to the newest bounded set, and the per-instance PBS backup list must not
+grow without an explicit monitoring-owned limit. PBS backup group cache metadata
+must be pruned to the retained group set after a completed poll, while
+preserving cache metadata only for groups still observed or intentionally reused
+after transient datastore failures. Recovery-point ingestion started by backup
+polling must be serialized and coalesced so slow store writes cannot retain one
+full backup point batch per poll cycle.
 Removed host-agent reconnect blocks are identity-scoped: matching may use the
 canonical host ID or token-qualified machine/hostname continuity, but must never
 block a distinct live host by hostname alone.

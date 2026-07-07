@@ -20,7 +20,11 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const pbsBackupSnapshotFetchWorkers = 5
+const (
+	pbsBackupSnapshotFetchWorkers   = 5
+	pbsBackupSnapshotsPerGroupLimit = 8
+	pbsBackupLiveStateLimit         = 5000
+)
 
 func pveBackupTemplateSubjectKey(instance, guestType, node string, vmid int) string {
 	return alerts.BuildBackupPVETemplateSubjectKey(instance, guestType, node, vmid)
@@ -1412,9 +1416,21 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 			}
 
 			datastoreHadSuccess = true
+			sortPBSBackupGroupsByLatest(groups)
 			requests := make([]pbsBackupFetchRequest, 0, len(groups))
+			projectedBackups := len(allBackups)
 
 			for _, group := range groups {
+				if projectedBackups >= pbsBackupLiveStateLimit {
+					log.Warn().
+						Str("instance", instanceName).
+						Str("datastore", ds.Name).
+						Str("namespace", namespace).
+						Int("limit", pbsBackupLiveStateLimit).
+						Msg("PBS backup live-state limit reached; skipping remaining groups")
+					break
+				}
+
 				key := pbsBackupGroupKey{
 					datastore:  ds.Name,
 					namespace:  namespace,
@@ -1431,6 +1447,7 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 
 				lastBackupTime := time.Unix(group.LastBackup, 0)
 				hasCachedData := len(cached.snapshots) > 0
+				cacheCountMatches := len(cached.snapshots) == expectedPBSBackupCacheSize(group.BackupCount)
 
 				// Check if the cached data is still within its TTL.
 				cacheAge := time.Since(m.pbsBackupCacheTimeFor(instanceName, key))
@@ -1440,11 +1457,21 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 				// is newer, or the cache TTL has expired (to pick up verification changes).
 				if hasCachedData &&
 					cacheStillFresh &&
-					len(cached.snapshots) == group.BackupCount &&
+					cacheCountMatches &&
 					!lastBackupTime.After(cached.latest) {
 
-					allBackups = append(allBackups, cached.snapshots...)
+					allBackups = appendPBSBackupsWithinLimit(allBackups, cached.snapshots)
 					groupsReused++
+					projectedBackups = len(allBackups)
+					continue
+				}
+
+				if group.BackupCount > pbsBackupSnapshotsPerGroupLimit ||
+					projectedBackups+group.BackupCount > pbsBackupLiveStateLimit {
+					allBackups = appendPBSBackupWithinLimit(allBackups, pbsBackupFromGroup(instanceName, ds.Name, namespace, group))
+					m.setPBSBackupCacheTime(instanceName, key, time.Now())
+					groupsReused++
+					projectedBackups = len(allBackups)
 					continue
 				}
 
@@ -1454,6 +1481,7 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 					group:     group,
 					cached:    cached,
 				})
+				projectedBackups += group.BackupCount
 			}
 
 			if len(requests) == 0 {
@@ -1463,7 +1491,7 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 			groupsRequested += len(requests)
 			fetched := m.fetchPBSBackupSnapshots(ctx, client, instanceName, requests)
 			if len(fetched) > 0 {
-				allBackups = append(allBackups, fetched...)
+				allBackups = appendPBSBackupsWithinLimit(allBackups, fetched)
 			}
 
 			// Record fetch time for each requested group so the TTL tracks freshness.
@@ -1511,7 +1539,7 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 					if key.datastore != ds.Name || len(entry.snapshots) == 0 {
 						continue
 					}
-					allBackups = append(allBackups, entry.snapshots...)
+					allBackups = appendPBSBackupsWithinLimit(allBackups, entry.snapshots)
 					retainedGroups[key] = struct{}{}
 				}
 			}
@@ -1578,6 +1606,13 @@ func (m *Monitor) buildPBSBackupCache(instanceName string) map[pbsBackupGroupKey
 		entry.snapshots = append(entry.snapshots, backup)
 		if backup.BackupTime.After(entry.latest) {
 			entry.latest = backup.BackupTime
+		}
+		cache[key] = entry
+	}
+	for key, entry := range cache {
+		sortPBSBackupsByLatest(entry.snapshots)
+		if len(entry.snapshots) > pbsBackupSnapshotsPerGroupLimit {
+			entry.snapshots = entry.snapshots[:pbsBackupSnapshotsPerGroupLimit]
 		}
 		cache[key] = entry
 	}
@@ -1733,13 +1768,20 @@ func (m *Monitor) fetchPBSBackupSnapshots(ctx context.Context, client *pbs.Clien
 		if len(backups) == 0 {
 			continue
 		}
-		combined = append(combined, backups...)
+		combined = appendPBSBackupsWithinLimit(combined, backups)
 	}
 
 	return combined
 }
 
 func convertPBSSnapshots(instanceName, datastore, namespace string, snapshots []pbs.BackupSnapshot) []models.PBSBackup {
+	sort.SliceStable(snapshots, func(i, j int) bool {
+		return snapshots[i].BackupTime > snapshots[j].BackupTime
+	})
+	if len(snapshots) > pbsBackupSnapshotsPerGroupLimit {
+		snapshots = snapshots[:pbsBackupSnapshotsPerGroupLimit]
+	}
+
 	backups := make([]models.PBSBackup, 0, len(snapshots))
 	for _, snapshot := range snapshots {
 		backupTime := time.Unix(snapshot.BackupTime, 0)
@@ -1798,6 +1840,73 @@ func convertPBSSnapshots(instanceName, datastore, namespace string, snapshots []
 	}
 
 	return backups
+}
+
+func sortPBSBackupGroupsByLatest(groups []pbs.BackupGroup) {
+	sort.SliceStable(groups, func(i, j int) bool {
+		if groups[i].LastBackup == groups[j].LastBackup {
+			if groups[i].BackupType == groups[j].BackupType {
+				return groups[i].BackupID < groups[j].BackupID
+			}
+			return groups[i].BackupType < groups[j].BackupType
+		}
+		return groups[i].LastBackup > groups[j].LastBackup
+	})
+}
+
+func sortPBSBackupsByLatest(backups []models.PBSBackup) {
+	sort.SliceStable(backups, func(i, j int) bool {
+		if backups[i].BackupTime.Equal(backups[j].BackupTime) {
+			return backups[i].ID < backups[j].ID
+		}
+		return backups[i].BackupTime.After(backups[j].BackupTime)
+	})
+}
+
+func expectedPBSBackupCacheSize(backupCount int) int {
+	if backupCount <= 0 {
+		return 0
+	}
+	if backupCount > pbsBackupSnapshotsPerGroupLimit {
+		return 1
+	}
+	return backupCount
+}
+
+func pbsBackupFromGroup(instanceName, datastore, namespace string, group pbs.BackupGroup) models.PBSBackup {
+	backupTime := time.Unix(group.LastBackup, 0)
+	backupID := fmt.Sprintf("pbs-%s-%s-%s-%s-%s-%d",
+		instanceName, datastore, namespace,
+		group.BackupType, group.BackupID,
+		group.LastBackup)
+
+	return models.PBSBackup{
+		ID:         backupID,
+		Instance:   instanceName,
+		Datastore:  datastore,
+		Namespace:  namespace,
+		BackupType: group.BackupType,
+		VMID:       group.BackupID,
+		BackupTime: backupTime,
+	}
+}
+
+func appendPBSBackupWithinLimit(backups []models.PBSBackup, backup models.PBSBackup) []models.PBSBackup {
+	if len(backups) >= pbsBackupLiveStateLimit {
+		return backups
+	}
+	return append(backups, backup)
+}
+
+func appendPBSBackupsWithinLimit(backups []models.PBSBackup, additions []models.PBSBackup) []models.PBSBackup {
+	if len(backups) >= pbsBackupLiveStateLimit || len(additions) == 0 {
+		return backups
+	}
+	remaining := pbsBackupLiveStateLimit - len(backups)
+	if len(additions) > remaining {
+		additions = additions[:remaining]
+	}
+	return append(backups, additions...)
 }
 
 // pollBackupTasks polls backup tasks from a PVE instance

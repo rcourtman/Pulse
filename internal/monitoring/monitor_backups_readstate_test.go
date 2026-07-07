@@ -230,6 +230,120 @@ func TestFetchPBSBackupSnapshotsUsesBoundedWorkerPool(t *testing.T) {
 	}
 }
 
+func TestPollPBSBackupsSummarizesLargeGroupsWithoutFetchingSnapshots(t *testing.T) {
+	t.Parallel()
+
+	var snapshotCalls int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "/admin/datastore/archive/groups"):
+			_, _ = w.Write([]byte(fmt.Sprintf(
+				`{"data":[{"backup-type":"vm","backup-id":"100","last-backup":1700000000,"backup-count":%d}]}`,
+				pbsBackupSnapshotsPerGroupLimit+1,
+			)))
+		case strings.Contains(r.URL.Path, "/admin/datastore/archive/snapshots"):
+			atomic.AddInt64(&snapshotCalls, 1)
+			_, _ = w.Write([]byte(`{"data":[{"backup-type":"vm","backup-id":"100","backup-time":1700000000}]}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	client, err := pbs.NewClient(pbs.ClientConfig{
+		Host:       server.URL,
+		TokenName:  "root@pam!token",
+		TokenValue: "secret",
+	})
+	if err != nil {
+		t.Fatalf("failed to create PBS client: %v", err)
+	}
+
+	m := &Monitor{state: models.NewState()}
+	m.pollPBSBackups(context.Background(), "pbs1", client, []models.PBSDatastore{{Name: "archive"}})
+
+	if got := atomic.LoadInt64(&snapshotCalls); got != 0 {
+		t.Fatalf("large PBS backup group fetched snapshots %d times, want 0", got)
+	}
+
+	snapshot := m.state.GetSnapshot()
+	if len(snapshot.PBSBackups) != 1 {
+		t.Fatalf("expected one summarized PBS backup artifact, got %d: %+v", len(snapshot.PBSBackups), snapshot.PBSBackups)
+	}
+	got := snapshot.PBSBackups[0]
+	if got.Instance != "pbs1" || got.Datastore != "archive" || got.BackupType != "vm" || got.VMID != "100" {
+		t.Fatalf("unexpected summarized PBS backup: %+v", got)
+	}
+	if !got.BackupTime.Equal(time.Unix(1700000000, 0)) {
+		t.Fatalf("summary backup time = %s, want %s", got.BackupTime, time.Unix(1700000000, 0))
+	}
+}
+
+func TestConvertPBSSnapshotsKeepsOnlyRecentBoundedSnapshots(t *testing.T) {
+	t.Parallel()
+
+	snapshots := make([]pbs.BackupSnapshot, 0, pbsBackupSnapshotsPerGroupLimit+3)
+	for i := 0; i < pbsBackupSnapshotsPerGroupLimit+3; i++ {
+		snapshots = append(snapshots, pbs.BackupSnapshot{
+			BackupType: "vm",
+			BackupID:   "100",
+			BackupTime: int64(1700000000 + i),
+		})
+	}
+
+	backups := convertPBSSnapshots("pbs1", "archive", "", snapshots)
+	if len(backups) != pbsBackupSnapshotsPerGroupLimit {
+		t.Fatalf("converted backups = %d, want %d", len(backups), pbsBackupSnapshotsPerGroupLimit)
+	}
+	if got, want := backups[0].BackupTime.Unix(), int64(1700000000+pbsBackupSnapshotsPerGroupLimit+2); got != want {
+		t.Fatalf("first backup time = %d, want newest %d", got, want)
+	}
+	for i := 1; i < len(backups); i++ {
+		if backups[i].BackupTime.After(backups[i-1].BackupTime) {
+			t.Fatalf("backups not sorted newest first at %d: %s after %s", i, backups[i].BackupTime, backups[i-1].BackupTime)
+		}
+	}
+}
+
+func TestBuildPBSBackupCacheKeepsNewestPerGroup(t *testing.T) {
+	t.Parallel()
+
+	backups := make([]models.PBSBackup, 0, pbsBackupSnapshotsPerGroupLimit+3)
+	for i := 0; i < pbsBackupSnapshotsPerGroupLimit+3; i++ {
+		backupTime := time.Unix(int64(1700000000+i), 0)
+		backups = append(backups, models.PBSBackup{
+			ID:         fmt.Sprintf("pbs-pbs1-archive-vm-100-%d", backupTime.Unix()),
+			Instance:   "pbs1",
+			Datastore:  "archive",
+			BackupType: "vm",
+			VMID:       "100",
+			BackupTime: backupTime,
+		})
+	}
+
+	state := models.NewState()
+	state.UpdatePBSBackups("pbs1", backups)
+	m := &Monitor{state: state}
+
+	entry := m.buildPBSBackupCache("pbs1")[pbsBackupGroupKey{
+		datastore:  "archive",
+		backupType: "vm",
+		backupID:   "100",
+	}]
+
+	if len(entry.snapshots) != pbsBackupSnapshotsPerGroupLimit {
+		t.Fatalf("cached snapshots = %d, want %d", len(entry.snapshots), pbsBackupSnapshotsPerGroupLimit)
+	}
+	if got, want := entry.snapshots[0].BackupTime.Unix(), int64(1700000000+pbsBackupSnapshotsPerGroupLimit+2); got != want {
+		t.Fatalf("first cached backup time = %d, want newest %d", got, want)
+	}
+	for i := 1; i < len(entry.snapshots); i++ {
+		if entry.snapshots[i].BackupTime.After(entry.snapshots[i-1].BackupTime) {
+			t.Fatalf("cache snapshots not sorted newest first at %d: %s after %s", i, entry.snapshots[i].BackupTime, entry.snapshots[i-1].BackupTime)
+		}
+	}
+}
+
 func TestPollPBSBackupsPrunesCacheTimesForDeletedGroups(t *testing.T) {
 	t.Parallel()
 
